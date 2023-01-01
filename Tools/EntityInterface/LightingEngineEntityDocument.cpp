@@ -8,21 +8,23 @@
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../RenderCore/LightingEngine/SunSourceConfiguration.h"
 
+using namespace Utility::Literals;
+
 namespace EntityInterface
 {
 
-	static const ParameterBox::ParameterName s_lightOperator = "LightOperator";
-	static const ParameterBox::ParameterName s_shadowOperator = "ShadowOperator";
-	static const ParameterBox::ParameterName s_ambientOperator = "AmbientOperator";
-	static const ParameterBox::ParameterName s_envSettings = "EnvSettings";
-	static const ParameterBox::ParameterName s_directionalLight = "DirectionalLight";
-	static const ParameterBox::ParameterName s_areaLight = "AreaLight";
-	static const ParameterBox::ParameterName s_distantIBL = "DistantIBL";
-	static const ParameterBox::ParameterName s_name = "Name";
-	static const ParameterBox::ParameterName s_packedColor = "PackedColor";
-	static const ParameterBox::ParameterName s_brightnessScalar = "BrightnessScalar";
-	static const ParameterBox::ParameterName s_sunSourceShadowSettings = "SunSourceShadowSettings";
-	static const ParameterBox::ParameterName s_light = "Light";
+	constexpr auto s_lightOperator = "LightOperator"_h;
+	constexpr auto s_shadowOperator = "ShadowOperator"_h;
+	constexpr auto s_ambientOperator = "AmbientOperator"_h;
+	constexpr auto s_envSettings = "EnvSettings"_h;
+	constexpr auto s_directionalLight = "DirectionalLight"_h;
+	constexpr auto s_areaLight = "AreaLight"_h;
+	constexpr auto s_distantIBL = "DistantIBL"_h;
+	constexpr auto s_name = "Name"_h;
+	constexpr auto s_packedColor = "PackedColor"_h;
+	constexpr auto s_brightnessScalar = "BrightnessScalar"_h;
+	constexpr auto s_sunSourceShadowSettings = "SunSourceShadowSettings"_h;
+	constexpr auto s_light = "Light"_h;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -107,7 +109,7 @@ namespace EntityInterface
 
 		for (const auto& l:_ambientOperators) {
 			if (l.second._container != envSettings) continue;
-			cfg._mergedCfg.SetAmbientOperator(l.second._opDesc);
+			cfg._mergedCfg.SetOperator(l.second._opDesc);
 		}
 
 		// register "implicit" light operators
@@ -149,53 +151,53 @@ namespace EntityInterface
 
 	bool MultiEnvironmentSettingsDocument::CreateEntity(StringAndHash objType, EntityId id, IteratorRange<const PropertyInitializer*> props)
 	{
-		if (objType.second == s_lightOperator._hash) {
+		if (objType.second == s_lightOperator) {
 			auto i = LowerBound(_lightOperators, id);
 			assert(i == _lightOperators.end() || i->first != id);
 			i = _lightOperators.insert(i, std::make_pair(id, LightSourceOperatorAndName{}));
 			for (const auto& p:props) {
-				if (p._prop.second == s_name._hash) {
+				if (p._prop.second == s_name) {
 					i->second._name = ImpliedTyping::AsString(p._data, p._type);
 				} else
 					SceneEngine::SetProperty(i->second._opDesc, p._prop.second, p._data, p._type);
 			}
 			return true;
-		} else if (objType.second == s_shadowOperator._hash) {
+		} else if (objType.second == s_shadowOperator) {
 			auto i = LowerBound(_shadowOperators, id);
 			assert(i == _shadowOperators.end() || i->first != id);
 			i = _shadowOperators.insert(i, std::make_pair(id, ShadowOperatorAndName{}));
 			for (const auto& p:props) {
-				if (p._prop.second == s_name._hash) {
+				if (p._prop.second == s_name) {
 					i->second._name = ImpliedTyping::AsString(p._data, p._type);
 				} else
 					SceneEngine::SetProperty(i->second._opDesc, p._prop.second, p._data, p._type);
 			}
 			return true;
-		} else if (objType.second == s_ambientOperator._hash) {
+		} else if (objType.second == s_ambientOperator) {
 			auto i = LowerBound(_ambientOperators, id);
 			assert(i == _ambientOperators.end() || i->first != id);
 			i = _ambientOperators.insert(i, std::make_pair(id, AmbientOperatorAndName{}));
 			for (const auto& p:props)
 				SceneEngine::SetProperty(i->second._opDesc, p._prop.second, p._data, p._type);
 			return true;
-		} else if (objType.second == s_envSettings._hash) {
+		} else if (objType.second == s_envSettings) {
 			auto i = LowerBound(_envSettingContainers, id);
 			assert(i == _envSettingContainers.end() || i->first != id);
 			i = _envSettingContainers.insert(i, std::make_pair(id, EnvSettingContainer{}));
 			for (const auto& p:props)
-				if (p._prop.second == s_name._hash)
+				if (p._prop.second == s_name)
 					i->second._name = ImpliedTyping::AsString(p._data, p._type);
 			return true;
-		} else if (objType.second == s_directionalLight._hash || objType.second == s_areaLight._hash || objType.second == s_distantIBL._hash) {
+		} else if (objType.second == s_directionalLight || objType.second == s_areaLight || objType.second == s_distantIBL) {
 			auto i = LowerBound(_lights, id);
 			assert(i == _lights.end() || i->first != id);
 			RegisteredLight newLight;
 			newLight._instantiatedLight = ~0u;
-			newLight._type = (objType.second == s_distantIBL._hash) ? RegisteredLight::Type::DistantIBL : RegisteredLight::Type::Positional;
+			newLight._type = (objType.second == s_distantIBL) ? RegisteredLight::Type::DistantIBL : RegisteredLight::Type::Positional;
 			_lights.insert(i, std::make_pair(id, std::move(newLight)));
 			SetProperty(id, props);
 			return true;
-		} else if (objType.second == s_sunSourceShadowSettings._hash) {
+		} else if (objType.second == s_sunSourceShadowSettings) {
 			auto i = LowerBound(_sunSourceShadowSettings, id);
 			assert(i == _sunSourceShadowSettings.end() || i->first != id);
 			RegisteredShadow newShadow;
@@ -270,7 +272,7 @@ namespace EntityInterface
 		uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type,
 		const ParameterBox& pbox)
 	{
-		if (propertyNameHash == s_packedColor._hash) {
+		if (propertyNameHash == s_packedColor) {
 			uint32_t packedColor;
 			if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(packedColor), ImpliedTyping::TypeOf<uint32_t>(), data, type)) {
 				if (auto brightnessScalar = pbox.GetParameter<float>(s_brightnessScalar)) {
@@ -281,7 +283,7 @@ namespace EntityInterface
 				}
 			}
 			return true;
-		} else if (propertyNameHash == s_brightnessScalar._hash) {
+		} else if (propertyNameHash == s_brightnessScalar) {
 			float brightnessScalar;
 			if (ImpliedTyping::Cast(MakeOpaqueIteratorRange(brightnessScalar), ImpliedTyping::TypeOf<float>(), data, type)) {
 				if (auto packedColor = pbox.GetParameter<uint32_t>(s_packedColor)) {
@@ -302,7 +304,7 @@ namespace EntityInterface
 		if (i != _lightOperators.end() && i->first == id) {
 			bool result = false;
 			for (const auto& p:props) {
-				if (p._prop.second == s_name._hash) {
+				if (p._prop.second == s_name) {
 					i->second._name = ImpliedTyping::AsString(p._data, p._type);
 					result = true;
 				} else
@@ -316,7 +318,7 @@ namespace EntityInterface
 		if (i2 != _shadowOperators.end() && i2->first == id) {
 			bool result = false;
 			for (const auto& p:props) {
-				if (p._prop.second == s_name._hash) {
+				if (p._prop.second == s_name) {
 					i2->second._name = ImpliedTyping::AsString(p._data, p._type);
 					result = true;
 				} else
@@ -339,7 +341,7 @@ namespace EntityInterface
 		if (i4 != _envSettingContainers.end() && i4->first == id) {
 			bool result = false;
 			for (const auto& p:props)
-				if (p._prop.second == s_name._hash) {
+				if (p._prop.second == s_name) {
 					i4->second._name = ImpliedTyping::AsString(p._data, p._type);
 					result = true;
 				}
@@ -350,19 +352,19 @@ namespace EntityInterface
 		if (i5 != _lights.end() && i5->first == id) {
 			bool changedOperatorOrName = false;
 			for (const auto& p:props) {
-				if (p._prop.second == s_lightOperator._hash) {
+				if (p._prop.second == s_lightOperator) {
 					auto newOperator = ImpliedTyping::AsString(p._data, p._type);
 					if (newOperator != i5->second._explicitLightOperator) {
 						i5->second._explicitLightOperator = newOperator;
 						changedOperatorOrName = true;
 					}
-				} else if (p._prop.second == s_shadowOperator._hash) {
+				} else if (p._prop.second == s_shadowOperator) {
 					auto newOperator = ImpliedTyping::AsString(p._data, p._type);
 					if (newOperator != i5->second._explicitLightOperator) {
 						i5->second._explicitShadowOperator = newOperator;
 						changedOperatorOrName = true;
 					}
-				} else if (p._prop.second == s_name._hash) {
+				} else if (p._prop.second == s_name) {
 					i5->second._name = ImpliedTyping::AsString(p._data, p._type);
 					changedOperatorOrName = true;
 				} else if (SceneEngine::SetProperty(i5->second._impliedLightingOperator, p._prop.second, p._data, p._type)) {
@@ -410,7 +412,7 @@ namespace EntityInterface
 			auto originalOperatorHash = RenderCore::LightingEngine::CalculateShadowOperatorDesc(i6->second._settings).GetHash();
 			bool successfulPropertyChange = false;
 			for (const auto& p:props) {
-				if (p._prop.second == s_light._hash) {
+				if (p._prop.second == s_light) {
 					i6->second._attachedLightName = ImpliedTyping::AsString(p._data, p._type);
 				} else {
 					successfulPropertyChange |= SceneEngine::SetProperty(i6->second._settings, p._prop.second, p._data, p._type);
@@ -666,7 +668,7 @@ namespace EntityInterface
 		}
 
 		for (auto p:registration._parameters)
-			if (p.HashName() != s_lightOperator._hash && p.HashName() != s_shadowOperator._hash)
+			if (p.HashName() != s_lightOperator && p.HashName() != s_shadowOperator)
 				if (!SetSpecialProperty(
 					*boundScene->second._boundScene, registration._instantiatedLight,
 					p.HashName(), p.RawValue(), p.Type(), registration._parameters)) {
