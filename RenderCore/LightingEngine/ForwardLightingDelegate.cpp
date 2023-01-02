@@ -124,7 +124,10 @@ namespace RenderCore { namespace LightingEngine
 
 	OnIBLUpdateFn ForwardLightingCaptures::MakeOnIBLUpdate()
 	{
-		return {};
+		return [this](std::shared_ptr<IResourceView> specularResource, BufferUploads::CommandListID completionCmdList, SHCoefficients& shCoefficients) {
+			// Pass the updated SH coefficients into the light scene
+			this->_lightScene->SetDiffuseSHCoefficients(shCoefficients);
+		};
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)

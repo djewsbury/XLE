@@ -15,7 +15,7 @@ namespace RenderCore { namespace LightingEngine
 	class SHCoefficients
 	{
 	public:
-		IteratorRange<const Float4*> GetCoefficients() const { assert(_coefficientCount!=0); return MakeIteratorRange(_coefficients, &_coefficients[_coefficientCount]); }
+		IteratorRange<const Float4*> GetCoefficients() const { return MakeIteratorRange(_coefficients, &_coefficients[_coefficientCount]); }
 		SHCoefficients(IteratorRange<const Float4*> coefficients);
 		SHCoefficients() = default;
 	private:
