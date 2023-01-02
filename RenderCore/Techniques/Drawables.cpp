@@ -98,6 +98,9 @@ namespace RenderCore { namespace Techniques
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
 
+		auto stencilRefs = GetStencilRefValues(sequencerConfig);
+		encoder.SetStencilRef(stencilRefs.first, stencilRefs.second);
+
 		unsigned pipelineLookupCount = 0;
 		unsigned pipelineLayoutChangeCount = 0;
 		unsigned boundUniformLookupCount = 0;
@@ -204,10 +207,12 @@ namespace RenderCore { namespace Techniques
 				++executeCount;
 			}
 		} CATCH (...) {
+			encoder.SetStencilRef(0,0);
 			encoder.EndStateCapture();
 			throw;
 		} CATCH_END
 
+		encoder.SetStencilRef(0,0);	// reset to avoid state leakage type issues
 		encoder.EndStateCapture();
 	}
 

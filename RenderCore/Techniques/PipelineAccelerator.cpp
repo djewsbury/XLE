@@ -40,6 +40,8 @@
 
 // #define PA_ADDITIONAL_THREADING_CHECKS 1
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 	using SequencerConfigId = uint64_t;
@@ -59,6 +61,9 @@ namespace RenderCore { namespace Techniques
 		unsigned _subpassIdx = 0;
 		uint64_t _fbRelevanceValue = 0;
 		std::string _name;
+
+		unsigned _frontFaceStencilRef = 0;
+		unsigned _backFaceStencilRef = 0;
 
 		#if defined(_DEBUG)
 			PipelineAcceleratorPool* _ownerPool = nullptr;
@@ -681,6 +686,11 @@ namespace RenderCore { namespace Techniques
 		return sequencerConfig._compiledPipelineLayout.get();
 	}
 
+	std::pair<unsigned, unsigned> GetStencilRefValues(const SequencerConfig& sequencerConfig)
+	{
+		return { sequencerConfig._frontFaceStencilRef, sequencerConfig._backFaceStencilRef };
+	}
+
 	SequencerConfig PipelineAcceleratorPool::MakeSequencerConfig(
 		/*out*/ uint64_t& hash,
 		std::shared_ptr<ITechniqueDelegate> delegate,
@@ -713,6 +723,9 @@ namespace RenderCore { namespace Techniques
 		}
 
 		cfg._fbRelevanceValue = Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(cfg._fbDesc, cfg._subpassIdx);
+
+		cfg._frontFaceStencilRef = sequencerSelectors.GetParameter<unsigned>("FRONT_STENCIL_REF"_h, cfg._frontFaceStencilRef);
+		cfg._backFaceStencilRef = sequencerSelectors.GetParameter<unsigned>("BACK_STENCIL_REF"_h, cfg._backFaceStencilRef);
 
 		hash = HashCombine(sequencerSelectors.GetHash(), sequencerSelectors.GetParameterNamesHash());
 		hash = HashCombine(cfg._fbRelevanceValue, hash);

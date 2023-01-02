@@ -108,6 +108,7 @@ namespace RenderCore { namespace Techniques
 	const IPipelineAcceleratorPool::Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig, VisibilityMarkerId);
 	const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator, VisibilityMarkerId);
 	ICompiledPipelineLayout* TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId);
+	std::pair<unsigned, unsigned> GetStencilRefValues(const SequencerConfig& sequencerConfig);
 
 	T1(Type) inline void   IPipelineAcceleratorPool::SetGlobalSelector(StringSection<> name, Type value)
 	{
