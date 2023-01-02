@@ -35,7 +35,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
     {
         return CB_Light 
             {
-                light._position, light._cutoffRange, 
+                (shapeCode == 0) ? light._unitLengthPosition : light._position, light._cutoffRange,
                 light._brightness, light._radii[0],
                 ExtractRight(light._orientation), light._radii[1],
                 ExtractForward(light._orientation), shapeCode, 

@@ -22,6 +22,12 @@ float3 DirectionalLightResolve(
     float3 directionToEye,
     LightScreenDest screenDest)
 {
+    #if _DEBUG
+        // Try to signal an error if light.Position is not 1 unit away from the origin
+        // we don't want to have to normalize this in the shader when we could just do it on the CPU side
+        if (abs(length(light.Position)-1) > 1e-3f)
+            return float3(1,0,0);
+    #endif
     float3 diffuse = DirectionalLightResolve_Diffuse(sample, directionToEye, light.Position, light);
     float3 specular = DirectionalLightResolve_Specular(sample, directionToEye, light.Position, light, sampleExtra.screenSpaceOcclusion);
     return diffuse + specular;

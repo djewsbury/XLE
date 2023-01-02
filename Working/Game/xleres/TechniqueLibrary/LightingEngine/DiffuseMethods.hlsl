@@ -78,7 +78,6 @@ float DiffuseMethod_Disney(
         * (1.f + (FD90v - 1.f) * RaiseTo5(1.f - cosThetaV))
         ;
 
-    // note that the "saturate" here prevents strange results on high grazing angles
     const float normalizationFactor = reciprocalPi;
     return result * normalizationFactor;
 }

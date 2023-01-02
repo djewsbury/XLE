@@ -160,6 +160,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	public:
 		Float3x3    _orientation;
 		Float3      _position;
+		Float3		_unitLengthPosition;
 		Float2      _radii;
 
 		float       _cutoffRange;
@@ -172,7 +173,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			ScaleRotationTranslationM srt(localToWorld);
 			_orientation = srt._rotation;
 			_position = srt._translation;
-			_radii = Truncate(srt._scale); 
+			_unitLengthPosition = Normalize(_position);
+			_radii = Truncate(srt._scale);
 		}
 
 		virtual Float4x4 GetLocalToWorld() const override
@@ -218,7 +220,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		StandardPositionalLight()
 		{
-			_position = Normalize(Float3(-.1f, 0.33f, 1.f));
+			_position = _unitLengthPosition = Normalize(Float3(-.1f, 0.33f, 1.f));
 			_orientation = Identity<Float3x3>();
 			_cutoffRange = 10000.f;
 			_radii = Float2(1.f, 1.f);
