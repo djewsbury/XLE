@@ -8,8 +8,10 @@
 #include "StandardLightScene.h"		// for ILightSceneComponent
 #include "ShadowProbes.h"
 #include "ShadowPreparer.h"
+#include "LightingEngineInitialization.h"
 #include "../Types.h"
 #include "../ResourceUtils.h"		// for ViewPool
+#include "../Techniques/PipelineCollection.h"		// for FrameBufferTarget
 #include "../../Assets/Marker.h"
 #include <memory>
 
@@ -153,6 +155,45 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
+	/////////////////////////// utility functions ////////////////////////
+	template<typename Dest>
+		const Dest& ChainedOperatorCast(const ChainedOperatorDesc& desc)
+	{
+		assert(desc._structureType == ctti::type_id<Dest>().hash());
+		return ((const ChainedOperatorTemplate<Dest>*)&desc)->_desc;
+	}
+
+	template<typename Type, typename... Params>
+		std::future<std::shared_ptr<Type>> SecondStageConstruction(
+			Type& op, Params&&... params)
+	{
+		std::promise<std::shared_ptr<Type>> promise;
+		auto future = promise.get_future();
+		op.SecondStageConstruction(std::move(promise), std::forward<Params>(params)...);
+		return future;
+	}
+
+	inline Techniques::FrameBufferTarget AsFrameBufferTarget(
+		LightingTechniqueSequence& sequence,
+		LightingTechniqueSequence::FragmentInterfaceRegistration regId)
+	{
+		auto resolvedFB = sequence.GetResolvedFrameBufferDesc(regId);
+		return Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second};
+	}
+
+	template<typename MarkerType, typename Time>
+		bool MarkerTimesOut(std::future<MarkerType>& marker, Time timeoutTime) { return marker.wait_until(timeoutTime) == std::future_status::timeout; }
+	template<typename MarkerType, typename Time>
+		bool MarkerTimesOut(std::shared_future<MarkerType>& marker, Time timeoutTime) { return marker.wait_until(timeoutTime) == std::future_status::timeout; }
+	template<typename MarkerType, typename Time>
+		bool MarkerTimesOut(::Assets::Marker<MarkerType>& marker, Time timeoutTime)
+	{
+		auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
+		if (remainingTime.count() <= 0) return true;
+		auto t = marker.StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
+		return t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending;
+	}
+
 	/////////////////////////////// inlines //////////////////////////////////
 	class SequencerAddendums;
 	struct DynamicShadowProjectionScheduler::SceneSet
@@ -179,6 +220,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		assert(_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx));
 		return _sceneSets[setIdx]._preparedResult[lightIdx].get();
 	}
-	
+
 }}}
 

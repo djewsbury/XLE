@@ -200,7 +200,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
-	::Assets::PtrToMarkerPtr<LightResolveOperators> BuildLightResolveOperators(
+	std::future<std::shared_ptr<LightResolveOperators>> BuildLightResolveOperators(
 		Techniques::PipelineCollection& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
@@ -301,9 +301,10 @@ namespace RenderCore { namespace LightingEngine
 		pendingHelper->_pipelineFutures = std::move(pipelineFutures);
 		pendingHelper->_fixedDescSetFuture = std::move(fixedDescSetFuture);
 
-		auto result = std::make_shared<::Assets::MarkerPtr<LightResolveOperators>>("light-operators");
+		std::promise<std::shared_ptr<LightResolveOperators>> promisedOperators;
+		auto result = promisedOperators.get_future();
 		::Assets::PollToPromise(
-			result->AdoptPromise(),
+			std::move(promisedOperators),
 			[pendingHelper](auto timeout) {
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 				for (auto& p:pendingHelper->_pipelineFutures)
@@ -458,6 +459,8 @@ namespace RenderCore { namespace LightingEngine
 				srvs[SR::StaticShadowProbeProperties] = parsingContext.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
 			}
 		}
+
+		parsingContext.RequireCommandList(lightResolveOperators._completionCommandList);
 
 			////////////////////////////////////////////////////////////////////////
 

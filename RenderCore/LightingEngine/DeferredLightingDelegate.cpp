@@ -15,6 +15,7 @@
 #include "StandardLightOperators.h"
 #include "LightingDelegateUtil.h"
 #include "ShadowProbes.h"
+#include "SkyOperator.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/DeferredShaderResource.h"
@@ -25,6 +26,7 @@
 #include "../Techniques/CommonResources.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/PipelineAccelerator.h"
+#include "../Techniques/DeformAccelerator.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Assets.h"
@@ -41,11 +43,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 		std::shared_ptr<Internal::DynamicShadowProjectionScheduler> _shadowScheduler;
-
-		LightSourceId CreateAmbientLightSource() override
-		{
-			Throw(std::runtime_error("Configurable ambient light source not supported"));
-		}
+		bool _ambientLightEnabled = false;
 
 		struct ShadowPreparerIdMapping
 		{
@@ -60,6 +58,8 @@ namespace RenderCore { namespace LightingEngine
 
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
+
+		std::function<void*(uint64_t)> _queryInterfaceHelper;
 
 		void FinalizeConfiguration()
 		{
@@ -78,6 +78,44 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
+		ILightScene::LightSourceId CreateAmbientLightSource()
+		{
+			if (_ambientLightEnabled)
+				Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
+			_ambientLightEnabled = true;
+			return 0;
+		}
+
+		void DestroyLightSource(LightSourceId sourceId)
+		{
+			if (sourceId == 0) {
+				if (!_ambientLightEnabled)
+					Throw(std::runtime_error("Attempting to destroy the ambient light source, but it has not been created"));
+				_ambientLightEnabled = false;
+			} else {
+				Internal::StandardLightScene::DestroyLightSource(sourceId);
+			}
+		}
+
+		void Clear()
+		{
+			_ambientLightEnabled = false;
+			Internal::StandardLightScene::Clear();
+		}
+
+		void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
+		{
+			if (sourceId == 0) {
+				switch (interfaceTypeCode) {
+				case TypeHashCode<ISkyTextureProcessor>:
+					return _queryInterfaceHelper(interfaceTypeCode);	// for the ambient light, get the global ISkyTextureProcessor
+				default: return nullptr;
+				}
+			} else {
+				return Internal::StandardLightScene::TryGetLightSourceInterface(sourceId, interfaceTypeCode);
+			}
+		}
+
 		void* QueryInterface(uint64_t typeCode) override
 		{
 			switch (typeCode) {
@@ -86,8 +124,17 @@ namespace RenderCore { namespace LightingEngine
 			case TypeHashCode<IDynamicShadowProjectionScheduler>:
 				return (IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
 			default:
+				if (_queryInterfaceHelper)
+					if (auto* result = _queryInterfaceHelper(typeCode))
+						return result;
 				return StandardLightScene::QueryInterface(typeCode);
 			}
+		}
+
+		DeferredLightScene()
+		{
+			// We'll maintain the first few ids for system lights (ambient surrounds, etc)
+			ReserveLightSourceIds(32);
 		}
 	};
 
@@ -98,11 +145,17 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<DeferredLightScene> _lightScene;
 		std::shared_ptr<Techniques::PipelineCollection> _pipelineCollection;
 		std::shared_ptr<ICompiledPipelineLayout> _lightingOperatorLayout;
+		std::shared_ptr<SkyOperator> _skyOperator;
+		std::shared_ptr<ISkyTextureProcessor> _skyTextureProcessor;
+
+		RenderStepFragmentInterface CreateLightingResolveFragment(bool precisionTargets = false);
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
 		void DoLightResolve(LightingTechniqueIterator& iterator);
 		void DoToneMap(LightingTechniqueIterator& iterator);
 		void GenerateDebuggingOutputs(LightingTechniqueIterator& iterator);
+		OnSkyTextureUpdateFn MakeOnSkyTextureUpdate() { return {}; }
+		OnIBLUpdateFn MakeOnIBLUpdate() { return {}; }
 	};
 
 	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
@@ -176,9 +229,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	static RenderStepFragmentInterface CreateLightingResolveFragment(
-		std::function<void(LightingTechniqueIterator&)>&& fn,
-		bool precisionTargets = false)
+	RenderStepFragmentInterface DeferredLightingCaptures::CreateLightingResolveFragment(bool precisionTargets)
 	{
 		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
 		auto depthTarget = fragment.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(LoadStore::Retain_StencilClear).FinalState(BindFlag::DepthStencil);
@@ -215,8 +266,21 @@ namespace RenderCore { namespace LightingEngine
 		subpasses[1].AppendInput(depthTarget, justDepthWindow);
 		subpasses[1].SetName("light-resolve");
 
-		fragment.AddSkySubpass(std::move(subpasses[0]));
-		fragment.AddSubpass(std::move(subpasses[1]), std::move(fn));
+		if (_skyOperator) {
+			fragment.AddSubpass(
+				std::move(subpasses[0]),
+				[this](LightingTechniqueIterator& iterator) {
+					iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
+					this->_skyOperator->Execute(iterator);
+				});
+		} else {
+			fragment.AddSkySubpass(std::move(subpasses[0]));
+		}
+		fragment.AddSubpass(
+			std::move(subpasses[1]), 
+			[this](LightingTechniqueIterator& iterator) {
+				this->DoLightResolve(iterator);
+			});
 		return fragment;
 	}
 
@@ -386,6 +450,41 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
+	struct DeferredOperatorDigest
+	{
+		std::optional<SkyTextureProcessorDesc> _skyTextureProcessor;
+		std::optional<SkyOperatorDesc> _sky;
+
+		std::vector<LightSourceOperatorDesc> _resolveOperators;
+		std::vector<ShadowOperatorDesc> _shadowOperators;
+
+		DeferredOperatorDigest(
+			IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
+			IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit,
+			const ChainedOperatorDesc* globalOperatorsChain)
+		: _resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() }
+		, _shadowOperators { shadowOperatorsInit.begin(), shadowOperatorsInit.end() }
+		{
+			auto* chain = globalOperatorsChain;
+			while (chain) {
+				switch(chain->_structureType) {
+				case TypeHashCode<SkyOperatorDesc>:
+					if (_sky)
+						Throw(std::runtime_error("Multiple sky operators found, where only one expected"));
+					_sky = Internal::ChainedOperatorCast<SkyOperatorDesc>(*chain);
+					break;
+
+				case TypeHashCode<SkyTextureProcessorDesc>:
+					if (_skyTextureProcessor)
+						Throw(std::runtime_error("Multiple sky operators found, where only one expected"));
+					_skyTextureProcessor = Internal::ChainedOperatorCast<SkyTextureProcessorDesc>(*chain);
+					break;
+				}
+				chain = chain->_next;
+			}
+		}
+	};
+
 	void CreateDeferredLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promisedTechnique,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
@@ -398,8 +497,8 @@ namespace RenderCore { namespace LightingEngine
 		DeferredLightingTechniqueFlags::BitField flags)
 	{
 		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferType::PositionNormalParameters);
-		std::vector<LightSourceOperatorDesc> resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() };
-		std::vector<ShadowOperatorDesc> shadowOperators { shadowOperatorsInit.begin(), shadowOperatorsInit.end() };
+
+		DeferredOperatorDigest digest { resolveOperatorsInit, shadowOperatorsInit, globalOperators };
 
 		std::promise<std::shared_ptr<DeferredLightScene>> lightScenePromise;
 		auto lightSceneFuture = lightScenePromise.get_future();
@@ -412,7 +511,7 @@ namespace RenderCore { namespace LightingEngine
 			std::move(promisedTechnique),
 			[pipelineAccelerators, techDelBox, resolution,
 			preregisteredAttachments=std::move(preregisteredAttachments), shadowDescSet=techDelBox->_dmShadowDescSetTemplate,
-			resolveOperators=std::move(resolveOperators), shadowOperators=std::move(shadowOperators), pipelineCollection, lightingOperatorLayout=techDelBox->_lightingOperatorLayout, flags](
+			digest=std::move(digest), pipelineCollection, lightingOperatorLayout=techDelBox->_lightingOperatorLayout, flags](
 				auto&& thatPromise, auto buildGbuffer, auto lightScene) {
 
 				TRY {
@@ -426,6 +525,29 @@ namespace RenderCore { namespace LightingEngine
 					captures->_lightingOperatorLayout = lightingOperatorLayout;
 					captures->_pipelineCollection = pipelineCollection;
 
+					if (digest._sky)
+						captures->_skyOperator = std::make_shared<SkyOperator>(pipelineCollection, *digest._sky);
+
+					if (digest._skyTextureProcessor) {
+						captures->_skyTextureProcessor = CreateSkyTextureProcessor(
+							*digest._skyTextureProcessor, captures->_skyOperator,
+							captures->MakeOnSkyTextureUpdate(),
+							captures->MakeOnIBLUpdate());
+					}
+
+					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
+
+					captures->_lightScene->_queryInterfaceHelper = lightingTechnique->_queryInterfaceHelper =
+						[captures](uint64_t typeCode) -> void* {
+							switch (typeCode) {
+							case TypeHashCode<ISkyTextureProcessor>:
+								return (ISkyTextureProcessor*)captures->_skyTextureProcessor.get();
+							}
+							return nullptr;
+						};
+
+					// --------------------- --------------------------------------------------
+
 					// Reset captures
 					lightingTechnique->PreSequenceSetup(
 						[captures](LightingTechniqueIterator& iterator) {
@@ -436,19 +558,26 @@ namespace RenderCore { namespace LightingEngine
 						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
 							captures->_lightResolveOperators->_stencilingGeometry.CompleteInitialization(*iterator._threadContext);
+							if (captures->_skyTextureProcessor)
+								SkyTextureProcessorPrerender(*captures->_skyTextureProcessor);
 						});
 
 					auto& mainSequence = lightingTechnique->CreateSequence();
+					mainSequence.CreateStep_CallFunction(
+						[](LightingTechniqueIterator& iterator) {
+							if (iterator._deformAcceleratorPool)
+								iterator._deformAcceleratorPool->SetVertexInputBarrier(*iterator._threadContext);
+						});
+
+					mainSequence.CreateStep_InvalidateUniforms();
+					mainSequence.CreateStep_BringUpToDateUniforms();
+
 					// Draw main scene
-					mainSequence.CreateStep_RunFragments(std::move(buildGbuffer.first));
+					auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(std::move(buildGbuffer.first));
 					lightingTechnique->_completionCommandList = std::max(lightingTechnique->_completionCommandList, buildGbuffer.second);
 
 					// Lighting resolve (gbuffer -> HDR color image)
-					auto lightingResolveFragment = CreateLightingResolveFragment(
-						[captures](LightingTechniqueIterator& iterator) {
-							// do lighting resolve here
-							captures->DoLightResolve(iterator);
-						});
+					auto lightingResolveFragment = captures->CreateLightingResolveFragment();
 					auto resolveFragmentRegistration = mainSequence.CreateStep_RunFragments(std::move(lightingResolveFragment));
 
 					auto toneMapFragment = CreateToneMapFragment(
@@ -486,22 +615,39 @@ namespace RenderCore { namespace LightingEngine
 					// And then we'll complete the technique when the future from BuildLightResolveOperators() is completed
 					//
 					auto resolvedFB = mainSequence.GetResolvedFrameBufferDesc(resolveFragmentRegistration);
-					auto lightResolveOperators = BuildLightResolveOperators(
+
+					struct SecondStageConstructionHelper
+					{
+						std::future<std::shared_ptr<LightResolveOperators>> _lightResolveOperators;
+						std::future<std::shared_ptr<SkyOperator>> _futureSky;
+					};
+					auto secondStageHelper = std::make_shared<SecondStageConstructionHelper>();
+
+					secondStageHelper->_lightResolveOperators = BuildLightResolveOperators(
 						*pipelineCollection, lightingOperatorLayout,
-						resolveOperators, shadowOperators,
+						digest._resolveOperators, digest._shadowOperators,
 						*resolvedFB.first, resolvedFB.second+1,
 						false, GBufferType::PositionNormalParameters);
 
-					::Assets::WhenAll(lightResolveOperators).ThenConstructToPromise(
+					if (captures->_skyOperator)
+						secondStageHelper->_futureSky = Internal::SecondStageConstruction(*captures->_skyOperator, Internal::AsFrameBufferTarget(mainSequence, mainSceneFragmentRegistration));
+
+					::Assets::PollToPromise(
 						std::move(thatPromise),
-						[lightingTechnique, captures, pipelineCollection](const std::shared_ptr<LightResolveOperators>& resolveOperators) {
-							captures->_lightResolveOperators = resolveOperators;
-							captures->_lightScene->_lightResolveOperators = resolveOperators;
+						[secondStageHelper](auto timeout) {
+							auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+							if (Internal::MarkerTimesOut(secondStageHelper->_lightResolveOperators, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureSky.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSky, timeoutTime)) return ::Assets::PollStatus::Continue;
+							return ::Assets::PollStatus::Finish;
+						},
+						[lightingTechnique, captures, pipelineCollection, secondStageHelper]() {
+							captures->_lightResolveOperators = secondStageHelper->_lightResolveOperators.get();
+							captures->_lightScene->_lightResolveOperators = captures->_lightResolveOperators;
 							// all lights get "SupportFiniteRange"
-							for (unsigned op=0; op<resolveOperators->_operatorDescs.size(); ++op)
+							for (unsigned op=0; op<captures->_lightResolveOperators->_operatorDescs.size(); ++op)
 								captures->_lightScene->AssociateFlag(op, Internal::StandardPositionLightFlags::SupportFiniteRange);
-							lightingTechnique->_depVal = resolveOperators->GetDependencyValidation();
-							lightingTechnique->_completionCommandList = std::max(lightingTechnique->_completionCommandList, resolveOperators->_completionCommandList);
+							lightingTechnique->_depVal.RegisterDependency(captures->_lightResolveOperators->GetDependencyValidation());
+							lightingTechnique->_completionCommandList = std::max(lightingTechnique->_completionCommandList, captures->_lightResolveOperators->_completionCommandList);
 							return lightingTechnique;
 						});
 				} CATCH(...) {

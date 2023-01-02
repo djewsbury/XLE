@@ -296,13 +296,6 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	template<typename Dest>
-		const Dest& ChainedOperatorCast(const ChainedOperatorDesc& desc)
-	{
-		assert(desc._structureType == ctti::type_id<Dest>().hash());
-		return ((const ChainedOperatorTemplate<Dest>*)&desc)->_desc;
-	}
-
 	static ShadowProbes::Configuration MakeShadowProbeConfiguration(const ShadowOperatorDesc& opDesc)
 	{
 		ShadowProbes::Configuration result;
@@ -384,43 +377,43 @@ namespace RenderCore { namespace LightingEngine
 				case TypeHashCode<ScreenSpaceReflectionsOperatorDesc>:
 					if (_ssr)
 						Throw(std::runtime_error("Multiple SSR operators found, where only one expected"));
-					_ssr = ChainedOperatorCast<ScreenSpaceReflectionsOperatorDesc>(*chain);
+					_ssr = Internal::ChainedOperatorCast<ScreenSpaceReflectionsOperatorDesc>(*chain);
 					break;
 
 				case TypeHashCode<AmbientOcclusionOperatorDesc>:
 					if (_ssao)
 						Throw(std::runtime_error("Multiple SSAO operators found, where only one expected"));
-					_ssao = ChainedOperatorCast<AmbientOcclusionOperatorDesc>(*chain);
+					_ssao = Internal::ChainedOperatorCast<AmbientOcclusionOperatorDesc>(*chain);
 					break;
 
 				case TypeHashCode<ToneMapAcesOperatorDesc>:
 					if (_tonemapAces)
 						Throw(std::runtime_error("Multiple tonemap operators found, where only one expected"));
-					_tonemapAces = ChainedOperatorCast<ToneMapAcesOperatorDesc>(*chain);
+					_tonemapAces = Internal::ChainedOperatorCast<ToneMapAcesOperatorDesc>(*chain);
 					break;
 
 				case TypeHashCode<MultiSampleOperatorDesc>:
 					if (_msaa)
 						Throw(std::runtime_error("Multiple antialiasing operators found, where only one expected"));
-					_msaa = ChainedOperatorCast<MultiSampleOperatorDesc>(*chain);
+					_msaa = Internal::ChainedOperatorCast<MultiSampleOperatorDesc>(*chain);
 					break;
 
 				case TypeHashCode<SkyOperatorDesc>:
 					if (_sky)
 						Throw(std::runtime_error("Multiple sky operators found, where only one expected"));
-					_sky = ChainedOperatorCast<SkyOperatorDesc>(*chain);
+					_sky = Internal::ChainedOperatorCast<SkyOperatorDesc>(*chain);
 					break;
 
 				case TypeHashCode<SkyTextureProcessorDesc>:
 					if (_skyTextureProcessor)
 						Throw(std::runtime_error("Multiple sky operators found, where only one expected"));
-					_skyTextureProcessor = ChainedOperatorCast<SkyTextureProcessorDesc>(*chain);
+					_skyTextureProcessor = Internal::ChainedOperatorCast<SkyTextureProcessorDesc>(*chain);
 					break;
 
 				case TypeHashCode<RasterizationLightTileOperatorDesc>:
 					if (gotTiledLightingConfig)
 						Throw(std::runtime_error("Multiple tiled lighting operators found, where only one expected"));
-					_tilingConfig = ChainedOperatorCast<RasterizationLightTileOperatorDesc>(*chain);
+					_tilingConfig = Internal::ChainedOperatorCast<RasterizationLightTileOperatorDesc>(*chain);
 					gotTiledLightingConfig = false;
 					break;
 				}
@@ -430,24 +423,6 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	static Techniques::FrameBufferTarget AsFrameBufferTarget(
-		LightingTechniqueSequence& sequence,
-		LightingTechniqueSequence::FragmentInterfaceRegistration regId)
-	{
-		auto resolvedFB = sequence.GetResolvedFrameBufferDesc(regId);
-		return Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second};
-	}
-
-	template<typename Type, typename... Params>
-		static std::future<std::shared_ptr<Type>> SecondStageConstruction(
-			Type& op, Params&&... params)
-	{
-		std::promise<std::shared_ptr<Type>> promise;
-		auto future = promise.get_future();
-		op.SecondStageConstruction(std::move(promise), std::forward<Params>(params)...);
-		return future;
-	}
 
 	struct ForwardLightingCaptures::SecondStageConstructionOperators
 	{
@@ -484,15 +459,15 @@ namespace RenderCore { namespace LightingEngine
 					iterator._deformAcceleratorPool->SetVertexInputBarrier(*iterator._threadContext);
 			});
 
+		mainSequence.CreateStep_InvalidateUniforms();
+		mainSequence.CreateStep_BringUpToDateUniforms();
+
 		// Pre depth
 		if (_ssrOperator) {
 			mainSequence.CreateStep_RunFragments(CreateDepthMotionNormalFragment(depthMotionNormalRoughnessDelegate));
 		} else {
 			mainSequence.CreateStep_RunFragments(CreateDepthMotionFragment(depthMotionDelegate));
 		}
-
-		mainSequence.CreateStep_InvalidateUniforms();
-		mainSequence.CreateStep_BringUpToDateUniforms();
 
 		// Build hierarchical depths
 		auto hierachicalDepthsReg = mainSequence.CreateStep_RunFragments(_hierarchicalDepthsOperator->CreateFragment(stitchingContext._workingProps));
@@ -540,31 +515,18 @@ namespace RenderCore { namespace LightingEngine
 		// It also gives the operator full context about how it's going to be used
 		auto ops = std::make_shared<SecondStageConstructionOperators>();
 		if (_skyOperator)
-			ops->_futureSky = SecondStageConstruction(*_skyOperator, AsFrameBufferTarget(mainSequence, mainSceneFragmentRegistration));
+			ops->_futureSky = Internal::SecondStageConstruction(*_skyOperator, Internal::AsFrameBufferTarget(mainSequence, mainSceneFragmentRegistration));
 		if (_ssrOperator)
-			ops->_futureSSR = SecondStageConstruction(*_ssrOperator, AsFrameBufferTarget(mainSequence, ssrFragmentReg));
-		ops->_futureHierarchicalDepths = SecondStageConstruction(*_hierarchicalDepthsOperator, AsFrameBufferTarget(mainSequence, hierachicalDepthsReg));
+			ops->_futureSSR = Internal::SecondStageConstruction(*_ssrOperator, Internal::AsFrameBufferTarget(mainSequence, ssrFragmentReg));
+		ops->_futureHierarchicalDepths = Internal::SecondStageConstruction(*_hierarchicalDepthsOperator, Internal::AsFrameBufferTarget(mainSequence, hierachicalDepthsReg));
 		if (_acesOperator)
-			ops->_futureAces = SecondStageConstruction(*_acesOperator, AsFrameBufferTarget(mainSequence, toneMapReg));
+			ops->_futureAces = Internal::SecondStageConstruction(*_acesOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));
 		if (_copyToneMapOperator)
-			ops->_futureCopyToneMap = SecondStageConstruction(*_copyToneMapOperator, AsFrameBufferTarget(mainSequence, toneMapReg));
+			ops->_futureCopyToneMap = Internal::SecondStageConstruction(*_copyToneMapOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));
 		return ops;
 	}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<typename MarkerType, typename Time>
-		static bool MarkerTimesOut(std::future<MarkerType>& marker, Time timeoutTime) { return marker.wait_until(timeoutTime) == std::future_status::timeout; }
-	template<typename MarkerType, typename Time>
-		static bool MarkerTimesOut(std::shared_future<MarkerType>& marker, Time timeoutTime) { return marker.wait_until(timeoutTime) == std::future_status::timeout; }
-	template<typename MarkerType, typename Time>
-		static bool MarkerTimesOut(::Assets::Marker<MarkerType>& marker, Time timeoutTime)
-	{
-		auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
-		if (remainingTime.count() <= 0) return true;
-		auto t = marker.StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
-		return t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending;
-	}
 
 	void CreateForwardLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
@@ -610,11 +572,11 @@ namespace RenderCore { namespace LightingEngine
 			std::move(promise),
 			[helper](auto timeout) {
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-				if (MarkerTimesOut(helper->_lightSceneFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (MarkerTimesOut(helper->_depthMotionNormalRoughnessDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (MarkerTimesOut(helper->_depthMotionDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (MarkerTimesOut(helper->_forwardIllumDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (MarkerTimesOut(helper->_balancedNoiseTexture, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_lightSceneFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_depthMotionNormalRoughnessDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_depthMotionDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_balancedNoiseTexture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
 			[helper, techDelBox, pipelineAccelerators, pipelinePool, preregisteredAttachments=std::move(preregisteredAttachments), resolution, digest=std::move(digest)]
@@ -693,12 +655,12 @@ namespace RenderCore { namespace LightingEngine
 						std::move(thatPromise),
 						[secondStageHelper](auto timeout) {
 							auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-							if (secondStageHelper->_futureHierarchicalDepths.valid() && MarkerTimesOut(secondStageHelper->_futureHierarchicalDepths, timeoutTime)) return ::Assets::PollStatus::Continue;
-							if (secondStageHelper->_futureSSR.valid() && MarkerTimesOut(secondStageHelper->_futureSSR, timeoutTime)) return ::Assets::PollStatus::Continue;
-							// if (secondStageHelper->_futureSSAO && MarkerTimesOut(*secondStageHelper->_futureSSAO, timeoutTime)) return ::Assets::PollStatus::Continue;
-							if (secondStageHelper->_futureAces.valid() && MarkerTimesOut(secondStageHelper->_futureAces, timeoutTime)) return ::Assets::PollStatus::Continue;
-							if (secondStageHelper->_futureCopyToneMap.valid() && MarkerTimesOut(secondStageHelper->_futureCopyToneMap, timeoutTime)) return ::Assets::PollStatus::Continue;
-							if (secondStageHelper->_futureSky.valid() && MarkerTimesOut(secondStageHelper->_futureSky, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureHierarchicalDepths.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureHierarchicalDepths, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureSSR.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSSR, timeoutTime)) return ::Assets::PollStatus::Continue;
+							// if (secondStageHelper->_futureSSAO && Internal::MarkerTimesOut(*secondStageHelper->_futureSSAO, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureAces.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureAces, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureCopyToneMap.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureCopyToneMap, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureSky.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSky, timeoutTime)) return ::Assets::PollStatus::Continue;
 							return ::Assets::PollStatus::Finish;
 						},
 						[secondStageHelper, lightingTechnique, captures]() {
