@@ -65,18 +65,18 @@ namespace RenderCore { namespace LightingEngine
 		};
 	};
 
-	static const uint32_t StencilSky = 1<<7;
+	static const uint32_t StencilNotSky = 1<<7;
 	static const uint32_t StencilSampleCount = 1<<6;
 
 	static DepthStencilDesc s_dsWritePixelFrequencyPixel {
 		CompareOp::GreaterEqual, false,
-		true, StencilSky|StencilSampleCount, 0xff, 
+		true, StencilNotSky|StencilSampleCount, 0,
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal},
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Less}};
 
 	static DepthStencilDesc s_dsWriteNonSky {
 		CompareOp::GreaterEqual, false,
-		true, StencilSky, 0xff, 
+		true, StencilNotSky, 0, 
 		StencilDesc{StencilOp::DontWrite, StencilOp::DontWrite, StencilOp::DontWrite, CompareOp::Equal}};
 
 	static std::future<Techniques::GraphicsPipelineAndLayout> BuildLightResolveOperator(
@@ -110,15 +110,11 @@ namespace RenderCore { namespace LightingEngine
 		selectors.SetParameter("LIGHT_RESOLVE_SHADER", 1);
 		shadowResolveParam.WriteShaderSelectors(selectors);
 
-		auto stencilRefValue = 0;
-
 		const bool doSampleFrequencyOptimisation = Tweakable("SampleFrequencyOptimisation", true);
 		if (doSampleFrequencyOptimisation && sampleCount._sampleCount > 1) {
 			pipelineDesc->_depthStencil = s_dsWritePixelFrequencyPixel;
-			stencilRefValue = StencilSampleCount;
 		} else {
 			pipelineDesc->_depthStencil = s_dsWriteNonSky;
-			stencilRefValue = 0x0;
 		}
 
 		if ((desc._flags & LightSourceOperatorDesc::Flags::NeverStencil) || desc._shape == LightSourceShape::Directional) {
@@ -476,6 +472,9 @@ namespace RenderCore { namespace LightingEngine
 			VertexBufferView { lightResolveOperators._stencilingGeometry._geo.get() }
 		};
 		encoder.Bind(MakeIteratorRange(vbvs), {});
+
+		encoder.SetStencilRef(StencilNotSky, StencilNotSky);
+		auto cleanup = MakeAutoCleanup([&encoder]() { encoder.SetStencilRef(0,0); });
 
 		auto clipSpaceType = Techniques::GetDefaultClipSpaceType();
 		assert(clipSpaceType != ClipSpaceType::StraddlingZero);		// only positive clip space types supported (see code below)

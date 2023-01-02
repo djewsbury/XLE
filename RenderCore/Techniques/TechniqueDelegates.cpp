@@ -245,6 +245,12 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_blend.push_back(deferredDecal ? CommonResourceBox::s_abStraightAlpha : CommonResourceBox::s_abOpaque);
 			nascentDesc->_blend.push_back(deferredDecal ? CommonResourceBox::s_abStraightAlpha : CommonResourceBox::s_abOpaque);
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWrite;
+			// We must write the a flag to the stencil buffer to mark pixels as "not sky"
+			nascentDesc->_depthStencil._stencilEnable = true;
+			nascentDesc->_depthStencil._stencilWriteMask = 1<<7;
+			nascentDesc->_depthStencil._frontFaceStencil._passOp = StencilOp::Replace;
+			if (stateSet._flag & RenderCore::Assets::RenderStateSet::Flag::DoubleSided && stateSet._doubleSided)
+				nascentDesc->_depthStencil._backFaceStencil._passOp = StencilOp::Replace;
 			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);

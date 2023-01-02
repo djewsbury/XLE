@@ -103,7 +103,11 @@ namespace RenderCore { namespace LightingEngine
 		params.SetParameter("SKY_PROJECTION", 5);
 		Techniques::PixelOutputStates po;
 		po.Bind(*fbTarget._fbDesc, fbTarget._subpassIdx);
-		po.Bind(Techniques::CommonResourceBox::s_dsReadOnly);
+		auto depthStencil = Techniques::CommonResourceBox::s_dsReadOnly;
+		depthStencil._stencilEnable = true;
+		depthStencil._stencilReadMask = 1<<7;
+		depthStencil._frontFaceStencil._comparisonOp = CompareOp::Equal;		// assuming stencil ref value == 0
+		po.Bind(depthStencil);
 		AttachmentBlendDesc blendDescs[] {Techniques::CommonResourceBox::s_abOpaque};
 		po.Bind(MakeIteratorRange(blendDescs));
 		auto futureShader = CreateFullViewportOperator(
