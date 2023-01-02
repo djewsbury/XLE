@@ -17,7 +17,7 @@ namespace RenderCore { namespace LightingEngine
 	struct LightSourceOperatorDesc
 	{
 		LightSourceShape _shape = LightSourceShape::Directional;
-		DiffuseModel _diffuseModel = DiffuseModel::Disney;
+		DiffuseModel _diffuseModel = DiffuseModel::Lambert;
 
 		struct Flags
 		{
