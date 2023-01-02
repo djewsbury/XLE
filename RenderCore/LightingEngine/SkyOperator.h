@@ -5,6 +5,7 @@
 #pragma once
 
 #include "StandardLightScene.h"
+#include "../Format.h"
 #include "../../Assets/AssetsCore.h"
 #include <memory>
 
@@ -23,16 +24,45 @@ namespace RenderCore { namespace Techniques
 	class PipelineCollection;
 	struct FrameBufferTarget;
 	class ParsingContext;
+	class DeferredShaderResource;
 }}
+
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderCore { namespace LightingEngine
 {
 	class LightingTechniqueIterator;
+	class SHCoefficients;
 
+	enum class SkyTextureType { HemiCube, Cube, Equirectangular, HemiEquirectangular };
 	struct SkyOperatorDesc
 	{
 		SkyTextureType _textureType = SkyTextureType::Equirectangular;
+
 		uint64_t GetHash(uint64_t seed=DefaultSeed64) const;
+	};
+
+	struct SkyTextureProcessorDesc
+	{
+		unsigned _cubemapFaceDimension = 1024;
+		Format _cubemapFormat = Format::BC6H_UF16;
+
+		unsigned _specularCubemapFaceDimension = 512;
+		Format _specularCubemapFormat = Format::BC6H_UF16;
+
+		uint64_t GetHash(uint64_t seed=DefaultSeed64) const;
+	};
+
+	/// <summary>Utility for transforming from asset name to sky texture resources, and assign to necessary operators</summary>
+	class ISkyTextureProcessor
+	{
+	public:
+		virtual void SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> src) = 0;
+
+		virtual void SetSkyResource(std::shared_ptr<IResourceView>, BufferUploads::CommandListID) = 0;
+		virtual void SetIBL(std::shared_ptr<IResourceView> specular, BufferUploads::CommandListID specularCompletion, SHCoefficients& diffuse) = 0;
+
+		virtual ~ISkyTextureProcessor();
 	};
 
 	class SkyOperator : public std::enable_shared_from_this<SkyOperator>
@@ -40,13 +70,15 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void Execute(Techniques::ParsingContext& parsingContext);
 		void Execute(LightingTechniqueIterator&);
-		void SetResource(std::shared_ptr<IResourceView>);
 
 		void SecondStageConstruction(
 			std::promise<std::shared_ptr<SkyOperator>>&& promise,
 			const Techniques::FrameBufferTarget& fbTarget);
 
 		::Assets::DependencyValidation GetDependencyValidation() const;
+		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
+
+		void SetResource(std::shared_ptr<IResourceView>, BufferUploads::CommandListID);
 
 		SkyOperator(
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
@@ -58,7 +90,20 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		std::shared_ptr<IDevice> _device;
 		unsigned _secondStageConstructionState = 0;		// debug usage only
+		SkyOperatorDesc _desc;
+		BufferUploads::CommandListID _completionCommandList = 0;
 	};
+
+	using OnSkyTextureUpdateFn = std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID)>;
+	using OnIBLUpdateFn = std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID, SHCoefficients&)>;
+
+	std::shared_ptr<ISkyTextureProcessor> CreateSkyTextureProcessor(
+		const SkyTextureProcessorDesc& desc,
+		std::shared_ptr<SkyOperator> skyOperator,
+		OnSkyTextureUpdateFn&& onSkyTextureUpdate,
+		OnIBLUpdateFn&& onIBLUpdate);
+
+	void SkyTextureProcessorPrerender(ISkyTextureProcessor&);
 
 }}
 

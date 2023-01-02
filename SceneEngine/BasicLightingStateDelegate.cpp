@@ -8,6 +8,7 @@
 #include "LightSceneConfiguration.h"
 #include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"
+#include "../RenderCore/LightingEngine/SkyOperator.h"
 #include "../Formatters/IDynamicFormatter.h"
 #include "../Tools/EntityInterface/EntityInterface.h"
 #include "../Tools/ToolsRig/ToolsRigServices.h"
@@ -52,9 +53,9 @@ namespace SceneEngine
                 auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(lightId);
                 if (positional) {
                     Float4x4 temp = AsFloat4x4(RotationY(2.f * gPI * c/float(tileLightCount) + _time));
-                    Combine_IntoLHS(temp, RotationX(2.f * gPI * c/float(tileLightCount)));
+                    Combine_IntoLHS(temp, RotationX(IntegerHash32(c) / 10000.0f));
                     Combine_IntoLHS(temp, RotationY(2.f * gPI * c/float(tileLightCount)));
-                    positional->SetLocalToWorld(AsFloat4x4(ScaleTranslation { Float3(0.1f, 0.1f, 1.0f), TransformPoint(temp, Float3(0,0,swirlingRadius)) }));
+                    positional->SetLocalToWorld(AsFloat4x4(ScaleTranslation { Float3(0.1f, 0.1f, 1.0f), TransformPoint(temp, Float3(0,0,std::sin(IntegerHash32(-(signed)c)+_time)*swirlingRadius)) }));
                 }
 
                 auto* emittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(lightId);
@@ -193,9 +194,9 @@ namespace SceneEngine
                 auto newLight = lightScene.CreateAmbientLightSource();
                 _lightSourcesInBoundScene.push_back(newLight);
 
-                auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(newLight);
+                auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(newLight);
                 if (distanceIBL)
-                    distanceIBL->SetEquirectangularSource(operationContext, light._parameters.GetParameterAsString("SkyTexture"_h).value());
+                    distanceIBL->SetEquirectangularSource(operationContext, light._parameters.GetParameterAsString("EquirectangularSource"_h).value());
                 continue;
             }
         }
@@ -274,10 +275,17 @@ namespace SceneEngine
         }
 
         if (!_operatorResolveContext._forwardLightingOperators._objects.empty()) {
-            if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1)
-                Throw(std::runtime_error("Only one forward lighting operator allowed in BasicLightingStateDelegate configuration file"));
+            if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1 || !_operatorResolveContext._deferredLightingOperators._objects.empty())
+                Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
 
             cfg.SetOperator(_operatorResolveContext._forwardLightingOperators._objects[0].second);
+        }
+
+        if (!_operatorResolveContext._deferredLightingOperators._objects.empty()) {
+            if (_operatorResolveContext._deferredLightingOperators._objects.size() != 1 || !_operatorResolveContext._forwardLightingOperators._objects.empty())
+                Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._deferredLightingOperators._objects[0].second);
         }
 
         if (!_operatorResolveContext._multiSampleOperators._objects.empty()) {
@@ -285,6 +293,20 @@ namespace SceneEngine
                 Throw(std::runtime_error("Only one multisample operator allowed in BasicLightingStateDelegate configuration file"));
 
             cfg.SetOperator(_operatorResolveContext._multiSampleOperators._objects[0].second);
+        }
+
+        if (!_operatorResolveContext._skyOperators._objects.empty()) {
+            if (_operatorResolveContext._skyOperators._objects.size() != 1)
+                Throw(std::runtime_error("Only one sky operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._skyOperators._objects[0].second);
+        }
+        
+        if (!_operatorResolveContext._skyTextureProcessors._objects.empty()) {
+            if (_operatorResolveContext._skyTextureProcessors._objects.size() != 1)
+                Throw(std::runtime_error("Only one sky texture processor allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._skyTextureProcessors._objects[0].second);
         }
 
         _swirlingLights.BindCfg(cfg);
@@ -482,6 +504,12 @@ namespace SceneEngine
         AddToOperatorList(_forwardLightingOperator);
     }
 
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::DeferredLightingTechniqueDesc& operatorDesc)
+    {
+        _deferredLightingOperator._desc = operatorDesc;
+        AddToOperatorList(_deferredLightingOperator);
+    }
+
     void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ToneMapAcesOperatorDesc& operatorDesc)
     {
         _toneMapAcesOperator._desc = operatorDesc;
@@ -492,6 +520,18 @@ namespace SceneEngine
     {
         _msaaOperator._desc = operatorDesc;
         AddToOperatorList(_msaaOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::SkyOperatorDesc& operatorDesc)
+    {
+        _skyOperator._desc = operatorDesc;
+        AddToOperatorList(_skyOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::SkyTextureProcessorDesc& operatorDesc)
+    {
+        _skyTextureProcessor._desc = operatorDesc;
+        AddToOperatorList(_skyTextureProcessor);
     }
 
     MergedLightingEngineCfg::MergedLightingEngineCfg() = default;
@@ -561,7 +601,7 @@ namespace SceneEngine
                 finite->SetCutoffRange(cutoffRange.value());
         }
 
-        auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(sourceId);
+        auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(sourceId);
         if (distantIBL) {
             auto src = parameters.GetParameterAsString(EquirectangularSource);
             if (src)
@@ -655,7 +695,7 @@ namespace SceneEngine
             }
             break;
         case EquirectangularSource:
-            if (auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IDistantIBLSource>(sourceId)) {
+            if (auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(sourceId)) {
                 auto src = ImpliedTyping::AsString(data, type);
                 distantIBL->SetEquirectangularSource(nullptr, src);     // todo -- Assets::OperationContext
             }
@@ -994,6 +1034,44 @@ namespace SceneEngine
                 desc._samples._samplingQuality = *value;
                 return true;
             }
+            break;
+        }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::SkyOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        // no useful properties yet
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::SkyTextureProcessorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "CubeMapFaceDimension"_h:
+            if (auto value = ConvertOrCast<unsigned>(data, type)) {
+                desc._cubemapFaceDimension = *value;
+                return true;
+            }
+            break;
+
+        case "CubeMapFormat"_h:
+            SetViaEnumFn<RenderCore::Format, RenderCore::AsFormat>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_cubemapFormat, data, type);
+            break;
+
+        case "SpecularCubeMapFaceDimension"_h:
+            if (auto value = ConvertOrCast<unsigned>(data, type)) {
+                desc._specularCubemapFaceDimension = *value;
+                return true;
+            }
+            break;
+
+        case "SpecularCubeMapFormat"_h:
+            SetViaEnumFn<RenderCore::Format, RenderCore::AsFormat>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_specularCubemapFormat, data, type);
             break;
         }
         return false;

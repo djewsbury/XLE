@@ -32,7 +32,13 @@ namespace RenderCore { namespace LightingEngine
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};
 
-	class SSAOOperator : public std::enable_shared_from_this<SSAOOperator>
+	class ISSAmbientOcclusion
+	{
+	public:
+		virtual ~ISSAmbientOcclusion();
+	};
+
+	class SSAOOperator : public ISSAmbientOcclusion, public std::enable_shared_from_this<SSAOOperator>
 	{
 	public:
 		void Execute(

@@ -14,6 +14,7 @@
 #include "LightingDelegateUtil.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
+#include "SkyOperator.h"
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/DrawableDelegates.h"
@@ -32,39 +33,8 @@ namespace RenderCore { namespace LightingEngine
 	class ForwardPlusLightScene::AmbientLightConfig
 	{
 	public:
-		std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _specularIBL;
-		std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _ambientRawCubemap;
-		std::shared_future<SHCoefficientsAsset> _diffuseIBL;
-
-		enum class SourceImageType { Equirectangular };
-		SourceImageType _sourceImageType = SourceImageType::Equirectangular;
-		std::string _sourceImage;
-
 		AmbientLightOperatorDesc _ambientLightOperator;
 		bool _ambientLightEnabled = false;
-
-		void SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> input)
-		{
-			if (XlEqString(input, _sourceImage)) return;
-			_sourceImage = input.AsString();
-			_sourceImageType = SourceImageType::Equirectangular;
-			_diffuseIBL = ::Assets::MakeAsset<SHCoefficientsAsset>(input);
-
-			Assets::TextureCompilationRequest request;
-			request._operation = Assets::TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular; 
-			request._srcFile = _sourceImage;
-			request._format = Format::BC6H_UF16;
-			request._faceDim = 512;
-			_specularIBL = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request);
-
-			Assets::TextureCompilationRequest request2;
-			request2._operation = Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
-			request2._srcFile = _sourceImage;
-			request2._format = Format::BC6H_UF16;
-			request2._faceDim = 1024;
-			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-			_ambientRawCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request2);
-		}
 	};
 
 	void ForwardPlusLightScene::FinalizeConfiguration()
@@ -144,8 +114,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (sourceId == 0) {
 			switch (interfaceTypeCode) {
-			case TypeHashCode<IDistantIBLSource>: return (IDistantIBLSource*)this;
-			case TypeHashCode<ISSAmbientOcclusion>: return (ISSAmbientOcclusion*)this;
+			case TypeHashCode<ISkyTextureProcessor>:
+				return _queryInterfaceHelper(interfaceTypeCode);	// for the ambient light, get the global ISkyTextureProcessor
 			default: return nullptr;
 			}
 		} else {
@@ -161,33 +131,12 @@ namespace RenderCore { namespace LightingEngine
 		case TypeHashCode<IDynamicShadowProjectionScheduler>:
 			return (IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
 		default:
+			// We get a lambda from the lighting delegate to query for more interfaces. It's a bit awkward, but it's convenient
+			if (_queryInterfaceHelper)
+				if (auto* result = _queryInterfaceHelper(typeCode))
+					return result;
 			return StandardLightScene::QueryInterface(typeCode);
 		}
-	}
-
-	void ForwardPlusLightScene::SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> input)
-	{
-		if (XlEqString(input, _ambientLight->_sourceImage)) return;
-		_ambientLight->SetEquirectangularSource(loadingContext, input);
-		auto weakThis = weak_from_this();
-		::Assets::WhenAll(_ambientLight->_specularIBL, _ambientLight->_diffuseIBL, _ambientLight->_ambientRawCubemap).Then(
-			[weakThis](auto specularIBLFuture, auto diffuseIBLFuture, auto ambientRawCubemapFuture) {
-				auto l = weakThis.lock();
-				if (!l) return;
-
-				ScopedLock(l->_pendingUpdatesLock);
-				l->_pendingSkyTextureUpdate = true;
-				TRY {
-					l->_pendingDiffuseIBL = diffuseIBLFuture.get();
-					l->_pendingSpecularIBL = specularIBLFuture.get();
-					l->_pendingAmbientRawCubemap = ambientRawCubemapFuture.get();
-				} CATCH(...) {
-					// suppress bad texture errors
-					l->_pendingDiffuseIBL = {};
-					l->_pendingSpecularIBL = nullptr;
-					l->_pendingAmbientRawCubemap = nullptr;
-				} CATCH_END
-			});
 	}
 
 	void ForwardPlusLightScene::ConfigureParsingContext(Techniques::ParsingContext& parsingContext, bool enableSSR)
@@ -259,23 +208,6 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardPlusLightScene::Prerender(IThreadContext& threadContext)
 	{
-		{
-			// certain updates processed one per render, in the main rendering thread
-			ScopedLock(_pendingUpdatesLock);
-			if (_pendingSkyTextureUpdate) {
-				if (!_pendingSpecularIBL) {
-					_onChangeSkyTexture(nullptr);
-					std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
-				} else {
-					std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
-					std::memcpy(_diffuseSHCoefficients, _pendingDiffuseIBL.GetCoefficients().begin(), sizeof(Float4*)*std::min(_pendingDiffuseIBL.GetCoefficients().size(), dimof(_diffuseSHCoefficients)));
-					_completionCommandListID = std::max(_completionCommandListID, _pendingAmbientRawCubemap->GetCompletionCommandList());
-					_onChangeSkyTexture(_pendingAmbientRawCubemap);
-				}
-				_pendingSkyTextureUpdate = false;
-			}
-		}
-
 		_lightTiler->CompleteInitialization(threadContext);
 		if (_shadowProbes)
 			_shadowProbes->CompleteInitialization(threadContext);
@@ -334,31 +266,16 @@ namespace RenderCore { namespace LightingEngine
 		return std::make_shared<ShaderResourceDelegate>(*this);
 	}
 
-#if 0
-	std::optional<LightSourceOperatorDesc> ForwardPlusLightScene::GetDominantLightOperator() const
-	{
-		if (!_dominantLightSet)
-			return {};
-		return _positionalLightOperators[_dominantLightSet->_lightOpId];
-	}
-
-	std::optional<ShadowOperatorDesc> ForwardPlusLightScene::GetDominantShadowOperator() const
-	{
-		if (!_dominantLightSet || _dominantLightSet->_shadowOpId == ~0u)
-			return {};
-		return _shadowOperators[_dominantLightSet->_shadowOpId];
-	}
-
-	const AmbientLightOperatorDesc& ForwardPlusLightScene::GetAmbientLightOperatorDesc() const
-	{
-		return _ambientLight->_ambientLightOperator;
-	}
-#endif
-
 	bool ForwardPlusLightScene::ShadowProbesSupported() const
 	{
 		// returns true if we have an operator for shadow probes, even if the shadow probe database hasn't actually been created
 		return _shadowPreparerIdMapping._operatorForStaticProbes != ~0u;
+	}
+
+	void ForwardPlusLightScene::SetDiffuseSHCoefficients(const SHCoefficients& coeffients)
+	{
+		std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
+		std::memcpy(_diffuseSHCoefficients, coeffients.GetCoefficients().begin(), sizeof(Float4)*std::min(coeffients.GetCoefficients().size(), dimof(_diffuseSHCoefficients)));
 	}
 
 #if 0
@@ -391,23 +308,6 @@ namespace RenderCore { namespace LightingEngine
 		return true;
 	}
 #endif
-
-	unsigned ForwardPlusLightScene::BindOnChangeSkyTexture(std::function<void(std::shared_ptr<Techniques::DeferredShaderResource>)>&& fn)
-	{
-		// if we don't have a pending update (ie, if we're not expecting to call the function at the start of next render, anyway, we must
-		// call it now with most recently configured texture)
-		{
-			ScopedLock(_pendingUpdatesLock);
-			if (!_pendingSkyTextureUpdate)
-				fn(_pendingAmbientRawCubemap);
-		}
-		return _onChangeSkyTexture.Bind(std::move(fn));
-	}
-
-	void ForwardPlusLightScene::UnbindOnChangeSkyTexture(unsigned bindId)
-	{
-		_onChangeSkyTexture.Unbind(bindId);
-	}
 
 	ForwardPlusLightScene::ForwardPlusLightScene()
 	{
@@ -444,7 +344,7 @@ namespace RenderCore { namespace LightingEngine
 		const ConstructionServices& constructionServices,
 		ShadowPreparerIdMapping&& shadowPreparerMapping,
 		std::vector<LightOperatorInfo>&& lightOperatorInfo,
-		const RasterizationLightTileOperator::Configuration& tilerCfg)
+		const RasterizationLightTileOperatorDesc& tilerCfg)
 	{
 		auto shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
 			shadowPreparerMapping._shadowPreparers,
@@ -455,7 +355,9 @@ namespace RenderCore { namespace LightingEngine
 		using namespace std::placeholders;
 		::Assets::WhenAll(std::move(shadowPreparationOperatorsFuture), lightTilerFuture).ThenConstructToPromise(
 			std::move(promise),
-			[shadowPreparerMapping=std::move(shadowPreparerMapping), lightOperatorInfo=std::move(lightOperatorInfo), constructionServices](auto shadowPreparer, auto lightTiler) mutable {
+			[shadowPreparerMapping=std::move(shadowPreparerMapping), lightOperatorInfo=std::move(lightOperatorInfo), constructionServices]
+			(auto shadowPreparer, auto lightTiler) mutable
+			{
 				return CreateInternal(constructionServices, std::move(shadowPreparer), std::move(lightTiler), std::move(shadowPreparerMapping), std::move(lightOperatorInfo));
 			});
 	}

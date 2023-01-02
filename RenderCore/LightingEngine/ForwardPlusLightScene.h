@@ -9,7 +9,6 @@
 #include "ShadowProbes.h"
 #include "SHCoefficients.h"
 #include "../Techniques/TechniqueUtils.h"
-#include "../../Utility/FunctionUtils.h"
 #include <optional>
 
 namespace RenderCore { namespace Techniques { class ITechniqueDelegate; class DeferredShaderResource; class IShaderResourceDelegate; } }
@@ -18,12 +17,11 @@ namespace RenderCore { namespace LightingEngine
 {
 	class ScreenSpaceReflectionsOperator;
 	class HierarchicalDepthsOperator;
-	class SkyOperator;
 	class DynamicShadowPreparers;
-	class SHCoefficientsAsset;
+	class SHCoefficients;
 	namespace Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProjectionScheduler; class DominantLightSet; }
 
-	class ForwardPlusLightScene : public Internal::StandardLightScene, public IDistantIBLSource, public ISSAmbientOcclusion, public std::enable_shared_from_this<ForwardPlusLightScene>
+	class ForwardPlusLightScene : public Internal::StandardLightScene, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
 	public:
 		RasterizationLightTileOperator& GetLightTiler() { return *_lightTiler; }
@@ -35,15 +33,9 @@ namespace RenderCore { namespace LightingEngine
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext, bool enableSSR);
 		void Prerender(IThreadContext&);
 
-		// std::optional<LightSourceOperatorDesc> GetDominantLightOperator() const;
-		// std::optional<ShadowOperatorDesc> GetDominantShadowOperator() const;
-		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate();
-		// const AmbientLightOperatorDesc& GetAmbientLightOperatorDesc() const;
+		void SetDiffuseSHCoefficients(const SHCoefficients&);
 
-		// The following are for propagating configuration settings to operators managed by the delegate
-		// signaled on the rendering thread just before rendering begins (ie, avoid long operations)s
-		unsigned BindOnChangeSkyTexture(std::function<void(std::shared_ptr<Techniques::DeferredShaderResource>)>&& fn);
-		void UnbindOnChangeSkyTexture(unsigned);
+		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate();
 
 		// ILightScene
 		virtual LightSourceId CreateAmbientLightSource() override;
@@ -51,9 +43,6 @@ namespace RenderCore { namespace LightingEngine
 		virtual void Clear() override;
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override;
 		virtual void* QueryInterface(uint64_t typeCode) override;
-
-		// IDistantIBLSource
-		virtual void SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext>, StringSection<> input) override;
 
 		bool IsCompatible(
 			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
@@ -90,18 +79,17 @@ namespace RenderCore { namespace LightingEngine
 			const ConstructionServices&,
 			ShadowPreparerIdMapping&& shadowPreparerMapping,
 			std::vector<LightOperatorInfo>&& lightOperatorInfo,
-			const RasterizationLightTileOperator::Configuration& tilerCfg);
+			const RasterizationLightTileOperatorDesc& tilerCfg);
 
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 		std::shared_ptr<Internal::DynamicShadowProjectionScheduler> _shadowScheduler;
+		std::function<void*(uint64_t)> _queryInterfaceHelper;
 
 	private:
-		// std::vector<LightSourceOperatorDesc> _positionalLightOperators;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
-		// std::vector<ShadowOperatorDesc> _shadowOperators;
 		ShadowPreparerIdMapping _shadowPreparerIdMapping;
 		std::vector<LightOperatorInfo> _lightOperatorInfo;
 
@@ -128,14 +116,6 @@ namespace RenderCore { namespace LightingEngine
 		};
 		SceneLightUniforms _uniforms[3];
 		unsigned _pingPongCounter = 0;
-
-		Threading::Mutex _pendingUpdatesLock;
-		bool _pendingSkyTextureUpdate = true;
-		SHCoefficientsAsset _pendingDiffuseIBL;
-		std::shared_ptr<Techniques::DeferredShaderResource> _pendingSpecularIBL;
-		std::shared_ptr<Techniques::DeferredShaderResource> _pendingAmbientRawCubemap;
-
-		Signal<std::shared_ptr<Techniques::DeferredShaderResource>> _onChangeSkyTexture;
 
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
 			const ConstructionServices&,

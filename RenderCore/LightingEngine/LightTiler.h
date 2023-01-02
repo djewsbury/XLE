@@ -28,6 +28,13 @@ namespace RenderCore { namespace LightingEngine
 	class LightingTechniqueIterator;
 	class RenderStepFragmentInterface;
 
+	struct RasterizationLightTileOperatorDesc
+	{
+		unsigned _maxLightsPerView = 256u;
+		unsigned _depthLookupGradiations = 1024u;
+		uint64_t GetHash(uint64_t = DefaultSeed64) const;
+	};
+
 	class RasterizationLightTileOperator : public std::enable_shared_from_this<RasterizationLightTileOperator>
 	{
 	public:
@@ -45,13 +52,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 		Outputs _outputs;
 
-		struct Configuration
-		{
-			unsigned _maxLightsPerView = 256u;
-			unsigned _depthLookupGradiations = 1024u;
-			uint64_t GetHash(uint64_t = DefaultSeed64) const;
-		};
-		Configuration GetConfiguration() const { return _config; }
+		RasterizationLightTileOperatorDesc GetConfiguration() const { return _config; }
 
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		RenderStepFragmentInterface CreateInitFragment(const FrameBufferProperties& fbProps);
@@ -66,13 +67,13 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool,
 			std::shared_ptr<Metal::GraphicsPipeline> prepareBitFieldPipeline,
 			std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout,
-			const Configuration& config);
+			const RasterizationLightTileOperatorDesc& config);
 		~RasterizationLightTileOperator();
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<RasterizationLightTileOperator>>&& promise,
 			std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool,
-			const Configuration& config);
+			const RasterizationLightTileOperatorDesc& config);
 
 		static void Visualize(
 			RenderCore::Techniques::ParsingContext& parsingContext,
@@ -95,7 +96,7 @@ namespace RenderCore { namespace LightingEngine
 		LightStencilingGeometry _stencilingGeo;
 
 		Internal::StandardLightScene* _lightScene;
-		Configuration _config;
+		RasterizationLightTileOperatorDesc _config;
 		UInt2 _lightTileBufferSize = UInt2{0,0};
 		::Assets::DependencyValidation _depVal;
 	};

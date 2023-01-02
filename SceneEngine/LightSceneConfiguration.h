@@ -35,8 +35,11 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::ShadowOperatorDesc> _shadowOperators;
 		ObjectTable<RenderCore::LightingEngine::AmbientLightOperatorDesc> _ambientOperators;
 		ObjectTable<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperators;
+		ObjectTable<RenderCore::LightingEngine::DeferredLightingTechniqueDesc> _deferredLightingOperators;
 		ObjectTable<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> _toneMapAcesOperators;
 		ObjectTable<RenderCore::LightingEngine::MultiSampleOperatorDesc> _multiSampleOperators;
+		ObjectTable<RenderCore::LightingEngine::SkyOperatorDesc> _skyOperators;
+		ObjectTable<RenderCore::LightingEngine::SkyTextureProcessorDesc> _skyTextureProcessors;
 
 		template<typename Formatter>
 			void Deserialize(Formatter& fmttr) 
@@ -59,6 +62,10 @@ namespace SceneEngine
 					RequireBeginElement(fmttr);
 					_forwardLightingOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
+				} else if (XlEqString(name, "DeferredLighting")) {
+					RequireBeginElement(fmttr);
+					_deferredLightingOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
 				} else if (XlEqString(name, "ToneMapAces")) {
 					RequireBeginElement(fmttr);
 					_toneMapAcesOperators.DeserializeObject(fmttr);
@@ -66,6 +73,14 @@ namespace SceneEngine
 				} else if (XlEqString(name, "MultiSample")) {
 					RequireBeginElement(fmttr);
 					_multiSampleOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+				} else if (XlEqString(name, "Sky")) {
+					RequireBeginElement(fmttr);
+					_skyOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+				} else if (XlEqString(name, "SkyTextureProcessor")) {
+					RequireBeginElement(fmttr);
+					_skyTextureProcessors.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 				} else {
 					SkipValueOrElement(fmttr);

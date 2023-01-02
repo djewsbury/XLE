@@ -249,7 +249,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		std::shared_ptr<Metal::GraphicsPipeline> prepareBitFieldPipeline,
 		std::shared_ptr<ICompiledPipelineLayout> prepareBitFieldLayout,
-		const Configuration& config)
+		const RasterizationLightTileOperatorDesc& config)
 	: _pipelinePool(std::move(pipelinePool))
 	, _prepareBitFieldPipeline(std::move(prepareBitFieldPipeline))
 	, _prepareBitFieldLayout(std::move(prepareBitFieldLayout))
@@ -292,7 +292,7 @@ namespace RenderCore { namespace LightingEngine
 	void RasterizationLightTileOperator::ConstructToPromise(
 		std::promise<std::shared_ptr<RasterizationLightTileOperator>>&& promise,
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-		const Configuration& config)
+		const RasterizationLightTileOperatorDesc& config)
 	{
 		const char pipelineLayoutAssetName[] = TILED_LIGHTING_PREPARE_PIPELINE ":GraphicsMain";
 		auto pipelineLayoutMarker = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
@@ -338,7 +338,7 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
-	uint64_t RasterizationLightTileOperator::Configuration::GetHash(uint64_t seed) const
+	uint64_t RasterizationLightTileOperatorDesc::GetHash(uint64_t seed) const
 	{
 		return HashCombine(
 			(uint64_t(_maxLightsPerView) << 32ull) | uint64_t(_depthLookupGradiations),

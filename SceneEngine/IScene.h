@@ -10,6 +10,7 @@
 #include "../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../RenderCore/LightingEngine/DeferredLightingDelegate.h"
 #include "../RenderCore/LightingEngine/ToneMapOperator.h"
+#include "../RenderCore/LightingEngine/SkyOperator.h"
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; } }
@@ -82,6 +83,8 @@ namespace SceneEngine
         void SetOperator(const RenderCore::LightingEngine::DeferredLightingTechniqueDesc&);
         void SetOperator(const RenderCore::LightingEngine::ToneMapAcesOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::MultiSampleOperatorDesc&);
+        void SetOperator(const RenderCore::LightingEngine::SkyOperatorDesc&);
+        void SetOperator(const RenderCore::LightingEngine::SkyTextureProcessorDesc&);
 
         IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> GetLightOperators() const { return _lightResolveOperators; }
         IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> GetShadowOperators() const { return _shadowResolveOperators; }
@@ -102,6 +105,8 @@ namespace SceneEngine
         ChainingTemplate<RenderCore::LightingEngine::DeferredLightingTechniqueDesc> _deferredLightingOperator;
         ChainingTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> _toneMapAcesOperator;
         ChainingTemplate<RenderCore::LightingEngine::MultiSampleOperatorDesc> _msaaOperator;
+        ChainingTemplate<RenderCore::LightingEngine::SkyOperatorDesc> _skyOperator;
+        ChainingTemplate<RenderCore::LightingEngine::SkyTextureProcessorDesc> _skyTextureProcessor;
         RenderCore::LightingEngine::ChainedOperatorDesc* _firstChainedOperator = nullptr;
 
         template<typename T> void AddToOperatorList(T& op);

@@ -54,12 +54,14 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ToneMapAcesOperator> _acesOperator;
 		std::shared_ptr<CopyToneMapOperator> _copyToneMapOperator;
 		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
+		std::shared_ptr<ISkyTextureProcessor> _skyTextureProcessor;
 
 		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
 		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext);
 
-		void ConfigureSkyOperatorBindings();
+		OnSkyTextureUpdateFn MakeOnSkyTextureUpdate();
+		OnIBLUpdateFn MakeOnIBLUpdate();
 
 		struct SecondStageConstructionOperators;
 		auto ConstructMainSequence(
@@ -72,13 +74,6 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
 			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite) -> std::shared_ptr<SecondStageConstructionOperators>;
-
-		std::vector<unsigned> _boundOnSkyTextureChange;
-		~ForwardLightingCaptures()
-		{
-			if (_lightScene)
-				for (auto b:_boundOnSkyTextureChange) _lightScene->UnbindOnChangeSkyTexture(b);
-		}
 	};
 
 	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
@@ -106,29 +101,30 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler->ClearPreparedShadows();
 	}
 
-	void ForwardLightingCaptures::ConfigureSkyOperatorBindings()
+	OnSkyTextureUpdateFn ForwardLightingCaptures::MakeOnSkyTextureUpdate()
 	{
-		unsigned binding0 = _lightScene->BindOnChangeSkyTexture(
-			[weakSkyOperator=std::weak_ptr<SkyOperator>(_skyOperator)](auto texture) {
-				auto l=weakSkyOperator.lock();
-				if (l) l->SetResource(texture ? texture->GetShaderResource() : nullptr);
-			});
-		unsigned binding1 = _lightScene->BindOnChangeSkyTexture(
-			[weakSSROperator=std::weak_ptr<ScreenSpaceReflectionsOperator>(_ssrOperator)](auto texture) {
-				auto l=weakSSROperator.lock();
-				if (l) {
-					// Note -- this is getting the full sky texture (not the specular IBL prefiltered texture!)
-					if (texture) {
-						TextureViewDesc adjustedViewDesc;
-						adjustedViewDesc._mipRange._min = 2;
-						auto adjustedView = texture->GetShaderResource()->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
-						l->SetSpecularIBL(adjustedView);
-					} else
-						l->SetSpecularIBL(nullptr);
-				}
-			});
-		_boundOnSkyTextureChange.push_back(binding0);
-		_boundOnSkyTextureChange.push_back(binding1);
+		if (_ssrOperator) {
+			return 
+				[weakSSROperator=std::weak_ptr<ScreenSpaceReflectionsOperator>(_ssrOperator)](auto texture, auto completion) {
+					auto l=weakSSROperator.lock();
+					if (l) {
+						// Note -- this is getting the full sky texture (not the specular IBL prefiltered texture!)
+						if (texture) {
+							TextureViewDesc adjustedViewDesc;
+							adjustedViewDesc._mipRange._min = 2;
+							auto adjustedView = texture->GetResource()->CreateTextureView(BindFlag::ShaderResource, adjustedViewDesc);
+							l->SetSpecularIBL(adjustedView);
+						} else
+							l->SetSpecularIBL(nullptr);
+					}
+				};
+		}
+		return {};
+	}
+
+	OnIBLUpdateFn ForwardLightingCaptures::MakeOnIBLUpdate()
+	{
+		return {};
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
@@ -255,8 +251,7 @@ namespace RenderCore { namespace LightingEngine
 		skySubpass.AppendOutput(lightResolve);
 		skySubpass.SetDepthStencil(depth);
 		skySubpass.SetName("Sky");
-		const bool drawIBLAsSky = true;
-		if (drawIBLAsSky) {
+		if (captures->_skyOperator) {
 			result.AddSubpass(
 				std::move(skySubpass),
 				[weakCaptures = std::weak_ptr<ForwardLightingCaptures>{captures}](LightingTechniqueIterator& iterator) {
@@ -264,6 +259,7 @@ namespace RenderCore { namespace LightingEngine
 					if (l) l->_skyOperator->Execute(iterator);
 				});
 		} else {
+			// This sends a message back to the client to draw the sky
 			result.AddSkySubpass(std::move(skySubpass));
 		}
 
@@ -324,10 +320,12 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<AmbientOcclusionOperatorDesc> _ssao;
 		std::optional<ToneMapAcesOperatorDesc> _tonemapAces;
 		std::optional<MultiSampleOperatorDesc> _msaa;
+		std::optional<SkyTextureProcessorDesc> _skyTextureProcessor;
+		std::optional<SkyOperatorDesc> _sky;
 
 		ForwardPlusLightScene::ShadowPreparerIdMapping _shadowPrepreparerIdMapping;
 		std::vector<ForwardPlusLightScene::LightOperatorInfo> _lightSceneOperatorInfo;
-		RasterizationLightTileOperator::Configuration _tilingConfig;
+		RasterizationLightTileOperatorDesc _tilingConfig;
 
 		std::optional<LightSourceOperatorDesc> _dominantLightOperator;
 		std::optional<ShadowOperatorDesc> _dominantShadowOperator;
@@ -379,6 +377,7 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 
+			bool gotTiledLightingConfig = false;
 			auto* chain = globalOperatorsChain;
 			while (chain) {
 				switch(chain->_structureType) {
@@ -404,6 +403,25 @@ namespace RenderCore { namespace LightingEngine
 					if (_msaa)
 						Throw(std::runtime_error("Multiple antialiasing operators found, where only one expected"));
 					_msaa = ChainedOperatorCast<MultiSampleOperatorDesc>(*chain);
+					break;
+
+				case TypeHashCode<SkyOperatorDesc>:
+					if (_sky)
+						Throw(std::runtime_error("Multiple sky operators found, where only one expected"));
+					_sky = ChainedOperatorCast<SkyOperatorDesc>(*chain);
+					break;
+
+				case TypeHashCode<SkyTextureProcessorDesc>:
+					if (_skyTextureProcessor)
+						Throw(std::runtime_error("Multiple sky operators found, where only one expected"));
+					_skyTextureProcessor = ChainedOperatorCast<SkyTextureProcessorDesc>(*chain);
+					break;
+
+				case TypeHashCode<RasterizationLightTileOperatorDesc>:
+					if (gotTiledLightingConfig)
+						Throw(std::runtime_error("Multiple tiled lighting operators found, where only one expected"));
+					_tilingConfig = ChainedOperatorCast<RasterizationLightTileOperatorDesc>(*chain);
+					gotTiledLightingConfig = false;
 					break;
 				}
 				chain = chain->_next;
@@ -521,7 +539,8 @@ namespace RenderCore { namespace LightingEngine
 		// This is because low level graphics pipelines used the FrameBufferDesc as a construction parameter
 		// It also gives the operator full context about how it's going to be used
 		auto ops = std::make_shared<SecondStageConstructionOperators>();
-		ops->_futureSky = SecondStageConstruction(*_skyOperator, AsFrameBufferTarget(mainSequence, mainSceneFragmentRegistration));
+		if (_skyOperator)
+			ops->_futureSky = SecondStageConstruction(*_skyOperator, AsFrameBufferTarget(mainSequence, mainSceneFragmentRegistration));
 		if (_ssrOperator)
 			ops->_futureSSR = SecondStageConstruction(*_ssrOperator, AsFrameBufferTarget(mainSequence, ssrFragmentReg));
 		ops->_futureHierarchicalDepths = SecondStageConstruction(*_hierarchicalDepthsOperator, AsFrameBufferTarget(mainSequence, hierachicalDepthsReg));
@@ -611,14 +630,21 @@ namespace RenderCore { namespace LightingEngine
 					// operators
 					auto msaaSamples = digest._msaa ? digest._msaa->_samples : TextureSamples::Create(); 
 					captures->_hierarchicalDepthsOperator = std::make_shared<HierarchicalDepthsOperator>(pipelinePool);
-					captures->_skyOperator = std::make_shared<SkyOperator>(pipelinePool, SkyOperatorDesc { SkyTextureType::Equirectangular });
-					captures->ConfigureSkyOperatorBindings();
+					if (digest._sky)
+						captures->_skyOperator = std::make_shared<SkyOperator>(pipelinePool, *digest._sky);
 					if (digest._ssr)
 						captures->_ssrOperator = std::make_shared<ScreenSpaceReflectionsOperator>(pipelinePool, *digest._ssr);
 					if (digest._tonemapAces) {
 						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces);
 					} else {
 						captures->_copyToneMapOperator = std::make_shared<CopyToneMapOperator>(pipelinePool);
+					}
+
+					if (digest._skyTextureProcessor) {
+						captures->_skyTextureProcessor = CreateSkyTextureProcessor(
+							*digest._skyTextureProcessor, captures->_skyOperator,
+							captures->MakeOnSkyTextureUpdate(),
+							captures->MakeOnIBLUpdate());
 					}
 
 					auto depthMotionNormalRoughnessDelegate = helper->_depthMotionNormalRoughnessDelegate.get();
@@ -633,11 +659,15 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(balancedNoiseTexture->GetDependencyValidation());
-					lightingTechnique->_queryInterfaceHelper =
+					captures->_lightScene->_queryInterfaceHelper = lightingTechnique->_queryInterfaceHelper =
 						[captures](uint64_t typeCode) -> void* {
 							switch (typeCode) {
 							case TypeHashCode<IBloom>:
 								return (IBloom*)captures->_acesOperator.get();
+							case TypeHashCode<ISkyTextureProcessor>:
+								return (ISkyTextureProcessor*)captures->_skyTextureProcessor.get();
+							// case TypeHashCode<ISSAmbientOcclusion>:
+							// 	return (ISSAmbientOcclusion*)captures->_ssao.get();
 							}
 							return nullptr;
 						};
@@ -647,6 +677,8 @@ namespace RenderCore { namespace LightingEngine
 						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
 							captures->_lightScene->Prerender(*iterator._threadContext);
+							if (captures->_skyTextureProcessor)
+								SkyTextureProcessorPrerender(*captures->_skyTextureProcessor);
 						});
 
 					// main sequence & setup second stage construction
@@ -676,7 +708,7 @@ namespace RenderCore { namespace LightingEngine
 							// secondStageHelper->_futureSSAO.get();
 							if (secondStageHelper->_futureAces.valid()) secondStageHelper->_futureAces.get();
 							if (secondStageHelper->_futureCopyToneMap.valid()) secondStageHelper->_futureCopyToneMap.get();
-							secondStageHelper->_futureSky.get();
+							if (secondStageHelper->_futureSky.valid()) secondStageHelper->_futureSky.get();
 
 							// register dep vals for operators after we've done their second-stage-construction 
 							lightingTechnique->_depVal.RegisterDependency(captures->_hierarchicalDepthsOperator->GetDependencyValidation());
@@ -686,7 +718,8 @@ namespace RenderCore { namespace LightingEngine
 								lightingTechnique->_depVal.RegisterDependency(captures->_acesOperator->GetDependencyValidation());
 							if (captures->_copyToneMapOperator)
 								lightingTechnique->_depVal.RegisterDependency(captures->_copyToneMapOperator->GetDependencyValidation());
-							lightingTechnique->_depVal.RegisterDependency(captures->_skyOperator->GetDependencyValidation());
+							if (captures->_skyOperator)
+								lightingTechnique->_depVal.RegisterDependency(captures->_skyOperator->GetDependencyValidation());
 
 							// Everything finally finished
 							return lightingTechnique;

@@ -149,7 +149,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		for (auto s=_lightSets.begin(); s!=_lightSets.end(); ++s)
 			if (s->_operatorId == lightOperator && s->_shadowOperatorId == shadowOperator)
-				return std::distance(_lightSets.begin(), s);
+				return (unsigned)std::distance(_lightSets.begin(), s);
 		_lightSets.push_back(LightSet{lightOperator, shadowOperator});
 		auto newSetIdx =  (unsigned)_lightSets.size()-1;
 		auto& newSet = _lightSets.back();
@@ -288,8 +288,6 @@ namespace RenderCore { namespace LightingEngine
 	IPositionalLightSource::~IPositionalLightSource() {}
 	IUniformEmittance::~IUniformEmittance() {}
 	IFiniteLightSource::~IFiniteLightSource() {}
-	IDistantIBLSource::~IDistantIBLSource() {}
-	ISSAmbientOcclusion::~ISSAmbientOcclusion() {}
 	IDepthTextureResolve::~IDepthTextureResolve() {}
 	IArbitraryShadowProjections::~IArbitraryShadowProjections() {}
 	IOrthoShadowProjections::~IOrthoShadowProjections() {}

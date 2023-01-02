@@ -70,19 +70,6 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~IFiniteLightSource();
 	};
 
-	class IDistantIBLSource
-	{
-	public:
-		virtual void SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext>, StringSection<> input) = 0;
-		virtual ~IDistantIBLSource();
-	};
-
-	class ISSAmbientOcclusion
-	{
-	public:
-		virtual ~ISSAmbientOcclusion();
-	};
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class IDepthTextureResolve
