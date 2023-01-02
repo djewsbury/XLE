@@ -2845,6 +2845,7 @@ namespace RenderCore { namespace ImplVulkan
 			cmdListSyncs._presentFenceWaitable = true;
 		} CATCH(const std::exception& e) {
 			Log(Warning) << "Failure during queue submission for present: " << e.what() << std::endl;
+			cmdListSyncs._presentFenceWaitable = false;		// we cannot wait on this fence, because the cmd list was not submitted
 		} CATCH_END
 
 		PumpDestructionQueues();

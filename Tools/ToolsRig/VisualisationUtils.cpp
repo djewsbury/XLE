@@ -231,8 +231,6 @@ namespace ToolsRig
 				_pendingCameraReset = false;
 			}
 
-			ApplyTweakables(*actualizedScene->_compiledLightingTechnique);
-
 			auto cam = _camera ? AsCameraDesc(*_camera) : RenderCore::Techniques::CameraDesc{};
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
 			{
@@ -334,11 +332,8 @@ namespace ToolsRig
 		// at the same time
 		if (_preparedSceneFuture)
 			_preparedSceneFuture->StallWhilePending();
+		_preparedSceneFuture = nullptr;
 
-		//
-		// envSettings -> compiledLightingTechnique -> preparedShaders -> PreparedScene
-		//                SceneEngine::IScene ----------------^
-		//
 		_preparedSceneFuture = std::make_shared<::Assets::MarkerPtr<PreparedScene>>("simple-scene-layer");
 
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
