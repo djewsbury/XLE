@@ -433,14 +433,20 @@ namespace RenderOverlays
 
 				if (expect_evaluation(ch == '{', false)) {
 					if (text.size() > 6 && XlEqStringI({text.begin(), text.begin()+6}, DrawingTags<CharType>::s_changeColor)) {
-						unsigned newColorOverride = 0;
-						unsigned parseLength = ParseColorValue(text._start+6, &newColorOverride);
-						if (parseLength) {
-							colorOverride = newColorOverride;
-							text._start += 6 + parseLength;
-							while (text._start!=text.end() && *text._start != '}') ++text._start;
-							if (text._start!=text.end()) ++text._start;
+						if (text._start+6 != text.end() && *(text._start+6) == '}') {
+							colorOverride = 0;
+							text._start += 7;
 							continue;
+						} else {
+							unsigned newColorOverride = 0;
+							unsigned parseLength = ParseColorValue(text._start+6, &newColorOverride);
+							if (parseLength) {
+								colorOverride = newColorOverride;
+								text._start += 6 + parseLength;
+								while (text._start!=text.end() && *text._start != '}') ++text._start;
+								if (text._start!=text.end()) ++text._start;
+								continue;
+							}
 						}
 					}
 				}

@@ -5,7 +5,9 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "GPUProfileDisplay.h"
+#include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderCore/IAnnotator.h"
+#include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -15,6 +17,54 @@
 
 namespace PlatformRig { namespace Overlays
 {
+    using namespace RenderOverlays;
+    using namespace RenderOverlays::DebuggingDisplay;
+
+    class GPUProfileDisplay : public IWidget ///////////////////////////////////////////////////////////
+    {
+    public:
+        GPUProfileDisplay(RenderCore::IAnnotator& profiler);
+        ~GPUProfileDisplay();
+        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
+
+		void    ProcessGPUEvents(const void* eventsBufferStart, const void* eventsBufferEnd);
+
+    private:
+        typedef float GPUDuration;
+        typedef uint64 GPUTime;
+        typedef unsigned FrameId;
+
+        static const unsigned DurationHistoryLength = 1024;
+        struct Section
+        {
+            const char* _id;
+            GPUDuration _durationHistory[DurationHistoryLength];
+            unsigned _durationHistoryLength;
+            float _graphMin, _graphMax;
+            unsigned _flags;
+
+            enum Flags
+            {
+                Flag_Pause = 1<<0,
+                Flag_Hide = 1<<1
+            };
+        };
+        Section _sections[20];
+
+        class GPUFrameConstruction;
+        std::unique_ptr<GPUFrameConstruction> _currentFrame;
+        GPUTime _endOfLastFrame;
+
+        RenderCore::IAnnotator* _profiler;
+		unsigned _listenerId;
+
+        ::Assets::PtrToMarkerPtr<RenderOverlays::Font> _sectionFont;
+
+        void    PushSectionInfo(const char id[], GPUTime selfTime);
+        static float   ToGPUDuration(GPUTime time, GPUTime frequency);
+    };
+
     ////////////////////////////////////////////////////////////////////////////////////////////
     class GPUProfileDisplay::GPUFrameConstruction
     {
@@ -161,6 +211,9 @@ namespace PlatformRig { namespace Overlays
 
     void    GPUProfileDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
     {
+        auto* sectionFont = _sectionFont->TryActualize();
+        if (!sectionFont) return;
+
         std::pair<float, unsigned> smoothedSectionCosts[dimof(_sections)];
         float sectionVariances[dimof(_sections)];
         for (unsigned c=0; c<dimof(_sections); ++c) {
@@ -190,11 +243,12 @@ namespace PlatformRig { namespace Overlays
             if (section._id && !(section._flags & Section::Flag_Hide)) {
                 //  Main outline for the section...
                 Rect sectionRect = layout.AllocateFullWidth( sectionHeight );
-                if (!IsGood(sectionRect)) {
+                if (!IsGood(sectionRect))
                     break;
-                }
 
-                FillAndOutlineRoundedRectangle(context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
+                static ColorB backgroundColor{66,120,105,128};
+                static ColorB outlineColor{255,255,255,255};
+                FillAndOutlineRoundedRectangle(context, sectionRect, backgroundColor, outlineColor);
 
                 Layout sectionLayout(sectionRect);
                 Rect labelRect = sectionLayout.AllocateFullHeightFraction( .15f );
@@ -204,7 +258,7 @@ namespace PlatformRig { namespace Overlays
                 Rect sectionNameRect( 
                     Coord2(labelRect._topLeft[0], labelRect._topLeft[1]),
                     Coord2(labelRect._bottomRight[0], LinearInterpolate(labelRect._topLeft[1], labelRect._bottomRight[1], 0.333f)) );
-                DrawText().Draw(context, sectionNameRect, section._id);
+                DrawText().Font(**sectionFont).Draw(context, sectionNameRect, section._id);
 
 				if (section._durationHistoryLength) {
                     Rect durationRect( 
@@ -213,12 +267,12 @@ namespace PlatformRig { namespace Overlays
 
                     float recentCost = section._durationHistory[section._durationHistoryLength-1];
                     float smoothedCost = smoothedSectionCosts[c2].first;
-                    DrawText().FormatAndDraw(context, durationRect, "%.2fms (%.2fms)", smoothedCost, recentCost);
+                    DrawText().FormatAndDraw(context, durationRect, "%.2f{Color:74daa8}ms{Color:} (%.2f{Color:74daa8}ms{Color:})", smoothedCost, recentCost);
 
                     Rect varianceRect( 
                         Coord2(labelRect._topLeft[0], durationRect._bottomRight[1]),
                         Coord2(labelRect._bottomRight[0], labelRect._bottomRight[1]) );
-                    DrawText().FormatAndDraw(context, varianceRect, "%.2fms variance", sectionVariances[smoothedSectionCosts[c2].second]);
+                    DrawText().FormatAndDraw(context, varianceRect, "%.2f{Color:74daa8}ms {Color:afafaf}variance", sectionVariances[smoothedSectionCosts[c2].second]);
                 }
 
                 //  Then draw the graph in the main part of the widget
@@ -360,10 +414,16 @@ namespace PlatformRig { namespace Overlays
         XlZeroMemory(_sections);
         _endOfLastFrame = 0;
 		_listenerId = profiler.AddEventListener(std::bind(&GPUEventListener, std::ref(*this), std::placeholders::_1, std::placeholders::_2));
+        _sectionFont = RenderOverlays::MakeFont("OrbitronBlack", 20);
     }
 
     GPUProfileDisplay::~GPUProfileDisplay()
     {
         _profiler->RemoveEventListener(_listenerId);
+    }
+
+    std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateGPUProfilerDisplay(RenderCore::IAnnotator& profiler)
+    {
+        return std::make_shared<GPUProfileDisplay>(profiler);
     }
 }}

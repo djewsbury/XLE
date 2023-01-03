@@ -51,12 +51,12 @@ namespace Sample
 		if (auto* annotator = &globals._windowApparatus->_immediateContext->GetAnnotator()) {
 			globals._displayRegistrations.emplace_back(
 				"[Profiler] GPU Profiler",
-				std::make_shared<PlatformRig::Overlays::GPUProfileDisplay>(*annotator));
+				PlatformRig::Overlays::CreateGPUProfilerDisplay(*annotator));
 		}
 
 		globals._displayRegistrations.emplace_back(
 			"[Profiler] CPU Profiler",
-			std::make_shared<PlatformRig::Overlays::HierarchicalProfilerDisplay>(globals._frameRenderingApparatus->_frameCPUProfiler.get()));
+			PlatformRig::Overlays::CreateHierarchicalProfilerDisplay(*globals._frameRenderingApparatus->_frameCPUProfiler));
 
 		if (auto assetSets = ::Assets::Services::GetAssetSetsPtr())
 			globals._displayRegistrations.emplace_back(

@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "CPUProfileDisplay.h"
+#include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../OSServices/TimeUtils.h"
 #include "../../Assets/Continuation.h"
@@ -262,9 +263,20 @@ namespace PlatformRig { namespace Overlays
             ProjectionMode::P2D, dividingLines, unsigned(divingLinesIterator - dividingLines), settings._dividingLineColor);
     }
 
-    class HierarchicalProfilerDisplay::Pimpl
+    class HierarchicalProfilerDisplay : public RenderOverlays::DebuggingDisplay::IWidget ///////////////////////////////////////////////////////////
     {
     public:
+        typedef RenderOverlays::IOverlayContext IOverlayContext;
+        typedef RenderOverlays::DebuggingDisplay::Layout Layout;
+        typedef RenderOverlays::DebuggingDisplay::Interactables Interactables;
+        typedef RenderOverlays::DebuggingDisplay::InterfaceState InterfaceState;
+        
+        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
+
+        HierarchicalProfilerDisplay(IHierarchicalProfiler* profiler);
+        ~HierarchicalProfilerDisplay();
+    
         IHierarchicalProfiler* _profiler;
         IHierarchicalProfiler::ListenerId _listenerId;
         std::vector<uint64_t> _toggledItems;
@@ -275,7 +287,7 @@ namespace PlatformRig { namespace Overlays
         void IngestFrameData(IteratorRange<const void*> rawData);
     };
 
-    void HierarchicalProfilerDisplay::Pimpl::IngestFrameData(IteratorRange<const void*> rawData)
+    void HierarchicalProfilerDisplay::IngestFrameData(IteratorRange<const void*> rawData)
     {
         auto resolvedEvents = IHierarchicalProfiler::CalculateResolvedEvents(rawData);
         ScopedLock(_resolvedEventsLock);
@@ -288,13 +300,13 @@ namespace PlatformRig { namespace Overlays
     {
         std::vector<IHierarchicalProfiler::ResolvedEvent> resolvedEvents;
         {
-            ScopedLock(_pimpl->_resolvedEventsLock);
-            resolvedEvents = _pimpl->_resolvedEvents;
+            ScopedLock(_resolvedEventsLock);
+            resolvedEvents = _resolvedEvents;
         }
         Layout tableView(layout.GetMaximumSize());
-        tableView._caretY -= _pimpl->_rowOffset * 200;
+        tableView._caretY -= _rowOffset * 200;
         static ProfilerTableSettings settings;
-        DrawProfilerTable(resolvedEvents, _pimpl->_toggledItems, settings, context, tableView,
+        DrawProfilerTable(resolvedEvents, _toggledItems, settings, context, tableView,
                             interactables, interfaceState);
     }
 
@@ -305,11 +317,11 @@ namespace PlatformRig { namespace Overlays
             auto topId = interfaceState.TopMostWidget()._id;
             if ((topId >> 32ull) == g_InteractableIdTopPart) {
                 if (input.IsRelease_LButton()) {
-                    auto i = std::lower_bound(_pimpl->_toggledItems.cbegin(), _pimpl->_toggledItems.cend(), topId);
-                    if (i!=_pimpl->_toggledItems.cend() && *i == topId) {
-                        _pimpl->_toggledItems.erase(i);
+                    auto i = std::lower_bound(_toggledItems.cbegin(), _toggledItems.cend(), topId);
+                    if (i!=_toggledItems.cend() && *i == topId) {
+                        _toggledItems.erase(i);
                     } else {
-                        _pimpl->_toggledItems.insert(i, topId);
+                        _toggledItems.insert(i, topId);
                     }
                 }
 
@@ -318,24 +330,27 @@ namespace PlatformRig { namespace Overlays
         }
         for (const auto& b:input._activeButtons) {
             if (b._name == "up"_key && b._transition && b._state) {
-                _pimpl->_rowOffset = std::max(0, _pimpl->_rowOffset-1);
+                _rowOffset = std::max(0, _rowOffset-1);
             } else if (b._name == "down"_key && b._transition && b._state)
-                ++_pimpl->_rowOffset;
+                ++_rowOffset;
         }
         return ProcessInputResult::Passthrough;
     }
 
     HierarchicalProfilerDisplay::HierarchicalProfilerDisplay(IHierarchicalProfiler* profiler)
     {
-        _pimpl = std::make_unique<Pimpl>();
-        _pimpl->_profiler = profiler;
-        auto* pimpl = _pimpl.get();
-        _pimpl->_listenerId = _pimpl->_profiler->AddEventListener(
-            [pimpl](IHierarchicalProfiler::RawEventData data) { pimpl->IngestFrameData(data); });
+        _profiler = profiler;
+        _listenerId = _profiler->AddEventListener(
+            [this](IHierarchicalProfiler::RawEventData data) { this->IngestFrameData(data); });
     }
 
     HierarchicalProfilerDisplay::~HierarchicalProfilerDisplay()
     {
-        _pimpl->_profiler->RemoveEventListener(_pimpl->_listenerId);
+        _profiler->RemoveEventListener(_listenerId);
+    }
+
+    std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateHierarchicalProfilerDisplay(Utility::IHierarchicalProfiler& profiler)
+    {
+        return std::make_shared<HierarchicalProfilerDisplay>(&profiler);
     }
 }}
