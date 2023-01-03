@@ -516,7 +516,7 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
 
 					captures->_lightScene->_queryInterfaceHelper = lightingTechnique->_queryInterfaceHelper =
-						[captures](uint64_t typeCode) -> void* {
+						[captures=captures.get()](uint64_t typeCode) -> void* {
 							switch (typeCode) {
 							case TypeHashCode<IBloom>:
 								return (IBloom*)captures->_acesOperator.get();
@@ -573,6 +573,8 @@ namespace RenderCore { namespace LightingEngine
 						assert(captures->_copyToneMapOperator);
 						toneMapReg = mainSequence.CreateStep_RunFragments(captures->_copyToneMapOperator->CreateFragment(stitchingContext._workingProps));
 					}
+
+					mainSequence.ResolvePendingCreateFragmentSteps();		// finish render pass
 
 					// generate debugging outputs
 					if (flags & DeferredLightingTechniqueFlags::GenerateDebuggingTextures) {
@@ -685,12 +687,15 @@ namespace RenderCore { namespace LightingEngine
 		sp.AppendNonFrameBufferAttachmentView(fbDesc.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::ShaderResource), BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::Depth});
 		fbDesc.AddSubpass(std::move(sp));
 
-		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
+		// barrier input resources before we begin the render pass
+		parsingContext.GetAttachmentReservation().AutoBarrier(
+			parsingContext.GetThreadContext(),
+			{
+				{parsingContext.GetAttachmentReservation().MapSemanticToName(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource, ShaderStage::Pixel},
+				{parsingContext.GetAttachmentReservation().MapSemanticToName(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, ShaderStage::Pixel}
+			});
 
-		rpi.AutoNonFrameBufferBarrier({
-			{0, BindFlag::ShaderResource, ShaderStage::Pixel},
-			{1, BindFlag::ShaderResource, ShaderStage::Pixel}
-		});
+		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "GBuffer_Normals"_h);

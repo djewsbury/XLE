@@ -236,6 +236,7 @@ namespace UnitTests
 
 			auto normalsFittingTexture = ::Assets::ActualizeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 			_normalsFittingSRV = normalsFittingTexture->GetShaderResource();
+			_completionCmdList = normalsFittingTexture->GetCompletionCommandList();
 		}
 
 		RenderCore::UniformsStreamInterface _interface;
@@ -372,11 +373,13 @@ namespace UnitTests
 		cameras[2]._nearClip = 0.f;
 		cameras[2]._farClip = 100.f;
 
+		const char* cameraName[] { "proj-flat", "proj-2", "ortho" };
+
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("write gbuffer")
 		{
 			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
-			auto futureTechDel = promisedTechDel.get_future();
+			std::shared_future<std::shared_ptr<Techniques::ITechniqueDelegate>> futureTechDel = promisedTechDel.get_future();
 			RenderCore::Techniques::CreateTechniqueDelegate_Deferred(
 				std::move(promisedTechDel),
 				::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH));
@@ -391,15 +394,12 @@ namespace UnitTests
 
 				auto globalDelegate = std::make_shared<GBufferConstructionUnitTestGlobalUniforms>();
 				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(globalDelegate);
+				parsingContext.RequireCommandList(globalDelegate->_completionCmdList);
 
 				std::shared_ptr<IResource> diffuseResource, normalResource, parameterResource, depthResource;
 				std::shared_ptr<IResource> reconstructedWorldPosition, reconstructedWorldNormal;
 				std::shared_ptr<IResource> directWorldPosition, directWorldNormal;
 				RenderCore::Techniques::AttachmentReservation attachmentReservation;
-
-				testApparatus._bufferUploads->Update(*threadContext);
-				Threading::Sleep(16);
-				testApparatus._bufferUploads->Update(*threadContext);
 
 				// Prepare gbuffer using standard technique delegate
 				{
@@ -502,6 +502,8 @@ namespace UnitTests
 							pkt);
 					}
 				}
+				if (parsingContext._requiredBufferUploadsCommandList)
+					testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 				testHelper->EndFrameCapture();
 
 				ReadyForTransfer(*threadContext, *reconstructedWorldPosition);
@@ -509,9 +511,9 @@ namespace UnitTests
 				ReadyForTransfer(*threadContext, *directWorldPosition);
 				ReadyForTransfer(*threadContext, *directWorldNormal);
 
-				SaveImage(*threadContext, *diffuseResource, "gbuffer-diffuse");
-				SaveImage(*threadContext, *normalResource, "gbuffer-normals");
-				SaveImage(*threadContext, *parameterResource, "gbuffer-parameters");
+				SaveImage(*threadContext, *diffuseResource, std::string{"gbuffer-diffuse-"} + cameraName[c]);
+				SaveImage(*threadContext, *normalResource, std::string{"gbuffer-normals-"} + cameraName[c]);
+				SaveImage(*threadContext, *parameterResource, std::string{"gbuffer-parameters-"} + cameraName[c]);
 				// SaveImage(*threadContext, *reconstructedWorldPosition, "reconstructed-world-position");
 				// SaveImage(*threadContext, *directWorldPosition, "direct-world-position");
 				auto reconstructedPositionData = reconstructedWorldPosition->ReadBackSynchronized(*threadContext);

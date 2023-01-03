@@ -107,16 +107,18 @@ namespace UnitTests
 			std::shared_ptr<SceneEngine::ILightingStateDelegate> lightingDelegate,
 			std::shared_ptr<ToolsRig::IDrawablesWriter> drawablesWriter,
 			LightingEngineTestApparatus& lightingApparatus,
-			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-			const RenderCore::FrameBufferProperties& fbProps)
+			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments)
 		{
 			SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
 			lightingDelegate->BindCfg(lightingEngineCfg);
 
-			auto techniqueFuture = RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+			std::promise<std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>> promisedTechnique;
+			auto techniqueFuture = promisedTechnique.get_future();
+			RenderCore::LightingEngine::CreateDeferredLightingTechnique(
+				std::move(promisedTechnique),
 				lightingApparatus._pipelineAccelerators, lightingApparatus._pipelineCollection, lightingApparatus._sharedDelegates,
-				lightingEngineCfg.GetLightOperators(), lightingEngineCfg.GetShadowOperators(),
-				preregAttachments, fbProps);
+				lightingEngineCfg.GetLightOperators(), lightingEngineCfg.GetShadowOperators(), nullptr,
+				preregAttachments);
 
 			::Assets::WhenAll(std::move(techniqueFuture)).ThenConstructToPromise(
 				std::move(promise),
@@ -264,7 +266,7 @@ namespace UnitTests
 			std::move(promise),
 			lightingDelegate, drawablesWriter,
 			testApparatus,
-			parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments(), parsingContext.GetFragmentStitchingContext()._workingProps);
+			parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments());
 
 		// awkwardly, we must pump buffer uploads, because the background thread can stall waiting on a buffer uploads complete
 		while (futureScene.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
@@ -325,7 +327,10 @@ namespace UnitTests
 				ParseScene(drawInstance, *scene._drawablesWriter);
 			}
 
-			auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
+			if (parsingContext._requiredBufferUploadsCommandList)
+				Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
+
+			auto colorLDR = parsingContext.GetAttachmentReservation().MapSemanticToResource(Techniques::AttachmentSemantics::ColorLDR);
 			REQUIRE(colorLDR);
 			SaveImage(*threadContext, *colorLDR, "background-probe-prepare-" + std::to_string(c));
 		}

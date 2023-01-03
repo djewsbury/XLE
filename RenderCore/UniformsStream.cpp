@@ -40,6 +40,12 @@ namespace RenderCore
 	ResourceViewStream::ResourceViewStream(const IResourceView& r0, const IResourceView& r1, const IResourceView& r2, const IResourceView& r3)
 	: _resourceViews({&r0, &r1, &r2, &r3})
 	{}
+	ResourceViewStream::ResourceViewStream(const IResourceView& r0, const IResourceView& r1, const IResourceView& r2, const IResourceView& r3, const IResourceView& r4)
+	: _resourceViews({&r0, &r1, &r2, &r3, &r4})
+	{}
+	ResourceViewStream::ResourceViewStream(const IResourceView& r0, const IResourceView& r1, const IResourceView& r2, const IResourceView& r3, const IResourceView& r4, const IResourceView& r5)
+	: _resourceViews({&r0, &r1, &r2, &r3, &r4, &r5})
+	{}
 
 	void UniformsStreamInterface::BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements)
 	{

@@ -103,6 +103,7 @@ static const char* s_basicTechniqueFile = R"--(
 			CLASSIFY_NORMAL_MAP
 			SKIP_MATERIAL_DIFFUSE=0
 		Preconfiguration=xleres/TechniqueLibrary/Config/Preconfiguration.hlsl
+		PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 	CopyDiffuseAlbedo_NoPatches=~
 		Inherit=~; Shared

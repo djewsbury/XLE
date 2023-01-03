@@ -14,7 +14,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(coefficients.size() <= dimof(_coefficients));
 		assert(coefficients.size() >= 9);
-		_coefficientCount = std::min(coefficients.size(), dimof(_coefficients));
+		_coefficientCount = (unsigned)std::min(coefficients.size(), dimof(_coefficients));
 		for (unsigned c=0; c<_coefficientCount; ++c)
 			_coefficients[c] = coefficients[c];
 	}

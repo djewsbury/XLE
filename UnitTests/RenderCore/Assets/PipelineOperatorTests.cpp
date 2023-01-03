@@ -150,6 +150,9 @@ namespace UnitTests
 			rpi.NextSubpass();
 			operator1->Draw(parsingContext, ResourceViewStream{*rpi.GetInputAttachmentView(0)});
 			outputResource = rpi.GetOutputAttachmentResource(0);
+
+			if (parsingContext._requiredBufferUploadsCommandList)
+				Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 		}
 
 		testHelper->EndFrameCapture();

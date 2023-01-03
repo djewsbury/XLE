@@ -59,6 +59,8 @@ namespace RenderCore
 		ResourceViewStream(const IResourceView&, const IResourceView&);
 		ResourceViewStream(const IResourceView&, const IResourceView&, const IResourceView&);
 		ResourceViewStream(const IResourceView&, const IResourceView&, const IResourceView&, const IResourceView&);
+		ResourceViewStream(const IResourceView&, const IResourceView&, const IResourceView&, const IResourceView&, const IResourceView&);
+		ResourceViewStream(const IResourceView&, const IResourceView&, const IResourceView&, const IResourceView&, const IResourceView&, const IResourceView&);
 	};
 
 	class ConstantBufferElementDesc

@@ -556,13 +556,13 @@ namespace Utility
                 Throw(::Exceptions::BasicLabel("Empty name in parameter box deserialization"));
             
             if constexpr (!std::is_same_v<CharType, utf8>) {
-                auto nameLen = (size_t(name._end) - size_t(name._start)) / sizeof(CharType);
+                auto nameLen = (size_t(keyname._end) - size_t(keyname._start)) / sizeof(CharType);
                 {
                     nameBuffer.resize(nameLen*2+1);
                     
                     auto nameConvResult = Conversion::Convert(
                         AsPointer(nameBuffer.begin()), nameBuffer.size(),
-                        name._start, name._end);
+                        keyname._start, keyname._end);
 
                     nameLen = std::min(nameBuffer.size()-1, (size_t)nameConvResult);
                     nameBuffer[nameLen] = '\0';

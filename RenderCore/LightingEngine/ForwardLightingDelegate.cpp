@@ -625,7 +625,7 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(balancedNoiseTexture->GetDependencyValidation());
 					captures->_lightScene->_queryInterfaceHelper = lightingTechnique->_queryInterfaceHelper =
-						[captures](uint64_t typeCode) -> void* {
+						[captures=captures.get()](uint64_t typeCode) -> void* {
 							switch (typeCode) {
 							case TypeHashCode<IBloom>:
 								return (IBloom*)captures->_acesOperator.get();

@@ -15,6 +15,7 @@
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Drawables.h"		// unfortunately required for PreparedResourcesVisibility
+#include "../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
@@ -1141,6 +1142,9 @@ namespace UnitTests
 				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->OnFrameBarrier();	// flip visible
 			}
 			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, fbHelper.GetDesc(), 0);
+
+			if (parserContext._requiredBufferUploadsCommandList)
+				testHelper.GetPrimaryResourcesApparatus()->_bufferUploads->StallAndMarkCommandListDependency(*threadContext, parserContext._requiredBufferUploadsCommandList);
 		}
 		fbHelper.SaveImage(*threadContext, output);
 	}

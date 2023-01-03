@@ -68,14 +68,6 @@ namespace UnitTests
 		return PrepareAndStall(testApparatus, std::move(prepareFuture));
 	}
 
-	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
-	{
-		auto& immContext= *testApparatus._metalTestHelper->_device->GetImmediateContext();
-		testApparatus._bufferUploads->Update(immContext);
-		Threading::Sleep(16);
-		testApparatus._bufferUploads->Update(immContext);
-	}
-
 	static unsigned CountPixelShaderInvocations(
 		RenderCore::IThreadContext& threadContext, 
 		RenderCore::Techniques::ParsingContext& parsingContext,
@@ -141,12 +133,14 @@ namespace UnitTests
 
 			auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+			std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
+			auto lightingTechniqueFuture = promisedLightingTechnique.get_future();
+			LightingEngine::CreateDeferredLightingTechnique(
+				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				MakeIteratorRange(resolveOperators), {}, 
-				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+				MakeIteratorRange(resolveOperators), {}, nullptr,
+				stitchingContext.GetPreregisteredAttachments());
 			auto lightingTechnique = lightingTechniqueFuture.get();
-			PumpBufferUploads(testApparatus);
 
 			auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
 			auto drawableWriterWithBlocker = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneAndBlockerDrawableWriter();

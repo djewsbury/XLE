@@ -513,7 +513,7 @@ namespace UnitTests
 		auto fastMipChain = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, BLOOM_COMPUTE_HLSL ":FastMipChain");
 		auto upsampleStep = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, BLOOM_COMPUTE_HLSL ":UpsampleStep");
 
-		const unsigned s_shaderMipChainUniformCount = 6;
+		const unsigned s_shaderMipChainUniformCount = 8;		// must be kept up to date with the shader
 		std::shared_ptr<Metal::BoundUniforms> brightPassBoundUniforms;
 		{
 			UniformsStreamInterface brightPassUsi;

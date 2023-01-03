@@ -259,6 +259,9 @@ namespace UnitTests
 					*pipelineAcceleratorPool,
 					*cfgId,
 					pkt);
+
+				if (parsingContext._requiredBufferUploadsCommandList)
+					techniqueTestApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 			}
 
 			fbHelper.SaveImage(*threadContext, "drawables-render-sphere");

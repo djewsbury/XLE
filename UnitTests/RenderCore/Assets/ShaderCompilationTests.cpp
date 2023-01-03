@@ -114,7 +114,11 @@ namespace UnitTests
 			REQUIRE(blob->size() >= sizeof(CompiledShaderByteCode::ShaderHeader));
 			const auto& hdr = *(const CompiledShaderByteCode::ShaderHeader*)blob->data();
 			REQUIRE(hdr._version == CompiledShaderByteCode::ShaderHeader::Version);
-			REQUIRE(hdr._identifier == std::string{"ut-data/IncludeDirective.hlsl-main[SOME_DEFINE=1;VS=1]"});
+			#if defined(_DEBUG)
+				REQUIRE(hdr._identifier == std::string{"ut-data/IncludeDirective.hlsl-main[SOME_DEFINE=1;VS=1;_DEBUG=1]"});
+			#else
+				REQUIRE(hdr._identifier == std::string{"ut-data/IncludeDirective.hlsl-main[SOME_DEFINE=1;VS=1]"});
+			#endif
 		}
 
 		SECTION("Catch errors") {
@@ -215,14 +219,23 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 
+		auto _globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+
 		// ensure that we're beginning from clean temporaries directory for this test
+		// (clean out all of the intermediates folders before we register the compilers)
 		{
-			auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
-			std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
+			auto baseDirectory = ::Assets::Services::GetAsyncMan().GetIntermediateStore()->GetBaseDirectory();
+			auto tempDirPath = std::filesystem::path{baseDirectory} / "shader-selector-filtering-compiler";
+			std::filesystem::remove_all(tempDirPath);
+			std::filesystem::create_directories(tempDirPath);
+			tempDirPath = std::filesystem::path{baseDirectory} / "shader-compiler";
+			std::filesystem::remove_all(tempDirPath);
+			std::filesystem::create_directories(tempDirPath);
+			tempDirPath = std::filesystem::path{baseDirectory} / "shader-graph-compiler";
+			std::filesystem::remove_all(tempDirPath);	
 			std::filesystem::create_directories(tempDirPath);
 		}
 
-		auto _globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto testHelper = MakeTestHelper();
 

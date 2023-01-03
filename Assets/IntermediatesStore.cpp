@@ -392,6 +392,12 @@ namespace Assets
 		}
 	}
 
+	std::string IntermediatesStore::GetBaseDirectory()
+	{
+		_pimpl->ResolveBaseDirectory();
+		return _pimpl->_resolvedBaseDirectory;
+	}
+
 	IntermediatesStore::IntermediatesStore(
 		std::shared_ptr<IFileSystem> intermediatesFilesystem,
 		StringSection<> baseDirectory, StringSection<> versionString, StringSection<> configString, 

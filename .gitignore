@@ -5,6 +5,8 @@
 /Finals_Debug64/*
 /Finals_Profile64/*
 /Finals_Release64/*
+/Finals_MinSizeRel64/*
+/Finals_RelWithDebInfo64/*
 /Finals_DebugAny/*
 /Finals_ProfileAny/*
 /Finals_ReleaseAny/*

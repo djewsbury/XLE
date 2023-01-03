@@ -237,6 +237,9 @@ namespace UnitTests
 					*pipelineAcceleratorPool,
 					*cfgId,
 					pkt);
+
+				if (parsingContext._requiredBufferUploadsCommandList)
+					testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 			}
 			fbHelper.SaveImage(*threadContext, "frustum-cull-check");
 		}

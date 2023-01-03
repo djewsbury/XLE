@@ -206,7 +206,9 @@ namespace RenderCore { namespace Techniques
 			}
 
 			deformer->Bind(inputBinding);
-			deformerInitFutures.emplace_back(deformer->GetInitializationFuture());
+			auto initFuture = deformer->GetInitializationFuture();
+			if (initFuture.valid())
+				deformerInitFutures.emplace_back(std::move(initFuture));
 			result->_deformOps.push_back(std::move(deformer));
 		}
 

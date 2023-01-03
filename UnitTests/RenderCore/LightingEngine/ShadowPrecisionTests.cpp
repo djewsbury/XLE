@@ -115,14 +115,6 @@ namespace UnitTests
 		return PrepareAndStall(testApparatus, std::move(prepareFuture));
 	}
 
-	static void PumpBufferUploads(LightingEngineTestApparatus& testApparatus)
-	{
-		auto& immContext= *testApparatus._metalTestHelper->_device->GetImmediateContext();
-		testApparatus._bufferUploads->Update(immContext);
-		Threading::Sleep(16);
-		testApparatus._bufferUploads->Update(immContext);
-	}
-
 	TEST_CASE( "LightingEngine-ShadowPrecisionTests", "[rendercore_lighting_engine]" )
 	{
 		using namespace RenderCore;
@@ -146,6 +138,7 @@ namespace UnitTests
 			float wsXYRange = filterRadiusInPixels * frustumWidthWS / 2048.f;
 			float ratio0 = wsXYRange / wsDepthResolution;
 			float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
+			(void)ratio0;
 
 			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
 				LightingEngine::LightSourceOperatorDesc{}
@@ -181,12 +174,14 @@ namespace UnitTests
 				parsingContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, fbHelper.GetMainTarget(), BindFlag::RenderTarget);
 
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+				std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
+				auto lightingTechniqueFuture = promisedLightingTechnique.get_future();
+				LightingEngine::CreateDeferredLightingTechnique(
+					std::move(promisedLightingTechnique),
 					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
-					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+					stitchingContext.GetPreregisteredAttachments());
 				auto lightingTechnique = lightingTechniqueFuture.get();
-				PumpBufferUploads(testApparatus);
 
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateFlatPlaneDrawableWriter();
 				auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
@@ -211,6 +206,9 @@ namespace UnitTests
 					lightScene.DestroyLightSource(lightId);
 				}
 
+				if (parsingContext._requiredBufferUploadsCommandList)
+					testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
+
 				SaveImage(*threadContext, *stitchedImage, "acne-shadow-precision");
 			}
 
@@ -223,12 +221,14 @@ namespace UnitTests
 
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, camera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+				std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
+				auto lightingTechniqueFuture = promisedLightingTechnique.get_future();
+				LightingEngine::CreateDeferredLightingTechnique(
+					std::move(promisedLightingTechnique),
 					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
-					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+					stitchingContext.GetPreregisteredAttachments());
 				auto lightingTechnique = lightingTechniqueFuture.get();
-				PumpBufferUploads(testApparatus);
 
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators).CreateSharpContactDrawableWriter();
 				auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
@@ -246,7 +246,10 @@ namespace UnitTests
 
 				lightScene.DestroyLightSource(lightId);
 
-				auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
+				if (parsingContext._requiredBufferUploadsCommandList)
+					testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
+
+				auto colorLDR = parsingContext.GetAttachmentReservation().MapSemanticToResource(Techniques::AttachmentSemantics::ColorLDR);
 				REQUIRE(colorLDR);
 
 				SaveImage(*threadContext, *colorLDR, "contact-shadow-precision");
@@ -338,7 +341,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
 		UniformsStreamInterface usi;
-		auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().GetSemanticResource("CascadeIndex"_h+0);
+		auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().MapSemanticToResource("CascadeIndex"_h+0);
 		REQUIRE(cascadeIndexTexture);
 		auto cascadeIndexTextureSRV = cascadeIndexTexture->CreateTextureView(BindFlag::ShaderResource);
 		usi.BindResourceView(0, "PrebuiltCascadeIndexTexture"_h);
@@ -463,13 +466,15 @@ namespace UnitTests
 
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, sceneCamera);
 				auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-				auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+				std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
+				auto lightingTechniqueFuture = promisedLightingTechnique.get_future();
+				LightingEngine::CreateDeferredLightingTechnique(
+					std::move(promisedLightingTechnique),
 					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
-					stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps,
+					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+					stitchingContext.GetPreregisteredAttachments(),
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
 				auto lightingTechnique = lightingTechniqueFuture.get();
-				PumpBufferUploads(testApparatus);
 
 				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
@@ -496,12 +501,15 @@ namespace UnitTests
 
 					DrawCascadeColors(parsingContext.GetThreadContext(), parsingContext, testApparatus._pipelineCollection);
 
-					auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
+					if (parsingContext._requiredBufferUploadsCommandList)
+						testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
+
+					auto colorLDR = parsingContext.GetAttachmentReservation().MapSemanticToResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
 
 					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-scene-camera");
 
-					auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().GetSemanticResource("CascadeIndex"_h+0);
+					auto cascadeIndexTexture = parsingContext.GetAttachmentReservation().MapSemanticToResource("CascadeIndex"_h+0);
 					REQUIRE(cascadeIndexTexture);
 					auto cascadeIndexReadback = cascadeIndexTexture->ReadBackSynchronized(*threadContext);
 					unsigned cascadePixelCount[5] = {0,0,0,0,0};
@@ -529,8 +537,11 @@ namespace UnitTests
 
 					// draw the camera and shadow frustums into the output image
 					DrawCameraAndShadowFrustums(*threadContext, immediateDrawingHelper, parsingContext, lightScene, lightId, sceneCamera);
+					
+					if (parsingContext._requiredBufferUploadsCommandList)
+						testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 
-					auto colorLDR = parsingContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::ColorLDR);
+					auto colorLDR = parsingContext.GetAttachmentReservation().MapSemanticToResource(Techniques::AttachmentSemantics::ColorLDR);
 					REQUIRE(colorLDR);
 
 					SaveImage(*threadContext, *colorLDR, "sun-source-cascades-vis-camera-" + std::to_string(c));

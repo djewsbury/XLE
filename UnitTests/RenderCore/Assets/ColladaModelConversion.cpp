@@ -54,6 +54,7 @@ namespace UnitTests
         }
     }
     
+#if !defined(_DEBUG)
     TEST_CASE("RenderCoreCompilation-ColladaParsePerformance", "[rendercore_assets]")
     {
         auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
@@ -119,6 +120,7 @@ namespace UnitTests
 
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
     }
+#endif
 
 #if 0
     TEST_METHOD(ColladaScaffold)

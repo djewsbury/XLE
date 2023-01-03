@@ -224,7 +224,7 @@ namespace UnitTests
 		return nullptr;
 	}
 
-	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, BufferUploads::IManager& bufferUploads, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
+	static std::vector<uint8_t> RunGPUDeformerDirectly(MetalTestHelper& testHelper, std::shared_ptr<RenderCore::Assets::ModelScaffold> modelScaffold)
 	{
 		std::shared_ptr<Techniques::Internal::DeformerPipelineCollection> pipelineCollection;
 		{
@@ -285,12 +285,7 @@ namespace UnitTests
 		auto inputView = inputResource->CreateBufferView(BindFlag::UnorderedAccess);
 		auto outputView = outputResource->CreateBufferView(BindFlag::UnorderedAccess);
 
-		// hack -- stall to ensure vertex buffers are initialized
 		auto threadContext = testHelper._device->GetImmediateContext();
-		for (unsigned c=0; c<32; ++c) {
-			bufferUploads.Update(*threadContext);
-			std::this_thread::sleep_for(std::chrono::milliseconds(16));
-		}
 
 		pipelineCollection->StallForPipeline();
 		
@@ -379,7 +374,7 @@ namespace UnitTests
 
 		auto modelScaffold = MakeTestAnimatedModel();
 
-		auto gpuRawBuffer = RunGPUDeformerDirectly(*testHelper, *techniqueTestHelper._bufferUploads, modelScaffold);
+		auto gpuRawBuffer = RunGPUDeformerDirectly(*testHelper, modelScaffold);
 		auto cpuPositions = DeformPositionsOnCPU(modelScaffold);
 
 		// Find the positions within the raw GPU output and convert to float3s
@@ -473,6 +468,8 @@ namespace UnitTests
 
 			pool->Attach(*gpuAccelerator, gpuGeoDeformAttachment);
 		}
+
+		globalServices->PrepareForDestruction();		// PrepareForDestruction, because we've probably got some shader compiles pending
 	}
 
 	TEST_CASE( "Deform-CPUInstantiation", "[rendercore_techniques]" )

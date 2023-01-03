@@ -3,16 +3,19 @@ Forward=~
 	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	PixelShader=xleres/TechniqueLibrary/Standard/nopatches-forward.pixel.hlsl:forward
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 Deferred=~
 	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Deferred
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:deferred
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 OrderIndependentTransparency=~
 	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	PixelShader=xleres/Forward/Transparency/illum.pixel.hlsl:main_oi
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 StochasticTransparency=~
 	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
@@ -22,11 +25,13 @@ StochasticTransparency=~
 		STOCHASTIC_TRANS_OPACITY
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	PixelShader=xleres/Forward/Transparency/illum.pixel.hlsl:main_stochastic
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 DepthWeightedTransparency=~
 	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
 	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
 	PixelShader=xleres/Forward/Transparency/depthweighted.hlsl:main_depth_weighted_oi
+	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

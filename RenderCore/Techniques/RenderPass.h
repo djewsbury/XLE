@@ -302,7 +302,8 @@ namespace RenderCore { namespace Techniques
         auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
         auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
 
-        const std::shared_ptr<IResource>& GetSemanticResource(uint64_t semantic) const;
+        const std::shared_ptr<IResource>& MapSemanticToResource(uint64_t semantic) const;
+        AttachmentName MapSemanticToName(uint64_t semantic) const;
 
         unsigned GetResourceCount() const { return (unsigned)_entries.size(); }
 

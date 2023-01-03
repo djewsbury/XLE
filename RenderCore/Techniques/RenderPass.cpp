@@ -1047,7 +1047,7 @@ namespace RenderCore { namespace Techniques
         return GetView(resName, BindFlag::ShaderResource, window);
     }
 
-    const std::shared_ptr<IResource>& AttachmentReservation::GetSemanticResource(uint64_t semantic) const
+    const std::shared_ptr<IResource>& AttachmentReservation::MapSemanticToResource(uint64_t semantic) const
     {
         static std::shared_ptr<IResource> dummy;
         for (const auto& e:_entries)
@@ -1057,6 +1057,14 @@ namespace RenderCore { namespace Techniques
                 return _pool->GetResource(e._poolResource);
             }
         return dummy;
+    }
+
+    AttachmentName AttachmentReservation::MapSemanticToName(uint64_t semantic) const
+    {
+        for (unsigned c=0; c<_entries.size(); ++c)
+            if (_entries[c]._semantic == semantic)
+                return c;
+        return ~0u;
     }
 
     void AttachmentReservation::DefineDoubleBufferAttachment(

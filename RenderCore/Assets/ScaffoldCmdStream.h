@@ -84,6 +84,7 @@ namespace RenderCore { namespace Assets
 	inline uint32_t ScaffoldCmdIterator::Value::BlockSize() const
 	{
 		const auto prefixSize = sizeof(uint32_t)*2;
+		(void)prefixSize;
 		assert(_data.size() >= prefixSize);
 		auto blockSize = *(const uint32_t*)PtrAdd(_data.begin(), sizeof(uint32_t));
 		assert(_data.size() >= prefixSize+blockSize);

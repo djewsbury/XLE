@@ -770,7 +770,12 @@ namespace UnitTests
 			starterAllocation._end = ReferenceCountingLayer::ToInternalSize(starterAllocation._start) + ReferenceCountingLayer::ToInternalSize(ReferenceCountingLayer::AlignSize(starterAllocation._size));
 			layer.AddRef(starterAllocation._start, starterAllocation._size);
 			allocations.push_back(starterAllocation);
-			for (unsigned c=0; c<100000; ++c) {
+			#if _DEBUG
+				const unsigned iterationCount = 10000;
+			#else
+				const unsigned iterationCount = 100000;
+			#endif
+			for (unsigned c=0; c<iterationCount; ++c) {
 				size_t valueStart = layer.Validate();
 				if ((rand()%3)==0) {
 					HeapTest_Allocation& a = allocations[rand()%allocations.size()];

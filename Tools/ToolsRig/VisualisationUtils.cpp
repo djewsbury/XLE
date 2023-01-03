@@ -338,7 +338,7 @@ namespace ToolsRig
 
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[	promise = _preparedSceneFuture->AdoptPromise(),
-				targets = _lightingTechniqueTargets, fbProps = _lightingTechniqueFBProps, lightingApparatus = _lightingApparatus, 
+				targets = _lightingTechniqueTargets, lightingApparatus = _lightingApparatus, 
 				scene = _scene, envSettings = _envSettings, pipelineAccelerators = _pipelineAccelerators]() mutable {
 
 				TRY {
@@ -835,7 +835,7 @@ namespace ToolsRig
     {
         using namespace RenderCore;
 		{
-			if (!parserContext.GetAttachmentReservation().GetSemanticResource(Techniques::AttachmentSemantics::MultisampleDepth))		// we need this attachment to continue
+			if (!parserContext.GetAttachmentReservation().MapSemanticToResource(Techniques::AttachmentSemantics::MultisampleDepth))		// we need this attachment to continue
 				return;
 
 			auto preRegs = parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments();

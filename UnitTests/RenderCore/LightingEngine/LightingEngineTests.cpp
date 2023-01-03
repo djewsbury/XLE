@@ -180,6 +180,7 @@ namespace UnitTests
 		float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
 		shadowOp._singleSidedBias._depthBias = (int)std::ceil(ratio1);
 		shadowOp._singleSidedBias._slopeScaledBias = 0.5f;
+		(void)ratio0;
 
 		LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 			shadowOp
@@ -188,7 +189,6 @@ namespace UnitTests
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("Forward lighting")
 		{
-			RenderCore::LightingEngine::ChainedOperatorTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> techniqueOperators = {};
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 
 			std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
@@ -197,8 +197,8 @@ namespace UnitTests
 				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
 				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator),
-				techniqueOperators,
-				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+				nullptr,
+				stitchingContext.GetPreregisteredAttachments());
 			auto lightingTechnique = futureLightingTechnique.get();		// stall
 			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 
@@ -212,6 +212,9 @@ namespace UnitTests
 				ParseScene(lightingIterator, *drawableWriter);
 			}
 
+			if (parsingContext._requiredBufferUploadsCommandList)
+				testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
+
 			fbHelper.SaveImage(*threadContext, "forward-lighting-output");
 		}
 
@@ -219,10 +222,13 @@ namespace UnitTests
 		SECTION("Deferred lighting")
 		{
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+			std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
+			auto lightingTechniqueFuture = promisedLightingTechnique.get_future();
+			LightingEngine::CreateDeferredLightingTechnique(
+				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
-				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+				stitchingContext.GetPreregisteredAttachments());
 			auto lightingTechnique = lightingTechniqueFuture.get();
 			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
 
@@ -233,6 +239,9 @@ namespace UnitTests
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
+
+			if (parsingContext._requiredBufferUploadsCommandList)
+				testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 
 			fbHelper.SaveImage(*threadContext, "deferred-lighting-output");
 		}
@@ -279,21 +288,18 @@ namespace UnitTests
 			};
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-			auto lightingTechniqueFuture = LightingEngine::CreateDeferredLightingTechnique(
+			std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
+			auto lightingTechniqueFuture = promisedLightingTechnique.get_future();
+			LightingEngine::CreateDeferredLightingTechnique(
+				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), 
-				stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+				stitchingContext.GetPreregisteredAttachments());
 			auto lightingTechnique = lightingTechniqueFuture.get();
 
 			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
 			auto lightId = CreateTestLight(lightScene);
 			CreateSphereShadowProjection(lightScene, lightId);
-
-#if 0
-			testApparatus._bufferUploads->v(*threadContext);
-			Threading::Sleep(16);
-			testApparatus._bufferUploads->Update(*threadContext);
-#endif
 
 			// stall until all resources are ready
 			{
@@ -312,6 +318,9 @@ namespace UnitTests
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
+
+			if (parsingContext._requiredBufferUploadsCommandList)
+				testApparatus._bufferUploads->StallAndMarkCommandListDependency(*threadContext, parsingContext._requiredBufferUploadsCommandList);
 
 			fbHelper.SaveImage(*threadContext, "sphere-light-shadows-output");
 		}

@@ -402,8 +402,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			return (reflectionVariable._binding._inputAttachmentIndex != ~0u) && reflectionVariable._resourceType && reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::InputAttachment;
 		case DescriptorType::Empty:
 		default:
-			assert(0);
-			return true;
+			return false;
 		}
 	}
 

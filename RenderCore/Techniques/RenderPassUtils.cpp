@@ -51,7 +51,7 @@ namespace RenderCore { namespace Techniques
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
-		auto boundDepth = parserContext.GetAttachmentReservation().GetSemanticResource(AttachmentSemantics::MultisampleDepth).get();
+		auto boundDepth = parserContext.GetAttachmentReservation().MapSemanticToResource(AttachmentSemantics::MultisampleDepth).get();
 		if (!boundDepth && loadOperation != LoadStore::Clear)
 			return RenderPassToPresentationTarget(parserContext, loadOperation, clearColor);
 

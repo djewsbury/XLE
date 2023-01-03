@@ -77,6 +77,8 @@ namespace Assets
 
 		void FlushToDisk();
 
+		std::string GetBaseDirectory();
+
 		IntermediatesStore(
 			std::shared_ptr<IFileSystem> intermediatesFilesystem,
 			StringSection<> baseDirectory,
