@@ -56,7 +56,7 @@ namespace RenderCore { namespace Techniques
 				// Once we've finally got the descriptor set, we need to link it against the pipeline layout version to make sure it
 				// will agree. Don't allow rearrangement of the input slots here, because the shader is probably making assumptions
 				// about where they appear
-				_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*i->second, *_interface._descriptorSet, false);
+				_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*i->second, *_interface._descriptorSet, 0);
 				_depVal.RegisterDependency(actualLayoutFile->GetDependencyValidation());
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 				::Assets::DependencyValidationMarker depVals[] { additionalDepVal, src.GetDependencyValidation() };

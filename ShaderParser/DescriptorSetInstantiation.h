@@ -21,10 +21,25 @@ namespace ShaderSourceParser
 		RenderCore::ShaderLanguage shaderLanguage,
 		std::ostream& warningStream);
 
+	namespace LinkToFixedLayoutFlags
+	{
+		enum { 
+			// When AllowSlotReassignment is off, the slot types in "input" must match the slots in "pipelineLayoutVersion"
+			// the names can be different, and "input" can be a subset
+			AllowSlotReassignment = 1<<0,
+
+			// When AllowSlotTypeModification is on, "pipelineLayoutVersion" is used as a rough template only. We reuse compatible
+			// slots in "pipelineLayoutVersion" when possible, but otherwise change slots, remove slots and add new slots as necessary
+			// With this flag, "pipelineLayoutVersion" can be empty
+			AllowSlotTypeModification = 1<<1
+		};
+		using BitField = unsigned;
+	}
+
 	std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> LinkToFixedLayout(
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& input,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout& pipelineLayoutVersion,
-		bool allowSlotReassignment = true);
+		LinkToFixedLayoutFlags::BitField = LinkToFixedLayoutFlags::AllowSlotReassignment|LinkToFixedLayoutFlags::AllowSlotTypeModification);
 
 	RenderCore::DescriptorType CalculateDescriptorType(StringSection<> type);
 }

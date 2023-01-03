@@ -485,7 +485,7 @@ namespace ShaderSourceParser
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	std::string GenerateDescriptorVariables(
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& descriptorSet, 
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& descriptorSet,
         unsigned descriptorSetSlotIdx,
 		IteratorRange<const GraphLanguage::NodeGraphSignature::Parameter*> captures)
 	{
@@ -494,7 +494,7 @@ namespace ShaderSourceParser
 		for (auto i=descriptorSet._slots.begin(); i!=descriptorSet._slots.end(); ++i) {
             if (i->_type != RenderCore::DescriptorType::SampledTexture || i->_name.empty())
                 continue;
-			auto descriptorIdx = std::distance(descriptorSet._slots.begin(), i);
+			auto descriptorIdx = i->_slotIdx;
 			auto cap = std::find_if(
 				captures.begin(), captures.end(),
 				[i](const GraphLanguage::NodeGraphSignature::Parameter&p) 
@@ -515,7 +515,7 @@ namespace ShaderSourceParser
             if (i->_type != RenderCore::DescriptorType::Sampler || i->_name.empty())
                 continue;
 
-			auto descriptorIdx = std::distance(descriptorSet._slots.begin(), i);
+			auto descriptorIdx = i->_slotIdx;
 			auto cap = std::find_if(
 				captures.begin(), captures.end(),
 				[i](const GraphLanguage::NodeGraphSignature::Parameter&p)
@@ -536,7 +536,7 @@ namespace ShaderSourceParser
             if ((cb->_type != RenderCore::DescriptorType::UniformBuffer && cb->_type != RenderCore::DescriptorType::UniformBufferDynamicOffset) || cb->_name.empty())
                 continue;
 
-			result << "cbuffer " << cb->_name << " : register (b" << std::distance(descriptorSet._slots.begin(), cb)  << ", space" << descriptorSetSlotIdx << ")" << std::endl;
+			result << "cbuffer " << cb->_name << " : register (b" << cb->_slotIdx  << ", space" << descriptorSetSlotIdx << ")" << std::endl;
             result << "{" << std::endl;
 
             if (cb->_cbIdx != ~0u) {
