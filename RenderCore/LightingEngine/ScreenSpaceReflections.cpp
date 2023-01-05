@@ -486,8 +486,8 @@ namespace RenderCore { namespace LightingEngine
 		const ScreenSpaceReflectionsOperatorDesc& desc)
 	: _desc(desc)
 	, _pipelinePool(std::move(pipelinePool))
-	, _device(_pipelinePool->GetDevice())
 	{
+		_device = _pipelinePool->GetDevice();
 		_blueNoiseRes = std::make_unique<BlueNoiseGeneratorTables>(*_device);
 	}
 
@@ -506,6 +506,9 @@ namespace RenderCore { namespace LightingEngine
 		std::promise<std::shared_ptr<ScreenSpaceReflectionsOperator>>&& promise,
 		const Techniques::FrameBufferTarget& fbTarget)
 	{
+		assert(_secondStageConstructionState == 0);
+		_secondStageConstructionState = 1;
+
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "g_denoised_reflections"_h);
 
@@ -622,6 +625,14 @@ namespace RenderCore { namespace LightingEngine
 				};
 				strongThis->_depVal = ::Assets::GetDepValSys().MakeOrReuse(subDepVals);
 
+				strongThis->_classifyTiles = std::move(classifyTiles);
+				strongThis->_prepareIndirectArgs = std::move(prepareIndirectArgs);
+				strongThis->_intersect = std::move(intersect);
+				strongThis->_resolveSpatial = std::move(resolveSpatial);
+				strongThis->_resolveTemporal = std::move(resolveTemporal);
+				strongThis->_reflectionsBlur = std::move(reflectionsBlur);
+				strongThis->_reflectionsBlur = std::move(reflectionsBlur);
+
 				{
 					ParameterBox params;
 					auto configCBLayout = FindCBLayout(*pipelineLayout, "SSRConfiguration");
@@ -646,6 +657,8 @@ namespace RenderCore { namespace LightingEngine
 						LinearBufferDesc::Create(3*sizeof(uint32_t))),
 					"ssr-indirect-args");
 				strongThis->_indirectArgsBufferUAV = strongThis->_indirectArgsBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+
+				strongThis->_secondStageConstructionState = 2;
 
 				return strongThis;
 			});
