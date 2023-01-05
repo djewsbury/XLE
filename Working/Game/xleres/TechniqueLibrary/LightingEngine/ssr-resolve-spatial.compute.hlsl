@@ -36,7 +36,7 @@ THE SOFTWARE.
 Texture2D<float> DownsampleDepths;
 Texture2D GBufferNormal;
 
-Texture2D<min16float3> g_intersection_result_read;
+Texture2D<float3> g_intersection_result_read;
 StructuredBuffer<uint> g_tile_meta_data_mask_read;
 RWTexture2D<float3> g_spatially_denoised_reflections;
 
