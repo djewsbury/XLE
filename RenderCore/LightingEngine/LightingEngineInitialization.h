@@ -59,7 +59,6 @@ namespace RenderCore { namespace LightingEngine
 		unsigned DrawablePktsToReserve() const { return _nextParseId; }
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
-		IteratorRange<const Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments() const;
 
 		LightingTechniqueSequence();
 		~LightingTechniqueSequence();
@@ -145,6 +144,8 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::DependencyValidation _depVal;
 		BufferUploads::CommandListID _completionCommandList = 0;
 
+		IteratorRange<const Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments() const { return _doubleBufferAttachments; }
+
 		CompiledLightingTechnique(const std::shared_ptr<ILightScene>& lightScene = nullptr);
 		~CompiledLightingTechnique();
 
@@ -165,6 +166,8 @@ namespace RenderCore { namespace LightingEngine
 		};
 		std::vector<Sequence> _sequences;
 		std::function<void(LightingTechniqueIterator&)> _preSequenceSetup;
+
+		std::vector<RenderCore::Techniques::DoubleBufferAttachment> _doubleBufferAttachments;
 
 		friend class LightingTechniqueIterator;
 		friend class LightingTechniqueInstance;

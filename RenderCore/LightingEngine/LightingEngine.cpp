@@ -361,6 +361,36 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 		}
+
+		// ensure that the double buffer attachments end up in the layout we're expecting for the next frame
+		for (const auto& doubleBuffer:stitchingContext.GetDoubleBufferAttachments()) {
+			for (auto preparingFrag=frags.rbegin(); preparingFrag!=frags.rend(); ++preparingFrag) {
+				auto i = std::find_if((*preparingFrag)->GetAttachments().begin(), (*preparingFrag)->GetAttachments().end(),
+					[sem=doubleBuffer._yesterdaySemantic](const auto& q) { return q._semantic == sem; });
+				if (i != (*preparingFrag)->GetAttachments().end()) {
+					if (i->_storeToNextPhase != LoadStore::Retain) {
+						i->_storeToNextPhase = LoadStore::Retain;
+						Log(Warning) << "Changed store operation due to force retain in PropagateReverseAttachmentDependencies" << std::endl;
+					}
+					i->_finalLayout = doubleBuffer._initialLayout;
+					break;
+				}
+			}
+		}
+
+		#if defined(_DEBUG)
+			for (const auto& doubleBuffer:stitchingContext.GetDoubleBufferAttachments()) {
+				auto i = std::find_if(_forceRetainSemantics.begin(), _forceRetainSemantics.end(), [sem=doubleBuffer._yesterdaySemantic](const auto& q) { return q.first == sem; });
+				if (i != _forceRetainSemantics.end() && i->second != doubleBuffer._yesterdaySemantic) {
+					Log(Warning) << "Force retain for attachment (";
+					if (auto* dehash = Techniques::AttachmentSemantics::TryDehash(doubleBuffer._yesterdaySemantic))
+						Log(Warning) << dehash;
+					else
+						Log(Warning) << "0x" << std::hex << doubleBuffer._yesterdaySemantic << std::dec;
+					Log(Warning) << ") conflicts with double buffer setting. Force retain setting ignored." << std::endl;
+				}
+			}
+		#endif
 	}
 
 	void LightingTechniqueSequence::Reset()
@@ -399,6 +429,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FragmentStitchingContext& stitchingContext)
 	{
 		assert(!_isConstructionCompleted);
+		_doubleBufferAttachments = { stitchingContext.GetDoubleBufferAttachments().begin(), stitchingContext.GetDoubleBufferAttachments().end() };
 		for (auto&s:_sequences)
 			if (!s._dynamicFn)
 				s._sequence->CompleteAndSeal(*pipelineAccelerators, stitchingContext);
@@ -440,6 +471,11 @@ namespace RenderCore { namespace LightingEngine
 	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique& technique)
 	{
 		return technique.GetDependencyValidation();
+	}
+
+	IteratorRange<const Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments(CompiledLightingTechnique& technique)
+	{
+		return technique.GetDoubleBufferAttachments();
 	}
 
 	namespace Internal

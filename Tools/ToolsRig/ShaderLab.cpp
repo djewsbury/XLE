@@ -74,12 +74,10 @@ namespace ToolsRig
 		const ::Assets::DependencyValidation& GetDependencyValidation() const override  { return _depVal; }
 		unsigned GetCompletionCommandList() const override { return _completionCommandList; }
 		void AdvanceTime(float time) override { _globalStateDelegate->_state._currentTime += time; }
-		IteratorRange<const RenderCore::Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments() const override { return _doubleBufferAttachments; }
 		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _operation;
 		std::shared_ptr<GlobalStateDelegate> _globalStateDelegate;
 		::Assets::DependencyValidation _depVal;
 		unsigned _completionCommandList = 0;
-		std::vector<RenderCore::Techniques::DoubleBufferAttachment> _doubleBufferAttachments;
 	};
 
 	template<typename Function, typename... Args>
@@ -249,7 +247,6 @@ namespace ToolsRig
 					result->_depVal = std::move(constructorContext._depVal);
 					result->_completionCommandList = constructorContext._completionCommandList;
 					result->_globalStateDelegate = std::move(globalStateDelegate);
-					result->_doubleBufferAttachments = { constructorContext._stitchingContext.GetDoubleBufferAttachments().begin(), constructorContext._stitchingContext.GetDoubleBufferAttachments().end() };
 					return std::static_pointer_cast<ICompiledOperation>(result);
 				} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
 					if (formatter) Throw(::Assets::Exceptions::ConstructionError(e, formatter->GetDependencyValidation()));

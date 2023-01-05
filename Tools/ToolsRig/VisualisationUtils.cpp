@@ -235,6 +235,7 @@ namespace ToolsRig
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
 			{
 				auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
+				parserContext.GetAttachmentReservation().DefineDoubleBufferAttachments(RenderCore::LightingEngine::GetDoubleBufferAttachments(*actualizedScene->_compiledLightingTechnique));
 				actualizedScene->_envSettings->PreRender(parserContext.GetProjectionDesc(), lightScene);
 
 				TRY {

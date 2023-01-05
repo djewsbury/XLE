@@ -11,7 +11,7 @@
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; class DrawablesPacket; class ParsingContext; struct PreparedResourcesVisibility; }}
-namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; } }
+namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; struct DoubleBufferAttachment; } }
 namespace Assets { class IAsyncMarker; class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace std { template<typename Type> class promise; template<typename Type> class future; }
@@ -97,6 +97,7 @@ namespace RenderCore { namespace LightingEngine
 	class ILightScene;
 	ILightScene& GetLightScene(CompiledLightingTechnique&);
 	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique&);
+	IteratorRange<const Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments(CompiledLightingTechnique&);
 	namespace Internal { void* QueryInterface(CompiledLightingTechnique&, uint64_t typeCode); }
 	template<typename Type>
 		Type* QueryInterface(CompiledLightingTechnique& technique)

@@ -39,7 +39,6 @@ namespace ToolsRig
 			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
 			virtual unsigned GetCompletionCommandList() const = 0;
 			virtual void AdvanceTime(float) = 0;
-			virtual IteratorRange<const RenderCore::Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments() const = 0;
 			virtual ~ICompiledOperation() = default;
 		};
 
