@@ -282,63 +282,66 @@ namespace ShaderSourceParser
 
 	static ::Assets::SimpleCompilerResult ShaderSelectorFilteringCompileOperation(const ::Assets::InitializerPack& initializer)
 	{
-		auto fn = initializer.GetInitializer<std::string>(0);
-
 		::Assets::PreprocessorIncludeHandler handler;
-		auto analysis = GeneratePreprocessorAnalysisFromFile(fn, &handler);
+		TRY {
+			auto fn = initializer.GetInitializer<std::string>(0);
+			auto analysis = GeneratePreprocessorAnalysisFromFile(fn, &handler);
 
-		SelectorFilteringRules filteringRules;
-		filteringRules._tokenDictionary = analysis._tokenDictionary;
-		filteringRules._relevanceTable = analysis._relevanceTable;
+			SelectorFilteringRules filteringRules;
+			filteringRules._tokenDictionary = analysis._tokenDictionary;
+			filteringRules._relevanceTable = analysis._relevanceTable;
 
-		for (auto& s:filteringRules._relevanceTable)
-			filteringRules._tokenDictionary.Simplify(s.second);
+			for (auto& s:filteringRules._relevanceTable)
+				filteringRules._tokenDictionary.Simplify(s.second);
 
-		for (const auto&s:analysis._sideEffects._substitutions) {
-			if (s._type != Utility::Internal::PreprocessorSubstitutions::Type::DefaultDefine
-				|| !IsTrue(s._condition))
-				continue;
+			for (const auto&s:analysis._sideEffects._substitutions) {
+				if (s._type != Utility::Internal::PreprocessorSubstitutions::Type::DefaultDefine
+					|| !IsTrue(s._condition))
+					continue;
 
-			auto trans = filteringRules._tokenDictionary.Translate(analysis._sideEffects._dictionary, s._substitution);
-			filteringRules._tokenDictionary.Simplify(trans);
-			filteringRules._defaultSets.insert(std::make_pair(
-				filteringRules._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, s._symbol),
-				trans));
-		}
+				auto trans = filteringRules._tokenDictionary.Translate(analysis._sideEffects._dictionary, s._substitution);
+				filteringRules._tokenDictionary.Simplify(trans);
+				filteringRules._defaultSets.insert(std::make_pair(
+					filteringRules._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, s._symbol),
+					trans));
+			}
 
-		MemoryOutputStream<> memStream;
-		OutputStreamFormatter fmttr(memStream);
-		fmttr << filteringRules;
+			MemoryOutputStream<> memStream;
+			OutputStreamFormatter fmttr(memStream);
+			fmttr << filteringRules;
 
-		std::vector<::Assets::ICompileOperation::SerializedArtifact> artifacts;
-		{
-			::Assets::ICompileOperation::SerializedArtifact artifact;
-			artifact._chunkTypeCode = SelectorFilteringRules::CompileProcessType;
-			artifact._name = "filtering-rules";
-			artifact._version = 1;
-			artifact._data = ::Assets::AsBlob(memStream.AsString());
-			artifacts.push_back(std::move(artifact));
-		}
+			std::vector<::Assets::ICompileOperation::SerializedArtifact> artifacts;
+			{
+				::Assets::ICompileOperation::SerializedArtifact artifact;
+				artifact._chunkTypeCode = SelectorFilteringRules::CompileProcessType;
+				artifact._name = "filtering-rules";
+				artifact._version = 1;
+				artifact._data = ::Assets::AsBlob(memStream.AsString());
+				artifacts.push_back(std::move(artifact));
+			}
 
-		{
-			::Assets::ICompileOperation::SerializedArtifact artifact;
-			artifact._chunkTypeCode = ChunkType_Metrics;
-			artifact._name = "metrics";
-			artifact._version = 1;
-			std::stringstream str;
-			str << filteringRules;
-			artifact._data = ::Assets::AsBlob(str.str());
-			artifacts.push_back(std::move(artifact));
-		}
+			{
+				::Assets::ICompileOperation::SerializedArtifact artifact;
+				artifact._chunkTypeCode = ChunkType_Metrics;
+				artifact._name = "metrics";
+				artifact._version = 1;
+				std::stringstream str;
+				str << filteringRules;
+				artifact._data = ::Assets::AsBlob(str.str());
+				artifacts.push_back(std::move(artifact));
+			}
 
-		std::vector<::Assets::DependentFileState> depFileStates;
-		depFileStates.insert(depFileStates.begin(), handler._depFileStates.begin(), handler._depFileStates.end());
+			std::vector<::Assets::DependentFileState> depFileStates;
+			depFileStates.insert(depFileStates.begin(), handler._depFileStates.begin(), handler._depFileStates.end());
 
-		return {
-			std::move(artifacts),
-			SelectorFilteringRules::CompileProcessType,
-			::Assets::GetDepValSys().Make(depFileStates)
-		};
+			return {
+				std::move(artifacts),
+				SelectorFilteringRules::CompileProcessType,
+				::Assets::GetDepValSys().Make(depFileStates)
+			};
+		} CATCH(const std::exception& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, handler.MakeDependencyValidation()));
+		} CATCH_END
 	}
 
 	::Assets::CompilerRegistration RegisterShaderSelectorFilteringCompiler(
