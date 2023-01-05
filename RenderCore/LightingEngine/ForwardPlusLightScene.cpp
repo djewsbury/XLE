@@ -115,7 +115,8 @@ namespace RenderCore { namespace LightingEngine
 		if (sourceId == 0) {
 			switch (interfaceTypeCode) {
 			case TypeHashCode<ISkyTextureProcessor>:
-				return _queryInterfaceHelper(interfaceTypeCode);	// for the ambient light, get the global ISkyTextureProcessor
+				if (_queryInterfaceHelper)
+					return _queryInterfaceHelper(interfaceTypeCode);	// for the ambient light, get the global ISkyTextureProcessor
 			default: return nullptr;
 			}
 		} else {

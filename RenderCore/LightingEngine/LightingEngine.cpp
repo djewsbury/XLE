@@ -247,7 +247,7 @@ namespace RenderCore { namespace LightingEngine
 							SequencerConfigPendingConstruction {
 								(unsigned)_steps.size(),
 								name, sb._techniqueDelegate, sb._sequencerSelectors,
-								beginStep._fbDescIdx, c });
+								beginStep._fbDescIdx, stepCounter });
 						drawStep._shaderResourceDelegate = sb._shaderResourceDelegate;
 						_steps.emplace_back(std::move(drawStep));
 					} else if (sb._type == SubpassExtension::Type::ExecuteSky) {
