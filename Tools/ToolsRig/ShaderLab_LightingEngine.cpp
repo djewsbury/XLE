@@ -73,7 +73,8 @@ namespace ToolsRig
 	{
 		shaderLab.RegisterOperation(
 			"PrepareLightScene",
-			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used outside of a sequence"));
 
 				StringSection<> keyName;
 				PipelineType shadowDescSetPipelineType = PipelineType::Graphics;
@@ -85,21 +86,18 @@ namespace ToolsRig
 				}
 
 				auto opStep = std::make_shared<PrepareForwardLightScene>(context._drawingApparatus->_device, context._lightScene, shadowDescSetPipelineType);
-				context._dynamicSequenceFunctions.emplace_back(
+				context._technique->CreateDynamicSequence(
 					[opStep](auto& iterator, auto& sequence) {
 						opStep->DoShadowPrepare(iterator, sequence);
-					});
-				context._setupFunctions.emplace_back(
-					[opStep](auto& sequence) {
 						sequence.CreateStep_CallFunction(
-							[opStep](auto& iterator) {
+							[opStep=opStep.get()](auto& iterator) {
 								opStep->ConfigureParsingContext(*iterator._parsingContext);
 							});
 					});
 
-				context._shutdownFunctions.emplace_back(
-					[opStep](auto& sequence) {
-						sequence.CreateStep_CallFunction(
+				context._techniqueFinalizers.emplace_back(
+					[opStep](auto& context, auto*) {
+						context._technique->CreateSequence().CreateStep_CallFunction(
 							[opStep](auto& iterator) {
 								opStep->ReleaseParsingContext(*iterator._parsingContext);
 							});
@@ -107,7 +105,7 @@ namespace ToolsRig
 			});
 	}
 
-	template<typename Type, typename... Params> Type MakeFutureAndActualize(Params... initialisers)
+	template<typename Type, typename... Params> Type MakeFutureAndActualize(Params&&... initialisers)
 	{
 		std::promise<Type> promise;
 		auto future = promise.get_future();
@@ -115,23 +113,43 @@ namespace ToolsRig
 		return future.get();		// stall here
 	}
 
+	template<typename Type, typename... Params> void StallForSecondStageConstruction(Type& obj, Params&&... params)
+	{
+		std::promise<std::shared_ptr<Type>> promise;
+		auto future = promise.get_future();
+		obj.SecondStageConstruction(std::move(promise), std::forward<Params>(params)...);
+		future.get();	// stall here
+	}
+
+	inline RenderCore::Techniques::FrameBufferTarget AsFrameBufferTarget(
+		RenderCore::LightingEngine::LightingTechniqueSequence& sequence,
+		RenderCore::LightingEngine::LightingTechniqueSequence::FragmentInterfaceRegistration regId)
+	{
+		return RenderCore::LightingEngine::Internal::AsFrameBufferTarget(sequence, regId);
+	}
+
 	void RegisterCommonLightingEngineSteps(ToolsRig::ShaderLab& shaderLab)
 	{
 		shaderLab.RegisterOperation(
 			"HierarchicalDepths",
-			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
-				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::HierarchicalDepthsOperator>>(context._drawingApparatus->_graphicsPipelinePool);
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used within sequence"));
+
+				auto opStep = std::make_shared<RenderCore::LightingEngine::HierarchicalDepthsOperator>(context._drawingApparatus->_graphicsPipelinePool);
 				opStep->PreregisterAttachments(context._stitchingContext);
-				context._setupFunctions.push_back(
-					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
-						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
+				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
+				context._postStitchFunctions.push_back(
+					[opStep, reg](auto& context, auto* sequence) {
+						StallForSecondStageConstruction(*opStep, AsFrameBufferTarget(*sequence, reg));
+						context._depVal.RegisterDependency(opStep->GetDependencyValidation());
 					});
-				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
 			});
 
 		shaderLab.RegisterOperation(
 			"SSAOOperator",
-			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used within sequence"));
+
 				RenderCore::LightingEngine::AmbientOcclusionOperatorDesc desc;
 				StringSection<> keyname;
 				while (formatter.TryKeyedItem(keyname)) {
@@ -159,16 +177,15 @@ namespace ToolsRig
 
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::SSAOOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, hasHierarchialDepths);
 				opStep->PreregisterAttachments(context._stitchingContext);
-				context._setupFunctions.push_back(
-					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
-						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
-					});
+				sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
 				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
 			});
 
 		shaderLab.RegisterOperation(
 			"ToneMapAcesOperator",
-			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used within sequence"));
+
 				RenderCore::LightingEngine::ToneMapAcesOperatorDesc desc;
 				StringSection<> keyname;
 				while (formatter.TryKeyedItem(keyname)) {
@@ -177,16 +194,19 @@ namespace ToolsRig
 
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ToneMapAcesOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc);
 				opStep->PreregisterAttachments(context._stitchingContext);
-				context._setupFunctions.push_back(
-					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
-						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
+				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
+				context._postStitchFunctions.push_back(
+					[opStep, reg](auto& context, auto* sequence) {
+						StallForSecondStageConstruction(*opStep, AsFrameBufferTarget(*sequence, reg));
+						context._depVal.RegisterDependency(opStep->GetDependencyValidation());
 					});
-				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
 			});
 
 		shaderLab.RegisterOperation(
 			"SSROperator",
-			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used within sequence"));
+
 				RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc desc;
 				StringSection<> keyname;
 				StringSection<> ambientCubemap;
@@ -203,11 +223,12 @@ namespace ToolsRig
 
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc);
 				opStep->PreregisterAttachments(context._stitchingContext);
-				context._setupFunctions.push_back(
-					[opStep, fbProps=context._stitchingContext._workingProps](auto& sequence) {
-						sequence.CreateStep_RunFragments(opStep->CreateFragment(fbProps));
+				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
+				context._postStitchFunctions.push_back(
+					[opStep, reg](auto& context, auto* sequence) {
+						StallForSecondStageConstruction(*opStep, AsFrameBufferTarget(*sequence, reg));
+						context._depVal.RegisterDependency(opStep->GetDependencyValidation());
 					});
-				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
 
 				// set a sky texture
 				if (!ambientCubemap.IsEmpty()) {

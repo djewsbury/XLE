@@ -330,4 +330,6 @@ namespace RenderCore { namespace LightingEngine
         return HashCombine(HashCombine(value0, value1), seed);
     }
 
+    ISSAmbientOcclusion::~ISSAmbientOcclusion() {}
+
 }}

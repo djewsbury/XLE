@@ -48,7 +48,6 @@ namespace ToolsRig
 			::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
 			::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> lightScene,
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
-			const RenderCore::FrameBufferProperties& fBProps,
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
 
 		::Assets::PtrToMarkerPtr<IVisualizeStep> BuildVisualizeStep(
@@ -56,11 +55,13 @@ namespace ToolsRig
 
 		struct OperationConstructorContext
 		{
-			using SetupFunction = std::function<void(RenderCore::LightingEngine::LightingTechniqueSequence&)>;
-			using DynamicSequenceFunction = std::function<void(RenderCore::LightingEngine::LightingTechniqueIterator&, RenderCore::LightingEngine::LightingTechniqueSequence&)>;
-			std::vector<SetupFunction> _setupFunctions;
-			std::vector<SetupFunction> _shutdownFunctions;
-			std::vector<DynamicSequenceFunction> _dynamicSequenceFunctions;
+			using SetupFunction = std::function<void(OperationConstructorContext&, RenderCore::LightingEngine::LightingTechniqueSequence*)>;
+			std::vector<SetupFunction> _sequenceFinalizers;
+			std::vector<SetupFunction> _postStitchFunctions;
+
+			std::vector<SetupFunction> _techniqueFinalizers;
+
+			RenderCore::LightingEngine::CompiledLightingTechnique* _technique = nullptr;
 			RenderCore::Techniques::FragmentStitchingContext _stitchingContext;
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 			std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
@@ -68,7 +69,7 @@ namespace ToolsRig
 			unsigned _completionCommandList = 0;
 			::Assets::DependencyValidation _depVal;
 		};
-		using OperationConstructor = std::function<void(Formatters::IDynamicFormatter&, OperationConstructorContext&)>;
+		using OperationConstructor = std::function<void(Formatters::IDynamicFormatter&, OperationConstructorContext&, RenderCore::LightingEngine::LightingTechniqueSequence*)>;
 		void RegisterOperation(
 			StringSection<> name,
 			OperationConstructor&& constructor);

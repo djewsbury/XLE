@@ -695,6 +695,31 @@ namespace RenderCore { namespace LightingEngine
 			});
 	}
 
+	void CreateForwardPlusLightScene(
+		std::promise<std::shared_ptr<ILightScene>>&& promise,
+		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
+		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
+		const ChainedOperatorDesc* globalOperators)
+	{
+		OperatorDigest digest { resolveOperators, shadowOperators, globalOperators };
+
+		std::promise<std::shared_ptr<ForwardPlusLightScene>> specializedPromise;
+		auto specializedFuture = specializedPromise.get_future();
+		ForwardPlusLightScene::ConstructToPromise(
+			std::move(specializedPromise),
+			ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
+			std::move(digest._shadowPrepreparerIdMapping), std::move(digest._lightSceneOperatorInfo),
+			digest._tilingConfig);
+
+		// awkwardly convert promise types
+		::Assets::WhenAll(std::move(specializedFuture)).ThenConstructToPromise(
+			std::move(promise),
+			[](auto&& input) { return std::move(input); });
+	}
+
 	bool ForwardLightingTechniqueIsCompatible(
 		CompiledLightingTechnique& technique,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,

@@ -9,6 +9,7 @@
 #include "../../RenderOverlays/SimpleVisualization.h"
 #include "../../RenderCore/LightingEngine/LightingEngineInitialization.h"
 #include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
+#include "../../RenderCore/LightingEngine/LightingDelegateUtil.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
@@ -99,13 +100,47 @@ namespace ToolsRig
 			},
 			std::forward<Args>(args)...);
 	}
+
+	static void ParseSequenceOperators(
+		Formatters::IDynamicFormatter& formatter,
+		ShaderLab::OperationConstructorContext& constructorContext,
+		RenderCore::LightingEngine::LightingTechniqueSequence& sequence,
+		const std::vector<std::pair<std::string, ShaderLab::OperationConstructor>>& operationConstructors)
+	{
+		assert(constructorContext._sequenceFinalizers.empty());
+		assert(constructorContext._postStitchFunctions.empty());
+
+		StringSection<> keyname;
+		while (formatter.TryKeyedItem(keyname)) {
+			auto constructor = std::find_if(operationConstructors.begin(), operationConstructors.end(),
+				[keyname](const auto& p) { return XlEqString(keyname, p.first); });
+			if (constructor == operationConstructors.end()) {
+				std::stringstream str;
+				str << "Unknown operation (" << keyname << ")." << std::endl << "Try one of the following: ";
+				bool first = true;
+				for (const auto& c:operationConstructors) {
+					if (!first) str << ", ";
+					first = false;
+					str << c.first;
+				}
+				Throw(FormatException(str.str().c_str(), formatter.GetLocation()));
+			}
+
+			RequireBeginElement(formatter);
+			constructor->second(formatter, constructorContext, &sequence);
+			RequireEndElement(formatter);
+		}
+
+		for (auto fn=constructorContext._sequenceFinalizers.rbegin(); fn!=constructorContext._sequenceFinalizers.rend(); ++fn)
+			(*fn)(constructorContext, &sequence);
+		constructorContext._sequenceFinalizers.clear();
+	}
 	
 	::Assets::PtrToMarkerPtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
 		std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter,
 		::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
 		::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> futureLightScene,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
-		const RenderCore::FrameBufferProperties& fBProps,
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormatsInit)
 	{
 		auto result = std::make_shared<::Assets::MarkerPtr<ShaderLab::ICompiledOperation>>();
@@ -115,7 +150,7 @@ namespace ToolsRig
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[preregAttachments=std::move(preregAttachments), fBProps=fBProps, futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
+			[preregAttachments=std::move(preregAttachments), futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
 				std::shared_ptr<Formatters::IDynamicFormatter> formatter;
 				TRY {
 					auto l = weakThis.lock();
@@ -133,61 +168,78 @@ namespace ToolsRig
 					auto noiseDelegate = noiseDelegateFuture.get();	// stall 
 				
 					OperationConstructorContext constructorContext;
-					constructorContext._stitchingContext = { preregAttachments, fBProps, MakeIteratorRange(systemAttachmentsFormat) };
+					auto outputRes = RenderCore::LightingEngine::Internal::ExtractOutputResolution(preregAttachments);
+					RenderCore::FrameBufferProperties fbProps { outputRes[0], outputRes[1] };
+					constructorContext._stitchingContext = { preregAttachments, fbProps, MakeIteratorRange(systemAttachmentsFormat) };
 					constructorContext._depVal = ::Assets::GetDepValSys().Make();
 					constructorContext._drawingApparatus = l->_drawingApparatus;
 					constructorContext._bufferUploads = l->_bufferUploads;
 					constructorContext._lightScene = lightScene;
 
-					{
-						StringSection<> keyname;
-						while (formatter->TryKeyedItem(keyname)) {
-							auto constructor = std::find_if(l->_operationConstructors.begin(), l->_operationConstructors.end(),
-								[keyname](const auto& p) { return XlEqString(keyname, p.first); });
-							if (constructor == l->_operationConstructors.end()) {
-								std::stringstream str;
-								str << "Unknown operation (" << keyname << ")." << std::endl << "Try one of the following: ";
-								bool first = true;
-								for (const auto& c:l->_operationConstructors) {
-									if (!first) str << ", ";
-									first = false;
-									str << c.first;
-								}
-								Throw(FormatException(str.str().c_str(), formatter->GetLocation()));
-							}
-
-							RequireBeginElement(*formatter);
-							constructor->second(*formatter, constructorContext);
-							RequireEndElement(*formatter);
-						}
-					}
+					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>();
+					constructorContext._technique = technique.get();
 
 					auto globalStateDelegate = std::make_shared<GlobalStateDelegate>();
 
-					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>();
-					for (auto& fn:constructorContext._dynamicSequenceFunctions)
-						technique->CreateDynamicSequence(std::move(fn));
-					auto& sequence = technique->CreateSequence();
-					sequence.CreateStep_BindDelegate(globalStateDelegate);
-					sequence.CreateStep_BindDelegate(noiseDelegate);
-					sequence.CreateStep_CallFunction(
-						[](RenderCore::LightingEngine::LightingTechniqueIterator& iterator) {
-							iterator._parsingContext->GetUniformDelegateManager()->InvalidateUniforms();
-							iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
-						});
-					for (auto& fn:constructorContext._setupFunctions) fn(sequence);
-					for (auto fn=constructorContext._shutdownFunctions.rbegin(); fn!=constructorContext._shutdownFunctions.rend(); ++fn) (*fn)(sequence);
+					std::vector<std::pair<
+						RenderCore::LightingEngine::LightingTechniqueSequence*, 
+						std::vector<OperationConstructorContext::SetupFunction>>> registeredSequences;
+
+					StringSection<> keyname;
+					while (formatter->TryKeyedItem(keyname)) {
+						auto constructor = std::find_if(l->_operationConstructors.begin(), l->_operationConstructors.end(),
+							[keyname](const auto& p) { return XlEqString(keyname, p.first); });
+						if (constructor != l->_operationConstructors.end()) {
+							RequireBeginElement(*formatter);
+							// out-of-sequence constructor. This should normally be used for operations that need to create their own
+							// sequence (for example, dynamic shader preparation)
+							constructor->second(*formatter, constructorContext, nullptr);
+							assert(constructorContext._sequenceFinalizers.empty());
+							registeredSequences.emplace_back(
+								nullptr,
+								std::move(constructorContext._postStitchFunctions));
+							RequireEndElement(*formatter);
+						} else if (XlEqString(keyname, "Sequence")) {
+							// sequence
+							RequireBeginElement(*formatter);
+
+							auto& sequence = technique->CreateSequence();
+							sequence.CreateStep_BindDelegate(globalStateDelegate);
+							sequence.CreateStep_BindDelegate(noiseDelegate);
+							sequence.CreateStep_InvalidateUniforms();
+							sequence.CreateStep_BringUpToDateUniforms();
+
+							ParseSequenceOperators(*formatter, constructorContext, sequence, l->_operationConstructors);
+
+							registeredSequences.emplace_back(
+								&sequence,
+								std::move(constructorContext._postStitchFunctions));
+
+							RequireEndElement(*formatter);
+						} else {
+							Throw(FormatException(StringMeld<256>() << "Unknown top level instruction: " << keyname, formatter->GetLocation()));
+						}
+					}
 
 					if (visualizeStep) {
 						visualizeStep->StallWhilePending();
 						auto reqAttachments = visualizeStep->ActualizeBkgrnd()->GetRequiredAttachments();
-						for (const auto& r:reqAttachments)
-							sequence.ForceRetainAttachment(r.first, r.second);
+						for (auto& seq:registeredSequences)
+							if (seq.first)
+								for (const auto& r:reqAttachments)
+									seq.first->ForceRetainAttachment(r.first, r.second);
 					}
+
+					for (auto fn=constructorContext._techniqueFinalizers.rbegin(); fn!=constructorContext._techniqueFinalizers.rend(); ++fn)
+						(*fn)(constructorContext, nullptr);
 
 					technique->CompleteConstruction(
 						l->_drawingApparatus->_pipelineAccelerators,
 						constructorContext._stitchingContext);
+
+					for (auto& seqAndFns:registeredSequences)
+						for (auto& fn:seqAndFns.second)
+							fn(constructorContext, seqAndFns.first);
 
 					auto result = std::make_shared<CompiledTechnique>();
 					result->_operation = std::move(technique);
