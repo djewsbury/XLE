@@ -233,46 +233,39 @@ namespace ToolsRig
 
 			auto cam = _camera ? AsCameraDesc(*_camera) : RenderCore::Techniques::CameraDesc{};
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
-			{
-				auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
-				parserContext.GetAttachmentReservation().DefineDoubleBufferAttachments(RenderCore::LightingEngine::GetDoubleBufferAttachments(*actualizedScene->_compiledLightingTechnique));
-				actualizedScene->_envSettings->PreRender(parserContext.GetProjectionDesc(), lightScene);
 
-				TRY {
-					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator { 
-						parserContext, *actualizedScene->_compiledLightingTechnique };
+			auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
+			parserContext.GetAttachmentReservation().DefineDoubleBufferAttachments(RenderCore::LightingEngine::GetDoubleBufferAttachments(*actualizedScene->_compiledLightingTechnique));
+			actualizedScene->_envSettings->PreRender(parserContext.GetProjectionDesc(), lightScene);
 
-					for (;;) {
-						auto next = lightingIterator.GetNextStep();
-						if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
-						if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
-							assert(!next._pkts.empty());
-							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), MakeIteratorRange(&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1), next._complexCullingVolume};
-							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
-							parserContext.RequireCommandList(executeContext._completionCmdList);
-						} else if (next._type == RenderCore::LightingEngine::StepType::MultiViewParseScene) {
-							assert(!next._pkts.empty());
-							assert(!next._multiViewDesc.empty());
-							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
-							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
-							parserContext.RequireCommandList(executeContext._completionCmdList);
-						} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
-							_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
-						}
+			TRY {
+				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator { 
+					parserContext, *actualizedScene->_compiledLightingTechnique };
+
+				for (;;) {
+					auto next = lightingIterator.GetNextStep();
+					if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
+					if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
+						assert(!next._pkts.empty());
+						SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), MakeIteratorRange(&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1), next._complexCullingVolume};
+						actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
+						parserContext.RequireCommandList(executeContext._completionCmdList);
+					} else if (next._type == RenderCore::LightingEngine::StepType::MultiViewParseScene) {
+						assert(!next._pkts.empty());
+						assert(!next._multiViewDesc.empty());
+						SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
+						actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
+						parserContext.RequireCommandList(executeContext._completionCmdList);
+					} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
+						_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
 					}
-				} CATCH(...) {
-					actualizedScene->_envSettings->PostRender(lightScene);
-					throw;
-				} CATCH_END
-
+				}
+			} CATCH(...) {
 				actualizedScene->_envSettings->PostRender(lightScene);
-			}
+				throw;
+			} CATCH_END
 
-			// Draw debugging overlays -- 
-			{
-				// auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, renderTarget, parserContext);
-				// SceneEngine::LightingParser_Overlays(threadContext, parserContext, lightingParserContext);
-			}
+			actualizedScene->_envSettings->PostRender(lightScene);
 		} else {
 			// Draw a loading indicator, 
 			using namespace RenderOverlays::DebuggingDisplay;
@@ -299,14 +292,6 @@ namespace ToolsRig
 
 			StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
 		}
-
-		/*if (!_envSettingsErrorMessage.empty()) {
-			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(threadContext, parserContext);
-			if (!_envSettingsErrorMessage.empty()) {
-				assert(0);
-				// SceneEngine::DrawString(threadContext, RenderOverlays::GetDefaultFont(), _envSettingsErrorMessage);
-			}
-		}*/
     }
 
 	void SimpleSceneOverlay::OnRenderTargetUpdate(

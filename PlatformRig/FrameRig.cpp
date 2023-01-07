@@ -49,6 +49,7 @@ namespace PlatformRig
 {
     using namespace RenderOverlays;
     using namespace RenderOverlays::DebuggingDisplay;
+    class FrameRigDisplay;
 
     class FrameRateRecorder
     {
@@ -84,6 +85,8 @@ namespace PlatformRig
 
         RenderCore::Techniques::AttachmentReservation _capturedDoubleBufferAttachments;
 
+        std::shared_ptr<FrameRigDisplay> _frameRigDisplay;
+
         Pimpl()
         : _timerFrequency(OSServices::GetPerformanceCounterFrequency())
         , _frameRenderCount(0)
@@ -93,27 +96,25 @@ namespace PlatformRig
         }
     };
 
-    class FrameRigResources
+    class FrameRigDisplay : public RenderOverlays::DebuggingDisplay::IWidget
     {
     public:
-        std::shared_ptr<RenderOverlays::Font> _frameRateFont;
-        std::shared_ptr<RenderOverlays::Font> _smallFrameRateFont;
-        std::shared_ptr<RenderOverlays::Font> _tabHeadingFont;
+        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
 
-        FrameRigResources(
-            std::shared_ptr<RenderOverlays::Font> frameRateFont,
-            std::shared_ptr<RenderOverlays::Font> smallFrameRateFont,
-            std::shared_ptr<RenderOverlays::Font> tabHeadingFont)
-        : _frameRateFont(std::move(frameRateFont)), _smallFrameRateFont(std::move(smallFrameRateFont)), _tabHeadingFont(std::move(tabHeadingFont))
-        {}
+        void SetErrorMsg(std::string msg) { _errorMsg = std::move(msg); }
 
-        static void ConstructToPromise(std::promise<std::shared_ptr<FrameRigResources>>&& promise)
-        {
-            ::Assets::WhenAll(
-                RenderOverlays::MakeFont("Shojumaru", 32),
-                RenderOverlays::MakeFont("PoiretOne", 14),
-                RenderOverlays::MakeFont("Raleway", 20)).ThenConstructToPromise(std::move(promise));
-        }
+        FrameRigDisplay(
+            std::shared_ptr<DebugScreensSystem> debugSystem,
+            const AccumulatedAllocations::Snapshot& prevFrameAllocationCount, const FrameRateRecorder& frameRate);
+        ~FrameRigDisplay();
+    protected:
+        const AccumulatedAllocations::Snapshot* _prevFrameAllocationCount;
+        const FrameRateRecorder* _frameRate;
+        unsigned _subMenuOpen;
+        std::string _errorMsg;
+
+        std::weak_ptr<DebugScreensSystem> _debugSystem;
     };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -190,26 +191,28 @@ namespace PlatformRig
                     mainOverlaySucceeded = true;
                 } 
 			}
-			CATCH_ASSETS(parserContext)
 			CATCH(const std::exception& e) {
 				StringMeldAppend(parserContext._stringHelpers->_errorString) << "Exception in main overlay system render: " << e.what() << "\n";
 			}
 			CATCH_END
 
-            // Techniques::GetAttachmentResource will acquire the presentation chain resource if it hasn't been acquired yet
-            auto* presentationTarget = Techniques::GetAttachmentResource(parserContext, Techniques::AttachmentSemantics::ColorLDR);
-
+            IResource* presentationTarget;
             if (!mainOverlaySucceeded) {
                 // We must at least clear, because the _debugScreenOverlaySystem might have something to render
-                Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(BindFlag::RenderTarget), Float4(0,0,0,1));
-                stitchingContext.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR, presentationTarget->GetDesc(), "color-ldr", Techniques::PreregisteredAttachment::State::Initialized, BindFlag::TransferDst);
+                presentationTarget = Techniques::GetAttachmentResourceAndBarrierToLayout(parserContext, Techniques::AttachmentSemantics::ColorLDR, BindFlag::TransferDst);
+                Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(BindFlag::TransferDst), Float4(0,0,0,1));
+            } else {
+                // Techniques::GetAttachmentResource will acquire the presentation chain resource if it hasn't been acquired yet
+                presentationTarget = Techniques::GetAttachmentResource(parserContext, Techniques::AttachmentSemantics::ColorLDR);
             }
+
+            if (_pimpl->_frameRigDisplay)
+                _pimpl->_frameRigDisplay->SetErrorMsg(parserContext._stringHelpers->_errorString);
 
 			TRY {
 				if (_debugScreenOverlaySystem)
                     _debugScreenOverlaySystem->Render(parserContext);
 			}
-			CATCH_ASSETS(parserContext)
 			CATCH(const std::exception& e) {
 				StringMeldAppend(parserContext._stringHelpers->_errorString) << "Exception in debug screens overlay system render: " << e.what() << "\n";
 			}
@@ -467,26 +470,34 @@ namespace PlatformRig
     static const std::string String_IconBegin("xleres/defaultresources/icon_");
     static const std::string String_IconEnd(".png");
 
-    class FrameRigDisplay : public RenderOverlays::DebuggingDisplay::IWidget
+    class FrameRigResources
     {
     public:
-        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
+        std::shared_ptr<RenderOverlays::Font> _frameRateFont;
+        std::shared_ptr<RenderOverlays::Font> _smallFrameRateFont;
+        std::shared_ptr<RenderOverlays::Font> _tabHeadingFont;
+        std::shared_ptr<RenderOverlays::Font> _errorReportingFont;
 
-        FrameRigDisplay(
-            std::shared_ptr<DebugScreensSystem> debugSystem,
-            const AccumulatedAllocations::Snapshot& prevFrameAllocationCount, const FrameRateRecorder& frameRate);
-        ~FrameRigDisplay();
-    protected:
-        const AccumulatedAllocations::Snapshot* _prevFrameAllocationCount;
-        const FrameRateRecorder* _frameRate;
-        unsigned _subMenuOpen;
+        FrameRigResources(
+            std::shared_ptr<RenderOverlays::Font> frameRateFont,
+            std::shared_ptr<RenderOverlays::Font> smallFrameRateFont,
+            std::shared_ptr<RenderOverlays::Font> tabHeadingFont,
+            std::shared_ptr<RenderOverlays::Font> errorReportingFont)
+        : _frameRateFont(std::move(frameRateFont)), _smallFrameRateFont(std::move(smallFrameRateFont)), _tabHeadingFont(std::move(tabHeadingFont)), _errorReportingFont(std::move(errorReportingFont))
+        {}
 
-        std::weak_ptr<DebugScreensSystem> _debugSystem;
+        static void ConstructToPromise(std::promise<std::shared_ptr<FrameRigResources>>&& promise)
+        {
+            ::Assets::WhenAll(
+                RenderOverlays::MakeFont("Shojumaru", 32),
+                RenderOverlays::MakeFont("PoiretOne", 14),
+                RenderOverlays::MakeFont("Raleway", 20),
+                RenderOverlays::MakeFont("Anka", 20)).ThenConstructToPromise(std::move(promise));
+        }
     };
 
     void    FrameRigDisplay::Render(IOverlayContext& context, Layout& layout, 
-                                    Interactables&interactables, InterfaceState& interfaceState)
+                                    Interactables& interactables, InterfaceState& interfaceState)
     {
         auto* res = ConsoleRig::TryActualizeCachedBox<FrameRigResources>();
         if (!res) return;
@@ -636,6 +647,14 @@ namespace PlatformRig
                 }
             }
         }
+
+        if (!_errorMsg.empty()) {
+            DrawText{}
+                .Alignment(RenderOverlays::TextAlignment::Center)
+                .Color(0xffffbfbf)
+                .Font(*res->_errorReportingFont)
+                .Draw(context, {outerRect._topLeft, outerRect._bottomRight}, _errorMsg);
+        }
     }
 
     auto    FrameRigDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
@@ -685,7 +704,9 @@ namespace PlatformRig
 
     std::shared_ptr<IWidget> FrameRig::CreateDisplay(std::shared_ptr<DebugScreensSystem> debugSystem)
     {
-        return std::make_shared<FrameRigDisplay>(std::move(debugSystem), _pimpl->_prevFrameAllocationCount, _pimpl->_frameRate);
+        if (!_pimpl->_frameRigDisplay)
+            _pimpl->_frameRigDisplay = std::make_shared<FrameRigDisplay>(std::move(debugSystem), _pimpl->_prevFrameAllocationCount, _pimpl->_frameRate);
+        return _pimpl->_frameRigDisplay;
     }
 
 }

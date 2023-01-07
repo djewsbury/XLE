@@ -9,6 +9,7 @@
 #include <memory>
 
 namespace RenderCore { class IThreadContext; class IResource; }
+namespace RenderCore { namespace BindFlags { using BitField = unsigned; }}
 
 namespace RenderCore { namespace Techniques
 {
@@ -45,4 +46,9 @@ namespace RenderCore { namespace Techniques
 	IResource* GetAttachmentResource(
 		Techniques::ParsingContext& parsingContext,
 		uint64_t semantic);
+
+	IResource* GetAttachmentResourceAndBarrierToLayout(
+		Techniques::ParsingContext& parsingContext,
+		uint64_t semantic,
+		BindFlags::BitField newLayout);
 }}

@@ -9,6 +9,7 @@
 #include "Techniques.h"
 #include "../IDevice.h"
 #include "../Format.h"
+#include "../Metal/Resource.h"
 #include "../../Utility/IteratorUtils.h"
 
 namespace RenderCore { namespace Techniques
@@ -110,6 +111,37 @@ namespace RenderCore { namespace Techniques
 		parsingContext.GetAttachmentReservation().UpdateAttachments(newReservation, MakeIteratorRange(&transform, &transform+1));
 
 		return newReservation.GetResource(0).get();
+	}
 
+	IResource* GetAttachmentResourceAndBarrierToLayout(
+		Techniques::ParsingContext& parsingContext,
+		uint64_t semantic,
+		BindFlags::BitField newLayout)
+	{
+		// See GetAttachmentResource
+		auto preregs = parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
+		auto i = std::find_if(preregs.begin(), preregs.end(), [semantic](const auto& c) { return c._semantic == semantic; });
+		if (i == preregs.end())
+			return nullptr;
+		auto newReservation = parsingContext.GetTechniqueContext()._attachmentPool->Reserve(
+			MakeIteratorRange(i, i+1),
+			&parsingContext.GetAttachmentReservation());
+		assert(newReservation.GetResourceCount() == 1);
+		newReservation.CompleteInitialization(parsingContext.GetThreadContext());
+
+		auto* resource = newReservation.GetResource(0).get();
+		Metal::BarrierHelper{parsingContext.GetThreadContext()}.Add(*resource, i->_layout, newLayout);
+
+		AttachmentTransform transform;
+		transform._type = AttachmentTransform::LoadedAndStored;
+		transform._initialLayout = i->_layout;
+		transform._finalLayout = newLayout;
+		parsingContext.GetAttachmentReservation().UpdateAttachments(newReservation, MakeIteratorRange(&transform, &transform+1));
+		auto newPrereg = *i;
+		newPrereg._layout = newLayout;
+		newPrereg._state = Techniques::PreregisteredAttachment::State::Initialized;
+		parsingContext.GetFragmentStitchingContext().DefineAttachment(newPrereg);
+
+		return resource;
 	}
 }}
