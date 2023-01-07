@@ -29,7 +29,7 @@ namespace EntityInterface
 
 		void BindScene(
 			EnvSettingsId envSettings,
-			std::shared_ptr<RenderCore::LightingEngine::ILightScene> lightScene,
+			RenderCore::LightingEngine::ILightScene& lightScene,
 			const MergedLightingCfgHelper& mergedCfgHelper);
 		void UnbindScene(RenderCore::LightingEngine::ILightScene&);
 

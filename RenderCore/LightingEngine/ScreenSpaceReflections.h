@@ -7,7 +7,6 @@
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
-#include <future>
 
 namespace RenderCore
 {
@@ -28,6 +27,7 @@ namespace RenderCore { namespace Techniques
 }}
 namespace RenderCore { namespace Assets { class PredefinedCBLayout; } }
 namespace RenderCore { namespace BufferUploads { class ResourceLocator; } }
+namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {

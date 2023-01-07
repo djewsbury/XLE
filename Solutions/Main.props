@@ -9,6 +9,10 @@
 				Android redirects to "Arch_Android"
 				
 		-->
+
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(SolutionDir)/../user.props" />
+  </ImportGroup>
   
   <ImportGroup Label="PropertySheets" Condition="'$(Platform)'=='Win32'" >
     <Import Project="Arch_WinAPI/Main.props" />

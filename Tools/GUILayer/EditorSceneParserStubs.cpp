@@ -43,31 +43,53 @@ namespace GUILayer
  
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
+    struct PreregAttachmentsHelper
+    {
+        uint64_t _targetsHash = 0ull;
+        uint64_t _targetsHashResolutionIndependent = 0ull;
+		std::vector<RenderCore::Techniques::PreregisteredAttachment> _targets;
+		RenderCore::FrameBufferProperties _fbProps;
+    };
+
     class BoundEnvironmentSettings
     {
     public:
-        bool LightingTechniqueIsCompatible(
-            RenderCore::LightingEngine::CompiledLightingTechnique& technique,
-            unsigned& lastChangeId)
+        void CheckPendingUpdates(PreregAttachmentsHelper& preregsHelper)
         {
-            CheckLightSceneUpdate();
+            // If you hit the following assert, it may mean the preregistered attachments have never been configured
+            assert(preregsHelper._targetsHash != 0);
 
-            if (_lightSceneChangeId == lastChangeId)
-                return true;
+            auto newChangeId = _envSettingsDocument->GetChangeId(_envSettings);
+            if (newChangeId == _lightSceneChangeId && preregsHelper._targetsHash == _lastBuiltTargetsHash)
+                return;
 
-            bool result = RenderCore::LightingEngine::ForwardLightingTechniqueIsCompatible(
-                technique,
-                _operatorsCfg._mergedCfg.GetLightOperators(),
-                _operatorsCfg._mergedCfg.GetShadowOperators(),
-                _operatorsCfg._mergedCfg.GetAmbientOperator());
+            // recreate light scene completely, because the operators configuration has changed
+            if (_envSettingsDocument && _lightScene)
+                _envSettingsDocument->UnbindScene(*_lightScene);
 
-            if (result)
-                lastChangeId = _lightSceneChangeId;     // mark ok for next time
-            return result;
+            _operatorsCfg = std::make_unique<EntityInterface::MergedLightingCfgHelper>();
+            _envSettingsDocument->PrepareCfg(_envSettings, *_operatorsCfg);
+
+            // todo -- there's a stall here; we need to move into native code in order to manage the 
+            // synchronization for background compilation properly
+            _lightingTechnique = SceneEngine::CreateAndActualizeLightingTechnique(
+                *_apparatus,
+                _operatorsCfg->_mergedCfg.GetLightOperators(),
+                _operatorsCfg->_mergedCfg.GetShadowOperators(),
+                _operatorsCfg->_mergedCfg.GetChainedGlobalOperators(),
+                preregsHelper._targets);
+
+            _lightScene = &RenderCore::LightingEngine::GetLightScene(*_lightingTechnique);
+
+            _envSettingsDocument->BindScene(_envSettings, *_lightScene, *_operatorsCfg);
+            _lightSceneChangeId = newChangeId;
+            _lastBuiltTargetsHash = preregsHelper._targetsHash;
         }
 
-        const SceneEngine::MergedLightingEngineCfg& GetMergedLightingEngineCfg() const { return _operatorsCfg._mergedCfg; }
-        const std::shared_ptr<RenderCore::LightingEngine::ILightScene> GetLightScene() const { return _lightScene; }
+        const SceneEngine::MergedLightingEngineCfg& GetMergedLightingEngineCfg() const { assert(_operatorsCfg); return _operatorsCfg->_mergedCfg; }
+        const RenderCore::LightingEngine::ILightScene& GetLightScene() const { return *_lightScene; }
+        RenderCore::LightingEngine::ILightScene& GetLightScene() { return *_lightScene; }
+        RenderCore::LightingEngine::CompiledLightingTechnique& GetLightingTechnique() { return *_lightingTechnique; }
         EntityInterface::MultiEnvironmentSettingsDocument::EnvSettingsId GetEnvSettingsId() const { return _envSettings; }
 
         BoundEnvironmentSettings(
@@ -78,19 +100,7 @@ namespace GUILayer
         , _apparatus(std::move(apparatus))
         {
             _envSettings = envSettingsId;
-            _lightSceneChangeId = _envSettingsDocument->GetChangeId(_envSettings);
-
-            _envSettingsDocument->PrepareCfg(_envSettings, _operatorsCfg);
-
-            // todo -- there's a stall here; we need to move into native code in order to manage the 
-            // synchronization for background compilation properly
-            _lightScene = SceneEngine::CreateAndActualizeForwardLightingScene(
-                *_apparatus,
-                _operatorsCfg._mergedCfg.GetLightOperators(),
-                _operatorsCfg._mergedCfg.GetShadowOperators(),
-                _operatorsCfg._mergedCfg.GetAmbientOperator());
-
-            _envSettingsDocument->BindScene(_envSettings, _lightScene, _operatorsCfg);
+            _lightSceneChangeId = ~0u;
         }
 
         ~BoundEnvironmentSettings()
@@ -103,45 +113,14 @@ namespace GUILayer
         BoundEnvironmentSettings& operator=(BoundEnvironmentSettings&&) = default;
     private:
         std::shared_ptr<EntityInterface::MultiEnvironmentSettingsDocument> _envSettingsDocument;
-        std::shared_ptr<RenderCore::LightingEngine::ILightScene> _lightScene;
+        std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _lightingTechnique;
+        RenderCore::LightingEngine::ILightScene* _lightScene = nullptr;
         unsigned _lightSceneChangeId = 0;
+        uint64_t _lastBuiltTargetsHash = 0ull;
         EntityInterface::MultiEnvironmentSettingsDocument::EnvSettingsId _envSettings;
-        EntityInterface::MergedLightingCfgHelper _operatorsCfg;
+        std::unique_ptr<EntityInterface::MergedLightingCfgHelper> _operatorsCfg;
 
         std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _apparatus;
-
-        void CheckLightSceneUpdate()
-        {
-            auto newChangeId = _envSettingsDocument->GetChangeId(_envSettings);
-            if (newChangeId == _lightSceneChangeId)
-                return;
-
-            // recreate light scene completely, because the operators configuration has changed
-            if (_envSettingsDocument && _lightScene)
-                _envSettingsDocument->UnbindScene(*_lightScene);
-            _lightScene.reset();
-
-            _operatorsCfg = {};
-            _envSettingsDocument->PrepareCfg(_envSettings, _operatorsCfg);
-
-            // todo -- stall here
-            _lightScene = SceneEngine::CreateAndActualizeForwardLightingScene(
-                *_apparatus,
-                _operatorsCfg._mergedCfg.GetLightOperators(),
-                _operatorsCfg._mergedCfg.GetShadowOperators(),
-                _operatorsCfg._mergedCfg.GetAmbientOperator());
-
-            _envSettingsDocument->BindScene(_envSettings, _lightScene, _operatorsCfg);
-            _lightSceneChangeId = newChangeId;
-        }
-    };
-
-    struct PreregAttachmentsHelper
-    {
-        uint64_t _targetsHash = 0ull;
-        uint64_t _lastBuiltTargetsHash = 0ull;
-		std::vector<RenderCore::Techniques::PreregisteredAttachment> _targets;
-		RenderCore::FrameBufferProperties _fbProps;
     };
 
     public ref class EditorSceneOverlay : public IOverlaySystem
@@ -163,9 +142,7 @@ namespace GUILayer
 		clix::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingApparatus;
         EditorSceneRenderSettings^ _renderSettings;
         clix::shared_ptr<BoundEnvironmentSettings> _boundEnvSettings;
-        clix::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _lightingTechnique;
         clix::shared_ptr<PreregAttachmentsHelper> _preregAttachmentsHelper;
-        unsigned _lastLightingTechniqueChangeId = 0;
     };
 
 	static void BuildDrawables(
@@ -190,29 +167,21 @@ namespace GUILayer
         RenderCore::Techniques::ParsingContext& parserContext)
     {
         auto envSettingsId = _scene->_envSettingsDocument->FindEnvSettingsId(clix::marshalString<clix::E_UTF8>(_renderSettings->_activeEnvironmentSettings));
-        if (!_boundEnvSettings || _boundEnvSettings->GetEnvSettingsId() != envSettingsId) {
+        if (!_boundEnvSettings || _boundEnvSettings->GetEnvSettingsId() != envSettingsId)
             _boundEnvSettings = std::make_shared<BoundEnvironmentSettings>(_lightingApparatus.GetNativePtr(), _scene->_envSettingsDocument, envSettingsId);
-            _lightingTechnique = nullptr;
-        }
 
         _scene->_rigidModelScene->OnFrameBarrier();     // todo -- move somewhere better
 
         auto& stitchingContext = parserContext.GetFragmentStitchingContext();
+        assert(RenderCore::Techniques::HashPreregisteredAttachmentsResolutionIndependent(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps) == _preregAttachmentsHelper->_targetsHashResolutionIndependent);
+        (void)stitchingContext;
 
-        // todo -- stitching context compatibility
-        unsigned temp = _lastLightingTechniqueChangeId;
-        if (!_lightingTechnique || !_boundEnvSettings->LightingTechniqueIsCompatible(*_lightingTechnique.get(), temp) || _preregAttachmentsHelper->_targetsHash != _preregAttachmentsHelper->_lastBuiltTargetsHash) {
-            _lightingTechnique = SceneEngine::CreateAndActualizeForwardLightingTechnique(
-                *_lightingApparatus.GetNativePtr(),
-                _boundEnvSettings->GetLightScene(),
-                stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
-            _preregAttachmentsHelper->_lastBuiltTargetsHash = _preregAttachmentsHelper->_targetsHash;
-        }
-        _lastLightingTechniqueChangeId = temp;
+        // todo -- do we really need a separate technique & lighting scene per window?
+        _boundEnvSettings->CheckPendingUpdates(*_preregAttachmentsHelper.get());
 
         {
 			ToolsRig::ConfigureParsingContext(parserContext, *_camera.get());
-            RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator { parserContext, *_lightingTechnique.get() };
+            RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator { parserContext, _boundEnvSettings->GetLightingTechnique() };
             for (;;) {
                 auto next = lightingIterator.GetNextStep();
                 if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
@@ -228,7 +197,7 @@ namespace GUILayer
             // at the moment, only placements can be selected... So we need to assume that 
             // they are all placements.
             ToolsRig::Placements_RenderHighlight(
-                parserContext, *_lightingApparatus->_pipelineAccelerators.get(),
+                parserContext, _lightingApparatus->_pipelineAccelerators,
                 *_scene->_placementsManager->GetRenderer().get(), *_scene->_placementsCells.get(),
                 (const SceneEngine::PlacementGUID*)AsPointer(_renderSettings->_selection->_nativePlacements->cbegin()),
                 (const SceneEngine::PlacementGUID*)AsPointer(_renderSettings->_selection->_nativePlacements->cend()));
@@ -237,7 +206,7 @@ namespace GUILayer
         // render shadow for hidden placements
         if (::ConsoleRig::Detail::FindTweakable("ShadowHiddenPlacements", true)) {
             ToolsRig::Placements_RenderShadow(
-                parserContext, *_lightingApparatus->_pipelineAccelerators.get(),
+                parserContext, _lightingApparatus->_pipelineAccelerators,
                 *_scene->_placementsManager->GetRenderer().get(), *_scene->_placementsCellsHidden.get());
         }
     }
@@ -248,6 +217,7 @@ namespace GUILayer
         IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
     {
         _preregAttachmentsHelper->_targetsHash = RenderCore::Techniques::HashPreregisteredAttachments(preregAttachments, fbProps);
+        _preregAttachmentsHelper->_targetsHashResolutionIndependent = RenderCore::Techniques::HashPreregisteredAttachmentsResolutionIndependent(preregAttachments, fbProps);
         _preregAttachmentsHelper->_targets = {preregAttachments.begin(), preregAttachments.end()};
 		_preregAttachmentsHelper->_fbProps = fbProps;
     }

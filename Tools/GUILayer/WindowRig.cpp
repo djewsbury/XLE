@@ -9,6 +9,7 @@
 #include "../../PlatformRig/OverlappedWindow.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/MainInputHandler.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
@@ -17,60 +18,33 @@
 #include "../../Utility/PtrUtils.h"
 #include "../../OSServices/WinAPI/IncludeWindows.h"
 
-// #include "../../RenderOverlays/DebuggingDisplay.h"
-
 namespace GUILayer
 {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class ResizePresentationChain : public PlatformRig::IWindowHandler
-    {
-    public:
-        void    OnResize(unsigned newWidth, unsigned newHeight);
-
-        ResizePresentationChain(
-            std::shared_ptr<RenderCore::IPresentationChain> presentationChain,
-            std::shared_ptr<RenderCore::IThreadContext> immediateThreadContext);
-    protected:
-        std::weak_ptr<RenderCore::IPresentationChain> _presentationChain;
-        std::weak_ptr<RenderCore::IThreadContext> _immediateThreadContext;
-    };
-
-    void ResizePresentationChain::OnResize(unsigned newWidth, unsigned newHeight)
-    {
-		auto chain = _presentationChain.lock();
-        auto threadContext = _immediateThreadContext.lock();
-        if (chain && threadContext) {
-                //  When we become an icon, we'll end up with zero width and height.
-                //  We can't actually resize the presentation to zero. And we can't
-                //  delete the presentation chain from here. So maybe just do nothing.
-            if (newWidth && newHeight) {
-				chain->Resize(*threadContext, newWidth, newHeight);
-            }
-        }
-    }
-
-    ResizePresentationChain::ResizePresentationChain(std::shared_ptr<RenderCore::IPresentationChain> presentationChain, std::shared_ptr<RenderCore::IThreadContext> immediateThreadContext)
-    : _presentationChain(presentationChain)
-    , _immediateThreadContext(std::move(immediateThreadContext))
-    {}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-    void WindowRig::AddWindowHandler(std::shared_ptr<PlatformRig::IWindowHandler> windowHandler)
-    {
-        _windowHandlers.push_back(std::move(windowHandler));
-    }
-
     void WindowRig::OnResize(unsigned newWidth, unsigned newHeight)
     {
-        for (auto i=_windowHandlers.begin(); i!=_windowHandlers.end(); ++i) {
-            (*i)->OnResize(newWidth, newHeight);
-        }
         RenderCore::Techniques::ResetFrameBufferPool(*_frameRig->GetTechniqueContext()._frameBufferPool);
         _frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
-        _frameRig->UpdatePresentationChain(*_device, *_presentationChain);
+
+        auto desc = _presentationChain->GetDesc();
+		desc._width = newWidth;
+		desc._height = newHeight;
+		_presentationChain->ChangeConfiguration(*_device->GetImmediateContext(), desc);
+        _frameRig->UpdatePresentationChain(*_presentationChain);
+    }
+
+    void WindowRig::OnInputEvent(const PlatformRig::InputSnapshot& snapshot)
+    {
+        _mainInputHandler->OnInputEvent(MakeInputContext(), snapshot);
+    }
+
+    PlatformRig::InputContext WindowRig::MakeInputContext()
+    {
+        RECT clientRect;
+		GetClientRect((HWND)_platformWindowHandle, &clientRect);
+		return { PlatformRig::Coord2{clientRect.left, clientRect.top}, PlatformRig::Coord2{clientRect.right, clientRect.bottom} };
     }
 
     PlatformRig::OverlaySystemSet& WindowRig::GetMainOverlaySystemSet()
@@ -83,28 +57,30 @@ namespace GUILayer
         std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> frameRenderingApparatus,
         const void* platformWindowHandle)
     : _device(drawingApparatus->_device)
+    , _platformWindowHandle(platformWindowHandle)
     {
         ::RECT clientRect;
         GetClientRect((HWND)platformWindowHandle, &clientRect);
 
-        _presentationChain = _device->CreatePresentationChain(
-            platformWindowHandle,
-			RenderCore::PresentationChainDesc {
-				unsigned(clientRect.right - clientRect.left), unsigned(clientRect.bottom - clientRect.top)});
+        RenderCore::PresentationChainDesc presChainCfg {
+			unsigned(clientRect.right - clientRect.left), unsigned(clientRect.bottom - clientRect.top)};
+        presChainCfg._bindFlags = RenderCore::BindFlag::UnorderedAccess | RenderCore::BindFlag::RenderTarget;
+        _presentationChain = _device->CreatePresentationChain(platformWindowHandle, presChainCfg);
         _frameRig = std::make_shared<PlatformRig::FrameRig>(*frameRenderingApparatus, drawingApparatus.get());
 
         _mainOverlaySystemSet = std::make_shared<PlatformRig::OverlaySystemSet>();
         _frameRig->SetMainOverlaySystem(_mainOverlaySystemSet);
 
-        _frameRig->UpdatePresentationChain(*_device, *_presentationChain);
+        _frameRig->UpdatePresentationChain(*_presentationChain);
+
+        _mainInputHandler = std::make_unique<PlatformRig::MainInputHandler>();
+        _mainInputHandler->AddListener(_mainOverlaySystemSet->GetInputListener());
 
         /*{
             auto overlaySwitch = std::make_shared<PlatformRig::OverlaySystemSwitch>();
             overlaySwitch->AddSystem("~"_key, PlatformRig::CreateConsoleOverlaySystem());
             _frameRig->GetMainOverlaySystem()->AddSystem(overlaySwitch);
         }*/
-
-        AddWindowHandler(std::make_shared<ResizePresentationChain>(_presentationChain));
     }
 
     WindowRig::~WindowRig() {}

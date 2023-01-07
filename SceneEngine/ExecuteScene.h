@@ -49,15 +49,10 @@ namespace SceneEngine
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
 		IScene& scene);
 
-	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeForwardLightingTechnique(
-		RenderCore::LightingEngine::LightingEngineApparatus& apparatus,
-		std::shared_ptr<RenderCore::LightingEngine::ILightScene> lightScene,
-		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const RenderCore::FrameBufferProperties& fbProps);
-
-	std::shared_ptr<RenderCore::LightingEngine::ILightScene> CreateAndActualizeForwardLightingScene(
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeLightingTechnique(
 		RenderCore::LightingEngine::LightingEngineApparatus& apparatus,
 		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowGenerators,
-		const RenderCore::LightingEngine::AmbientLightOperatorDesc& ambientLightOperator);
+		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowOperators,
+		const RenderCore::LightingEngine::ChainedOperatorDesc* globalOperators,
+		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments);
 }

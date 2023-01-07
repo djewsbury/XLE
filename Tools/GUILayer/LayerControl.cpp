@@ -49,7 +49,7 @@ namespace GUILayer
         TRY
         {
             auto& frameRig = windowRig.GetFrameRig();
-            auto frResult = frameRig.ExecuteFrame(threadContext, *windowRig.GetPresentationChain());
+            auto frResult = frameRig.ExecuteFrame(threadContext, windowRig.GetPresentationChain());
 
             // return false if when we have pending resources (encourage another redraw)
             result = !frResult._hasPendingResources;

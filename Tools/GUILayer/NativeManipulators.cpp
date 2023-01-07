@@ -33,9 +33,9 @@ namespace GUILayer
     static void SetupModifierKeys(PlatformRig::InputSnapshot& evnt)
     {
         typedef PlatformRig::InputSnapshot::ActiveButton ActiveButton;
-        constexr auto shift = "shift"_key;
-        constexr auto control = "control"_key;
-        constexr auto alt = "alt"_key;
+        constexpr auto shift = "shift"_key;
+        constexpr auto control = "control"_key;
+        constexpr auto alt = "alt"_key;
 
         if (GetKeyState(0x10) < 0) evnt._activeButtons.push_back(ActiveButton(shift, false, true));
         if (GetKeyState(0x11) < 0) evnt._activeButtons.push_back(ActiveButton(control, false, true));
@@ -56,7 +56,7 @@ namespace GUILayer
     {
         auto underlying = _manipContext->GetNativeManipulator();
         if (!underlying) return;
-        underlying->Render(context->GetThreadContext(), context->GetParsingContext(), context->GetPipelineAccelerators());
+        underlying->Render(context->GetThreadContext(), context->GetParsingContext(), context->GetPipelineAcceleratorsPtr());
     }
 
     bool NativeManipulatorLayer::OnBeginDrag(IViewContext^ vc, Point scrPt) 

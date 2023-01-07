@@ -20,6 +20,7 @@
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../RenderCore/IDevice.h"
+#include "../../RenderCore/DeviceInitialization.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/MountingTree.h"
 #include "../../Assets/OSFileSystem.h"
@@ -109,10 +110,12 @@ namespace GUILayer
 
 		_assetServices = std::make_shared<::Assets::Services>();
         _mountId0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", _services->GetPollingThread()));
-        _mountId1 = ::Assets::MainFileSystem::GetMountingTree()->Mount("", ::Assets::MainFileSystem::GetDefaultFileSystem());
         _mountId2 = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::MainFileSystem::GetDefaultFileSystem());
 
-        _renderDevice = RenderCore::CreateDevice(RenderCore::Techniques::GetTargetAPI());
+        auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
+        const unsigned deviceConfigurationIdx = 0;
+        auto capability = renderAPI->QueryFeatureCapability(deviceConfigurationIdx);
+        _renderDevice = renderAPI->CreateDevice(deviceConfigurationIdx, capability);
         _immediateContext = _renderDevice->GetImmediateContext();
 
         _techniquesServices = std::make_shared<RenderCore::Techniques::Services>(_renderDevice);

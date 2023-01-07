@@ -110,7 +110,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">
     <Link>
       <AssemblyDebug>true</AssemblyDebug>
-      <AdditionalDependencies>dxguid.lib;cfgmgr32.lib;shlwapi.lib;imagehlp.lib;
+      <AdditionalDependencies>dxguid.lib;cfgmgr32.lib;shlwapi.lib;imagehlp.lib;avrt.lib;winmm.lib;
 		  $(SolutionDir)\..\build\msvc-debug\ToolsRig\ToolsRig-$(GfxConfiguration).lib;
 		  $(SolutionDir)\..\build\msvc-debug\PlatformRig\PlatformRig-$(GfxConfiguration).lib;
 		  $(SolutionDir)\..\build\msvc-debug\RenderOverlays\RenderOverlays-$(GfxConfiguration).lib;
@@ -130,9 +130,8 @@
 		  $(SolutionDir)\..\build\msvc-debug\ForeignMisc\ForeignMisc.lib;
       $(SolutionDir)\..\build\msvc-debug\ForeignMisc\yogacore.lib;
 		  $(SolutionDir)\..\build\msvc-debug\bin\CMake\DirectXTex.lib;
-		  $(SolutionDir)\..\build\msvc-debug\freetype\freetyped.lib;
-		  $(SolutionDir)\..\build\msvc-debug\lib64\libHLSLcc.lib;
-      C:\codelibrary\Compressonator_4.1.5083\lib\VS2017\x64\Compressonator_MDd.lib;
+		  $(SolutionDir)\..\build\msvc-debug\ForeignMisc\freetype\freetyped.lib;
+      $(XLECompressonatorDir)\lib\VS2017\x64\Compressonator_MDd.lib;
 		  $(VULKAN_SDK)\Lib\vulkan-1.lib;
 		  $(VULKAN_SDK)\Lib\glslangd.lib;
 		  $(VULKAN_SDK)\Lib\GenericCodeGend.lib;

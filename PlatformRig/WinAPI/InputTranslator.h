@@ -6,14 +6,13 @@
 
 #pragma once
 
-#include "../Math/Vector.h"
-#include "../Utility/UTFUtils.h"
+#include "../InputListener.h"
+#include "../../Math/Vector.h"
+#include "../../Utility/UTFUtils.h"
 #include <vector>
 
 namespace PlatformRig
 {
-	class IInputListener; class InputContext; class InputSnapshot;
-
     class InputTranslator
     {
     public:

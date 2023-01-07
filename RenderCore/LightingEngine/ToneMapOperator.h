@@ -9,10 +9,11 @@
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
-#include <future>
 
 namespace RenderCore { class IResourceView; class IDevice; class FrameBufferProperties; class IThreadContext; class ICompiledPipelineLayout; }
 namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class IShaderOperator; class PipelineCollection; class ParsingContext; struct FrameBufferTarget; }}
+namespace std { template<typename T> class promise; }
+
 namespace RenderCore { namespace LightingEngine 
 {
 	class RenderStepFragmentInterface;

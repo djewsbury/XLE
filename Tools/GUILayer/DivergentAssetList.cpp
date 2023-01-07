@@ -471,7 +471,7 @@ namespace GUILayer
     auto PendingSaveList::Commit() -> CommitResult^
     {
 		std::stringstream errorMessages;
-        constexpr auto materialCode = TypeHashCode<RawMaterial>;
+        constexpr auto materialCode = TypeHashCode<RenderCore::Assets::RawMaterial>;
 
 		using namespace RenderCore::Assets;
 		auto& divAssetMan = ToolsRig::DivergentAssetManager::GetInstance();

@@ -107,3 +107,4 @@ build/
 .ccls-cache/
 compile_commands.json
 CMakeUserPresets.json
+user.props

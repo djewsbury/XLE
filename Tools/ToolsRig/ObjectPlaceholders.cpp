@@ -42,15 +42,16 @@
 namespace ToolsRig
 {
     using namespace RenderCore;
+	using namespace Utility::Literals;
 
     namespace Parameters
     {
-        static const auto Transform = ParameterBox::MakeParameterNameHash("Transform");
-        static const auto Translation = ParameterBox::MakeParameterNameHash("Translation");
-        static const auto Visible = ParameterBox::MakeParameterNameHash("Visible");
-        static const auto ShowMarker = ParameterBox::MakeParameterNameHash("ShowMarker");
-		static const auto Shape = ParameterBox::MakeParameterNameHash("Shape");
-		static const auto Diffuse = ParameterBox::MakeParameterNameHash("Diffuse");
+        constexpr auto Transform = "Transform"_h;
+        constexpr auto Translation = "Translation"_h;
+        constexpr auto Visible = "Visible"_h;
+        constexpr auto ShowMarker = "ShowMarker"_h;
+		constexpr auto Shape = "Shape"_h;
+		constexpr auto Diffuse = "Diffuse"_h;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -398,7 +399,7 @@ namespace ToolsRig
 		const RetainedEntity& obj,
         EntityInterface::RetainedEntities& objs)
     {
-        static auto IndexListHash = ParameterBox::MakeParameterNameHash("IndexList");
+        constexpr auto IndexListHash = "IndexList"_h;
 
         if (!obj._properties.GetParameter(Parameters::Visible, true) || !GetShowMarker(obj)) return;
 

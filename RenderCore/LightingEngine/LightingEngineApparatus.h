@@ -7,11 +7,11 @@
 #include "../Techniques/TechniqueDelegates.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/InitializerPack.h"
-#include "../../Assets/Marker.h"
 #include "../../Assets/AssetHeap.h"		// (for ::Assets::IsInvalidated)
 #include <memory>
 #include <map>
 #if !defined(__CLR_VER)
+	#include "../../Assets/Marker.h"
 	#include <future>
 #endif
 

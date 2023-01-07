@@ -28,6 +28,7 @@ namespace RenderCore { namespace Techniques
 }}
 
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
+namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {

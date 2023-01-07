@@ -12,6 +12,7 @@
 #include <vector>
 
 namespace RenderCore { namespace Techniques { class DrawingApparatus; class FrameRenderingApparatus; } }
+namespace PlatformRig { class InputSnapshot; class InputContext; class MainInputHandler; }
 
 namespace GUILayer
 {
@@ -22,8 +23,8 @@ namespace GUILayer
         PlatformRig::OverlaySystemSet& GetMainOverlaySystemSet();
         std::shared_ptr<RenderCore::IPresentationChain>& GetPresentationChain() { return _presentationChain; }
 
-        void AddWindowHandler(std::shared_ptr<PlatformRig::IWindowHandler> windowHandler);
         void OnResize(unsigned newWidth, unsigned newHeight);
+        void OnInputEvent(const PlatformRig::InputSnapshot&);
 
         WindowRig(
             std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
@@ -33,9 +34,12 @@ namespace GUILayer
     protected:
         std::shared_ptr<PlatformRig::FrameRig> _frameRig;
         std::shared_ptr<RenderCore::IPresentationChain> _presentationChain;
-        std::vector<std::shared_ptr<PlatformRig::IWindowHandler>> _windowHandlers;
         std::shared_ptr<PlatformRig::OverlaySystemSet> _mainOverlaySystemSet;
         std::shared_ptr<RenderCore::IDevice> _device;
+        std::unique_ptr<PlatformRig::MainInputHandler> _mainInputHandler;
+
+        PlatformRig::InputContext MakeInputContext();
+        const void* _platformWindowHandle;
     };
 }
 

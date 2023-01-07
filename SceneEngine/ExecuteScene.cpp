@@ -4,7 +4,6 @@
 
 #include "ExecuteScene.h"
 #include "../RenderCore/LightingEngine/LightingEngine.h"
-#include "../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/Techniques.h"
@@ -66,34 +65,20 @@ namespace SceneEngine
 		return result;
 	}
 
-	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeForwardLightingTechnique(
+	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeLightingTechnique(
 		RenderCore::LightingEngine::LightingEngineApparatus& apparatus,
-		std::shared_ptr<RenderCore::LightingEngine::ILightScene> lightScene,
-		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments,
-		const RenderCore::FrameBufferProperties& fbProps)
+		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowOperators,
+		const RenderCore::LightingEngine::ChainedOperatorDesc* globalOperators,
+		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments)
 	{
 		std::promise<std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>> promise;
 		auto future = promise.get_future();
-		RenderCore::LightingEngine::CreateForwardLightingTechnique(
+		RenderCore::LightingEngine::CreateLightingTechnique(
 			std::move(promise),
 			apparatus._pipelineAccelerators, apparatus._lightingOperatorCollection, apparatus._sharedDelegates,
-			std::move(lightScene),
-			preregisteredAttachments, fbProps);
-		return future.get();
-	}
-
-	std::shared_ptr<RenderCore::LightingEngine::ILightScene> CreateAndActualizeForwardLightingScene(
-		RenderCore::LightingEngine::LightingEngineApparatus& apparatus,
-		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowGenerators,
-		const RenderCore::LightingEngine::AmbientLightOperatorDesc& ambientLightOperator)
-	{
-		std::promise<std::shared_ptr<RenderCore::LightingEngine::ILightScene>> promise;
-		auto future = promise.get_future();
-		RenderCore::LightingEngine::CreateForwardLightingScene(
-			std::move(promise),
-			apparatus._pipelineAccelerators, apparatus._lightingOperatorCollection, apparatus._sharedDelegates,
-			resolveOperators, shadowGenerators, ambientLightOperator);
+			resolveOperators, shadowOperators, globalOperators,
+			preregisteredAttachments);
 		return future.get();
 	}
 }

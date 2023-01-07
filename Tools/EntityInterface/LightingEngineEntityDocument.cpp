@@ -50,7 +50,7 @@ namespace EntityInterface
 
 	struct MultiEnvironmentSettingsDocument::BoundScene
 	{
-		std::shared_ptr<RenderCore::LightingEngine::ILightScene> _boundScene;
+		RenderCore::LightingEngine::ILightScene* _boundScene = nullptr;		// raw pointer, lifetime must be guaranteed by client
 		std::vector<std::pair<uint64_t, unsigned>> _lightOperatorNameToIdx;
 		std::vector<std::pair<uint64_t, unsigned>> _shadowOperatorNameToIdx;
 		std::vector<uint64_t> _lightOperatorHashes;
@@ -575,7 +575,7 @@ namespace EntityInterface
 
 	void MultiEnvironmentSettingsDocument::BindScene(
 		EnvSettingsId envSettings,
-		std::shared_ptr<RenderCore::LightingEngine::ILightScene> lightScene,
+		RenderCore::LightingEngine::ILightScene& lightScene,
 		const MergedLightingCfgHelper& mergedCfgHelper)
 	{
 		for (auto& l:_lights)
@@ -586,7 +586,7 @@ namespace EntityInterface
 		if (i == _boundScenes.end() || i->first != envSettings)
 			 i = _boundScenes.insert(i, std::make_pair(envSettings, BoundScene{}));
 
-		i->second._boundScene = std::move(lightScene);
+		i->second._boundScene = &lightScene;
 		i->second._lightOperatorNameToIdx = mergedCfgHelper._lightOperatorNameToIdx;
 		i->second._shadowOperatorNameToIdx = mergedCfgHelper._shadowOperatorNameToIdx;
 		i->second._lightOperatorHashes.clear();
@@ -606,7 +606,7 @@ namespace EntityInterface
 	void MultiEnvironmentSettingsDocument::UnbindScene(RenderCore::LightingEngine::ILightScene& scene)
 	{
 		for (auto bs=_boundScenes.begin(); bs!=_boundScenes.end(); ++bs) {
-			if (bs->second._boundScene.get() != &scene) continue;
+			if (bs->second._boundScene != &scene) continue;
 
 			for (auto& l:_lights)
 				if (l.second._container == bs->first)

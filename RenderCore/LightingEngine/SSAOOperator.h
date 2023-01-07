@@ -7,12 +7,12 @@
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
-#include <future>
 
 namespace RenderCore { class IResourceView; class IDevice; class FrameBufferProperties; }
 namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; }}
 namespace RenderCore { namespace BufferUploads { class ResourceLocator; } }
 namespace RenderCore { class IThreadContext; }
+namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {

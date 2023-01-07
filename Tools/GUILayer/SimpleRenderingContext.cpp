@@ -309,11 +309,11 @@ namespace GUILayer
     SimpleRenderingContext::SimpleRenderingContext(
         RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
         RetainedRenderResources^ savedRes,
-        RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
+        std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
         void* parsingContext)
     : _retainedRes(savedRes)
     , _immediateDrawables(&immediateDrawables), _parsingContext((RenderCore::Techniques::ParsingContext*)parsingContext)
-    , _pipelineAccelerators(&pipelineAccelerators)
+    , _pipelineAccelerators(pipelineAccelerators)
     {
         _depthWriteEnable = true;
         _depthTestEnable = true;
@@ -347,7 +347,7 @@ namespace GUILayer
             if (highlight == nullptr) {
 
 				ToolsRig::Placements_RenderHighlight(
-                    context->GetParsingContext(), context->GetPipelineAccelerators(),
+                    context->GetParsingContext(), context->GetPipelineAcceleratorsPtr(),
                     renderer->GetNative(), placements->GetNative().GetCellSet(),
 					nullptr, nullptr,
                     materialGuid);
@@ -356,7 +356,7 @@ namespace GUILayer
                 if (highlight->IsEmpty()) return;
 
                 ToolsRig::Placements_RenderHighlight(
-                    context->GetParsingContext(), context->GetPipelineAccelerators(),
+                    context->GetParsingContext(), context->GetPipelineAcceleratorsPtr(),
                     renderer->GetNative(), placements->GetNative().GetCellSet(),
                     (const SceneEngine::PlacementGUID*)AsPointer(highlight->_nativePlacements->cbegin()),
                     (const SceneEngine::PlacementGUID*)AsPointer(highlight->_nativePlacements->cend()),
@@ -386,7 +386,7 @@ namespace GUILayer
             ToolsRig::ConfigureParsingContext(parserContext, *_visCameraSettings.get());
             
             auto& immediateDrawables = *EngineDevice::GetInstance()->GetNative().GetImmediateDrawingApparatus()->_immediateDrawables;
-            auto& pipelineAccelerators = *EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_pipelineAccelerators;
+            auto& pipelineAccelerators = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_pipelineAccelerators;
 			auto context = gcnew GUILayer::SimpleRenderingContext(immediateDrawables, RetainedResources, pipelineAccelerators, &parserContext);
 			try
 			{
