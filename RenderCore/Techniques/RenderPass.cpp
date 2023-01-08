@@ -110,8 +110,8 @@ namespace RenderCore { namespace Techniques
     static std::ostream& operator<<(std::ostream& str, const FrameBufferDescFragment::SubpassDesc& subpass)
     {
         str << (const RenderCore::SubpassDesc&)subpass;
-        str << ", viewed [";
-        for (unsigned c=0; c<subpass.GetViews().size(); ++c) { if (c!=0) str << ", "; str << subpass.GetViews()[c]._resourceName; }
+        str << ", non-fb [";
+        for (unsigned c=0; c<subpass.GetNonFrameBufferAttachmentViews().size(); ++c) { if (c!=0) str << ", "; str << subpass.GetNonFrameBufferAttachmentViews()[c]._resourceName; }
         str << "]";
         return str;
     }
@@ -279,12 +279,12 @@ namespace RenderCore { namespace Techniques
 
     unsigned FrameBufferDescFragment::SubpassDesc::AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage, TextureViewDesc window)
     {
-        auto result = (unsigned)_views.size();
+        auto result = (unsigned)_nonfbViews.size();
         ViewedAttachment view;
         view._resourceName = name;
         view._window = window;
         view._usage = usage;
-        _views.push_back(view);
+        _nonfbViews.push_back(view);
         return result;
     }
 
@@ -1794,7 +1794,7 @@ namespace RenderCore { namespace Techniques
             if (p.GetResolveDepthStencil()._resourceName == attachment)
                 result |= DirectionFlags::Reference | DirectionFlags::WritesData;
 
-            for (const auto&a:p.GetViews())
+            for (const auto&a:p.GetNonFrameBufferAttachmentViews())
                 if (a._resourceName == attachment) {
                     result |= DirectionFlags::Reference;
                     if (a._usage & BindFlag::UnorderedAccess)
@@ -2284,7 +2284,7 @@ namespace RenderCore { namespace Techniques
 
         for (const auto&sp:fragment._subpasses) {
             result._viewedAttachmentsMap.push_back((unsigned)result._viewedAttachments.size());
-            result._viewedAttachments.insert(result._viewedAttachments.end(), sp._views.begin(), sp._views.end());
+            result._viewedAttachments.insert(result._viewedAttachments.end(), sp._nonfbViews.begin(), sp._nonfbViews.end());
         }
         result._viewedAttachmentsMap.push_back((unsigned)result._viewedAttachments.size());
 
@@ -2478,7 +2478,7 @@ namespace RenderCore { namespace Techniques
 			auto remapped = input.GetResolveDepthStencil();
 			result.SetResolveDepthStencil(remapFunction(remapped._resourceName), remapped._window);
 		}
-        for (auto src:input.GetViews())
+        for (auto src:input.GetNonFrameBufferAttachmentViews())
 			result.AppendNonFrameBufferAttachmentView(remapFunction(src._resourceName), src._usage, src._window);
         result.SetViewInstanceMask(input.GetViewInstanceMask());
 		return result;
@@ -2739,7 +2739,7 @@ namespace RenderCore { namespace Techniques
                 subpassUsages[v._resourceName] |= BindFlag::InputAttachment;
             if (sp.GetDepthStencil()._resourceName != ~0u)
                 subpassUsages[sp.GetDepthStencil()._resourceName] |= BindFlag::DepthStencil;
-            for (const auto& v:sp.GetViews())
+            for (const auto& v:sp.GetNonFrameBufferAttachmentViews())
                 subpassUsages[v._resourceName] |= v._usage;
 
             for (unsigned c=0; c<fragment.GetAttachments().size(); ++c)
@@ -2783,8 +2783,14 @@ namespace RenderCore { namespace Techniques
                     if (sp.GetDepthStencil()._resourceName != ~0u)
                         attachmentState[sp.GetDepthStencil()._resourceName] = BindFlag::DepthStencil;
 
-                    for (const auto& nonfb:sp.GetViews()) {
+                    for (const auto& nonfb:sp.GetNonFrameBufferAttachmentViews()) {
                         // usage must agree with expectations (or at least have "simultaneous" flags set)
+                        // If you hit this assert, it means you're attempting to access a non-framebuffer attachment using a view for a specific
+                        // layout, but the attachment is not configured to be in that layout during this subpass. This is ok if the right
+                        // "simultaneous" flag is set.
+                        // We can't change the layout of a resource in the middle of a subpass (without a self dependency) so normally we're expecting
+                        // the attachment to be configured for the way it will be used in the non-fb view on entry to the subpass.
+                        // 
                         // note -- we're not validating that we're using the correct "simultaneous" flags; just that we're using at least one
                         auto simultaneousFlags = nonfb._window._flags &
                             ( TextureViewDesc::Flags::SimultaneouslyColorAttachment | TextureViewDesc::Flags::SimultaneouslyColorReadOnly
@@ -2885,7 +2891,7 @@ namespace RenderCore { namespace Techniques
 			for (const auto& r:spDesc.GetInputs())
                 if (r._resourceName == attachmentName)
                     result |= BindFlag::InputAttachment;
-            for (const auto& r:spDesc.GetViews())
+            for (const auto& r:spDesc.GetNonFrameBufferAttachmentViews())
                 if (r._resourceName == attachmentName)
                     result |= r._usage;
         }

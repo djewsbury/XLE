@@ -93,9 +93,9 @@ namespace RenderCore { namespace Techniques
         struct ViewedAttachment : public RenderCore::AttachmentViewDesc { BindFlag::Enum _usage = BindFlag::ShaderResource; };
         struct SubpassDesc : public RenderCore::SubpassDesc
         {
-            IteratorRange<const ViewedAttachment*> GetViews() const { return MakeIteratorRange(_views); }
+            IteratorRange<const ViewedAttachment*> GetNonFrameBufferAttachmentViews() const { return MakeIteratorRange(_nonfbViews); }
             unsigned AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
-            std::vector<ViewedAttachment> _views;
+            std::vector<ViewedAttachment> _nonfbViews;
         };
         void AddSubpass(SubpassDesc&& subpass);
         void AddSubpass(RenderCore::SubpassDesc&& subpass);
