@@ -62,7 +62,7 @@
   <PropertyGroup />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Link>
-      <AdditionalDependencies>imagehlp.lib;
+      <AdditionalDependencies>imagehlp.lib;avrt.lib;winmm.lib;
         $(SolutionDir)\..\build\msvc-debug\ConsoleRig\ConsoleRig.lib;
         $(SolutionDir)\..\build\msvc-debug\Assets\Assets.lib;
         $(SolutionDir)\..\build\msvc-debug\Math\Math.lib;

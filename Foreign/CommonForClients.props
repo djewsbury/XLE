@@ -6,7 +6,15 @@
   </ImportGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(ForeignDir)\half-1.9.2\include;$(ForeignDir)\eigen;$(ForeignDir)\json\include;$(ForeignDir)\future\include;$(ForeignDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>
+        $(ForeignDir)\half-1.9.2\include;
+        $(ForeignDir)\eigen;$(ForeignDir)\json\include;
+        $(ForeignDir)\future\include;
+        $(ForeignDir)\thousandeyes-futures\include;
+        $(ForeignDir)\wildcards\include;
+        $(ForeignDir)\ctti\include;
+        $(ForeignDir);
+        %(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup />
