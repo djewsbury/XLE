@@ -536,6 +536,7 @@ namespace Utility
     ParameterBox::ParameterBox(
         std::initializer_list<std::pair<const utf8*, const char*>> init)
     {
+        _cachedHash = _cachedParameterNameHash = 0;
         for (auto i=init.begin(); i!=init.end(); ++i) {
             SetParameter(i->first, i->second);
         }
@@ -545,6 +546,7 @@ namespace Utility
         ParameterBox::ParameterBox(InputStreamFormatter<CharType>& fmttr)
     {
         using namespace ImpliedTyping;
+        _cachedHash = _cachedParameterNameHash = 0;
 
             // note -- fixed size buffer here bottlenecks max size for native representations
             // of these values
