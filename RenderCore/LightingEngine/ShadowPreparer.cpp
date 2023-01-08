@@ -74,6 +74,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IShaderResourceDelegate> _uniformDelegate;
 
 		Techniques::ProjectionDesc _savedProjectionDesc;
+		ViewportDesc _savedViewport;
 
 		Internal::PreparedDMShadowFrustum _workingDMFrustum;
 
@@ -317,6 +318,7 @@ namespace RenderCore { namespace LightingEngine
 		assert(_workingDMFrustum.IsReady());
 		assert(!_fbDesc._fbDesc.GetSubpasses().empty());
 		_savedProjectionDesc = parsingContext.GetProjectionDesc();
+		_savedViewport = parsingContext.GetViewport();
 		auto rpi = Techniques::RenderPassInstance{
 			threadContext,
 			_fbDesc._fbDesc, _fbDesc._fullAttachmentDescriptions,
@@ -359,6 +361,7 @@ namespace RenderCore { namespace LightingEngine
 		checked_cast<PreparedShadowResult*>(&res)->_descriptorSet = descSet;
 
 		parsingContext.GetProjectionDesc() = _savedProjectionDesc;
+		parsingContext.GetViewport() = _savedViewport;
 	}
 
 	std::pair<std::shared_ptr<Techniques::SequencerConfig>, std::shared_ptr<Techniques::IShaderResourceDelegate>> DMShadowPreparer::GetSequencerConfig()
