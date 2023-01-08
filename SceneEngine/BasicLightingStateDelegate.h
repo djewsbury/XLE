@@ -10,7 +10,7 @@
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetsCore.h"
 
-namespace RenderCore { namespace LightingEngine { struct SunSourceFrustumSettings; }}
+namespace RenderCore { namespace LightingEngine { struct SunSourceFrustumSettings; struct ScreenSpaceReflectionsOperatorDesc; }}
 namespace Utility { class ParameterBox; }
 namespace Utility { namespace ImpliedTyping { class TypeDesc; }}
 
@@ -82,6 +82,14 @@ namespace SceneEngine
 
     bool SetProperty(
         RenderCore::LightingEngine::SkyTextureProcessorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::AmbientOcclusionOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 }
 

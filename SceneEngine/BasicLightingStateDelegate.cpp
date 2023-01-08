@@ -308,6 +308,20 @@ namespace SceneEngine
             cfg.SetOperator(_operatorResolveContext._skyTextureProcessors._objects[0].second);
         }
 
+        if (!_operatorResolveContext._ssr._objects.empty()) {
+            if (_operatorResolveContext._ssr._objects.size() != 1)
+                Throw(std::runtime_error("Only one screen space reflections operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._ssr._objects[0].second);
+        }
+
+        if (!_operatorResolveContext._ssao._objects.empty()) {
+            if (_operatorResolveContext._ssao._objects.size() != 1)
+                Throw(std::runtime_error("Only one screen space ambient occlusion operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._ssao._objects[0].second);
+        }
+
         _swirlingLights.BindCfg(cfg);
 
         std::sort(_lightOperatorHashToId.begin(), _lightOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
@@ -525,6 +539,18 @@ namespace SceneEngine
     {
         _skyTextureProcessor._desc = operatorDesc;
         AddToOperatorList(_skyTextureProcessor);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc& operatorDesc)
+    {
+        _ssr._desc = operatorDesc;
+        AddToOperatorList(_ssr);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::AmbientOcclusionOperatorDesc& operatorDesc)
+    {
+        _ssao._desc = operatorDesc;
+        AddToOperatorList(_ssao);
     }
 
     MergedLightingEngineCfg::MergedLightingEngineCfg() = default;
@@ -1092,6 +1118,34 @@ namespace SceneEngine
             }
             break;
         }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "EnableFinalBlur"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._enableFinalBlur = *value;
+                return true;
+            }
+            break;
+        case "SplitConfidence"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._splitConfidence = *value;
+                return true;
+            }
+            break;
+        }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::AmbientOcclusionOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
         return false;
     }
 

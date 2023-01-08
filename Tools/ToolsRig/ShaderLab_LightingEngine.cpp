@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ShaderLab_LightingEngine.h"
+#include "../../SceneEngine/BasicLightingStateDelegate.h"		// (for SetProperty)
 #include "../../RenderCore/LightingEngine/LightingDelegateUtil.h"
 #include "../../RenderCore/LightingEngine/LightingEngineInitialization.h"
 #include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
@@ -211,14 +212,13 @@ namespace ToolsRig
 				StringSection<> keyname;
 				StringSection<> ambientCubemap;
 				while (formatter.TryKeyedItem(keyname)) {
-					if (XlEqString(keyname, "EnableFinalBlur"))
-						desc._enableFinalBlur = RequireCastValue<bool>(formatter);
-					else if (XlEqString(keyname, "SplitConfidence"))
-						desc._splitConfidence = RequireCastValue<bool>(formatter);
-					else if (XlEqString(keyname, "AmbientCubemap"))
+					if (XlEqString(keyname, "AmbientCubemap")) {
 						ambientCubemap = RequireStringValue(formatter);
-					else
-						formatter.SkipValueOrElement();
+					} else {
+						ImpliedTyping::TypeDesc type;
+						auto value = RequireRawValue(formatter, type);
+						SceneEngine::SetProperty(desc, Hash64(keyname), value, type);
+					}
 				}
 
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc);

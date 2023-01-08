@@ -449,6 +449,10 @@ namespace RenderCore { namespace LightingEngine
 		};
 		for (const auto& a:attachments)
 			stitchingContext.DefineAttachment(a);
+
+		// We need last frame buffers for some of the biggest render targets (unfortunately)
+		stitchingContext.DefineDoubleBufferAttachment(Techniques::AttachmentSemantics::GBufferNormal, MakeClearValue(0,0,0,0), BindFlag::ShaderResource);
+		stitchingContext.DefineDoubleBufferAttachment(Techniques::AttachmentSemantics::ColorHDR, MakeClearValue(0,0,0,0), BindFlag::ShaderResource);
 	}
 
 	void ScreenSpaceReflectionsOperator::ResetAccumulation() { _pingPongCounter = ~0u; }
@@ -468,7 +472,7 @@ namespace RenderCore { namespace LightingEngine
 
 			assert(!_configCBData.empty());
 			if (!_configCBData.empty()) {
-				_configCB = _device->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(_configCBData.size())), "ssr-config")->CreateBufferView();
+				_configCB = _device->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create((unsigned)_configCBData.size())), "ssr-config")->CreateBufferView();
 				Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*_configCB->GetResource(), MakeIteratorRange(_configCBData));
 			}
 

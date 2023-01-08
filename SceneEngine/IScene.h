@@ -11,6 +11,8 @@
 #include "../RenderCore/LightingEngine/DeferredLightingDelegate.h"
 #include "../RenderCore/LightingEngine/ToneMapOperator.h"
 #include "../RenderCore/LightingEngine/SkyOperator.h"
+#include "../RenderCore/LightingEngine/ScreenSpaceReflections.h"
+#include "../RenderCore/LightingEngine/SSAOOperator.h"
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; } }
@@ -84,6 +86,8 @@ namespace SceneEngine
         void SetOperator(const RenderCore::LightingEngine::MultiSampleOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::SkyOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::SkyTextureProcessorDesc&);
+        void SetOperator(const RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc&);
+        void SetOperator(const RenderCore::LightingEngine::AmbientOcclusionOperatorDesc&);
 
         IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> GetLightOperators() const { return _lightResolveOperators; }
         IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> GetShadowOperators() const { return _shadowResolveOperators; }
@@ -105,6 +109,8 @@ namespace SceneEngine
         ChainingTemplate<RenderCore::LightingEngine::MultiSampleOperatorDesc> _msaaOperator;
         ChainingTemplate<RenderCore::LightingEngine::SkyOperatorDesc> _skyOperator;
         ChainingTemplate<RenderCore::LightingEngine::SkyTextureProcessorDesc> _skyTextureProcessor;
+        ChainingTemplate<RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc> _ssr;
+        ChainingTemplate<RenderCore::LightingEngine::AmbientOcclusionOperatorDesc> _ssao;
         RenderCore::LightingEngine::ChainedOperatorDesc* _firstChainedOperator = nullptr;
 
         template<typename T> void AddToOperatorList(T& op);

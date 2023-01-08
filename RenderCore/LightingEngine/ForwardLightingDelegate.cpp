@@ -271,8 +271,8 @@ namespace RenderCore { namespace LightingEngine
 		mainSubpass.SetDepthStencil(depth);
 
 		if (hasSSR) {
-			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSReflection"_h).NoInitialState());
-			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSRConfidence"_h).NoInitialState());
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSReflection"_h).InitialState(BindFlag::ShaderResource));
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSRConfidence"_h).InitialState(BindFlag::ShaderResource));
 		}
 		mainSubpass.SetName("MainForward");
 
@@ -451,9 +451,9 @@ namespace RenderCore { namespace LightingEngine
 		PreregisterAttachments(stitchingContext);
 		_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
 		_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext);
 		if (_acesOperator) _acesOperator->PreregisterAttachments(stitchingContext);
 		if (_copyToneMapOperator) _copyToneMapOperator->PreregisterAttachments(stitchingContext);
+		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext);
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(

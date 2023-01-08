@@ -40,50 +40,73 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::MultiSampleOperatorDesc> _multiSampleOperators;
 		ObjectTable<RenderCore::LightingEngine::SkyOperatorDesc> _skyOperators;
 		ObjectTable<RenderCore::LightingEngine::SkyTextureProcessorDesc> _skyTextureProcessors;
+		ObjectTable<RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc> _ssr;
+		ObjectTable<RenderCore::LightingEngine::AmbientOcclusionOperatorDesc> _ssao;
 
 		template<typename Formatter>
 			void Deserialize(Formatter& fmttr) 
 		{ 
-			StringSection<> name;
+			uint64_t name;
 			while (fmttr.TryKeyedItem(name)) {
-				if (XlEqString(name, "LightSource")) {
+				switch (name) {
+				case "LightSource"_h:
 					RequireBeginElement(fmttr);
 					_lightSourceOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else if (XlEqString(name, "Shadow")) {
+					break;
+				case "Shadow"_h:
 					RequireBeginElement(fmttr);
 					_shadowOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else if (XlEqString(name, "Ambient")) {
+					break;
+				case "Ambient"_h:
 					RequireBeginElement(fmttr);
 					_ambientOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else if (XlEqString(name, "ForwardLighting")) {
+					break;
+				case "ForwardLighting"_h:
 					RequireBeginElement(fmttr);
 					_forwardLightingOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else if (XlEqString(name, "DeferredLighting")) {
+					break;
+				case "DeferredLighting"_h:
 					RequireBeginElement(fmttr);
 					_deferredLightingOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else if (XlEqString(name, "ToneMapAces")) {
+					break;
+				case "ToneMapAces"_h:
 					RequireBeginElement(fmttr);
 					_toneMapAcesOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else if (XlEqString(name, "MultiSample")) {
+					break;
+				case "MultiSample"_h:
 					RequireBeginElement(fmttr);
 					_multiSampleOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else if (XlEqString(name, "Sky")) {
+					break;
+				case "Sky"_h:
 					RequireBeginElement(fmttr);
 					_skyOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else if (XlEqString(name, "SkyTextureProcessor")) {
+					break;
+				case "SkyTextureProcessor"_h:
 					RequireBeginElement(fmttr);
 					_skyTextureProcessors.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
-				} else {
+					break;
+				case "ScreenSpaceReflections"_h:
+					RequireBeginElement(fmttr);
+					_ssr.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+					break;
+				case "ScreenSpaceAmbientOcclusion"_h:
+					RequireBeginElement(fmttr);
+					_ssao.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+					break;
+				default:
 					SkipValueOrElement(fmttr);
+					break;
 				}
 			}
 		}
