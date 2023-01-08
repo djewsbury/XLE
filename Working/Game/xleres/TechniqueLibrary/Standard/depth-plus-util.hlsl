@@ -45,9 +45,7 @@ DepthPlusEncoded ResolveDepthPlus(VSOUT geo, GBufferValues sample)
 	float historyAccumulationWeight = 1;
 	#if VSOUT_HAS_PREV_POSITION
 		prevPos = geo.prevPosition.xyz / geo.prevPosition.w;
-		prevPos.x = prevPos.x * 0.5 + 0.5;
-		prevPos.y = prevPos.y * 0.5 + 0.5;
-		prevPos.xy = SysUniform_GetViewportMinXY() + prevPos.xy * SysUniform_GetViewportWidthHeight();
+		prevPos.xy = SysUniform_GetViewportCenter() + prevPos.xy * SysUniform_GetViewportHalfWidthHeight();
 		prevPos.xyz -= geo.position.xyz;
 		prevPos.xy = clamp(round(prevPos.xy), -127, 127);
 

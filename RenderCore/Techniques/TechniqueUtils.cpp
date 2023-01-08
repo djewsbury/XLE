@@ -204,6 +204,8 @@ namespace RenderCore { namespace Techniques
             Float2{1.f/float(viewport._width), 1.f/float(viewport._height)}, 
             Float2{viewport._x, viewport._y},
             Float2{viewport._width, viewport._height},
+            Float2{viewport._x+.5f*viewport._width, viewport._y+.5f*viewport._height},
+            Float2{.5f*viewport._width, .5f*viewport._height},
             {0, 0} };
     }
 
