@@ -41,10 +41,9 @@ float SRGBToLinear_Formal(float input)
 
 float LinearToSRGB_Formal(float input)
 {
-	if (input <= 0.04045f/12.92f) {
-		return input * 12.92;
-	} else
-		return pow(input, 1.f/2.4f)*1.055f-0.055f;
+	// Note branch free optimization recommended by AMD
+	// 	(https://gpuopen.com/gdc-presentations/2019/gdc-2019-s5-blend-of-gcn-optimization-and-color-processing.pdf)
+	return max(min(input*12.92, 0.0031308),1.055*pow(input,0.41666)-0.055);
 }
 
 float3 SRGBToLinear_Formal(float3 input)
@@ -54,7 +53,9 @@ float3 SRGBToLinear_Formal(float3 input)
 
 float3 LinearToSRGB_Formal(float3 input)
 {
-	return float3(LinearToSRGB_Formal(input.r), LinearToSRGB_Formal(input.g), LinearToSRGB_Formal(input.b));
+	// Note branch free optimization recommended by AMD
+	// 	(https://gpuopen.com/gdc-presentations/2019/gdc-2019-s5-blend-of-gcn-optimization-and-color-processing.pdf)
+	return max(min(input*12.92, 0.0031308),1.055*pow(input,0.41666)-0.055);
 }
 
 static const float LightingScale = 1.f;     // note -- LightingScale is currently not working with high res screenshots (it is applied twice, so only 1 is safe)
