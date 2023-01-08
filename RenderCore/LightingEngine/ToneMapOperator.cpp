@@ -16,6 +16,7 @@
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
+#include "../IAnnotator.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
@@ -52,6 +53,7 @@ namespace RenderCore { namespace LightingEngine
 
 	static Float4x4 BuildPreToneScaleTransform();
 	static Float4x4 BuildPostToneScaleTransform_SRGB();
+	static void InitializeAcesLookupTable(Metal::DeviceContext&, IResource&);
 
 	void ToneMapAcesOperator::Execute(
 		Techniques::ParsingContext& parsingContext,
@@ -233,13 +235,21 @@ namespace RenderCore { namespace LightingEngine
 
 		////////////////////////////////////////////////////////////
 
+		if (!_lookupTableInitialized) {
+			InitializeAcesLookupTable(metalContext, *_lookupTable->GetResource());
+			_lookupTableInitialized = true;
+		}
+
 		{
+			GPUProfilerBlock profileBlock(parsingContext.GetThreadContext(), "Tonemap");
+
 			const unsigned dispatchGroupWidth = 8;
 			const unsigned dispatchGroupHeight = 8;
 			ResourceViewStream uniforms {
 				hdrInput, ldrOutput,
 				*_params[_paramsBufferCounter],
-				*((_desc._broadBloomMaxRadius > 0.f) ? brightPassMipChainSRV : brightPassHighResBlurWorkingSRV)
+				*((_desc._broadBloomMaxRadius > 0.f) ? brightPassMipChainSRV : brightPassHighResBlurWorkingSRV),
+				*_lookupTable
 			};
 			_toneMap->Dispatch(
 				parsingContext,
@@ -288,7 +298,7 @@ namespace RenderCore { namespace LightingEngine
 
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=this, brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx](LightingTechniqueIterator& iterator) {
+			[op=shared_from_this(), brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx](LightingTechniqueIterator& iterator) {
 				auto& ldrOutput = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				auto& hdrInput = *iterator._rpi.GetNonFrameBufferAttachmentView(1);
 				IResourceView* brightPassHighResBlurWorkingUAV = nullptr, *brightPassHighResBlurWorkingSRV = nullptr, *brightPassMipChainSRV = nullptr;
@@ -415,6 +425,11 @@ namespace RenderCore { namespace LightingEngine
 				LinearBufferDesc::Create(4*4)),
 			"tonemap-aces-atomic-counter");
 		_atomicCounterBufferView = atomicBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+
+		_lookupTable = _pool->GetDevice()->CreateResource(
+			CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(256*sizeof(float))),
+			"aces-tonemap-fixed-curve")->CreateBufferView();
+		_lookupTableInitialized = false;
 	}
 
 	ToneMapAcesOperator::~ToneMapAcesOperator()
@@ -444,6 +459,7 @@ namespace RenderCore { namespace LightingEngine
 					toneMapUsi.BindResourceView(1, "LDROutput"_h);
 					toneMapUsi.BindResourceView(2, "Params"_h);
 					toneMapUsi.BindResourceView(3, "BrightPass"_h);
+					toneMapUsi.BindResourceView(4, "LookupTable"_h);
 
 					bool hasBrightPass = strongThis->_desc._enablePreciseBloom || (strongThis->_desc._broadBloomMaxRadius > 0.f);
 					ParameterBox toneMapParameters;
@@ -649,6 +665,16 @@ namespace RenderCore { namespace LightingEngine
 		float stdDevSq = radius * radius / (1.5f * 1.5f);
 		for (unsigned c=0; c<dimof(_smallBlurWeights); ++c)
 			_smallBlurWeights[c] = GaussianWeight1D(float(c), stdDevSq);
+	}
+
+	void InitializeAcesLookupTable(Metal::DeviceContext& metalContext, IResource& resource)
+	{
+		// curve between [1.0/4096.0, 2.0)
+		float fixedCurve[256] = {
+			0.02f, 0.0487438f, 0.11277f, 0.20191f, 0.312459f, 0.442387f, 0.590982f, 0.755897f, 0.933821f, 1.12363f, 1.32439f, 1.53534f, 1.75584f, 1.98635f, 2.22684f, 2.477f, 2.73654f, 3.00519f, 3.28272f, 3.56891f, 3.86354f, 4.16642f, 4.47739f, 4.79627f, 5.12033f, 5.44652f, 5.77446f, 6.10376f, 6.43412f, 6.76524f, 7.09685f, 7.42872f, 7.76063f, 8.09239f, 8.42382f, 8.75476f, 9.08507f, 9.41462f, 9.7433f, 10.071f, 10.3975f, 10.7227f, 11.0466f, 11.3692f, 11.6902f, 12.0098f, 12.3277f, 12.6441f, 12.9588f, 13.2719f, 13.5832f, 13.8927f, 14.2006f, 14.5066f, 14.8108f, 15.1132f, 15.4138f, 15.7125f, 16.0094f, 16.3044f, 16.5976f, 16.889f, 17.1784f, 17.4661f, 17.7518f, 18.0357f, 18.3173f, 18.5951f, 18.8692f, 19.1396f, 19.4062f, 19.6692f, 19.9285f, 20.1841f, 20.4361f, 20.6846f, 20.9295f, 21.1709f, 21.4088f, 21.6432f, 21.8743f, 22.1019f, 22.3262f, 22.5472f, 22.765f, 22.9795f, 23.1908f, 23.399f, 23.604f, 23.8059f, 24.0049f, 24.2008f, 24.3937f, 24.5837f, 24.7708f, 24.9551f, 25.1365f, 25.3152f, 25.4911f, 25.6643f, 25.8348f, 26.0027f, 26.168f, 26.3308f, 26.491f, 26.6487f, 26.8039f, 26.9568f, 27.1072f, 27.2553f, 27.401f, 27.5445f, 27.6857f, 27.8246f, 27.9614f, 28.096f, 28.2285f, 28.3594f, 28.4888f, 28.6167f, 28.7432f, 28.8683f, 28.992f, 29.1143f, 29.2353f, 29.3549f, 29.4732f, 29.5902f, 29.7059f, 29.8203f, 29.9335f, 30.0454f, 30.1561f, 30.2656f, 30.3739f, 30.4811f, 30.5871f, 30.6919f, 30.7956f, 30.8982f, 30.9997f, 31.1001f, 31.1995f, 31.2978f, 31.395f, 31.4912f, 31.5864f, 31.6806f, 31.7738f, 31.866f, 31.9573f, 32.0476f, 32.1369f, 32.2253f, 32.3128f, 32.3994f, 32.4851f, 32.5699f, 32.6538f, 32.7369f, 32.8191f, 32.9005f, 32.981f, 33.0607f, 33.1396f, 33.2177f, 33.295f, 33.3715f, 33.4473f, 33.5222f, 33.5964f, 33.6699f, 33.7426f, 33.8146f, 33.8859f, 33.9564f, 34.0263f, 34.0954f, 34.1639f, 34.2317f, 34.2988f, 34.3652f, 34.431f, 34.4961f, 34.5606f, 34.6244f, 34.6876f, 34.7502f, 34.8122f, 34.8736f, 34.9344f, 34.9945f, 35.0541f, 35.1131f, 35.1715f, 35.2294f, 35.2867f, 35.3434f, 35.3996f, 35.4552f, 35.5103f, 35.5649f, 35.619f, 35.6725f, 35.7255f, 35.778f, 35.8299f, 35.8814f, 35.9324f, 35.9829f, 36.0329f, 36.0825f, 36.1315f, 36.1801f, 36.2283f, 36.276f, 36.3234f, 36.3705f, 36.4173f, 36.4637f, 36.5098f, 36.5557f, 36.6012f, 36.6464f, 36.6914f, 36.736f, 36.7803f, 36.8244f, 36.8681f, 36.9116f, 36.9548f, 36.9977f, 37.0404f, 37.0827f, 37.1248f, 37.1666f, 37.2082f, 37.2495f, 37.2905f, 37.3312f, 37.3718f, 37.412f, 37.452f, 37.4918f, 37.5312f, 37.5705f, 37.6095f, 37.6483f, 37.6868f, 37.7251f, 37.7631f, 37.801f, 37.8385f, 37.8759f, 37.913f, 37.9499f
+		};
+		
+		metalContext.BeginBlitEncoder().Write(resource, MakeIteratorRange(fixedCurve));
 	}
 
 	namespace ACES

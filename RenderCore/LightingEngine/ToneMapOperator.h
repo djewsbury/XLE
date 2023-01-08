@@ -2,6 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#pragma once
+
 #include "StandardLightScene.h"
 #include "../Format.h"
 #include "../ResourceDesc.h"
@@ -106,6 +108,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResourceView> _params[3];
 		std::shared_ptr<IResourceView> _brightPassParams[3];
 		std::shared_ptr<IResourceView> _atomicCounterBufferView;
+		std::shared_ptr<IResourceView> _lookupTable;
 		unsigned _paramsBufferCounter = 0;
 		unsigned _paramsBufferCopyCountdown = 0;
 		std::vector<uint8_t> _paramsData;
@@ -118,6 +121,8 @@ namespace RenderCore { namespace LightingEngine
 
 		float _brightPassLargeRadius = 1.f;
 		float _brightPassSmallRadius = 1.f;
+
+		mutable bool _lookupTableInitialized = false;
 
 		// IBloom interface
 		void SetBroadRadius(float) override;
