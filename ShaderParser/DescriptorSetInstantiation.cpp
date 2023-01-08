@@ -151,23 +151,62 @@ namespace ShaderSourceParser
 
 		VLA(bool, assignedSlots_final, maxSlotIdxPipelineLayout+1);
 		VLA(bool, processedSlots_input, input._slots.size());
-		for (unsigned c=0; c<maxSlotIdxPipelineLayout+1; ++c) assignedSlots_final[c] = false;
+		for (unsigned c=0; c<(unsigned)maxSlotIdxPipelineLayout+1; ++c) assignedSlots_final[c] = false;
 		for (unsigned c=0; c<input._slots.size(); ++c) processedSlots_input[c] = false;
 		result->_slots.reserve(maxSlotIdxPipelineLayout+1);
 
-		// First look for cases where the names agree
-		if (flags & LinkToFixedLayoutFlags::AllowSlotReassignment) {
-			for (unsigned c=0; c<input._slots.size(); c++) {
-				auto name = input._slots[c]._name;
-				if (name.empty()) continue;
-				auto i = std::find_if(
-					pipelineLayoutVersion._slots.begin(), pipelineLayoutVersion._slots.end(),
-					[name](const auto& q) { return q._name == name; });
-				if (i != pipelineLayoutVersion._slots.end()) {
+		for (auto& s:pipelineLayoutVersion._slots) assert(s._slotIdx != ~0u);		// all entries in the pipeline layout version must have explict slot indeices
+
+		// Where slot indices are explicitly provided in the input, we must use those directly
+		for (unsigned c=0; c<input._slots.size(); c++) {
+			if (input._slots[c]._slotIdx == ~0u) continue;
+
+			unsigned q=0;
+			for (; q<(unsigned)pipelineLayoutVersion._slots.size(); q++)
+				if (pipelineLayoutVersion._slots[q]._slotIdx == input._slots[c]._slotIdx)
+					break;
+
+			bool requiresSlotCreation = q == (unsigned)pipelineLayoutVersion._slots.size();
+			if (requiresSlotCreation) {
+				if (!(flags & LinkToFixedLayoutFlags::AllowSlotTypeModification)) {
+					std::stringstream str;
+					str << "Custom pipeline layout does not agree with fixed layout in LinkToFixedLayout. Matching slot with type (" << AsString(input._slots[c]._type) << ") in the custom layout (" << input._slots[c]._name << ")";
+					Throw(std::runtime_error(str.str()));
+				}
+			} else {
+				bool requiresTypeModification = 
+					MatchableDescriptorType(input._slots[c]._type, pipelineLayoutVersion._slots[q]._type)
+					&& input._slots[c]._arrayElementCount == pipelineLayoutVersion._slots[q]._arrayElementCount;
+				if (requiresTypeModification && !(flags & LinkToFixedLayoutFlags::AllowSlotTypeModification)) {
+					std::stringstream str;
+					str << "Custom pipeline layout does not agree with fixed layout in LinkToFixedLayout. Matching slot (" << pipelineLayoutVersion._slots[q]._slotIdx << "), which has type (" << AsString(pipelineLayoutVersion._slots[q]._type) << ") in the fixed layout but type (" << AsString(input._slots[c]._type) << ") in the custom layout (" << input._slots[c]._name << ")";
+					Throw(std::runtime_error(str.str()));
+				}
+			}
+
+			assignedSlots_final[input._slots[c]._slotIdx] = true;
+			processedSlots_input[c] = true;
+			result->_slots.push_back(input._slots[c]);
+		}
+
+		// Look for cases where names match, and prioritize matching those
+		for (unsigned c=0; c<input._slots.size(); c++) {
+			if (processedSlots_input[c]) continue;
+
+			auto name = input._slots[c]._name;
+			if (name.empty()) continue;
+			auto i = std::find_if(
+				pipelineLayoutVersion._slots.begin(), pipelineLayoutVersion._slots.end(),
+				[name](const auto& q) { return q._name == name; });
+			if (i != pipelineLayoutVersion._slots.end()) {
+
+				// If the input has an explicit slot assigned that doesn't match the pipeline layout, we can't match them
+				if (input._slots[c]._slotIdx == ~0u || input._slots[c]._slotIdx == i->_slotIdx) {
+
 					// If the types do not agree, we can't use this slot. We will just treat them as unmatching
 					if (!MatchableDescriptorType(input._slots[c]._type, i->_type) || input._slots[c]._arrayElementCount != i->_arrayElementCount)
 						continue;
-						
+				
 					if (assignedSlots_final[i->_slotIdx])
 						Throw(std::runtime_error("Multiple descriptor set slots with the same name discovered"));
 					assignedSlots_final[i->_slotIdx] = true;
@@ -183,41 +222,20 @@ namespace ShaderSourceParser
 			}
 		}
 
-		// Fill in everything that didn't get assigned by name, this time just maintaining relative
-		// ordering wherever possible
+		// Repurpose unused slots from the pipeline layout version for anything not yet matched
 		for (unsigned c=0; c<input._slots.size(); c++) {
 			if (processedSlots_input[c]) continue;
 
 			unsigned q=0;
-			if (!(flags & LinkToFixedLayoutFlags::AllowSlotReassignment)) {
-				for (; q<pipelineLayoutVersion._slots.size(); q++)
-					if (pipelineLayoutVersion._slots[q]._slotIdx == input._slots[c]._slotIdx)
-						break;
-				if (q == pipelineLayoutVersion._slots.size()) {
-					std::stringstream str;
-					str << "Custom pipeline layout does not agree with fixed layout in LinkToFixedLayout. No slot (" << input._slots[c]._slotIdx << ") in the fixed layout. Required to match entry (" << input._slots[c]._name << ") in the custom layout";
-					Throw(std::runtime_error(str.str()));
+			for (; q<pipelineLayoutVersion._slots.size(); q++) {
+				if (!assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx]
+					&& MatchableDescriptorType(input._slots[c]._type, pipelineLayoutVersion._slots[q]._type)
+					&& input._slots[c]._arrayElementCount == pipelineLayoutVersion._slots[q]._arrayElementCount) {
+					break;
 				}
-				const auto& i = pipelineLayoutVersion._slots[q];
-				if (!MatchableDescriptorType(input._slots[c]._type, i._type) || input._slots[c]._arrayElementCount != i._arrayElementCount) {
-					std::stringstream str;
-					str << "Custom pipeline layout does not agree with fixed layout in LinkToFixedLayout. Matching slot (" << i._slotIdx << "), which has type (" << AsString(i._type) << ") in the fixed layout but type (" << AsString(input._slots[c]._type) << ") in the custom layout (" << input._slots[c]._name << ")";
-					Throw(std::runtime_error(str.str()));
-				}
-			} else {
-				for (; q<pipelineLayoutVersion._slots.size(); q++) {
-					if (!assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx]
-						&& MatchableDescriptorType(input._slots[c]._type, pipelineLayoutVersion._slots[q]._type)
-						&& input._slots[c]._arrayElementCount == pipelineLayoutVersion._slots[q]._arrayElementCount) {
-						break;
-					}
-				}
-				if (q == pipelineLayoutVersion._slots.size())
-					if (!(flags & LinkToFixedLayoutFlags::AllowSlotTypeModification)) {
-						Throw(std::runtime_error("Could not find a slot in the pipeline layout for material descriptor set slot (" + input._slots[c]._name + "), when linking the instantiated layout to the shared fixed layout. You may have exceeded the maximum number of resources of this type"));
-					} else
-						continue;		// we'll get to this one after all of the easier slots are handled
 			}
+			if (q == pipelineLayoutVersion._slots.size())
+				continue;		// we'll get to this one after all of the easier slots are handled
 
 			assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx] = true;
 			auto finalSlot = input._slots[c];
@@ -227,14 +245,13 @@ namespace ShaderSourceParser
 			processedSlots_input[c] = true;
 		}
 
-		auto modificationWithReassignment = LinkToFixedLayoutFlags::AllowSlotReassignment|LinkToFixedLayoutFlags::AllowSlotTypeModification;
-		if ((flags & modificationWithReassignment) == modificationWithReassignment) {
+		if (flags & LinkToFixedLayoutFlags::AllowSlotTypeModification) {
 			// any input slots that weren't assigned anywhere in the previous pass now get new slots created for them
 			for (unsigned c=0; c<input._slots.size(); c++) {
 				if (processedSlots_input[c]) continue;
 
 				unsigned firstUnusedOutputSlot = 0;
-				for (;firstUnusedOutputSlot<maxSlotIdxPipelineLayout; ++firstUnusedOutputSlot)
+				for (;firstUnusedOutputSlot<(unsigned)maxSlotIdxPipelineLayout; ++firstUnusedOutputSlot)
 					if (!assignedSlots_final[firstUnusedOutputSlot])
 						break;
 
@@ -252,6 +269,11 @@ namespace ShaderSourceParser
 				result->_slots.push_back(pipelineLayoutVersion._slots[c]);
 			}
 		}
+
+		// Check for slots that didn't get assigned
+		for (unsigned c=0; c<input._slots.size(); c++)
+			if (!processedSlots_input[c])
+				Throw(std::runtime_error("Could not find a slot in the pipeline layout for material descriptor set slot (" + input._slots[c]._name + "), when linking the instantiated layout to the shared fixed layout. You may have exceeded the maximum number of resources of this type"));
 
 		// fill in the _cbIdx fields and copy across CB details
 		for (unsigned q=0; q<result->_slots.size(); q++) {
