@@ -17,7 +17,6 @@ namespace RenderCore { namespace LightingEngine
 {
 	struct ShadowOperatorDesc;
 	struct LightSourceOperatorDesc;
-	struct AmbientLightOperatorDesc;
 	struct ChainedOperatorDesc;
 
 	struct ForwardLightingTechniqueDesc
@@ -43,7 +42,7 @@ namespace RenderCore { namespace LightingEngine
 		CompiledLightingTechnique& technique,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const AmbientLightOperatorDesc& ambientLightOperator);
+		const ChainedOperatorDesc* globalOperators);
 
 
 

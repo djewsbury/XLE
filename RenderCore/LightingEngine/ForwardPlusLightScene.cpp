@@ -33,7 +33,6 @@ namespace RenderCore { namespace LightingEngine
 	class ForwardPlusLightScene::AmbientLightConfig
 	{
 	public:
-		AmbientLightOperatorDesc _ambientLightOperator;
 		bool _ambientLightEnabled = false;
 	};
 

@@ -79,7 +79,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		ILightScene::LightSourceId CreateAmbientLightSource()
+		ILightScene::LightSourceId CreateAmbientLightSource() override
 		{
 			if (_ambientLightEnabled)
 				Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
@@ -87,7 +87,7 @@ namespace RenderCore { namespace LightingEngine
 			return 0;
 		}
 
-		void DestroyLightSource(LightSourceId sourceId)
+		void DestroyLightSource(LightSourceId sourceId) override
 		{
 			if (sourceId == 0) {
 				if (!_ambientLightEnabled)
@@ -98,13 +98,13 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		void Clear()
+		void Clear() override
 		{
 			_ambientLightEnabled = false;
 			Internal::StandardLightScene::Clear();
 		}
 
-		void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
+		void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override
 		{
 			if (sourceId == 0) {
 				switch (interfaceTypeCode) {
@@ -282,22 +282,6 @@ namespace RenderCore { namespace LightingEngine
 			[this](LightingTechniqueIterator& iterator) {
 				this->DoLightResolve(iterator);
 			});
-		return fragment;
-	}
-
-	static RenderStepFragmentInterface CreateToneMapFragment(
-		std::function<void(LightingTechniqueIterator&)>&& fn,
-		bool precisionTargets = false)
-	{
-		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
-		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
-
-		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
-		subpass.AppendOutput(ldrOutput);
-		subpass.AppendInput(hdrInput);
-		subpass.SetName("tonemap");
-		fragment.AddSubpass(std::move(subpass), std::move(fn));
 		return fragment;
 	}
 	

@@ -46,8 +46,7 @@ namespace RenderCore { namespace LightingEngine
 
 		bool IsCompatible(
 			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-			IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-			const AmbientLightOperatorDesc& ambientLightOperator);
+			IteratorRange<const ShadowOperatorDesc*> shadowGenerators);
 
 		struct ShadowPreparerIdMapping
 		{

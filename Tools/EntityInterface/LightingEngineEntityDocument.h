@@ -60,10 +60,10 @@ namespace EntityInterface
 
 		struct LightSourceOperatorAndName;
 		struct ShadowOperatorAndName;
-		struct AmbientOperatorAndName;
+		struct SkyTextureProcessorAndName;
 		std::vector<std::pair<EntityId, LightSourceOperatorAndName>> _lightOperators;
 		std::vector<std::pair<EntityId, ShadowOperatorAndName>> _shadowOperators;
-		std::vector<std::pair<EntityId, AmbientOperatorAndName>> _ambientOperators;
+		std::vector<std::pair<EntityId, SkyTextureProcessorAndName>> _ambientOperators;
 
 		struct EnvSettingContainer;
 		std::vector<std::pair<EnvSettingsId, EnvSettingContainer>> _envSettingContainers;

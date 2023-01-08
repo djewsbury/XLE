@@ -25,7 +25,6 @@ namespace RenderCore { namespace LightingEngine
 	class LightingEngineApparatus;
 	struct LightSourceOperatorDesc;
 	struct ShadowOperatorDesc;
-	struct AmbientLightOperatorDesc;
 }}
 namespace RenderCore { class IThreadContext; class FrameBufferProperties; }
 namespace std { template<typename Type> class future; }

@@ -263,7 +263,6 @@ namespace SceneEngine
             if (_operatorResolveContext._ambientOperators._objects.size() != 1)
                 Throw(std::runtime_error("Only one ambient operator allowed in BasicLightingStateDelegate configuration file"));
 
-            cfg.SetOperator(_operatorResolveContext._ambientOperators._objects[0].second);
             _ambientOperator = _operatorResolveContext._ambientOperators._objects[0].first;
         }
 
@@ -490,12 +489,6 @@ namespace SceneEngine
         } else {
             _firstChainedOperator = &op;
         }
-    }
-
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::AmbientLightOperatorDesc& operatorDesc)
-    { 
-        _ambientOperator._desc = operatorDesc;
-        AddToOperatorList(_ambientOperator);
     }
 
     void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ForwardLightingTechniqueDesc& operatorDesc)

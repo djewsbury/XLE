@@ -724,7 +724,7 @@ namespace RenderCore { namespace LightingEngine
 		CompiledLightingTechnique& technique,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const AmbientLightOperatorDesc& ambientLightOperator)
+		const ChainedOperatorDesc* globalOperators)
 	{
 		assert(0);	// todo -- update for chained technique operators
 #if 0

@@ -78,7 +78,6 @@ namespace SceneEngine
         unsigned Register(const RenderCore::LightingEngine::LightSourceOperatorDesc&);
         unsigned Register(const RenderCore::LightingEngine::ShadowOperatorDesc&);
 
-        void SetOperator(const RenderCore::LightingEngine::AmbientLightOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::ForwardLightingTechniqueDesc&);
         void SetOperator(const RenderCore::LightingEngine::DeferredLightingTechniqueDesc&);
         void SetOperator(const RenderCore::LightingEngine::ToneMapAcesOperatorDesc&);
@@ -100,7 +99,6 @@ namespace SceneEngine
         std::vector<uint64_t> _lightHashes, _shadowHashes;
 
         template<typename T> using ChainingTemplate = RenderCore::LightingEngine::ChainedOperatorTemplate<T>;
-        ChainingTemplate<RenderCore::LightingEngine::AmbientLightOperatorDesc> _ambientOperator;
         ChainingTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperator;
         ChainingTemplate<RenderCore::LightingEngine::DeferredLightingTechniqueDesc> _deferredLightingOperator;
         ChainingTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> _toneMapAcesOperator;

@@ -15,7 +15,7 @@ namespace EntityInterface
 
 	constexpr auto s_lightOperator = "LightOperator"_h;
 	constexpr auto s_shadowOperator = "ShadowOperator"_h;
-	constexpr auto s_ambientOperator = "AmbientOperator"_h;
+	constexpr auto s_skyTextureProcessor = "SkyTextureProcessor"_h;
 	constexpr auto s_envSettings = "EnvSettings"_h;
 	constexpr auto s_directionalLight = "DirectionalLight"_h;
 	constexpr auto s_areaLight = "AreaLight"_h;
@@ -69,11 +69,11 @@ namespace EntityInterface
 		EnvSettingsId _container = ~0ull;
 		RenderCore::LightingEngine::ShadowOperatorDesc _opDesc;
 	};
-	struct MultiEnvironmentSettingsDocument::AmbientOperatorAndName
+	struct MultiEnvironmentSettingsDocument::SkyTextureProcessorAndName
 	{
 		std::string _name;
 		EnvSettingsId _container = ~0ull;
-		RenderCore::LightingEngine::AmbientLightOperatorDesc _opDesc;
+		RenderCore::LightingEngine::SkyTextureProcessorDesc _opDesc;
 	};
 	struct MultiEnvironmentSettingsDocument::EnvSettingContainer
 	{
@@ -173,10 +173,10 @@ namespace EntityInterface
 					SceneEngine::SetProperty(i->second._opDesc, p._prop.second, p._data, p._type);
 			}
 			return true;
-		} else if (objType.second == s_ambientOperator) {
+		} else if (objType.second == s_skyTextureProcessor) {
 			auto i = LowerBound(_ambientOperators, id);
 			assert(i == _ambientOperators.end() || i->first != id);
-			i = _ambientOperators.insert(i, std::make_pair(id, AmbientOperatorAndName{}));
+			i = _ambientOperators.insert(i, std::make_pair(id, SkyTextureProcessorAndName{}));
 			for (const auto& p:props)
 				SceneEngine::SetProperty(i->second._opDesc, p._prop.second, p._data, p._type);
 			return true;
