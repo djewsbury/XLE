@@ -146,16 +146,18 @@ namespace RenderCore { namespace LightingEngine
 		assert(_classifyTiles && _prepareIndirectArgs && _intersect && _resolveSpatial && _resolveTemporal);
 		assert(!_desc._enableFinalBlur || _reflectionsBlur);
 
-		if (_pendingCompleteInit) {
+		if (_pendingCompleteInit)
 			CompleteInitialization(*iterator._threadContext);
 
-			// hack -- force clear here
-			auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
-			metalContext.Clear(*iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intUAV), Float4{0.f,0.f,0.f,0.f});
-			metalContext.Clear(*iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intPrevSRV), Float4{0.f,0.f,0.f,0.f});
-		}
-
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
+
+		_paramsBufferCounter = (_paramsBufferCounter+1)%dimof(_paramsBuffer);
+		if (_paramsBufferCopyCountdown) {
+			metalContext.BeginBlitEncoder().Write(
+				CopyPartial_Dest{*_paramsBuffer[0]->GetResource(), unsigned(_paramsBufferCounter*_paramsBufferData.size())},
+				_paramsBufferData);
+			_paramsBufferCopyCountdown--;
+		}
 
 		IResourceView* rvs[35];
 		rvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();			// g_denoised_reflections
@@ -201,7 +203,7 @@ namespace RenderCore { namespace LightingEngine
 
 		rvs[27] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_debugUAV).get();			// SSRDebug
 
-		rvs[28] = _configCB.get();
+		rvs[28] = _paramsBuffer[_paramsBufferCounter].get();
 
 		if (_desc._splitConfidence) {
 			rvs[29] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_confidence_result
@@ -469,13 +471,6 @@ namespace RenderCore { namespace LightingEngine
 				0, VK_WHOLE_SIZE, 0);
 			
 			_blueNoiseRes->CompleteInitialization(threadContext);
-
-			assert(!_configCBData.empty());
-			if (!_configCBData.empty()) {
-				_configCB = _device->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create((unsigned)_configCBData.size())), "ssr-config")->CreateBufferView();
-				Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*_configCB->GetResource(), MakeIteratorRange(_configCBData));
-			}
-
 			_pendingCompleteInit = false;
 		}
 	}
@@ -484,6 +479,23 @@ namespace RenderCore { namespace LightingEngine
 	{
 		_skyCubeSRV = inputView;
 	}
+
+	static void ConfigureParameterBox(ParameterBox& pBox, const IScreenSpaceReflections::QualityParameters& params);
+
+	void ScreenSpaceReflectionsOperator::SetQualityParameters(const QualityParameters& params)
+	{
+		assert(_secondStageConstructionState == 2);
+
+		_qualityParameters = params;
+
+		// prepare the data via the cb layout & start the copy countdown
+		ParameterBox pBox;
+		ConfigureParameterBox(pBox, _qualityParameters);
+		_paramsBufferData = _paramsCBLayout.BuildCBDataAsVector(pBox, Techniques::GetDefaultShaderLanguage());
+		_paramsBufferCopyCountdown = 3;
+	}
+
+	auto ScreenSpaceReflectionsOperator::GetQualityParameters() const -> QualityParameters { return _qualityParameters; }
 
 	ScreenSpaceReflectionsOperator::ScreenSpaceReflectionsOperator(
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
@@ -505,7 +517,7 @@ namespace RenderCore { namespace LightingEngine
 					return *l._descSet->_constantBuffers[cb._cbIdx];
 		Throw(std::runtime_error("Missing CBLayout named (" + name.AsString() + ")"));
 	}
-	
+
 	void ScreenSpaceReflectionsOperator::SecondStageConstruction(
 		std::promise<std::shared_ptr<ScreenSpaceReflectionsOperator>>&& promise,
 		const Techniques::FrameBufferTarget& fbTarget)
@@ -638,10 +650,18 @@ namespace RenderCore { namespace LightingEngine
 				strongThis->_reflectionsBlur = std::move(reflectionsBlur);
 
 				{
-					ParameterBox params;
-					auto configCBLayout = FindCBLayout(*pipelineLayout, "SSRConfiguration");
-					strongThis->_configCBData = configCBLayout.BuildCBDataAsVector(params, Techniques::GetDefaultShaderLanguage());
+					strongThis->_paramsCBLayout = FindCBLayout(*pipelineLayout, "SSRConfiguration");
+					ParameterBox pBox;
+					ConfigureParameterBox(pBox, strongThis->_qualityParameters);
+					strongThis->_paramsBufferData = strongThis->_paramsCBLayout.BuildCBDataAsVector(pBox, Techniques::GetDefaultShaderLanguage());
 				}
+
+				auto paramsBufferSize = strongThis->_paramsBufferData.size();
+				auto paramsBuffer = strongThis->_device->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create((unsigned)paramsBufferSize*3)), "ssr-config");
+				for (unsigned c=0; c<dimof(strongThis->_paramsBuffer); ++c)
+					strongThis->_paramsBuffer[c] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(c*paramsBufferSize), (unsigned)paramsBufferSize);
+				strongThis->_paramsBufferCounter = 0;
+				strongThis->_paramsBufferCopyCountdown = 3;
 
 				///////////////////
 
@@ -673,6 +693,28 @@ namespace RenderCore { namespace LightingEngine
 		uint32_t value = (_enableFinalBlur<<1) | (_splitConfidence<<0);
 		return rotl64(seed, value);
 	}
+
+	void ConfigureParameterBox(ParameterBox& pBox, const IScreenSpaceReflections::QualityParameters& params)
+	{
+		// names for the values in pBox must match how they appear in the pipeline file (srr.pipeline)
+		pBox.SetParameter("g_most_detailed_mip"_h, params._mostDetailedMip);
+		pBox.SetParameter("g_min_traversal_occupancy"_h, params._minTraversalOccupancy);
+		pBox.SetParameter("g_max_traversal_intersections"_h, params._maxTraversalIntersections);
+
+		pBox.SetParameter("g_depth_buffer_thickness"_h, params._depthBufferThickness);
+
+		pBox.SetParameter("g_temporal_variance_guided_tracing_enabled"_h, params._temporalVarianceGuidanceEnabled);
+		pBox.SetParameter("g_samples_per_quad"_h, params._samplesPerQuad);
+
+		pBox.SetParameter("g_temporal_stability_factor"_h, params._temporalStabilityFactor);
+		pBox.SetParameter("g_temporal_variance_threshold"_h, params._temporalVarianceThreshold);
+
+		pBox.SetParameter("g_depth_sigma"_h, params._depthSigma);
+		pBox.SetParameter("g_roughness_sigma_min"_h, params._roughnessSigmaxMin);
+		pBox.SetParameter("g_roughness_sigma_max"_h, params._roughnessSigmaMax);
+	}
+
+	IScreenSpaceReflections::~IScreenSpaceReflections() {}
 
 	/*
 		Reference for some of the main shader inputs:

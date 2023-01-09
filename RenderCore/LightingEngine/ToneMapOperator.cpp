@@ -74,10 +74,9 @@ namespace RenderCore { namespace LightingEngine
 		static_assert(dimof(_brightPassParams) == dimof(_params));
 		_paramsBufferCounter = (_paramsBufferCounter+1)%dimof(_params);
 		if (_paramsBufferCopyCountdown) {
-			Metal::ResourceMap map { *parsingContext.GetThreadContext().GetDevice(), *_params[0]->GetResource(), Metal::ResourceMap::Mode::WriteDiscardPrevious };
-			std::memcpy(
-				PtrAdd(map.GetData().begin(), _paramsBufferCounter*_paramsData.size()),
-				_paramsData.data(), _paramsData.size());
+			metalContext.BeginBlitEncoder().Write(
+				CopyPartial_Dest{*_params[0]->GetResource(), unsigned(_paramsBufferCounter*_paramsData.size())},
+				_paramsData);
 			_paramsBufferCopyCountdown--;
 		}
 
@@ -409,7 +408,7 @@ namespace RenderCore { namespace LightingEngine
 
 		// we need to multi-buffer the params buffer in order to update it safely
 		auto paramsBuffer = _pool->GetDevice()->CreateResource(
-			CreateDesc(BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(unsigned(3*sizeof(AllParams)))),
+			CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(unsigned(3*sizeof(AllParams)))),
 			"aces-tonemap-params");
 		_params[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*sizeof(AllParams)), (unsigned)sizeof(CB_Params));
 		_brightPassParams[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*sizeof(AllParams)+sizeof(CB_Params)), (unsigned)sizeof(CB_BrightPassParams));

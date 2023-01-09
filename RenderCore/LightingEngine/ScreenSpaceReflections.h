@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../Assets/PredefinedCBLayout.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
@@ -43,7 +44,33 @@ namespace RenderCore { namespace LightingEngine
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
 	};
 
-	class ScreenSpaceReflectionsOperator : public std::enable_shared_from_this<ScreenSpaceReflectionsOperator>
+	class IScreenSpaceReflections
+	{
+	public:
+		struct QualityParameters
+		{
+			unsigned _mostDetailedMip = 1;
+			unsigned _minTraversalOccupancy = 4;
+			unsigned _maxTraversalIntersections = 128;
+
+			float _depthBufferThickness = 0.015f;
+
+			bool _temporalVarianceGuidanceEnabled = true;
+			unsigned _samplesPerQuad = 4;
+
+			float _temporalStabilityFactor = 0.96f;
+			float _temporalVarianceThreshold = 0.002f;
+
+			float _depthSigma = 0.02f;
+			float _roughnessSigmaxMin = 0.001f;
+			float _roughnessSigmaMax = 0.01f;
+		};
+		virtual void SetQualityParameters(const QualityParameters&) = 0;
+		virtual QualityParameters GetQualityParameters() const = 0;
+		virtual ~IScreenSpaceReflections();
+	};
+
+	class ScreenSpaceReflectionsOperator : public IScreenSpaceReflections, public std::enable_shared_from_this<ScreenSpaceReflectionsOperator>
 	{
 	public:
 		void Execute(LightingEngine::LightingTechniqueIterator& iterator);
@@ -60,6 +87,9 @@ namespace RenderCore { namespace LightingEngine
 			std::promise<std::shared_ptr<ScreenSpaceReflectionsOperator>>&& promise,
 			const Techniques::FrameBufferTarget& fbTarget);
 		void CompleteInitialization(IThreadContext& threadContext);		// must be called after CompleteInitialization()
+
+		void SetQualityParameters(const QualityParameters&) override;
+		QualityParameters GetQualityParameters() const override;
 
 		ScreenSpaceReflectionsOperator(
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
@@ -80,8 +110,12 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IResource> _indirectArgsBuffer;
 		std::shared_ptr<IResourceView> _skyCubeSRV;
 
-		std::shared_ptr<IResourceView> _configCB;
-		std::vector<uint8_t> _configCBData;
+		std::shared_ptr<IResourceView> _paramsBuffer[3];
+		unsigned _paramsBufferCounter = 0;
+		unsigned _paramsBufferCopyCountdown = 0;
+		std::vector<uint8_t> _paramsBufferData;
+		QualityParameters _qualityParameters;
+		RenderCore::Assets::PredefinedCBLayout _paramsCBLayout;
 
 		struct ResolutionDependentResources;
 		std::unique_ptr<ResolutionDependentResources> _res;

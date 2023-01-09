@@ -64,6 +64,7 @@ namespace Utility
         T1(Type) void   SetParameter(StringSection<utf8> name, Type value);
 
         void            SetParameter(ParameterNameHash nameHash, IteratorRange<const void*> data, const TypeDesc& type);
+        T1(Type) void   SetParameter(ParameterNameHash nameHash, Type value);
 		void			RemoveParameter(ParameterName name);
 
         // avoid ambiguity
@@ -228,6 +229,12 @@ namespace Utility
         void ParameterBox::SetParameter(StringSection<utf8> name, Type value)
     {
         SetParameter(name, MakeOpaqueIteratorRange(value), ImpliedTyping::TypeOf<Type>());
+    }
+
+    template<typename Type>
+        void ParameterBox::SetParameter(ParameterNameHash nameHash, Type value)
+    {
+        SetParameter(nameHash, MakeOpaqueIteratorRange(value), ImpliedTyping::TypeOf<Type>());
     }
 
     inline void ParameterBox::SetParameter(StringSection<utf8> name, const std::string& stringData) { SetParameter(name, MakeStringSection(stringData)); }
