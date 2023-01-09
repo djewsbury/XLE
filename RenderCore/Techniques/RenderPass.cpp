@@ -1090,6 +1090,12 @@ namespace RenderCore { namespace Techniques
                 Throw(std::runtime_error("Double buffer attachment description mismatch between an existing registered attachment and requested attachment"));
             if (existing->_pendingSwitchToLayout.value_or(existing->_currentLayout) != initialLayout)
                 Throw(std::runtime_error("Double buffer attachment layout mismatch between an existing registered attachment and requested attachment"));
+            
+            // still need to record the request in _doubleBufferAttachments
+            if (existingRegistration == _doubleBufferAttachments.end())
+                _doubleBufferAttachments.push_back({
+                    yesterdaySemantic, todaySemantic, initialLayout, defaultContents, desc
+                });
             return;
         }
 
@@ -1109,11 +1115,10 @@ namespace RenderCore { namespace Techniques
         newEntry._desc = desc;
         _entries.emplace_back(std::move(newEntry));
 
-        if (existingRegistration == _doubleBufferAttachments.end()) {
+        if (existingRegistration == _doubleBufferAttachments.end())
             _doubleBufferAttachments.push_back({
                 yesterdaySemantic, todaySemantic, initialLayout, defaultContents, desc
             });
-        }
     }
 
     void AttachmentReservation::DefineDoubleBufferAttachments(IteratorRange<const DoubleBufferAttachment*> attachments)
@@ -2355,17 +2360,7 @@ namespace RenderCore { namespace Techniques
         PreregisteredAttachment::State state,
         BindFlag::BitField initialLayoutFlags)
 	{
-		auto i = std::find_if(
-			_workingAttachments.begin(), _workingAttachments.end(),
-			[semantic](const auto& c) { return c._semantic == semantic; });
-		if (i != _workingAttachments.end()) {
-            assert(MatchRequest(resourceDesc, i->_desc));
-            if (initialLayoutFlags)
-                i->_layout = initialLayoutFlags;
-            i->_state = state;
-        } else
-            _workingAttachments.push_back(
-                RenderCore::Techniques::PreregisteredAttachment{semantic, resourceDesc, name, state, initialLayoutFlags});
+		DefineAttachment(RenderCore::Techniques::PreregisteredAttachment{semantic, resourceDesc, name, state, initialLayoutFlags});
 	}
 
     void FragmentStitchingContext::DefineAttachment(
@@ -2382,6 +2377,15 @@ namespace RenderCore { namespace Techniques
             i->_state = attachment._state;
         } else
             _workingAttachments.push_back(attachment);
+
+        // If there's a double buffer attachment registered, we must update that
+        auto dblBuff = std::find_if(
+            _doubleBufferAttachments.begin(), _doubleBufferAttachments.end(),
+            [semantic=attachment._semantic](const auto& q) { return q._yesterdaySemantic == semantic; });
+        if (dblBuff != _doubleBufferAttachments.end()) {
+            dblBuff->_desc = attachment._desc;
+            DefineAttachment(dblBuff->_todaySemantic, dblBuff->_desc, "yesterday-data", PreregisteredAttachment::State::Initialized, dblBuff->_initialLayout);
+        }
 	}
 
     void FragmentStitchingContext::Undefine(uint64_t semantic)
@@ -2395,36 +2399,31 @@ namespace RenderCore { namespace Techniques
 
     void FragmentStitchingContext::DefineDoubleBufferAttachment(uint64_t semantic, ClearValue initialContents, unsigned initialLayoutFlags)
     {
-        auto i = std::find_if(
-			_workingAttachments.begin(), _workingAttachments.end(),
-			[semantic](const auto& c) { return c._semantic == semantic; });
-        if (i == _workingAttachments.end())
-            Throw(std::runtime_error("Attempting to call DefineDoubleBufferAttachment() for a semantic that doesn't have a predefined attachment yet. Define the attachment for the current frame first, before requiring a double buffer of it."));
-
         auto i3 = std::find_if(
 			_doubleBufferAttachments.begin(), _doubleBufferAttachments.end(),
-			[semantic](const auto& c) { return c._todaySemantic == semantic; });
+			[semantic](const auto& c) { return c._yesterdaySemantic == semantic; });
         if (i3 != _doubleBufferAttachments.end()) {
             // can't easily check if the clear values are the same, because it's an enum
             assert(i3->_initialLayout == initialLayoutFlags);
             return; // already defined
         }
 
-        auto i2 = std::find_if(
+        auto i = std::find_if(
 			_workingAttachments.begin(), _workingAttachments.end(),
-			[semantic](const auto& c) { return c._semantic == semantic+1; });
-        if (i2 != _workingAttachments.end())
-            Throw(std::runtime_error("Attempting to call DefineDoubleBufferAttachment(), but there is an overlapping predefined attachment for the double buffer. Only predefine the attachment once."));
+			[semantic](const auto& c) { return c._semantic == semantic; });
 
         DoubleBufferAttachment a;
         a._todaySemantic = semantic+1;
         a._yesterdaySemantic = semantic;
         a._initialContents = initialContents;
         a._initialLayout = initialLayoutFlags;
-        a._desc = i->_desc;
+        if (i != _workingAttachments.end())
+            a._desc = i->_desc;
         _doubleBufferAttachments.push_back(a);
         assert(initialLayoutFlags != 0);
-        DefineAttachment(a._todaySemantic, a._desc, "yesterday-data", PreregisteredAttachment::State::Initialized, initialLayoutFlags);
+
+        if (i != _workingAttachments.end())
+            DefineAttachment(a._todaySemantic, a._desc, "yesterday-data", PreregisteredAttachment::State::Initialized, a._initialLayout);
     }
 
     Format FragmentStitchingContext::GetSystemAttachmentFormat(SystemAttachmentFormat fmt) const
