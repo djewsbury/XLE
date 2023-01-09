@@ -40,13 +40,6 @@ namespace PlatformRig
 
         struct FrameRigBinder
         {
-            void SetFrameLimiter(unsigned maxFPS)
-            {
-                auto l = _real.lock();
-                if (!l)
-                    Throw(std::runtime_error("C++ object has expired"));
-                l->SetFrameLimiter(maxFPS);
-            }
             std::weak_ptr<FrameRig> _real;
             FrameRigBinder(std::weak_ptr<FrameRig> real) : _real(std::move(real)) {}
         };
@@ -85,7 +78,6 @@ namespace PlatformRig
         auto luaState = ConsoleRig::Console::GetInstance().LockLuaState();
         getGlobalNamespace(luaState.GetLuaState())
             .beginClass<Pimpl::FrameRigBinder>("FrameRig")
-                .addFunction("SetFrameLimiter", &Pimpl::FrameRigBinder::SetFrameLimiter)
             .endClass();
 
         getGlobalNamespace(luaState.GetLuaState())

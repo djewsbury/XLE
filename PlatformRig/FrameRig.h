@@ -41,8 +41,8 @@ namespace PlatformRig
             std::shared_ptr<RenderCore::IPresentationChain> presChain,
             RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult;
 
-        void SetFrameLimiter(unsigned maxFPS);
         void UpdatePresentationChain(RenderCore::IPresentationChain& presChain);
+        void ReleaseDoubleBufferAttachments();
 
         void SetMainOverlaySystem(std::shared_ptr<IOverlaySystem>);
 		void SetDebugScreensOverlaySystem(std::shared_ptr<IOverlaySystem>);

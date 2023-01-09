@@ -117,6 +117,7 @@ namespace PlatformRig
 
 					auto resize = std::get<WindowResize>(msg);
 					RenderCore::Techniques::ResetFrameBufferPool(*frameRig->GetTechniqueContext()._frameBufferPool);
+					frameRig->ReleaseDoubleBufferAttachments();
 					frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
 					auto desc = presentationChain->GetDesc();
 					desc._width = resize._newWidth;

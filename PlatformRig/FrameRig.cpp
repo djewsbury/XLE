@@ -73,7 +73,6 @@ namespace PlatformRig
         FrameRateRecorder _frameRate;
         float _timerToSeconds;
         unsigned _frameRenderCount;
-        uint64_t _frameLimiter;
         uint64_t _timerFrequency;
         uint64_t _lastFrameBarrierTimePoint = 0;
 
@@ -90,7 +89,6 @@ namespace PlatformRig
         Pimpl()
         : _timerFrequency(OSServices::GetPerformanceCounterFrequency())
         , _frameRenderCount(0)
-        , _frameLimiter(0)
         {
             _timerToSeconds = 1.0f / float(_timerFrequency);
         }
@@ -360,10 +358,10 @@ namespace PlatformRig
         }
     }
 
-    void FrameRig::SetFrameLimiter(unsigned maxFPS)
+    void FrameRig::ReleaseDoubleBufferAttachments()
     {
-        if (maxFPS) { _pimpl->_frameLimiter = _pimpl->_timerFrequency / uint64_t(maxFPS); }
-        else { _pimpl->_frameLimiter = 0; }
+        // we may need to clear all of the captured attachments sometimes (for example, before a swap chain resolution change)
+        _pimpl->_capturedDoubleBufferAttachments = {};
     }
 
     void FrameRig::SetMainOverlaySystem(std::shared_ptr<IOverlaySystem> overlaySystem)

@@ -26,6 +26,7 @@ namespace GUILayer
     void WindowRig::OnResize(unsigned newWidth, unsigned newHeight)
     {
         RenderCore::Techniques::ResetFrameBufferPool(*_frameRig->GetTechniqueContext()._frameBufferPool);
+        _frameRig->ReleaseDoubleBufferAttachments();
         _frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
 
         auto desc = _presentationChain->GetDesc();
