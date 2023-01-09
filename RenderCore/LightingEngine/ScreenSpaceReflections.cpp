@@ -477,6 +477,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void ScreenSpaceReflectionsOperator::SetSpecularIBL(std::shared_ptr<IResourceView> inputView)
 	{
+		if (!_integrationParams._specularIBLEnabled) return;
 		_skyCubeSRV = inputView;
 	}
 
@@ -499,9 +500,11 @@ namespace RenderCore { namespace LightingEngine
 
 	ScreenSpaceReflectionsOperator::ScreenSpaceReflectionsOperator(
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-		const ScreenSpaceReflectionsOperatorDesc& desc)
+		const ScreenSpaceReflectionsOperatorDesc& desc,
+		const IntegrationParams& integrationParams)
 	: _desc(desc)
 	, _pipelinePool(std::move(pipelinePool))
+	, _integrationParams(integrationParams)
 	{
 		_device = _pipelinePool->GetDevice();
 		_blueNoiseRes = std::make_unique<BlueNoiseGeneratorTables>(*_device);
@@ -581,6 +584,8 @@ namespace RenderCore { namespace LightingEngine
 		selectors.SetParameter("DEBUGGING_PRODUCTS", 1);
 		if (_desc._splitConfidence)
 			selectors.SetParameter("SPLIT_CONFIDENCE", 1);
+		if (_integrationParams._specularIBLEnabled)
+			selectors.SetParameter("HAS_SPECULAR_IBL", 1);
 		auto classifyTiles = Techniques::CreateComputeOperator(
 			_pipelinePool,
 			SSR_CLASSIFY_TILES_HLSL ":ClassifyTiles",

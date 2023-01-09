@@ -1,0 +1,5 @@
+ComputeShader=~
+    Shader = xleres/ToolsHelper/IBLTables.hlsl:GenerateSplitSumGlossLUT
+    Format = BC6H_UF16
+    Width = 512
+    Height = 512

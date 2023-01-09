@@ -13,14 +13,17 @@ DescriptorSet ForwardLighting
 
 	SampledTexture NoiseTexture;						// 8
 
-	Sampler ShadowSampler								// 9
+	SampledTexture SpecularIBL;							// 9
+	SampledTexture GlossLUT;							// 10
+
+	Sampler ShadowSampler								// 11
 	{
 		Filter = ComparisonBilinear,
 		AddressU = Border,
 		AddressV = Border,
 		Comparison = GreaterEqual
 	};
-	Sampler ShadowDepthSampler							// 10
+	Sampler ShadowDepthSampler							// 12
 	{
 		Filter = Bilinear,
 		AddressU = Border,

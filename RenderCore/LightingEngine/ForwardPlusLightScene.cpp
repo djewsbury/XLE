@@ -21,10 +21,12 @@
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/CommonResources.h"
+#include "../Techniques/Services.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Metal/Resource.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/Assets.h"
+#include "../../xleres/FileList.h"
 
 using namespace Utility::Literals;
 
@@ -247,6 +249,12 @@ namespace RenderCore { namespace LightingEngine
 					dst[5] = context.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
 				}
 			}
+
+			if (bindingFlags & ((1ull<<6ull)|(1ull<<7ull))) {
+				dst[6] = _lightScene->_distantSpecularIBL.get();
+				dst[7] = _lightScene->_glossLut.get();
+				context.RequireCommandList(_lightScene->_distantSpecularIBLAndGlossLutCompletion);
+			}
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
 		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
@@ -258,6 +266,8 @@ namespace RenderCore { namespace LightingEngine
 			BindResourceView(3, "EnvironmentProps"_h);
 			BindResourceView(4, "StaticShadowProbeDatabase"_h);
 			BindResourceView(5, "StaticShadowProbeProperties"_h);
+			BindResourceView(6, "SpecularIBL"_h);
+			BindResourceView(7, "GlossLUT"_h);
 		}
 	};
 
@@ -276,6 +286,16 @@ namespace RenderCore { namespace LightingEngine
 	{
 		std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
 		std::memcpy(_diffuseSHCoefficients, coeffients.GetCoefficients().begin(), sizeof(Float4)*std::min(coeffients.GetCoefficients().size(), dimof(_diffuseSHCoefficients)));
+	}
+
+	void ForwardPlusLightScene::SetDistantSpecularIBL(std::shared_ptr<IResourceView> resource, BufferUploads::CommandListID completion)
+	{
+		// When distant specular IBL is disabled, _glossLut will be nullptr
+		if (_glossLut) {
+			_distantSpecularIBL = std::move(resource);
+			if (!_distantSpecularIBL) _distantSpecularIBL = Techniques::Services::GetCommonResources()->_blackCubeSRV;
+			_distantSpecularIBLAndGlossLutCompletion = std::max(_distantSpecularIBLAndGlossLutCompletion, completion);
+		}
 	}
 
 #if 0
@@ -323,7 +343,9 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 		std::shared_ptr<RasterizationLightTileOperator> lightTiler,
 		ForwardPlusLightScene::ShadowPreparerIdMapping&& shadowPreparerMapping,
-		std::vector<LightOperatorInfo>&& lightOperatorInfo)
+		std::vector<LightOperatorInfo>&& lightOperatorInfo,
+		std::shared_ptr<IResourceView> glossLut,
+		BufferUploads::CommandListID glossLutCompletion)
 	{
 		auto lightScene = std::make_shared<ForwardPlusLightScene>();
 		lightScene->_shadowPreparers = shadowPreparers;
@@ -335,6 +357,10 @@ namespace RenderCore { namespace LightingEngine
 		lightScene->_lightTiler = lightTiler;
 		lightTiler->SetLightScene(*lightScene);
 
+		lightScene->_glossLut = glossLut ? std::move(glossLut) : Techniques::Services::GetCommonResources()->_black2DSRV;
+		lightScene->_distantSpecularIBLAndGlossLutCompletion = glossLutCompletion;
+		lightScene->_distantSpecularIBL = Techniques::Services::GetCommonResources()->_blackCubeSRV;
+
 		lightScene->FinalizeConfiguration();
 		return lightScene;
 	}
@@ -344,21 +370,44 @@ namespace RenderCore { namespace LightingEngine
 		const ConstructionServices& constructionServices,
 		ShadowPreparerIdMapping&& shadowPreparerMapping,
 		std::vector<LightOperatorInfo>&& lightOperatorInfo,
-		const RasterizationLightTileOperatorDesc& tilerCfg)
+		const RasterizationLightTileOperatorDesc& tilerCfg,
+		const IntegrationParams& integrationParams)
 	{
-		auto shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
+		struct Helper
+		{
+			std::future<std::shared_ptr<DynamicShadowPreparers>> _shadowPreparationOperatorsFuture;
+			std::future<std::shared_ptr<RasterizationLightTileOperator>> _lightTilerFuture;
+			std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _glossLUTFuture;
+		};
+		auto helper = std::make_shared<Helper>();
+
+		helper->_shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
 			shadowPreparerMapping._shadowPreparers,
 			constructionServices._pipelineAccelerators, constructionServices._techDelBox);
 
-		auto lightTilerFuture = ::Assets::ConstructToMarkerPtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
+		helper->_lightTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
+		helper->_glossLUTFuture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(GLOSS_LUT_TEXTURE);
 
 		using namespace std::placeholders;
-		::Assets::WhenAll(std::move(shadowPreparationOperatorsFuture), lightTilerFuture).ThenConstructToPromise(
+		::Assets::PollToPromise(
 			std::move(promise),
-			[shadowPreparerMapping=std::move(shadowPreparerMapping), lightOperatorInfo=std::move(lightOperatorInfo), constructionServices]
-			(auto shadowPreparer, auto lightTiler) mutable
+			[helper](auto timeout) {
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				if (helper->_shadowPreparationOperatorsFuture.valid() && Internal::MarkerTimesOut(helper->_shadowPreparationOperatorsFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (helper->_lightTilerFuture.valid() && Internal::MarkerTimesOut(helper->_lightTilerFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (helper->_glossLUTFuture.valid() && Internal::MarkerTimesOut(helper->_glossLUTFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[helper, shadowPreparerMapping=std::move(shadowPreparerMapping), lightOperatorInfo=std::move(lightOperatorInfo), constructionServices] () mutable
 			{
-				return CreateInternal(constructionServices, std::move(shadowPreparer), std::move(lightTiler), std::move(shadowPreparerMapping), std::move(lightOperatorInfo));
+				std::shared_ptr<IResourceView> glossLut;
+				BufferUploads::CommandListID glossLutCompletion = 0;
+				if (helper->_glossLUTFuture.valid()) {
+					auto defRes = helper->_glossLUTFuture.get();
+					glossLut = defRes->GetShaderResource();
+					glossLutCompletion = defRes->GetCompletionCommandList();
+				}
+				return CreateInternal(constructionServices, helper->_shadowPreparationOperatorsFuture.get(), helper->_lightTilerFuture.get(), std::move(shadowPreparerMapping), std::move(lightOperatorInfo), glossLut, glossLutCompletion);
 			});
 	}
 

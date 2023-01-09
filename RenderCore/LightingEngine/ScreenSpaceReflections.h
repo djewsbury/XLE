@@ -91,9 +91,15 @@ namespace RenderCore { namespace LightingEngine
 		void SetQualityParameters(const QualityParameters&) override;
 		QualityParameters GetQualityParameters() const override;
 
+		struct IntegrationParams
+		{
+			bool _specularIBLEnabled = false;
+		};
+
 		ScreenSpaceReflectionsOperator(
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-			const ScreenSpaceReflectionsOperatorDesc& desc);
+			const ScreenSpaceReflectionsOperatorDesc& desc,
+			const IntegrationParams& integrationParams);
 		~ScreenSpaceReflectionsOperator();
 	private:
 		ScreenSpaceReflectionsOperatorDesc _desc;
@@ -116,6 +122,7 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<uint8_t> _paramsBufferData;
 		QualityParameters _qualityParameters;
 		RenderCore::Assets::PredefinedCBLayout _paramsCBLayout;
+		IntegrationParams _integrationParams;
 
 		struct ResolutionDependentResources;
 		std::unique_ptr<ResolutionDependentResources> _res;

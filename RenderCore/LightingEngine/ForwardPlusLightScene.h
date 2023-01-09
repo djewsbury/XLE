@@ -34,6 +34,7 @@ namespace RenderCore { namespace LightingEngine
 		void Prerender(IThreadContext&);
 
 		void SetDiffuseSHCoefficients(const SHCoefficients&);
+		void SetDistantSpecularIBL(std::shared_ptr<IResourceView>, BufferUploads::CommandListID);
 
 		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate();
 
@@ -64,6 +65,11 @@ namespace RenderCore { namespace LightingEngine
 			unsigned _uniformShapeCode = 0;
 		};
 
+		struct IntegrationParams
+		{
+			bool _specularIBLEnabled = false;
+		};
+
 		ForwardPlusLightScene();
 
 		struct ConstructionServices
@@ -78,7 +84,8 @@ namespace RenderCore { namespace LightingEngine
 			const ConstructionServices&,
 			ShadowPreparerIdMapping&& shadowPreparerMapping,
 			std::vector<LightOperatorInfo>&& lightOperatorInfo,
-			const RasterizationLightTileOperatorDesc& tilerCfg);
+			const RasterizationLightTileOperatorDesc& tilerCfg,
+			const IntegrationParams& integrationParams);
 
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 		std::shared_ptr<Internal::DynamicShadowProjectionScheduler> _shadowScheduler;
@@ -100,6 +107,9 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<AmbientLightConfig> _ambientLight;
 
 		Float4 _diffuseSHCoefficients[25];
+		std::shared_ptr<IResourceView> _distantSpecularIBL;
+		std::shared_ptr<IResourceView> _glossLut;
+		BufferUploads::CommandListID _distantSpecularIBLAndGlossLutCompletion = 0;
 
 		BufferUploads::CommandListID _completionCommandListID = 0;
 
@@ -121,7 +131,9 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
 			ForwardPlusLightScene::ShadowPreparerIdMapping&& shadowPreparerMapping,
-			std::vector<LightOperatorInfo>&& lightOperatorInfo);
+			std::vector<LightOperatorInfo>&& lightOperatorInfo,
+			std::shared_ptr<IResourceView> glossLut,
+			BufferUploads::CommandListID glossLutCompletion);
 	};
 
 }}

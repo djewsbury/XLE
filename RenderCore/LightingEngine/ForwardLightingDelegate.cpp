@@ -127,6 +127,7 @@ namespace RenderCore { namespace LightingEngine
 		return [this](std::shared_ptr<IResourceView> specularResource, BufferUploads::CommandListID completionCmdList, SHCoefficients& shCoefficients) {
 			// Pass the updated SH coefficients into the light scene
 			this->_lightScene->SetDiffuseSHCoefficients(shCoefficients);
+			this->_lightScene->SetDistantSpecularIBL(std::move(specularResource), completionCmdList);
 		};
 	}
 
@@ -182,10 +183,7 @@ namespace RenderCore { namespace LightingEngine
 		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetName("PreDepth");
-
-		auto srDelegateFuture = Internal::CreateBuildGBufferResourceDelegate();
-		srDelegateFuture.StallWhilePending();
-		result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, Techniques::BatchFlags::Opaque, {}, srDelegateFuture.Actualize());
+		result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, Techniques::BatchFlags::Opaque);
 		return result;
 	}
 
@@ -242,6 +240,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
 		bool hasSSR,
+		bool hasDistantIBL,
 		Techniques::DeferredShaderResource& balanceNoiseTexture,
 		std::optional<LightSourceOperatorDesc> dominantLightOperator,
 		std::optional<ShadowOperatorDesc> dominantShadowOperator)
@@ -288,6 +287,9 @@ namespace RenderCore { namespace LightingEngine
 			if (captures->_lightScene->ShadowProbesSupported())
 				box.SetParameter("SHADOW_PROBE", 1);
 		}
+
+		if (hasDistantIBL)
+			box.SetParameter("SPECULAR_IBL", 1);
 
 		auto resourceDelegate = std::make_shared<MainSceneResourceDelegate>(
 			captures->_lightScene->CreateMainSceneResourceDelegate(),
@@ -493,7 +495,10 @@ namespace RenderCore { namespace LightingEngine
 
 		// Draw main scene
 		auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
-			CreateForwardSceneFragment(shared_from_this(), forwardIllumDelegate_DisableDepthWrite, _ssrOperator!=nullptr, balancedNoiseTexture, digest._dominantLightOperator, digest._dominantShadowOperator));
+			CreateForwardSceneFragment(
+				shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
+				_ssrOperator!=nullptr, digest._skyTextureProcessor.has_value(),
+				balancedNoiseTexture, digest._dominantLightOperator, digest._dominantShadowOperator));
 
 		// simplify uniforms before going into post processing steps
 		mainSequence.CreateStep_CallFunction(
@@ -558,10 +563,12 @@ namespace RenderCore { namespace LightingEngine
 
 		OperatorDigest digest { resolveOperators, shadowOperators, globalOperators };
 
+		ForwardPlusLightScene::IntegrationParams lightSceneIntegrationParams;
+		lightSceneIntegrationParams._specularIBLEnabled = digest._skyTextureProcessor.has_value();
 		helper->_lightSceneFuture = ::Assets::ConstructToFuturePtr<ForwardPlusLightScene>(
 			ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
 			std::move(digest._shadowPrepreparerIdMapping), std::move(digest._lightSceneOperatorInfo),
-			digest._tilingConfig);
+			digest._tilingConfig, lightSceneIntegrationParams);
 
 		helper->_depthMotionNormalRoughnessDelegate = techDelBox->GetDepthMotionNormalRoughnessDelegate();
 		helper->_depthMotionDelegate = techDelBox->GetDepthMotionDelegate();
@@ -598,7 +605,7 @@ namespace RenderCore { namespace LightingEngine
 					if (digest._sky)
 						captures->_skyOperator = std::make_shared<SkyOperator>(pipelinePool, *digest._sky);
 					if (digest._ssr)
-						captures->_ssrOperator = std::make_shared<ScreenSpaceReflectionsOperator>(pipelinePool, *digest._ssr);
+						captures->_ssrOperator = std::make_shared<ScreenSpaceReflectionsOperator>(pipelinePool, *digest._ssr, ScreenSpaceReflectionsOperator::IntegrationParams{digest._skyTextureProcessor.has_value()});
 					if (digest._tonemapAces) {
 						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces);
 					} else {
@@ -708,11 +715,13 @@ namespace RenderCore { namespace LightingEngine
 
 		std::promise<std::shared_ptr<ForwardPlusLightScene>> specializedPromise;
 		auto specializedFuture = specializedPromise.get_future();
+		ForwardPlusLightScene::IntegrationParams integrationParams;
+		integrationParams._specularIBLEnabled = digest._skyTextureProcessor.has_value();
 		ForwardPlusLightScene::ConstructToPromise(
 			std::move(specializedPromise),
 			ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
 			std::move(digest._shadowPrepreparerIdMapping), std::move(digest._lightSceneOperatorInfo),
-			digest._tilingConfig);
+			digest._tilingConfig, integrationParams);
 
 		// awkwardly convert promise types
 		::Assets::WhenAll(std::move(specializedFuture)).ThenConstructToPromise(

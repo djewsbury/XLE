@@ -2,8 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#if !defined(LIGHTING_FORWARD_H)
-#define LIGHTING_FORWARD_H
+#if !defined(FORWARD_PLUS_LIGHTING_H)
+#define FORWARD_PLUS_LIGHTING_H
 
 #include "../TechniqueLibrary/LightingEngine/LightDesc.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightShapes.hlsl"
@@ -13,6 +13,10 @@
 #include "../TechniqueLibrary/LightingEngine/ShadowProbes.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
 #include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
+
+#if SPECULAR_IBL
+	#include "../TechniqueLibrary/SceneEngine/Lighting/ImageBased.hlsl"
+#endif
 
 cbuffer EnvironmentProps : register (b0, space2)
 {
@@ -29,6 +33,11 @@ Texture3D<uint> TiledLightBitField : register(t3, space2);
 Texture2D<float3> SSR : register(t4, space2);
 Texture2D<float> SSRConfidence : register(t5, space2);
 
+#if SPECULAR_IBL
+	TextureCube SpecularIBL : register(t1, space0);
+	Texture2D<float2> GlossLUT : register(t2, space0);			// this is the look up table used in the split-sum IBL glossy reflections
+#endif
+
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;
 
@@ -36,6 +45,16 @@ float3 CalculateSkyReflectionFresnel(GBufferValues sample, float3 viewDirection)
 {
 	float3 F0 = lerp(SpecularParameterToF0(sample.material.specular).xxx, sample.diffuseAlbedo, sample.material.metal);
 	return SchlickFresnelF0(viewDirection, sample.worldSpaceNormal, F0);
+}
+
+float3 CalculateDistantReflections(GBufferValues sample, float3 directionToEye, LightScreenDest lsd)
+{
+	#if SPECULAR_IBL
+		SpecularParameters specParam = SpecularParameters_RoughF0(sample.material.roughness, SpecularParameterToF0(sample.material.specular));
+		return SpecularIBLLookup(sample.worldSpaceNormal, directionToEye, specParam, lsd);
+	#else
+		return 0;
+	#endif
 }
 
 float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightScreenDest lsd)
@@ -48,8 +67,9 @@ float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightSc
 
 	#if !defined(PROBE_PREPARE)
 		float3 fresnel = CalculateSkyReflectionFresnel(sample, directionToEye);
-		fresnel *= float(EnableSSR); 
-		result += fresnel * SSRConfidence.Load(uint3(lsd.pixelCoords, 0)) * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb;
+		float ssrConfidence = float(EnableSSR) * SSRConfidence.Load(uint3(lsd.pixelCoords, 0));
+		float3 distanceReflections = CalculateDistantReflections(sample, directionToEye, lsd);
+		result += lerp(distanceReflections, fresnel * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb, ssrConfidence);
 	#endif
 
 	return result; 
@@ -138,5 +158,18 @@ float3 CalculateIllumination(
 
 	return result;
 }
+
+
+#if SPECULAR_IBL
+	float2 GlossLUT_Sample(float2 tc)
+	{
+		return GlossLUT.SampleLevel(ClampingSampler, tc, 0).xy;
+	}
+
+	float3 SpecularIBL_Sample(float3 cubemapCoords, float mipmapLevel)
+	{
+		return SpecularIBL.SampleLevel(DefaultSampler, cubemapCoords, mipmapLevel).rgb;
+	}
+#endif
 
 #endif

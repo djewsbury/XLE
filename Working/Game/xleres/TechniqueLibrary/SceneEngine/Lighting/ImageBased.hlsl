@@ -17,11 +17,11 @@
 #include "IBL/IBLRef.hlsl"
 #include "../../Math/Misc.hlsl"        // for DitherPatternInt
 
-TextureCube SpecularIBL : register(t1, space0);
-Texture2D<float2> GlossLUT : register(t2, space0);        // this is the look up table used in the split-sum IBL glossy reflections
+TextureCube DiffuseIBL;
+Texture2DArray<float> GlossTransLUT;
 
-TextureCube DiffuseIBL : register(t4, space0);
-Texture2DArray<float> GlossTransLUT : register(t5, space0);
+float2 GlossLUT_Sample(float2 tc);
+float3 SpecularIBL_Sample(float3 cubemapCoords, float mipmapLevel);
 
 #if MAT_SEPARATE_REFRACTION_MAP
     TextureCube SpecularTransIBL;
@@ -72,9 +72,9 @@ float3 SplitSumIBL_PrefilterEnvMap(float roughness, float3 reflection, uint dith
         // use the same mapping for roughness that we do -- otherwise
         // we need to apply the mapping there.
     #if !defined(RECALC_FILTERED_TEXTURE)
-        return SpecularIBL.SampleLevel(
-            DefaultSampler, AdjSkyCubeMapCoords(reflection),
-            RoughnessToMipmap(roughness)).rgb;
+        return SpecularIBL_Sample(
+            AdjSkyCubeMapCoords(reflection),
+            RoughnessToMipmap(roughness));
     #else
         const uint sampleCount = 64;
         return GenerateFilteredSpecular(
@@ -95,14 +95,14 @@ float2 SplitSumIBL_IntegrateBRDF(float roughness, float NdotV, uint dither)
     //          use a small texture and bilinear filtering, or a large texture
     //          and no filtering?
     #if !defined(RECALC_SPLIT_TERM)
-        return GlossLUT.SampleLevel(ClampingSampler, float2(NdotV, roughness), 0).xy;
+        return GlossLUT_Sample(float2(NdotV, roughness));
     #else
         const uint sampleCount = 64;
         return GenerateSplitTerm(saturate(NdotV), saturate(roughness), sampleCount, dither&0xf, 16);
     #endif
 }
 
-float3 SampleSpecularIBL_SplitSum(float3 normal, float3 viewDirection, SpecularParameters specParam, uint dither)
+float3 SpecularIBLLookup_SplitSum(float3 normal, float3 viewDirection, SpecularParameters specParam, uint dither)
 {
     // This is the split-sum approximation for glossy specular reflections from
     // Brian Karis for Unreal.
@@ -122,14 +122,14 @@ float3 SampleSpecularIBL_SplitSum(float3 normal, float3 viewDirection, SpecularP
     return prefilteredColor * (specParam.F0 * envBRDF.x + envBRDF.y);
 }
 
-float3 SampleSpecularIBL(float3 normal, float3 viewDirection, SpecularParameters specParam, LightScreenDest lsd)
+float3 SpecularIBLLookup(float3 normal, float3 viewDirection, SpecularParameters specParam, LightScreenDest lsd)
 {
     uint dither = DitherPatternInt(lsd.pixelCoords);
     #if defined(REF_IBL)
         const uint sampleCount = 64;
-        return SampleSpecularIBL_Ref(normal, viewDirection, specParam, SkyReflectionTexture, sampleCount, dither&0xf, 16);
+        return SpecularIBLLookup_Ref(normal, viewDirection, specParam, SkyReflectionTexture, sampleCount, dither&0xf, 16);
     #else
-        return SampleSpecularIBL_SplitSum(normal, viewDirection, specParam, dither);
+        return SpecularIBLLookup_SplitSum(normal, viewDirection, specParam, dither);
     #endif
 }
 
@@ -178,9 +178,7 @@ float3 SplitSumIBLTrans_PrefilterEnvMap2(
     float angularBlurriness = RefractionIncidentAngleDerivative2(
         dot(viewDirection, normal), iorIncident, iorOutgoing);
     float A = 2.f * roughness * pow(angularBlurriness, 1.5f);
-    return SpecularIBL.SampleLevel(
-        DefaultSampler, AdjSkyCubeMapCoords(dir),
-        RoughnessToMipmap(saturate(A))).rgb;
+    return SpecularIBL_Sample(AdjSkyCubeMapCoords(dir), RoughnessToMipmap(saturate(A)));
 }
 
 float3 SplitSumIBLTrans_PrefilterEnvMap(

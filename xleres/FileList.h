@@ -93,3 +93,5 @@
 #define SKIN_COMPUTE_HLSL "xleres/Deform/skin.compute.hlsl"
 #define SKIN_PIPELINE "xleres/Deform/skin.pipeline"
 #define DEFORM_ENTRY_HLSL "xleres/Deform/deform-entry.compute.hlsl"
+
+#define GLOSS_LUT_TEXTURE "xleres/TechniqueLibrary/LightingEngine/glosslut.texture"

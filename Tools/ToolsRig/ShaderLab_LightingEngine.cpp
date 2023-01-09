@@ -221,7 +221,9 @@ namespace ToolsRig
 					}
 				}
 
-				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc);
+				RenderCore::LightingEngine::ScreenSpaceReflectionsOperator::IntegrationParams integrationParams;
+				integrationParams._specularIBLEnabled = false;
+				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, integrationParams);
 				opStep->PreregisterAttachments(context._stitchingContext);
 				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
 				context._postStitchFunctions.push_back(
