@@ -16,6 +16,7 @@
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Services.h"
+#include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/DeviceInitialization.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Vulkan/IDeviceVulkan.h"
@@ -61,6 +62,8 @@ namespace UnitTests
 			auto adapter = CreateAdapter(overlaySystem, camera, weak_from_this());
 			_frameRig->SetMainOverlaySystem(adapter);
 			_frameRig->UpdatePresentationChain(*_windowApparatus->_presentationChain);
+			if (_drawingApparatus)
+				_drawingApparatus->_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_windowApparatus->_immediateContext);
 			_windowApparatus->_mainInputHandler->AddListener(adapter->GetInputListener());
 			_windowApparatus->_osWindow->Show();
 			for (;;) {
@@ -124,7 +127,8 @@ namespace UnitTests
 				_lightingEngineApparatus = std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(_drawingApparatus);
 			}
 
-			_windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), _drawingApparatus.get(), *_frameRenderingApparatus);
+			auto presentationChainBindFlags = RenderCore::BindFlag::UnorderedAccess;
+			_windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), _drawingApparatus.get(), *_frameRenderingApparatus, presentationChainBindFlags);
 			auto v = _device->GetDesc();
 			_windowApparatus->_osWindow->SetTitle(StringMeld<128>() << "XLE interactive unit test [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]");
 
@@ -173,6 +177,14 @@ namespace UnitTests
         virtual std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override
 		{
 			return _childInputListener;
+		}
+
+		virtual void OnRenderTargetUpdate(
+            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override
+		{
+			_overlaySystem->OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
 		}
 
 		class ChildInputListener : public PlatformRig::IInputListener
@@ -227,6 +239,11 @@ namespace UnitTests
 	{
 		return false;
 	}
+	void IInteractiveTestOverlay::OnRenderTargetUpdate(
+		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+		const RenderCore::FrameBufferProperties& fbProps,
+		IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
+	{}
 
 	IInteractiveTestOverlay::~IInteractiveTestOverlay() {}
 	IInteractiveTestHelper::~IInteractiveTestHelper() {}

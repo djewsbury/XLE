@@ -181,6 +181,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")      # embedded resources only suppor
             Interactive/BatchAndDefragTests.cpp
             Interactive/FontRenderingTests.cpp
             Interactive/FrameSchedulingTests.cpp
+            Interactive/MaterialParameterization.cpp
             EmbeddedRes.cpp
             RenderCore/Metal/MetalTestHelper.cpp
             )

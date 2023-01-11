@@ -9,6 +9,8 @@
 #include "../../Math/Matrix.h"
 #include "../../Math/ProjectionMath.h"
 
+namespace RenderCore { namespace BufferUploads { class IManager; }}
+
 namespace ToolsRig
 {
 	class IDrawablesWriter
@@ -78,4 +80,13 @@ namespace ToolsRig
 		RenderCore::Techniques::IDrawablesPool* _drawablesPool;
 		RenderCore::Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool;
 	};
+
+	std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateSphereGeo(
+		RenderCore::BufferUploads::IManager&, RenderCore::Techniques::IDrawablesPool&);
+
+	std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateCubeGeo(
+		RenderCore::BufferUploads::IManager&, RenderCore::Techniques::IDrawablesPool&);
+
+	std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateTriangleBasePyramidGeo(
+		RenderCore::BufferUploads::IManager&, RenderCore::Techniques::IDrawablesPool&);
 }

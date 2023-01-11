@@ -3,13 +3,14 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../../Math/Vector.h"
+#include "../../Utility/IteratorUtils.h"
 #include <memory>
 #include <utility>
 
 namespace PlatformRig { class IOverlaySystem; class InputContext; class InputSnapshot; }
-namespace RenderCore { namespace Techniques { class DrawingApparatus; class ImmediateDrawingApparatus; class PrimaryResourcesApparatus; class ParsingContext; class CameraDesc; class TechniqueContext; }}
+namespace RenderCore { namespace Techniques { class DrawingApparatus; class ImmediateDrawingApparatus; class PrimaryResourcesApparatus; class ParsingContext; class CameraDesc; class TechniqueContext; struct PreregisteredAttachment; }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
-namespace RenderCore { class IDevice; class IThreadContext; }
+namespace RenderCore { class IDevice; class IThreadContext; class FrameBufferProperties; enum class Format; }
 
 namespace UnitTests
 {
@@ -27,6 +28,11 @@ namespace UnitTests
 			const PlatformRig::InputContext& context,
 			const PlatformRig::InputSnapshot& evnt,
 			IInteractiveTestHelper& testHelper);
+
+		virtual void OnRenderTargetUpdate(
+			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+			const RenderCore::FrameBufferProperties& fbProps,
+			IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
 
 		virtual ~IInteractiveTestOverlay();
 	};

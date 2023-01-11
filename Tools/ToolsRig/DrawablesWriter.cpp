@@ -7,6 +7,7 @@
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
+#include "../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../RenderCore/IDevice.h"
@@ -32,6 +33,16 @@ namespace ToolsRig
 				LinearBufferDesc::Create((unsigned)data.size())),
 			"vertex-buffer",
 			SubResourceInitData { data });
+	}
+
+	static RenderCore::BufferUploads::ResourceLocator CreateVB(RenderCore::BufferUploads::IManager& bu, IteratorRange<const void*> data)
+	{
+		using namespace RenderCore;
+		return bu.ImmediateTransaction(
+			CreateDesc(
+				BindFlag::VertexBuffer,
+				LinearBufferDesc::Create((unsigned)data.size())),
+			BufferUploads::CreateBasicPacket(data, "vertex-buffer"));
 	}
 
 	static std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateSphereGeo(RenderCore::IDevice& device, RenderCore::Techniques::IDrawablesPool& drawablesPool)
@@ -64,6 +75,42 @@ namespace ToolsRig
 		return {geo, pyramidGeo.size()};
 	}
 
+	std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateSphereGeo(
+		RenderCore::BufferUploads::IManager& bu, RenderCore::Techniques::IDrawablesPool& drawablesPool)
+	{
+		auto sphereGeo = ToolsRig::BuildGeodesicSphere();
+		auto sphereVb = CreateVB(bu, sphereGeo);
+		auto geo = drawablesPool.CreateGeo();
+		geo->_vertexStreams[0]._resource = sphereVb.AsIndependentResource();
+		geo->_vertexStreamCount = 1;
+		geo->_completionCmdList = sphereVb.GetCompletionCommandList();
+		return {geo, sphereGeo.size()};
+	}
+
+	std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateCubeGeo(
+		RenderCore::BufferUploads::IManager& bu, RenderCore::Techniques::IDrawablesPool& drawablesPool)
+	{
+		auto cubeGeo = ToolsRig::BuildCube();
+		auto cubeVb = CreateVB(bu, cubeGeo);
+		auto geo = drawablesPool.CreateGeo();
+		geo->_vertexStreams[0]._resource = cubeVb.AsIndependentResource();
+		geo->_vertexStreamCount = 1;
+		geo->_completionCmdList = cubeVb.GetCompletionCommandList();
+		return {geo, cubeGeo.size()};
+	}
+
+	std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateTriangleBasePyramidGeo(
+		RenderCore::BufferUploads::IManager& bu, RenderCore::Techniques::IDrawablesPool& drawablesPool)
+	{
+		auto pyramidGeo = ToolsRig::BuildTriangleBasePyramid();
+		auto pyramidVb = CreateVB(bu, pyramidGeo);
+		auto geo = drawablesPool.CreateGeo();
+		geo->_vertexStreams[0]._resource = pyramidVb.AsIndependentResource();
+		geo->_vertexStreamCount = 1;
+		geo->_completionCmdList = pyramidVb.GetCompletionCommandList();
+		return {geo, pyramidGeo.size()};
+	}
+
 	static RenderCore::UniformsStreamInterface MakeLocalTransformUSI()
 	{
 		RenderCore::UniformsStreamInterface result;
@@ -79,7 +126,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
 
 		void WriteDrawable(
-			RenderCore::Techniques::DrawablesPacket& pkt, 
+			RenderCore::Techniques::DrawablesPacket& pkt,
 			const RenderCore::Techniques::DrawableGeo& geo,
 			size_t vertexCount,
 			const Float4x4& localToWorld,
@@ -115,7 +162,7 @@ namespace ToolsRig
 		}
 
 		void WriteDrawable(
-			RenderCore::Techniques::DrawablesPacket& pkt, 
+			RenderCore::Techniques::DrawablesPacket& pkt,
 			const RenderCore::Techniques::DrawableGeo& geo,
 			size_t vertexCount,
 			const Float4x4& localToWorld,
@@ -169,7 +216,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
 		size_t _vertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt,uint32_t viewMask)
 		{
 			WriteDrawable(pkt, *_geo, _vertexCount, Identity<Float4x4>(), viewMask);
 		}
@@ -192,7 +239,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _cubeGeo;
 		size_t _sphereVertexCount, _cubeVertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt,uint32_t viewMask)
 		{
 			WriteDrawable(
 				pkt,
@@ -232,7 +279,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
 		size_t _vertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt,uint32_t viewMask)
 		{
 			const unsigned stoneCount = 32;
 			
@@ -287,7 +334,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _geo;
 		size_t _vertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt,uint32_t viewMask)
 		{
 			ScaleRotationTranslationM srt {
 				Float3 { 1000.f, 1.0f, 1000.f },
@@ -315,7 +362,7 @@ namespace ToolsRig
 	class FlatPlaneAndBlockerDrawableWriter : public FlatPlaneDrawableWriter
 	{
 	public:
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt,uint32_t viewMask)
 		{
 			FlatPlaneDrawableWriter::WriteDrawables(pkt, viewMask);
 
@@ -341,7 +388,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _pyramidGeo;
 		size_t _sphereVertexCount, _pyramidVertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt,uint32_t viewMask)
 		{
 			WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, AsFloat4x4(Float3{0.f, 0.0f, 1.f}), viewMask);
 			auto pyramidTransform = MakeObjectToWorld(Float3{0.f, 0.0f, 1.f}, Float3{1.f, 0.f, 0.f}, Float3{0.f, 0.f, -1.f});
@@ -390,14 +437,14 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawableGeo> _sphereGeo, _pyramidGeo, _cubeGeo;
 		size_t _sphereVertexCount, _pyramidVertexCount, _cubeVertexCount;
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, uint32_t viewMask)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt,uint32_t viewMask)
 		{
 			for (const auto& transform:_cubes) WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform, viewMask);
 			for (const auto& transform:_spheres) WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform, viewMask);
 			for (const auto& transform:_pyramid) WriteDrawable(pkt, *_pyramidGeo, _pyramidVertexCount, transform, viewMask);
 		}
 
-		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt, const std::shared_ptr<CustomDrawDelegate>& customDraw)
+		void WriteDrawables(RenderCore::Techniques::DrawablesPacket& pkt,const std::shared_ptr<CustomDrawDelegate>& customDraw)
 		{
 			for (const auto& transform:_cubes) WriteDrawable(pkt, *_cubeGeo, _cubeVertexCount, transform, customDraw);
 			for (const auto& transform:_spheres) WriteDrawable(pkt, *_sphereGeo, _sphereVertexCount, transform, customDraw);
