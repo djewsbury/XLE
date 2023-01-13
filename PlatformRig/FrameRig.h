@@ -41,6 +41,16 @@ namespace PlatformRig
             std::shared_ptr<RenderCore::IPresentationChain> presChain,
             RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult;
 
+        void IntermedialSleep(
+            RenderCore::IThreadContext& threadContext,
+            bool inBackground,
+            const FrameResult& lastFrameResult);
+
+        void IntermedialSleep(
+            WindowApparatus& windowApparatus,
+            bool inBackground,
+            const FrameResult& lastFrameResult);
+
         void UpdatePresentationChain(RenderCore::IPresentationChain& presChain);
         void ReleaseDoubleBufferAttachments();
 

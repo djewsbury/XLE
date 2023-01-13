@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "OverlappedWindow.h"		// for SystemMessageVariant
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../Assets/DepVal.h"
 #include <memory>
@@ -64,6 +65,8 @@ namespace PlatformRig
 			RenderCore::BindFlag::BitField presentationChainBindFlags=0);
 		~WindowApparatus();
 	};
+
+	void CommonEventHandling(WindowApparatus& windowApparatus, SystemMessageVariant& msgPump);
 
 }
 

@@ -126,7 +126,7 @@ namespace Utility
     public:
         EventId     BeginEvent(const char eventLiteral[]);
         void        EndEvent(EventId eventId);
-        void        EndFrame();
+        void        FrameBarrier();
 
         uint64_t    GetAverageFrameInterval(unsigned windowFrameCount = ~0u);
 
@@ -207,7 +207,7 @@ namespace Utility
             _id = _profiler->BeginEvent(label);
         }
 
-        CPUProfileEvent() : _id(~0u) {}
+        CPUProfileEvent() : _id(~0u), _profiler(nullptr) {}
 
         ~CPUProfileEvent()
         {
@@ -254,11 +254,31 @@ namespace Utility
             }
         }
 
+        CPUProfileEvent_Conditional() : _id(~0u), _profiler(nullptr) {}
+
         ~CPUProfileEvent_Conditional()
         {
-            if (_profiler) {
+            if (_id != ~0u)
                 _profiler->EndEvent(_id);
-            }
+        }
+
+        CPUProfileEvent_Conditional(CPUProfileEvent_Conditional&& moveFrom) never_throws
+        : _profiler(moveFrom._profiler), _id(moveFrom._id)
+        {
+            moveFrom._profiler = nullptr;
+            moveFrom._id = ~0u;
+        }
+
+        CPUProfileEvent_Conditional& operator=(CPUProfileEvent_Conditional&& moveFrom) never_throws
+        {
+            if (_id != ~0u)
+                _profiler->EndEvent(_id);
+
+            _profiler = moveFrom._profiler;
+            _id = moveFrom._id;
+            moveFrom._profiler = nullptr;
+            moveFrom._id = ~0u;
+            return *this;
         }
 
     private:

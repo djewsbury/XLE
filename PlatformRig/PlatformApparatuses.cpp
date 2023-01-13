@@ -93,6 +93,7 @@ namespace PlatformRig
 		auto clientRect = _osWindow->GetRect();
 		auto desc = RenderCore::PresentationChainDesc{unsigned(clientRect.second[0] - clientRect.first[0]), unsigned(clientRect.second[1] - clientRect.first[1])};
 		desc._bindFlags |= presentationChainBindFlags;
+		desc._imageCount = 3;
 		_presentationChain = device->CreatePresentationChain(
 			_osWindow->GetUnderlyingHandle(),
 			desc);
@@ -101,47 +102,39 @@ namespace PlatformRig
 		_displaySettings = std::make_shared<OSServices::DisplaySettingsManager>();
 
 		_mainInputHandler = std::make_shared<PlatformRig::MainInputHandler>();
-
-		auto threadId = std::this_thread::get_id();
-		_osWindow->OnMessage().Bind(
-			[	wfr = std::weak_ptr<FrameRig>{_frameRig}, wpc = std::weak_ptr<RenderCore::IPresentationChain>(_presentationChain),
-				immediateContext=_immediateContext.get(),
-				wih = std::weak_ptr<MainInputHandler>(_mainInputHandler), window=_osWindow.get(), threadId](auto&& msg) {
-
-				assert(std::this_thread::get_id() == threadId);
-
-				if (std::holds_alternative<WindowResize>(msg)) {
-					auto frameRig = wfr.lock();
-					auto presentationChain = wpc.lock();
-					if (!frameRig || !presentationChain) return;
-
-					auto resize = std::get<WindowResize>(msg);
-					RenderCore::Techniques::ResetFrameBufferPool(*frameRig->GetTechniqueContext()._frameBufferPool);
-					frameRig->ReleaseDoubleBufferAttachments();
-					frameRig->GetTechniqueContext()._attachmentPool->ResetActualized();
-					auto desc = presentationChain->GetDesc();
-					desc._width = resize._newWidth;
-					desc._height = resize._newHeight;
-					presentationChain->ChangeConfiguration(*immediateContext, desc);
-					frameRig->UpdatePresentationChain(*presentationChain);
-				} else if (std::holds_alternative<InputSnapshot>(msg)) {
-					auto inputHandler = wih.lock();
-					if (!inputHandler) return;
-					auto context = window->MakeInputContext();
-					inputHandler->OnInputEvent(context, std::get<InputSnapshot>(msg));
-				}
-			});
 	}
 	
 	WindowApparatus::~WindowApparatus()
-	{
-
-	}
+	{}
 
 	void ShowDebugScreen(StringSection<> screenName)
 	{
 		ConsoleRig::CrossModule::GetInstance()._services.Call<void>(Fn_ShowScreen, screenName);
 	}
+
+	void CommonEventHandling(PlatformRig::WindowApparatus& windowApparatus, PlatformRig::SystemMessageVariant& msgPump)
+    {
+        if (std::holds_alternative<PlatformRig::InputSnapshot>(msgPump)) {
+
+            auto context = windowApparatus._osWindow->MakeInputContext();
+            windowApparatus._mainInputHandler->OnInputEvent(context, std::get<PlatformRig::InputSnapshot>(msgPump));
+
+        } else if (std::holds_alternative<PlatformRig::WindowResize>(msgPump)) {
+
+            auto resize = std::get<PlatformRig::WindowResize>(msgPump);
+            auto& frameRig = *windowApparatus._frameRig;
+
+            RenderCore::Techniques::ResetFrameBufferPool(*frameRig.GetTechniqueContext()._frameBufferPool);
+            frameRig.ReleaseDoubleBufferAttachments();
+            frameRig.GetTechniqueContext()._attachmentPool->ResetActualized();
+            auto desc = windowApparatus._presentationChain->GetDesc();
+            desc._width = resize._newWidth;
+            desc._height = resize._newHeight;
+            windowApparatus._presentationChain->ChangeConfiguration(*windowApparatus._immediateContext, desc);
+            frameRig.UpdatePresentationChain(*windowApparatus._presentationChain);
+
+        }
+    }
 
 }
 

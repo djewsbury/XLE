@@ -79,7 +79,7 @@ namespace UnitTests
 				}
 				
 				_frameRig->ExecuteFrame(*_windowApparatus);
-				_frameRenderingApparatus->_frameCPUProfiler->EndFrame();
+				_frameRenderingApparatus->_frameCPUProfiler->FrameBarrier();
 			}
 			_frameRig->SetMainOverlaySystem(nullptr);
 			_activeCamera = nullptr;

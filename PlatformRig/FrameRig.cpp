@@ -262,25 +262,11 @@ namespace PlatformRig
         if (accAlloc)
             _pimpl->_prevFrameAllocationCount = accAlloc->GetAndClear();
 
-        if (cpuProfiler)
+        pEvnt = {};
+        if (cpuProfiler) {
             if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
                 threadContextVulkan->AttachCPUProfiler(nullptr);
-
-        if (parserContext.HasPendingAssets()) {
-            ::Threading::Sleep(16);  // slow down while we're building pending resources
-        } else {
-
-            float threadingPressure = 0.f;
-            if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
-                threadingPressure = threadContextVulkan->GetThreadingPressure();
-
-            if (threadingPressure > 0.f) {
-                // Start dropping frames if we have high threading pressure
-                // This happens when there is some expensive background thread generating long cmd lists (or just not submitting frequently)
-                ::Threading::Sleep(uint32_t(16 * std::min(60.f, threadingPressure)));
-            } else {
-                Threading::YieldTimeSlice();    // this might be too extreme. We risk not getting execution back for a long while
-            }
+            cpuProfiler->FrameBarrier();
         }
 
         return { frameBarrierTime / float(_pimpl->_timerFrequency), parserContext.HasPendingAssets() };
@@ -300,6 +286,36 @@ namespace PlatformRig
         WindowApparatus& windowApparatus) -> FrameResult
     {
         return ExecuteFrame(windowApparatus._immediateContext, windowApparatus._presentationChain);
+    }
+
+    void FrameRig::IntermedialSleep(
+        RenderCore::IThreadContext& threadContext,
+        bool inBackground,
+        const FrameResult& lastFrameResult)
+    {
+        if (lastFrameResult._hasPendingResources) {
+            ::Threading::Sleep(16);  // slow down while we're building pending resources
+        } else if (inBackground) {
+            ::Threading::Sleep(16); // yield some process time
+        } else {
+            float threadingPressure = 0.f;
+            if (auto* threadContextVulkan = query_interface_cast<RenderCore::IThreadContextVulkan*>(&threadContext))
+                threadingPressure = threadContextVulkan->GetThreadingPressure();
+
+            if (threadingPressure > 0.f) {
+                // Start dropping frames if we have high threading pressure
+                // This happens when there is some expensive background thread generating long cmd lists (or just not submitting frequently)
+                ::Threading::Sleep(uint32_t(16 * std::min(60.f, threadingPressure)));
+            }
+        }
+    }
+
+    void FrameRig::IntermedialSleep(
+        WindowApparatus& windowApparatus,
+        bool inBackground,
+        const FrameResult& lastFrameResult)
+    {
+        IntermedialSleep(*windowApparatus._immediateContext, inBackground, lastFrameResult);
     }
 
     void FrameRig::UpdatePresentationChain(RenderCore::IPresentationChain& presChain)

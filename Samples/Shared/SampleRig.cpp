@@ -41,8 +41,31 @@ namespace Sample
 {
     void InstallDefaultDebuggingDisplays(SampleGlobals& globals);   // DefaultDebuggingDisplays.cpp
 
+    struct SampleRigApparatus
+    {
+        ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniqueServices;
+        ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> _previewSceneRegistry;
+        ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> _entityMountingTree;
+
+        SampleRigApparatus(std::shared_ptr<RenderCore::IDevice> renderDevice)
+        {
+            _techniqueServices = std::make_shared<RenderCore::Techniques::Services>(renderDevice);
+            _previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
+            _entityMountingTree = EntityInterface::CreateMountingTree();
+            ::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
+        }
+        ~SampleRigApparatus()
+        {
+            ::ConsoleRig::GlobalServices::GetInstance().UnloadDefaultPlugins();
+        }
+    };
+
 	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& config)
     {
+            // XLE prefers to avoiding controlling the flow of execution
+            // (in order to promote integration with other systems)
+            // But one consequence of that is there isn't just a single Go() function
+            //      -- we have to do a little bit of configuration work here
         Log(Verbose) << "Building primary managers" << std::endl;
         auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
 
@@ -66,10 +89,7 @@ namespace Sample
         auto capability = renderAPI->QueryFeatureCapability(0);
         auto renderDevice = renderAPI->CreateDevice(0, capability);
 
-        auto techniqueServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(renderDevice);
-        ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
-        ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> entityMountingTree = EntityInterface::CreateMountingTree();
-        ::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
+        SampleRigApparatus sampleRigApparatus{renderDevice};
 
             // Many objects are initialized by via helper objects called "apparatuses". These construct and destruct
             // the objects required to do meaningful work. Often they also initialize the "services" singletons
@@ -92,74 +112,71 @@ namespace Sample
             sampleGlobals._windowApparatus->_osWindow->SetTitle(meld);
         }
 
-        {
-                //  Create the debugging system, and add any "displays"
-                //  If we have any custom displays to add, we can add them here. Often it's 
-                //  useful to create a debugging display to go along with any new feature. 
-                //  It just provides a convenient architecture for visualizing important information.
-            Log(Verbose) << "Setup tools and debugging" << std::endl;
-            auto& frameRig = *sampleGlobals._windowApparatus->_frameRig;
-            sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
-            frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
-            frameRig.SetMainOverlaySystem(sampleOverlay);
-            techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
+            //  Create the debugging system, and add any "displays"
+            //  If we have any custom displays to add, we can add them here. Often it's 
+            //  useful to create a debugging display to go along with any new feature. 
+            //  It just provides a convenient architecture for visualizing important information.
+        Log(Verbose) << "Setup tools and debugging" << std::endl;
+        auto& frameRig = *sampleGlobals._windowApparatus->_frameRig;
+        sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
+        frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
+        frameRig.SetMainOverlaySystem(sampleOverlay);
+        InstallDefaultDebuggingDisplays(sampleGlobals);
 
-            InstallDefaultDebuggingDisplays(sampleGlobals);
+            // Final startup operations
+        Log(Verbose) << "Call OnStartup, prepare first frame and show window" << std::endl;
+        sampleOverlay->OnStartup(sampleGlobals);
+        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.dat"));
+        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
+        auto sampleListener = sampleOverlay->GetInputListener();
+        if (sampleListener)
+            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
 
-            Log(Verbose) << "Call OnStartup and start the frame loop" << std::endl;
-            sampleOverlay->OnStartup(sampleGlobals);
-            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.dat"));
-            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
-            auto sampleListener = sampleOverlay->GetInputListener();
-            if (sampleListener)
-                sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
+        frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
+        sampleRigApparatus._techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
-            frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
+            // Pump a single frame to ensure we have some content when the window appears (and then show it)
+        frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
+        sampleGlobals._windowApparatus->_osWindow->Show();
 
-            RenderCore::Techniques::SetThreadContext(sampleGlobals._windowApparatus->_immediateContext);
-            techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
+            //  Finally, we execute the frame loop. 
+        Log(Verbose) << "Beginning the frame loop" << std::endl;
+        for (;;) {
+            auto msgPump = PlatformRig::Window::SingleWindowMessagePump(*sampleGlobals._windowApparatus->_osWindow);
 
-            TRY {
-                    // Pump a single frame to ensure we have some content when the window appears (and then show it)
-                frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
-                sampleGlobals._windowApparatus->_osWindow->Show();
+            if (std::holds_alternative<PlatformRig::Idle>(msgPump)) {
 
-                    //  Finally, we execute the frame loop
-                for (;;) {
-                    auto msgPump = PlatformRig::Window::DoMsgPump();
-                    if (msgPump == PlatformRig::Window::PumpResult::Terminate) break;
-                    if (msgPump == PlatformRig::Window::PumpResult::Background) {
-                        // Bail if we're minimized (don't have to check this in the foreground case)
-                        auto presChainDesc = sampleGlobals._windowApparatus->_presentationChain->GetDesc();
-                        if (!(presChainDesc._width * presChainDesc._height)) {
-                            Threading::Sleep(64);       // minimized and inactive
-                            continue;
-                        }
+                // if we don't have any immediate OS events to process, it may be time to render
+                auto& idle = std::get<PlatformRig::Idle>(msgPump);
+
+                if (idle._state == PlatformRig::IdleState::Background) {
+                    // Bail if we're minimized (don't have to check this in the foreground case)
+                    auto presChainDesc = sampleGlobals._windowApparatus->_presentationChain->GetDesc();
+                    if (!(presChainDesc._width * presChainDesc._height)) {
+                        Threading::Sleep(64);       // minimized and inactive
+                        continue;
                     }
-
-                        // ------- Render ----------------------------------------
-                    auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
-                        // ------- Update ----------------------------------------
-                    sampleOverlay->OnUpdate(frameResult._intervalTime * Tweakable("TimeScale", 1.0f));
-                    sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->EndFrame();
-
-                    if (msgPump == PlatformRig::Window::PumpResult::Background)
-                        Threading::Sleep(16);       // yield some process time
                 }
-            } CATCH(const std::exception& e) {
-                Log(Error) << "Shutting down due to exception in frame rig. Exception details follow:" << std::endl;
-                Log(Error) << e.what();
-            } CATCH_END
 
-            RenderCore::Techniques::SetThreadContext(nullptr);
-            sampleOverlay.reset();		// (ensure this gets destroyed before the engine is shutdown)
+                    // ------- Update ----------------------------------------
+                float smoothedDeltaTime = float(sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->GetAverageFrameInterval() / (double)OSServices::GetPerformanceCounterFrequency());
+                sampleOverlay->OnUpdate(smoothedDeltaTime * Tweakable("TimeScale", 1.0f));
+
+                    // ------- Render ----------------------------------------
+                auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
+
+                    // ------- Yield some process time when appropriate ------
+                frameRig.IntermedialSleep(*sampleGlobals._windowApparatus, idle._state == PlatformRig::IdleState::Background, frameResult);
+
+            } else if (std::holds_alternative<PlatformRig::ShutdownRequest>(msgPump)) {
+                break;
+            } else {
+                PlatformRig::CommonEventHandling(*sampleGlobals._windowApparatus, msgPump);
+            } 
         }
 
-            //  There are some manual destruction operations we need to perform...
-            //  (note that currently some shutdown steps might get skipped if we get 
-            //  an unhandled exception)
-            //  Before we go too far, though, let's log a list of active assets.
         Log(Verbose) << "Starting shutdown" << std::endl;
+        sampleOverlay.reset();		// (ensure this gets destroyed before the engine is shutdown)
         ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
         sampleGlobals._renderDevice->PrepareForDestruction();
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt);

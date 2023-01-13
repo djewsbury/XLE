@@ -208,7 +208,7 @@ namespace UnitTests
 			}
 			threadContext.Present(presentationChain);
 
-			if (profiler) profiler->EndFrame();
+			if (profiler) profiler->FrameBarrier();
 
 			// we don't time the first few frame, because we'll use them to align with the vsync
 			if (c > 2)

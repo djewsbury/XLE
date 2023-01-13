@@ -19,10 +19,13 @@ namespace PlatformRig
 {
     struct SystemDisplayChange {};
     struct WindowResize { signed _newWidth = 0, _newHeight = 0; };
+    struct ShutdownRequest {};
+    struct Idle;
     class InputSnapshot;
     class InputContext;
+    class Window;
 
-    using SystemMessageVariant = std::variant<InputSnapshot, SystemDisplayChange, WindowResize>;
+    using SystemMessageVariant = std::variant<InputSnapshot, SystemDisplayChange, WindowResize, ShutdownRequest, Idle>;
 
     /// <summary>An independent window in OS presentation scheme</summary>
     /// Creates and manages an independent OS window.
@@ -63,11 +66,13 @@ namespace PlatformRig
         void Resize(unsigned width, unsigned height);
         void Show(bool newState = true);
 
-        Utility::Signal<SystemMessageVariant&&>& OnMessage();
-        InputContext MakeInputContext();
+        static SystemMessageVariant SingleWindowMessagePump(Window&);
 
-        enum class PumpResult { Continue, Background, Terminate };
-        static PumpResult DoMsgPump();
+        // Certain messages can be received immediately by listening to OnMessageImmediate
+        // This is typically invoked during an OS event, in a thread determined by the OS
+        // Most clients may prefer to receive messages via SingleWindowMessagePump() instead
+        Utility::Signal<SystemMessageVariant&&>& OnMessageImmediate();
+        InputContext MakeInputContext();
 
         void CaptureMonitor(
             std::shared_ptr<OSServices::DisplaySettingsManager>,
@@ -85,6 +90,12 @@ namespace PlatformRig
         class Pimpl;
     protected:
         std::unique_ptr<Pimpl> _pimpl;
+    };
+
+    enum class IdleState { Foreground, Background };
+    struct Idle
+    {
+        IdleState _state;
     };
 
 	class IOSRunLoop

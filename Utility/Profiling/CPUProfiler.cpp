@@ -286,7 +286,7 @@ namespace Utility
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void HierarchicalCPUProfiler::EndFrame()
+    void HierarchicalCPUProfiler::FrameBarrier()
     {
         assert(Threading::CurrentThreadId() == _threadId);
         assert(_aeStackI==0);

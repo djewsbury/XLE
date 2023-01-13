@@ -18,6 +18,7 @@
 #include "../../OSServices/WinAPI/WinAPIWrapper.h"
 #include "../../OSServices/Log.h"
 #include "../../Core/Exceptions.h"
+#include <queue>
 #include <windowsx.h>
 
 namespace OSServices { void OnDisplaySettingsChange(unsigned, unsigned); }
@@ -80,7 +81,8 @@ namespace PlatformRig
         std::shared_ptr<InputTranslator> _inputTranslator;
 
 		std::shared_ptr<OSRunLoop_BasicTimer> _runLoop;
-        Signal<SystemMessageVariant&&> _onMessage;
+        Signal<SystemMessageVariant&&> _onMessageImmediate;
+        std::queue<SystemMessageVariant> _systemMessages;
 
         std::shared_ptr<OSServices::DisplaySettingsManager> _displaySettingsManager;
         OSServices::DisplaySettingsManager::MonitorId _capturedMonitorId = ~0u;
@@ -105,7 +107,8 @@ namespace PlatformRig
                 OSServices::OnDisplaySettingsChange(unsigned(lparam & 0xffff), unsigned(lparam >> 16u));
                 auto pimpl = (Window::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
                 if (pimpl && pimpl->_hwnd == hwnd) {
-                    pimpl->_onMessage.Invoke(SystemDisplayChange{});
+                    pimpl->_onMessageImmediate.Invoke(SystemDisplayChange{});
+                    pimpl->_systemMessages.emplace(SystemDisplayChange{});
 
                     // If we are capturing a monitor, we should realign the window with the new desktop geometry
                     if (pimpl->_displaySettingsManager && pimpl->_capturedMonitorId != ~0u) {
@@ -232,13 +235,13 @@ namespace PlatformRig
                         // it's harder to tell when the app is minimized
                         // & we just get more spam with that message
                         signed newWidth = ((int)(short)LOWORD(lparam)), newHeight = ((int)(short)HIWORD(lparam));
-                        pimpl->_onMessage.Invoke(WindowResize{newWidth, newHeight});
+                        pimpl->_systemMessages.emplace(WindowResize{newWidth, newHeight});
                     }
                     break;
                 }
 
                 if (generatedSnapshot)
-                    pimpl->_onMessage.Invoke(*generatedSnapshot);
+                    pimpl->_systemMessages.emplace(*generatedSnapshot);
 
                 if (suppressDefaultHandler)
                     return true;
@@ -440,28 +443,37 @@ namespace PlatformRig
         SetWindowTextA(_pimpl->_hwnd, titleText);
     }
 
-    Utility::Signal<SystemMessageVariant&&>& Window::OnMessage()
+    Utility::Signal<SystemMessageVariant&&>& Window::OnMessageImmediate()
     {
-        return _pimpl->_onMessage;
+        return _pimpl->_onMessageImmediate;
     }
 
-    auto Window::DoMsgPump() -> PumpResult
+    auto Window::SingleWindowMessagePump(Window& window) -> SystemMessageVariant
     {
         MSG msg;
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
-                return PumpResult::Terminate;
+                window._pimpl->_systemMessages.emplace(ShutdownRequest{});
+                continue;
             }
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
 
-        DWORD foreWindowProcess;
-        GetWindowThreadProcessId(GetForegroundWindow(), &foreWindowProcess);
+        if (!window._pimpl->_systemMessages.empty()) {
+            auto result = std::move(window._pimpl->_systemMessages.front());
+            window._pimpl->_systemMessages.pop();
+            return result;
+        }
+
+        #if defined(_DEBUG)
+            DWORD foreWindowProcess;
+            GetWindowThreadProcessId(GetForegroundWindow(), &foreWindowProcess);
+            bool expectedActivation = GetCurrentProcessId() == foreWindowProcess;
+            assert(window._pimpl->_activated == expectedActivation);
+        #endif
         
-        return (GetCurrentProcessId() != foreWindowProcess)
-            ? PumpResult::Background
-            : PumpResult::Continue;
+        return Idle{window._pimpl->_activated ? IdleState::Foreground : IdleState::Background};
     }
 
 }
