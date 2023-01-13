@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-namespace PlatformRig { class IOverlaySystem; class InputContext; class InputSnapshot; }
+namespace PlatformRig { class IOverlaySystem; class InputContext; class InputSnapshot; class WindowApparatus; }
 namespace RenderCore { namespace Techniques { class DrawingApparatus; class ImmediateDrawingApparatus; class PrimaryResourcesApparatus; class ParsingContext; class CameraDesc; class TechniqueContext; struct PreregisteredAttachment; }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
 namespace RenderCore { class IDevice; class IThreadContext; class FrameBufferProperties; enum class Format; }
@@ -44,6 +44,7 @@ namespace UnitTests
 		virtual std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> GetImmediateDrawingApparatus() const = 0;
 		virtual std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> GetPrimaryResourcesApparatus() const = 0;
 		virtual std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> GetLightingEngineApparatus() const = 0;
+		virtual std::shared_ptr<PlatformRig::WindowApparatus> GetWindowApparatus() const = 0;
 		virtual std::shared_ptr<RenderCore::IDevice> GetDevice() const = 0;
 		virtual RenderCore::Techniques::TechniqueContext CreateTechniqueContext() = 0;
 
@@ -52,6 +53,7 @@ namespace UnitTests
 			std::shared_ptr<IInteractiveTestOverlay> overlaySystem) = 0;
 
 		virtual std::pair<Float3, Float3> ScreenToWorldSpaceRay(Int2 screenPt) const = 0;
+		virtual void ResizeWindow(unsigned width, unsigned height) = 0;
 
 		struct EnabledComponents
 		{

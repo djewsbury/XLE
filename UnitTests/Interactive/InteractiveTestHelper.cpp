@@ -50,6 +50,7 @@ namespace UnitTests
 		virtual std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> GetImmediateDrawingApparatus() const override { return _immediateDrawingApparatus; }
 		virtual std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> GetPrimaryResourcesApparatus() const override { return _primaryResourcesApparatus; }
 		virtual std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> GetLightingEngineApparatus() const override { return _lightingEngineApparatus; }
+		virtual std::shared_ptr<PlatformRig::WindowApparatus> GetWindowApparatus() const override { return _windowApparatus; }
 		virtual std::shared_ptr<RenderCore::IDevice> GetDevice() const override { return _device; }
 
 		void Run(
@@ -101,6 +102,11 @@ namespace UnitTests
 		virtual RenderCore::Techniques::TechniqueContext CreateTechniqueContext() override
 		{
 			return _frameRig->GetTechniqueContext();
+		}
+
+		virtual void ResizeWindow(unsigned width, unsigned height) override
+		{
+			return _windowApparatus->_osWindow->Resize(width, height);
 		}
 
 		InteractiveTestHelper(EnabledComponents::BitField enabledComponents)

@@ -12,12 +12,14 @@
 #include "../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../RenderCore/LightingEngine/ToneMapOperator.h"
 #include "../../RenderCore/LightingEngine/SkyOperator.h"
+#include "../../RenderCore/LightingEngine/ILightScene.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/ManualDrawables.h"
 #include "../../RenderCore/Techniques/PipelineOperators.h"
+#include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
@@ -113,8 +115,14 @@ namespace UnitTests
 			RenderCore::Techniques::ParsingContext& parserContext,
 			IInteractiveTestHelper& testHelper) override
 		{
-			assert(_futureLightingTechnique.valid());
+			if (!_futureLightingTechnique.valid())
+				BuildFutureLightingTechnique();
 			auto lightingTechnique = _futureLightingTechnique.get();	// stall
+			if (LightingEngine::GetDependencyValidation(*lightingTechnique).GetValidationIndex() != 0) {
+				// rebuild again
+				BuildFutureLightingTechnique();
+				lightingTechnique = _futureLightingTechnique.get();	// stall
+			}
 
 			if (auto* skyProcessor = LightingEngine::QueryInterface<LightingEngine::ISkyTextureProcessor>(*lightingTechnique))
 				skyProcessor->SetEquirectangularSource(nullptr, "xleres/DefaultResources/sky/desertsky.jpg");
@@ -171,7 +179,7 @@ namespace UnitTests
 				_camera._top = LinearInterpolate(_camera._top, _camera._bottom, movement * (1-yRatio));
 				_camera._bottom = LinearInterpolate(_camera._bottom, _camera._top, movement * yRatio);
 			}
-			if ((evnt._mouseDelta[0] || evnt._mouseDelta[1]) && evnt.IsHeld_LButton()) {
+			if ((evnt._mouseDelta[0] || evnt._mouseDelta[1]) && evnt.IsHeld_LButton() && !evnt.IsPress_LButton()) {
 				_camera._left -= evnt._mouseDelta[0] / 20.f;
 				_camera._right -= evnt._mouseDelta[0] / 20.f;
 				_camera._top += evnt._mouseDelta[1] / 20.f;
@@ -186,20 +194,48 @@ namespace UnitTests
 			return false;
 		}
 
+		std::vector<Techniques::PreregisteredAttachment> _preRegs;
+
 		void OnRenderTargetUpdate(
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
 			const RenderCore::FrameBufferProperties& fbProps,
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override
 		{
+			_preRegs = {preregAttachments.begin(), preregAttachments.end()};
+			_futureLightingTechnique = {};
+		}
+
+		void BuildFutureLightingTechnique()
+		{
+			const bool specularLight = true;
 			LightingEngine::ChainedOperatorTemplate<LightingEngine::ForwardLightingTechniqueDesc> globalChain0 {};
-			LightingEngine::ChainedOperatorTemplate<LightingEngine::SkyTextureProcessorDesc> globalChain1 {};
-			LightingEngine::ChainedOperatorTemplate<LightingEngine::ToneMapAcesOperatorDesc> globalChain2 {};
-			globalChain2._desc._enablePreciseBloom = true;
+			LightingEngine::ChainedOperatorTemplate<LightingEngine::ToneMapAcesOperatorDesc> globalChain1 {};
+			globalChain1._desc._enablePreciseBloom = true;
 			globalChain0._next = &globalChain1;
-			globalChain1._next = &globalChain2;
+
+			if (!specularLight) {
+				LightingEngine::ChainedOperatorTemplate<LightingEngine::SkyTextureProcessorDesc> globalChain2 {};
+				globalChain2._desc._specularCubemapFaceDimension = 128;
+				globalChain2._desc._specularCubemapFormat = Format::R32G32B32A32_FLOAT;
+				globalChain1._next = &globalChain2;
+			}
+
+			LightingEngine::LightSourceOperatorDesc lightOperators[] {
+				LightingEngine::LightSourceOperatorDesc{}
+			};
 			_futureLightingTechnique = LightingEngine::CreateLightingTechnique(
-				_apparatus, {}, {}, &globalChain0,
-				preregAttachments);
+				_apparatus, lightOperators, {}, &globalChain0,
+				_preRegs);
+
+			if (specularLight) {
+				auto technique = _futureLightingTechnique.get();		// stall
+				auto& lightScene = LightingEngine::GetLightScene(*technique);
+				auto lightId = lightScene.CreateLightSource(0);
+				if (auto* positional = lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId))
+					positional->SetLocalToWorld(AsFloat4x4(Float3{1.0f, 1.0f, -1.0f}));
+				if (auto* emittance = lightScene.TryGetLightSourceInterface<LightingEngine::IUniformEmittance>(lightId))
+					emittance->SetBrightness({10, 10, 10});
+			}
 		}
 
 		MaterialParameterizationDisplay(
@@ -273,6 +309,7 @@ namespace UnitTests
 			testHelper->GetLightingEngineApparatus(),
 			*testHelper->GetPrimaryResourcesApparatus()->_bufferUploads,
 			*testHelper->GetDrawingApparatus()->_drawablesPool);
+		testHelper->ResizeWindow(1280, 1280);
 		testHelper->Run(tester->_camera, tester);
 	}
 
