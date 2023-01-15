@@ -23,6 +23,7 @@
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/Techniques/DeferredShaderResource.h"
+#include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/BufferUploads/IBufferUploads.h"
 
 #include "../Assets/Assets.h"
@@ -303,17 +304,6 @@ namespace PlatformRig
         return StartupFrame(windowApparatus._immediateContext, windowApparatus._presentationChain);
     }
 
-    void ReportError(RenderCore::Techniques::ParsingContext& parserContext, StringSection<> error)
-    {
-        using namespace RenderCore;
-
-        // Clear the presentation target, because it may not be getting any content otherwise
-        auto presentationTarget = Techniques::GetAttachmentResourceAndBarrierToLayout(parserContext, Techniques::AttachmentSemantics::ColorLDR, BindFlag::TransferDst);
-        Metal::DeviceContext::Get(parserContext.GetThreadContext())->Clear(*presentationTarget->CreateTextureView(BindFlag::TransferDst), Float4(0,0,0,1));
-
-        StringMeldAppend(parserContext._stringHelpers->_errorString) << error << "\n";
-    }
-
     void FrameRig::IntermedialSleep(
         RenderCore::IThreadContext& threadContext,
         bool inBackground,
@@ -358,7 +348,6 @@ namespace PlatformRig
     auto FrameRig::GetOverlayConfiguration(RenderCore::IPresentationChain& presChain) const -> OverlayConfiguration
     {
         auto desc = presChain.GetDesc();
-        auto& device = *presChain.GetDevice();
 
         using namespace RenderCore;
         // Should match ParsingContext::BindAttachment (for IPresentationChain)
@@ -744,6 +733,40 @@ namespace PlatformRig
         if (!_pimpl->_frameRigDisplay)
             _pimpl->_frameRigDisplay = std::make_shared<FrameRigDisplay>(std::move(debugSystem), _pimpl->_prevFrameAllocationCount, _pimpl->_frameRate);
         return _pimpl->_frameRigDisplay;
+    }
+
+    void ReportError(RenderCore::Techniques::ParsingContext& parserContext, StringSection<> error)
+    {
+        using namespace RenderCore;
+
+        // Clear the presentation target, because it may not be getting any content otherwise
+        auto presentationTarget = Techniques::GetAttachmentResourceAndBarrierToLayout(parserContext, Techniques::AttachmentSemantics::ColorLDR, BindFlag::TransferDst);
+        Metal::DeviceContext::Get(parserContext.GetThreadContext())->Clear(*presentationTarget->CreateTextureView(BindFlag::TransferDst), Float4(0,0,0,1));
+
+        StringMeldAppend(parserContext._stringHelpers->_errorString) << error << "\n";
+    }
+
+    void ReportErrorToColorLDR(RenderCore::Techniques::ParsingContext& parserContext, RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawing, StringSection<> errorMsg)
+    {
+        using namespace RenderCore;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<FrameRigResources>();
+        if (res) {
+            auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), immediateDrawing);
+
+            RenderOverlays::Rect outerRect {
+                {0,0}, {parserContext.GetViewport()._width, parserContext.GetViewport()._height}
+            };
+
+            DrawText{}
+                .Alignment(RenderOverlays::TextAlignment::Center)
+                .Color(0xffffbfbf)
+                .Font(*res->_errorReportingFont)
+                .Draw(*overlayContext, {outerRect._topLeft, outerRect._bottomRight}, errorMsg);
+        }
+
+        auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
+		immediateDrawing._immediateDrawables->ExecuteDraws(parserContext, rpi);
     }
 
 }

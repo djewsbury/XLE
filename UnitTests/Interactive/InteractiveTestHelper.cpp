@@ -61,28 +61,54 @@ namespace UnitTests
 			_activeCamera = &camera;
 
 			auto adapter = CreateAdapter(overlaySystem, camera, weak_from_this());
-			_frameRig->SetMainOverlaySystem(adapter);
 			_frameRig->UpdatePresentationChain(*_windowApparatus->_presentationChain);
+			auto overlayConfig = _windowApparatus->_frameRig->GetOverlayConfiguration(*_windowApparatus->_presentationChain);
+			overlaySystem->OnRenderTargetUpdate(overlayConfig._preregAttachments, overlayConfig._fbProps, overlayConfig._systemAttachmentFormats);
 			if (_drawingApparatus)
 				_drawingApparatus->_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_windowApparatus->_immediateContext);
 			_windowApparatus->_mainInputHandler->AddListener(adapter->GetInputListener());
 			_windowApparatus->_osWindow->Show();
 			for (;;) {
-				auto msgPump = PlatformRig::Window::DoMsgPump();
-				if (msgPump == PlatformRig::Window::PumpResult::Terminate) break;
-				if (msgPump == PlatformRig::Window::PumpResult::Background) {
-					// Bail if we're minimized (don't have to check this in the foreground case)
-					auto presChainDesc = _windowApparatus->_presentationChain->GetDesc();
-					if (!(presChainDesc._width * presChainDesc._height)) {
-						Threading::Sleep(64);       // minimized and inactive
-						continue;
+				auto msg = PlatformRig::Window::SingleWindowMessagePump(*_windowApparatus->_osWindow);
+				PlatformRig::CommonEventHandling(*_windowApparatus, msg);
+
+				if (std::holds_alternative<PlatformRig::ShutdownRequest>(msg)) {
+					break;
+				} else if (std::holds_alternative<PlatformRig::Idle>(msg)) {
+
+					auto& idle = std::get<PlatformRig::Idle>(msg);
+					if (idle._state == PlatformRig::IdleState::Background) {
+						// Bail if we're minimized (don't have to check this in the foreground case)
+						auto presChainDesc = _windowApparatus->_presentationChain->GetDesc();
+						if (!(presChainDesc._width * presChainDesc._height)) {
+							Threading::Sleep(64);       // minimized and inactive
+							continue;
+						}
 					}
+
+					overlaySystem->OnUpdate(_windowApparatus->_frameRig->GetSmoothedDeltaTime());
+					
+					auto parsingContext = _windowApparatus->_frameRig->StartupFrame(*_windowApparatus);
+
+					TRY {
+						overlaySystem->Render(parsingContext, *this);
+					} CATCH(const std::exception& e) {
+						PlatformRig::ReportErrorToColorLDR(parsingContext, *_immediateDrawingApparatus, e.what());
+					} CATCH_END
+
+					auto frameResult = _windowApparatus->_frameRig->ShutdownFrame(parsingContext);
+					_windowApparatus->_frameRig->IntermedialSleep(*_windowApparatus, idle._state == PlatformRig::IdleState::Background, frameResult);
+
+				} else if (std::holds_alternative<PlatformRig::WindowResize>(msg)) {
+
+					auto newOverlayConfig = _windowApparatus->_frameRig->GetOverlayConfiguration(*_windowApparatus->_presentationChain);
+					if (newOverlayConfig._hash != overlayConfig._hash) {
+						overlaySystem->OnRenderTargetUpdate(newOverlayConfig._preregAttachments, newOverlayConfig._fbProps, newOverlayConfig._systemAttachmentFormats);
+						overlayConfig = newOverlayConfig;
+					}
+
 				}
-				
-				_frameRig->ExecuteFrame(*_windowApparatus);
-				_frameRenderingApparatus->_frameCPUProfiler->FrameBarrier();
 			}
-			_frameRig->SetMainOverlaySystem(nullptr);
 			_activeCamera = nullptr;
 		}
 
