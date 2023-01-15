@@ -220,11 +220,6 @@ float3 ReferenceSpecularGGX(
         if (NdotH <= 0.f || NdotL <= 0.f) return float3(0.0f, 0.0f, 0.0f);
     #endif
 
-    // Note that when N or H contain NaNs, this calculation is doomed to also result
-    // in a NaN. This will cause black boxes in the output image. So we need to be careful
-    // to avoid this case.
-    // if (isnan(NdotH)) return 0.0.xxx;
-
     /////////// Shadowing factor ///////////
         // As per the Disney model, rescaling roughness to
         // values 0.5f -> 1.f for SmithG alpha, and squaring
@@ -266,17 +261,15 @@ float3 ReferenceSpecularGGX(
         // Including here just for clarity and reference purposes.
     float denom = 4.f * NdotV * NdotL;
 
-    // note that the NdotL part here is for scaling down the incident light
-    // (and so not part of the general BRDF equation)
+        // note that the NdotL part here is not part of the BRDF function, but still
+        // required for correct results.
+        // See pbr-book 5.5 for good reference. NdotL is part of the integral
+        // We can think of this as accounting for the orientation of the infinitesimal 
+        // tangent space of the incident ray relative to the shape it's bouncing
+        // off of.
+        // We can also think of it as related to the transformation from radiance to 
+        // irradiance
     float A = (NdotL * G * D / denom);
-
-    // In extreme cases, we must clamp the maximum specular values. This is should
-    // only be used when there is extreme variation in the normals (otherwise it can
-    // distort the lighting model). However, for some models, it's difficult to find
-    // a better solution.
-    #if MAT_CLAMP_SPEC!=0
-        A = min(A, 10.f);
-    #endif
     return F * A;
 }
 

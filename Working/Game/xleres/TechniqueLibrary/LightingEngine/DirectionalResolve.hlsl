@@ -55,6 +55,7 @@ float3 DirectionalLightResolve_Diffuse(
 	return DirectionalLightResolve_Diffuse_NdotL(sample, directionToEye, negativeLightDirection, NdotL, light);
 }
 
+
 float3 DirectionalLightResolve_Specular(
 	GBufferValues sample,
 	float3 directionToEye,
@@ -75,24 +76,9 @@ float3 DirectionalLightResolve_Specular(
 	SpecularParameters param0 = SpecularParameters_RoughF0Transmission(
 		roughnessValue, F0_0, sample.transmission);
 
-	// todo -- 	Consider not normalizing the half vector for lower quality modes
-	//			we could also consider calculating the half vector at a lower
-	//			granularity (particularly for distant objects). Calculating on
-	//			a per-vertex level might not be beneficial in the long run, but
-	//			perhaps on a per-object level for distant objects and distant lights...?
-	float3 halfVector = negativeLightDirection + directionToEye;
-
-	// note -- 	What would happen if negativeLightDirection and directionToEye were
-	//			exactly the opposite? We could increase the length of one so that
-	//			the half vector always has length.
-	// float hvlsq = dot(halfVector, halfVector);
-	// [flatten] if (hvlsq<1e-4f) return 0.0.xxx;		// (uncommon case)
-	// halfVector *= rsqrt(hvlsq);
-	halfVector = normalize(halfVector);
-
 	float3 spec0 = CalculateSpecular(
 		sample.worldSpaceNormal, directionToEye,
-		negativeLightDirection, halfVector,
+		negativeLightDirection, normalize(negativeLightDirection + directionToEye),
 		param0);
 
 	float specularOcclusion = screenSpaceOcclusion * sample.cookedLightOcclusion;
@@ -105,11 +91,8 @@ float3 DirectionalLightResolve_Specular(
 		specularOcclusion = TriAceSpecularOcclusion(NdotV, specularOcclusion);
 	}
 
-	// float norm = 1.f / (pi * GetRoughness(sample) * GetRoughness(sample));
-	float norm = 1.f;
-
 	// note -- specular occlusion is going to apply to both reflected and transmitted specular
-	return spec0 * (specularOcclusion * norm) * light.Brightness;
+	return spec0 * specularOcclusion * light.Brightness;
 }
 
 #endif

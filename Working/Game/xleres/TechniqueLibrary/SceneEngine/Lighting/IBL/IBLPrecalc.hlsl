@@ -45,19 +45,25 @@ float2 GenerateSplitTerm(
         // good, however... Because without it, low roughness get a clear
         // halo around their edges. This doesn't happen so much with the
         // runtime specular. So it actually seems better with the this remapping.
-    // roughness = max(roughness, MinSamplingRoughness);
     precise float alphag = RoughnessToGAlpha(roughness);
-    precise float alphad = RoughnessToDAlpha(max(roughness, MinSamplingRoughness)); //roughness);
+    precise float alphad = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
+    alphag = alphad;
     precise float G2 = SmithG(NdotV, alphag);
 
     precise float A = 0.f, B = 0.f;
     LOOP_DIRECTIVE for (uint s=0u; s<passSampleCount; ++s) {
-        precise float3 H = SampleMicrofacetNormalGGX(s*passCount+passIndex, passSampleCount*passCount, normal, alphad);
+        // Note that "HammersleyPt" always produces (0,0) as the first points
+        //      -- this will become a direction equal to "normal"
+        float2 xi = HammersleyPt(s*passCount+passIndex, passSampleCount*passCount);
+
+        float3 tangentSpaceHalfVector = GGXHalfVector_Sample(xi, alphad);
+        // float3 tangentSpaceHalfVector = HeitzGGXVNDF_Sample(V, alphad, alphad, xi.x, xi.y);
+        precise float3 H = tangentSpaceHalfVector;  //(normal is fixed, so we don't need TransformByArbitraryTangentFrame(tangentSpaceHalfVector, normal);
         precise float3 L = 2.f * dot(V, H) * H - V;
 
         precise float NdotL = L.z;
-        precise float NdotH = saturate(H.z);
-        precise float VdotH = saturate(dot(V, H));
+        precise float NdotH = H.z;
+        precise float VdotH = dot(V, H);
 
         if (NdotL > 0.0f) {
                 // using "precise" here has a massive effect...
@@ -69,23 +75,43 @@ float2 GenerateSplitTerm(
             // the runtime F0 value.
             precise float F = pow(1.f - VdotH, 5.f);
 
-            // As per SampleSpecularIBL_Ref, we need to apply the inverse of the
-            // propability density function to get a normalized result.
+            // Remember that our expected value estimation of the integral is
+            // 1/sampleCount * sum( f(x) / p(x) ), where f(x) is the function we're integrating and p(x) is the pdf
+
             #if !defined(OLD_M_DISTRIBUTION_FN)
-                precise float normalizedSpecular = G / (4.f * NdotL * NdotV * NdotH);  // (excluding F term)
+                precise float D = TrowReitzD(NdotH, alphad);
+                precise float pdf = GGXHalfVector_PDF(tangentSpaceHalfVector, alphad);
+                // precise float pdf = HeitzGGXVNDF_PDF(tangentSpaceHalfVector, V, alphad);
+
+                // See PBR book chapter 14.1.1. Our pdf is distributing half vectors, but the integral we're estimating
+                // is w.r.t the incident (or exident) light direction. Half vectors are obviously more tightly distributed,
+                // by nature of how to reflect the light. As a result they are more "densly" distributed, so obviously the
+                // pdf over the hemisphere is different.
+                //
+                // Convert by calculating d omega-h / d omega-i (see pbr book for the working out here)
+                pdf = pdf / (4.0f * VdotH);
+
+                precise float specular = D*G/(4.0*NdotL*NdotV);
+
+                // We stil consider the incident light "radiance" -- meaning we have to include that term
+                // that takes into account the orientation of incoming light to the surface
+                // without this, samples at shearing angles contribute too much overall
+                specular *= NdotL;
             #else
                 // This factors out the D term, and introduces some other terms.
                 //      pdf inverse = 4.f * VdotH / (D * NdotH)
                 //      specular eq = D*G*F / (4*NdotL*NdotV)
-                precise float normalizedSpecular = G * VdotH / (NdotH * NdotV);  // (excluding F term)
+                precise float specular = G * VdotH / (NdotH * NdotV);  // (excluding F term)
+                precise float pdf = 1.0f;
             #endif
 
-            normalizedSpecular *= NdotL;
-
-            A += ((1.f - F) * normalizedSpecular) / float(passSampleCount);
-            B += (F * normalizedSpecular) / float(passSampleCount);
+            A += ((1.f - F) * specular) / (pdf * float(passSampleCount));
+            B += (F * specular) / (pdf * float(passSampleCount));
         }
     }
+
+    // Note that we're assuming that each "pass" is equally weight here. This is only true because we're
+    // interleaving the samples (ie, it's not like we do all of the high cosTheta samples in a single pass)
 
     return float2(A, B) / float(passCount);
 }

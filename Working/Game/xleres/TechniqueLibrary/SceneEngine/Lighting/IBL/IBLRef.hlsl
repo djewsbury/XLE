@@ -181,7 +181,7 @@ float3 SampleDiffuseIBL_Ref(
 
     float3 result = float3(0.0f, 0.0f, 0.0f);
     for (uint s=0u; s<passSampleCount; ++s) {
-        precise float3 i = CosWeightedDirection(s*passCount+passIndex, passSampleCount*passCount, normal);
+        precise float3 i = CosineWeightedHemisphere_Sample(s*passCount+passIndex, passSampleCount*passCount, normal);
         float3 lightColor = SampleLevelZero_Default(tex, AdjSkyCubeMapCoords(i)).rgb;
         // here, our lighting equation (lambert diffuse) is just the same as the pdf -- so it's gets factored out
         result += lightColor;

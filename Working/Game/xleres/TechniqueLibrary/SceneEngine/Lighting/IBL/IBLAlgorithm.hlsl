@@ -43,12 +43,21 @@ float2 HammersleyPt(uint i, uint N)
     return float2(float(i)/float(N), VanderCorputRadicalInverse(i));
 }
 
-float3 SampleMicrofacetNormalGGX(uint i, uint sampleCount, float3 normal, float alphad)
+float3 TransformByArbitraryTangentFrame(float3 tangentSpaceInput, float3 normalInDestinationSpace)
 {
-        // Very similar to the unreal course notes implementation here
-        // Note that "HammersleyPt" always produces (0,0) as the first points
-        //      -- this will become a direction equal to "normal"
-    float2 xi = HammersleyPt(i, sampleCount);
+    // we're just building a tangent frame to give meaning to theta and phi...
+    float3 up = (abs(normalInDestinationSpace).y < 0.5f) ? float3(0,1,0) : float3(1,0,0);
+    float3 tangentX = normalize(cross(up, normalInDestinationSpace));
+    float3 tangentY = cross(normalInDestinationSpace, tangentX);
+    return tangentX * tangentSpaceInput.x 
+         + tangentY * tangentSpaceInput.y
+         + normalInDestinationSpace * tangentSpaceInput.z;
+}
+
+float3 GGXHalfVector_Sample(float2 xi, float alphad)
+{
+    // See also https://hal.science/hal-01509746/document
+    // VNDF sampling specifically for GGX & smith shadowing/masking
 
     // The following will attempt to select points that are
     // well distributed for the GGX highlight
@@ -62,33 +71,34 @@ float3 SampleMicrofacetNormalGGX(uint i, uint sampleCount, float3 normal, float 
     // have to be careful to make sure the final equation is properly normalized
     // (in other words, if we had a full dome of incoming white light,
     // we don't want changes to the roughness to change the result).
-    // See http://http.developer.nvidia.com/GPUGems3/gpugems3_ch20.html
+    // See https://developer.nvidia.com/gpugems/gpugems3/part-iii-rendering/chapter-20-gpu-based-importance-sampling
     // for more information about normalized "PDFs" in this context
-    //
-    // Note that I've swapped xi.x & xi.y from the Unreal implementation. Maybe
-    // not a massive change, but it seems to help the distribution of the output
-    // samples significantly. xi.x is evenly distributed, while xi.y is not
     alphad = max(MinSamplingAlpha, alphad);
 
     #if !defined(OLD_M_DISTRIBUTION_FN)
         // This is the distribution functions from Walter07 --
         // It was intended for both reflection and transmision
+        //
+        // This is a distribution directly built from D(...) * abs(dot(m, n))
+        // It doesn't consider G, F, or other potentially useful factors
+        // As mentioned above, the PDF (respecting solid angle) is p(m) = D(M) * abs(dot(m, n))
+        //
         //  theta = arctan(q)
         //  phi = 2 * pi * xi.y
         //  where q = alphad * sqrt(xi.x) / sqrt(1.f - xi.x)
         // So, cos(theta) = cos(arctan(q))
         //  = 1.f / sqrt(1.f + q*q) (from trig)
         //
-        // These functions are designed to work with GGX specifically.
-        // The probability function is p(m) = D(M) * abs(dot(m, n))
-        //
         // Note that the math here is actually mathematically identical to
         //      float cosTheta = sqrt((1.f - xi.x) / (1.f + (alphad*alphad - 1.f) * xi.x));
         // However, the above form is not evaluating correctly in some cases. Since this
         // is only used for reference and precalculation steps, let's just use the unoptimized
         // form below.
-        float q = alphad * sqrt(xi.x) / sqrt(1.f - xi.x);
-        float cosTheta = 1.f / sqrt(1.f + q*q);
+        //
+        // See more reference (including working out) at https://agraphicsguynotes.com/posts/sample_microfacet_brdf/
+        // float cosTheta = 1.f / sqrt(1.f + q*q);
+        // float q = alphad * sqrt(xi.x) / sqrt(1.f - xi.x);
+        float cosTheta = sqrt((1.f - xi.x) / (1.f + (alphad*alphad - 1.f) * xi.x));
     #else
         // This is the distribution function from the unreal course notes
         // They say the pdf is as below, but I haven't checked that.
@@ -103,13 +113,62 @@ float3 SampleMicrofacetNormalGGX(uint i, uint sampleCount, float3 normal, float 
     H.x = sinTheta * cos(phi);
     H.y = sinTheta * sin(phi);
     H.z = cosTheta;
-
-    // we're just building a tangent frame to give meaning to theta and phi...
-    float3 up = (abs(normal.y) < 0.5f) ? float3(0,1,0) : float3(1,0,0);
-    float3 tangentX = normalize(cross(up, normal));
-    float3 tangentY = cross(normal, tangentX);
-    return tangentX * H.x + tangentY * H.y + normal * H.z;
+    return H;
 }
+
+float GGXHalfVector_PDF(float3 sampledHalfVector, float alphad)
+{
+    // Used alongside GGXHalfVector_Sample
+    // Gives the pdf respecting solid angle
+    //
+    // This is D(...) * abs(dot(m, n))
+    // But it must be in exactly the same form used in the distribution in GGXHalfVector_Sample
+    // (ie, separating from our TrowReitzD for this purpose)
+    //
+    // Nice reference with working out from https://agraphicsguynotes.com/posts/sample_microfacet_brdf/
+
+    float cosTheta = sampledHalfVector.z;
+    float denomSqrt = (alphad * alphad - 1) * cosTheta * cosTheta + 1;
+    return alphad * alphad * cosTheta / (pi*denomSqrt*denomSqrt);
+}
+
+float3 HeitzGGXVNDF_Sample(float3 Ve, float alpha_x, float alpha_y, float U1, float U2)
+{
+    // See https://jcgt.org/published/0007/04/01/paper.pdf
+    // "Sampling the GGX Distribution of Visible Normals"
+
+    // Section 3.2: transforming the view direction to the hemisphere configuration
+    float3 Vh = normalize(float3(alpha_x * Ve.x, alpha_y * Ve.y, Ve.z));
+    // Section 4.1: orthonormal basis (with special case if cross product is zero)
+    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+    float3 T1 = lensq > 0 ? float3(-Vh.y, Vh.x, 0) * rsqrt(lensq) : float3(1,0,0);
+    float3 T2 = cross(Vh, T1);
+    // Section 4.2: parameterization of the projected area
+    float r = sqrt(U1);
+    float phi = 2.0 * pi * U2;
+    float t1 = r * cos(phi);
+    float t2 = r * sin(phi);
+    float s = 0.5 * (1.0 + Vh.z);
+    t2 = (1.0 - s)*sqrt(1.0 - t1*t1) + s*t2;
+    // Section 4.3: reprojection onto hemisphere
+    float3 Nh = t1*T1 + t2*T2 + sqrt(max(0.0, 1.0 - t1*t1 - t2*t2))*Vh;
+    // Section 3.4: transforming the normal back to the ellipsoid configuration
+    float3 Ne = normalize(float3(alpha_x * Nh.x, alpha_y * Nh.y, max(0.0, Nh.z)));
+    return Ne;
+}
+
+float HeitzGGXVNDF_PDF(float3 M, float3 V_, float alpha)
+{
+    // See https://jcgt.org/published/0007/04/01/paper.pdf
+    // "Sampling the GGX Distribution of Visible Normals"
+    // V_ must be in tangent space (ie, V_.z is VdotN)
+    float D = TrowReitzD(M.z, alpha);
+    float G = SmithG(V_.z, alpha);  // G only in one direction
+    return G * D * saturate(dot(V_, M)) / V_.z;
+}
+
+#if 1 //////////////////////////////////////////////////////////////////////////////////////////
+        // legacy names
 
 float InversePDFWeight(float3 H, float3 N, float3 V, float alphad)
 {
@@ -129,7 +188,16 @@ float InversePDFWeight(float3 H, float3 N, float3 V, float alphad)
     #endif
 }
 
-float3 CosWeightedDirection(uint i, uint sampleCount, float3 normal)
+float3 SampleMicrofacetNormalGGX(uint i, uint sampleCount, float3 normal, float alphad)
+{
+    float2 xi = HammersleyPt(i, sampleCount);
+    float3 tangentSpaceM = GGXHalfVector_Sample(xi, alphad);
+    return TransformByArbitraryTangentFrame(tangentSpaceM, normal);
+}
+
+#endif //////////////////////////////////////////////////////////////////////////////////////////
+
+float3 CosineWeightedHemisphere_Sample(uint i, uint sampleCount, float3 normal)
 {
     // Derived from:
     //  https://pathtracing.wordpress.com/2011/03/03/cosine-weighted-hemisphere/

@@ -115,8 +115,8 @@ float3 SpecularIBLLookup_SplitSum(float3 normal, float3 viewDirection, SpecularP
     // angles. But Karis suggests that the error is minor. The advantage is the blurring
     // we apply to the reflection cubemap now only depends on roughness.
 
-    float NdotV = saturate(dot(normal, viewDirection));
-    float3 R = 2.f * dot(viewDirection, normal) * normal - viewDirection;   // reflection vector
+    float NdotV = dot(normal, viewDirection);
+    float3 R = 2.f * NdotV * normal - viewDirection;   // reflection vector
     float3 prefilteredColor = SplitSumIBL_PrefilterEnvMap(specParam.roughness, R, dither);
     float2 envBRDF = SplitSumIBL_IntegrateBRDF(specParam.roughness, NdotV, dither);
     return prefilteredColor * (specParam.F0 * envBRDF.x + envBRDF.y);
