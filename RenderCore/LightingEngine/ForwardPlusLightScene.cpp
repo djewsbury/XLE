@@ -345,7 +345,8 @@ namespace RenderCore { namespace LightingEngine
 		ForwardPlusLightScene::ShadowPreparerIdMapping&& shadowPreparerMapping,
 		std::vector<LightOperatorInfo>&& lightOperatorInfo,
 		std::shared_ptr<IResourceView> glossLut,
-		BufferUploads::CommandListID glossLutCompletion)
+		BufferUploads::CommandListID glossLutCompletion,
+		::Assets::DependencyValidation depVal)
 	{
 		auto lightScene = std::make_shared<ForwardPlusLightScene>();
 		lightScene->_shadowPreparers = shadowPreparers;
@@ -353,6 +354,7 @@ namespace RenderCore { namespace LightingEngine
 		lightScene->_pipelineAccelerators = constructionServices._pipelineAccelerators;
 		lightScene->_techDelBox = constructionServices._techDelBox;
 		lightScene->_lightOperatorInfo = std::move(lightOperatorInfo);
+		lightScene->_depVal = std::move(depVal);
 
 		lightScene->_lightTiler = lightTiler;
 		lightTiler->SetLightScene(*lightScene);
@@ -402,12 +404,17 @@ namespace RenderCore { namespace LightingEngine
 			{
 				std::shared_ptr<IResourceView> glossLut;
 				BufferUploads::CommandListID glossLutCompletion = 0;
+				::Assets::DependencyValidationMarker depVals[2];
 				if (helper->_glossLUTFuture.valid()) {
 					auto defRes = helper->_glossLUTFuture.get();
 					glossLut = defRes->GetShaderResource();
 					glossLutCompletion = defRes->GetCompletionCommandList();
+					depVals[0] = defRes->GetDependencyValidation();
 				}
-				return CreateInternal(constructionServices, helper->_shadowPreparationOperatorsFuture.get(), helper->_lightTilerFuture.get(), std::move(shadowPreparerMapping), std::move(lightOperatorInfo), glossLut, glossLutCompletion);
+				auto lightTiler = helper->_lightTilerFuture.get();
+				depVals[1] = lightTiler->GetDependencyValidation();
+				auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+				return CreateInternal(constructionServices, helper->_shadowPreparationOperatorsFuture.get(), std::move(lightTiler), std::move(shadowPreparerMapping), std::move(lightOperatorInfo), glossLut, glossLutCompletion, std::move(depVal));
 			});
 	}
 

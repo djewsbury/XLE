@@ -49,6 +49,8 @@ namespace RenderCore { namespace LightingEngine
 			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 			IteratorRange<const ShadowOperatorDesc*> shadowGenerators);
 
+		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
+
 		struct ShadowPreparerIdMapping
 		{
 			std::vector<unsigned> _operatorToShadowPreparerId;
@@ -112,6 +114,7 @@ namespace RenderCore { namespace LightingEngine
 		BufferUploads::CommandListID _distantSpecularIBLAndGlossLutCompletion = 0;
 
 		BufferUploads::CommandListID _completionCommandListID = 0;
+		::Assets::DependencyValidation _depVal;
 
 		class ShaderResourceDelegate;
 		struct SceneLightUniforms
@@ -133,7 +136,8 @@ namespace RenderCore { namespace LightingEngine
 			ForwardPlusLightScene::ShadowPreparerIdMapping&& shadowPreparerMapping,
 			std::vector<LightOperatorInfo>&& lightOperatorInfo,
 			std::shared_ptr<IResourceView> glossLut,
-			BufferUploads::CommandListID glossLutCompletion);
+			BufferUploads::CommandListID glossLutCompletion,
+			::Assets::DependencyValidation depVal);
 	};
 
 }}

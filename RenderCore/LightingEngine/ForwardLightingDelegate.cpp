@@ -626,7 +626,7 @@ namespace RenderCore { namespace LightingEngine
 
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(captures->_lightScene);
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
-					lightingTechnique->_depVal.RegisterDependency(captures->_lightScene->GetLightTiler().GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(captures->_lightScene->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionNormalRoughnessDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
