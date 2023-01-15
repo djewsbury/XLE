@@ -17,15 +17,16 @@
 #include "../RenderCore/Techniques/RenderPassUtils.h"
 #include "../RenderCore/Techniques/RenderPass.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/SubFrameEvents.h"
 #include "../RenderCore/Techniques/Techniques.h"
+#include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../RenderCore/BufferUploads/IBufferUploads.h"
 
 #include "../Assets/Assets.h"
+#include "../Assets/Continuation.h"
 
 #include "../OSServices/Log.h"
 #include "../OSServices/TimeUtils.h"
@@ -76,15 +77,15 @@ namespace PlatformRig
         uint64_t _timerFrequency;
         uint64_t _lastFrameBarrierTimePoint = 0;
 
-        uint64_t _mainOverlayRigTargetConfig = 0;
-        uint64_t _debugScreensTargetConfig = 0; 
-
         RenderCore::Techniques::TechniqueContext _techniqueContext;
         std::shared_ptr<Utility::HierarchicalCPUProfiler> _frameCPUProfiler;
 
         RenderCore::Techniques::AttachmentReservation _capturedDoubleBufferAttachments;
 
         std::shared_ptr<FrameRigDisplay> _frameRigDisplay;
+
+        CPUProfileEvent_Conditional _frameEvnt;
+        RenderCore::IPresentationChain* _activePresentationChain = nullptr;
 
         Pimpl()
         : _timerFrequency(OSServices::GetPerformanceCounterFrequency())
@@ -117,14 +118,14 @@ namespace PlatformRig
 
 ///////////////////////////////////////////////////////////////////////////////
 
-    auto FrameRig::ExecuteFrame(
+    RenderCore::Techniques::ParsingContext FrameRig::StartupFrame(
         std::shared_ptr<RenderCore::IThreadContext> context,
-        std::shared_ptr<RenderCore::IPresentationChain> presChain,
-		RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult
+        std::shared_ptr<RenderCore::IPresentationChain> presChain)
     {
         using namespace RenderCore;
         auto* cpuProfiler = _pimpl->_frameCPUProfiler.get();
-        CPUProfileEvent_Conditional pEvnt("FrameRig::ExecuteFrame", cpuProfiler);
+        _pimpl->_frameEvnt = CPUProfileEvent_Conditional{"FrameRig::ExecuteFrame", cpuProfiler};
+        RenderCore::Techniques::ParsingContext parserContext{_pimpl->_techniqueContext, *context};
         assert(&parserContext.GetThreadContext() == context.get());
 
         if (!_pimpl->_lastFrameBarrierTimePoint) _pimpl->_lastFrameBarrierTimePoint = OSServices::GetPerformanceCounter();
@@ -147,13 +148,15 @@ namespace PlatformRig
             if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
                 threadContextVulkan->AttachCPUProfiler(cpuProfiler);
 
-        bool endAnnotatorFrame = false;
-		TRY {
+        // bool endAnnotatorFrame = false;
+
+        _pimpl->_activePresentationChain = presChain.get();
+
             if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
                 threadContextVulkan->BeginFrameRenderingCommandList();
 
             context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrameRenderingCommandList(), because that primes the command list in the vulkan device)
-            endAnnotatorFrame = true;
+            // endAnnotatorFrame = true;
 
                 //  We must invalidate the cached state at least once per frame.
                 //  It appears that the driver might forget bound constant buffers
@@ -177,6 +180,10 @@ namespace PlatformRig
             stitchingContext._workingProps = FrameBufferProperties { presentationChainDesc._width, presentationChainDesc._height };
             parserContext.GetViewport() = ViewportDesc { 0.f, 0.f, (float)presentationChainDesc._width, (float)presentationChainDesc._height };
 
+            return parserContext;
+    }
+
+#if 0
 			////////////////////////////////
 
             bool mainOverlaySucceeded = false;
@@ -217,41 +224,59 @@ namespace PlatformRig
 			CATCH_END
 
 			////////////////////////////////
+    #endif
+
+    auto FrameRig::ShutdownFrame(
+        RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult
+    {
+        using namespace RenderCore;
+        auto* cpuProfiler = _pimpl->_frameCPUProfiler.get();
+        auto& context = parserContext.GetThreadContext();
+
+        if (_pimpl->_frameRigDisplay)
+            _pimpl->_frameRigDisplay->SetErrorMsg(parserContext._stringHelpers->_errorString);
+
+        auto presentationTarget = Techniques::GetAttachmentResource(parserContext, Techniques::AttachmentSemantics::ColorLDR);
+        bool endAnnotatorFrame = true;
+
+        TRY {
 
             if (_subFrameEvents)
-                _subFrameEvents->_onPrePresent.Invoke(*context);
+                _subFrameEvents->_onPrePresent.Invoke(context);
 
             if (parserContext._requiredBufferUploadsCommandList)
-                Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*context, parserContext._requiredBufferUploadsCommandList);
+                Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(context, parserContext._requiredBufferUploadsCommandList);
 
             {
-                Metal::BarrierHelper barrierHelper(*context);
+                Metal::BarrierHelper barrierHelper(context);
                 barrierHelper.Add(*presentationTarget, BindFlag::RenderTarget, BindFlag::PresentationSrc);
             }
 
             endAnnotatorFrame = false;
-            context->GetAnnotator().Frame_End();        // calling Frame_End() can prevent creating a new command list immediately after the Present() call (which ends the previous command list)
+            context.GetAnnotator().Frame_End();        // calling Frame_End() can prevent creating a new command list immediately after the Present() call (which ends the previous command list)
 
 			{
 				CPUProfileEvent_Conditional pEvnt2("Present", cpuProfiler);
-				context->Present(*presChain);
+				context.Present(*_pimpl->_activePresentationChain);
 			}
 
             if (_subFrameEvents)
-                _subFrameEvents->_onPostPresent.Invoke(*context);
+                _subFrameEvents->_onPostPresent.Invoke(context);
 
             _pimpl->_capturedDoubleBufferAttachments = parserContext.GetAttachmentReservation().CaptureDoubleBufferAttachments();
 
-		} CATCH(const std::exception& e) {
+            if (_subFrameEvents)
+                _subFrameEvents->_onFrameBarrier.Invoke();
+
+            Techniques::SetThreadContext(nullptr);
+
+        } CATCH(const std::exception& e) {
 			Log(Error) << "Suppressed error in frame rig render: " << e.what() << std::endl;
 		    if (endAnnotatorFrame)
-                context->GetAnnotator().Frame_End();
+                context.GetAnnotator().Frame_End();
             Techniques::SetThreadContext(nullptr);
 	    } CATCH_END
 	
-        if (_subFrameEvents)
-            _subFrameEvents->_onFrameBarrier.Invoke();
-
         uint64_t frameBarrierTimePoint = OSServices::GetPerformanceCounter();
         auto frameBarrierTime = frameBarrierTimePoint-_pimpl->_lastFrameBarrierTimePoint;
         _pimpl->_frameRate.PushFrameInterval(frameBarrierTime);
@@ -262,9 +287,9 @@ namespace PlatformRig
         if (accAlloc)
             _pimpl->_prevFrameAllocationCount = accAlloc->GetAndClear();
 
-        pEvnt = {};
+        _pimpl->_frameEvnt = {};
         if (cpuProfiler) {
-            if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
+            if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&context))
                 threadContextVulkan->AttachCPUProfiler(nullptr);
             cpuProfiler->FrameBarrier();
         }
@@ -272,20 +297,21 @@ namespace PlatformRig
         return { frameBarrierTime / float(_pimpl->_timerFrequency), parserContext.HasPendingAssets() };
     }
 
-    auto FrameRig::ExecuteFrame(
-        std::shared_ptr<RenderCore::IThreadContext> context,
-        std::shared_ptr<RenderCore::IPresentationChain> presChain) -> FrameResult
+    RenderCore::Techniques::ParsingContext FrameRig::StartupFrame(
+        WindowApparatus& windowApparatus)
     {
-        RenderCore::Techniques::ParsingContext parserContext{_pimpl->_techniqueContext, *context};
-        return ExecuteFrame(
-            std::move(context), std::move(presChain),
-            parserContext);
+        return StartupFrame(windowApparatus._immediateContext, windowApparatus._presentationChain);
     }
 
-    auto FrameRig::ExecuteFrame(
-        WindowApparatus& windowApparatus) -> FrameResult
+    void ReportError(RenderCore::Techniques::ParsingContext& parserContext, StringSection<> error)
     {
-        return ExecuteFrame(windowApparatus._immediateContext, windowApparatus._presentationChain);
+        using namespace RenderCore;
+
+        // Clear the presentation target, because it may not be getting any content otherwise
+        auto presentationTarget = Techniques::GetAttachmentResourceAndBarrierToLayout(parserContext, Techniques::AttachmentSemantics::ColorLDR, BindFlag::TransferDst);
+        Metal::DeviceContext::Get(parserContext.GetThreadContext())->Clear(*presentationTarget->CreateTextureView(BindFlag::TransferDst), Float4(0,0,0,1));
+
+        StringMeldAppend(parserContext._stringHelpers->_errorString) << error << "\n";
     }
 
     void FrameRig::IntermedialSleep(
@@ -324,54 +350,48 @@ namespace PlatformRig
         auto& device = *presChain.GetDevice();
 
         using namespace RenderCore;
+        // update system attachment formats
+        _pimpl->_techniqueContext._systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(device);
+        _pimpl->_techniqueContext._systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::TargetColor] = desc._format;
+    }
+
+    auto FrameRig::GetOverlayConfiguration(RenderCore::IPresentationChain& presChain) const -> OverlayConfiguration
+    {
+        auto desc = presChain.GetDesc();
+        auto& device = *presChain.GetDevice();
+
+        using namespace RenderCore;
         // Should match ParsingContext::BindAttachment (for IPresentationChain)
         auto targetDesc = CreateDesc(
             desc._bindFlags, 
             AllocationRules::ResizeableRenderTarget,
             TextureDesc::Plain2D(desc._width, desc._height, desc._format, 1, 0, desc._samples));
 
-        // update system attachment formats
-        _pimpl->_techniqueContext._systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(device);
-        _pimpl->_techniqueContext._systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::TargetColor] = targetDesc._textureDesc._format;
+        OverlayConfiguration result;
+        result._fbProps = FrameBufferProperties { desc._width, desc._height, desc._samples };
 
-        auto fbProps = FrameBufferProperties { desc._width, desc._height, desc._samples };
-        if (_mainOverlaySys) {
-            std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments;
-            preregisteredAttachments.push_back(
-                Techniques::PreregisteredAttachment {
-                    Techniques::AttachmentSemantics::ColorLDR,
-                    targetDesc,
-                    "color-ldr",
-                    Techniques::PreregisteredAttachment::State::Uninitialized,
-                    BindFlag::PresentationSrc
-                });
-            auto cfgHash = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
-            if (cfgHash != _pimpl->_mainOverlayRigTargetConfig) {
-                _mainOverlaySys->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
-                _pimpl->_mainOverlayRigTargetConfig = cfgHash;
-            }
-        } else {
-            _pimpl->_mainOverlayRigTargetConfig = 0;
-        }
+        result._preregAttachments.push_back(
+            Techniques::PreregisteredAttachment {
+                Techniques::AttachmentSemantics::ColorLDR,
+                targetDesc,
+                "color-ldr",
+                Techniques::PreregisteredAttachment::State::Uninitialized,
+                BindFlag::PresentationSrc
+            });
 
-        if (_debugScreenOverlaySystem) {
-            std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments;
-            preregisteredAttachments.push_back(
-                Techniques::PreregisteredAttachment {
-                    Techniques::AttachmentSemantics::ColorLDR,
-                    targetDesc,
-                    "color-ldr",
-                    Techniques::PreregisteredAttachment::State::Initialized,
-                    BindFlag::RenderTarget
-                });
-            auto cfgHash = Techniques::HashPreregisteredAttachments(MakeIteratorRange(preregisteredAttachments), fbProps);
-            if (cfgHash != _pimpl->_debugScreensTargetConfig) {
-                _debugScreenOverlaySystem->OnRenderTargetUpdate(MakeIteratorRange(preregisteredAttachments), fbProps, MakeIteratorRange(_pimpl->_techniqueContext._systemAttachmentFormats));
-                _pimpl->_debugScreensTargetConfig = _pimpl->_debugScreensTargetConfig;
-            }
-        } else {
-            _pimpl->_debugScreensTargetConfig = 0;
-        }
+        result._systemAttachmentFormats = _pimpl->_techniqueContext._systemAttachmentFormats;
+        result._hash = RenderCore::Techniques::HashPreregisteredAttachments(MakeIteratorRange(result._preregAttachments), result._fbProps);
+        return result;
+    }
+
+    std::vector<RenderCore::Techniques::PreregisteredAttachment> InitializeColorLDR(
+        IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> input)
+    {
+        std::vector<RenderCore::Techniques::PreregisteredAttachment> result = {input.begin(), input.end()};
+        auto i = std::find_if(result.begin(), result.end(), [](const auto& q) { return q._semantic == RenderCore::Techniques::AttachmentSemantics::ColorLDR; });
+        if (i != result.end())
+            i->_state = RenderCore::Techniques::PreregisteredAttachment::State::Initialized;
+        return result;
     }
 
     void FrameRig::ReleaseDoubleBufferAttachments()
@@ -380,14 +400,9 @@ namespace PlatformRig
         _pimpl->_capturedDoubleBufferAttachments = {};
     }
 
-    void FrameRig::SetMainOverlaySystem(std::shared_ptr<IOverlaySystem> overlaySystem)
+    float FrameRig::GetSmoothedDeltaTime()
     {
-        _mainOverlaySys = std::move(overlaySystem);
-    }
-    
-    void FrameRig::SetDebugScreensOverlaySystem(std::shared_ptr<IOverlaySystem> overlaySystem)
-    {
-        _debugScreenOverlaySystem = std::move(overlaySystem);
+        return std::get<0>(_pimpl->_frameRate.GetPerformanceStats());
     }
 
     RenderCore::Techniques::TechniqueContext& FrameRig::GetTechniqueContext()
@@ -435,12 +450,11 @@ namespace PlatformRig
 
     void FrameRateRecorder::PushFrameInterval(uint64_t duration)
     {
-            // (note, in this scheme, one entry is always empty -- so actual capacity is really dimof(_durationHistory)-1)
-        _durationHistory[_bufferEnd] = duration;
-        _bufferEnd      = (_bufferEnd+1)%dimof(_durationHistory);
-        if (_bufferEnd == _bufferStart) {
+        if (_bufferEnd == _bufferStart)
             _bufferStart = (_bufferStart+1)%dimof(_durationHistory);
-        }
+
+        _durationHistory[_bufferEnd] = duration;
+        _bufferEnd = (_bufferEnd+1)%dimof(_durationHistory);
     }
 
     std::tuple<float, float, float> FrameRateRecorder::GetPerformanceStats() const
@@ -448,23 +462,32 @@ namespace PlatformRig
         unsigned    entryCount = 0;
         uint64_t      accumulation = 0;
         uint64_t      minTime = std::numeric_limits<uint64_t>::max(), maxTime = 0;
-        for (unsigned c=_bufferStart; c!=_bufferEnd; c=(c+1)%dimof(_durationHistory)) {
+        // we're never empty, so if _bufferStart == _bufferEnd, we're full up
+        unsigned c=_bufferStart;
+        for (;;) {
             accumulation += _durationHistory[c];
             minTime = std::min(minTime, _durationHistory[c]);
             maxTime = std::max(maxTime, _durationHistory[c]);
             ++entryCount;
+
+            c=(c+1)%dimof(_durationHistory);
+            if (c==_bufferEnd) break;
         }
 
-        double averageDuration = double(accumulation) / double(_frequency/1000) / double(entryCount);
-        double minDuration = minTime / double(_frequency/1000);
-        double maxDuration = maxTime / double(_frequency/1000);
+        assert(entryCount);
+
+        double averageDuration = double(accumulation) / double(_frequency) / double(entryCount);
+        double minDuration = minTime / double(_frequency);
+        double maxDuration = maxTime / double(_frequency);
         return std::make_tuple(float(averageDuration), float(minDuration), float(maxDuration));
     }
 
     FrameRateRecorder::FrameRateRecorder()
     {
-        _bufferStart = _bufferEnd = 0;
+        _bufferStart = _bufferEnd = 0;      // (we start full)
         _frequency = OSServices::GetPerformanceCounterFrequency();
+        // For the first few frames, we want to return a reasonable defaults -- so let's fill up with a fixed value
+        for (auto& d:_durationHistory) d = _frequency / 60;
     }
 
     FrameRateRecorder::~FrameRateRecorder() {}
@@ -551,12 +574,12 @@ namespace PlatformRig
         DrawText()
             .Alignment(TextAlignment::Left)
             .Font(*res->_frameRateFont)
-            .Draw(context, innerLayout.Allocate(Coord2(80, bigLineHeight)), StringMeld<64>() << std::setprecision(1) << std::fixed << 1000.f / std::get<0>(f));
+            .Draw(context, innerLayout.Allocate(Coord2(80, bigLineHeight)), StringMeld<64>() << std::setprecision(1) << std::fixed << 1.f / std::get<0>(f));
 
         DrawText()
             .Font(*res->_smallFrameRateFont)
             .Alignment(TextAlignment::Left)
-			.Draw(context, innerLayout.Allocate(Coord2(rectWidth - 80 - innerLayout._paddingInternalBorder*2 - innerLayout._paddingBetweenAllocations, smallLineHeight * 2)), StringMeld<64>() << std::setprecision(1) << std::fixed << (1000.f / std::get<2>(f)) << "-" << (1000.f / std::get<1>(f)));
+			.Draw(context, innerLayout.Allocate(Coord2(rectWidth - 80 - innerLayout._paddingInternalBorder*2 - innerLayout._paddingBetweenAllocations, smallLineHeight * 2)), StringMeld<64>() << std::setprecision(1) << std::fixed << (1.f / std::get<2>(f)) << "-" << (1.f / std::get<1>(f)));
 
         auto heapMetrics = AccumulatedAllocations::GetCurrentHeapMetrics();
         auto frameAllocations = _prevFrameAllocationCount->_allocationCount;

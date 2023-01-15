@@ -14,6 +14,8 @@
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
+#include "../../RenderCore/Techniques/ParsingContext.h"
+#include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/DeviceInitialization.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Vulkan/IDeviceVulkan.h"
@@ -36,6 +38,7 @@
 #include "../../Utility/StringFormat.h"
 
 #include <functional>
+#include <variant>
 
 namespace Sample
 {
@@ -59,6 +62,151 @@ namespace Sample
             ::ConsoleRig::GlobalServices::GetInstance().UnloadDefaultPlugins();
         }
     };
+
+    template<typename V, typename std::size_t... I, typename... O>
+        constexpr auto VariantCat_Helper(V&&, std::index_sequence<I...>&&, O&&...) -> 
+            std::variant<std::variant_alternative_t<I, V>..., O...>;
+
+    template<typename V, typename... O>
+        using VariantCat = decltype(VariantCat_Helper(std::declval<V>(), std::make_index_sequence<std::variant_size_v<V>>{}, std::declval<O>()...));
+
+    template<typename O, typename V, typename T, typename... M>
+        O VariantCast_(V&& input)
+        {
+            if (std::holds_alternative<T>(input))
+                return std::move(std::get<T>(input));
+            if constexpr (std::tuple_size_v<std::tuple<M...>> == 0) {
+                Throw(std::runtime_error("bad variant cast"));
+            } else
+                return VariantCast_<O, V, M...>(std::move(input));
+        }
+
+    template<typename O, typename... T>
+        O VariantCast(std::variant<T...>&& input)
+        {
+            return VariantCast_<O, std::variant<T...>, T...>(std::move(input));
+        }
+
+    class MessageLoop
+    {
+    public:
+        struct RenderFrame
+        {
+            RenderCore::Techniques::ParsingContext& _parsingContext;
+        };
+
+        struct UpdateFrame
+        {
+            float _deltaTime;
+        };
+
+        struct OnRenderTargetUpdate
+        {
+            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> _preregAttachments;
+            const RenderCore::FrameBufferProperties _fbProps;
+            IteratorRange<const RenderCore::Format*> _systemAttachmentFormats;
+        };
+
+        using MsgVariant = VariantCat<PlatformRig::SystemMessageVariant, RenderFrame, UpdateFrame, OnRenderTargetUpdate>;
+        MsgVariant Pump();
+
+        MessageLoop(std::shared_ptr<PlatformRig::WindowApparatus> apparatus);
+        ~MessageLoop();
+    private:
+        std::shared_ptr<PlatformRig::WindowApparatus> _apparatus;
+        enum class Pending
+        {
+            None, BeginRenderFrame, EndRenderFrame
+        };
+        Pending _pending = Pending::None;
+
+        std::optional<RenderCore::Techniques::ParsingContext> _activeParsingContext;
+        PlatformRig::IdleState _lastIdleState = PlatformRig::IdleState::Foreground;
+        PlatformRig::FrameRig::OverlayConfiguration _lastOverlayConfiguration;
+    };
+
+    auto MessageLoop::Pump() -> MsgVariant
+    {
+        switch (_pending) {
+        case Pending::BeginRenderFrame:
+            _pending = Pending::EndRenderFrame;
+            assert(!_activeParsingContext);
+            _activeParsingContext = _apparatus->_frameRig->StartupFrame(*_apparatus);
+            return RenderFrame { _activeParsingContext.value() };
+
+        case Pending::EndRenderFrame:
+            _pending = Pending::None;
+            {
+                assert(_activeParsingContext);
+                auto parsingContext = std::move(_activeParsingContext.value());
+                _activeParsingContext = {};
+
+                auto frameResult = _apparatus->_frameRig->ShutdownFrame(parsingContext);
+
+                // ------- Yield some process time when appropriate ------
+                _apparatus->_frameRig->IntermedialSleep(*_apparatus, _lastIdleState == PlatformRig::IdleState::Background, frameResult);
+            }
+            break;       // break and continue with next event
+
+        case Pending::None:
+            break;
+        }
+
+        assert(!_activeParsingContext);
+        auto msgPump = PlatformRig::Window::SingleWindowMessagePump(*_apparatus->_osWindow);
+        PlatformRig::CommonEventHandling(*_apparatus, msgPump);
+        if (std::holds_alternative<PlatformRig::Idle>(msgPump)) {
+
+             // if we don't have any immediate OS events to process, it may be time to render
+            auto& idle = std::get<PlatformRig::Idle>(msgPump);
+
+            if (idle._state == PlatformRig::IdleState::Background) {
+                // Bail if we're minimized (don't have to check this in the foreground case)
+                auto presChainDesc = _apparatus->_presentationChain->GetDesc();
+                if (!(presChainDesc._width * presChainDesc._height)) {
+                    Threading::Sleep(64);       // minimized and inactive
+                    return idle;
+                }
+            }
+
+            _pending = Pending::BeginRenderFrame;
+            _lastIdleState = idle._state;
+            return UpdateFrame { _apparatus->_frameRig->GetSmoothedDeltaTime() * Tweakable("TimeScale", 1.0f) };
+
+        } else if (std::holds_alternative<PlatformRig::WindowResize>(msgPump)) {
+
+            // slightly awkward here -- we return PlatformRig::WindowResize only if we're not returning OnRenderTargetUpdate
+            auto newConfig = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
+            if (newConfig._hash != _lastOverlayConfiguration._hash) {
+                _lastOverlayConfiguration = std::move(newConfig);
+                return OnRenderTargetUpdate { _lastOverlayConfiguration._preregAttachments, _lastOverlayConfiguration._fbProps, _lastOverlayConfiguration._systemAttachmentFormats };
+            }
+
+        }
+        
+        return VariantCast<MsgVariant>(std::move(msgPump));
+    }
+
+    MessageLoop::MessageLoop(std::shared_ptr<PlatformRig::WindowApparatus> apparatus)
+    : _apparatus(std::move(apparatus))
+    {
+        _lastOverlayConfiguration = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
+    }
+
+    MessageLoop::~MessageLoop()
+    {}
+
+    static void OnRenderTargetUpdate(
+        PlatformRig::IOverlaySystem& mainOverlay,
+        PlatformRig::IOverlaySystem& debuggingOverlay,
+        IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+        const RenderCore::FrameBufferProperties& fbProps,
+        IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
+    {
+        mainOverlay.OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
+        auto updatedAttachments = PlatformRig::InitializeColorLDR(preregAttachments);
+        debuggingOverlay.OnRenderTargetUpdate(updatedAttachments, fbProps, systemAttachmentFormats);
+    }
 
 	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& config)
     {
@@ -119,8 +267,6 @@ namespace Sample
         Log(Verbose) << "Setup tools and debugging" << std::endl;
         auto& frameRig = *sampleGlobals._windowApparatus->_frameRig;
         sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
-        frameRig.SetDebugScreensOverlaySystem(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem);
-        frameRig.SetMainOverlaySystem(sampleOverlay);
         InstallDefaultDebuggingDisplays(sampleGlobals);
 
             // Final startup operations
@@ -136,42 +282,57 @@ namespace Sample
         sampleRigApparatus._techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
 
             // Pump a single frame to ensure we have some content when the window appears (and then show it)
-        frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
+        {
+            auto initialConfig = frameRig.GetOverlayConfiguration(*sampleGlobals._windowApparatus->_presentationChain);
+            OnRenderTargetUpdate(
+                *sampleOverlay, *sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem,
+                initialConfig._preregAttachments, initialConfig._fbProps, initialConfig._systemAttachmentFormats);
+        }
+        {
+            auto parserContext = frameRig.StartupFrame(*sampleGlobals._windowApparatus);
+            TRY {
+                sampleOverlay->Render(parserContext);
+                sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->Render(parserContext);
+            } CATCH(const std::exception& e) {
+                PlatformRig::ReportError(parserContext, e.what());
+            } CATCH_END
+            frameRig.ShutdownFrame(parserContext);
+        }
         sampleGlobals._windowApparatus->_osWindow->Show();
 
             //  Finally, we execute the frame loop. 
         Log(Verbose) << "Beginning the frame loop" << std::endl;
+        MessageLoop msgLoop{sampleGlobals._windowApparatus};
         for (;;) {
-            auto msgPump = PlatformRig::Window::SingleWindowMessagePump(*sampleGlobals._windowApparatus->_osWindow);
+            auto msg = msgLoop.Pump();
 
-            if (std::holds_alternative<PlatformRig::Idle>(msgPump)) {
+                    // ------- Update -----------------------------------------
+            if (std::holds_alternative<MessageLoop::UpdateFrame>(msg)) {
+                sampleOverlay->OnUpdate(std::get<MessageLoop::UpdateFrame>(msg)._deltaTime);
+            }
 
-                // if we don't have any immediate OS events to process, it may be time to render
-                auto& idle = std::get<PlatformRig::Idle>(msgPump);
+                    // ------- Render -----------------------------------------
+            else if (std::holds_alternative<MessageLoop::RenderFrame>(msg)) {
+                auto& parserContext = std::get<MessageLoop::RenderFrame>(msg)._parsingContext;
+                TRY {
+                    sampleOverlay->Render(parserContext);
+                    sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->Render(parserContext);
+                } CATCH(const std::exception& e) {
+                    PlatformRig::ReportError(parserContext, e.what());
+                } CATCH_END
+            }
 
-                if (idle._state == PlatformRig::IdleState::Background) {
-                    // Bail if we're minimized (don't have to check this in the foreground case)
-                    auto presChainDesc = sampleGlobals._windowApparatus->_presentationChain->GetDesc();
-                    if (!(presChainDesc._width * presChainDesc._height)) {
-                        Threading::Sleep(64);       // minimized and inactive
-                        continue;
-                    }
-                }
+                    // ------- Render target update ---------------------------
+            else if (std::holds_alternative<MessageLoop::OnRenderTargetUpdate>(msg)) {
+                auto& rtu = std::get<MessageLoop::OnRenderTargetUpdate>(msg);
+                OnRenderTargetUpdate(
+                    *sampleOverlay, *sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem,
+                    rtu._preregAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
+            }
 
-                    // ------- Update ----------------------------------------
-                float smoothedDeltaTime = float(sampleGlobals._frameRenderingApparatus->_frameCPUProfiler->GetAverageFrameInterval() / (double)OSServices::GetPerformanceCounterFrequency());
-                sampleOverlay->OnUpdate(smoothedDeltaTime * Tweakable("TimeScale", 1.0f));
-
-                    // ------- Render ----------------------------------------
-                auto frameResult = frameRig.ExecuteFrame(*sampleGlobals._windowApparatus);
-
-                    // ------- Yield some process time when appropriate ------
-                frameRig.IntermedialSleep(*sampleGlobals._windowApparatus, idle._state == PlatformRig::IdleState::Background, frameResult);
-
-            } else if (std::holds_alternative<PlatformRig::ShutdownRequest>(msgPump)) {
+                    // ------- Quit -------------------------------------------
+            else if (std::holds_alternative<PlatformRig::ShutdownRequest>(msg)) {
                 break;
-            } else {
-                PlatformRig::CommonEventHandling(*sampleGlobals._windowApparatus, msgPump);
             } 
         }
 

@@ -4,14 +4,12 @@
 
 #pragma once
 
-#include "../RenderCore/IDevice_Forward.h"
-#include "../Utility/FunctionUtils.h"
-#include <functional>
+#include "../RenderCore/FrameBufferDesc.h"      // for FrameBufferProperties
 #include <memory>
+#include <vector>
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; class SubFrameEvents; class FrameRenderingApparatus; class DrawingApparatus; class TechniqueContext; }}
-namespace RenderOverlays { class FontRenderingManager; }
+namespace RenderCore { namespace Techniques { class ParsingContext; class SubFrameEvents; class FrameRenderingApparatus; class DrawingApparatus; class TechniqueContext; struct PreregisteredAttachment; }}
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget; }}
 namespace Utility { class HierarchicalCPUProfiler; }
 
@@ -19,6 +17,10 @@ namespace PlatformRig
 {
     class IOverlaySystem;
     class WindowApparatus;
+
+    void ReportError(RenderCore::Techniques::ParsingContext&, StringSection<>);
+    std::vector<RenderCore::Techniques::PreregisteredAttachment> InitializeColorLDR(
+        IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*>);
 
     class FrameRig
     {
@@ -29,17 +31,14 @@ namespace PlatformRig
             bool _hasPendingResources = false;
         };
 
-        FrameResult ExecuteFrame(
+        RenderCore::Techniques::ParsingContext StartupFrame(
             WindowApparatus& windowApparatus);
-
-        FrameResult ExecuteFrame(
+        RenderCore::Techniques::ParsingContext StartupFrame(
             std::shared_ptr<RenderCore::IThreadContext> context,
             std::shared_ptr<RenderCore::IPresentationChain> presChain);
 
-        auto ExecuteFrame(
-            std::shared_ptr<RenderCore::IThreadContext> context,
-            std::shared_ptr<RenderCore::IPresentationChain> presChain,
-            RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult;
+        FrameResult ShutdownFrame(
+            RenderCore::Techniques::ParsingContext& parsingContext);
 
         void IntermedialSleep(
             RenderCore::IThreadContext& threadContext,
@@ -51,15 +50,20 @@ namespace PlatformRig
             bool inBackground,
             const FrameResult& lastFrameResult);
 
+        float GetSmoothedDeltaTime();
+
         void UpdatePresentationChain(RenderCore::IPresentationChain& presChain);
         void ReleaseDoubleBufferAttachments();
 
-        void SetMainOverlaySystem(std::shared_ptr<IOverlaySystem>);
-		void SetDebugScreensOverlaySystem(std::shared_ptr<IOverlaySystem>);
+        struct OverlayConfiguration
+        {
+            std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregAttachments;
+            RenderCore::FrameBufferProperties _fbProps;
+            std::vector<RenderCore::Format> _systemAttachmentFormats;
+            uint64_t _hash = 0ull;
+        };
+        OverlayConfiguration GetOverlayConfiguration(RenderCore::IPresentationChain& presChain) const;
 
-        const std::shared_ptr<IOverlaySystem>& GetMainOverlaySystem() { return _mainOverlaySys; }
-		const std::shared_ptr<IOverlaySystem>& GetDebugScreensOverlaySystem() { return _debugScreenOverlaySystem; }
-        const std::shared_ptr<RenderCore::Techniques::SubFrameEvents>& GetSubFrameEvents() { return _subFrameEvents; }
         RenderCore::Techniques::TechniqueContext& GetTechniqueContext();
 
         auto CreateDisplay(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugSystem) -> std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>;
@@ -73,8 +77,6 @@ namespace PlatformRig
         FrameRig& operator=(const FrameRig& cloneFrom) = delete;
 
     protected:
-        std::shared_ptr<IOverlaySystem> _mainOverlaySys;
-		std::shared_ptr<IOverlaySystem> _debugScreenOverlaySystem;
         std::shared_ptr<RenderCore::Techniques::SubFrameEvents> _subFrameEvents;
 
         class Pimpl;
