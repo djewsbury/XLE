@@ -317,6 +317,22 @@ namespace RenderCore { namespace Techniques
     }
 
     void DeferredShaderResource::ConstructToPromise(
+        std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
+        std::shared_ptr<::Assets::OperationContext> opContext,
+        const Assets::TextureCompilationRequest& compileRequest,
+        ProgressiveResultFn&& intermediateResultsFn)
+    {
+        std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
+        auto containerFuture = containerPromise.get_future();
+        ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest, std::move(intermediateResultsFn));
+        ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
+            std::move(promise),
+            [originalRequest=compileRequest._srcFile](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
+            });
+    }
+
+    void DeferredShaderResource::ConstructToPromise(
 		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		StringSection<> initializer)
     {

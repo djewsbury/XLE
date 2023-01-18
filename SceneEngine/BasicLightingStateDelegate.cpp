@@ -1092,6 +1092,13 @@ namespace SceneEngine
         case "SpecularCubeMapFormat"_h:
             SetViaEnumFn<RenderCore::Format, RenderCore::AsFormat>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_specularCubemapFormat, data, type);
             break;
+
+        case "ProgressiveCompilation"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._progressiveCompilation = *value;
+                return true;
+            }
+            break;
         }
         return false;
     }

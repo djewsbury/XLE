@@ -78,6 +78,13 @@ namespace RenderCore { namespace Techniques
             std::shared_ptr<::Assets::OperationContext>,
 			const Assets::TextureCompilationRequest& compileRequest);
 
+        using ProgressiveResultFn = std::function<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>;
+        static void ConstructToPromise(
+			std::promise<std::shared_ptr<DeferredShaderResource>>&&,
+            std::shared_ptr<::Assets::OperationContext>,
+			const Assets::TextureCompilationRequest& compileRequest,
+            ProgressiveResultFn&& progressiveResultsFn);
+
         static BufferUploads::TransactionID ConstructToTrackablePromise(
 			std::promise<std::shared_ptr<DeferredShaderResource>>&&,
 			StringSection<> initializer);

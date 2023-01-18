@@ -13,6 +13,7 @@
 #include "../../Utility/Streams/SerializationUtils.h"
 
 namespace Assets { class OperationContext; }
+namespace std { template <typename T> class function; }
 
 namespace RenderCore { namespace Assets
 {
@@ -75,6 +76,14 @@ namespace RenderCore { namespace Assets
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
 			std::shared_ptr<::Assets::OperationContext> opContext,
 			const TextureCompilationRequest& request);
+
+		using ProgressiveResultFn = std::function<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>;
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<TextureArtifact>>&&,
+			std::shared_ptr<::Assets::OperationContext> opContext,
+			const TextureCompilationRequest& request,
+			ProgressiveResultFn&& intermediateResultFn);
 
 		TextureArtifact();
 		~TextureArtifact();

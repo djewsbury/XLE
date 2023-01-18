@@ -42,7 +42,6 @@ namespace RenderCore { namespace Techniques
 			std::promise<void> promise;
 			auto result = promise.get_future(); 
 			promise.set_value();
-
 			return result;
 		}
 
@@ -68,7 +67,10 @@ namespace RenderCore { namespace Techniques
 	static std::string s_equRectFilterName { "texture-compiler (EquRectFilter)" };
 	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
 
-	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc, EquRectFilterMode filter)
+	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(
+		BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc,
+		EquRectFilterMode filter,
+		const ProgressiveTextureFn& progressiveResults)
 	{
 		// We need to create a texture from the data source and run a shader process on it to generate
 		// an output cubemap. We'll do this on the GPU and copy the results back into a new IAsyncDataSource
@@ -118,6 +120,10 @@ namespace RenderCore { namespace Techniques
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
 
+		auto depVal = ::Assets::GetDepValSys().Make();
+		depVal.RegisterDependency(computeOp->GetDependencyValidation());
+		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
+
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
 		for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
 			TextureViewDesc view;
@@ -148,7 +154,16 @@ namespace RenderCore { namespace Techniques
 
 					if ((d%dispatchesPerCommit) == (dispatchesPerCommit-1)) {
 						dispatchGroup = {};
-						threadContext->CommitCommands();
+						if (progressiveResults) {
+							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
+							auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+							// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
+							progressiveResults(intermediateData);
+							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
+						} else {
+							threadContext->CommitCommands();
+						}
+
 						dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
 						if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 							threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
@@ -180,25 +195,8 @@ namespace RenderCore { namespace Techniques
 		}
 
 		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
-		{
-			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
-			barrier.pNext = nullptr;
-			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			vkCmdPipelineBarrier(
-				metalContext.GetActiveCommandList().GetUnderlying().get(),
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				0,
-				1, &barrier,
-				0, nullptr,
-				0, nullptr);
-		}
+		Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
 
-		auto depVal = ::Assets::GetDepValSys().Make();
-		depVal.RegisterDependency(computeOp->GetDependencyValidation());
-		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
 		auto result = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
 		threadContext->CommitCommands();
 		// Release the command buffer pool, because Vulkan requires pumping the command buffer destroys regularly,

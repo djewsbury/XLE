@@ -236,7 +236,7 @@ namespace RenderCore { namespace Assets
 			return ::Assets::GetDepValSys().MakeOrReuse(markers);
 		}
 
-		void Initialize(TextureCompilationRequest request, std::string srcFN)
+		void Initialize(TextureCompilationRequest request, std::string srcFN, const VariantFunctions& conduit)
 		{
 			std::shared_ptr<BufferUploads::IAsyncDataSource> srcPkt;
 			if (request._operation != TextureCompilationRequest::Operation::ComputeShader) {
@@ -245,6 +245,11 @@ namespace RenderCore { namespace Assets
 				srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(request._srcFile, 0);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			}
+
+			Techniques::ProgressiveTextureFn dummyIntermediateFn;
+			Techniques::ProgressiveTextureFn* intermediateFunction = &dummyIntermediateFn;
+			if (conduit.Has<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0))
+				intermediateFunction = &conduit.Get<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0);
 
 			if (request._operation == TextureCompilationRequest::Operation::EquRectToCubeMap) {
 				auto srcDst = srcPkt->GetDesc();
@@ -256,7 +261,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._arrayCount = 0u;
 				targetDesc._mipCount = (request._mipMapFilter == TextureCompilationRequest::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToCubeMap);
+				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToCubeMap, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular) {
 				auto srcDst = srcPkt->GetDesc();
@@ -269,11 +274,11 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToGlossySpecular);
+				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ToGlossySpecular, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ProjectToSphericalHarmonic) {
 				auto targetDesc = TextureDesc::Plain2D(request._coefficientCount, 1, Format::R32G32B32A32_FLOAT);
-				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ProjectToSphericalHarmonic);
+				srcPkt = Techniques::EquRectFilter(*srcPkt, targetDesc, Techniques::EquRectFilterMode::ProjectToSphericalHarmonic, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ComputeShader) {
 				auto targetDesc = TextureDesc::Plain2D(
@@ -341,7 +346,7 @@ namespace RenderCore { namespace Assets
 			};
 		}
 
-		TextureCompileOperation(std::string srcFN)
+		TextureCompileOperation(std::string srcFN, const VariantFunctions& conduit)
 		{
 			// load the given file and perform texture processing operations
 			size_t inputBlockSize = 0;
@@ -360,14 +365,14 @@ namespace RenderCore { namespace Assets
 			auto operationElement = *dom.RootElement().children().begin();
 			auto request = MakeTextureCompilationRequest(operationElement, srcFN);
 
-			Initialize(request, srcFN);
+			Initialize(request, srcFN, conduit);
 		}
 
-		TextureCompileOperation(TextureCompilationRequest request)
+		TextureCompileOperation(TextureCompilationRequest request, const VariantFunctions& conduit)
 		{
 			std::stringstream str;
 			str << request;
-			Initialize(request, str.str());
+			Initialize(request, str.str(), conduit);
 		}
 
 	private:
@@ -385,12 +390,12 @@ namespace RenderCore { namespace Assets
 			"texture-compiler",
 			ConsoleRig::GetLibVersionDesc(),
 			{},
-			[](const ::Assets::InitializerPack& initializers) {
+			[](const ::Assets::InitializerPack& initializers, const auto& conduit) {
 				auto paramType = initializers.GetInitializer<unsigned>(0);
 				if (paramType == 0) {
-					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<std::string>(1));
+					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<std::string>(1), conduit);
 				} else {
-					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<TextureCompilationRequest>(1));
+					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<TextureCompilationRequest>(1), conduit);
 				}
 			}};
 
@@ -539,6 +544,32 @@ namespace RenderCore { namespace Assets
 			[request, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
 				TRY {
 					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{1u, request}, opContext.get());
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+	}
+
+	void TextureArtifact::ConstructToPromise(
+		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
+		std::shared_ptr<::Assets::OperationContext> opContext,
+		const TextureCompilationRequest& request,
+		ProgressiveResultFn&& intermediateResultFn)
+	{
+		if (!intermediateResultFn) {
+			ConstructToPromise(std::move(promise), std::move(opContext), request);
+			return;
+		}
+		VariantFunctions conduit;
+		conduit.Add(0, std::move(intermediateResultFn));
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[request, promise=std::move(promise), opContext=std::move(opContext), conduit=std::move(conduit)]() mutable {
+				TRY {
+					::Assets::DefaultCompilerConstructionSynchronously(
+						std::move(promise), TextureCompilerProcessType,
+						::Assets::InitializerPack{1u, request},
+						std::move(conduit),
+						opContext.get());
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END

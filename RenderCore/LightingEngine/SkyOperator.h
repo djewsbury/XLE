@@ -27,7 +27,7 @@ namespace RenderCore { namespace Techniques
 	class DeferredShaderResource;
 }}
 
-namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; class IManager; }}
 namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
@@ -50,6 +50,8 @@ namespace RenderCore { namespace LightingEngine
 
 		unsigned _specularCubemapFaceDimension = 512;
 		Format _specularCubemapFormat = Format::BC6H_UF16;
+
+		bool _progressiveCompilation = false;
 
 		uint64_t GetHash(uint64_t seed=DefaultSeed64) const;
 	};

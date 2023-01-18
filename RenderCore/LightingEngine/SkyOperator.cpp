@@ -193,8 +193,9 @@ namespace RenderCore { namespace LightingEngine
 
 		SkyTextureProcessor(
 			const SkyTextureProcessorDesc& desc,
-			std::shared_ptr<SkyOperator> skyOperator)
-		: _desc(desc), _skyOperator(std::move(skyOperator))
+			std::shared_ptr<SkyOperator> skyOperator,
+			std::shared_ptr<BufferUploads::IManager> bufferUploads)
+		: _desc(desc), _skyOperator(std::move(skyOperator)), _bufferUploads(std::move(bufferUploads))
 		{}
 		~SkyTextureProcessor() = default;
 	private:
@@ -218,6 +219,7 @@ namespace RenderCore { namespace LightingEngine
 		BufferUploads::CommandListID _pendingSpecularIBLCompletion = 0;
 		std::shared_ptr<IResourceView> _pendingAmbientRawCubemap;
 		BufferUploads::CommandListID _pendingAmbientRawCubemapCompletion = 0;
+		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 	};
 
 	void SkyTextureProcessor::SetEquirectangularSource(std::shared_ptr<::Assets::OperationContext> loadingContext, StringSection<> input)
@@ -228,17 +230,7 @@ namespace RenderCore { namespace LightingEngine
 		_diffuseIBL = {};
 		_specularIBL = {};
 		_skyCubemap = {};
-
-		if (_onChangeIBL.AtLeastOneBind()) {
-			_diffuseIBL = ::Assets::MakeAsset<SHCoefficientsAsset>(input);
-
-			Assets::TextureCompilationRequest request;
-			request._operation = Assets::TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular; 
-			request._srcFile = _sourceImage;
-			request._format = _desc._specularCubemapFormat;
-			request._faceDim = _desc._specularCubemapFaceDimension;
-			_specularIBL = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request);
-		}
+		auto weakThis = weak_from_this();
 
 		if (_skyOperator || _onChangeSkyTexture.AtLeastOneBind()) {
 			Assets::TextureCompilationRequest request2;
@@ -248,6 +240,48 @@ namespace RenderCore { namespace LightingEngine
 			request2._faceDim = _desc._cubemapFaceDimension;
 			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
 			_skyCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request2);
+		}
+
+		if (_onChangeIBL.AtLeastOneBind()) {
+			_diffuseIBL = ::Assets::MakeAsset<SHCoefficientsAsset>(input);
+
+			Assets::TextureCompilationRequest request;
+			request._operation = Assets::TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular; 
+			request._srcFile = _sourceImage;
+			request._format = _desc._specularCubemapFormat;
+			request._faceDim = _desc._specularCubemapFaceDimension;
+			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
+
+			if (_desc._progressiveCompilation) {
+				progressiveResultsFn =
+					[weakbu=std::weak_ptr<BufferUploads::IManager>{_bufferUploads}, weakThis](auto dataSource) {
+						auto bu = weakbu.lock();
+						auto strongThis = weakThis.lock();
+						if (!bu || !strongThis) return;
+
+						auto transaction = bu->Begin(dataSource);
+						auto locator = transaction._future.get();		// note -- stall here, maybe some alignment with frame beat
+						
+						ScopedLock(strongThis->_pendingUpdatesLock);
+						strongThis->_pendingUpdate = true;
+						TRY {
+							const bool useProgressiveResourceAsBackground = false;
+							if (!useProgressiveResourceAsBackground) {
+								strongThis->_pendingSpecularIBL = locator.CreateTextureView();
+								strongThis->_pendingSpecularIBLCompletion = locator.GetCompletionCommandList();
+							} else {
+								strongThis->_pendingAmbientRawCubemap = locator.CreateTextureView();
+								strongThis->_pendingAmbientRawCubemapCompletion = locator.GetCompletionCommandList();
+							}
+						} CATCH(...) {
+							// suppress bad texture errors
+							strongThis->_pendingSpecularIBL = nullptr;
+							strongThis->_pendingSpecularIBLCompletion = 0;
+						} CATCH_END
+					};
+			}
+				
+			_specularIBL = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request, std::move(progressiveResultsFn));
 		}
 
 		if (!_specularIBL.valid() && !_diffuseIBL.valid() && !_skyCubemap.valid())
@@ -267,7 +301,6 @@ namespace RenderCore { namespace LightingEngine
 		helper->_diffuseIBL = _diffuseIBL;
 		helper->_skyCubemap = _skyCubemap;
 
-		auto weakThis = weak_from_this();
 		::Assets::PollToPromise(
 			std::move(promisedUpdate),
 			[weakThis, helper](auto timeout) {
@@ -344,7 +377,7 @@ namespace RenderCore { namespace LightingEngine
 		std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID)>&& onSkyTextureUpdate,
 		std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID, SHCoefficients&)>&& onIBLUpdate)
 	{
-		auto result = std::make_shared<SkyTextureProcessor>(desc, std::move(skyOperator));
+		auto result = std::make_shared<SkyTextureProcessor>(desc, std::move(skyOperator), Techniques::Services::GetBufferUploadsPtr());
 		if (onSkyTextureUpdate)
 			result->BindOnChangeSkyTexture(std::move(onSkyTextureUpdate));
 		if (onIBLUpdate)
