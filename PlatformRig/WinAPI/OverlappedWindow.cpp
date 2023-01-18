@@ -466,14 +466,22 @@ namespace PlatformRig
             return result;
         }
 
+        bool foreground = window._pimpl->_activated;
+        if (!foreground) {
+            // Protection for cases where a popup in our process has stolen our activation
+            DWORD foreWindowProcess;
+            GetWindowThreadProcessId(GetForegroundWindow(), &foreWindowProcess);
+            foreground = GetCurrentProcessId() == foreWindowProcess;
+        }
+
         #if defined(_DEBUG)
             DWORD foreWindowProcess;
             GetWindowThreadProcessId(GetForegroundWindow(), &foreWindowProcess);
-            bool expectedActivation = GetCurrentProcessId() == foreWindowProcess;
-            assert(window._pimpl->_activated == expectedActivation);
+            bool expectedForeground = GetCurrentProcessId() == foreWindowProcess;
+            assert(foreground == expectedForeground);
         #endif
         
-        return Idle{window._pimpl->_activated ? IdleState::Foreground : IdleState::Background};
+        return Idle{foreground ? IdleState::Foreground : IdleState::Background};
     }
 
 }
