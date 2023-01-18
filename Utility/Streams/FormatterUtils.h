@@ -208,6 +208,25 @@ namespace Utility
 	}
 
 	template<typename Formatter>
+		bool TryKeyedItem(Formatter& fmttr, uint64_t& keyname)
+	{
+		if constexpr (Internal::FormatterTraits<Formatter>::HasTryKeyedItemHash) {
+			return fmttr.TryKeyedItem(keyname);
+		} else {
+			StringSection<> stringKeyName;
+			auto result = fmttr.TryKeyedItem(stringKeyName);
+			if (result) keyname = Hash64(stringKeyName);
+			return result;
+		}
+	}
+
+	template<typename Formatter>
+		bool TryKeyedItem(Formatter& fmttr, StringSection<> keyname)
+	{
+		return fmttr.TryKeyedItem(keyname);
+	}
+
+	template<typename Formatter>
 		std::vector<typename Formatter::InteriorSection> RequireListOfStrings(Formatter& formatter)
 	{
 		std::vector<typename Formatter::InteriorSection> result;

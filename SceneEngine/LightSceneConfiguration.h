@@ -47,7 +47,7 @@ namespace SceneEngine
 			void Deserialize(Formatter& fmttr) 
 		{ 
 			uint64_t name;
-			while (fmttr.TryKeyedItem(name)) {
+			while (TryKeyedItem(fmttr, name)) {
 				switch (name) {
 				case "LightSource"_h:
 					RequireBeginElement(fmttr);
