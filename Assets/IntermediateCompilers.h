@@ -13,6 +13,7 @@
 #include <string>
 
 namespace OSServices { class LibVersionDesc; }
+namespace Utility { class VariantFunctions; }
 
 namespace Assets
 {
@@ -30,6 +31,7 @@ namespace Assets
 		
 		struct SplitArchiveName { std::string _archive; uint64_t _entryId = 0ull; std::string _descriptiveName; };
 		using CompileOperationDelegate = std::function<std::shared_ptr<ICompileOperation>(const InitializerPack&)>;
+		using CompileOperationDelegate2 = std::function<std::shared_ptr<ICompileOperation>(const InitializerPack&, const VariantFunctions&)>;
 		using ArchiveNameDelegate = std::function<SplitArchiveName(ArtifactTargetCode, const InitializerPack&)>;
 
 		using RegisteredCompilerId = uint64_t;
@@ -40,6 +42,15 @@ namespace Assets
 			const DependencyValidation& compilerDepVal,						///< dependency validation for the compiler shared library itself. Can trigger recompiles if the compiler changes
 			CompileOperationDelegate&& delegate,							///< delegate that can create the ICompileOperation for a given asset
 			ArchiveNameDelegate&& archiveNameDelegate = {}					///< delegate used to store the artifacts with in ArchiveCache, rather than individual files (optional)
+			) = 0;
+
+		virtual RegisteredCompilerId RegisterCompiler(
+			const std::string& name,
+			const std::string& shortName,
+			OSServices::LibVersionDesc srcVersion,
+			const DependencyValidation& compilerDepVal,
+			CompileOperationDelegate2&& delegate,
+			ArchiveNameDelegate&& archiveNameDelegate = {}
 			) = 0;
 
 		virtual void DeregisterCompiler(RegisteredCompilerId id) = 0;
@@ -87,6 +98,14 @@ namespace Assets
 			const DependencyValidation& compilerDepVal,
 			IIntermediateCompilers::CompileOperationDelegate&& delegate,
 			IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate = {});
+		CompilerRegistration(
+			IIntermediateCompilers& compilers,
+			const std::string& name,
+			const std::string& shortName,
+			OSServices::LibVersionDesc srcVersion,
+			const DependencyValidation& compilerDepVal,
+			IIntermediateCompilers::CompileOperationDelegate2&& delegate,
+			IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate = {});
 		CompilerRegistration();
 		~CompilerRegistration();
 		CompilerRegistration(CompilerRegistration&&);
@@ -123,6 +142,7 @@ namespace Assets
 		virtual std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> GetArtifact(ArtifactTargetCode) = 0;
 		virtual ArtifactCollectionFuture InvokeCompile(CompileRequestCode targetCode) = 0;
 		virtual std::string GetCompilerDescription() const = 0;
+		virtual void AttachConduit(VariantFunctions&&) = 0;
 		virtual ~IIntermediateCompileMarker();
 	};
 }

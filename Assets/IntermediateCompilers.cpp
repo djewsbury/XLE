@@ -36,6 +36,7 @@ namespace Assets
 		std::string _name;
 		OSServices::LibVersionDesc _srcVersion = {nullptr, nullptr};
 		IIntermediateCompilers::CompileOperationDelegate _delegate;
+		IIntermediateCompilers::CompileOperationDelegate2 _delegateWithConduit;
 		IIntermediateCompilers::ArchiveNameDelegate _archiveNameDelegate;
 		DependencyValidation _compilerLibraryDepVal;
 		IntermediatesStore::CompileProductsGroupId _storeGroupId = 0;
@@ -63,6 +64,15 @@ namespace Assets
 			OSServices::LibVersionDesc srcVersion,
 			const DependencyValidation& compilerDepVal,
 			CompileOperationDelegate&& delegate,
+			ArchiveNameDelegate&& archiveNameDelegate
+			) override;
+
+		virtual RegisteredCompilerId RegisterCompiler(
+			const std::string& name,
+			const std::string& shortName,
+			OSServices::LibVersionDesc srcVersion,
+			const DependencyValidation& compilerDepVal,
+			CompileOperationDelegate2&& delegate,
 			ArchiveNameDelegate&& archiveNameDelegate
 			) override;
 
@@ -106,6 +116,7 @@ namespace Assets
 		std::string GetCompilerDescription() const override;
 		RegisteredCompilerId GetRegisteredCompilerId() { return _registeredCompilerId; }
 		void StallForActiveFuture();
+		void AttachConduit(VariantFunctions&& conduit) override { ScopedLock(_conduitLock); _conduit = std::move(conduit); }
 
         Marker(
             InitializerPack&& requestName,
@@ -118,6 +129,8 @@ namespace Assets
 		std::shared_ptr<IntermediatesStore> _intermediateStore;
         InitializerPack _initializers;
 		RegisteredCompilerId _registeredCompilerId;
+		VariantFunctions _conduit;
+		Threading::Mutex _conduitLock;
 
 		Threading::Mutex _activeFutureLock;
 		std::weak_ptr<std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet>> _activeFuture;
@@ -125,6 +138,7 @@ namespace Assets
 		static void PerformCompile(
 			const ExtensionAndDelegate& delegate,
 			const InitializerPack& initializers,
+			const VariantFunctions& conduit,
 			std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& compileMarker,
 			IntermediatesStore* destinationStore);
 		std::future<ArtifactCollectionFuture::ArtifactCollectionSet> InvokeCompileInternal();
@@ -192,7 +206,8 @@ namespace Assets
 
 	void IntermediateCompilers::Marker::PerformCompile(
 		const ExtensionAndDelegate& delegate,
-		const InitializerPack& initializers, 
+		const InitializerPack& initializers,
+		const VariantFunctions& conduit,
 		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& promise,
 		IntermediatesStore* destinationStore)
     {
@@ -200,8 +215,12 @@ namespace Assets
 
         TRY
         {
-            auto model = delegate._delegate(initializers);
-			if (!model)
+			std::shared_ptr<ICompileOperation> compileOperation;
+			if (delegate._delegateWithConduit) {
+				compileOperation = delegate._delegateWithConduit(initializers, conduit);
+			} else
+            	compileOperation = delegate._delegate(initializers);
+			if (!compileOperation)
 				Throw(std::runtime_error("Compiler library returned null to compile request on " + initializers.ArchivableName()));
 
 			std::vector<std::pair<CompileRequestCode, std::shared_ptr<IArtifactCollection>>> finalCollections;
@@ -221,7 +240,7 @@ namespace Assets
 			// a specific target; and then later on we compile again but this time the operation does not
 			// produce that same output target, then the target remains in the cache and will not be removed
 
-			auto targets = model->GetTargets();
+			auto targets = compileOperation->GetTargets();
 			finalCollections.reserve(targets.size());
 			for (unsigned t=0; t<targets.size(); ++t) {
 				const auto& target = targets[t];
@@ -229,10 +248,10 @@ namespace Assets
 				std::vector<ICompileOperation::SerializedArtifact> serializedArtifacts;
 				AssetState state = AssetState::Pending;
 				std::vector<DependencyValidation> targetDependencies = compilerDepVals;
-				targetDependencies.push_back(model->GetDependencyValidation());
+				targetDependencies.push_back(compileOperation->GetDependencyValidation());
 
 				TRY {
-					serializedArtifacts = model->SerializeTarget(t);
+					serializedArtifacts = compileOperation->SerializeTarget(t);
 					state = AssetState::Ready;
 
 					// If we produced no artifacts, or if we produced only one and it's a "log" -- then we consider
@@ -325,11 +344,17 @@ namespace Assets
 		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet> promise;
 		auto result = promise.get_future();
 
+		VariantFunctions conduit;
+		{
+			ScopedLock(_conduitLock);
+			conduit = std::move(_conduit);
+		}
+
 		// Unfortunately we have to copy _initializers here, because we 
 		// must allow for this marker to be reused (and both InvokeCompile 
 		// and GetExistingAsset use _initializers)
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[weakDelegate=std::weak_ptr<ExtensionAndDelegate>{_delegate}, store=_intermediateStore, inits=_initializers, promise=std::move(promise)]() mutable {
+			[weakDelegate=std::weak_ptr<ExtensionAndDelegate>{_delegate}, store=_intermediateStore, inits=_initializers, conduit=std::move(conduit), promise=std::move(promise)]() mutable {
 			auto d = weakDelegate.lock();
 			if (!d) {
 				promise.set_exception(std::make_exception_ptr(std::runtime_error("Request expired before it was completed")));
@@ -339,7 +364,7 @@ namespace Assets
 			++d->_activeOperationCount;
 			if (!d->_shuttingDown) {
 				TRY {
-					PerformCompile(*d, inits, std::move(promise), store.get());
+					PerformCompile(*d, inits, conduit, std::move(promise), store.get());
 				} CATCH (...) {
 					--d->_activeOperationCount;
 					promise.set_exception(std::current_exception());
@@ -434,6 +459,29 @@ namespace Assets
 		registration->_name = name;
 		registration->_srcVersion = srcVersion;
 		registration->_delegate = std::move(delegate);
+		registration->_archiveNameDelegate = std::move(archiveNameDelegate);
+		registration->_compilerLibraryDepVal = compilerDepVal;
+		if (_store)
+			registration->_storeGroupId = _store->RegisterCompileProductsGroup(MakeStringSection(shortName), srcVersion, !!registration->_archiveNameDelegate);
+		_delegates.push_back(std::make_pair(result, std::move(registration)));
+		return result;
+	}
+
+	auto IntermediateCompilers::RegisterCompiler(
+		const std::string& name,
+		const std::string& shortName,
+		OSServices::LibVersionDesc srcVersion,
+		const DependencyValidation& compilerDepVal,
+		CompileOperationDelegate2&& delegate,
+		ArchiveNameDelegate&& archiveNameDelegate
+		) -> RegisteredCompilerId
+	{
+		ScopedLock(_delegatesLock);
+		auto registration = std::make_shared<ExtensionAndDelegate>();
+		auto result = _nextCompilerId++;
+		registration->_name = name;
+		registration->_srcVersion = srcVersion;
+		registration->_delegateWithConduit = std::move(delegate);
 		registration->_archiveNameDelegate = std::move(archiveNameDelegate);
 		registration->_compilerLibraryDepVal = compilerDepVal;
 		if (_store)
@@ -694,6 +742,18 @@ namespace Assets
 		OSServices::LibVersionDesc srcVersion,
 		const DependencyValidation& compilerDepVal,
 		IIntermediateCompilers::CompileOperationDelegate&& delegate,
+		IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate)
+	: _compilers(&compilers)
+	{
+		_registration = compilers.RegisterCompiler(name, shortName, srcVersion, compilerDepVal, std::move(delegate), std::move(archiveNameDelegate));
+	}
+	CompilerRegistration::CompilerRegistration(
+		IIntermediateCompilers& compilers,
+		const std::string& name,
+		const std::string& shortName,
+		OSServices::LibVersionDesc srcVersion,
+		const DependencyValidation& compilerDepVal,
+		IIntermediateCompilers::CompileOperationDelegate2&& delegate,
 		IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate)
 	: _compilers(&compilers)
 	{

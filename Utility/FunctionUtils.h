@@ -224,6 +224,8 @@ namespace Utility
 
         VariantFunctions(const VariantFunctions&) = delete;
         VariantFunctions& operator=(const VariantFunctions&) = delete;
+        VariantFunctions(VariantFunctions&&) = default;
+        VariantFunctions& operator=(VariantFunctions&&) = default;
     protected:
         class StoredFunction
         {

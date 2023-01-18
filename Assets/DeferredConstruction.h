@@ -197,6 +197,59 @@ namespace Assets
 		} CATCH_END
 	}
 
+	template<typename Promise>
+		static void DefaultCompilerConstructionSynchronously(
+			Promise&& promise,
+			CompileRequestCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
+			InitializerPack&& initializerPack,
+			VariantFunctions&& progressiveResultConduit,
+			OperationContext* operationContext = nullptr)
+	{
+		// Begin a compilation operation via the registered compilers for this type.
+		// Our deferred constructor will wait for the completion of that compilation operation,
+		// and then construct the final asset from the result
+		// We use the "short" task pool here, because we're assuming that construction of the asset
+		// from a precompiled result is quick, but actual compilation would take much longer
+
+		TRY {
+			std::string initializerLabel;
+			#if defined(_DEBUG)
+				initializerLabel = initializerPack.ArchivableName();
+			#else
+				if (operationContext) initializerLabel = initializerPack.ArchivableName();
+			#endif
+
+			auto marker = Internal::BeginCompileOperation(targetCode, std::move(initializerPack));
+			if (!marker) {
+				#if defined(_DEBUG)
+					Throw(std::runtime_error("No compiler found for asset (" + initializerLabel + ")"));
+				#else
+					Throw(std::runtime_error("No compiler found for asset"));
+				#endif
+			}
+
+			marker->AttachConduit(std::move(progressiveResultConduit));
+
+			// Attempt to load the existing asset immediately. In some cases we should fall back to a recompile (such as, if the
+			// version number is bad). We could attempt to push this into a background thread, also
+
+			auto artifactQuery = marker->GetArtifact(targetCode);
+			if (artifactQuery.first) {
+				AutoConstructToPromiseSynchronously(std::move(promise), *artifactQuery.first, targetCode);
+			} else {
+				assert(artifactQuery.second.Valid());
+				AutoConstructToPromiseFromPendingCompile(std::move(promise), artifactQuery.second, targetCode);
+
+				if (operationContext) {
+					auto operation = operationContext->Begin(Concatenate("Compiling (", initializerLabel, ") with compiler (", marker->GetCompilerDescription(), ")"));
+					operation.EndWithFuture(artifactQuery.second.ShareFuture());
+				}
+			}
+		} CATCH(...) {
+			promise.set_exception(std::current_exception());
+		} CATCH_END
+	}
+
 	template<
 		typename Promise, typename... Params, 
 		typename std::enable_if<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
