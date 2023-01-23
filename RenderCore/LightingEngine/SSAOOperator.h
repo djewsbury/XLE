@@ -47,6 +47,7 @@ namespace RenderCore { namespace LightingEngine
 			IResourceView& inputNormalsSRV,
 			IResourceView& inputVelocitiesSRV,
 			IResourceView& inputHistoryAccumulation,
+			IResourceView& workingUAV,
 			IResourceView& accumulation0UAV,
 			IResourceView& accumulation1UAV,
 			IResourceView& aoOutputUAV,

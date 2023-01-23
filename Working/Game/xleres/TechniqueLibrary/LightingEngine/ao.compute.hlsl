@@ -7,16 +7,11 @@
 #include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-Texture2D<float> InputTexture;
-RWTexture2D<float> OutputTexture;
-RWTexture2D<float> DownsampleDepths;
-RWTexture2D<float> AccumulationAO;
-Texture2D InputNormals;
-Texture2D<int2> GBufferMotion;
-Texture2D<float> HistoryAcc;
-Texture2D<float> AccumulationAOLast;
-
+RWTexture2D<float> Working;
+Texture2D<float> FullResolutionDepths;
 Texture2D<float> HierarchicalDepths;
+RWTexture2D<float> DownsampleDepths;
+Texture2D InputNormals;
 
 cbuffer AOProps
 {
@@ -107,7 +102,7 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 	return maxCosTheta;
 }
 
-float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
+float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi, uint2 mostDetailedMipDims)
 {
 	// There are 2 ways to ray march through the depth field
 	//	a) visit every pixel that intersects the given ray even if the ray only touches the edge
@@ -130,17 +125,16 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 
 	const uint mostDetailedMipLevel = 1;		// mostDetailedMipLevel must be >= 1, because we don't store the most detailed depth layer in HierarchicalDepths
 	uint currentMipLevel = mostDetailedMipLevel;
-	float2 mostDetailedMipRes = textureDims*pow(0.5, mostDetailedMipLevel);
 	float currentMipLevelScale = exp2(currentMipLevel-mostDetailedMipLevel);
 
 	#if ORTHO_CAMERA
-		float2 worldSpacePixelSize = 2 / SysUniform_GetMinimalProjection().xy / mostDetailedMipRes;
+		float2 worldSpacePixelSize = 2 / SysUniform_GetMinimalProjection().xy / mostDetailedMipDims;
 		worldSpacePixelSize *= float2(xStep, yStep);
 		stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
 	#else
 		float wsDepth0 = NDCDepthToWorldSpace_Perspective(d0, GlobalMiniProjZW());
 		// worldSpacePixelSize calculation simplifed by assuming moving on constant depth plane (which will not be entirely correct)
-		float2 worldSpacePixelSize = 2 / SysUniform_GetMinimalProjection().xy * wsDepth0 / mostDetailedMipRes;
+		float2 worldSpacePixelSize = 2 / SysUniform_GetMinimalProjection().xy * wsDepth0 / mostDetailedMipDims;
 		worldSpacePixelSize *= float2(xStep, yStep);
 		stepDistanceSq = dot(worldSpacePixelSize, worldSpacePixelSize);
 	#endif
@@ -153,7 +147,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	float stepsAtMostDetailedRes = initialStepSize;
 	float lastCosTheta = 1;
 	while (c--) {
-		if (any(xy < 0 || xy >= mostDetailedMipRes)) break;
+		if (any(xy < 0 || xy >= mostDetailedMipDims)) break;
 		float d = LoadHierarchicalDepth(xy/currentMipLevelScale, currentMipLevel);
 
 		#if ORTHO_CAMERA
@@ -220,12 +214,12 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	return maxCosTheta;
 }
 
-float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
+float TraverseRay(uint2 pixelId, float cosPhi, float sinPhi, uint2 mostDetailedMipDims)
 {
 	#if !defined(HAS_HIERARCHICAL_DEPTHS)
-		return TraverseRay_NonHierachicalDepths(pixelId, cosPhi, sinPhi, textureDims);
+		return TraverseRay_NonHierachicalDepths(pixelId, cosPhi, sinPhi, mostDetailedMipDims);
 	#else
-		return TraverseRay_HierachicalDepths_1(pixelId, cosPhi, sinPhi, textureDims);
+		return TraverseRay_HierachicalDepths_1(pixelId, cosPhi, sinPhi, mostDetailedMipDims);
 	#endif
 }
 
@@ -246,16 +240,16 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 {
 #if !defined(HAS_HIERARCHICAL_DEPTHS)
 	uint2 textureDims;
-	InputTexture.GetDimensions(textureDims.x, textureDims.y);
+	FullResolutionDepths.GetDimensions(textureDims.x, textureDims.y);
 
 	uint2 threadGroupCounts = uint2((textureDims.x+(2*8)-1)/(2*8), (textureDims.y+(2*8)-1)/(2*8));
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 
 	///////////// downsample ///////////
-	float zero  = InputTexture.Load(uint3(pixelId.xy*2, 0));
-	float one   = InputTexture.Load(uint3(pixelId.xy*2 + uint2(1,0), 0));
-	float two   = InputTexture.Load(uint3(pixelId.xy*2 + uint2(0,1), 0));
-	float three = InputTexture.Load(uint3(pixelId.xy*2 + uint2(1,1), 0));
+	float zero  = FullResolutionDepths.Load(uint3(pixelId.xy*2, 0));
+	float one   = FullResolutionDepths.Load(uint3(pixelId.xy*2 + uint2(1,0), 0));
+	float two   = FullResolutionDepths.Load(uint3(pixelId.xy*2 + uint2(0,1), 0));
+	float three = FullResolutionDepths.Load(uint3(pixelId.xy*2 + uint2(1,1), 0));
 	if (((pixelId.x+pixelId.y)&1) == 0) {
 		DownsampleDepths[pixelId.xy] = min(min(min(zero, one), two), three);
 	} else {
@@ -265,7 +259,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	AllMemoryBarrierWithGroupSync();
 #else
 	uint2 textureDims;
-	AccumulationAO.GetDimensions(textureDims.x, textureDims.y);
+	Working.GetDimensions(textureDims.x, textureDims.y);
 	uint2 threadGroupCounts = uint2((textureDims.x+8-1)/8, (textureDims.y+8-1)/8);
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 	if (any(pixelId >= textureDims)) return;
@@ -360,475 +354,49 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	alpha = 1-alpha;
 	alpha *= HistoryAcc.Load(uint3(pixelId.xy*2, 0));		// scale alpha by our confidence in the "yesterday" data
 	float accumulationToday = accumulationYesterday * alpha + final * (1-alpha);
-	AccumulationAO[pixelId.xy] = accumulationToday;
+	Working[pixelId.xy] = accumulationToday;
 #else
-	AccumulationAO[pixelId.xy] = final;
+	Working[pixelId.xy] = final;
 #endif
 }
 
-float Weight(float downsampleDepth, float originalDepth, float2 depthRangeScale)
-{
-	// This calculation is extremely important for the sharpness of the final image
-	// We're comparing a nearby pixel in the *downsampled* AO buffer to a full resolution pixel
-	// and we want to know if they lie on the same plane in 3d space. If they don't lie on the same
-	// plane, we don't want to use this AO sample, beause that would mean bleeding the AO values
-	// across a discontuity. That will end up desharpening the image, and it can be quite dramatic
-	const float baseAccuracyValue = 8.f/65535.f; 	// assuming 16 bit depth buffer (in the downsampled depths); this is enough for a 4x4 sampling kernel
+#include "mosaic-denoise.hlsl"
 
-	// We have to expand the "accurate" range by some factor of the depth derivatives. This is because
-	// when we downsample to the reduced depth buffer, we take the min/max of several pixels. So we don't know where
-	// in side the downsamples pixel that particular height really occurs -- it could be nearer or further away from 
-	// from the "originalDepth" pixel
-	float accuracy = 2*max(abs(depthRangeScale.x), abs(depthRangeScale.y)) + baseAccuracyValue;
-	return abs(downsampleDepth - originalDepth) <= accuracy;
-}
+RWTexture2D<float> OutputTexture;
 
-void AccumulateSample(
-	float value, float depth, inout float outValue, inout float outWeight, float dstDepth, float2 depthRangeScale, float weightMultiplier)
-{
-	float w = Weight(depth, dstDepth, depthRangeScale);
-	w *= weightMultiplier;
-	outValue += w * value;
-	outWeight += w;
-}
+Texture2D<int2> GBufferMotion;
+Texture2D<float> HistoryAcc;
 
-groupshared float GroupAO[16][16];
-groupshared float GroupDepths[16][16];
-groupshared uint AccumulationTemporary = 0;
-groupshared uint AccumulationTemporary2 = 0;
+RWTexture2D<float> AccumulationAO;
+Texture2D<float> AccumulationAOLast;
 
-void InitializeGroupSharedMem(int2 dispatchThreadId, int2 groupThreadId)
-{
-	// Load a 16x16 region which we'll access randomly in this group. This creates some overlaps with neighbouring
-	// groups. Each thread loads 4 of the 16x16 samples
-	dispatchThreadId.xy -= 4;
-	GroupAO[groupThreadId.y][groupThreadId.x] = AccumulationAO[dispatchThreadId.xy];
-	GroupAO[groupThreadId.y][groupThreadId.x+8] = AccumulationAO[dispatchThreadId.xy+int2(8,0)];
-	GroupAO[groupThreadId.y+8][groupThreadId.x] = AccumulationAO[dispatchThreadId.xy+int2(0,8)];
-	GroupAO[groupThreadId.y+8][groupThreadId.x+8] = AccumulationAO[dispatchThreadId.xy+int2(8,8)];
+void WriteOutputTexture(uint2 coords, ValueType value) { OutputTexture[coords] = value; }
+DepthType LoadFullResDepth(uint2 coords) { return FullResolutionDepths.Load(uint3(coords, 0)); }
+DepthType LoadDownsampleDepth(uint2 coords) { return HierarchicalDepths.Load(uint3(coords, 1-1)); }
+ValueType LoadWorking(uint2 coords) { return Working[coords]; }
+void WriteAccumulation(uint2 coords, ValueType newValue) { AccumulationAO[coords] = newValue; }
+ValueType LoadAccumulationPrev(uint2 coords) { return AccumulationAOLast[coords]; }
+int2 LoadMotion(uint2 coords) { return GBufferMotion.Load(uint3(coords, 0)).rg; }
+FloatType LoadHistoryConfidence(uint2 coords) { return HistoryAcc.Load(uint3(coords, 0)); }
 
-	#if !defined(HAS_HIERARCHICAL_DEPTHS)
-		GroupDepths[groupThreadId.y][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy];
-		GroupDepths[groupThreadId.y][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,0)];
-		GroupDepths[groupThreadId.y+8][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy+int2(0,8)];
-		GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,8)];
-	#else
-		GroupDepths[groupThreadId.y][groupThreadId.x] = LoadHierarchicalDepth(dispatchThreadId.xy, 1);
-		GroupDepths[groupThreadId.y][groupThreadId.x+8] = LoadHierarchicalDepth(dispatchThreadId.xy+int2(8,0), 1);
-		GroupDepths[groupThreadId.y+8][groupThreadId.x] = LoadHierarchicalDepth(dispatchThreadId.xy+int2(0,8), 1);
-		GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = LoadHierarchicalDepth(dispatchThreadId.xy+int2(8,8), 1);
-	#endif
-	#if defined(DO_LATE_TEMPORAL_FILTERING)
-		if (all(groupThreadId==0)) {
-			AccumulationTemporary = 0;
-			AccumulationTemporary2 = 0;
-		}
-	#endif
-	GroupMemoryBarrierWithGroupSync();
-}
-
-void DoTemporalAccumulation(int2 groupThreadId, int2 srcPixel, float minV, float maxV)
-{
-	int2 vel = GBufferMotion.Load(uint3(srcPixel*2, 0)).rg;
-	float accumulationYesterday = AccumulationAOLast.Load(uint3(srcPixel.xy + vel / 2, 0));	// will sometimes read outside
-	const float Nvalue = FrameWrap*2;
-	float alpha = 2.0/(Nvalue+1.0);
-	alpha = 1-alpha;
-	alpha *= HistoryAcc.Load(uint3(srcPixel*2, 0));		// scale alpha by our confidence in the "yesterday" data
-	float accumulationToday = accumulationYesterday * alpha + GroupAO[groupThreadId.y][groupThreadId.x] * (1-alpha);
-	accumulationToday = clamp(accumulationToday, minV, maxV);
-	GroupAO[groupThreadId.y][groupThreadId.x] = accumulationToday;
-}
-
-void LateTemporalFiltering(int2 dispatchThreadId, int2 groupThreadId)
-{
-	GroupMemoryBarrierWithGroupSync();
-
-	uint A = (uint)(255.f*GroupAO[groupThreadId.y][groupThreadId.x]);
-	uint B = (uint)(255.f*GroupAO[groupThreadId.y][groupThreadId.x+8]);
-	uint C = (uint)(255.f*GroupAO[groupThreadId.y+8][groupThreadId.x]);
-	uint D = (uint)(255.f*GroupAO[groupThreadId.y+8][groupThreadId.x+8]);
-	uint T = A+B+C+D;
-	uint T2 = A*A+B*B+C*C+D*D;
-	// I think WaveActiveSum() won't necessarily work here, because we want values from every thread
-	// in the entire thread group (as opposed to just whatever lanes are running the current group)
-	InterlockedAdd(AccumulationTemporary, T);
-	InterlockedAdd(AccumulationTemporary2, T2);
-	GroupMemoryBarrierWithGroupSync();
-	float valueSum = float(AccumulationTemporary);
-	float valueSumSq = float(AccumulationTemporary2);
-
-	const float sampleCount = 16*16;
-	float valueStd = sqrt((valueSumSq - valueSum * valueSum / sampleCount) / (sampleCount - 1.0));
-    float valueMean = valueSum / sampleCount;
-	valueStd /= 255.f;
-	valueMean /= 255.f;
-	// The clamping range here can be pretty important to minimize ghosting and streaking. Effectively we're define a value range for the post-temporal filtered
-	// values based on the values in the local spatial neighbourhood. If the temporal filtered value doesn't look like it matches the kinds of
-	// values we see in the spatial neighbourhood, we'll consider it to be a filtering artifact. Since for the most part the temporal distribution of
-	// values should match the spatial distribution of values, this tends to do a really good job. However it can also introduce flickering and artifacts of
-	// it's own in areas of high frequency changes. 
-	const float clampingRange = 1.5;
-	const float minV = valueMean - clampingRange*valueStd, maxV = valueMean + clampingRange*valueStd;
-
-	DoTemporalAccumulation(groupThreadId, dispatchThreadId+int2(-4,-4), minV, maxV);
-	DoTemporalAccumulation(groupThreadId+int2(0,8), dispatchThreadId+int2(-4,4), minV, maxV);
-	DoTemporalAccumulation(groupThreadId+int2(8,0), dispatchThreadId+int2(4,-4), minV, maxV);
-	DoTemporalAccumulation(groupThreadId+int2(8,8), dispatchThreadId+int2(4,4), minV, maxV);
-
-	int2 pixelToWrite = groupThreadId + int2(groupThreadId.x<4?8:0, groupThreadId.y<4?8:0);
-	AccumulationAO[dispatchThreadId.xy-groupThreadId.xy+pixelToWrite.xy-int2(4,4)] = GroupAO[pixelToWrite.y][pixelToWrite.x];
-	GroupMemoryBarrierWithGroupSync();
-}
-
-float LoadGroupSharedAO(int2 base, int2 offset) { return GroupAO[base.y+offset.y+4][base.x+offset.x+4]; }
-float LoadGroupSharedDepth(int2 base, int2 offset) { return GroupDepths[base.y+offset.y+4][base.x+offset.x+4]; }
+FloatType GetNValue() { return FrameWrap*2; }
+FloatType GetVariationTolerance() { return 2.5f; }
 
 [numthreads(8, 8, 1)]
 	void UpsampleOp(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
-	uint2 textureDims;
-	InputTexture.GetDimensions(textureDims.x, textureDims.y);
-	uint2 threadGroupCounts = uint2((textureDims.x+(2*8)-1)/(2*8), (textureDims.y+(2*8)-1)/(2*8));
+	uint2 downsampleDims;
+	Working.GetDimensions(downsampleDims.x, downsampleDims.y);
 
 	// Not sure that the thread group tiling actually helps any more with better use of group shared
 	// memory. It doesn't seem particularly impactful with some basic profiling 
 	// See also FFX_DNSR_Reflections_RemapLane8x8() in GPUOpen repo for AMD's approach to this 
-	#if 1
-		uint2 outputPixel = groupId.xy*8+groupThreadId.xy;
-	#else
-		uint2 outputPixel = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 16, groupThreadId.xy, groupId.xy);
-		groupId.xy = outputPixel.xy/8;
-		groupThreadId.xy = outputPixel.xy-groupId.xy*8;
+	#if 0
+		uint2 threadGroupCounts = uint2((downsampleDims.x+8-1)/8, (downsampleDims.y+8-1)/8);
+		uint2 downsampledCoord = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 16, groupThreadId.xy, groupId.xy);
+		groupId.xy = downsampledCoord.xy/8;
+		groupThreadId.xy = downsampledCoord.xy-groupId.xy*8;
 	#endif
 
-	#if !defined(ENABLE_FILTERING)
-		OutputTexture[outputPixel.xy*2] = AccumulationAO[outputPixel.xy + int2(0,0)];
-		OutputTexture[outputPixel.xy*2 + uint2(1,0)] = AccumulationAO[outputPixel.xy + int2(0,0)];
-		OutputTexture[outputPixel.xy*2 + uint2(0,1)] = AccumulationAO[outputPixel.xy + int2(0,0)];
-		OutputTexture[outputPixel.xy*2 + uint2(1,1)] = AccumulationAO[outputPixel.xy + int2(0,0)];
-		return;
-	#endif
-
-	InitializeGroupSharedMem(outputPixel, groupThreadId.xy);
-	#if defined(DO_LATE_TEMPORAL_FILTERING)
-		LateTemporalFiltering(outputPixel, groupThreadId.xy);
-	#endif
-
-	// experimental filtering, inspired by demosaicing. We're assuming that there's
-	// an underlying pattern in the input data we're upsampling: there is a pattern that
-	// repeats in each block of 4x4 pixels. In this case, the AO sampling direction is
-	// a fixed dither pattern that repeats in 4x4 blocks.
-	int2 base = outputPixel.xy;
-
-	float outDepth0 = InputTexture[base.xy*2 + int2(0,0)];
-	float outDepth1 = InputTexture[base.xy*2 + int2(1,0)];
-	float outDepth2 = InputTexture[base.xy*2 + int2(0,1)];
-	float outDepth3 = InputTexture[base.xy*2 + int2(1,1)];
-
-	base = groupThreadId.xy;
-
-	float2 depth0divs = float2(outDepth1 - outDepth0, outDepth2 - outDepth0);
-	float2 depth1divs = float2(outDepth1 - outDepth0, outDepth3 - outDepth1);
-	float2 depth2divs = float2(outDepth3 - outDepth2, outDepth2 - outDepth0);
-	float2 depth3divs = float2(outDepth3 - outDepth2, outDepth3 - outDepth1);
-
-	float out0 = 0, out1 = 0, out2 = 0, out3 = 0;
-	float out0TotalWeight = 0, out1TotalWeight = 0, out2TotalWeight = 0, out3TotalWeight = 0;
-
-#if !defined(DITHER3x3)
-
-	const float2 offsetHighRes0 = float2(0,0);
-	const float2 offsetHighRes1 = float2(1,0);
-	const float2 offsetHighRes2 = float2(0,1);
-	const float2 offsetHighRes3 = float2(1,1);
-
-	#define ACC(X, N, W) AccumulateSample(X, X##Depth, out##N, out##N##TotalWeight, outDepth##N + dot(depth##N##divs, X##OffsetHighRes - offsetHighRes##N + float2(1, 1)), depth##N##divs, W)
-
-	const float weightCenter = 1, weightNearEdge = .75, weightFarEdge = .25;
-	const float weightNearCorner = weightNearEdge*weightNearEdge, weightMidCorner = weightNearEdge*weightFarEdge, weightFarCorner = weightFarEdge*weightFarEdge;
-
-	float topLeft10 = LoadGroupSharedAO(base.xy, int2(-2,-2));
-	float topLeft10Depth = LoadGroupSharedDepth(base.xy, int2(-2,-2));
-	float2 topLeft10OffsetHighRes = float2(-4, -4);
-	ACC(topLeft10, 0, weightNearCorner);
-	ACC(topLeft10, 1, weightMidCorner);
-	ACC(topLeft10, 2, weightMidCorner);
-	ACC(topLeft10, 3, weightFarCorner);
-
-	float top11 = LoadGroupSharedAO(base.xy, int2(-1,-2));
-	float top11Depth = LoadGroupSharedDepth(base.xy, int2(-1,-2));
-	float2 top11OffsetHighRes = float2(-2, -4);
-	ACC(top11, 0, weightNearEdge);
-	ACC(top11, 1, weightNearEdge);
-	ACC(top11, 2, weightFarEdge);
-	ACC(top11, 3, weightFarEdge);
-
-	float top8 = LoadGroupSharedAO(base.xy, int2(0,-2));
-	float top8Depth = LoadGroupSharedDepth(base.xy, int2(0,-2));
-	float2 top8OffsetHighRes = float2(0, -4);
-	ACC(top8, 0, weightNearEdge);
-	ACC(top8, 1, weightNearEdge);
-	ACC(top8, 2, weightFarEdge);
-	ACC(top8, 3, weightFarEdge);
-
-	float top9 = LoadGroupSharedAO(base.xy, int2(1,-2));
-	float top9Depth = LoadGroupSharedDepth(base.xy, int2(1,-2));
-	float2 top9OffsetHighRes = float2(2, -4);
-	ACC(top9, 0, weightNearEdge);
-	ACC(top9, 1, weightNearEdge);
-	ACC(top9, 2, weightFarEdge);
-	ACC(top9, 3, weightFarEdge);
-
-	float topRight10 = LoadGroupSharedAO(base.xy, int2(2,-2));
-	float topRight10Depth = LoadGroupSharedDepth(base.xy, int2(2,-2));
-	float2 topRight10OffsetHighRes = float2(4, -4);
-	ACC(topRight10, 0, weightMidCorner);
-	ACC(topRight10, 1, weightNearCorner);
-	ACC(topRight10, 2, weightFarCorner);
-	ACC(topRight10, 3, weightMidCorner);
-
-	////////////////////////////////////////////////////////
-
-	float left14 = LoadGroupSharedAO(base.xy, int2(-2,-1));
-	float left14Depth = LoadGroupSharedDepth(base.xy, int2(-2,-1));
-	float2 left14OffsetHighRes = float2(-4, -2);
-	ACC(left14, 0, weightNearEdge);
-	ACC(left14, 1, weightFarEdge);
-	ACC(left14, 2, weightNearEdge);
-	ACC(left14, 3, weightFarEdge);
-
-	float center15 = LoadGroupSharedAO(base.xy, int2(-1,-1));
-	float center15Depth = LoadGroupSharedDepth(base.xy, int2(-1,-1));
-	float2 center15OffsetHighRes = float2(-2, -2);
-	ACC(center15, 0, weightCenter);
-	ACC(center15, 1, weightCenter);
-	ACC(center15, 2, weightCenter);
-	ACC(center15, 3, weightCenter);
-
-	float center12 = LoadGroupSharedAO(base.xy, int2(0,-1));
-	float center12Depth = LoadGroupSharedDepth(base.xy, int2(0,-1));
-	float2 center12OffsetHighRes = float2(0, -2);
-	ACC(center12, 0, weightCenter);
-	ACC(center12, 1, weightCenter);
-	ACC(center12, 2, weightCenter);
-	ACC(center12, 3, weightCenter);
-
-	float center13 = LoadGroupSharedAO(base.xy, int2(1,-1));
-	float center13Depth = LoadGroupSharedDepth(base.xy, int2(1,-1));
-	float2 center13OffsetHighRes = float2(2, -2);
-	ACC(center13, 0, weightCenter);
-	ACC(center13, 1, weightCenter);
-	ACC(center13, 2, weightCenter);
-	ACC(center13, 3, weightCenter);
-
-	float right14 = LoadGroupSharedAO(base.xy, int2(2,-1));
-	float right14Depth = LoadGroupSharedDepth(base.xy, int2(2,-1));
-	float2 right14OffsetHighRes = float2(4, -2);
-	ACC(right14, 0, weightFarEdge);
-	ACC(right14, 1, weightNearEdge);
-	ACC(right14, 2, weightFarEdge);
-	ACC(right14, 3, weightNearEdge);
-
-	////////////////////////////////////////////////////////
-
-	float left2 = LoadGroupSharedAO(base.xy, int2(-2,0));
-	float left2Depth = LoadGroupSharedDepth(base.xy, int2(-2,0));
-	float2 left2OffsetHighRes = float2(-4, 0);
-	ACC(left2, 0, weightNearEdge);
-	ACC(left2, 1, weightFarEdge);
-	ACC(left2, 2, weightNearEdge);
-	ACC(left2, 3, weightFarEdge);
-
-	float center3 = LoadGroupSharedAO(base.xy, int2(-1,0));
-	float center3Depth = LoadGroupSharedDepth(base.xy, int2(-1,0));
-	float2 center3OffsetHighRes = float2(-2, 0);
-	ACC(center3, 0, weightCenter);
-	ACC(center3, 1, weightCenter);
-	ACC(center3, 2, weightCenter);
-	ACC(center3, 3, weightCenter);
-
-	float center0 = LoadGroupSharedAO(base.xy, int2(0,0));
-	float center0Depth = LoadGroupSharedDepth(base.xy, int2(0,0));
-	float2 center0OffsetHighRes = float2(0, 0);
-	out0 += center0; out0TotalWeight += weightCenter;
-	out1 += center0; out1TotalWeight += weightCenter;
-	out2 += center0; out2TotalWeight += weightCenter;
-	out3 += center0; out3TotalWeight += weightCenter;
-
-	float center1 = LoadGroupSharedAO(base.xy, int2(1,0));
-	float center1Depth = LoadGroupSharedDepth(base.xy, int2(1,0));
-	float2 center1OffsetHighRes = float2(2, 0);
-	ACC(center1, 0, weightCenter);
-	ACC(center1, 1, weightCenter);
-	ACC(center1, 2, weightCenter);
-	ACC(center1, 3, weightCenter);
-
-	float right2 = LoadGroupSharedAO(base.xy, int2(2,0));
-	float right2Depth = LoadGroupSharedDepth(base.xy, int2(2,0));
-	float2 right2OffsetHighRes = float2(4, 0);
-	ACC(right2, 0, weightFarEdge);
-	ACC(right2, 1, weightNearEdge);
-	ACC(right2, 2, weightFarEdge);
-	ACC(right2, 3, weightNearEdge);
-
-	////////////////////////////////////////////////////////
-
-	float left6 = LoadGroupSharedAO(base.xy, int2(-2,1));
-	float left6Depth = LoadGroupSharedDepth(base.xy, int2(-2,1));
-	float2 left6OffsetHighRes = float2(-4, 2);
-	ACC(left6, 0, weightNearEdge);
-	ACC(left6, 1, weightFarEdge);
-	ACC(left6, 2, weightNearEdge);
-	ACC(left6, 3, weightFarEdge);
-
-	float center7 = LoadGroupSharedAO(base.xy, int2(-1,1));
-	float center7Depth = LoadGroupSharedDepth(base.xy, int2(-1,1));
-	float2 center7OffsetHighRes = float2(-2, 2);
-	ACC(center7, 0, weightCenter);
-	ACC(center7, 1, weightCenter);
-	ACC(center7, 2, weightCenter);
-	ACC(center7, 3, weightCenter);
-
-	float center4 = LoadGroupSharedAO(base.xy, int2(0,1));
-	float center4Depth = LoadGroupSharedDepth(base.xy, int2(0,1));
-	float2 center4OffsetHighRes = float2(0, 2);
-	ACC(center4, 0, weightCenter);
-	ACC(center4, 1, weightCenter);
-	ACC(center4, 2, weightCenter);
-	ACC(center4, 3, weightCenter);
-
-	float center5 = LoadGroupSharedAO(base.xy, int2(1,1));
-	float center5Depth = LoadGroupSharedDepth(base.xy, int2(1,1));
-	float2 center5OffsetHighRes = float2(2, 2);
-	ACC(center5, 0, weightCenter);
-	ACC(center5, 1, weightCenter);
-	ACC(center5, 2, weightCenter);
-	ACC(center5, 3, weightCenter);
-
-	float right6 = LoadGroupSharedAO(base.xy, int2(2,1));
-	float right6Depth = LoadGroupSharedDepth(base.xy, int2(2,1));
-	float2 right6OffsetHighRes = float2(4, 2);
-	ACC(right6, 0, weightFarEdge);
-	ACC(right6, 1, weightNearEdge);
-	ACC(right6, 2, weightFarEdge);
-	ACC(right6, 3, weightNearEdge);
-
-	////////////////////////////////////////////////////////
-
-	float bottomLeft10 = LoadGroupSharedAO(base.xy, int2(-2,2));
-	float bottomLeft10Depth = LoadGroupSharedDepth(base.xy, int2(-2,2));
-	float2 bottomLeft10OffsetHighRes = float2(-4, 4);
-	ACC(bottomLeft10, 0, weightMidCorner);
-	ACC(bottomLeft10, 1, weightFarCorner);
-	ACC(bottomLeft10, 2, weightNearCorner);
-	ACC(bottomLeft10, 3, weightMidCorner);
-
-	float bottom11 = LoadGroupSharedAO(base.xy, int2(-1,2));
-	float bottom11Depth = LoadGroupSharedDepth(base.xy, int2(-1,2));
-	float2 bottom11OffsetHighRes = float2(-2, 4);
-	ACC(bottom11, 0, weightFarEdge);
-	ACC(bottom11, 1, weightFarEdge);
-	ACC(bottom11, 2, weightNearEdge);
-	ACC(bottom11, 3, weightNearEdge);
-
-	float bottom8 = LoadGroupSharedAO(base.xy, int2(0,2));
-	float bottom8Depth = LoadGroupSharedDepth(base.xy, int2(0,2));
-	float2 bottom8OffsetHighRes = float2(0, 4);
-	ACC(bottom8, 0, weightFarEdge);
-	ACC(bottom8, 1, weightFarEdge);
-	ACC(bottom8, 2, weightNearEdge);
-	ACC(bottom8, 3, weightNearEdge);
-
-	float bottom9 = LoadGroupSharedAO(base.xy, int2(1,2));
-	float bottom9Depth = LoadGroupSharedDepth(base.xy, int2(1,2));
-	float2 bottom9OffsetHighRes = float2(2, 4);
-	ACC(bottom9, 0, weightFarEdge);
-	ACC(bottom9, 1, weightFarEdge);
-	ACC(bottom9, 2, weightNearEdge);
-	ACC(bottom9, 3, weightNearEdge);
-
-	float bottomRight10 = LoadGroupSharedAO(base.xy, int2(2,2));
-	float bottomRight10Depth = LoadGroupSharedDepth(base.xy, int2(2,2));
-	float2 bottomRight10OffsetHighRes = float2(4, 4);
-	ACC(bottomRight10, 0, weightFarCorner);
-	ACC(bottomRight10, 1, weightMidCorner);
-	ACC(bottomRight10, 2, weightMidCorner);
-	ACC(bottomRight10, 3, weightNearCorner);
-
-#else
-
-	// const float weightVeryStrong = 1.2, weightStrong = 1, weightWeak = 0.8, weightVeryWeak = 0.5;
-	// const float weightVeryStrong = 1, weightStrong = 1, weightWeak = 0.75, weightVeryWeak = 0.75;
-	const float weightVeryStrong = 1, weightStrong = 1, weightWeak = 1, weightVeryWeak = 1;
-
-	float center0 = AccumulationAO[base.xy + int2(0,0)];
-	float center0Depth = DownsampleDepths[base.xy + int2(0,0)];
-	AccumulateSample(center0, center0Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightVeryStrong);
-	AccumulateSample(center0, center0Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightVeryStrong);
-	AccumulateSample(center0, center0Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightVeryStrong);
-	AccumulateSample(center0, center0Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightVeryStrong);
-
-	float center1 = AccumulationAO[base.xy + int2(1,0)];
-	float center1Depth = DownsampleDepths[base.xy + int2(1,0)];
-	AccumulateSample(center1, center1Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightWeak);
-	AccumulateSample(center1, center1Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightStrong);
-	AccumulateSample(center1, center1Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightWeak);
-	AccumulateSample(center1, center1Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightStrong);
-
-	float center2 = AccumulationAO[base.xy + int2(-1,0)];
-	float center2Depth = DownsampleDepths[base.xy + int2(-1,0)];
-	AccumulateSample(center2, center2Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightStrong);
-	AccumulateSample(center2, center2Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightWeak);
-	AccumulateSample(center2, center2Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightStrong);
-	AccumulateSample(center2, center2Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightWeak);
-
-	float center3 = AccumulationAO[base.xy + int2(0,1)];
-	float center3Depth = DownsampleDepths[base.xy + int2(0,1)];
-	AccumulateSample(center3, center3Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightWeak);
-	AccumulateSample(center3, center3Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightWeak);
-	AccumulateSample(center3, center3Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightStrong);
-	AccumulateSample(center3, center3Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightStrong);
-
-	float center4 = AccumulationAO[base.xy + int2(1,1)];
-	float center4Depth = DownsampleDepths[base.xy + int2(1,1)];
-	AccumulateSample(center4, center4Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightVeryWeak);
-	AccumulateSample(center4, center4Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightWeak);
-	AccumulateSample(center4, center4Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightWeak);
-	AccumulateSample(center4, center4Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightStrong);
-
-	float center5 = AccumulationAO[base.xy + int2(-1,1)];
-	float center5Depth = DownsampleDepths[base.xy + int2(-1,1)];
-	AccumulateSample(center5, center5Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightWeak);
-	AccumulateSample(center5, center5Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightVeryWeak);
-	AccumulateSample(center5, center5Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightStrong);
-	AccumulateSample(center5, center5Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightWeak);
-
-	float center6 = AccumulationAO[base.xy + int2(0,-1)];
-	float center6Depth = DownsampleDepths[base.xy + int2(0,-1)];
-	AccumulateSample(center6, center6Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightStrong);
-	AccumulateSample(center6, center6Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightStrong);
-	AccumulateSample(center6, center6Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightWeak);
-	AccumulateSample(center6, center6Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightWeak);
-
-	float center7 = AccumulationAO[base.xy + int2(1,-1)];
-	float center7Depth = DownsampleDepths[base.xy + int2(1,-1)];
-	AccumulateSample(center7, center7Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightWeak);
-	AccumulateSample(center7, center7Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightStrong);
-	AccumulateSample(center7, center7Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightVeryWeak);
-	AccumulateSample(center7, center7Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightWeak);
-
-	float center8 = AccumulationAO[base.xy + int2(-1,-1)];
-	float center8Depth = DownsampleDepths[base.xy + int2(-1,-1)];
-	AccumulateSample(center8, center8Depth, out0, out0TotalWeight, outDepth0, depth0divs, weightStrong);
-	AccumulateSample(center8, center8Depth, out1, out1TotalWeight, outDepth1, depth1divs, weightWeak);
-	AccumulateSample(center8, center8Depth, out2, out2TotalWeight, outDepth2, depth2divs, weightWeak);
-	AccumulateSample(center8, center8Depth, out3, out3TotalWeight, outDepth3, depth3divs, weightVeryWeak);
-
-#endif
-
-	OutputTexture[outputPixel.xy*2] = out0 / out0TotalWeight;
-	OutputTexture[outputPixel.xy*2 + uint2(1,0)] = out1 / out1TotalWeight;
-	OutputTexture[outputPixel.xy*2 + uint2(0,1)] = out2 / out2TotalWeight;
-	OutputTexture[outputPixel.xy*2 + uint2(1,1)] = out3 / out3TotalWeight;
+	MosiacDenoiseUpsample(groupThreadId.xy, groupId.xy, downsampleDims);
 }

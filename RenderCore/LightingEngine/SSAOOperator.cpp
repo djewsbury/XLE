@@ -31,6 +31,7 @@ namespace RenderCore { namespace LightingEngine
 	static const auto Hash_AOOutput = "ao-output"_h;
 	static const auto Hash_AOAccumulation = "ao-accumulation"_h;
 	static const auto Hash_AOAccumulationPrev = "ao-accumulation"_h+1;
+    static const auto Hash_AOWorking = "ao-working"_h;
 
 	static const auto s_aoFormat = Format::R8_UNORM;
 
@@ -42,6 +43,7 @@ namespace RenderCore { namespace LightingEngine
         IResourceView& inputNormalsSRV,
         IResourceView& inputVelocitiesSRV,
         IResourceView& inputHistoryAccuracy,
+        IResourceView& workingUAV,
         IResourceView& accumulationUAV,
         IResourceView& accumulationPrevUAV,
         IResourceView& aoOutputUAV,
@@ -76,7 +78,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
         UniformsStream us;
-        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, &accumulationUAV, &accumulationPrevUAV, &inputNormalsSRV, &inputVelocitiesSRV, &inputHistoryAccuracy, hierarchicalDepths, _ditherTable.get() };
+        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, &workingUAV, &accumulationUAV, &accumulationPrevUAV, &inputNormalsSRV, &inputVelocitiesSRV, &inputHistoryAccuracy, hierarchicalDepths, _ditherTable.get() };
         us._resourceViews = MakeIteratorRange(srvs);
         struct AOProps
         {
@@ -147,6 +149,7 @@ namespace RenderCore { namespace LightingEngine
     {
         RenderStepFragmentInterface result{PipelineType::Compute};
 
+        auto working = result.DefineAttachment(Hash_AOWorking).InitialState(LoadStore::DontCare, BindFlag::UnorderedAccess).Discard();
         auto accumulation = result.DefineAttachment(Hash_AOAccumulation).InitialState(LoadStore::DontCare, BindFlag::UnorderedAccess).FinalState(BindFlag::ShaderResource);
         auto accumulationPrev = result.DefineAttachment(Hash_AOAccumulationPrev).InitialState(BindFlag::ShaderResource).Discard();
         auto aoOutput = result.DefineAttachment(Hash_AOOutput).NoInitialState().FinalState(BindFlag::UnorderedAccess);
@@ -157,6 +160,7 @@ namespace RenderCore { namespace LightingEngine
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion));
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HistoryAcc));
 
+        spDesc.AppendNonFrameBufferAttachmentView(working, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulation, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulationPrev, BindFlag::ShaderResource);
         spDesc.AppendNonFrameBufferAttachmentView(aoOutput, BindFlag::UnorderedAccess);
@@ -176,7 +180,8 @@ namespace RenderCore { namespace LightingEngine
                     *iterator._rpi.GetNonFrameBufferAttachmentView(4),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(5),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(6),
-                    hd ? iterator._rpi.GetNonFrameBufferAttachmentView(7).get() : nullptr);
+                    *iterator._rpi.GetNonFrameBufferAttachmentView(7),
+                    hd ? iterator._rpi.GetNonFrameBufferAttachmentView(8).get() : nullptr);
             });
 
         return result;
@@ -191,7 +196,15 @@ namespace RenderCore { namespace LightingEngine
                 CreateDesc(
                     BindFlag::UnorderedAccess | BindFlag::ShaderResource,
                     TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat)),
-                "ao-accumulation-0"
+                "ao-accumulation"
+            },
+
+            Techniques::PreregisteredAttachment {
+                Hash_AOWorking,
+                CreateDesc(
+                    BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+                    TextureDesc::Plain2D(fbSize[0]/2, fbSize[1]/2, s_aoFormat)),
+                "ao-working"
             },
 
             Techniques::PreregisteredAttachment {
@@ -257,15 +270,16 @@ namespace RenderCore { namespace LightingEngine
             assert(opDesc._maxWorldSpaceDistance > 0);
 
             UniformsStreamInterface usi;
-            usi.BindResourceView(0, "InputTexture"_h);
+            usi.BindResourceView(0, "FullResolutionDepths"_h);
             usi.BindResourceView(1, "OutputTexture"_h);
-            usi.BindResourceView(2, "AccumulationAO"_h);
-            usi.BindResourceView(3, "AccumulationAOLast"_h);
-            usi.BindResourceView(4, "InputNormals"_h);
-            usi.BindResourceView(5, "GBufferMotion"_h);
-            usi.BindResourceView(6, "HistoryAcc"_h);
-            usi.BindResourceView(7, "HierarchicalDepths"_h);
-            usi.BindResourceView(8, "DitherTable"_h);
+            usi.BindResourceView(2, "Working"_h);
+            usi.BindResourceView(3, "AccumulationAO"_h);
+            usi.BindResourceView(4, "AccumulationAOLast"_h);
+            usi.BindResourceView(5, "InputNormals"_h);
+            usi.BindResourceView(6, "GBufferMotion"_h);
+            usi.BindResourceView(7, "HistoryAcc"_h);
+            usi.BindResourceView(8, "HierarchicalDepths"_h);
+            usi.BindResourceView(9, "DitherTable"_h);
             usi.BindImmediateData(0, "AOProps"_h);
 
             ParameterBox selectors;
