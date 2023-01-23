@@ -8,6 +8,7 @@ cbuffer Params
 {
 	row_major float3x4 PreToneScale;
 	row_major float3x4 PostToneScale;
+	float ExposureControl;
 }
 
 cbuffer LookupTable
@@ -147,9 +148,10 @@ float3 InvertMinimalToneMap(float3 y) 	{ return y/(1-y); }
 			hdrInput = HDRInput[pixelId];
 		#endif
 
+		hdrInput *= ExposureControl;
+
 		float3 linearColour = ToneMapAces(hdrInput);
 		#if HAS_BRIGHT_PASS
-			// linearColour = 0;
 			linearColour += BrightPassSample(pixelId.xy / float2(textureDims.xy), brightPassTexelSize);
 		#endif
 		LDROutput[pixelId] = float4(LinearToSRGB_Formal(saturate(linearColour)), 1);

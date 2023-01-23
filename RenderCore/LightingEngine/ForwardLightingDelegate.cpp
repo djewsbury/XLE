@@ -636,6 +636,8 @@ namespace RenderCore { namespace LightingEngine
 							switch (typeCode) {
 							case TypeHashCode<IBloom>:
 								return (IBloom*)captures->_acesOperator.get();
+							case TypeHashCode<IExposure>:
+								return (IExposure*)captures->_acesOperator.get();
 							case TypeHashCode<ISkyTextureProcessor>:
 								return (ISkyTextureProcessor*)captures->_skyTextureProcessor.get();
 							// case TypeHashCode<ISSAmbientOcclusion>:

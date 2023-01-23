@@ -144,6 +144,7 @@ namespace SceneEngine
         };
         std::vector<PendingLightSource> _lightSourcesInCfgFile;
         ParameterBox _bloomPropertiesInCfgFile;
+        ParameterBox _exposurePropertiesInCfgFile;
 
         std::vector<unsigned> _lightSourcesInBoundScene;
 
@@ -224,6 +225,11 @@ namespace SceneEngine
             if (auto* bloom = query_interface_cast<RenderCore::LightingEngine::IBloom*>(&lightScene))
                 for (auto p:_bloomPropertiesInCfgFile)
                     SetProperty(*bloom, p.HashName(), p.RawValue(), p.Type());
+
+        if (_exposurePropertiesInCfgFile.GetCount() != 0)
+            if (auto* exposure = query_interface_cast<RenderCore::LightingEngine::IExposure*>(&lightScene))
+                for (auto p:_exposurePropertiesInCfgFile)
+                    SetProperty(*exposure, p.HashName(), p.RawValue(), p.Type());
 
         _swirlingLights.BindScene(lightScene);
     }
@@ -392,6 +398,17 @@ namespace SceneEngine
                     ImpliedTyping::TypeDesc typeDesc;
                     auto data = RequireRawValue(formatter, typeDesc);
                     _bloomPropertiesInCfgFile.SetParameter(keyname, data, typeDesc);
+                }
+                RequireEndElement(formatter);
+
+            } else if (XlEqString(keyname, "Exposure")) {
+
+                RequireBeginElement(formatter);
+                StringSection<> keyname;
+                while (formatter.TryKeyedItem(keyname)) {
+                    ImpliedTyping::TypeDesc typeDesc;
+                    auto data = RequireRawValue(formatter, typeDesc);
+                    _exposurePropertiesInCfgFile.SetParameter(keyname, data, typeDesc);
                 }
                 RequireEndElement(formatter);
 
@@ -767,6 +784,21 @@ namespace SceneEngine
         case "PreciseBrightness"_h:
             if (auto value = ConvertOrCast<Float3>(data, type)) {
                 bloom.SetPreciseBrightness(*value);
+                return true;
+            }
+            break;
+        }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::IExposure& exposure,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "Exposure"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                exposure.SetExposure(*value);
                 return true;
             }
             break;

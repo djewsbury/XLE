@@ -73,7 +73,16 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~IBloom();
 	};
 
-	class ToneMapAcesOperator : public std::enable_shared_from_this<ToneMapAcesOperator>, public IBloom
+	class IExposure
+	{
+	public:
+		virtual void SetExposure(float exposureControl) = 0;
+		virtual float GetExposure() const = 0;
+
+		virtual ~IExposure();
+	};
+
+	class ToneMapAcesOperator : public IBloom, public IExposure, public std::enable_shared_from_this<ToneMapAcesOperator>
 	{
 	public:
 		void Execute(
@@ -121,6 +130,7 @@ namespace RenderCore { namespace LightingEngine
 
 		float _brightPassLargeRadius = 1.f;
 		float _brightPassSmallRadius = 1.f;
+		float _bloomThreshold = 2.f;
 
 		mutable bool _lookupTableInitialized = false;
 
@@ -137,6 +147,10 @@ namespace RenderCore { namespace LightingEngine
 		Float3 GetBroadBrightness() const override;
 		void SetPreciseBrightness(Float3) override;
 		Float3 GetPreciseBrightness() const override;
+
+		// IExposure
+		void SetExposure(float exposureControl) override;
+		float GetExposure() const override;
 	};
 
 	class CopyToneMapOperator : public std::enable_shared_from_this<CopyToneMapOperator>

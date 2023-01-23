@@ -30,6 +30,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		Float3x4 _preToneScale;
 		Float3x4 _postToneScale;
+		float _exposureControl;
+		uint32_t _dummy[3];
 	};
 
 	struct CB_BrightPassParams
@@ -400,8 +402,10 @@ namespace RenderCore { namespace LightingEngine
 		auto& params = *(AllParams*)_paramsData.data();
 		params._tonemapParams._preToneScale = Truncate(BuildPreToneScaleTransform());
 		params._tonemapParams._postToneScale = Truncate(BuildPostToneScaleTransform_SRGB());
+		params._tonemapParams._exposureControl = 1;
+		for (auto& c:params._tonemapParams._dummy) c = 0;
 		params._brightPassParams._bloomDesaturationFactor = .5f;
-		params._brightPassParams._bloomThreshold = 2.0f;
+		params._brightPassParams._bloomThreshold = _bloomThreshold = 2.0f;
 		params._brightPassParams.CalculateSmallBlurWeights(_brightPassSmallRadius);
 		params._brightPassParams._largeRadiusBrightness = Float4(1,1,1,1);
 		params._brightPassParams._smallRadiusBrightness = Float4(1,1,1,1);
@@ -589,14 +593,14 @@ namespace RenderCore { namespace LightingEngine
 		if (_desc._broadBloomMaxRadius <= 0.f && !_desc._enablePreciseBloom)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
 		auto& params = *(AllParams*)_paramsData.data();
-		params._brightPassParams._bloomThreshold = bloomThreshold;
+		_bloomThreshold = bloomThreshold;
+		params._brightPassParams._bloomThreshold = bloomThreshold / params._tonemapParams._exposureControl;
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
 	float ToneMapAcesOperator::GetThreshold() const
 	{
-		auto& params = *(AllParams*)_paramsData.data();
-		return params._brightPassParams._bloomThreshold;
+		return _bloomThreshold;
 	}
 
 	void ToneMapAcesOperator::SetDesaturationFactor(float desatFactor)
@@ -642,6 +646,20 @@ namespace RenderCore { namespace LightingEngine
 	{
 		auto& params = *(AllParams*)_paramsData.data();
 		return Truncate(params._brightPassParams._smallRadiusBrightness);
+	}
+
+	void ToneMapAcesOperator::SetExposure(float exposureControl)
+	{
+		auto& params = *(AllParams*)_paramsData.data();
+		params._tonemapParams._exposureControl = exposureControl;
+		params._brightPassParams._bloomThreshold = _bloomThreshold / exposureControl;
+		_paramsBufferCopyCountdown = dimof(_params);
+	}
+
+	float ToneMapAcesOperator::GetExposure() const
+	{
+		auto& params = *(AllParams*)_paramsData.data();
+		return params._tonemapParams._exposureControl;
 	}
 
 	uint64_t ToneMapAcesOperatorDesc::GetHash(uint64_t seed) const
@@ -944,6 +962,7 @@ namespace RenderCore { namespace LightingEngine
 
 
 	IBloom::~IBloom() {}
+	IExposure::~IExposure() {}
 
 }}
 
