@@ -28,6 +28,10 @@ THE SOFTWARE.
 #pragma selector_filtering(push_disable)
 #define A_GPU
 #define A_HLSL
+#define SPD_PACKED_ONLY
+#if defined(SPD_PACKED_ONLY)
+	#define A_HALF
+#endif
 #include "xleres/Foreign/ffx-spd/ffx_a.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -38,31 +42,65 @@ Texture2D<float> InputDepths            : register(t0, space0);
 RWTexture2D<float> DownsampleDepths[13] : register(u1, space0);
 RWBuffer<uint> AtomicBuffer             : register(u2, space0);
 
-groupshared float GroupDepthValues[16][16];
-groupshared uint GroupAtomicCounter;
+#if !defined(SPD_PACKED_ONLY)
 
-// input/output interface for the ffx_spd library
-AF4 SpdLoadSourceImage(ASU2 index)                  { return InputDepths[index].xxxx; }
-#if DUPLICATE_TOP_LEVEL
-	AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
-	void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index + 1][pixel] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
+	// 32 bit floats version
+
+	groupshared float GroupDepthValues[16][16];
+
+	// input/output interface for the ffx_spd library
+	AF4 SpdLoadSourceImage(ASU2 index)                  { return InputDepths[index].xxxx; }
+	#if DUPLICATE_TOP_LEVEL
+		AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
+		void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index + 1][pixel] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
+	#else
+		AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[5][index].xxxx; }
+		void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index][pixel] = outValue.x; }
+	#endif
+	void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value)  { GroupDepthValues[x][y] = value.x; }
+
+	// For AMD screenspace reflections, the reduction operator must return the closest depth
+	// so for ReverseZ depth mode, we must use a max operator
+	AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3)      { return max(max(v0.x, v1.x), max(v2.x,v3.x)).xxxx; }
+
+	AF4 SpdLoadIntermediate(AU1 x, AU1 y) 
+	{
+		float f = GroupDepthValues[x][y];
+		return f.xxxx; 
+	}
+
 #else
-	AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[5][index].xxxx; }
-	void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index][pixel] = outValue.x; }
+
+	// 16 bit floats version
+
+	groupshared AH1 GroupDepthValues[16][16];
+
+	// input/output interface for the ffx_spd library
+	AH4 SpdLoadSourceImageH(ASU2 index)                  { return InputDepths[index].xxxx; }
+	#if DUPLICATE_TOP_LEVEL
+		AH4 SpdLoadH(ASU2 index)                             { return DownsampleDepths[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
+		void SpdStoreH(ASU2 pixel, AH4 outValue, AU1 index)  { DownsampleDepths[index + 1][pixel] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
+	#else
+		AH4 SpdLoadH(ASU2 index)                             { return DownsampleDepths[5][index].xxxx; }
+		void SpdStoreH(ASU2 pixel, AH4 outValue, AU1 index)  { DownsampleDepths[index][pixel] = outValue.x; }
+	#endif
+	void SpdStoreIntermediateH(AU1 x, AU1 y, AH4 value)  { GroupDepthValues[x][y] = value.x; }
+
+	// For AMD screenspace reflections, the reduction operator must return the closest depth
+	// so for ReverseZ depth mode, we must use a max operator
+	AH4 SpdReduce4H(AH4 v0, AH4 v1, AH4 v2, AH4 v3)      { return max(max(v0.x, v1.x), max(v2.x,v3.x)).xxxx; }
+
+	AH4 SpdLoadIntermediateH(AU1 x, AU1 y) 
+	{
+		AH1 f = GroupDepthValues[x][y];
+		return f.xxxx; 
+	}
+
 #endif
+
+groupshared uint GroupAtomicCounter;
 void SpdIncreaseAtomicCounter()                     { InterlockedAdd(AtomicBuffer[0], 1, GroupAtomicCounter); }
 AU1 SpdGetAtomicCounter()                           { return GroupAtomicCounter; }
-void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value)  { GroupDepthValues[x][y] = value.x; }
-
-// For AMD screenspace reflections, the reduction operator must return the closest depth
-// so for ReverseZ depth mode, we must use a max operator
-AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3)      { return max(max(v0, v1), max(v2,v3)); }
-
-AF4 SpdLoadIntermediate(AU1 x, AU1 y) 
-{
-	float f = GroupDepthValues[x][y];
-	return f.xxxx; 
-}
 
 #include "xleres/Foreign/ffx-spd/ffx_spd.h"
 
@@ -89,11 +127,19 @@ AF4 SpdLoadIntermediate(AU1 x, AU1 y)
 			}
 	#endif
 
-	SpdDownsample(
-		AU2(groupId.xy),
-		AU1(groupIndex),
-		AU1(ControlUniforms.MipsCount),
-		AU1(ControlUniforms.ThreadgroupCount));
+	#if !defined(SPD_PACKED_ONLY)
+		SpdDownsample(
+			AU2(groupId.xy),
+			AU1(groupIndex),
+			AU1(ControlUniforms.MipsCount),
+			AU1(ControlUniforms.ThreadgroupCount));
+	#else
+		SpdDownsampleH(
+			AU2(groupId.xy),
+			AU1(groupIndex),
+			AU1(ControlUniforms.MipsCount),
+			AU1(ControlUniforms.ThreadgroupCount));
+	#endif
 }
 
 #pragma selector_filtering(pop)

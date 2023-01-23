@@ -20,6 +20,8 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine
 {
+	static const Format s_hierarchicalDepthFormat = Format::R16_FLOAT;
+
 	void HierarchicalDepthsOperator::Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator)
 	{
 		assert(_secondStageConstructionState == 2);
@@ -85,7 +87,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned depthsMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height));	// excluding the top full resolution texture
 		for (unsigned c=0; c<depthsMipCount; ++c) {
 			TextureViewDesc view;
-			view._format._explicitFormat = Format::R32_FLOAT;
+			view._format._explicitFormat = s_hierarchicalDepthFormat;
 			view._mipRange._min = c;
 			view._mipRange._count = 1;
 			spDesc.AppendNonFrameBufferAttachmentView(hierarchicalDepthsAttachment, BindFlag::UnorderedAccess, view);
@@ -110,7 +112,7 @@ namespace RenderCore { namespace LightingEngine
 				Techniques::AttachmentSemantics::HierarchicalDepths,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::R32_FLOAT, depthsMipCount)),
+					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, s_hierarchicalDepthFormat, depthsMipCount)),
 				"hierarchical-depths"
 			}
 		};
