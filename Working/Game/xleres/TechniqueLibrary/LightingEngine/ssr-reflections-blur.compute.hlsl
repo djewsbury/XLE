@@ -28,7 +28,6 @@ RWTexture2D<float3> g_denoised_reflections;
 Texture2D<float3> g_temporally_denoised_reflections_read;
 StructuredBuffer<uint> g_tile_meta_data_mask_read;
 
-Texture2D<float> DownsampleDepths;
 Texture2D GBufferNormal;
 
 static const float g_roughness_sigma_min = 0.001f;

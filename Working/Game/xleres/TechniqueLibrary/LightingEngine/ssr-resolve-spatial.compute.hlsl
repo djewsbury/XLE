@@ -33,7 +33,7 @@ THE SOFTWARE.
     #define min16RadianceValue min16float3
 #endif
 
-Texture2D<float> DownsampleDepths;
+Texture2D<float> FullResolutionDepths;
 Texture2D GBufferNormal;
 
 Texture2D<float3> g_intersection_result_read;
@@ -123,7 +123,7 @@ min16float3 FFX_DNSR_Reflections_LoadNormalFP16(int2 pixel_coordinate)
 
 float FFX_DNSR_Reflections_LoadDepth(int2 pixel_coordinate)
 {
-    return DownsampleDepths.Load(int3(pixel_coordinate, 0));
+    return FullResolutionDepths.Load(int3(pixel_coordinate, 0));
 }
 
 void FFX_DNSR_Reflections_StoreSpatiallyDenoisedReflections(int2 pixel_coordinate, min16RadianceValue value)
@@ -148,7 +148,7 @@ bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) { return false; }
     void ResolveSpatial(uint group_index : SV_GroupIndex, uint2 group_id : SV_GroupID)
 {
     uint2 screen_dimensions;
-    DownsampleDepths.GetDimensions(screen_dimensions.x, screen_dimensions.y);
+    FullResolutionDepths.GetDimensions(screen_dimensions.x, screen_dimensions.y);
 
     uint2 group_thread_id = FFX_DNSR_Reflections_RemapLane8x8(group_index);
     uint2 dispatch_thread_id = group_id * 8 + group_thread_id;

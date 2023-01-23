@@ -27,7 +27,7 @@ THE SOFTWARE.
 #include "ssr-common.hlsl"
 #include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 
-Texture2D<float> DownsampleDepths;
+Texture2D<float> FullResolutionDepths;
 Texture2D GBufferNormal;
 Texture2D GBufferNormalPrev;
 Texture2D<int2> GBufferMotion;
@@ -85,7 +85,7 @@ float3 FFX_DNSR_Reflections_LoadRadianceHistory(int2 pixel_coordinate)
 
 float FFX_DNSR_Reflections_LoadDepth(int2 pixel_coordinate)
 {
-    return DownsampleDepths.Load(int3(pixel_coordinate, 0));
+    return FullResolutionDepths.Load(int3(pixel_coordinate, 0));
 }
 
 float3 FFX_DNSR_Reflections_LoadSpatiallyDenoisedReflections(int2 pixel_coordinate)

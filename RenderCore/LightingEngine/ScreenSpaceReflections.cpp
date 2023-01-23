@@ -120,25 +120,26 @@ namespace RenderCore { namespace LightingEngine
 	constexpr unsigned s_nfb_outputSRV = 1;
 
 	constexpr unsigned s_nfb_hierarchicalDepthsSRV = 2;
-	constexpr unsigned s_nfb_gbufferMotionSRV = 3;
-	constexpr unsigned s_nfb_gbufferNormalSRV = 4;
-	constexpr unsigned s_nfb_gbufferNormalPrevSRV = 5;
-	constexpr unsigned s_nfb_colorHDRSRV = 6;
+	constexpr unsigned s_nfb_fullResolutionDepthSRV = 3;
+	constexpr unsigned s_nfb_gbufferMotionSRV = 4;
+	constexpr unsigned s_nfb_gbufferNormalSRV = 5;
+	constexpr unsigned s_nfb_gbufferNormalPrevSRV = 6;
+	constexpr unsigned s_nfb_colorHDRSRV = 7;
 
-	constexpr unsigned s_nfb_intUAV = 7;
-	constexpr unsigned s_nfb_intSRV = 8;
+	constexpr unsigned s_nfb_intUAV = 8;
+	constexpr unsigned s_nfb_intSRV = 9;
 
 	// depending on whether the find blur is enabled, you'll get one of the following
-	constexpr unsigned s_nfb_intPrevSRV = 9;
-	constexpr unsigned s_nfb_SSRPrevSRV = 9;
+	constexpr unsigned s_nfb_intPrevSRV = 10;
+	constexpr unsigned s_nfb_SSRPrevSRV = 10;
 
-	constexpr unsigned s_nfb_debugUAV = 10;
+	constexpr unsigned s_nfb_debugUAV = 11;
 
-	constexpr unsigned s_nfb_confidenceUAV = 11;
-	constexpr unsigned s_nfb_confidenceSRV = 12;
-	constexpr unsigned s_nfb_confidencePrevSRV = 13;
-	constexpr unsigned s_nfb_confidenceIntUAV = 14;
-	constexpr unsigned s_nfb_confidenceIntSRV = 15;
+	constexpr unsigned s_nfb_confidenceUAV = 12;
+	constexpr unsigned s_nfb_confidenceSRV = 13;
+	constexpr unsigned s_nfb_confidencePrevSRV = 14;
+	constexpr unsigned s_nfb_confidenceIntUAV = 15;
+	constexpr unsigned s_nfb_confidenceIntSRV = 16;
 
 	void ScreenSpaceReflectionsOperator::Execute(LightingEngine::LightingTechniqueIterator& iterator)
 	{
@@ -159,7 +160,11 @@ namespace RenderCore { namespace LightingEngine
 			_paramsBufferCopyCountdown--;
 		}
 
-		IResourceView* rvs[35];
+		iterator._rpi.AutoNonFrameBufferBarrier({
+			{s_nfb_fullResolutionDepthSRV, BindFlag::ShaderResource, ShaderStage::Compute}		// MultisampleDepth to ShaderResource
+		});
+
+		IResourceView* rvs[36];
 		rvs[0] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_outputUAV).get();			// g_denoised_reflections
 		rvs[3] = _res->_rayListBufferUAV.get();													// g_ray_list
 		rvs[4] = _res->_rayListBufferSRV.get();													// g_ray_list_read
@@ -190,29 +195,30 @@ namespace RenderCore { namespace LightingEngine
 		rvs[17] = _indirectArgsBufferUAV.get();													// g_intersect_args
 
 		rvs[18] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_hierarchicalDepthsSRV).get();		// HierarchicalDepths
-		rvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferMotionSRV).get();			// GBufferMotion
-		rvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferNormalSRV).get();			// GBufferNormal
-		rvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferNormalPrevSRV).get();		// GBufferNormalPrev
-		rvs[22] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_colorHDRSRV).get();				// LastFrameLit
+		rvs[19] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_fullResolutionDepthSRV).get();	// FullResolutionDepths
+		rvs[20] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferMotionSRV).get();			// GBufferMotion
+		rvs[21] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferNormalSRV).get();			// GBufferNormal
+		rvs[22] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_gbufferNormalPrevSRV).get();		// GBufferNormalPrev
+		rvs[23] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_colorHDRSRV).get();				// LastFrameLit
 
-		rvs[23] = _blueNoiseRes->_sobolBufferView.get();
-		rvs[24] = _blueNoiseRes->_rankingTileBufferView.get();
-		rvs[25] = _blueNoiseRes->_scramblingTileBufferView.get();
+		rvs[24] = _blueNoiseRes->_sobolBufferView.get();
+		rvs[25] = _blueNoiseRes->_rankingTileBufferView.get();
+		rvs[26] = _blueNoiseRes->_scramblingTileBufferView.get();
 
-		rvs[26] = _skyCubeSRV ? _skyCubeSRV.get() : Techniques::Services::GetCommonResources()->_blackCubeSRV.get();
+		rvs[27] = _skyCubeSRV ? _skyCubeSRV.get() : Techniques::Services::GetCommonResources()->_blackCubeSRV.get();
 
-		rvs[27] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_debugUAV).get();			// SSRDebug
+		rvs[28] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_debugUAV).get();			// SSRDebug
 
-		rvs[28] = _paramsBuffer[_paramsBufferCounter].get();
+		rvs[29] = _paramsBuffer[_paramsBufferCounter].get();
 
 		if (_desc._splitConfidence) {
-			rvs[29] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_confidence_result
-			rvs[30] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceSRV).get();		// g_confidence_result_read
-			rvs[31] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntUAV).get();	// g_spatially_denoised_confidence
+			rvs[30] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_confidence_result
+			rvs[31] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceSRV).get();		// g_confidence_result_read
+			rvs[32] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntUAV).get();	// g_spatially_denoised_confidence
 
-			rvs[32] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidencePrevSRV).get();	// g_temporally_denoised_confidence_history
-			rvs[33] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_temporally_denoised_confidence
-			rvs[34] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntSRV).get();	// g_spatially_denoised_confidence_read
+			rvs[33] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidencePrevSRV).get();	// g_temporally_denoised_confidence_history
+			rvs[34] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceUAV).get();		// g_temporally_denoised_confidence
+			rvs[35] = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_confidenceIntSRV).get();	// g_spatially_denoised_confidence_read
 		}
 
 		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._width, iterator._rpi.GetFrameBufferDesc().GetProperties()._height };
@@ -325,6 +331,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(outputReflections, BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).FinalState(BindFlag::ShaderResource), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal), BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormalPrev), BindFlag::ShaderResource);
@@ -551,30 +558,31 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(15, "g_spatially_denoised_reflections"_h);
 		usi.BindResourceView(16, "g_spatially_denoised_reflections_read"_h);
 
-		usi.BindResourceView(17, "g_intersect_args"_h);			
+		usi.BindResourceView(17, "g_intersect_args"_h);
 
 		usi.BindResourceView(18, "DownsampleDepths"_h);
-		usi.BindResourceView(19, "GBufferMotion"_h);
-		usi.BindResourceView(20, "GBufferNormal"_h);
-		usi.BindResourceView(21, "GBufferNormalPrev"_h);
-		usi.BindResourceView(22, "LastFrameLit"_h);
+		usi.BindResourceView(19, "FullResolutionDepths"_h);
+		usi.BindResourceView(20, "GBufferMotion"_h);
+		usi.BindResourceView(21, "GBufferNormal"_h);
+		usi.BindResourceView(22, "GBufferNormalPrev"_h);
+		usi.BindResourceView(23, "LastFrameLit"_h);
 
-		usi.BindResourceView(23, "BN_Sobol"_h);
-		usi.BindResourceView(24, "BN_Ranking"_h);
-		usi.BindResourceView(25, "BN_Scrambling"_h);
+		usi.BindResourceView(24, "BN_Sobol"_h);
+		usi.BindResourceView(25, "BN_Ranking"_h);
+		usi.BindResourceView(26, "BN_Scrambling"_h);
 
-		usi.BindResourceView(26, "SkyCube"_h);
+		usi.BindResourceView(27, "SkyCube"_h);
 
-		usi.BindResourceView(27, "SSRDebug"_h);
-		usi.BindResourceView(28, "SSRConfiguration"_h);
+		usi.BindResourceView(28, "SSRDebug"_h);
+		usi.BindResourceView(29, "SSRConfiguration"_h);
 
 		if (_desc._splitConfidence) {
-			usi.BindResourceView(29, "g_confidence_result"_h);
-			usi.BindResourceView(30, "g_confidence_result_read"_h);
-			usi.BindResourceView(31, "g_spatially_denoised_confidence"_h);
-			usi.BindResourceView(32, "g_temporally_denoised_confidence_history"_h);
-			usi.BindResourceView(33, "g_temporally_denoised_confidence"_h);
-			usi.BindResourceView(34, "g_spatially_denoised_confidence_read"_h);
+			usi.BindResourceView(30, "g_confidence_result"_h);
+			usi.BindResourceView(31, "g_confidence_result_read"_h);
+			usi.BindResourceView(32, "g_spatially_denoised_confidence"_h);
+			usi.BindResourceView(33, "g_temporally_denoised_confidence_history"_h);
+			usi.BindResourceView(34, "g_temporally_denoised_confidence"_h);
+			usi.BindResourceView(35, "g_spatially_denoised_confidence_read"_h);
 		}
 
 		usi.BindImmediateData(0, "ExtendedTransforms"_h);

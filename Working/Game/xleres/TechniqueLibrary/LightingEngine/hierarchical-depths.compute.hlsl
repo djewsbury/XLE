@@ -32,6 +32,8 @@ THE SOFTWARE.
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
+// #define DUPLICATE_TOP_LEVEL 1
+
 Texture2D<float> InputDepths            : register(t0, space0);
 RWTexture2D<float> DownsampleDepths[13] : register(u1, space0);
 RWBuffer<uint> AtomicBuffer             : register(u2, space0);
@@ -41,8 +43,13 @@ groupshared uint GroupAtomicCounter;
 
 // input/output interface for the ffx_spd library
 AF4 SpdLoadSourceImage(ASU2 index)                  { return InputDepths[index].xxxx; }
-AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
-void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index + 1][pixel] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
+#if DUPLICATE_TOP_LEVEL
+	AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
+	void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index + 1][pixel] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
+#else
+	AF4 SpdLoad(ASU2 index)                             { return DownsampleDepths[5][index].xxxx; }
+	void SpdStore(ASU2 pixel, AF4 outValue, AU1 index)  { DownsampleDepths[index][pixel] = outValue.x; }
+#endif
 void SpdIncreaseAtomicCounter()                     { InterlockedAdd(AtomicBuffer[0], 1, GroupAtomicCounter); }
 AU1 SpdGetAtomicCounter()                           { return GroupAtomicCounter; }
 void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value)  { GroupDepthValues[x][y] = value.x; }
@@ -61,42 +68,32 @@ AF4 SpdLoadIntermediate(AU1 x, AU1 y)
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-uint GetThreadgroupCount(uint2 imageSize)
+[[vk::push_constant]] struct ControlUniformsStruct
 {
-	return ((imageSize.x + 63) / 64) * ((imageSize.y + 63) / 64);
-}
-
-float GetMipsCount(float2 imageSize)
-{
-	float max_dim = max(imageSize.x, imageSize.y);
-	return 1.0 + floor(log2(max_dim));
-}
+	uint ThreadgroupCount;
+	uint MipsCount; 
+} ControlUniforms;
 
 [numthreads(32, 8, 1)]
 	void GenerateDownsampleDepths(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 {
-	float2 depth_image_size = 0;
-	InputDepths.GetDimensions(depth_image_size.x, depth_image_size.y);
-
-	// Copy most detailed level into the hierarchy and transform it.
-	uint2 u_depth_image_size = uint2(depth_image_size);
-	for (int i = 0; i < 2; ++i)
-		for (int j = 0; j < 8; ++j) {
-			uint2 idx = uint2(2 * dispatchThreadId.x + i, 8 * dispatchThreadId.y + j);
-			if (idx.x < u_depth_image_size.x && idx.y < u_depth_image_size.y)
-				DownsampleDepths[0][idx] = InputDepths[idx];
-		}
-
-	float2 image_size = 0;
-	DownsampleDepths[0].GetDimensions(image_size.x, image_size.y);
-	float mipsCount = GetMipsCount(image_size);
-	uint threadgroupCount = GetThreadgroupCount(image_size);
+	#if DUPLICATE_TOP_LEVEL
+		// Copy most detailed level into the hierarchy and transform it.
+		uint2 u_depth_image_size = 0;
+		InputDepths.GetDimensions(depth_image_size.x, depth_image_size.y);
+		for (int i = 0; i < 2; ++i)
+			for (int j = 0; j < 8; ++j) {
+				uint2 idx = uint2(2 * dispatchThreadId.x + i, 8 * dispatchThreadId.y + j);
+				if (idx.x < u_depth_image_size.x && idx.y < u_depth_image_size.y)
+					DownsampleDepths[0][idx] = InputDepths[idx];
+			}
+	#endif
 
 	SpdDownsample(
 		AU2(groupId.xy),
 		AU1(groupIndex),
-		AU1(mipsCount),
-		AU1(threadgroupCount));
+		AU1(ControlUniforms.MipsCount),
+		AU1(ControlUniforms.ThreadgroupCount));
 }
 
 #pragma selector_filtering(pop)

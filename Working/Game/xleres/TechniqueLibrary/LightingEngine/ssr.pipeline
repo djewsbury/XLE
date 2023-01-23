@@ -54,4 +54,10 @@ DescriptorSet DownsampleDepthsDS
 PipelineLayout DownsampleDepths
 {
 	ComputeDescriptorSet DownsampleDepthsDS;
+
+	CSPushConstants ControlUniforms
+	{
+		uint ThreadgroupCount;
+		uint MipsCount; 
+	};
 };

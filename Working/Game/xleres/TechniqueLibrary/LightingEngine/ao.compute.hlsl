@@ -41,12 +41,18 @@ static const uint FrameWrap = 6;
 // static const uint DitherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 18, 6, 54, 30, 78, 7, 91, 61, 25, 55, 43, 13, 73, 31, 67, 85, 1, 79, 19, 37, 49, 80, 20, 38, 50, 32, 68, 86, 2, 56, 44, 14, 74, 8, 92, 62, 26, 9, 57, 33, 81, 93, 45, 69, 21, 63, 15, 87, 39, 27, 75, 3, 51, 52, 4, 76, 28, 40, 88, 16, 64, 22, 70, 46, 94, 82, 34, 58, 10, 29, 65, 95, 11, 77, 17, 47, 59, 5, 89, 71, 35, 53, 41, 23, 83};
 Buffer<uint> DitherTable;
 
+float LoadHierarchicalDepth(uint2 coord, uint mipLevel)
+{
+	// Expecting mipLevel to always be >= 1 here. We don't include the most detailed resolution in the hierarchical depths
+	return HierarchicalDepths.Load(uint3(coord.xy, mipLevel-1));
+}
+
 float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi, uint2 textureDims)
 {
 	// in world space units, how big is the distance between samples in the sample direction?
 	// For orthogonal, this only depends on the angle phi since there's no foreshortening
 
-	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
+	float d0 = LoadHierarchicalDepth(pixelId.xy, 1);
 	[branch] if (d0 == 0) return 0;		// early out for sky, to avoid excessive noise in the image
 
 	float maxCosTheta = 0.0;
@@ -76,7 +82,7 @@ float TraverseRay_NonHierachicalDepths(uint2 pixelId, float cosPhi, float sinPhi
 
 	int c=1;
 	for (; c<SearchSteps; ++c) {
-		float d = HierarchicalDepths.Load(uint3(xy, 1));
+		float d = LoadHierarchicalDepth(xy, 1);
 		xy += float2(xStep, yStep);
 		#if ORTHO_CAMERA
 			float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
@@ -108,7 +114,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	//	b) take the longest axis and step along that; even if it means missing some intersecting pixels
 	// type (b) is a lot more efficient, and just seems to produce few artifacts. Since we're sampling
 	// so many directions, the skipped pixels will still be accounted for; so type (B) just seems better
-	float d0 = HierarchicalDepths.Load(uint3(pixelId.xy, 1));
+	float d0 = LoadHierarchicalDepth(pixelId.xy, 1);
 	[branch] if (d0 == 0) return 0;		// early out for sky, to avoid excessive noise in the image
 
 	float maxCosTheta = 0.0;
@@ -122,7 +128,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 		yStep = sinPhi / abs(cosPhi);
 	}
 
-	const uint mostDetailedMipLevel = 1;
+	const uint mostDetailedMipLevel = 1;		// mostDetailedMipLevel must be >= 1, because we don't store the most detailed depth layer in HierarchicalDepths
 	uint currentMipLevel = mostDetailedMipLevel;
 	float2 mostDetailedMipRes = textureDims*pow(0.5, mostDetailedMipLevel);
 	float currentMipLevelScale = exp2(currentMipLevel-mostDetailedMipLevel);
@@ -148,7 +154,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	float lastCosTheta = 1;
 	while (c--) {
 		if (any(xy < 0 || xy >= mostDetailedMipRes)) break;
-		float d = HierarchicalDepths.Load(uint3(xy/currentMipLevelScale, currentMipLevel));
+		float d = LoadHierarchicalDepth(xy/currentMipLevelScale, currentMipLevel);
 
 		#if ORTHO_CAMERA
 			float worldSpaceDepthDifference = NDCDepthDifferenceToWorldSpace_Ortho(d0-d, GlobalMiniProjZW());
@@ -259,8 +265,8 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	AllMemoryBarrierWithGroupSync();
 #else
 	uint2 textureDims;
-	HierarchicalDepths.GetDimensions(textureDims.x, textureDims.y);
-	uint2 threadGroupCounts = uint2((textureDims.x+(2*8)-1)/(2*8), (textureDims.y+(2*8)-1)/(2*8));
+	AccumulationAO.GetDimensions(textureDims.x, textureDims.y);
+	uint2 threadGroupCounts = uint2((textureDims.x+8-1)/8, (textureDims.y+8-1)/8);
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 	if (any(pixelId >= textureDims)) return;
 #endif
@@ -407,10 +413,10 @@ void InitializeGroupSharedMem(int2 dispatchThreadId, int2 groupThreadId)
 		GroupDepths[groupThreadId.y+8][groupThreadId.x] = DownsampleDepths[dispatchThreadId.xy+int2(0,8)];
 		GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = DownsampleDepths[dispatchThreadId.xy+int2(8,8)];
 	#else
-		GroupDepths[groupThreadId.y][groupThreadId.x] = HierarchicalDepths.Load(int3(dispatchThreadId.xy, 1));
-		GroupDepths[groupThreadId.y][groupThreadId.x+8] = HierarchicalDepths.Load(int3(dispatchThreadId.xy+int2(8,0), 1));
-		GroupDepths[groupThreadId.y+8][groupThreadId.x] = HierarchicalDepths.Load(int3(dispatchThreadId.xy+int2(0,8), 1));
-		GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = HierarchicalDepths.Load(int3(dispatchThreadId.xy+int2(8,8), 1));
+		GroupDepths[groupThreadId.y][groupThreadId.x] = LoadHierarchicalDepth(dispatchThreadId.xy, 1);
+		GroupDepths[groupThreadId.y][groupThreadId.x+8] = LoadHierarchicalDepth(dispatchThreadId.xy+int2(8,0), 1);
+		GroupDepths[groupThreadId.y+8][groupThreadId.x] = LoadHierarchicalDepth(dispatchThreadId.xy+int2(0,8), 1);
+		GroupDepths[groupThreadId.y+8][groupThreadId.x+8] = LoadHierarchicalDepth(dispatchThreadId.xy+int2(8,8), 1);
 	#endif
 	#if defined(DO_LATE_TEMPORAL_FILTERING)
 		if (all(groupThreadId==0)) {

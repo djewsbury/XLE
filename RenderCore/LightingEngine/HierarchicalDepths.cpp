@@ -28,6 +28,9 @@ namespace RenderCore { namespace LightingEngine
 		GPUProfilerBlock profileBlock(*iterator._threadContext, "HierarchicalDepthsOperator");
 
 		Metal::BarrierHelper{*iterator._threadContext}.Add(*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::UnorderedAccess);
+		iterator._rpi.AutoNonFrameBufferBarrier({
+			{0, BindFlag::ShaderResource, ShaderStage::Compute}		// MultisampleDepth to ShaderResource
+		});
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 		vkCmdFillBuffer(
@@ -40,20 +43,31 @@ namespace RenderCore { namespace LightingEngine
 		srvs[1] = iterator._rpi.GetNonFrameBufferAttachmentView(0).get();
 		unsigned mipCount = iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource()->GetDesc()._textureDesc._mipCount;
 		auto& fbProps = iterator._rpi.GetFrameBufferDesc().GetProperties();
-		unsigned expectedMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height))+1;
+		unsigned expectedMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height));	// excluding the top full resolution texture
 		assert(mipCount == expectedMipCount);
 		for (unsigned c=0; c<13; ++c) {		// 13 slots in the shader input interface
 			// duplicate the lowest resource view over any extra bindings
 			srvs[2+c] = iterator._rpi.GetNonFrameBufferAttachmentView(1+std::min(c, mipCount-1)).get();
 		}
 
+		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._width, iterator._rpi.GetFrameBufferDesc().GetProperties()._height };
+		unsigned groupsX = (outputDims[0]+63) / 64, groupsY = (outputDims[1]+63) / 64;
+		struct ControlParams
+		{
+			uint32_t _threadgroupCount;
+			uint32_t _mipsCount;
+		} controlParams {
+			groupsX * groupsY,
+			mipCount
+		};
+		UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(controlParams) };
+
 		UniformsStream us;
 		us._resourceViews = MakeIteratorRange(srvs);
-
-		UInt2 outputDims { iterator._rpi.GetFrameBufferDesc().GetProperties()._width, iterator._rpi.GetFrameBufferDesc().GetProperties()._height };
+		us._immediateData = immData;
 		_resolveOp->Dispatch(
 			*iterator._parsingContext,
-			(outputDims[0]+63) / 64, (outputDims[1]+63) / 64, 1,
+			groupsX, groupsY, 1,
 			us);
 
 		// because we're using a compute shader fragment, we must manually add a barrier to update the resource layout
@@ -66,9 +80,9 @@ namespace RenderCore { namespace LightingEngine
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
-		auto hierarchicalDepthsAttachment = result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths).InitialState(LoadStore::DontCare, BindFlag::UnorderedAccess).FinalState(BindFlag::ShaderResource);
-		unsigned depthsMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height))+1;
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).FinalState(BindFlag::ShaderResource), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
+		auto hierarchicalDepthsAttachment = result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths).NoInitialState().FinalState(BindFlag::ShaderResource);
+		unsigned depthsMipCount = IntegerLog2(std::max(fbProps._width, fbProps._height));	// excluding the top full resolution texture
 		for (unsigned c=0; c<depthsMipCount; ++c) {
 			TextureViewDesc view;
 			view._format._explicitFormat = Format::R32_FLOAT;
@@ -90,13 +104,13 @@ namespace RenderCore { namespace LightingEngine
 	void HierarchicalDepthsOperator::PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext) 
 	{
 		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
-		unsigned depthsMipCount = IntegerLog2(std::max(fbSize[0], fbSize[1]))+1;
+		unsigned depthsMipCount = IntegerLog2(std::max(fbSize[0], fbSize[1]));	// excluding the top full resolution texture
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::HierarchicalDepths,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource | BindFlag::TransferSrc,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], Format::R32_FLOAT, depthsMipCount)),
+					TextureDesc::Plain2D(fbSize[0]>>1, fbSize[1]>>1, Format::R32_FLOAT, depthsMipCount)),
 				"hierarchical-depths"
 			}
 		};
@@ -128,6 +142,7 @@ namespace RenderCore { namespace LightingEngine
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "AtomicBuffer"_h);
 		usi.BindResourceView(1, "InputDepths"_h);
+		usi.BindImmediateData(0, "ControlUniforms"_h);
 		auto downSampleDepthsBinding = "DownsampleDepths"_h;
 		for (unsigned c=0; c<13; ++c)
 			usi.BindResourceView(2+c, downSampleDepthsBinding+c);

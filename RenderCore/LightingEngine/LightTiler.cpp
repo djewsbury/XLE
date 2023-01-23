@@ -186,7 +186,7 @@ namespace RenderCore { namespace LightingEngine
 		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::UnorderedAccess);
 		TextureViewDesc depthBufferView;
-		depthBufferView._mipRange._min = IntegerLog2(s_gridDims);
+		depthBufferView._mipRange._min = IntegerLog2(s_gridDims) - 1;		// -1 because we don't store the full resolution depth buffer in hierarchicaldepths
 		depthBufferView._mipRange._count = 1;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource, depthBufferView);
 		spDesc.SetName("rasterization-light-tiler");

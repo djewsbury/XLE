@@ -53,7 +53,6 @@ RWTexture2D<float3> g_intersection_result;
 RWStructuredBuffer<uint> g_tile_meta_data_mask;
 RWBuffer<uint> g_intersect_args;
 
-Texture2D<float> DownsampleDepths;
 Texture2D GBufferNormal;
 
 uint FFX_DNSR_Reflections_LoadTemporalVarianceMask(uint index)

@@ -68,7 +68,8 @@ float3 FFX_SSSR_LoadNormal(int2 pixel_coordinate)
 
 float FFX_SSSR_LoadDepth(int2 pixel_coordinate, int mip)
 {
-    return DownsampleDepths.Load(int3(pixel_coordinate, mip));
+    // Expecting 'mip' to always be >= 1 here. DownsampleDepths does not contain the most detailed depth layer
+    return DownsampleDepths.Load(int3(pixel_coordinate, mip-1));
 }
 
 float3 SampleEnvironmentMap(float3 direction)
