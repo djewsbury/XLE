@@ -143,7 +143,7 @@ namespace ToolsRig
             RenderCore::Techniques::ParsingContext& parserContext) override;
 
 		void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) override;
-		void Set(std::shared_ptr<SceneEngine::IScene> scene) override;
+		void Set(std::shared_ptr<SceneEngine::IScene> scene, std::shared_ptr<::Assets::OperationContext> loadingContext) override;
 
 		void Set(std::shared_ptr<VisCameraSettings>) override;
 		void ResetCamera() override;
@@ -187,6 +187,7 @@ namespace ToolsRig
 
 		std::shared_ptr<SceneEngine::IScene> _scene;
 		std::shared_ptr<SceneEngine::ILightingStateDelegate> _envSettings;
+		std::shared_ptr<::Assets::OperationContext> _loadingContext;
 		void RebuildPreparedScene();
 		
 		unsigned _loadingIndicatorCounter = 0;
@@ -325,7 +326,8 @@ namespace ToolsRig
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[	promise = _preparedSceneFuture->AdoptPromise(),
 				targets = _lightingTechniqueTargets, lightingApparatus = _lightingApparatus, 
-				scene = _scene, envSettings = _envSettings, pipelineAccelerators = _pipelineAccelerators]() mutable {
+				scene = _scene, envSettings = _envSettings, pipelineAccelerators = _pipelineAccelerators,
+				loadingContext = _loadingContext]() mutable {
 
 				TRY {
 					SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
@@ -339,7 +341,7 @@ namespace ToolsRig
 
 					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
 						std::move(promise),
-						[pipelineAccelerators, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique) mutable {
+						[pipelineAccelerators, loadingContext, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique) mutable {
 							
 							TRY {
 								auto preparedScene = std::make_shared<PreparedScene>();
@@ -349,7 +351,7 @@ namespace ToolsRig
 								preparedScene->_depVal = RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique);
 
 								auto& lightScene = RenderCore::LightingEngine::GetLightScene(*preparedScene->_compiledLightingTechnique);
-								preparedScene->_envSettings->BindScene(lightScene);
+								preparedScene->_envSettings->BindScene(lightScene, loadingContext);
 
 								auto pendingResources = SceneEngine::PrepareResources(
 									*RenderCore::Techniques::GetThreadContext(),
@@ -380,8 +382,9 @@ namespace ToolsRig
 		RebuildPreparedScene();
     }
 
-	void SimpleSceneOverlay::Set(std::shared_ptr<SceneEngine::IScene> scene)
+	void SimpleSceneOverlay::Set(std::shared_ptr<SceneEngine::IScene> scene, std::shared_ptr<::Assets::OperationContext> loadingContext)
 	{
+		_loadingContext = std::move(loadingContext);
 		_scene = std::move(scene);
 		RebuildPreparedScene();
 	}
@@ -744,6 +747,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 
 		std::shared_ptr<SceneEngine::IScene> _scene;
+		std::shared_ptr<::Assets::OperationContext> _loadingContext;
 		bool _pendingAnimStateBind = false;
 		uint64_t _renderTargetHashes = 0;
 
@@ -1196,7 +1200,7 @@ namespace ToolsRig
 	{
 		if (_pendingSceneActualize && _sceneMarker) {
 			if (auto* actualized = _sceneMarker->TryActualize()) {
-				if (_sceneOverlay) _sceneOverlay->Set(*actualized);
+				if (_sceneOverlay) _sceneOverlay->Set(*actualized, _loadingContext);
 				if (_visualisationOverlay) _visualisationOverlay->Set(*actualized);
 				_pendingSceneActualize = false;
 			}
@@ -1269,7 +1273,7 @@ namespace ToolsRig
 		_pimpl->_sceneBindType = Pimpl::SceneBindType::Ptr;
 		_pimpl->_pendingSceneActualize = false;
 
-		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene);
+		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene, _pimpl->_loadingContext);
 		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
 	}
 
@@ -1282,7 +1286,7 @@ namespace ToolsRig
 		_pimpl->_sceneBindType = Pimpl::SceneBindType::Marker;
 		auto* actual = _pimpl->_sceneMarker->TryActualize();
 		if (actual) {
-			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(*actual);
+			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(*actual, _pimpl->_loadingContext);
 			if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(*actual);
 			_pimpl->_pendingSceneActualize = false;
 		} else {
@@ -1342,10 +1346,10 @@ namespace ToolsRig
 
 		// set current scene state
 		if (_pimpl->_scene) {
-			_pimpl->_sceneOverlay->Set(_pimpl->_scene);
+			_pimpl->_sceneOverlay->Set(_pimpl->_scene, _pimpl->_loadingContext);
 		} else if (_pimpl->_sceneMarker) {
 			if (auto* actual = _pimpl->_sceneMarker->TryActualize()) {
-				_pimpl->_sceneOverlay->Set(*actual);
+				_pimpl->_sceneOverlay->Set(*actual, _pimpl->_loadingContext);
 			} else
 				_pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 		} else
