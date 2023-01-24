@@ -30,6 +30,7 @@ cbuffer AOProps
 // #define ENABLE_HIERARCHICAL_STEPPING 1
 // #define ENABLE_FILTERING 1
 // #define ENABLE_THICKNESS_HEURISTIC 1
+// #define HAS_HISTORY_CONFIDENCE_TEXTURE 1
 
 static const uint FrameWrap = 6;
 
@@ -361,6 +362,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 }
 
 #include "mosaic-denoise.hlsl"
+#include "history-confidence.hlsl"
 
 RWTexture2D<float> OutputTexture;
 
@@ -370,6 +372,9 @@ Texture2D<float> HistoryAcc;
 RWTexture2D<float> AccumulationAO;
 Texture2D<float> AccumulationAOLast;
 
+Texture2D<float> DepthPrev;
+Texture2D<float4> GBufferNormalPrev;
+
 void WriteOutputTexture(uint2 coords, ValueType value) { OutputTexture[coords] = value; }
 DepthType LoadFullResDepth(uint2 coords) { return FullResolutionDepths.Load(uint3(coords, 0)); }
 DepthType LoadDownsampleDepth(uint2 coords) { return HierarchicalDepths.Load(uint3(coords, 1-1)); }
@@ -377,7 +382,31 @@ ValueType LoadWorking(uint2 coords) { return Working[coords]; }
 void WriteAccumulation(uint2 coords, ValueType newValue) { AccumulationAO[coords] = newValue; }
 ValueType LoadAccumulationPrev(uint2 coords) { return AccumulationAOLast[coords]; }
 int2 LoadMotion(uint2 coords) { return GBufferMotion.Load(uint3(coords, 0)).rg; }
-FloatType LoadHistoryConfidence(uint2 coords) { return HistoryAcc.Load(uint3(coords, 0)); }
+
+float4 NormalAndRoughnessFromGBuffer(float4 sample)
+{
+	float3 normal = DecodeGBufferNormal(sample.xyz);
+	float roughness = sample.w;
+	return float4(normal, roughness);
+}
+float4 LoadNormalAndRoughnessPrev(uint2 loadPos) { return NormalAndRoughnessFromGBuffer(GBufferNormalPrev.Load(int3(loadPos, 0))); }
+float LoadDepthPrev(uint2 loadPos) { return DepthPrev.Load(uint3(loadPos, 0)); }
+
+FloatType LoadHistoryConfidence(uint2 coords, int2 motion)
+{
+	#if HAS_HISTORY_CONFIDENCE_TEXTURE
+		return HistoryAcc.Load(uint3(coords, 0));
+	#else
+		// if we don't have a precompute history confidence texture, we have to calculate it now
+		float4 todayNormalAndRoughness = NormalAndRoughnessFromGBuffer(InputNormals.Load(int3(coords, 0)));
+		int2 depthPrevDims;
+		DepthPrev.GetDimensions(depthPrevDims.x, depthPrevDims.y);
+		return CalculatePixelHistoryConfidence(
+			coords, motion,
+			todayNormalAndRoughness.xyz, todayNormalAndRoughness.w, FullResolutionDepths.Load(int3(coords, 0)),
+			depthPrevDims);
+	#endif
+}
 
 FloatType GetNValue() { return FrameWrap*2; }
 FloatType GetVariationTolerance() { return 2.5f; }

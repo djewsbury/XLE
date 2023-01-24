@@ -34,7 +34,7 @@ ValueType LoadAccumulationPrev(uint2 coords);
 void WriteAccumulationAndPixelVariance(uint2 coords, ValueType2);
 ValueType2 LoadAccumulationAndPixelVariancePrev(uint2 coords);
 int2 LoadMotion(uint2 coords);
-FloatType LoadHistoryConfidence(uint2 coords);
+FloatType LoadHistoryConfidence(uint2 coords, int2 motion);
 
 FloatType GetNValue();
 FloatType GetVariationTolerance();
@@ -215,7 +215,7 @@ void DoTemporalAccumulation(
 		const FloatType Nvalue = GetNValue();
 		alpha = 2.0/(Nvalue+1.0);
 		alpha = 1-alpha;
-		alpha *= LoadHistoryConfidence(srcPixel*2);		// scale alpha by our confidence in the "yesterday" data
+		alpha *= LoadHistoryConfidence(srcPixel*2, motion);		// scale alpha by our confidence in the "yesterday" data
 	} else {
 		alpha = 0;
 		accumulationYesterday = 0;
