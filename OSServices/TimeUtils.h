@@ -22,5 +22,7 @@ namespace OSServices
 	{
 		return std::chrono::duration_cast<std::chrono::microseconds>(input).count();	
 	}
+
+	void ConfigureProcessSettings();
 	void ConfigureDPIAwareness();
 }

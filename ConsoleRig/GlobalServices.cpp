@@ -24,6 +24,7 @@
 #include "../OSServices/FileSystemMonitor.h"
 #include "../OSServices/PollingThread.h"
 #include "../OSServices/AttachableLibrary.h"
+#include "../OSServices/TimeUtils.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/StreamFormatter.h"
 #include "../Utility/StringFormat.h"
@@ -114,6 +115,9 @@ namespace ConsoleRig
 
 		serv.Add<std::basic_string<utf8>()>(Fn_GetAssetRoot, [assetRoot](){ return assetRoot; });
 
+        // Some OSs may require us to configure settings for the process as a whole
+        // On Windows, for example, this is requred to ensure that system callbacks are as responsive as possible
+        OSServices::ConfigureProcessSettings();
         if (cfg._enableDPIAwareness)
             OSServices::ConfigureDPIAwareness();
     }

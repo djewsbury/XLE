@@ -8,6 +8,7 @@
 #include "WinAPIWrapper.h"
 #include "../RawFS.h"
 #include "../TimeUtils.h"
+#include "../Log.h"
 #include "../../Core/Prefix.h"
 #include "../../Core/Types.h"
 #include "../../Utility/Threading/LockFree.h"
@@ -17,10 +18,12 @@
 #include <process.h>
 #include <share.h>
 #include <time.h>
+#include <timeapi.h>
 
 #include <psapi.h>
 #include <shellapi.h>
 #include <ImageHlp.h>
+#include <avrt.h>
 
 namespace OSServices
 {
@@ -39,6 +42,55 @@ uint64 GetPerformanceCounterFrequency()
     LARGE_INTEGER i;
     QueryPerformanceFrequency(&i);
     return i.QuadPart;
+}
+
+void ConfigureProcessSettings()
+{
+    // Windows has a built-in system for managing thread priority for multimedia applications called MMCSS
+    // It's a little hidden, you could say, within the layers of the WinAPI
+    //
+    // But there's a set of configuration at
+    //      HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile
+    //
+    // and we can opt-in to one of the configurations there by selecting it by name
+    //
+    // There's also a function, DwmEnableMMCSS, that enableds the MMCSS system as whole throughout the 
+    // entire system. I'm not sure if this is enabled by default
+
+    DWORD taskIndex = 0;
+    auto avTaskHandle = ::AvSetMmThreadCharacteristicsA("Games", &taskIndex);       // (requires Vista and above)
+    if (!avTaskHandle) {
+        auto error = ::GetLastError();
+        if (error == ERROR_INVALID_TASK_NAME) Log(Warning) << "Thread priorties not set because there is no 'Games' entry in 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'" << std::endl;
+        else if (error == ERROR_PRIVILEGE_NOT_HELD) Log(Warning) << "Cannot set thread priorties due to lack of privileges" << std::endl;
+        else Log(Warning) << "Cannot set thread priorties due to unknown reason" << std::endl;
+    }
+
+    // see also AvRevertMmThreadCharacteristics to undo what we've done here
+
+    // AvQuerySystemResponsiveness
+
+    // also consider: SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED);
+    //  this just ensures that the display is not turned off while the application is alive
+
+    // We should attempt to set windows to the highest possible timer precision. This is a system wide setting, so
+    // it will effect other applications running at the same time
+    // Some background:
+    // https://randomascii.wordpress.com/2020/10/04/windows-timer-resolution-the-great-rule-change/
+    //
+    // In theory we should check battery status and consider reducing frequency when on battery
+    //
+    // See also NtSetTimerResolution / NtQueryTimerResolution
+    // http://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FTime%2FNtSetTimerResolution.html
+    unsigned timePeriod = 1;
+    while (timePeriod < 15) {
+        auto hres = timeBeginPeriod(timePeriod);        // (timeEndPeriod to clear this again)
+        if (hres == TIMERR_NOCANDO) {
+            ++timePeriod;
+            continue;
+        }
+        break;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -570,3 +622,4 @@ static struct win32_condvar_init
 #endif
 
 }
+
