@@ -174,7 +174,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// unfortunately it's a little expensive, but we can validate that the given range has all of the correct
 			// stage flags required (and doesn't overflow what was registered in the pipeline layout)
 			if (size == 0) Throw(std::runtime_error("Zero sized push constants operation"));
-			if (_pushConstantsRangeValidation.empty()) Throw(std::runtime_error("Attempting to use push constants for pipeline layout without any registered"));
+			if (_pushConstantsRangeValidation.empty()) Throw(std::runtime_error("Attempting to use push constants, however there are no push constants registered in the pipeline layout"));
 
 			auto i=_pushConstantsRangeValidation.begin();
 			while ((i+1) != _pushConstantsRangeValidation.end() && (i+1)->first <= offset) ++i;

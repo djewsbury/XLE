@@ -676,8 +676,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		rp_info.correlatedViewMaskCount = 0;
 		rp_info.pCorrelatedViewMasks = nullptr;
 
-		Log(Verbose) << "Vulkan render pass generated: " << std::endl;
-		Log(Verbose) << rp_info << std::endl;
+		// Log(Verbose) << "Vulkan render pass generated: " << std::endl;
+		// Log(Verbose) << rp_info << std::endl;
 
         return factory.CreateRenderPass(rp_info);
 	}

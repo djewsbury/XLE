@@ -490,13 +490,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto currentStateIterator = _allocatedDatabaseEntries.begin();
 		auto newStateIterator = lightsAndDistance.begin();
 		assert(_probeSlotsCount <= 64u);	// has to be small, because we're going to use a bitfield in a uint64_t
-		uint64_t availableProbeSlots = _unassociatedProbeSlots;
 		while (newStateIterator != lightsAndDistance.end()) {
 			while (currentStateIterator != _allocatedDatabaseEntries.end() && currentStateIterator->first < newStateIterator->first) {
 				// This light fell out of the close lights list
 				currentStateIterator->second._fading = std::max(currentStateIterator->second._fading-1, 0);
 				if (!currentStateIterator->second._fading) {
-					availableProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
+					_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
 					auto& inComponent = _sceneSets[GetSetIndex(currentStateIterator->first)]._probes[GetLightIndex(currentStateIterator->first)];
 					inComponent._attachedDatabaseIndex = ~0u;
 					inComponent._fading = 0;
@@ -525,7 +524,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		while (currentStateIterator!=_allocatedDatabaseEntries.end()) {
 			currentStateIterator->second._fading = std::max(currentStateIterator->second._fading-1, 0);
 			if (!currentStateIterator->second._fading) {
-				availableProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
+				_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
 				auto& inComponent = _sceneSets[GetSetIndex(currentStateIterator->first)]._probes[GetLightIndex(currentStateIterator->first)];
 				inComponent._attachedDatabaseIndex = ~0u;
 				inComponent._fading = 0;
@@ -534,6 +533,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				++currentStateIterator;
 		}
 
+		uint64_t availableProbeSlots = _unassociatedProbeSlots;
 		// avoid stealing something begin written to in the background right now
 		availableProbeSlots &= ~_probeSlotsReservedInBackground;
 
