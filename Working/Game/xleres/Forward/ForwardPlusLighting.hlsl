@@ -30,13 +30,18 @@ StructuredBuffer<LightDesc> LightList : register (t1, space2);
 StructuredBuffer<uint> LightDepthTable : register(t2, space2);
 Texture3D<uint> TiledLightBitField : register(t3, space2);
 
-Texture2D<float3> SSR : register(t4, space2);
+Texture2D<float3> SSRTexture : register(t4, space2);
 Texture2D<float> SSRConfidence : register(t5, space2);
+Texture2D<float> SSAOTexture : register(t6, space2);
 
 #if SPECULAR_IBL
-	TextureCube SpecularIBL : register(t1, space0);
-	Texture2D<float2> GlossLUT : register(t2, space0);			// this is the look up table used in the split-sum IBL glossy reflections
+	TextureCube SpecularIBL : register(t10, space2);
 #endif
+Texture2D<float2> GlossLUT : register(t11, space2);			// this is the look up table used in the split-sum IBL glossy reflections
+
+Texture2D<float>			NoiseTexture 			: register(t9, space2);
+SamplerComparisonState		ShadowSampler           : register(s12, space2);
+SamplerState				ShadowDepthSampler      : register(s13, space2);
 
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;
@@ -66,10 +71,19 @@ float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightSc
 	float3 result = diffuseSHRef*(1.0f - metal)*sample.diffuseAlbedo.rgb;
 
 	#if !defined(PROBE_PREPARE)
-		float3 fresnel = CalculateSkyReflectionFresnel(sample, directionToEye);
-		float ssrConfidence = float(EnableSSR) * SSRConfidence.Load(uint3(lsd.pixelCoords, 0));
 		float3 distanceReflections = CalculateDistantReflections(sample, directionToEye, lsd);
-		result += lerp(distanceReflections, fresnel * SSR.Load(uint3(lsd.pixelCoords, 0)).rgb, ssrConfidence);
+		#if SSR
+			if (EnableSSR) {
+				float3 fresnel = CalculateSkyReflectionFresnel(sample, directionToEye);
+				float ssrConfidence = SSRConfidence.Load(uint3(lsd.pixelCoords, 0));
+				distanceReflections = lerp(distanceReflections, fresnel * SSRTexture.Load(uint3(lsd.pixelCoords, 0)).rgb, ssrConfidence);
+			}
+		#endif
+		result += distanceReflections;
+	#endif
+
+	#if SSAO
+		result *= SSAOTexture.Load(uint3(lsd.pixelCoords, 0));
 	#endif
 
 	return result; 
@@ -159,17 +173,12 @@ float3 CalculateIllumination(
 	return result;
 }
 
-
+float2 GlossLUT_Sample(float2 tc) { return GlossLUT.SampleLevel(ClampingSampler, tc, 0).xy; }
 #if SPECULAR_IBL
-	float2 GlossLUT_Sample(float2 tc)
-	{
-		return GlossLUT.SampleLevel(ClampingSampler, tc, 0).xy;
-	}
-
-	float3 SpecularIBL_Sample(float3 cubemapCoords, float mipmapLevel)
-	{
-		return SpecularIBL.SampleLevel(DefaultSampler, cubemapCoords, mipmapLevel).rgb;
-	}
+	float3 SpecularIBL_Sample(float3 cubemapCoords, float mipmapLevel) { return SpecularIBL.SampleLevel(DefaultSampler, cubemapCoords, mipmapLevel).rgb; }
 #endif
+Texture2D<float> GetNoiseTexture() { return NoiseTexture; }
+SamplerComparisonState GetShadowSampler() { return ShadowSampler; }
+SamplerState GetShadowDepthSampler() { return ShadowDepthSampler; }
 
 #endif

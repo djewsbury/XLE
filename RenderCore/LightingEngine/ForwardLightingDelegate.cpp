@@ -200,7 +200,9 @@ namespace RenderCore { namespace LightingEngine
 				dst[_resourceViewsStart+1] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
 			}
 			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart+2)))
-				dst[_resourceViewsStart+2] = _noise.get();
+				dst[_resourceViewsStart+2] = context._rpi->GetNonFrameBufferAttachmentView(2).get();
+			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart+3)))
+				dst[_resourceViewsStart+3] = _noise.get();
 			_lightSceneDelegate->WriteResourceViews(context, objectContext, bindingFlags, dst);
 		}
 
@@ -217,19 +219,19 @@ namespace RenderCore { namespace LightingEngine
 			return _lightSceneDelegate->GetImmediateDataSize(context, objectContext, idx);
 		}
 
-		MainSceneResourceDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> lightSceneDelegate, bool hasSSR, Techniques::DeferredShaderResource& balanceNoiseTexture)
+		MainSceneResourceDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> lightSceneDelegate, bool hasSSR, bool hasSSAO, Techniques::DeferredShaderResource& balanceNoiseTexture)
 		: _lightSceneDelegate(std::move(lightSceneDelegate))
 		{
 			_interface = _lightSceneDelegate->_interface;
 			_resourceViewsStart = (unsigned)_interface.GetResourceViewBindings().size();
-			if (hasSSR) {
-				_interface.BindResourceView(_resourceViewsStart+0, "SSR"_h);
-				_interface.BindResourceView(_resourceViewsStart+1, "SSRConfidence"_h);
-			}
+
+			_interface.BindResourceView(_resourceViewsStart+0, "SSR"_h);
+			_interface.BindResourceView(_resourceViewsStart+1, "SSRConfidence"_h);
+			_interface.BindResourceView(_resourceViewsStart+2, "SSAO"_h);
 
 			_noise = balanceNoiseTexture.GetShaderResource();
 			_completionCmdList = balanceNoiseTexture.GetCompletionCommandList();
-			_interface.BindResourceView(_resourceViewsStart+2, "NoiseTexture"_h);
+			_interface.BindResourceView(_resourceViewsStart+3, "NoiseTexture"_h);
 		}
 
 		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneDelegate;
@@ -240,7 +242,7 @@ namespace RenderCore { namespace LightingEngine
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
-		bool hasSSR,
+		bool hasSSR, bool hasSSAO,
 		bool hasDistantIBL,
 		Techniques::DeferredShaderResource& balanceNoiseTexture,
 		std::optional<LightSourceOperatorDesc> dominantLightOperator,
@@ -274,6 +276,8 @@ namespace RenderCore { namespace LightingEngine
 			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSReflection"_h).InitialState(BindFlag::ShaderResource));
 			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSRConfidence"_h).InitialState(BindFlag::ShaderResource));
 		}
+		if (hasSSAO)
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("ao-output"_h).InitialState(BindFlag::ShaderResource));
 		mainSubpass.SetName("MainForward");
 
 		ParameterBox box;
@@ -292,9 +296,12 @@ namespace RenderCore { namespace LightingEngine
 		if (hasDistantIBL)
 			box.SetParameter("SPECULAR_IBL", 1);
 
+		if (hasSSR) box.SetParameter("SSR", 1);
+		if (hasSSAO) box.SetParameter("SSAO", 1);
+
 		auto resourceDelegate = std::make_shared<MainSceneResourceDelegate>(
 			captures->_lightScene->CreateMainSceneResourceDelegate(),
-			hasSSR, balanceNoiseTexture);
+			hasSSR, hasSSAO, balanceNoiseTexture);
 
 		result.AddSubpass(
 			std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending, std::move(box),
@@ -502,7 +509,7 @@ namespace RenderCore { namespace LightingEngine
 		auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 			CreateForwardSceneFragment(
 				shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
-				_ssrOperator!=nullptr, digest._skyTextureProcessor.has_value(),
+				_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
 				balancedNoiseTexture, digest._dominantLightOperator, digest._dominantShadowOperator));
 
 		// simplify uniforms before going into post processing steps

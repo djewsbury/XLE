@@ -103,6 +103,9 @@ namespace RenderCore { namespace LightingEngine
             (outputDims[0] + (2*8) - 1) / (2*8), (outputDims[1] + (2*8) - 1) / (2*8), 1,
             us);
 
+        // leave the output texture in ShaderResource layout
+        Metal::BarrierHelper{metalContext}
+            .Add(*aoOutputUAV.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::ShaderResource);
         ++_pingPongCounter;
     }
 
@@ -114,7 +117,7 @@ namespace RenderCore { namespace LightingEngine
         auto working = result.DefineAttachment(Hash_AOWorking).InitialState(LoadStore::DontCare, BindFlag::UnorderedAccess).Discard();
         auto accumulation = result.DefineAttachment(Hash_AOAccumulation).InitialState(LoadStore::DontCare, BindFlag::UnorderedAccess).FinalState(BindFlag::ShaderResource);
         auto accumulationPrev = result.DefineAttachment(Hash_AOAccumulationPrev).InitialState(BindFlag::ShaderResource).Discard();
-        auto aoOutput = result.DefineAttachment(Hash_AOOutput).NoInitialState().FinalState(BindFlag::UnorderedAccess);
+        auto aoOutput = result.DefineAttachment(Hash_AOOutput).NoInitialState().FinalState(BindFlag::ShaderResource);
 
         Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });

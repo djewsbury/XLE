@@ -14,8 +14,8 @@
 		TextureCubeArray<float> StaticShadowProbeDatabase : register(t10, space1);
 		StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t11, space1);
 	#else
-		TextureCubeArray<float> StaticShadowProbeDatabase : register(t6, space2);
-		StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t7, space2);
+		TextureCubeArray<float> StaticShadowProbeDatabase : register(t7, space2);
+		StructuredBuffer<StaticShadowProbeDesc> StaticShadowProbeProperties : register(t8, space2);
 	#endif
 
 	uint MajorAxisIndex(float3 input)
@@ -108,10 +108,10 @@
 
 				distance = extraBias + WorldSpaceDepthToNDC_Perspective(distance, StaticShadowProbeProperties[databaseEntry]._miniProjZW);
 				float result 
-					= StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(A, float(databaseEntry)), distance)
-					+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(B, float(databaseEntry)), distance)
-					+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(C, float(databaseEntry)), distance)
-					+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(D, float(databaseEntry)), distance);
+					= StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float4(A, float(databaseEntry)), distance)
+					+ StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float4(B, float(databaseEntry)), distance)
+					+ StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float4(C, float(databaseEntry)), distance)
+					+ StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float4(D, float(databaseEntry)), distance);
 				return result * 0.25;
 
 			#else
@@ -129,10 +129,10 @@
 				[branch] if (all(w0 == saturate(w0) && w1 == saturate(w1))) {
 					// cheap -- all samples in the one face
 					float result 
-						= StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(w0.x, w0.y, float(databaseEntry*6+faceIdx)), distance)
-						+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(w0.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
-						+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(w1.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
-						+ StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float3(w1.x, w0.y, float(databaseEntry*6+faceIdx)), distance);
+						= StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float3(w0.x, w0.y, float(databaseEntry*6+faceIdx)), distance)
+						+ StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float3(w0.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
+						+ StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float3(w1.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
+						+ StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float3(w1.x, w0.y, float(databaseEntry*6+faceIdx)), distance);
 					return result * 0.25;
 				} else {
 					// expensive -- samples cross face boundaries
@@ -148,7 +148,7 @@
 		{
 			float distance = WorldSpaceDepthToNDC_Perspective(MajorAxisDistance(offset), StaticShadowProbeProperties[databaseEntry]._miniProjZW);
 			// distance += 0.5f / 65535.f;     // bias half precision
-			return StaticShadowProbeDatabase.SampleCmpLevelZero(ShadowSampler, float4(offset, float(databaseEntry)), distance);
+			return StaticShadowProbeDatabase.SampleCmpLevelZero(GetShadowSampler(), float4(offset, float(databaseEntry)), distance);
 		}
 	#endif
 

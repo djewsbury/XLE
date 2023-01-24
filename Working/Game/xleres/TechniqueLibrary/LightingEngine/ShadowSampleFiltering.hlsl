@@ -9,8 +9,8 @@
 
 #include "../Framework/Binding.hlsl"
 
-SamplerComparisonState		ShadowSampler           BIND_SHARED_LIGHTING_S2;
-SamplerState				ShadowDepthSampler      BIND_SHARED_LIGHTING_S3;
+SamplerComparisonState GetShadowSampler();
+SamplerState GetShadowDepthSampler();
 
 ////////////////////////////////////////////////////////////////////////////
         //   A M D   s h a d o w   f i l t e r i n g   //
@@ -277,7 +277,7 @@ float FixedSizeShadowFilter(Texture2DArray<float> samplingTexture, float3 baseTC
     [unroll(AMD_FILTER_SIZE)] for (row = -FS2; row <= FS2; row += 2) {
         for (col = -FS2; col <= FS2; col += 2) {
             v1[(col+FS2)/2] = samplingTexture.GatherCmpRed(
-                ShadowSampler, baseTC.xyz, comparisonDepth, int2( col, row ) );
+                GetShadowSampler(), baseTC.xyz, comparisonDepth, int2( col, row ) );
 
             if( col == -FS2 )
             {
@@ -391,11 +391,11 @@ float FixedSizeShadowFilter(Texture2DArray<float> samplingTexture, float3 baseTC
 	[unroll(FS)] for (row = -FS2; row <= FS2; row += 2) {
 		[unroll(FS)] for (col = -FS2; col <= FS2; col += 2) {
             #if (REUSE_GATHER)
-			    float4 d4 = samplingTexture.GatherRed(ShadowDepthSampler, baseTC.xyz, int2(col, row));
+			    float4 d4 = samplingTexture.GatherRed(GetShadowDepthSampler(), baseTC.xyz, int2(col, row));
 			    float4 sm4 = (comparisonDepth.xxxx <= d4) ? (1.0).xxxx : (0.0).xxxx;
             #else
                 float biasedCompareDepth = comparisonDepth + dot(float2(col, row), largeFilterBias.xy);
-			    float4 sm4 = samplingTexture.GatherCmpRed(ShadowSampler, baseTC.xyz, biasedCompareDepth, int2(col, row));
+			    float4 sm4 = samplingTexture.GatherCmpRed(GetShadowSampler(), baseTC.xyz, biasedCompareDepth, int2(col, row));
             #endif
 
             #define SM(_row, _col) ((_row) == 0 ? ((_col) == 0 ? sm4.w : sm4.z) \

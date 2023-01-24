@@ -104,11 +104,6 @@
     #define BIND_SHADOW_T3 : register(t3, space3)
     #define BIND_SHADOW_T4 : register(t4, space3)
     #define BIND_SHADOW_T5 : register(t5, space3)
-
-    // Here, BIND_SHARED_LIGHTING_* map onto the pipeline in forward.pipeline
-    #define BIND_SHARED_LIGHTING_T1 : register(t8, space2)
-    #define BIND_SHARED_LIGHTING_S2 : register(s11, space2)
-    #define BIND_SHARED_LIGHTING_S3 : register(s12, space2)
 #endif
 
 #pragma selector_filtering(pop)

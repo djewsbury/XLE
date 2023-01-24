@@ -26,7 +26,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 Texture2DArray<float> 	ShadowTextures BIND_SHADOW_T3;
 TextureCube<float> 	    ShadowCube BIND_SHADOW_T3;
-Texture2D<float>		NoiseTexture BIND_SHARED_LIGHTING_T1;
+
+Texture2D<float> GetNoiseTexture();
 
 #if !defined(SHADOW_FILTER_MODEL)
     #define SHADOW_FILTER_MODEL 0
@@ -120,9 +121,9 @@ float GetNoisyValue(int2 randomizerValue, uint idx)
     const uint noiseMethod = 0;
     if (noiseMethod == 0) {
         if (idx == 0) {
-            return NoiseTexture.Load(int3(randomizerValue.x & 0xff, randomizerValue.y & 0xff, 0)).r;
+            return GetNoiseTexture().Load(int3(randomizerValue.x & 0xff, randomizerValue.y & 0xff, 0)).r;
         } else {
-            return NoiseTexture.Load(int3((randomizerValue.x + 17) & 0xff, (randomizerValue.y + 33) & 0xff, 0)).r;
+            return GetNoiseTexture().Load(int3((randomizerValue.x + 17) & 0xff, (randomizerValue.y + 33) & 0xff, 0)).r;
         }
     } else if (noiseMethod == 1) {
         if (idx == 0) {
@@ -200,10 +201,10 @@ float CalculateShadowCasterDistance(
         float2 rotatedFilter3 = float2(dot(filterRotation, filter3), dot(float2(filterRotation.y, -filterRotation.x), filter3));
 
         float4 sampleDepth;
-        sampleDepth.x = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter0, float(arrayIndex)), 0).r;
-        sampleDepth.y = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter1, float(arrayIndex)), 0).r;
-        sampleDepth.z = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter2, float(arrayIndex)), 0).r;
-        sampleDepth.w = ShadowTextures.SampleLevel(ShadowDepthSampler, float3(texCoords + rotatedFilter3, float(arrayIndex)), 0).r;
+        sampleDepth.x = ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter0, float(arrayIndex)), 0).r;
+        sampleDepth.y = ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter1, float(arrayIndex)), 0).r;
+        sampleDepth.z = ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter2, float(arrayIndex)), 0).r;
+        sampleDepth.w = ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter3, float(arrayIndex)), 0).r;
 
         // Note that we have to flip this comparison for the ReverseZ projection modes, since
         // larger values mean closer to the light in ReverseZ, while smaller numbers mean closer to the
@@ -270,12 +271,12 @@ float TestShadow(float2 texCoord, uint arrayIndex, float comparisonDistance)
         // SampleCmpLevelZero cannot be used when cross compiling via glsl, because there is no textureLod() override
         // for a a sampler2DArrayShadow 
         #if !defined(HLSLCC)
-            return ShadowTextures.SampleCmpLevelZero(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
+            return ShadowTextures.SampleCmpLevelZero(GetShadowSampler(), float3(texCoord, float(arrayIndex)), comparisonDistance);
         #else
-            return ShadowTextures.SampleCmp(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
+            return ShadowTextures.SampleCmp(GetShadowSampler(), float3(texCoord, float(arrayIndex)), comparisonDistance);
         #endif
     } else {
-        float4 t = ShadowTextures.GatherCmpRed(ShadowSampler, float3(texCoord, float(arrayIndex)), comparisonDistance);
+        float4 t = ShadowTextures.GatherCmpRed(GetShadowSampler(), float3(texCoord, float(arrayIndex)), comparisonDistance);
         return dot(t, 1.0.xxxx) * 0.25f;
     }
 }
@@ -539,7 +540,7 @@ float ResolveShadows_CubeMap(
     ShadowResolveConfig config)
 {
     float comparisonDistance = CubeMapComparisonDistance(cubeMapNormCoords, miniProjection);
-    return ShadowCube.SampleCmpLevelZero(ShadowSampler, cubeMapNormCoords, comparisonDistance);
+    return ShadowCube.SampleCmpLevelZero(GetShadowSampler(), cubeMapNormCoords, comparisonDistance);
 }
 
 #endif
