@@ -706,6 +706,7 @@ namespace RenderCore { namespace Techniques
                 selectedAttachments[r]._presentationChain = matchingParent->_presentationChain;
                 selectedAttachments[r]._poolName = matchingParent->_poolResource;
                 selectedAttachments[r]._currentLayout = matchingParent->_currentLayout;
+                selectedAttachments[r]._pendingSwitchToLayout = matchingParent->_pendingSwitchToLayout;
                 selectedAttachments[r]._semantic = request._semantic;
 
                 if (request._layout && (matchingParent->_pendingSwitchToLayout.value_or(matchingParent->_currentLayout) != request._layout)) {
