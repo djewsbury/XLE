@@ -20,6 +20,8 @@ cbuffer AOProps
 	uint FrameIdx;
 	uint ClearAccumulation;
 	float ThicknessHeuristicFactor;		// 0.15
+	float FilteringStrength;			// 2 
+	float VariationTolerance;			// 2.5
 }
 
 // #define BOTH_WAYS 1
@@ -398,18 +400,19 @@ FloatType LoadHistoryConfidence(uint2 coords, int2 motion)
 		return HistoryAcc.Load(uint3(coords, 0));
 	#else
 		// if we don't have a precompute history confidence texture, we have to calculate it now
+		// We can't consider depth in this path, because we don't store the expected depth for yesterday's pixel
 		float4 todayNormalAndRoughness = NormalAndRoughnessFromGBuffer(InputNormals.Load(int3(coords, 0)));
-		int2 depthPrevDims;
-		DepthPrev.GetDimensions(depthPrevDims.x, depthPrevDims.y);
-		return CalculatePixelHistoryConfidence(
+		int2 dims;
+		InputNormals.GetDimensions(dims.x, dims.y);
+		return CalculatePixelHistoryConfidence_NoDepth(
 			coords, motion,
-			todayNormalAndRoughness.xyz, todayNormalAndRoughness.w, FullResolutionDepths.Load(int3(coords, 0)),
-			depthPrevDims);
+			todayNormalAndRoughness.xyz, todayNormalAndRoughness.w,
+			dims);
 	#endif
 }
 
-FloatType GetNValue() { return FrameWrap*2; }
-FloatType GetVariationTolerance() { return 2.5f; }
+FloatType GetNValue() { return FrameWrap*FilteringStrength; }
+FloatType GetVariationTolerance() { return VariationTolerance; }
 
 [numthreads(8, 8, 1)]
 	void UpsampleOp(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)

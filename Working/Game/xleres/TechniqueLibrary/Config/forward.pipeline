@@ -8,7 +8,7 @@ DescriptorSet ForwardLighting
 
 	SampledTexture SSR;									// 4
 	SampledTexture SSRConfidence;						// 5
-	SampledTexture SSAO;								// 6
+	SampledTexture SSAOTexture;							// 6
 	SampledTexture StaticShadowProbeDatabase;			// 7
 	UnorderedAccessBuffer StaticShadowProbeProperties;	// 8
 

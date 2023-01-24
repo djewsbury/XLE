@@ -32,7 +32,9 @@ Texture3D<uint> TiledLightBitField : register(t3, space2);
 
 Texture2D<float3> SSRTexture : register(t4, space2);
 Texture2D<float> SSRConfidence : register(t5, space2);
-Texture2D<float> SSAOTexture : register(t6, space2);
+#if SSAO
+	Texture2D<float> SSAOTexture : register(t6, space2);
+#endif
 
 #if SPECULAR_IBL
 	TextureCube SpecularIBL : register(t10, space2);
@@ -62,7 +64,7 @@ float3 CalculateDistantReflections(GBufferValues sample, float3 directionToEye, 
 	#endif
 }
 
-float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightScreenDest lsd)
+float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, float screenSpaceOcclusion, LightScreenDest lsd)
 {
 	float metal = sample.material.metal;
 	float3 diffuseSHRef = 0;
@@ -82,10 +84,7 @@ float3 LightResolve_Ambient(GBufferValues sample, float3 directionToEye, LightSc
 		result += distanceReflections;
 	#endif
 
-	#if SSAO
-		result *= SSAOTexture.Load(uint3(lsd.pixelCoords, 0));
-	#endif
-
+	result *= screenSpaceOcclusion;
 	return result; 
 }
 
@@ -98,8 +97,12 @@ float3 CalculateIllumination(
 {
 	float3 result = 0.0.xxx;
 
-	LightSampleExtra sampleExtra;
+	LightSampleExtra sampleExtra, sampleExtraNoSSAO;
 	sampleExtra.screenSpaceOcclusion = 1;
+	sampleExtraNoSSAO.screenSpaceOcclusion = 1;
+	#if SSAO
+		sampleExtra.screenSpaceOcclusion = SSAOTexture.Load(uint3(screenDest.pixelCoords, 0));
+	#endif
 
 	if (hasNormal) {
 
@@ -156,9 +159,9 @@ float3 CalculateIllumination(
 						#endif
 
 						if (l.Shape == 0) {
-							result += shadowing * DirectionalLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
+							result += shadowing * DirectionalLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
 						} else if (l.Shape == 1) {
-							result += shadowing * SphereLightResolve(sample, sampleExtra, l, worldPosition, directionToEye, screenDest);
+							result += shadowing * SphereLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
 						}
 					}
 				}
@@ -167,7 +170,7 @@ float3 CalculateIllumination(
 		#endif
 	}
 
-	result += LightResolve_Ambient(sample, directionToEye, screenDest);
+	result += LightResolve_Ambient(sample, directionToEye, sampleExtra.screenSpaceOcclusion, screenDest);
 	result += sample.emissive;
 
 	return result;

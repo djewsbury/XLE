@@ -28,7 +28,7 @@ float3 DirectionalLightResolve(
         if (abs(length(light.Position)-1) > 1e-3f)
             return float3(1,0,0);
     #endif
-    float3 diffuse = DirectionalLightResolve_Diffuse(sample, directionToEye, light.Position, light);
+    float3 diffuse = DirectionalLightResolve_Diffuse(sample, directionToEye, light.Position, light) * sampleExtra.screenSpaceOcclusion;
     float3 specular = DirectionalLightResolve_Specular(sample, directionToEye, light.Position, light, sampleExtra.screenSpaceOcclusion);
     return diffuse + specular;
 }

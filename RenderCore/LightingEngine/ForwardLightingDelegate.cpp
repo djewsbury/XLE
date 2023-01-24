@@ -26,6 +26,7 @@
 #include "../Techniques/Techniques.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/DeformAccelerator.h"
+#include "../Techniques/Services.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
@@ -196,11 +197,21 @@ namespace RenderCore { namespace LightingEngine
 			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart))) {
 				assert(bindingFlags & (1ull<<uint64_t(_resourceViewsStart+1)));
 				assert(context._rpi);
-				dst[_resourceViewsStart] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
-				dst[_resourceViewsStart+1] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
+				if (_hasSSR) {
+					dst[_resourceViewsStart] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
+					dst[_resourceViewsStart+1] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
+				} else {
+					dst[_resourceViewsStart] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+					dst[_resourceViewsStart+1] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+				}
 			}
-			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart+2)))
-				dst[_resourceViewsStart+2] = context._rpi->GetNonFrameBufferAttachmentView(2).get();
+			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart+2))) {
+				if (_hasSSAO) {
+					dst[_resourceViewsStart+2] = context._rpi->GetNonFrameBufferAttachmentView(2).get();
+				} else {
+					dst[_resourceViewsStart+2] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+				}
+			}
 			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart+3)))
 				dst[_resourceViewsStart+3] = _noise.get();
 			_lightSceneDelegate->WriteResourceViews(context, objectContext, bindingFlags, dst);
@@ -220,14 +231,14 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		MainSceneResourceDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> lightSceneDelegate, bool hasSSR, bool hasSSAO, Techniques::DeferredShaderResource& balanceNoiseTexture)
-		: _lightSceneDelegate(std::move(lightSceneDelegate))
+		: _lightSceneDelegate(std::move(lightSceneDelegate)), _hasSSR(hasSSR), _hasSSAO(hasSSAO)
 		{
 			_interface = _lightSceneDelegate->_interface;
 			_resourceViewsStart = (unsigned)_interface.GetResourceViewBindings().size();
 
 			_interface.BindResourceView(_resourceViewsStart+0, "SSR"_h);
 			_interface.BindResourceView(_resourceViewsStart+1, "SSRConfidence"_h);
-			_interface.BindResourceView(_resourceViewsStart+2, "SSAO"_h);
+			_interface.BindResourceView(_resourceViewsStart+2, "SSAOTexture"_h);
 
 			_noise = balanceNoiseTexture.GetShaderResource();
 			_completionCmdList = balanceNoiseTexture.GetCompletionCommandList();
@@ -237,6 +248,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneDelegate;
 		unsigned _resourceViewsStart = 0;
 		std::shared_ptr<IResourceView> _noise;
+		bool _hasSSR = false, _hasSSAO = false;
 	};
 
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
@@ -656,8 +668,8 @@ namespace RenderCore { namespace LightingEngine
 								return (IExposure*)captures->_acesOperator.get();
 							case TypeHashCode<ISkyTextureProcessor>:
 								return (ISkyTextureProcessor*)captures->_skyTextureProcessor.get();
-							// case TypeHashCode<ISSAmbientOcclusion>:
-							// 	return (ISSAmbientOcclusion*)captures->_ssao.get();
+							case TypeHashCode<ISSAmbientOcclusion>:
+								return (ISSAmbientOcclusion*)captures->_ssaoOperator.get();
 							}
 							return nullptr;
 						};

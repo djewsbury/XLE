@@ -41,11 +41,30 @@ float CalculatePixelHistoryConfidence(
 		return 0;
 
 	float4 yesterdayNormalAndRoughness = LoadNormalAndRoughnessPrev(loadPos);
-	
+
 	// Note that resulting confidence will always be reduced a little bit just because of the normal compression method
 	return
 		  CalculateEdgeStoppingNormalWeight(todayWorldSpaceNormal, yesterdayNormalAndRoughness.xyz)
 		* CalculateEdgeStoppingRoughnessWeight(todayRoughness, yesterdayNormalAndRoughness.w)
 		* CalculateEdgeStoppingDepthWeight(todayDepth, yesterdayDepth)
+		;
+}
+
+float CalculatePixelHistoryConfidence_NoDepth(
+	uint2 todayCoord, int2 motion,
+	float3 todayWorldSpaceNormal, float todayRoughness,
+	uint2 depthBufferDims)
+{
+	int2 loadPos = int2(todayCoord.xy+motion.xy);
+	// Note that we consider the texture size here, not the viewport
+	if (any(loadPos < 0 || loadPos >= depthBufferDims))
+		return 0;
+
+	float4 yesterdayNormalAndRoughness = LoadNormalAndRoughnessPrev(loadPos);
+
+	// Note that resulting confidence will always be reduced a little bit just because of the normal compression method
+	return
+		  CalculateEdgeStoppingNormalWeight(todayWorldSpaceNormal, yesterdayNormalAndRoughness.xyz)
+		* CalculateEdgeStoppingRoughnessWeight(todayRoughness, yesterdayNormalAndRoughness.w)
 		;
 }

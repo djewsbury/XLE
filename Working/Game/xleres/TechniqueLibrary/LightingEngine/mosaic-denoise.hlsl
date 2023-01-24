@@ -202,24 +202,21 @@ void DoTemporalAccumulation(
 	out ValueType newPixelVariance,
 	int2 groupThreadId, int2 srcPixel, ValueType spatialStdDev, ValueType spatialMean, uint2 downsampleDims)
 {
-	int2 motion = LoadMotion(srcPixel*2);
 	ValueType2 accumulationYesterday;
-	FloatType alpha;
-	int2 yesterdayReadCoord = srcPixel.xy + motion / 2;
-	if (all(yesterdayReadCoord >= 0) && all(yesterdayReadCoord < downsampleDims)) {
+	int2 motion = LoadMotion(srcPixel*2);
+	FloatType alpha = LoadHistoryConfidence(srcPixel*2, motion);
+	if (alpha > 0) {
+		int2 yesterdayReadCoord = srcPixel.xy + motion / 2;
 		#if PIXEL_LOCAL_VARIANCE
 			accumulationYesterday = LoadAccumulationAndPixelVariancePrev(yesterdayReadCoord);
 		#else
 			accumulationYesterday.x = LoadAccumulationPrev(yesterdayReadCoord);
 		#endif
-		const FloatType Nvalue = GetNValue();
-		alpha = 2.0/(Nvalue+1.0);
-		alpha = 1-alpha;
-		alpha *= LoadHistoryConfidence(srcPixel*2, motion);		// scale alpha by our confidence in the "yesterday" data
-	} else {
-		alpha = 0;
+		float a = 2.0/(GetNValue()+1.0);
+		a = 1-a;
+		alpha *= a;		// scale alpha by our confidence in the "yesterday" data
+	} else
 		accumulationYesterday = 0;
-	}
 
 	ValueType2 accumulationToday;
 	ValueType x = GroupValues[groupThreadId.y][groupThreadId.x];

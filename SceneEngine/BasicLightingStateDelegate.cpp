@@ -1228,6 +1228,18 @@ namespace SceneEngine
                 return true;
             }
             break;
+        case "FilteringStrength"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._filteringStrength = *value;
+                return true;
+            }
+            break;
+        case "VariationTolerance"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._variationTolerance = *value;
+                return true;
+            }
+            break;
         }
         return false;
     }

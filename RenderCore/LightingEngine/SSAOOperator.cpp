@@ -69,11 +69,15 @@ namespace RenderCore { namespace LightingEngine
             unsigned _frameIdx;
             unsigned _clearAccumulation;
             float _thicknessHeuristicFactor;
+            float _filteringStrength;
+            float _variationTolerance;
         } aoProps {
             _opDesc._searchSteps, _opDesc._maxWorldSpaceDistance * _opDesc._maxWorldSpaceDistance,
             _pingPongCounter, 
             _pingPongCounter == ~0u,
-            _opDesc._thicknessHeuristicFactor
+            _opDesc._thicknessHeuristicFactor,
+            _opDesc._filteringStrength,
+            _opDesc._variationTolerance
         };
         UniformsStream::ImmediateData immData[] = {
             MakeOpaqueIteratorRange(aoProps)
@@ -133,8 +137,8 @@ namespace RenderCore { namespace LightingEngine
         if (_integrationParams._hasHistoryConfidence) {
             spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HistoryAcc));
         } else {
-            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepthPrev), BindFlag::ShaderResource);
-            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormalPrev), BindFlag::ShaderResource);
+            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepthPrev).InitialState(BindFlag::ShaderResource), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
+            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormalPrev).InitialState(BindFlag::ShaderResource), BindFlag::ShaderResource);
         }
         spDesc.SetName("ao-operator");
 
@@ -342,7 +346,13 @@ namespace RenderCore { namespace LightingEngine
             CompressToBits(*reinterpret_cast<const unsigned*>(&_maxWorldSpaceDistance), 32)
             | (CompressToBits(*reinterpret_cast<const unsigned*>(&_thicknessHeuristicFactor), 32) << 32ull)
             ;
-        return HashCombine(HashCombine(value0, value1), seed);
+
+        uint64_t value2 =
+            CompressToBits(*reinterpret_cast<const unsigned*>(&_filteringStrength), 32)
+            | (CompressToBits(*reinterpret_cast<const unsigned*>(&_variationTolerance), 32) << 32ull)
+            ;
+
+        return HashCombine(HashCombine(HashCombine(value0, value1), value2), seed);
     }
 
     ISSAmbientOcclusion::~ISSAmbientOcclusion() {}
