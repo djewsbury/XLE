@@ -4,7 +4,6 @@ add_subdirectory(wildcards wildcards)
 
 if (WIN32)
     add_subdirectory(DirectXTex DirectXTex)
-    add_subdirectory(HLSLCC/mk HLSLCC)
 endif ()
 
 #############################################################################################
