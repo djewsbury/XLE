@@ -173,13 +173,20 @@ namespace ToolsRig
 				}
 
 				bool hasHierarchialDepths = false;
-				for (const auto& a:context._stitchingContext.GetPreregisteredAttachments())
+				bool hasHistoryConfidence = false;
+				for (const auto& a:context._stitchingContext.GetPreregisteredAttachments()) {
 					hasHierarchialDepths |= a._semantic == Techniques::AttachmentSemantics::HierarchicalDepths;
+					hasHistoryConfidence |= a._semantic == Techniques::AttachmentSemantics::HistoryAcc;
+				}
 
-				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::SSAOOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, hasHierarchialDepths);
+				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::SSAOOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, RenderCore::LightingEngine::SSAOOperator::IntegrationParams{hasHierarchialDepths, hasHistoryConfidence});
 				opStep->PreregisterAttachments(context._stitchingContext);
-				sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
-				context._depVal.RegisterDependency(opStep->GetDependencyValidation());
+				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
+				context._postStitchFunctions.push_back(
+					[opStep, reg](auto& context, auto* sequence) {
+						StallForSecondStageConstruction(*opStep, AsFrameBufferTarget(*sequence, reg));
+						context._depVal.RegisterDependency(opStep->GetDependencyValidation());
+					});
 			});
 
 		shaderLab.RegisterOperation(

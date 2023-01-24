@@ -42,43 +42,25 @@ namespace RenderCore { namespace LightingEngine
         IResourceView& inputDepthsSRV,
         IResourceView& inputNormalsSRV,
         IResourceView& inputVelocitiesSRV,
-        IResourceView& inputHistoryAccuracy,
         IResourceView& workingUAV,
         IResourceView& accumulationUAV,
         IResourceView& accumulationPrevUAV,
         IResourceView& aoOutputUAV,
-        IResourceView* hierarchicalDepths)
+        IResourceView* historyAccumulationSRV,
+        IResourceView* hierarchicalDepthsSRV,
+        IResourceView* depthPrevSRV,
+        IResourceView* gbufferNormalPrevSRV)
     {
+        assert(_secondStageConstructionState == 2);
         CompleteInitialization(*iterator._threadContext);
 
         auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
-        if (hierarchicalDepths) {
-            // need to ensure the hierarchical depths compute step has finished
-            VkImageMemoryBarrier barrier[1];
-            barrier[0] = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-            barrier[0].pNext = nullptr;
-            barrier[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-            barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            barrier[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            barrier[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            barrier[0].image = checked_cast<Metal_Vulkan::Resource*>(hierarchicalDepths->GetResource().get())->GetImage();
-            barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier[0].subresourceRange.baseMipLevel = 0;
-            barrier[0].subresourceRange.baseArrayLayer = 0;
-            barrier[0].subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-            barrier[0].subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-            vkCmdPipelineBarrier(
-				metalContext.GetActiveCommandList().GetUnderlying().get(),
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				dimof(barrier), barrier);
-		}
 
         UniformsStream us;
-        IResourceView* srvs[] = { &inputDepthsSRV, &aoOutputUAV, &workingUAV, &accumulationUAV, &accumulationPrevUAV, &inputNormalsSRV, &inputVelocitiesSRV, &inputHistoryAccuracy, hierarchicalDepths, _ditherTable.get() };
+        IResourceView* srvs[] = {
+            &inputDepthsSRV, &aoOutputUAV, &workingUAV, &accumulationUAV, &accumulationPrevUAV, &inputNormalsSRV, &inputVelocitiesSRV, historyAccumulationSRV, 
+            hierarchicalDepthsSRV, depthPrevSRV, gbufferNormalPrevSRV,
+            _ditherTable.get() };
         us._resourceViews = MakeIteratorRange(srvs);
         struct AOProps
         {
@@ -112,30 +94,9 @@ namespace RenderCore { namespace LightingEngine
                 us);
         }
 
-        {
-            // barrier on "accumulationUAV" (written in first step, read in second)
-            VkImageMemoryBarrier barrier[1];
-            barrier[0] = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-            barrier[0].pNext = nullptr;
-            barrier[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-            barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            barrier[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            barrier[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            barrier[0].image = checked_cast<Metal_Vulkan::Resource*>(accumulationUAV.GetResource().get())->GetImage();
-            barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier[0].subresourceRange.baseMipLevel = 0;
-            barrier[0].subresourceRange.baseArrayLayer = 0;
-            barrier[0].subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-            barrier[0].subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-            vkCmdPipelineBarrier(
-				metalContext.GetActiveCommandList().GetUnderlying().get(),
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				dimof(barrier), barrier);
-        }
+        // barrier on "workingUAV" (written in first step, read in second)
+        Metal::BarrierHelper{metalContext}
+            .Add(*workingUAV.GetResource(), BindFlag::UnorderedAccess, BindFlag::ShaderResource);
         
         _upsampleOp->Dispatch(
             *iterator._parsingContext,
@@ -147,6 +108,7 @@ namespace RenderCore { namespace LightingEngine
 
     RenderStepFragmentInterface SSAOOperator::CreateFragment(const FrameBufferProperties& fbProps)
     {
+        assert(_secondStageConstructionState == 0);
         RenderStepFragmentInterface result{PipelineType::Compute};
 
         auto working = result.DefineAttachment(Hash_AOWorking).InitialState(LoadStore::DontCare, BindFlag::UnorderedAccess).Discard();
@@ -158,19 +120,45 @@ namespace RenderCore { namespace LightingEngine
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal));
         spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion));
-        spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HistoryAcc));
 
         spDesc.AppendNonFrameBufferAttachmentView(working, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulation, BindFlag::UnorderedAccess);
         spDesc.AppendNonFrameBufferAttachmentView(accumulationPrev, BindFlag::ShaderResource);
         spDesc.AppendNonFrameBufferAttachmentView(aoOutput, BindFlag::UnorderedAccess);
-        if (_hasHierarchicalDepths)
+        if (_integrationParams._hasHierarchicalDepths)
             spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
+        if (_integrationParams._hasHistoryConfidence) {
+            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HistoryAcc));
+        } else {
+            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepthPrev), BindFlag::ShaderResource);
+            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormalPrev), BindFlag::ShaderResource);
+        }
         spDesc.SetName("ao-operator");
 
         result.AddSubpass(
             std::move(spDesc),
-            [op=shared_from_this(), hd=_hasHierarchicalDepths](LightingTechniqueIterator& iterator) {
+            [op=shared_from_this(), hd=_integrationParams._hasHierarchicalDepths, hc=_integrationParams._hasHistoryConfidence](LightingTechniqueIterator& iterator) {
+
+                IResourceView* hierarchicalDepthsSRV = nullptr, *depthPrevSRV = nullptr, *gbufferNormalPrevSRV = nullptr;
+                IResourceView* historyAccumulationSRV = nullptr;
+                unsigned counter = 7;
+                if (hd) {
+                    // need to ensure the hierarchical depths compute step has finished
+                    iterator._rpi.AutoNonFrameBufferBarrier({
+                        {counter, BindFlag::ShaderResource, ShaderStage::Compute}
+                    });
+                    hierarchicalDepthsSRV = iterator._rpi.GetNonFrameBufferAttachmentView(counter).get();
+                    ++counter;
+                }
+                if (hc) {
+                    historyAccumulationSRV = iterator._rpi.GetNonFrameBufferAttachmentView(counter).get();
+                    ++counter;
+                } else {
+                    depthPrevSRV = iterator._rpi.GetNonFrameBufferAttachmentView(counter).get();
+                    gbufferNormalPrevSRV = iterator._rpi.GetNonFrameBufferAttachmentView(counter+1).get();
+                    counter += 2;
+                }
+
                 op->Execute(
                     iterator,
                     *iterator._rpi.GetNonFrameBufferAttachmentView(0),
@@ -180,8 +168,7 @@ namespace RenderCore { namespace LightingEngine
                     *iterator._rpi.GetNonFrameBufferAttachmentView(4),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(5),
                     *iterator._rpi.GetNonFrameBufferAttachmentView(6),
-                    *iterator._rpi.GetNonFrameBufferAttachmentView(7),
-                    hd ? iterator._rpi.GetNonFrameBufferAttachmentView(8).get() : nullptr);
+                    historyAccumulationSRV, hierarchicalDepthsSRV, depthPrevSRV, gbufferNormalPrevSRV);
             });
 
         return result;
@@ -219,10 +206,15 @@ namespace RenderCore { namespace LightingEngine
         for (auto a:preGeneratedAttachments)
             stitchingContext.DefineAttachment(a);
         stitchingContext.DefineDoubleBufferAttachment(Hash_AOAccumulation, MakeClearValue(1.f, 1.f, 1.f, 1.f), BindFlag::ShaderResource);
+
+        if (!_integrationParams._hasHistoryConfidence) {
+            stitchingContext.DefineDoubleBufferAttachment(Techniques::AttachmentSemantics::MultisampleDepth, MakeClearValue(0.f, 0.f, 0.f, 0.f), BindFlag::ShaderResource);
+            stitchingContext.DefineDoubleBufferAttachment(Techniques::AttachmentSemantics::GBufferNormal, MakeClearValue(0.f, 0.f, 0.f, 0.f), BindFlag::ShaderResource);
+        }
     }
 
     void SSAOOperator::ResetAccumulation() { _pingPongCounter = ~0u; }
-    ::Assets::DependencyValidation SSAOOperator::GetDependencyValidation() const { return _depVal; }
+    ::Assets::DependencyValidation SSAOOperator::GetDependencyValidation() const { assert(_secondStageConstructionState == 2); return _depVal; }
 
     void SSAOOperator::CompleteInitialization(IThreadContext& threadContext)
 	{
@@ -240,83 +232,89 @@ namespace RenderCore { namespace LightingEngine
 	}
 
     SSAOOperator::SSAOOperator(
-        std::shared_ptr<Techniques::IComputeShaderOperator> perspectiveComputeOp,
-        std::shared_ptr<Techniques::IComputeShaderOperator> orthogonalComputeOp,
-        std::shared_ptr<Techniques::IComputeShaderOperator> upsampleOp,
+        std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
         const AmbientOcclusionOperatorDesc& opDesc,
-        bool hasHierarchicalDepths)
-    : _perspectiveComputeOp(std::move(perspectiveComputeOp))
-    , _orthogonalComputeOp(std::move(orthogonalComputeOp)), _upsampleOp(std::move(upsampleOp))
-    , _opDesc(opDesc)
-    , _hasHierarchicalDepths(hasHierarchicalDepths)
+        const IntegrationParams& integrationParams)
+    : _opDesc(opDesc)
+    , _pipelinePool(std::move(pipelinePool))
+    , _integrationParams(integrationParams)
     {
-        ::Assets::DependencyValidationMarker depVals[] {
-            _perspectiveComputeOp->GetDependencyValidation(),
-            _orthogonalComputeOp->GetDependencyValidation(),
-            _upsampleOp->GetDependencyValidation()
-        };
-        _depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
+        assert(opDesc._searchSteps > 1 && opDesc._searchSteps < 1024);  // rationality check
+        assert(opDesc._maxWorldSpaceDistance > 0);
     }
     SSAOOperator::~SSAOOperator() {}
 
-    void SSAOOperator::ConstructToPromise(
+    void SSAOOperator::SecondStageConstruction(
         std::promise<std::shared_ptr<SSAOOperator>>&& promise,
-        std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-        const AmbientOcclusionOperatorDesc& opDesc,
-		bool hasHierarchicalDepths)
+        const Techniques::FrameBufferTarget& fbTarget)
     {
-        TRY {
-            assert(opDesc._searchSteps > 1 && opDesc._searchSteps < 1024);  // rationality check
-            assert(opDesc._maxWorldSpaceDistance > 0);
+        assert(_secondStageConstructionState == 0);
+        _secondStageConstructionState = 1;
 
-            UniformsStreamInterface usi;
-            usi.BindResourceView(0, "FullResolutionDepths"_h);
-            usi.BindResourceView(1, "OutputTexture"_h);
-            usi.BindResourceView(2, "Working"_h);
-            usi.BindResourceView(3, "AccumulationAO"_h);
-            usi.BindResourceView(4, "AccumulationAOLast"_h);
-            usi.BindResourceView(5, "InputNormals"_h);
-            usi.BindResourceView(6, "GBufferMotion"_h);
-            usi.BindResourceView(7, "HistoryAcc"_h);
-            usi.BindResourceView(8, "HierarchicalDepths"_h);
-            usi.BindResourceView(9, "DitherTable"_h);
-            usi.BindImmediateData(0, "AOProps"_h);
+        UniformsStreamInterface usi;
+        usi.BindResourceView(0, "FullResolutionDepths"_h);
+        usi.BindResourceView(1, "OutputTexture"_h);
+        usi.BindResourceView(2, "Working"_h);
+        usi.BindResourceView(3, "AccumulationAO"_h);
+        usi.BindResourceView(4, "AccumulationAOLast"_h);
+        usi.BindResourceView(5, "InputNormals"_h);
+        usi.BindResourceView(6, "GBufferMotion"_h);
+        usi.BindResourceView(7, "HistoryAcc"_h);
+        usi.BindResourceView(8, "HierarchicalDepths"_h);
+        usi.BindResourceView(9, "DepthPrev"_h);
+        usi.BindResourceView(10, "GBufferNormalPrev"_h);
+        usi.BindResourceView(11, "DitherTable"_h);
+        usi.BindImmediateData(0, "AOProps"_h);
 
-            ParameterBox selectors;
-            if (opDesc._sampleBothDirections) selectors.SetParameter("BOTH_WAYS", 1);
-            if (opDesc._lateTemporalFiltering) selectors.SetParameter("DO_LATE_TEMPORAL_FILTERING", 1);
-            if (hasHierarchicalDepths) selectors.SetParameter("HAS_HIERARCHICAL_DEPTHS", 1);
-            if (opDesc._enableHierarchicalStepping) selectors.SetParameter("ENABLE_HIERARCHICAL_STEPPING", 1);
-            if (opDesc._enableFiltering) selectors.SetParameter("ENABLE_FILTERING", 1);
-            if (opDesc._thicknessHeuristicFactor < 1) selectors.SetParameter("ENABLE_THICKNESS_HEURISTIC", 1);
-            auto perspectiveComputeOp = Techniques::CreateComputeOperator(
-                pipelinePool,
-                AO_COMPUTE_HLSL ":main",
-                selectors, 
-                GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-                usi);
-            selectors.SetParameter("ORTHO_CAMERA", 1);
-            auto orthogonalComputeOp = Techniques::CreateComputeOperator(
-                pipelinePool,
-                AO_COMPUTE_HLSL ":main",
-                selectors, 
-                GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-                usi);
+        ParameterBox selectors;
+        if (_opDesc._sampleBothDirections) selectors.SetParameter("BOTH_WAYS", 1);
+        if (_opDesc._lateTemporalFiltering) selectors.SetParameter("DO_LATE_TEMPORAL_FILTERING", 1);
+        if (_integrationParams._hasHierarchicalDepths) selectors.SetParameter("HAS_HIERARCHICAL_DEPTHS", 1);
+        if (_integrationParams._hasHistoryConfidence) selectors.SetParameter("HAS_HISTORY_CONFIDENCE_TEXTURE", 1);
+        if (_opDesc._enableHierarchicalStepping) selectors.SetParameter("ENABLE_HIERARCHICAL_STEPPING", 1);
+        if (_opDesc._enableFiltering) selectors.SetParameter("ENABLE_FILTERING", 1);
+        if (_opDesc._thicknessHeuristicFactor < 1) selectors.SetParameter("ENABLE_THICKNESS_HEURISTIC", 1);
+        auto perspectiveComputeOp = Techniques::CreateComputeOperator(
+            _pipelinePool,
+            AO_COMPUTE_HLSL ":main",
+            selectors, 
+            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+            usi);
+        selectors.SetParameter("ORTHO_CAMERA", 1);
+        auto orthogonalComputeOp = Techniques::CreateComputeOperator(
+            _pipelinePool,
+            AO_COMPUTE_HLSL ":main",
+            selectors, 
+            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+            usi);
 
-            auto upsampleOp = Techniques::CreateComputeOperator(
-                pipelinePool,
-                AO_COMPUTE_HLSL ":UpsampleOp",
-                selectors, 
-                GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-                usi);
+        auto upsampleOp = Techniques::CreateComputeOperator(
+            _pipelinePool,
+            AO_COMPUTE_HLSL ":UpsampleOp",
+            selectors, 
+            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+            usi);
 
-            ::Assets::WhenAll(perspectiveComputeOp, orthogonalComputeOp, upsampleOp).ThenConstructToPromise(
-                std::move(promise),
-                [od=opDesc, hd=hasHierarchicalDepths](auto perspectiveComputeOpActual, auto orthogonalComputeOpActual, auto upsampleOpActual) mutable
-                { return std::make_shared<SSAOOperator>(std::move(perspectiveComputeOpActual), std::move(orthogonalComputeOpActual), std::move(upsampleOpActual), od, hd); });
-        } CATCH(...) {
-            promise.set_exception(std::current_exception());
-        } CATCH_END
+        ::Assets::WhenAll(perspectiveComputeOp, orthogonalComputeOp, upsampleOp).ThenConstructToPromise(
+            std::move(promise),
+            [strongThis=shared_from_this()](auto perspectiveComputeOpActual, auto orthogonalComputeOpActual, auto upsampleOpActual) mutable
+            {
+                assert(strongThis->_secondStageConstructionState == 1);
+
+                ::Assets::DependencyValidationMarker depVals[] {
+                    perspectiveComputeOpActual->GetDependencyValidation(),
+                    orthogonalComputeOpActual->GetDependencyValidation(),
+                    upsampleOpActual->GetDependencyValidation()
+                };
+                strongThis->_depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
+
+                strongThis->_perspectiveComputeOp = std::move(perspectiveComputeOpActual);
+                strongThis->_orthogonalComputeOp = std::move(orthogonalComputeOpActual);
+                strongThis->_upsampleOp = std::move(upsampleOpActual);
+
+                strongThis->_secondStageConstructionState = 2;
+                return strongThis;
+            });
     }
 
     template<typename Type>

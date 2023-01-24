@@ -51,6 +51,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<SkyOperator> _skyOperator;
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
+		std::shared_ptr<SSAOOperator> _ssaoOperator;
 		std::shared_ptr<ToneMapAcesOperator> _acesOperator;
 		std::shared_ptr<CopyToneMapOperator> _copyToneMapOperator;
 		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
@@ -433,6 +434,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		std::future<std::shared_ptr<HierarchicalDepthsOperator>> _futureHierarchicalDepths;
 		std::future<std::shared_ptr<ScreenSpaceReflectionsOperator>> _futureSSR;
+		std::future<std::shared_ptr<SSAOOperator>> _futureSSAO;
 		std::future<std::shared_ptr<ToneMapAcesOperator>> _futureAces;
 		std::future<std::shared_ptr<CopyToneMapOperator>> _futureCopyToneMap;
 		std::future<std::shared_ptr<SkyOperator>> _futureSky;
@@ -456,6 +458,7 @@ namespace RenderCore { namespace LightingEngine
 		if (_acesOperator) _acesOperator->PreregisterAttachments(stitchingContext);
 		if (_copyToneMapOperator) _copyToneMapOperator->PreregisterAttachments(stitchingContext);
 		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext);
+		if (_ssaoOperator) _ssaoOperator->PreregisterAttachments(stitchingContext);
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(
@@ -482,10 +485,12 @@ namespace RenderCore { namespace LightingEngine
 		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
 		mainSequence.ResolvePendingCreateFragmentSteps();
 
-		// Calculate SSRs
-		LightingTechniqueSequence::FragmentInterfaceRegistration ssrFragmentReg;
+		// Calculate SSR & SSAO
+		LightingTechniqueSequence::FragmentInterfaceRegistration ssrFragmentReg, ssaoFragmentReg;
 		if (_ssrOperator)
 			ssrFragmentReg = mainSequence.CreateStep_RunFragments(_ssrOperator->CreateFragment(stitchingContext._workingProps));
+		if (_ssaoOperator)
+			ssaoFragmentReg = mainSequence.CreateStep_RunFragments(_ssaoOperator->CreateFragment(stitchingContext._workingProps));
 
 		mainSequence.CreateStep_CallFunction(
 			[captures=shared_from_this()](LightingTechniqueIterator& iterator) {
@@ -526,6 +531,8 @@ namespace RenderCore { namespace LightingEngine
 			ops->_futureSky = Internal::SecondStageConstruction(*_skyOperator, Internal::AsFrameBufferTarget(mainSequence, mainSceneFragmentRegistration));
 		if (_ssrOperator)
 			ops->_futureSSR = Internal::SecondStageConstruction(*_ssrOperator, Internal::AsFrameBufferTarget(mainSequence, ssrFragmentReg));
+		if (_ssaoOperator)
+			ops->_futureSSAO = Internal::SecondStageConstruction(*_ssaoOperator, Internal::AsFrameBufferTarget(mainSequence, ssaoFragmentReg));
 		ops->_futureHierarchicalDepths = Internal::SecondStageConstruction(*_hierarchicalDepthsOperator, Internal::AsFrameBufferTarget(mainSequence, hierachicalDepthsReg));
 		if (_acesOperator)
 			ops->_futureAces = Internal::SecondStageConstruction(*_acesOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));
@@ -606,6 +613,8 @@ namespace RenderCore { namespace LightingEngine
 						captures->_skyOperator = std::make_shared<SkyOperator>(pipelinePool, *digest._sky);
 					if (digest._ssr)
 						captures->_ssrOperator = std::make_shared<ScreenSpaceReflectionsOperator>(pipelinePool, *digest._ssr, ScreenSpaceReflectionsOperator::IntegrationParams{digest._skyTextureProcessor.has_value()});
+					if (digest._ssao)
+						captures->_ssaoOperator = std::make_shared<SSAOOperator>(pipelinePool, *digest._ssao, SSAOOperator::IntegrationParams{true});
 					if (digest._tonemapAces) {
 						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces);
 					} else {
@@ -669,7 +678,7 @@ namespace RenderCore { namespace LightingEngine
 							auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 							if (secondStageHelper->_futureHierarchicalDepths.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureHierarchicalDepths, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureSSR.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSSR, timeoutTime)) return ::Assets::PollStatus::Continue;
-							// if (secondStageHelper->_futureSSAO && Internal::MarkerTimesOut(*secondStageHelper->_futureSSAO, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureSSAO.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSSAO, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureAces.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureAces, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureCopyToneMap.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureCopyToneMap, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureSky.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSky, timeoutTime)) return ::Assets::PollStatus::Continue;
@@ -679,7 +688,7 @@ namespace RenderCore { namespace LightingEngine
 							// Shake out any exceptions
 							secondStageHelper->_futureHierarchicalDepths.get();
 							if (secondStageHelper->_futureSSR.valid()) secondStageHelper->_futureSSR.get();
-							// secondStageHelper->_futureSSAO.get();
+							if (secondStageHelper->_futureSSAO.valid()) secondStageHelper->_futureSSAO.get();
 							if (secondStageHelper->_futureAces.valid()) secondStageHelper->_futureAces.get();
 							if (secondStageHelper->_futureCopyToneMap.valid()) secondStageHelper->_futureCopyToneMap.get();
 							if (secondStageHelper->_futureSky.valid()) secondStageHelper->_futureSky.get();
@@ -688,6 +697,8 @@ namespace RenderCore { namespace LightingEngine
 							lightingTechnique->_depVal.RegisterDependency(captures->_hierarchicalDepthsOperator->GetDependencyValidation());
 							if (captures->_ssrOperator)
 								lightingTechnique->_depVal.RegisterDependency(captures->_ssrOperator->GetDependencyValidation());
+							if (captures->_ssaoOperator)
+								lightingTechnique->_depVal.RegisterDependency(captures->_ssaoOperator->GetDependencyValidation());
 							if (captures->_acesOperator)
 								lightingTechnique->_depVal.RegisterDependency(captures->_acesOperator->GetDependencyValidation());
 							if (captures->_copyToneMapOperator)

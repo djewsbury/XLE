@@ -9,7 +9,7 @@
 #include <memory>
 
 namespace RenderCore { class IResourceView; class IDevice; class FrameBufferProperties; }
-namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; }}
+namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; struct FrameBufferTarget; }}
 namespace RenderCore { namespace BufferUploads { class ResourceLocator; } }
 namespace RenderCore { class IThreadContext; }
 namespace std { template<typename T> class promise; }
@@ -46,12 +46,14 @@ namespace RenderCore { namespace LightingEngine
 			IResourceView& inputDepthsSRV,
 			IResourceView& inputNormalsSRV,
 			IResourceView& inputVelocitiesSRV,
-			IResourceView& inputHistoryAccumulation,
 			IResourceView& workingUAV,
 			IResourceView& accumulation0UAV,
 			IResourceView& accumulation1UAV,
 			IResourceView& aoOutputUAV,
-			IResourceView* hierarchicalDepths);
+			IResourceView* historyAccumulationSRV,
+			IResourceView* hierarchicalDepthsSRV,
+			IResourceView* depthPrevSRV,
+        	IResourceView* gbufferNormalPrevSRV);
 
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
@@ -59,30 +61,35 @@ namespace RenderCore { namespace LightingEngine
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const;
 
+		void SecondStageConstruction(
+			std::promise<std::shared_ptr<SSAOOperator>>&& promise,
+			const Techniques::FrameBufferTarget& fbTarget);
 		void CompleteInitialization(IThreadContext& threadContext);
 
-		SSAOOperator(
-			std::shared_ptr<Techniques::IComputeShaderOperator> perspectiveComputeOp,
-			std::shared_ptr<Techniques::IComputeShaderOperator> orthogonalComputeOp,
-			std::shared_ptr<Techniques::IComputeShaderOperator> upsampleOp,
-			const AmbientOcclusionOperatorDesc& opDesc,
-			bool hasHierarchicalDepths);
-		~SSAOOperator();
+		struct IntegrationParams
+		{
+			bool _hasHierarchicalDepths = false;
+			bool _hasHistoryConfidence = false;		// has precomputed history confidence texture
+		};
 
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<SSAOOperator>>&& promise,
+		SSAOOperator(
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 			const AmbientOcclusionOperatorDesc& opDesc,
-			bool hasHierarchicalDepths);
+			const IntegrationParams& integrationParams);
+		~SSAOOperator();
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _perspectiveComputeOp;
 		std::shared_ptr<Techniques::IComputeShaderOperator> _orthogonalComputeOp;
 		std::shared_ptr<Techniques::IComputeShaderOperator> _upsampleOp;
 		std::shared_ptr<IResourceView> _ditherTable;
-		::Assets::DependencyValidation _depVal;
+
 		unsigned _pingPongCounter = ~0u;
 		AmbientOcclusionOperatorDesc _opDesc;
-		bool _hasHierarchicalDepths = false;
+		IntegrationParams _integrationParams;
+
+		std::shared_ptr<Techniques::PipelineCollection> _pipelinePool;
+		::Assets::DependencyValidation _depVal;
 		bool _pendingCompleteInit = true;
+		unsigned _secondStageConstructionState = 0;		// debug usage only
 	};
 }}

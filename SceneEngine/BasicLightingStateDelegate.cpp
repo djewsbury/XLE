@@ -1185,6 +1185,50 @@ namespace SceneEngine
         RenderCore::LightingEngine::AmbientOcclusionOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
+        switch (propertyNameHash) {
+        case "SearchSteps"_h:
+            if (auto value = ConvertOrCast<unsigned>(data, type)) {
+                desc._searchSteps = *value;
+                return true;
+            }
+            break;
+        case "MaxWorldSpaceDistance"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._maxWorldSpaceDistance = *value;
+                return true;
+            }
+            break;
+        case "SampleBothDirections"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._sampleBothDirections = *value;
+                return true;
+            }
+            break;
+        case "LateTemporalFiltering"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._lateTemporalFiltering = *value;
+                return true;
+            }
+            break;
+        case "EnableFiltering"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._enableFiltering = *value;
+                return true;
+            }
+            break;
+        case "EnableHierarchicalStepping"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._enableHierarchicalStepping = *value;
+                return true;
+            }
+            break;
+        case "ThicknessHeuristicFactor"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._thicknessHeuristicFactor = *value;
+                return true;
+            }
+            break;
+        }
         return false;
     }
 
