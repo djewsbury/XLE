@@ -13,6 +13,7 @@
 #include "../Vulkan/IDeviceVulkan.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Marker.h"
+#include "../../OSServices/Log.h"
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
 
@@ -212,12 +213,13 @@ namespace RenderCore { namespace Techniques
 		
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "Output"_h);
-		usi.BindImmediateData(0, "FilterPassParams"_h);
+		usi.BindImmediateData(0, "ControlUniforms"_h);
 
  		auto computeOpFuture = CreateComputeOperator(
 			std::make_shared<PipelineCollection>(threadContext->GetDevice()),
 			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain", usi);
 
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
 		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
@@ -226,43 +228,65 @@ namespace RenderCore { namespace Techniques
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
 
+		threadContext->GetDevice()->Stall();		// sync with GPU, because of timing work below
+
 		for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
-			TextureViewDesc view;
-			view._mipRange = {mip, 1};
-			auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
-			IResourceView* resViews[] = { outputView.get() };
-			struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, 0, 1, 0 };
-			const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(filterPassParams) };
-			UniformsStream us;
-			us._resourceViews = MakeIteratorRange(resViews);
-			us._immediateData = MakeIteratorRange(immData);
+
 			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
-			computeOp->Dispatch(*threadContext, (mipDesc._width+7)/8, (mipDesc._height+7)/8, 1, us);
+			unsigned totalPixelCount = mipDesc._width * mipDesc._height;
+
+			// We have to baby the graphics API a little bit to avoid timeouts. We don't know
+			// exactly how many pixels we can calculate in a single command list before we will
+			// start to get timeouts.
+			//
+			// It doesn't matter how we distribute threads in groups or dispatches -- what matters
+			// is the cost of the command list submit as a whole
+			//
+			// We will start with a small number of pixels and slowly increase while it seems safe
+			// Unfortunately we have to do this with the CPU & GPU synced, because timing the GPU
+			// would otherwise be awkward
+
+			unsigned pixelsProcessed = 0;
+			unsigned pixelsPerCmdList = 256;
+			while (true) {
+				TextureViewDesc view;
+				view._mipRange = {mip, 1};
+				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+				IResourceView* resViews[] = { outputView.get() };
+				struct ControlUniforms { unsigned _mipIndex, _groupIdOffset, _dummy0, _dummy1; } controlUniforms { mip, pixelsProcessed, 0, 0 };
+				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(controlUniforms) };
+				UniformsStream us;
+				us._resourceViews = MakeIteratorRange(resViews);
+				us._immediateData = MakeIteratorRange(immData);
+				
+				auto thisCmdList = std::min(totalPixelCount - pixelsProcessed, pixelsPerCmdList);
+				Log(Verbose) << "Attempting " << thisCmdList << " pixels" << std::endl;
+				computeOp->Dispatch(*threadContext, thisCmdList, 1, 1, us);
+
+				pixelsProcessed += thisCmdList;
+				if (pixelsProcessed >= totalPixelCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
+
+				auto start = std::chrono::steady_clock::now();
+				threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
+				auto elapsed = std::chrono::steady_clock::now() - start;
+				Log(Verbose) << "Processing " << thisCmdList << " pixels took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
+				// On windows with default settings, timeouts begin at 2 seconds
+				if (elapsed < std::chrono::milliseconds(750)) {
+					pixelsPerCmdList *= 1 << IntegerLog2(uint32_t(1500 / std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
+				}
+			}
 		}
 
 		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
-		{
-			auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
-			barrier.pNext = nullptr;
-			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			vkCmdPipelineBarrier(
-				metalContext.GetActiveCommandList().GetUnderlying().get(),
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				0,
-				1, &barrier,
-				0, nullptr,
-				0, nullptr);
-		}
+		Metal::BarrierHelper{metalContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
 
 		auto result = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, computeOp->GetDependencyValidation());
-		threadContext->CommitCommands();
 		// Release the command buffer pool, because Vulkan requires pumping the command buffer destroys regularly,
 		// and we may not be doing that in this thread for awhile
-		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>)) {
+			threadContext->CommitCommands();
 			threadContextVulkan->ReleaseCommandBufferPool();
+		}
 		return result;
 	}
 
