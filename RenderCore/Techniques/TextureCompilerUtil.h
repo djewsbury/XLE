@@ -24,7 +24,8 @@ namespace RenderCore { namespace Techniques
 		EquRectFilterMode filter = EquRectFilterMode::ToCubeMap,
 		const ProgressiveTextureFn& progressiveResults = {});
 
-	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromComputeShader(
+	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(
 		StringSection<> shader,
-		const TextureDesc& targetDesc);
+		const TextureDesc& targetDesc,
+		unsigned totalSampleCount);
 }}

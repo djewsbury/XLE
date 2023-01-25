@@ -207,7 +207,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromComputeShader(StringSection<> shader, const TextureDesc& targetDesc)
+	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(StringSection<> shader, const TextureDesc& targetDesc, unsigned totalSampleCount)
 	{
 		auto threadContext = GetThreadContext();
 		
@@ -242,37 +242,45 @@ namespace RenderCore { namespace Techniques
 			// It doesn't matter how we distribute threads in groups or dispatches -- what matters
 			// is the cost of the command list submit as a whole
 			//
-			// We will start with a small number of pixels and slowly increase while it seems safe
-			// Unfortunately we have to do this with the CPU & GPU synced, because timing the GPU
-			// would otherwise be awkward
+			// We will start with a small number of samples per pixel and slowly increase while it seems safe
+			// Let's do this with the CPU & GPU synced, because we don't want this thread to 
+			// get ahead of the GPU anyway, and we also don't want to release this thread to the 
+			// thread pool while waiting for the GPU
 
-			unsigned pixelsProcessed = 0;
-			unsigned pixelsPerCmdList = 256;
+			unsigned samplesProcessed = 0;
+			unsigned samplesPerCmdList = 256;
 			while (true) {
+				auto thisCmdList = std::min(totalSampleCount - samplesProcessed, samplesPerCmdList);
+
 				TextureViewDesc view;
 				view._mipRange = {mip, 1};
 				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
 				IResourceView* resViews[] = { outputView.get() };
-				struct ControlUniforms { unsigned _mipIndex, _groupIdOffset, _dummy0, _dummy1; } controlUniforms { mip, pixelsProcessed, 0, 0 };
+				struct ControlUniforms
+				{
+					unsigned _thisPassSampleOffset, _thisPassSampleCount, _thisPassSampleStride, _totalSampleCount;
+					unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
+				} controlUniforms { samplesProcessed, thisCmdList, 1, totalSampleCount, mip, 0, 0, 0 };
 				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(controlUniforms) };
 				UniformsStream us;
 				us._resourceViews = MakeIteratorRange(resViews);
 				us._immediateData = MakeIteratorRange(immData);
 				
-				auto thisCmdList = std::min(totalPixelCount - pixelsProcessed, pixelsPerCmdList);
-				Log(Verbose) << "Attempting " << thisCmdList << " pixels" << std::endl;
-				computeOp->Dispatch(*threadContext, thisCmdList, 1, 1, us);
+				computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
 
-				pixelsProcessed += thisCmdList;
-				if (pixelsProcessed >= totalPixelCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
+				samplesProcessed += thisCmdList;
+				if (samplesProcessed >= totalSampleCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
 
 				auto start = std::chrono::steady_clock::now();
 				threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
 				auto elapsed = std::chrono::steady_clock::now() - start;
-				Log(Verbose) << "Processing " << thisCmdList << " pixels took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
+				Log(Verbose) << "[" << shader << "] Processing " << thisCmdList << " samples took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
 				// On windows with default settings, timeouts begin at 2 seconds
 				if (elapsed < std::chrono::milliseconds(750)) {
-					pixelsPerCmdList *= 1 << IntegerLog2(uint32_t(1500 / std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
+					// increase by powers of two, roughly by proportion, just not too quickly
+					auto increaser = IntegerLog2(uint32_t(1500 / std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
+					increaser = std::min(increaser, 4u);
+					samplesPerCmdList *= 1 << increaser;
 				}
 			}
 		}

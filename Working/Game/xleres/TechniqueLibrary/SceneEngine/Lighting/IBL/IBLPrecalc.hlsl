@@ -17,20 +17,12 @@
 
 float2 GenerateSplitTerm(
     float NdotV, float roughness,
-    uint passSampleCount, uint passIndex, uint passCount)
+    uint thisPassSampleBegin, uint thisPassSampleCount, uint sampleStride, uint totalSampleCount)
 {
     // This generates the lookup table used by the glossy specular reflections
     // split sum approximation.
     // Based on the method presented by Unreal course notes:
     //  http://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
-    // While referencing the implementation in "IBL Baker":
-    //  https://github.com/derkreature/IBLBaker/
-    // We should maintain our own version, because we need to take into account the
-    // same remapping on "roughness" that we do for run-time specular.
-    //
-    // For the most part, we will just be integrating the specular equation over the
-    // hemisphere with white incoming light. We use importance sampling with a fixed
-    // number of samples to try to make the work load manageable...
 
     precise float3 normal = float3(0.0f, 0.0f, 1.0f);
     precise float3 V = float3(sqrt(1.0f - NdotV * NdotV), 0.0f, NdotV);
@@ -47,14 +39,14 @@ float2 GenerateSplitTerm(
         // runtime specular. So it actually seems better with the this remapping.
     precise float alphag = RoughnessToGAlpha(roughness);
     precise float alphad = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
-    alphag = alphad;
     precise float G2 = SmithG(NdotV, alphag);
 
-    precise float A = 0.f, B = 0.f;
-    LOOP_DIRECTIVE for (uint s=0u; s<passSampleCount; ++s) {
+    precise float A = 0.0, B = 0.0;
+    LOOP_DIRECTIVE for (uint s=0u; s<thisPassSampleCount; ++s) {
         // Note that "HammersleyPt" always produces (0,0) as the first points
         //      -- this will become a direction equal to "normal"
-        float2 xi = HammersleyPt(s*passCount+passIndex, passSampleCount*passCount);
+        uint sampleIdx = (s*sampleStride+thisPassSampleBegin)%totalSampleCount;
+        precise float2 xi = HammersleyPt(sampleIdx, totalSampleCount);
 
         float3 tangentSpaceHalfVector = GGXHalfVector_Sample(xi, alphad);
         // float3 tangentSpaceHalfVector = HeitzGGXVNDF_Sample(V, alphad, alphad, xi.x, xi.y);
@@ -105,15 +97,17 @@ float2 GenerateSplitTerm(
                 precise float pdf = 1.0f;
             #endif
 
-            A += ((1.f - F) * specular) / (pdf * float(passSampleCount));
-            B += (F * specular) / (pdf * float(passSampleCount));
+            // adding small numbers to large numbers -- probably not ideal for precision
+            A += ((1.f - F) * specular) / pdf;
+            B += (F * specular) / pdf;
         }
     }
 
     // Note that we're assuming that each "pass" is equally weight here. This is only true because we're
     // interleaving the samples (ie, it's not like we do all of the high cosTheta samples in a single pass)
 
-    return float2(A, B) / float(passCount);
+    precise float reciprocalN = 1.0 / (totalSampleCount);
+    return float2(A, B) * reciprocalN;
 }
 
 float GenerateSplitTermTrans(

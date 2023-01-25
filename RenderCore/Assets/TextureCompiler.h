@@ -35,6 +35,7 @@ namespace RenderCore { namespace Assets
 		unsigned _faceDim = 512;
 		unsigned _width = 512, _height = 512;
 		unsigned _coefficientCount = 9;
+		unsigned _sampleCount = 256;
 
 		enum class MipMapFilter { None, FromSource };
 		MipMapFilter _mipMapFilter = MipMapFilter::None;

@@ -185,6 +185,7 @@ namespace RenderCore { namespace Assets
 		result._width = operationElement.Attribute("Width", result._width);
 		result._height = operationElement.Attribute("Height", result._height);
 		result._coefficientCount = operationElement.Attribute("CoefficientCount", result._coefficientCount);
+		result._sampleCount = operationElement.Attribute("SampleCount", result._sampleCount);
 
 		auto mipFilter = operationElement.Attribute("MipMapFilter");
 		if (mipFilter && XlEqStringI(mipFilter.Value(), "FromSource")) result._mipMapFilter = TextureCompilationRequest::MipMapFilter::FromSource;
@@ -288,7 +289,7 @@ namespace RenderCore { namespace Assets
 				auto shader = request._shader;
 				if (shader.empty())
 					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
-				srcPkt = Techniques::GenerateFromComputeShader(shader, targetDesc);
+				srcPkt = Techniques::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			}
 			CompressonatorTexture input{*srcPkt};
@@ -320,7 +321,7 @@ namespace RenderCore { namespace Assets
 					destTexture.dwHeight   = std::max(1u, (unsigned)srcMipDesc._height);
 					destTexture.dwPitch    = 0;
 					destTexture.format     = comprDstFormat;
-					destTexture.dwDataSize = dstOffset._size;
+					destTexture.dwDataSize = (CMP_DWORD)dstOffset._size;
 					auto calcSize = CMP_CalculateBufferSize(&destTexture);
 					assert(destTexture.dwDataSize == calcSize);
 					destTexture.pData = (CMP_BYTE*)PtrAdd(destinationBlob->data(), ddsHeaderOffset + dstOffset._offset);
@@ -330,7 +331,7 @@ namespace RenderCore { namespace Assets
 					auto srcTexture = input._srcTexture;
 					srcTexture.dwWidth = destTexture.dwWidth;
 					srcTexture.dwHeight = destTexture.dwHeight;
-					srcTexture.dwDataSize = srcOffset._size;
+					srcTexture.dwDataSize = (CMP_DWORD)srcOffset._size;
 					srcTexture.pData = PtrAdd(srcTexture.pData, srcOffset._offset);
 
 					CMP_ERROR cmp_status;

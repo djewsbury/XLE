@@ -3,3 +3,4 @@ ComputeShader=~
     Format = BC6H_UF16
     Width = 512
     Height = 512
+    SampleCount = 65536
