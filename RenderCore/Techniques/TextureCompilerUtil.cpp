@@ -10,6 +10,7 @@
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
+#include "../IAnnotator.h"
 #include "../Vulkan/IDeviceVulkan.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Marker.h"
@@ -68,6 +69,97 @@ namespace RenderCore { namespace Techniques
 	static std::string s_equRectFilterName { "texture-compiler (EquRectFilter)" };
 	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
 
+	template<int Base, typename FloatType=float>
+		static FloatType RadicalInverseSpecialized(uint64_t a)
+	{
+		const FloatType reciprocalBase = FloatType(1.0) / FloatType(Base);
+		uint64_t reversedDigits = 0;
+		FloatType reciprocalBaseN = 1;
+		while (a) {
+			uint64_t next = a / Base;
+			uint64_t digit = a - next * Base;
+			reversedDigits = reversedDigits * Base + digit;
+			reciprocalBaseN *= reciprocalBase;
+			a = next;
+		}
+		return reversedDigits * reciprocalBaseN;
+	}
+
+	class HaltonSamplerHelper
+	{
+	public:
+		std::shared_ptr<IResourceView> _pixelToSampleIndex;
+		std::shared_ptr<IResourceView> _pixelToSampleIndexParams;		// cbuffer
+
+		// todo -- consider max resolution
+		HaltonSamplerHelper(IThreadContext& threadContext, unsigned width, unsigned height)
+		{
+			// For a given texture, we're going to create a lookup table that converts from 
+			// xy coords to first sample index in the Halton sequence
+			//
+			// That is, if (radical-inverse-base-2(i), radical-inverse-base-3(i)) is the xy
+			// coords associated with sample i; we want to be able to go backwards and get i
+			// from a given sample coords
+			//
+			// This will then allow us to generate more well distributed numbers based on i,
+			// by using the deeper dimensions of the Halton sequence
+			//
+			// Furthermore, we can cause samples in a given pixel to repeat with a constant
+			// interval by multiplying the sampling coordinate space by a specific scale
+			//
+			// See pbr-book chapter 7.4 for more reference on this
+			// Though, we're not going to use a mathematically sophisticated method for this,
+			// instead something pretty rudimentary
+
+			float j = std::ceil(std::log2(float(width)));
+			float log3Height = std::log(float(height))/std::log(3.0f);
+			float k = std::ceil(log3Height);
+			float scaledWidth = std::pow(2.f, j), scaledHeight = std::pow(3.f, k);
+
+			auto data = std::make_unique<unsigned[]>(width*height);
+			std::memset(data.get(), 0, sizeof(unsigned)*width*height);
+
+			// We can do this in a smarter way by using the inverse-radical-inverse, and solving some simultaneous
+			// equations with modular arithmetic. But since we're building a lookup table anyway, that doesn't seem
+			// of any practical purpose
+			unsigned repeatingStride = (unsigned)(scaledWidth*scaledHeight);
+			for (unsigned sampleIdx=0; sampleIdx<repeatingStride; ++sampleIdx) {
+				auto x = unsigned(scaledWidth * RadicalInverseSpecialized<2>(sampleIdx)), 
+					y = unsigned(scaledHeight * RadicalInverseSpecialized<3>(sampleIdx));
+				if (x >= width || y >= height) continue;
+				data[x+y*width] = sampleIdx;
+			}
+
+			auto texture = threadContext.GetDevice()->CreateResource(
+				CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(width, height, Format::R32_UINT)),
+				"sample-idx-lookup");
+			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(
+				*texture, 
+				SubResourceInitData{MakeIteratorRange(data.get(), PtrAdd(data.get(), sizeof(unsigned)*width*height))},
+				Format::R32_UINT,
+				UInt3{width, height, 1},
+				TexturePitches{width*sizeof(unsigned), width*height*sizeof(unsigned)});
+
+			_pixelToSampleIndex = texture->CreateTextureView();
+
+			struct Uniforms
+			{
+				float _j, _k;
+				unsigned _repeatingStride;
+				unsigned _dummy;
+			} uniforms {
+				j, k, repeatingStride, 0
+			};
+
+			auto cbuffer = threadContext.GetDevice()->CreateResource(
+				CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(Uniforms))),
+				"sample-idx-uniforms");
+			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(
+				*cbuffer, MakeOpaqueIteratorRange(uniforms));
+			_pixelToSampleIndexParams = cbuffer->CreateBufferView();
+		}
+	};
+
 	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(
 		BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc,
 		EquRectFilterMode filter,
@@ -77,7 +169,12 @@ namespace RenderCore { namespace Techniques
 		// an output cubemap. We'll do this on the GPU and copy the results back into a new IAsyncDataSource
 		if (filter != EquRectFilterMode::ProjectToSphericalHarmonic)
 			assert(ActualArrayLayerCount(targetDesc) == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
+
 		auto threadContext = GetThreadContext();
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		auto pipelineCollection = std::make_shared<PipelineCollection>(threadContext->GetDevice());
+
+		threadContext->GetAnnotator().BeginFrameCapture();
 		
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "Input"_h);
@@ -87,17 +184,21 @@ namespace RenderCore { namespace Techniques
 		if (filter == EquRectFilterMode::ToCubeMap) {
 			usi.BindResourceView(1, "OutputArray"_h);
  			computeOpFuture = CreateComputeOperator(
-				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
+				pipelineCollection,
 				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquRectToCube",
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
 			usi.BindResourceView(1, "OutputArray"_h);
+			usi.BindResourceView(2, "MarginalHorizontalCDF"_h);
+			usi.BindResourceView(3, "MarginalVerticalCDF"_h);
+			usi.BindResourceView(4, "SampleIndexLookup"_h);
+			usi.BindResourceView(5, "SampleIndexUniforms"_h);
+			usi.BindImmediateData(0, "ControlUniforms"_h);
 			computeOpFuture = CreateComputeOperator(
-				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
+				pipelineCollection,
 				IBL_PREFILTER_HLSL ":EquiRectFilterGlossySpecular",
-				// IBL_PREFILTER_HLSL ":ReferenceDiffuseFilter",
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
@@ -105,7 +206,7 @@ namespace RenderCore { namespace Techniques
 			assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
 			usi.BindResourceView(1, "Output"_h);
 			computeOpFuture = CreateComputeOperator(
-				std::make_shared<PipelineCollection>(threadContext->GetDevice()),
+				pipelineCollection,
 				IBL_PREFILTER_HLSL ":ProjectToSphericalHarmonic",
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
@@ -114,7 +215,7 @@ namespace RenderCore { namespace Techniques
 
 		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
-		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
+		Metal::CompleteInitialization(metalContext, {outputRes.get()});
 		if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(threadContext.get()))
 			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
 
@@ -126,73 +227,167 @@ namespace RenderCore { namespace Techniques
 		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
 
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
-		for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
-			TextureViewDesc view;
-			view._mipRange = {mip, 1};
-			auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
-			IResourceView* resViews[] = { inputView.get(), outputView.get() };
-			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
 
+		if (filter != EquRectFilterMode::ToGlossySpecular) {
+			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
+				TextureViewDesc view;
+				view._mipRange = {mip, 1};
+				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+				IResourceView* resViews[] = { inputView.get(), outputView.get() };
+				auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+
+				UniformsStream us;
+				us._resourceViews = MakeIteratorRange(resViews);
+				auto dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+
+				if (filter == EquRectFilterMode::ToCubeMap) {
+					auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
+					for (unsigned p=0; p<passCount; ++p) {
+						struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
+						dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
+					}
+#if 0
+				} else if (filter == EquRectFilterMode::ToGlossySpecular) {
+					auto pixelCount = mipDesc._width * mipDesc._height * ActualArrayLayerCount(targetDesc);
+					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
+					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
+					auto dispatchCount = passesPerPixel*pixelCount;
+					auto dispatchesPerCommit = std::min(32768u, pixelCount);
+					for (unsigned d=0; d<dispatchCount; ++d) {
+						struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, d, dispatchCount, 0 };
+						dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
+
+						if ((d%dispatchesPerCommit) == (dispatchesPerCommit-1)) {
+							dispatchGroup = {};
+							if (progressiveResults) {
+								Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
+								auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+								// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
+								progressiveResults(intermediateData);
+								Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
+							} else {
+								threadContext->CommitCommands();
+							}
+
+							dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+							if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
+								threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
+						} else {
+							/* 	We shouldn't need a barrier here, because we won't write to the same pixel in the same
+								cmd list. The pixel we're writing to is based on 'd' -- and this won't wrap around back to
+								the start before we commit the command list
+							VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+							barrier.pNext = nullptr;
+							barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+							barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+							vkCmdPipelineBarrier(
+								Metal::DeviceContext::Get(*threadContext)->GetActiveCommandList().GetUnderlying().get(),
+								VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+								VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+								0,
+								1, &barrier,
+								0, nullptr,
+								0, nullptr);
+							*/
+						}
+					}
+#endif
+				} else {
+					assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
+					dispatchGroup.Dispatch(targetDesc._width, 1, 1);
+				}
+
+				dispatchGroup = {};
+			}
+		} else {
+			// glossy specular
+			auto horizontalDensitiesFuture = CreateComputeOperator(
+				pipelineCollection,
+				IBL_PREFILTER_HLSL ":CalculateHorizontalMarginalDensities",
+				{},
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
+				usi);
+			auto normalizeDensitiesFuture = CreateComputeOperator(
+				pipelineCollection,
+				IBL_PREFILTER_HLSL ":NormalizeMarginalDensities",
+				{},
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
+				usi);
+			horizontalDensitiesFuture->StallWhilePending();
+			normalizeDensitiesFuture->StallWhilePending();
+			auto horizontalDensities = horizontalDensitiesFuture->Actualize();
+			auto normalizeDensities = normalizeDensitiesFuture->Actualize();
+
+			depVal.RegisterDependency(horizontalDensities->GetDependencyValidation());
+			depVal.RegisterDependency(normalizeDensities->GetDependencyValidation());
+
+			auto inputDesc = inputRes->GetDesc()._textureDesc;
+			const unsigned densityBlock = 16;
+			UInt2 densitiesDims { (inputDesc._width+densityBlock-1)/densityBlock, (inputDesc._height+densityBlock-1)/densityBlock };
+			auto marginalHorizontalCFG = threadContext->GetDevice()->CreateResource(
+				CreateDesc(BindFlag::UnorderedAccess, TextureDesc::Plain2D(densitiesDims[0], densitiesDims[1], Format::R32_FLOAT)),
+				"marginal-horizontal-cdf")->CreateTextureView(BindFlag::UnorderedAccess);
+			auto marginalVerticalCFG = threadContext->GetDevice()->CreateResource(
+				CreateDesc(BindFlag::UnorderedAccess, TextureDesc::Plain1D(densitiesDims[1], Format::R32_FLOAT)),
+				"marginal-vertical-cdf")->CreateTextureView(BindFlag::UnorderedAccess);
+			RenderCore::IResource* toComplete[] { marginalHorizontalCFG->GetResource().get(), marginalVerticalCFG->GetResource().get() };
+			Metal::CompleteInitialization(metalContext, toComplete);
+
+			IResourceView* resViews[] = { inputView.get(), nullptr, marginalHorizontalCFG.get(), marginalVerticalCFG.get(), nullptr, nullptr };
 			UniformsStream us;
 			us._resourceViews = MakeIteratorRange(resViews);
-			auto dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
 
-			if (filter == EquRectFilterMode::ToCubeMap) {
-				auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
-				for (unsigned p=0; p<passCount; ++p) {
-					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
-					dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
-				}
-			} else if (filter == EquRectFilterMode::ToGlossySpecular) {
-				auto pixelCount = mipDesc._width * mipDesc._height * ActualArrayLayerCount(targetDesc);
-				auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
-				auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
-				auto dispatchCount = passesPerPixel*pixelCount;
-				auto dispatchesPerCommit = std::min(32768u, pixelCount);
-				for (unsigned d=0; d<dispatchCount; ++d) {
-					struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, d, dispatchCount, 0 };
-					dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
+			horizontalDensities->Dispatch(*threadContext, (densitiesDims[0]+8-1)/8, (densitiesDims[1]+8-1)/8, 1, us);
+			Metal::BarrierHelper(metalContext).Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
+			normalizeDensities->Dispatch(*threadContext, 1, 1, 1, us);
+			Metal::BarrierHelper(metalContext)
+				.Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess)
+				.Add(*marginalVerticalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 
-					if ((d%dispatchesPerCommit) == (dispatchesPerCommit-1)) {
-						dispatchGroup = {};
-						if (progressiveResults) {
-							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
-							auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
-							// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
-							progressiveResults(intermediateData);
-							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
-						} else {
-							threadContext->CommitCommands();
-						}
+			threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion); // sync with GPU, because of timing work below
 
-						dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
-						if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
-							threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
+			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
+				TextureViewDesc view;
+				view._mipRange = {mip, 1};
+				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+				resViews[1] = outputView.get();
+				auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+
+				HaltonSamplerHelper samplerHelper{*threadContext, mipDesc._width, mipDesc._height};
+				resViews[4] = samplerHelper._pixelToSampleIndex.get();
+				resViews[5] = samplerHelper._pixelToSampleIndexParams.get();
+
+				{
+					auto pixelCount = mipDesc._width * mipDesc._height * ActualArrayLayerCount(targetDesc);
+					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
+					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
+					auto dispatchCount = passesPerPixel*pixelCount;
+					auto dispatchesPerCommit = std::min(32768u, pixelCount);
+
+					struct ControlUniforms
+					{
+						unsigned _thisPassSampleOffset, _thisPassSampleCount, _thisPassSampleStride, _totalSampleCount;
+						unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
+					} controlUniforms { 0, 256, 1, 256, mip, 0, 0, 0 };
+
+					UniformsStream us;
+					us._resourceViews = MakeIteratorRange(resViews);
+					UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
+					us._immediateData = immDatas;
+
+					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
+
+					if (progressiveResults) {
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
+						auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+						// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
+						progressiveResults(intermediateData);
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
 					} else {
-						/* 	We shouldn't need a barrier here, because we won't write to the same pixel in the same
-							cmd list. The pixel we're writing to is based on 'd' -- and this won't wrap around back to
-							the start before we commit the command list
-						VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
-						barrier.pNext = nullptr;
-						barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-						barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-						vkCmdPipelineBarrier(
-							Metal::DeviceContext::Get(*threadContext)->GetActiveCommandList().GetUnderlying().get(),
-							VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-							VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-							0,
-							1, &barrier,
-							0, nullptr,
-							0, nullptr);
-						 */
+						threadContext->CommitCommands();
 					}
 				}
-			} else {
-				assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
-				dispatchGroup.Dispatch(targetDesc._width, 1, 1);
 			}
-
-			dispatchGroup = {};
 		}
 
 		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
@@ -204,6 +399,9 @@ namespace RenderCore { namespace Techniques
 		// and we may not be doing that in this thread for awhile
 		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 			threadContextVulkan->ReleaseCommandBufferPool();
+
+		threadContext->GetAnnotator().EndFrameCapture();
+
 		return result;
 	}
 
@@ -221,7 +419,7 @@ namespace RenderCore { namespace Techniques
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
-		Metal::CompleteInitialization(*Metal::DeviceContext::Get(*threadContext), {outputRes.get()});
+		Metal::CompleteInitialization(metalContext, {outputRes.get()});
 		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
 

@@ -5,21 +5,31 @@
 #define FORCE_GGX_REF
 
 #include "Cubemap.hlsl"
+#include "sampling-shader-helper.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
-#include "../Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
+#include "../TechniqueLibrary/Utility/Colour.hlsl"
 
 Texture2D Input;
 RWTexture2DArray<float4> OutputArray;
 RWTexture2D<float4> Output;
 SamplerState EquirectangularBilinearSampler;
+RWTexture2D<float> MarginalHorizontalCDF;
+RWTexture1D<float> MarginalVerticalCDF;
+Texture2D<uint> SampleIndexLookup;
 
-struct FilterPassParamsStruct
+cbuffer SampleIndexUniforms
 {
+    float HaltonSamplerJ, HaltonSamplerK;
+    uint HaltonSamplerRepeatingStride;
+}
+
+struct ControlUniformsStruct
+{
+    SamplingShaderUniforms _samplingShaderUniforms;
     uint MipIndex;
-    uint PassIndex, PassCount;
 };
-[[vk::push_constant]] FilterPassParamsStruct FilterPassParams;
+[[vk::push_constant]] ControlUniformsStruct ControlUniforms;
 
 float3 IBLPrecalc_SampleInputTexture(float3 direction)
 {
@@ -33,9 +43,110 @@ float3 IBLPrecalc_SampleInputTexture(float3 direction)
 
 #include "../Foreign/ffx-reflection-dnsr/ffx_denoiser_reflections_common.h"
 
+float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
+{
+    // Search for the v coordinate
+    uint l=0, h=marginalCDFDims.y;
+    while (true) {
+        uint m = (l+h)>>1;
+        float midCDF = MarginalVerticalCDF[m];
+        if (xi.y < midCDF) {
+            h = m;
+        } else {
+            l = m;
+        }
+        if ((l+3)>=h) break;
+    }
+
+    float v;
+    uint y;
+    float workingPdf;
+    if (xi.y < MarginalVerticalCDF[l+1]) {
+        float range = MarginalVerticalCDF[l+1] - MarginalVerticalCDF[l];
+        v = lerp(l, l+1, (xi.y - MarginalVerticalCDF[l]) / range)/marginalCDFDims.y;
+        y = l;
+        workingPdf = range;
+    } else if (xi.y < MarginalVerticalCDF[l+2]) {
+        float range = MarginalVerticalCDF[l+2] - MarginalVerticalCDF[l+1];
+        v = lerp(l+1, l+2, (xi.y - MarginalVerticalCDF[l+1]) / range)/marginalCDFDims.y;
+        y = l+1;
+        workingPdf = range;
+    } else {
+        // xi.y must be smaller than MarginalVerticalCDF[l+3], though l+3 might be off the end
+        float range = (((l+3) == marginalCDFDims.y) ? 1.0 : MarginalVerticalCDF[l+3]) - MarginalVerticalCDF[l+2];
+        v = lerp(l+2, l+3, (xi.y - MarginalVerticalCDF[l+2]) / range)/marginalCDFDims.y;
+        y = l+2;
+        workingPdf = range;
+    }
+
+    // search for the u coordinate
+    l=0; h=marginalCDFDims.x;
+    while (true) {
+        uint m = (l+h)>>1;
+        float midCDF = MarginalHorizontalCDF[uint2(m, y)];
+        if (xi.x < midCDF) {
+            h = m;
+        } else {
+            l = m;
+        }
+        if ((l+3)>=h) break;
+    }
+
+    float u;
+    if (xi.y < MarginalHorizontalCDF[uint2(l+1, y)]) {
+        float range = MarginalHorizontalCDF[uint2(l+1, y)] - MarginalHorizontalCDF[uint2(l, y)];
+        u = lerp(l, l+1, (xi.y - MarginalHorizontalCDF[uint2(l,y)]) / range)/marginalCDFDims.y;
+        workingPdf *= range;
+    } else if (xi.y < MarginalHorizontalCDF[uint2(l+2, y)]) {
+        float range = MarginalHorizontalCDF[uint2(l+2, y)] - MarginalHorizontalCDF[uint2(l+1, y)];
+        u = lerp(l+1, l+2, (xi.y - MarginalHorizontalCDF[uint2(l+1,y)]) / range)/marginalCDFDims.y;
+        workingPdf *= range;
+    } else {
+        // xi.y must be smaller than MarginalHorizontalCDF[uint2(l+3,y)], though l+3 might be off the end
+        float range = (((l+3) == marginalCDFDims.x) ? 1.0 : MarginalHorizontalCDF[uint2(l+3,y)]) - MarginalHorizontalCDF[uint2(l+2,y)];
+        u = lerp(l+2, l+3, (xi.y - MarginalHorizontalCDF[uint2(l+2,y)]) / range)/marginalCDFDims.y;
+        workingPdf *= range;
+    }
+
+    pdf = workingPdf;
+    return float2(u, v);
+}
+
+static float RadicalInverseBase5(uint a)
+{
+    uint Base = 5;
+    float reciprocalBase = 1.0 / Base;
+    uint reversedDigits = 0;
+    float reciprocalBaseN = 1;
+    while (a) {
+        uint next = a / Base;
+        uint digit = a - next * Base;
+        reversedDigits = reversedDigits * Base + digit;
+        reciprocalBaseN *= reciprocalBase;
+        a = next;
+    }
+    return reversedDigits * reciprocalBaseN;
+}
+
+static float RadicalInverseBase7(uint a)
+{
+    uint Base = 7;
+    float reciprocalBase = 1.0 / Base;
+    uint reversedDigits = 0;
+    float reciprocalBaseN = 1;
+    while (a) {
+        uint next = a / Base;
+        uint digit = a - next * Base;
+        reversedDigits = reversedDigits * Base + digit;
+        reciprocalBaseN *= reciprocalBase;
+        a = next;
+    }
+    return reversedDigits * reciprocalBaseN;
+}
+
 groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
-[numthreads(64, 1, 1)]
-    void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID)
+[numthreads(8, 8, 1)]
+    void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {    
     // This is the second term of the "split-term" solution for IBL glossy specular
     // Here, we prefilter the reflection texture in such a way that the blur matches
@@ -54,6 +165,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     uint2 textureDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 
+#if 0
     uint passesPerPixel = FilterPassParams.PassCount/(textureDims.x*textureDims.y*6);
     uint3 pixelId;
     uint linearPixel = FilterPassParams.PassIndex%(textureDims.x*textureDims.y*6);
@@ -98,10 +210,103 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
             OutputArray[pixelId.xyz].rgb += result;
         }
     }
+#endif
+
+    PixelBalancingShaderHelper helper = PixelBalancingShaderCalculate(groupThreadId, groupId, uint3(textureDims, 1), ControlUniforms._samplingShaderUniforms);
+    if (any(helper._outputPixel >= uint3(textureDims, 1))) return;
+    if (helper._firstDispatch) OutputArray[uint3(helper._outputPixel.xy, 0)] = 0;
+
+    uint2 marginalCDFDims;
+	MarginalHorizontalCDF.GetDimensions(marginalCDFDims.x, marginalCDFDims.y);
+
+    uint2 inputTextureDims;
+	Input.GetDimensions(inputTextureDims.x, inputTextureDims.y);
+
+    // OutputArray[uint3(helper._outputPixel.xy, 0)] = MarginalHorizontalCDF[helper._outputPixel.xy/float2(textureDims)*marginalCDFDims.xy];
+    // return;
+
+    // OutputArray[uint3(helper._outputPixel.xy, 0)] = Input[helper._outputPixel.xy/float2(textureDims)*inputTextureDims.xy];
+    // return;
+
+    float3 value = 0;
+    for (uint t=0; t<helper._thisPassSampleCount; ++t) {
+        uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
+        uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy] + HaltonSamplerRepeatingStride * globalTap;
+        // Using the Halton sequence in such a straightforward way as this is not going to be efficient; but we don't require a perfectly
+        // optimal solution here
+        float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
+        float pdf;
+        float2 uv = SampleUV(pdf, xi, marginalCDFDims);
+
+        value += Input[uv * inputTextureDims].rgb / helper._totalSampleCount; // / pdf;
+    }
+
+    OutputArray[uint3(helper._outputPixel.xy, 0)].rgb += value;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
+
+[numthreads(8, 8, 1)]
+    void CalculateHorizontalMarginalDensities(uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
+{
+    uint2 inputDims, outputDims;
+	Input.GetDimensions(inputDims.x, inputDims.y);
+    MarginalHorizontalCDF.GetDimensions(outputDims.x, outputDims.y);
+    if (any(dispatchThreadId.xy >= outputDims)) return;
+
+    uint2 blockDims = inputDims / outputDims;
+    float blockBrightness = 0.0;
+    for (uint y=0; y<blockDims.y; ++y)
+        for (uint x=0; x<blockDims.x; ++x)
+            blockBrightness += Brightness(Input[dispatchThreadId.xy*blockDims+uint2(x, y)].rgb);
+    MarginalHorizontalCDF[dispatchThreadId.xy] = blockBrightness / float(blockDims.x * blockDims.y);
+}
+
+[numthreads(64, 1, 1)]
+    void NormalizeMarginalDensities(uint3 groupThreadId : SV_GroupThreadID) : SV_Target0
+{
+    // We do this in a single thread group to make the scheduling easy
+    uint2 outputDims;
+    MarginalHorizontalCDF.GetDimensions(outputDims.x, outputDims.y);
+    uint rowsPerThread = (outputDims.y + 64 - 1) / 64;
+    for (uint y=groupThreadId.x*rowsPerThread; y<(groupThreadId.x+1)*rowsPerThread; ++y) {
+        if (y >= outputDims.y) break;
+
+        float norm = 0.f;
+        uint x=0;
+        for (; x<outputDims.x; ++x)
+            norm += MarginalHorizontalCDF[uint2(x, y)];
+        float cummulative = 0.f;
+        for (x=0; x<outputDims.x; ++x) {
+            float v = cummulative;
+            cummulative += MarginalHorizontalCDF[uint2(x, y)] / norm;
+            MarginalHorizontalCDF[uint2(x, y)] = v;
+        }
+
+        MarginalVerticalCDF[y] = norm;
+    }
+
+    AllMemoryBarrierWithGroupSync();        // need GroupSync here
+    if (groupThreadId.x == 0) {
+        // simple approach to normalizing vertical values
+        float verticalNorm = 0.f;
+        uint y=0;
+        for (; y<outputDims.y; ++y)
+            verticalNorm += MarginalVerticalCDF[y];
+        float cummulative = 0.f;
+        for (y=0; y<outputDims.y; ++y) {
+            float v = cummulative;
+            cummulative += MarginalVerticalCDF[y] / verticalNorm;
+            MarginalVerticalCDF[y] = v;
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if 0
 [numthreads(8, 8, 6)]
     void EquiRectFilterGlossySpecularTrans(uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
 {
@@ -176,6 +381,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     // float2 diff = back - float2(position.xy) / float2(dims);
     // return float4(abs(diff.xy), 0, 1);
 }
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
