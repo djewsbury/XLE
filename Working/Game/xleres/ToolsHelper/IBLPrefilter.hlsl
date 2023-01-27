@@ -45,6 +45,9 @@ float3 IBLPrecalc_SampleInputTexture(float3 direction)
 
 float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
 {
+    // binary search not great for GPUs, but we will deal
+    // note -- coordinate conversion not really correct when the input texture isn't an exactly mutliple
+    // of the block size
     // Search for the v coordinate
     uint l=0, h=marginalCDFDims.y;
     while (true) {
@@ -60,24 +63,26 @@ float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
 
     float v;
     uint y;
-    float workingPdf;
-    if (xi.y < MarginalVerticalCDF[l+1]) {
-        float range = MarginalVerticalCDF[l+1] - MarginalVerticalCDF[l];
-        v = lerp(l, l+1, (xi.y - MarginalVerticalCDF[l]) / range)/marginalCDFDims.y;
+    float range;
+    float t1 = MarginalVerticalCDF[l+1];
+    float t2 = (((l+2) == marginalCDFDims.y) ? 1.0 : MarginalVerticalCDF[l+2]);
+    float t3 = (((l+3) >= marginalCDFDims.y) ? 1.0 : MarginalVerticalCDF[l+3]);
+    if (xi.y < t1) {
+        range = t1 - MarginalVerticalCDF[l];
+        v = l + (xi.y - MarginalVerticalCDF[l]) / range;
         y = l;
-        workingPdf = range;
-    } else if (xi.y < MarginalVerticalCDF[l+2]) {
-        float range = MarginalVerticalCDF[l+2] - MarginalVerticalCDF[l+1];
-        v = lerp(l+1, l+2, (xi.y - MarginalVerticalCDF[l+1]) / range)/marginalCDFDims.y;
+    } else if (xi.y < t2) {
+        range = t2 - t1;
+        v = l+1 + (xi.y - t1) / range;
         y = l+1;
-        workingPdf = range;
     } else {
         // xi.y must be smaller than MarginalVerticalCDF[l+3], though l+3 might be off the end
-        float range = (((l+3) == marginalCDFDims.y) ? 1.0 : MarginalVerticalCDF[l+3]) - MarginalVerticalCDF[l+2];
-        v = lerp(l+2, l+3, (xi.y - MarginalVerticalCDF[l+2]) / range)/marginalCDFDims.y;
+        range = t3 - t2;
+        v = l+2 + (xi.y - t2) / range;
         y = l+2;
-        workingPdf = range;
     }
+    v /= marginalCDFDims.y;
+    pdf = range * float(marginalCDFDims.y);
 
     // search for the u coordinate
     l=0; h=marginalCDFDims.x;
@@ -93,22 +98,23 @@ float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
     }
 
     float u;
-    if (xi.y < MarginalHorizontalCDF[uint2(l+1, y)]) {
-        float range = MarginalHorizontalCDF[uint2(l+1, y)] - MarginalHorizontalCDF[uint2(l, y)];
-        u = lerp(l, l+1, (xi.y - MarginalHorizontalCDF[uint2(l,y)]) / range)/marginalCDFDims.y;
-        workingPdf *= range;
-    } else if (xi.y < MarginalHorizontalCDF[uint2(l+2, y)]) {
-        float range = MarginalHorizontalCDF[uint2(l+2, y)] - MarginalHorizontalCDF[uint2(l+1, y)];
-        u = lerp(l+1, l+2, (xi.y - MarginalHorizontalCDF[uint2(l+1,y)]) / range)/marginalCDFDims.y;
-        workingPdf *= range;
+    t1 = MarginalHorizontalCDF[uint2(l+1, y)];
+    t2 = (((l+2) == marginalCDFDims.x) ? 1.0 : MarginalHorizontalCDF[uint2(l+2, y)]);
+    t3 = (((l+3) >= marginalCDFDims.x) ? 1.0 : MarginalHorizontalCDF[uint2(l+3, y)]);
+    if (xi.y < t1) {
+        range = t1 - MarginalHorizontalCDF[uint2(l, y)];
+        u = l + (xi.y - t1) / range;
+    } else if (xi.y < t2) {
+        range = t2 - t1;
+        u = l+1 + (xi.y - t1) / range;
     } else {
         // xi.y must be smaller than MarginalHorizontalCDF[uint2(l+3,y)], though l+3 might be off the end
-        float range = (((l+3) == marginalCDFDims.x) ? 1.0 : MarginalHorizontalCDF[uint2(l+3,y)]) - MarginalHorizontalCDF[uint2(l+2,y)];
-        u = lerp(l+2, l+3, (xi.y - MarginalHorizontalCDF[uint2(l+2,y)]) / range)/marginalCDFDims.y;
-        workingPdf *= range;
+        range = t3 - t2;
+        u = l+2 + (xi.y - t2) / range;
     }
+    u /= marginalCDFDims.x;
+    pdf *= range * float(marginalCDFDims.x);
 
-    pdf = workingPdf;
     return float2(u, v);
 }
 
@@ -222,6 +228,13 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     uint2 inputTextureDims;
 	Input.GetDimensions(inputTextureDims.x, inputTextureDims.y);
 
+    // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
+    float2 texCoord = (helper._outputPixel.xy + 0.5.xx) / float2(textureDims);
+    float3 cubeMapDirection = CalculateCubeMapDirection(helper._outputPixel.z, texCoord);
+    int log2dim = firstbithigh(textureDims.x);
+    float roughness = MipmapToRoughness(SpecularIBLMipMapCount-log2dim);
+    SpecularParameters specParam = SpecularParameters_RoughF0(roughness, float3(1.0f, 1.0f, 1.0f));
+
     // OutputArray[uint3(helper._outputPixel.xy, 0)] = MarginalHorizontalCDF[helper._outputPixel.xy/float2(textureDims)*marginalCDFDims.xy];
     // return;
 
@@ -236,12 +249,19 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         // optimal solution here
         float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
         float pdf;
-        float2 uv = SampleUV(pdf, xi, marginalCDFDims);
+        float2 inputTextureUV = SampleUV(pdf, xi, marginalCDFDims);
 
-        value += Input[uv * inputTextureDims].rgb / helper._totalSampleCount; // / pdf;
+        float3 normal = cubeMapDirection, viewDirection = cubeMapDirection;
+        float3 L = EquirectangularCoordToDirection_YUp(inputTextureUV);
+        if (dot(normal, L) < 0) continue;   // todo -- creating bias
+        float3 H = normalize(L+viewDirection);
+        // float brdf_costheta = CalculateSpecular(normal, viewDirection, L, H, specParam).g;
+        float brdf_costheta = pow(dot(normal, L), 16);
+
+        value += Input[inputTextureUV * inputTextureDims].rgb * brdf_costheta / pdf;
     }
 
-    OutputArray[uint3(helper._outputPixel.xy, 0)].rgb += value;
+    OutputArray[uint3(helper._outputPixel.xy, 0)].rgb += value / helper._totalSampleCount;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -256,12 +276,18 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
     MarginalHorizontalCDF.GetDimensions(outputDims.x, outputDims.y);
     if (any(dispatchThreadId.xy >= outputDims)) return;
 
-    uint2 blockDims = inputDims / outputDims;
+    uint2 blockDims = uint2(inputDims + outputDims - 1) / outputDims;
     float blockBrightness = 0.0;
     for (uint y=0; y<blockDims.y; ++y)
-        for (uint x=0; x<blockDims.x; ++x)
-            blockBrightness += Brightness(Input[dispatchThreadId.xy*blockDims+uint2(x, y)].rgb);
-    MarginalHorizontalCDF[dispatchThreadId.xy] = blockBrightness / float(blockDims.x * blockDims.y);
+        for (uint x=0; x<blockDims.x; ++x) {
+            uint2 pt = dispatchThreadId.xy*blockDims+uint2(x, y);
+            if (all(pt < inputDims))
+                blockBrightness += Brightness(Input[pt].rgb);
+        }
+
+    // Our code assumes no 0 pdf values, so we will accept some sampling inefficiency for textures with large
+    // blocks of blackness
+    MarginalHorizontalCDF[dispatchThreadId.xy] = max(blockBrightness / float(blockDims.x * blockDims.y), 1.0/255.0);
 }
 
 [numthreads(64, 1, 1)]
@@ -274,6 +300,10 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
     for (uint y=groupThreadId.x*rowsPerThread; y<(groupThreadId.x+1)*rowsPerThread; ++y) {
         if (y >= outputDims.y) break;
 
+        // pdf is proportional to brightness within each pixel block
+        // furthermore, the integral with respect to u should be 1
+        // sum(pdf_values) * (1/outDims.x) = 1 => sum(pdf_values) = outputDims.y
+        // so, pdf at a y coord is brightness[y] / sum(brightnesses) * outputDims.y
         float norm = 0.f;
         uint x=0;
         for (; x<outputDims.x; ++x)

@@ -361,31 +361,60 @@ namespace RenderCore { namespace Techniques
 					auto pixelCount = mipDesc._width * mipDesc._height * ActualArrayLayerCount(targetDesc);
 					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
 					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
-					auto dispatchCount = passesPerPixel*pixelCount;
-					auto dispatchesPerCommit = std::min(32768u, pixelCount);
+					auto samplesPerPass = 1024u; // 64*1024;
+					auto totalSampleCount = passesPerPixel * samplesPerPass;
 
-					struct ControlUniforms
-					{
-						unsigned _thisPassSampleOffset, _thisPassSampleCount, _thisPassSampleStride, _totalSampleCount;
-						unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
-					} controlUniforms { 0, 256, 1, 256, mip, 0, 0, 0 };
+					unsigned samplesPerCmdList = 256;
+					unsigned samplesProcessed = 0;
+					while (samplesProcessed < totalSampleCount) {
+						assert(samplesPerCmdList != 0);
+						auto thisCmdList = std::min(totalSampleCount - samplesProcessed, samplesPerCmdList);
 
-					UniformsStream us;
-					us._resourceViews = MakeIteratorRange(resViews);
-					UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
-					us._immediateData = immDatas;
+						struct ControlUniforms
+						{
+							unsigned _thisPassSampleOffset, _thisPassSampleCount, _thisPassSampleStride, _totalSampleCount;
+							unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
+						} controlUniforms { samplesProcessed, thisCmdList, 1, totalSampleCount, mip, 0, 0, 0 };
 
-					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
+						UniformsStream us;
+						us._resourceViews = MakeIteratorRange(resViews);
+						UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
+						us._immediateData = immDatas;
 
-					if (progressiveResults) {
-						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
-						auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
-						// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
-						progressiveResults(intermediateData);
-						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
-					} else {
-						threadContext->CommitCommands();
+						computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
+
+						samplesProcessed += thisCmdList;
+						// if ((mip+1) == targetDesc._mipCount && samplesProcessed >= totalSampleCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
+
+						if (progressiveResults) {
+							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
+						} else {
+							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
+						}
+
+						auto start = std::chrono::steady_clock::now();
+						threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
+						auto elapsed = std::chrono::steady_clock::now() - start;
+						Log(Verbose) << "[GlossySpecularBuild] Processing " << thisCmdList << " samples took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
+						// On windows with default settings, timeouts begin at 2 seconds
+						if (thisCmdList == samplesPerCmdList && elapsed < std::chrono::milliseconds(750)) {
+							// increase by powers of two, roughly by proportion, just not too quickly
+							auto increaser = IntegerLog2(uint32_t(1500 / std::max(1u, (unsigned)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())));
+							increaser = std::min(increaser, 4u);
+							if (xl_clz4(samplesPerCmdList) >= increaser) {
+								assert(samplesPerCmdList << increaser);
+								samplesPerCmdList <<= increaser;
+							}
+						}
+
+						if (progressiveResults) {
+							auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+							// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
+							progressiveResults(intermediateData);
+							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
+						}
 					}
+
 				}
 			}
 		}
@@ -474,11 +503,14 @@ namespace RenderCore { namespace Techniques
 				auto elapsed = std::chrono::steady_clock::now() - start;
 				Log(Verbose) << "[" << shader << "] Processing " << thisCmdList << " samples took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
 				// On windows with default settings, timeouts begin at 2 seconds
-				if (elapsed < std::chrono::milliseconds(750)) {
+				if (thisCmdList == samplesPerCmdList && elapsed < std::chrono::milliseconds(750)) {
 					// increase by powers of two, roughly by proportion, just not too quickly
-					auto increaser = IntegerLog2(uint32_t(1500 / std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
+					auto increaser = IntegerLog2(uint32_t(1500 / std::max(1u, (unsigned)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())));
 					increaser = std::min(increaser, 4u);
-					samplesPerCmdList *= 1 << increaser;
+					if (xl_clz4(samplesPerCmdList) >= increaser) {
+						assert(samplesPerCmdList << increaser);
+						samplesPerCmdList <<= increaser;
+					}
 				}
 			}
 		}
