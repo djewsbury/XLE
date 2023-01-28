@@ -43,6 +43,9 @@ float3 IBLPrecalc_SampleInputTexture(float3 direction)
 
 #include "../Foreign/ffx-reflection-dnsr/ffx_denoiser_reflections_common.h"
 
+float LoadMarginalVerticalCDF(uint coord) { return MarginalVerticalCDF[coord]; }
+float LoadMarginalHorizontalCDF(uint2 coord) { return MarginalHorizontalCDF[coord]; }
+
 float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
 {
     // binary search not great for GPUs, but we will deal
@@ -52,7 +55,7 @@ float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
     uint l=0, h=marginalCDFDims.y;
     while (true) {
         uint m = (l+h)>>1;
-        float midCDF = MarginalVerticalCDF[m];
+        float midCDF = LoadMarginalVerticalCDF(m);
         if (xi.y < midCDF) {
             h = m;
         } else {
@@ -64,12 +67,12 @@ float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
     float v;
     uint y;
     float range;
-    float t1 = MarginalVerticalCDF[l+1];
-    float t2 = (((l+2) == marginalCDFDims.y) ? 1.0 : MarginalVerticalCDF[l+2]);
-    float t3 = (((l+3) >= marginalCDFDims.y) ? 1.0 : MarginalVerticalCDF[l+3]);
+    float t1 = LoadMarginalVerticalCDF(l+1);
+    float t2 = (((l+2) == marginalCDFDims.y) ? 1.0 : LoadMarginalVerticalCDF(l+2));
+    float t3 = (((l+3) >= marginalCDFDims.y) ? 1.0 : LoadMarginalVerticalCDF(l+3));
     if (xi.y < t1) {
-        range = t1 - MarginalVerticalCDF[l];
-        v = l + (xi.y - MarginalVerticalCDF[l]) / range;
+        range = t1 - LoadMarginalVerticalCDF(l);
+        v = l + (xi.y - LoadMarginalVerticalCDF(l)) / range;
         y = l;
     } else if (xi.y < t2) {
         range = t2 - t1;
@@ -77,7 +80,7 @@ float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
         y = l+1;
     } else {
         // xi.y must be smaller than MarginalVerticalCDF[l+3], though l+3 might be off the end
-        range = t3 - t2;
+        range = max(t3 - t2, 1e-5);     // tiny ranges here can cause a nans later
         v = l+2 + (xi.y - t2) / range;
         y = l+2;
     }
@@ -88,7 +91,7 @@ float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
     l=0; h=marginalCDFDims.x;
     while (true) {
         uint m = (l+h)>>1;
-        float midCDF = MarginalHorizontalCDF[uint2(m, y)];
+        float midCDF = LoadMarginalHorizontalCDF(uint2(m, y));
         if (xi.x < midCDF) {
             h = m;
         } else {
@@ -98,18 +101,18 @@ float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
     }
 
     float u;
-    t1 = MarginalHorizontalCDF[uint2(l+1, y)];
-    t2 = (((l+2) == marginalCDFDims.x) ? 1.0 : MarginalHorizontalCDF[uint2(l+2, y)]);
-    t3 = (((l+3) >= marginalCDFDims.x) ? 1.0 : MarginalHorizontalCDF[uint2(l+3, y)]);
+    t1 = LoadMarginalHorizontalCDF(uint2(l+1, y));
+    t2 = (((l+2) == marginalCDFDims.x) ? 1.0 : LoadMarginalHorizontalCDF(uint2(l+2, y)));
+    t3 = (((l+3) >= marginalCDFDims.x) ? 1.0 : LoadMarginalHorizontalCDF(uint2(l+3, y)));
     if (xi.x < t1) {
-        range = t1 - MarginalHorizontalCDF[uint2(l, y)];
+        range = t1 - LoadMarginalHorizontalCDF(uint2(l, y));
         u = l + (xi.x - t1) / range;
     } else if (xi.x < t2) {
         range = t2 - t1;
         u = l+1 + (xi.x - t1) / range;
     } else {
         // xi.x must be smaller than MarginalHorizontalCDF[uint2(l+3,y)], though l+3 might be off the end
-        range = t3 - t2;
+        range = max(t3 - t2, 1e-5);     // tiny ranges here can cause a nans later
         u = l+2 + (xi.x - t2) / range;
     }
     u /= marginalCDFDims.x;
@@ -240,6 +243,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         // Using the Halton sequence in such a straightforward way as this is not going to be efficient; but we don't require a perfectly
         // optimal solution here
         float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
+        xi = saturate(xi);      // floating point creep may be resulting in some bad xi values
         float pdf=1;
         float2 inputTextureUV = SampleUV(pdf, xi, marginalCDFDims);
 
