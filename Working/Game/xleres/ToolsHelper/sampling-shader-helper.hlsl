@@ -35,7 +35,7 @@ PixelBalancingShaderHelper PixelBalancingShaderCalculate(uint3 groupThreadId, ui
     PixelBalancingShaderHelper result;
     uint2 threadGroupCounts = uint2((outputDims.x+8-1)/8, (outputDims.y+8-1)/8);
     result._outputPixel.xy = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
-    result._outputPixel.z = 0;
+    result._outputPixel.z = groupId.z;
     result._thisPassSampleOffset = SamplingShaderUniforms_GetThisPassSampleOffset(uniforms);
     result._thisPassSampleCount = SamplingShaderUniforms_GetThisPassSampleCount(uniforms);
     result._thisPassSampleStride = SamplingShaderUniforms_GetThisPassSampleStride(uniforms);

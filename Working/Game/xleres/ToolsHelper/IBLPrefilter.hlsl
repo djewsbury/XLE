@@ -101,16 +101,16 @@ float2 SampleUV(out float pdf, float2 xi, uint2 marginalCDFDims)
     t1 = MarginalHorizontalCDF[uint2(l+1, y)];
     t2 = (((l+2) == marginalCDFDims.x) ? 1.0 : MarginalHorizontalCDF[uint2(l+2, y)]);
     t3 = (((l+3) >= marginalCDFDims.x) ? 1.0 : MarginalHorizontalCDF[uint2(l+3, y)]);
-    if (xi.y < t1) {
+    if (xi.x < t1) {
         range = t1 - MarginalHorizontalCDF[uint2(l, y)];
-        u = l + (xi.y - t1) / range;
-    } else if (xi.y < t2) {
+        u = l + (xi.x - t1) / range;
+    } else if (xi.x < t2) {
         range = t2 - t1;
-        u = l+1 + (xi.y - t1) / range;
+        u = l+1 + (xi.x - t1) / range;
     } else {
-        // xi.y must be smaller than MarginalHorizontalCDF[uint2(l+3,y)], though l+3 might be off the end
+        // xi.x must be smaller than MarginalHorizontalCDF[uint2(l+3,y)], though l+3 might be off the end
         range = t3 - t2;
-        u = l+2 + (xi.y - t2) / range;
+        u = l+2 + (xi.x - t2) / range;
     }
     u /= marginalCDFDims.x;
     pdf *= range * float(marginalCDFDims.x);
@@ -218,14 +218,12 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     }
 #endif
 
-    PixelBalancingShaderHelper helper = PixelBalancingShaderCalculate(groupThreadId, groupId, uint3(textureDims, 1), ControlUniforms._samplingShaderUniforms);
-    if (any(helper._outputPixel >= uint3(textureDims, 1))) return;
-    if (helper._firstDispatch) OutputArray[uint3(helper._outputPixel.xy, 0)] = 0;
+    PixelBalancingShaderHelper helper = PixelBalancingShaderCalculate(groupThreadId, groupId, uint3(textureDims, 6), ControlUniforms._samplingShaderUniforms);
+    if (any(helper._outputPixel >= uint3(textureDims, arrayLayerCount))) return;
+    if (helper._firstDispatch) OutputArray[helper._outputPixel] = 0;
 
-    uint2 marginalCDFDims;
+    uint2 marginalCDFDims, inputTextureDims;
 	MarginalHorizontalCDF.GetDimensions(marginalCDFDims.x, marginalCDFDims.y);
-
-    uint2 inputTextureDims;
 	Input.GetDimensions(inputTextureDims.x, inputTextureDims.y);
 
     // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
@@ -235,12 +233,6 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     float roughness = MipmapToRoughness(SpecularIBLMipMapCount-log2dim);
     SpecularParameters specParam = SpecularParameters_RoughF0(roughness, float3(1.0f, 1.0f, 1.0f));
 
-    // OutputArray[uint3(helper._outputPixel.xy, 0)] = MarginalHorizontalCDF[helper._outputPixel.xy/float2(textureDims)*marginalCDFDims.xy];
-    // return;
-
-    // OutputArray[uint3(helper._outputPixel.xy, 0)] = Input[helper._outputPixel.xy/float2(textureDims)*inputTextureDims.xy];
-    // return;
-
     float3 value = 0;
     for (uint t=0; t<helper._thisPassSampleCount; ++t) {
         uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
@@ -248,20 +240,31 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         // Using the Halton sequence in such a straightforward way as this is not going to be efficient; but we don't require a perfectly
         // optimal solution here
         float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
-        float pdf;
+        float pdf=1;
         float2 inputTextureUV = SampleUV(pdf, xi, marginalCDFDims);
 
         float3 normal = cubeMapDirection, viewDirection = cubeMapDirection;
         float3 L = EquirectangularCoordToDirection_YUp(inputTextureUV);
+
         if (dot(normal, L) < 0) continue;   // todo -- creating bias
+
+        // change-of-variables for pdf
+        // Original pdf is w.r.t. u,v coords. But we want a pdf w.r.t. solid angle on the hemisphere
+        // (consider, for example, that a lot of uvs are densly packed around the polls)
+        // see pbr-book chapter 14.2.4
+        float compressionFactor = sin(pi * inputTextureUV.y);
+        pdf /= 2 * pi * pi * max(compressionFactor, 1e-5);
+
+        pdf *= 0.5;     // accounting for half-hemisphere
+
         float3 H = normalize(L+viewDirection);
         // float brdf_costheta = CalculateSpecular(normal, viewDirection, L, H, specParam).g;
-        float brdf_costheta = pow(dot(normal, L), 16);
+        float brdf_costheta = pow(dot(normal, L), 48) / .35992; // approx integral
 
         value += Input[inputTextureUV * inputTextureDims].rgb * brdf_costheta / pdf;
     }
 
-    OutputArray[uint3(helper._outputPixel.xy, 0)].rgb += value / helper._totalSampleCount;
+    OutputArray[helper._outputPixel].rgb += value / helper._totalSampleCount;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -281,8 +284,13 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
     for (uint y=0; y<blockDims.y; ++y)
         for (uint x=0; x<blockDims.x; ++x) {
             uint2 pt = dispatchThreadId.xy*blockDims+uint2(x, y);
-            if (all(pt < inputDims))
-                blockBrightness += Brightness(Input[pt].rgb);
+            if (all(pt < inputDims)) {
+                // Scale down the pixels according to how densly packed the uvs are. This reshapes
+                // the pdf and causes us to select evenly w.r.t. solid angle, rather then w.r.t. uvs
+                float v = pt.y / float(inputDims.y);
+                float compressionFactor = sin(pi * v);
+                blockBrightness += compressionFactor * Brightness(Input[pt].rgb);
+            }
         }
 
     // Our code assumes no 0 pdf values, so we will accept some sampling inefficiency for textures with large

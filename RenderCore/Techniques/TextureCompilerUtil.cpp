@@ -358,10 +358,9 @@ namespace RenderCore { namespace Techniques
 				resViews[5] = samplerHelper._pixelToSampleIndexParams.get();
 
 				{
-					auto pixelCount = mipDesc._width * mipDesc._height * ActualArrayLayerCount(targetDesc);
 					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
 					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
-					auto samplesPerPass = 1024u; // 64*1024;
+					auto samplesPerPass = 128u; // 64*1024;
 					auto totalSampleCount = passesPerPixel * samplesPerPass;
 
 					unsigned samplesPerCmdList = 256;
@@ -381,7 +380,7 @@ namespace RenderCore { namespace Techniques
 						UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
 						us._immediateData = immDatas;
 
-						computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
+						computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, us);
 
 						samplesProcessed += thisCmdList;
 						// if ((mip+1) == targetDesc._mipCount && samplesProcessed >= totalSampleCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
@@ -419,6 +418,12 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
+		const bool test = true;
+		if (test) {
+			threadContext->CommitCommands();
+			threadContext->GetAnnotator().EndFrameCapture();
+		}
+
 		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
 		Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
 
@@ -428,8 +433,6 @@ namespace RenderCore { namespace Techniques
 		// and we may not be doing that in this thread for awhile
 		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 			threadContextVulkan->ReleaseCommandBufferPool();
-
-		threadContext->GetAnnotator().EndFrameCapture();
 
 		return result;
 	}
