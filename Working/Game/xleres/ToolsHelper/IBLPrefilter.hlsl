@@ -176,6 +176,8 @@ float FilterGlossySpecular_BRDF_costheta(
     float3 N, float3 L, 
     float roughness)
 {
+#if 0
+
     //
     // Partial BRDF used for filtering the glossy specular
     // We can't replicate the effect that a true full brdf would have (given this is only single-directional)
@@ -206,7 +208,22 @@ float FilterGlossySpecular_BRDF_costheta(
     //
     pdf = D * G / 4;
 
-    return filteringWeight;   
+    return filteringWeight;
+
+#else
+
+    float alpha = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
+    float NdotL = dot(N, L);
+    float NdotV = 1;
+    float NdotM = sqrt((1.0+NdotL)/2.0);
+    float D = TrowReitzD(NdotM, alpha);
+    float filteringWeight = NdotL * D;
+
+    pdf = GGXHalfVector_PDF(float3(0,0,NdotM), alpha);
+
+    return filteringWeight;
+
+#endif
 }
 
 float FilterGlossySpecular_SampleFilteringHalfVector(
@@ -216,17 +233,18 @@ float FilterGlossySpecular_SampleFilteringHalfVector(
     float3 N,
     float roughness)
 {
+#if 0
+
     // Sample half vector using VDNF approach
     float alpha = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
     float3 V = N;
     float3 tangentSpaceHalfVector = HeitzGGXVNDF_Sample(float3(0,0,1), alpha, alpha, xi.x, xi.y);
     float3 H = TransformByArbitraryTangentFrame(tangentSpaceHalfVector, N);
-    L = 2.f * dot(V, H) * H - V;
+    L = 2.f * tangentSpaceHalfVector.z * H - V;
 
     // note that the pdf and filtering weight actually mostly factor out. We only need to calculate
     // most of this stuff just for the multiple importance sampling
 
-    float alphad = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
     float NdotL = dot(N, L);
     float NdotV = 1;
     float NdotM = tangentSpaceHalfVector.z;
@@ -237,6 +255,25 @@ float FilterGlossySpecular_SampleFilteringHalfVector(
     pdf = D * G / 4;
 
     return filteringWeight;
+
+#else
+
+    float alpha = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
+    float3 tangentSpaceHalfVector = GGXHalfVector_Sample(xi, alpha);
+    L = 2.f * tangentSpaceHalfVector.z * tangentSpaceHalfVector - float3(0,0,1);
+
+    float NdotL = L.z;
+    float NdotV = 1;
+    float NdotM = tangentSpaceHalfVector.z;
+    float D = TrowReitzD(NdotM, alpha);
+    float filteringWeight = NdotL * D;
+
+    pdf = GGXHalfVector_PDF(tangentSpaceHalfVector, alpha);
+    L = TransformByArbitraryTangentFrame(L, N);
+
+    return filteringWeight;
+
+#endif
 }
 
 float BalanceHeuristic(float nf, float fpdf, float ng, float gpdf)
@@ -332,6 +369,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     // Sampling with importance based on the brightness of the image
 
     float3 value = 0;
+#if 1
     for (uint t=0; t<helper._thisPassSampleCount; ++t) {
         uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
         uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy] + HaltonSamplerRepeatingStride * globalTap;
@@ -352,11 +390,10 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         // see pbr-book chapter 14.2.4
         float compressionFactor = sin(pi * inputTextureUV.y);
         light_pdf /= 2 * pi * pi * max(compressionFactor, 1e-5);
-        light_pdf *= 0.5;     // accounting for hemisphere
 
         // float3 H = normalize(L+viewDirection);
         // // float brdf_costheta = CalculateSpecular(normal, viewDirection, L, H, specParam).g;
-        // float brdf_costheta = pow(dot(normal, L), 48) / .35992; // approx integral
+        // float brdf_costheta = pow(dot(cubeMapDirection, L), 48) / .35992; // approx integral
         float filtering_pdf;
         float brdf_costheta = FilterGlossySpecular_BRDF_costheta(filtering_pdf, cubeMapDirection, L, roughness);
 
@@ -364,7 +401,9 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 
         value += Input[inputTextureUV * inputTextureDims].rgb * brdf_costheta * msWeight / light_pdf;
     }
+#endif
 
+#if 1
     // Sampling with importance based on the filtering kernel
     for (uint t=0; t<helper._thisPassSampleCount; ++t) {
         uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
@@ -377,6 +416,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         float brdf_costheta = FilterGlossySpecular_SampleFilteringHalfVector(
             filtering_pdf, L,
             xi, cubeMapDirection, roughness);
+        if (brdf_costheta <= 0) continue;       // sometimes getting bad samples
         
         float2 inputTextureUV = DirectionToEquirectangularCoord_YUp(L);
         if (inputTextureUV.x < 0) inputTextureUV.x += 1.0;      // try to get in (0,1) range
@@ -384,12 +424,12 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         // change-of-variables for light_pdf...
         float compressionFactor = sin(pi * inputTextureUV.y);
         light_pdf /= 2 * pi * pi * max(compressionFactor, 1e-5);
-        light_pdf *= 0.5;     // accounting for hemisphere
 
         float msWeight = BalanceHeuristic(1, filtering_pdf, 1, light_pdf);
 
         value += Input[inputTextureUV * inputTextureDims].rgb * brdf_costheta * msWeight / filtering_pdf;
     }
+#endif
 
     OutputArray[helper._outputPixel].rgb += value / helper._totalSampleCount;
 }
