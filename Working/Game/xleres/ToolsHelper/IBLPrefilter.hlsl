@@ -264,7 +264,7 @@ float FilterGlossySpecular_BRDF_costheta(
 
     pdf = GGXHalfVector_PDF(float3(0,0,NdotM), float3(0,0,1), alpha);
 
-    filteringWeight = pow(NdotL, 48) / .35992;
+    // filteringWeight = pow(NdotL, 48) / .35992;
     return filteringWeight;
 
 #else
@@ -326,7 +326,7 @@ float FilterGlossySpecular_SampleFilteringHalfVector(
     pdf = GGXHalfVector_PDF(tangentSpaceHalfVector, float3(0,0,1), alpha);
     L = TransformByArbitraryTangentFrame(L, N);
 
-    filteringWeight = pow(NdotL, 48) / .35992;
+    // filteringWeight = pow(NdotL, 48) / .35992;
     return filteringWeight;
 
 #else
@@ -359,7 +359,7 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
 groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 [numthreads(8, 8, 1)]
     void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
-{    
+{
     // This is the second term of the "split-term" solution for IBL glossy specular
     // Here, we prefilter the reflection texture in such a way that the blur matches
     // the GGX equation.
@@ -460,14 +460,11 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 
         // change-of-variables for light_pdf
         // Original light_pdf is w.r.t. u,v coords. But we want a light_pdf w.r.t. solid angle on the hemisphere
-        // (consider, for example, that a lot of uvs are densly packed around the polls)
+        // (consider, for example, that a lot of uvs are densly packed around the poles)
         // see pbr-book chapter 14.2.4
-        // float compressionFactor = sin(pi * inputTextureUV.y);
-        light_pdf /= 2 * pi * pi; // * max(compressionFactor, 1e-5);
+        float compressionFactor = sin(pi * inputTextureUV.y);
+        light_pdf /= 2 * pi * pi * max(compressionFactor, 1e-5);
 
-        // float3 H = normalize(L+viewDirection);
-        // // float brdf_costheta = CalculateSpecular(normal, viewDirection, L, H, specParam).g;
-        // float brdf_costheta = pow(dot(cubeMapDirection, L), 48) / .35992; // approx integral
         float filtering_pdf;
         float brdf_costheta = FilterGlossySpecular_BRDF_costheta(filtering_pdf, cubeMapDirection, L, roughness);
 
@@ -496,8 +493,8 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         if (inputTextureUV.x < 0) inputTextureUV.x += 1.0;      // try to get in (0,1) range
         float light_pdf = LookupPDF(inputTextureUV, marginalCDFDims);
         // change-of-variables for light_pdf...
-        // float compressionFactor = sin(pi * inputTextureUV.y);
-        light_pdf /= 2 * pi * pi; // * max(compressionFactor, 1e-5);
+        float compressionFactor = sin(pi * inputTextureUV.y);
+        light_pdf /= 2 * pi * pi * max(compressionFactor, 1e-5);
 
         float msWeight = PowerHeuristic2(1, filtering_pdf, 1, light_pdf);
 
@@ -510,7 +507,8 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     } else {
         // potential floating point creep issues here (and output values will vary based on # of samples/pass)
         OutputArray[helper._outputPixel].rgb
-            = (OutputArray[helper._outputPixel].rgb * helper._thisPassSampleOffset + value) / (helper._thisPassSampleOffset+helper._thisPassSampleCount);
+            = OutputArray[helper._outputPixel].rgb * (helper._thisPassSampleOffset / float(helper._thisPassSampleOffset+helper._thisPassSampleCount))
+            + value / float(helper._thisPassSampleOffset+helper._thisPassSampleCount);
     }
 }
 
@@ -587,6 +585,64 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
             MarginalVerticalCDF[y] = v;
         }
     }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+[numthreads(8, 8, 1)]
+    void EquiRectFilterGlossySpecular_Reference(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    uint2 textureDims; uint arrayLayerCount;
+	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
+    PixelBalancingShaderHelper helper = PixelBalancingShaderCalculate(groupThreadId, groupId, uint3(textureDims, 6), ControlUniforms._samplingShaderUniforms);
+    if (any(helper._outputPixel >= uint3(textureDims, arrayLayerCount))) return;
+    if (helper._firstDispatch) OutputArray[helper._outputPixel] = 0;
+
+    uint2 inputTextureDims;
+	Input.GetDimensions(inputTextureDims.x, inputTextureDims.y);
+    float2 reciprocalInputTextureDims = float2(1/float(inputTextureDims.x), 1/float(inputTextureDims.y));
+
+    // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
+    float2 texCoord = (helper._outputPixel.xy + 0.5.xx) / float2(textureDims);
+    float3 cubeMapDirection = CalculateCubeMapDirection(helper._outputPixel.z, texCoord);
+    int log2dim = firstbithigh(textureDims.x);
+    float roughness = MipmapToRoughness(SpecularIBLMipMapCount-log2dim);
+    SpecularParameters specParam = SpecularParameters_RoughF0(roughness, float3(1.0f, 1.0f, 1.0f));
+
+    // Basic sampling for reference purposes. We're going to sample every pixel from the input texture
+
+    float3 value = 0;
+    for (uint t=0; t<helper._thisPassSampleCount; ++t) {
+        uint globalTap = t+helper._thisPassSampleOffset;
+
+        uint2 inputXY = uint2(globalTap%inputTextureDims.x, globalTap/inputTextureDims.x);
+        float2 inputTextureUV = inputXY * reciprocalInputTextureDims;
+
+        float3 L = EquirectangularCoordToDirection_YUp(inputTextureUV);
+        float NdotL = dot(cubeMapDirection, L);
+        if (NdotL < 0) continue;   // sampling only one hemisphere (pdf adjusted below)
+
+        // Since we're sampling the entire hemisphere, we can just weight the values by the solid angle
+        // of the particular equirectangular texel
+        // float uvArea = reciprocalInputTextureDims.x*reciprocalInputTextureDims.y;
+        // float theta = inputTextureUV.y * pi;
+        // float solidAngle = uvArea / (2*pi*sin(theta));
+        // float hemisphereProportion = solidAngle / (2*pi);
+        float theta = inputTextureUV.y * pi;
+        float weight = sin(theta) / 2.0 * reciprocalInputTextureDims.x * reciprocalInputTextureDims.y;
+        weight *= 2.0;      // compensate for sampling only a hemisphere, while the texture extends the full sphere
+
+        float filtering_pdf;
+        float brdf_costheta = FilterGlossySpecular_BRDF_costheta(filtering_pdf, cubeMapDirection, L, roughness);
+
+        // value += IBLPrecalc_SampleInputTextureUV(inputTextureUV) * brdf_costheta * weight;
+
+        float light_pdf = 2 * pi * pi * max(sin(pi * inputTextureUV.y), 1e-5);
+        value += IBLPrecalc_SampleInputTextureUV(inputTextureUV) * brdf_costheta / light_pdf * reciprocalInputTextureDims.x * reciprocalInputTextureDims.y;
+    }
+
+    // potential floating point creep issues here (and output values will vary based on # of samples/pass)
+    OutputArray[helper._outputPixel].rgb += value;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

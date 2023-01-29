@@ -27,6 +27,7 @@ namespace RenderCore { namespace Assets
 			Convert,
 			EquRectToCubeMap,
 			EquiRectFilterGlossySpecular,
+			EquiRectFilterGlossySpecularReference,
 			ComputeShader,
 			ProjectToSphericalHarmonic
 		};

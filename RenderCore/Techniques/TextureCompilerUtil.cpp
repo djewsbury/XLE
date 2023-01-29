@@ -160,6 +160,52 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
+	struct BalancedSamplingShaderHelper
+	{
+	public:
+		struct Uniforms {
+			unsigned _thisPassSampleOffset, _thisPassSampleCount, _thisPassSampleStride, _totalSampleCount;
+		};
+
+		Uniforms BeginDispatch()
+		{
+			assert(_samplesPerCmdList != 0);
+			auto thisCmdList = std::min(_totalSampleCount - _samplesProcessed, _samplesPerCmdList);
+			auto initialSamplesProcessed = _samplesProcessed;
+			_samplesProcessed += thisCmdList;
+			return { initialSamplesProcessed, thisCmdList, 1, _totalSampleCount };
+		}
+
+		bool Finished() const { return _samplesProcessed == _totalSampleCount; }
+
+		void CommitAndTimeCommandList(IThreadContext& threadContext, const Uniforms& uniforms, StringSection<> name)
+		{
+			auto start = std::chrono::steady_clock::now();
+			threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
+			auto elapsed = std::chrono::steady_clock::now() - start;
+			Log(Verbose) << "[" << name << "] Processing " << uniforms._thisPassSampleCount << " samples took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
+			// On windows with default settings, timeouts begin at 2 seconds
+			const unsigned idealCmdListCostMS = 500; // 1500;
+			if (uniforms._thisPassSampleCount == _samplesPerCmdList && elapsed < std::chrono::milliseconds(idealCmdListCostMS/2)) {
+				// increase by powers of two, roughly by proportion, just not too quickly
+				auto increaser = IntegerLog2(uint32_t(idealCmdListCostMS / std::max(1u, (unsigned)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())));
+				increaser = std::min(increaser, 4u);
+				if (xl_clz4(_samplesPerCmdList) >= increaser) {
+					assert(_samplesPerCmdList << increaser);
+					_samplesPerCmdList <<= increaser;
+				}
+			}
+		}
+
+		BalancedSamplingShaderHelper(unsigned totalSampleCount)
+		: _totalSampleCount(totalSampleCount) {}
+	private:
+		unsigned _samplesProcessed = 0;
+		unsigned _samplesPerCmdList = 256;
+		unsigned _totalSampleCount = 0;
+	};
+
+
 	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(
 		BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc,
 		EquRectFilterMode filter,
@@ -174,8 +220,6 @@ namespace RenderCore { namespace Techniques
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		auto pipelineCollection = std::make_shared<PipelineCollection>(threadContext->GetDevice());
 
-		threadContext->GetAnnotator().BeginFrameCapture();
-		
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "Input"_h);
 		constexpr auto pushConstantsBinding = "FilterPassParams"_h;
@@ -199,6 +243,15 @@ namespace RenderCore { namespace Techniques
 			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":EquiRectFilterGlossySpecular",
+				{},
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
+				usi);
+		} else if (filter == EquRectFilterMode::ToGlossySpecularReference) {
+			usi.BindResourceView(1, "OutputArray"_h);
+			usi.BindImmediateData(0, "ControlUniforms"_h);
+ 			computeOpFuture = CreateComputeOperator(
+				pipelineCollection,
+				IBL_PREFILTER_HLSL ":EquiRectFilterGlossySpecular_Reference",
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
@@ -228,7 +281,7 @@ namespace RenderCore { namespace Techniques
 
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
 
-		if (filter != EquRectFilterMode::ToGlossySpecular) {
+		if (filter == EquRectFilterMode::ToCubeMap || filter == EquRectFilterMode::ProjectToSphericalHarmonic) {
 			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
 				TextureViewDesc view;
 				view._mipRange = {mip, 1};
@@ -246,52 +299,6 @@ namespace RenderCore { namespace Techniques
 						struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
 						dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 					}
-#if 0
-				} else if (filter == EquRectFilterMode::ToGlossySpecular) {
-					auto pixelCount = mipDesc._width * mipDesc._height * ActualArrayLayerCount(targetDesc);
-					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
-					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
-					auto dispatchCount = passesPerPixel*pixelCount;
-					auto dispatchesPerCommit = std::min(32768u, pixelCount);
-					for (unsigned d=0; d<dispatchCount; ++d) {
-						struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, d, dispatchCount, 0 };
-						dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
-
-						if ((d%dispatchesPerCommit) == (dispatchesPerCommit-1)) {
-							dispatchGroup = {};
-							if (progressiveResults) {
-								Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
-								auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
-								// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
-								progressiveResults(intermediateData);
-								Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
-							} else {
-								threadContext->CommitCommands();
-							}
-
-							dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
-							if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
-								threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
-						} else {
-							/* 	We shouldn't need a barrier here, because we won't write to the same pixel in the same
-								cmd list. The pixel we're writing to is based on 'd' -- and this won't wrap around back to
-								the start before we commit the command list
-							VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
-							barrier.pNext = nullptr;
-							barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-							barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-							vkCmdPipelineBarrier(
-								Metal::DeviceContext::Get(*threadContext)->GetActiveCommandList().GetUnderlying().get(),
-								VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-								VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-								0,
-								1, &barrier,
-								0, nullptr,
-								0, nullptr);
-							*/
-						}
-					}
-#endif
 				} else {
 					assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
 					dispatchGroup.Dispatch(targetDesc._width, 1, 1);
@@ -299,7 +306,7 @@ namespace RenderCore { namespace Techniques
 
 				dispatchGroup = {};
 			}
-		} else {
+		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
 			// glossy specular
 			auto horizontalDensitiesFuture = CreateComputeOperator(
 				pipelineCollection,
@@ -357,23 +364,24 @@ namespace RenderCore { namespace Techniques
 				resViews[4] = samplerHelper._pixelToSampleIndex.get();
 				resViews[5] = samplerHelper._pixelToSampleIndexParams.get();
 
+				Metal::BarrierHelper{metalContext}.Add(*samplerHelper._pixelToSampleIndex->GetResource(), BindFlag::TransferDst, BindFlag::ShaderResource);
+
 				{
 					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
 					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
-					auto samplesPerPass = 128u; // 64*1024;
+					auto samplesPerPass = 1024u; // 64*1024;
 					auto totalSampleCount = passesPerPixel * samplesPerPass;
 
-					unsigned samplesPerCmdList = 256;
-					unsigned samplesProcessed = 0;
-					while (samplesProcessed < totalSampleCount) {
-						assert(samplesPerCmdList != 0);
-						auto thisCmdList = std::min(totalSampleCount - samplesProcessed, samplesPerCmdList);
-
+					BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount);
+					while (!samplingShaderHelper.Finished()) {
 						struct ControlUniforms
 						{
-							unsigned _thisPassSampleOffset, _thisPassSampleCount, _thisPassSampleStride, _totalSampleCount;
+							BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
 							unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
-						} controlUniforms { samplesProcessed, thisCmdList, 1, totalSampleCount, mip, 0, 0, 0 };
+						} controlUniforms {
+							samplingShaderHelper.BeginDispatch(),
+							mip, 0, 0, 0
+						};
 
 						UniformsStream us;
 						us._resourceViews = MakeIteratorRange(resViews);
@@ -382,8 +390,7 @@ namespace RenderCore { namespace Techniques
 
 						computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, us);
 
-						samplesProcessed += thisCmdList;
-						// if ((mip+1) == targetDesc._mipCount && samplesProcessed >= totalSampleCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
+						if ((mip+1) == targetDesc._mipCount && samplingShaderHelper.Finished()) break;		// exit now to avoid a tiny cmd list after the last dispatch
 
 						if (progressiveResults) {
 							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
@@ -391,21 +398,7 @@ namespace RenderCore { namespace Techniques
 							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 						}
 
-						auto start = std::chrono::steady_clock::now();
-						threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
-						auto elapsed = std::chrono::steady_clock::now() - start;
-						Log(Verbose) << "[GlossySpecularBuild] Processing " << thisCmdList << " samples took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
-						// On windows with default settings, timeouts begin at 2 seconds
-						if (thisCmdList == samplesPerCmdList && elapsed < std::chrono::milliseconds(750)) {
-							// increase by powers of two, roughly by proportion, just not too quickly
-							auto increaser = IntegerLog2(uint32_t(1500 / std::max(1u, (unsigned)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())));
-							increaser = std::min(increaser, 4u);
-							if (xl_clz4(samplesPerCmdList) >= increaser) {
-								assert(samplesPerCmdList << increaser);
-								samplesPerCmdList <<= increaser;
-							}
-						}
-
+						samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, "GlossySpecularBuild");
 						if (progressiveResults) {
 							auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
 							// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
@@ -416,12 +409,54 @@ namespace RenderCore { namespace Techniques
 
 				}
 			}
-		}
+		} else if (filter == EquRectFilterMode::ToGlossySpecularReference) {
+			auto inputDesc = inputRes->GetDesc()._textureDesc;
+			auto totalSampleCount = inputDesc._width*inputDesc._height;
+			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
+				TextureViewDesc view;
+				view._mipRange = {mip, 1};
+				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+				IResourceView* resViews[] = { inputView.get(), outputView.get() };
+				auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
 
-		const bool test = true;
-		if (test) {
-			threadContext->CommitCommands();
-			threadContext->GetAnnotator().EndFrameCapture();
+				UniformsStream us;
+				us._resourceViews = MakeIteratorRange(resViews);
+
+				BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount);
+				while (!samplingShaderHelper.Finished()) {
+					struct ControlUniforms
+					{
+						BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
+						unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
+					} controlUniforms {
+						samplingShaderHelper.BeginDispatch(),
+						mip, 0, 0, 0
+					};
+
+					UniformsStream us;
+					us._resourceViews = MakeIteratorRange(resViews);
+					UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
+					us._immediateData = immDatas;
+
+					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, us);
+
+					if ((mip+1) == targetDesc._mipCount && samplingShaderHelper.Finished()) break;		// exit now to avoid a tiny cmd list after the last dispatch
+
+					if (progressiveResults) {
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
+					} else {
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
+					}
+
+					samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, "GlossySpecularReference");
+					if (progressiveResults) {
+						auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+						// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
+						progressiveResults(intermediateData);
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
+					}
+				}
+			}
 		}
 
 		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
@@ -477,20 +512,20 @@ namespace RenderCore { namespace Techniques
 			// get ahead of the GPU anyway, and we also don't want to release this thread to the 
 			// thread pool while waiting for the GPU
 
-			unsigned samplesProcessed = 0;
-			unsigned samplesPerCmdList = 256;
+			BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount);
 			while (true) {
-				auto thisCmdList = std::min(totalSampleCount - samplesProcessed, samplesPerCmdList);
-
 				TextureViewDesc view;
 				view._mipRange = {mip, 1};
 				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
 				IResourceView* resViews[] = { outputView.get() };
 				struct ControlUniforms
 				{
-					unsigned _thisPassSampleOffset, _thisPassSampleCount, _thisPassSampleStride, _totalSampleCount;
+					BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
 					unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
-				} controlUniforms { samplesProcessed, thisCmdList, 1, totalSampleCount, mip, 0, 0, 0 };
+				} controlUniforms {
+					samplingShaderHelper.BeginDispatch(), 
+					mip, 0, 0, 0 
+				};
 				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(controlUniforms) };
 				UniformsStream us;
 				us._resourceViews = MakeIteratorRange(resViews);
@@ -498,23 +533,8 @@ namespace RenderCore { namespace Techniques
 				
 				computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
 
-				samplesProcessed += thisCmdList;
-				if (samplesProcessed >= totalSampleCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
-
-				auto start = std::chrono::steady_clock::now();
-				threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion);
-				auto elapsed = std::chrono::steady_clock::now() - start;
-				Log(Verbose) << "[" << shader << "] Processing " << thisCmdList << " samples took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
-				// On windows with default settings, timeouts begin at 2 seconds
-				if (thisCmdList == samplesPerCmdList && elapsed < std::chrono::milliseconds(750)) {
-					// increase by powers of two, roughly by proportion, just not too quickly
-					auto increaser = IntegerLog2(uint32_t(1500 / std::max(1u, (unsigned)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())));
-					increaser = std::min(increaser, 4u);
-					if (xl_clz4(samplesPerCmdList) >= increaser) {
-						assert(samplesPerCmdList << increaser);
-						samplesPerCmdList <<= increaser;
-					}
-				}
+				if (samplingShaderHelper.Finished()) break;		// exit now to avoid a tiny cmd list after the last dispatch
+				samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, shader);
 			}
 		}
 
