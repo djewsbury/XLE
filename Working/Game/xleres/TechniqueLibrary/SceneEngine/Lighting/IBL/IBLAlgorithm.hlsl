@@ -116,10 +116,10 @@ float3 GGXHalfVector_Sample(float2 xi, float alphad)
     return H;
 }
 
-float GGXHalfVector_PDF(float3 sampledHalfVector, float alphad)
+float GGXHalfVector_PDFh(float3 tangentSpaceHalfVector, float alphad)
 {
     // Used alongside GGXHalfVector_Sample
-    // Gives the pdf respecting solid angle
+    // Gives the pdf respecting solid angle for the half vector distribution (ie, ph(omega))
     //
     // This is D(...) * abs(dot(m, n))
     // But it must be in exactly the same form used in the distribution in GGXHalfVector_Sample
@@ -127,9 +127,19 @@ float GGXHalfVector_PDF(float3 sampledHalfVector, float alphad)
     //
     // Nice reference with working out from https://agraphicsguynotes.com/posts/sample_microfacet_brdf/
 
-    float cosTheta = sampledHalfVector.z;
+    float cosTheta = tangentSpaceHalfVector.z;
     float denomSqrt = (alphad * alphad - 1) * cosTheta * cosTheta + 1;
     return alphad * alphad * cosTheta / (pi*denomSqrt*denomSqrt);
+}
+
+float GGXHalfVector_PDF(float3 tangentSpaceHalfVector, float3 tangentSpaceViewVector, float alphad)
+{
+    // We require a change-of-variables term to convert from a pdf describing the distribution of
+    // half vectors, to a pdf describing a distribution of incident light vectors (since the integral we're solving
+    // is over incident light vectors respecting solid angle)
+    // fortunately it's a pretty easy conversion
+    // See PBR book chapter 14.1.1
+    return GGXHalfVector_PDFh(tangentSpaceHalfVector, alphad) / (4 * dot(tangentSpaceViewVector, tangentSpaceHalfVector));
 }
 
 float3 HeitzGGXVNDF_Sample(float3 Ve, float alpha_x, float alpha_y, float U1, float U2)

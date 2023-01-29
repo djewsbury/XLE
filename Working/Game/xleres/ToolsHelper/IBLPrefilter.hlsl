@@ -37,6 +37,11 @@ float3 IBLPrecalc_SampleInputTexture(float3 direction)
     return Input.SampleLevel(EquirectangularBilinearSampler, coord, 0).rgb;
 }
 
+float3 IBLPrecalc_SampleInputTextureUV(float2 uv)
+{
+    return Input.SampleLevel(EquirectangularBilinearSampler, uv, 0).rgb;
+}
+
 #include "../TechniqueLibrary/SceneEngine/Lighting/IBL/IBLPrecalc.hlsl"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -171,6 +176,44 @@ static float RadicalInverseBase7(uint a)
     return reversedDigits * reciprocalBaseN;
 }
 
+float2 ConcentricSampleDisk(float2 xi)
+{
+	// See pbr-book chapter 13.6.2
+	// Very snazzy method that projects 8 triangular octants onto slices of the disk
+	// it's a little like the geodesic sphere method
+	// this creates a nicer distribution relative to our evenly space xi input coords
+	// than a basic polar coordinate method would
+
+	float2 xiOffset = 2 * xi - 1.0.xx;
+	if (all(xiOffset == 0)) return 0;
+
+	float theta, r;
+	if (abs(xiOffset.x) > abs(xiOffset.y)) {
+		r = xiOffset.x;
+		theta = pi / 4.0 * (xiOffset.y / xiOffset.x);
+	} else {
+		r = xiOffset.y;
+		theta = pi / 2.0 - pi / 4.0 * (xiOffset.x / xiOffset.y);
+	}
+	float2 result;
+	sincos(theta, result.x, result.y);
+	return r * result;
+}
+
+float3 CosineHemisphere_Sample(out float pdf, float2 xi)
+{
+    // using distribution trick from pbr-book Chapter 13.6.3
+    float2 disk = ConcentricSampleDisk(xi);
+    float z = sqrt(max(0, 1-dot(disk, disk)));
+    pdf = z * reciprocalPi;     // pdf w.r.t solid angle
+    return float3(disk.x, disk.y, z);
+}
+
+float CosineHemisphere_PDF(float cosTheta)     // cosTheta is NdotL in typical cases
+{
+    return cosTheta * reciprocalPi; // pdf w.r.t solid angle
+}
+
 float FilterGlossySpecular_BRDF_costheta(
     out float pdf,
     float3 N, float3 L, 
@@ -210,7 +253,7 @@ float FilterGlossySpecular_BRDF_costheta(
 
     return filteringWeight;
 
-#else
+#elif 1
 
     float alpha = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
     float NdotL = dot(N, L);
@@ -219,8 +262,16 @@ float FilterGlossySpecular_BRDF_costheta(
     float D = TrowReitzD(NdotM, alpha);
     float filteringWeight = NdotL * D;
 
-    pdf = GGXHalfVector_PDF(float3(0,0,NdotM), alpha);
+    pdf = GGXHalfVector_PDF(float3(0,0,NdotM), float3(0,0,1), alpha);
 
+    filteringWeight = pow(NdotL, 48) / .35992;
+    return filteringWeight;
+
+#else
+
+    // cosine weighted hemisphere
+    float filteringWeight = pow(dot(N, L), 48) / .35992;
+    pdf = CosineHemisphere_PDF(filteringWeight);
     return filteringWeight;
 
 #endif
@@ -256,11 +307,15 @@ float FilterGlossySpecular_SampleFilteringHalfVector(
 
     return filteringWeight;
 
-#else
+#elif 1
 
     float alpha = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
     float3 tangentSpaceHalfVector = GGXHalfVector_Sample(xi, alpha);
     L = 2.f * tangentSpaceHalfVector.z * tangentSpaceHalfVector - float3(0,0,1);
+    if (L.z < 0) {
+        pdf = 0;
+        return 0;
+    }
 
     float NdotL = L.z;
     float NdotV = 1;
@@ -268,10 +323,21 @@ float FilterGlossySpecular_SampleFilteringHalfVector(
     float D = TrowReitzD(NdotM, alpha);
     float filteringWeight = NdotL * D;
 
-    pdf = GGXHalfVector_PDF(tangentSpaceHalfVector, alpha);
+    pdf = GGXHalfVector_PDF(tangentSpaceHalfVector, float3(0,0,1), alpha);
     L = TransformByArbitraryTangentFrame(L, N);
 
+    filteringWeight = pow(NdotL, 48) / .35992;
     return filteringWeight;
+
+#else
+
+    float hemisphere_pdf;
+    L = CosineHemisphere_Sample(hemisphere_pdf, xi);
+    float NdotL = L.z;
+
+    pdf = hemisphere_pdf;
+    L = TransformByArbitraryTangentFrame(L, N);
+    return pow(NdotL, 48) / .35992;
 
 #endif
 }
@@ -281,6 +347,13 @@ float BalanceHeuristic(float nf, float fpdf, float ng, float gpdf)
     // "balance heuristic" for multiple important sampling
     // note that fpdf tends to get factored out at the usage point
     return (nf * fpdf) / (nf * fpdf + ng * gpdf);
+}
+
+float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
+{
+    float f = nf * fpdf, g = ng * gpdf;
+    f *= f; g *= g;
+    return f/(f+g);
 }
 
 groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
@@ -369,8 +442,9 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     // Sampling with importance based on the brightness of the image
 
     float3 value = 0;
+    uint t;
 #if 1
-    for (uint t=0; t<helper._thisPassSampleCount; ++t) {
+    for (t=0; t<helper._thisPassSampleCount; ++t) {
         uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
         uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy] + HaltonSamplerRepeatingStride * globalTap;
         // Using the Halton sequence in such a straightforward way as this is not going to be efficient; but we don't require a perfectly
@@ -388,8 +462,8 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         // Original light_pdf is w.r.t. u,v coords. But we want a light_pdf w.r.t. solid angle on the hemisphere
         // (consider, for example, that a lot of uvs are densly packed around the polls)
         // see pbr-book chapter 14.2.4
-        float compressionFactor = sin(pi * inputTextureUV.y);
-        light_pdf /= 2 * pi * pi * max(compressionFactor, 1e-5);
+        // float compressionFactor = sin(pi * inputTextureUV.y);
+        light_pdf /= 2 * pi * pi; // * max(compressionFactor, 1e-5);
 
         // float3 H = normalize(L+viewDirection);
         // // float brdf_costheta = CalculateSpecular(normal, viewDirection, L, H, specParam).g;
@@ -397,15 +471,15 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         float filtering_pdf;
         float brdf_costheta = FilterGlossySpecular_BRDF_costheta(filtering_pdf, cubeMapDirection, L, roughness);
 
-        float msWeight = BalanceHeuristic(1, light_pdf, 1, filtering_pdf);        // (assuming equal count of samples)
+        float msWeight = PowerHeuristic2(1, light_pdf, 1, filtering_pdf);        // (assuming equal count of samples)
 
-        value += Input[inputTextureUV * inputTextureDims].rgb * brdf_costheta * msWeight / light_pdf;
+        value += IBLPrecalc_SampleInputTextureUV(inputTextureUV) * brdf_costheta * msWeight / light_pdf;
     }
 #endif
 
 #if 1
     // Sampling with importance based on the filtering kernel
-    for (uint t=0; t<helper._thisPassSampleCount; ++t) {
+    for (t=0; t<helper._thisPassSampleCount; ++t) {
         uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
         uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy] + HaltonSamplerRepeatingStride * globalTap;
         float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
@@ -422,16 +496,22 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         if (inputTextureUV.x < 0) inputTextureUV.x += 1.0;      // try to get in (0,1) range
         float light_pdf = LookupPDF(inputTextureUV, marginalCDFDims);
         // change-of-variables for light_pdf...
-        float compressionFactor = sin(pi * inputTextureUV.y);
-        light_pdf /= 2 * pi * pi * max(compressionFactor, 1e-5);
+        // float compressionFactor = sin(pi * inputTextureUV.y);
+        light_pdf /= 2 * pi * pi; // * max(compressionFactor, 1e-5);
 
-        float msWeight = BalanceHeuristic(1, filtering_pdf, 1, light_pdf);
+        float msWeight = PowerHeuristic2(1, filtering_pdf, 1, light_pdf);
 
-        value += Input[inputTextureUV * inputTextureDims].rgb * brdf_costheta * msWeight / filtering_pdf;
+        value += IBLPrecalc_SampleInputTextureUV(inputTextureUV) * brdf_costheta * msWeight / filtering_pdf;
     }
 #endif
 
-    OutputArray[helper._outputPixel].rgb += value / helper._totalSampleCount;
+    if (helper._thisPassSampleStride != 1) {
+        OutputArray[helper._outputPixel].rgb += value / helper._totalSampleCount;
+    } else {
+        // potential floating point creep issues here (and output values will vary based on # of samples/pass)
+        OutputArray[helper._outputPixel].rgb
+            = (OutputArray[helper._outputPixel].rgb * helper._thisPassSampleOffset + value) / (helper._thisPassSampleOffset+helper._thisPassSampleCount);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
