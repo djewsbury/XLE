@@ -133,12 +133,16 @@ namespace RenderCore { namespace Techniques
 			auto texture = threadContext.GetDevice()->CreateResource(
 				CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(width, height, Format::R32_UINT)),
 				"sample-idx-lookup");
-			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(
+			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+			Metal::BarrierHelper{metalContext}.Add(*texture, Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);
+			auto pitches = TexturePitches{width*(unsigned)sizeof(unsigned), width*height*(unsigned)sizeof(unsigned)};
+			metalContext.BeginBlitEncoder().Write(
 				*texture, 
-				SubResourceInitData{MakeIteratorRange(data.get(), PtrAdd(data.get(), sizeof(unsigned)*width*height))},
+				SubResourceInitData{MakeIteratorRange(data.get(), PtrAdd(data.get(), sizeof(unsigned)*width*height)), pitches},
 				Format::R32_UINT,
 				UInt3{width, height, 1},
-				TexturePitches{width*sizeof(unsigned), width*height*sizeof(unsigned)});
+				pitches);
+			Metal::BarrierHelper{metalContext}.Add(*texture, BindFlag::TransferDst, BindFlag::ShaderResource);
 
 			_pixelToSampleIndex = texture->CreateTextureView();
 
@@ -167,7 +171,7 @@ namespace RenderCore { namespace Techniques
 			unsigned _thisPassSampleOffset, _thisPassSampleCount, _thisPassSampleStride, _totalSampleCount;
 		};
 
-		Uniforms BeginDispatch()
+		Uniforms ConfigureNextDispatch()
 		{
 			assert(_samplesPerCmdList != 0);
 			auto thisCmdList = std::min(_totalSampleCount - _samplesProcessed, _samplesPerCmdList);
@@ -204,7 +208,6 @@ namespace RenderCore { namespace Techniques
 		unsigned _samplesPerCmdList = 256;
 		unsigned _totalSampleCount = 0;
 	};
-
 
 	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(
 		BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc,
@@ -364,12 +367,10 @@ namespace RenderCore { namespace Techniques
 				resViews[4] = samplerHelper._pixelToSampleIndex.get();
 				resViews[5] = samplerHelper._pixelToSampleIndexParams.get();
 
-				Metal::BarrierHelper{metalContext}.Add(*samplerHelper._pixelToSampleIndex->GetResource(), BindFlag::TransferDst, BindFlag::ShaderResource);
-
 				{
 					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
 					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
-					auto samplesPerPass = 1024u; // 64*1024;
+					auto samplesPerPass = 64u*1024u; // 64*1024;
 					auto totalSampleCount = passesPerPixel * samplesPerPass;
 
 					BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount);
@@ -379,7 +380,7 @@ namespace RenderCore { namespace Techniques
 							BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
 							unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
 						} controlUniforms {
-							samplingShaderHelper.BeginDispatch(),
+							samplingShaderHelper.ConfigureNextDispatch(),
 							mip, 0, 0, 0
 						};
 
@@ -429,7 +430,7 @@ namespace RenderCore { namespace Techniques
 						BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
 						unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
 					} controlUniforms {
-						samplingShaderHelper.BeginDispatch(),
+						samplingShaderHelper.ConfigureNextDispatch(),
 						mip, 0, 0, 0
 					};
 
@@ -523,7 +524,7 @@ namespace RenderCore { namespace Techniques
 					BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
 					unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
 				} controlUniforms {
-					samplingShaderHelper.BeginDispatch(), 
+					samplingShaderHelper.ConfigureNextDispatch(), 
 					mip, 0, 0, 0 
 				};
 				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(controlUniforms) };
