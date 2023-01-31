@@ -106,10 +106,18 @@ namespace RenderCore { namespace Metal_Vulkan
 	class CmdListAttachedStorage
 	{
 	public:
-		TemporaryStorageResourceMap	MapStorage(size_t byteCount, BindFlag::BitField bindFlags);
-		TemporaryStorageResourceMap	MapStorageFromNamedPage(size_t byteCount, NamedPage namedPage);
+		// <summary>Allocate temporary storage with the given bind flags</summary>
+		// The returned storage will be valid only for use by the attached command list, and will be
+		// released back to the pool after the GPU completes that command list
+		//
+		// "alignment" is only required when the allocation has specific restrictions. Alignment rules
+		// implied by the bind flags are automatically applied, regardless of the given alignment value
+		// In particular, minUniformBufferOffsetAlignment, minStorageBufferOffsetAlignment and 
+		// minTexelBufferOffsetAlignment are always respected for their relevant bind flags
+		TemporaryStorageResourceMap	MapStorage(size_t byteCount, BindFlag::BitField bindFlags, size_t alignment=1);
+		TemporaryStorageResourceMap	MapStorageFromNamedPage(size_t byteCount, NamedPage namedPage, size_t alignment=1);
 		
-		BufferAndRange AllocateDeviceOnlyRange(size_t byteCount, BindFlag::BitField bindFlags);
+		BufferAndRange AllocateDeviceOnlyRange(size_t byteCount, BindFlag::BitField bindFlags, size_t alignment=1);
 
 		void OnSubmitToQueue(unsigned trackerMarker);		// IAsyncTracker::Marker
 		void AbandonAllocations();

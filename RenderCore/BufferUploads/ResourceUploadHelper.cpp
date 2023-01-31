@@ -34,6 +34,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize)
     {
         auto destinationDesc = finalResource.GetContainingResource()->GetDesc();
+        assert((stagingOffset % CalculateStagingBufferOffsetAlignment(destinationDesc)) == 0);      // copy src must be aligned by the pixel size
         Metal::BarrierHelper{*_metalContext}.Add(*finalResource.GetContainingResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);
 
         if (destinationDesc._type == ResourceDesc::Type::Texture) {
@@ -161,11 +162,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             byteCount = finalResource.GetRangeInContainingResource().second - finalResource.GetRangeInContainingResource().first;
             desc._linearBufferDesc._sizeInBytes = byteCount;
         }
-        // auto alignment = CalculateStagingBufferOffsetAlignment(desc);
+        auto alignment = CalculateStagingBufferOffsetAlignment(desc);       // alignment varies based on pixel format
         
         auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 
-        auto stagingSpace = metalContext.MapTemporaryStorage(byteCount, BindFlag::TransferSrc);
+        auto stagingSpace = metalContext.MapTemporaryStorage(byteCount, BindFlag::TransferSrc, alignment);
         auto uploadList = CalculateUploadList(stagingSpace, desc);
         for (const auto& upload:uploadList) {
             SubResourceInitData srcSubResource = {};

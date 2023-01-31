@@ -1212,12 +1212,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		return _sharedState->_commandList.GetUnderlying() != nullptr;
 	}
 
-	TemporaryStorageResourceMap DeviceContext::MapTemporaryStorage(size_t byteCount, BindFlag::Enum type)
+	TemporaryStorageResourceMap DeviceContext::MapTemporaryStorage(size_t byteCount, BindFlag::Enum type, size_t alignment)
 	{
 		auto& cmdList = _sharedState->_commandList;
 		if (!cmdList._attachedStorage)
 			cmdList._attachedStorage = _sharedState->_globalPools->_temporaryStorageManager->BeginCmdListReservation();
-		return cmdList._attachedStorage.MapStorage(byteCount, type);
+		return cmdList._attachedStorage.MapStorage(byteCount, type, alignment);
 	}
 
 	DeviceContext::DeviceContext(ObjectFactory& factory, GlobalPools& globalPools)

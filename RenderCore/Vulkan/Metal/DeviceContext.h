@@ -343,7 +343,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		void BeginLabel(const char*, const VectorPattern<float,4>& color = {1,1,1,1});
 		void EndLabel();
 
-		TemporaryStorageResourceMap MapTemporaryStorage(size_t byteCount, BindFlag::Enum type);
+		TemporaryStorageResourceMap MapTemporaryStorage(size_t byteCount, BindFlag::Enum type, size_t alignment=1);
 
 		static const std::shared_ptr<DeviceContext>& Get(IThreadContext& threadContext);
 

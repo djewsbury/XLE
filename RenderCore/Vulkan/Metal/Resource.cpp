@@ -1028,6 +1028,14 @@ namespace RenderCore { namespace Metal_Vulkan
 					}
 				}
 
+			#if defined(_DEBUG)
+				auto alignmentRestriction = std::max(1u, BitsPerPixel(dstDesc._textureDesc._format)/8u);
+				for (unsigned c=0; c<arrayLayerCount*mipLevelCount; ++c) {
+					auto& op = copyOps[c];
+					assert((op.bufferOffset%alignmentRestriction) == 0);
+				}
+			#endif
+
             context.GetActiveCommandList().CopyBufferToImage(
                 srcResource->GetBuffer(),
                 dstResource->GetImage(), dstLayout,
@@ -1627,6 +1635,17 @@ namespace RenderCore { namespace Metal_Vulkan
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static unsigned CalculateStagingBufferOffsetAlignment(const TextureDesc& desc)
+    {
+		auto compressionParam = GetCompressionParameters(desc._format);
+		if (compressionParam._blockWidth != 1) {
+			return compressionParam._blockBytes;
+		} else {
+			// non-blocked format -- alignment requirement is a multiple of the texel size
+			return BitsPerPixel(desc._format)/8u;
+		}
+    }
+
 	void BlitEncoder::Write(
 		const CopyPartial_Dest& dst,
 		const SubResourceInitData& srcData,
@@ -1659,7 +1678,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			Throw(std::runtime_error("Source data size for BlitEncoder::Write does not match texture dimensions provided"));
 
 		// We never map the destination resource directly here, because this write operation must happen in-order with DeviceContext commands
-		auto staging = _devContext->MapTemporaryStorage(expectedSize, BindFlag::TransferSrc);
+		auto alignment = std::max(1u, CalculateStagingBufferOffsetAlignment(desc._textureDesc));
+		auto staging = _devContext->MapTemporaryStorage(expectedSize, BindFlag::TransferSrc, alignment);
 		assert(staging.GetData().size() == expectedSize);
 		std::memcpy(staging.GetData().begin(), srcData._data.begin(), expectedSize);
 
