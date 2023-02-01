@@ -2,8 +2,6 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#define FORCE_GGX_REF
-
 #include "Cubemap.hlsl"
 #include "sampling-shader-helper.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"
@@ -144,127 +142,23 @@ float LookupPDF(float2 uv, uint2 marginalCDFDims)
     return pdf;
 }
 
-uint FixedScramble5(uint a, uint scrambleSeed)
-{
-    return (a+scrambleSeed)%5;
-    switch (a) {
-    default:
-    case 0: return 0;
-    case 1: return 3;
-    case 2: return 1;
-    case 3: return 4;
-    case 4: return 2;
-    }
-    // const uint scrambleTable[5] { 0, 3, 1, 4, 2 };
-    // return scrambleTable[a];
-}
-
-uint FixedScramble7(uint a, uint scrambleSeed)
-{
-    return (a+scrambleSeed)%7;
-    switch (a) {
-    default:
-    case 0: return 0;
-    case 1: return 3;
-    case 2: return 6;
-    case 3: return 4;
-    case 4: return 2;
-    case 5: return 1;
-    case 6: return 5;
-    }
-    // const uint scrambleTable[7] { 0, 3, 6, 4, 2, 1, 5 };
-    // return scrambleTable[a];
-}
-
-static float RadicalInverseBase5(uint a, uint scrambleSeed)
-{
-    uint Base = 5;
-    float reciprocalBase = 1.0 / float(Base);
-    uint reversedDigits = 0;
-    float reciprocalBaseN = 1;
-    uint divisor = 1;
-    while (a) {
-        uint next = a / Base;
-        uint digit = a - next * Base;
-        reversedDigits = reversedDigits * Base + FixedScramble5(digit, scrambleSeed);
-        reciprocalBaseN *= reciprocalBase;
-        divisor *= Base;
-        a = next;
-    }
-    uint zeroScramble = FixedScramble5(0, scrambleSeed);
-    reversedDigits += zeroScramble * reciprocalBase / (1.0 - reciprocalBase);
-    return reversedDigits / float(divisor); // * reciprocalBaseN;
-}
-
-static float RadicalInverseBase7(uint a, uint scrambleSeed)
-{
-    uint Base = 7;
-    precise float reciprocalBase = 1.0 / float(Base);
-    uint reversedDigits = 0;
-    precise float reciprocalBaseN = 1;
-    uint divisor = 1;
-    while (a) {
-        uint next = a / Base;
-        uint digit = a - next * Base;
-        reversedDigits = reversedDigits * Base + FixedScramble7(digit, scrambleSeed);
-        reciprocalBaseN *= reciprocalBase;
-        divisor *= Base;
-        a = next;
-    }
-    uint zeroScramble = FixedScramble7(0, scrambleSeed);
-    reversedDigits += zeroScramble * reciprocalBase / (1.0 - reciprocalBase);
-    return reversedDigits / float(divisor); //  * reciprocalBaseN;
-}
-
-float2 ConcentricSampleDisk(float2 xi)
-{
-	// See pbr-book chapter 13.6.2
-	// Very snazzy method that projects 8 triangular octants onto slices of the disk
-	// it's a little like the geodesic sphere method
-	// this creates a nicer distribution relative to our evenly space xi input coords
-	// than a basic polar coordinate method would
-
-	float2 xiOffset = 2 * xi - 1.0.xx;
-	if (all(xiOffset == 0)) return 0;
-
-	float theta, r;
-	if (abs(xiOffset.x) > abs(xiOffset.y)) {
-		r = xiOffset.x;
-		theta = pi / 4.0 * (xiOffset.y / xiOffset.x);
-	} else {
-		r = xiOffset.y;
-		theta = pi / 2.0 - pi / 4.0 * (xiOffset.x / xiOffset.y);
-	}
-	float2 result;
-	sincos(theta, result.x, result.y);
-	return r * result;
-}
-
-float3 CosineHemisphere_Sample(out float pdf, float2 xi)
-{
-    // using distribution trick from pbr-book Chapter 13.6.3
-    float2 disk = ConcentricSampleDisk(xi);
-    float z = sqrt(max(0, 1-dot(disk, disk)));
-    pdf = z * reciprocalPi;     // pdf w.r.t solid angle
-    return float3(disk.x, disk.y, z);
-}
-
-float CosineHemisphere_PDF(float cosTheta)     // cosTheta is NdotL in typical cases
-{
-    return cosTheta * reciprocalPi; // pdf w.r.t solid angle
-}
 
 float FilteringEquation(float NdotL, float NdotM, float alpha)
 {
-    // return pow(NdotL, 48) / (.35992*.35992);
     float D = TrowReitzD(NdotM, alpha);
-    return NdotL * D / 4;
+    float G = SmithG(NdotL, alpha);     // (only half of the G term from Torrence-Sparrow)
+    return NdotL * D * G / 4;
 }
+
+static const uint s_VNDFSampling = 0;
+static const uint s_GGXSampling = 1;
+static const uint s_CosineHemisphereSampling = 2;
 
 float FilterGlossySpecular_BRDF_costheta(
     out float pdf,
     float3 N, float3 L, 
-    float roughness)
+    float roughness,
+    uint samplingMethod)
 {
     float alpha = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
     float NdotL = dot(N, L);
@@ -273,106 +167,109 @@ float FilterGlossySpecular_BRDF_costheta(
     // since V = N, if VdotL = cos(theta), then VdotM = NdotM = cos(theta/2)
     // cos(theta/2) = +/- sqrt((1+cos(theta))/2)
     float NdotM = sqrt((1.0+NdotL)/2.0);
-#if 0
 
-    //
-    // Partial BRDF used for filtering the glossy specular
-    // We can't replicate the effect that a true full brdf would have (given this is only single-directional)
-    // But we want to try to just get an approximation of the expected blurriness
-    // Our filtering is selected partially to be convenient with the half vector selection algorithm
-    // we're using for importance sampling
-    //
-    // filtering equation = NdotL * D * excid_G / (4 * NdotV * NdotL)
-    // (note only half of the G term from Torrence-Sparrow)
-    //
+    if (samplingMethod == s_VNDFSampling) {
 
-    float D = TrowReitzD(NdotM, alpha);
-    float G = SmithG(NdotV, alpha);
-    float filteringWeight = D * G / 4;
+        //
+        // Partial BRDF used for filtering the glossy specular
+        // We can't replicate the effect that a true full brdf would have (given this is only single-directional)
+        // But we want to try to just get an approximation of the expected blurriness
+        // Our filtering is selected partially to be convenient with the half vector selection algorithm
+        // we're using for importance sampling
+        //
+        // filtering equation = NdotL * D * excid_G / (4 * NdotV * NdotL)
+        // (note only half of the G term from Torrence-Sparrow)
+        //
 
-    // pdf associated with the half vector selection method we're using for glossy filtering
-    // used for multiple importance sampling weighting
-    //
-    // pdf = D * excid_G * VdotM / (4 * NdotV * VdotM)
-    // (above includes the change-of-variables term requires to convert this to be w.r.t. solid angle)
-    //
-    pdf = D * G / 4;
+        float D = TrowReitzD(NdotM, alpha);
+        float G = SmithG(NdotV, alpha);
+        float filteringWeight = D * G / 4;
 
-    return filteringWeight;
+        // pdf associated with the half vector selection method we're using for glossy filtering
+        // used for multiple importance sampling weighting
+        //
+        // pdf = D * excid_G * VdotM / (4 * NdotV * VdotM)
+        // (above includes the change-of-variables term requires to convert this to be w.r.t. solid angle)
+        //
+        pdf = D * G / 4;
 
-#elif 1
+        return filteringWeight;
 
-    pdf = GGXHalfVector_PDF(float3(0,0,NdotM), float3(0,0,1), alpha);
-    return FilteringEquation(NdotL, NdotM, alpha);
+    } else if (samplingMethod == s_GGXSampling) {
 
-#else
+        pdf = SamplerGGXHalfVector_PDF(float3(0,0,NdotM), float3(0,0,1), alpha);
+        return FilteringEquation(NdotL, NdotM, alpha);
 
-    // cosine weighted hemisphere
-    pdf = CosineHemisphere_PDF(NdotL);
-    return FilteringEquation(NdotL, NdotM, alpha);
+    } else {
 
-#endif
+        // cosine weighted hemisphere
+        pdf = SamplerCosineHemisphere_PDF(NdotL);
+        return FilteringEquation(NdotL, NdotM, alpha);
+
+    }
 }
 
-float FilterGlossySpecular_SampleFilteringHalfVector(
+float FilterGlossySpecular_SampleBRDF(
     out float pdf,
     out float3 L,
     float2 xi,
     float3 N,
-    float roughness)
+    float roughness,
+    uint samplingMethod)
 {
     float alpha = RoughnessToDAlpha(max(roughness, MinSamplingRoughness));
-#if 0
 
-    // Sample half vector using VDNF approach
-    float3 V = N;
-    float3 tangentSpaceHalfVector = HeitzGGXVNDF_Sample(float3(0,0,1), alpha, alpha, xi.x, xi.y);
-    float3 H = TransformByArbitraryTangentFrame(tangentSpaceHalfVector, N);
-    L = 2.f * tangentSpaceHalfVector.z * H - V;
+    if (samplingMethod == s_VNDFSampling) {
 
-    // note that the pdf and filtering weight actually mostly factor out. We only need to calculate
-    // most of this stuff just for the multiple importance sampling
+        // Sample half vector using VDNF approach
+        float3 V = N;
+        float3 tangentSpaceHalfVector = SamplerHeitzGGXVNDF_Pick(float3(0,0,1), alpha, alpha, xi.x, xi.y);
+        float3 H = TransformByArbitraryTangentFrame(tangentSpaceHalfVector, N);
+        L = 2.f * tangentSpaceHalfVector.z * H - V;
 
-    float NdotL = dot(N, L);
-    float NdotV = 1;
-    float NdotM = tangentSpaceHalfVector.z;
-    float D = TrowReitzD(NdotM, alpha);
-    float G = SmithG(NdotV, alpha);
-    float filteringWeight = D * G / 4;
+        // note that the pdf and filtering weight actually mostly factor out. We only need to calculate
+        // most of this stuff just for the multiple importance sampling
 
-    pdf = D * G / 4;
+        float NdotL = dot(N, L);
+        float NdotV = 1;
+        float NdotM = tangentSpaceHalfVector.z;
+        float D = TrowReitzD(NdotM, alpha);
+        float G = SmithG(NdotV, alpha);
+        float filteringWeight = D * G / 4;
 
-    return filteringWeight;
+        pdf = D * G / 4;
 
-#elif 1
+        return filteringWeight;
 
-    float3 tangentSpaceHalfVector = GGXHalfVector_Sample(xi, alpha);
-    L = 2.f * tangentSpaceHalfVector.z * tangentSpaceHalfVector - float3(0,0,1);
-    if (L.z < 0) {
-        pdf = 0;
-        return 0;
+    } else if (samplingMethod == s_GGXSampling) {
+
+        float3 tangentSpaceHalfVector = SamplerGGXHalfVector_Pick(xi, alpha);
+        L = 2.f * tangentSpaceHalfVector.z * tangentSpaceHalfVector - float3(0,0,1);
+        if (L.z < 0) {
+            pdf = 0;
+            return 0;
+        }
+
+        float NdotL = L.z;
+        float NdotV = 1;
+        float NdotM = tangentSpaceHalfVector.z;
+
+        pdf = SamplerGGXHalfVector_PDF(tangentSpaceHalfVector, float3(0,0,1), alpha);
+        L = TransformByArbitraryTangentFrame(L, N);
+
+        return FilteringEquation(NdotL, NdotM, alpha);
+
+    } else {
+
+        float hemisphere_pdf;
+        L = SamplerCosineHemisphere_Pick(hemisphere_pdf, xi);
+        float NdotL = L.z;
+
+        pdf = hemisphere_pdf;
+        L = TransformByArbitraryTangentFrame(L, N);
+        return FilteringEquation(NdotL, 1, alpha);
+
     }
-
-    float NdotL = L.z;
-    float NdotV = 1;
-    float NdotM = tangentSpaceHalfVector.z;
-
-    pdf = GGXHalfVector_PDF(tangentSpaceHalfVector, float3(0,0,1), alpha);
-    L = TransformByArbitraryTangentFrame(L, N);
-
-    return FilteringEquation(NdotL, NdotM, alpha);
-
-#else
-
-    float hemisphere_pdf;
-    L = CosineHemisphere_Sample(hemisphere_pdf, xi);
-    float NdotL = L.z;
-
-    pdf = hemisphere_pdf;
-    L = TransformByArbitraryTangentFrame(L, N);
-    return FilteringEquation(NdotL, 1, alpha);
-
-#endif
 }
 
 float BalanceHeuristic(float nf, float fpdf, float ng, float gpdf)
@@ -407,70 +304,15 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     // If we sample every pixel we need to weight by the solid angle of the texel we're
     // reading from. But if we're just using the importance sampling approach, we can skip
     // this step (it's just taken care of by the probability density function weighting)
-    uint2 textureDims; uint arrayLayerCount;
+    uint2 textureDims, marginalCDFDims, inputTextureDims, samplingPatternDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
-
-#if 0
-    uint passesPerPixel = FilterPassParams.PassCount/(textureDims.x*textureDims.y*6);
-    uint3 pixelId;
-    uint linearPixel = FilterPassParams.PassIndex%(textureDims.x*textureDims.y*6);
-    uint passOfThisPixel = FilterPassParams.PassIndex/(textureDims.x*textureDims.y*6);
-    if (textureDims.x >= 8 && textureDims.y >= 8) {
-        uint blockWidth = ((textureDims.x+7)/8), blockHeight = ((textureDims.y+7)/8);
-        uint2 pixelInBlock = FFX_DNSR_Reflections_RemapLane8x8(linearPixel%64);
-        uint linearBlock = (FilterPassParams.PassIndex/64)%(blockWidth*blockHeight*6);
-
-        pixelId = uint3(
-            (linearBlock%blockWidth)*8+pixelInBlock.x, 
-            ((linearBlock/blockWidth)%blockHeight)*8+pixelInBlock.y, 
-            linearBlock/(blockWidth*blockHeight));
-    } else {
-        pixelId = uint3(
-            linearPixel%textureDims.x, 
-            (linearPixel/textureDims.x)%textureDims.y, 
-            linearPixel/(textureDims.x*textureDims.y));
-    }
-
-	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y && pixelId.z < 6) {
-        // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
-        float2 texCoord = (pixelId.xy + 0.5.xx) / float2(textureDims);
-        float3 cubeMapDirection = CalculateCubeMapDirection(pixelId.z, texCoord);
-        int log2dim = firstbithigh(textureDims.x);
-        float roughness = MipmapToRoughness(SpecularIBLMipMapCount-log2dim);
-
-        const uint samplesPerPassCount = 1024;
-        EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = GenerateFilteredSpecular(
-            cubeMapDirection, roughness,
-            samplesPerPassCount, groupThreadId.x + passOfThisPixel*64, passesPerPixel*64);
-
-        //////////////////////////////////
-        // Sync, and then combine together the results from all of the samples
-        AllMemoryBarrierWithGroupSync();
-        if (groupThreadId.x == 0) {
-            if (passOfThisPixel == 0)
-                OutputArray[pixelId.xyz] = float4(0,0,0,1);
-            float3 result = 0;
-            for (uint c=0; c<64; ++c)
-                result.rgb += EquiRectFilterGlossySpecular_SharedWorking[c].rgb/(64.0f*passesPerPixel);
-            OutputArray[pixelId.xyz].rgb += result;
-        }
-    }
-#endif
+	MarginalHorizontalCDF.GetDimensions(marginalCDFDims.x, marginalCDFDims.y);
+	Input.GetDimensions(inputTextureDims.x, inputTextureDims.y);
+    SampleIndexLookup.GetDimensions(samplingPatternDims.x, samplingPatternDims.y);
 
     PixelBalancingShaderHelper helper = PixelBalancingShaderCalculate(groupThreadId, groupId, uint3(textureDims, 6), ControlUniforms._samplingShaderUniforms);
     if (any(helper._outputPixel >= uint3(textureDims, arrayLayerCount))) return;
     if (helper._firstDispatch) OutputArray[helper._outputPixel] = 0;
-
-    uint2 marginalCDFDims, inputTextureDims, sampingPatternDims;
-	MarginalHorizontalCDF.GetDimensions(marginalCDFDims.x, marginalCDFDims.y);
-	Input.GetDimensions(inputTextureDims.x, inputTextureDims.y);
-    SampleIndexLookup.GetDimensions(sampingPatternDims.x, sampingPatternDims.y);
-
-    // OutputArray[helper._outputPixel].rgb = MarginalHorizontalCDF[helper._outputPixel.xy/float2(textureDims)*marginalCDFDims].rrr;
-    // return;
-
-    // OutputArray[helper._outputPixel].rgb = float3(helper._outputPixel.xy/float2(textureDims), 0) + MarginalHorizontalCDF[helper._outputPixel.xy/float2(textureDims)*marginalCDFDims].rrr;
-    // return;
 
     // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
     float2 texCoord = (helper._outputPixel.xy + 0.5.xx) / float2(textureDims);
@@ -478,21 +320,23 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     int log2dim = firstbithigh(textureDims.x);
     float roughness = MipmapToRoughness(SpecularIBLMipMapCount-log2dim);
     SpecularParameters specParam = SpecularParameters_RoughF0(roughness, float3(1.0f, 1.0f, 1.0f));
+    float samplingJScale = pow(2,HaltonSamplerJ), samplingKScale = pow(3,HaltonSamplerK);
 
     // Sampling with importance based on the brightness of the image
     const bool sampleLight = true;
     const bool sampleBrdf = true;
+    const uint brdfSamplingMethod = s_VNDFSampling;
 
     float3 value = 0;
     uint t;
-    uint scrambleSeed = 0; // helper._outputPixel.x + helper._outputPixel.y * textureDims.x;
     if (sampleLight) {
         for (t=0; t<helper._thisPassSampleCount; ++t) {
             uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
-            uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy % sampingPatternDims.xy] + HaltonSamplerRepeatingStride * globalTap;
+            uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy % samplingPatternDims.xy] + HaltonSamplerRepeatingStride * globalTap;
             // Using the Halton sequence in such a straightforward way as this is not going to be efficient; but we don't require a perfectly
             // optimal solution here
-            float2 xi = float2(RadicalInverseBase5(samplerIdx, scrambleSeed), RadicalInverseBase7(samplerIdx, scrambleSeed));
+            float2 xi = float2(frac(RadicalInverseBase2(samplerIdx)*samplingJScale), frac(RadicalInverseBase3(samplerIdx)*samplingKScale));
+
             xi = saturate(xi);      // floating point creep may be resulting in some bad xi values
             float light_pdf=1;
             float2 inputTextureUV = SampleUV(light_pdf, xi, marginalCDFDims);
@@ -510,7 +354,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
             light_pdf /= 2 * pi * pi * max(compressionFactor, 1e-5);
 
             float filtering_pdf;
-            float brdf_costheta = FilterGlossySpecular_BRDF_costheta(filtering_pdf, cubeMapDirection, L, roughness);
+            float brdf_costheta = FilterGlossySpecular_BRDF_costheta(filtering_pdf, cubeMapDirection, L, roughness, brdfSamplingMethod);
 
             float msWeight = sampleBrdf ? PowerHeuristic2(1, light_pdf, 1, filtering_pdf) : 1;        // (assuming equal count of samples)
 
@@ -523,14 +367,14 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         for (t=0; t<helper._thisPassSampleCount; ++t) {
             uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
             uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy] + HaltonSamplerRepeatingStride * globalTap;
-            float2 xi = float2(RadicalInverseBase5(samplerIdx, scrambleSeed), RadicalInverseBase7(samplerIdx, scrambleSeed));
+            float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
             xi = saturate(xi);      // floating point creep may be resulting in some bad xi values
 
             float filtering_pdf;
             float3 L;
-            float brdf_costheta = FilterGlossySpecular_SampleFilteringHalfVector(
+            float brdf_costheta = FilterGlossySpecular_SampleBRDF(
                 filtering_pdf, L,
-                xi, cubeMapDirection, roughness);
+                xi, cubeMapDirection, roughness, brdfSamplingMethod);
             if (brdf_costheta <= 0) continue;       // sometimes getting bad samples
             
             float2 inputTextureUV = DirectionToEquirectangularCoord_YUp(L);
@@ -654,6 +498,7 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
     SpecularParameters specParam = SpecularParameters_RoughF0(roughness, float3(1.0f, 1.0f, 1.0f));
 
     // Basic sampling for reference purposes. We're going to sample every pixel from the input texture
+    const uint brdfSamplingMethod = s_VNDFSampling;
 
     float3 value = 0;
     for (uint t=0; t<helper._thisPassSampleCount; ++t) {
@@ -667,7 +512,7 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
         if (NdotL <= 0) continue;   // sampling only one hemisphere (pdf adjusted below)
 
         float filtering_pdf;
-        float brdf_costheta = FilterGlossySpecular_BRDF_costheta(filtering_pdf, cubeMapDirection, L, roughness);
+        float brdf_costheta = FilterGlossySpecular_BRDF_costheta(filtering_pdf, cubeMapDirection, L, roughness, brdfSamplingMethod);
         if (brdf_costheta <= 0) continue;
 
         if (inputTextureUV.y == 0) continue;

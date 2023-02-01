@@ -37,12 +37,20 @@ float3 SampleSpecularIBL_Ref(
     // Unreal course notes
     //      http://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
 
+    float3 up = (abs(normal).y < 0.5f) ? float3(0,1,0) : float3(1,0,0);
+    float3 tangentX = normalize(cross(up, normal));
+    float3 tangentY = cross(normal, tangentX);
+
+    float3 viewTangentSpace = float3(dot(viewDirection, tangentX), dot(viewDirection, tangentY), dot(viewDirection, normal));
+
     float alphad = RoughnessToDAlpha(specParam.roughness);
     float3 result = float3(0.0f, 0.0f, 0.0f);
     for (uint s=0u; s<passSampleCount; ++s) {
             // We could build a distribution of "H" vectors here,
             // or "L" vectors. It makes sense to use H vectors
-        precise float3 H = SampleMicrofacetNormalGGX(s*passCount+passIndex, passSampleCount*passCount, normal, alphad);
+        float2 xi = HammersleyPt(s*passCount+passIndex, passSampleCount*passCount);
+        precise float3 halfVectorTangentSpace = SamplerHeitzGGXVNDF_Pick(viewTangentSpace, alphad, alphad, xi.x, xi.y);
+        float3 H = halfVectorTangentSpace.x * tangentX + halfVectorTangentSpace.y * tangentY + halfVectorTangentSpace.z * normal;
         float3 L = 2.f * dot(viewDirection, H) * H - viewDirection;
 
             // Now we can light as if the point on the reflection map
@@ -50,14 +58,15 @@ float3 SampleSpecularIBL_Ref(
 
             // note -- "CalculateSpecular" has NdotL term built-in
         float3 lightColor = SampleLevelZero_Default(tex, AdjSkyCubeMapCoords(L)).rgb;
-        precise float3 brdf = CalculateSpecular(normal, viewDirection, L, H, specParam); // (also contains NdotL term)
-        float pdfWeight = InversePDFWeight(H, normal, viewDirection, alphad);
-        result += lightColor * brdf * pdfWeight;
+        precise float3 brdf_costheta = CalculateSpecular(normal, viewDirection, L, H, specParam); // (also contains NdotL term)
+        float pdf = SamplerHeitzGGXVNDF_PDF(halfVectorTangentSpace, viewTangentSpace, alphad);
+        result += lightColor * brdf_costheta / pdf;
     }
 
     return result / float(passSampleCount);
 }
 
+#if 0
 float3 SampleTransmittedSpecularIBL_Ref(
     float3 normal, float3 viewDirection,
     SpecularParameters specParam,
@@ -168,6 +177,7 @@ float3 SampleTransmittedSpecularIBL_Ref(
 
     return result / float(passSampleCount);
 }
+#endif
 
 float3 SampleDiffuseIBL_Ref(
     float3 normal, TextureCube tex,
@@ -179,9 +189,16 @@ float3 SampleDiffuseIBL_Ref(
     // to the diffuse equation (eg, just NdotL; even if we're using a more complex
     // diffuse equation, this is a good approximation)
 
+    float3 up = (abs(normal).y < 0.5f) ? float3(0,1,0) : float3(1,0,0);
+    float3 tangentX = normalize(cross(up, normal));
+    float3 tangentY = cross(normal, tangentX);
+
     float3 result = float3(0.0f, 0.0f, 0.0f);
     for (uint s=0u; s<passSampleCount; ++s) {
-        precise float3 i = CosineWeightedHemisphere_Sample(s*passCount+passIndex, passSampleCount*passCount, normal);
+        float2 xi = HammersleyPt(s*passCount+passIndex, passSampleCount*passCount);
+        float pdf;
+        float3 i_tangentSpace = SamplerCosineHemisphere_Pick(pdf, xi);
+        float3 i = i_tangentSpace.x * tangentX + i_tangentSpace.y * tangentY + i_tangentSpace.z * normal;
         float3 lightColor = SampleLevelZero_Default(tex, AdjSkyCubeMapCoords(i)).rgb;
         // here, our lighting equation (lambert diffuse) is just the same as the pdf -- so it's gets factored out
         result += lightColor;

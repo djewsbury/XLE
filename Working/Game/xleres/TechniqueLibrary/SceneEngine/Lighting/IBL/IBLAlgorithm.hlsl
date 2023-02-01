@@ -15,8 +15,6 @@ static const float MinSamplingAlpha = 0.001f;
 static const float MinSamplingRoughness = 0.03f;
 static const float SpecularIBLMipMapCount = 9.f;
 
-// #define OLD_M_DISTRIBUTION_FN
-
 float VanderCorputRadicalInverse(uint bits)
 {
     // This is the "Van der Corput radical inverse" function
@@ -34,6 +32,70 @@ float VanderCorputRadicalInverse(uint bits)
     // bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
     // return float(bits) * 2.3283064365386963e-10f; // / 0x100000000
  }
+
+static float RadicalInverseBase2(uint a)
+{
+    // non ideal for GPU usage, don't use when performance is a concern
+    uint Base = 2;
+    uint reversedDigits = 0;
+    uint divisor = 1;
+    while (a) {
+        uint next = a / Base;
+        uint digit = a - next * Base;
+        reversedDigits = reversedDigits * Base + digit;
+        divisor *= Base;
+        a = next;
+    }
+    return reversedDigits / float(divisor);
+}
+
+static float RadicalInverseBase3(uint a)
+{
+    // non ideal for GPU usage, don't use when performance is a concern
+    uint Base = 3;
+    uint reversedDigits = 0;
+    uint divisor = 1;
+    while (a) {
+        uint next = a / Base;
+        uint digit = a - next * Base;
+        reversedDigits = reversedDigits * Base + digit;
+        divisor *= Base;
+        a = next;
+    }
+    return reversedDigits / float(divisor);
+}
+
+static float RadicalInverseBase5(uint a)
+{
+    // non ideal for GPU usage, don't use when performance is a concern
+    uint Base = 5;
+    uint reversedDigits = 0;
+    uint divisor = 1;
+    while (a) {
+        uint next = a / Base;
+        uint digit = a - next * Base;
+        reversedDigits = reversedDigits * Base + digit;
+        divisor *= Base;
+        a = next;
+    }
+    return reversedDigits / float(divisor);
+}
+
+static float RadicalInverseBase7(uint a)
+{
+    // non ideal for GPU usage, don't use when performance is a concern
+    uint Base = 7;
+    uint reversedDigits = 0;
+    uint divisor = 1;
+    while (a) {
+        uint next = a / Base;
+        uint digit = a - next * Base;
+        reversedDigits = reversedDigits * Base + digit;
+        divisor *= Base;
+        a = next;
+    }
+    return reversedDigits / float(divisor);
+}
 
 float2 HammersleyPt(uint i, uint N)
 {
@@ -54,11 +116,8 @@ float3 TransformByArbitraryTangentFrame(float3 tangentSpaceInput, float3 normalI
          + normalInDestinationSpace * tangentSpaceInput.z;
 }
 
-float3 GGXHalfVector_Sample(float2 xi, float alphad)
+float3 SamplerGGXHalfVector_Pick(float2 xi, float alphad)
 {
-    // See also https://hal.science/hal-01509746/document
-    // VNDF sampling specifically for GGX & smith shadowing/masking
-
     // The following will attempt to select points that are
     // well distributed for the GGX highlight
     // See a version of this equation in
@@ -75,36 +134,29 @@ float3 GGXHalfVector_Sample(float2 xi, float alphad)
     // for more information about normalized "PDFs" in this context
     alphad = max(MinSamplingAlpha, alphad);
 
-    #if !defined(OLD_M_DISTRIBUTION_FN)
-        // This is the distribution functions from Walter07 --
-        // It was intended for both reflection and transmision
-        //
-        // This is a distribution directly built from D(...) * abs(dot(m, n))
-        // It doesn't consider G, F, or other potentially useful factors
-        // As mentioned above, the PDF (respecting solid angle) is p(m) = D(M) * abs(dot(m, n))
-        //
-        //  theta = arctan(q)
-        //  phi = 2 * pi * xi.y
-        //  where q = alphad * sqrt(xi.x) / sqrt(1.f - xi.x)
-        // So, cos(theta) = cos(arctan(q))
-        //  = 1.f / sqrt(1.f + q*q) (from trig)
-        //
-        // Note that the math here is actually mathematically identical to
-        //      float cosTheta = sqrt((1.f - xi.x) / (1.f + (alphad*alphad - 1.f) * xi.x));
-        // However, the above form is not evaluating correctly in some cases. Since this
-        // is only used for reference and precalculation steps, let's just use the unoptimized
-        // form below.
-        //
-        // See more reference (including working out) at https://agraphicsguynotes.com/posts/sample_microfacet_brdf/
-        // float cosTheta = 1.f / sqrt(1.f + q*q);
-        // float q = alphad * sqrt(xi.x) / sqrt(1.f - xi.x);
-        float cosTheta = sqrt((1.f - xi.x) / (1.f + (alphad*alphad - 1.f) * xi.x));
-    #else
-        // This is the distribution function from the unreal course notes
-        // They say the pdf is as below, but I haven't checked that.
-        //      pdf  = (D * NdotH) / 4.f * VdotH
-        float cosTheta = sqrt((1.f - xi.x) / (1.f + (alphad*alphad - 1.f) * xi.x));
-    #endif
+    // This is the distribution functions from Walter07 --
+    // It was intended for both reflection and transmision
+    //
+    // This is a distribution directly built from D(...) * abs(dot(m, n))
+    // It doesn't consider G, F, or other potentially useful factors
+    // As mentioned above, the PDF (respecting solid angle) is p(m) = D(M) * abs(dot(m, n))
+    //
+    //  theta = arctan(q)
+    //  phi = 2 * pi * xi.y
+    //  where q = alphad * sqrt(xi.x) / sqrt(1.f - xi.x)
+    // So, cos(theta) = cos(arctan(q))
+    //  = 1.f / sqrt(1.f + q*q) (from trig)
+    //
+    // Note that the math here is actually mathematically identical to
+    //      float cosTheta = sqrt((1.f - xi.x) / (1.f + (alphad*alphad - 1.f) * xi.x));
+    // However, the above form is not evaluating correctly in some cases. Since this
+    // is only used for reference and precalculation steps, let's just use the unoptimized
+    // form below.
+    //
+    // See more reference (including working out) at https://agraphicsguynotes.com/posts/sample_microfacet_brdf/
+    // float cosTheta = 1.f / sqrt(1.f + q*q);
+    // float q = alphad * sqrt(xi.x) / sqrt(1.f - xi.x);
+    float cosTheta = sqrt((1.f - xi.x) / (1.f + (alphad*alphad - 1.f) * xi.x));
 
     float sinTheta = sqrt(1.f - cosTheta * cosTheta);
     float phi = 2.f * pi * xi.y;
@@ -116,13 +168,13 @@ float3 GGXHalfVector_Sample(float2 xi, float alphad)
     return H;
 }
 
-float GGXHalfVector_PDFh(float3 tangentSpaceHalfVector, float alphad)
+float SamplerGGXHalfVector_PDFh(float3 tangentSpaceHalfVector, float alphad)
 {
-    // Used alongside GGXHalfVector_Sample
+    // Used alongside SamplerGGXHalfVector_Pick
     // Gives the pdf respecting solid angle for the half vector distribution (ie, ph(omega))
     //
     // This is D(...) * abs(dot(m, n))
-    // But it must be in exactly the same form used in the distribution in GGXHalfVector_Sample
+    // But it must be in exactly the same form used in the distribution in SamplerGGXHalfVector_Pick
     // (ie, separating from our TrowReitzD for this purpose)
     //
     // Nice reference with working out from https://agraphicsguynotes.com/posts/sample_microfacet_brdf/
@@ -132,17 +184,17 @@ float GGXHalfVector_PDFh(float3 tangentSpaceHalfVector, float alphad)
     return alphad * alphad * cosTheta / (pi*denomSqrt*denomSqrt);
 }
 
-float GGXHalfVector_PDF(float3 tangentSpaceHalfVector, float3 tangentSpaceViewVector, float alphad)
+float SamplerGGXHalfVector_PDF(float3 tangentSpaceHalfVector, float3 tangentSpaceViewVector, float alphad)
 {
     // We require a change-of-variables term to convert from a pdf describing the distribution of
     // half vectors, to a pdf describing a distribution of incident light vectors (since the integral we're solving
     // is over incident light vectors respecting solid angle)
     // fortunately it's a pretty easy conversion
     // See PBR book chapter 14.1.1
-    return GGXHalfVector_PDFh(tangentSpaceHalfVector, alphad) / (4 * dot(tangentSpaceViewVector, tangentSpaceHalfVector));
+    return SamplerGGXHalfVector_PDFh(tangentSpaceHalfVector, alphad) / (4 * dot(tangentSpaceViewVector, tangentSpaceHalfVector));
 }
 
-float3 HeitzGGXVNDF_Sample(float3 Ve, float alpha_x, float alpha_y, float U1, float U2)
+float3 SamplerHeitzGGXVNDF_Pick(float3 Ve, float alpha_x, float alpha_y, float U1, float U2)
 {
     // See https://jcgt.org/published/0007/04/01/paper.pdf
     // "Sampling the GGX Distribution of Visible Normals"
@@ -167,7 +219,7 @@ float3 HeitzGGXVNDF_Sample(float3 Ve, float alpha_x, float alpha_y, float U1, fl
     return Ne;
 }
 
-float HeitzGGXVNDF_PDF(float3 M, float3 V_, float alpha)
+float SamplerHeitzGGXVNDF_PDF(float3 M, float3 V_, float alpha)
 {
     // See https://jcgt.org/published/0007/04/01/paper.pdf
     // "Sampling the GGX Distribution of Visible Normals"
@@ -177,7 +229,64 @@ float HeitzGGXVNDF_PDF(float3 M, float3 V_, float alpha)
     return G * D * saturate(dot(V_, M)) / V_.z;
 }
 
-#if 1 //////////////////////////////////////////////////////////////////////////////////////////
+float2 ConcentricSampleDisk(float2 xi)
+{
+	// See pbr-book chapter 13.6.2
+	// Very snazzy method that projects 8 triangular octants onto slices of the disk
+	// it's a little like the geodesic sphere method
+	// this creates a nicer distribution relative to our evenly space xi input coords
+	// than a basic polar coordinate method would
+
+	float2 xiOffset = 2 * xi - 1.0.xx;
+	if (all(xiOffset == 0)) return 0;
+
+	float theta, r;
+	if (abs(xiOffset.x) > abs(xiOffset.y)) {
+		r = xiOffset.x;
+		theta = pi / 4.0 * (xiOffset.y / xiOffset.x);
+	} else {
+		r = xiOffset.y;
+		theta = pi / 2.0 - pi / 4.0 * (xiOffset.x / xiOffset.y);
+	}
+	float2 result;
+	sincos(theta, result.x, result.y);
+	return r * result;
+}
+
+float3 SamplerCosineHemisphere_Pick(out float pdf, float2 xi)
+{
+    // using distribution trick from pbr-book Chapter 13.6.3
+    float2 disk = ConcentricSampleDisk(xi);
+    float z = sqrt(max(0, 1-dot(disk, disk)));
+    pdf = z * reciprocalPi;     // pdf w.r.t solid angle
+    return float3(disk.x, disk.y, z);
+}
+
+float SamplerCosineHemisphere_PDF(float cosTheta)     // cosTheta is NdotL in typical cases
+{
+    return cosTheta * reciprocalPi; // pdf w.r.t solid angle
+}
+
+float MipmapToRoughness(uint mipIndex)
+{
+    // We can adjust the mapping between roughness and the mipmaps as needed...
+    // Each successive mipmap is smaller, so we loose resolution linearly against
+    // roughness (even though the blurring amount is not actually linear against roughness)
+    // We could use the inverse of the GGX function to calculate something that is
+    // more linear against the sample cone size, perhaps...?
+    // Does it make sense to offset by .5 to get a value in the middle of the range? We
+    // will be using trilinear filtering to get a value between 2 mipmaps.
+    // Arguably a roughness of "0.0" is not very interesting -- but we commit our
+    // highest resolution mipmap to that.
+    return 0.08f + 0.33f * saturate(float(mipIndex) / float(SpecularIBLMipMapCount));
+}
+
+float RoughnessToMipmap(float roughness)
+{
+    return saturate(3.0f * roughness - 0.08f) * SpecularIBLMipMapCount;
+}
+
+#if 0 //////////////////////////////////////////////////////////////////////////////////////////
         // legacy names
 
 float InversePDFWeight(float3 H, float3 N, float3 V, float alphad)
@@ -201,11 +310,9 @@ float InversePDFWeight(float3 H, float3 N, float3 V, float alphad)
 float3 SampleMicrofacetNormalGGX(uint i, uint sampleCount, float3 normal, float alphad)
 {
     float2 xi = HammersleyPt(i, sampleCount);
-    float3 tangentSpaceM = GGXHalfVector_Sample(xi, alphad);
+    float3 tangentSpaceM = SamplerGGXHalfVector_Pick(xi, alphad);
     return TransformByArbitraryTangentFrame(tangentSpaceM, normal);
 }
-
-#endif //////////////////////////////////////////////////////////////////////////////////////////
 
 float3 CosineWeightedHemisphere_Sample(uint i, uint sampleCount, float3 normal)
 {
@@ -244,24 +351,6 @@ float3 CosineWeightedHemisphere_Sample(uint i, uint sampleCount, float3 normal)
 #endif
 }
 
-float MipmapToRoughness(uint mipIndex)
-{
-    // We can adjust the mapping between roughness and the mipmaps as needed...
-    // Each successive mipmap is smaller, so we loose resolution linearly against
-    // roughness (even though the blurring amount is not actually linear against roughness)
-    // We could use the inverse of the GGX function to calculate something that is
-    // more linear against the sample cone size, perhaps...?
-    // Does it make sense to offset by .5 to get a value in the middle of the range? We
-    // will be using trilinear filtering to get a value between 2 mipmaps.
-    // Arguably a roughness of "0.0" is not very interesting -- but we commit our
-    // highest resolution mipmap to that.
-    return 0.08f + 0.33f * saturate(float(mipIndex) / float(SpecularIBLMipMapCount));
-}
-
-float RoughnessToMipmap(float roughness)
-{
-    return saturate(3.0f * roughness - 0.08f) * SpecularIBLMipMapCount;
-}
-
+#endif //////////////////////////////////////////////////////////////////////////////////////////
 
 #endif

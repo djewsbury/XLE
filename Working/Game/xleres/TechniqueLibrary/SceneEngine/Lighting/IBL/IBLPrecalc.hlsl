@@ -48,8 +48,8 @@ float2 GenerateSplitTerm(
         uint sampleIdx = (s*sampleStride+thisPassSampleBegin)%totalSampleCount;
         precise float2 xi = HammersleyPt(sampleIdx, totalSampleCount);
 
-        float3 tangentSpaceHalfVector = GGXHalfVector_Sample(xi, alphad);
-        // float3 tangentSpaceHalfVector = HeitzGGXVNDF_Sample(V, alphad, alphad, xi.x, xi.y);
+        // float3 tangentSpaceHalfVector = SamplerGGXHalfVector_Pick(xi, alphad);
+        precise float3 tangentSpaceHalfVector = SamplerHeitzGGXVNDF_Pick(V, alphad, alphad, xi.x, xi.y);
         precise float3 H = tangentSpaceHalfVector;  //(normal is fixed, so we don't need TransformByArbitraryTangentFrame(tangentSpaceHalfVector, normal);
         precise float3 L = 2.f * dot(V, H) * H - V;
 
@@ -65,30 +65,40 @@ float2 GenerateSplitTerm(
             // F0 gets factored out of the equation here
             // the result we will generate is actually a scale and offset to
             // the runtime F0 value.
-            precise float F = pow(1.f - VdotH, 5.f);
+            precise float F = SchlickFresnelCore(VdotH);
 
             // Remember that our expected value estimation of the integral is
             // 1/sampleCount * sum( f(x) / p(x) ), where f(x) is the function we're integrating and p(x) is the pdf
 
             #if !defined(OLD_M_DISTRIBUTION_FN)
-                precise float D = TrowReitzD(NdotH, alphad);
-                precise float pdf = GGXHalfVector_PDF(tangentSpaceHalfVector, alphad);
-                // precise float pdf = HeitzGGXVNDF_PDF(tangentSpaceHalfVector, V, alphad);
+                precise float specular, pdf;
+                if (0) {
+                    precise float D = TrowReitzD(NdotH, alphad);
+                    // pdf = SamplerGGXHalfVector_PDF(tangentSpaceHalfVector, alphad);
+                    pdf = SamplerHeitzGGXVNDF_PDF(tangentSpaceHalfVector, V, alphad);
 
-                // See PBR book chapter 14.1.1. Our pdf is distributing half vectors, but the integral we're estimating
-                // is w.r.t the incident (or exident) light direction. Half vectors are obviously more tightly distributed,
-                // by nature of how to reflect the light. As a result they are more "densly" distributed, so obviously the
-                // pdf over the hemisphere is different.
-                //
-                // Convert by calculating d omega-h / d omega-i (see pbr book for the working out here)
-                pdf = pdf / (4.0f * VdotH);
+                    // See PBR book chapter 14.1.1. Our pdf is distributing half vectors, but the integral we're estimating
+                    // is w.r.t the incident (or excident) light direction. Half vectors are obviously more tightly distributed,
+                    // by nature of how to reflect the light. As a result they are more "densely" distributed, so obviously the
+                    // pdf over the hemisphere is different.
+                    //
+                    // Convert by calculating d omega-h / d omega-i (see pbr book for the working out here)
+                    pdf = pdf / (4.0f * VdotH);
 
-                precise float specular = D*G/(4.0*NdotL*NdotV);
+                    specular = D*G/(4.0*NdotL*NdotV);
 
-                // We stil consider the incident light "radiance" -- meaning we have to include that term
-                // that takes into account the orientation of incoming light to the surface
-                // without this, samples at shearing angles contribute too much overall
-                specular *= NdotL;
+                    // We still consider the incident light "radiance" -- meaning we have to include that term
+                    // that takes into account the orientation of incoming light to the surface
+                    // without this, samples at shearing angles contribute too much overall
+                    specular *= NdotL;
+                } else {
+                    // pdf = D * excid_G * VdotM / (4 * VdotN * VdotM)
+                    // specular = D*incid_G*excid_G/(4.0*NdotL*VdotN);
+                    // factored -- incid_G / NdotL
+                    //  (plus multiply by NdotL at the end)
+                    specular = SmithG(NdotL, alphag);
+                    pdf = 1.0;
+                }
             #else
                 // This factors out the D term, and introduces some other terms.
                 //      pdf inverse = 4.f * VdotH / (D * NdotH)
@@ -115,6 +125,7 @@ float GenerateSplitTermTrans(
     float iorIncident, float iorOutgoing,
     uint passSampleCount, uint passIndex, uint passCount)
 {
+#if 0
     // This is for generating the split-term lookup for specular transmission
     // It uses the same approximations and simplifications as for reflected
     // specular.
@@ -203,12 +214,16 @@ float GenerateSplitTermTrans(
     }
 
     return A / float(passSampleCount);
+#else
+    return 0;
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //  Filtered textures
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if 0
 float3 GenerateFilteredSpecular(
     float3 cubeMapDirection, float roughness,
     uint passSampleCount, uint passIndex, uint passCount)
@@ -433,6 +448,7 @@ float3 CalculateFilteredTextureTrans(
 
     return result / (totalWeight + 1e-6f);
 }
+#endif
 
 
 #endif
