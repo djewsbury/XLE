@@ -260,6 +260,14 @@ namespace Sample
             sampleGlobals._windowApparatus->_osWindow->SetTitle(meld);
         }
 
+        auto cleanup = AutoCleanup(
+            [rawosmnt, rd=sampleGlobals._renderDevice.get()]() {
+                Log(Verbose) << "Starting shutdown" << std::endl;
+                ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
+                rd->PrepareForDestruction();
+                ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt);
+            });
+
             //  Create the debugging system, and add any "displays"
             //  If we have any custom displays to add, we can add them here. Often it's 
             //  useful to create a debugging display to go along with any new feature. 
@@ -336,11 +344,7 @@ namespace Sample
             } 
         }
 
-        Log(Verbose) << "Starting shutdown" << std::endl;
         sampleOverlay.reset();		// (ensure this gets destroyed before the engine is shutdown)
-        ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
-        sampleGlobals._renderDevice->PrepareForDestruction();
-        ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt);
     }
 
 	void ISampleOverlay::OnStartup(const SampleGlobals& globals) {}
