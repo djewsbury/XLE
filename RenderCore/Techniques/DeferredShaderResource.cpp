@@ -596,8 +596,11 @@ namespace RenderCore { namespace Techniques
         const std::shared_ptr<IResource>& input)
     {
         auto inputDesc = input->GetDesc();
-        if (inputDesc._allocationRules & AllocationRules::HostVisibleRandomAccess)
+        if (inputDesc._allocationRules & AllocationRules::HostVisibleRandomAccess) {
+            // to be consistant with the other case, we should do a complete sync here
+            threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
             return input;
+        }
 
         auto destagingDesc = inputDesc;
         destagingDesc._allocationRules = AllocationRules::HostVisibleRandomAccess;

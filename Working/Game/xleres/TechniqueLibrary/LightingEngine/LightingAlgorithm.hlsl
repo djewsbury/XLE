@@ -218,7 +218,7 @@ float2 DirectionToEquirectangularCoord_YUp(float3 direction)
 float2 DirectionToHemiEquirectangularCoord_YUp(float3 direction)
 {
 	float3 spherical = CartesianToSpherical_YUp(direction);
-	float x = spherical.y * (2.0f * pi);
+	float x = spherical.y * 0.5f * reciprocalPi;
 	float y = 1.f-(spherical.x * 2.0f * reciprocalPi);
 	return float2(x, y);
 }

@@ -100,6 +100,7 @@ namespace PlatformRig { namespace Overlays
 					assert(r.second._state == AssetState::Invalid);
 
 					auto titleRect = layout.AllocateFullWidth(lineHeight);
+					if (titleRect.Height() <= 0) break;
 					RenderOverlays::DebuggingDisplay::FillRectangle(context, titleRect, titleBkground);
 					RenderOverlays::DebuggingDisplay::DrawText().Draw(context, titleRect, r.second._initializer);
 
