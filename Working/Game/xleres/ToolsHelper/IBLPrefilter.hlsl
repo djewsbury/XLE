@@ -39,7 +39,7 @@ float3 IBLPrecalc_SampleInputTexture(float3 direction)
 
 float3 IBLPrecalc_SampleInputTextureUV(float2 uv)
 {
-    return 1; // Input.SampleLevel(EquirectangularBilinearSampler, uv, 0).rgb;
+    return Input.SampleLevel(EquirectangularBilinearSampler, uv, 0).rgb;
 }
 
 #include "../TechniqueLibrary/SceneEngine/Lighting/IBL/IBLPrecalc.hlsl"
@@ -144,36 +144,76 @@ float LookupPDF(float2 uv, uint2 marginalCDFDims)
     return pdf;
 }
 
-static float RadicalInverseBase5(uint a)
+uint FixedScramble5(uint a, uint scrambleSeed)
 {
-    uint Base = 5;
-    float reciprocalBase = 1.0 / Base;
-    uint reversedDigits = 0;
-    float reciprocalBaseN = 1;
-    while (a) {
-        uint next = a / Base;
-        uint digit = a - next * Base;
-        reversedDigits = reversedDigits * Base + digit;
-        reciprocalBaseN *= reciprocalBase;
-        a = next;
+    return (a+scrambleSeed)%5;
+    switch (a) {
+    default:
+    case 0: return 0;
+    case 1: return 3;
+    case 2: return 1;
+    case 3: return 4;
+    case 4: return 2;
     }
-    return reversedDigits * reciprocalBaseN;
+    // const uint scrambleTable[5] { 0, 3, 1, 4, 2 };
+    // return scrambleTable[a];
 }
 
-static float RadicalInverseBase7(uint a)
+uint FixedScramble7(uint a, uint scrambleSeed)
 {
-    uint Base = 7;
-    float reciprocalBase = 1.0 / Base;
+    return (a+scrambleSeed)%7;
+    switch (a) {
+    default:
+    case 0: return 0;
+    case 1: return 3;
+    case 2: return 6;
+    case 3: return 4;
+    case 4: return 2;
+    case 5: return 1;
+    case 6: return 5;
+    }
+    // const uint scrambleTable[7] { 0, 3, 6, 4, 2, 1, 5 };
+    // return scrambleTable[a];
+}
+
+static float RadicalInverseBase5(uint a, uint scrambleSeed)
+{
+    uint Base = 5;
+    float reciprocalBase = 1.0 / float(Base);
     uint reversedDigits = 0;
     float reciprocalBaseN = 1;
+    uint divisor = 1;
     while (a) {
         uint next = a / Base;
         uint digit = a - next * Base;
-        reversedDigits = reversedDigits * Base + digit;
+        reversedDigits = reversedDigits * Base + FixedScramble5(digit, scrambleSeed);
         reciprocalBaseN *= reciprocalBase;
+        divisor *= Base;
         a = next;
     }
-    return reversedDigits * reciprocalBaseN;
+    uint zeroScramble = FixedScramble5(0, scrambleSeed);
+    reversedDigits += zeroScramble * reciprocalBase / (1.0 - reciprocalBase);
+    return reversedDigits / float(divisor); // * reciprocalBaseN;
+}
+
+static float RadicalInverseBase7(uint a, uint scrambleSeed)
+{
+    uint Base = 7;
+    precise float reciprocalBase = 1.0 / float(Base);
+    uint reversedDigits = 0;
+    precise float reciprocalBaseN = 1;
+    uint divisor = 1;
+    while (a) {
+        uint next = a / Base;
+        uint digit = a - next * Base;
+        reversedDigits = reversedDigits * Base + FixedScramble7(digit, scrambleSeed);
+        reciprocalBaseN *= reciprocalBase;
+        divisor *= Base;
+        a = next;
+    }
+    uint zeroScramble = FixedScramble7(0, scrambleSeed);
+    reversedDigits += zeroScramble * reciprocalBase / (1.0 - reciprocalBase);
+    return reversedDigits / float(divisor); //  * reciprocalBaseN;
 }
 
 float2 ConcentricSampleDisk(float2 xi)
@@ -421,9 +461,10 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     if (any(helper._outputPixel >= uint3(textureDims, arrayLayerCount))) return;
     if (helper._firstDispatch) OutputArray[helper._outputPixel] = 0;
 
-    uint2 marginalCDFDims, inputTextureDims;
+    uint2 marginalCDFDims, inputTextureDims, sampingPatternDims;
 	MarginalHorizontalCDF.GetDimensions(marginalCDFDims.x, marginalCDFDims.y);
 	Input.GetDimensions(inputTextureDims.x, inputTextureDims.y);
+    SampleIndexLookup.GetDimensions(sampingPatternDims.x, sampingPatternDims.y);
 
     // OutputArray[helper._outputPixel].rgb = MarginalHorizontalCDF[helper._outputPixel.xy/float2(textureDims)*marginalCDFDims].rrr;
     // return;
@@ -440,18 +481,18 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 
     // Sampling with importance based on the brightness of the image
     const bool sampleLight = true;
-    const bool sampleBrdf = false;
+    const bool sampleBrdf = true;
 
     float3 value = 0;
     uint t;
+    uint scrambleSeed = 0; // helper._outputPixel.x + helper._outputPixel.y * textureDims.x;
     if (sampleLight) {
         for (t=0; t<helper._thisPassSampleCount; ++t) {
             uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
-            uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy] + HaltonSamplerRepeatingStride * globalTap;
+            uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy % sampingPatternDims.xy] + HaltonSamplerRepeatingStride * globalTap;
             // Using the Halton sequence in such a straightforward way as this is not going to be efficient; but we don't require a perfectly
             // optimal solution here
-            float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
-            // float2 xi = HammersleyPt(globalTap, helper._totalSampleCount);
+            float2 xi = float2(RadicalInverseBase5(samplerIdx, scrambleSeed), RadicalInverseBase7(samplerIdx, scrambleSeed));
             xi = saturate(xi);      // floating point creep may be resulting in some bad xi values
             float light_pdf=1;
             float2 inputTextureUV = SampleUV(light_pdf, xi, marginalCDFDims);
@@ -482,7 +523,7 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
         for (t=0; t<helper._thisPassSampleCount; ++t) {
             uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
             uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy] + HaltonSamplerRepeatingStride * globalTap;
-            float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
+            float2 xi = float2(RadicalInverseBase5(samplerIdx, scrambleSeed), RadicalInverseBase7(samplerIdx, scrambleSeed));
             xi = saturate(xi);      // floating point creep may be resulting in some bad xi values
 
             float filtering_pdf;

@@ -90,6 +90,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::shared_ptr<IResourceView> _pixelToSampleIndex;
 		std::shared_ptr<IResourceView> _pixelToSampleIndexParams;		// cbuffer
+		unsigned _repeatingStride = 0;
 
 		// todo -- consider max resolution
 		HaltonSamplerHelper(IThreadContext& threadContext, unsigned width, unsigned height)
@@ -161,6 +162,7 @@ namespace RenderCore { namespace Techniques
 			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(
 				*cbuffer, MakeOpaqueIteratorRange(uniforms));
 			_pixelToSampleIndexParams = cbuffer->CreateBufferView();
+			_repeatingStride = repeatingStride;
 		}
 	};
 
@@ -363,15 +365,20 @@ namespace RenderCore { namespace Techniques
 				resViews[1] = outputView.get();
 				auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
 
-				HaltonSamplerHelper samplerHelper{*threadContext, mipDesc._width, mipDesc._height};
+				// We must limit the maximum dimensions of the sampling pattern significantly, because the number of samples
+				// we can fit within 32bit limits is proportional to the number of pixels in this sampling pattern
+				const unsigned maxWidth = 32, maxHeight = 27;
+				HaltonSamplerHelper samplerHelper{*threadContext, std::min(mipDesc._width, maxWidth), std::min(mipDesc._height, maxHeight)};
 				resViews[4] = samplerHelper._pixelToSampleIndex.get();
 				resViews[5] = samplerHelper._pixelToSampleIndexParams.get();
 
 				{
 					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
 					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
-					auto samplesPerPass = 64u*1024u; // 64*1024;
+					auto samplesPerPass = 32u*1024u;
 					auto totalSampleCount = passesPerPixel * samplesPerPass;
+					// If you hit the following, the quantity of samples is going to exceed precision available with 32 bit ints
+					assert((uint64_t(totalSampleCount)*uint64_t(samplerHelper._repeatingStride)) < (1ull<<30ull));
 
 					BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount);
 					while (!samplingShaderHelper.Finished()) {
