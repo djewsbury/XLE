@@ -219,11 +219,13 @@ float3 SamplerHeitzGGXVNDF_Pick(float3 Ve, float alpha_x, float alpha_y, float U
     return Ne;
 }
 
-float SamplerHeitzGGXVNDF_PDF(float3 M, float3 V_, float alpha)
+float SamplerHeitzGGXVNDF_PDFh(float3 M, float3 V_, float alpha)
 {
     // See https://jcgt.org/published/0007/04/01/paper.pdf
     // "Sampling the GGX Distribution of Visible Normals"
     // V_ must be in tangent space (ie, V_.z is VdotN)
+    //
+    // note that this returns the pdf for the distribution of half vectors w.r.t solid angle
     float D = TrowReitzD(M.z, alpha);
     float G = SmithG(V_.z, alpha);  // G only in one direction
     return G * D * saturate(dot(V_, M)) / V_.z;

@@ -75,7 +75,7 @@ float2 GenerateSplitTerm(
                 if (0) {
                     precise float D = TrowReitzD(NdotH, alphad);
                     // pdf = SamplerGGXHalfVector_PDF(tangentSpaceHalfVector, alphad);
-                    pdf = SamplerHeitzGGXVNDF_PDF(tangentSpaceHalfVector, V, alphad);
+                    pdf = SamplerHeitzGGXVNDF_PDFh(tangentSpaceHalfVector, V, alphad);
 
                     // See PBR book chapter 14.1.1. Our pdf is distributing half vectors, but the integral we're estimating
                     // is w.r.t the incident (or excident) light direction. Half vectors are obviously more tightly distributed,

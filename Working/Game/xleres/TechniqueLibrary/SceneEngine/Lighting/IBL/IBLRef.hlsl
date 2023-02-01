@@ -20,7 +20,7 @@
 float3 SampleSpecularIBL_Ref(
     float3 normal, float3 viewDirection,
     SpecularParameters specParam, TextureCube tex,
-    uint passSampleCount, uint passIndex, uint passCount)
+    uint sampleOffset, uint sampleCount, uint totalSampleCount)
 {
     // This is a reference implementation of glossy specular reflections from a
     // cube map texture. It's too inefficient to run at real-time. But it provides
@@ -45,10 +45,10 @@ float3 SampleSpecularIBL_Ref(
 
     float alphad = RoughnessToDAlpha(specParam.roughness);
     float3 result = float3(0.0f, 0.0f, 0.0f);
-    for (uint s=0u; s<passSampleCount; ++s) {
+    for (uint s=0u; s<sampleCount; ++s) {
             // We could build a distribution of "H" vectors here,
             // or "L" vectors. It makes sense to use H vectors
-        float2 xi = HammersleyPt(s*passCount+passIndex, passSampleCount*passCount);
+        float2 xi = HammersleyPt(s+sampleOffset, totalSampleCount);
         precise float3 halfVectorTangentSpace = SamplerHeitzGGXVNDF_Pick(viewTangentSpace, alphad, alphad, xi.x, xi.y);
         float3 H = halfVectorTangentSpace.x * tangentX + halfVectorTangentSpace.y * tangentY + halfVectorTangentSpace.z * normal;
         float3 L = 2.f * dot(viewDirection, H) * H - viewDirection;
@@ -59,11 +59,13 @@ float3 SampleSpecularIBL_Ref(
             // note -- "CalculateSpecular" has NdotL term built-in
         float3 lightColor = SampleLevelZero_Default(tex, AdjSkyCubeMapCoords(L)).rgb;
         precise float3 brdf_costheta = CalculateSpecular(normal, viewDirection, L, H, specParam); // (also contains NdotL term)
-        float pdf = SamplerHeitzGGXVNDF_PDF(halfVectorTangentSpace, viewTangentSpace, alphad);
+        float pdf = SamplerHeitzGGXVNDF_PDFh(halfVectorTangentSpace, viewTangentSpace, alphad);
+        // change-of-variables conversion for this (see notes in GenerateSplitTerm)
+        pdf = pdf / (4.0f * dot(viewDirection, H));
         result += lightColor * brdf_costheta / pdf;
     }
 
-    return result / float(passSampleCount);
+    return result / float(totalSampleCount);
 }
 
 #if 0
