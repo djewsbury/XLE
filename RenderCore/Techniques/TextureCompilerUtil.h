@@ -16,12 +16,19 @@ namespace RenderCore { class TextureDesc; }
 
 namespace RenderCore { namespace Techniques
 {
-	enum class EquRectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic, ToGlossySpecularReference };
+	enum class EquirectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic, ToGlossySpecularReference };
+	struct EquirectFilterParams
+	{
+		unsigned _sampleCount = 1;
+		unsigned _idealCmdListCostMS = 1500;
+	};
+
 	using ProgressiveTextureFn = std::function<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>;
-	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(
+	std::shared_ptr<BufferUploads::IAsyncDataSource> EquirectFilter(
 		BufferUploads::IAsyncDataSource& dataSrc,
 		const TextureDesc& targetDesc,
-		EquRectFilterMode filter = EquRectFilterMode::ToCubeMap,
+		EquirectFilterMode filter = EquirectFilterMode::ToCubeMap,
+		const EquirectFilterParams& params = {},
 		const ProgressiveTextureFn& progressiveResults = {});
 
 	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(

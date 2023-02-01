@@ -41,6 +41,13 @@ namespace RenderCore { namespace Assets
 		enum class MipMapFilter { None, FromSource };
 		MipMapFilter _mipMapFilter = MipMapFilter::None;
 
+		// Compilers that operate on the GPU will attempt to split command lists so that
+		// each individual one takes less than the give number of milliseconds to process
+		// on the GPU.
+		// This can be useful for avoiding driver timeouts; and also so that operations
+		// that given progressive results don't hog the GPU to heavily
+		unsigned _commandListIntervalMS = 1500;
+
 		std::string _shader;
 		std::string _srcFile;
 

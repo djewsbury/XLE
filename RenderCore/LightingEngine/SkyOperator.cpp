@@ -250,6 +250,9 @@ namespace RenderCore { namespace LightingEngine
 			request._srcFile = _sourceImage;
 			request._format = _desc._specularCubemapFormat;
 			request._faceDim = _desc._specularCubemapFaceDimension;
+			request._sampleCount = 32u*1024u;
+			if (_desc._progressiveCompilation)
+				request._commandListIntervalMS = 250;	// some overhead created by splitting cmd lists when we want progressive results
 			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
 
 			if (_desc._progressiveCompilation) {
@@ -265,11 +268,10 @@ namespace RenderCore { namespace LightingEngine
 						ScopedLock(strongThis->_pendingUpdatesLock);
 						strongThis->_pendingUpdate = true;
 						TRY {
-							const bool useProgressiveResourceAsBackground = false;
-							if (!useProgressiveResourceAsBackground) {
 								strongThis->_pendingSpecularIBL = locator.CreateTextureView();
 								strongThis->_pendingSpecularIBLCompletion = locator.GetCompletionCommandList();
-							} else {
+							const bool useProgressiveResourceAsBackground = false;
+							if (useProgressiveResourceAsBackground) {
 								strongThis->_pendingAmbientRawCubemap = locator.CreateTextureView();
 								strongThis->_pendingAmbientRawCubemapCompletion = locator.GetCompletionCommandList();
 							}

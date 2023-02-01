@@ -142,7 +142,21 @@ float LookupPDF(float2 uv, uint2 marginalCDFDims)
     return pdf;
 }
 
-
+/// <summary>Filtering equation used by FilterGlossySpecular_BRDF_costheta</summary>
+/// With the "split-sum" approach to IBL prefiltering, we can select the filtering equation
+/// to use somewhat arbitrarily, since we can't capture the full effect of the BRDF using
+/// this approximation.
+///
+/// However, it seems logical that the ideal filtering is based on the BRDF equation itself,
+/// and particularly on the "D" term. This will give approximately the right level and shape
+/// to the filtering for a given alpha value, when looking straight on at a reflective surface.
+///
+/// We should also bring in the cosTheta term from the light transport integral. G here doesn't
+/// play a huge role, but is convenient for the sampling process.
+///
+/// Divide by 4 so the integral across the hemisphere is 1 -- this will mean the output retains
+/// the brightness levels of the original texture, which therefore means the other part of the 
+/// split-sum equation will have full control over the brightness of the final estimate.
 float FilteringEquation(float NdotL, float NdotM, float alpha)
 {
     float D = TrowReitzD(NdotM, alpha);
@@ -154,6 +168,12 @@ static const uint s_VNDFSampling = 0;
 static const uint s_GGXSampling = 1;
 static const uint s_CosineHemisphereSampling = 2;
 
+/// <summary>For a given light direction, calculate our filtering weight as well as the pdf if we had happened to sample this using FilterGlossySpecular_SampleBRDF</summary>
+/// The pdf here is intended for multiple importance sampling; since with that method we take a sample from the light source and we need to know 
+/// the pdf if we had picked that sample from the brdf sampling distribution.
+///
+/// the pdf returned is intended for the light transport equation, so is w.r.t solid angle and describing the distribution of 
+/// light directions (ie, not half vectors)
 float FilterGlossySpecular_BRDF_costheta(
     out float pdf,
     float3 N, float3 L, 
@@ -209,6 +229,20 @@ float FilterGlossySpecular_BRDF_costheta(
     }
 }
 
+/// <summary>Sample the brdf to generate a filtering weight and pdf</summary>
+/// There are 3 different sampling methods:
+///     * s_VNDFSampling
+///     * s_GGXSampling
+///     * s_CosineHemisphereSampling
+///
+/// s_VNDFSampling is the preferred approach, though in this application there's little difference between
+/// it and s_GGXSampling. Both of these 2 sample half vectors from the BRDF equation itself.
+///
+/// s_CosineHemisphereSampling samples the entire hemisphere with cosine weight. Since the important samples of
+/// the brdf in a focused area of the hemiphere, this isn't efficient. However it can be used for verification.
+/// 
+/// the pdf returned is intended for the light transport equation, so is w.r.t solid angle and describing the distribution of 
+/// light directions (ie, not half vectors)
 float FilterGlossySpecular_SampleBRDF(
     out float pdf,
     out float3 L,
@@ -235,7 +269,7 @@ float FilterGlossySpecular_SampleBRDF(
         float NdotM = tangentSpaceHalfVector.z;
         float D = TrowReitzD(NdotM, alpha);
         float G = SmithG(NdotV, alpha);
-        float filteringWeight = D * G / 4;
+        float filteringWeight = NdotL * D * G / 4;
 
         pdf = D * G / 4;
 
@@ -304,6 +338,13 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     // If we sample every pixel we need to weight by the solid angle of the texel we're
     // reading from. But if we're just using the importance sampling approach, we can skip
     // this step (it's just taken care of by the probability density function weighting)
+    //
+    // The MarginalHorizontalCDF & MarginalVerticalCDF textures must be prepared before
+    // calling this function. Typically this is done with CalculateHorizontalMarginalDensities &
+    // NormalizeMarginalDensities. These textures are used to fine which parts of the input
+    // texture are most important to the filtered output. Since some parts of the input texture
+    // can be thousands of times brighter than other parts, this importance distribution can
+    // be very uneven
     uint2 textureDims, marginalCDFDims, inputTextureDims, samplingPatternDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
 	MarginalHorizontalCDF.GetDimensions(marginalCDFDims.x, marginalCDFDims.y);
@@ -322,13 +363,13 @@ groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
     SpecularParameters specParam = SpecularParameters_RoughF0(roughness, float3(1.0f, 1.0f, 1.0f));
     float samplingJScale = pow(2,HaltonSamplerJ), samplingKScale = pow(3,HaltonSamplerK);
 
-    // Sampling with importance based on the brightness of the image
     const bool sampleLight = true;
     const bool sampleBrdf = true;
     const uint brdfSamplingMethod = s_VNDFSampling;
 
     float3 value = 0;
     uint t;
+    // Sampling with importance based on the brightness of the image
     if (sampleLight) {
         for (t=0; t<helper._thisPassSampleCount; ++t) {
             uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;

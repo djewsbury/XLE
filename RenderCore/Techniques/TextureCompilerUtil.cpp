@@ -66,7 +66,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 	};
 
-	static std::string s_equRectFilterName { "texture-compiler (EquRectFilter)" };
+	static std::string s_equRectFilterName { "texture-compiler (EquiRectFilter)" };
 	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
 
 	template<int Base, typename FloatType=float>
@@ -191,10 +191,9 @@ namespace RenderCore { namespace Techniques
 			auto elapsed = std::chrono::steady_clock::now() - start;
 			Log(Verbose) << "[" << name << "] Processing " << uniforms._thisPassSampleCount << " samples took " << std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() << " ms" << std::endl;
 			// On windows with default settings, timeouts begin at 2 seconds
-			const unsigned idealCmdListCostMS = 500; // 1500;
-			if (uniforms._thisPassSampleCount == _samplesPerCmdList && elapsed < std::chrono::milliseconds(idealCmdListCostMS/2)) {
+			if (uniforms._thisPassSampleCount == _samplesPerCmdList && elapsed < std::chrono::milliseconds(_idealCmdListCostMS/2)) {
 				// increase by powers of two, roughly by proportion, just not too quickly
-				auto increaser = IntegerLog2(uint32_t(idealCmdListCostMS / std::max(1u, (unsigned)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())));
+				auto increaser = IntegerLog2(uint32_t(_idealCmdListCostMS / std::max(1u, (unsigned)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count())));
 				increaser = std::min(increaser, 4u);
 				if (xl_clz4(_samplesPerCmdList) >= increaser) {
 					assert(_samplesPerCmdList << increaser);
@@ -203,22 +202,28 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		BalancedSamplingShaderHelper(unsigned totalSampleCount)
-		: _totalSampleCount(totalSampleCount) {}
+		BalancedSamplingShaderHelper(unsigned totalSampleCount, unsigned idealCmdListCostMS)
+		: _totalSampleCount(totalSampleCount), _idealCmdListCostMS(idealCmdListCostMS)
+		{
+			assert(_totalSampleCount);
+			assert(_idealCmdListCostMS);
+		}
 	private:
 		unsigned _samplesProcessed = 0;
 		unsigned _samplesPerCmdList = 256;
 		unsigned _totalSampleCount = 0;
+		unsigned _idealCmdListCostMS = 1500;
 	};
 
-	std::shared_ptr<BufferUploads::IAsyncDataSource> EquRectFilter(
+	std::shared_ptr<BufferUploads::IAsyncDataSource> EquirectFilter(
 		BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc,
-		EquRectFilterMode filter,
+		EquirectFilterMode filter,
+		const EquirectFilterParams& params,
 		const ProgressiveTextureFn& progressiveResults)
 	{
 		// We need to create a texture from the data source and run a shader process on it to generate
 		// an output cubemap. We'll do this on the GPU and copy the results back into a new IAsyncDataSource
-		if (filter != EquRectFilterMode::ProjectToSphericalHarmonic)
+		if (filter != EquirectFilterMode::ProjectToSphericalHarmonic)
 			assert(ActualArrayLayerCount(targetDesc) == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
 
 		auto threadContext = GetThreadContext();
@@ -230,7 +235,7 @@ namespace RenderCore { namespace Techniques
 		constexpr auto pushConstantsBinding = "FilterPassParams"_h;
 
 		::Assets::PtrToMarkerPtr<IComputeShaderOperator> computeOpFuture;
-		if (filter == EquRectFilterMode::ToCubeMap) {
+		if (filter == EquirectFilterMode::ToCubeMap) {
 			usi.BindResourceView(1, "OutputArray"_h);
  			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
@@ -238,7 +243,7 @@ namespace RenderCore { namespace Techniques
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
-		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
+		} else if (filter == EquirectFilterMode::ToGlossySpecular) {
 			usi.BindResourceView(1, "OutputArray"_h);
 			usi.BindResourceView(2, "MarginalHorizontalCDF"_h);
 			usi.BindResourceView(3, "MarginalVerticalCDF"_h);
@@ -251,7 +256,7 @@ namespace RenderCore { namespace Techniques
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
-		} else if (filter == EquRectFilterMode::ToGlossySpecularReference) {
+		} else if (filter == EquirectFilterMode::ToGlossySpecularReference) {
 			usi.BindResourceView(1, "OutputArray"_h);
 			usi.BindImmediateData(0, "ControlUniforms"_h);
  			computeOpFuture = CreateComputeOperator(
@@ -261,7 +266,7 @@ namespace RenderCore { namespace Techniques
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		} else {
-			assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
+			assert(filter == EquirectFilterMode::ProjectToSphericalHarmonic);
 			usi.BindResourceView(1, "Output"_h);
 			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
@@ -286,7 +291,7 @@ namespace RenderCore { namespace Techniques
 
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
 
-		if (filter == EquRectFilterMode::ToCubeMap || filter == EquRectFilterMode::ProjectToSphericalHarmonic) {
+		if (filter == EquirectFilterMode::ToCubeMap || filter == EquirectFilterMode::ProjectToSphericalHarmonic) {
 			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
 				TextureViewDesc view;
 				view._mipRange = {mip, 1};
@@ -298,20 +303,20 @@ namespace RenderCore { namespace Techniques
 				us._resourceViews = MakeIteratorRange(resViews);
 				auto dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
 
-				if (filter == EquRectFilterMode::ToCubeMap) {
+				if (filter == EquirectFilterMode::ToCubeMap) {
 					auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
 					for (unsigned p=0; p<passCount; ++p) {
 						struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
 						dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 					}
 				} else {
-					assert(filter == EquRectFilterMode::ProjectToSphericalHarmonic);
+					assert(filter == EquirectFilterMode::ProjectToSphericalHarmonic);
 					dispatchGroup.Dispatch(targetDesc._width, 1, 1);
 				}
 
 				dispatchGroup = {};
 			}
-		} else if (filter == EquRectFilterMode::ToGlossySpecular) {
+		} else if (filter == EquirectFilterMode::ToGlossySpecular) {
 			// glossy specular
 			auto horizontalDensitiesFuture = CreateComputeOperator(
 				pipelineCollection,
@@ -358,66 +363,94 @@ namespace RenderCore { namespace Techniques
 
 			threadContext->CommitCommands(CommitCommandsFlags::WaitForCompletion); // sync with GPU, because of timing work below
 
+			// We must limit the maximum dimensions of the sampling pattern significantly, because the number of samples
+			// we can fit within 32bit limits is proportional to the number of pixels in this sampling pattern
+			const unsigned maxSamplePatternWidth = 32, maxSamplePatternHeight = 27;
+			std::vector<HaltonSamplerHelper> samplerHelpers;
+			samplerHelpers.reserve(targetDesc._mipCount);
 			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
-				TextureViewDesc view;
-				view._mipRange = {mip, 1};
-				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
-				resViews[1] = outputView.get();
 				auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+				samplerHelpers.push_back(
+					HaltonSamplerHelper{*threadContext, std::min(mipDesc._width, maxSamplePatternWidth), std::min(mipDesc._height, maxSamplePatternHeight)});
+			}
 
-				// We must limit the maximum dimensions of the sampling pattern significantly, because the number of samples
-				// we can fit within 32bit limits is proportional to the number of pixels in this sampling pattern
-				const unsigned maxWidth = 32, maxHeight = 27;
-				HaltonSamplerHelper samplerHelper{*threadContext, std::min(mipDesc._width, maxWidth), std::min(mipDesc._height, maxHeight)};
-				resViews[4] = samplerHelper._pixelToSampleIndex.get();
-				resViews[5] = samplerHelper._pixelToSampleIndexParams.get();
+			std::vector<BalancedSamplingShaderHelper> samplingShaderHelpers;
+			samplingShaderHelpers.reserve(targetDesc._mipCount);
+			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
+				auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+				auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
+				auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
+				auto samplesPerPass = params._sampleCount; // approx 32u*1024u is a reasonable sample count
+				auto totalSampleCount = passesPerPixel * samplesPerPass;
+				// If you hit the following, the quantity of samples is going to exceed precision available with 32 bit ints
+				assert((uint64_t(totalSampleCount)*uint64_t(samplerHelpers[mip]._repeatingStride)) < (1ull<<30ull));
+				samplingShaderHelpers.push_back(BalancedSamplingShaderHelper{totalSampleCount, params._idealCmdListCostMS});
+			}
 
-				{
-					auto revMipIdx = IntegerLog2(std::max(mipDesc._width, mipDesc._height));
-					auto passesPerPixel = 16u-std::min(revMipIdx, 7u);		// increase the number of passes per pixel for lower mip maps, where there is greater roughness
-					auto samplesPerPass = 32u*1024u;
-					auto totalSampleCount = passesPerPixel * samplesPerPass;
-					// If you hit the following, the quantity of samples is going to exceed precision available with 32 bit ints
-					assert((uint64_t(totalSampleCount)*uint64_t(samplerHelper._repeatingStride)) < (1ull<<30ull));
+			// We need to mip all of the mips at the same time, rather than one mip at a time, so we will loop
+			// better mips until they are all done
+			// we record the samples/time separately for each mip, because it depends on the number of pixels
+			std::vector<unsigned> activeMips;
+			activeMips.reserve(targetDesc._mipCount);
+			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) activeMips.push_back(mip);
+			while (!activeMips.empty()) {
+				for (auto i=activeMips.begin(); i!=activeMips.end();) {
+					auto mip = *i;
+					auto& samplingShaderHelper = samplingShaderHelpers[mip];
+					assert(!samplingShaderHelper.Finished());
 
-					BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount);
-					while (!samplingShaderHelper.Finished()) {
-						struct ControlUniforms
-						{
-							BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
-							unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
-						} controlUniforms {
-							samplingShaderHelper.ConfigureNextDispatch(),
-							mip, 0, 0, 0
-						};
+					TextureViewDesc view;
+					view._mipRange = {mip, 1};
+					auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+					resViews[1] = outputView.get();
+					auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
 
-						UniformsStream us;
-						us._resourceViews = MakeIteratorRange(resViews);
-						UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
-						us._immediateData = immDatas;
+					const auto& samplerHelper = samplerHelpers[mip];
+					resViews[4] = samplerHelper._pixelToSampleIndex.get();
+					resViews[5] = samplerHelper._pixelToSampleIndexParams.get();
 
-						computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, us);
+					struct ControlUniforms
+					{
+						BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
+						unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
+					} controlUniforms {
+						samplingShaderHelper.ConfigureNextDispatch(),
+						mip, 0, 0, 0
+					};
 
-						if ((mip+1) == targetDesc._mipCount && samplingShaderHelper.Finished()) break;		// exit now to avoid a tiny cmd list after the last dispatch
+					UniformsStream us;
+					us._resourceViews = MakeIteratorRange(resViews);
+					UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
+					us._immediateData = immDatas;
 
-						if (progressiveResults) {
-							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
-						} else {
-							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
-						}
+					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, us);
 
-						samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, "GlossySpecularBuild");
-						if (progressiveResults) {
-							auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
-							// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
-							progressiveResults(intermediateData);
-							Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
-						}
+					if (samplingShaderHelper.Finished()) {
+						i = activeMips.erase(i);
+					} else
+						++i;
+
+					if (activeMips.empty()) break;		// exit now to avoid a tiny cmd list after the last dispatch
+
+					if (progressiveResults) {
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
+					} else {
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 					}
 
+					samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, "GlossySpecularBuild");
+					if (progressiveResults) {
+						auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
+						// note -- we could dispatch to another thread; but there's a potential risk of out of order execution
+						progressiveResults(intermediateData);
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::TransferSrc, BindFlag::UnorderedAccess);
+						// Sleep & yield a little bit of GPU time to ensure that the rendering context can actually commit and complete cmd lists
+						Threading::Sleep(8);
+					}
 				}
 			}
-		} else if (filter == EquRectFilterMode::ToGlossySpecularReference) {
+
+		} else if (filter == EquirectFilterMode::ToGlossySpecularReference) {
 			auto inputDesc = inputRes->GetDesc()._textureDesc;
 			auto totalSampleCount = inputDesc._width*inputDesc._height;
 			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
@@ -430,7 +463,7 @@ namespace RenderCore { namespace Techniques
 				UniformsStream us;
 				us._resourceViews = MakeIteratorRange(resViews);
 
-				BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount);
+				BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount, params._idealCmdListCostMS);
 				while (!samplingShaderHelper.Finished()) {
 					struct ControlUniforms
 					{
@@ -520,7 +553,8 @@ namespace RenderCore { namespace Techniques
 			// get ahead of the GPU anyway, and we also don't want to release this thread to the 
 			// thread pool while waiting for the GPU
 
-			BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount);
+			const unsigned idealCmdListCostMS = 1500;
+			BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount, idealCmdListCostMS);
 			while (true) {
 				TextureViewDesc view;
 				view._mipRange = {mip, 1};
