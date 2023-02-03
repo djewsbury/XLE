@@ -10,7 +10,7 @@
 
 namespace RenderCore
 {
-	const AttachmentViewDesc SubpassDesc::Unused = AttachmentViewDesc{};
+	const SubpassDesc::AttachmentReference SubpassDesc::Unused = AttachmentReference{};
 
 	FrameBufferDesc FrameBufferDesc::s_empty { {}, {SubpassDesc{}} };
 
@@ -121,7 +121,7 @@ namespace RenderCore
 
     uint64_t SubpassDesc::CalculateHash() const
     {
-        uint64_t result = Hash64(_attachmentViewBuffer, &_attachmentViewBuffer[BufferSpaceUsed()]);
+        uint64_t result = Hash64(_attachmentReferenceBuffer, &_attachmentReferenceBuffer[BufferSpaceUsed()]);
         result = Hash64(&_depthStencil, &_depthStencil+1, result);
         // result = Hash64(AsPointer(_preserve.begin()), AsPointer(_preserve.end()), result);
         result = Hash64(&_resolveDepthStencil, &_resolveDepthStencil+1, result);
@@ -164,7 +164,7 @@ namespace RenderCore
 		std::vector<AttachmentName> attachmentRemap;
 		attachmentRemap.resize(input.GetAttachments().size(), ~0u);
 		unsigned nextRemapIndex = 0;
-		for (auto&a:MakeIteratorRange(newSubpasses[0]._attachmentViewBuffer, &newSubpasses[0]._attachmentViewBuffer[newSubpasses[0].BufferSpaceUsed()])) {
+		for (auto&a:MakeIteratorRange(newSubpasses[0]._attachmentReferenceBuffer, &newSubpasses[0]._attachmentReferenceBuffer[newSubpasses[0].BufferSpaceUsed()])) {
 			if (attachmentRemap[a._resourceName] == ~0u)
 				attachmentRemap[a._resourceName] = nextRemapIndex++;
 			a._resourceName = attachmentRemap[a._resourceName];

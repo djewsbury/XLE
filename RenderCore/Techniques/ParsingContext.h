@@ -73,8 +73,8 @@ namespace RenderCore { namespace Techniques
 			//  ----------------- Frame buffer / render pass state -----------------
         FragmentStitchingContext& GetFragmentStitchingContext();
         AttachmentReservation& GetAttachmentReservation();
-        void BindAttachment(uint64_t semantic, std::shared_ptr<IResource>, bool isInitialized, BindFlags::BitField currentLayout=~0u);      // set initialLayout=~0u for never initialized
-        void BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain>, BindFlags::BitField currentLayout=~0u);
+        void BindAttachment(uint64_t semantic, std::shared_ptr<IResource>, bool isInitialized, BindFlags::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});      // set initialLayout=~0u for never initialized
+        void BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain>, BindFlags::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});
 
 			//  ----------------- Overlays for late rendering -----------------
         typedef std::function<void(ParsingContext&)> PendingOverlay;

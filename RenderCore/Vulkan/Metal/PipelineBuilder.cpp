@@ -259,7 +259,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_currentSubpassIndex = subPass;
 	}
 
-	uint64_t MergeHash(AttachmentViewDesc viewDesc, const FrameBufferDesc& fbDesc, uint64_t seed)
+	uint64_t MergeHash(SubpassDesc::AttachmentReference viewDesc, const FrameBufferDesc& fbDesc, uint64_t seed)
 	{
 		if (viewDesc._resourceName == ~0u) return seed;
 		auto& attachment = fbDesc.GetAttachments()[viewDesc._resourceName];

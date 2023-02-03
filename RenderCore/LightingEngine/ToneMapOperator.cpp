@@ -272,7 +272,7 @@ namespace RenderCore { namespace LightingEngine
 
 		// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess);
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard());
 		unsigned brightPassMipChainSRVIdx = ~0u, brightPassMipChainUAVIdx = ~0u, brightPassHighResBlurWorkingUAVIdx = ~0u, brightPassHighResBlurWorkingSRVIdx = ~0u;
 		if (_desc._broadBloomMaxRadius > 0.f || _desc._enablePreciseBloom) {

@@ -90,12 +90,12 @@ namespace RenderCore { namespace Techniques
         };
         DefineAttachmentHelper DefineAttachment(uint64_t semantic);
 
-        struct ViewedAttachment : public RenderCore::AttachmentViewDesc { BindFlag::Enum _usage = BindFlag::ShaderResource; };
+        struct NonFrameBufferAttachmentReference : public RenderCore::SubpassDesc::AttachmentReference { BindFlag::Enum _usage = BindFlag::ShaderResource; };
         struct SubpassDesc : public RenderCore::SubpassDesc
         {
-            IteratorRange<const ViewedAttachment*> GetNonFrameBufferAttachmentViews() const { return MakeIteratorRange(_nonfbViews); }
+            IteratorRange<const NonFrameBufferAttachmentReference*> GetNonFrameBufferAttachmentViews() const { return MakeIteratorRange(_nonfbViews); }
             unsigned AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
-            std::vector<ViewedAttachment> _nonfbViews;
+            std::vector<NonFrameBufferAttachmentReference> _nonfbViews;
         };
         void AddSubpass(SubpassDesc&& subpass);
         void AddSubpass(RenderCore::SubpassDesc&& subpass);
@@ -139,6 +139,7 @@ namespace RenderCore { namespace Techniques
         StringSection<> _name;
         State _state = State::Uninitialized;
         BindFlag::BitField _layout = 0;
+        TextureViewDesc _defaultView;
 
         uint64_t CalculateHash() const;
         uint64_t CalculateHashResolutionIndependent() const;
@@ -181,12 +182,13 @@ namespace RenderCore { namespace Techniques
             uint64_t semantic, const ResourceDesc&,
             StringSection<> name,
             PreregisteredAttachment::State state = PreregisteredAttachment::State::Uninitialized, 
-            BindFlag::BitField initialLayout = 0);
+            BindFlag::BitField initialLayout = 0,
+            const TextureViewDesc& defaultView = {});
         void DefineAttachment(const PreregisteredAttachment& attachment);
         void Undefine(uint64_t semantic);
 
         // Declare that we will need the data from the previous frame for the given attachment
-        // The data will be accessable in the attachment semantic+1
+        // The data will be accessible in the attachment semantic+1
         // (eg, if you call DefineDoubleBufferAttachment(AttachmentSemantics::MultisampleDepth), 
         // you can then use AttachmentSemantics::MultisampleDepthPrev)
         void DefineDoubleBufferAttachment(
@@ -200,8 +202,8 @@ namespace RenderCore { namespace Techniques
             std::vector<PreregisteredAttachment> _fullAttachmentDescriptions;
             std::vector<AttachmentTransform> _attachmentTransforms;
             std::string _log;
-            std::vector<FrameBufferDescFragment::ViewedAttachment> _viewedAttachments;
-            std::vector<unsigned> _viewedAttachmentsMap;      // subpassIdx -> index in _viewedAttachments
+            std::vector<FrameBufferDescFragment::NonFrameBufferAttachmentReference> _nonFBAttachments;
+            std::vector<unsigned> _nonFBAttachmentsMap;      // subpassIdx -> index in _nonFBAttachments
             PipelineType _pipelineType = PipelineType::Graphics;
         };
 
@@ -484,8 +486,8 @@ namespace RenderCore { namespace Techniques
         ParsingContext* _attachedParsingContext = nullptr;
         bool _trueRenderPass = false;
 
-        std::vector<std::pair<std::shared_ptr<IResourceView>, unsigned>> _viewedAttachments;         // good candidate for subframe heap
-        std::vector<unsigned> _viewedAttachmentsMap;                            // good candidate for subframe heap
+        std::vector<std::pair<std::shared_ptr<IResourceView>, unsigned>> _nonFBAttachments;         // good candidate for subframe heap
+        std::vector<unsigned> _nonFBAttachmentsMap;                            // good candidate for subframe heap
     };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

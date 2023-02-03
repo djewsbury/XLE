@@ -280,7 +280,7 @@ namespace RenderCore { namespace Techniques
     unsigned FrameBufferDescFragment::SubpassDesc::AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage, TextureViewDesc window)
     {
         auto result = (unsigned)_nonfbViews.size();
-        ViewedAttachment view;
+        NonFrameBufferAttachmentReference view;
         view._resourceName = name;
         view._window = window;
         view._usage = usage;
@@ -484,13 +484,6 @@ namespace RenderCore { namespace Techniques
                     assert(
                         ResolveFormat(resolvedAttachmentDescs[i._resourceName]._desc._textureDesc._format, i._window._format, BindFlag::InputAttachment)
                         == ResolveFormat(adjustedDesc.GetAttachments()[i._resourceName]._format, i._window._format, BindFlag::InputAttachment));
-                }
-            for (auto& v:sp.GetViews())
-                if (!HasExplicitAspect(v._window)) {
-                    v._window._format = ImpliedFormatFilter(desc.GetAttachments()[v._resourceName]._format);
-                    assert(
-                        ResolveFormat(resolvedAttachmentDescs[v._resourceName]._desc._textureDesc._format, v._window._format, BindFlag::ShaderResource)
-                        == ResolveFormat(adjustedDesc.GetAttachments()[v._resourceName]._format, v._window._format, BindFlag::ShaderResource));
                 }
             assert(sp.GetResolveOutputs().empty());
             assert(sp.GetResolveDepthStencil()._resourceName == ~0u);
@@ -1485,10 +1478,10 @@ namespace RenderCore { namespace Techniques
     auto RenderPassInstance::GetNonFrameBufferAttachmentView(unsigned viewedAttachmentSlot) const -> const std::shared_ptr<IResourceView>&
     {
         auto spIdx = GetCurrentSubpassIndex();
-        assert((spIdx+1) < _viewedAttachmentsMap.size());
-        auto base = _viewedAttachmentsMap[spIdx];
-        assert((_viewedAttachmentsMap[spIdx+1] - base) > viewedAttachmentSlot);     // if you hit this, it means "viewedAttachmentSlot" is out of bounds for the current subpass
-        return _viewedAttachments[base+viewedAttachmentSlot].first;
+        assert((spIdx+1) < _nonFBAttachmentsMap.size());
+        auto base = _nonFBAttachmentsMap[spIdx];
+        assert((_nonFBAttachmentsMap[spIdx+1] - base) > viewedAttachmentSlot);     // if you hit this, it means "viewedAttachmentSlot" is out of bounds for the current subpass
+        return _nonFBAttachments[base+viewedAttachmentSlot].first;
     }
 
     void RenderPassInstance::AutoNonFrameBufferBarrier(IteratorRange<const AttachmentBarrier*> barriers)
@@ -1496,14 +1489,14 @@ namespace RenderCore { namespace Techniques
         assert(!barriers.empty());
         // Barrier to the new state, from whatever state we think the attachment is currently in 
         auto spIdx = GetCurrentSubpassIndex();
-        assert((spIdx+1) < _viewedAttachmentsMap.size());
-        auto base = _viewedAttachmentsMap[spIdx];
+        assert((spIdx+1) < _nonFBAttachmentsMap.size());
+        auto base = _nonFBAttachmentsMap[spIdx];
 
         VLA_UNSAFE_FORCE(AttachmentBarrier, translatedBarriers, barriers.size());
         for (unsigned c=0; c<barriers.size(); ++c) {
             auto viewedAttachmentSlot = barriers[c]._attachment;
-            assert((_viewedAttachmentsMap[spIdx+1] - base) > viewedAttachmentSlot);     // if you hit this, it means "viewedAttachmentSlot" is out of bounds for the current subpass
-            auto attachmentIdx = _viewedAttachments[base+viewedAttachmentSlot].second;
+            assert((_nonFBAttachmentsMap[spIdx+1] - base) > viewedAttachmentSlot);     // if you hit this, it means "viewedAttachmentSlot" is out of bounds for the current subpass
+            auto attachmentIdx = _nonFBAttachments[base+viewedAttachmentSlot].second;
             translatedBarriers[c]._attachment = attachmentIdx;
             translatedBarriers[c]._layout = barriers[c]._layout;
             translatedBarriers[c]._shaderStage = barriers[c]._shaderStage;
@@ -1604,10 +1597,10 @@ namespace RenderCore { namespace Techniques
         stitchContext.UpdateAttachments(stitchedFragment);
         parentReservation.UpdateAttachments(_attachmentPoolReservation, stitchedFragment._attachmentTransforms);
 
-        _viewedAttachmentsMap = stitchedFragment._viewedAttachmentsMap;
-        _viewedAttachments.reserve(stitchedFragment._viewedAttachments.size());
-        for (const auto&view:stitchedFragment._viewedAttachments)
-            _viewedAttachments.emplace_back(_attachmentPoolReservation.GetView(view._resourceName, view._usage, view._window), view._resourceName);
+        _nonFBAttachmentsMap = stitchedFragment._nonFBAttachmentsMap;
+        _nonFBAttachments.reserve(stitchedFragment._nonFBAttachments.size());
+        for (const auto&view:stitchedFragment._nonFBAttachments)
+            _nonFBAttachments.emplace_back(_attachmentPoolReservation.GetView(view._resourceName, view._usage, view._window), view._resourceName);
     }
 
     RenderPassInstance::RenderPassInstance(
@@ -1654,8 +1647,8 @@ namespace RenderCore { namespace Techniques
     , _attachedContext(moveFrom._attachedContext)
     , _attachmentPoolReservation(std::move(moveFrom._attachmentPoolReservation))
 	, _layout(std::move(moveFrom._layout))
-    , _viewedAttachments(std::move(moveFrom._viewedAttachments))
-    , _viewedAttachmentsMap(std::move(moveFrom._viewedAttachmentsMap))
+    , _nonFBAttachments(std::move(moveFrom._nonFBAttachments))
+    , _nonFBAttachmentsMap(std::move(moveFrom._nonFBAttachmentsMap))
     , _currentSubpassIndex(moveFrom._currentSubpassIndex)
     , _trueRenderPass(moveFrom._trueRenderPass)
     {
@@ -1681,8 +1674,8 @@ namespace RenderCore { namespace Techniques
         moveFrom._attachedContext = nullptr;
 		_layout = std::move(moveFrom._layout);
         moveFrom._layout = nullptr;
-        _viewedAttachments = std::move(moveFrom._viewedAttachments);
-        _viewedAttachmentsMap = std::move(moveFrom._viewedAttachmentsMap);
+        _nonFBAttachments = std::move(moveFrom._nonFBAttachments);
+        _nonFBAttachmentsMap = std::move(moveFrom._nonFBAttachmentsMap);
         _currentSubpassIndex = moveFrom._currentSubpassIndex;
         moveFrom._currentSubpassIndex = 0;
         _trueRenderPass = moveFrom._trueRenderPass;
@@ -1713,6 +1706,7 @@ namespace RenderCore { namespace Techniques
 		auto shift = (unsigned)_state;
 		lrot(result, shift);
         result += _layout;
+        result = HashCombine(result, _defaultView.GetHash());
 		return result;
 	}
 
@@ -1722,6 +1716,7 @@ namespace RenderCore { namespace Techniques
 		auto shift = (unsigned)_state;
 		lrot(result, shift);
         result += _layout;
+        result = HashCombine(result, _defaultView.GetHash());
 		return result;
     }
 
@@ -1830,6 +1825,7 @@ namespace RenderCore { namespace Techniques
             bool _hasBeenAccessed = false;
             std::optional<PreregisteredAttachment> _fullyDefinedAttachment;
             AttachmentMatchingRules _matchingRules;
+            TextureViewDesc _defaultView;
 
             std::optional<Attachment> TryMerge(const AttachmentMatchingRules& matchingRules, const FrameBufferProperties& fbProps) const;
 
@@ -1966,6 +1962,7 @@ namespace RenderCore { namespace Techniques
         _shouldReceiveDataForSemantic = attachment._semantic;
         _firstAccessInitialLayout = attachment._layout;
         _fullyDefinedAttachment = attachment;
+        _defaultView = attachment._defaultView;
     }
 
     WorkingAttachmentContext::Attachment::Attachment(
@@ -2175,13 +2172,32 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
+    static void MergeAttachmentViewDesc(TextureViewDesc& textureView, const TextureViewDesc& defaultView)
+    {
+        if (textureView._format._aspect == TextureViewDesc::FormatFilter{}._aspect && textureView._format._explicitFormat == TextureViewDesc::FormatFilter{}._explicitFormat)
+            textureView._format = defaultView._format;
+
+        if (textureView._mipRange == TextureViewDesc::All)
+            textureView._mipRange = defaultView._mipRange;
+
+        if (textureView._arrayLayerRange == TextureViewDesc::All)
+            textureView._arrayLayerRange = defaultView._arrayLayerRange;
+
+        if (textureView._dimensionality == TextureDesc::Dimensionality::Undefined)
+            textureView._dimensionality = defaultView._dimensionality;
+
+        // we can't merge "_flags" easily, so we'll skip that one
+    }
+
     static FrameBufferDesc BuildFrameBufferDesc(
         const FrameBufferDescFragment& fragment,
         const FrameBufferProperties& props,
         IteratorRange<const PreregisteredAttachment*> fullAttachmentDescriptions)
     {
         std::vector<AttachmentDesc> fbAttachments;
+        std::vector<TextureViewDesc> defaultTextureViewDescs;
         fbAttachments.reserve(fragment._attachments.size());
+        defaultTextureViewDescs.reserve(fragment._attachments.size());
         for (const auto& inputFrag:fragment._attachments) {
             AttachmentDesc desc;
             desc._loadFromPreviousPhase = inputFrag._loadFromPreviousPhase;
@@ -2197,12 +2213,14 @@ namespace RenderCore { namespace Techniques
                 desc._format = fullDescription->_desc._textureDesc._format;
                 if (fullDescription->_desc._textureDesc._samples._sampleCount > 1u)
                     desc._flags |= AttachmentDesc::Flags::Multisampled;
+                defaultTextureViewDescs.push_back(fullDescription->_defaultView);
             } else {
                 // build the attachment we'd expect to get if we used the matching rules directly
                 auto prereg = BuildPreregisteredAttachment(inputFrag, 0, props);
                 desc._format = prereg._desc._textureDesc._format;
                 if (prereg._desc._textureDesc._samples._sampleCount > 1u)
                     desc._flags |= AttachmentDesc::Flags::Multisampled;
+                defaultTextureViewDescs.push_back({});
             }
 
             assert(desc._format != Format::Unknown);
@@ -2212,9 +2230,20 @@ namespace RenderCore { namespace Techniques
         // Generate the final FrameBufferDesc by moving the subpasses out of the fragment
         // Usually this function is called as a final step when converting a number of fragments
         // into a final FrameBufferDesc, so it makes sense to move the subpasses from the input
+        // While doing this merge the default attachment views with the requested views
         std::vector<SubpassDesc> subpasses;
         subpasses.reserve(fragment._subpasses.size());
-        for (const auto& sp:fragment._subpasses) subpasses.push_back(sp);
+        for (const auto& sp:fragment._subpasses) {
+            auto updatedSP = sp;
+            for (auto& a:updatedSP.GetOutputs()) MergeAttachmentViewDesc(a._window, defaultTextureViewDescs[a._resourceName]);
+            if (updatedSP.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
+                MergeAttachmentViewDesc(updatedSP.GetDepthStencil()._window, defaultTextureViewDescs[updatedSP.GetDepthStencil()._resourceName]);
+            if (updatedSP.GetResolveDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
+                MergeAttachmentViewDesc(updatedSP.GetResolveDepthStencil()._window, defaultTextureViewDescs[updatedSP.GetResolveDepthStencil()._resourceName]);
+            for (auto& a:updatedSP.GetInputs()) MergeAttachmentViewDesc(a._window, defaultTextureViewDescs[a._resourceName]);
+            for (auto& a:updatedSP.GetResolveOutputs()) MergeAttachmentViewDesc(a._window, defaultTextureViewDescs[a._resourceName]);
+            subpasses.push_back(std::move(updatedSP));
+        }
         return FrameBufferDesc { std::move(fbAttachments), std::move(subpasses), props };
     }
 
@@ -2289,10 +2318,19 @@ namespace RenderCore { namespace Techniques
         }
 
         for (const auto&sp:fragment._subpasses) {
-            result._viewedAttachmentsMap.push_back((unsigned)result._viewedAttachments.size());
-            result._viewedAttachments.insert(result._viewedAttachments.end(), sp._nonfbViews.begin(), sp._nonfbViews.end());
+            result._nonFBAttachmentsMap.push_back((unsigned)result._nonFBAttachments.size());
+            for (const auto& nonfb:sp._nonfbViews) {
+                auto updated = nonfb;
+                // configure default view
+                auto i = std::find_if(
+                    _workingAttachments.begin(), _workingAttachments.end(),
+                    [semantic=fragment._attachments[updated._resourceName]._semantic](const auto& c) { return c._semantic == semantic; });
+                if (i != _workingAttachments.end())
+                    MergeAttachmentViewDesc(updated._window, i->_defaultView);
+                result._nonFBAttachments.push_back(std::move(updated));
+            }
         }
-        result._viewedAttachmentsMap.push_back((unsigned)result._viewedAttachments.size());
+        result._nonFBAttachmentsMap.push_back((unsigned)result._nonFBAttachments.size());
 
         #if defined(_DEBUG)
             if (CanBeSimplified(fragment, _workingAttachments, _workingProps))
@@ -2359,9 +2397,10 @@ namespace RenderCore { namespace Techniques
         uint64_t semantic, const ResourceDesc& resourceDesc,
         StringSection<> name,
         PreregisteredAttachment::State state,
-        BindFlag::BitField initialLayoutFlags)
+        BindFlag::BitField initialLayoutFlags,
+        const TextureViewDesc& defaultView)
 	{
-		DefineAttachment(RenderCore::Techniques::PreregisteredAttachment{semantic, resourceDesc, name, state, initialLayoutFlags});
+		DefineAttachment(PreregisteredAttachment{semantic, resourceDesc, name, state, initialLayoutFlags, defaultView});
 	}
 
     void FragmentStitchingContext::DefineAttachment(

@@ -117,6 +117,8 @@ namespace PlatformRig
         std::weak_ptr<DebugScreensSystem> _debugSystem;
     };
 
+    static RenderCore::TextureViewDesc MakeDefaultPresentationChainView(RenderCore::Format);
+
 ///////////////////////////////////////////////////////////////////////////////
 
     RenderCore::Techniques::ParsingContext FrameRig::StartupFrame(
@@ -174,7 +176,7 @@ namespace PlatformRig
 
 			// Bind the presentation target as the default output for the parser context
             auto presentationChainDesc = presChain->GetDesc();
-            parserContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, presChain, BindFlag::PresentationSrc);
+        parserContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, presChain, BindFlag::PresentationSrc, MakeDefaultPresentationChainView(presentationChainDesc._format));
             parserContext.GetAttachmentReservation().Absorb(std::move(_pimpl->_capturedDoubleBufferAttachments));
 
             auto& stitchingContext = parserContext.GetFragmentStitchingContext();
@@ -365,7 +367,8 @@ namespace PlatformRig
                 targetDesc,
                 "color-ldr",
                 Techniques::PreregisteredAttachment::State::Uninitialized,
-                BindFlag::PresentationSrc
+                BindFlag::PresentationSrc,
+                MakeDefaultPresentationChainView(desc._format)
             });
 
         result._systemAttachmentFormats = _pimpl->_techniqueContext._systemAttachmentFormats;
@@ -433,6 +436,16 @@ namespace PlatformRig
 
     FrameRig::~FrameRig() 
     {
+    }
+
+    static RenderCore::TextureViewDesc MakeDefaultPresentationChainView(RenderCore::Format fmt)
+    {
+        // Given a desc for a presentation chain target format, calculate the default TextureViewDesc
+        // for formats with less than 16 bits per pixel, we will treat the target as having non-linear color
+        RenderCore::TextureViewDesc result;
+        if (RenderCore::GetComponentPrecision(fmt) < 16)
+            result._format._aspect = RenderCore::TextureViewDesc::Aspect::ColorSRGB;
+        return result;
     }
 
 ///////////////////////////////////////////////////////////////////////////////
