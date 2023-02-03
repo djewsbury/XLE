@@ -25,6 +25,8 @@ namespace RenderCore { namespace Metal_Vulkan
         }
     }
 
+    VkImageUsageFlags AsImageUsageFlags(BindFlag::BitField bindFlags);
+
     static Format ResolveVkFormat(Format baseFormat, TextureViewDesc::FormatFilter filter, BindFlag::Enum usage)
     {
         if (filter._explicitFormat != Format(0))
@@ -313,6 +315,14 @@ namespace RenderCore { namespace Metal_Vulkan
                     assert(adjWindow._arrayLayerRange._min == 0);
                 }
             }
+
+            // Occasionally we want to use formats that are valid for one usage of a texture, but not enough
+            // to avoid warning messages from Vulkan, we should just tell the API how we're going to use this view
+            VkImageViewUsageCreateInfo usageRestriction;
+            usageRestriction.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
+            usageRestriction.pNext = createInfo.pNext;
+            usageRestriction.usage = AsImageUsageFlags(formatUsage);
+            createInfo.pNext = &usageRestriction;
 
             _imageView = factory.CreateImageView(createInfo);
             static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));

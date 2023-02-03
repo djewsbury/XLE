@@ -1404,9 +1404,9 @@ namespace RenderCore { namespace ImplVulkan
 		device_info.queueCreateInfoCount = queueCount;
 		device_info.pQueueCreateInfos = queue_info;
 
-		const char* deviceExtensions[8];
+		const char* deviceExtensions[16];
 		unsigned deviceExtensionCount = 0;
-		const char* deviceLayers[8];
+		const char* deviceLayers[16];
 		unsigned deviceLayerCount = 0;
 
 		if (xleFeatures._conservativeRaster)
@@ -1419,6 +1419,8 @@ namespace RenderCore { namespace ImplVulkan
 		if (xleFeatures._timelineSemaphore)
 			deviceExtensions[deviceExtensionCount++] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;	// because it's used internally, it's always required (promoted into Vulkan 1.2)
 		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME; 
+		deviceExtensions[deviceExtensionCount++] = VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME;		// promoted to Vulkan 1.2 core. Require to enable mutable format bit for swapchain images
 		if (xleFeatures._viewInstancingRenderPasses)
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME; 	// promoted to Vulkan 1.2, HLSL compiler likes to require it
 
@@ -2199,6 +2201,27 @@ namespace RenderCore { namespace ImplVulkan
         swapChainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         swapChainInfo.queueFamilyIndexCount = 0;
         swapChainInfo.pQueueFamilyIndices = nullptr;
+
+		// For render targets that support both UnorderedAccess and RenderTarget usages, we enable the "mutable" format bit
+		// this is because we will often need to these targets with some views with a non-linear color format and some with a linear color format
+		// (since compute shaders don't support the automatic conversion that goes along with non-linear format)
+		VkImageFormatListCreateInfo formatListInfo;
+		VkFormat fmtsBuffer[2];
+		if ((props._bindFlags & (BindFlag::UnorderedAccess|BindFlag::RenderTarget)) == (BindFlag::UnorderedAccess|BindFlag::RenderTarget)) {
+			auto fmt = Metal_Vulkan::AsFormat(props._fmt.format);
+			if (HasLinearAndSRGBFormats(fmt)) {
+				fmtsBuffer[0] = (VkFormat)Metal_Vulkan::AsVkFormat(AsSRGBFormat(fmt));
+				fmtsBuffer[1] = (VkFormat)Metal_Vulkan::AsVkFormat(AsLinearFormat(fmt));
+				assert(fmtsBuffer[0] != fmtsBuffer[1]);
+				assert(fmtsBuffer[0] && fmtsBuffer[1]);
+				formatListInfo.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO;
+				formatListInfo.pNext = swapChainInfo.pNext;
+				formatListInfo.viewFormatCount = dimof(fmtsBuffer);
+				formatListInfo.pViewFormats = fmtsBuffer;
+				swapChainInfo.pNext = &formatListInfo;
+				swapChainInfo.flags |= VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
+			}
+		}
 
         VkSwapchainKHR swapChainRaw = nullptr;
         auto res = vkCreateSwapchainKHR(dev, &swapChainInfo, Metal_Vulkan::g_allocationCallbacks, &swapChainRaw);
