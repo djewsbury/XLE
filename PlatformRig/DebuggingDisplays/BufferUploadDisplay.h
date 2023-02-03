@@ -62,10 +62,10 @@ namespace PlatformRig { namespace Overlays
         };
         std::vector<GraphSlot> _graphSlots;
 
-        unsigned        _accumulatedCreateCount[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
-        unsigned        _accumulatedCreateBytes[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
-        unsigned        _accumulatedUploadCount[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
-        unsigned        _accumulatedUploadBytes[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
+        size_t          _accumulatedCreateCount[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
+        size_t          _accumulatedCreateBytes[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
+        size_t          _accumulatedUploadCount[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
+        size_t          _accumulatedUploadBytes[(unsigned)RenderCore::BufferUploads::UploadDataType::Max];
 
         double          _reciprocalTimerFrequency;
         unsigned        _graphsMode;

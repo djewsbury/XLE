@@ -100,7 +100,7 @@ namespace RenderCore { namespace ImplVulkan
 				auto* handler = (DebugMessageHandler*)pUserData;
 
 				bool report = true;
-				if (handler->_suppressSpamRules & messageSeverity) {
+				if (handler->_suppressSpamRules & messageSeverity && pCallbackData->messageIdNumber != 0) {	// (don't suppress message id 0, since it seems to be used for just general reporting)
 					ScopedLock(handler->_suppressSpamLock);
 					auto now = std::chrono::steady_clock::now();
 					constexpr std::chrono::steady_clock::duration timeBetweenDuplicateMsgs = std::chrono::seconds(5);

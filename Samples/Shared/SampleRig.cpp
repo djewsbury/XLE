@@ -251,6 +251,7 @@ namespace Sample
         sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), sampleGlobals._drawingApparatus.get(), *sampleGlobals._frameRenderingApparatus, config._presentationChainBindFlags);
+        sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus);
         {
             auto v = sampleGlobals._renderDevice->GetDesc();
             StringMeld<128> meld;
@@ -274,7 +275,7 @@ namespace Sample
             //  It just provides a convenient architecture for visualizing important information.
         Log(Verbose) << "Setup tools and debugging" << std::endl;
         auto& frameRig = *sampleGlobals._windowApparatus->_frameRig;
-        sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus, frameRig);
+        PlatformRig::SetSystemDisplay(*sampleGlobals._debugOverlaysApparatus->_debugSystem, frameRig.CreateDisplay(sampleGlobals._debugOverlaysApparatus->_debugSystem));
         InstallDefaultDebuggingDisplays(sampleGlobals);
 
             // Final startup operations

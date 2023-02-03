@@ -16,67 +16,20 @@
 #endif
 
     //////////////////////////////////////////////////////////////////////////
-        //   C O O K   T O R R E N C E                                  //
-    //////////////////////////////////////////////////////////////////////////
-
-float CookTorrenceSpecular(float NdotL, float NdotH, float NdotV, float VdotH, float roughnessSquared)
-{
-		// using D3D book wiki for reference for Cook-Torrence specular equation:
-
-	float geo_numerator   = 2.0f * NdotH;
-    float geo_denominator = VdotH;
-
-    float geo_b = (geo_numerator * NdotV) / geo_denominator;
-    float geo_c = (geo_numerator * NdotL) / geo_denominator;
-    float geo   = min(1.0f, min(geo_b, geo_c));
-
-	float finalRoughness;
-	{
-			// beckmann distribution
-		float roughness_a = 1.0f / ( 4.0f * roughnessSquared * pow( NdotH, 4.0f ) );
-        float roughness_b = NdotH * NdotH - 1.0f;
-        float roughness_c = roughnessSquared * NdotH * NdotH;
-        finalRoughness = roughness_a * exp( roughness_b / roughness_c );
-	}
-
-	float Rs_numerator    = (geo * finalRoughness);
-    float Rs_denominator  = NdotV * NdotL;
-    float Rs              = Rs_numerator/ Rs_denominator;
-
-	return saturate(NdotL) * Rs;
-}
-
-float CalculateSpecular_CookTorrence(float3 normal, float3 directionToEye, float3 negativeLightDirection, float roughness, float F0)
-{
-    float3 worldSpaceReflection = reflect(-directionToEye, normal);
-	float3 halfVector = normalize(negativeLightDirection + directionToEye);
-	float fresnel = SchlickFresnelF0(directionToEye, halfVector, F0);
-
-	float NdotL = saturate(dot(negativeLightDirection, normal.xyz));
-	float NdotH = saturate(dot(halfVector, normal.xyz));
-	float NdotV = saturate(dot(directionToEye, normal.xyz));
-	float VdotH = saturate(dot(halfVector, directionToEye));
-
-    return fresnel * CookTorrenceSpecular(NdotL, NdotH, NdotV, VdotH, roughness*roughness);
-}
-
-    //////////////////////////////////////////////////////////////////////////
         //   G G X                                                      //
     //////////////////////////////////////////////////////////////////////////
 
 float SmithG(float NdotV, float alpha)
 {
-    // Filmic worlds uses Smith-Schlick implementation.
-    // It's a little bit simplier...
-    // Epic course notes suggest k = alpha/2
-    // float k = alpha / 2.f;
-    // return NdotV/(NdotV*(1.0f-k)+k);
-
+    // This is one part of the G term in Torrent-Sparrow
+    // Note that 'Smith-G' equations like this are generated from a particular
+    // 'D' equation, given an assumption about the arrangement of microfacets
+    // So this implementation must be used with TrowReitzD
+    // This implementation doesn't consider height correlation issues and so
+    // over-darkens from certain angles
     float a = alpha * alpha;
     float b = NdotV * NdotV;
     return (2.f * NdotV) / (NdotV + sqrt(lerp(b, 1.0f, a)));
-    // return 1.f/(NdotV + sqrt(a + (1.f-a) * b));
-    // return 1.f/(NdotV + sqrt(a + b - a*b));
 }
 
 float TrowReitzD(float NdotH, float alpha)
@@ -151,11 +104,14 @@ float RoughnessToGAlpha(float roughness)
     // This is the remapping to convert from a roughness
     // value into the "alpha" term used in the G part of
     // the brdf equation.
-    // We're using the Disney remapping. It helps to reduce
+    // Disney suggest a remapping. It helps to reduce
     // the brighness of the specular around the edges of high
-    // roughness materials.
-    // float alphag = roughness*.5+.5;
+    // roughness materials; however this breaks the correctness of
+    // the smith-G assumption, since the 'G' equation is just based
+    // on the 'D' equation
+    const bool useDisneyRemapping = false;
     float alphag = roughness;
+    if (useDisneyRemapping) alphag = roughness*.5+.5;
     alphag *= alphag;
     return alphag;
 }
@@ -177,7 +133,8 @@ float3 ReferenceSpecularGGX(
     bool mirrorSurface)
 {
     // This is reference implementation of "GGX" specular
-    // It's very close to the Disney lighting model implementation
+    // The math here can be significantly optimized, however it's easier to work with
+    // in this format
 
     // Our basic microfacet specular equation is:
     //
@@ -187,7 +144,7 @@ float3 ReferenceSpecularGGX(
 
     // D is our microfacet distribution function
     // F is fresnel
-    // G is the shadowing factor (geometric attenuation)
+    // G is the shadowing/masking factor (geometric attenuation)
 
     float NdotL = dot(normal, negativeLightDirection);
     float NdotV = dot(normal, directionToEye);
@@ -221,9 +178,6 @@ float3 ReferenceSpecularGGX(
     #endif
 
     /////////// Shadowing factor ///////////
-        // As per the Disney model, rescaling roughness to
-        // values 0.5f -> 1.f for SmithG alpha, and squaring
-        //
         // Note; there's an interesting question about whether
         // we should use HdotL and HdotV here, instead of NdotL
         // and NdotV. Walter07 mentions this -- I assume the N
@@ -252,13 +206,8 @@ float3 ReferenceSpecularGGX(
     #endif
 
     /////////// Microfacet ///////////
-        // Mapping alpha to roughness squared (as per Disney
-        // model and Filmic worlds implementation)
     precise float D = TrowReitzD(NdotH, RoughnessToDAlpha(roughness));
 
-        // Note that the denominator here can be combined with
-        // the "G" equation and factored out.
-        // Including here just for clarity and reference purposes.
     float denom = 4.f * NdotV * NdotL;
 
         // note that the NdotL part here is not part of the BRDF function, but still

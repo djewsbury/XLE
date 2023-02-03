@@ -53,64 +53,51 @@ float2 GenerateSplitTerm(
         precise float NdotH = H.z;
         precise float VdotH = dot(V, H);
 
-        if (NdotL > 0.0f) {
-                // using "precise" here has a massive effect...
-                // Without it, there are clear errors in the result.
+        if (NdotL <= 0.0f) continue;
+
+        // using "precise" here has a massive effect...
+        // Without it, there are clear errors in the result.
+        //
+        // Remember that our expected value estimation of the integral is
+        // 1/sampleCount * sum( f(x) / p(x) ), where f(x) is the function we're integrating and p(x) is the pdf
+
+        precise float specular, pdf;
+        const bool useVDNFOptimizations = true;
+        if (!useVDNFOptimizations) {
             precise float G = SmithG(NdotL, alphag) * G2;
+            precise float D = TrowReitzD(NdotH, alphad);
+            // pdf = SamplerGGXHalfVector_PDF(tangentSpaceHalfVector, alphad);
+            pdf = SamplerHeitzGGXVNDF_PDFh(tangentSpaceHalfVector, V, alphad);
 
-            // F0 gets factored out of the equation here
-            // the result we will generate is actually a scale and offset to
-            // the runtime F0 value.
-            precise float F = SchlickFresnelCore(VdotH);
+            // See PBR book chapter 14.1.1. Our pdf is distributing half vectors, but the integral we're estimating
+            // is w.r.t the incident (or excident) light direction. Half vectors are obviously more tightly distributed,
+            // by nature of how to reflect the light. As a result they are more "densely" distributed, so obviously the
+            // pdf over the hemisphere is different.
+            //
+            // Convert by calculating d omega-h / d omega-i (see pbr book for the working out here)
+            pdf = pdf / (4.0f * VdotH);
 
-            // Remember that our expected value estimation of the integral is
-            // 1/sampleCount * sum( f(x) / p(x) ), where f(x) is the function we're integrating and p(x) is the pdf
+            specular = D*G/(4.0*NdotL*NdotV);
 
-            #if !defined(OLD_M_DISTRIBUTION_FN)
-                precise float specular, pdf;
-                if (0) {
-                    precise float D = TrowReitzD(NdotH, alphad);
-                    // pdf = SamplerGGXHalfVector_PDF(tangentSpaceHalfVector, alphad);
-                    pdf = SamplerHeitzGGXVNDF_PDFh(tangentSpaceHalfVector, V, alphad);
-
-                    // See PBR book chapter 14.1.1. Our pdf is distributing half vectors, but the integral we're estimating
-                    // is w.r.t the incident (or excident) light direction. Half vectors are obviously more tightly distributed,
-                    // by nature of how to reflect the light. As a result they are more "densely" distributed, so obviously the
-                    // pdf over the hemisphere is different.
-                    //
-                    // Convert by calculating d omega-h / d omega-i (see pbr book for the working out here)
-                    pdf = pdf / (4.0f * VdotH);
-
-                    specular = D*G/(4.0*NdotL*NdotV);
-
-                    // We still consider the incident light "radiance" -- meaning we have to include that term
-                    // that takes into account the orientation of incoming light to the surface
-                    // without this, samples at shearing angles contribute too much overall
-                    specular *= NdotL;
-                } else {
-                    // pdf = D * excid_G * VdotM / (4 * VdotN * VdotM)
-                    // specular = D*incid_G*excid_G/(4.0*NdotL*VdotN);
-                    // factored -- incid_G / NdotL
-                    //  (plus multiply by NdotL at the end)
-                    specular = SmithG(NdotL, alphag);
-                    pdf = 1.0;
-                }
-            #else
-                // This factors out the D term, and introduces some other terms.
-                //      pdf inverse = 4.f * VdotH / (D * NdotH)
-                //      specular eq = D*G*F / (4*NdotL*NdotV)
-                precise float specular = G * VdotH / (NdotH * NdotV);  // (excluding F term)
-                precise float pdf = 1.0f;
-            #endif
-
-            // adding small numbers to large numbers -- probably not ideal for precision
-            A += ((1.f - F) * specular) / pdf;
-            B += (F * specular) / pdf;
+            // We still consider the incident light "radiance" -- meaning we have to include that term
+            // that takes into account the orientation of incoming light to the surface
+            // without this, samples at shearing angles contribute too much overall
+            specular *= NdotL;
+        } else {
+            // Due to how VDNF works, we can 
+            // pdf = D * excid_G * VdotM / (4 * VdotN * VdotM)
+            // specular = D*incid_G*excid_G/(4.0*NdotL*VdotN);
+            // factored -- incid_G / NdotL
+            //  (plus multiply by NdotL at the end)
+            specular = SmithG(NdotL, alphag);
+            pdf = 1.0;
         }
-    }
 
-    // Note that we're assuming that each "pass" is equally weight here. This is only true because we're
-    // interleaving the samples (ie, it's not like we do all of the high cosTheta samples in a single pass)
+        precise float F = SchlickFresnelCore(VdotH);
+        // adding small numbers to large numbers -- probably not ideal for precision
+        A += ((1.f - F) * specular) / pdf;
+        B += (F * specular) / pdf;
+    }
 
     precise float reciprocalN = 1.0 / (totalSampleCount);
     return float2(A, B) * reciprocalN;

@@ -33,14 +33,10 @@ namespace PlatformRig
 	constexpr auto Fn_ShowScreen = ConstHash64Legacy<'show', 'scre', 'en'>::Value;
 
 	DebugOverlaysApparatus::DebugOverlaysApparatus(
-		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
-		PlatformRig::FrameRig& frameRig)
+		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus)
 	{
 		using DebugScreensSystem = RenderOverlays::DebuggingDisplay::DebugScreensSystem;
 		_debugSystem = std::make_shared<DebugScreensSystem>();
-		_debugSystem->Register(
-			frameRig.CreateDisplay(_debugSystem),
-			"FrameRig", DebugScreensSystem::SystemDisplay);
 
 		_debugScreensOverlaySystem = std::make_shared<PlatformRig::OverlaySystemSet>();
 		_debugScreensOverlaySystem->AddSystem(CreateDebugScreensOverlay(_debugSystem, immediateDrawingApparatus->_immediateDrawables, immediateDrawingApparatus->_fontRenderingManager));
@@ -79,6 +75,12 @@ namespace PlatformRig
 		ConsoleRig::CrossModule::GetInstance()._services.Remove(Fn_ShowScreen);
 	}
 
+	void SetSystemDisplay(RenderOverlays::DebuggingDisplay::DebugScreensSystem& debugScreens, std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> systemDisplay)
+	{
+		debugScreens.Register(
+			std::move(systemDisplay),
+			"system-display", RenderOverlays::DebuggingDisplay::DebugScreensSystem::SystemDisplay);
+	}
 
 	WindowApparatus::WindowApparatus(
 		std::shared_ptr<Window> osWindow,

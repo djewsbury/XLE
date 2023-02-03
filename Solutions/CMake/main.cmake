@@ -43,7 +43,7 @@ macro(xle_internal_configure_compiler TargetName)
     elseif ((CMAKE_BUILD_TYPE STREQUAL "Release") OR (CMAKE_BUILD_TYPE STREQUAL "MinSizeRel") OR (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
         target_compile_definitions(${TargetName} PUBLIC XL_RELEASE NDEBUG)
     else ()
-        message(WARNING "Unknown CMAKE_BUILD_TYPE. Compiler configuration settings may not be setup correctly")
+        message(WARNING "Unknown CMAKE_BUILD_TYPE (${CMAKE_BUILD_TYPE}). Compiler configuration settings may not be setup correctly")
     endif ()
 
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")

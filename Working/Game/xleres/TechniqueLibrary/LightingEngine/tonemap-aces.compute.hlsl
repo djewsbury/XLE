@@ -79,7 +79,7 @@ float3 ToneMapAces(float3 x)
 
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-#if HDR_INPUT_SAMPLE_COUNT
+#if HDR_INPUT_SAMPLE_COUNT > 1
 	Texture2DMS<float3> HDRInput;
 #else
 	Texture2D<float3> HDRInput;
@@ -136,7 +136,7 @@ float3 InvertMinimalToneMap(float3 y) 	{ return y/(1-y); }
 	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y) {
 
 		float3 hdrInput;
-		#if HDR_INPUT_SAMPLE_COUNT
+		#if HDR_INPUT_SAMPLE_COUNT > 1
 			// Integrated resolve for MSAA. We do this at this point if there are no postprocessing effects that need to happen
 			// in HDR post-resolve, but pre-tonemap
 			// But note that this minimal tonemap becomes extremely flat -- we could be loosing a lot of precision just going through these transforms

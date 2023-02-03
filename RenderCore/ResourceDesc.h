@@ -38,7 +38,7 @@ namespace RenderCore
             DepthStencil        = 1<<4,     ///< Used as a depth buffer (ie, OMSetRenderTargets)
             UnorderedAccess     = 1<<5,     ///< Used as a unordered access texture or structured buffer (ie, CSSetUnorderedAccessViews)
             ConstantBuffer      = 1<<7,     ///< Used as a constant buffer (ie, VSSetConstantBuffers)
-            StreamOutput        = 1<<8,     ///< Used as a stream-output buffer from the geomtry shader (ie, SOSetTargets)
+            StreamOutput        = 1<<8,     ///< Used as a stream-output buffer from the geometry shader (ie, SOSetTargets)
             DrawIndirectArgs    = 1<<9,     ///< Used with DrawInstancedIndirect or DrawIndexedInstancedIndirect
             RawViews            = 1<<10,    ///< Enables use of raw shader resource views
             InputAttachment     = 1<<11,    ///< Used as an input attachment for a render pass (usually appears in combination with ShaderResource as well as some other output oriented flags)
@@ -57,7 +57,7 @@ namespace RenderCore
     namespace AllocationRules
     {
         /// <summary>Determines how to to allocate the resource, and rules for host access</summary>
-        /// Use these flags to identicate how the host (ie, CPU-side) will use the resource.
+        /// Use these flags to identify how the host (ie, CPU-side) will use the resource.
         ///
         /// Most resources should be GPU-only, in which case there will be no host flags. However, for staging
         /// buffers, dynamic resources, and other similar resources, we need to place them into memory
@@ -81,12 +81,12 @@ namespace RenderCore
             /// The ResourceMap{} may or may not be enabled -- caller must handle either case
             FallbackNonHostVisible          = 1<<2,
             /// Map the resource into CPU visible memory at allocation time, and keep it mapped until destruction. This is useful
-            /// for reuable staging buffers, and avoid thrashing the CPU heap by continually mapping and unmapping resources.
+            /// for reusable staging buffers, and avoid thrashing the CPU heap by continually mapping and unmapping resources.
             PermanentlyMapped               = 1<<3,
             /// Set to disable automatic cache invalidation & flushing before and after ResourceMap{} operations. In Vulkan, by
             /// default we set the VK_MEMORY_PROPERTY_HOST_COHERENT_BIT flag. This ensures the CPU cache and the GPU cache are kept
             /// up to date implicitly. Use DisableAutoCacheCoherency to disable the Vulkan flag -- in which case, the caller must
-            /// explicity flush and invalidate the cache as needed. This can be useful (particular with PermanentlyMapped buffers)
+            /// explicitly flush and invalidate the cache as needed. This can be useful (particular with PermanentlyMapped buffers)
             /// when the caller wants to affect the caches for only a part of the resource.
             DisableAutoCacheCoherency       = 1<<4,
             /// Set as a hint to the allocator that this is a large resizable render target (which can be a source of fragmentation)
@@ -232,6 +232,7 @@ namespace RenderCore
 
     Format ResolveFormat(Format baseFormat, TextureViewDesc::FormatFilter filter, BindFlag::Enum usage);
     TextureViewDesc::FormatFilter ImpliedFormatFilter(Format);
+    inline bool operator==(const TextureViewDesc::SubResourceRange& lhs, const TextureViewDesc::SubResourceRange& rhs) { return lhs._min == rhs._min && lhs._count == rhs._count; }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

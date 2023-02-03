@@ -226,7 +226,7 @@ namespace ToolsRig
 
 		if (actualizedScene) {
 
-			// Have to do camera reset here after load to avoid therading issues
+			// Have to do camera reset here after load to avoid threading issues
 			if (_pendingCameraReset) {
 				ResetCamera();
 				_pendingCameraReset = false;

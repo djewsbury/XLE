@@ -151,83 +151,37 @@ namespace PlatformRig
             if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
                 threadContextVulkan->AttachCPUProfiler(cpuProfiler);
 
-        // bool endAnnotatorFrame = false;
-
         _pimpl->_activePresentationChain = presChain.get();
 
-            if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
-                threadContextVulkan->BeginFrameRenderingCommandList();
+        if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(context.get()))
+            threadContextVulkan->BeginFrameRenderingCommandList();
 
-            context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrameRenderingCommandList(), because that primes the command list in the vulkan device)
-            // endAnnotatorFrame = true;
+        context->GetAnnotator().Frame_Begin(_pimpl->_frameRenderCount);		// (on Vulkan, we must do this after IThreadContext::BeginFrameRenderingCommandList(), because that primes the command list in the vulkan device)
 
-                //  We must invalidate the cached state at least once per frame.
-                //  It appears that the driver might forget bound constant buffers
-                //  during the begin frame or present
-            context->InvalidateCachedState();
+            //  We must invalidate the cached state at least once per frame.
+            //  It appears that the driver might forget bound constant buffers
+            //  during the begin frame or present
+        context->InvalidateCachedState();
 
-            if (_subFrameEvents)
-                _subFrameEvents->_onBeginFrame.Invoke(parserContext);
-            
-            if (_pimpl->_techniqueContext._pipelineAccelerators) {
-                auto newVisibility = _pimpl->_techniqueContext._pipelineAccelerators->VisibilityBarrier();
-                parserContext.SetPipelineAcceleratorsVisibility(newVisibility);
-            }
+        if (_subFrameEvents)
+            _subFrameEvents->_onBeginFrame.Invoke(parserContext);
+        
+        if (_pimpl->_techniqueContext._pipelineAccelerators) {
+            auto newVisibility = _pimpl->_techniqueContext._pipelineAccelerators->VisibilityBarrier();
+            parserContext.SetPipelineAcceleratorsVisibility(newVisibility);
+        }
 
-			// Bind the presentation target as the default output for the parser context
-            auto presentationChainDesc = presChain->GetDesc();
+        // Bind the presentation target as the default output for the parser context
+        auto presentationChainDesc = presChain->GetDesc();
         parserContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, presChain, BindFlag::PresentationSrc, MakeDefaultPresentationChainView(presentationChainDesc._format));
-            parserContext.GetAttachmentReservation().Absorb(std::move(_pimpl->_capturedDoubleBufferAttachments));
+        parserContext.GetAttachmentReservation().Absorb(std::move(_pimpl->_capturedDoubleBufferAttachments));
 
-            auto& stitchingContext = parserContext.GetFragmentStitchingContext();
-            stitchingContext._workingProps = FrameBufferProperties { presentationChainDesc._width, presentationChainDesc._height };
-            parserContext.GetViewport() = ViewportDesc { 0.f, 0.f, (float)presentationChainDesc._width, (float)presentationChainDesc._height };
+        auto& stitchingContext = parserContext.GetFragmentStitchingContext();
+        stitchingContext._workingProps = FrameBufferProperties { presentationChainDesc._width, presentationChainDesc._height };
+        parserContext.GetViewport() = ViewportDesc { 0.f, 0.f, (float)presentationChainDesc._width, (float)presentationChainDesc._height };
 
-            return parserContext;
+        return parserContext;
     }
-
-#if 0
-			////////////////////////////////
-
-            bool mainOverlaySucceeded = false;
-			TRY {
-				if (_mainOverlaySys) {
-                    #if defined(_DEBUG)
-                        assert(_pimpl->_mainOverlayRigTargetConfig == Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps));
-                    #endif
-                    _mainOverlaySys->Render(parserContext);
-                    mainOverlaySucceeded = true;
-                } 
-			}
-			CATCH(const std::exception& e) {
-				StringMeldAppend(parserContext._stringHelpers->_errorString) << "Exception in main overlay system render: " << e.what() << "\n";
-			}
-			CATCH_END
-
-            IResource* presentationTarget;
-            if (!mainOverlaySucceeded) {
-                // We must at least clear, because the _debugScreenOverlaySystem might have something to render
-                presentationTarget = Techniques::GetAttachmentResourceAndBarrierToLayout(parserContext, Techniques::AttachmentSemantics::ColorLDR, BindFlag::TransferDst);
-                Metal::DeviceContext::Get(*context)->Clear(*presentationTarget->CreateTextureView(BindFlag::TransferDst), Float4(0,0,0,1));
-            } else {
-                // Techniques::GetAttachmentResource will acquire the presentation chain resource if it hasn't been acquired yet
-                presentationTarget = Techniques::GetAttachmentResource(parserContext, Techniques::AttachmentSemantics::ColorLDR);
-            }
-
-            if (_pimpl->_frameRigDisplay)
-                _pimpl->_frameRigDisplay->SetErrorMsg(parserContext._stringHelpers->_errorString);
-
-			TRY {
-				if (_debugScreenOverlaySystem)
-                    _debugScreenOverlaySystem->Render(parserContext);
-			}
-			CATCH(const std::exception& e) {
-				StringMeldAppend(parserContext._stringHelpers->_errorString) << "Exception in debug screens overlay system render: " << e.what() << "\n";
-			}
-			CATCH_END
-
-			////////////////////////////////
-    #endif
 
     auto FrameRig::ShutdownFrame(
         RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult
