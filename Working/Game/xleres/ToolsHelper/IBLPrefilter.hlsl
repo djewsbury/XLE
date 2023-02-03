@@ -320,9 +320,8 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
     return f/(f+g);
 }
 
-groupshared float4 EquiRectFilterGlossySpecular_SharedWorking[64];
 [numthreads(8, 8, 1)]
-    void EquiRectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+    void EquirectFilterGlossySpecular(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
     // This is the second term of the "split-term" solution for IBL glossy specular
     // Here, we prefilter the reflection texture in such a way that the blur matches
@@ -519,7 +518,7 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 [numthreads(8, 8, 1)]
-    void EquiRectFilterGlossySpecular_Reference(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+    void EquirectFilterGlossySpecular_Reference(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 textureDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
@@ -560,7 +559,7 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
 
         // light_pdf here effectively takes into account the different sizes of the texels in the equirectangular texture
         float light_pdf = 1 / (2 * pi * pi * sin(pi * inputTextureUV.y));        
-        value += /*Input[inputXY].rgb * */brdf_costheta / light_pdf * reciprocalInputTextureDims.x * reciprocalInputTextureDims.y;
+        value += Input[inputXY].rgb * brdf_costheta / light_pdf * reciprocalInputTextureDims.x * reciprocalInputTextureDims.y;
     }
 
     // potential floating point creep issues here (and output values will vary based on # of samples/pass)
@@ -571,7 +570,7 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
 
 #if 0
 [numthreads(8, 8, 6)]
-    void EquiRectFilterGlossySpecularTrans(uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
+    void EquirectFilterGlossySpecularTrans(uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
 {
     // Following the simplifications we use for split-sum specular reflections, here
     // is the equivalent sampling for specular transmission
@@ -592,64 +591,74 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
         OutputArray[dispatchThreadId.xyz].rgb += r / float(FilterPassParams.PassCount);
     }
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-[numthreads(64, 1, 1)]
-    void ReferenceDiffuseFilter(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID)
+float FilterDiffuse_BRDF_costheta(
+    out float pdf,
+    float3 N, float3 L)
+{
+    // This function is patterned after FilterGlossySpecular_BRDF_costheta, see related comments there
+    float NdotL = saturate(dot(N, L));
+    pdf = 1;
+    return NdotL / pi;
+}
+
+[numthreads(8, 8, 1)]
+    void EquirectFilterDiffuse_Reference(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     uint2 textureDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);
+    PixelBalancingShaderHelper helper = PixelBalancingShaderCalculate(groupThreadId, groupId, uint3(textureDims, 6), ControlUniforms._samplingShaderUniforms);
+    if (any(helper._outputPixel >= uint3(textureDims, arrayLayerCount))) return;
+    if (helper._firstDispatch) OutputArray[helper._outputPixel] = 0;
 
-    uint3 pixelId = uint3(
-        FilterPassParams.PassIndex%textureDims.x, 
-        (FilterPassParams.PassIndex/textureDims.x)%textureDims.y, 
-        groupId.z);
-	if (pixelId.x < textureDims.x && pixelId.y < textureDims.y && pixelId.z < 6) {
+    uint2 inputTextureDims;
+	Input.GetDimensions(inputTextureDims.x, inputTextureDims.y);
+    float2 reciprocalInputTextureDims = float2(1/float(inputTextureDims.x), 1/float(inputTextureDims.y));
 
-        uint2 inputDims;
-        Input.GetDimensions(inputDims.x, inputDims.y);
+    // The features in the filtered map are clearly biased to one direction in mip maps unless we add half a pixel here
+    float2 texCoord = (helper._outputPixel.xy + 0.5.xx) / float2(textureDims);
+    float3 cubeMapDirection = CalculateCubeMapDirection(helper._outputPixel.z, texCoord);
 
-        float2 texCoord = (pixelId.xy + 0.5.xx) / float2(textureDims);
-        float3 normalDirection = CalculateCubeMapDirection(pixelId.z, texCoord);
-        float3 result = float3(0,0,0);
+    // Basic sampling for reference purposes. We're going to sample every pixel from the input texture
+    float3 value = 0;
+    for (uint t=0; t<helper._thisPassSampleCount; ++t) {
+        uint globalTap = t+helper._thisPassSampleOffset;
 
-        for (uint q=0; q<(inputDims.y+63)/64; ++q) {
-            uint y=q*64+groupThreadId.x;
-            if (y >= inputDims.y) break;
+        uint2 inputXY = uint2(globalTap%inputTextureDims.x, globalTap/inputTextureDims.x);
+        float2 inputTextureUV = inputXY * reciprocalInputTextureDims;
 
-            float texelAreaWeight = (4*pi*pi)/(2.f*inputDims.x*inputDims.y);
-            float verticalDistortion = sin(pi * (float(y)+0.5f) / float(inputDims.y));
+        float3 L = EquirectangularCoordToDirection_YUp(inputTextureUV);
+
+        // 2 different mathematical approaches to arrive at the same result
+        #if 1
+            float filtering_pdf;
+            float brdf_costheta = FilterDiffuse_BRDF_costheta(filtering_pdf, cubeMapDirection, L);
+            if (brdf_costheta <= 0 || inputTextureUV.y == 0) continue;
+
+            // light_pdf here effectively takes into account the different sizes of the texels in the equirectangular texture
+            float light_pdf = 1 / (2 * pi * pi * sin(pi * inputTextureUV.y));        
+            value += Input[inputXY].rgb * brdf_costheta / light_pdf * reciprocalInputTextureDims.x * reciprocalInputTextureDims.y;
+        #else
+            float texelAreaWeight = (4*pi*pi)/(2.f*inputTextureDims.x*inputTextureDims.y);
+            float verticalDistortion = sin(pi * (float(inputXY.y)+0.5f) / float(inputTextureDims.y));
             texelAreaWeight *= verticalDistortion;
 
-            for (uint x=0; x<inputDims.x; ++x) {
-                float3 sampleDirection = EquirectangularCoordToDirection_YUp(float2(x, y) / float2(inputDims));
-                float cosFilter = max(0.0, dot(sampleDirection, normalDirection)) / pi;
-                [branch] if (cosFilter > 0)
-                    result += texelAreaWeight * cosFilter * Input.Load(uint3(x, y, 0)).rgb;
-            }
-        }
-        EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = result;
-
-        AllMemoryBarrierWithGroupSync();
-        if (groupThreadId.x == 0) {
-            float4 result = float4(0,0,0,1);
-            for (uint c=0; c<64; ++c)
-                result.rgb += EquiRectFilterGlossySpecular_SharedWorking[c].rgb;
-            OutputArray[pixelId.xyz] = result;    // note -- weighted by 4*pi steradians
-        }
+            float cosFilter = saturate(dot(L, cubeMapDirection)) / pi;
+            value += texelAreaWeight * cosFilter * Input[inputXY].rgb;
+        #endif
     }
 
-    // float2 back = EquirectangularMappingCoord(direction);
-    // float2 diff = back - float2(position.xy) / float2(dims);
-    // return float4(abs(diff.xy), 0, 1);
+    OutputArray[helper._outputPixel].rgb += value;
 }
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
 // Take an input equirectangular input texture and generate the spherical
 // harmonic coefficients that best represent it.
+groupshared float4 ProjectToSphericalHarmonic_SharedWorking[64];
 [numthreads(64, 1, 1)]
     void ProjectToSphericalHarmonic(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID) : SV_Target0
 {
@@ -695,13 +704,13 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
         }
     }
 
-    EquiRectFilterGlossySpecular_SharedWorking[groupThreadId.x].rgb = result;
+    ProjectToSphericalHarmonic_SharedWorking[groupThreadId.x].rgb = result;
 
     AllMemoryBarrierWithGroupSync();
     if (groupThreadId.x == 0) {
         result = 0;
         for (uint c=0; c<64; ++c)
-            result += EquiRectFilterGlossySpecular_SharedWorking[c].rgb;
+            result += ProjectToSphericalHarmonic_SharedWorking[c].rgb;
         
         // we should expect weightAccum to be exactly 4*pi here
         // Output[dispatchThreadId.xy] = float4((4*pi)/weightAccum.xxx, 1.0);

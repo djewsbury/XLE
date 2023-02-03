@@ -167,10 +167,11 @@ namespace RenderCore { namespace Assets
 		TextureCompilationRequest result;
 		auto type = operationElement.Name();
 		if (XlEqStringI(type, "Convert")) result._operation = TextureCompilationRequest::Operation::Convert; 
-		else if (XlEqStringI(type, "EquRectToCubeMap")) result._operation = TextureCompilationRequest::Operation::EquRectToCubeMap;
-		else if (XlEqStringI(type, "EquiRectFilterGlossySpecular")) result._operation = TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular;
-		else if (XlEqStringI(type, "EquiRectFilterGlossySpecularReference")) result._operation = TextureCompilationRequest::Operation::EquiRectFilterGlossySpecularReference;
+		else if (XlEqStringI(type, "EquirectToCubeMap")) result._operation = TextureCompilationRequest::Operation::EquirectToCubeMap;
+		else if (XlEqStringI(type, "EquirectFilterGlossySpecular")) result._operation = TextureCompilationRequest::Operation::EquirectFilterGlossySpecular;
+		else if (XlEqStringI(type, "EquirectFilterGlossySpecularReference")) result._operation = TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference;
 		else if (XlEqStringI(type, "ProjectToSphericalHarmonic")) result._operation = TextureCompilationRequest::Operation::ProjectToSphericalHarmonic;
+		else if (XlEqStringI(type, "EquirectFilterDiffuseReference")) result._operation = TextureCompilationRequest::Operation::EquirectFilterDiffuseReference;
 		else if (XlEqStringI(type, "ComputeShader")) result._operation = TextureCompilationRequest::Operation::ComputeShader;
 		else Throw(std::runtime_error("Unknown operation in texture compiler file: " + srcFN + ", (" + type.AsString() + ")"));
 
@@ -200,9 +201,10 @@ namespace RenderCore { namespace Assets
 	{
 		switch (request._operation) {
 		case TextureCompilationRequest::Operation::Convert: str << request._srcFile << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::EquRectToCubeMap: str << request._srcFile << "-EquRectToCubeMap-" << request._faceDim << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular: str << request._srcFile << "-spec-" << request._faceDim << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::EquiRectFilterGlossySpecularReference: str << request._srcFile << "-refspec-" << request._faceDim << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::EquirectToCubeMap: str << request._srcFile << "-EquirectToCubeMap-" << request._faceDim << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecular: str << request._srcFile << "-spec-" << request._faceDim << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference: str << request._srcFile << "-refspec-" << request._faceDim << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::EquirectFilterDiffuseReference: str << request._srcFile << "-refdiffuse-" << request._faceDim << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::ProjectToSphericalHarmonic: str << request._srcFile << "-sh-" << request._coefficientCount; break;
 		case TextureCompilationRequest::Operation::ComputeShader: str << request._shader << "-" << request._width << "-" << request._height << "-" << AsString(request._format); break;
 		default: assert(0);
@@ -254,7 +256,7 @@ namespace RenderCore { namespace Assets
 			if (conduit.Has<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0))
 				intermediateFunction = &conduit.Get<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0);
 
-			if (request._operation == TextureCompilationRequest::Operation::EquRectToCubeMap) {
+			if (request._operation == TextureCompilationRequest::Operation::EquirectToCubeMap) {
 				auto srcDst = srcPkt->GetDesc();
 				srcDst.wait();
 				auto targetDesc = srcDst.get()._textureDesc;
@@ -266,7 +268,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
 				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ToCubeMap, {}, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
-			} else if (request._operation == TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular) {
+			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterGlossySpecular) {
 				auto srcDst = srcPkt->GetDesc();
 				srcDst.wait();
 				auto targetDesc = srcDst.get()._textureDesc;
@@ -282,7 +284,7 @@ namespace RenderCore { namespace Assets
 				params._idealCmdListCostMS = request._commandListIntervalMS;
 				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ToGlossySpecular, params, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
-			} else if (request._operation == TextureCompilationRequest::Operation::EquiRectFilterGlossySpecularReference) {
+			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference) {
 				auto srcDst = srcPkt->GetDesc();
 				srcDst.wait();
 				auto targetDesc = srcDst.get()._textureDesc;
@@ -294,6 +296,19 @@ namespace RenderCore { namespace Assets
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
 				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ToGlossySpecularReference, {}, *intermediateFunction);
+				_dependencies.push_back(srcPkt->GetDependencyValidation());
+			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterDiffuseReference) {
+				auto srcDst = srcPkt->GetDesc();
+				srcDst.wait();
+				auto targetDesc = srcDst.get()._textureDesc;
+				targetDesc._width = request._faceDim;
+				targetDesc._height = request._faceDim;
+				targetDesc._depth = 1;
+				targetDesc._arrayCount = 0u;
+				targetDesc._mipCount = 1;
+				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
+				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ToDiffuseReference, {}, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ProjectToSphericalHarmonic) {
 				auto targetDesc = TextureDesc::Plain2D(request._coefficientCount, 1, Format::R32G32B32A32_FLOAT);

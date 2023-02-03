@@ -100,8 +100,8 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 
 		if (center.y == -1 || center.y == 1) {
 
-			float minEquRectX = 0.5f*minTheta*reciprocalPi, maxEquRectX = 0.5f*maxTheta*reciprocalPi;
-			for (float x=floor(inputDims.x * minEquRectX); x<ceil(inputDims.x * maxEquRectX); x+=1) {
+			float minEquirectX = 0.5f*minTheta*reciprocalPi, maxEquirectX = 0.5f*maxTheta*reciprocalPi;
+			for (float x=floor(inputDims.x * minEquirectX); x<ceil(inputDims.x * maxEquirectX); x+=1) {
 				float theta = x/float(inputDims.x)*2.0f;
 				float faceTheta = fmod(theta + 2.25, 0.5) - 0.25;
 				theta = (theta-faceTheta)*pi;
@@ -134,8 +134,8 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 					maxInc = atan2(cos(faceTheta), maxProjDist);
 				}
 
-				float minEquRectY = 0.5f-(minInc * reciprocalPi), maxEquRectY = 0.5f-(maxInc*reciprocalPi);
-				for (float y=floor(inputDims.y * minEquRectY); y<ceil(inputDims.y * maxEquRectY); y+=1) {
+				float minEquirectY = 0.5f-(minInc * reciprocalPi), maxEquirectY = 0.5f-(maxInc*reciprocalPi);
+				for (float y=floor(inputDims.y * minEquirectY); y<ceil(inputDims.y * maxEquirectY); y+=1) {
 					float3 pixelDirection0 = EquirectangularCoordToDirection_YUp(float2((x)/float(inputDims.x),(y)/float(inputDims.y)));
 					float3 pixelDirection1 = EquirectangularCoordToDirection_YUp(float2((x+1)/float(inputDims.x),(y)/float(inputDims.y)));
 					float3 pixelDirection2 = EquirectangularCoordToDirection_YUp(float2((x)/float(inputDims.x),(y+1)/float(inputDims.y)));
@@ -167,16 +167,16 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 			float3 lowDirection = center + plusX * faceMin.x + plusY * faceMin.y;
 			float3 highDirection = center + plusX * faceMax.x + plusY * faceMax.y;
 
-			float minEquRectX = 0.5f*minTheta*reciprocalPi, maxEquRectX = 0.5f*maxTheta*reciprocalPi;
-			for (float x=floor(inputDims.x * minEquRectX); x<ceil(inputDims.x * maxEquRectX); x+=1) {
+			float minEquirectX = 0.5f*minTheta*reciprocalPi, maxEquirectX = 0.5f*maxTheta*reciprocalPi;
+			for (float x=floor(inputDims.x * minEquirectX); x<ceil(inputDims.x * maxEquirectX); x+=1) {
 			// for (float x=0; x<inputDims.x; x+=4) {
 				float faceTheta = x/float(inputDims.x)*2.0f;
 				faceTheta = fmod(faceTheta + 2.25, 0.5) - 0.25;
 				faceTheta *= pi;										// we need faceTheta in the (-.25*pi, .25*pi) for the following calculations
 				float minInc = atan(lowDirection.y*cos(faceTheta));		// cos(faceTheta) here takes care of warping of the shape that occurs in X,-X,Z,-Z panels
 				float maxInc = atan(highDirection.y*cos(faceTheta));
-				float minEquRectY = 0.5f-(minInc * reciprocalPi), maxEquRectY = 0.5f-(maxInc*reciprocalPi);
-				for (float y=floor(inputDims.y * minEquRectY); y<ceil(inputDims.y * maxEquRectY); y+=1) {
+				float minEquirectY = 0.5f-(minInc * reciprocalPi), maxEquirectY = 0.5f-(maxInc*reciprocalPi);
+				for (float y=floor(inputDims.y * minEquirectY); y<ceil(inputDims.y * maxEquirectY); y+=1) {
 				// for (float y=0; y<inputDims.y; y+=4) {
 					// We can project equirectangular point back onto the cubemap plane and see how much it overlaps with the 
 					// cubemap pixel. The pixel has a distorted shape post projection; but if we assume that equirectangular input
@@ -389,7 +389,7 @@ float4 WriteVerticalHemiCubeMapCorss(float4 position : SV_Position, float2 texCo
 }
 
 [numthreads(8, 8, 1)]
-	void EquRectToCube(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID)
+	void EquirectToCube(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID, uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 textureDims; uint arrayLayerCount;
 	OutputArray.GetDimensions(textureDims.x, textureDims.y, arrayLayerCount);

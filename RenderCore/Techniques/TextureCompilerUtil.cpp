@@ -66,7 +66,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 	};
 
-	static std::string s_equRectFilterName { "texture-compiler (EquiRectFilter)" };
+	static std::string s_equRectFilterName { "texture-compiler (EquirectFilter)" };
 	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
 
 	template<int Base, typename FloatType=float>
@@ -239,7 +239,7 @@ namespace RenderCore { namespace Techniques
 			usi.BindResourceView(1, "OutputArray"_h);
  			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
-				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquRectToCube",
+				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquirectToCube",
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
@@ -252,7 +252,7 @@ namespace RenderCore { namespace Techniques
 			usi.BindImmediateData(0, "ControlUniforms"_h);
 			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
-				IBL_PREFILTER_HLSL ":EquiRectFilterGlossySpecular",
+				IBL_PREFILTER_HLSL ":EquirectFilterGlossySpecular",
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
@@ -261,7 +261,16 @@ namespace RenderCore { namespace Techniques
 			usi.BindImmediateData(0, "ControlUniforms"_h);
  			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
-				IBL_PREFILTER_HLSL ":EquiRectFilterGlossySpecular_Reference",
+				IBL_PREFILTER_HLSL ":EquirectFilterGlossySpecular_Reference",
+				{},
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
+				usi);
+		} else if (filter == EquirectFilterMode::ToDiffuseReference) {
+			usi.BindResourceView(1, "OutputArray"_h);
+			usi.BindImmediateData(0, "ControlUniforms"_h);
+			computeOpFuture = CreateComputeOperator(
+				pipelineCollection,
+				IBL_PREFILTER_HLSL ":EquirectFilterDiffuse_Reference",
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
@@ -450,7 +459,7 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 
-		} else if (filter == EquirectFilterMode::ToGlossySpecularReference) {
+		} else if (filter == EquirectFilterMode::ToGlossySpecularReference || filter == EquirectFilterMode::ToDiffuseReference) {
 			auto inputDesc = inputRes->GetDesc()._textureDesc;
 			auto totalSampleCount = inputDesc._width*inputDesc._height;
 			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
@@ -489,7 +498,7 @@ namespace RenderCore { namespace Techniques
 						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 					}
 
-					samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, "GlossySpecularReference");
+					samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, (filter == EquirectFilterMode::ToGlossySpecularReference)?"GlossySpecularReference":"DiffuseReference");
 					if (progressiveResults) {
 						auto intermediateData = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, depVal);
 						// note -- we could dispatch to another thread; but there's a potential risk of out of order execution

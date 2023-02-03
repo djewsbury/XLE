@@ -242,7 +242,7 @@ namespace ToolsRig
 				// set a sky texture
 				if (!ambientCubemap.IsEmpty()) {
 					RenderCore::Assets::TextureCompilationRequest request2;
-					request2._operation = RenderCore::Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
+					request2._operation = RenderCore::Assets::TextureCompilationRequest::Operation::EquirectToCubeMap; 
 					request2._srcFile = ambientCubemap.AsString();
 					request2._format = Format::BC6H_UF16;
 					request2._faceDim = 1024;

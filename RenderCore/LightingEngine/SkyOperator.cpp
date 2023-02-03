@@ -234,7 +234,7 @@ namespace RenderCore { namespace LightingEngine
 
 		if (_skyOperator || _onChangeSkyTexture.AtLeastOneBind()) {
 			Assets::TextureCompilationRequest request2;
-			request2._operation = Assets::TextureCompilationRequest::Operation::EquRectToCubeMap; 
+			request2._operation = Assets::TextureCompilationRequest::Operation::EquirectToCubeMap; 
 			request2._srcFile = _sourceImage;
 			request2._format = _desc._cubemapFormat;
 			request2._faceDim = _desc._cubemapFaceDimension;
@@ -246,7 +246,9 @@ namespace RenderCore { namespace LightingEngine
 			_diffuseIBL = ::Assets::MakeAsset<SHCoefficientsAsset>(input);
 
 			Assets::TextureCompilationRequest request;
-			request._operation = Assets::TextureCompilationRequest::Operation::EquiRectFilterGlossySpecular; 
+			request._operation = Assets::TextureCompilationRequest::Operation::EquirectFilterGlossySpecular;
+			// request._operation = Assets::TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference;
+			// request._operation = Assets::TextureCompilationRequest::Operation::EquirectFilterDiffuseReference;
 			request._srcFile = _sourceImage;
 			request._format = _desc._specularCubemapFormat;
 			request._faceDim = _desc._specularCubemapFaceDimension;

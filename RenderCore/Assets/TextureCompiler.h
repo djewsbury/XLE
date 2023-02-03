@@ -25,9 +25,10 @@ namespace RenderCore { namespace Assets
 		enum class Operation
 		{
 			Convert,
-			EquRectToCubeMap,
-			EquiRectFilterGlossySpecular,
-			EquiRectFilterGlossySpecularReference,
+			EquirectToCubeMap,
+			EquirectFilterGlossySpecular,
+			EquirectFilterGlossySpecularReference,
+			EquirectFilterDiffuseReference,
 			ComputeShader,
 			ProjectToSphericalHarmonic
 		};

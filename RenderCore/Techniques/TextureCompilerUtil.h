@@ -16,7 +16,7 @@ namespace RenderCore { class TextureDesc; }
 
 namespace RenderCore { namespace Techniques
 {
-	enum class EquirectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic, ToGlossySpecularReference };
+	enum class EquirectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic, ToGlossySpecularReference, ToDiffuseReference };
 	struct EquirectFilterParams
 	{
 		unsigned _sampleCount = 1;
