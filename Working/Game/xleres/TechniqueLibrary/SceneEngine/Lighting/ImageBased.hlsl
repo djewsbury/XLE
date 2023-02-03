@@ -27,17 +27,9 @@ float3 SpecularIBL_Sample(float3 cubemapCoords, float mipmapLevel);
     TextureCube SpecularTransIBL;
 #endif
 
-// #define RECALC_SPLIT_TERM
-// #define RECALC_FILTERED_TEXTURE
 // #define REF_IBL
 
 #if defined(REF_IBL)
-    float3 IBLPrecalc_SampleInputTexture(float3 direction)
-    {
-        return ReadSkyReflectionTexture(InvAdjSkyCubeMapCoords(direction), 0.f);
-    }
-
-    #include "IBL/IBLPrecalc.hlsl"
     #include "../../Framework/SystemUniforms.hlsl"           // for SysUniform_GetGlobalSamplingPassCount(), SysUniform_GetGlobalSamplingPassIndex()
 #endif
 
@@ -71,15 +63,9 @@ float3 SplitSumIBL_PrefilterEnvMap(float roughness, float3 reflection, uint dith
         // Also note that the tool that filters the texture must
         // use the same mapping for roughness that we do -- otherwise
         // we need to apply the mapping there.
-    #if !defined(RECALC_FILTERED_TEXTURE)
-        return SpecularIBL_Sample(
-            AdjSkyCubeMapCoords(reflection),
-            RoughnessToMipmap(roughness));
-    #else
-        const uint sampleCount = 64;
-        return GenerateFilteredSpecular(
-            AdjSkyCubeMapCoords(reflection), roughness, sampleCount, dither&0xf, 16);
-    #endif
+    return SpecularIBL_Sample(
+        AdjSkyCubeMapCoords(reflection),
+        RoughnessToMipmap(roughness));
 }
 
 float2 SplitSumIBL_IntegrateBRDF(float roughness, float NdotV, uint dither)
@@ -94,12 +80,7 @@ float2 SplitSumIBL_IntegrateBRDF(float roughness, float NdotV, uint dither)
     // note -- it may be ok to use PointClampSampler here...? is it better to
     //          use a small texture and bilinear filtering, or a large texture
     //          and no filtering?
-    #if !defined(RECALC_SPLIT_TERM)
-        return GlossLUT_Sample(float2(NdotV, roughness));
-    #else
-        const uint sampleCount = 64;
-        return GenerateSplitTerm(saturate(NdotV), saturate(roughness), sampleCount, dither&0xf, 16);
-    #endif
+    return GlossLUT_Sample(float2(NdotV, roughness));
 }
 
 float3 SpecularIBLLookup_SplitSum(float3 normal, float3 viewDirection, SpecularParameters specParam, uint dither)
@@ -137,27 +118,22 @@ float3 SpecularIBLLookup(float3 normal, float3 viewDirection, SpecularParameters
 
 float SplitSumIBLTrans_IntegrateBTDF(float roughness, float NdotV, float F0, float iorIncident, float iorOutgoing, uint dither)
 {
-    #if !defined(RECALC_SPLIT_TERM)
-        // Currently our split term solution for specular transmission uses a 3D texture. It's seems
-        // reasonably ok, but there is an easy way to switch it to 2D -- by just fixing the IOR to a single
-        // value for all objects.
-        // We could also try to find a parametric simplification... But the surface in 3D space is fairly complex.
-        // I think we can afford to be much less accuracy for refraction (when compared to reflections) because it's
-        // a somewhat less important effect.
-        const float minF0 = RefractiveIndexToF0(SpecularParameterRange_RefractiveIndexMin);
-        const float maxF0 = RefractiveIndexToF0(SpecularParameterRange_RefractiveIndexMax);
-        float specular = (F0 - minF0) / (maxF0 - minF0);
-        // Note --
-        //      Fixed array count for GlossTransLUT here
-        //      Also, we're not doing any linear interpolation on "arrayIndex" -- that's probably
-        //      ok, but it may cause banding if "specular" varies greatly across an object (though that
-        //      would probably also cause some very wierd refractions)
-        float arrayIndex = 32.f * specular;
-        return GlossTransLUT.SampleLevel(ClampingSampler, float3(NdotV, 1.f - roughness, arrayIndex), 0);
-    #else
-        const uint sampleCount = 64;
-        return GenerateSplitTermTrans(NdotV, roughness, iorIncident, iorOutgoing, sampleCount, dither&0xf, 16);
-    #endif
+    // Currently our split term solution for specular transmission uses a 3D texture. It's seems
+    // reasonably ok, but there is an easy way to switch it to 2D -- by just fixing the IOR to a single
+    // value for all objects.
+    // We could also try to find a parametric simplification... But the surface in 3D space is fairly complex.
+    // I think we can afford to be much less accuracy for refraction (when compared to reflections) because it's
+    // a somewhat less important effect.
+    const float minF0 = RefractiveIndexToF0(SpecularParameterRange_RefractiveIndexMin);
+    const float maxF0 = RefractiveIndexToF0(SpecularParameterRange_RefractiveIndexMax);
+    float specular = (F0 - minF0) / (maxF0 - minF0);
+    // Note --
+    //      Fixed array count for GlossTransLUT here
+    //      Also, we're not doing any linear interpolation on "arrayIndex" -- that's probably
+    //      ok, but it may cause banding if "specular" varies greatly across an object (though that
+    //      would probably also cause some very wierd refractions)
+    float arrayIndex = 32.f * specular;
+    return GlossTransLUT.SampleLevel(ClampingSampler, float3(NdotV, 1.f - roughness, arrayIndex), 0);
 }
 
 float3 SplitSumIBLTrans_PrefilterEnvMap2(
@@ -185,22 +161,14 @@ float3 SplitSumIBLTrans_PrefilterEnvMap(
     float roughness, float3 dir, float3 viewDirection, float3 normal,
     float iorIncident, float iorOutgoing, uint dither)
 {
-    #if !defined(RECALC_FILTERED_TEXTURE)
-        #if MAT_SEPARATE_REFRACTION_MAP
-            return SpecularTransIBL.SampleLevel(
-                DefaultSampler, AdjSkyCubeMapCoords(dir),
-                RoughnessToMipmap(roughness)).rgb;
-        #else
-            return SplitSumIBLTrans_PrefilterEnvMap2(
-                roughness, dir, viewDirection, normal,
-                iorIncident, iorOutgoing, dither);
-        #endif
+    #if MAT_SEPARATE_REFRACTION_MAP
+        return SpecularTransIBL.SampleLevel(
+            DefaultSampler, AdjSkyCubeMapCoords(dir),
+            RoughnessToMipmap(roughness)).rgb;
     #else
-        const uint sampleCount = 64;
-        return CalculateFilteredTextureTrans(
-            AdjSkyCubeMapCoords(dir), roughness,
-            iorIncident, iorOutgoing,
-            sampleCount, dither&0xf, 16);
+        return SplitSumIBLTrans_PrefilterEnvMap2(
+            roughness, dir, viewDirection, normal,
+            iorIncident, iorOutgoing, dither);
     #endif
 }
 

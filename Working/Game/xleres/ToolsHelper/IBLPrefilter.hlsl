@@ -6,6 +6,7 @@
 #include "sampling-shader-helper.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"
 #include "../TechniqueLibrary/LightingEngine/SphericalHarmonics.hlsl"
+#include "../TechniqueLibrary/SceneEngine/Lighting/IBL/IBLAlgorithm.hlsl"
 #include "../TechniqueLibrary/Utility/Colour.hlsl"
 
 Texture2D Input;
@@ -29,18 +30,10 @@ struct ControlUniformsStruct
 };
 [[vk::push_constant]] ControlUniformsStruct ControlUniforms;
 
-float3 IBLPrecalc_SampleInputTexture(float3 direction)
-{
-    float2 coord = DirectionToEquirectangularCoord_YUp(direction);
-    return Input.SampleLevel(EquirectangularBilinearSampler, coord, 0).rgb;
-}
-
 float3 IBLPrecalc_SampleInputTextureUV(float2 uv)
 {
     return Input.SampleLevel(EquirectangularBilinearSampler, uv, 0).rgb;
 }
-
-#include "../TechniqueLibrary/SceneEngine/Lighting/IBL/IBLPrecalc.hlsl"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -569,6 +562,110 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if 0
+
+float3 SampleNormal(float3 core, uint s, uint sampleCount)
+{
+    float theta = 2.f * pi * float(s)/float(sampleCount);
+    const float variation = 0.2f;
+    float3 H = float3(variation * cos(theta), variation * sin(theta), 0.f);
+    H.z = sqrt(1.f - H.x*H.x - H.y*H.y);
+    float3 up = abs(core.z) < 0.999f ? float3(0,0,1) : float3(1,0,0);
+    float3 tangentX = normalize(cross(up, core));
+    float3 tangentY = cross(core, tangentX);
+    return tangentX * H.x + tangentY * H.y + core * H.z;
+}
+
+float3 CalculateFilteredTextureTrans(
+    float3 cubeMapDirection, float roughness,
+    float iorIncident, float iorOutgoing,
+    uint passSampleCount, uint passIndex, uint passCount)
+{
+    float3 corei = cubeMapDirection;
+    float3 coreNormal = (iorIncident < iorOutgoing) ? corei : -corei;
+
+    // Very small roughness values break this equation, because D converges to infinity
+    // when NdotH is 1.f. We must clamp roughness, or this convergence produces bad
+    // floating point numbers.
+    roughness = max(roughness, MinSamplingRoughness);
+    float alphad = RoughnessToDAlpha(roughness);
+    float alphag = RoughnessToGAlpha(roughness);
+
+    float totalWeight = 0.f;
+    float3 result = float3(0.0f, 0.0f, 0.0f);
+    LOOP_DIRECTIVE for (uint s=0u; s<passSampleCount; ++s) {
+
+        // Ok, here's where it gets complex. We have a "corei" direction,
+        //  -- "i" direction when H == normal. However, there are many
+        // different values for "normal" that we can use; each will give
+        // a different "ot" and a different sampling of H values.
+        //
+        // Let's take a sampling approach for "normal" as well as H. Each
+        // time through the loop we'll pick a random normal within a small
+        // cone around corei. This is similar to SampleMicrofacetNormalGGX
+        // an it will have an indirect effect on the distribution of
+        // microfacet normals.
+        //
+        // It will also effect the value for "ot" that we get... But we want
+        // the minimize the effect of "ot" in this calculation.
+
+        float3 normal = SampleNormal(coreNormal, s, passSampleCount);
+
+        // There seems to be a problem with this line...? This refraction step
+        // is causing too much blurring, and "normal" doesn't seem to have much
+        // effect
+        // float3 ot = refract(-corei, -normal, iorIncident/iorOutgoing);
+
+        float3 ot = CalculateTransmissionOutgoing(corei, normal, iorIncident, iorOutgoing);
+        if (dot(ot, ot) == 0.0f) continue;      // no refraction solution
+
+        //float3 test = refract(-ot, normal, iorOutgoing/iorIncident);
+        //if (length(test - corei) > 0.001f)
+        //    return float3(1, 0, 0);
+
+#if 1
+        precise float3 H = SampleMicrofacetNormalGGX(
+            s*passCount+passIndex, passSampleCount*passCount,
+            normal, alphad);
+
+        // float3 ot = CalculateTransmissionOutgoing(i, H, iorIncident, iorOutgoing);
+        float3 i;
+        if (!CalculateTransmissionIncident(i, ot, H, iorIncident, iorOutgoing))
+            continue;
+#else
+        precise float3 i = SampleMicrofacetNormalGGX(
+            s*passCount+passIndex, passSampleCount*passCount,
+            corei, alphad);
+#endif
+
+        float3 incidentLight = IBLPrecalc_SampleInputTexture(i);
+
+#if 1
+        float bsdf;
+        bsdf = 1.f;
+        bsdf *= SmithG(abs(dot( i,  normal)), RoughnessToGAlpha(roughness));
+        bsdf *= SmithG(abs(dot(ot,  normal)), RoughnessToGAlpha(roughness));
+        bsdf *= TrowReitzD(abs(dot( H, normal)), alphad);
+        // bsdf *= Sq(iorOutgoing) / Sq(iorIncident * dot(i, H) - iorOutgoing * dot(ot, H));
+        bsdf /= max(0.005f, 4.f * RefractionIncidentAngleDerivative2(dot(ot, H), iorIncident, iorOutgoing));
+        bsdf *= abs(dot(i, H)) * abs(dot(ot, H));
+        bsdf /= abs(dot(i, normal)) * abs(dot(ot, normal));
+        //bsdf *= GGXTransmissionFresnel(
+        //    i, viewDirection, specParam.F0.g,
+        //    iorIncident, iorOutgoing);
+
+        bsdf *= 1.0f - SchlickFresnelCore(saturate(dot(ot, H)));
+        bsdf *= -dot(i, normal);
+
+        float weight = bsdf * InversePDFWeight(H, coreNormal, float3(0.0f, 0.0f, 0.0f), alphad);
+#endif
+
+        result += incidentLight * weight;
+        totalWeight += weight;
+    }
+
+    return result / (totalWeight + 1e-6f);
+}
+
 [numthreads(8, 8, 6)]
     void EquirectFilterGlossySpecularTrans(uint3 dispatchThreadId : SV_DispatchThreadID) : SV_Target0
 {
