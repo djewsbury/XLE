@@ -364,12 +364,14 @@ namespace RenderCore { namespace Techniques
         };
         Entry _entries[24];
         unsigned _currentTickId = 0;
+        DEBUG_ONLY(std::thread::id _boundThread);
 
         void IncreaseTickId();
     };
 
     void FrameBufferPool::IncreaseTickId()
     {
+        DEBUG_ONLY(assert(std::this_thread::get_id() == _boundThread));
         // look for old FBs, and evict; then just increase the tick id
         const unsigned evictionRange = 2*dimof(_entries);
         for (auto&e:_entries)
@@ -425,6 +427,7 @@ namespace RenderCore { namespace Techniques
         AttachmentPool& attachmentPool,
         AttachmentReservation* parentReservation) -> Result
     {    
+        DEBUG_ONLY(assert(std::this_thread::get_id() == _boundThread));
         auto poolAttachments = attachmentPool.Reserve(resolvedAttachmentDescs, parentReservation);
 		assert(poolAttachments.GetResourceCount() == desc.GetAttachments().size());
         auto& factory = Metal::GetObjectFactory(*threadContext.GetDevice());
@@ -534,6 +537,7 @@ namespace RenderCore { namespace Techniques
 
     void FrameBufferPool::Reset()
     {
+        DEBUG_ONLY(assert(std::this_thread::get_id() == _boundThread));
         for (unsigned c=0; c<dimof(_entries); ++c)
             _entries[c] = {};
         _currentTickId = 0;
@@ -541,6 +545,7 @@ namespace RenderCore { namespace Techniques
 
     FrameBufferPool::FrameBufferPool()
     {
+        DEBUG_ONLY(_boundThread = std::this_thread::get_id());
     }
 
     FrameBufferPool::~FrameBufferPool()
@@ -574,11 +579,16 @@ namespace RenderCore { namespace Techniques
         ViewPool                    _srvPool;
         std::shared_ptr<IDevice>    _device;
 
+        #if defined(_DEBUG)
+            std::thread::id _boundThread;
+        #endif
+
         bool BuildAttachment(AttachmentName attach);
     };
 
     bool AttachmentPool::Pimpl::BuildAttachment(AttachmentName attachName)
     {
+        DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
         Attachment* attach = &_attachments[attachName];
         assert(attach);
         if (!attach) return false;
@@ -594,6 +604,7 @@ namespace RenderCore { namespace Techniques
 
     auto AttachmentPool::GetResource(AttachmentName attachName) const -> const std::shared_ptr<IResource>&
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         if (attachName >= _pimpl->_attachments.size()) return s_nullResourcePtr;
         auto* attach = &_pimpl->_attachments[attachName];
         assert(attach);
@@ -606,6 +617,7 @@ namespace RenderCore { namespace Techniques
 
     const ResourceDesc& AttachmentPool::GetResourceDesc(AttachmentName attachName) const
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         static ResourceDesc nullDesc;
         if (attachName >= _pimpl->_attachments.size()) return nullDesc;
         auto* attach = &_pimpl->_attachments[attachName];
@@ -615,6 +627,7 @@ namespace RenderCore { namespace Techniques
 
     AttachmentName AttachmentPool::GetNameForResource(IResource& res) const
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         for (unsigned c=0; c<_pimpl->_attachments.size(); ++c)
             if (_pimpl->_attachments[c]._resource.get() == &res)
                 return c;
@@ -623,11 +636,13 @@ namespace RenderCore { namespace Techniques
 
 	const std::shared_ptr<IResourceView>& AttachmentPool::GetSRV(AttachmentName attachName, const TextureViewDesc& window) const
 	{
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         return GetView(attachName, BindFlag::ShaderResource, window);
 	}
 
     const std::shared_ptr<IResourceView>& AttachmentPool::GetView(AttachmentName attachName, BindFlag::Enum usage, const TextureViewDesc& window) const
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         static std::shared_ptr<IResourceView> dummy;
         if (attachName >= _pimpl->_attachments.size()) return dummy;
         auto* attach = &_pimpl->_attachments[attachName];
@@ -656,6 +671,7 @@ namespace RenderCore { namespace Techniques
         AttachmentReservation* parentReservation,
         ReservationFlag::BitField flags) -> AttachmentReservation
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         AttachmentReservation emptyReservation;
         if (!parentReservation) parentReservation = &emptyReservation;
 
@@ -765,6 +781,7 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::ResetActualized()
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         // Reset all actualized attachments. They will get recreated on demand
         _pimpl->_attachments.clear();
         _pimpl->_srvPool.Reset();
@@ -772,6 +789,7 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::AddRef(IteratorRange<const AttachmentName*> attachments, ReservationFlag::BitField flags)
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         for (auto a:attachments) {
             assert(a<_pimpl->_attachments.size());
             ++_pimpl->_attachments[a]._lockCount;
@@ -780,6 +798,7 @@ namespace RenderCore { namespace Techniques
 
     void AttachmentPool::Release(IteratorRange<const AttachmentName*> attachments, ReservationFlag::BitField flags)
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         for (auto a:attachments) {
             assert(a<_pimpl->_attachments.size());
             assert(_pimpl->_attachments[a]._lockCount >= 1);
@@ -818,6 +837,7 @@ namespace RenderCore { namespace Techniques
 
     std::string AttachmentPool::GetMetrics() const
     {
+        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
         std::stringstream str;
         size_t totalByteCount = 0;
         str << "(" << _pimpl->_attachments.size() << ") attachments:" << std::endl;
@@ -842,6 +862,7 @@ namespace RenderCore { namespace Techniques
     {
         _pimpl = std::make_unique<Pimpl>();
         _pimpl->_device = device;
+        DEBUG_ONLY(_pimpl->_boundThread = std::this_thread::get_id());
     }
 
     AttachmentPool::~AttachmentPool()

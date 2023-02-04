@@ -7,6 +7,7 @@
 #include "PipelineAccelerator.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
+#include "../../Utility/Threading/Mutex.h"
 
 namespace RenderCore { class ICompiledPipelineLayout; }
 namespace RenderCore { namespace Techniques
@@ -14,7 +15,8 @@ namespace RenderCore { namespace Techniques
 	class BoundUniformsPool
 	{
 	public:
-		std::vector<std::pair<uint64_t, Metal::BoundUniforms>> _boundUniforms;
+		std::vector<std::pair<uint64_t, std::unique_ptr<Metal::BoundUniforms>>> _boundUniforms;
+		mutable Threading::Mutex _lock;
 
 		Metal::BoundUniforms& Get(
 			const Metal::GraphicsPipeline& pipeline,
@@ -37,6 +39,12 @@ namespace RenderCore { namespace Techniques
 			const UniformsStreamInterface& group0,
 			const UniformsStreamInterface& group1,
 			const UniformsStreamInterface& group2);
+
+		BoundUniformsPool() = default;
+		BoundUniformsPool(BoundUniformsPool&&);
+		BoundUniformsPool& operator=(BoundUniformsPool&&);
+		BoundUniformsPool(const BoundUniformsPool&);
+		BoundUniformsPool& operator=(const BoundUniformsPool&);
 	};
 
 	class IPipelineAcceleratorPool::Pipeline
@@ -58,13 +66,14 @@ namespace RenderCore { namespace Techniques
 		const Metal::GraphicsPipeline& pipeline,
 		const UniformsStreamInterface& group0)
 	{
+		ScopedLock(_lock);
 		uint64_t hash = HashCombine(group0.GetHash(), pipeline.GetInterfaceBindingGUID());
 		auto i = LowerBound(_boundUniforms, hash);
 		if (i == _boundUniforms.end() || i->first != hash) {
-			Metal::BoundUniforms boundUniforms(pipeline, group0);
+			auto boundUniforms = std::make_unique<Metal::BoundUniforms>(pipeline, group0);
 			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
 		}
-		return i->second;
+		return *i->second;
 	}
 	
 	inline Metal::BoundUniforms& BoundUniformsPool::Get(
@@ -72,17 +81,18 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& group0,
 		const UniformsStreamInterface& group1)
 	{
+		ScopedLock(_lock);
 		uint64_t hash = pipeline.GetInterfaceBindingGUID();
 		hash = HashCombine(group0.GetHash(), hash);
 		hash = HashCombine(group1.GetHash(), hash);
 
 		auto i = LowerBound(_boundUniforms, hash);
 		if (i == _boundUniforms.end() || i->first != hash) {
-			Metal::BoundUniforms boundUniforms(pipeline, group0, group1);
+			auto boundUniforms = std::make_unique<Metal::BoundUniforms>(pipeline, group0, group1);
 			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
 		}
 			
-		return i->second;
+		return *i->second;
 	}
 
 	inline Metal::BoundUniforms& BoundUniformsPool::Get(
@@ -90,17 +100,18 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& group0,
 		const UniformsStreamInterface& group1)
 	{
+		ScopedLock(_lock);
 		uint64_t hash = pipeline.GetInterfaceBindingGUID();
 		hash = HashCombine(group0.GetHash(), hash);
 		hash = HashCombine(group1.GetHash(), hash);
 
 		auto i = LowerBound(_boundUniforms, hash);
 		if (i == _boundUniforms.end() || i->first != hash) {
-			Metal::BoundUniforms boundUniforms(pipeline, group0, group1);
+			auto boundUniforms = std::make_unique<Metal::BoundUniforms>(pipeline, group0, group1);
 			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
 		}
 			
-		return i->second;
+		return *i->second;
 	}
 
 	inline Metal::BoundUniforms& BoundUniformsPool::Get(
@@ -109,6 +120,7 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& group1,
 		const UniformsStreamInterface& group2)
 	{
+		ScopedLock(_lock);
 		uint64_t hash = pipeline.GetInterfaceBindingGUID();
 		hash = HashCombine(group0.GetHash(), hash);
 		hash = HashCombine(group1.GetHash(), hash);
@@ -116,11 +128,11 @@ namespace RenderCore { namespace Techniques
 
 		auto i = LowerBound(_boundUniforms, hash);
 		if (i == _boundUniforms.end() || i->first != hash) {
-			Metal::BoundUniforms boundUniforms(pipeline, group0, group1, group2);
+			auto boundUniforms = std::make_unique<Metal::BoundUniforms>(pipeline, group0, group1, group2);
 			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
 		}
 			
-		return i->second;
+		return *i->second;
 	}
 
 	inline Metal::BoundUniforms& BoundUniformsPool::Get(
@@ -129,6 +141,7 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& group1,
 		const UniformsStreamInterface& group2)
 	{
+		ScopedLock(_lock);
 		uint64_t hash = pipeline.GetInterfaceBindingGUID();
 		hash = HashCombine(group0.GetHash(), hash);
 		hash = HashCombine(group1.GetHash(), hash);
@@ -136,10 +149,41 @@ namespace RenderCore { namespace Techniques
 
 		auto i = LowerBound(_boundUniforms, hash);
 		if (i == _boundUniforms.end() || i->first != hash) {
-			Metal::BoundUniforms boundUniforms(pipeline, group0, group1, group2);
+			auto boundUniforms = std::make_unique<Metal::BoundUniforms>(pipeline, group0, group1, group2);
 			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
 		}
 			
-		return i->second;
+		return *i->second;
+	}
+
+	inline BoundUniformsPool::BoundUniformsPool(BoundUniformsPool&& moveFrom)
+	{
+		ScopedLock(moveFrom._lock);
+		_boundUniforms = std::move(moveFrom._boundUniforms);
+	}
+	inline BoundUniformsPool& BoundUniformsPool::operator=(BoundUniformsPool&& moveFrom)
+	{
+		std::unique_lock<Threading::Mutex> l0(_lock, std::defer_lock);
+		std::unique_lock<Threading::Mutex> l1(moveFrom._lock, std::defer_lock);
+		std::lock(l0, l1);
+		_boundUniforms = std::move(moveFrom._boundUniforms);
+		return *this;
+	}
+	inline BoundUniformsPool::BoundUniformsPool(const BoundUniformsPool& copyFrom)
+	{
+		// in normal usage we should only attempt to copy empty pools
+		ScopedLock(copyFrom._lock);
+		if (!copyFrom._boundUniforms.empty())
+			Throw(std::runtime_error("Attempting to copy non-empty bound uniforms pool"));
+	}
+	inline BoundUniformsPool& BoundUniformsPool::operator=(const BoundUniformsPool& copyFrom)
+	{
+		// in normal usage we should only attempt to copy empty pools
+		std::unique_lock<Threading::Mutex> l0(_lock, std::defer_lock);
+		std::unique_lock<Threading::Mutex> l1(copyFrom._lock, std::defer_lock);
+		std::lock(l0, l1);
+		if (!copyFrom._boundUniforms.empty() || !_boundUniforms.empty())
+			Throw(std::runtime_error("Attempting to copy non-empty bound uniforms pool"));
+		return *this;
 	}
 }}

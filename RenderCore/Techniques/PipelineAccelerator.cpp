@@ -97,6 +97,10 @@ namespace RenderCore { namespace Techniques
 			Pipeline _pipeline; 
 			::Assets::DependencyValidation _depVal;
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+			CompletedPipeline() = default;
+			CompletedPipeline(CompletedPipeline&&) = default;
+			CompletedPipeline& operator=(CompletedPipeline&&) = default;
 		};
 		std::vector<CompletedPipeline> _completedPipelines;
 

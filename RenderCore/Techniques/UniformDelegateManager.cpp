@@ -594,6 +594,10 @@ namespace RenderCore { namespace Techniques
 		PipelineBindings _graphics;
 		PipelineBindings _compute;
 
+		#if defined(_DEBUG)
+			std::thread::id _boundThread;
+		#endif
+
 		////////////////////////////////////////////////////////////////////////////////////
 		void BindShaderResourceDelegate(std::shared_ptr<IShaderResourceDelegate>) override;
 		void UnbindShaderResourceDelegate(IShaderResourceDelegate&) override;
@@ -622,6 +626,7 @@ namespace RenderCore { namespace Techniques
 
 	void UniformDelegateManager::BringUpToDate_Internal(ParsingContext& parsingContext, PipelineBindings& bindings)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		bool pendingRebuildInterface = _delegateGroup->_currentChangeIndex != _lastPreparedChangeIndex;
 		for (auto&base:_delegateGroup->_baseGroups)
 			pendingRebuildInterface |= base.first != base.second->_currentChangeIndex;
@@ -666,26 +671,31 @@ namespace RenderCore { namespace Techniques
 
 	void UniformDelegateManager::BringUpToDateGraphics(ParsingContext& parsingContext)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		BringUpToDate_Internal(parsingContext, _graphics);
 	}
 	
 	void UniformDelegateManager::BringUpToDateCompute(ParsingContext& parsingContext)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		BringUpToDate_Internal(parsingContext, _compute);
 	}
 
 	const UniformsStreamInterface& UniformDelegateManager::GetInterfaceGraphics()
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		return _graphics._interface;
 	}
 
 	const UniformsStreamInterface& UniformDelegateManager::GetInterfaceCompute()
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		return _compute._interface;
 	}
 
 	void UniformDelegateManager::InvalidateUniforms()
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		_delegateHelper.InvalidateUniforms();
 		_graphics._pendingRebuildDescSets = true;
 		_compute._pendingRebuildDescSets = true;
@@ -693,28 +703,33 @@ namespace RenderCore { namespace Techniques
 
 	void UniformDelegateManager::BindShaderResourceDelegate(std::shared_ptr<IShaderResourceDelegate> delegate)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		_delegateGroup->BindShaderResourceDelegate(std::move(delegate));
 	}
 
 	void UniformDelegateManager::UnbindShaderResourceDelegate(IShaderResourceDelegate& delegate)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		_delegateGroup->UnbindShaderResourceDelegate(delegate);
 	}
 	
 	void UniformDelegateManager::BindUniformDelegate(uint64_t binding, std::shared_ptr<IUniformBufferDelegate> delegate)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		_delegateGroup->BindUniformDelegate(binding, std::move(delegate));
 	}
 
 	void UniformDelegateManager::UnbindUniformDelegate(IUniformBufferDelegate& delegate)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		_delegateGroup->UnbindUniformDelegate(delegate);
 	}
 
 	void UniformDelegateManager::AddBase(std::shared_ptr<IUniformDelegateManager> iman)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		auto& man = *checked_cast<UniformDelegateManager*>(iman.get());
-		// fixed & semi-constant desc sets don't get inheritted via this
+		// fixed & semi-constant desc sets don't get inherited via this
 		assert(man._graphics._fixedDescriptorSets.empty());
 		assert(man._graphics._semiConstantDescSets.empty());
 		assert(man._compute._fixedDescriptorSets.empty());
@@ -724,12 +739,14 @@ namespace RenderCore { namespace Techniques
 
 	void UniformDelegateManager::RemoveBase(IUniformDelegateManager& iman)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		auto& man = *checked_cast<UniformDelegateManager*>(&iman);
 		_delegateGroup->RemoveBase(*man._delegateGroup);
 	}
 
 	void UniformDelegateManager::BindSemiConstantDescriptorSet(uint64_t binding, std::shared_ptr<SemiConstantDescriptorSet> descSet)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		assert(descSet);
 		if (descSet->_pipelineType == PipelineType::Graphics) {
 			#if defined(_DEBUG)
@@ -762,6 +779,7 @@ namespace RenderCore { namespace Techniques
 
 	void UniformDelegateManager::UnbindSemiConstantDescriptorSet(SemiConstantDescriptorSet& descSet)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
 		auto i = std::find_if(_graphics._semiConstantDescSets.begin(), _graphics._semiConstantDescSets.end(),
 			[&descSet](const auto& c) { return c.second.get() == &descSet; });
 		if (i != _graphics._semiConstantDescSets.end()) {
@@ -780,6 +798,7 @@ namespace RenderCore { namespace Techniques
 	void UniformDelegateManager::BindFixedDescriptorSet(uint64_t binding, IDescriptorSet& descSet)
 	{
 		#if defined(_DEBUG)
+			assert(_boundThread == std::this_thread::get_id());
 			// We should not have another descriptor set bound to the same name (either as a semi-constant or fixed descriptor set)
 			auto i = std::find_if(_graphics._semiConstantDescSets.begin(), _graphics._semiConstantDescSets.end(),
 				[binding](const auto& c) { return c.first == binding; });
@@ -803,6 +822,8 @@ namespace RenderCore { namespace Techniques
 
     void UniformDelegateManager::UnbindFixedDescriptorSet(IDescriptorSet& descSet)
 	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
+
 		auto i2 = std::find_if(_graphics._fixedDescriptorSets.begin(), _graphics._fixedDescriptorSets.end(),
 			[&descSet](const auto& c) { return c.second == &descSet; });
 		if (i2 != _graphics._fixedDescriptorSets.end()) {
@@ -821,6 +842,7 @@ namespace RenderCore { namespace Techniques
 	UniformDelegateManager::UniformDelegateManager()
 	{
 		_delegateGroup = std::make_shared<UniformDelegateGroup>();
+		DEBUG_ONLY(_boundThread = std::this_thread::get_id());
 	}
 
 	std::shared_ptr<IUniformDelegateManager> CreateUniformDelegateManager()
