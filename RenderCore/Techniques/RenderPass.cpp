@@ -2298,6 +2298,7 @@ namespace RenderCore { namespace Techniques
                 i->_layout = a._initialLayout.value();
                 result._fullAttachmentDescriptions.push_back(*i);
 
+                assert(*a._initialLayout != ~0u && *a._finalLayout != ~0u);
                 auto requiredBindFlags = usageFlags | *a._initialLayout | *a._finalLayout; 
                 if ((i->_desc._bindFlags & requiredBindFlags) != requiredBindFlags)
                     Throw(std::runtime_error((StringMeld<512>() << "FrameBufferDescFragment requires attachment bind flags that are not present in the preregistered attachment. Attachment semantic (" << AttachmentSemantic{a._semantic} << "). Preregistered attachment bind flags: (" << BindFlagsAsString(i->_desc._bindFlags) << "), Frame buffer request bind flags: (" << BindFlagsAsString(requiredBindFlags) << ")").AsString()));
@@ -2745,6 +2746,8 @@ namespace RenderCore { namespace Techniques
                 assert(r._matchingRules._flagsSet & (uint32_t(AttachmentMatchingRules::Flags::FixedFormat)|uint32_t(AttachmentMatchingRules::Flags::SystemFormat)|uint32_t(AttachmentMatchingRules::Flags::CopyFormatFromSemantic)));
             }
             r._initialLayout = a._firstAccessInitialLayout;
+            if (r._initialLayout == ~0u)
+                r._initialLayout = 0;
             r._finalLayout = a._lastAccessFinalLayout;
             r._loadFromPreviousPhase = a._firstAccessLoad;
             r._storeToNextPhase = a._lastAccessStore;
