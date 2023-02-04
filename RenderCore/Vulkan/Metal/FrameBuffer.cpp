@@ -291,7 +291,7 @@ namespace RenderCore { namespace Metal_Vulkan
             desc.stencilStoreOp = viewedAttachment._lastViewOfResource ? AsStoreOpStencil(finalStore) : VK_ATTACHMENT_STORE_OP_STORE;
 			assert(desc.format != VK_FORMAT_UNDEFINED);
 
-			// the API doesn't allow specifying differents layouts for the aspects for the initial/final layouts
+			// the API doesn't allow specifying different layouts for the aspects for the initial/final layouts
 			// we have to assume that we always mean all aspects the image has
 			auto aspectsForInitialFinalLayout = CalculateImageAspects({}, res.second._attachmentUsage);
 			if (aspectsForInitialFinalLayout & (VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT))

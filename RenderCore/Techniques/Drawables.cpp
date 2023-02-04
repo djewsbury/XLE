@@ -116,6 +116,7 @@ namespace RenderCore { namespace Techniques
 					auto* pipeline = TryGetPipeline(*drawable._pipeline, sequencerConfig, acceleratorVisibilityId);
 					if (!pipeline) continue;
 
+					assert(pipeline->_metalPipeline);
 					currentPipeline = pipeline;
 					currentPipelineAccelerator = drawable._pipeline;
 

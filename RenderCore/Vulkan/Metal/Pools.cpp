@@ -180,7 +180,13 @@ namespace RenderCore { namespace Metal_Vulkan
 
         VkResult res;
         res = vkAllocateDescriptorSets(_device.get(), &desc_alloc_info, rawDescriptorSets);
+        if (res == VK_ERROR_OUT_OF_POOL_MEMORY) {
+            Throw(VulkanAPIFailure(res, "Vulkan descriptor set allocation failed because pool memory is exhausted")); 
+        } else if (res != VK_SUCCESS)
+			Throw(VulkanAPIFailure(res, "Failure while allocating descriptor set")); 
+
         for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c) {
+            if (!rawDescriptorSets[c]) continue;
 
             DescriptorTypeCounts descriptorCounts;
             auto* types = layouts[c]->GetDescriptorTypesCount();
@@ -211,9 +217,6 @@ namespace RenderCore { namespace Metal_Vulkan
                 }
 			}
 		#endif
-
-        if (res != VK_SUCCESS)
-			Throw(VulkanAPIFailure(res, "Failure while allocating descriptor set")); 
     }
 
     void DescriptorPool::Allocate(

@@ -426,7 +426,7 @@ namespace RenderCore { namespace Techniques
         IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
         AttachmentPool& attachmentPool,
         AttachmentReservation* parentReservation) -> Result
-    {    
+    {
         DEBUG_ONLY(assert(std::this_thread::get_id() == _boundThread));
         auto poolAttachments = attachmentPool.Reserve(resolvedAttachmentDescs, parentReservation);
 		assert(poolAttachments.GetResourceCount() == desc.GetAttachments().size());
@@ -2299,7 +2299,7 @@ namespace RenderCore { namespace Techniques
                 result._fullAttachmentDescriptions.push_back(*i);
 
                 assert(*a._initialLayout != ~0u && *a._finalLayout != ~0u);
-                auto requiredBindFlags = usageFlags | *a._initialLayout | *a._finalLayout; 
+                auto requiredBindFlags = usageFlags | *a._initialLayout | *a._finalLayout;
                 if ((i->_desc._bindFlags & requiredBindFlags) != requiredBindFlags)
                     Throw(std::runtime_error((StringMeld<512>() << "FrameBufferDescFragment requires attachment bind flags that are not present in the preregistered attachment. Attachment semantic (" << AttachmentSemantic{a._semantic} << "). Preregistered attachment bind flags: (" << BindFlagsAsString(i->_desc._bindFlags) << "), Frame buffer request bind flags: (" << BindFlagsAsString(requiredBindFlags) << ")").AsString()));
 
@@ -2889,7 +2889,7 @@ namespace RenderCore { namespace Techniques
             // Since we don't know if there's an upcoming subpass that will use this attachment, we need to
             // assume it exists
             a._storeToNextPhase = LoadStore::Retain;
-            // Also, if we used this attachment in a previous subpass, we havet oa ssume this is now a retain
+            // Also, if we used this attachment in a previous subpass, we have to assume this is now a retain
             auto q = std::lower_bound(prevWrittenAttachments.begin(), prevWrittenAttachments.end(), input);
             if (q != prevWrittenAttachments.end() && *q == input)
                 a._loadFromPreviousPhase = LoadStore::Retain;

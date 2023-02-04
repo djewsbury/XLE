@@ -52,7 +52,7 @@ namespace RenderCore { namespace Techniques
 				if (s != settingsTable._settings.end() && s->first == settingHash) {
 					dst.MergeIn(s->second);
 				} else 
-					Throw(FormatException("Inheritted object not found", formatter.GetLocation()));
+					Throw(FormatException("Inherited object not found", formatter.GetLocation()));
 
 				if (std::find(inherited.begin(), inherited.end(), settingsTable.GetDependencyValidation()) == inherited.end()) {
 					inherited.push_back(settingsTable.GetDependencyValidation());
@@ -64,12 +64,12 @@ namespace RenderCore { namespace Techniques
 				if (s != localSettings.end() && s->first == settingHash) {
 					dst.MergeIn(s->second);
 				} else
-					Throw(FormatException("Inheritted object not found", formatter.GetLocation()));
+					Throw(FormatException("Inherited object not found", formatter.GetLocation()));
 			}
 		}
 
 		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected blob when deserializing inheritted list", formatter.GetLocation()));
+			Throw(FormatException("Unexpected blob when deserializing inherited list", formatter.GetLocation()));
 	}
 	
 	static TechniqueEntry ParseTechniqueEntry(
@@ -294,18 +294,18 @@ namespace RenderCore { namespace Techniques
 			if (XlEqString(name, "Inherit")) {
 				RequireBeginElement(formatter);
 				
-				// we should find a list of other technique configuation files to inherit from
+				// we should find a list of other technique configuration files to inherit from
 				while (formatter.PeekNext() == FormatterBlob::Value) {
 					auto inheritSrc = RequireStringValue(formatter);
 					::Assets::ResChar resolvedFile[MaxPath];
 					XlCopyNString(resolvedFile, (const ::Assets::ResChar*)inheritSrc._start, inheritSrc._end-inheritSrc._start);
 					searchRules.ResolveFile(resolvedFile, resolvedFile);
 
-					// exceptions thrown by from the inheritted asset will not be suppressed
+					// exceptions thrown by from the inherited asset will not be suppressed
 					const auto& inheritFrom = ::Assets::Legacy::GetAssetDep<Technique>(resolvedFile);
 					inheritedAssets.push_back(inheritFrom.GetDependencyValidation());
 
-					// we should merge in the content from all the inheritted's assets
+					// we should merge in the content from all the inherited's assets
 					for (unsigned c=0; c<dimof(_entries); ++c)
 						_entries[c].MergeIn(inheritFrom._entries[c]);
 					_cbLayout = inheritFrom._cbLayout;

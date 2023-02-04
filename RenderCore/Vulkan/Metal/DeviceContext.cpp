@@ -581,7 +581,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	SharedEncoder::~SharedEncoder()
 	{
 		if (_pendingBoundUniforms)
-			_pendingBoundUniforms->AbortPendingApplies();		// this helps us surive exception scenarios -- but there is no lifecycle protection
+			_pendingBoundUniforms->AbortPendingApplies();		// this helps us survive exception scenarios -- but there is no lifecycle protection
 
 		if (_sharedState) {
 			assert(_sharedState->_currentEncoder == this);
@@ -607,7 +607,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	SharedEncoder& SharedEncoder::operator=(SharedEncoder&& moveFrom)
 	{
 		if (_pendingBoundUniforms)
-			_pendingBoundUniforms->AbortPendingApplies();		// this helps us surive exception scenarios -- but there is no lifecycle protection
+			_pendingBoundUniforms->AbortPendingApplies();		// this helps us survive exception scenarios -- but there is no lifecycle protection
 
 		if (_sharedState) {
 			assert(_sharedState->_currentEncoder == this);

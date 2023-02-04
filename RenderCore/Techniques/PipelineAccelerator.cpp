@@ -324,7 +324,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		// If we have no IA elements at all, force on GEO_HAS_VERTEX_ID. Shaders will almost always
-		// require it in this case, because there's no other way to distinquish one vertex from
+		// require it in this case, because there's no other way to distinguish one vertex from
 		// the next.
 		if (sortedIA.empty())
 			_geoSelectors.SetParameter("GEO_HAS_VERTEX_ID", 1);
@@ -369,7 +369,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		// If we have no IA elements at all, force on GEO_HAS_VERTEX_ID. Shaders will almost always
-		// require it in this case, because there's no other way to distinquish one vertex from
+		// require it in this case, because there's no other way to distinguish one vertex from
 		// the next.
 		if (sortedIA.empty())
 			_geoSelectors.SetParameter("GEO_HAS_VERTEX_ID", 1);
@@ -474,7 +474,7 @@ namespace RenderCore { namespace Techniques
 		// _constructionLock is used for all construction operations; CreatePipelineAccelerator, CreateSequencerConfig, etc
 		// _pipelineUsageLock is used for actually retrieving the pipeline/descriptor set with TryGetPipeline, etc
 		// Construction operations can happen in parallel with pipeline usage operations, so different kinds of clients won't
-		// interfer with each other. 
+		// interfere with each other. 
 		// However, there is an overlap in RebuildAllOutOfDatePipelines() where both locks are taken. This also exposes
 		// the changes that were made by construction operations
 		//
@@ -568,7 +568,7 @@ namespace RenderCore { namespace Techniques
 	{
 		// We must lock the "_constructionLock" for this -- so it's less advisable to call this often
 		// TryGetPipeline doesn't take a lock and is more efficient to call frequently
-		// This will also return nullptr if the pipeline has already been completed and is accessable via TryGetPipeline
+		// This will also return nullptr if the pipeline has already been completed and is accessible via TryGetPipeline
 		ScopedLock(_constructionLock);
 		#if defined(_DEBUG)
 			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);

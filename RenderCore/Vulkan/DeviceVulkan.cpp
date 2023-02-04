@@ -112,9 +112,9 @@ namespace RenderCore { namespace ImplVulkan
 					for (unsigned c=0; c<pCallbackData->objectCount; ++c)
 						hashedCode = HashCombine(pCallbackData->pObjects[c].objectHandle, hashedCode);
 
-					auto i = LowerBound(handler->_suppressableMsgs, hashedCode);
-					if (i == handler->_suppressableMsgs.end() || i->first != hashedCode) {
-						i = handler->_suppressableMsgs.insert(i, {hashedCode, MsgReport{now, pCallbackData->messageIdNumber, 0}});
+					auto i = LowerBound(handler->_suppressibleMsgs, hashedCode);
+					if (i == handler->_suppressibleMsgs.end() || i->first != hashedCode) {
+						i = handler->_suppressibleMsgs.insert(i, {hashedCode, MsgReport{now, pCallbackData->messageIdNumber, 0}});
 					} else {
 						report = (now - i->second._lastReport) > timeBetweenDuplicateMsgs;
 						if (report) {
@@ -128,7 +128,7 @@ namespace RenderCore { namespace ImplVulkan
 								handler->_lastSuppressionReport = now;
 
 								Log(VulkanMsgTarget) << "Recent suppressed Vulkan messages: ";
-								for (auto& h:handler->_suppressableMsgs) {
+								for (auto& h:handler->_suppressibleMsgs) {
 									if (h.second._suppressedSinceLastReport > 0) {
 										Log(VulkanMsgTarget) << "[type: 0x" << std::hex << h.second._idMsgCode << std::dec << ", count: " << h.second._suppressedSinceLastReport << "]";
 										h.second._suppressedSinceLastReport = 0;
@@ -186,7 +186,7 @@ namespace RenderCore { namespace ImplVulkan
 			unsigned _suppressSpamRules = 0;
 			Threading::Mutex _suppressSpamLock;
 			struct MsgReport { std::chrono::steady_clock::time_point _lastReport; int32_t _idMsgCode; unsigned _suppressedSinceLastReport; };
-			std::vector<std::pair<uint64_t, MsgReport>> _suppressableMsgs;
+			std::vector<std::pair<uint64_t, MsgReport>> _suppressibleMsgs;
 			std::chrono::steady_clock::time_point _lastSuppressionReport;
 		};
 
