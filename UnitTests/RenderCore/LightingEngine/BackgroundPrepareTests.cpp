@@ -337,4 +337,103 @@ namespace UnitTests
 
 		testHelper->EndFrameCapture();
 	}
+
+	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
+	{
+		// stall until all resources are ready
+		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
+		ParseScene(prepareLightingIterator, drawablesWriter);
+		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> preparePromise;
+		auto prepareFuture = preparePromise.get_future();
+		prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
+		return PrepareAndStall(testApparatus, std::move(prepareFuture));
+	}
+
+	static void ThreadedRenderingFunction(LightingEngineTestApparatus& testApparatus)
+	{
+		// Construct a lighting technique & render to an offscreen texture
+
+		using namespace RenderCore;
+		auto targetDesc = CreateDesc(
+			BindFlag::RenderTarget | BindFlag::TransferSrc,
+			TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM_SRGB));
+		auto* testHelper = testApparatus._metalTestHelper.get();
+
+		Techniques::CameraDesc sceneCamera;
+        sceneCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 200.0f, 0.0f});
+        sceneCamera._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		sceneCamera._nearClip = 0.f;
+		sceneCamera._farClip = 400.f;
+		sceneCamera._left = 0.f;
+		sceneCamera._right = 100.f;
+		sceneCamera._top = 0.f;
+		sceneCamera._bottom = -100.f;
+
+		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
+
+		LightingEngine::LightSourceOperatorDesc resolveOperators[] {
+			LightingEngine::LightSourceOperatorDesc{}
+		};
+
+		auto threadContext = Techniques::GetThreadContext();
+
+		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, sceneCamera);
+		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
+		std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
+		auto lightingTechniqueFuture = promisedLightingTechnique.get_future();
+		LightingEngine::CreateDeferredLightingTechnique(
+			std::move(promisedLightingTechnique),
+			testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
+			MakeIteratorRange(resolveOperators), {}, nullptr,
+			stitchingContext.GetPreregisteredAttachments(),
+			LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
+		auto lightingTechnique = lightingTechniqueFuture.get();
+
+		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
+		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
+			.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
+		auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+		parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+		parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
+
+		auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+		auto lightId = lightScene.CreateLightSource(0);
+		lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
+
+		// draw once, and then return
+		RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+			parsingContext, *lightingTechnique);
+		ParseScene(lightingIterator, *drawableWriter);
+	}
+
+	TEST_CASE( "LightingEngine-MultithreadRenderingTrash", "[rendercore_lighting_engine]" )
+	{
+		using namespace RenderCore;
+		LightingEngineTestApparatus testApparatus;
+
+		// We're going to spawn a number of synchronous threads, each running ThreadedRenderingFunction
+		// the threads will share certain resources, such as the pipeline accelerator pool, etc
+		// any threading issues related to those shared resources should then be encouraged to occur
+		
+		const unsigned invocationCount = 1000;
+		const unsigned synchronousCount = 12;
+		std::vector<std::thread> spawnedThreads;
+		spawnedThreads.reserve(invocationCount);
+		unsigned spawnedInvocations = 0;
+		while (spawnedInvocations < invocationCount) {
+			while (spawnedThreads.size() >= synchronousCount) {
+				spawnedThreads.front().join();
+				spawnedThreads.erase(spawnedThreads.begin());
+			}
+			spawnedThreads.emplace_back(
+				[&testApparatus]() {
+					ThreadedRenderingFunction(testApparatus);
+				});
+			spawnedInvocations++;
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		}
+
+		for (auto& t:spawnedThreads)
+			t.join();
+	}
 }
