@@ -606,7 +606,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			DEBUG_ONLY(std::vector<std::string>* names);
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
-				DEBUG_ONLY(names = &adaptiveSet->_immedateDataNames);
+				DEBUG_ONLY(names = &adaptiveSet->_immediateDataNames);
 				groupRules._boundLooseImmediateDatas |= (1ull << uint64_t(inputUniformStreamIdx));
 			} else if (uniformStreamType == UniformStreamType::ResourceView) {
 				binds = &adaptiveSet->_resourceViewBinds;
@@ -659,7 +659,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			DEBUG_ONLY(std::vector<std::string>* names);
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
-				DEBUG_ONLY(names = &adaptiveSet->_immedateDataNames);
+				DEBUG_ONLY(names = &adaptiveSet->_immediateDataNames);
 				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseImmediateDatas |= (1ull << uint64_t(streamIdx));
 			} else if (uniformStreamType == UniformStreamType::ResourceView) {
 				binds = &adaptiveSet->_resourceViewBinds;
@@ -1445,7 +1445,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				stream._immediateData,
 				MakeIteratorRange(adaptiveSet._immediateDataBinds),
 				#if defined(_DEBUG)
-					MakeIteratorRange(adaptiveSet._immedateDataNames),
+					MakeIteratorRange(adaptiveSet._immediateDataNames),
 				#else
 					{},
 				#endif

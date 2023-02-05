@@ -131,7 +131,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					Throw(VulkanAPIFailure(res, "Failed while retrieving query pool results"));
 			}
 
-			// Succesfully retrieved results for all queries. We can reset the pool
+			// Successfully retrieved results for all queries. We can reset the pool
 			b._pendingReadback = false;
 			b._pendingReset = true;
 			return FrameResults{true, false,

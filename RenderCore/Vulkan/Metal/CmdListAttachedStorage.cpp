@@ -431,7 +431,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		src._reservedPages.clear();
 		_namedPageReservations.resize(std::max(_namedPageReservations.size(), src._namedPageReservations.size()));
 		for (unsigned c=0; c<src._namedPageReservations.size(); ++c) {
-			assert(!src._namedPageReservations[c] && _namedPageReservations[c]);		// samed named page can't be reserved by both
+			assert(!src._namedPageReservations[c] && _namedPageReservations[c]);		// same named page can't be reserved by both
 			if (src._namedPageReservations[c])
 				_namedPageReservations[c] = src._namedPageReservations[c];
 		}

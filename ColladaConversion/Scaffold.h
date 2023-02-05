@@ -78,7 +78,7 @@ namespace ColladaConversion
             Float4 _borderColor;
             unsigned _minMipLevel, _maxMipLevel;
             float _mipMapBias;
-            unsigned _maxAnisotrophy;
+            unsigned _maxAnisotropy;
             SubDoc _extra;
 
             SamplerParameter();

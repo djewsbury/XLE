@@ -165,7 +165,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			#if defined(_DEBUG)
 				std::vector<std::string> _resourceViewNames;
-				std::vector<std::string> _immedateDataNames;
+				std::vector<std::string> _immediateDataNames;
 				std::vector<std::string> _samplerNames;
 			#endif
 

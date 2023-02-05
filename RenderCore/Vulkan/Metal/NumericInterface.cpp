@@ -317,7 +317,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pimpl->_hasChanges = false;
 
 		for (auto passThrough:bindings.GetPassThroughDescriptorSets()) {
-			// "pass-through" are simplier configuration settings, whereby we jsut expose the registers of the bound pipeline
+			// "pass-through" are simpler configuration settings, whereby we just expose the registers of the bound pipeline
 			// layout in a 1:1 way. LegacyRegisterBindingDesc gives us a name of a descriptor set, and we'll search for that in 
 			// the pipeline layout binding
 			auto descriptorSet = _pimpl->LookupDescriptorSet(pipelineLayout, passThrough);

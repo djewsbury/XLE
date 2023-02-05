@@ -19,7 +19,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkFenceCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         createInfo.pNext = nullptr;
-        createInfo.flags = 0;		// can onlt be 0 or VK_FENCE_CREATE_SIGNALED_BIT
+        createInfo.flags = 0;		// can only be 0 or VK_FENCE_CREATE_SIGNALED_BIT
 
 		VkFence rawFence = nullptr;
         auto res = vkCreateFence(device, &createInfo, g_allocationCallbacks, &rawFence);
@@ -48,7 +48,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	VkFence FenceBasedTracker::FindAvailableFence(IteratorRange<const Marker*> markers, std::unique_lock<Threading::Mutex>& lock)
 	{
 		if (_fenceAllocationFlags.AllocatedCount() > _requestedQueueDepth) {
-			// we incur this penalty on all threads, however it will have greated impact on threads that are submitting frequently -- which is why it can help correct the situation
+			// we incur this penalty on all threads, however it will have greatest impact on threads that are submitting frequently -- which is why it can help correct the situation
 			lock.unlock();
 			auto pressure = GetThreadingPressure();
 			Log(Warning) << "Stalling due to too many fences in FenceBasedTracker (pressure: " << pressure << "). This happens when a command list submitted in the background takes longer than multiple frames. Slowing down to try to reduce pressure" << std::endl;
@@ -365,7 +365,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		// If we didn't find the fence, we must assume that it's already been waited for/completed
 		if (!fence) return true;
 
-		// Stall for this specific fence now. But do this outside of a lock so that we won't interfer with
+		// Stall for this specific fence now. But do this outside of a lock so that we won't interfere with
 		// other threads. Note that other threads can interact with the queue and submit or wait for fences
 		// at the same time
 		bool timedOut = false;
@@ -448,7 +448,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		ScopedLock(_trackersWritingCommandsLock);
 		// note that the first call to AllocateMarkerForNewCmdList() does not advance the producer frame marker, because we want
 		// anything that happens before the first AllocateMarkerForNewCmdList() to be considered part of the first cmd list
-		// Similarily, we can get an early advance if the submitted queue marker catches up to the producer marker
+		// Similarly, we can get an early advance if the submitted queue marker catches up to the producer marker
 		if (_currentProducerFrameMarkerAdvancedBeforeAllocation) {
 			_trackersWritingCommands.push_back({(Marker)_currentProducerFrameMarker, std::chrono::steady_clock::now(), std::this_thread::get_id()});
 			_currentProducerFrameMarkerAdvancedBeforeAllocation = false;

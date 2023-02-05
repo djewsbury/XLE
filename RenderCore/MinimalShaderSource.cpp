@@ -109,7 +109,7 @@ namespace RenderCore
 		{
 			return Compile(
 				shaderInMemory,
-				ILowLevelCompiler::ResId("", entryPoint, shaderModel),		// use an empty string for the filename here, beacuse otherwhile it tends to confuse the DX11 compiler (when generating error messages, it will treat the string as a filename from the current directory)
+				ILowLevelCompiler::ResId("", entryPoint, shaderModel),		// use an empty string for the filename here, because otherwise it tends to confuse the DX11 compiler (when generating error messages, it will treat the string as a filename from the current directory)
 				definesTable);
 		}
 
@@ -202,7 +202,7 @@ namespace RenderCore
 						processedDefinesTable);
 				}
 			}
-				// embue any exceptions with the dependency validation
+				// imbue any exceptions with the dependency validation
 			CATCH(const ::Assets::Exceptions::ConstructionError& e)
 			{
 				result._errors = ::Assets::AsBlob(e.what());
@@ -285,7 +285,7 @@ namespace RenderCore
 	::Assets::CompilerRegistration RegisterShaderCompiler(
 		const std::shared_ptr<IShaderSource>& shaderSource,
 		::Assets::IIntermediateCompilers& intermediateCompilers,
-		ILowLevelCompiler::CompilationFlags::BitField universalComplationFlags)
+		ILowLevelCompiler::CompilationFlags::BitField universalCompilationFlags)
 	{
 		::Assets::CompilerRegistration result{
 			intermediateCompilers,
@@ -293,21 +293,21 @@ namespace RenderCore
 			"shader-compiler",
 			ConsoleRig::GetLibVersionDesc(),
 			{},
-			[shaderSource, universalComplationFlags](const ::Assets::InitializerPack& initializers) {
+			[shaderSource, universalCompilationFlags](const ::Assets::InitializerPack& initializers) {
 				std::string definesTable;
 				if (initializers.GetCount() > 1)
 					definesTable = initializers.GetInitializer<std::string>(1);
 				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
-				res._compilationFlags |= universalComplationFlags;
+				res._compilationFlags |= universalCompilationFlags;
 				return std::make_shared<ShaderCompileOperation>(
 					*shaderSource,
 					res,
 					definesTable
 				);
 			},
-			[shaderSource, universalComplationFlags](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
+			[shaderSource, universalCompilationFlags](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
 				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
-				res._compilationFlags |= universalComplationFlags;
+				res._compilationFlags |= universalCompilationFlags;
 				std::string definesTable;
 				if (initializers.GetCount() > 1)
 					definesTable = initializers.GetInitializer<std::string>(1);

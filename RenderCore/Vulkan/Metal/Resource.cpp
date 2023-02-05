@@ -320,7 +320,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			image_create_info.tiling = requireHostVisibility ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
 			// Transition from VK_IMAGE_LAYOUT_UNDEFINED to any other layout is not guaranteed to preserve any data written by the host
 			// so, we will use the VK_IMAGE_LAYOUT_PREINITIALIZED initial layout for any resource with host visibility
-			// However, this is not idealin case of textures that are written first by the GPU (eg, transfer or otherwise), 
+			// However, this is not ideal in the case of textures that are written first by the GPU (eg, transfer or otherwise), 
 			// but still have host visibility (eg, for a destaging texture)
 			image_create_info.initialLayout = requireHostVisibility ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
 			image_create_info.usage = AsImageUsageFlags(desc._bindFlags);
@@ -732,7 +732,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
             // Each mipmap is treated as a separate copy operation (but multiple array layers can be handled
 		    // in a single operation).
-		    // The Vulkan API requires that the formats of each resource must be reasonably similiar
+		    // The Vulkan API requires that the formats of each resource must be reasonably similar
 		    //		-- in practice, that means that the size of the pixels in both cases must be the same.
 		    //		When copying between compressed and uncompressed images, the uncompressed pixel size must
 		    //		be equal to the compressed block size.
@@ -961,9 +961,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			assert(!dst._leftTopFrontIsLinearBufferOffset);		// expecting an actual xyz coord since it's an image
 
-			// Vulkan can copy mutliple array layers in a single VkBufferImageCopy, but that expects
+			// Vulkan can copy multiple array layers in a single VkBufferImageCopy, but that expects
 			// array layers to be stored contiguously. By contrast, GetSubResourceOffset() uses a layout
-			// where a full mipchain is contigous, and there's a gap between subsequent array layers of
+			// where a full mipchain is contiguous, and there's a gap between subsequent array layers of
 			// the same mip level. So let's just expand out to a separate copy op per mip chain, just to
 			// avoid a special requirement there.
             VLA(VkBufferImageCopy, copyOps, arrayLayerCount*mipLevelCount);
@@ -1847,7 +1847,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			switch (prevLayout) {
 			default:
 				assert(0);
-				// intential fall-through
+				// intentional fall-through
 			case VK_IMAGE_LAYOUT_GENERAL:
 				preBarrierUsage._accessFlags = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 				break;

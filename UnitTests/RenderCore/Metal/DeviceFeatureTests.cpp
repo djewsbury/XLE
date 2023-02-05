@@ -136,11 +136,11 @@ namespace UnitTests
 			}
 		}
 
-		SECTION("Sampler Anisotrophy")
+		SECTION("Sampler Anisotropy")
 		{
 			SamplerDesc sampler;
 			sampler._filter = FilterMode::Anisotropic;
-			if (factory.GetXLEFeatures()._samplerAnisotrophy) {
+			if (factory.GetXLEFeatures()._samplerAnisotropy) {
 				REQUIRE_NOTHROW(testHelper._device->CreateSampler(sampler));
 			} else {
 				REQUIRE_THROWS(testHelper._device->CreateSampler(sampler));

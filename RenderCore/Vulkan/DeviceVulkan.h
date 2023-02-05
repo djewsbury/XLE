@@ -100,7 +100,7 @@ namespace RenderCore { namespace ImplVulkan
     class PrimaryCommandBufferChain
     {
     public:
-        VulkanSharedPtr<VkCommandBuffer> AquireNextCommandBuffer(HierarchicalCPUProfiler*);
+        VulkanSharedPtr<VkCommandBuffer> AcquireNextCommandBuffer(HierarchicalCPUProfiler*);
 
         struct CommandListAttachedSyncs
         {

@@ -106,12 +106,12 @@ namespace ConsoleRig
 	type that will automatically propagate it's value such that all pointers that point to the same type
 	have the same value. In other words, it points to singleton types that can be used across modules.
 
-	If you declare an AttachablePtr in code without providing a value, it will be embued with the current
+	If you declare an AttachablePtr in code without providing a value, it will be imbued with the current
 	singleton of that type, if it exists. Or nullptr, if no singleton of that type exists.
 	If you assign an AttachablePtr to a value, that value will be propagated out to all other AttachablePtrs
 	of the same type, and they will all start to point to that same new object.
 
-	When a module is unloaded, any pointers that were initailized by that module will automatically be
+	When a module is unloaded, any pointers that were initialized by that module will automatically be
 	nulled out. This handles cases when a singleton is created by one module, but used in another. It's not
 	safe to use a singleton after it's creating module has been unloaded -- because if there are any methods,
 	the code for those methods has probably been unloaded. But this automatic nulling pattern makes it possible

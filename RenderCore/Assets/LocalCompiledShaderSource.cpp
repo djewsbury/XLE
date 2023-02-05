@@ -419,7 +419,7 @@ namespace RenderCore { namespace Assets
 						definesTable);
 				}
 			}
-				// embue any exceptions with the dependency validation
+				// imbue any exceptions with the dependency validation
 			CATCH(const ::Assets::Exceptions::ConstructionError& e)
 			{
 				Throw(::Assets::Exceptions::ConstructionError(e, ::Assets::GetDepValSys().Make(MakeIteratorRange(deps))));
@@ -594,7 +594,7 @@ namespace RenderCore { namespace Assets
 					shaderInMemory.data(), shaderInMemory.size(), resId,
 					definesTable);
 			}
-				// embue any exceptions with the dependency validation
+				// iembue any exceptions with the dependency validation
 			CATCH(const ::Assets::Exceptions::ConstructionError& e)
 			{
 				Throw(::Assets::Exceptions::ConstructionError(e, ::Assets::GetDepValSys().Make(MakeIteratorRange(deps))));

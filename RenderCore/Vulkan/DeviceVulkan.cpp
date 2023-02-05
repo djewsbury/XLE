@@ -712,7 +712,7 @@ static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceLimits&
 
 	str << "Max DrawIndexed index value: " << limits.maxDrawIndexedIndexValue << ", max DrawIndirect count: " << limits.maxDrawIndirectCount << std::endl;
 
-	str << "Max Sampler -- lod bias: " << limits.maxSamplerLodBias << ", anisotrophy: " << limits.maxSamplerAnisotropy << std::endl;
+	str << "Max Sampler -- lod bias: " << limits.maxSamplerLodBias << ", anisotropy: " << limits.maxSamplerAnisotropy << std::endl;
 
 	str << "Max viewports: " << limits.maxViewports << ", max viewport dimensions: " << limits.maxViewportDimensions[0] << "x" << limits.maxViewportDimensions[1]
 		<< ", viewport bounds range: " << limits.viewportBoundsRange[0] << " to " << limits.viewportBoundsRange[1] << ", viewport sub pixel bits: " << limits.viewportSubPixelBits << std::endl;
@@ -1341,7 +1341,7 @@ namespace RenderCore { namespace ImplVulkan
 		}
 
 		enabledFeatures2.features.depthBounds = xleFeatures._depthBounds;
-		enabledFeatures2.features.samplerAnisotropy = xleFeatures._samplerAnisotrophy;
+		enabledFeatures2.features.samplerAnisotropy = xleFeatures._samplerAnisotropy;
 		enabledFeatures2.features.wideLines = xleFeatures._wideLines;
 		enabledFeatures2.features.independentBlend = xleFeatures._independentBlend;
 		enabledFeatures2.features.multiViewport = xleFeatures._multiViewport;
@@ -1670,7 +1670,7 @@ namespace RenderCore { namespace ImplVulkan
 					VkPhysicalDeviceTransformFeedbackFeaturesEXT_inst.geometryStreams
 				&&  VkPhysicalDeviceTransformFeedbackFeaturesEXT_inst.transformFeedback;
 		result._depthBounds = features.features.depthBounds;
-		result._samplerAnisotrophy = features.features.samplerAnisotropy;
+		result._samplerAnisotropy = features.features.samplerAnisotropy;
 		result._wideLines = features.features.wideLines;
 		result._conservativeRaster = hasConservativeRasterExt;
 		result._multiViewport = features.features.multiViewport;
@@ -2104,27 +2104,27 @@ namespace RenderCore { namespace ImplVulkan
 			&& requestedDesc._colorSpace != PresentationColorSpace::SRGB_Linear
 			;
 
-		VkFormat vkPreferedFormat = preferSRGBMarkedFormats ? VK_FORMAT_B8G8R8A8_SRGB : VK_FORMAT_B8G8R8A8_UNORM;
+		VkFormat vkPreferredFormat = preferSRGBMarkedFormats ? VK_FORMAT_B8G8R8A8_SRGB : VK_FORMAT_B8G8R8A8_UNORM;
 		if (requestedDesc._format != Format(0))
-			vkPreferedFormat = (VkFormat)Metal_Vulkan::AsVkFormat(requestedDesc._format);
+			vkPreferredFormat = (VkFormat)Metal_Vulkan::AsVkFormat(requestedDesc._format);
 
-		VkColorSpaceKHR vkPreferedColorSpace = AsVkColorSpaceKHR(requestedDesc._colorSpace);
+		VkColorSpaceKHR vkPreferredColorSpace = AsVkColorSpaceKHR(requestedDesc._colorSpace);
 
-		if (std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{vkPreferedFormat, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
-			result._fmt = {vkPreferedFormat, vkPreferedColorSpace};
+		if (std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{vkPreferredFormat, vkPreferredColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+			result._fmt = {vkPreferredFormat, vkPreferredColorSpace};
 
 		if (preferSRGBMarkedFormats) {
-			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_SRGB, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
-				result._fmt = {VK_FORMAT_B8G8R8A8_SRGB, vkPreferedColorSpace};
+			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_SRGB, vkPreferredColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+				result._fmt = {VK_FORMAT_B8G8R8A8_SRGB, vkPreferredColorSpace};
 
-			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8_SRGB, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
-				result._fmt = {VK_FORMAT_B8G8R8_SRGB, vkPreferedColorSpace};
+			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8_SRGB, vkPreferredColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+				result._fmt = {VK_FORMAT_B8G8R8_SRGB, vkPreferredColorSpace};
 		} else {
-			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
-				result._fmt = {VK_FORMAT_B8G8R8A8_UNORM, vkPreferedColorSpace};
+			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, vkPreferredColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+				result._fmt = {VK_FORMAT_B8G8R8A8_UNORM, vkPreferredColorSpace};
 
-			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8_UNORM, vkPreferedColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
-				result._fmt = {VK_FORMAT_B8G8R8_UNORM, vkPreferedColorSpace};
+			if (result._fmt.format == VK_FORMAT_UNDEFINED && std::find_if(fmts.begin(), fmts.end(), [q=VkSurfaceFormatKHR{VK_FORMAT_B8G8R8_UNORM, vkPreferredColorSpace}](const auto& c) { return c.format == q.format && c.colorSpace == q.colorSpace; }) != fmts.end())
+				result._fmt = {VK_FORMAT_B8G8R8_UNORM, vkPreferredColorSpace};
 		}
 
 		if (result._fmt.format == VK_FORMAT_UNDEFINED)
@@ -2242,7 +2242,7 @@ namespace RenderCore { namespace ImplVulkan
 		// if you hit this, there are a few things you can do:
 		//	a) check that IAPIInstanceVulkan::SetWindowPlatformValue() is called with a relevant window handle before any other IAPIInstance methods
 		//	b) if you need to render to multiple windows, they must all be renderable with the same vulkan "physical device". Physical devices can be
-		//		compatible with rendering to a specific window, or incompatable. We only a single physical device per IAPIInstance / IDevice, and
+		//		compatible with rendering to a specific window, or incompatible. We only a single physical device per IAPIInstance / IDevice, and
 		//		only check at most a single window for compatibility
         VkBool32 supportsPresent = false;
 		auto res = vkGetPhysicalDeviceSurfaceSupportKHR(
@@ -2678,7 +2678,7 @@ namespace RenderCore { namespace ImplVulkan
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
-	VulkanSharedPtr<VkCommandBuffer> PrimaryCommandBufferChain::AquireNextCommandBuffer(HierarchicalCPUProfiler* profiler)
+	VulkanSharedPtr<VkCommandBuffer> PrimaryCommandBufferChain::AcquireNextCommandBuffer(HierarchicalCPUProfiler* profiler)
 	{
 		RollList(MakeIteratorRange(_commandListAttachedSyncs, &_commandListAttachedSyncs[_primaryBufferCount]));
 		RollList(MakeIteratorRange(_primaryCommandLists, &_primaryCommandLists[_primaryBufferCount]));
@@ -2852,7 +2852,7 @@ namespace RenderCore { namespace ImplVulkan
 		if (!_primaryCommandBufferChain)
 			_primaryCommandBufferChain = std::make_shared<PrimaryCommandBufferChain>(*_factory, *_submissionQueue);
 
-		auto primaryCommandBuffer = _primaryCommandBufferChain->AquireNextCommandBuffer(_cpuProfiler);
+		auto primaryCommandBuffer = _primaryCommandBufferChain->AcquireNextCommandBuffer(_cpuProfiler);
 
 		{
 			auto res = vkResetCommandBuffer(primaryCommandBuffer.get(), VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
@@ -2912,7 +2912,7 @@ namespace RenderCore { namespace ImplVulkan
 		// and are still being processed
 		bool waitForCompletion = !!(flags & CommitCommandsFlags::WaitForCompletion);
 
-		// CommitCommands(WaitForCompletion) is somtimes used to ensure that the GPU is finished
+		// CommitCommands(WaitForCompletion) is sometimes used to ensure that the GPU is finished
 		// using a certain resource (eg, the swap chain images). In order to guarantee that
 		// we do actually get a wait in these scenarios, we have to ensure that there is a command
 		// list submitted (to flush through absolutely all markers in the async tracker)
@@ -2986,7 +2986,7 @@ namespace RenderCore { namespace ImplVulkan
 
     auto ThreadContext::GetStateDesc() const -> ThreadContextStateDesc
     {
-		// note; we can't get the viewport state here; or at least it's a bit ambigious (since we could have multiple viewports)
+		// note; we can't get the viewport state here; or at least it's a bit ambiguous (since we could have multiple viewports)
         // const auto& view = _metalContext->GetBoundViewport();
         // return ThreadContextStateDesc { {(unsigned)view.Width, (unsigned)view.Height}, _frameId };
 		return ThreadContextStateDesc { {0, 0}, _frameId };

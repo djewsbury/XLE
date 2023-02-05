@@ -760,7 +760,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				fbDesc.GetAttachments()[res.first], fbDesc.GetProperties());
 			rawViews[rawViewCount++] = checked_cast<ResourceView*>(rtv.get())->GetImageView();
 
-			// Even though the "rtv" has a _imageLayout built in, we will ignore it here. It will be superceeded
+			// Even though the "rtv" has a _imageLayout built in, we will ignore it here. It will be superseded
 			// the image layout calculated when we built the render pass
 
 			ClearValue defaultClearValue = MakeClearValue(0.f, 0.f, 0.f, 1.f);

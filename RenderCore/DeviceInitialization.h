@@ -64,7 +64,7 @@ namespace RenderCore
         bool _viewInstancingRenderPasses = false;
         bool _streamOutput = false;                 // "transform feedback" in GL/Vulkan parlance
         bool _depthBounds = false;
-        bool _samplerAnisotrophy = false;
+        bool _samplerAnisotropy = false;
         bool _wideLines = false;
         bool _conservativeRaster = false;
         bool _independentBlend = false;

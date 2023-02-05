@@ -20,7 +20,7 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		case CullMode::Back: return VK_CULL_MODE_BACK_BIT;
 		}
 
-		// (VK_CULL_MODE_FRONT_AND_BACK not accessable)
+		// (VK_CULL_MODE_FRONT_AND_BACK not accessible)
 	}
 
 	static VkPolygonMode AsVkPolygonMode(FillMode cullmode)
@@ -31,7 +31,7 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		case FillMode::Wireframe: return VK_POLYGON_MODE_LINE;
 		}
 
-		// (VK_POLYGON_MODE_POINT not accessable)
+		// (VK_POLYGON_MODE_POINT not accessible)
 	}
 
 	static VkBlendOp AsVkBlendOp(BlendOp blendOp)
@@ -66,7 +66,7 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		case Blend::InvDestAlpha: return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
 		}
 
-		// not accessable:
+		// not accessible:
 		// VK_BLEND_FACTOR_CONSTANT_COLOR
 		// VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR
 		// VK_BLEND_FACTOR_CONSTANT_ALPHA
@@ -234,7 +234,7 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		pNext = nullptr;
 		flags = 0;
 		// Note both depth write and depth test are disabled when the "depthTestEnable" flag is false
-		// this case is a little wierd, though, some APIs don't well support depth write enabled while 
+		// this case is a little weird, though, some APIs don't well support depth write enabled while 
 		// depth testing is disabled, so it's not recommended to rely on it
 		depthTestEnable = desc._depthWrite || (desc._depthTest != CompareOp::Always);
 		depthWriteEnable = desc._depthWrite;
@@ -292,8 +292,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 			break;
 		case FilterMode::Anisotropic:
-			if (!objectFactory.GetXLEFeatures()._samplerAnisotrophy)
-				Throw(std::runtime_error("Attempting to create a sampler with anisotrophic filtering, but the anisotropic filtering feature is not enabled in DeviceFeatures"));
+			if (!objectFactory.GetXLEFeatures()._samplerAnisotropy)
+				Throw(std::runtime_error("Attempting to create a sampler with anisotropic filtering, but the anisotropic filtering feature is not enabled in DeviceFeatures"));
 			samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
 			samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
 			samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;

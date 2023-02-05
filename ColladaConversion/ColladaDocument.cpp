@@ -239,7 +239,7 @@ namespace ColladaConversion
         _minMipLevel = 0;
         _maxMipLevel = 255;
         _mipMapBias = 0.f;
-        _maxAnisotrophy = 1;
+        _maxAnisotropy = 1;
     }
 
     std::pair<SamplerAddress, const utf8*> s_SamplerAddressNames[] = 
@@ -305,7 +305,7 @@ namespace ColladaConversion
             } else if (Is(eleName, "mip_bias")) {
                 _mipMapBias = ReadCDataAsValue(formatter, _mipMapBias);
             } else if (Is(eleName, "max_anisotropy")) {
-                _maxAnisotrophy = ReadCDataAsValue(formatter, _maxAnisotrophy);
+                _maxAnisotropy = ReadCDataAsValue(formatter, _maxAnisotropy);
             } else if (Is(eleName, "extra")) {
                 _extra = SubDoc(formatter);
             } else {
