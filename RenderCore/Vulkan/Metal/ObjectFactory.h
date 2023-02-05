@@ -166,6 +166,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
             void ForgetResource(uint64_t resourceGuid) const;
+            void UpdateForgottenResourcesAlreadyLocked();
             mutable std::vector<uint64_t> _resourcesVisibleToQueue;
             mutable Threading::Mutex _resourcesVisibleToQueueLock;
         #endif
@@ -204,6 +205,11 @@ namespace RenderCore { namespace Metal_Vulkan
 
         #if defined(_DEBUG)
             std::vector<std::weak_ptr<IDestructionQueue>> _associatedDestructionQueues;
+        #endif
+
+        #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+            struct ResourceVisibilityHelper;
+            std::unique_ptr<ResourceVisibilityHelper> _resourceVisibilityHelper;
         #endif
 	};
 

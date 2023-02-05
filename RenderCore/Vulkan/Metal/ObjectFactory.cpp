@@ -520,12 +520,62 @@ namespace RenderCore { namespace Metal_Vulkan
 	}
 
     #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+        struct ObjectFactory::ResourceVisibilityHelper
+        {
+            ResizableCircularBuffer<std::pair<IAsyncTracker::Marker, unsigned>, 32> _toBeForgottenCount;
+            std::deque<uint64_t> _toBeForgotten;
+            std::weak_ptr<IAsyncTracker> _gpuTracker;
+        };
+
         void ObjectFactory::ForgetResource(uint64_t resourceGuid) const
         {
+            // We can't forget the resource immediately, because it's still valid to submit command lists that use this resource
+            // We must just not use it on any command lists that are created after this point
+            // We will monitor a gpu tracker and remove it from the visible resource list in the same manner that underlying
+            // objects are cleaned up.
+            // In this case, it might be more ideal if we were tracking when cmd lists are destroyed on the host side -- once the
+            // last command list that is alive now is destroyed, we can then remove it from the visible list. However we don't track
+            // this, and it might be overkill to implement that just for this case
             ScopedLock(_resourcesVisibleToQueueLock);
-            auto i = std::lower_bound(_resourcesVisibleToQueue.begin(), _resourcesVisibleToQueue.end(), resourceGuid);
-            if (i != _resourcesVisibleToQueue.end() && *i == resourceGuid)
-                _resourcesVisibleToQueue.erase(i);
+            const bool forgetImmediately = false;
+            if (auto gpuTracker = _resourceVisibilityHelper->_gpuTracker.lock()) {
+                auto marker = gpuTracker->GetProducerMarker();
+                if (_resourceVisibilityHelper->_toBeForgottenCount.empty()) {
+                    assert(_resourceVisibilityHelper->_toBeForgotten.empty());
+                    _resourceVisibilityHelper->_toBeForgottenCount.emplace_back(marker, 1u);
+                } else if (_resourceVisibilityHelper->_toBeForgottenCount.back().first == marker) {
+                    ++_resourceVisibilityHelper->_toBeForgottenCount.back().second;
+                } else {
+                    assert(_resourceVisibilityHelper->_toBeForgottenCount.front().first < marker);
+                    _resourceVisibilityHelper->_toBeForgottenCount.emplace_back(std::make_pair(marker, 1u));
+                }
+                _resourceVisibilityHelper->_toBeForgotten.emplace_back(resourceGuid);
+            } else {
+                auto i = std::lower_bound(_resourcesVisibleToQueue.begin(), _resourcesVisibleToQueue.end(), resourceGuid);
+                if (i != _resourcesVisibleToQueue.end() && *i == resourceGuid)
+                    _resourcesVisibleToQueue.erase(i);
+            }
+        }
+
+        void ObjectFactory::UpdateForgottenResourcesAlreadyLocked()
+        {
+            // _resourcesVisibleToQueueLock should be locked already
+            auto* hlp = _resourceVisibilityHelper.get();
+            if (auto gpuTracker = hlp->_gpuTracker.lock()) {
+                auto marker = gpuTracker->GetConsumerMarker();
+                while (!hlp->_toBeForgottenCount.empty() && hlp->_toBeForgottenCount.front().first <= marker) {
+                    auto countToDelete = hlp->_toBeForgottenCount.front().second;
+
+                    for (auto resourceGuid:MakeIteratorRange(hlp->_toBeForgotten.begin(), hlp->_toBeForgotten.begin() + countToDelete)) {
+                        auto i = std::lower_bound(_resourcesVisibleToQueue.begin(), _resourcesVisibleToQueue.end(), resourceGuid);
+                        if (i != _resourcesVisibleToQueue.end() && *i == resourceGuid)
+                            _resourcesVisibleToQueue.erase(i);
+                    }
+
+                    hlp->_toBeForgotten.erase(hlp->_toBeForgotten.begin(), hlp->_toBeForgotten.begin()+countToDelete);
+                    hlp->_toBeForgottenCount.pop_front();
+                }
+            }
         }
     #endif
 
@@ -544,6 +594,9 @@ namespace RenderCore { namespace Metal_Vulkan
         moveFrom._vmaAllocator = nullptr;
         #if defined(_DEBUG)
             _associatedDestructionQueues = std::move(moveFrom._associatedDestructionQueues);
+        #endif
+        #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+            _resourceVisibilityHelper = std::move(moveFrom._resourceVisibilityHelper);
         #endif
     }
 
@@ -572,6 +625,9 @@ namespace RenderCore { namespace Metal_Vulkan
         _vmaAllocator = std::move(moveFrom._vmaAllocator); moveFrom._vmaAllocator = nullptr;
         #if defined(_DEBUG)
             _associatedDestructionQueues = std::move(moveFrom._associatedDestructionQueues);
+        #endif
+        #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+            _resourceVisibilityHelper = std::move(moveFrom._resourceVisibilityHelper);
         #endif
         return *this;
     }
@@ -621,6 +677,10 @@ namespace RenderCore { namespace Metal_Vulkan
         // default destruction behaviour (should normally be overriden by the device later)
         _immediateDestruction = CreateImmediateDestroyer(_device, _vmaAllocator);
 		_destruction = _immediateDestruction;
+
+        #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+            _resourceVisibilityHelper = std::make_unique<ResourceVisibilityHelper>();
+        #endif
     }
 
 	ObjectFactory::ObjectFactory() {}
@@ -856,6 +916,11 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto result = std::make_shared<DeferredDestruction>(_device, tracker, _vmaAllocator);
         #if defined(_DEBUG)
             _associatedDestructionQueues.emplace_back(result);
+        #endif
+        #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+            auto* hlp = _resourceVisibilityHelper.get();
+            assert(hlp->_gpuTracker.expired() || (!hlp->_gpuTracker.owner_before(tracker) && !tracker.owner_before(hlp->_gpuTracker)));
+            hlp->_gpuTracker = tracker;
         #endif
         return result;
 	}
