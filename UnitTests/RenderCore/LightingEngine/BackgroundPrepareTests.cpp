@@ -20,6 +20,7 @@
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
+#include "../../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/QueryPool.h"
 #include "../../../RenderCore/Metal/ObjectFactory.h"
@@ -338,7 +339,7 @@ namespace UnitTests
 		testHelper->EndFrameCapture();
 	}
 
-	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
+	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique, RenderCore::IThreadContext& threadContext)
 	{
 		// stall until all resources are ready
 		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
@@ -346,7 +347,48 @@ namespace UnitTests
 		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> preparePromise;
 		auto prepareFuture = preparePromise.get_future();
 		prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
-		return PrepareAndStall(testApparatus, std::move(prepareFuture));
+		return PrepareAndStall(testApparatus, threadContext, std::move(prepareFuture), RenderCore::BufferUploads::MarkCommandListDependencyFlags::IrregularThreadContext);
+	}
+
+	RenderCore::Techniques::ParsingContext BeginThreadSafeParsingContext(
+		LightingEngineTestApparatus& testApparatus,
+		RenderCore::IThreadContext& threadContext,
+		RenderCore::Techniques::TechniqueContext& techniqueContext,
+		const RenderCore::ResourceDesc& targetDesc,
+		const RenderCore::Techniques::CameraDesc& camera)
+	{
+		// Each thread needs it's own technique context, since some technique context objects can't be shared
+		// between threads
+		using namespace RenderCore;
+		Techniques::PreregisteredAttachment preregisteredAttachments[] {
+			Techniques::PreregisteredAttachment {
+				Techniques::AttachmentSemantics::ColorLDR,
+				targetDesc,
+				"color-ldr",
+				Techniques::PreregisteredAttachment::State::Uninitialized
+			}
+		};
+		FrameBufferProperties fbProps { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
+
+		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+		parsingContext.SetPipelineAcceleratorsVisibility(testApparatus._pipelineAccelerators->VisibilityBarrier());
+		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+		
+		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
+		stitchingContext._workingProps = fbProps;
+		for (const auto&a:preregisteredAttachments)
+			stitchingContext.DefineAttachment(a._semantic, a._desc, a._name, a._state, a._layout);
+		return parsingContext;
+	}
+
+	std::shared_ptr<RenderCore::Techniques::TechniqueContext> ForkTechniqueContext(RenderCore::Techniques::TechniqueContext& original)
+	{
+		using namespace RenderCore;
+		auto techniqueContext = std::make_shared<Techniques::TechniqueContext>(original);
+		techniqueContext->_uniformDelegateManager = Techniques::CreateUniformDelegateManager();
+		techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(original._pipelineAccelerators->GetDevice());
+		techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
+		return techniqueContext;
 	}
 
 	static void ThreadedRenderingFunction(LightingEngineTestApparatus& testApparatus)
@@ -376,23 +418,22 @@ namespace UnitTests
 		};
 
 		auto threadContext = Techniques::GetThreadContext();
+		auto techniqueContext = ForkTechniqueContext(*testApparatus._techniqueContext);
 
-		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, sceneCamera);
-		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
+		auto parsingContext = BeginThreadSafeParsingContext(testApparatus, *threadContext, *techniqueContext, targetDesc, sceneCamera);
 		std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
 		auto lightingTechniqueFuture = promisedLightingTechnique.get_future();
 		LightingEngine::CreateDeferredLightingTechnique(
 			std::move(promisedLightingTechnique),
 			testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
 			MakeIteratorRange(resolveOperators), {}, nullptr,
-			stitchingContext.GetPreregisteredAttachments(),
-			LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
+			parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments());
 		auto lightingTechnique = lightingTechniqueFuture.get();
 
 		const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
 		auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
 			.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
-		auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique);
+		auto newVisibility = PrepareResources(*drawableWriter, testApparatus, *lightingTechnique, *threadContext);
 		parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 		parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
@@ -404,6 +445,69 @@ namespace UnitTests
 		RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
 			parsingContext, *lightingTechnique);
 		ParseScene(lightingIterator, *drawableWriter);
+
+		threadContext->CommitCommands();
+	}
+
+	static void ThreadedRenderingFunction2(LightingEngineTestApparatus& testApparatus, uint64_t seed)
+	{
+		// Without using a lighting technique, render to an offscreen texture using randomly created sequencer configs
+
+		using namespace RenderCore;
+		auto targetDesc = CreateDesc(
+			BindFlag::RenderTarget | BindFlag::TransferDst,
+			TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM_SRGB));
+		auto* testHelper = testApparatus._metalTestHelper.get();
+		auto& pipelineAccelerators = testApparatus._pipelineAccelerators;
+
+		Techniques::CameraDesc sceneCamera;
+        sceneCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 200.0f, 0.0f});
+        sceneCamera._projection = Techniques::CameraDesc::Projection::Orthogonal;
+		sceneCamera._nearClip = 0.f;
+		sceneCamera._farClip = 400.f;
+		sceneCamera._left = 0.f;
+		sceneCamera._right = 100.f;
+		sceneCamera._top = 0.f;
+		sceneCamera._bottom = -100.f;
+
+		auto threadContext = Techniques::GetThreadContext();
+		auto techniqueContext = ForkTechniqueContext(*testApparatus._techniqueContext);
+		auto parsingContext = BeginThreadSafeParsingContext(testApparatus, *threadContext, *techniqueContext, targetDesc, sceneCamera);
+		auto outputAttachment = testHelper->_device->CreateResource(targetDesc, "target");
+		parsingContext.BindAttachment(Techniques::AttachmentSemantics::ColorLDR, outputAttachment, false);
+
+		{
+			auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext, LoadStore::Clear);
+
+			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
+			auto futureTechDel = promisedTechDel.get_future();
+			Techniques::CreateTechniqueDelegate_Utility(std::move(promisedTechDel), ::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH), Techniques::UtilityDelegateType::FlatColor);
+			ParameterBox params;
+			params.SetParameter("RANDOMIZED", seed);
+			auto cfg = testApparatus._pipelineAccelerators->CreateSequencerConfig(
+				"threaded-cfg",
+				futureTechDel.get(),		// stall for tech del
+				std::move(params),
+				rpi.GetFrameBufferDesc());
+
+			{
+				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};
+				auto drawableWriter = ToolsRig::DrawablesWriterHelper(*testHelper->_device, *testApparatus._drawablesPool, *testApparatus._pipelineAccelerators)
+					.CreateShapeWorldDrawableWriter(worldMins, worldMaxs);
+				Techniques::DrawablesPacket pkt;
+				drawableWriter->WriteDrawables(pkt);
+				auto newVisibility = PrepareAndStall(testApparatus, *threadContext, *cfg.get(), pkt, BufferUploads::MarkCommandListDependencyFlags::IrregularThreadContext);
+				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
+				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
+				Techniques::Draw(
+					parsingContext, 
+					*testApparatus._pipelineAccelerators,
+					*cfg,
+					pkt);
+			}
+		}
+
+		threadContext->CommitCommands();
 	}
 
 	TEST_CASE( "LightingEngine-MultithreadRenderingTrash", "[rendercore_lighting_engine]" )
@@ -417,6 +521,7 @@ namespace UnitTests
 		
 		const unsigned invocationCount = 1000;
 		const unsigned synchronousCount = 12;
+		std::mt19937_64 rng(629846298462);
 		std::vector<std::thread> spawnedThreads;
 		spawnedThreads.reserve(invocationCount);
 		unsigned spawnedInvocations = 0;
@@ -426,11 +531,19 @@ namespace UnitTests
 				spawnedThreads.erase(spawnedThreads.begin());
 			}
 			spawnedThreads.emplace_back(
-				[&testApparatus]() {
-					ThreadedRenderingFunction(testApparatus);
+				[&testApparatus, seed=rng()]() {
+					if (seed & 1) {
+						ThreadedRenderingFunction(testApparatus);
+					} else {
+						ThreadedRenderingFunction2(testApparatus, seed);
+					}
 				});
 			spawnedInvocations++;
 			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+
+			// CommitCommands on the immediate context every now and again to ensure that destruction
+			// queues will be pumped
+			testApparatus._metalTestHelper->_device->GetImmediateContext()->CommitCommands();
 		}
 
 		for (auto& t:spawnedThreads)
