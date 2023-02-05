@@ -2258,6 +2258,10 @@ namespace RenderCore { namespace ImplVulkan
 
     std::shared_ptr<IThreadContext> Device::GetImmediateContext()
     {
+		// It's not essential to use the immediate context in the same thread as the device is constructed, but this is typical
+		// Really we just want some way to protect against using the immediate context from multiple threads at the same time,
+		// since it's so easy to access this context
+		DEBUG_ONLY(assert(std::this_thread::get_id() == _initializationThread));
         if (!_foregroundPrimaryContext) {
 			_foregroundPrimaryContext = std::make_shared<ThreadContext>(shared_from_this(), _graphicsQueue);
 			_foregroundPrimaryContext->AttachDestroyer(_destrQueue);
@@ -2925,18 +2929,18 @@ namespace RenderCore { namespace ImplVulkan
 				fence = _factory->CreateFence();
 
 			TRY {
-				if (_metalContext->HasActiveCommandList()) {
-					auto immediateCommands = _metalContext->ResolveCommandList();
-					_interimCmdLists.emplace_back(std::move(*immediateCommands));
-				}
-				CommitToQueue_Internal({}, {}, fence.get());
+			if (_metalContext->HasActiveCommandList()) {
+				auto immediateCommands = _metalContext->ResolveCommandList();
+				_interimCmdLists.emplace_back(std::move(*immediateCommands));
+			}
+			CommitToQueue_Internal({}, {}, fence.get());
 
-				if (waitForCompletion) {
-					VkFence f = fence.get();
-					auto res = vkWaitForFences(_underlyingDevice, 1, &f, true, UINT64_MAX);
-					if (res != VK_SUCCESS)
-						Throw(VulkanAPIFailure(res, "Failure while waiting for CommitCommands() completion"));
-				}
+			if (waitForCompletion) {
+				VkFence f = fence.get();
+				auto res = vkWaitForFences(_underlyingDevice, 1, &f, true, UINT64_MAX);
+				if (res != VK_SUCCESS)
+					Throw(VulkanAPIFailure(res, "Failure while waiting for CommitCommands() completion"));
+			}
 			} CATCH (const std::exception& e) {
 				Log(Warning) << "Failure during queue submission in CommitCommands:" << e.what() << std::endl;
 				waitForCompletion = false;
