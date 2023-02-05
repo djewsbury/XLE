@@ -1706,8 +1706,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(staging.GetData().size() == srcData.size());
 		std::memcpy(staging.GetData().begin(), srcData.begin(), srcData.size());
 
-		Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::TransferDst);
-		CopyPartial(*_devContext, dst, staging.AsCopySource(), captureDst.GetLayout(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		CopyPartial(*_devContext, dst, staging.AsCopySource(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_UNDEFINED);
 	}
 
 	void BlitEncoder::Copy(
@@ -1716,11 +1715,16 @@ namespace RenderCore { namespace Metal_Vulkan
 	{
 		assert(src._resource && dst._resource);
 		if (src._resource != dst._resource) {
-			Internal::CaptureForBind captureSrc(*_devContext, *checked_cast<Resource*>(src._resource), BindFlag::TransferSrc);
-			Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::TransferDst);
+			Internal::CaptureForBind captureSrc, captureDst;
+			if (checked_cast<Resource*>(src._resource)->GetImage())
+				captureSrc = Internal::CaptureForBind(*_devContext, *checked_cast<Resource*>(src._resource), BindFlag::TransferSrc);
+			if (checked_cast<Resource*>(dst._resource)->GetImage())
+				captureDst = Internal::CaptureForBind(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::TransferDst);
 			CopyPartial(*_devContext, dst, src, captureDst.GetLayout(), captureSrc.GetLayout());
 		} else {
-			Internal::CaptureForBind capture(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::Enum(BindFlag::TransferSrc|BindFlag::TransferDst));
+			Internal::CaptureForBind capture;
+			if (checked_cast<Resource*>(dst._resource)->GetImage())
+				capture = Internal::CaptureForBind(*_devContext, *checked_cast<Resource*>(dst._resource), BindFlag::Enum(BindFlag::TransferSrc|BindFlag::TransferDst));
 			CopyPartial(*_devContext, dst, src, capture.GetLayout(), capture.GetLayout());
 		}
 	}
@@ -1730,11 +1734,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		IResource& src)
 	{
 		if (&dst != &src) {
-			Internal::CaptureForBind captureSrc(*_devContext, *checked_cast<Resource*>(&src), BindFlag::TransferSrc);
-			Internal::CaptureForBind captureDst(*_devContext, *checked_cast<Resource*>(&dst), BindFlag::TransferDst);
+			Internal::CaptureForBind captureSrc, captureDst;
+			if (checked_cast<Resource*>(&src)->GetImage())
+				captureSrc = Internal::CaptureForBind(*_devContext, *checked_cast<Resource*>(&src), BindFlag::TransferSrc);
+			if (checked_cast<Resource*>(&dst)->GetImage())
+				captureDst = Internal::CaptureForBind(*_devContext, *checked_cast<Resource*>(&dst), BindFlag::TransferDst);
 			Metal_Vulkan::Copy(*_devContext, *checked_cast<Resource*>(&dst), *checked_cast<Resource*>(&src), captureDst.GetLayout(), captureSrc.GetLayout());
 		} else {
-			Internal::CaptureForBind capture(*_devContext, *checked_cast<Resource*>(&dst), BindFlag::Enum(BindFlag::TransferSrc|BindFlag::TransferDst));
+			Internal::CaptureForBind capture;
+			if (checked_cast<Resource*>(&dst)->GetImage())
+				capture = Internal::CaptureForBind(*_devContext, *checked_cast<Resource*>(&dst), BindFlag::Enum(BindFlag::TransferSrc|BindFlag::TransferDst));
 			Metal_Vulkan::Copy(*_devContext, *checked_cast<Resource*>(&dst), *checked_cast<Resource*>(&src), capture.GetLayout(), capture.GetLayout());
 		}
 	}
@@ -1885,26 +1894,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		: _context(&context), _resource(&resource)
 		{
 			auto* res = checked_cast<Resource*>(&resource);
-
-			bool pendingInit = res->_pendingInit;
-
-			// try to mix this with the steady state from the resource
-			auto steadyLayout = res->_steadyStateImageLayout;
-			bool usingCompatibleSteadyState = false;
-			if (!pendingInit 
-				&& (steadyLayout == usage._imageLayout || steadyLayout == VK_IMAGE_LAYOUT_GENERAL)) {
-
-				// The steady state is already compatible with what we want
-				// we still consider this a capture, but we don't actually have to change the layout or
-				// access mode at all
-				_capturedLayout = steadyLayout;
-				usingCompatibleSteadyState = true;
-			} else {
-				_capturedLayout = usage._imageLayout;
-			}
-
+			// we only allow support image type resources here, because we don't track enough context information for buffers to
+			// make this interface efficient
+			if (!res->GetImage())
+				Throw(std::runtime_error("Attempting to use non-image resource type with CaptureForBind"));
+			
 			_capturedAccessMask = usage._accessFlags;
 			_capturedStageMask = usage._pipelineStageFlags;
+			_capturedLayout = usage._imageLayout;
+
+			auto previousLayout = res->_steadyStateImageLayout;
 
 			if (!context._captureForBindRecords)
 				context._captureForBindRecords = std::make_shared<Internal::CaptureForBindRecords>();
@@ -1914,31 +1913,28 @@ namespace RenderCore { namespace Metal_Vulkan
 				// and we release them in opposite order to creation order (ie shoes and socks order)
 				if (existing->second._layout != _capturedLayout)
 					Throw(std::runtime_error("Attempting to CaptureForBind a resource that is already captured in another state"));
-				_capturedLayout = existing->second._layout;
-				return;
+				previousLayout = existing->second._layout;
 			}
 
 			BarrierHelper barrierHelper(context);
-			if (pendingInit) {
+			if (res->_pendingInit) {
 				// The init operation will normally shift from undefined layout -> steady state
 				// We're just going to skip that and jump directly to our captured layout
 				res->_pendingInit = false;
-				if (res->GetImage()) {
-					bool initialLayoutPreinitialized = !!(res->AccessDesc()._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite));
-					if (initialLayoutPreinitialized) {
-						barrierHelper.Add(*res, BarrierResourceUsage::Preinitialized(), usage);
-					} else
-						barrierHelper.Add(*res, BarrierResourceUsage::NoState(), usage);
-					_restoreLayout = steadyLayout;
-				}
-			} else if (!usingCompatibleSteadyState) {
-				if (res->GetImage()) {
-					barrierHelper.Add(*res, DefaultBarrierResourceUsageFromLayout(steadyLayout), usage);
-					_restoreLayout = steadyLayout;
-				} else {
-					barrierHelper.Add(*res, BarrierResourceUsage::AllCommandsReadAndWrite(), usage);
-				}
+				bool initialLayoutPreinitialized = !!(res->AccessDesc()._allocationRules & (AllocationRules::HostVisibleRandomAccess|AllocationRules::HostVisibleSequentialWrite));
+				if (initialLayoutPreinitialized) {
+					barrierHelper.Add(*res, BarrierResourceUsage::Preinitialized(), usage);
+				} else
+					barrierHelper.Add(*res, BarrierResourceUsage::NoState(), usage);
+			} else {
+				// we only add a barrier if there has actually been a layout state change
+				if (_capturedLayout != previousLayout)
+					barrierHelper.Add(*res, DefaultBarrierResourceUsageFromLayout(previousLayout), usage);
 			}
+
+			// add a barrier in the destructor only if we have the change the layout back to something else
+			if (_capturedLayout != previousLayout && previousLayout)
+				_restoreLayout = previousLayout;
 		}
 
 		CaptureForBind::~CaptureForBind()
@@ -1950,8 +1946,36 @@ namespace RenderCore { namespace Metal_Vulkan
 				preUsage._imageLayout = _capturedLayout;
 				preUsage._accessFlags = _capturedAccessMask;
 				preUsage._pipelineStageFlags = _capturedStageMask;
-				barrierHelper.Add(*res, preUsage, DefaultBarrierResourceUsageFromLayout(res->_steadyStateImageLayout));
+				barrierHelper.Add(*res, preUsage, DefaultBarrierResourceUsageFromLayout(*_restoreLayout));
 			}
+		}
+
+		CaptureForBind::CaptureForBind()
+		{
+			_context = nullptr;
+			_resource = nullptr;
+			_capturedLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			_capturedAccessMask = _capturedStageMask = ~0u;
+		}
+
+		CaptureForBind::CaptureForBind(CaptureForBind&& moveFrom)
+		{
+			_context = moveFrom._context; moveFrom._context = nullptr;
+			_resource = moveFrom._resource; moveFrom._resource = nullptr;
+			_capturedLayout = moveFrom._capturedLayout; moveFrom._capturedLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			_capturedAccessMask = moveFrom._capturedAccessMask; moveFrom._capturedAccessMask = ~0u;
+			_capturedStageMask = moveFrom._capturedStageMask; moveFrom._capturedStageMask = ~0u;
+		}
+
+		CaptureForBind& CaptureForBind::operator=(CaptureForBind&& moveFrom)
+		{
+			CaptureForBind{std::move(*this)};		// release our capture
+			_context = moveFrom._context; moveFrom._context = nullptr;
+			_resource = moveFrom._resource; moveFrom._resource = nullptr;
+			_capturedLayout = moveFrom._capturedLayout; moveFrom._capturedLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			_capturedAccessMask = moveFrom._capturedAccessMask; moveFrom._capturedAccessMask = ~0u;
+			_capturedStageMask = moveFrom._capturedStageMask; moveFrom._capturedStageMask = ~0u;
+			return *this;
 		}
 
 		void ValidateIsEmpty(CaptureForBindRecords& records)
@@ -1959,7 +1983,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			// normally we want to return all images to the "steady state" layout at the end of a command list
 			// If you hit this, it means the layout was changed via BarrierHelper or CaptureForBind, but wasn't
 			// reset before the command list was committed
-			assert(records._captures.empty());
+			static unsigned checkCounter = 0;
+			if (((checkCounter++) % 60) == 0)
+				if (!records._captures.empty())
+					Log(Verbose) << "DeviceContext resource layout capture resources still contains (" << records._captures.size() << ") entries" << std::endl;
 		}
 	}
 

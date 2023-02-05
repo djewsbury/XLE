@@ -319,8 +319,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			VkImageLayout GetLayout() { return _capturedLayout; }
 			CaptureForBind(DeviceContext&, IResource&, BarrierResourceUsage usage);
 			~CaptureForBind();
-			CaptureForBind(const CaptureForBind&) = delete;
-			CaptureForBind& operator=(const CaptureForBind&) = delete;
+			CaptureForBind();
+			CaptureForBind(CaptureForBind&&);
+			CaptureForBind& operator=(CaptureForBind&&);
 		private:
 			DeviceContext* _context;
 			IResource* _resource;
