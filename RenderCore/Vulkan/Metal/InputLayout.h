@@ -111,6 +111,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		uint64_t GetBoundLooseImmediateDatas(unsigned groupIdx = 0) const;
 		uint64_t GetBoundLooseResources(unsigned groupIdx = 0) const;
 		uint64_t GetBoundLooseSamplers(unsigned groupIdx = 0) const;
+		bool HasBoundAdditionalEffects(unsigned groupIdx = 0) const;
 		uint64_t GetGroupRulesHash(unsigned groupIdx = 0) const;
 
 		BoundUniforms(
@@ -191,6 +192,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<AdaptiveSetBindingRules> _adaptiveSetRules;
 			std::vector<PushConstantBindingRules> _pushConstantsRules;
 			std::vector<FixedDescriptorSetBindingRules> _fixedDescriptorSetRules;
+			std::vector<unsigned> _defaultDescriptorSetRules;
 			
 			uint64_t _groupRulesHash = 0ull;
 			uint64_t _boundLooseImmediateDatas = 0ull;
@@ -218,6 +220,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	inline uint64_t BoundUniforms::GetBoundLooseImmediateDatas(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return _group[groupIdx]._boundLooseImmediateDatas; }
 	inline uint64_t BoundUniforms::GetBoundLooseResources(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return _group[groupIdx]._boundLooseResources; }
 	inline uint64_t BoundUniforms::GetBoundLooseSamplers(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return _group[groupIdx]._boundLooseSamplerStates; }
+	inline bool BoundUniforms::HasBoundAdditionalEffects(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return !_group[groupIdx]._defaultDescriptorSetRules.empty(); }
 	inline uint64_t BoundUniforms::GetGroupRulesHash(unsigned groupIdx) const { assert(groupIdx < dimof(_group)); return _group[groupIdx]._groupRulesHash; }
 
 		////////////////////////////////////////////////////////////////////////////////////////////////

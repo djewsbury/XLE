@@ -873,7 +873,7 @@ namespace RenderCore { namespace Techniques
 		if (expect_evaluation(!man._graphics._descSetsForBinding.empty(), true))
 			boundUniforms.ApplyDescriptorSets(metalContext, encoder, man._graphics._descSetsForBinding, groupIdx);
 
-		if (expect_evaluation(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0), 0ull)) {
+		if (expect_evaluation(boundUniforms.GetBoundLooseImmediateDatas(0) | boundUniforms.GetBoundLooseResources(0) | boundUniforms.GetBoundLooseResources(0) | uint64_t(boundUniforms.HasBoundAdditionalEffects(0)), 0ull)) {
 			man._delegateHelper.QueryResources(parsingContext, boundUniforms.GetBoundLooseResources(groupIdx));
 			man._delegateHelper.QuerySamplers(parsingContext, boundUniforms.GetBoundLooseSamplers(groupIdx));
 			man._delegateHelper.QueryImmediateDatas(parsingContext, boundUniforms.GetBoundLooseImmediateDatas(groupIdx));

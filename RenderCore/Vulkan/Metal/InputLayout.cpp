@@ -461,6 +461,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			uint64_t _boundLooseResources = 0;
 			uint64_t _boundLooseSamplerStates = 0;
 
+			std::vector<unsigned> _defaultDescriptorSetRules;
+
 			void Finalize(const CompiledPipelineLayout& pipelineLayout);
 		};
 		GroupRules _group[4];
@@ -509,38 +511,34 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			for (unsigned descSetIdx=0; descSetIdx<_descSetInfos.size(); ++descSetIdx) {
 				auto& ds = _descSetInfos[descSetIdx];
-				if (ds._groupsThatWriteHere.empty()) {
-					// If there are some dummys that need to be written, we'll create some rules for that
-					// here and continue on
-					// Otherwise this desc set is not needed by the shader and we'll ignore it
-					if (ds._dummyMask != 0) {
-						assert(firstLooseUniformsGroup != ~0u);
-						ds._groupsThatWriteHere.push_back(firstLooseUniformsGroup);
-						InitializeAdaptiveSetBindingRules(descSetIdx, firstLooseUniformsGroup, ds._shaderStageMask);
-					} else
-						continue;
-				}
-				std::sort(ds._groupsThatWriteHere.begin(), ds._groupsThatWriteHere.end());
-				
-				// assign the "dummies" for this desc set to the first group that writes here
-				auto& groupForDummies = _group[ds._groupsThatWriteHere[0]];
-				for (auto& set:groupForDummies._adaptiveSetRules) {
-					if (set._descriptorSetIdx == descSetIdx) {
-						assert(set._dummyMask == 0); 
-						set._dummyMask = ds._dummyMask;
-						set._shaderDummyTypes = ds._shaderDummyTypes;
-						break;
+				if (!ds._groupsThatWriteHere.empty()) {
+					std::sort(ds._groupsThatWriteHere.begin(), ds._groupsThatWriteHere.end());
+					
+					// assign the "dummies" for this desc set to the first group that writes here
+					auto& groupForDummies = _group[ds._groupsThatWriteHere[0]];
+					for (auto& set:groupForDummies._adaptiveSetRules) {
+						if (set._descriptorSetIdx == descSetIdx) {
+							assert(set._dummyMask == 0); 
+							set._dummyMask = ds._dummyMask;
+							set._shaderDummyTypes = ds._shaderDummyTypes;
+							break;
+						}
 					}
+
+					if (ds._groupsThatWriteHere.size() == 1) continue;
+
+					// If multiple groups write here, assign a shared builder
+					ds._assignedSharedDescSetWriter = _sharedDescSetWriterCount++;
+					for (auto groupIdx:ds._groupsThatWriteHere)
+						for (auto& set:_group[groupIdx]._adaptiveSetRules)
+							if (set._descriptorSetIdx == descSetIdx)
+								set._sharedBuilder = ds._assignedSharedDescSetWriter;
+				} else {
+					// This descriptor set requires some dummies, but there are no groups that
+					// will write to it. We can instead just use the default descriptor set
+					// from the pipeline layout, we just need to ensure it gets bound
+					_group[firstLooseUniformsGroup]._defaultDescriptorSetRules.push_back(descSetIdx);
 				}
-
-				if (ds._groupsThatWriteHere.size() == 1) continue;
-
-				// If multiple groups write here, assign a shared builder
-				ds._assignedSharedDescSetWriter = _sharedDescSetWriterCount++;
-				for (auto groupIdx:ds._groupsThatWriteHere)
-					for (auto& set:_group[groupIdx]._adaptiveSetRules)
-						if (set._descriptorSetIdx == descSetIdx)
-							set._sharedBuilder = ds._assignedSharedDescSetWriter;
 			}
 		}
 
@@ -982,7 +980,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			[](const auto& lhs, const auto& rhs) {
 				return lhs._descriptorSetIdx < rhs._descriptorSetIdx;
 			});
-
+		std::sort(_defaultDescriptorSetRules.begin(), _defaultDescriptorSetRules.end());
 
 		uint64_t hash;
 
@@ -1002,6 +1000,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		hash = Hash64(AsPointer(_pushConstantsRules.begin()), AsPointer(_pushConstantsRules.end()), hash);
 		hash = Hash64(AsPointer(_fixedDescriptorSetRules.begin()), AsPointer(_fixedDescriptorSetRules.end()), hash);
+		hash = Hash64(AsPointer(_defaultDescriptorSetRules.begin()), AsPointer(_defaultDescriptorSetRules.end()), hash);
 		for (const auto& a:_adaptiveSetRules)
 			hash = a.CalculateHash(hash);
 		_groupRulesHash = hash;
@@ -1119,6 +1118,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
+			_group[c]._defaultDescriptorSetRules = std::move(helper._group[c]._defaultDescriptorSetRules);
 			_group[c]._groupRulesHash = helper._group[c]._groupRulesHash;
 		}
 	}
@@ -1167,6 +1167,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
+			_group[c]._defaultDescriptorSetRules = std::move(helper._group[c]._defaultDescriptorSetRules);
 			_group[c]._groupRulesHash = helper._group[c]._groupRulesHash;
 		}
 	}
@@ -1219,6 +1220,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_group[c]._boundLooseImmediateDatas = helper._group[c]._boundLooseImmediateDatas;
 			_group[c]._boundLooseResources = helper._group[c]._boundLooseResources;
 			_group[c]._boundLooseSamplerStates = helper._group[c]._boundLooseSamplerStates;
+			_group[c]._defaultDescriptorSetRules = std::move(helper._group[c]._defaultDescriptorSetRules);
 			_group[c]._groupRulesHash = helper._group[c]._groupRulesHash;
 		}
 	}
@@ -1512,6 +1514,9 @@ namespace RenderCore { namespace Metal_Vulkan
 					encoder._pendingBoundUniforms = nullptr;
 			}
 		}
+
+		for (auto def:_group[groupIdx]._defaultDescriptorSetRules)
+			encoder.BindDescriptorSet(def, _pipelineLayout->GetBlankDescriptorSet(def).get(), {});
 
 		for (const auto&pushConstants:_group[groupIdx]._pushConstantsRules) {
 			auto cb = stream._immediateData[pushConstants._inputCBSlot];
