@@ -108,7 +108,7 @@ namespace UnitTests
 
 		auto& threadContext = *testHelper._device->GetImmediateContext();
 		auto frameBufferPool = Techniques::CreateFrameBufferPool();
-		auto attachmentPool = std::make_shared<Techniques::AttachmentPool>(testHelper._device);
+		auto attachmentPool = Techniques::CreateAttachmentPool(testHelper._device);
 
 		unsigned iterationCount = 16;
 		unsigned currentLayerEstimateCount = 300;
@@ -182,7 +182,7 @@ namespace UnitTests
 		
 		auto& threadContext = *testHelper._device->GetImmediateContext();
 		auto frameBufferPool = Techniques::CreateFrameBufferPool();
-		auto attachmentPool = std::make_shared<Techniques::AttachmentPool>(testHelper._device);
+		auto attachmentPool = Techniques::CreateAttachmentPool(testHelper._device);
 
 		const unsigned framesToRender = 1*60;
 		

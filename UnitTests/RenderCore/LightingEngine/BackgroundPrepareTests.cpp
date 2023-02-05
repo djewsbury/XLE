@@ -386,7 +386,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto techniqueContext = std::make_shared<Techniques::TechniqueContext>(original);
 		techniqueContext->_uniformDelegateManager = Techniques::CreateUniformDelegateManager();
-		techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(original._pipelineAccelerators->GetDevice());
+		techniqueContext->_attachmentPool = Techniques::CreateAttachmentPool(original._pipelineAccelerators->GetDevice());
 		techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
 		return techniqueContext;
 	}

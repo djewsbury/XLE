@@ -162,7 +162,7 @@ namespace GUILayer
 			_pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
 			_drawablesPool = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_drawablesPool;
 			_globalTechniqueContext = std::make_shared<RenderCore::Techniques::TechniqueContext>();
-			_globalTechniqueContext->_attachmentPool = std::make_shared<RenderCore::Techniques::AttachmentPool>(device);
+			_globalTechniqueContext->_attachmentPool = RenderCore::Techniques::CreateAttachmentPool(device);
 			_globalTechniqueContext->_frameBufferPool = RenderCore::Techniques::CreateFrameBufferPool();
 			_globalTechniqueContext->_commonResources = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_commonResources;
 

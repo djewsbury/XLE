@@ -56,7 +56,7 @@ namespace UnitTests
 
 		auto testHelper = MakeTestHelper();
 		auto frameBufferPool = CreateFrameBufferPool();
-		AttachmentPool attachmentPool(testHelper->_device);
+		auto attachmentPool = CreateAttachmentPool(testHelper->_device);
 
 		SECTION("Basic construction")
 		{
@@ -93,7 +93,7 @@ namespace UnitTests
 				stitched._fbDesc,
 				stitched._fullAttachmentDescriptions,
 				*frameBufferPool,
-				attachmentPool};
+				*attachmentPool};
 			rpi.NextSubpass();
 			rpi.NextSubpass();
 			rpi.End();
@@ -166,7 +166,7 @@ namespace UnitTests
 				stitched._fbDesc,
 				stitched._fullAttachmentDescriptions,
 				*frameBufferPool,
-				attachmentPool};
+				*attachmentPool};
 
 			const auto& finalFBDesc = rpi.GetFrameBufferDesc();
 			REQUIRE(finalFBDesc.GetAttachments().size() == 4);

@@ -73,7 +73,7 @@ namespace UnitTests
 
 		_techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		_techniqueContext->_commonResources = _commonResources;
-		_techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(_metalTestHelper->_device);
+		_techniqueContext->_attachmentPool = Techniques::CreateAttachmentPool(_metalTestHelper->_device);
 		_techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
 		_techniqueContext->_drawablesPool = _drawablesPool;
 		_techniqueContext->_graphicsPipelinePool = _pipelineCollection;

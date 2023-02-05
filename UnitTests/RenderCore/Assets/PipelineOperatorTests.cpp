@@ -64,7 +64,7 @@ namespace UnitTests
 
 		auto testHelper = MakeTestHelper();
 		TechniqueTestApparatus testApparatus(*testHelper);	
-		testApparatus._techniqueContext->_attachmentPool = std::make_shared<Techniques::AttachmentPool>(testHelper->_device);
+		testApparatus._techniqueContext->_attachmentPool = Techniques::CreateAttachmentPool(testHelper->_device);
 		testApparatus._techniqueContext->_frameBufferPool = Techniques::CreateFrameBufferPool();
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
