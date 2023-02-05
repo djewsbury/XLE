@@ -67,10 +67,14 @@ namespace UnitTests
 
 	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
 		LightingEngineTestApparatus& testApparatus,
+		RenderCore::IThreadContext& threadContext,
 		const RenderCore::Techniques::SequencerConfig& sequencerConfig,
-		const RenderCore::Techniques::DrawablesPacket& drawablePkt);
+		const RenderCore::Techniques::DrawablesPacket& drawablePkt,
+		RenderCore::BufferUploads::MarkCommandListDependencyFlags::BitField markDependencyFlags = 0);
 
 	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
 		LightingEngineTestApparatus& testApparatus,
-		std::future<RenderCore::Techniques::PreparedResourcesVisibility> visibility);
+		RenderCore::IThreadContext& threadContext,
+		std::future<RenderCore::Techniques::PreparedResourcesVisibility> visibility,
+		RenderCore::BufferUploads::MarkCommandListDependencyFlags::BitField markDependencyFlags = 0);
 }

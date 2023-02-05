@@ -126,7 +126,7 @@ namespace UnitTests
 		std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
 		auto prepareFuture = preparePromise.get_future();
 		prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
-		auto newVisibility = PrepareAndStall(testApparatus, std::move(prepareFuture));
+		auto newVisibility = PrepareAndStall(testApparatus, parsingContext.GetThreadContext(), std::move(prepareFuture));
 		parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 		parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 	}
@@ -308,7 +308,7 @@ namespace UnitTests
 				std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
 				auto prepareFuture = preparePromise.get_future();
 				prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
-				auto newVisibility = PrepareAndStall(testApparatus, std::move(prepareFuture));
+				auto newVisibility = PrepareAndStall(testApparatus, *threadContext, std::move(prepareFuture));
 				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 			}

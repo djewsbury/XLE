@@ -836,7 +836,7 @@ namespace UnitTests
 		{
 			RenderCore::Techniques::DrawablesPacket pkt;
 			drawablesWriter.WriteDrawables(pkt);
-			auto newVisibility = PrepareAndStall(testApparatus, *tester._cfg, pkt);
+			auto newVisibility = PrepareAndStall(testApparatus, threadContext, *tester._cfg, pkt);
 			parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 			parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 		}

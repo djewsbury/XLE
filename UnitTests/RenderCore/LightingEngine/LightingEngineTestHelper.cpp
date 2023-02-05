@@ -150,8 +150,10 @@ namespace UnitTests
 
 	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
 		LightingEngineTestApparatus& testApparatus,
+		RenderCore::IThreadContext& threadContext,
 		const RenderCore::Techniques::SequencerConfig& sequencerConfig,
-		const RenderCore::Techniques::DrawablesPacket& drawablePkt)
+		const RenderCore::Techniques::DrawablesPacket& drawablePkt,
+		RenderCore::BufferUploads::MarkCommandListDependencyFlags::BitField markDependencyFlags)
 	{
 		using namespace RenderCore;
 		std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
@@ -160,20 +162,24 @@ namespace UnitTests
 		auto requiredVisibility = prepareFuture.get();		// stall
 		testApparatus._pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility);		// must call this to flip completed pipelines, etc, to visible
 		testApparatus._bufferUploads->StallAndMarkCommandListDependency(
-			*testApparatus._pipelineAccelerators->GetDevice()->GetImmediateContext(),
-			requiredVisibility._bufferUploadsVisibility);
+			threadContext,
+			requiredVisibility._bufferUploadsVisibility,
+			markDependencyFlags);
 		return requiredVisibility;
 	}
 
 	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(
 		LightingEngineTestApparatus& testApparatus,
-		std::future<RenderCore::Techniques::PreparedResourcesVisibility> visibility)
+		RenderCore::IThreadContext& threadContext,
+		std::future<RenderCore::Techniques::PreparedResourcesVisibility> visibility,
+		RenderCore::BufferUploads::MarkCommandListDependencyFlags::BitField markDependencyFlags)
 	{
 		auto requiredVisibility = visibility.get();		// stall
 		testApparatus._pipelineAccelerators->VisibilityBarrier(requiredVisibility._pipelineAcceleratorsVisibility);		// must call this to flip completed pipelines, etc, to visible
 		testApparatus._bufferUploads->StallAndMarkCommandListDependency(
-			*testApparatus._pipelineAccelerators->GetDevice()->GetImmediateContext(),
-			requiredVisibility._bufferUploadsVisibility);
+			threadContext,
+			requiredVisibility._bufferUploadsVisibility,
+			markDependencyFlags);
 		return requiredVisibility;
 	}
 

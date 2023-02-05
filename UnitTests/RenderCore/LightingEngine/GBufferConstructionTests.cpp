@@ -426,7 +426,7 @@ namespace UnitTests
 					{
 						Techniques::DrawablesPacket pkt;
 						drawableWriter->WriteDrawables(pkt);
-						auto newVisibility = PrepareAndStall(testApparatus, *gbufferWriteCfg.get(), pkt);
+						auto newVisibility = PrepareAndStall(testApparatus, *testApparatus._metalTestHelper->_device->GetImmediateContext(), *gbufferWriteCfg.get(), pkt);
 						parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 						parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 						Techniques::Draw(
@@ -492,7 +492,7 @@ namespace UnitTests
 					{
 						Techniques::DrawablesPacket pkt;
 						drawableWriter->WriteDrawables(pkt);
-						auto newVisibility = PrepareAndStall(testApparatus, *writeDirectCfg.get(), pkt);
+						auto newVisibility = PrepareAndStall(testApparatus, *testApparatus._metalTestHelper->_device->GetImmediateContext(), *writeDirectCfg.get(), pkt);
 						parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 						parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 						Techniques::Draw(

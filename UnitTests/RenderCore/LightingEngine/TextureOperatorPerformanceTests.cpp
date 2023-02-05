@@ -238,7 +238,7 @@ namespace UnitTests
 		if (1) {
 			Techniques::DrawablesPacket pkt;
 			drawableWriter.WriteDrawables(pkt);
-			auto newVisibility = PrepareAndStall(testApparatus, *sequencerConfig, pkt);
+			auto newVisibility = PrepareAndStall(testApparatus, parsingContext.GetThreadContext(), *sequencerConfig, pkt);
 			parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 			parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 			Techniques::Draw(

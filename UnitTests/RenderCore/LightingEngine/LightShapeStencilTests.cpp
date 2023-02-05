@@ -65,7 +65,7 @@ namespace UnitTests
 		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> preparePromise;
 		auto prepareFuture = preparePromise.get_future();
 		prepareLightingIterator.FulfillWhenNotPending(std::move(preparePromise));
-		return PrepareAndStall(testApparatus, std::move(prepareFuture));
+		return PrepareAndStall(testApparatus, *testApparatus._metalTestHelper->_device->GetImmediateContext(), std::move(prepareFuture));
 	}
 
 	static unsigned CountPixelShaderInvocations(
