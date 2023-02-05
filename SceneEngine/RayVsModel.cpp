@@ -95,14 +95,14 @@ namespace SceneEngine
 		std::unique_ptr<RenderCore::Metal::QueryPool> _streamOutputQueryPool;
 
 		std::shared_ptr<RayDefinitionUniformDelegate> _rayDefinition;
-		Techniques::AttachmentPool _dummyAttachmentPool;
-		std::shared_ptr<Techniques::FrameBufferPool> _frameBufferPool;
+		std::shared_ptr<Techniques::IAttachmentPool> _dummyAttachmentPool;
+		std::shared_ptr<Techniques::IFrameBufferPool> _frameBufferPool;
 
         ModelIntersectionResources(unsigned elementSize, unsigned elementCount);
     };
 
     ModelIntersectionResources::ModelIntersectionResources(unsigned elementSize, unsigned elementCount)
-	: _dummyAttachmentPool(RenderCore::Techniques::Services::GetDevicePtr())
+	: _dummyAttachmentPool(RenderCore::Techniques::CreateAttachmentPool(RenderCore::Techniques::Services::GetDevicePtr()))
     {
         auto& device = RenderCore::Techniques::Services::GetDevice();
 
@@ -318,7 +318,7 @@ namespace SceneEngine
 		_pimpl->_rpi = Techniques::RenderPassInstance {
 			threadContext,
 			box->_fbDesc, {},
-			*_pimpl->_res->_frameBufferPool, _pimpl->_res->_dummyAttachmentPool,
+			*_pimpl->_res->_frameBufferPool, *_pimpl->_res->_dummyAttachmentPool,
 			{} };
 
 		VertexBufferView sov { _pimpl->_res->_streamOutputBuffer.get() };

@@ -256,35 +256,27 @@ namespace RenderCore { namespace Techniques
     struct AttachmentTransform;
     struct AttachmentBarrier;
 
-    class AttachmentPool
+    class IAttachmentPool
     {
     public:
-        const std::shared_ptr<IResource>& GetResource(AttachmentName resName) const;
-        const ResourceDesc& GetResourceDesc(AttachmentName resName) const;
-        AttachmentName GetNameForResource(IResource&) const;
+        virtual const std::shared_ptr<IResource>& GetResource(AttachmentName resName) = 0;
+        virtual const ResourceDesc& GetResourceDesc(AttachmentName resName) = 0;
+        virtual AttachmentName GetNameForResource(IResource&) = 0;
 
-        auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
-        auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) const -> const std::shared_ptr<IResourceView>&;
+        virtual auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) -> const std::shared_ptr<IResourceView>& = 0;
+        virtual auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) -> const std::shared_ptr<IResourceView>& = 0;
 
-        AttachmentReservation Reserve(
+        virtual AttachmentReservation Reserve(
             IteratorRange<const PreregisteredAttachment*>,
             AttachmentReservation* parentReservation = nullptr,
-            ReservationFlag::BitField = 0);
+            ReservationFlag::BitField = 0) = 0;
 
-        void ResetActualized();
-        std::string GetMetrics() const;
-
-        AttachmentPool(const std::shared_ptr<IDevice>& device);
-        ~AttachmentPool();
-    private:
-        class Pimpl;
-        std::unique_ptr<Pimpl> _pimpl;
-
-        void AddRef(IteratorRange<const AttachmentName*>, ReservationFlag::BitField flags);
-        void Release(IteratorRange<const AttachmentName*>, ReservationFlag::BitField flags);
-
-        friend class AttachmentReservation;
+        virtual void ResetActualized() = 0;
+        virtual std::string GetMetrics() const = 0;
+        virtual ~IAttachmentPool();
     };
+
+    std::shared_ptr<IAttachmentPool> CreateAttachmentPool(std::shared_ptr<IDevice> device);
 
     class AttachmentReservation
     {
@@ -324,10 +316,10 @@ namespace RenderCore { namespace Techniques
             BindFlag::BitField initialLayout);
         AttachmentReservation CaptureDoubleBufferAttachments();
 
-        const AttachmentPool& GetAttachmentPool() const { return *_pool; }
+        IAttachmentPool& GetAttachmentPool() const { return *_pool; }
 
         AttachmentReservation();
-        AttachmentReservation(AttachmentPool& pool);
+        AttachmentReservation(IAttachmentPool& pool);
         ~AttachmentReservation();
         AttachmentReservation(AttachmentReservation&&);
         AttachmentReservation& operator=(AttachmentReservation&&);
@@ -346,7 +338,7 @@ namespace RenderCore { namespace Techniques
             std::optional<BindFlag::BitField> _pendingSwitchToLayout;
         };
         std::vector<Entry> _entries;                 // candidate for subframe heap
-        AttachmentPool* _pool = nullptr;
+        IAttachmentPool* _pool = nullptr;
         ReservationFlag::BitField _reservationFlags = 0;
         mutable ViewPool _viewPool;
 
@@ -364,11 +356,12 @@ namespace RenderCore { namespace Techniques
         };
         AttachmentReservation(
             std::vector<AttachmentToReserve>&& reservedAttachments,
-            AttachmentPool* pool,
+            IAttachmentPool* pool,
             ReservationFlag::BitField flags);
         void Remove(AttachmentName);
         void AddRefAll();
         void ReleaseAll();
+
         friend class AttachmentPool;
     };
 
@@ -392,10 +385,13 @@ namespace RenderCore { namespace Techniques
     ///
     /// This helper class allows client code to simply declare what it needs and the actual management
     /// of the device objects will be handled within the cache.
-    class FrameBufferPool;
-    std::shared_ptr<FrameBufferPool> CreateFrameBufferPool();
-
-    void ResetFrameBufferPool(FrameBufferPool& fbPool);
+    class IFrameBufferPool
+    {
+    public:
+        virtual void Reset() = 0;
+        virtual ~IFrameBufferPool();
+    };
+    std::shared_ptr<IFrameBufferPool> CreateFrameBufferPool();
 
     class ParsingContext;
 
@@ -447,8 +443,8 @@ namespace RenderCore { namespace Techniques
             IThreadContext& context,
             const FrameBufferDesc& layout,
             IteratorRange<const PreregisteredAttachment*> fullAttachmentsDescription,
-            FrameBufferPool& frameBufferPool,
-            AttachmentPool& attachmentPool,
+            IFrameBufferPool& frameBufferPool,
+            IAttachmentPool& attachmentPool,
             AttachmentReservation* parentReservation = nullptr,
             const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());
 
@@ -470,7 +466,7 @@ namespace RenderCore { namespace Techniques
 		RenderPassInstance(
 			const FrameBufferDesc& layout,
             IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
-			AttachmentPool& attachmentPool);
+			IAttachmentPool& attachmentPool);
         ~RenderPassInstance();
 
         RenderPassInstance();

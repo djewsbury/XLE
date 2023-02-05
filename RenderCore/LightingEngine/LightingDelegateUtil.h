@@ -17,8 +17,8 @@
 
 namespace RenderCore { namespace Techniques
 {
-	class FrameBufferPool;
-	class AttachmentPool;
+	class IFrameBufferPool;
+	class IAttachmentPool;
 	class IShaderResourceDelegate;
 	struct PreregisteredAttachment;
 }}
@@ -131,8 +131,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) override;
 		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
 
-		std::shared_ptr<Techniques::FrameBufferPool> _shadowGenFrameBufferPool;
-		std::shared_ptr<Techniques::AttachmentPool> _shadowGenAttachmentPool;
+		std::shared_ptr<Techniques::IFrameBufferPool> _shadowGenFrameBufferPool;
+		std::shared_ptr<Techniques::IAttachmentPool> _shadowGenAttachmentPool;
 		ViewPool _shadowGenViewPool;
 		std::vector<unsigned> _operatorToPreparerIdMapping;
 	};

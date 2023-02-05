@@ -330,9 +330,872 @@ namespace RenderCore { namespace Techniques
     : _reservation(&reservation) {}
     NamedAttachmentsAdapter::~NamedAttachmentsAdapter() {}
 
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class AttachmentPool : public IAttachmentPool
+    {
+    public:
+        const std::shared_ptr<IResource>& GetResource(AttachmentName resName) override SEALED;
+        const ResourceDesc& GetResourceDesc(AttachmentName resName) override SEALED;
+        AttachmentName GetNameForResource(IResource&) override SEALED;
+
+        auto GetSRV(AttachmentName resName, const TextureViewDesc& window = {}) -> const std::shared_ptr<IResourceView>& override SEALED;
+        auto GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window = {}) -> const std::shared_ptr<IResourceView>& override SEALED;
+
+        AttachmentReservation Reserve(
+            IteratorRange<const PreregisteredAttachment*>,
+            AttachmentReservation* parentReservation = nullptr,
+            ReservationFlag::BitField = 0) override SEALED;
+
+        void ResetActualized()  override SEALED;
+        std::string GetMetrics() const override SEALED;
+
+        AttachmentPool(std::shared_ptr<IDevice> device);
+        ~AttachmentPool();
+    private:
+        struct Attachment
+        {
+            IResourcePtr            _resource;
+            ResourceDesc            _desc;
+            unsigned                _lockCount = 0;
+            bool                    _pendingCompleteInitialization = true;
+            std::string             _name;      // tends to just be the name of the first request (since attachments will be frequently used for multiple requests)
+        };
+        std::vector<Attachment>     _attachments;
+
+        ViewPool                    _srvPool;
+        std::shared_ptr<IDevice>    _device;
+
+        #if defined(_DEBUG)
+            mutable Threading::RecursiveMutex _lock;
+        #endif
+
+        bool BuildAttachment(AttachmentName attach);
+
+        void AddRef(IteratorRange<const AttachmentName*>, ReservationFlag::BitField flags);
+        void Release(IteratorRange<const AttachmentName*>, ReservationFlag::BitField flags);
+
+        friend class AttachmentReservation;
+    };
+
+    bool AttachmentPool::BuildAttachment(AttachmentName attachName)
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        Attachment* attach = &_attachments[attachName];
+        assert(attach);
+        if (!attach) return false;
+
+        assert(attach->_desc._type == ResourceDesc::Type::Texture);
+        assert(attach->_desc._textureDesc._width > 0);
+        assert(attach->_desc._textureDesc._height > 0);
+        assert(attach->_desc._textureDesc._depth > 0);
+        attach->_resource = _device->CreateResource(attach->_desc, attach->_name.empty() ? MakeStringSection("attachment-pool") : MakeStringSection(attach->_name));
+        attach->_pendingCompleteInitialization = true;
+        return attach->_resource != nullptr;
+    }
+
+    auto AttachmentPool::GetResource(AttachmentName attachName) -> const std::shared_ptr<IResource>&
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        if (attachName >= _attachments.size()) return s_nullResourcePtr;
+        auto* attach = &_attachments[attachName];
+        assert(attach);
+        if (attach->_resource)
+            return attach->_resource;
+            
+        BuildAttachment(attachName);
+        return attach->_resource;
+	}
+
+    const ResourceDesc& AttachmentPool::GetResourceDesc(AttachmentName attachName)
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        static ResourceDesc nullDesc;
+        if (attachName >= _attachments.size()) return nullDesc;
+        auto* attach = &_attachments[attachName];
+        assert(attach);
+        return attach->_desc;
+    }
+
+    AttachmentName AttachmentPool::GetNameForResource(IResource& res)
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        for (unsigned c=0; c<_attachments.size(); ++c)
+            if (_attachments[c]._resource.get() == &res)
+                return c;
+        return ~0u;
+    }
+
+	const std::shared_ptr<IResourceView>& AttachmentPool::GetSRV(AttachmentName attachName, const TextureViewDesc& window)
+	{
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        return GetView(attachName, BindFlag::ShaderResource, window);
+	}
+
+    const std::shared_ptr<IResourceView>& AttachmentPool::GetView(AttachmentName attachName, BindFlag::Enum usage, const TextureViewDesc& window)
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        static std::shared_ptr<IResourceView> dummy;
+        if (attachName >= _attachments.size()) return dummy;
+        auto* attach = &_attachments[attachName];
+        assert(attach);
+        if (!attach->_resource)
+        	BuildAttachment(attachName);
+		assert(attach->_resource);
+        return _srvPool.GetTextureView(attach->_resource, usage, window);
+    }
+
+    static bool MatchRequest(const ResourceDesc& preregisteredDesc, const ResourceDesc& concreteObjectDesc)
+    {
+        assert(preregisteredDesc._type == ResourceDesc::Type::Texture && concreteObjectDesc._type == ResourceDesc::Type::Texture);
+        return
+            preregisteredDesc._textureDesc._arrayCount == concreteObjectDesc._textureDesc._arrayCount
+            && (AsTypelessFormat(preregisteredDesc._textureDesc._format) == AsTypelessFormat(concreteObjectDesc._textureDesc._format) || preregisteredDesc._textureDesc._format == Format::Unknown)
+            && preregisteredDesc._textureDesc._width == concreteObjectDesc._textureDesc._width
+            && preregisteredDesc._textureDesc._height == concreteObjectDesc._textureDesc._height
+            && preregisteredDesc._textureDesc._samples == concreteObjectDesc._textureDesc._samples
+            && (concreteObjectDesc._bindFlags & preregisteredDesc._bindFlags) == preregisteredDesc._bindFlags
+            ;
+    }
+
+    auto AttachmentPool::Reserve(
+        IteratorRange<const PreregisteredAttachment*> attachmentRequests,
+        AttachmentReservation* parentReservation,
+        ReservationFlag::BitField flags) -> AttachmentReservation
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        AttachmentReservation emptyReservation;
+        if (!parentReservation) parentReservation = &emptyReservation;
+
+        VLA(bool, consumed, _attachments.size());
+        for (unsigned c=0; c<_attachments.size(); ++c) consumed[c] = false;
+        auto originalAttachmentsSize = _attachments.size();
+
+        assert(!parentReservation || !parentReservation->_pool || parentReservation->_pool == this);     // parentReservation must be associated with this pool, or none at all
+
+        // Treat any attachments that are bound to semantic values as "consumed" already.
+        // In other words, we can't give these attachments to requests without a semantic,
+        // or using another semantic.
+        for (unsigned c=0; c<_attachments.size(); ++c)
+            consumed[c] = _attachments[c]._lockCount > 0;
+
+        std::vector<AttachmentReservation::AttachmentToReserve> selectedAttachments;
+        selectedAttachments.resize(attachmentRequests.size());
+
+        for (unsigned r=0; r<attachmentRequests.size(); ++r) {
+            const auto& request = attachmentRequests[r];
+
+            // If a semantic value is set, we should first check to see if the request can match
+            // something bound to that semantic in the parent reservation
+            if (!request._semantic) continue;
+
+            auto matchingParent = std::find_if(
+                parentReservation->_entries.begin(), parentReservation->_entries.end(),
+                [semantic=request._semantic](const auto& q) { return q._semantic == semantic; });
+
+            if (matchingParent != parentReservation->_entries.end()) {
+                #if defined(_DEBUG)
+                    auto q = unsigned(matchingParent - parentReservation->_entries.begin());
+                    if (!MatchRequest(request._desc, parentReservation->GetResourceDesc(q))) {
+                        Log(Warning) << "Attachment previously used for the semantic (" << AttachmentSemantic{request._semantic} << ") does not match the request for this semantic. Attempting to use it anyway. Request: "
+                            << request._desc << ", Bound previously: " << parentReservation->GetResourceDesc(q)
+                            << std::endl;
+                    }
+                #endif
+
+                selectedAttachments[r]._resource = matchingParent->_resource;
+                selectedAttachments[r]._presentationChain = matchingParent->_presentationChain;
+                selectedAttachments[r]._poolName = matchingParent->_poolResource;
+                selectedAttachments[r]._currentLayout = matchingParent->_currentLayout;
+                selectedAttachments[r]._pendingSwitchToLayout = matchingParent->_pendingSwitchToLayout;
+                selectedAttachments[r]._semantic = request._semantic;
+
+                if (request._layout && (matchingParent->_pendingSwitchToLayout.value_or(matchingParent->_currentLayout) != request._layout)) {
+                    // If you hit this, it probably means that initial/final layouts for sequential render passes do not agree
+                    // Continuing will spit out a lot of underlying graphics API warnings and could potentially cause synchronization
+                    // bugs on certain hardware
+                    Log(Warning) << "Request for attachment with semantic (" << AttachmentSemantic{request._semantic} << ") found mismatch between layouts" << std::endl;
+                    Log(Warning) << "Requested layout: (" << BindFlagsAsString(request._layout) << "), resource last left in layout: (" << BindFlagsAsString(matchingParent->_pendingSwitchToLayout.value_or(matchingParent->_currentLayout)) << ")" << std::endl;
+                    assert(0);
+                }
+            }
+        }
+
+        // If we didn't find a match in one of our bound semantic attachments, we must flow
+        // through and treat it as a temporary attachment.
+        for (unsigned r=0; r<attachmentRequests.size(); ++r) {
+            const auto& request = attachmentRequests[r];
+
+            if (selectedAttachments[r]._poolName != ~0u || selectedAttachments[r]._resource || selectedAttachments[r]._presentationChain) continue;
+
+            // We will never attempt to reuse something from the parent reservation (unless the semantics match),
+            // even another temporary -- ie, we're expecting any temporaries in the parent reservation are there
+            // because they are expected to be used later
+
+            bool foundMatch = false;
+            unsigned poolAttachmentName = 0;
+            for (unsigned q=0; q<_attachments.size(); ++q) {
+                if (MatchRequest(request._desc, _attachments[q]._desc) && q < originalAttachmentsSize && !consumed[q]) {
+                    consumed[q] = true;
+                    poolAttachmentName = q;
+                    foundMatch = true;
+                    break;
+                }
+            }
+
+            if (!foundMatch) {
+                _attachments.push_back(Attachment{nullptr, request._desc});
+                poolAttachmentName = unsigned(_attachments.size()-1);
+                _attachments[poolAttachmentName]._name = Concatenate("[pool] ", request._name);
+            }
+
+            selectedAttachments[r]._poolName = poolAttachmentName;
+            selectedAttachments[r]._semantic = request._semantic;
+            // selectedAttachments[r]._currentLayout = ...
+            if (request._layout)
+                selectedAttachments[r]._pendingSwitchToLayout = request._layout;
+
+            // If the request was expecting an initialized input, it must match either with something explicitly bound to the semantic,
+            // or with something with double buffer attachment rules
+            // If we don't have either of these, then we can't fulfill it correctly -- we'd be passing uninitialized data into something
+            // that asked for an initialized attachment
+            if (request._state != PreregisteredAttachment::State::Uninitialized) {
+                char buffer[256];
+                if (request._semantic) {
+                    Throw(std::runtime_error(StringMeldInPlace(buffer) << "Cannot find initialized attachment for request with semantic " << AttachmentSemantic{request._semantic}));
+                } else
+                    Throw(std::runtime_error(StringMeldInPlace(buffer) << "Cannot find initialized attachment for non-semantic request"));
+            }
+        }
+
+        return AttachmentReservation{std::move(selectedAttachments), this, flags};
+    }
+
+    void AttachmentPool::ResetActualized()
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        // Reset all actualized attachments. They will get recreated on demand
+        _attachments.clear();
+        _srvPool.Reset();
+    }
+
+    void AttachmentPool::AddRef(IteratorRange<const AttachmentName*> attachments, ReservationFlag::BitField flags)
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        for (auto a:attachments) {
+            assert(a<_attachments.size());
+            ++_attachments[a]._lockCount;
+        }
+    }
+
+    void AttachmentPool::Release(IteratorRange<const AttachmentName*> attachments, ReservationFlag::BitField flags)
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        for (auto a:attachments) {
+            assert(a<_attachments.size());
+            assert(_attachments[a]._lockCount >= 1);
+            --_attachments[a]._lockCount;
+        }
+    }
+
+    static void InitializeEmptyYesterdayAttachment(
+        IThreadContext& threadContext,
+        AttachmentReservation& attachmentReservation,
+        AttachmentName attachmentName,
+        ClearValue initialContents)
+    {
+        // initialize a "yesterday" attachment where there is no prior data (eg, on the first frame)
+        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+        auto desc = attachmentReservation.GetResourceDesc(attachmentName);
+        if (desc._bindFlags & BindFlag::RenderTarget) {
+            auto rtv = attachmentReservation.GetView(attachmentName, BindFlag::RenderTarget);
+            metalContext.Clear(*rtv, initialContents._float);
+        } else if (desc._bindFlags & BindFlag::UnorderedAccess) {
+            auto uav = attachmentReservation.GetView(attachmentName, BindFlag::UnorderedAccess);
+            metalContext.ClearFloat(*uav, initialContents._float);
+        } else if (desc._bindFlags & BindFlag::DepthStencil) {
+            auto dsv = attachmentReservation.GetView(attachmentName, BindFlag::DepthStencil);
+            auto components = GetComponents(desc._textureDesc._format);
+            ClearFilter::BitField clearFilter = 0;
+            if (components == FormatComponents::Depth || components == FormatComponents::DepthStencil)
+                clearFilter |= ClearFilter::Depth;
+            if (components == FormatComponents::Stencil || components == FormatComponents::DepthStencil)
+                clearFilter |= ClearFilter::Stencil;
+            metalContext.Clear(*dsv, clearFilter, initialContents._depthStencil._depth, initialContents._depthStencil._stencil);
+        } else {
+            Throw(std::runtime_error("Unable to initialize double buffered attachment, because no writable bind flags were given"));
+        }
+    }
+
+    std::string AttachmentPool::GetMetrics() const
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+        std::stringstream str;
+        size_t totalByteCount = 0;
+        str << "(" << _attachments.size() << ") attachments:" << std::endl;
+        for (unsigned c=0; c<_attachments.size(); ++c) {
+            auto& desc = _attachments[c]._desc;
+            str << "    [" << c << "] " << desc;
+            if (_attachments[c]._resource) {
+                totalByteCount += ByteCount(_attachments[c]._resource->GetDesc());
+                str << " (actualized)";
+            } else {
+                str << " (not actualized)";
+            }
+            str << std::endl;
+        }
+
+        str << "Total memory: (" << std::setprecision(4) << totalByteCount / (1024.f*1024.f) << "MiB)" << std::endl;
+        str << "ViewPool count: (" << _srvPool.GetMetrics()._viewCount << ")" << std::endl;
+        return str.str();
+    }
+
+    AttachmentPool::AttachmentPool(std::shared_ptr<IDevice> device)
+    : _device(std::move(device))
+    {
+    }
+
+    AttachmentPool::~AttachmentPool() {}
+    IAttachmentPool::~IAttachmentPool() {}
+
+    std::shared_ptr<IAttachmentPool> CreateAttachmentPool(std::shared_ptr<IDevice> device)
+    {
+        return std::make_shared<AttachmentPool>(std::move(device));
+    }
+
+    AttachmentName AttachmentReservation::Bind(uint64_t semantic, std::shared_ptr<IResource> resource, BindFlag::BitField currentLayout)
+    {
+        Entry newEntry;
+        newEntry._resource = std::move(resource);
+        newEntry._desc = newEntry._resource->GetDesc();
+        newEntry._semantic = semantic;
+        newEntry._currentLayout = currentLayout;    // current layout can be ~0u, which means never initialized
+
+        // replace an existing binding to this semantic, if one exists
+        for (auto e=_entries.begin(); e!=_entries.end(); ++e) {
+            if (e->_semantic == semantic) {
+                if (_pool && e->_poolResource != ~0u) {
+                    AttachmentName toRelease = e->_poolResource;
+                    checked_cast<AttachmentPool*>(_pool)->Release(MakeIteratorRange(&toRelease, &toRelease+1), _reservationFlags);
+                }
+                *e = std::move(newEntry);
+                return (AttachmentName)std::distance(_entries.begin(), e);
+            }
+        }
+
+        _entries.push_back(std::move(newEntry));
+        return AttachmentName(_entries.size()-1);
+    }
+
+    AttachmentName AttachmentReservation::Bind(uint64_t semantic, std::shared_ptr<IPresentationChain> presentationChain, const ResourceDesc& resourceDesc, BindFlag::BitField currentLayout)
+    {
+        Entry newEntry;
+        newEntry._presentationChain = std::move(presentationChain);
+        newEntry._desc = resourceDesc;
+        newEntry._semantic = semantic;
+        newEntry._currentLayout = currentLayout;    // current layout can be ~0u, which means never initialized
+
+        // replace an existing binding to this semantic, if one exists
+        for (auto e=_entries.begin(); e!=_entries.end(); ++e) {
+            if (e->_semantic == semantic) {
+                if (_pool && e->_poolResource != ~0u) {
+                    AttachmentName toRelease = e->_poolResource;
+                    checked_cast<AttachmentPool*>(_pool)->Release(MakeIteratorRange(&toRelease, &toRelease+1), _reservationFlags);
+                }
+                *e = std::move(newEntry);
+                return (AttachmentName)std::distance(_entries.begin(), e);
+            }
+        }
+
+        _entries.push_back(std::move(newEntry));
+        return AttachmentName(_entries.size()-1);
+    }
+
+    void AttachmentReservation::Unbind(const IResource& resource)
+    {
+        // note that this will end up reshuffling all of the resNames
+        for (auto i=_entries.begin(); i!=_entries.end();) {
+            if (i->_resource.get() == &resource) {
+                i = _entries.erase(i);
+            } else
+                ++i;
+        }
+    }
+
+    void AttachmentReservation::UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms)
+    {
+        assert(transforms.size() == childReservation._entries.size());
+
+        VLA(bool, removeEntry, _entries.size());
+        for (unsigned c=0; c<_entries.size(); ++c)
+            removeEntry[c] = false;
+
+        std::vector<Entry> newEntries;
+        for (unsigned aIdx=0; aIdx<transforms.size(); ++aIdx) {
+            auto transform = transforms[aIdx];
+            auto& childEntry = childReservation._entries[aIdx];
+
+            if (    transform._type == AttachmentTransform::Temporary
+                ||  transform._type == AttachmentTransform::Consumed) {
+                // unbind this attachment if it appears anywhere, and unbind the semantic as well
+                for (unsigned c=0; c<_entries.size(); ++c)
+                    if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource)
+                        removeEntry[c] = true;
+                if (childEntry._semantic != ~0ull && childEntry._semantic != 0ull)
+                    for (unsigned c=0; c<_entries.size(); ++c)
+                        if (_entries[c]._semantic == childEntry._semantic)
+                            removeEntry[c] = true;
+            } else if (transform._type == AttachmentTransform::LoadedAndStored
+                    || transform._type == AttachmentTransform::Generated) {
+                // unbind any alternative bindings of this semantic, and update the layout for this resource
+                // note that we allow the resource to keep any previous binding it might have
+                for (unsigned c=0; c<_entries.size(); ++c)
+                    if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource) {
+                        _entries[c]._currentLayout = transform._finalLayout;
+                        _entries[c]._pendingClear = {};
+                        _entries[c]._pendingSwitchToLayout = {};
+                    } else if (_entries[c]._presentationChain && _entries[c]._presentationChain == childEntry._presentationChain) {
+                        // child reservation may have acquired the resource for this presentationChain
+                        _entries[c]._resource = childEntry._resource;
+                        _entries[c]._currentLayout = transform._finalLayout;
+                        _entries[c]._pendingClear = {};
+                        _entries[c]._pendingSwitchToLayout = {};
+                    }
+
+                if (childEntry._semantic != ~0ull && childEntry._semantic != 0ull) {
+                    bool foundExistingBinding = false;
+                    for (unsigned c=0; c<_entries.size(); ++c)
+                        if (_entries[c]._semantic == childEntry._semantic) {
+                            if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource) {
+                                foundExistingBinding = true;
+                                removeEntry[c] = false;
+                            } else
+                                removeEntry[c] = true;
+                        }
+                    if (!foundExistingBinding) {
+                        Entry newEntry;
+                        newEntry._desc = childEntry._desc;
+                        newEntry._poolResource = childEntry._poolResource;
+                        newEntry._resource = childEntry._resource;
+                        newEntry._currentLayout = transform._finalLayout;
+                        newEntry._semantic = childEntry._semantic;
+                        newEntries.emplace_back(std::move(newEntry));
+                    }
+                }
+            }
+        }
+
+        // release fixup
+        {
+            auto initialEntriesSize = _entries.size();
+            VLA(AttachmentName, toRelease, initialEntriesSize);
+            unsigned toReleaseCount = 0;
+            for (int c=(int)initialEntriesSize-1; c>=0; c--)
+                if (removeEntry[c]) {
+                    if (_entries[c]._poolResource != ~0u)
+                        toRelease[toReleaseCount++] = _entries[c]._poolResource;
+                    _entries.erase(_entries.begin()+c);
+                }
+
+            if (toReleaseCount)
+                checked_cast<AttachmentPool*>(_pool)->Release(MakeIteratorRange(toRelease, toRelease+toReleaseCount), _reservationFlags);
+        }
+
+        // addref fixup
+        if (!newEntries.empty()) {
+            VLA(AttachmentName, toAddRef, newEntries.size());
+            unsigned toAddRefCount = 0;
+
+            _entries.reserve(_entries.size()+newEntries.size());
+            for (auto& e:newEntries) {
+                if (e._poolResource != ~0u)
+                    toAddRef[toAddRefCount++] = e._poolResource;
+                _entries.emplace_back(std::move(e));
+            }
+
+            if (!_pool) {
+                _pool = childReservation._pool;
+                _reservationFlags = childReservation._reservationFlags;
+            }
+
+            checked_cast<AttachmentPool*>(_pool)->AddRef(MakeIteratorRange(toAddRef, toAddRef+toAddRefCount), _reservationFlags);
+        }
+
+        assert(!_pool || _pool == childReservation._pool);
+        assert(!_pool || _reservationFlags == childReservation._reservationFlags);
+    }
+
+    // AttachmentReservation has it's own indexing for attachments
+    // this will be zero-based and agree with the ordering of requests when returned from AttachmentPool::Reserve
+    // this can be used to make it compatible with the AttachmentName in a FrameBufferDesc
+    const std::shared_ptr<IResource>& AttachmentReservation::GetResource(AttachmentName resName) const
+    {
+        assert(resName < _entries.size());
+        auto& e = _entries[resName];
+        if (e._resource) return e._resource;
+        assert(!e._presentationChain);
+        return checked_cast<AttachmentPool*>(_pool)->GetResource(e._poolResource);
+    }
+
+    ResourceDesc AttachmentReservation::GetResourceDesc(AttachmentName resName) const
+    {
+        assert(resName < _entries.size());
+        return _entries[resName]._desc;
+    }
+
+    auto AttachmentReservation::GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
+    {
+        assert(resName < _entries.size());
+        const auto& e = _entries[resName];
+        if (e._poolResource == ~0u)
+            return _viewPool.GetTextureView(e._resource, usage, window);
+        return checked_cast<AttachmentPool*>(_pool)->GetView(e._poolResource, usage, window);
+    }
+
+    auto AttachmentReservation::GetSRV(AttachmentName resName, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
+    {
+        return GetView(resName, BindFlag::ShaderResource, window);
+    }
+
+    const std::shared_ptr<IResource>& AttachmentReservation::MapSemanticToResource(uint64_t semantic) const
+    {
+        static std::shared_ptr<IResource> dummy;
+        for (const auto& e:_entries)
+            if (e._semantic == semantic) {
+                assert(!e._presentationChain);
+                if (e._poolResource == ~0u) return e._resource;
+                return checked_cast<AttachmentPool*>(_pool)->GetResource(e._poolResource);
+            }
+        return dummy;
+    }
+
+    AttachmentName AttachmentReservation::MapSemanticToName(uint64_t semantic) const
+    {
+        for (unsigned c=0; c<_entries.size(); ++c)
+            if (_entries[c]._semantic == semantic)
+                return c;
+        return ~0u;
+    }
+
+    void AttachmentReservation::DefineDoubleBufferAttachment(
+        uint64_t yesterdaySemantic,
+        uint64_t todaySemantic,
+        const ResourceDesc& desc,
+        ClearValue defaultContents,
+        BindFlag::BitField initialLayout)
+    {
+        auto existingRegistration = std::find_if(_doubleBufferAttachments.begin(), _doubleBufferAttachments.end(), [y=yesterdaySemantic, t=todaySemantic](const auto& q) { return q._yesterdaySemantic == y || q._todaySemantic == t; });
+        if (existingRegistration != _doubleBufferAttachments.end())
+            if (!MatchRequest(desc, existingRegistration->_desc) || initialLayout != existingRegistration->_initialLayout || yesterdaySemantic != existingRegistration->_yesterdaySemantic || todaySemantic != existingRegistration->_todaySemantic)
+                Throw(std::runtime_error("Double buffer attachment registered multiple times, and both registrations don't agree"));
+
+        // figure out if we have the given attachment already. If not, we'll declare a new one with an initial clear operation
+        auto existing = std::find_if(_entries.begin(), _entries.end(), [s=todaySemantic](const auto& q) { return q._semantic == s; });
+        if (existing != _entries.end()) {
+            // check compatibility, using the same behaviour as AttachmentPool::Reserve
+            // We can get a mis-match if (for example) resolution changed and there's still a registered attachment with the previous size
+            assert(!existing->_presentationChain);
+            auto* res = (existing->_poolResource != ~0u) ? checked_cast<AttachmentPool*>(_pool)->GetResource(existing->_poolResource).get() : existing->_resource.get();
+            if (!MatchRequest(desc, res->GetDesc()))
+                Throw(std::runtime_error("Double buffer attachment description mismatch between an existing registered attachment and requested attachment"));
+            if (existing->_pendingSwitchToLayout.value_or(existing->_currentLayout) != initialLayout)
+                Throw(std::runtime_error("Double buffer attachment layout mismatch between an existing registered attachment and requested attachment"));
+            
+            // still need to record the request in _doubleBufferAttachments
+            if (existingRegistration == _doubleBufferAttachments.end())
+                _doubleBufferAttachments.push_back({
+                    yesterdaySemantic, todaySemantic, initialLayout, defaultContents, desc
+                });
+            return;
+        }
+
+        // no existing entry, create a new one and ensure that there's a pending clear registered
+        assert(_pool);
+        PreregisteredAttachment reservation {
+            0, desc, {}, PreregisteredAttachment::State::Uninitialized, 0
+        };
+        auto newReservation = checked_cast<AttachmentPool*>(_pool)->Reserve(MakeIteratorRange(&reservation, &reservation+1));
+        assert(newReservation._entries.size() == 1);
+        auto newEntry = std::move(newReservation._entries[0]);
+        newReservation._entries.clear();
+
+        newEntry._semantic = todaySemantic;
+        newEntry._pendingClear = defaultContents;
+        newEntry._pendingSwitchToLayout = initialLayout;
+        newEntry._desc = desc;
+        _entries.emplace_back(std::move(newEntry));
+
+        if (existingRegistration == _doubleBufferAttachments.end())
+            _doubleBufferAttachments.push_back({
+                yesterdaySemantic, todaySemantic, initialLayout, defaultContents, desc
+            });
+    }
+
+    void AttachmentReservation::DefineDoubleBufferAttachments(IteratorRange<const DoubleBufferAttachment*> attachments)
+    {
+        for (auto& a:attachments)
+            DefineDoubleBufferAttachment(a._yesterdaySemantic, a._todaySemantic, a._desc, a._initialContents, a._initialLayout);
+    }
+
+    AttachmentReservation AttachmentReservation::CaptureDoubleBufferAttachments()
+    {
+        // Double buffer attachment reservations work both ways -- we register what we want to use from last frame, and those
+        // same reservations are used to determine what we will pass on from this frame to the next
+        AttachmentReservation result;
+        result._pool = _pool;
+        result._reservationFlags = _reservationFlags;
+        for (const auto& res:_doubleBufferAttachments) {
+            auto e = std::find_if(_entries.begin(), _entries.end(), [s=res._yesterdaySemantic](const auto& q) { return q._semantic == s; });
+            if (e == _entries.end()) continue;      // didn't actually write out any information for this semantic
+            if (e->_pendingClear.has_value() || e->_currentLayout == 0) continue;
+            Entry newEntry = *e;
+            newEntry._semantic = res._todaySemantic;        // flip the semantic
+            if (newEntry._pendingSwitchToLayout.has_value() || (newEntry._currentLayout != res._initialLayout))
+                newEntry._pendingSwitchToLayout = res._initialLayout;
+            result._entries.emplace_back(std::move(newEntry));
+        }
+        result.AddRefAll();
+        return result;
+    }
+
+    void AttachmentReservation::Absorb(AttachmentReservation&& src)
+    {
+        if (src._entries.empty()) return;
+        _entries.reserve(_entries.size() + src._entries.size());
+        for (auto& e:src._entries) {
+            assert((e._poolResource == ~0u) || (src._pool == _pool || src._reservationFlags == _reservationFlags));
+
+            auto existing = std::find_if(_entries.begin(), _entries.end(), [s=e._semantic](const auto& q) { return q._semantic == s; });
+            if (existing != _entries.end()) {
+                assert(0);      // if you hit this, it means we already have an attachment for this semantic
+                continue;
+            }
+
+            _entries.emplace_back(std::move(e));
+        }
+        src._entries.clear();
+    }
+
+    void AttachmentReservation::CompleteInitialization(IThreadContext& threadContext)
+    {
+        for (unsigned c=0; c<_entries.size(); ++c)
+            if (_entries[c]._pendingClear) {
+                InitializeEmptyYesterdayAttachment(threadContext, *this, c, _entries[c]._pendingClear.value());
+                _entries[c]._pendingClear = {};
+            }
+
+        VLA(IResource*, completeInitializationResources, _entries.size());
+        size_t completeInitializationCount = 0;
+        VLA(uint64_t, makeVisibleResources, _entries.size());
+        size_t makeVisibleCount = 0;
+
+        Metal::BarrierHelper barrierHelper{threadContext};
+
+        for (auto& a:_entries) {
+            if (a._pendingSwitchToLayout) {
+                if (a._resource) {
+                    if (a._currentLayout == ~0u) {
+                        barrierHelper.Add(*a._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
+                    } else
+                        barrierHelper.Add(*a._resource, a._currentLayout, *a._pendingSwitchToLayout);
+                } else if (a._presentationChain) {
+                    assert(!a._resource);
+                    a._resource = threadContext.BeginFrame(*a._presentationChain);
+                    assert(a._resource);
+                    if (a._currentLayout == ~0u) {
+                        barrierHelper.Add(*a._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
+                    } else
+                        barrierHelper.Add(*a._resource, a._currentLayout, *a._pendingSwitchToLayout);
+                } else {
+                    assert(a._poolResource != ~0u);
+                    auto& poolResource = checked_cast<AttachmentPool*>(_pool)->_attachments[a._poolResource];
+                    if (!poolResource._resource) {
+                        checked_cast<AttachmentPool*>(_pool)->BuildAttachment(a._poolResource);
+                        assert(poolResource._resource);
+                        barrierHelper.Add(*poolResource._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
+                    } else if (a._currentLayout == ~0u) {
+                        // not a new texture, but we don't know the previous layout / usage
+                        barrierHelper.Add(*poolResource._resource, Metal::BarrierResourceUsage::AllCommandsReadAndWrite(), *a._pendingSwitchToLayout);
+                    } else {
+                        barrierHelper.Add(*poolResource._resource, a._currentLayout, *a._pendingSwitchToLayout);
+                    }
+                    poolResource._pendingCompleteInitialization = false;
+                }
+                a._currentLayout = a._pendingSwitchToLayout.value();
+                a._pendingSwitchToLayout = {};
+            } else if (a._presentationChain && !a._resource) {
+                a._resource = threadContext.BeginFrame(*a._presentationChain);
+                assert(a._resource);
+            } else if (a._poolResource != ~0u) {
+                auto& poolResource = checked_cast<AttachmentPool*>(_pool)->_attachments[a._poolResource];
+                if (poolResource._pendingCompleteInitialization) {
+                    if (!poolResource._resource)
+                        checked_cast<AttachmentPool*>(_pool)->BuildAttachment(a._poolResource);
+                    assert(poolResource._resource);
+                    completeInitializationResources[completeInitializationCount++] = poolResource._resource.get();
+                    poolResource._pendingCompleteInitialization = false;
+                } 
+                // We don't need a "make visible" in the "else" case, because for pool resources we must have had a complete initialization to at some earlier
+                // point. We would only have problems if there was an abandoned cmd list, or one submitted out of order
+            } else {
+                // We don't know the history of bound attachments submitted with no layout -- so we have to call make visible for them
+                if (a._currentLayout == ~0u)
+                    makeVisibleResources[makeVisibleCount++] = a._resource->GetGUID();
+            }
+        }
+
+        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+        Metal::CompleteInitialization(
+            metalContext,
+            MakeIteratorRange(completeInitializationResources, &completeInitializationResources[completeInitializationCount]));
+
+        if (makeVisibleCount)
+            metalContext.GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(makeVisibleResources, &makeVisibleResources[makeVisibleCount]));
+    }
+
+    bool AttachmentReservation::HasPendingCompleteInitialization() const
+    {
+        for (auto& a:_entries) {
+            if (a._pendingSwitchToLayout)
+                return true;
+
+            if (a._poolResource != ~0u) {
+                auto& poolResource = checked_cast<AttachmentPool*>(_pool)->_attachments[a._poolResource];
+                if (poolResource._pendingCompleteInitialization)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    void AttachmentReservation::AutoBarrier(IThreadContext& threadContext, IteratorRange<const AttachmentBarrier*> barriers)
+    {
+        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+        Metal::BarrierHelper barrierHelper(metalContext);
+        for (auto b:barriers) {
+            auto& i = _entries[b._attachment];
+            if (i._currentLayout != b._layout) {
+                auto* resource = (i._poolResource == ~0u) ? i._resource.get() : checked_cast<AttachmentPool*>(_pool)->GetResource(i._poolResource).get();
+                barrierHelper.Add(*resource, i._currentLayout, Metal::BarrierResourceUsage{b._layout, b._shaderStage});
+                i._currentLayout = b._layout;
+            }
+        }
+    }
+
+    AttachmentReservation::AttachmentReservation() = default;
+    
+    AttachmentReservation::AttachmentReservation(IAttachmentPool& pool) : _pool(&pool)
+    {
+    }
+
+    AttachmentReservation::~AttachmentReservation()
+    {
+        ReleaseAll();
+    }
+
+    AttachmentReservation::AttachmentReservation(AttachmentReservation&& moveFrom)
+    : _entries(std::move(moveFrom._entries))
+    , _pool(std::move(moveFrom._pool))
+    , _reservationFlags(std::move(moveFrom._reservationFlags))
+    {
+        moveFrom._pool = nullptr;
+    }
+
+    auto AttachmentReservation::operator=(AttachmentReservation&& moveFrom) -> AttachmentReservation&
+    {
+        ReleaseAll();
+        _entries = std::move(moveFrom._entries);
+        _pool = std::move(moveFrom._pool);
+        _reservationFlags = std::move(moveFrom._reservationFlags);
+        moveFrom._pool = nullptr;
+        return *this;
+    }
+
+    AttachmentReservation::AttachmentReservation(const AttachmentReservation& copyFrom)
+    : _entries(copyFrom._entries)
+    , _pool(copyFrom._pool)
+    , _reservationFlags(copyFrom._reservationFlags)
+    {
+        AddRefAll();
+    }
+
+    auto AttachmentReservation::operator=(const AttachmentReservation& copyFrom) -> AttachmentReservation&
+    {
+        ReleaseAll();
+        _entries = copyFrom._entries;
+        _pool = copyFrom._pool;
+        _reservationFlags = copyFrom._reservationFlags;
+        AddRefAll();
+        return *this;
+    }
+
+    AttachmentReservation::AttachmentReservation(
+        std::vector<AttachmentToReserve>&& reservedAttachments,
+        IAttachmentPool* pool,
+        ReservationFlag::BitField flags)
+    : _pool(pool)
+    , _reservationFlags(flags)
+    {
+        assert(reservedAttachments.empty() || _pool);
+        _entries.reserve(reservedAttachments.size());
+        for (const auto& a:reservedAttachments) {
+            Entry e;
+            e._poolResource = a._poolName;
+            e._desc = pool->GetResourceDesc(a._poolName);
+            e._resource = std::move(a._resource);
+            e._presentationChain = std::move(a._presentationChain);
+            e._semantic = a._semantic;
+            e._pendingClear = a._pendingClear;
+            e._pendingSwitchToLayout = a._pendingSwitchToLayout;
+            e._currentLayout = a._currentLayout.value_or(~0u);
+            _entries.push_back(e);
+        }
+
+        AddRefAll();
+    }
+
+    void AttachmentReservation::Remove(AttachmentName resName)
+    {
+        // remove a specific entry from the attachment reservation (and release the ref count)
+        // note that this will rebind all of the attachment names (since they are just indices into the internal array)
+        assert(resName < _entries.size());
+        if (_pool && _entries[resName]._poolResource != ~0u) {
+            AttachmentName toRelease = _entries[resName]._poolResource;
+            checked_cast<AttachmentPool*>(_pool)->Release(MakeIteratorRange(&toRelease, &toRelease+1), _reservationFlags);
+        }
+        _entries.erase(_entries.begin()+resName);
+    }
+
+    void AttachmentReservation::ReleaseAll()
+    {
+        if (_pool) {
+            VLA(AttachmentName, poolAttachmentsToRelease, _entries.size());
+            unsigned attachmentsToReleaseCount = 0;
+            for (auto& a:_entries)
+                if (a._poolResource != ~0u)
+                    poolAttachmentsToRelease[attachmentsToReleaseCount++] = a._poolResource;
+            if (attachmentsToReleaseCount)
+                checked_cast<AttachmentPool*>(_pool)->Release(MakeIteratorRange(poolAttachmentsToRelease, &poolAttachmentsToRelease[attachmentsToReleaseCount]), _reservationFlags);
+        }
+    }
+
+    void AttachmentReservation::AddRefAll()
+    {
+        if (_pool) {
+            VLA(AttachmentName, poolAttachmentsToRelease, _entries.size());
+            unsigned attachmentsToReleaseCount = 0;
+            for (auto& a:_entries)
+                if (a._poolResource != ~0u)
+                    poolAttachmentsToRelease[attachmentsToReleaseCount++] = a._poolResource;
+            if (attachmentsToReleaseCount)
+                checked_cast<AttachmentPool*>(_pool)->AddRef(MakeIteratorRange(poolAttachmentsToRelease, &poolAttachmentsToRelease[attachmentsToReleaseCount]), _reservationFlags);
+        }
+    }
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class FrameBufferPool
+    class FrameBufferPool : public IFrameBufferPool
     {
     public:
         class Result
@@ -349,7 +1212,7 @@ namespace RenderCore { namespace Techniques
             AttachmentPool& attachmentPool,
             AttachmentReservation* parentReservation);
 
-        void Reset();
+        void Reset() override SEALED;
 
         FrameBufferPool();
         ~FrameBufferPool();
@@ -364,14 +1227,14 @@ namespace RenderCore { namespace Techniques
         };
         Entry _entries[24];
         unsigned _currentTickId = 0;
-        DEBUG_ONLY(std::thread::id _boundThread);
+        DEBUG_ONLY(Threading::RecursiveMutex _lock);
 
         void IncreaseTickId();
     };
 
     void FrameBufferPool::IncreaseTickId()
     {
-        DEBUG_ONLY(assert(std::this_thread::get_id() == _boundThread));
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
         // look for old FBs, and evict; then just increase the tick id
         const unsigned evictionRange = 2*dimof(_entries);
         for (auto&e:_entries)
@@ -427,7 +1290,7 @@ namespace RenderCore { namespace Techniques
         AttachmentPool& attachmentPool,
         AttachmentReservation* parentReservation) -> Result
     {
-        DEBUG_ONLY(assert(std::this_thread::get_id() == _boundThread));
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
         auto poolAttachments = attachmentPool.Reserve(resolvedAttachmentDescs, parentReservation);
 		assert(poolAttachments.GetResourceCount() == desc.GetAttachments().size());
         auto& factory = Metal::GetObjectFactory(*threadContext.GetDevice());
@@ -537,7 +1400,7 @@ namespace RenderCore { namespace Techniques
 
     void FrameBufferPool::Reset()
     {
-        DEBUG_ONLY(assert(std::this_thread::get_id() == _boundThread));
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
         for (unsigned c=0; c<dimof(_entries); ++c)
             _entries[c] = {};
         _currentTickId = 0;
@@ -545,856 +1408,16 @@ namespace RenderCore { namespace Techniques
 
     FrameBufferPool::FrameBufferPool()
     {
-        DEBUG_ONLY(_boundThread = std::this_thread::get_id());
     }
 
     FrameBufferPool::~FrameBufferPool()
     {}
 
-    std::shared_ptr<FrameBufferPool> CreateFrameBufferPool()
+    IFrameBufferPool::~IFrameBufferPool() {}
+
+    std::shared_ptr<IFrameBufferPool> CreateFrameBufferPool()
     {
         return std::make_shared<FrameBufferPool>();
-    }
-
-    void ResetFrameBufferPool(FrameBufferPool& fbPool)
-    {
-        fbPool.Reset();
-    }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-    class AttachmentPool::Pimpl
-    {
-    public:
-        struct Attachment
-        {
-            IResourcePtr            _resource;
-            ResourceDesc            _desc;
-            unsigned                _lockCount = 0;
-            bool                    _pendingCompleteInitialization = true;
-            std::string             _name;      // tends to just be the name of the first request (since attachments will be frequently used for multiple requests)
-        };
-        std::vector<Attachment>     _attachments;
-
-        ViewPool                    _srvPool;
-        std::shared_ptr<IDevice>    _device;
-
-        #if defined(_DEBUG)
-            std::thread::id _boundThread;
-        #endif
-
-        bool BuildAttachment(AttachmentName attach);
-    };
-
-    bool AttachmentPool::Pimpl::BuildAttachment(AttachmentName attachName)
-    {
-        DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
-        Attachment* attach = &_attachments[attachName];
-        assert(attach);
-        if (!attach) return false;
-
-        assert(attach->_desc._type == ResourceDesc::Type::Texture);
-        assert(attach->_desc._textureDesc._width > 0);
-        assert(attach->_desc._textureDesc._height > 0);
-        assert(attach->_desc._textureDesc._depth > 0);
-        attach->_resource = _device->CreateResource(attach->_desc, attach->_name.empty() ? MakeStringSection("attachment-pool") : MakeStringSection(attach->_name));
-        attach->_pendingCompleteInitialization = true;
-        return attach->_resource != nullptr;
-    }
-
-    auto AttachmentPool::GetResource(AttachmentName attachName) const -> const std::shared_ptr<IResource>&
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        if (attachName >= _pimpl->_attachments.size()) return s_nullResourcePtr;
-        auto* attach = &_pimpl->_attachments[attachName];
-        assert(attach);
-        if (attach->_resource)
-            return attach->_resource;
-            
-        _pimpl->BuildAttachment(attachName);
-        return attach->_resource;
-	}
-
-    const ResourceDesc& AttachmentPool::GetResourceDesc(AttachmentName attachName) const
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        static ResourceDesc nullDesc;
-        if (attachName >= _pimpl->_attachments.size()) return nullDesc;
-        auto* attach = &_pimpl->_attachments[attachName];
-        assert(attach);
-        return attach->_desc;
-    }
-
-    AttachmentName AttachmentPool::GetNameForResource(IResource& res) const
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        for (unsigned c=0; c<_pimpl->_attachments.size(); ++c)
-            if (_pimpl->_attachments[c]._resource.get() == &res)
-                return c;
-        return ~0u;
-    }
-
-	const std::shared_ptr<IResourceView>& AttachmentPool::GetSRV(AttachmentName attachName, const TextureViewDesc& window) const
-	{
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        return GetView(attachName, BindFlag::ShaderResource, window);
-	}
-
-    const std::shared_ptr<IResourceView>& AttachmentPool::GetView(AttachmentName attachName, BindFlag::Enum usage, const TextureViewDesc& window) const
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        static std::shared_ptr<IResourceView> dummy;
-        if (attachName >= _pimpl->_attachments.size()) return dummy;
-        auto* attach = &_pimpl->_attachments[attachName];
-        assert(attach);
-        if (!attach->_resource)
-        	_pimpl->BuildAttachment(attachName);
-		assert(attach->_resource);
-        return _pimpl->_srvPool.GetTextureView(attach->_resource, usage, window);
-    }
-
-    static bool MatchRequest(const ResourceDesc& preregisteredDesc, const ResourceDesc& concreteObjectDesc)
-    {
-        assert(preregisteredDesc._type == ResourceDesc::Type::Texture && concreteObjectDesc._type == ResourceDesc::Type::Texture);
-        return
-            preregisteredDesc._textureDesc._arrayCount == concreteObjectDesc._textureDesc._arrayCount
-            && (AsTypelessFormat(preregisteredDesc._textureDesc._format) == AsTypelessFormat(concreteObjectDesc._textureDesc._format) || preregisteredDesc._textureDesc._format == Format::Unknown)
-            && preregisteredDesc._textureDesc._width == concreteObjectDesc._textureDesc._width
-            && preregisteredDesc._textureDesc._height == concreteObjectDesc._textureDesc._height
-            && preregisteredDesc._textureDesc._samples == concreteObjectDesc._textureDesc._samples
-            && (concreteObjectDesc._bindFlags & preregisteredDesc._bindFlags) == preregisteredDesc._bindFlags
-            ;
-    }
-
-    auto AttachmentPool::Reserve(
-        IteratorRange<const PreregisteredAttachment*> attachmentRequests,
-        AttachmentReservation* parentReservation,
-        ReservationFlag::BitField flags) -> AttachmentReservation
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        AttachmentReservation emptyReservation;
-        if (!parentReservation) parentReservation = &emptyReservation;
-
-        VLA(bool, consumed, _pimpl->_attachments.size());
-        for (unsigned c=0; c<_pimpl->_attachments.size(); ++c) consumed[c] = false;
-        auto originalAttachmentsSize = _pimpl->_attachments.size();
-
-        assert(!parentReservation || !parentReservation->_pool || parentReservation->_pool == this);     // parentReservation must be associated with this pool, or none at all
-
-        // Treat any attachments that are bound to semantic values as "consumed" already.
-        // In other words, we can't give these attachments to requests without a semantic,
-        // or using another semantic.
-        for (unsigned c=0; c<_pimpl->_attachments.size(); ++c)
-            consumed[c] = _pimpl->_attachments[c]._lockCount > 0;
-
-        std::vector<AttachmentReservation::AttachmentToReserve> selectedAttachments;
-        selectedAttachments.resize(attachmentRequests.size());
-
-        for (unsigned r=0; r<attachmentRequests.size(); ++r) {
-            const auto& request = attachmentRequests[r];
-
-            // If a semantic value is set, we should first check to see if the request can match
-            // something bound to that semantic in the parent reservation
-            if (!request._semantic) continue;
-
-            auto matchingParent = std::find_if(
-                parentReservation->_entries.begin(), parentReservation->_entries.end(),
-                [semantic=request._semantic](const auto& q) { return q._semantic == semantic; });
-
-            if (matchingParent != parentReservation->_entries.end()) {
-                #if defined(_DEBUG)
-                    auto q = unsigned(matchingParent - parentReservation->_entries.begin());
-                    if (!MatchRequest(request._desc, parentReservation->GetResourceDesc(q))) {
-                        Log(Warning) << "Attachment previously used for the semantic (" << AttachmentSemantic{request._semantic} << ") does not match the request for this semantic. Attempting to use it anyway. Request: "
-                            << request._desc << ", Bound previously: " << parentReservation->GetResourceDesc(q)
-                            << std::endl;
-                    }
-                #endif
-
-                selectedAttachments[r]._resource = matchingParent->_resource;
-                selectedAttachments[r]._presentationChain = matchingParent->_presentationChain;
-                selectedAttachments[r]._poolName = matchingParent->_poolResource;
-                selectedAttachments[r]._currentLayout = matchingParent->_currentLayout;
-                selectedAttachments[r]._pendingSwitchToLayout = matchingParent->_pendingSwitchToLayout;
-                selectedAttachments[r]._semantic = request._semantic;
-
-                if (request._layout && (matchingParent->_pendingSwitchToLayout.value_or(matchingParent->_currentLayout) != request._layout)) {
-                    // If you hit this, it probably means that initial/final layouts for sequential render passes do not agree
-                    // Continuing will spit out a lot of underlying graphics API warnings and could potentially cause synchronization
-                    // bugs on certain hardware
-                    Log(Warning) << "Request for attachment with semantic (" << AttachmentSemantic{request._semantic} << ") found mismatch between layouts" << std::endl;
-                    Log(Warning) << "Requested layout: (" << BindFlagsAsString(request._layout) << "), resource last left in layout: (" << BindFlagsAsString(matchingParent->_pendingSwitchToLayout.value_or(matchingParent->_currentLayout)) << ")" << std::endl;
-                    assert(0);
-                }
-            }
-        }
-
-        // If we didn't find a match in one of our bound semantic attachments, we must flow
-        // through and treat it as a temporary attachment.
-        for (unsigned r=0; r<attachmentRequests.size(); ++r) {
-            const auto& request = attachmentRequests[r];
-
-            if (selectedAttachments[r]._poolName != ~0u || selectedAttachments[r]._resource || selectedAttachments[r]._presentationChain) continue;
-
-            // We will never attempt to reuse something from the parent reservation (unless the semantics match),
-            // even another temporary -- ie, we're expecting any temporaries in the parent reservation are there
-            // because they are expected to be used later
-
-            bool foundMatch = false;
-            unsigned poolAttachmentName = 0;
-            for (unsigned q=0; q<_pimpl->_attachments.size(); ++q) {
-                if (MatchRequest(request._desc, _pimpl->_attachments[q]._desc) && q < originalAttachmentsSize && !consumed[q]) {
-                    consumed[q] = true;
-                    poolAttachmentName = q;
-                    foundMatch = true;
-                    break;
-                }
-            }
-
-            if (!foundMatch) {
-                _pimpl->_attachments.push_back(Pimpl::Attachment{nullptr, request._desc});
-                poolAttachmentName = unsigned(_pimpl->_attachments.size()-1);
-                _pimpl->_attachments[poolAttachmentName]._name = Concatenate("[pool] ", request._name);
-            }
-
-            selectedAttachments[r]._poolName = poolAttachmentName;
-            selectedAttachments[r]._semantic = request._semantic;
-            // selectedAttachments[r]._currentLayout = ...
-            if (request._layout)
-                selectedAttachments[r]._pendingSwitchToLayout = request._layout;
-
-            // If the request was expecting an initialized input, it must match either with something explicitly bound to the semantic,
-            // or with something with double buffer attachment rules
-            // If we don't have either of these, then we can't fulfill it correctly -- we'd be passing uninitialized data into something
-            // that asked for an initialized attachment
-            if (request._state != PreregisteredAttachment::State::Uninitialized) {
-                char buffer[256];
-                if (request._semantic) {
-                    Throw(std::runtime_error(StringMeldInPlace(buffer) << "Cannot find initialized attachment for request with semantic " << AttachmentSemantic{request._semantic}));
-                } else
-                    Throw(std::runtime_error(StringMeldInPlace(buffer) << "Cannot find initialized attachment for non-semantic request"));
-            }
-        }
-
-        return AttachmentReservation{std::move(selectedAttachments), this, flags};
-    }
-
-    void AttachmentPool::ResetActualized()
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        // Reset all actualized attachments. They will get recreated on demand
-        _pimpl->_attachments.clear();
-        _pimpl->_srvPool.Reset();
-    }
-
-    void AttachmentPool::AddRef(IteratorRange<const AttachmentName*> attachments, ReservationFlag::BitField flags)
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        for (auto a:attachments) {
-            assert(a<_pimpl->_attachments.size());
-            ++_pimpl->_attachments[a]._lockCount;
-        }
-    }
-
-    void AttachmentPool::Release(IteratorRange<const AttachmentName*> attachments, ReservationFlag::BitField flags)
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        for (auto a:attachments) {
-            assert(a<_pimpl->_attachments.size());
-            assert(_pimpl->_attachments[a]._lockCount >= 1);
-            --_pimpl->_attachments[a]._lockCount;
-        }
-    }
-
-    static void InitializeEmptyYesterdayAttachment(
-        IThreadContext& threadContext,
-        AttachmentReservation& attachmentReservation,
-        AttachmentName attachmentName,
-        ClearValue initialContents)
-    {
-        // initialize a "yesterday" attachment where there is no prior data (eg, on the first frame)
-        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-        auto desc = attachmentReservation.GetResourceDesc(attachmentName);
-        if (desc._bindFlags & BindFlag::RenderTarget) {
-            auto rtv = attachmentReservation.GetView(attachmentName, BindFlag::RenderTarget);
-            metalContext.Clear(*rtv, initialContents._float);
-        } else if (desc._bindFlags & BindFlag::UnorderedAccess) {
-            auto uav = attachmentReservation.GetView(attachmentName, BindFlag::UnorderedAccess);
-            metalContext.ClearFloat(*uav, initialContents._float);
-        } else if (desc._bindFlags & BindFlag::DepthStencil) {
-            auto dsv = attachmentReservation.GetView(attachmentName, BindFlag::DepthStencil);
-            auto components = GetComponents(desc._textureDesc._format);
-            ClearFilter::BitField clearFilter = 0;
-            if (components == FormatComponents::Depth || components == FormatComponents::DepthStencil)
-                clearFilter |= ClearFilter::Depth;
-            if (components == FormatComponents::Stencil || components == FormatComponents::DepthStencil)
-                clearFilter |= ClearFilter::Stencil;
-            metalContext.Clear(*dsv, clearFilter, initialContents._depthStencil._depth, initialContents._depthStencil._stencil);
-        } else {
-            Throw(std::runtime_error("Unable to initialize double buffered attachment, because no writable bind flags were given"));
-        }
-    }
-
-    std::string AttachmentPool::GetMetrics() const
-    {
-        DEBUG_ONLY(assert(_pimpl->_boundThread == std::this_thread::get_id()));
-        std::stringstream str;
-        size_t totalByteCount = 0;
-        str << "(" << _pimpl->_attachments.size() << ") attachments:" << std::endl;
-        for (unsigned c=0; c<_pimpl->_attachments.size(); ++c) {
-            auto& desc = _pimpl->_attachments[c]._desc;
-            str << "    [" << c << "] " << desc;
-            if (_pimpl->_attachments[c]._resource) {
-                totalByteCount += ByteCount(_pimpl->_attachments[c]._resource->GetDesc());
-                str << " (actualized)";
-            } else {
-                str << " (not actualized)";
-            }
-            str << std::endl;
-        }
-
-        str << "Total memory: (" << std::setprecision(4) << totalByteCount / (1024.f*1024.f) << "MiB)" << std::endl;
-        str << "ViewPool count: (" << _pimpl->_srvPool.GetMetrics()._viewCount << ")" << std::endl;
-        return str.str();
-    }
-
-    AttachmentPool::AttachmentPool(const std::shared_ptr<IDevice>& device)
-    {
-        _pimpl = std::make_unique<Pimpl>();
-        _pimpl->_device = device;
-        DEBUG_ONLY(_pimpl->_boundThread = std::this_thread::get_id());
-    }
-
-    AttachmentPool::~AttachmentPool()
-    {}
-
-    AttachmentName AttachmentReservation::Bind(uint64_t semantic, std::shared_ptr<IResource> resource, BindFlag::BitField currentLayout)
-    {
-        Entry newEntry;
-        newEntry._resource = std::move(resource);
-        newEntry._desc = newEntry._resource->GetDesc();
-        newEntry._semantic = semantic;
-        newEntry._currentLayout = currentLayout;    // current layout can be ~0u, which means never initialized
-
-        // replace an existing binding to this semantic, if one exists
-        for (auto e=_entries.begin(); e!=_entries.end(); ++e) {
-            if (e->_semantic == semantic) {
-                if (_pool && e->_poolResource != ~0u) {
-                    AttachmentName toRelease = e->_poolResource;
-                    _pool->Release(MakeIteratorRange(&toRelease, &toRelease+1), _reservationFlags);
-                }
-                *e = std::move(newEntry);
-                return (AttachmentName)std::distance(_entries.begin(), e);
-            }
-        }
-
-        _entries.push_back(std::move(newEntry));
-        return AttachmentName(_entries.size()-1);
-    }
-
-    AttachmentName AttachmentReservation::Bind(uint64_t semantic, std::shared_ptr<IPresentationChain> presentationChain, const ResourceDesc& resourceDesc, BindFlag::BitField currentLayout)
-    {
-        Entry newEntry;
-        newEntry._presentationChain = std::move(presentationChain);
-        newEntry._desc = resourceDesc;
-        newEntry._semantic = semantic;
-        newEntry._currentLayout = currentLayout;    // current layout can be ~0u, which means never initialized
-
-        // replace an existing binding to this semantic, if one exists
-        for (auto e=_entries.begin(); e!=_entries.end(); ++e) {
-            if (e->_semantic == semantic) {
-                if (_pool && e->_poolResource != ~0u) {
-                    AttachmentName toRelease = e->_poolResource;
-                    _pool->Release(MakeIteratorRange(&toRelease, &toRelease+1), _reservationFlags);
-                }
-                *e = std::move(newEntry);
-                return (AttachmentName)std::distance(_entries.begin(), e);
-            }
-        }
-
-        _entries.push_back(std::move(newEntry));
-        return AttachmentName(_entries.size()-1);
-    }
-
-    void AttachmentReservation::Unbind(const IResource& resource)
-    {
-        // note that this will end up reshuffling all of the resNames
-        for (auto i=_entries.begin(); i!=_entries.end();) {
-            if (i->_resource.get() == &resource) {
-                i = _entries.erase(i);
-            } else
-                ++i;
-        }
-    }
-
-    void AttachmentReservation::UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms)
-    {
-        assert(transforms.size() == childReservation._entries.size());
-
-        VLA(bool, removeEntry, _entries.size());
-        for (unsigned c=0; c<_entries.size(); ++c)
-            removeEntry[c] = false;
-
-        std::vector<Entry> newEntries;
-        for (unsigned aIdx=0; aIdx<transforms.size(); ++aIdx) {
-            auto transform = transforms[aIdx];
-            auto& childEntry = childReservation._entries[aIdx];
-
-            if (    transform._type == AttachmentTransform::Temporary
-                ||  transform._type == AttachmentTransform::Consumed) {
-                // unbind this attachment if it appears anywhere, and unbind the semantic as well
-                for (unsigned c=0; c<_entries.size(); ++c)
-                    if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource)
-                        removeEntry[c] = true;
-                if (childEntry._semantic != ~0ull && childEntry._semantic != 0ull)
-                    for (unsigned c=0; c<_entries.size(); ++c)
-                        if (_entries[c]._semantic == childEntry._semantic)
-                            removeEntry[c] = true;
-            } else if (transform._type == AttachmentTransform::LoadedAndStored
-                    || transform._type == AttachmentTransform::Generated) {
-                // unbind any alternative bindings of this semantic, and update the layout for this resource
-                // note that we allow the resource to keep any previous binding it might have
-                for (unsigned c=0; c<_entries.size(); ++c)
-                    if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource) {
-                        _entries[c]._currentLayout = transform._finalLayout;
-                        _entries[c]._pendingClear = {};
-                        _entries[c]._pendingSwitchToLayout = {};
-                    } else if (_entries[c]._presentationChain && _entries[c]._presentationChain == childEntry._presentationChain) {
-                        // child reservation may have acquired the resource for this presentationChain
-                        _entries[c]._resource = childEntry._resource;
-                        _entries[c]._currentLayout = transform._finalLayout;
-                        _entries[c]._pendingClear = {};
-                        _entries[c]._pendingSwitchToLayout = {};
-                    }
-
-                if (childEntry._semantic != ~0ull && childEntry._semantic != 0ull) {
-                    bool foundExistingBinding = false;
-                    for (unsigned c=0; c<_entries.size(); ++c)
-                        if (_entries[c]._semantic == childEntry._semantic) {
-                            if (_entries[c]._poolResource == childEntry._poolResource && _entries[c]._resource == childEntry._resource) {
-                                foundExistingBinding = true;
-                                removeEntry[c] = false;
-                            } else
-                                removeEntry[c] = true;
-                        }
-                    if (!foundExistingBinding) {
-                        Entry newEntry;
-                        newEntry._desc = childEntry._desc;
-                        newEntry._poolResource = childEntry._poolResource;
-                        newEntry._resource = childEntry._resource;
-                        newEntry._currentLayout = transform._finalLayout;
-                        newEntry._semantic = childEntry._semantic;
-                        newEntries.emplace_back(std::move(newEntry));
-                    }
-                }
-            }
-        }
-
-        // release fixup
-        {
-            auto initialEntriesSize = _entries.size();
-            VLA(AttachmentName, toRelease, initialEntriesSize);
-            unsigned toReleaseCount = 0;
-            for (int c=(int)initialEntriesSize-1; c>=0; c--)
-                if (removeEntry[c]) {
-                    if (_entries[c]._poolResource != ~0u)
-                        toRelease[toReleaseCount++] = _entries[c]._poolResource;
-                    _entries.erase(_entries.begin()+c);
-                }
-
-            if (toReleaseCount)
-                _pool->Release(MakeIteratorRange(toRelease, toRelease+toReleaseCount), _reservationFlags);
-        }
-
-        // addref fixup
-        if (!newEntries.empty()) {
-            VLA(AttachmentName, toAddRef, newEntries.size());
-            unsigned toAddRefCount = 0;
-
-            _entries.reserve(_entries.size()+newEntries.size());
-            for (auto& e:newEntries) {
-                if (e._poolResource != ~0u)
-                    toAddRef[toAddRefCount++] = e._poolResource;
-                _entries.emplace_back(std::move(e));
-            }
-
-            if (!_pool) {
-                _pool = childReservation._pool;
-                _reservationFlags = childReservation._reservationFlags;
-            }
-
-            _pool->AddRef(MakeIteratorRange(toAddRef, toAddRef+toAddRefCount), _reservationFlags);
-        }
-
-        assert(!_pool || _pool == childReservation._pool);
-        assert(!_pool || _reservationFlags == childReservation._reservationFlags);
-    }
-
-    // AttachmentReservation has it's own indexing for attachments
-    // this will be zero-based and agree with the ordering of requests when returned from AttachmentPool::Reserve
-    // this can be used to make it compatible with the AttachmentName in a FrameBufferDesc
-    const std::shared_ptr<IResource>& AttachmentReservation::GetResource(AttachmentName resName) const
-    {
-        assert(resName < _entries.size());
-        auto& e = _entries[resName];
-        if (e._resource) return e._resource;
-        assert(!e._presentationChain);
-        return _pool->GetResource(e._poolResource);
-    }
-
-    ResourceDesc AttachmentReservation::GetResourceDesc(AttachmentName resName) const
-    {
-        assert(resName < _entries.size());
-        return _entries[resName]._desc;
-    }
-
-    auto AttachmentReservation::GetView(AttachmentName resName, BindFlag::Enum usage, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
-    {
-        assert(resName < _entries.size());
-        const auto& e = _entries[resName];
-        if (e._poolResource == ~0u)
-            return _viewPool.GetTextureView(e._resource, usage, window);
-        return _pool->GetView(e._poolResource, usage, window);
-    }
-
-    auto AttachmentReservation::GetSRV(AttachmentName resName, const TextureViewDesc& window) const -> const std::shared_ptr<IResourceView>&
-    {
-        return GetView(resName, BindFlag::ShaderResource, window);
-    }
-
-    const std::shared_ptr<IResource>& AttachmentReservation::MapSemanticToResource(uint64_t semantic) const
-    {
-        static std::shared_ptr<IResource> dummy;
-        for (const auto& e:_entries)
-            if (e._semantic == semantic) {
-                assert(!e._presentationChain);
-                if (e._poolResource == ~0u) return e._resource;
-                return _pool->GetResource(e._poolResource);
-            }
-        return dummy;
-    }
-
-    AttachmentName AttachmentReservation::MapSemanticToName(uint64_t semantic) const
-    {
-        for (unsigned c=0; c<_entries.size(); ++c)
-            if (_entries[c]._semantic == semantic)
-                return c;
-        return ~0u;
-    }
-
-    void AttachmentReservation::DefineDoubleBufferAttachment(
-        uint64_t yesterdaySemantic,
-        uint64_t todaySemantic,
-        const ResourceDesc& desc,
-        ClearValue defaultContents,
-        BindFlag::BitField initialLayout)
-    {
-        auto existingRegistration = std::find_if(_doubleBufferAttachments.begin(), _doubleBufferAttachments.end(), [y=yesterdaySemantic, t=todaySemantic](const auto& q) { return q._yesterdaySemantic == y || q._todaySemantic == t; });
-        if (existingRegistration != _doubleBufferAttachments.end())
-            if (!MatchRequest(desc, existingRegistration->_desc) || initialLayout != existingRegistration->_initialLayout || yesterdaySemantic != existingRegistration->_yesterdaySemantic || todaySemantic != existingRegistration->_todaySemantic)
-                Throw(std::runtime_error("Double buffer attachment registered multiple times, and both registrations don't agree"));
-
-        // figure out if we have the given attachment already. If not, we'll declare a new one with an initial clear operation
-        auto existing = std::find_if(_entries.begin(), _entries.end(), [s=todaySemantic](const auto& q) { return q._semantic == s; });
-        if (existing != _entries.end()) {
-            // check compatibility, using the same behaviour as AttachmentPool::Reserve
-            // We can get a mis-match if (for example) resolution changed and there's still a registered attachment with the previous size
-            assert(!existing->_presentationChain);
-            auto* res = (existing->_poolResource != ~0u) ? _pool->GetResource(existing->_poolResource).get() : existing->_resource.get();
-            if (!MatchRequest(desc, res->GetDesc()))
-                Throw(std::runtime_error("Double buffer attachment description mismatch between an existing registered attachment and requested attachment"));
-            if (existing->_pendingSwitchToLayout.value_or(existing->_currentLayout) != initialLayout)
-                Throw(std::runtime_error("Double buffer attachment layout mismatch between an existing registered attachment and requested attachment"));
-            
-            // still need to record the request in _doubleBufferAttachments
-            if (existingRegistration == _doubleBufferAttachments.end())
-                _doubleBufferAttachments.push_back({
-                    yesterdaySemantic, todaySemantic, initialLayout, defaultContents, desc
-                });
-            return;
-        }
-
-        // no existing entry, create a new one and ensure that there's a pending clear registered
-        assert(_pool);
-        PreregisteredAttachment reservation {
-            0, desc, {}, PreregisteredAttachment::State::Uninitialized, 0
-        };
-        auto newReservation = _pool->Reserve(MakeIteratorRange(&reservation, &reservation+1));
-        assert(newReservation._entries.size() == 1);
-        auto newEntry = std::move(newReservation._entries[0]);
-        newReservation._entries.clear();
-
-        newEntry._semantic = todaySemantic;
-        newEntry._pendingClear = defaultContents;
-        newEntry._pendingSwitchToLayout = initialLayout;
-        newEntry._desc = desc;
-        _entries.emplace_back(std::move(newEntry));
-
-        if (existingRegistration == _doubleBufferAttachments.end())
-            _doubleBufferAttachments.push_back({
-                yesterdaySemantic, todaySemantic, initialLayout, defaultContents, desc
-            });
-    }
-
-    void AttachmentReservation::DefineDoubleBufferAttachments(IteratorRange<const DoubleBufferAttachment*> attachments)
-    {
-        for (auto& a:attachments)
-            DefineDoubleBufferAttachment(a._yesterdaySemantic, a._todaySemantic, a._desc, a._initialContents, a._initialLayout);
-    }
-
-    AttachmentReservation AttachmentReservation::CaptureDoubleBufferAttachments()
-    {
-        // Double buffer attachment reservations work both ways -- we register what we want to use from last frame, and those
-        // same reservations are used to determine what we will pass on from this frame to the next
-        AttachmentReservation result;
-        result._pool = _pool;
-        result._reservationFlags = _reservationFlags;
-        for (const auto& res:_doubleBufferAttachments) {
-            auto e = std::find_if(_entries.begin(), _entries.end(), [s=res._yesterdaySemantic](const auto& q) { return q._semantic == s; });
-            if (e == _entries.end()) continue;      // didn't actually write out any information for this semantic
-            if (e->_pendingClear.has_value() || e->_currentLayout == 0) continue;
-            Entry newEntry = *e;
-            newEntry._semantic = res._todaySemantic;        // flip the semantic
-            if (newEntry._pendingSwitchToLayout.has_value() || (newEntry._currentLayout != res._initialLayout))
-                newEntry._pendingSwitchToLayout = res._initialLayout;
-            result._entries.emplace_back(std::move(newEntry));
-        }
-        result.AddRefAll();
-        return result;
-    }
-
-    void AttachmentReservation::Absorb(AttachmentReservation&& src)
-    {
-        if (src._entries.empty()) return;
-        _entries.reserve(_entries.size() + src._entries.size());
-        for (auto& e:src._entries) {
-            assert((e._poolResource == ~0u) || (src._pool == _pool || src._reservationFlags == _reservationFlags));
-
-            auto existing = std::find_if(_entries.begin(), _entries.end(), [s=e._semantic](const auto& q) { return q._semantic == s; });
-            if (existing != _entries.end()) {
-                assert(0);      // if you hit this, it means we already have an attachment for this semantic
-                continue;
-            }
-
-            _entries.emplace_back(std::move(e));
-        }
-        src._entries.clear();
-    }
-
-    void AttachmentReservation::CompleteInitialization(IThreadContext& threadContext)
-    {
-        for (unsigned c=0; c<_entries.size(); ++c)
-            if (_entries[c]._pendingClear) {
-                InitializeEmptyYesterdayAttachment(threadContext, *this, c, _entries[c]._pendingClear.value());
-                _entries[c]._pendingClear = {};
-            }
-
-        VLA(IResource*, completeInitializationResources, _entries.size());
-        size_t completeInitializationCount = 0;
-        VLA(uint64_t, makeVisibleResources, _entries.size());
-        size_t makeVisibleCount = 0;
-
-        Metal::BarrierHelper barrierHelper{threadContext};
-
-        for (auto& a:_entries) {
-            if (a._pendingSwitchToLayout) {
-                if (a._resource) {
-                    if (a._currentLayout == ~0u) {
-                        barrierHelper.Add(*a._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
-                    } else
-                        barrierHelper.Add(*a._resource, a._currentLayout, *a._pendingSwitchToLayout);
-                } else if (a._presentationChain) {
-                    assert(!a._resource);
-                    a._resource = threadContext.BeginFrame(*a._presentationChain);
-                    assert(a._resource);
-                    if (a._currentLayout == ~0u) {
-                        barrierHelper.Add(*a._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
-                    } else
-                        barrierHelper.Add(*a._resource, a._currentLayout, *a._pendingSwitchToLayout);
-                } else {
-                    assert(a._poolResource != ~0u);
-                    auto& poolResource = _pool->_pimpl->_attachments[a._poolResource];
-                    if (!poolResource._resource) {
-                        _pool->_pimpl->BuildAttachment(a._poolResource);
-                        assert(poolResource._resource);
-                        barrierHelper.Add(*poolResource._resource, Metal::BarrierResourceUsage::NoState(), *a._pendingSwitchToLayout);
-                    } else if (a._currentLayout == ~0u) {
-                        // not a new texture, but we don't know the previous layout / usage
-                        barrierHelper.Add(*poolResource._resource, Metal::BarrierResourceUsage::AllCommandsReadAndWrite(), *a._pendingSwitchToLayout);
-                    } else {
-                        barrierHelper.Add(*poolResource._resource, a._currentLayout, *a._pendingSwitchToLayout);
-                    }
-                    poolResource._pendingCompleteInitialization = false;
-                }
-                a._currentLayout = a._pendingSwitchToLayout.value();
-                a._pendingSwitchToLayout = {};
-            } else if (a._presentationChain && !a._resource) {
-                a._resource = threadContext.BeginFrame(*a._presentationChain);
-                assert(a._resource);
-            } else if (a._poolResource != ~0u) {
-                auto& poolResource = _pool->_pimpl->_attachments[a._poolResource];
-                if (poolResource._pendingCompleteInitialization) {
-                    if (!poolResource._resource)
-                        _pool->_pimpl->BuildAttachment(a._poolResource);
-                    assert(poolResource._resource);
-                    completeInitializationResources[completeInitializationCount++] = poolResource._resource.get();
-                    poolResource._pendingCompleteInitialization = false;
-                } 
-                // We don't need a "make visible" in the "else" case, because for pool resources we must have had a complete initialization to at some earlier
-                // point. We would only have problems if there was an abandoned cmd list, or one submitted out of order
-            } else {
-                // We don't know the history of bound attachments submitted with no layout -- so we have to call make visible for them
-                if (a._currentLayout == ~0u)
-                    makeVisibleResources[makeVisibleCount++] = a._resource->GetGUID();
-            }
-        }
-
-        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-        Metal::CompleteInitialization(
-            metalContext,
-            MakeIteratorRange(completeInitializationResources, &completeInitializationResources[completeInitializationCount]));
-
-        if (makeVisibleCount)
-            metalContext.GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(makeVisibleResources, &makeVisibleResources[makeVisibleCount]));
-    }
-
-    bool AttachmentReservation::HasPendingCompleteInitialization() const
-    {
-        for (auto& a:_entries) {
-            if (a._pendingSwitchToLayout)
-                return true;
-
-            if (a._poolResource != ~0u) {
-                auto& poolResource = _pool->_pimpl->_attachments[a._poolResource];
-                if (poolResource._pendingCompleteInitialization)
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    void AttachmentReservation::AutoBarrier(IThreadContext& threadContext, IteratorRange<const AttachmentBarrier*> barriers)
-    {
-        auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-        Metal::BarrierHelper barrierHelper(metalContext);
-        for (auto b:barriers) {
-            auto& i = _entries[b._attachment];
-            if (i._currentLayout != b._layout) {
-                auto* resource = (i._poolResource == ~0u) ? i._resource.get() : _pool->GetResource(i._poolResource).get();
-                barrierHelper.Add(*resource, i._currentLayout, Metal::BarrierResourceUsage{b._layout, b._shaderStage});
-                i._currentLayout = b._layout;
-            }
-        }
-    }
-
-    AttachmentReservation::AttachmentReservation() = default;
-    
-    AttachmentReservation::AttachmentReservation(AttachmentPool& pool) : _pool(&pool)
-    {
-    }
-
-    AttachmentReservation::~AttachmentReservation()
-    {
-        ReleaseAll();
-    }
-
-    AttachmentReservation::AttachmentReservation(AttachmentReservation&& moveFrom)
-    : _entries(std::move(moveFrom._entries))
-    , _pool(std::move(moveFrom._pool))
-    , _reservationFlags(std::move(moveFrom._reservationFlags))
-    {
-        moveFrom._pool = nullptr;
-    }
-
-    auto AttachmentReservation::operator=(AttachmentReservation&& moveFrom) -> AttachmentReservation&
-    {
-        ReleaseAll();
-        _entries = std::move(moveFrom._entries);
-        _pool = std::move(moveFrom._pool);
-        _reservationFlags = std::move(moveFrom._reservationFlags);
-        moveFrom._pool = nullptr;
-        return *this;
-    }
-
-    AttachmentReservation::AttachmentReservation(const AttachmentReservation& copyFrom)
-    : _entries(copyFrom._entries)
-    , _pool(copyFrom._pool)
-    , _reservationFlags(copyFrom._reservationFlags)
-    {
-        AddRefAll();
-    }
-
-    auto AttachmentReservation::operator=(const AttachmentReservation& copyFrom) -> AttachmentReservation&
-    {
-        ReleaseAll();
-        _entries = copyFrom._entries;
-        _pool = copyFrom._pool;
-        _reservationFlags = copyFrom._reservationFlags;
-        AddRefAll();
-        return *this;
-    }
-
-    AttachmentReservation::AttachmentReservation(
-        std::vector<AttachmentToReserve>&& reservedAttachments,
-        AttachmentPool* pool,
-        ReservationFlag::BitField flags)
-    : _pool(pool)
-    , _reservationFlags(flags)
-    {
-        assert(reservedAttachments.empty() || _pool);
-        _entries.reserve(reservedAttachments.size());
-        for (const auto& a:reservedAttachments) {
-            Entry e;
-            e._poolResource = a._poolName;
-            e._desc = pool->GetResourceDesc(a._poolName);
-            e._resource = std::move(a._resource);
-            e._presentationChain = std::move(a._presentationChain);
-            e._semantic = a._semantic;
-            e._pendingClear = a._pendingClear;
-            e._pendingSwitchToLayout = a._pendingSwitchToLayout;
-            e._currentLayout = a._currentLayout.value_or(~0u);
-            _entries.push_back(e);
-        }
-
-        AddRefAll();
-    }
-
-    void AttachmentReservation::Remove(AttachmentName resName)
-    {
-        // remove a specific entry from the attachment reservation (and release the ref count)
-        // note that this will rebind all of the attachment names (since they are just indices into the internal array)
-        assert(resName < _entries.size());
-        if (_pool && _entries[resName]._poolResource != ~0u) {
-            AttachmentName toRelease = _entries[resName]._poolResource;
-            _pool->Release(MakeIteratorRange(&toRelease, &toRelease+1), _reservationFlags);
-        }
-        _entries.erase(_entries.begin()+resName);
-    }
-
-    void AttachmentReservation::ReleaseAll()
-    {
-        if (_pool) {
-            VLA(AttachmentName, poolAttachmentsToRelease, _entries.size());
-            unsigned attachmentsToReleaseCount = 0;
-            for (auto& a:_entries)
-                if (a._poolResource != ~0u)
-                    poolAttachmentsToRelease[attachmentsToReleaseCount++] = a._poolResource;
-            if (attachmentsToReleaseCount)
-                _pool->Release(MakeIteratorRange(poolAttachmentsToRelease, &poolAttachmentsToRelease[attachmentsToReleaseCount]), _reservationFlags);
-        }
-    }
-
-    void AttachmentReservation::AddRefAll()
-    {
-        if (_pool) {
-            VLA(AttachmentName, poolAttachmentsToRelease, _entries.size());
-            unsigned attachmentsToReleaseCount = 0;
-            for (auto& a:_entries)
-                if (a._poolResource != ~0u)
-                    poolAttachmentsToRelease[attachmentsToReleaseCount++] = a._poolResource;
-            if (attachmentsToReleaseCount)
-                _pool->AddRef(MakeIteratorRange(poolAttachmentsToRelease, &poolAttachmentsToRelease[attachmentsToReleaseCount]), _reservationFlags);
-        }
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1535,16 +1558,16 @@ namespace RenderCore { namespace Techniques
         IThreadContext& threadContext,
         const FrameBufferDesc& layout,
         IteratorRange<const PreregisteredAttachment*> fullAttachmentsDescription,
-        FrameBufferPool& frameBufferPool,
-        AttachmentPool& attachmentPool,
+        IFrameBufferPool& frameBufferPool,
+        IAttachmentPool& attachmentPool,
         AttachmentReservation* parentReservation,
         const RenderPassBeginDesc& beginInfo)
     {
         _attachedContext = Metal::DeviceContext::Get(threadContext).get();
 
-        auto fb = frameBufferPool.BuildFrameBuffer(
+        auto fb = checked_cast<FrameBufferPool*>(&frameBufferPool)->BuildFrameBuffer(
             threadContext,
-            layout, fullAttachmentsDescription, attachmentPool, parentReservation);
+            layout, fullAttachmentsDescription, *checked_cast<AttachmentPool*>(&attachmentPool), parentReservation);
 
         _frameBuffer = std::move(fb._frameBuffer);
         _attachmentPoolReservation = std::move(fb._poolReservation);
@@ -1643,7 +1666,7 @@ namespace RenderCore { namespace Techniques
 	RenderPassInstance::RenderPassInstance(
         const FrameBufferDesc& layout,
         IteratorRange<const PreregisteredAttachment*> resolvedAttachmentDescs,
-        AttachmentPool& attachmentPool)
+        IAttachmentPool& attachmentPool)
 	: _layout(&layout)
     {
 		// This constructs a kind of "non-metal" RenderPassInstance

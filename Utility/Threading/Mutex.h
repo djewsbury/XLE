@@ -81,6 +81,13 @@
     #define ScopedReadLock(x)        std::unique_lock<std::decay_t<decltype(x)>> _autoLockB(x)
     #define ScopedModifyLock(x)      std::unique_lock<std::decay_t<decltype(x)>> _autoLockC(x)
 
+    #define _ScopedAssertExclusivityInternal(x, c)                                                              \
+        std::unique_lock<std::decay_t<decltype(x)>> _StringConcat(_lockValidation, c)(x, std::try_to_lock);     \
+        assert(_StringConcat(_lockValidation, c).owns_lock());                                                  \
+        /**/
+
+    #define ScopedAssertExclusivity(x) _ScopedAssertExclusivityInternal(x, __COUNTER__)
+
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////

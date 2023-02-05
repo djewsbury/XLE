@@ -9,18 +9,10 @@
 #include "EngineControl.h"
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class  TechniqueContext; class AttachmentPool; class FrameBufferPool; }}
-
 namespace GUILayer 
 {
-    class LayerControlPimpl;
-
-    ref class ModelVisSettings;
     ref class IOverlaySystem;
     ref class VisCameraSettings;
-    ref class VisMouseOver;
-    ref class VisResources;
-    ref class TechniqueContextWrapper;
 
     public ref class LayerControl : public EngineControl
     {

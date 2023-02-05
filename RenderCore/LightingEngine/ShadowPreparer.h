@@ -16,8 +16,8 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool;
 	class RenderPassInstance;
 	class ParsingContext;
-	class FrameBufferPool;
-	class AttachmentPool;
+	class IFrameBufferPool;
+	class IAttachmentPool;
 	class SequencerConfig;
 	class IShaderResourceDelegate;
 }}
@@ -86,8 +86,8 @@ namespace RenderCore { namespace LightingEngine
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
 			Internal::ILightBase& projection,
-			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-			Techniques::AttachmentPool& shadowGenAttachmentPool,
+			Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
+			Techniques::IAttachmentPool& shadowGenAttachmentPool,
 			ViewPool& viewPool) = 0;
 		virtual void End(
 			IThreadContext& threadContext, 

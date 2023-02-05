@@ -12,7 +12,7 @@
 #include "DebugScreenRegistry.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/Techniques/Techniques.h"
-#include "../RenderCore/Techniques/RenderPass.h"		// for ResetFrameBufferPool
+#include "../RenderCore/Techniques/RenderPass.h"		// for IFrameBufferPool
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
@@ -126,7 +126,7 @@ namespace PlatformRig
             auto resize = std::get<PlatformRig::WindowResize>(msgPump);
             auto& frameRig = *windowApparatus._frameRig;
 
-            RenderCore::Techniques::ResetFrameBufferPool(*frameRig.GetTechniqueContext()._frameBufferPool);
+            frameRig.GetTechniqueContext()._frameBufferPool->Reset();
             frameRig.ReleaseDoubleBufferAttachments();
             frameRig.GetTechniqueContext()._attachmentPool->ResetActualized();
             auto desc = windowApparatus._presentationChain->GetDesc();

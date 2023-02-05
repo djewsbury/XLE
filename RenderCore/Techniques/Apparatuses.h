@@ -34,8 +34,8 @@ namespace RenderCore { namespace Techniques
 	class ITechniqueDelegate;
 	class IImmediateDrawables;
 	class TechniqueContext;
-	class AttachmentPool;
-	class FrameBufferPool;
+	class IAttachmentPool;
+	class IFrameBufferPool;
 	class CommonResourceBox;
 	class SystemUniformsDelegate;
 	class PipelineCollection;
@@ -140,8 +140,8 @@ namespace RenderCore { namespace Techniques
 	class FrameRenderingApparatus
 	{
 	public:
-		std::shared_ptr<FrameBufferPool> _frameBufferPool;
-		std::shared_ptr<AttachmentPool> _attachmentPool;
+		std::shared_ptr<IFrameBufferPool> _frameBufferPool;
+		std::shared_ptr<IAttachmentPool> _attachmentPool;
 		std::shared_ptr<Utility::HierarchicalCPUProfiler> _frameCPUProfiler;
 		std::shared_ptr<IDevice> _device;
 

@@ -8,7 +8,7 @@
 
 #include "../../Math/Vector.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class AttachmentPool; class FrameBufferPool; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class IAttachmentPool; class IFrameBufferPool; } }
 namespace RenderCore { class FrameBufferDesc; class FrameBufferProperties; class IThreadContext; class ICompiledPipelineLayout; }
 
 namespace RenderOverlays

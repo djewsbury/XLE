@@ -42,8 +42,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		ILightBase& proj,
 		const SequencerAddendums& addenums,
 		PipelineType descSetPipelineType,
-		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool,
+		Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
+		Techniques::IAttachmentPool& shadowGenAttachmentPool,
 		ViewPool& shadowGenViewPool);
 
 	void DynamicShadowProjectionScheduler::SceneSet::RegisterLight(unsigned index, ILightBase& light)
@@ -175,7 +175,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		IteratorRange<const unsigned*> operatorToPreparerIdMapping)
 	: _shadowPreparers(std::move(shadowPreparers)), _totalProjectionCount(0)
 	{
-		_shadowGenAttachmentPool = std::make_shared<Techniques::AttachmentPool>(device);
+		_shadowGenAttachmentPool = Techniques::CreateAttachmentPool(device);
 		_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 
 		assert(!operatorToPreparerIdMapping.empty());
@@ -216,8 +216,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		ILightBase& proj,
 		const SequencerAddendums& addenums,
 		PipelineType descSetPipelineType,
-		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool,
+		Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
+		Techniques::IAttachmentPool& shadowGenAttachmentPool,
 		ViewPool& shadowGenViewPool)
 	{
 		auto parseId = SetupShadowParse(iterator, sequence, proj, addenums);

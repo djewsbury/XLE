@@ -97,7 +97,7 @@ namespace RenderCore { namespace LightingEngine
 			StaticProbePrepareHelper(IThreadContext& threadContext, ShadowProbes::Pimpl& pimpl)
 			: _pimpl(&pimpl)
 			{
-				_techContext._attachmentPool = std::make_shared<Techniques::AttachmentPool>(threadContext.GetDevice());
+				_techContext._attachmentPool = Techniques::CreateAttachmentPool(threadContext.GetDevice());
 				_techContext._frameBufferPool = Techniques::CreateFrameBufferPool();
 				auto uniformDelegateMan = Techniques::CreateUniformDelegateManager();
 				uniformDelegateMan->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice()));

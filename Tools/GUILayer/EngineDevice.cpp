@@ -98,7 +98,7 @@ namespace GUILayer
 
     void NativeEngineDevice::ResetFrameBufferPool()
     {
-        RenderCore::Techniques::ResetFrameBufferPool(*_frameRenderingApparatus->_frameBufferPool);
+        _frameRenderingApparatus->_frameBufferPool->Reset();
     }
 
     NativeEngineDevice::NativeEngineDevice()

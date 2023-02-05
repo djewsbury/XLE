@@ -45,8 +45,8 @@ namespace RenderCore { namespace LightingEngine
 			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
 			Internal::ILightBase& projection,
-			Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-			Techniques::AttachmentPool& shadowGenAttachmentPool,
+			Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
+			Techniques::IAttachmentPool& shadowGenAttachmentPool,
 			ViewPool& viewPool) override;
 
 		void End(
@@ -308,8 +308,8 @@ namespace RenderCore { namespace LightingEngine
 		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		Internal::ILightBase& projectionBase,
-		Techniques::FrameBufferPool& shadowGenFrameBufferPool,
-		Techniques::AttachmentPool& shadowGenAttachmentPool,
+		Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
+		Techniques::IAttachmentPool& shadowGenAttachmentPool,
 		ViewPool& viewPool)
 	{
 		assert(projectionBase.QueryInterface(TypeHashCode<Internal::StandardShadowProjection>) == &projectionBase);

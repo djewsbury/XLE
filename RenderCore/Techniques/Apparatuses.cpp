@@ -228,7 +228,7 @@ namespace RenderCore { namespace Techniques
 	{
 		_frameBufferPool = RenderCore::Techniques::CreateFrameBufferPool();
 		_frameCPUProfiler = std::make_shared<Utility::HierarchicalCPUProfiler>();
-		_attachmentPool = std::make_shared<RenderCore::Techniques::AttachmentPool>(device);
+		_attachmentPool = RenderCore::Techniques::CreateAttachmentPool(device);
 		_device = std::move(device);
 	}
 
