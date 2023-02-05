@@ -1493,7 +1493,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 						// we don't care about which slots resources are assigned to, so ignore _pendingResourceVisibilityChangesSlotAndCount
 						if (!builder->_pendingResourceVisibilityChanges.empty())
-							context.GetActiveCommandList().RequireResourceVisbility(builder->_pendingResourceVisibilityChanges);
+							context.GetActiveCommandList().RequireResourceVisibility(builder->_pendingResourceVisibilityChanges);
 					#endif
 
 					builder->FlushChanges(
@@ -1551,7 +1551,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
 
 			#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-				context.GetActiveCommandList().RequireResourceVisbilityAlreadySorted(descSet->GetResourcesThatMustBeVisibleSorted());
+				context.GetActiveCommandList().RequireResourceVisibilityAlreadySorted(descSet->GetResourcesThatMustBeVisibleSorted());
 			#endif
 		}
 	}
@@ -1584,7 +1584,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					VULKAN_VERBOSE_DEBUG_ONLY(, DescriptorSetDebugInfo{descSet->GetDescription()} ));
 
 				#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
-					context.GetActiveCommandList().RequireResourceVisbilityAlreadySorted(descSet->GetResourcesThatMustBeVisibleSorted());
+					context.GetActiveCommandList().RequireResourceVisibilityAlreadySorted(descSet->GetResourcesThatMustBeVisibleSorted());
 				#endif
 				break;
 			}

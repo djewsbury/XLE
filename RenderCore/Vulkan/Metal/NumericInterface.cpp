@@ -268,7 +268,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 				#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 					if (!d._builder._pendingResourceVisibilityChanges.empty())
-						context.GetActiveCommandList().RequireResourceVisbility(d._builder._pendingResourceVisibilityChanges);
+						context.GetActiveCommandList().RequireResourceVisibility(d._builder._pendingResourceVisibilityChanges);
 				#endif
 
 				auto written = d._builder.FlushChanges(

@@ -198,7 +198,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			//		- input and output arrays should be sorted -- so we can use merge sort approach for this
 			//		- any new "must be visible" resources that are already present in our "becoming visible" list 
 			//			be filtered out (ie, we're merging in use of a resource that was made visible previously on this cmd list) 
-			RequireResourceVisbility(cmdList._resourcesThatMustBeVisible);
+			RequireResourceVisibility(cmdList._resourcesThatMustBeVisible);
 			MakeResourcesVisible(cmdList._resourcesBecomingVisible);
 		#endif
 
@@ -251,7 +251,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
-	void CommandList::RequireResourceVisbilityAlreadySorted(IteratorRange<const uint64_t*> resourceGuids)
+	void CommandList::RequireResourceVisibilityAlreadySorted(IteratorRange<const uint64_t*> resourceGuids)
 	{
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 				// Don't record the guid for any resources that are already marked as becoming visible 
@@ -273,13 +273,13 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 	}
 
-	void CommandList::RequireResourceVisbility(IteratorRange<const uint64_t*> resourceGuidsInit)
+	void CommandList::RequireResourceVisibility(IteratorRange<const uint64_t*> resourceGuidsInit)
 	{
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			VLA(uint64_t, resourceGuids, resourceGuidsInit.size());
 			std::copy(resourceGuidsInit.begin(), resourceGuidsInit.end(), resourceGuids);
 			std::sort(resourceGuids, &resourceGuids[resourceGuidsInit.size()]);
-			RequireResourceVisbilityAlreadySorted(MakeIteratorRange(resourceGuids, &resourceGuids[resourceGuidsInit.size()]));	// inline please
+			RequireResourceVisibilityAlreadySorted(MakeIteratorRange(resourceGuids, &resourceGuids[resourceGuidsInit.size()]));	// inline please
 		#endif
 	}
 
@@ -396,7 +396,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		size_t trackerMarkersCount = 0;
 		for (auto* cmdList:cmdLists) {
 			assert(&cmdList->GetAsyncTracker() == _gpuTracker.get());
-			// We don't call ValidateCommitToQueue for transfer queues so that resources aren't marked visible to object factory until they are transfered to graphics queues
+			// We don't call ValidateCommitToQueue for transfer queues so that resources aren't marked visible to object factory until they are transferred to graphics queues
 			if (_queueFamilyIndex != _factory->_dedicatedTransferQueueFamily)
 				cmdList->ValidateCommitToQueue(*_factory);
 			cmdList->_attachedStorage.OnSubmitToQueue(cmdList->GetPrimaryTrackerMarker());
