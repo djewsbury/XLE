@@ -53,6 +53,7 @@ namespace RenderCore
 		virtual std::shared_ptr<Metal_Vulkan::DeviceContext> BeginSecondaryCommandList() = 0;
 
 		virtual void AddPreFrameCommandList(Metal_Vulkan::CommandList&& cmdList) = 0;
+		virtual void QueuePrimaryCommandList(Metal_Vulkan::CommandList&& cmdList) = 0;
 
 		virtual std::shared_ptr<Metal_Vulkan::IAsyncTracker> GetQueueTracker() = 0;
 		virtual void UpdateGPUTracking() = 0;

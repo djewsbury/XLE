@@ -1775,7 +1775,7 @@ namespace RenderCore { namespace BufferUploads
         }
         
         bool                    IsComplete(CommandListID id) override;
-        void                    StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id) override;
+        void                    StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id, MarkCommandListDependencyFlags::BitField flags) override;
         std::optional<CommandListID>           LatestCommandListPendingProcessing() override;
 
         CommandListMetrics      PopMetrics() override;
@@ -1809,10 +1809,10 @@ namespace RenderCore { namespace BufferUploads
         return id <= (_backgroundStepMask ? _backgroundContext.get() : _foregroundContext.get())->CommandList_GetReadyForGraphicsQueue();
     }
 
-    void                    Manager::StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id)
+    void                    Manager::StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id, MarkCommandListDependencyFlags::BitField flags)
     {
         if (!id || id == CommandListID_Invalid) return;
-        while (!_backgroundContext->AdvanceGraphicsQueue(immediateContext, id)) {
+        while (!_backgroundContext->AdvanceGraphicsQueue(immediateContext, id, flags)) {
             _assemblyLine->TriggerWakeupEvent();
             std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
         }

@@ -179,7 +179,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     {
     public:
         void                    QueueToHardware(std::optional<CommandListID> completeCmdList);
-        bool                    AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired);
+        bool                    AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired, MarkCommandListDependencyFlags::BitField flags);
 
         CommandListMetrics      PopMetrics();
         CommandListMetrics&     GetMetricsUnderConstruction();

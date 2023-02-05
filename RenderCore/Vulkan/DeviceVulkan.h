@@ -130,6 +130,7 @@ namespace RenderCore { namespace ImplVulkan
 		void			CommitCommands(CommitCommandsFlags::BitField) override;
 
         void AddPreFrameCommandList(Metal_Vulkan::CommandList&& cmdList) override;
+        void QueuePrimaryCommandList(Metal_Vulkan::CommandList&& cmdList) override;
         float GetThreadingPressure() override;
         bool IsDedicatedTransferContext() override;
 

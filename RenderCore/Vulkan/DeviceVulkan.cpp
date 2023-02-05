@@ -2732,11 +2732,6 @@ namespace RenderCore { namespace ImplVulkan
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void ThreadContext::AddPreFrameCommandList(Metal_Vulkan::CommandList&& cmdList)
-	{
-		_interimCmdLists.emplace_back(std::move(cmdList));
-	}
-
 	float ThreadContext::GetThreadingPressure()
 	{
 		return _submissionQueue->GetTracker()->GetThreadingPressure();
@@ -2764,6 +2759,26 @@ namespace RenderCore { namespace ImplVulkan
 			return;
 		_submissionQueue->GetTracker()->AttachName(
 			_metalContext->GetActiveCommandList().GetPrimaryTrackerMarker(), std::move(name));
+	}
+
+	void ThreadContext::AddPreFrameCommandList(Metal_Vulkan::CommandList&& cmdList)
+	{
+		_interimCmdLists.emplace_back(std::move(cmdList));
+	}
+
+	void ThreadContext::QueuePrimaryCommandList(Metal_Vulkan::CommandList&& cmdList)
+	{
+		// Queue the given command list, without any scheduling related to _interimCmdLists, or 
+		// our _metalContext.
+		// This is used by clients as an alternative to AddPreFrameCommandList(), however with
+		// that method, the cmd list is delayed until _metalContext is committed
+		Metal_Vulkan::CommandList* cmdLists[] { &cmdList };
+		_submissionQueue->Submit(
+			MakeIteratorRange(cmdLists),
+			{},
+			{},
+			{}, 
+			VK_NULL_HANDLE);
 	}
 
 	void ThreadContext::CommitToQueue_Internal(

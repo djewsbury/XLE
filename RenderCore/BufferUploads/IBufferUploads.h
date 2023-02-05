@@ -48,6 +48,19 @@ namespace RenderCore { namespace BufferUploads
         using BitField = unsigned;
     }
 
+    namespace MarkCommandListDependencyFlags
+    {
+        enum { 
+            /// <summary>Use with thread contexts that don't commit with a fast regular heartbeat</summary>
+            /// Buffer uploads can piggy-back some graphics queue related work on the active cmd list of 
+            /// the thread context passed to MarkCommandListDependency. This is non-ideal for irregular thread
+            /// contexts, because other graphics queue thread contexts can end up having to stall waiting for them
+            /// Use this flag to disable this behaviour.
+            IrregularThreadContext = 1<<0 
+        };
+        using BitField = unsigned;
+    }
+
         /////////////////////////////////////////////////
 
     class IManager
@@ -89,7 +102,7 @@ namespace RenderCore { namespace BufferUploads
             /// processing may still be ongoing)
             /// The command list building built in "context" will be marked with a GPU dependency on GPU processing
             /// part of the given command list
-        virtual void                    StallAndMarkCommandListDependency(IThreadContext& context, CommandListID id) = 0;
+        virtual void                    StallAndMarkCommandListDependency(IThreadContext& context, CommandListID id, MarkCommandListDependencyFlags::BitField flags = 0) = 0;
 
             /// <summary>Returns the highest command list that will not stall in StallAndMarkCommandListDependency</summary>
             /// If StallAndMarkCommandListDependency() will have no effect (other than marking a GPU dependency), this

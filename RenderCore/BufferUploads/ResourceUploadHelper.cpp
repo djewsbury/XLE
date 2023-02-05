@@ -698,6 +698,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         std::shared_ptr<Metal::DeviceContext> _fallbackGraphicsQueueCmdList;
 
         void RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList&& commandList);
+        void RetireToGraphicsQueue_IrregularThreadContext(IThreadContext& commitTo, QueuedCommandList&& commandList);
     };
 
     void UploadsThreadContext::QueueToHardware(std::optional<CommandListID> completeCmdList)
@@ -760,7 +761,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         DeferredOperations().swap(_pimpl->_deferredOperationsUnderConstruction);
     }
 
-    bool UploadsThreadContext::AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired)
+    bool UploadsThreadContext::AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired, MarkCommandListDependencyFlags::BitField flags)
     {
         if (!_pimpl->_backgroundContext) {
             assert(&commitTo == _mainContext.get());
@@ -796,8 +797,19 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                     annotatorStart = true;
                 }
 
-                _pimpl->RetireToGraphicsQueue(commitTo, std::move(commandList));
-                wroteSomeStub = true;
+                // Unfortunately, we have to wait on the graphics queue timeline, not the transfer queue timeline here
+                // (because of _graphicsQueueAdditionalCmdList & _deferredOperations)
+                // this means that a cmd list from one graphics thread context may become delayed for another graphics
+                // thread context, if both threads are calling IBufferUploads::StallAndMarkCommandListDependency
+                //
+                // To avoid this problem, when given the flag "IrregularThreadContext", we will commit to the graphics
+                // queue immediately, even if it means committing a tiny command list.
+                if (!(flags & MarkCommandListDependencyFlags::IrregularThreadContext)) {
+                    _pimpl->RetireToGraphicsQueue(commitTo, std::move(commandList));
+                    wroteSomeStub = true;
+                } else {
+                    _pimpl->RetireToGraphicsQueue_IrregularThreadContext(commitTo, std::move(commandList));
+                }
             }
 
             if (!needAnotherBatch) break;
@@ -817,6 +829,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     void UploadsThreadContext::Pimpl::RetireToGraphicsQueue(IThreadContext& commitTo, QueuedCommandList&& commandList)
     {
+        // See also RetireToGraphicsQueue_IrregularThreadContext
         TRY {
             if (!commandList._deferredOperations.IsEmpty()) {
                 auto metalContext = Metal::DeviceContext::BeginPrimaryCommandList(commitTo);
@@ -834,11 +847,12 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 }
 
                 if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo)) {
+                    if (commandList._graphicsQueueAdditionalCmdList)
+                        threadContextVulkan->AddPreFrameCommandList(std::move(*commandList._graphicsQueueAdditionalCmdList));
+                        
                     // the command list generated will become a "pre-frame" command list; meaning it will go into
                     // the queue earlier than the main frame rendering command list
                     threadContextVulkan->AddPreFrameCommandList(std::move(*metalCmdList));
-                    if (commandList._graphicsQueueAdditionalCmdList)
-                        threadContextVulkan->AddPreFrameCommandList(std::move(*commandList._graphicsQueueAdditionalCmdList));
                 } else {
                     assert(0);      // missing gfx api specific implementation
                 }
@@ -848,9 +862,14 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 metalContext.GetActiveCommandList().AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
                 metalContext.GetActiveCommandList().AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
 
-                if (commandList._graphicsQueueAdditionalCmdList)
+                if (commandList._graphicsQueueAdditionalCmdList) {
                     if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo))
                         threadContextVulkan->AddPreFrameCommandList(std::move(*commandList._graphicsQueueAdditionalCmdList));
+                } else {
+                    assert(0);      // missing gfx api specific implementation
+                }
+            } else {
+                assert(!commandList._graphicsQueueAdditionalCmdList);       // this case not handled
             }
         } CATCH (const std::exception& e) {
             // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again
@@ -870,6 +889,54 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #endif
     }
 
+    void UploadsThreadContext::Pimpl::RetireToGraphicsQueue_IrregularThreadContext(IThreadContext& commitTo, QueuedCommandList&& commandList)
+    {
+        TRY {
+
+            // Unfortunately this cmd list will often end up begin trivial. But if the thread context is considered "irregular",
+            // we can't necessarily afford to piggyback on other command lists
+
+            auto metalContext = Metal::DeviceContext::BeginPrimaryCommandList(commitTo);
+            auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo);
+            assert(threadContextVulkan);        // missing gfx api specific implementation
+
+            if (commandList._graphicsQueueAdditionalCmdList)
+                threadContextVulkan->QueuePrimaryCommandList(std::move(*commandList._graphicsQueueAdditionalCmdList));
+
+            if (!commandList._deferredOperations.IsEmpty()) {                
+                ResourceUploadHelper helper{*commitTo.GetDevice(), *metalContext};
+                commandList._deferredOperations.CommitToImmediate_PreCommandList(helper);
+                commandList._deferredOperations.CommitToImmediate_ResourceTransfers(helper);
+                commandList._deferredOperations.CommitToImmediate_PostCommandList(helper);
+            }
+
+            auto metalCmdList = metalContext->ResolveCommandList();
+            metalContext.reset();
+
+            if (commandList._id != ~0u) {
+                metalCmdList->AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
+                metalCmdList->AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
+            }
+
+            threadContextVulkan->QueuePrimaryCommandList(std::move(*metalCmdList));
+
+        } CATCH (const std::exception& e) {
+            // we have to catch any exception to ensure (at the very least) that we don't attempt to resubmit this same cmd list again
+            if (!commandList._metrics._exceptionMsg.empty()) commandList._metrics._exceptionMsg += ", ";
+            commandList._metrics._exceptionMsg += e.what();
+        } CATCH_END
+
+        if (commandList._id != ~0u)
+            _commandListIDReadyForGraphicsQueue = std::max(_commandListIDReadyForGraphicsQueue, commandList._id);
+    
+        commandList._metrics._frameId                  = _frameId;
+        commandList._metrics._commitTime               = OSServices::GetPerformanceCounter();
+        
+        #if defined(RECORD_BU_THREAD_CONTEXT_METRICS)
+            while (!_recentRetirements.push(std::move(commandList._metrics)))
+                _recentRetirements.pop();   // note -- this might violate the single-popping-thread rule!
+        #endif
+    }
 
     CommandListMetrics UploadsThreadContext::PopMetrics()
     {
