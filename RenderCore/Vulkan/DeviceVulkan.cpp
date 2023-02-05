@@ -2928,11 +2928,13 @@ namespace RenderCore { namespace ImplVulkan
 			if (waitForCompletion)
 				fence = _factory->CreateFence();
 
-			TRY {
 			if (_metalContext->HasActiveCommandList()) {
 				auto immediateCommands = _metalContext->ResolveCommandList();
 				_interimCmdLists.emplace_back(std::move(*immediateCommands));
 			}
+			// Particularly when using CommitCommandsFlags::WaitForCompletion, clients need to know
+			// if the submission failed. So let's just throw back to the user if there's a failure
+			// during the commit
 			CommitToQueue_Internal({}, {}, fence.get());
 
 			if (waitForCompletion) {
@@ -2941,10 +2943,6 @@ namespace RenderCore { namespace ImplVulkan
 				if (res != VK_SUCCESS)
 					Throw(VulkanAPIFailure(res, "Failure while waiting for CommitCommands() completion"));
 			}
-			} CATCH (const std::exception& e) {
-				Log(Warning) << "Failure during queue submission in CommitCommands:" << e.what() << std::endl;
-				waitForCompletion = false;
-			} CATCH_END
 		}
 
 		// We need to flush the destruction queues at some point for clients that never actually call Present
