@@ -38,7 +38,9 @@
 	#include "thousandeyes/futures/then.h"
 #endif
 
-// #define PA_ADDITIONAL_THREADING_CHECKS 1
+#if defined(_DEBUG)
+	#define PA_ADDITIONAL_THREADING_CHECKS 1
+#endif
 
 using namespace Utility::Literals;
 
@@ -65,10 +67,14 @@ namespace RenderCore { namespace Techniques
 		unsigned _frontFaceStencilRef = 0;
 		unsigned _backFaceStencilRef = 0;
 
-		#if defined(_DEBUG)
+		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 			PipelineAcceleratorPool* _ownerPool = nullptr;
 		#endif
 	};
+
+	#if defined(PA_ADDITIONAL_THREADING_CHECKS)
+		void AssertPipelineUsageLock(const PipelineAcceleratorPool& pool);
+	#endif
 
 	class PipelineAccelerator : public std::enable_shared_from_this<PipelineAccelerator>
 	{
@@ -107,6 +113,7 @@ namespace RenderCore { namespace Techniques
 		// "_pendingPipelines" is protected by the _constructionLock in the pipeline accelerator pool
 		using FuturePipeline = std::shared_future<Pipeline>;
 		std::vector<std::pair<uint32_t, FuturePipeline>> _pendingPipelines;		// sequencer index -> FuturePipeline
+		std::vector<bool> _hasCompletedPipelineConstructionLock;				// parallel to _completedPipelines, but protected by the _constructionLock, not the _pipelineUsageLock
 
 		std::shared_future<Pipeline> BeginPrepareForSequencerStateAlreadyLocked(
 			std::shared_ptr<SequencerConfig> cfg,
@@ -245,10 +252,11 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
 		#endif
 
-		// If we have something in _completedPipelines return true
+		// we must have _constructionLock here, but we don't need _pipelineUsageLock
+
+		// If we have something in _hasCompletedPipelineConstructionLock return true
 		unsigned sequencerIdx = unsigned(cfg._cfgId);
-		assert(sequencerIdx < _completedPipelines.size());
-		if (_completedPipelines[sequencerIdx]._pipeline._metalPipeline)
+		if (sequencerIdx < _hasCompletedPipelineConstructionLock.size() && _hasCompletedPipelineConstructionLock[sequencerIdx])
 			return true;
 
 		// If we have a pipeline currently in pending state, also return true
@@ -267,9 +275,12 @@ namespace RenderCore { namespace Techniques
 				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
 		#endif
 
+		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
+			AssertPipelineUsageLock(*cfg._ownerPool);
+		#endif
+
 		unsigned sequencerIdx = unsigned(cfg._cfgId);
-		assert(_completedPipelines.size() > sequencerIdx);
-		if (_completedPipelines[sequencerIdx]._visibilityMarker > visibilityMarker || !_completedPipelines[sequencerIdx]._pipeline._metalPipeline)
+		if (sequencerIdx >= _completedPipelines.size() || _completedPipelines[sequencerIdx]._visibilityMarker > visibilityMarker || !_completedPipelines[sequencerIdx]._pipeline._metalPipeline)
 			return nullptr;
 		return &_completedPipelines[sequencerIdx]._pipeline;
 	}
@@ -392,7 +403,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;		// filled in after _pending has completed
 		DescriptorSetBindingInfo _bindingInfo;
 
-		#if defined(_DEBUG)
+		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 			PipelineAcceleratorPool* _ownerPool = nullptr;
 		#endif
 		uint64_t _constructionContextGuid = 0;
@@ -461,10 +472,6 @@ namespace RenderCore { namespace Techniques
 		PipelineAcceleratorPool(const PipelineAcceleratorPool&) = delete;
 		PipelineAcceleratorPool& operator=(const PipelineAcceleratorPool&) = delete;
 
-		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			mutable std::optional<std::thread::id> _lockForThreadingThread;
-		#endif
-
 	protected:
 		//
 		// Two main locks:
@@ -475,8 +482,9 @@ namespace RenderCore { namespace Techniques
 		// _pipelineUsageLock is used for actually retrieving the pipeline/descriptor set with TryGetPipeline, etc
 		// Construction operations can happen in parallel with pipeline usage operations, so different kinds of clients won't
 		// interfere with each other. 
-		// However, there is an overlap in RebuildAllOutOfDatePipelines() where both locks are taken. This also exposes
-		// the changes that were made by construction operations
+		//
+		// We do take both locks frequently in VisibilityBarrier, however for other operations we should prefer to take
+		// only one
 		//
 		mutable Threading::Mutex _constructionLock;
 		mutable std::shared_mutex _pipelineUsageLock;
@@ -527,23 +535,35 @@ namespace RenderCore { namespace Techniques
 		#endif
 	};
 
+	#if defined(PA_ADDITIONAL_THREADING_CHECKS)
+		static thread_local std::vector<const PipelineAcceleratorPool*> s_poolsLockedForThread;
+	#endif
+
 	void PipelineAcceleratorPool::LockForReading() const
 	{
 		_pipelineUsageLock.lock_shared();
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			assert(!_lockForThreadingThread.has_value());
-			_lockForThreadingThread = std::this_thread::get_id();
+			assert(std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this) == s_poolsLockedForThread.end());
+			s_poolsLockedForThread.push_back(this);
 		#endif
 	}
 
 	void PipelineAcceleratorPool::UnlockForReading() const
 	{
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			assert(_lockForThreadingThread.has_value() && _lockForThreadingThread.value() == std::this_thread::get_id());
-			_lockForThreadingThread = {};
+			auto i = std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this);
+			assert(i != s_poolsLockedForThread.end());
+			s_poolsLockedForThread.erase(i);
 		#endif
 		_pipelineUsageLock.unlock_shared();	
 	}
+
+	#if defined(PA_ADDITIONAL_THREADING_CHECKS)
+		void AssertPipelineUsageLock(const PipelineAcceleratorPool& pool)
+		{
+			assert(std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), &pool) != s_poolsLockedForThread.end());
+		}
+	#endif
 
 	template<typename ContinuationFn, typename PromisedType, typename... FutureTypes>
 		static std::unique_ptr<::Assets::Internal::FlexTimedWaitableWithContinuation<ContinuationFn, PromisedType, std::decay_t<FutureTypes>...>> MakeTimedWaitable(
@@ -566,10 +586,24 @@ namespace RenderCore { namespace Techniques
 
 	std::future<VisibilityMarkerId> PipelineAcceleratorPool::GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const
 	{
-		// We must lock the "_constructionLock" for this -- so it's less advisable to call this often
+		// We must lock both "_constructionLock" & "_pipelineUsageLock" for this -- so it's less advisable to call this often
 		// TryGetPipeline doesn't take a lock and is more efficient to call frequently
 		// This will also return nullptr if the pipeline has already been completed and is accessible via TryGetPipeline
+		// See notes in VisibilityBarrier for lock ordering
+		ScopedLock(_pipelineUsageLock);		// (exclusive lock here)
 		ScopedLock(_constructionLock);
+
+		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
+			assert(std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this) == s_poolsLockedForThread.end());
+			s_poolsLockedForThread.push_back(this);
+			auto cleanup = AutoCleanup(
+				[this]() {
+					auto i = std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this);
+					assert(i != s_poolsLockedForThread.end());
+					s_poolsLockedForThread.erase(i);
+				});
+		#endif
+
 		#if defined(_DEBUG)
 			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);
 			if (poolId != _guid || pipelineAccelerator._ownerPoolId != _guid)
@@ -601,6 +635,10 @@ namespace RenderCore { namespace Techniques
 			#endif
 			return result;
 		}
+
+		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
+			AssertPipelineUsageLock(*this);
+		#endif
 		
 		auto seqIndex = unsigned(sequencerConfig._cfgId);
 		if (seqIndex >= pipelineAccelerator._completedPipelines.size())
@@ -660,7 +698,7 @@ namespace RenderCore { namespace Techniques
 	{
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 			assert(sequencerConfig._ownerPool);
-			assert(sequencerConfig._ownerPool->_lockForThreadingThread.has_value() && sequencerConfig._ownerPool->_lockForThreadingThread.value() == std::this_thread::get_id());
+			AssertPipelineUsageLock(*sequencerConfig._ownerPool);
 		#endif
 		#if defined(_DEBUG)
 			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);
@@ -675,7 +713,7 @@ namespace RenderCore { namespace Techniques
 	{
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 			assert(accelerator._ownerPool);
-			assert(accelerator._ownerPool->_lockForThreadingThread.has_value() && accelerator._ownerPool->_lockForThreadingThread.value() == std::this_thread::get_id());
+			AssertPipelineUsageLock(*accelerator._ownerPool);
 		#endif
 		if (accelerator._visibilityMarker > visibilityMarker) return nullptr;
 		return &accelerator._completed;
@@ -685,7 +723,6 @@ namespace RenderCore { namespace Techniques
 	{
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 			assert(sequencerConfig._ownerPool);
-			assert(sequencerConfig._ownerPool->_lockForThreadingThread.has_value() && sequencerConfig._ownerPool->_lockForThreadingThread.value() == std::this_thread::get_id());
 		#endif
 		return sequencerConfig._compiledPipelineLayout.get();
 	}
@@ -887,7 +924,7 @@ namespace RenderCore { namespace Techniques
 
 			result->_constructionContextGuid = constructionContextGuid;
 			result->_name = name;
-			#if defined(_DEBUG)
+			#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 				result->_ownerPool = this;
 			#endif
 
@@ -981,7 +1018,7 @@ namespace RenderCore { namespace Techniques
 						GetDefaultShaderLanguage(), _samplerPool.get());
 					result->_compiledPipelineLayout = _pipelineCollection->CreatePipelineLayout(layoutInitializer, result->_name);
 					result->_cfgId = cfgId;
-					#if defined(_DEBUG)
+					#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 						result->_ownerPool = this;
 					#endif
 					i->second = result;
@@ -1019,7 +1056,7 @@ namespace RenderCore { namespace Techniques
 			GetDefaultShaderLanguage(), _samplerPool.get());
 		result->_compiledPipelineLayout = _pipelineCollection->CreatePipelineLayout(layoutInitializer, result->_name);
 		result->_cfgId = cfgId;
-		#if defined(_DEBUG)
+		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 			result->_ownerPool = this;
 		#endif
 
@@ -1030,8 +1067,6 @@ namespace RenderCore { namespace Techniques
 		for (auto& accelerator:_pipelineAccelerators) {
 			auto a = accelerator.second.lock();
 			if (a) {
-				if (a->_completedPipelines.size() < _sequencerConfigs.size())
-					a->_completedPipelines.resize(_sequencerConfigs.size());
 				auto future = a->BeginPrepareForSequencerStateAlreadyLocked(result, _globalSelectors, _pipelineCollection, _layoutDelegate);
 				newlyQueued.emplace_back(std::move(future), accelerator.first, cfgId);
 			}
@@ -1043,10 +1078,9 @@ namespace RenderCore { namespace Techniques
 
 	void PipelineAcceleratorPool::RebuildAllPipelinesAlreadyLocked(unsigned poolGuid, PipelineAccelerator& pipeline, uint64_t acceleratorHash)
 	{
-		std::vector<NewlyQueued> newlyQueued;
+		// We can't touch _completedPipelines here -- because we have _constructionLock, but not _pipelineUsageLock
 
-		if (pipeline._completedPipelines.size() < _sequencerConfigs.size())
-			pipeline._completedPipelines.resize(_sequencerConfigs.size());
+		std::vector<NewlyQueued> newlyQueued;
 
 		for (unsigned c=0; c<_sequencerConfigs.size(); ++c) {
 			auto cfgId = SequencerConfigId(c) | (SequencerConfigId(poolGuid) << 32ull);
@@ -1084,6 +1118,17 @@ namespace RenderCore { namespace Techniques
 		// This way around should be more easily controllable for us
 		ScopedLock(_pipelineUsageLock);		// (exclusive lock here)
 		ScopedLock(_constructionLock);
+
+		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
+			assert(std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this) == s_poolsLockedForThread.end());
+			s_poolsLockedForThread.push_back(this);
+			auto cleanup = AutoCleanup(
+				[this]() {
+					auto i = std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this);
+					assert(i != s_poolsLockedForThread.end());
+					s_poolsLockedForThread.erase(i);
+				});
+		#endif
 
 		// We can make the barrier optional by setting "expectedVisibility" to something other than the default (which is ~0u)
 		// This can allow us to early out if we find that the required visibility is already achieved
@@ -1139,7 +1184,7 @@ namespace RenderCore { namespace Techniques
 						if (!acceleratorsToCheckCountDown--) break;
 						auto a = _pipelineAccelerators[_lastPipelineAcceleratorHotReloadCheck].second.lock();
 						if (!a) continue;
-						if (a->_completedPipelines[_lastSequencerCfgHotReloadCheck].GetDependencyValidation().GetValidationIndex() != 0) {
+						if (_lastSequencerCfgHotReloadCheck < a->_completedPipelines.size() && a->_completedPipelines[_lastSequencerCfgHotReloadCheck].GetDependencyValidation().GetValidationIndex() != 0) {
 							// Don't attempt hotreload if we already have a pending pipeline here (if the hotreload is already out of date it will still get rebuilt after finishing)
 							auto existing = std::find_if(a->_pendingPipelines.begin(), a->_pendingPipelines.end(), [c=_lastSequencerCfgHotReloadCheck](const auto& p) { return p.first == c; });
 							if (existing != a->_pendingPipelines.end()) continue;
@@ -1164,7 +1209,10 @@ namespace RenderCore { namespace Techniques
 			for (auto& accelerator:_pipelineAccelerators)
 				if (auto a = accelerator.second.lock())
 					for (auto newlyExpired:MakeIteratorRange(newlyExpiredSequencerIndices, &newlyExpiredSequencerIndices[newlyExpiredSequencerCount]))
-						a->_completedPipelines[newlyExpired] = {};
+						if (newlyExpired < a->_completedPipelines.size()) {
+							a->_completedPipelines[newlyExpired] = {};
+							a->_hasCompletedPipelineConstructionLock[newlyExpired] = false;
+						}
 		}
 
 		// check for completed futures
@@ -1183,7 +1231,11 @@ namespace RenderCore { namespace Techniques
 			auto accelerator = a->second.lock();
 			if (!accelerator) continue;
 
-			assert(accelerator->_completedPipelines.size() >= _sequencerConfigs.size());
+			// lazy updating of _completedPipelines' size
+			if (accelerator->_completedPipelines.size() < _sequencerConfigs.size()) {
+				accelerator->_completedPipelines.resize(_sequencerConfigs.size());
+				accelerator->_hasCompletedPipelineConstructionLock.resize(_sequencerConfigs.size());
+			}
 			auto seqIdx = uint32_t(futureToCheck.second);
 			assert(seqIdx < _sequencerConfigs.size());
 
@@ -1207,21 +1259,25 @@ namespace RenderCore { namespace Techniques
 				accelerator->_completedPipelines[seqIdx]._depVal = pipeline.GetDependencyValidation();
 				accelerator->_completedPipelines[seqIdx]._pipeline = std::move(pipeline);
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = newVisibilityMarker;
+				accelerator->_hasCompletedPipelineConstructionLock[seqIdx] = true;
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 				// we've gone invalid
 				accelerator->_completedPipelines[seqIdx]._depVal = e.GetDependencyValidation();
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
+				accelerator->_hasCompletedPipelineConstructionLock[seqIdx] = false;
 			} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
 				// we've gone invalid
 				accelerator->_completedPipelines[seqIdx]._depVal = e.GetDependencyValidation();
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
+				accelerator->_hasCompletedPipelineConstructionLock[seqIdx] = false;
 			} CATCH(const std::exception&) {
 				// we've gone invalid (no dep val)
 				accelerator->_completedPipelines[seqIdx]._depVal = {};
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
+				accelerator->_hasCompletedPipelineConstructionLock[seqIdx] = false;
 			} CATCH_END
 		}
 
