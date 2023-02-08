@@ -20,6 +20,7 @@ namespace EntityInterface
         RetainedEntity& dest, const PropertyInitializer& prop) const
     {
         if (prop._data.empty()) return false;
+        assert(!prop._reversedEndian);
         dest._properties.SetParameter(prop._prop.first, prop._data, prop._type);
         return true;
     }

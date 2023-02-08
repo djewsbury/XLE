@@ -625,7 +625,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (unsigned(graphArea.Width() / horizontalAllocation) >= (gapBetweenBlocks+1)) {
             // magnification horizontally
             unsigned valueLeft = (unsigned)std::max(int(series._values.size() - horizontalAllocation), 0);
-            unsigned valueRight = series._values.size();
+            unsigned valueRight = (unsigned)series._values.size();
             unsigned allocationRight = valueRight-valueLeft;
 
             int blockSize = graphArea.Width() / horizontalAllocation;      // round down
@@ -646,7 +646,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 unsigned verticalBlocks = std::abs(yBottom - yTop) / blockSize;
                 if (!verticalBlocks) continue;
 
-                for (int b=0; b<verticalBlocks; ++b) {
+                for (int b=0; b<(int)verticalBlocks; ++b) {
                     if (q >= dimof(pts)) {
                         context.DrawTriangles(ProjectionMode::P2D, pts, q, colors);
                         q = 0;
