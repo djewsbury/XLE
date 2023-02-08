@@ -42,7 +42,7 @@ namespace Utility
                         break;
                     }
 
-                case '\r':  // (could be an independant new line, or /r/n combo)
+                case '\r':  // (could be an independent new line, or /r/n combo)
                     ++_input._start;
                     if (_input.begin() != _input.end() &&  *_input.begin() == '\n')
                         ++_input._start;
@@ -50,7 +50,7 @@ namespace Utility
                     preprocValid = true;
                     break;
 
-                case '\n':  // (independant new line. A following /r will be treated as another new line)
+                case '\n':  // (independent new line. A following /r will be treated as another new line)
                     ++_input._start;
                     ++_lineIndex; _lineStart = _input.begin();
                     preprocValid = true;
@@ -146,7 +146,7 @@ namespace Utility
             return Token { { startOfToken, _input.begin() }, startLocation, GetLocation() };
         }
 
-        auto PreProc_GetBrackettedToken() -> Token
+        auto PreProc_GetBracketedToken() -> Token
         {
             // we need a special implementation for this for reading the preprocessor tokens themselves,
             // because the rules are slightly different (for example, we don't want to start parsing
@@ -213,7 +213,7 @@ namespace Utility
                 ++state._helper._input._start;
                 break;
 
-            case '\r':  // (could be an independant new line, or /r/n combo)
+            case '\r':  // (could be an independent new line, or /r/n combo)
                 ++state._helper._input._start;
                 if (state._helper._input.begin() != state._helper._input.end() &&  *state._helper._input.begin() == '\n')
                     ++state._helper._input._start;
@@ -221,7 +221,7 @@ namespace Utility
                 _preprocValid = true;
                 break;
 
-            case '\n':  // (independant new line. A following /r will be treated as another new line)
+            case '\n':  // (independent new line. A following /r will be treated as another new line)
                 ++state._helper._input._start;
                 ++state._helper._lineIndex; state._helper._lineStart = state._helper._input.begin();
                 _preprocValid = true;
@@ -371,6 +371,11 @@ namespace Utility
             auto prevCondition = *(_preprocessorContext._conditionsStack.end()-1);
             _preprocessorContext._conditionsStack.erase(_preprocessorContext._conditionsStack.end()-1);
 
+            if (prevCondition._elseCondition && !XlEqStringI(directive._value, "endif"))
+                Throw(FormatException(
+                    StringMeld<256>() << "else/elif after an else",
+                    directive._start));
+
             auto negCondition = prevCondition._positiveCond;
             if (!prevCondition._negativeCond.empty())
                 negCondition = "(" + negCondition + ") || (" + prevCondition._negativeCond +  ")";
@@ -379,7 +384,7 @@ namespace Utility
                 auto remainingLine = ReadUntilEndOfLine();
                 _preprocessorContext._conditionsStack.push_back({remainingLine._value.AsString(), negCondition});
             } else if (XlEqStringI(directive._value, "else")) {
-                _preprocessorContext._conditionsStack.push_back({"1", negCondition});
+                _preprocessorContext._conditionsStack.push_back({"1", negCondition, true});
 
                 ReadUntilEndOfLine();       // skip rest of line
             }
@@ -388,7 +393,7 @@ namespace Utility
 
             assert(!_fileStates.empty());
             auto& state = *(_fileStates.end()-1);
-            auto symbol = state._helper.PreProc_GetBrackettedToken();
+            auto symbol = state._helper.PreProc_GetBracketedToken();
             if (symbol._value.IsEmpty())
                 Throw(FormatException("Expected file to include after #include directive", directive._start));
 
@@ -658,7 +663,7 @@ namespace Utility
                         auto expr = Internal::AsExpressionTokenList(
                             tokenDictionary, remainingLine._value, activeSubstitutions);
 
-                        auto exprRelevance = CalculatePreprocessorExpressionRevelance(
+                        auto exprRelevance = CalculatePreprocessorExpressionRelevance(
                             tokenDictionary, expr);
 
                         relevanceTable = Internal::MergeRelevanceTables(
@@ -680,7 +685,7 @@ namespace Utility
                         Internal::ExpressionTokenList expr;
                         tokenDictionary.PushBack(expr, Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString());
 
-                        auto exprRelevance = CalculatePreprocessorExpressionRevelance(
+                        auto exprRelevance = CalculatePreprocessorExpressionRelevance(
                             tokenDictionary, expr);
 
                         relevanceTable = Internal::MergeRelevanceTables(
@@ -702,7 +707,7 @@ namespace Utility
                         tokenDictionary.PushBack(expr, Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString());
                         expr = Internal::InvertExpression(expr);
 
-                        auto exprRelevance = CalculatePreprocessorExpressionRevelance(
+                        auto exprRelevance = CalculatePreprocessorExpressionRelevance(
                             tokenDictionary, expr);
 
                         relevanceTable = Internal::MergeRelevanceTables(
@@ -723,7 +728,7 @@ namespace Utility
 
                         // Since we're at the same layer of nesting as the #if that we're trailing,
                         // we wil actually modify the top condition on the stack, rather than pushing
-                        // and going to a deaper level
+                        // and going to a deeper level
                         auto prevCondition = *(conditionsStack.end()-1);
                         conditionsStack.erase(conditionsStack.end()-1);
 
@@ -740,7 +745,7 @@ namespace Utility
                             auto expr = Internal::AsExpressionTokenList(
                                 tokenDictionary, remainingLine._value, activeSubstitutions);
 
-                            auto exprRelevance = CalculatePreprocessorExpressionRevelance(
+                            auto exprRelevance = CalculatePreprocessorExpressionRelevance(
                                 tokenDictionary, expr);
 
                             auto conditions = Internal::AndNotExpression(GetCurrentCondition(conditionsStack), negCondition);
@@ -868,7 +873,7 @@ namespace Utility
                 } else if (XlEqStringI(directive._value, "include")) {
 
                     if (!disablePushCount) {
-                        auto symbol = helper.PreProc_GetBrackettedToken();
+                        auto symbol = helper.PreProc_GetBracketedToken();
                         if (symbol._value.IsEmpty())
                             Throw(FormatException("Expected file to include after #include directive", directive._start));
 

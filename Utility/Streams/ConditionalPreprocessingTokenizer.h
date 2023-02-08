@@ -22,7 +22,7 @@ namespace Utility
 	/// token is conditionally included in the file output, based on the particular conditions in the directive.
 	///
 	/// GetNextToken() itself will never return the preprocessor directive text, but it returns every other token
-	/// in the source file (ie, without evaluating the #if statments)
+	/// in the source file (ie, without evaluating the #if statements)
 	/// However, we can check on the  conditions under which that token is included in the preprocessed output 
 	/// at any time byt calling _preprocessorContext.GetCurrentConditionString()
 	///
@@ -65,6 +65,7 @@ namespace Utility
             {
                 Expression _positiveCond;
                 Expression _negativeCond;
+                bool _elseCondition = false;
             };
             std::vector<Cond> _conditionsStack;
 
