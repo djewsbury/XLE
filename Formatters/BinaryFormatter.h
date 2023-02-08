@@ -37,6 +37,9 @@ namespace Formatters
 
 		void PushPattern(std::shared_ptr<BinarySchemata> schemata, BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams = {}, uint32_t templateParamsTypeField = 0u);
 
+		bool ReversedEndian() const { return _reversedEndian; }
+		void SetReversedEndian(bool newState) { _reversedEndian = newState; }
+
 		EvaluationContext& GetEvaluationContext() const { return *_evalContext; }
 		IteratorRange<const void*> GetRemainingData() const { return _dataIterator; }
 		IteratorRange<const unsigned*> GetPassedConditionSymbols() const { return _passedConditionSymbols; }
@@ -62,15 +65,16 @@ namespace Formatters
 			void* _cachedEvals = nullptr;		// EvaluationContext::CachedSubEvals
 
 			std::vector<std::pair<uint64_t, ImpliedTyping::VariantNonRetained>> _localEvalContext;
-			std::vector<uint64_t> _nonIntegerLocalVariables;
 		};
 		std::deque<BlockContext> _blockStack;
 		EvaluationContext* _evalContext = nullptr;
 		IteratorRange<const void*> _dataIterator;
 		std::vector<unsigned> _passedConditionSymbols;
+		bool _reversedEndian = false;
 
 		Blob _queuedNext = Blob::None;
 		std::optional<size_t> TryCalculateFixedSize(unsigned evalTypeId);
+		int64_t EvaluateExpression(IteratorRange<const Utility::Internal::Token*>, const Utility::Internal::TokenDictionary&);
 	};
 
 	void SkipUntilEndBlock(BinaryFormatter&);

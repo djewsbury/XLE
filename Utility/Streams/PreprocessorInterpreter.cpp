@@ -879,6 +879,7 @@ namespace Utility
 			bool _useRetainedValue = false;
 			uint64_t _retainedValue;		// can't hold arrays
 			IteratorRange<const void*> _nonRetainedValue;
+			bool _nonRetainedValueReversedEndian = false;
 
 			#if defined(_DEBUG)
 				uint64_t _validationBuffer = 0;
@@ -893,11 +894,11 @@ namespace Utility
 						assert(_type.GetSize() == _nonRetainedValue.size());
 					}
 				#endif
-				return ImpliedTyping::VariantNonRetained{ _type, _useRetainedValue ? MakeOpaqueIteratorRange(_retainedValue) : _nonRetainedValue };
+				return ImpliedTyping::VariantNonRetained{ _type, _useRetainedValue ? MakeOpaqueIteratorRange(_retainedValue) : _nonRetainedValue, _nonRetainedValueReversedEndian };
 			}
 			EvaluatedValue() = default;
 			EvaluatedValue(const ImpliedTyping::VariantNonRetained& copyFrom)
-			: _type(copyFrom._type), _useRetainedValue(false), _nonRetainedValue(copyFrom._data) 
+			: _type(copyFrom._type), _useRetainedValue(false), _nonRetainedValue(copyFrom._data), _nonRetainedValueReversedEndian(copyFrom._reversedEndian)
 			{
 				assert(_type.GetSize() == _nonRetainedValue.size());
 				#if defined(_DEBUG)
@@ -913,6 +914,7 @@ namespace Utility
 				:_type{ImpliedTyping::TypeOf<Type>()}
 				, _useRetainedValue{true}
 				, _retainedValue{0}	// clear for clarity
+				, _nonRetainedValueReversedEndian{false}
 				{
 					assert(_type._type != ImpliedTyping::TypeCat::Void);
 					assert(_type.GetSize() <= sizeof(_retainedValue));
@@ -1103,7 +1105,7 @@ namespace Utility
 
 		ExpressionEvaluator::~ExpressionEvaluator() {}
 
-		WorkingRelevanceTable CalculatePreprocessorExpressionRevelance(
+		WorkingRelevanceTable CalculatePreprocessorExpressionRelevance(
 			TokenDictionary& tokenDictionary,
 			const ExpressionTokenList& abstractInput)
 		{

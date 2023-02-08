@@ -38,6 +38,10 @@ namespace Utility
 		template<typename...> static auto HasTryKeyedItemHash_Helper(...) -> std::false_type;
 		template<typename Type> struct HasTryKeyedItemHash : decltype(HasTryKeyedItemHash_Helper<Type>(0)) {};
 
+		template<typename Type> static auto HasReversedEndian_Helper(int) -> decltype(std::declval<Type>().ReversedEndian(), std::true_type{});
+		template<typename...> static auto HasReversedEndian_Helper(...) -> std::false_type;
+		template<typename Type> struct HasReversedEndian : decltype(HasReversedEndian_Helper<Type>(0)) {};
+
 		template<typename Formatter>
 			struct FormatterTraits
 		{
@@ -47,6 +51,7 @@ namespace Utility
 			static constexpr auto HasTryRawValue = Internal::HasTryRawValue<Formatter>::value;
 			static constexpr auto HasTryCastValue = Internal::HasTryRawValue<Formatter>::value;
 			static constexpr auto HasTryKeyedItemHash = Internal::HasTryKeyedItemHash<Formatter>::value;
+			static constexpr auto HasReversedEndian = Internal::HasReversedEndian<Formatter>::value;
 		};
 	}
 
@@ -183,6 +188,16 @@ namespace Utility
 		return value;
 	}
 
+	template<typename Formatter>
+		bool ReversedEndian(Formatter& formatter)
+	{
+		if constexpr (Internal::FormatterTraits<Formatter>::HasReversedEndian) {
+			return formatter.ReversedEndian();
+		} else {
+			return false;
+		}
+	}
+
 	template<typename Type, typename Formatter>
 		Type RequireCastValue(Formatter& formatter)
 	{
@@ -196,7 +211,7 @@ namespace Utility
 			ImpliedTyping::TypeDesc typeDesc;
 			if (!formatter.TryRawValue(value, typeDesc))
 				Throw(Utility::FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
-			return ImpliedTyping::VariantNonRetained{typeDesc, value}.RequireCastValue<Type>();
+			return ImpliedTyping::VariantNonRetained{typeDesc, value, ReversedEndian(formatter)}.RequireCastValue<Type>();
 		} else {
 			typename Formatter::InteriorSection value;
 			Type result;

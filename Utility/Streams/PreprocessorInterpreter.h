@@ -80,7 +80,7 @@ namespace Utility
 				// larger values (such as arrays)
 				template<typename Type> void SetQueryResult(const Type& value);
 				template<typename Type, int N> void SetQueryResult(Type (&value)[N]);
-				void SetQueryResult(const ImpliedTyping::TypeDesc& typeDesc, IteratorRange<const void*> data);
+				void SetQueryResult(const ImpliedTyping::TypeDesc& typeDesc, IteratorRange<const void*> data, bool reversedEndian=false);
 			};
 
 			Step GetNextStep();
@@ -105,17 +105,20 @@ namespace Utility
 			{
 				_queryResult->_type = ImpliedTyping::TypeOf<Type>();
 				_queryResult->_data = MakeOpaqueIteratorRange(value);
+				_queryResult->_reversedEndian = false;
 			}
 		template<typename Type, int N>
 			void ExpressionEvaluator::Step::SetQueryResult(Type (&value)[N])
 			{
 				_queryResult->_type = { ImpliedTyping::TypeOf<Type>()._type, N};
 				_queryResult->_data = MakeOpaqueIteratorRange(value);
+				_queryResult->_reversedEndian = false;
 			}
-		inline void ExpressionEvaluator::Step::SetQueryResult(const ImpliedTyping::TypeDesc& typeDesc, IteratorRange<const void*> data)
+		inline void ExpressionEvaluator::Step::SetQueryResult(const ImpliedTyping::TypeDesc& typeDesc, IteratorRange<const void*> data, bool reversedEndian)
 		{
 			_queryResult->_type = typeDesc;
-			_queryResult->_data = {const_cast<void*>(data.begin()), const_cast<void*>(data.end())};		// we promise to be good
+			_queryResult->_data = { const_cast<void*>(data.begin()), const_cast<void*>(data.end()) };		// we promise to be good
+			_queryResult->_reversedEndian = reversedEndian;
 		}
 
 		const char* AsString(TokenDictionary::TokenType);
@@ -157,7 +160,7 @@ namespace Utility
 			StringSection<> input,
 			const PreprocessorSubstitutions& substitutions = {});
 		
-		WorkingRelevanceTable CalculatePreprocessorExpressionRevelance(
+		WorkingRelevanceTable CalculatePreprocessorExpressionRelevance(
 			TokenDictionary& dictionary,
 			const ExpressionTokenList& input);
 	}

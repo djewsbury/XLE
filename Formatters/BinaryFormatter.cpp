@@ -35,7 +35,7 @@ namespace Formatters
 		if (lhs._paramTypeField != rhs._paramTypeField) return false;
 		if (!Match(MakeIteratorRange(lhs._params), MakeIteratorRange(rhs._params))) return false;
 		if (lhs._schemata != rhs._schemata) return false;
-		return lhs._valueTypeDesc == rhs._valueTypeDesc; 
+		return lhs._valueTypeDesc == rhs._valueTypeDesc && lhs._valueTypeDesc._typeHint == rhs._valueTypeDesc._typeHint; 
 	}
 
 	auto EvaluationContext::GetEvaluatedType(const std::shared_ptr<BinarySchemata>& schemata, StringSection<> baseName, BinarySchemata::BlockDefinitionId scope, IteratorRange<const int64_t*> parameters, unsigned typeBitField) -> EvaluatedTypeToken
@@ -273,6 +273,7 @@ namespace Formatters
 
 						auto result = exprEval.GetResult();
 						int64_t resultValue = 0;
+						assert(!result._reversedEndian);
 						if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
 							Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
 						valueStack.push(resultValue);
@@ -413,6 +414,91 @@ namespace Formatters
 		_blockStack.emplace_back(std::move(newContext));
 	}
 
+	int64_t BinaryFormatter::EvaluateExpression(IteratorRange<const Utility::Internal::Token*> expressionCommands, const Utility::Internal::TokenDictionary& tokenDictionary)
+	{
+		TRY {
+			uint8_t stringParseOutputBuffer[1024];
+			unsigned stringParseOutputIterator = 0;
+			Utility::Internal::ExpressionEvaluator exprEval{tokenDictionary, expressionCommands};
+			while (auto nextStep = exprEval.GetNextStep()) {
+				assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
+
+				// Try to lookup the value in a number of places --
+				// - previously evaluated variables
+				// - template values
+				// - context state
+
+				// (we could just store this hash in the Token object)
+				// unfortunately we can't look up by token index any more, because each eval context can have a different dictionary
+				uint64_t hash = Hash64(nextStep._name);
+				bool gotValue = false;
+
+				// ------------------------- previously evaluated members --------------------
+				for (auto block=_blockStack.rbegin(); block!=_blockStack.rend() && !gotValue; ++block) {
+					auto localValue = std::find_if(block->_localEvalContext.begin(), block->_localEvalContext.end(), [hash](const auto& q) {return q.first==hash;});
+					if (localValue != block->_localEvalContext.end()) {
+
+						// If the value is a string; let's attempt to parse it before we send the results to the 
+						if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
+							if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
+								Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
+							auto parsedType = ImpliedTyping::ParseFullMatch(
+								MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
+								MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
+							if (parsedType._type != ImpliedTyping::TypeCat::Void) {
+								nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
+								stringParseOutputIterator += parsedType.GetSize();
+								gotValue = true;
+								break;
+							}
+						} else if (localValue->second._reversedEndian) {
+							assert(localValue->second._type._type > ImpliedTyping::TypeCat::UInt8);
+							// flip endian early in order to avoid pushing flipped endian values into ExpressionEvaluator
+							if (localValue->second._type.GetSize() > 8)
+								Throw(std::runtime_error("Attempting to use a reversed endian large type with a conditional statement. This isn't supported"));
+							auto* buffer = _alloca(localValue->second._type.GetSize());
+							assert(localValue->second._data.size() == localValue->second._type.GetSize());
+							ImpliedTyping::FlipEndian(MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize())), localValue->second._data.begin(), localValue->second._type);
+							nextStep.SetQueryResult(localValue->second._type, MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize())));
+						} else {
+							nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
+						}
+						gotValue = true;
+						break;
+					}
+
+					// ------------------------- template variables --------------------
+					if (block == _blockStack.rbegin())	// (only for the immediately enclosing context)
+						for (unsigned p=0; p<(unsigned)block->_definition->_templateParameterNames.size(); ++p)
+							if (block->_definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
+								assert(!(block->_parsingTemplateParamsTypeField & (1<<p)));		// assert value, not type parameter
+								nextStep.SetQueryResult(block->_parsingTemplateParams[p]);
+								gotValue = true;
+								break;
+							}
+				}
+
+				if (!gotValue) {
+					auto globalType = this->_evalContext->GetGlobalParameterBox().GetParameterType(hash);
+					if (globalType._type != ImpliedTyping::TypeCat::Void) {
+						nextStep.SetQueryResult(globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash));
+						gotValue = true;
+					}
+				}
+			}
+
+			auto result = exprEval.GetResult();
+			int64_t resultValue = 0;
+			if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
+				Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
+			return resultValue;
+			
+		} CATCH(const std::exception& e) {
+			auto exprString = tokenDictionary.AsString(expressionCommands);
+			Throw(std::runtime_error(e.what() + std::string{", while evaluating ["} + exprString + "]"));
+		} CATCH_END
+	}
+
 	BinaryFormatter::Blob BinaryFormatter::PeekNext()
 	{
 		if (_blockStack.empty()) return Blob::None;
@@ -464,81 +550,8 @@ namespace Formatters
 					auto range = MakeIteratorRange(cmds.begin(), cmds.begin()+length);
 					cmds.first += length;
 
-					TRY {
-						uint8_t stringParseOutputBuffer[1024];
-						unsigned stringParseOutputIterator = 0;
-						Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
-						while (auto nextStep = exprEval.GetNextStep()) {
-							assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
-
-							// Try to lookup the value in a number of places --
-							// - previously evaluated variables
-							// - template values
-							// - context state
-
-							// (we could just store this hash in the Token object)
-							// unfortunately we can't look up by token index any more, because each eval context can have a different dictionary
-							uint64_t hash = Hash64(nextStep._name);
-							bool gotValue = false;
-
-							// ------------------------- previously evaluated members --------------------
-							for (auto block=_blockStack.rbegin(); block!=_blockStack.rend() && !gotValue; ++block) {
-								auto localValue = std::find_if(block->_localEvalContext.begin(), block->_localEvalContext.end(), [hash](const auto& q) {return q.first==hash;});
-								if (localValue != block->_localEvalContext.end()) {
-
-									// If the value is a string; let's attempt to parse it before we send the results to the 
-									if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
-										if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
-											Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
-										auto parsedType = ImpliedTyping::ParseFullMatch(
-											MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
-											MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
-										if (parsedType._type != ImpliedTyping::TypeCat::Void) {
-											nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
-											stringParseOutputIterator += parsedType.GetSize();
-											gotValue = true;
-											break;
-										}
-									}
-									
-									nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
-									gotValue = true;
-									break;
-								}
-
-								if (std::find(block->_nonIntegerLocalVariables.begin(), block->_nonIntegerLocalVariables.end(), hash) != block->_nonIntegerLocalVariables.end())
-									Throw(std::runtime_error("Attempting to non-numeric local variable (" + nextStep._name.AsString() + ") in an expression. This isn't supported"));
-
-								// ------------------------- template variables --------------------
-								if (block == _blockStack.rbegin())	// (only for the immediately enclosing context)
-									for (unsigned p=0; p<(unsigned)block->_definition->_templateParameterNames.size(); ++p)
-										if (block->_definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
-											assert(!(block->_parsingTemplateParamsTypeField & (1<<p)));		// assert value, not type parameter
-											nextStep.SetQueryResult(block->_parsingTemplateParams[p]);
-											gotValue = true;
-											break;
-										}
-							}
-
-							if (!gotValue) {
-								auto globalType = this->_evalContext->GetGlobalParameterBox().GetParameterType(hash);
-								if (globalType._type != ImpliedTyping::TypeCat::Void) {
-									nextStep.SetQueryResult(globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash));
-									gotValue = true;
-								}
-							}
-						}
-
-						auto result = exprEval.GetResult();
-						int64_t resultValue = 0;
-						if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(resultValue), ImpliedTyping::TypeOf<int64_t>(), result._data, result._type))
-							Throw(std::runtime_error("Invalid expression or returned value that could not be cast to scalar integral in formatter expression evaluation"));
-
-						workingBlock._valueStack.push(resultValue);
-					} CATCH(const std::exception& e) {
-						auto exprString = def._tokenDictionary.AsString(range);
-						Throw(std::runtime_error(e.what() + std::string{", while evaluating ["} + exprString + "]"));
-					} CATCH_END
+					auto resultValue = EvaluateExpression(range, def._tokenDictionary);
+					workingBlock._valueStack.push(resultValue);
 					break;
 				}
 
@@ -597,8 +610,8 @@ namespace Formatters
 			// Sometimes we can just compress the "array count" into the basic value description, as so...
 			bool isCharType = false;
 			if (evalType._alias != ~0u && workingBlock._schemata->GetAliasName(evalType._alias) == "char") isCharType = true;		// hack -- special case for "char" alias
-			bool isCompressable = evalType._blockDefinition == ~0u && (evalType._alias == ~0u || isCharType) && evalType._valueTypeDesc._arrayCount <= 1;
-			_queuedNext = isCompressable ? Blob::ValueMember : Blob::BeginArray;
+			bool isCompressible = evalType._blockDefinition == ~0u && (evalType._alias == ~0u || isCharType) && evalType._valueTypeDesc._arrayCount <= 1;
+			_queuedNext = isCompressible ? Blob::ValueMember : Blob::BeginArray;
 
 		} else
 			return false;
@@ -611,7 +624,7 @@ namespace Formatters
 
 	bool BinaryFormatter::TryPeekKeyedItem(StringSection<>& name)
 	{
-		// TryKeyedItem only changes _queuedNext -- so we can efectively "peek"
+		// TryKeyedItem only changes _queuedNext -- so we can effectively "peek"
 		// at it by just changing _queuedNext back ....
 		auto res = TryKeyedItem(name);
 		if (!res) return false;
@@ -710,12 +723,15 @@ namespace Formatters
 			if (cmds[0] == (unsigned)Cmd::InlineArrayMember) {
 				bool isCharType = false;
 				if (evalType._alias != ~0u && workingBlock._schemata->GetAliasName(evalType._alias) == "char") isCharType = true;		// hack -- special case for "char" alias
-				bool isCompressable = evalType._blockDefinition == ~0u && (evalType._alias == ~0u || isCharType) && finalTypeDesc._arrayCount <= 1;
-				if (!isCompressable) return false;
+				bool isCompressible = evalType._blockDefinition == ~0u && (evalType._alias == ~0u || isCharType) && finalTypeDesc._arrayCount <= 1;
+				if (!isCompressible) return false;
 				auto arrayCount = workingBlock._valueStack.top();
 				assert(arrayCount <= std::numeric_limits<decltype(finalTypeDesc._arrayCount)>::max());
-				finalTypeDesc._arrayCount = arrayCount;
+				finalTypeDesc._arrayCount = (uint32_t)arrayCount;
 				if (isCharType) finalTypeDesc._typeHint = ImpliedTyping::TypeHint::String;
+			} else {
+				// expression evaluator treats anything we pass with the string hint as a string, even if it doesn't make sense to be so
+				assert(finalTypeDesc._typeHint != ImpliedTyping::TypeHint::String);
 			}
 
 			auto nameToken = cmds[1];
@@ -725,7 +741,8 @@ namespace Formatters
 			resultData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), size));
 			resultTypeDesc = finalTypeDesc;
 			
-			workingBlock._localEvalContext.emplace_back(Hash64(def._tokenDictionary._tokenDefinitions[nameToken]._value), ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData});
+			bool reversedEndian = _reversedEndian && resultTypeDesc._type > ImpliedTyping::TypeCat::UInt8;
+			workingBlock._localEvalContext.emplace_back(Hash64(def._tokenDictionary._tokenDefinitions[nameToken]._value), ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData, reversedEndian});
 			
 			evaluatedTypeId = type;
 			cmds.first+=2;
@@ -786,7 +803,8 @@ namespace Formatters
 
 		if (evalType._valueTypeDesc._type != ImpliedTyping::TypeCat::Void) {
 			auto arrayData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), evalType._valueTypeDesc.GetSize()));
-			workingBlock._localEvalContext.emplace_back(Hash64(def._tokenDictionary._tokenDefinitions[nameToken]._value), ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData});
+			bool reversedEndian = _reversedEndian && evalType._valueTypeDesc._type > ImpliedTyping::TypeCat::UInt8;
+			workingBlock._localEvalContext.emplace_back(Hash64(def._tokenDictionary._tokenDefinitions[nameToken]._value), ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData, reversedEndian});
 		}
 
 		return true;
@@ -1110,6 +1128,9 @@ namespace Formatters
 		unsigned arrayCount = 0;
 		IteratorRange<const void*> valueData;
 		ImpliedTyping::TypeDesc valueTypeDesc;
+		std::vector<uint8_t> largeTemporaryBuffer;
+		char smallTemporaryBuffer[256];
+
 		if (formatter.TryBeginBlock(evaluatedTypeId)) {
 			str << StreamIndent{indent};
 			formatter.GetEvaluationContext().SerializeEvaluatedType(str, evaluatedTypeId);
@@ -1118,6 +1139,19 @@ namespace Formatters
 			if (!formatter.TryEndBlock())
 				Throw(std::runtime_error("Expected end block"));
 		} else if (formatter.TryRawValue(valueData, valueTypeDesc, evaluatedTypeId)) {
+
+			if (formatter.ReversedEndian() && valueTypeDesc._type > ImpliedTyping::TypeCat::UInt8) {
+				IteratorRange<void*> reversedBuffer;
+				if (valueTypeDesc.GetSize() <= sizeof(smallTemporaryBuffer)) {
+					reversedBuffer = MakeIteratorRange(smallTemporaryBuffer, PtrAdd(smallTemporaryBuffer, valueTypeDesc.GetSize()));
+				} else {
+					largeTemporaryBuffer.resize(valueTypeDesc.GetSize());
+					reversedBuffer = MakeIteratorRange(largeTemporaryBuffer);
+				}
+				ImpliedTyping::FlipEndian(reversedBuffer, valueData.begin(), valueTypeDesc);
+				valueData = reversedBuffer;
+			}
+
 			str << StreamIndent{indent};
 			formatter.GetEvaluationContext().SerializeEvaluatedType(str, evaluatedTypeId);
 			str << " " << name << " = ";

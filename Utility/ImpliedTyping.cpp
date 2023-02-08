@@ -298,7 +298,7 @@ namespace Utility { namespace ImpliedTyping
         } else {
 
                 // multiple array elements. We might need to remap elements
-                // First -- trival cases can be completed with a memcpy
+                // First -- trivial cases can be completed with a memcpy
             if (    srcType._arrayCount == destType._arrayCount
                 &&  srcType._type == destType._type) {
                 std::memcpy(dest.begin(), src.begin(), std::min(dest.size(), size_t(srcType.GetSize())));
@@ -1223,6 +1223,8 @@ namespace Utility { namespace ImpliedTyping
         const ImpliedTyping::VariantNonRetained& lhs,
         const ImpliedTyping::VariantNonRetained& rhs)
     {
+        // Expecting reversed endian data to be pre-flipped before it enters here
+        assert(!lhs._reversedEndian && !rhs._reversedEndian);
         if (lhs._type._arrayCount > 1 || rhs._type._arrayCount > 1)
             return ImpliedTyping::TypeCat::Void;
 
@@ -1448,6 +1450,8 @@ namespace Utility { namespace ImpliedTyping
         StringSection<> op,
         const ImpliedTyping::VariantNonRetained& operand)
     {
+        // Expecting reversed endian data to be pre-flipped before it enters here
+        assert(!operand._reversedEndian);
         if (operand._type._arrayCount > 1)
             return ImpliedTyping::TypeCat::Void;
 
@@ -1468,6 +1472,84 @@ namespace Utility { namespace ImpliedTyping
         }
 
         return ImpliedTyping::TypeCat::Void;
+    }
+
+	static constexpr uint16_t FlipEndian(uint16_t input)
+	{
+		return (input << 8u) | (input >> 8u);
+	}
+	
+	static constexpr uint32_t FlipEndian(uint32_t input)
+	{
+		return (input << 24u)
+			| ((input & 0x0000ff00u) <<  8u)
+			| ((input & 0x00ff0000u) >>  8u)
+			| (input >> 24u);
+	}
+
+	static constexpr uint64_t FlipEndian(uint64_t input)
+	{
+		return (input << 56ull)
+			| ((input & 0x0000ff00ull) << 40ull)
+			| ((input & 0x00ff0000ull) << 24ull)
+			| ((input & 0xff000000ull) <<  8ull)
+
+			| ((input & 0x000000ff00000000ull) >>  8ull)
+			| ((input & 0x0000ff0000000000ull) >> 24ull)
+			| ((input & 0x00ff000000000000ull) >> 40ull)
+			| (input >> 56ull);
+	}
+
+    void FlipEndian(IteratorRange<void*> output, const void* src, const TypeDesc& type)
+    {
+        unsigned byteCount;
+        switch (type._type) {
+        case TypeCat::Void:
+        case TypeCat::Bool:
+        case TypeCat::Int8:
+        case TypeCat::UInt8:
+            assert(0);
+            std::memcpy(output.begin(), src, output.size());
+            break;
+
+        case TypeCat::Int16:
+        case TypeCat::UInt16:
+            byteCount = 2;
+            break;
+
+        case TypeCat::Int32:
+        case TypeCat::UInt32:
+        case TypeCat::Float:
+            byteCount = 4;
+            break;
+
+        case TypeCat::Int64:
+        case TypeCat::UInt64:
+        case TypeCat::Double:
+            byteCount = 8;
+            break;
+        }
+
+        assert((output.size()%byteCount) == 0);
+        unsigned count = output.size() / byteCount;
+
+        if (byteCount == 2) {
+            auto* d = (uint16_t*)output.begin();
+            auto* s = (const uint16_t*)src;
+            while (count--)
+                *d++ = FlipEndian(*s++);
+        } else if (byteCount == 4) {
+            auto* d = (uint32_t*)output.begin();
+            auto* s = (const uint32_t*)src;
+            while (count--)
+                *d++ = FlipEndian(*s++);
+        } else {
+            assert(byteCount == 8);
+            auto* d = (uint64_t*)output.begin();
+            auto* s = (const uint64_t*)src;
+            while (count--)
+                *d++ = FlipEndian(*s++);
+        }
     }
 
 }}

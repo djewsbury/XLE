@@ -72,7 +72,7 @@ namespace Formatters
 
 		struct ConditionSymbol { unsigned _lineIdx; };
 		ConditionSymbol GetConditionSymbol(unsigned idx) const;
-		unsigned GetConditionSymbolCount() const { return _conditionSymbolLines.size(); }
+		unsigned GetConditionSymbolCount() const { return (unsigned)_conditionSymbolLines.size(); }
 		
 	private:
 		void ParseBlock(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
