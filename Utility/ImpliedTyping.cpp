@@ -335,8 +335,301 @@ namespace Utility { namespace ImpliedTyping
 
         return false;
     }
-    
-    
+
+	static constexpr uint16_t FlipEndian(uint16_t input)
+	{
+		return (input << 8u) | (input >> 8u);
+	}
+	
+	static constexpr uint32_t FlipEndian(uint32_t input)
+	{
+		return (input << 24u)
+			| ((input & 0x0000ff00u) <<  8u)
+			| ((input & 0x00ff0000u) >>  8u)
+			| (input >> 24u);
+	}
+
+	static constexpr uint64_t FlipEndian(uint64_t input)
+	{
+		return (input << 56ull)
+			| ((input & 0x0000ff00ull) << 40ull)
+			| ((input & 0x00ff0000ull) << 24ull)
+			| ((input & 0xff000000ull) <<  8ull)
+
+			| ((input & 0x000000ff00000000ull) >>  8ull)
+			| ((input & 0x0000ff0000000000ull) >> 24ull)
+			| ((input & 0x00ff000000000000ull) >> 40ull)
+			| (input >> 56ull);
+	}
+
+    static float FloatBits(uint32_t input)
+	{
+		union Converter { float f; uint32_t i; };
+		Converter c; c.i = input; 
+		return c.f;
+	}
+
+    static double DoubleBits(uint64_t input)
+	{
+		union Converter { double f; uint64_t i; };
+		Converter c; c.i = input; 
+		return c.f;
+	}
+
+    template<typename Type>
+        static Type FlipEndianHelper(const void* input)
+    {
+        static_assert(std::is_integral_v<Type>);
+        switch (sizeof(Type)) {
+        case 1: return *(Type*)input;
+        case 2: return (Type)FlipEndian(*(const uint16_t*)input);
+        case 4: return (Type)FlipEndian(*(const uint32_t*)input);
+        case 8: return (Type)FlipEndian(*(const uint64_t*)input);
+        default:
+            assert(0);
+            return *(const Type*)input;
+        }
+    }
+
+    template<>
+        static float FlipEndianHelper(const void* input)
+    {
+        return FloatBits(FlipEndian(*(const uint32_t*)input));
+    }
+
+    template<>
+        static double FlipEndianHelper(const void* input)
+    {
+        return DoubleBits(FlipEndian(*(const uint64_t*)input));
+    }
+
+    bool Cast_FlipEndian(
+        IteratorRange<void*> dest, TypeDesc destType,
+        IteratorRange<const void*> rawSrc, TypeDesc srcType)
+    {
+        // Casting from string types to non-string types can be unexpected -- beacuse it's a cast, not a parse
+        // it's very rare that we would want a cast in this case
+        assert(srcType._typeHint != ImpliedTyping::TypeHint::String || destType._typeHint == ImpliedTyping::TypeHint::String);
+
+        if (srcType._type <= TypeCat::UInt8) {
+            assert(0);  // no need to call this variation
+            return Cast(dest, destType, rawSrc, srcType);
+        }
+
+        assert(rawSrc.size() >= srcType.GetSize());
+        assert(dest.size() >= destType.GetSize());
+        IteratorRange<const void*> src = rawSrc;
+        if (destType._arrayCount <= 1) {
+            switch (destType._type) {
+            case TypeCat::Bool:
+                {
+                    switch (srcType._type) {
+                        // integral types are simplified here, since we're effectively just comparing against zero
+                    case TypeCat::Int16: *(bool*)dest.begin() = !!*(int16_t*)src.begin(); return true;
+                    case TypeCat::UInt16: *(bool*)dest.begin() = !!*(uint16_t*)src.begin(); return true;
+                    case TypeCat::Int32: *(bool*)dest.begin() = !!*(int32_t*)src.begin(); return true;
+                    case TypeCat::UInt32: *(bool*)dest.begin() = !!*(uint32_t*)src.begin(); return true;
+                    case TypeCat::Int64: *(bool*)dest.begin() = !!*(int64_t*)src.begin(); return true;
+                    case TypeCat::UInt64: *(bool*)dest.begin() = !!*(uint64_t*)src.begin(); return true;
+                    case TypeCat::Float: *(bool*)dest.begin() = !!(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(bool*)dest.begin() = !!(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+
+            case TypeCat::Int8:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+
+            case TypeCat::UInt8:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+            
+            case TypeCat::Int16:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+
+            case TypeCat::UInt16:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+            
+            case TypeCat::Int32:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(int32_t*)dest.begin() = FlipEndianHelper<int32_t>(src.begin()); return true;
+                    case TypeCat::UInt32: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+
+            case TypeCat::UInt32:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(uint32_t*)dest.begin() = FlipEndianHelper<uint32_t>(src.begin()); return true;
+                    case TypeCat::Int64: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+
+            case TypeCat::Int64:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+
+            case TypeCat::UInt64:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+
+            case TypeCat::Float:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(float*)dest.begin() = float(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(float*)dest.begin() = float(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(float*)dest.begin() = float(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(float*)dest.begin() = float(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(float*)dest.begin() = float(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(float*)dest.begin() = float(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(float*)dest.begin() = float(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(float*)dest.begin() = float(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+
+            case TypeCat::Double:
+                {
+                    switch (srcType._type) {
+                    case TypeCat::Int16: *(double*)dest.begin() = double(FlipEndianHelper<int16_t>(src.begin())); return true;
+                    case TypeCat::UInt16: *(double*)dest.begin() = double(FlipEndianHelper<uint16_t>(src.begin())); return true;
+                    case TypeCat::Int32: *(double*)dest.begin() = double(FlipEndianHelper<int32_t>(src.begin())); return true;
+                    case TypeCat::UInt32: *(double*)dest.begin() = double(FlipEndianHelper<uint32_t>(src.begin())); return true;
+                    case TypeCat::Int64: *(double*)dest.begin() = double(FlipEndianHelper<int64_t>(src.begin())); return true;
+                    case TypeCat::UInt64: *(double*)dest.begin() = double(FlipEndianHelper<uint64_t>(src.begin())); return true;
+                    case TypeCat::Float: *(double*)dest.begin() = double(FlipEndianHelper<float>(src.begin())); return true;
+                    case TypeCat::Double: *(double*)dest.begin() = double(FlipEndianHelper<double>(src.begin())); return true;
+                    }
+                }
+                break;
+                    
+            case TypeCat::Void: break;
+            }
+        } else {
+
+                // multiple array elements. We might need to remap elements
+                // First -- trivial cases can be completed with a memcpy
+            if (    srcType._arrayCount == destType._arrayCount
+                &&  srcType._type == destType._type) {
+                FlipEndian(dest, src.begin(), destType);
+                return true;
+            }
+                
+            auto destIterator = dest;
+            auto srcIterator = src;
+            for (unsigned c=0; c<destType._arrayCount; ++c) {
+                if (destIterator.size() < TypeDesc{destType._type}.GetSize()) {
+                    return false;
+                }
+                if (c < srcType._arrayCount) {
+                    if (!Cast_FlipEndian(destIterator, TypeDesc{destType._type},
+                        srcIterator, TypeDesc{srcType._type})) {
+                        return false;
+                    }
+
+                    destIterator.first = PtrAdd(destIterator.first, TypeDesc{destType._type}.GetSize());
+                    srcIterator.first = PtrAdd(srcIterator.first, TypeDesc{srcType._type}.GetSize());
+                } else {
+                        // using HLSL rules for filling in blanks:
+                        //  element 3 is 1, but others are 0
+                    unsigned value = (c==3)?1:0;
+                    if (!Cast(destIterator, TypeDesc{destType._type},
+                        MakeOpaqueIteratorRange(value), TypeDesc{TypeCat::UInt32})) {
+                        return false;
+                    }
+                    destIterator.first = PtrAdd(destIterator.first, TypeDesc{destType._type}.GetSize());
+                }
+            }
+            return true;
+        }
+
+        return false;
+    }
+
     CastType CalculateCastType(TypeCat testType, TypeCat againstType) 
     {
         // todo -- "uint64_t" and "float" should get widened to "double"
@@ -1474,32 +1767,6 @@ namespace Utility { namespace ImpliedTyping
         return ImpliedTyping::TypeCat::Void;
     }
 
-	static constexpr uint16_t FlipEndian(uint16_t input)
-	{
-		return (input << 8u) | (input >> 8u);
-	}
-	
-	static constexpr uint32_t FlipEndian(uint32_t input)
-	{
-		return (input << 24u)
-			| ((input & 0x0000ff00u) <<  8u)
-			| ((input & 0x00ff0000u) >>  8u)
-			| (input >> 24u);
-	}
-
-	static constexpr uint64_t FlipEndian(uint64_t input)
-	{
-		return (input << 56ull)
-			| ((input & 0x0000ff00ull) << 40ull)
-			| ((input & 0x00ff0000ull) << 24ull)
-			| ((input & 0xff000000ull) <<  8ull)
-
-			| ((input & 0x000000ff00000000ull) >>  8ull)
-			| ((input & 0x0000ff0000000000ull) >> 24ull)
-			| ((input & 0x00ff000000000000ull) >> 40ull)
-			| (input >> 56ull);
-	}
-
     void FlipEndian(IteratorRange<void*> output, const void* src, const TypeDesc& type)
     {
         unsigned byteCount;
@@ -1531,7 +1798,7 @@ namespace Utility { namespace ImpliedTyping
         }
 
         assert((output.size()%byteCount) == 0);
-        unsigned count = output.size() / byteCount;
+        auto count = output.size() / byteCount;
 
         if (byteCount == 2) {
             auto* d = (uint16_t*)output.begin();

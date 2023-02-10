@@ -124,6 +124,16 @@ namespace Utility
             IteratorRange<void*> dest, TypeDesc destType,
             IteratorRange<const void*> src, TypeDesc srcType);
 
+        /// <summary>Similar to Cast(), but flips the endian of "src" before converting into the type for "dest"</summary>
+        ///
+        /// Similar to calling FlipEndian() and then Cast(), but can be more efficient when done in one go.
+        ///
+        /// Note that endian flipping happens on values of type "srcType". If you need to flip in the endian after converting
+        /// to destType (eg, for an output option), call Cast() first to convert the types, then call FlipEndian()
+        bool Cast_FlipEndian(
+            IteratorRange<void*> dest, TypeDesc destType,
+            IteratorRange<const void*> src, TypeDesc srcType);
+
         CastType CalculateCastType(TypeCat testType, TypeCat againstType);
 
         void FlipEndian(IteratorRange<void*> output, const void* src, const TypeDesc& type);
