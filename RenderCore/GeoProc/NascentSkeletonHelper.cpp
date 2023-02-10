@@ -165,7 +165,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 
 		stream << " --- Output interface:" << std::endl;
 		for (auto i=transMachine._jointTags.begin(); i!=transMachine._jointTags.end(); ++i)
-			stream << "  [" << std::distance(transMachine._jointTags.begin(), i) << "] " << i->first << " : " << i->second << ", Output transform index: (" << std::distance(transMachine._jointTags.begin(), i) << ")" << std::endl;
+			stream << "  [" << std::distance(transMachine._jointTags.begin(), i) << "] " << i->first << " : " << i->second << ", Output transform index: (" << std::distance(transMachine._jointTags.begin(), i)
+				<< "), Hashed: 0x" << std::hex << HashCombine(Hash64(i->first), Hash64(i->second)) << std::dec << std::endl;
 
 		stream << " --- Command stream:" << std::endl;
 		const auto& cmds = transMachine._commandStream;

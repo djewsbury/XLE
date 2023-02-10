@@ -174,6 +174,32 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		unsigned _nextId = 0;
 	};
 
+	struct CmdStreamSerializationHelper
+	{
+		unsigned RegisterInputInterfaceMarker(const std::string& skeleton, const std::string& name)
+		{
+			auto j = std::make_pair(skeleton, name);
+			auto existing = std::find(_inputInterfaceNames.begin(), _inputInterfaceNames.end(), j);
+			if (existing != _inputInterfaceNames.end()) {
+				return (unsigned)std::distance(_inputInterfaceNames.begin(), existing);
+			}
+
+			auto result = (unsigned)_inputInterfaceNames.size();
+			_inputInterfaceNames.push_back({skeleton, name});
+			return result;
+		}
+
+		std::vector<uint64_t> BuildHashedInputInterface() const
+		{
+			std::vector<uint64_t> hashedInterface;
+			hashedInterface.reserve(_inputInterfaceNames.size());
+			for (const auto&j:_inputInterfaceNames) hashedInterface.push_back(HashCombine(Hash64(j.first), Hash64(j.second)));
+			return hashedInterface;
+		}
+
+		std::vector<std::pair<std::string, std::string>>	_inputInterfaceNames;
+	};
+
     static std::ostream& SerializationOperator(std::ostream& stream, const NascentGeometryObjects& geos)
     {
         stream << " --- Geos:" << std::endl;
@@ -186,7 +212,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return stream;
     }
 
-	static void TraceCommandStream(std::ostream& stream, IteratorRange<ScaffoldCmdIterator> cmdStream)
+	static void TraceCommandStream(std::ostream& stream, IteratorRange<ScaffoldCmdIterator> cmdStream, const CmdStreamSerializationHelper* dehashHelper = nullptr)
 	{
 		for (auto cmd:cmdStream) {
 			switch (cmd.Cmd()) {
@@ -214,13 +240,31 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				stream << "Transform marker (" << cmd.As<unsigned>() << ")" << std::endl;
 				break;
 
+			case (uint32_t)Assets::ModelCommand::InputInterface:
+				{
+					auto jointNameHashes = cmd.RawData().Cast<const uint64_t*>();
+					stream << "Input interface" << std::endl;
+					if (dehashHelper) {
+						// the full strings are not stored in the cmd stream itself
+						assert(dehashHelper->_inputInterfaceNames.size() == jointNameHashes.size());
+						for (unsigned c=0; c<jointNameHashes.size(); ++c) {
+							assert(HashCombine(Hash64(dehashHelper->_inputInterfaceNames[c].first), Hash64(dehashHelper->_inputInterfaceNames[c].second)) == jointNameHashes[c]);
+							stream << "  [" << c << "] " << dehashHelper->_inputInterfaceNames[c].first << " : " << dehashHelper->_inputInterfaceNames[c].second << ", Hashed: 0x" << std::hex << jointNameHashes[c] << std::dec << std::endl;
+						}
+
+					} else
+						for (unsigned c=0; c<jointNameHashes.size(); ++c)
+							stream << "  [" << c << "] 0x" << std::hex << jointNameHashes[c] << std::dec << std::endl;
+				}
+				break;
+
 			default:
 				stream << "Unknown command (" << cmd.Cmd() << ")" << std::endl;
 			}
 		}
 	}
 
-	static void TraceMetrics(std::ostream& stream, const NascentGeometryObjects& geoObjects, IteratorRange<const ::Assets::BlockSerializer*> cmdStreams, const NascentSkeleton& skeleton)
+	static void TraceMetrics(std::ostream& stream, const NascentGeometryObjects& geoObjects, IteratorRange<const ::Assets::BlockSerializer*> cmdStreams, const NascentSkeleton& skeleton, IteratorRange<const CmdStreamSerializationHelper*> dehashHelpers)
 	{
 		stream << "============== Geometry Objects ==============" << std::endl;
 		stream << geoObjects;
@@ -232,7 +276,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			::Assets::Block_Initialize(block.get());
 			auto* start = ::Assets::Block_GetFirstObject(block.get());
 			auto range = MakeIteratorRange(start, (const void*)PtrAdd(start, cmdStreams[c].SizePrimaryBlock()));
-			TraceCommandStream(stream, MakeScaffoldCmdRange(range));
+			if (c < dehashHelpers.size()) {
+				TraceCommandStream(stream, MakeScaffoldCmdRange(range), &dehashHelpers[c]);
+			} else {
+				TraceCommandStream(stream, MakeScaffoldCmdRange(range));
+			}
 		}
 		stream << std::endl;
 		stream << "============== Transformation Machine ==============" << std::endl;
@@ -249,32 +297,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return result;
 	}
 
-	struct CmdStreamSerializationHelper
-	{
-		unsigned RegisterInputInterfaceMarker(const std::string& skeleton, const std::string& name)
-		{
-			auto j = std::make_pair(skeleton, name);
-			auto existing = std::find(_inputInterfaceNames.begin(), _inputInterfaceNames.end(), j);
-			if (existing != _inputInterfaceNames.end()) {
-				return (unsigned)std::distance(_inputInterfaceNames.begin(), existing);
-			}
-
-			auto result = (unsigned)_inputInterfaceNames.size();
-			_inputInterfaceNames.push_back({skeleton, name});
-			return result;
-		}
-
-		std::vector<uint64_t> BuildHashedInputInterface() const
-		{
-			std::vector<uint64_t> hashedInterface;
-			hashedInterface.reserve(_inputInterfaceNames.size());
-			for (const auto&j:_inputInterfaceNames) hashedInterface.push_back(HashCombine(Hash64(j.first), Hash64(j.second)));
-			return hashedInterface;
-		}
-
-		std::vector<std::pair<std::string, std::string>>	_inputInterfaceNames;
-	};
-
 	std::vector<::Assets::ICompileOperation::SerializedArtifact> NascentModel::SerializeToChunks(const std::string& name, const NascentSkeleton& embeddedSkeleton, const NativeVBSettings& nativeSettings) const
 	{
 		::Assets::BlockSerializer serializer;
@@ -282,6 +304,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		
 		CmdStreamSerializationHelper mainStreamHelper;
 		std::vector<::Assets::BlockSerializer> generatedCmdStreams;
+		std::vector<CmdStreamSerializationHelper> cmdStreamDehashHelpers;
 		NascentGeometryObjects geoObjects;
 		#if WRITE_TOPOLOGICAL_CMDSTREAM
 			CmdStreamMode cmdStreamModes[] {CmdStreamMode::Normal, CmdStreamMode::Topological};
@@ -382,9 +405,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			serializer << cmdStreamSerializer.SizePrimaryBlock();
 			serializer.SerializeSubBlock(cmdStreamSerializer);
 
+			generatedCmdStreams.emplace_back(std::move(cmdStreamSerializer));
+			#if defined(_DEBUG)
+				cmdStreamDehashHelpers.emplace_back(CmdStreamSerializationHelper{helper});
+			#endif
 			if (mode == CmdStreamMode::Normal)
 				mainStreamHelper = std::move(helper);
-			generatedCmdStreams.emplace_back(std::move(cmdStreamSerializer));
 		}
 
 		// "large resources" --> created from the objects in geoObjects
@@ -459,7 +485,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		// SerializationOperator human-readable metrics information
 		std::stringstream metricsStream;
-		TraceMetrics(metricsStream, geoObjects, generatedCmdStreams, embeddedSkeleton);
+		TraceMetrics(metricsStream, geoObjects, generatedCmdStreams, embeddedSkeleton, cmdStreamDehashHelpers);
 
 		auto scaffoldBlock = ::Assets::AsBlob(serializer);
 		auto metricsBlock = ::Assets::AsBlob(metricsStream);
