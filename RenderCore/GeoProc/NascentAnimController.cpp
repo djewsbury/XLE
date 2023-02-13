@@ -85,6 +85,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		unsigned c=0;
 		for (; c<std::min(WeightCount, jointCount); ++c) {
 			attachment._weights[c] = weights[c];
+            assert(joints[c] <= 0xff);
 			attachment._jointIndex[c] = (uint8_t)joints[c];
 		}
 		for (; c<WeightCount; ++c) {
@@ -955,6 +956,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						Combine(
 							controllers[controllerIdx]._controller->GetBindShapeMatrix(),
 							controllers[controllerIdx]._controller->GetInverseBindMatrices()[srcIdx]);
+                    assert(srcIdx < controllers[controllerIdx]._jointMatrices.size());
 					section._jointMatrices[jointRemapping[srcIdx]] = controllers[controllerIdx]._jointMatrices[srcIdx];
 				}
 			}
@@ -1124,6 +1126,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		assert(accumulator.size() >= 256);
 		for (const auto&w:bucket._weightAttachments) {
 			for (unsigned c=0; c<WeightCount; ++c) {
+                assert(w._jointIndex[c] <= 0xff);
 				++accumulator[w._jointIndex[c]];
 			}
 		}

@@ -66,11 +66,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 const void*             constantValue,
                 size_t                  constantValueSize,
                 Format                  format);
+            NascentBlock() = default;
         private:
             NascentAnimationSet* _animSet = nullptr;
             unsigned _blockIdx = 0;
             NascentBlock(NascentAnimationSet& animSet, unsigned blockIdx) : _animSet(&animSet), _blockIdx(blockIdx) {}
-            NascentBlock() = default;
             friend class NascentAnimationSet;
         };
 

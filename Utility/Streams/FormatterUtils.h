@@ -236,7 +236,7 @@ namespace Utility
 	}
 
 	template<typename Formatter>
-		bool TryKeyedItem(Formatter& fmttr, StringSection<> keyname)
+		bool TryKeyedItem(Formatter& fmttr, StringSection<>& keyname)
 	{
 		return fmttr.TryKeyedItem(keyname);
 	}

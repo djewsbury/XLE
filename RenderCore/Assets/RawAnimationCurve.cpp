@@ -493,13 +493,13 @@ namespace RenderCore { namespace Assets
         OutType        RawAnimationCurve::Calculate(float inputTime, CurveInterpolationType interpolationType) const never_throws
     {
 		if (_desc._flags & CurveDesc::Flags::HasDequantBlock) {
-			return EvaluateCurve<OutType>(	
+			return EvaluateCurve<OutType>(
 				inputTime, 
 				MakeIteratorRange(_timeMarkers.begin(), _timeMarkers.end()),
 				_desc, interpolationType,
 				CurveElementDequantDecompressor<OutType>(MakeIteratorRange(_keyData.begin(), _keyData.end()), _desc._elementStride, _desc._elementFormat));
 		} else {
-			return EvaluateCurve<OutType>(	
+			return EvaluateCurve<OutType>(
 				inputTime, 
 				MakeIteratorRange(_timeMarkers.begin(), _timeMarkers.end()),
 				_desc, interpolationType,

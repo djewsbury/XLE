@@ -6,6 +6,7 @@
 
 #include "Vector.h"
 #include "Matrix.h"
+#include "Quaternion.h"
 #include "../Assets/BlockSerializer.h"
 #include "../Utility/ImpliedTyping.h"
 #include <iosfwd>
@@ -21,6 +22,8 @@ namespace cml
     constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(Float3x3 const*)      { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::Float, 9, Utility::ImpliedTyping::TypeHint::Matrix}; }
     constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(Float3x4 const*)      { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::Float, 12, Utility::ImpliedTyping::TypeHint::Matrix}; }
     constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(Float4x4 const*)      { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::Float, 16, Utility::ImpliedTyping::TypeHint::Matrix}; }
+
+	constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(Quaternion const*)	{ return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::Float, 4, Utility::ImpliedTyping::TypeHint::Vector}; }
 
 	template<int Dimen, typename Primitive>
 		inline void SerializationOperator(::Assets::BlockSerializer& serializer, const cml::vector< Primitive, cml::fixed<Dimen> >& vec)
