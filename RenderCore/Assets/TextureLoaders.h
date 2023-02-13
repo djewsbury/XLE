@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../ResourceDesc.h"
 #include "../../Utility/StringUtils.h"
 #include <functional>
 #include <memory>
@@ -22,4 +23,19 @@ namespace RenderCore { namespace Assets
     std::function<TextureLoaderSignature> CreateDDSTextureLoader();
     std::function<TextureLoaderSignature> CreateWICTextureLoader();
     std::function<TextureLoaderSignature> CreateHDRTextureLoader();
+
+    struct DDSBreakdown
+	{
+		TextureDesc _textureDesc;
+
+		struct Subresource
+		{
+			const void* _data;
+			TexturePitches _pitches;
+		};
+		// _subresources indexed by (arrayLayer * _textureDesc._mipCount + mip)
+		std::vector<Subresource> _subresources;
+	};
+
+	std::optional<DDSBreakdown> BuildDDSBreakdown(IteratorRange<const void*> data, StringSection<> filename);
 }}

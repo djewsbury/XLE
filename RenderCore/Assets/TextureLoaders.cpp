@@ -129,6 +129,63 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
+	std::optional<DDSBreakdown> BuildDDSBreakdown(IteratorRange<const void*> data, StringSection<> filename)
+	{
+		DirectX::TexMetadata texMetadata;
+		auto hres = DirectX::GetMetadataFromDDSMemory(data.begin(), data.size(), DirectX::DDS_FLAGS_NO_LEGACY_EXPANSION, texMetadata);
+		if (!SUCCEEDED(hres))
+			return {};
+
+		DDSBreakdown result;
+		result._textureDesc = BuildTextureDesc(texMetadata);
+
+		// We need to get the image data from the file and copy it into the locations requested
+		// The normal usage of the DirectXTex library is to use LoadFromDDSMemory() and 
+		// construct a series of DirectX::ScatchImage objects. However, that would result in an
+		// extra copy (ie, copy mapped file -> ScatchImage -> staging texture output)
+		// We can skip that copy if we use the internal DirectXTex library functions directly
+
+		if (texMetadata.dimension == DirectX::TEX_DIMENSION_TEXTURE3D)
+			Throw(std::runtime_error("3D DDS textures encountered while reading (" + filename.AsString() + "). Reading this type of texture is not supported."));
+
+		size_t pixelSize, nimages;
+		if (!DirectX::_DetermineImageArray(texMetadata, DirectX::CP_FLAGS_NONE, nimages, pixelSize))
+			Throw(std::runtime_error("Could not determine image offsets when loading DDS file (" + filename.AsString() + "). This file may be truncated?"));
+
+		size_t offset = sizeof(uint32_t) + sizeof(DirectX::DDS_HEADER);
+		auto* pHeader = reinterpret_cast<const DirectX::DDS_HEADER*>(PtrAdd(data.begin(), sizeof(uint32_t)));
+		if ((pHeader->ddspf.flags & DDS_FOURCC) && (MAKEFOURCC('D', 'X', '1', '0') == pHeader->ddspf.fourCC))
+			offset += sizeof(DirectX::DDS_HEADER_DXT10);
+		auto* pixels = PtrAdd(data.begin(), offset);
+
+		if ((pixelSize + offset) > data.size())
+			Throw(std::runtime_error("DDS file appears truncating when reading (" + filename.AsString() + ")"));
+
+		VLA(DirectX::Image, dximages, nimages);
+		if (!_SetupImageArray(
+			(uint8_t*)pixels,
+			pixelSize,
+			texMetadata,
+			DirectX::CP_FLAGS_NONE, dximages, nimages))
+			Throw(std::runtime_error("Failure while reading images in DDS file (" + filename.AsString() + ")"));
+
+		result._subresources.reserve(nimages);
+		for (unsigned imageIdx=0; imageIdx<nimages; ++imageIdx) {
+			auto& image = dximages[imageIdx];
+			result._subresources.push_back(
+				DDSBreakdown::Subresource {
+					image.pixels,
+					TexturePitches {
+						(unsigned)image.rowPitch,
+						(unsigned)image.slicePitch,
+						(unsigned)image.slicePitch
+					}
+				});
+		}
+
+		return result;
+	}
+
 	class DDSDataSource : public BufferUploads::IAsyncDataSource, public std::enable_shared_from_this<DDSDataSource>
 	{
 	public:
@@ -154,27 +211,29 @@ namespace RenderCore { namespace Assets
 							if (!that->_file.IsGood())
 								that->_file = ::Assets::MainFileSystem::OpenMemoryMappedFile(that->_filename, 0ull, "r");
 						
-							auto hres = DirectX::GetMetadataFromDDSMemory(that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NO_LEGACY_EXPANSION, that->_texMetadata);
-							if (!SUCCEEDED(hres)) {
+							auto breakdown = BuildDDSBreakdown(that->_file.GetData(), that->_filename);
+							if (!breakdown) {
 								// Sometimes we can get here if the file requires some conversion at load in. For example, there are some legacy formats (such as R8G8B8 formats)
 								// that are valid in DDS, but aren't supported by modern DX/DXGI. To support these, we need to drop back to a less efficient way of loading
 								// the file. But this is much less efficient, and really not recommended
-								hres = DirectX::GetMetadataFromDDSMemory(that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NONE, that->_texMetadata);
+								auto hres = DirectX::GetMetadataFromDDSMemory(that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NONE, that->_fallbackTexMetadata);
 								if (!SUCCEEDED(hres))
 									Throw(std::runtime_error("Failed while attempting reading header from DDS file (" + that->_filename + ")"));
 
 								// We succeeded after allowing conversions. Let's use the fallback path
 								Log(Warning) << "Falling back to inefficient path for loading DDS file (" << that->_filename << "). This usually means that the file is using a legacy pixel format that isn't natively supported by modern hardware and graphics APIs. This path is not recommended because it can result in slowdowns and memory spikes during loading." << std::endl;
-								hres = LoadFromDDSMemory(that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NONE, &that->_texMetadata, that->_fallbackScratchImage);
+								hres = LoadFromDDSMemory(that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NONE, &that->_fallbackTexMetadata, that->_fallbackScratchImage);
 								if (!SUCCEEDED(hres))
 									Throw(std::runtime_error("Failed while attempting reading header from DDS file (" + that->_filename + ") in fallback phase"));
-								that->_texMetadata = that->_fallbackScratchImage.GetMetadata();
+								that->_fallbackTexMetadata = that->_fallbackScratchImage.GetMetadata();
 								that->_useFallbackScratchImage = true;
 								that->_file = {};
+								that->_resourceDesc = CreateDesc(0, BuildTextureDesc(that->_fallbackTexMetadata));
+							} else {
+								that->_ddsBreakdown = *breakdown;
+								that->_resourceDesc = CreateDesc(0, that->_ddsBreakdown._textureDesc);
 							}
 
-							auto textureDesc = BuildTextureDesc(that->_texMetadata);
-							that->_resourceDesc = CreateDesc(0, textureDesc);
 							that->_hasReadMetadata = true;
 						}
 
@@ -212,53 +271,16 @@ namespace RenderCore { namespace Assets
 							if (!that->_file.IsGood())
 								that->_file = ::Assets::MainFileSystem::OpenMemoryMappedFile(that->_filename, 0ull, "r");
 
-							// We need to get the image data from the file and copy it into the locations requested
-							// The normal usage of the DirectXTex library is to use LoadFromDDSMemory() and 
-							// construct a series of DirectX::ScatchImage objects. However, that would result in an
-							// extra copy (ie, copy mapped file -> ScatchImage -> staging texture output)
-							// We can skip that copy if we use the internal DirectXTex library functions directly
-
-							if (that->_texMetadata.dimension == DirectX::TEX_DIMENSION_TEXTURE3D)
-								Throw(std::runtime_error("3D DDS textures encountered while reading (" + that->_filename + "). Reading this type of texture is not supported."));
-
-							size_t pixelSize, nimages;
-							if (!DirectX::_DetermineImageArray(that->_texMetadata, DirectX::CP_FLAGS_NONE, nimages, pixelSize))
-								Throw(std::runtime_error("Could not determine image offsets when loading DDS file (" + that->_filename + "). This file may be truncated?"));
-
-							size_t offset = sizeof(uint32_t) + sizeof(DirectX::DDS_HEADER);
-							auto* pHeader = reinterpret_cast<const DirectX::DDS_HEADER*>(PtrAdd(that->_file.GetData().begin(), sizeof(uint32_t)));
-							if ((pHeader->ddspf.flags & DDS_FOURCC) && (MAKEFOURCC('D', 'X', '1', '0') == pHeader->ddspf.fourCC))
-								offset += sizeof(DirectX::DDS_HEADER_DXT10);
-							void* pixels = PtrAdd(that->_file.GetData().begin(), offset);
-
-							if ((pixelSize + offset) > that->_file.GetData().size())
-								Throw(std::runtime_error("DDS file appears truncating when reading (" + that->_filename + ")"));
-
-							VLA(DirectX::Image, dximages, nimages);
-							if (!_SetupImageArray(
-								(uint8_t*)pixels,
-								pixelSize,
-								that->_texMetadata,
-								DirectX::CP_FLAGS_NONE, dximages, nimages))
-								Throw(std::runtime_error("Failure while reading images in DDS file (" + that->_filename + ")"));
-
 							for (const auto& sr:captures->_subResources) {
-								auto imageIdx = sr._id._arrayLayer * that->_texMetadata.mipLevels + sr._id._mip;
-								if (imageIdx >= nimages)
-									Throw(std::runtime_error("Invalid subresource encounted while reading DDS file (" + that->_filename + ")"));
-								auto& image = dximages[imageIdx];
-								TexturePitches expectedPitches {
-									(unsigned)image.rowPitch,
-									(unsigned)image.slicePitch,
-									(unsigned)image.slicePitch
-								};
-								assert(expectedPitches._rowPitch == sr._pitches._rowPitch);
-								assert(expectedPitches._slicePitch == sr._pitches._slicePitch);
+								auto srcSrIdx = sr._id._arrayLayer * that->_ddsBreakdown._textureDesc._mipCount + sr._id._mip;
+								auto& srcSr = that->_ddsBreakdown._subresources[srcSrIdx];
+								assert(srcSr._pitches._rowPitch == sr._pitches._rowPitch);
+								assert(srcSr._pitches._slicePitch == sr._pitches._slicePitch);
 								assert(sr._destination.size() == (size_t)sr._pitches._slicePitch);
 								std::memcpy(
 									sr._destination.begin(),
-									image.pixels,
-									std::min(image.slicePitch, sr._destination.size()));
+									srcSr._data,
+									std::min((size_t)srcSr._pitches._arrayPitch, sr._destination.size()));
 							}
 						} else {
 							// This is the inefficient path used when the DirectXTex library needs to do some conversion after loading
@@ -292,10 +314,11 @@ namespace RenderCore { namespace Assets
 
 		std::mutex _lock;
 		OSServices::MemoryMappedFile _file;
-		DirectX::TexMetadata _texMetadata;
+		DDSBreakdown _ddsBreakdown;
 		RenderCore::ResourceDesc _resourceDesc;
 		bool _hasReadMetadata = false;
 
+		DirectX::TexMetadata _fallbackTexMetadata;
 		DirectX::ScratchImage _fallbackScratchImage;
 		bool _useFallbackScratchImage = false;
 	};
