@@ -513,7 +513,7 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static RenderCore::Techniques::TechniqueContext MakeTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
+	static RenderCore::Techniques::TechniqueContext MakeRayTestTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
     {
         RenderCore::Techniques::TechniqueContext techniqueContext;
 		techniqueContext._commonResources = drawingApparatus._commonResources;
@@ -531,9 +531,10 @@ namespace ToolsRig
 		SceneEngine::IScene& scene)
 	{
 		using namespace RenderCore;
+		std::vector<SceneEngine::ModelIntersectionStateContext::ResultEntry> results;
 
 		TRY {
-			auto techniqueContext = MakeTechniqueContext(drawingApparatus);
+			auto techniqueContext = MakeRayTestTechniqueContext(drawingApparatus);
 			Techniques::ParsingContext parserContext { techniqueContext, threadContext };
 			parserContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
@@ -562,38 +563,37 @@ namespace ToolsRig
 				bu.StallAndMarkCommandListDependency(threadContext, parserContext._requiredBufferUploadsCommandList);
 			}
 			
-			auto results = stateContext.GetResults();
-
-			if (drawingApparatus._deformAccelerators)
-				drawingApparatus._deformAccelerators->OnFrameBarrier(); // must create a fake "frame barrier" -- to reset before whatever comes after this
-
-			if (!results.empty()) {
-				const auto& r = results[0];
-
-				SceneEngine::IntersectionTestResult result;
-				result._type = SceneEngine::IntersectionTestResult::Type::Extra;
-				result._worldSpaceCollision = 
-					worldSpaceRay.first + r._intersectionDepth * Normalize(worldSpaceRay.second - worldSpaceRay.first);
-				result._distance = r._intersectionDepth;
-				result._drawCallIndex = r._drawCallIndex;
-				result._materialGuid = r._materialGuid;
-
-				result._modelName = "Model";
-				result._materialName = "Material";
-				auto* visContent = dynamic_cast<IVisContent*>(&scene);
-				if (visContent) {
-					auto details = visContent->GetDrawCallDetails(result._drawCallIndex, result._materialGuid);
-					result._modelName = details._modelName;
-					result._materialName = details._materialName;
-				}
-
-				return result;
-			}
+			results = stateContext.GetResults();
 		} CATCH(...) {
 			// suppress exceptions during intersection detection
 			// we can get pending assets, etc
 		} CATCH_END
 
+		if (drawingApparatus._deformAccelerators)
+			drawingApparatus._deformAccelerators->OnFrameBarrier(); // must create a fake "frame barrier" -- to reset before whatever comes after this
+
+		if (!results.empty()) {
+			const auto& r = results[0];
+
+			SceneEngine::IntersectionTestResult result;
+			result._type = SceneEngine::IntersectionTestResult::Type::Extra;
+			result._worldSpaceCollision = 
+				worldSpaceRay.first + r._intersectionDepth * Normalize(worldSpaceRay.second - worldSpaceRay.first);
+			result._distance = r._intersectionDepth;
+			result._drawCallIndex = r._drawCallIndex;
+			result._materialGuid = r._materialGuid;
+
+			result._modelName = "Model";
+			result._materialName = "Material";
+			auto* visContent = dynamic_cast<IVisContent*>(&scene);
+			if (visContent) {
+				auto details = visContent->GetDrawCallDetails(result._drawCallIndex, result._materialGuid);
+				result._modelName = details._modelName;
+				result._materialName = details._materialName;
+			}
+
+			return result;
+		}
 		return {};
     }
 

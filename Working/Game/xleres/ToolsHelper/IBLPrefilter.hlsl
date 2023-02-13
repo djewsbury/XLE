@@ -354,6 +354,7 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
     float roughness = MipmapToRoughness(SpecularIBLMipMapCount-log2dim);
     SpecularParameters specParam = SpecularParameters_RoughF0(roughness, float3(1.0f, 1.0f, 1.0f));
     float samplingJScale = pow(2,HaltonSamplerJ), samplingKScale = pow(3,HaltonSamplerK);
+    uint samplerIdxBase = SampleIndexLookup[helper._outputPixel.xy % samplingPatternDims.xy];
 
     const bool sampleLight = true;
     const bool sampleBrdf = true;
@@ -365,12 +366,12 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
     if (sampleLight) {
         for (t=0; t<helper._thisPassSampleCount; ++t) {
             uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
-            uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy % samplingPatternDims.xy] + HaltonSamplerRepeatingStride * globalTap;
+            uint samplerIdx = samplerIdxBase + HaltonSamplerRepeatingStride * globalTap;
             // Using the Halton sequence in such a straightforward way as this is not going to be efficient; but we don't require a perfectly
             // optimal solution here
             float2 xi = float2(frac(RadicalInverseBase2(samplerIdx)*samplingJScale), frac(RadicalInverseBase3(samplerIdx)*samplingKScale));
-
             xi = saturate(xi);      // floating point creep may be resulting in some bad xi values
+
             float light_pdf=1;
             float2 inputTextureUV = SampleUV(light_pdf, xi, marginalCDFDims);
 
@@ -399,7 +400,7 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
     if (sampleBrdf) {
         for (t=0; t<helper._thisPassSampleCount; ++t) {
             uint globalTap = t*helper._thisPassSampleStride+helper._thisPassSampleOffset;
-            uint samplerIdx = SampleIndexLookup[helper._outputPixel.xy] + HaltonSamplerRepeatingStride * globalTap;
+            uint samplerIdx = samplerIdxBase + HaltonSamplerRepeatingStride * globalTap;
             float2 xi = float2(RadicalInverseBase5(samplerIdx), RadicalInverseBase7(samplerIdx));
             xi = saturate(xi);      // floating point creep may be resulting in some bad xi values
 

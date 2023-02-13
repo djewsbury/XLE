@@ -18,6 +18,32 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 float3 SampleSpecularIBL_Ref(
+    out float pdf,
+    float2 xi,
+    float3 viewTangentSpace,
+    float3x3 tangentToWorld,
+    SpecularParameters specParam, TextureCube tex)
+{
+            // We could build a distribution of "H" vectors here,
+            // or "L" vectors. It makes sense to use H vectors
+    float alphad = RoughnessToDAlpha(specParam.roughness);
+    precise float3 halfVectorTangentSpace = SamplerHeitzGGXVNDF_Pick(viewTangentSpace, alphad, alphad, xi.x, xi.y);
+    float3 incidentTangentSpace = 2.f * dot(viewTangentSpace, halfVectorTangentSpace) * halfVectorTangentSpace - viewTangentSpace;
+        // note -- "CalculateSpecular" has NdotL term built-in
+    precise float3 brdf_costheta = CalculateSpecular(float3(0,0,1), viewTangentSpace, incidentTangentSpace, halfVectorTangentSpace, specParam); // (also contains NdotL term)
+
+    if (all(brdf_costheta <= 0))
+        return 0;
+
+    pdf = SamplerHeitzGGXVNDF_PDFh(halfVectorTangentSpace, viewTangentSpace, alphad);
+    // change-of-variables conversion for this (see notes in GenerateSplitTerm)
+    pdf = pdf / (4.0f * dot(viewTangentSpace, halfVectorTangentSpace));
+
+    float3 lightColor = SampleLevelZero_Default(tex, AdjSkyCubeMapCoords(mul(tangentToWorld, incidentTangentSpace))).rgb;
+    return lightColor * brdf_costheta;
+}
+
+float3 SampleSpecularIBL_Ref(
     float3 normal, float3 viewDirection,
     SpecularParameters specParam, TextureCube tex,
     uint sampleOffset, uint sampleCount, uint totalSampleCount)
@@ -42,27 +68,14 @@ float3 SampleSpecularIBL_Ref(
     float3 tangentY = cross(normal, tangentX);
 
     float3 viewTangentSpace = float3(dot(viewDirection, tangentX), dot(viewDirection, tangentY), dot(viewDirection, normal));
+    float3x3 tangentToWorld = transpose(float3x3(tangentX, tangentY, normal));
 
-    float alphad = RoughnessToDAlpha(specParam.roughness);
     float3 result = float3(0.0f, 0.0f, 0.0f);
     for (uint s=0u; s<sampleCount; ++s) {
-            // We could build a distribution of "H" vectors here,
-            // or "L" vectors. It makes sense to use H vectors
         float2 xi = HammersleyPt(s+sampleOffset, totalSampleCount);
-        precise float3 halfVectorTangentSpace = SamplerHeitzGGXVNDF_Pick(viewTangentSpace, alphad, alphad, xi.x, xi.y);
-        float3 H = halfVectorTangentSpace.x * tangentX + halfVectorTangentSpace.y * tangentY + halfVectorTangentSpace.z * normal;
-        float3 L = 2.f * dot(viewDirection, H) * H - viewDirection;
-
-            // Now we can light as if the point on the reflection map
-            // is a directonal light
-
-            // note -- "CalculateSpecular" has NdotL term built-in
-        float3 lightColor = SampleLevelZero_Default(tex, AdjSkyCubeMapCoords(L)).rgb;
-        precise float3 brdf_costheta = CalculateSpecular(normal, viewDirection, L, H, specParam); // (also contains NdotL term)
-        float pdf = SamplerHeitzGGXVNDF_PDFh(halfVectorTangentSpace, viewTangentSpace, alphad);
-        // change-of-variables conversion for this (see notes in GenerateSplitTerm)
-        pdf = pdf / (4.0f * dot(viewDirection, H));
-        result += lightColor * brdf_costheta / pdf;
+        float pdf;
+        float3 tap = SampleSpecularIBL_Ref(pdf, xi, viewTangentSpace, tangentToWorld, specParam, tex);
+        result += tap / pdf;
     }
 
     return result / float(totalSampleCount);
