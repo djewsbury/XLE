@@ -89,4 +89,15 @@ namespace ToolsRig
 
 	std::pair<std::shared_ptr<RenderCore::Techniques::DrawableGeo>, size_t> CreateTriangleBasePyramidGeo(
 		RenderCore::BufferUploads::IManager&, RenderCore::Techniques::IDrawablesPool&);
+
+	void BuildSimpleDrawable(
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::Techniques::DrawablesPacket& pkt,
+		RenderCore::Techniques::PipelineAccelerator& pipelineAccelerator,
+		RenderCore::Techniques::DescriptorSetAccelerator* descriptorSetAccelerator,
+		RenderCore::Techniques::DrawableGeo& geo,
+		size_t vertexCount,
+		const Float4x4& localToWorld);
+
+	std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> CreateSimplePipelineAccelerator(RenderCore::Techniques::IPipelineAcceleratorPool&);
 }

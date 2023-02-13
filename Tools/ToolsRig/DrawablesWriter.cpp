@@ -580,5 +580,41 @@ namespace ToolsRig
 		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 	: _device(&device), _drawablesPool(&drawablesPool), _pipelineAcceleratorPool(&pipelineAcceleratorPool)
 	{}
-    
+
+
+	void BuildSimpleDrawable(
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::Techniques::DrawablesPacket& pkt,
+		RenderCore::Techniques::PipelineAccelerator& pipelineAccelerator,
+		RenderCore::Techniques::DescriptorSetAccelerator* descriptorSetAccelerator,
+		RenderCore::Techniques::DrawableGeo& geo,
+		size_t vertexCount,
+		const Float4x4& localToWorld)
+	{
+		struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; Float4x4 _localToWorld; };
+		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
+		drawables[0]._pipeline = &pipelineAccelerator;
+		drawables[0]._descriptorSet = descriptorSetAccelerator;
+		drawables[0]._geo = &geo;
+		drawables[0]._vertexCount = vertexCount;
+		drawables[0]._looseUniformsInterface = &s_localTransformUSI;
+		drawables[0]._localToWorld = localToWorld;
+		drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
+			{
+				auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localToWorld, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
+				drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
+				drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
+			};
+		parsingContext.RequireCommandList(geo._completionCmdList);
+	}
+
+	std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> CreateSimplePipelineAccelerator(RenderCore::Techniques::IPipelineAcceleratorPool& pool)
+	{
+		return pool.CreatePipelineAccelerator(
+			nullptr,
+			ParameterBox {},
+			ToolsRig::Vertex3D_InputLayout,
+			RenderCore::Topology::TriangleList,
+			RenderCore::Assets::RenderStateSet{});
+	}
 }
