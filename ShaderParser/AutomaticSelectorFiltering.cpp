@@ -255,7 +255,7 @@ namespace ShaderSourceParser
 				continue;
 
 			filteringRules._defaultSets.insert(std::make_pair(
-				filteringRules._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, s._symbol),
+				filteringRules._tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, s._symbol),
 				filteringRules._tokenDictionary.Translate(analysis._sideEffects._dictionary, s._substitution)));
 		}
 
@@ -302,7 +302,7 @@ namespace ShaderSourceParser
 				auto trans = filteringRules._tokenDictionary.Translate(analysis._sideEffects._dictionary, s._substitution);
 				filteringRules._tokenDictionary.Simplify(trans);
 				filteringRules._defaultSets.insert(std::make_pair(
-					filteringRules._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, s._symbol),
+					filteringRules._tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, s._symbol),
 					trans));
 			}
 

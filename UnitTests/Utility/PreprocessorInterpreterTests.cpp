@@ -335,7 +335,7 @@ struct VSOUT /////////////////////////////////////////////////////
 
 		// We only care about AUTO_COTANGENT is GEO_HAS_NORMAL or GEO_HAS_TEXTANGENT
 		auto autoCotangentRelevance = preprocAnalysis._relevanceTable[
-			preprocAnalysis._tokenDictionary.GetToken(Utility::Internal::TokenDictionary::TokenType::Variable, "AUTO_COTANGENT")];
+			preprocAnalysis._tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, "AUTO_COTANGENT")];
 
 		auto expr = preprocAnalysis._tokenDictionary.AsString(autoCotangentRelevance);
 		INFO(expr);

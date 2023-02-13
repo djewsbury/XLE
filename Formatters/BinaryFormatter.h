@@ -25,6 +25,8 @@ namespace Formatters
 		Blob PeekNext();
 		bool TryKeyedItem(StringSection<>& name);
 		bool TryPeekKeyedItem(StringSection<>& name);
+		bool TryKeyedItem(uint64_t& name);
+		bool TryPeekKeyedItem(uint64_t& name);
 		bool TryBeginBlock(unsigned& evaluatedTypeId);
 		bool TryEndBlock();
 		bool TryBeginArray(unsigned& count, unsigned& evaluatedTypeId);
@@ -43,6 +45,7 @@ namespace Formatters
 		EvaluationContext& GetEvaluationContext() const { return *_evalContext; }
 		IteratorRange<const void*> GetRemainingData() const { return _dataIterator; }
 		IteratorRange<const unsigned*> GetPassedConditionSymbols() const { return _passedConditionSymbols; }
+		const BinarySchemata& GetSchemata() const { return *_blockStack.front()._schemata; }
 
 		BinaryFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data);
 	private:
@@ -81,10 +84,10 @@ namespace Formatters
 	unsigned RequireBeginBlock(BinaryFormatter&);
 	void RequireEndBlock(BinaryFormatter&);
 	StringSection<> RequireKeyedItem(BinaryFormatter&);
+	uint64_t RequireKeyedItemHash(BinaryFormatter&);
 	std::pair<unsigned, unsigned> RequireBeginArray(BinaryFormatter&);
 	void RequireEndArray(BinaryFormatter&);
-	template<typename Type>
-		Type RequireStringValue(BinaryFormatter&);
+	StringSection<> RequireStringValue(BinaryFormatter&);
 	std::ostream& SerializeBlock(std::ostream& str, BinaryFormatter& formatter, unsigned indent = 0);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -352,13 +355,24 @@ namespace Formatters
 		unsigned evaluatedTypeId;
 		if (!formatter.TryRawValue(data, typeDesc, evaluatedTypeId))
 			Throw(std::runtime_error("Unexpected blob while looking for value in binary formatter"));
-		Type result;
-		bool castSuccess = ImpliedTyping::Cast(
-			MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(),
-			data, typeDesc);
-		if (!castSuccess)
-			Throw(std::runtime_error("Could not convert value to the required type in binary formatter"));
-		return result;
+
+		if (expect_evaluation(formatter.ReversedEndian(), false)) {
+			Type result;
+			bool castSuccess = ImpliedTyping::Cast_FlipEndian(
+				MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(),
+				data, typeDesc);
+			if (!castSuccess)
+				Throw(std::runtime_error("Could not convert value to the required type in binary formatter"));
+			return result;
+		} else {
+			Type result;
+			bool castSuccess = ImpliedTyping::Cast(
+				MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>(),
+				data, typeDesc);
+			if (!castSuccess)
+				Throw(std::runtime_error("Could not convert value to the required type in binary formatter"));
+			return result;
+		}
 	}
 	
 }

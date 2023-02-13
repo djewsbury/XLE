@@ -250,7 +250,8 @@ namespace Formatters
 								}
 							if (foundTemplateParam) continue;
 
-							uint64_t hash = Hash64(nextStep._name);
+							uint64_t hash = def._tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex]._hash;
+							assert(hash == Hash64(nextStep._name));
 							
 							if (std::find(dynamicLocalVars.begin(), dynamicLocalVars.end(), hash) != dynamicLocalVars.end()) {
 								usingDynamicVariable = true;
@@ -428,9 +429,8 @@ namespace Formatters
 				// - template values
 				// - context state
 
-				// (we could just store this hash in the Token object)
-				// unfortunately we can't look up by token index any more, because each eval context can have a different dictionary
-				uint64_t hash = Hash64(nextStep._name);
+				uint64_t hash = tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex]._hash;
+				assert(hash == Hash64(nextStep._name));
 				bool gotValue = false;
 
 				// ------------------------- previously evaluated members --------------------
@@ -617,8 +617,7 @@ namespace Formatters
 			return false;
 
 		auto nameToken = cmds[1];
-		const auto& memberName = workingBlock._definition->_tokenDictionary._tokenDefinitions[nameToken]._value;
-		name = memberName;
+		name = workingBlock._definition->_tokenDictionary._tokenDefinitions[nameToken]._value;
 		return true;
 	}
 
@@ -626,6 +625,47 @@ namespace Formatters
 	{
 		// TryKeyedItem only changes _queuedNext -- so we can effectively "peek"
 		// at it by just changing _queuedNext back ....
+		auto res = TryKeyedItem(name);
+		if (!res) return false;
+		_queuedNext = Blob::KeyedItem;
+		return true;
+	}
+
+	bool BinaryFormatter::TryKeyedItem(uint64_t& name)
+	{
+		if (_blockStack.empty()) return false;
+		auto& workingBlock = _blockStack.back();
+		auto& cmds = workingBlock._cmdsIterator;
+		if (cmds.empty()) return false;
+
+		if (PeekNext() != Blob::KeyedItem) return false;
+		if (workingBlock._pendingArrayMembers || workingBlock._pendingEndArray) return false;
+
+		const auto& evalType = _evalContext->GetEvaluatedTypeDesc(workingBlock._typeStack.top());
+		if (cmds[0] == (unsigned)Cmd::InlineIndividualMember) {
+			if (evalType._blockDefinition == ~0u) {
+				_queuedNext = Blob::ValueMember;
+			} else
+				_queuedNext = Blob::BeginBlock;
+		} else if (cmds[0] == (unsigned)Cmd::InlineArrayMember) {
+
+			// Sometimes we can just compress the "array count" into the basic value description, as so...
+			bool isCharType = false;
+			if (evalType._alias != ~0u && workingBlock._schemata->GetAliasName(evalType._alias) == "char") isCharType = true;		// hack -- special case for "char" alias
+			bool isCompressible = evalType._blockDefinition == ~0u && (evalType._alias == ~0u || isCharType) && evalType._valueTypeDesc._arrayCount <= 1;
+			_queuedNext = isCompressible ? Blob::ValueMember : Blob::BeginArray;
+
+		} else
+			return false;
+
+		auto nameToken = cmds[1];
+		name = workingBlock._definition->_tokenDictionary._tokenDefinitions[nameToken]._hash;
+		assert(name);
+		return true;
+	}
+
+	bool BinaryFormatter::TryPeekKeyedItem(uint64_t& name)
+	{
 		auto res = TryKeyedItem(name);
 		if (!res) return false;
 		_queuedNext = Blob::KeyedItem;
@@ -742,7 +782,8 @@ namespace Formatters
 			resultTypeDesc = finalTypeDesc;
 			
 			bool reversedEndian = _reversedEndian && resultTypeDesc._type > ImpliedTyping::TypeCat::UInt8;
-			workingBlock._localEvalContext.emplace_back(Hash64(def._tokenDictionary._tokenDefinitions[nameToken]._value), ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData, reversedEndian});
+			assert(def._tokenDictionary._tokenDefinitions[nameToken]._hash);
+			workingBlock._localEvalContext.emplace_back(def._tokenDictionary._tokenDefinitions[nameToken]._hash, ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData, reversedEndian});
 			
 			evaluatedTypeId = type;
 			cmds.first+=2;
@@ -804,7 +845,8 @@ namespace Formatters
 		if (evalType._valueTypeDesc._type != ImpliedTyping::TypeCat::Void) {
 			auto arrayData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), evalType._valueTypeDesc.GetSize()));
 			bool reversedEndian = _reversedEndian && evalType._valueTypeDesc._type > ImpliedTyping::TypeCat::UInt8;
-			workingBlock._localEvalContext.emplace_back(Hash64(def._tokenDictionary._tokenDefinitions[nameToken]._value), ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData, reversedEndian});
+			assert(def._tokenDictionary._tokenDefinitions[nameToken]._hash);
+			workingBlock._localEvalContext.emplace_back(def._tokenDictionary._tokenDefinitions[nameToken]._hash, ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData, reversedEndian});
 		}
 
 		return true;
@@ -1065,6 +1107,14 @@ namespace Formatters
 			Throw(std::runtime_error("Unexpected blob while looking for keyed item in binary formatter"));
 		return result;
 	}
+
+	uint64_t RequireKeyedItemHash(BinaryFormatter& formatter)
+	{
+		uint64_t result;
+		if (!formatter.TryKeyedItem(result))
+			Throw(std::runtime_error("Unexpected blob while looking for keyed item in binary formatter"));
+		return result;
+	}
 	
 	std::pair<unsigned, unsigned> RequireBeginArray(BinaryFormatter& formatter)
 	{
@@ -1078,6 +1128,17 @@ namespace Formatters
 	{
 		if (!formatter.TryEndArray())
 			Throw(std::runtime_error("Unexpected blob while looking for end array in binary formatter"));
+	}
+
+	StringSection<> RequireStringValue(BinaryFormatter& formatter)
+	{
+		IteratorRange<const void*> valueData;
+		ImpliedTyping::TypeDesc valueTypeDesc;
+		if (!formatter.TryRawValue(valueData, valueTypeDesc))
+			Throw(std::runtime_error("Unexpected blob while looking for string value in binary formatter"));
+		if (valueTypeDesc._typeHint != ImpliedTyping::TypeHint::String || (valueTypeDesc._type != ImpliedTyping::TypeCat::UInt8 && valueTypeDesc._type != ImpliedTyping::TypeCat::Int8))
+			Throw(std::runtime_error("Expected string type member in binary formatter"));
+		return { (const char*)valueData.begin(), (const char*)valueData.end() };
 	}
 
 	static void SerializeValueWithDecoder(

@@ -37,12 +37,9 @@ namespace Utility
 			{
 				TokenType _type;
 				std::string _value;
+				uint64_t _hash = 0;			// can often just be zero, since not all clients need a hash value
 			};
 			std::vector<TokenDefinition> _tokenDefinitions;
-
-			void PushBack(
-				ExpressionTokenList& tokenList,
-				TokenType type, const std::string& value = {});
 
 			ExpressionTokenList Translate(
 				const TokenDictionary& otherDictionary,
@@ -51,7 +48,7 @@ namespace Utility
 				const TokenDictionary& otherDictionary,
 				Token tokenForOtherDictionary);
 
-			Token GetToken(TokenType type, const std::string& value = {});
+			Token GetOrAddToken(TokenType type, const std::string& value = {}, uint64_t hash = 0);
 			std::optional<Token> TryGetToken(TokenType type, StringSection<> value) const;
 
 			std::string AsString(IteratorRange<const Token*> tokenList) const;

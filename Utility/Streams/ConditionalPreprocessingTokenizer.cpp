@@ -683,7 +683,7 @@ namespace Utility
                             Throw(FormatException("Expected token in #ifdef", directive._start));
 
                         Internal::ExpressionTokenList expr;
-                        tokenDictionary.PushBack(expr, Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString());
+                        expr.push_back(tokenDictionary.GetOrAddToken(Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString()));
 
                         auto exprRelevance = CalculatePreprocessorExpressionRelevance(
                             tokenDictionary, expr);
@@ -704,7 +704,7 @@ namespace Utility
                             Throw(FormatException("Expected token in #ifndef", directive._start));
 
                         Internal::ExpressionTokenList expr;
-                        tokenDictionary.PushBack(expr, Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString());
+                        expr.push_back(tokenDictionary.GetOrAddToken(Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString()));
                         expr = Internal::InvertExpression(expr);
 
                         auto exprRelevance = CalculatePreprocessorExpressionRelevance(

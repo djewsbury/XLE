@@ -362,13 +362,15 @@ namespace Utility
 
 		static bool operator==(const TokenDictionary::TokenDefinition& lhs, const TokenDictionary::TokenDefinition& rhs)
 		{
-			return lhs._type == rhs._type && lhs._value == rhs._value;
+			return lhs._type == rhs._type && ((lhs._hash == rhs._hash && lhs._hash != 0) || lhs._value == rhs._value);
 		}
 
 		static bool operator<(const TokenDictionary::TokenDefinition& lhs, const TokenDictionary::TokenDefinition& rhs)
 		{
 			if (lhs._type < rhs._type) return true;
 			if (lhs._type > rhs._type) return false;
+			if (lhs._hash < rhs._hash) return true;
+			if (lhs._hash > rhs._hash) return false;
 			return lhs._value < rhs._value;
 		}
 
@@ -400,19 +402,19 @@ namespace Utility
 						if (op == "()") {
 							Throw(std::runtime_error("Only defined() is supported in expression parser. Other functions are not supported"));
 						} else {
-							dictionary.PushBack(reversePolishOrdering, TokenDictionary::TokenType::Operation, op);
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Operation, op));
 						}
 
 					} else if (base.type == UNARY) {
 
-						dictionary.PushBack(reversePolishOrdering, TokenDictionary::TokenType::UnaryMarker);
+						reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::UnaryMarker));
 					
 					} else if (base.type == VAR) {
 
 						std::string key = static_cast<::Token<std::string>*>(&base)->val;
 						auto sub = std::find_if(substitutions._substitutions.rbegin(), substitutions._substitutions.rend(), [key](const auto& c) { return c._symbol == key; });
 						if (sub == substitutions._substitutions.rend() || !IsTrue(sub->_condition) || sub->_type == PreprocessorSubstitutions::Type::Undefine) {
-							dictionary.PushBack(reversePolishOrdering, TokenDictionary::TokenType::Variable, key);
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Variable, key));
 						} else {
 							// We need to substitute in the expression provided in the substitutions table
 							// This is used for things like #define
@@ -463,7 +465,7 @@ namespace Utility
 
 						auto sub = std::find_if(substitutions._substitutions.rbegin(), substitutions._substitutions.rend(), [key](const auto& c) { return c._symbol == key; });
 						if (sub == substitutions._substitutions.rend() || !IsTrue(sub->_condition) || sub->_type == PreprocessorSubstitutions::Type::Undefine) {
-							dictionary.PushBack(reversePolishOrdering, TokenDictionary::TokenType::IsDefinedTest, key);
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::IsDefinedTest, key));
 						} else {
 							// This is actually doing a defined(...) check on one of our substitutions. We can treat it
 							// as just "true"
@@ -474,7 +476,7 @@ namespace Utility
 					} else {
 						
 						std::string literal = packToken::str(&base);
-						dictionary.PushBack(reversePolishOrdering, TokenDictionary::TokenType::Literal, literal);
+						reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Literal, literal));
 
 					}
 
@@ -675,7 +677,7 @@ namespace Utility
 								reversedPart.insert(reversedPart.end(), rrange.begin(), rrange.end());
 								reversedPart.insert(reversedPart.end(), lrange.begin(), lrange.end());
 								std::copy(reversedPart.begin(), reversedPart.end(), lrange.begin());
-								expr[idx] = GetToken(TokenType::Operation, reversedOperator.AsString());
+								expr[idx] = GetOrAddToken(TokenType::Operation, reversedOperator.AsString());
 
 								// notice lsub & rsub reversed when calculating the "tokenWeight" just below
 								Subexpression subexpr { lsub._begin, idx + 1, lsub._tokenWeight ^ (rsub._tokenWeight << Token(3)) };
@@ -690,7 +692,7 @@ namespace Utility
 							if (internalOp._type == TokenType::Operation) {
 								auto negated = preprocessor_operations::NumeralOperation_NegatedOperator(internalOp._value);
 								if (!negated.IsEmpty()) {
-									*(rrange.end()-1) = GetToken(TokenType::Operation, negated.AsString());
+									*(rrange.end()-1) = GetOrAddToken(TokenType::Operation, negated.AsString());
 									expr.erase(expr.begin()+idx);
 									expr.erase(expr.begin()+lsub._begin);
 									idx -= 1;	// back one because we erased the unary marker
@@ -800,14 +802,25 @@ namespace Utility
 			return evaluation.top().first;
 		}
 
-		Token TokenDictionary::GetToken(TokenType type, const std::string& value)
+		Token TokenDictionary::GetOrAddToken(TokenType type, const std::string& value, uint64_t hash)
 		{
-			TokenDictionary::TokenDefinition token { type, value };
+			assert(!hash || hash == Hash64(value));
+			TokenDictionary::TokenDefinition token { type, value, hash };
 			auto existing = std::find(_tokenDefinitions.begin(), _tokenDefinitions.end(), token);
 			if (existing == _tokenDefinitions.end()) {
+
+				// ensure there are no tokens that differ just by hash value
+				#if defined(_DEBUG)
+					for (auto&i:_tokenDefinitions)
+						assert(i._type != type || i._value != value);
+				#endif
+
 				_tokenDefinitions.push_back(token);
 				return (Token)_tokenDefinitions.size() - 1;
 			} else {
+				if (!existing->_hash)
+					existing->_hash = hash;
+				assert(type != existing->_type || ((!hash || existing->_hash == hash) && existing->_value == value));
 				return (Token)std::distance(_tokenDefinitions.begin(), existing);
 			}
 		}
@@ -822,11 +835,6 @@ namespace Utility
 			return {};
 		}
 
-		void TokenDictionary::PushBack(ExpressionTokenList& tokenList, TokenDictionary::TokenType type, const std::string& value)
-		{
-			tokenList.push_back(GetToken(type, value));
-		}
-
 		ExpressionTokenList TokenDictionary::Translate(
 			const TokenDictionary& otherDictionary,
 			const ExpressionTokenList& tokenListForOtherDictionary)
@@ -838,7 +846,7 @@ namespace Utility
 			for (const auto&token:tokenListForOtherDictionary) {
 				auto& trns = translated[token];
 				if (trns == ~0u)
-					trns = GetToken(otherDictionary._tokenDefinitions[token]._type, otherDictionary._tokenDefinitions[token]._value);
+					trns = GetOrAddToken(otherDictionary._tokenDefinitions[token]._type, otherDictionary._tokenDefinitions[token]._value, otherDictionary._tokenDefinitions[token]._hash);
 				result.push_back(trns);
 			}
 			return result;
@@ -848,7 +856,7 @@ namespace Utility
 			const TokenDictionary& otherDictionary,
 			Token tokenForOtherDictionary)
 		{
-			return GetToken(otherDictionary._tokenDefinitions[tokenForOtherDictionary]._type, otherDictionary._tokenDefinitions[tokenForOtherDictionary]._value);
+			return GetOrAddToken(otherDictionary._tokenDefinitions[tokenForOtherDictionary]._type, otherDictionary._tokenDefinitions[tokenForOtherDictionary]._value, otherDictionary._tokenDefinitions[tokenForOtherDictionary]._hash);
 		}
 
 		uint64_t TokenDictionary::CalculateHash() const
