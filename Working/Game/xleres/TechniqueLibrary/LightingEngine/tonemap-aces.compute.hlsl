@@ -67,6 +67,8 @@ float3 ToneMapAces(float3 x)
 	x = mul(PreToneScale, float4(x, 0));
 	#if !USE_LOOKUP_TABLE
 		x = exp(float3(c5c9CurveEsimate_LogY4(x.x), c5c9CurveEsimate_LogY4(x.y), c5c9CurveEsimate_LogY4(x.z)));
+		const float CINEMA_WHITE = 48.0;
+		x = min(x, CINEMA_WHITE);		// protection against very bright values overflowing
 	#else
 		x = float3(LookupFromCBuffer(x.x), LookupFromCBuffer(x.y), LookupFromCBuffer(x.z));
 	#endif
