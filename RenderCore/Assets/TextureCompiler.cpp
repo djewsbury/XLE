@@ -4,7 +4,7 @@
 
 #include "TextureCompiler.h"
 #include "../Techniques/Services.h"
-#include "../Techniques/TextureCompilerUtil.h"
+#include "../LightingEngine/TextureCompilerUtil.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/IFileSystem.h"
@@ -251,8 +251,8 @@ namespace RenderCore { namespace Assets
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			}
 
-			Techniques::ProgressiveTextureFn dummyIntermediateFn;
-			Techniques::ProgressiveTextureFn* intermediateFunction = &dummyIntermediateFn;
+			LightingEngine::ProgressiveTextureFn dummyIntermediateFn;
+			LightingEngine::ProgressiveTextureFn* intermediateFunction = &dummyIntermediateFn;
 			if (conduit.Has<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0))
 				intermediateFunction = &conduit.Get<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0);
 
@@ -266,7 +266,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._arrayCount = 0u;
 				targetDesc._mipCount = (request._mipMapFilter == TextureCompilationRequest::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ToCubeMap, {}, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToCubeMap, {}, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterGlossySpecular) {
 				auto srcDst = srcPkt->GetDesc();
@@ -279,10 +279,10 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				Techniques::EquirectFilterParams params;
+				LightingEngine::EquirectFilterParams params;
 				params._sampleCount = request._sampleCount;
 				params._idealCmdListCostMS = request._commandListIntervalMS;
-				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ToGlossySpecular, params, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecular, params, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference) {
 				auto srcDst = srcPkt->GetDesc();
@@ -295,7 +295,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ToGlossySpecularReference, {}, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecularReference, {}, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterDiffuseReference) {
 				auto srcDst = srcPkt->GetDesc();
@@ -308,11 +308,11 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = 1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ToDiffuseReference, {}, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToDiffuseReference, {}, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ProjectToSphericalHarmonic) {
 				auto targetDesc = TextureDesc::Plain2D(request._coefficientCount, 1, Format::R32G32B32A32_FLOAT);
-				srcPkt = Techniques::EquirectFilter(*srcPkt, targetDesc, Techniques::EquirectFilterMode::ProjectToSphericalHarmonic, {}, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ProjectToSphericalHarmonic, {}, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ComputeShader) {
 				auto targetDesc = TextureDesc::Plain2D(
@@ -322,7 +322,7 @@ namespace RenderCore { namespace Assets
 				auto shader = request._shader;
 				if (shader.empty())
 					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
-				srcPkt = Techniques::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount);
+				srcPkt = LightingEngine::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			}
 			CompressonatorTexture input{*srcPkt};

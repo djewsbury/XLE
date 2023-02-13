@@ -14,7 +14,7 @@ namespace RenderCore { namespace BufferUploads { class IAsyncDataSource; }}
 namespace Assets { struct DependentFileState; }
 namespace RenderCore { class TextureDesc; }
 
-namespace RenderCore { namespace Techniques
+namespace RenderCore { namespace LightingEngine
 {
 	enum class EquirectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic, ToGlossySpecularReference, ToDiffuseReference };
 	struct EquirectFilterParams

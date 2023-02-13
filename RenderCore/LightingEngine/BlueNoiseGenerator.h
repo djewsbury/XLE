@@ -21,5 +21,22 @@ namespace RenderCore { namespace LightingEngine
 		void CompleteInitialization(IThreadContext&);
 		BlueNoiseGeneratorTables(IDevice& device);
 	};
+
+	/// <summary>Utility for generating halton sampling patterns in shaders</summary>
+	/// Halton sampling in shaders isn't ideal, because there's a fair level of overhead in
+	/// generating the sample values. However, it's quite convenient to work with (as well as
+	/// begin easy to understand intuitively).
+	///
+	/// This is intended for preprocessing shaders and reference shaders, where performance isn't
+	/// the primary concern.
+	class HaltonSamplerHelper
+	{
+	public:
+		std::shared_ptr<IResourceView> _pixelToSampleIndex;
+		std::shared_ptr<IResourceView> _pixelToSampleIndexParams;		// cbuffer
+		unsigned _repeatingStride = 0;
+
+		HaltonSamplerHelper(IThreadContext& threadContext, unsigned width, unsigned height);
+	};
 }}
 

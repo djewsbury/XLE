@@ -14,7 +14,7 @@ add_library(
     SkinningScaffold.cpp
     TransformationCommands.cpp
     PipelineConfigurationUtils.cpp
-    #TextureCompiler.cpp        moved into the Techniques project for now, due to dependencies on that project (& bufferuploads)
+    #TextureCompiler.cpp        moved into the LightingEngine project for now, due to dependencies on that project (& bufferuploads)
     TextureLoaders.cpp
     MergedAnimationSetCompiler.cpp
     AnimationBindings.cpp

@@ -25,9 +25,15 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		LightingDelegateUtil.cpp
 		ForwardPlusLightScene.cpp
 		ToneMapOperator.cpp
+		TextureCompilerUtil.cpp
+		../Assets/TextureCompiler.cpp           # moved here while figuring out the architecture -- due to dependencies with TextureCompilerUtil.cpp
 		)
 
 	xle_configure_library(RenderCoreLightingEngine-${metal_name})
 	target_link_libraries(RenderCoreLightingEngine-${metal_name} PUBLIC RenderCoreTechniques-${metal_name})
+
+	include(${FOREIGN_DIR}/Compressonator/FindCompressonator.cmake)
+	find_compressonator()
+	target_link_libraries(RenderCoreLightingEngine-${metal_name} PRIVATE compressonator)
 
 endforeach()

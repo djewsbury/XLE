@@ -3,10 +3,10 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "TextureCompilerUtil.h"
-#include "Techniques.h"
-#include "DeferredShaderResource.h"
-#include "PipelineOperators.h"
-#include "Services.h"
+#include "BlueNoiseGenerator.h"
+#include "../Techniques/Techniques.h"
+#include "../Techniques/DeferredShaderResource.h"
+#include "../Techniques/PipelineOperators.h"
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
@@ -20,7 +20,7 @@
 
 using namespace Utility::Literals;
 
-namespace RenderCore { namespace Techniques
+namespace RenderCore { namespace LightingEngine
 {
 	class DataSourceFromResourceSynchronized : public BufferUploads::IAsyncDataSource
 	{
@@ -58,7 +58,7 @@ namespace RenderCore { namespace Techniques
 		: _device(threadContext->GetDevice())
 		, _depVal(std::move(depVal))
 		{
-			_resource = DestageResource(*threadContext, resource);
+			_resource = Techniques::DestageResource(*threadContext, resource);
 		}
 
 		std::shared_ptr<IDevice> _device;
@@ -68,103 +68,6 @@ namespace RenderCore { namespace Techniques
 
 	static std::string s_equRectFilterName { "texture-compiler (EquirectFilter)" };
 	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
-
-	template<int Base, typename FloatType=float>
-		static FloatType RadicalInverseSpecialized(uint64_t a)
-	{
-		const FloatType reciprocalBase = FloatType(1.0) / FloatType(Base);
-		uint64_t reversedDigits = 0;
-		FloatType reciprocalBaseN = 1;
-		while (a) {
-			uint64_t next = a / Base;
-			uint64_t digit = a - next * Base;
-			reversedDigits = reversedDigits * Base + digit;
-			reciprocalBaseN *= reciprocalBase;
-			a = next;
-		}
-		return reversedDigits * reciprocalBaseN;
-	}
-
-	class HaltonSamplerHelper
-	{
-	public:
-		std::shared_ptr<IResourceView> _pixelToSampleIndex;
-		std::shared_ptr<IResourceView> _pixelToSampleIndexParams;		// cbuffer
-		unsigned _repeatingStride = 0;
-
-		// todo -- consider max resolution
-		HaltonSamplerHelper(IThreadContext& threadContext, unsigned width, unsigned height)
-		{
-			// For a given texture, we're going to create a lookup table that converts from 
-			// xy coords to first sample index in the Halton sequence
-			//
-			// That is, if (radical-inverse-base-2(i), radical-inverse-base-3(i)) is the xy
-			// coords associated with sample i; we want to be able to go backwards and get i
-			// from a given sample coords
-			//
-			// This will then allow us to generate more well distributed numbers based on i,
-			// by using the deeper dimensions of the Halton sequence
-			//
-			// Furthermore, we can cause samples in a given pixel to repeat with a constant
-			// interval by multiplying the sampling coordinate space by a specific scale
-			//
-			// See pbr-book chapter 7.4 for more reference on this
-			// Though, we're not going to use a mathematically sophisticated method for this,
-			// instead something pretty rudimentary
-
-			float j = std::ceil(std::log2(float(width)));
-			float log3Height = std::log(float(height))/std::log(3.0f);
-			float k = std::ceil(log3Height);
-			float scaledWidth = std::pow(2.f, j), scaledHeight = std::pow(3.f, k);
-
-			auto data = std::make_unique<unsigned[]>(width*height);
-			std::memset(data.get(), 0, sizeof(unsigned)*width*height);
-
-			// We can do this in a smarter way by using the inverse-radical-inverse, and solving some simultaneous
-			// equations with modular arithmetic. But since we're building a lookup table anyway, that doesn't seem
-			// of any practical purpose
-			unsigned repeatingStride = (unsigned)(scaledWidth*scaledHeight);
-			for (unsigned sampleIdx=0; sampleIdx<repeatingStride; ++sampleIdx) {
-				auto x = unsigned(scaledWidth * RadicalInverseSpecialized<2>(sampleIdx)), 
-					y = unsigned(scaledHeight * RadicalInverseSpecialized<3>(sampleIdx));
-				if (x >= width || y >= height) continue;
-				data[x+y*width] = sampleIdx;
-			}
-
-			auto texture = threadContext.GetDevice()->CreateResource(
-				CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(width, height, Format::R32_UINT)),
-				"sample-idx-lookup");
-			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
-			Metal::BarrierHelper{metalContext}.Add(*texture, Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);
-			auto pitches = TexturePitches{width*(unsigned)sizeof(unsigned), width*height*(unsigned)sizeof(unsigned)};
-			metalContext.BeginBlitEncoder().Write(
-				*texture, 
-				SubResourceInitData{MakeIteratorRange(data.get(), PtrAdd(data.get(), sizeof(unsigned)*width*height)), pitches},
-				Format::R32_UINT,
-				UInt3{width, height, 1},
-				pitches);
-			Metal::BarrierHelper{metalContext}.Add(*texture, BindFlag::TransferDst, BindFlag::ShaderResource);
-
-			_pixelToSampleIndex = texture->CreateTextureView();
-
-			struct Uniforms
-			{
-				float _j, _k;
-				unsigned _repeatingStride;
-				unsigned _dummy;
-			} uniforms {
-				j, k, repeatingStride, 0
-			};
-
-			auto cbuffer = threadContext.GetDevice()->CreateResource(
-				CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(Uniforms))),
-				"sample-idx-uniforms");
-			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(
-				*cbuffer, MakeOpaqueIteratorRange(uniforms));
-			_pixelToSampleIndexParams = cbuffer->CreateBufferView();
-			_repeatingStride = repeatingStride;
-		}
-	};
 
 	struct BalancedSamplingShaderHelper
 	{
@@ -226,18 +129,18 @@ namespace RenderCore { namespace Techniques
 		if (filter != EquirectFilterMode::ProjectToSphericalHarmonic)
 			assert(ActualArrayLayerCount(targetDesc) == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
 
-		auto threadContext = GetThreadContext();
+		auto threadContext = Techniques::GetThreadContext();
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-		auto pipelineCollection = std::make_shared<PipelineCollection>(threadContext->GetDevice());
+		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(threadContext->GetDevice());
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "Input"_h);
 		constexpr auto pushConstantsBinding = "FilterPassParams"_h;
 
-		::Assets::PtrToMarkerPtr<IComputeShaderOperator> computeOpFuture;
+		::Assets::PtrToMarkerPtr<Techniques::IComputeShaderOperator> computeOpFuture;
 		if (filter == EquirectFilterMode::ToCubeMap) {
 			usi.BindResourceView(1, "OutputArray"_h);
- 			computeOpFuture = CreateComputeOperator(
+ 			computeOpFuture = Techniques::CreateComputeOperator(
 				pipelineCollection,
 				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquirectToCube",
 				{},
@@ -285,7 +188,7 @@ namespace RenderCore { namespace Techniques
 				usi);
 		}
 
-		auto inputRes = CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
+		auto inputRes = Techniques::CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
 		Metal::CompleteInitialization(metalContext, {outputRes.get()});
 		if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(threadContext.get()))
@@ -524,14 +427,14 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(StringSection<> shader, const TextureDesc& targetDesc, unsigned totalSampleCount)
 	{
-		auto threadContext = GetThreadContext();
+		auto threadContext = Techniques::GetThreadContext();
 		
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "Output"_h);
 		usi.BindImmediateData(0, "ControlUniforms"_h);
 
- 		auto computeOpFuture = CreateComputeOperator(
-			std::make_shared<PipelineCollection>(threadContext->GetDevice()),
+ 		auto computeOpFuture = Techniques::CreateComputeOperator(
+			std::make_shared<Techniques::PipelineCollection>(threadContext->GetDevice()),
 			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain", usi);
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
