@@ -14,12 +14,20 @@
 	#include "../../BasicMaterial.hlsl"
 #endif
 
+#if !defined(INTERSECTION_TEST)
+	#define INTERSECTION_TEST 0
+#endif
+
 struct GSOutput
 {
 	float4	triangleA : POINT0;
 	float4	triangleB : POINT1;
 	float4	triangleC : POINT2;
 	uint4	properties : PROPERTIES;
+
+	#if INTERSECTION_TEST == 0
+		float3 normal : NORMAL;
+	#endif
 };
 
 cbuffer RayDefinition BIND_SEQ_B5
@@ -107,7 +115,7 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 	// We're going to ignore the winding order. So callers will get both front-face
 	// and back-face intersections.
 
-#if !defined(INTERSECTION_TEST) || (INTERSECTION_TEST == 0)
+#if INTERSECTION_TEST == 0
 
 	float3 intersectionResult =
 		RayTriangleIntersection(
@@ -147,6 +155,10 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 			result.properties.x = asuint(intersectionResult.x);
 			result.properties.y = CurrentDrawCallIndex;
 			result.properties.zw = MaterialGuid;
+			result.normal = normalize(
+				  barycentric.x * VSOUT_GetWorldVertexNormal(input[0])
+				+ barycentric.y * VSOUT_GetWorldVertexNormal(input[1])
+				+ barycentric.z * VSOUT_GetWorldVertexNormal(input[2]));
 			outputStream.Append(result);
 		}
 	}

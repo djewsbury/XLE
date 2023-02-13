@@ -89,6 +89,7 @@ DepthOnly=~
 RayTest=~
 	Selectors=~
 		VSOUT_HAS_WORLD_POSITION=1
+		DEPTH_PLUS_NORMAL=1
 	GeometryShader=xleres/TechniqueLibrary/Standard/raytest.geo.hlsl:triangles
 	PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
 

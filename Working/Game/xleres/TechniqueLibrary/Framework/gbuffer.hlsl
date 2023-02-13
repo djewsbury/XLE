@@ -317,15 +317,15 @@ DepthPlusEncoded EncodeDepthPlus(GBufferValues values, int2 motion, float histor
     DepthPlusEncoded result;
     #if DEPTH_PLUS_MOTION
         result.motionBuffer = motion;
-    #endif
-    #if DEPTH_PLUS_NORMAL
-        result.normalBuffer.xyz = EncodeGBufferNormal(values.worldSpaceNormal.xyz);
-    #endif
-    #if DEPTH_PLUS_ROUGHNESS
-        result.normalBuffer.a = values.material.roughness;
-    #endif
-    #if DEPTH_PLUS_MOTION && DEPTH_PLUS_HISTORY_ACCUMULATION
-        result.historyAccumulation = historyAccumulationWeight;
+        #if DEPTH_PLUS_NORMAL
+            result.normalBuffer.xyz = EncodeGBufferNormal(values.worldSpaceNormal.xyz);
+        #endif
+        #if DEPTH_PLUS_ROUGHNESS
+            result.normalBuffer.a = values.material.roughness;
+        #endif
+        #if DEPTH_PLUS_MOTION && DEPTH_PLUS_HISTORY_ACCUMULATION
+            result.historyAccumulation = historyAccumulationWeight;
+        #endif
     #endif
     return result;
 }

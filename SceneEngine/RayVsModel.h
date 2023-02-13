@@ -31,11 +31,13 @@ namespace SceneEngine
     public:
         struct ResultEntry
         {
-        public:
-            Float4 _pt[3];
-			union { unsigned _depthAsInt; float _intersectionDepth; };
+            Float3 _ptA; float _barycentricA;
+            Float3 _ptB; float _barycentricB;
+            Float3 _ptC; float _barycentricC;
+			float _intersectionDepth;
             unsigned _drawCallIndex;
-            uint64 _materialGuid;
+            uint64_t _materialGuid;
+            Float3 _normal;
 
             static bool CompareDepth(const ResultEntry& lhs, const ResultEntry& rhs)
                 { return lhs._intersectionDepth < rhs._intersectionDepth; }

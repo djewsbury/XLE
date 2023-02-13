@@ -68,6 +68,42 @@ namespace SceneEngine
 	};
 	const uint64_t RayDefinitionUniformDelegate::s_binding = Hash64("ShadowProjection");		// we reuse this binding for RayDefinition -- but we have to use this string in order to find it
 
+	static const InputElementDesc s_soEles[] = {
+        InputElementDesc("POINT",               0, Format::R32G32B32A32_FLOAT),
+        InputElementDesc("POINT",               1, Format::R32G32B32A32_FLOAT),
+        InputElementDesc("POINT",               2, Format::R32G32B32A32_FLOAT),
+		InputElementDesc("PROPERTIES",			0, Format::R32G32B32A32_UINT)
+    };
+
+    static const unsigned s_soStrides[] = { 16*4 };
+
+	struct SOStruct
+	{
+		Float4 _pt[3];
+		float _intersectionDepth;
+		unsigned _drawCallIndex;
+        uint64_t _materialGuid;
+	};
+
+	static const InputElementDesc s_soEles_Normal[] = {
+        InputElementDesc("POINT",               0, Format::R32G32B32A32_FLOAT),
+        InputElementDesc("POINT",               1, Format::R32G32B32A32_FLOAT),
+        InputElementDesc("POINT",               2, Format::R32G32B32A32_FLOAT),
+		InputElementDesc("PROPERTIES",			0, Format::R32G32B32A32_UINT),
+		InputElementDesc("NORMAL",				0, Format::R32G32B32A32_FLOAT)
+    };
+
+    static const unsigned s_soStrides_Normal[] = { 16*5 };
+
+	struct SOStruct_Normal
+	{
+		Float4 _pt[3];
+		float _intersectionDepth;
+		unsigned _drawCallIndex;
+        uint64_t _materialGuid;
+		Float4 _normal;
+	};
+
     class ModelIntersectionStateContext::Pimpl
     {
     public:
@@ -205,10 +241,35 @@ namespace SceneEngine
 			// note -- we may not have to readback the entire buffer here, if we use the hitEventsWritten value
 			auto readback = _pimpl->_res->_cpuAccessBuffer->ReadBackSynchronized(*_pimpl->_threadContext);
 			if (!readback.empty()) {
-				const auto* mappedData = (const ResultEntry*)readback.data();
-				result.reserve(std::min(std::min(hitEventsWritten, unsigned(readback.size() / sizeof(ResultEntry))), s_maxResultCount));
-				for (unsigned c=0; c<std::min(hitEventsWritten, s_maxResultCount); ++c)
-					result.push_back(mappedData[c]);
+				if (_pimpl->_testType == TestType::RayTest) {
+					const auto* mappedData = (const SOStruct_Normal*)readback.data();
+					result.reserve(std::min(std::min(hitEventsWritten, unsigned(readback.size() / sizeof(SOStruct_Normal))), s_maxResultCount));
+					for (unsigned c=0; c<std::min(hitEventsWritten, s_maxResultCount); ++c) {
+						ResultEntry entry;
+						entry._ptA = Truncate(mappedData[c]._pt[0]); entry._barycentricA = mappedData[c]._pt[0][3];
+						entry._ptB = Truncate(mappedData[c]._pt[1]); entry._barycentricB = mappedData[c]._pt[1][3];
+						entry._ptC = Truncate(mappedData[c]._pt[2]); entry._barycentricC = mappedData[c]._pt[2][3];
+						entry._intersectionDepth = mappedData[c]._intersectionDepth;
+						entry._drawCallIndex = mappedData[c]._drawCallIndex;
+						entry._materialGuid = mappedData[c]._materialGuid;
+						entry._normal = Truncate(mappedData[c]._normal);
+						result.push_back(entry);
+					}
+				} else {
+					const auto* mappedData = (const SOStruct*)readback.data();
+					result.reserve(std::min(std::min(hitEventsWritten, unsigned(readback.size() / sizeof(SOStruct))), s_maxResultCount));
+					for (unsigned c=0; c<std::min(hitEventsWritten, s_maxResultCount); ++c) {
+						ResultEntry entry;
+						entry._ptA = Truncate(mappedData[c]._pt[0]); entry._barycentricA = mappedData[c]._pt[0][3];
+						entry._ptB = Truncate(mappedData[c]._pt[1]); entry._barycentricB = mappedData[c]._pt[1][3];
+						entry._ptC = Truncate(mappedData[c]._pt[2]); entry._barycentricC = mappedData[c]._pt[2][3];
+						entry._intersectionDepth = mappedData[c]._intersectionDepth;
+						entry._drawCallIndex = mappedData[c]._drawCallIndex;
+						entry._materialGuid = mappedData[c]._materialGuid;
+						entry._normal = Float3{0,0,0};
+						result.push_back(entry);
+					}
+				}
 			}
 
 			std::sort(result.begin(), result.end(), &ResultEntry::CompareDepth);
@@ -396,26 +457,26 @@ namespace SceneEngine
 		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 	}
 
-	static const InputElementDesc s_soEles[] = {
-        InputElementDesc("POINT",               0, Format::R32G32B32A32_FLOAT),
-        InputElementDesc("POINT",               1, Format::R32G32B32A32_FLOAT),
-        InputElementDesc("POINT",               2, Format::R32G32B32A32_FLOAT),
-		InputElementDesc("PROPERTIES",			0, Format::R32G32B32A32_UINT)
-    };
-
-    static const unsigned s_soStrides[] = { sizeof(ModelIntersectionStateContext::ResultEntry) };
-
 	static void CreateTechniqueDelegate(
 		std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>>&& promise,
 		const std::shared_future<std::shared_ptr<RenderCore::Techniques::TechniqueSetFile>>& techniqueSet,
 		unsigned testTypeParameter)
 	{
-		RenderCore::Techniques::CreateTechniqueDelegate_RayTest(
-			std::move(promise),
-			techniqueSet, testTypeParameter, 
-			StreamOutputInitializers {
-				MakeIteratorRange(s_soEles),
-				MakeIteratorRange(s_soStrides)});
+		if (testTypeParameter == 0) {
+			RenderCore::Techniques::CreateTechniqueDelegate_RayTest(
+				std::move(promise),
+				techniqueSet, testTypeParameter,
+				StreamOutputInitializers {
+					MakeIteratorRange(s_soEles_Normal),
+					MakeIteratorRange(s_soStrides_Normal)});
+		} else {
+			RenderCore::Techniques::CreateTechniqueDelegate_RayTest(
+				std::move(promise),
+				techniqueSet, testTypeParameter,
+				StreamOutputInitializers {
+					MakeIteratorRange(s_soEles),
+					MakeIteratorRange(s_soStrides)});
+		}
 	}
 }
 
