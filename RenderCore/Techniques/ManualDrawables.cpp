@@ -4,11 +4,16 @@
 
 #include "ManualDrawables.h"
 #include "PipelineAccelerator.h"
+#include "TechniqueUtils.h"
+#include "CommonBindings.h"
+#include "ParsingContext.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/ScaffoldCmdStream.h"
 #include "../Assets/AssetUtils.h"
 #include "../Assets/MaterialMachine.h"
 #include "../BufferUploads/IBufferUploads.h"
+#include "../UniformsStream.h"
+#include "../../Math/Transformations.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/BlockSerializer.h"
@@ -616,5 +621,209 @@ namespace RenderCore { namespace Techniques
 		::Assets::Block_Initialize(_dataBlock.get());
 	}
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	namespace Internal
+	{
+		static UniformsStreamInterface MakeLocalTransformUSI()
+		{
+			UniformsStreamInterface result;
+			result.BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+			return result;
+		}
+		static UniformsStreamInterface s_localTransformUSI = MakeLocalTransformUSI();
+	}
+
+	IteratorRange<void*> ManualDrawableWriter::BuildDrawable(
+		DrawablesPacket& pkt,
+		size_t vertexCount)
+	{
+		// Ensure to call at least ConfigurePipeline before BuildDrawables. You may also call ConfigureDescriptorSet, but that is optional
+		// ConfigurePipeline should be called only once over the lifetime of ManualDrawableWriter
+		assert(_pipelineAccelerator);
+
+		auto vbStorageRequest = pkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexCount*_vertexStride);
+		assert(vbStorageRequest._startOffset != ~0u);
+		assert(vbStorageRequest._data.size() == vertexCount*_vertexStride);
+
+		auto* geo = pkt.CreateTemporaryGeo();
+		geo->_vertexStreamCount = 1;
+		geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+		geo->_vertexStreams[0]._vbOffset = vbStorageRequest._startOffset;
+
+		struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; };
+		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
+		drawables[0]._pipeline = _pipelineAccelerator.get();
+		drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
+		drawables[0]._geo = geo;
+		drawables[0]._vertexCount = (unsigned)vertexCount;
+		drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
+			{
+				drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
+			};
+
+		return vbStorageRequest._data;
+	}
+
+	IteratorRange<void*> ManualDrawableWriter::BuildDrawable(
+		DrawablesPacket& pkt,
+		const Float4x4& localToWorld,
+		size_t vertexCount)
+	{
+		// Ensure to call at least ConfigurePipeline before BuildDrawables. You may also call ConfigureDescriptorSet, but that is optional
+		// ConfigurePipeline should be called only once over the lifetime of ManualDrawableWriter
+		assert(_pipelineAccelerator);
+
+		auto vbStorageRequest = pkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexCount*_vertexStride);
+		assert(vbStorageRequest._startOffset != ~0u);
+		assert(vbStorageRequest._data.size() == vertexCount*_vertexStride);
+
+		auto* geo = pkt.CreateTemporaryGeo();
+		geo->_vertexStreamCount = 1;
+		geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+		geo->_vertexStreams[0]._vbOffset = vbStorageRequest._startOffset;
+
+		struct CustomDrawable : public RenderCore::Techniques::Drawable { Float4x4 _localToWorld; unsigned _vertexCount; };
+		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
+		drawables[0]._pipeline = _pipelineAccelerator.get();
+		drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
+		drawables[0]._geo = geo;
+		drawables[0]._vertexCount = (unsigned)vertexCount;
+		drawables[0]._looseUniformsInterface = &Internal::s_localTransformUSI;
+		drawables[0]._localToWorld = localToWorld;
+		drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
+			{
+				auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localToWorld, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
+				drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
+				drawFnContext.Draw(((CustomDrawable&)drawable)._vertexCount);
+			};
+
+		return vbStorageRequest._data;
+	}
+
+	auto ManualDrawableWriter::BuildDrawable(
+		DrawablesPacket& pkt,
+		size_t vertexCount, size_t indexCount) -> VertexAndIndexData
+	{
+		// Ensure to call at least ConfigurePipeline before BuildDrawables. You may also call ConfigureDescriptorSet, but that is optional
+		// ConfigurePipeline should be called only once over the lifetime of ManualDrawableWriter
+		assert(_pipelineAccelerator);
+
+		auto vbStorageRequest = pkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexCount*_vertexStride);
+		assert(vbStorageRequest._startOffset != ~0u);
+		assert(vbStorageRequest._data.size() == vertexCount*_vertexStride);
+
+		auto ibStorageRequest = pkt.AllocateStorage(DrawablesPacket::Storage::Index, indexCount*sizeof(uint16_t));
+		assert(ibStorageRequest._startOffset != ~0u);
+		assert(ibStorageRequest._data.size() == indexCount*sizeof(uint16_t));
+
+		auto* geo = pkt.CreateTemporaryGeo();
+		geo->_vertexStreamCount = 1;
+		geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+		geo->_vertexStreams[0]._vbOffset = vbStorageRequest._startOffset;
+		geo->_ibStreamType = DrawableGeo::StreamType::PacketStorage;
+		geo->_ibOffset = ibStorageRequest._startOffset;
+		geo->_ibFormat = Format::R16_UINT;
+
+		struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _indexCount; };
+		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
+		drawables[0]._pipeline = _pipelineAccelerator.get();
+		drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
+		drawables[0]._geo = geo;
+		drawables[0]._indexCount = (unsigned)indexCount;
+		drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
+			{
+				drawFnContext.DrawIndexed(((CustomDrawable&)drawable)._indexCount);
+			};
+
+		return VertexAndIndexData { vbStorageRequest._data, ibStorageRequest._data.Cast<uint16_t*>() };
+	}
+
+	auto ManualDrawableWriter::BuildDrawable(
+		DrawablesPacket& pkt,
+		const Float4x4& localToWorld,
+		size_t vertexCount, size_t indexCount) -> VertexAndIndexData
+	{
+		// Ensure to call at least ConfigurePipeline before BuildDrawables. You may also call ConfigureDescriptorSet, but that is optional
+		// ConfigurePipeline should be called only once over the lifetime of ManualDrawableWriter
+		assert(_pipelineAccelerator);
+
+		auto vbStorageRequest = pkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexCount*_vertexStride);
+		assert(vbStorageRequest._startOffset != ~0u);
+		assert(vbStorageRequest._data.size() == vertexCount*_vertexStride);
+
+		auto ibStorageRequest = pkt.AllocateStorage(DrawablesPacket::Storage::Index, indexCount*sizeof(uint16_t));
+		assert(ibStorageRequest._startOffset != ~0u);
+		assert(ibStorageRequest._data.size() == indexCount*sizeof(uint16_t));
+
+		auto* geo = pkt.CreateTemporaryGeo();
+		geo->_vertexStreamCount = 1;
+		geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+		geo->_vertexStreams[0]._vbOffset = vbStorageRequest._startOffset;
+		geo->_ibStreamType = DrawableGeo::StreamType::PacketStorage;
+		geo->_ibOffset = ibStorageRequest._startOffset;
+		geo->_ibFormat = Format::R16_UINT;
+
+		struct CustomDrawable : public RenderCore::Techniques::Drawable { Float4x4 _localToWorld; unsigned _indexCount; };
+		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
+		drawables[0]._pipeline = _pipelineAccelerator.get();
+		drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
+		drawables[0]._geo = geo;
+		drawables[0]._indexCount = (unsigned)indexCount;
+		drawables[0]._looseUniformsInterface = &Internal::s_localTransformUSI;
+		drawables[0]._localToWorld = localToWorld;
+		drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
+			{
+				auto localTransform = RenderCore::Techniques::MakeLocalTransform(((CustomDrawable&)drawable)._localToWorld, ExtractTranslation(parsingContext.GetProjectionDesc()._cameraToWorld));
+				drawFnContext.ApplyLooseUniforms(RenderCore::ImmediateDataStream(localTransform));
+				drawFnContext.DrawIndexed(((CustomDrawable&)drawable)._indexCount);
+			};
+
+		return VertexAndIndexData { vbStorageRequest._data, ibStorageRequest._data.Cast<uint16_t*>() };
+	}
+
+	ManualDrawableWriter& ManualDrawableWriter::ConfigurePipeline(
+		IteratorRange<const MiniInputElementDesc*> inputAssembly,
+		RenderCore::Topology topology)
+	{
+		// avoid calling ConfigurePipeline multiple times for the same ManualDrawableWriter
+		assert(!_pipelineAccelerator);
+		RenderCore::Assets::RenderStateSet stateSet{};
+		_pipelineAccelerator = _pipelineAccelerators->CreatePipelineAccelerator(
+			_shaderPatches, _materialSelectors,
+			inputAssembly, topology, stateSet);
+		_vertexStride = CalculateVertexStride(inputAssembly);
+		return *this;
+	}
+
+	ManualDrawableWriter& ManualDrawableWriter::ConfigureDescriptorSet(
+		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
+		std::shared_ptr<void> memoryHolder)
+	{
+		// avoid calling ConfigureDescriptorSet multiple times for the same ManualDrawableWriter
+		assert(!_descriptorSetAccelerator);
+
+		_descriptorSetAccelerator = _pipelineAccelerators->CreateDescriptorSetAccelerator(
+			nullptr, _shaderPatches,
+			materialMachine, std::move(memoryHolder),
+			{});
+		return *this;
+	}
+
+	ManualDrawableWriter::ManualDrawableWriter(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
+	: _pipelineAccelerators(std::move(pipelineAccelerators))
+	{}
+
+	ManualDrawableWriter::ManualDrawableWriter(
+		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
+		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches,
+		ParameterBox&& materialSelectors)
+	: _shaderPatches(std::move(shaderPatches))
+	, _materialSelectors(std::move(materialSelectors))
+	, _pipelineAccelerators(std::move(pipelineAccelerators))
+	{}
+
+	ManualDrawableWriter::~ManualDrawableWriter()
+	{}
 
 }}

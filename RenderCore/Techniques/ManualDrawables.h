@@ -6,6 +6,7 @@
 
 #include "Drawables.h"
 #include "../../Utility/MemoryUtils.h"
+#include "../../Utility/ParameterBox.h"
 #include <memory>
 #include <future>
 
@@ -101,6 +102,62 @@ namespace RenderCore { namespace Techniques
 	private:
 		std::unique_ptr<uint8_t[], PODAlignedDeletor> _dataBlock;
 		size_t _primaryBlockSize;
+	};
+
+	/// <summary>Construct a single-use Drawable with dynamic geometry</summary>
+	class ManualDrawableWriter
+	{
+	public:
+		IteratorRange<void*> BuildDrawable(
+			DrawablesPacket& pkt,
+			size_t vertexCount);
+
+		IteratorRange<void*> BuildDrawable(
+			DrawablesPacket& pkt,
+			const Float4x4& localToWorld,
+			size_t vertexCount);
+
+		struct VertexAndIndexData
+		{
+			IteratorRange<void*> _vb;
+			IteratorRange<uint16_t*> _ib;
+		};
+
+		VertexAndIndexData BuildDrawable(
+			DrawablesPacket& pkt,
+			size_t vertexCount, size_t indexCount);
+
+		VertexAndIndexData BuildDrawable(
+			DrawablesPacket& pkt,
+			const Float4x4& localToWorld,
+			size_t vertexCount, size_t indexCount);
+
+			//////
+
+		ManualDrawableWriter& ConfigurePipeline(
+			IteratorRange<const MiniInputElementDesc*> inputAssembly,
+			RenderCore::Topology topology = RenderCore::Topology::TriangleList);
+
+		ManualDrawableWriter& ConfigureDescriptorSet(
+			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
+			std::shared_ptr<void> memoryHolder);								// retained while we need access to materialMachine
+
+			//////
+
+		ManualDrawableWriter(std::shared_ptr<IPipelineAcceleratorPool>);
+		ManualDrawableWriter(
+			std::shared_ptr<IPipelineAcceleratorPool>,
+			std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches,
+			ParameterBox&& materialSelectors);
+		~ManualDrawableWriter();
+	protected:
+		std::shared_ptr<PipelineAccelerator> _pipelineAccelerator;
+		std::shared_ptr<DescriptorSetAccelerator> _descriptorSetAccelerator;
+		size_t _vertexStride;
+
+		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAccelerators;
+		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _shaderPatches;
+		ParameterBox _materialSelectors;
 	};
 
 }}
