@@ -21,7 +21,7 @@ DescriptorSet Sequencer
 
 	UniformBuffer b3;							// 3		(can be used for BasicLightingEnvironment)
 	UniformBuffer MultiViewProperties;			// 4
-	UniformBuffer ShadowProjection;				// 5		(also RayDefinition)
+	UniformBuffer ShadowProjection;				// 5
 
 	SampledTexture DepthPrev;					// 6
 	SampledTexture GBufferNormalPrev;			// 7

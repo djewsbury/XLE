@@ -19,6 +19,7 @@ namespace RenderCore { namespace Techniques
 	class ParsingContext;
     class IPipelineAcceleratorPool;
     class DrawablesPacket;
+    struct Drawable;
     using VisibilityMarkerId = uint32_t;
 }}
 
@@ -35,8 +36,7 @@ namespace SceneEngine
             Float3 _ptB; float _barycentricB;
             Float3 _ptC; float _barycentricC;
 			float _intersectionDepth;
-            unsigned _drawCallIndex;
-            uint64_t _materialGuid;
+            unsigned _drawableIndex;
             Float3 _normal;
 
             static bool CompareDepth(const ResultEntry& lhs, const ResultEntry& rhs)

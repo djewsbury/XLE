@@ -30,6 +30,8 @@
 #include "../ConsoleRig/ResourceBox.h"
 #include "../xleres/FileList.h"
 
+using namespace Utility::Literals;
+
 namespace SceneEngine
 {
     using namespace RenderCore;
@@ -42,23 +44,39 @@ namespace SceneEngine
 	class RayDefinitionUniformDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:
-		struct Buffer
+		struct RayTestBuffer
         {
-            Float3 _rayStart = Zero<Float3>();
-            float _rayLength = 0.f;
-            Float3 _rayDirection = Zero<Float3>();
-            unsigned _dummy = 0;
-			Float4x4 _frustum = Identity<Float4x4>();
+            Float3 _rayStart;
+            Float3 _rayDirection;
+			float _rayLength;
+		};
+		struct FrustumTestBuffer
+		{
+			unsigned _dummy[3];
+			Float4x4 _frustum;
         };
-		Buffer _data = {};
+		struct Data
+		{
+			unsigned _drawableIndex;
+			union { 
+				RayTestBuffer _rayTest;
+				FrustumTestBuffer _frustumTest;
+			};
+		 } _data;
 
 		virtual void WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
 		{ 
 			assert(idx==0);
 			assert(dst.size() == sizeof(_data));
 			std::memcpy(dst.begin(), &_data, sizeof(_data));
+			((Data*)dst.begin())->_drawableIndex = ((const RenderCore::Techniques::PerDrawableUniformsContext*)objectContext)->_drawableIndex;
 		}
-		virtual size_t GetImmediateDataSize(Techniques::ParsingContext&, const void*, unsigned idx) override { assert(idx==0); return sizeof(_data); };
+
+		virtual size_t GetImmediateDataSize(Techniques::ParsingContext&, const void*, unsigned idx) override
+		{
+			assert(idx==0);
+			return sizeof(_data);
+		}
 
 		RayDefinitionUniformDelegate()
 		{
@@ -66,7 +84,7 @@ namespace SceneEngine
 		}
 		static const uint64_t s_binding;
 	};
-	const uint64_t RayDefinitionUniformDelegate::s_binding = Hash64("ShadowProjection");		// we reuse this binding for RayDefinition -- but we have to use this string in order to find it
+	const uint64_t RayDefinitionUniformDelegate::s_binding = "RayDefinition"_h;
 
 	static const InputElementDesc s_soEles[] = {
         InputElementDesc("POINT",               0, Format::R32G32B32A32_FLOAT),
@@ -81,8 +99,8 @@ namespace SceneEngine
 	{
 		Float4 _pt[3];
 		float _intersectionDepth;
-		unsigned _drawCallIndex;
-        uint64_t _materialGuid;
+		unsigned _drawableIndex;
+        unsigned _dummy[2];
 	};
 
 	static const InputElementDesc s_soEles_Normal[] = {
@@ -99,8 +117,8 @@ namespace SceneEngine
 	{
 		Float4 _pt[3];
 		float _intersectionDepth;
-		unsigned _drawCallIndex;
-        uint64_t _materialGuid;
+		unsigned _drawableIndex;
+        unsigned _dummy[2];
 		Float4 _normal;
 	};
 
@@ -250,8 +268,7 @@ namespace SceneEngine
 						entry._ptB = Truncate(mappedData[c]._pt[1]); entry._barycentricB = mappedData[c]._pt[1][3];
 						entry._ptC = Truncate(mappedData[c]._pt[2]); entry._barycentricC = mappedData[c]._pt[2][3];
 						entry._intersectionDepth = mappedData[c]._intersectionDepth;
-						entry._drawCallIndex = mappedData[c]._drawCallIndex;
-						entry._materialGuid = mappedData[c]._materialGuid;
+						entry._drawableIndex = mappedData[c]._drawableIndex;
 						entry._normal = Truncate(mappedData[c]._normal);
 						result.push_back(entry);
 					}
@@ -264,8 +281,7 @@ namespace SceneEngine
 						entry._ptB = Truncate(mappedData[c]._pt[1]); entry._barycentricB = mappedData[c]._pt[1][3];
 						entry._ptC = Truncate(mappedData[c]._pt[2]); entry._barycentricC = mappedData[c]._pt[2][3];
 						entry._intersectionDepth = mappedData[c]._intersectionDepth;
-						entry._drawCallIndex = mappedData[c]._drawCallIndex;
-						entry._materialGuid = mappedData[c]._materialGuid;
+						entry._drawableIndex = mappedData[c]._drawableIndex;
 						entry._normal = Float3{0,0,0};
 						result.push_back(entry);
 					}
@@ -281,14 +297,14 @@ namespace SceneEngine
     void ModelIntersectionStateContext::SetRay(const std::pair<Float3, Float3> worldSpaceRay)
     {
         float rayLength = Magnitude(worldSpaceRay.second - worldSpaceRay.first);
-		_pimpl->_res->_rayDefinition->_data._rayStart = worldSpaceRay.first;
-		_pimpl->_res->_rayDefinition->_data._rayLength = rayLength;
-		_pimpl->_res->_rayDefinition->_data._rayDirection = (worldSpaceRay.second - worldSpaceRay.first) / rayLength;
+		_pimpl->_res->_rayDefinition->_data._rayTest._rayStart = worldSpaceRay.first;
+		_pimpl->_res->_rayDefinition->_data._rayTest._rayLength = rayLength;
+		_pimpl->_res->_rayDefinition->_data._rayTest._rayDirection = (worldSpaceRay.second - worldSpaceRay.first) / rayLength;
     }
 
     void ModelIntersectionStateContext::SetFrustum(const Float4x4& frustum)
     {
-		_pimpl->_res->_rayDefinition->_data._frustum = frustum;
+		_pimpl->_res->_rayDefinition->_data._frustumTest._frustum = frustum;
     }
 
 	class ModelIntersectionTechniqueBox
@@ -439,22 +455,21 @@ namespace SceneEngine
 		parsingContext.GetProjectionDesc() = projDesc;
 
 		auto& metalContext = *Metal::DeviceContext::Get(context);
-		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_res->_rayDefinition);
+
+		RenderCore::Techniques::DrawOptions drawOptions;
+		drawOptions._perDrawableUniforms = _pimpl->_res->_rayDefinition.get();
 
 		_pimpl->_pipelineAccelerators->LockForReading();
 		TRY {
 			RenderCore::Techniques::Draw(
 				metalContext, _pimpl->_encoder, parsingContext, *_pimpl->_pipelineAccelerators,
-				*_pimpl->_sequencerConfig, drawablePkt, *_pimpl->_pipelineLayout);
+				*_pimpl->_sequencerConfig, drawablePkt, *_pimpl->_pipelineLayout,
+				drawOptions);
 		} CATCH(...) {
 			_pimpl->_pipelineAccelerators->UnlockForReading();
-			parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*_pimpl->_res->_rayDefinition);
-			parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 			throw;
 		} CATCH_END
 		_pimpl->_pipelineAccelerators->UnlockForReading();
-		parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*_pimpl->_res->_rayDefinition);
-		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 	}
 
 	static void CreateTechniqueDelegate(

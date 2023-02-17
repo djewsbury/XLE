@@ -30,18 +30,16 @@ struct GSOutput
 	#endif
 };
 
-cbuffer RayDefinition BIND_SEQ_B5
+cbuffer RayDefinition
 {
+	uint 	DrawableIndex;
+#if INTERSECTION_TEST == 0
 	float3	RayStart;
-	float	RayLength;
 	float3	RayDirection;
+	float	RayLength;
+#elif INTERSECTION_TEST == 1
  	row_major float4x4 IntersectionFrustum;
-}
-
-cbuffer DrawCallProperties
-{
-	uint2 MaterialGuid;
-	uint CurrentDrawCallIndex;
+#endif
 }
 
 Texture2D		DiffuseTexture          BIND_MAT_T1;
@@ -153,8 +151,8 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 			result.triangleB = float4(input[1].worldPosition, barycentric.y);
 			result.triangleC = float4(input[2].worldPosition, barycentric.z);
 			result.properties.x = asuint(intersectionResult.x);
-			result.properties.y = CurrentDrawCallIndex;
-			result.properties.zw = MaterialGuid;
+			result.properties.y = DrawableIndex;
+			result.properties.zw = 0;
 			result.normal = normalize(
 				  barycentric.x * VSOUT_GetWorldVertexNormal(input[0])
 				+ barycentric.y * VSOUT_GetWorldVertexNormal(input[1])
@@ -174,8 +172,8 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 		result.triangleB = float4(input[1].worldPosition, 0.f);
 		result.triangleC = float4(input[2].worldPosition, 0.f);
 		result.properties.x = asuint(1.f);
-		result.properties.y = CurrentDrawCallIndex;
-		result.properties.zw = MaterialGuid;
+		result.properties.y = DrawableIndex;
+		result.properties.zw = 0;
 		outputStream.Append(result);
 	}
 
