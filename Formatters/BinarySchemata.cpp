@@ -111,7 +111,7 @@ namespace Formatters
 	void BinarySchemata::PushExpression(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer)
 	{
 		auto str = ParseExpressionStr(tokenizer);
-		auto tokenList = Utility::Internal::AsExpressionTokenList(workingDefinition._tokenDictionary, str);
+		auto tokenList = Utility::Internal::AsExpressionTokenList(workingDefinition._tokenDictionary, str, {}, Utility::Internal::ExpressionTokenListFlags::RecordHashes);
 		if (tokenList.empty())
 			Throw(FormatException("Expecting expression", tokenizer.GetLocation()));
 		workingDefinition._cmdList.push_back((unsigned)Cmd::EvaluateExpression);
@@ -210,7 +210,7 @@ namespace Formatters
 				size_t writeJumpHere = 0;
 				auto currentCondition = tokenizer._preprocessorContext.GetCurrentConditionString();
 				if (!currentCondition.empty()) {
-					auto tokenList = Utility::Internal::AsExpressionTokenList(workingDefinition._tokenDictionary, currentCondition);
+					auto tokenList = Utility::Internal::AsExpressionTokenList(workingDefinition._tokenDictionary, currentCondition, {}, Utility::Internal::ExpressionTokenListFlags::RecordHashes);
 					if (tokenList.empty())
 						Throw(FormatException("Could not parse condition as expression", tokenizer.GetLocation()));
 					workingDefinition._cmdList.push_back((unsigned)Cmd::EvaluateExpression);

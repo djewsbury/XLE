@@ -147,15 +147,23 @@ namespace Utility
 			std::vector<ConditionalSubstitutions> _substitutions;
 		};
 
+		namespace ExpressionTokenListFlags
+		{
+			enum Flags { RecordHashes = 1u<<0u };
+			using BitField = unsigned;
+		}
+
 		ExpressionTokenList AsExpressionTokenList(
 			TokenDictionary& dictionary,
 			StringSection<> input,
-			const PreprocessorSubstitutions& substitutions = {});
+			const PreprocessorSubstitutions& substitutions = {},
+			ExpressionTokenListFlags::BitField flags = 0);
 
 		std::optional<ExpressionTokenList> TryAsExpressionTokenList(
 			TokenDictionary& dictionary,
 			StringSection<> input,
-			const PreprocessorSubstitutions& substitutions = {});
+			const PreprocessorSubstitutions& substitutions = {},
+			ExpressionTokenListFlags::BitField flags = 0);
 		
 		WorkingRelevanceTable CalculatePreprocessorExpressionRelevance(
 			TokenDictionary& dictionary,

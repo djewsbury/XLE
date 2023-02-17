@@ -387,7 +387,8 @@ namespace Utility
 		ExpressionTokenList AsAbstractExpression(
 			TokenDictionary& dictionary,
 			TokenQueue_t&& input,
-			const PreprocessorSubstitutions& substitutions)
+			const PreprocessorSubstitutions& substitutions,
+			bool recordHashes)
 		{
 			TRY {
 				ExpressionTokenList reversePolishOrdering;		// we use this indirection here because we're expecting tokens (particular variables) to be frequently reused
@@ -414,7 +415,10 @@ namespace Utility
 						std::string key = static_cast<::Token<std::string>*>(&base)->val;
 						auto sub = std::find_if(substitutions._substitutions.rbegin(), substitutions._substitutions.rend(), [key](const auto& c) { return c._symbol == key; });
 						if (sub == substitutions._substitutions.rend() || !IsTrue(sub->_condition) || sub->_type == PreprocessorSubstitutions::Type::Undefine) {
-							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Variable, key));
+							if (recordHashes) {
+								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Variable, key, Hash64(key)));
+							} else
+								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Variable, key));
 						} else {
 							// We need to substitute in the expression provided in the substitutions table
 							// This is used for things like #define
@@ -465,7 +469,10 @@ namespace Utility
 
 						auto sub = std::find_if(substitutions._substitutions.rbegin(), substitutions._substitutions.rend(), [key](const auto& c) { return c._symbol == key; });
 						if (sub == substitutions._substitutions.rend() || !IsTrue(sub->_condition) || sub->_type == PreprocessorSubstitutions::Type::Undefine) {
-							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::IsDefinedTest, key));
+							if (recordHashes) {
+								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::IsDefinedTest, key, Hash64(key)));
+							} else
+								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::IsDefinedTest, key));
 						} else {
 							// This is actually doing a defined(...) check on one of our substitutions. We can treat it
 							// as just "true"
@@ -476,7 +483,10 @@ namespace Utility
 					} else {
 						
 						std::string literal = packToken::str(&base);
-						reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Literal, literal));
+						if (recordHashes) {
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Literal, literal, Hash64(literal)));
+						} else
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Literal, literal));
 
 					}
 
@@ -497,22 +507,24 @@ namespace Utility
 		ExpressionTokenList AsExpressionTokenList(
 			TokenDictionary& dictionary,
 			StringSection<> input,
-			const PreprocessorSubstitutions& substitutions)
+			const PreprocessorSubstitutions& substitutions,
+			ExpressionTokenListFlags::BitField flags)
 		{
 			TokenMap vars;
 			auto rpn = calculator::toRPN(input.AsString().c_str(), vars);
-			return AsAbstractExpression(dictionary, std::move(rpn), substitutions);
+			return AsAbstractExpression(dictionary, std::move(rpn), substitutions, !!(flags & ExpressionTokenListFlags::RecordHashes));
 		}
 
 		std::optional<ExpressionTokenList> TryAsExpressionTokenList(
 			TokenDictionary& dictionary,
 			StringSection<> input,
-			const PreprocessorSubstitutions& substitutions)
+			const PreprocessorSubstitutions& substitutions,
+			ExpressionTokenListFlags::BitField flags)
 		{
 			TokenMap vars;
 			auto rpn = calculator::tryToRPN(input.AsString().c_str(), vars);
 			if (rpn.has_value())
-				return AsAbstractExpression(dictionary, rpn.get_value(), substitutions);
+				return AsAbstractExpression(dictionary, rpn.get_value(), substitutions, !!(flags & ExpressionTokenListFlags::RecordHashes));
 			return {};
 		}
 
