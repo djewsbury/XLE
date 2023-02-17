@@ -50,13 +50,6 @@ namespace RenderCore { namespace Techniques
 		unsigned			_ibOffset = 0u;
 		StreamType			_ibStreamType = StreamType::Resource;
 
-		struct Flags
-		{
-			enum Enum { Temporary       = 1 << 0 };
-			using BitField = unsigned;
-		};
-		Flags::BitField     _flags = 0u;
-
 		std::shared_ptr<DeformAccelerator> _deformAccelerator;
 		BufferUploads::CommandListID _completionCmdList = 0;
 
@@ -159,9 +152,9 @@ namespace RenderCore { namespace Techniques
 		DrawablesPacket(DrawablesPacket&& moveFrom) never_throws;
 		DrawablesPacket&operator=(DrawablesPacket&& moveFrom) never_throws;
 	private:
-		std::vector<uint8_t>	_vbStorage;
-		std::vector<uint8_t>	_ibStorage;
-		std::vector<uint8_t>	_ubStorage;
+		std::vector<uint8_t, default_init_allocator<uint8_t>>	_vbStorage;
+		std::vector<uint8_t, default_init_allocator<uint8_t>>	_ibStorage;
+		std::vector<uint8_t, default_init_allocator<uint8_t>>	_ubStorage;
 		struct CPUStoragePage
 		{
 			std::unique_ptr<uint8_t[]> _memory;
@@ -208,10 +201,12 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool;
 	class SequencerConfig;
 	using VisibilityMarkerId = uint32_t;
+	class IShaderResourceDelegate;
 
 	struct DrawOptions
 	{
 		std::optional<VisibilityMarkerId> _pipelineAcceleratorsVisibility;	// when empty, the marker in the ParsingContext is used
+		IShaderResourceDelegate* _perDrawableUniforms = nullptr;
 	};
 		
 	void Draw(
@@ -247,6 +242,12 @@ namespace RenderCore { namespace Techniques
 		};
 		using BitField = unsigned;
 	}
+
+	struct PerDrawableUniformsContext
+	{
+		unsigned _drawableIndex;
+		const Drawable* _drawable;
+	};
 
 #if !defined(__CLR_VER)
 	/// <summary>Associate drawable geos with resource source so they can be updated after reposition operations</summary>

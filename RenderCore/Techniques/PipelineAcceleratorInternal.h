@@ -39,6 +39,18 @@ namespace RenderCore { namespace Techniques
 			const UniformsStreamInterface& group0,
 			const UniformsStreamInterface& group1,
 			const UniformsStreamInterface& group2);
+		Metal::BoundUniforms& Get(
+			const Metal::GraphicsPipeline& pipeline,
+			const UniformsStreamInterface& group0,
+			const UniformsStreamInterface& group1,
+			const UniformsStreamInterface& group2,
+			const UniformsStreamInterface& group3);
+		Metal::BoundUniforms& Get(
+			const Metal::ComputePipeline& pipeline,
+			const UniformsStreamInterface& group0,
+			const UniformsStreamInterface& group1,
+			const UniformsStreamInterface& group2,
+			const UniformsStreamInterface& group3);
 
 		BoundUniformsPool() = default;
 		BoundUniformsPool(BoundUniformsPool&&);
@@ -150,6 +162,52 @@ namespace RenderCore { namespace Techniques
 		auto i = LowerBound(_boundUniforms, hash);
 		if (i == _boundUniforms.end() || i->first != hash) {
 			auto boundUniforms = std::make_unique<Metal::BoundUniforms>(pipeline, group0, group1, group2);
+			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
+		}
+			
+		return *i->second;
+	}
+
+	inline Metal::BoundUniforms& BoundUniformsPool::Get(
+		const Metal::GraphicsPipeline& pipeline,
+		const UniformsStreamInterface& group0,
+		const UniformsStreamInterface& group1,
+		const UniformsStreamInterface& group2,
+		const UniformsStreamInterface& group3)
+	{
+		ScopedLock(_lock);
+		uint64_t hash = pipeline.GetInterfaceBindingGUID();
+		hash = HashCombine(group0.GetHash(), hash);
+		hash = HashCombine(group1.GetHash(), hash);
+		hash = HashCombine(group2.GetHash(), hash);
+		hash = HashCombine(group3.GetHash(), hash);
+
+		auto i = LowerBound(_boundUniforms, hash);
+		if (i == _boundUniforms.end() || i->first != hash) {
+			auto boundUniforms = std::make_unique<Metal::BoundUniforms>(pipeline, group0, group1, group2, group3);
+			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
+		}
+			
+		return *i->second;
+	}
+
+	inline Metal::BoundUniforms& BoundUniformsPool::Get(
+		const Metal::ComputePipeline& pipeline,
+		const UniformsStreamInterface& group0,
+		const UniformsStreamInterface& group1,
+		const UniformsStreamInterface& group2,
+		const UniformsStreamInterface& group3)
+	{
+		ScopedLock(_lock);
+		uint64_t hash = pipeline.GetInterfaceBindingGUID();
+		hash = HashCombine(group0.GetHash(), hash);
+		hash = HashCombine(group1.GetHash(), hash);
+		hash = HashCombine(group2.GetHash(), hash);
+		hash = HashCombine(group3.GetHash(), hash);
+
+		auto i = LowerBound(_boundUniforms, hash);
+		if (i == _boundUniforms.end() || i->first != hash) {
+			auto boundUniforms = std::make_unique<Metal::BoundUniforms>(pipeline, group0, group1, group2, group3);
 			i = _boundUniforms.insert(i, std::make_pair(hash, std::move(boundUniforms)));
 		}
 			

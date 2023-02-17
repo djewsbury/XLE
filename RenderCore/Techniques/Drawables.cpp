@@ -63,6 +63,8 @@ namespace RenderCore { namespace Techniques
 		{
 			return descSet.ApplyDeformAcceleratorOffset() ? GetUniformPageBufferOffset(deformAccelerator, deformInstanceIdx) : 0u;
 		}
+
+		static void ApplyPerDrawableUniforms(ParsingContext& parsingContext, RealExecuteDrawableContext& context, IShaderResourceDelegate& delegate, const Drawable& drawable, unsigned drawableIndex, unsigned uniformGroupIdx);
 	}
 
 	static void Draw(
@@ -75,7 +77,7 @@ namespace RenderCore { namespace Techniques
 		const ICompiledPipelineLayout& initialPipelineLayout,
 		const Internal::TemporaryStorageLocator& temporaryVB, 
 		const Internal::TemporaryStorageLocator& temporaryIB,
-		VisibilityMarkerId acceleratorVisibilityId)
+		const DrawOptions& drawOptions)
 	{
 		auto& uniformDelegateMan = *parserContext.GetUniformDelegateManager();
 		uniformDelegateMan.BringUpToDateGraphics(parserContext);
@@ -86,6 +88,8 @@ namespace RenderCore { namespace Techniques
 		materialUSI.BindFixedDescriptorSet(0, s_materialDescSetName);
 
 		UniformsStreamInterface emptyUSI;
+		const UniformsStreamInterface* perDrawableUSI = drawOptions._perDrawableUniforms ? &drawOptions._perDrawableUniforms->_interface : &emptyUSI;
+
 		const DrawableGeo* currentGeo = nullptr;
 		PipelineAccelerator* currentPipelineAccelerator = nullptr;
 		const IPipelineAcceleratorPool::Pipeline* currentPipeline = nullptr;
@@ -100,6 +104,7 @@ namespace RenderCore { namespace Techniques
 
 		auto stencilRefs = GetStencilRefValues(sequencerConfig);
 		encoder.SetStencilRef(stencilRefs.first, stencilRefs.second);
+		auto acceleratorVisibilityId = drawOptions._pipelineAcceleratorsVisibility.value_or(parserContext.GetPipelineAcceleratorsVisibility());
 
 		unsigned pipelineLookupCount = 0;
 		unsigned pipelineLayoutChangeCount = 0;
@@ -123,7 +128,8 @@ namespace RenderCore { namespace Techniques
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
 						globalUSI, materialUSI,
-						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface : &emptyUSI));
+						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface : &emptyUSI),
+						*perDrawableUSI);
 					currentLooseUniformsInterface = drawable._looseUniformsInterface;
 					++boundUniformLookupCount;
 					++pipelineLookupCount;
@@ -137,7 +143,8 @@ namespace RenderCore { namespace Techniques
 					currentBoundUniforms = &currentPipeline->_boundUniformsPool.Get(
 						*currentPipeline->_metalPipeline,
 						globalUSI, materialUSI,
-						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface : &emptyUSI));
+						*(drawable._looseUniformsInterface ? drawable._looseUniformsInterface : &emptyUSI),
+						*perDrawableUSI);
 					currentLooseUniformsInterface = drawable._looseUniformsInterface;
 					++boundUniformLookupCount;
 				}
@@ -146,7 +153,7 @@ namespace RenderCore { namespace Techniques
 				if (drawable._descriptorSet) {
 					matDescSet = TryGetDescriptorSet(*drawable._descriptorSet, acceleratorVisibilityId);
 					if (!matDescSet) continue;
-					// assert(parserContext._requiredBufferUploadsCommandList >= matDescSet->GetCompletionCommandList());	// parser context must be configured for this completion cmd list before getting here
+					assert(parserContext._requiredBufferUploadsCommandList >= matDescSet->GetCompletionCommandList());	// parser context must be configured for this completion cmd list before getting here
 					parserContext.RequireCommandList(matDescSet->GetCompletionCommandList());
 				}
 
@@ -204,6 +211,10 @@ namespace RenderCore { namespace Techniques
 				//////////////////////////////////////////////////////////////////////////////
 
 				Internal::RealExecuteDrawableContext drawFnContext { &metalContext, &encoder, currentPipeline->_metalPipeline.get(), currentBoundUniforms };
+
+				if (expect_evaluation(drawOptions._perDrawableUniforms != nullptr, false))
+					Internal::ApplyPerDrawableUniforms(parserContext, drawFnContext, *drawOptions._perDrawableUniforms, drawable, idx, 3);
+
 				drawable._drawFn(parserContext, *(ExecuteDrawableContext*)&drawFnContext, drawable);
 				++executeCount;
 			}
@@ -247,7 +258,7 @@ namespace RenderCore { namespace Techniques
 
 		Draw(
 			metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, initialPipelineLayout, temporaryVB, temporaryIB, 
-			drawOptions._pipelineAcceleratorsVisibility.value_or(parserContext.GetPipelineAcceleratorsVisibility()));
+			drawOptions);
 	}
 
 	void Draw(
@@ -479,6 +490,58 @@ namespace RenderCore { namespace Techniques
 
 	namespace Internal
 	{
+		static void ApplyPerDrawableUniforms(ParsingContext& parsingContext, RealExecuteDrawableContext& context, IShaderResourceDelegate& delegate, const Drawable& drawable, unsigned drawableIndex, unsigned uniformGroupIdx)
+		{
+			// We query everything from the delegate for every drawable, and attempt to apply it
+			auto boundSRVs = context._boundUniforms->GetBoundLooseResources(uniformGroupIdx);
+			auto boundSamplers = context._boundUniforms->GetBoundLooseSamplers(uniformGroupIdx);
+			auto boundImmData = context._boundUniforms->GetBoundLooseImmediateDatas(uniformGroupIdx);
+			if (!(boundSRVs|boundSamplers|boundImmData)) return;
+
+			PerDrawableUniformsContext delegateContext { drawableIndex, &drawable };
+
+			IResourceView* srvs[64];
+			ISampler* samplers[64];
+			if (boundSRVs)
+				delegate.WriteResourceViews(parsingContext, &delegateContext, boundSRVs, MakeIteratorRange(srvs));
+			if (boundSamplers)
+				delegate.WriteSamplers(parsingContext, &delegateContext, boundSamplers, MakeIteratorRange(samplers));
+			IteratorRange<void*> immDatas[64];
+			std::vector<uint8_t> temporaryStorage;
+			if (boundImmData) {
+				size_t totalUniformBytes = 0;
+				for (uint64_t q=boundImmData; q;) {
+					unsigned idx = xl_ctz8(q);
+					auto size = delegate.GetImmediateDataSize(parsingContext, &delegateContext, idx);
+					immDatas[idx] = {(void*)totalUniformBytes, (void*)(totalUniformBytes+size)};
+					totalUniformBytes += size;
+					q ^= 1ull<<uint64_t(idx);
+				}
+
+				void* dataStorage = nullptr;
+				if (totalUniformBytes < 1024) {	// allocate from the stack, but only if it isn't to large (since it's only a single Drawable, we should expect it to be small)
+					dataStorage = _alloca(totalUniformBytes);
+				} else {
+					temporaryStorage.resize(totalUniformBytes);
+					dataStorage = temporaryStorage.data();
+				}
+				for (uint64_t q=boundImmData; q;) {
+					unsigned idx = xl_ctz8(q);
+					immDatas[idx] = { PtrAdd(dataStorage, (size_t)immDatas[idx].first), PtrAdd(dataStorage, (size_t)immDatas[idx].second) };
+					delegate.WriteImmediateData(parsingContext, &delegateContext, idx, immDatas[idx]);
+					q ^= 1ull<<uint64_t(idx);
+				}
+			}
+
+			// now apply the changes to the device
+			context._boundUniforms->ApplyLooseUniforms(
+				*context._metalContext, *context._encoder,
+				UniformsStream {
+					MakeIteratorRange(srvs), 
+					MakeIteratorRange((UniformsStream::ImmediateData*)immDatas, (UniformsStream::ImmediateData*)&immDatas[dimof(immDatas)]),
+					MakeIteratorRange(samplers) }, uniformGroupIdx);
+		}
+
 		/// Simple resizable heap with pointer stability and no deletion until we delete all at once
 		class DrawableGeoHeap
 		{
@@ -552,7 +615,8 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	static DrawablesPacket::AllocateStorageResult AllocateFrom(std::vector<uint8_t>& vector, size_t size, unsigned alignment)
+	template<typename T>
+		static DrawablesPacket::AllocateStorageResult AllocateFrom(T& vector, size_t size, unsigned alignment)
 	{
 		unsigned preAlignmentBuffer = 0;
 		if (alignment != 0) {
