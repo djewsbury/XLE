@@ -17,6 +17,7 @@ namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialSca
 namespace RenderCore { namespace Assets { struct DrawCallDesc; class ModelRendererConstruction; }}
 namespace RenderCore { class UniformsStreamInterface; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
+namespace SceneEngine { class DrawableMetadataLookupContext; }		// todo -- move this file into SceneEngine
 namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace Techniques 
@@ -99,6 +100,10 @@ namespace RenderCore { namespace Techniques
 			const Float4x4& localToWorld = Identity<Float4x4>(),
 			uint64_t cmdStream = 0) const;		/* s_CmdStreamGuid_Default */
 
+		void LookupDrawableMetadata(
+			SceneEngine::DrawableMetadataLookupContext& lookupContext,
+			uint64_t cmdStream = 0);
+
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		const std::shared_ptr<DeformAccelerator>& GetDeformAccelerator() const { return _deformAccelerator; }
 		const std::shared_ptr<DrawableConstructor>& GetDrawableConstructor() const { return _drawableConstructor; }
@@ -108,7 +113,7 @@ namespace RenderCore { namespace Techniques
 
 		SimpleModelRenderer(
 			IDrawablesPool& drawablesPool,
-			const Assets::ModelRendererConstruction& construction,
+			std::shared_ptr<Assets::ModelRendererConstruction> construction,
 			std::shared_ptr<DrawableConstructor> drawableConstructor,
 			std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool = nullptr,
 			std::shared_ptr<DeformAccelerator> deformAccelerator = nullptr,
@@ -152,6 +157,8 @@ namespace RenderCore { namespace Techniques
 
 		::Assets::DependencyValidation _depVal;
 		BufferUploads::CommandListID _completionCmdList;
+
+		std::shared_ptr<Assets::ModelRendererConstruction> _rendererConstruction;	// we retain this for metadata queries
 
 		class GeoCallBuilder;
 		class DrawableGeoBuilder;

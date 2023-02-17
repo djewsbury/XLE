@@ -47,7 +47,7 @@ namespace SceneEngine
 
 		struct BuildDrawablesHelper;
 		BuildDrawablesHelper BeginBuildDrawables(
-			IteratorRange<RenderCore::Techniques::DrawablesPacket** const>,
+			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> = {},
 			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> = {},
 			const XLEMath::ArbitraryConvexVolumeTester* = nullptr);
 
@@ -106,6 +106,8 @@ namespace SceneEngine
 			unsigned instanceIdx, const Float3x4& localToWorld);
 
 		bool IntersectViewFrustumTest(const Float3x4& localToWorld);
+
+		unsigned GetDrawableCount(unsigned pktIndex) const;
 
 		BuildDrawablesHelper(
 			IRigidModelScene& scene,

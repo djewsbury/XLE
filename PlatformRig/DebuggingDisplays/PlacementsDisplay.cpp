@@ -18,10 +18,20 @@
 #include "../../Assets/Marker.h"
 #include "../../Utility/StringFormat.h"
 
+using namespace Utility::Literals;
+
 namespace PlatformRig { namespace Overlays
 {
 	using namespace RenderOverlays;
 	using namespace RenderOverlays::DebuggingDisplay;
+
+	template<typename T>
+		T TryAnyCast(std::any&& any, T defaultValue)
+	{
+		if (any.has_value() && any.type() == typeid(T))
+			return std::any_cast<T>(std::move(any));
+		return defaultValue;
+	}
 
 	class PlacementsDisplay : public IWidget ///////////////////////////////////////////////////////////
 	{
@@ -76,8 +86,11 @@ namespace PlatformRig { namespace Overlays
 
 				auto firstHit = SceneEngine::FirstRayIntersection(parsingContext, *_placementsEditor, worldSpaceRay, &cameraDesc);
 				if (firstHit) {
-					_selectedMaterialName = firstHit->_materialName;
-					_selectedModelName = firstHit->_modelName;
+					_selectedMaterialName = _selectedModelName = {};
+					if (firstHit->_metadataQuery) {
+						_selectedMaterialName = TryAnyCast(firstHit->_metadataQuery("MaterialName"_h), _selectedMaterialName);
+						_selectedModelName = TryAnyCast(firstHit->_metadataQuery("ModelScaffold"_h), _selectedModelName);
+					}
 					_hasSelectedPlacements = true;
 				} else {
 					_selectedMaterialName = _selectedModelName = {};

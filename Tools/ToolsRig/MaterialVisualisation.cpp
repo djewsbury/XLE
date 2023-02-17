@@ -184,7 +184,9 @@ namespace ToolsRig
         }
 
 		std::pair<Float3, Float3> GetBoundingBox() const override { return { Float3{-1.0f, 1.0f, 1.0f}, Float3{1.0f, 1.0f, 1.0f} }; }
-		DrawCallDetails GetDrawCallDetails(unsigned drawCallIndex, uint64_t materialGuid) const override { return { {}, {} }; }
+		void LookupDrawableMetadata(
+            SceneEngine::ExecuteSceneContext& exeContext,
+			SceneEngine::DrawableMetadataLookupContext& context) const override {}
 		std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate> SetCustomDrawDelegate(const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& delegate) override { return nullptr; }
 		void RenderSkeleton(
 			RenderOverlays::IOverlayContext& overlayContext, 

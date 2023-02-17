@@ -622,6 +622,13 @@ namespace SceneEngine
 		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
+	unsigned IRigidModelScene::BuildDrawablesHelper::GetDrawableCount(unsigned pktIndex) const
+	{
+		return RenderCore::Techniques::LightWeightBuildDrawables::GetDrawableCount(
+			*_activeRenderer->_drawableConstructor,
+			pktIndex);
+	}
+
 	bool IRigidModelScene::BuildDrawablesHelper::IntersectViewFrustumTest(const Float3x4& localToWorld)
 	{
 		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)

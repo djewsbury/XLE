@@ -10,6 +10,7 @@
 #include "GenericQuadTree.h"
 #include "DynamicImposters.h"
 #include "RigidModelScene.h"
+#include "DrawableMetadataLookup.h"
 
 #include "../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../RenderCore/Assets/ModelScaffold.h"
@@ -493,6 +494,15 @@ namespace SceneEngine
                 const uint64_t* filterStart = nullptr, const uint64_t* filterEnd = nullptr,
                 BuildDrawablesMetrics* metrics = nullptr);
 
+        template<bool DoFilter, bool DoLateCulling>
+            void LookupDrawableMetadata(
+                DrawableMetadataLookupContext& context,
+                ExecuteSceneContext& exeContext,
+                const ICellRenderer& renderInfo,
+                IteratorRange<const unsigned*> objects,
+                const Float3x4& cellToWorld,
+                const uint64_t* filterStart = nullptr, const uint64_t* filterEnd = nullptr);
+
         RenderCore::BufferUploads::CommandListID BuildDrawablesViewMasks(
             IteratorRange<RenderCore::Techniques::DrawablesPacket**const> pkts,
             const ICellRenderer& placements,
@@ -843,7 +853,7 @@ namespace SceneEngine
                 *localToWorldI = Combine(objRef[idx]._localToCell, cellToWorld);
 
                 // cull per-object -- typically used for dynamic placements (eg, in the editor), where we
-                // don't have a quad tree and we allow for more flexibility related to when the bounding volumn is calculated
+                // don't have a quad tree and we allow for more flexibility related to when the bounding volume is calculated
                 if constexpr (DoLateCulling)
                     if (!buildDrawablesHelper.IntersectViewFrustumTest(*localToWorldI))
                         continue;
@@ -864,6 +874,81 @@ namespace SceneEngine
 
         if (metrics) *metrics += workingMetrics;
         return completionCmdList;
+    }
+
+    template<bool DoFilter, bool DoLateCulling>
+        void PlacementsRenderer::Pimpl::LookupDrawableMetadata(
+            DrawableMetadataLookupContext& context,
+            ExecuteSceneContext& exeContext,
+            const ICellRenderer& renderInfo,
+            IteratorRange<const unsigned*> objects,
+            const Float3x4& cellToWorld,
+            const uint64_t* filterStart, const uint64_t* filterEnd)
+    {
+        // Must match behaviour in BuildDrawables(), so that the drawable indices correspond to what we're expecting
+
+        const uint64_t* filterIterator = filterStart;
+        if constexpr (DoFilter)
+            assert(filterStart != filterEnd);
+
+        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
+        const auto* objRef = renderInfo.GetObjectReferences().begin();
+        auto renderIndices = MakeIteratorRange(renderInfo._objectToRenderer);
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        VLA_UNSAFE_FORCE(Float3x4, localToWorldBuffer, objects.size());
+        auto& rigidModelScene = _placementsCache->GetRigidModelScene();
+        auto buildDrawablesHelper = rigidModelScene.BeginBuildDrawables(exeContext);
+
+        auto i = objects.begin();
+        for (; i!=objects.end();) {
+            if constexpr (DoFilter) {
+                while (i!=objects.end() && !FilterIn(filterIterator, filterEnd, objRef[*i]._guid)) ++i;
+                if (i == objects.end()) break;
+            }
+
+            auto start = i;
+            ++i;
+            auto rendererIdx = renderIndices[*start];
+            if constexpr (DoFilter) {
+                while (i!=objects.end() 
+                    && renderIndices[*i] == rendererIdx 
+                    && FilterIn(filterIterator, filterEnd, *i)) ++i;
+            } else {
+                while (i!=objects.end() && renderIndices[*i] == rendererIdx) ++i;
+            }
+
+            if (!buildDrawablesHelper.SetRenderer(renderInfo._renderers[rendererIdx].get())) continue;
+
+            Float3x4* localToWorldI = localToWorldBuffer;
+            for (auto idx:MakeIteratorRange(start, i)) {
+                *localToWorldI = Combine(objRef[idx]._localToCell, cellToWorld);
+                if constexpr (DoLateCulling)
+                    if (!buildDrawablesHelper.IntersectViewFrustumTest(*localToWorldI))
+                        continue;
+                ++localToWorldI;
+            }
+
+            // If the the next queried index is one of the drawables that would be produced by a parallel render
+            // operation, we must register a MetadataProvider for it
+            auto objCount = localToWorldI-localToWorldBuffer;
+            auto drawableCount = buildDrawablesHelper.GetDrawableCount(context.PktIndex());
+            while (!context.Finished()) {
+                auto nextIndex = context.NextIndex();
+                if (nextIndex >= drawableCount * objCount) break;
+
+                unsigned objectIdx = nextIndex / drawableCount;
+                unsigned drawable = nextIndex % drawableCount;
+
+                context.AddProviderAndAdvance(
+                    [objectIdx, drawable, placementsCache=std::weak_ptr<PlacementsCache>(_placementsCache), renderer=std::weak_ptr<void>{renderInfo._renderers[rendererIdx]}](uint64_t) -> std::any
+                    {
+                        return "Some result";
+                    });
+            }
+            context.AdvanceIndexOffset(objCount*drawableCount);
+        }
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
     }
 
     RenderCore::BufferUploads::CommandListID PlacementsRenderer::Pimpl::BuildDrawablesViewMasks(
@@ -984,7 +1069,7 @@ namespace SceneEngine
             BuildDrawablesComplex(executeContext, cellSet);
             return;
         }
-        // what follows is the "simplier" mode that have only one view & no complex culling volume
+        // what follows is the "simpler" mode that have only one view & no complex culling volume
         assert(executeContext._views.size() == 1);
         auto worldToProjection =  executeContext._views[0]._worldToProjection;
 
@@ -1194,6 +1279,101 @@ namespace SceneEngine
             }
         }
         executeContext._completionCmdList = std::max(executeContext._completionCmdList, completionCmdList);
+    }
+
+    void PlacementsRenderer::LookupDrawableMetadata(
+        DrawableMetadataLookupContext& helper,
+        ExecuteSceneContext& executeContext,
+        const PlacementCellSet& cellSet,
+        const PlacementGUID* begin, const PlacementGUID* end,
+        const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate)
+    {
+        // It's a little awkward, but sometimes we want to lookup arbitrary data related to specific drawables
+        // Rather than complicate the performance-critical functions that general Drawables, we instead have this
+        // interface, which finds the drawables that would be created with the indices given in drawableIndices,
+        // and for each, returns an accessor that allows for querying information
+        //
+        // So the behaviour here must match BuildDrawablesSingleView, so that the drawable indices match up
+
+        std::vector<unsigned> visibleObjects;
+        RenderCore::BufferUploads::CommandListID completionCmdList = 0;
+        assert(executeContext._views.size() == 1);
+        const auto& worldToProjection = executeContext._views[0]._worldToProjection;
+
+            //  We need to take a copy, so we don't overwrite
+            //  and reorder the caller's version.
+        if (begin || end) {
+            std::vector<PlacementGUID> copy(begin, end);
+            std::sort(copy.begin(), copy.end());
+
+            auto ci = cellSet._pimpl->_cells.begin();
+            for (auto i=copy.begin(); i!=copy.end();) {
+                auto i2 = i+1;
+                for (; i2!=copy.end() && i2->first == i->first; ++i2) {}
+                while (ci != cellSet._pimpl->_cells.end() && ci->_filenameHash < i->first) { ++ci; }
+                if (ci != cellSet._pimpl->_cells.end() && ci->_filenameHash == i->first) {
+
+                    if (CullAABB_Aligned(worldToProjection, ci->_aabbMin, ci->_aabbMax, RenderCore::Techniques::GetDefaultClipSpaceType())) {
+                        i = i2;
+                        continue;
+                    }
+
+                        // re-write the object guids for the renderer's convenience
+                    uint64_t* tStart = &i->first;
+                    uint64_t* t = tStart;
+                    while (i < i2) { *t++ = i->second; i++; }
+
+                    visibleObjects.clear();
+
+                    auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, ci->_filenameHash);
+					if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == ci->_filenameHash) {
+
+                        auto objectReferences = ovr->second->GetObjectReferences();
+                        visibleObjects.resize(objectReferences.size());
+                        for (unsigned c=0; c<objectReferences.size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything (note assuming overlay objects already sorted by guid)
+                        _pimpl->LookupDrawableMetadata<true, true>(helper, executeContext, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+
+					} else if (auto* renderInfo = _pimpl->TryGetCellRenderer(*ci)) {
+
+						__declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, worldToProjection);
+                        _pimpl->CullCell(visibleObjects, cellToCullSpace, renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get());
+                        _pimpl->LookupDrawableMetadata<true, false>(helper, executeContext, *renderInfo, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+
+					}
+
+                    if (helper.Finished()) break;
+
+                } else {
+                    i = i2;
+                }
+            }
+        } else {
+                // in this case we're not filtering by object GUID (though we may apply a predicate on the prepared draw calls)
+            for (auto i=cellSet._pimpl->_cells.begin(); i!=cellSet._pimpl->_cells.end(); ++i) {
+                if (CullAABB_Aligned(worldToProjection, i->_aabbMin, i->_aabbMax, RenderCore::Techniques::GetDefaultClipSpaceType()))
+				    continue;
+
+                visibleObjects.clear();
+
+                auto ovr = LowerBound(cellSet._pimpl->_cellOverrides, i->_filenameHash);
+				if (ovr != cellSet._pimpl->_cellOverrides.end() && ovr->first == i->_filenameHash) {
+
+                    auto objectReferences = ovr->second->GetObjectReferences();
+                    visibleObjects.resize(objectReferences.size());
+                    for (unsigned c=0; c<objectReferences.size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
+                    _pimpl->LookupDrawableMetadata<false, true>(helper, executeContext, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+
+				} else if (auto* renderInfo = _pimpl->TryGetCellRenderer(*i)) {
+
+					__declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
+                    _pimpl->CullCell(visibleObjects, cellToCullSpace, renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get());
+                    _pimpl->LookupDrawableMetadata<false, false>(helper, executeContext, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+
+				}
+
+                if (helper.Finished()) break;
+            }
+        }
     }
 
     std::future<void> PlacementsRenderer::PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet)
@@ -1611,7 +1791,7 @@ namespace SceneEngine
         auto cellSpaceBoundaries = StallAndCalculateCellSpaceBoundaries(cache);
 
         // Go via NascentPlacements to generate a data block
-        // we do this partially to santize out filenames buffer; but it's good to share the code anyway
+        // we do this partially to sanitize out filenames buffer; but it's good to share the code anyway
         std::vector<NascentPlacement> nascentPlacements;
         nascentPlacements.reserve(_objects.size());
         for (unsigned c=0; c<_objects.size(); ++c) {
@@ -1905,7 +2085,7 @@ namespace SceneEngine
             if (!cellSpaceBoundaries.empty()) {
                 auto& cellSpaceBoundary = cellSpaceBoundaries[c];
                     //  We're only doing a very rough world space bounding box vs ray test here...
-                    //  Ideally, we should follow up with a more accurate test using the object loca
+                    //  Ideally, we should follow up with a more accurate test using the object local
                     //  space bounding box
                 if (CullAABB(cellToProjection, cellSpaceBoundary.first, cellSpaceBoundary.second, RenderCore::Techniques::GetDefaultClipSpaceType())) {
                     continue;
@@ -2965,7 +3145,7 @@ namespace SceneEngine
         }
 
         if (supplementsBuffer.empty())
-            supplementsBuffer.push_back(0);    // sentinal in place 0 (since an offset of '0' is used to mean no supplements)
+            supplementsBuffer.push_back(0);    // sentinel in place 0 (since an offset of '0' is used to mean no supplements)
 
         auto r = supplementsBuffer.size();
         supplementsBuffer.push_back(supplements.size());

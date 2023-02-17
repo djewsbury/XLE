@@ -69,7 +69,8 @@ namespace SceneEngine
     class PlacementsCache;
     class PreparedScene;
     using PlacementGUID = std::pair<uint64_t, uint64_t>;
-    
+    class DrawableMetadataLookupContext;
+
     class PlacementsRenderer
     {
     public:
@@ -85,9 +86,16 @@ namespace SceneEngine
             const PlacementGUID* begin, const PlacementGUID* end,
 			const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate = nullptr);
 
-        void SetImposters(std::shared_ptr<DynamicImposters> imposters);
-
         std::future<void> PrepareDrawables(IteratorRange<const Float4x4*> worldToCullingFrustums, const PlacementCellSet& cellSet);
+
+        void LookupDrawableMetadata(
+            DrawableMetadataLookupContext& context,
+            ExecuteSceneContext& executeContext,
+            const PlacementCellSet& cellSet,
+            const PlacementGUID* begin, const PlacementGUID* end,
+            const std::shared_ptr<RenderCore::Techniques::ICustomDrawDelegate>& preDrawDelegate = nullptr);
+
+        void SetImposters(std::shared_ptr<DynamicImposters> imposters);
 
             // -------------- For debugging displays --------------
         auto StallAndGetQuadTree(const PlacementCellSet& cellSet, StringSection<> cellName) const -> std::shared_ptr<GenericQuadTree>;

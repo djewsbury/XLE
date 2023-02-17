@@ -30,8 +30,9 @@ namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus;
 namespace RenderCore { namespace Assets { class RawMaterial; } }
 namespace RenderOverlays { class IOverlayContext; struct Rect; }
 namespace OSServices { class OnChangeCallback; }
-namespace SceneEngine { class IScene; class ILightingStateDelegate; class IRenderStep; }
+namespace SceneEngine { class IScene; class ILightingStateDelegate; class IRenderStep; class ExecuteSceneContext; class DrawableMetadataLookupContext; }
 namespace Assets { class OperationContext; }
+namespace std { class any; }
 
 namespace ToolsRig
 {
@@ -91,7 +92,8 @@ namespace ToolsRig
         bool			_hasMouseOver = false;
         Float3			_intersectionPt = Zero<Float3>();
         unsigned		_drawCallIndex = 0u;
-        uint64			_materialGuid = 0;
+        uint64_t		_materialGuid = 0;
+        std::function<std::any(uint64_t)> _metadataQuery;
         ChangeEvent		_changeEvent;
     };
 
@@ -125,8 +127,9 @@ namespace ToolsRig
 			RenderCore::Techniques::ParsingContext& parserContext, 
 			bool drawBoneNames) const = 0;
 
-		struct DrawCallDetails { std::string _modelName, _materialName; };
-		virtual DrawCallDetails GetDrawCallDetails(unsigned drawCallIndex, uint64_t materialGuid) const = 0;
+		virtual void LookupDrawableMetadata(
+            SceneEngine::ExecuteSceneContext& exeContext,
+			SceneEngine::DrawableMetadataLookupContext& context) const = 0;
 
 		virtual void BindAnimationState(const std::shared_ptr<VisAnimationState>& animState) = 0;
 		virtual bool HasActiveAnimation() const = 0;
@@ -203,7 +206,7 @@ namespace ToolsRig
         void SetScene(const ModelVisSettings&);
         void SetScene(const MaterialVisSettings&, std::shared_ptr<RenderCore::Assets::RawMaterial> = nullptr);
         void SetScene(std::shared_ptr<SceneEngine::IScene>);
-        void SetScene(Assets::PtrToMarkerPtr<SceneEngine::IScene>);
+        void SetScene(::Assets::PtrToMarkerPtr<SceneEngine::IScene>);
 
         void SetEnvSettings(StringSection<>);
         void SetEnvSettings(::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate>);

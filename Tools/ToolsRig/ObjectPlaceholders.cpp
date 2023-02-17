@@ -571,8 +571,6 @@ namespace ToolsRig
 		result._worldSpaceCollision = worldSpaceCollision;
 		result._distance = 0.f;
 		result._objectGuid = {0ull, o._id};
-		result._drawCallIndex = 0;
-		result._materialGuid = 0;
 		return result;
 	}
 

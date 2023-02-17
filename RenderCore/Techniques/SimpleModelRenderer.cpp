@@ -13,9 +13,11 @@
 #include "DeformerConstruction.h"
 #include "SkinDeformer.h"
 #include "Services.h"
+#include "../SceneEngine/DrawableMetadataLookup.h"
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
+#include "../Assets/MaterialScaffold.h"		// for metadata query
 #include "../Assets/AnimationBindings.h"
 #include "../Assets/CompoundObject.h"
 #include "../Assets/CompileAndAsyncManager.h"
@@ -32,35 +34,46 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace Techniques 
 {
-	#if _DEBUG
-		static Float3x4    Combine_NoDebugOverhead(const Float3x4& firstTransform, const Float3x4& secondTransform)
-		{
-			// Debug overhead is kind of crazy for this operation. Let's just cut some of it out, just for day-to-day
-			// convenience
-			const float* lhs = (const float*)&secondTransform;
-			const float* rhs = (const float*)&firstTransform;
+	namespace Internal
+	{
+		#if _DEBUG
+			static Float3x4    Combine_NoDebugOverhead(const Float3x4& firstTransform, const Float3x4& secondTransform)
+			{
+				// Debug overhead is kind of crazy for this operation. Let's just cut some of it out, just for day-to-day
+				// convenience
+				const float* lhs = (const float*)&secondTransform;
+				const float* rhs = (const float*)&firstTransform;
 
-			Float3x4 resultm;
-			float* result = (float*)&resultm;
-			result[0*4+0] = lhs[0*4+0] * rhs[0*4+0] + lhs[0*4+1] * rhs[1*4+0] + lhs[0*4+2] * rhs[2*4+0];
-			result[0*4+1] = lhs[0*4+0] * rhs[0*4+1] + lhs[0*4+1] * rhs[1*4+1] + lhs[0*4+2] * rhs[2*4+1];
-			result[0*4+2] = lhs[0*4+0] * rhs[0*4+2] + lhs[0*4+1] * rhs[1*4+2] + lhs[0*4+2] * rhs[2*4+2];
-			result[0*4+3] = lhs[0*4+0] * rhs[0*4+3] + lhs[0*4+1] * rhs[1*4+3] + lhs[0*4+2] * rhs[2*4+3] + lhs[0*4+3];
-			
-			result[1*4+0] = lhs[1*4+0] * rhs[0*4+0] + lhs[1*4+1] * rhs[1*4+0] + lhs[1*4+2] * rhs[2*4+0];
-			result[1*4+1] = lhs[1*4+0] * rhs[0*4+1] + lhs[1*4+1] * rhs[1*4+1] + lhs[1*4+2] * rhs[2*4+1];
-			result[1*4+2] = lhs[1*4+0] * rhs[0*4+2] + lhs[1*4+1] * rhs[1*4+2] + lhs[1*4+2] * rhs[2*4+2];
-			result[1*4+3] = lhs[1*4+0] * rhs[0*4+3] + lhs[1*4+1] * rhs[1*4+3] + lhs[1*4+2] * rhs[2*4+3] + lhs[1*4+3];
-			
-			result[2*4+0] = lhs[2*4+0] * rhs[0*4+0] + lhs[2*4+1] * rhs[1*4+0] + lhs[2*4+2] * rhs[2*4+0];
-			result[2*4+1] = lhs[2*4+0] * rhs[0*4+1] + lhs[2*4+1] * rhs[1*4+1] + lhs[2*4+2] * rhs[2*4+1];
-			result[2*4+2] = lhs[2*4+0] * rhs[0*4+2] + lhs[2*4+1] * rhs[1*4+2] + lhs[2*4+2] * rhs[2*4+2];
-			result[2*4+3] = lhs[2*4+0] * rhs[0*4+3] + lhs[2*4+1] * rhs[1*4+3] + lhs[2*4+2] * rhs[2*4+3] + lhs[2*4+3];
-			return resultm;
+				Float3x4 resultm;
+				float* result = (float*)&resultm;
+				result[0*4+0] = lhs[0*4+0] * rhs[0*4+0] + lhs[0*4+1] * rhs[1*4+0] + lhs[0*4+2] * rhs[2*4+0];
+				result[0*4+1] = lhs[0*4+0] * rhs[0*4+1] + lhs[0*4+1] * rhs[1*4+1] + lhs[0*4+2] * rhs[2*4+1];
+				result[0*4+2] = lhs[0*4+0] * rhs[0*4+2] + lhs[0*4+1] * rhs[1*4+2] + lhs[0*4+2] * rhs[2*4+2];
+				result[0*4+3] = lhs[0*4+0] * rhs[0*4+3] + lhs[0*4+1] * rhs[1*4+3] + lhs[0*4+2] * rhs[2*4+3] + lhs[0*4+3];
+				
+				result[1*4+0] = lhs[1*4+0] * rhs[0*4+0] + lhs[1*4+1] * rhs[1*4+0] + lhs[1*4+2] * rhs[2*4+0];
+				result[1*4+1] = lhs[1*4+0] * rhs[0*4+1] + lhs[1*4+1] * rhs[1*4+1] + lhs[1*4+2] * rhs[2*4+1];
+				result[1*4+2] = lhs[1*4+0] * rhs[0*4+2] + lhs[1*4+1] * rhs[1*4+2] + lhs[1*4+2] * rhs[2*4+2];
+				result[1*4+3] = lhs[1*4+0] * rhs[0*4+3] + lhs[1*4+1] * rhs[1*4+3] + lhs[1*4+2] * rhs[2*4+3] + lhs[1*4+3];
+				
+				result[2*4+0] = lhs[2*4+0] * rhs[0*4+0] + lhs[2*4+1] * rhs[1*4+0] + lhs[2*4+2] * rhs[2*4+0];
+				result[2*4+1] = lhs[2*4+0] * rhs[0*4+1] + lhs[2*4+1] * rhs[1*4+1] + lhs[2*4+2] * rhs[2*4+1];
+				result[2*4+2] = lhs[2*4+0] * rhs[0*4+2] + lhs[2*4+1] * rhs[1*4+2] + lhs[2*4+2] * rhs[2*4+2];
+				result[2*4+3] = lhs[2*4+0] * rhs[0*4+3] + lhs[2*4+1] * rhs[1*4+3] + lhs[2*4+2] * rhs[2*4+3] + lhs[2*4+3];
+				return resultm;
+			}
+		#else
+			#define Combine_NoDebugOverhead Combine
+		#endif
+
+		static std::shared_ptr<UniformsStreamInterface> MakeLocalTransformUSI()
+		{
+			auto result = std::make_shared<UniformsStreamInterface>();
+			result->BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
+			return result;
 		}
-	#else
-		#define Combine_NoDebugOverhead Combine
-	#endif
+		static std::shared_ptr<UniformsStreamInterface> s_localTransformUSI = MakeLocalTransformUSI();
+	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,15 +82,6 @@ namespace RenderCore { namespace Techniques
 	public:
 		RenderCore::Assets::DrawCallDesc _drawCall;
 		LocalTransformConstants _localTransform;
-		uint64_t _materialGuid;
-		unsigned _drawCallIdx;
-	};
-
-	struct DrawCallProperties
-	{
-		uint64_t _materialGuid;
-		unsigned _drawCallIdx;
-		unsigned _dummy;
 	};
 
 	static void DrawFn_SimpleModelStatic(
@@ -86,8 +90,7 @@ namespace RenderCore { namespace Techniques
 		const SimpleModelDrawable& drawable)
 	{
 		if (drawFnContext.GetBoundLooseImmediateDatas()) {
-			DrawCallProperties drawCallProps{drawable._materialGuid, drawable._drawCallIdx};
-			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(drawable._localTransform), MakeOpaqueIteratorRange(drawCallProps) };
+			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(drawable._localTransform) };
 			drawFnContext.ApplyLooseUniforms(UniformsStream{{}, immDatas});
 		}
 
@@ -116,8 +119,7 @@ namespace RenderCore { namespace Techniques
 		assert(viewCount <= 32);
 
 		if (drawFnContext.GetBoundLooseImmediateDatas()) {
-			DrawCallProperties drawCallProps{drawable._materialGuid, drawable._drawCallIdx};
-			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(drawable._localTransform), MakeOpaqueIteratorRange(drawCallProps) };
+			UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(drawable._localTransform) };
 			drawFnContext.ApplyLooseUniforms(UniformsStream{{}, immDatas});
 		}
 
@@ -128,6 +130,8 @@ namespace RenderCore { namespace Techniques
 	class SimpleModelDrawable_Delegate : public SimpleModelDrawable
 	{
 	public:
+		uint64_t _materialGuid;
+		unsigned _drawCallIdx;
 		std::shared_ptr<ICustomDrawDelegate> _delegate;
 	};
 
@@ -187,11 +191,8 @@ namespace RenderCore { namespace Techniques
 		auto localToWorld3x4 = AsFloat3x4(localToWorld);
 		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
-		IteratorRange<const uint64_t*> materialGuids;
-		unsigned materialGuidsIterator = 0;
 		unsigned transformMarker = ~0u;
 		unsigned elementIdx = ~0u;
-		unsigned drawCallCounter = 0;
 		for (auto cmd:cmdStream->GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
@@ -199,12 +200,10 @@ namespace RenderCore { namespace Techniques
 				{
 					assert(elementIdx != ~0u);
 					auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
-					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+					nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 				}
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
-				materialGuids = cmd.RawData().Cast<const uint64_t*>();
-				materialGuidsIterator = 0;
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
 				elementIdx = cmd.As<unsigned>();
@@ -217,7 +216,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+					auto localTransform = geoSpaceToNodeSpace ? Internal::Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -227,13 +226,10 @@ namespace RenderCore { namespace Techniques
 						drawable._drawFn = drawableFn;
 						drawable._drawCall = RenderCore::Assets::DrawCallDesc { dc._firstIndex, dc._indexCount, dc._firstVertex };
 						drawable._looseUniformsInterface = _usi.get();
-						drawable._materialGuid = materialGuids[materialGuidsIterator++];
-						drawable._drawCallIdx = drawCallCounter;
 						drawable._localTransform._localToWorld = localTransform;
 						drawable._localTransform._localSpaceView = Float3{0,0,0};
 						drawable._localTransform._viewMask = viewMask;
 						drawable._deformInstanceIdx = deformInstanceIdx;
-						++drawCallCounter;
 					}
 				}
 				break;
@@ -274,11 +270,8 @@ namespace RenderCore { namespace Techniques
 		auto localToWorld3x4 = AsFloat3x4(localToWorld);
 		auto nodeSpaceToWorld = Identity<Float3x4>();
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
-		IteratorRange<const uint64_t*> materialGuids;
-		unsigned materialGuidsIterator = 0;
 		unsigned transformMarker = ~0u;
 		unsigned elementIdx = ~0u;
-		unsigned drawCallCounter = 0;
 		for (auto cmd:cmdStream->GetCmdStream()) {
 			switch (cmd.Cmd()) {
 			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
@@ -288,16 +281,14 @@ namespace RenderCore { namespace Techniques
 					auto animatedIdx =_skeletonBinding.ModelJointToMachineOutput(elementIdx, transformMarker);
 					if (animatedIdx < animatedSkeletonOutput.size()) {
 						auto& animatedTransform = animatedSkeletonOutput[animatedIdx];
-						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
+						nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
 					} else {
 						auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
-						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+						nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 					}
 				}
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
-				materialGuids = cmd.RawData().Cast<const uint64_t*>();
-				materialGuidsIterator = 0;
 				break;
 			case (uint32_t)DrawableConstructor::Command::BeginElement:
 				elementIdx = cmd.As<unsigned>();
@@ -310,7 +301,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+					auto localTransform = geoSpaceToNodeSpace ? Internal::Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -320,13 +311,10 @@ namespace RenderCore { namespace Techniques
 						drawable._drawFn = drawableFn;
 						drawable._drawCall = RenderCore::Assets::DrawCallDesc { dc._firstIndex, dc._indexCount, dc._firstVertex };
 						drawable._looseUniformsInterface = _usi.get();
-						drawable._materialGuid = materialGuids[materialGuidsIterator++];
-						drawable._drawCallIdx = drawCallCounter;
 						drawable._localTransform._localToWorld = localTransform;
 						drawable._localTransform._localSpaceView = Float3{0,0,0};
 						drawable._localTransform._viewMask = viewMask;
 						drawable._deformInstanceIdx = deformInstanceIdx;
-						++drawCallCounter;
 					}
 				}
 				break;
@@ -385,10 +373,10 @@ namespace RenderCore { namespace Techniques
 					auto animatedIdx =_skeletonBinding.ModelJointToMachineOutput(elementIdx, transformMarker);
 					if (animatedIdx < animatedSkeletonOutput.size()) {
 						auto& animatedTransform = animatedSkeletonOutput[animatedIdx];
-						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
+						nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
 					} else {
 						auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
-						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+						nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 					}
 				}
 				break;
@@ -407,7 +395,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+					auto localTransform = geoSpaceToNodeSpace ? Internal::Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -467,7 +455,7 @@ namespace RenderCore { namespace Techniques
 				{
 					assert(elementIdx != ~0u);
 					auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
-					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+					nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 				}
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
@@ -484,7 +472,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto localToWorld = AsFloat4x4(geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld); // todo -- don't have to recalculate this every draw call
+					auto localToWorld = AsFloat4x4(geoSpaceToNodeSpace ? Internal::Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld); // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -505,16 +493,95 @@ namespace RenderCore { namespace Techniques
 			BuildGeometryProcables(pkts, localToWorld, s_topologicalCmdStream);
 	}
 
+	void SimpleModelRenderer::LookupDrawableMetadata(
+		SceneEngine::DrawableMetadataLookupContext& lookupContext,
+		uint64_t cmdStreamGuid)
+	{
+		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
+		if (!cmdStream) return;		// cmdStream could the topological stream, for example
+
+		if (lookupContext.NextIndex() >= cmdStream->_drawCallCounts[lookupContext.PktIndex()]) {
+			lookupContext.AdvanceIndexOffset(cmdStream->_drawCallCounts[lookupContext.PktIndex()]);
+			return;
+		}
+
+		const Float4x4* geoSpaceToNodeSpace = nullptr;
+		IteratorRange<const uint64_t*> materialGuids;
+		unsigned materialGuidsIterator = 0;
+		unsigned transformMarker = ~0u;
+		unsigned elementIdx = ~0u;
+		unsigned drawCallCounter = 0;
+		for (auto cmd:cmdStream->GetCmdStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+				transformMarker = cmd.As<unsigned>();
+				break;
+			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
+				materialGuids = cmd.RawData().Cast<const uint64_t*>();
+				materialGuidsIterator = 0;
+				break;
+			case (uint32_t)DrawableConstructor::Command::BeginElement:
+				elementIdx = cmd.As<unsigned>();
+				break;
+			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
+				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
+				break;
+			case (uint32_t)DrawableConstructor::Command::ExecuteDrawCalls:
+				{
+					struct DrawCallsRef { unsigned _start, _end; };
+					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
+						if (dc._batchFilter != lookupContext.PktIndex()) continue;
+						if (lookupContext.Finished()) break;
+						if (drawCallCounter == lookupContext.NextIndex()) {
+							lookupContext.AddProviderAndAdvance(
+								[drawCallCounter, matGuid = materialGuids[materialGuidsIterator], dc, elementIdx, rendererConstruction=std::weak_ptr<Assets::ModelRendererConstruction>{_rendererConstruction}]
+								(uint64_t semantic) -> std::any
+								{
+									switch(semantic) {
+									case "DrawCallIndex"_h: return drawCallCounter;
+									case "MaterialGuid"_h: return matGuid;
+									case "IndexCount"_h: return dc._indexCount;
+									case "ElementIndex"_h: return elementIdx;
+									case "MaterialName"_h: 
+										if (auto l = rendererConstruction.lock())
+											return l->GetElement(elementIdx)->GetMaterialScaffold()->DehashMaterialName(matGuid).AsString();
+										Throw(std::runtime_error("Expired ModelRendererConstruction"));
+									case "MaterialScaffold"_h:
+										if (auto l = rendererConstruction.lock())
+											return l->GetElement(elementIdx)->GetMaterialScaffoldName();
+										Throw(std::runtime_error("Expired ModelRendererConstruction"));
+									case "ModelScaffold"_h:
+										if (auto l = rendererConstruction.lock())
+											return l->GetElement(elementIdx)->GetModelScaffoldName();
+										Throw(std::runtime_error("Expired ModelRendererConstruction"));
+									default: return {};
+									}
+								});
+						}
+						materialGuidsIterator++;
+						++drawCallCounter;
+					}
+				}
+				break;
+			}
+		}
+
+		if (!lookupContext.Finished())
+			lookupContext.AdvanceIndexOffset(cmdStream->_drawCallCounts[lookupContext.PktIndex()]);
+	}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	SimpleModelRenderer::SimpleModelRenderer(
 		IDrawablesPool& drawablesPool,
-		const Assets::ModelRendererConstruction& construction,
+		std::shared_ptr<Assets::ModelRendererConstruction> construction,
 		std::shared_ptr<DrawableConstructor> drawableConstructor,
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		std::shared_ptr<DeformAccelerator> deformAccelerator,
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	: _drawableConstructor(std::move(drawableConstructor))
+	, _rendererConstruction(std::move(construction))
 	{
 		_depVal = _drawableConstructor->GetDependencyValidation();
 
@@ -528,17 +595,12 @@ namespace RenderCore { namespace Techniques
 		if (!uniformBufferDelegates.empty()) {
 			UniformsStreamInterface usi;
 			usi.BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
-			usi.BindImmediateData(1, Techniques::ObjectCB::DrawCallProperties);
 			unsigned c=2;
 			for (const auto&u:uniformBufferDelegates)
 				usi.BindImmediateData(c++, u.first, u.second->GetLayout());
 			_usi = drawablesPool.CreateProtectedLifetime(std::move(usi));
 		} else {
-			// todo -- this can just become static
-			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, Techniques::ObjectCB::LocalTransform);
-			usi.BindImmediateData(1, Techniques::ObjectCB::DrawCallProperties);
-			_usi = drawablesPool.CreateProtectedLifetime(std::move(usi));
+			_usi = Internal::s_localTransformUSI;
 		}
 		
 		_completionCmdList = _drawableConstructor->_completionCommandList;
@@ -546,14 +608,14 @@ namespace RenderCore { namespace Techniques
 			_completionCmdList = std::max(_completionCmdList, geoDeformerInfrastructure->GetCompletionCommandList());
 
 		// setup skeleton binding
-		auto externalSkeletonScaffold = construction.GetSkeletonScaffold();
+		auto externalSkeletonScaffold = _rendererConstruction->GetSkeletonScaffold();
 		if (externalSkeletonScaffold) {
 			// merge in the dep val from the skeleton scaffold
 			::Assets::DependencyValidationMarker depVals[] { _depVal, externalSkeletonScaffold->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 
-		_skeletonBinding = ModelConstructionSkeletonBinding{construction};
+		_skeletonBinding = ModelConstructionSkeletonBinding{*_rendererConstruction};
 	}
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
@@ -689,7 +751,7 @@ namespace RenderCore { namespace Techniques
 
 						return std::make_shared<SimpleModelRenderer>(
 							*drawablesPool,
-							*completedConstruction,
+							std::move(completedConstruction),
 							std::move(helper->_drawableConstructor),
 							std::move(deformAcceleratorPool), std::move(deformAccelerator),
 							uniformBufferBindings);

@@ -218,13 +218,11 @@ namespace ToolsRig
 			executeContext._completionCmdList = std::max(executeContext._completionCmdList, _actualized->_renderer->GetCompletionCommandList());
 		}
 
-		DrawCallDetails GetDrawCallDetails(unsigned drawCallIndex, uint64_t materialGuid) const override
+		void LookupDrawableMetadata(
+			SceneEngine::ExecuteSceneContext& exeContext,
+			SceneEngine::DrawableMetadataLookupContext& context) const override
 		{
-			assert(_actualized->_rendererConstruction->GetElementCount() >= 1);
-			auto matName = _actualized->_rendererConstruction->GetElement(0)->GetMaterialScaffold()->DehashMaterialName(materialGuid).AsString();
-			if (matName.empty())
-				matName = _actualized->_rendererConstruction->GetElement(0)->GetMaterialScaffoldName();
-			return { _actualized->_rendererConstruction->GetElement(0)->GetModelScaffoldName(), matName };
+			_actualized->_renderer->LookupDrawableMetadata(context);
 		}
 		std::pair<Float3, Float3> GetBoundingBox() const override
 		{

@@ -49,6 +49,7 @@
 #include <chrono>
 
 #pragma warning(disable:4505) // unreferenced local function has been removed
+using namespace Utility::Literals;
 
 namespace ToolsRig
 {
@@ -533,15 +534,16 @@ namespace ToolsRig
 		using namespace RenderCore;
 		std::vector<SceneEngine::ModelIntersectionStateContext::ResultEntry> results;
 
+		RenderCore::Techniques::DrawablesPacket pkt;
+		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
+		pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
+		SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), {}};
+
 		TRY {
 			auto techniqueContext = MakeRayTestTechniqueContext(drawingApparatus);
 			Techniques::ParsingContext parserContext { techniqueContext, threadContext };
 			parserContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
-			RenderCore::Techniques::DrawablesPacket pkt;
-			RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
-			pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
-			SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), {}};
 			scene.ExecuteScene(threadContext, sceneExecuteContext);
 			parserContext.RequireCommandList(sceneExecuteContext._completionCmdList);
 
@@ -580,16 +582,15 @@ namespace ToolsRig
 			result._worldSpaceCollision = 
 				worldSpaceRay.first + r._intersectionDepth * Normalize(worldSpaceRay.second - worldSpaceRay.first);
 			result._distance = r._intersectionDepth;
-			result._drawCallIndex = r._drawCallIndex;
-			result._materialGuid = r._materialGuid;
 
-			result._modelName = "Model";
-			result._materialName = "Material";
 			auto* visContent = dynamic_cast<IVisContent*>(&scene);
 			if (visContent) {
-				auto details = visContent->GetDrawCallDetails(result._drawCallIndex, result._materialGuid);
-				result._modelName = details._modelName;
-				result._materialName = details._materialName;
+				SceneEngine::DrawableMetadataLookupContext lookupContext{
+					{&r._drawableIndex, &r._drawableIndex+1}, 0
+				};
+				visContent->LookupDrawableMetadata(sceneExecuteContext, lookupContext);
+				if (!lookupContext.GetProviders().empty())
+					result._metadataQuery = lookupContext.GetProviders()[0];
 			}
 
 			return result;
@@ -598,6 +599,14 @@ namespace ToolsRig
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<typename T>
+		T TryAnyCast(std::any&& any, T defaultValue)
+	{
+		if (any.has_value() && any.type() == typeid(T))
+			return std::any_cast<T>(std::move(any));
+		return defaultValue;
+	}
 
     class MouseOverTrackingListener : public PlatformRig::IInputListener, public std::enable_shared_from_this<MouseOverTrackingListener>
     {
@@ -668,18 +677,26 @@ namespace ToolsRig
 
 			auto intr = FirstRayIntersection(*RenderCore::Techniques::GetThreadContext(), *_drawingApparatus, worldSpaceRay, *_scene);
 			if (intr._type != 0) {
-				if (        intr._drawCallIndex != _mouseOver->_drawCallIndex
-						||  intr._materialGuid != _mouseOver->_materialGuid
+				unsigned drawCallIndex = ~0u;
+				uint64_t materialGuid = ~0ull;
+				if (intr._metadataQuery) {
+					drawCallIndex = TryAnyCast(intr._metadataQuery("DrawCallIndex"_h), drawCallIndex);
+					materialGuid = TryAnyCast(intr._metadataQuery("MaterialGuid"_h), materialGuid);
+				}
+				if (        drawCallIndex != _mouseOver->_drawCallIndex
+						||  materialGuid != _mouseOver->_materialGuid
 						||  !_mouseOver->_hasMouseOver) {
 
 					_mouseOver->_hasMouseOver = true;
-					_mouseOver->_drawCallIndex = intr._drawCallIndex;
-					_mouseOver->_materialGuid = intr._materialGuid;
+					_mouseOver->_drawCallIndex = drawCallIndex;
+					_mouseOver->_materialGuid = materialGuid;
+					_mouseOver->_metadataQuery = std::move(intr._metadataQuery);
 					_mouseOver->_changeEvent.Invoke();
 				}
 			} else {
 				if (_mouseOver->_hasMouseOver) {
 					_mouseOver->_hasMouseOver = false;
+					_mouseOver->_metadataQuery = {};
 					_mouseOver->_changeEvent.Invoke();
 				}
 			}
@@ -779,9 +796,8 @@ namespace ToolsRig
 
         const auto textHeight = 20u;
         std::string matName;
-		auto* visContent = dynamic_cast<const ToolsRig::IVisContent*>(&scene);
-		if (visContent)
-			matName = visContent->GetDrawCallDetails(mouseOver._drawCallIndex, mouseOver._materialGuid)._materialName;
+		if (mouseOver._metadataQuery)
+			matName = TryAnyCast(mouseOver._metadataQuery("MaterialName"_h), matName);
         DrawText()
 			.Color(ColorB(0xffafafaf))
 			.Draw(context, Rect(Coord2(viewport._topLeft[0]+3, viewport._bottomRight[1]-textHeight-8), Coord2(viewport._bottomRight[0]-6, viewport._bottomRight[1]-8)),

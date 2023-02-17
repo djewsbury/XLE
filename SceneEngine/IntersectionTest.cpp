@@ -181,9 +181,7 @@ namespace SceneEngine
             {
                 float rayLength = Magnitude(worldSpaceRay.second - worldSpaceRay.first);
 
-                // note --  we could do this all in a single render call, except that there
-                //          is no way to associate a low level intersection result with a specific
-                //          draw call.
+                // todo -- change to single ModelIntersectionStateContext operation
                 auto count = trans->GetObjectCount();
                 for (unsigned c=0; c<count; ++c) {
                     auto guid = trans->GetGuid(c);
@@ -200,14 +198,24 @@ namespace SceneEngine
 
                     bool gotGoodResult = false;
                     unsigned drawCallIndex = 0;
-                    uint64 materialGuid = 0;
+                    uint64_t materialGuid = 0;
                     float intersectionDistance = std::numeric_limits<float>::max();
                     for (auto i=results.cbegin(); i!=results.cend(); ++i) {
                         if (i->_intersectionDepth < intersectionDistance) {
-                            intersectionDistance = i->_intersectionDepth;
-                            drawCallIndex = i->_drawCallIndex;
-                            materialGuid = i->_materialGuid;
-                            gotGoodResult = true;
+                            // We need to translate from the drawable back to something useful
+                            // to pass back to the caller
+#if 0
+                            auto reverseLookup = placementsEditor.GetManager()->GetRenderer()->ReverseDrawableLookup(
+                                placementsEditor.GetCellSet(), &guid, &guid+1,
+                                i->_drawable);
+                            if (reverseLookup) {
+                                intersectionDistance = i->_intersectionDepth;
+                                drawCallIndex = reverseLookup->_drawCallIndex;
+                                materialGuid = reverseLookup->_materialGuid;
+                                assert(reverseLookup->_guid == guid);
+                                gotGoodResult = true;
+                            }
+#endif
                         }
                     }
 
@@ -219,10 +227,11 @@ namespace SceneEngine
                             intersectionDistance / rayLength);
                         result->_distance = intersectionDistance;
                         result->_objectGuid = guid;
-                        result->_drawCallIndex = drawCallIndex;
-                        result->_materialGuid = materialGuid;
-                        result->_materialName = trans->GetMaterialName(c, materialGuid);
-                        result->_modelName = trans->GetObject(c)._model;
+                        result->_metadataQuery = std::move(result->_metadataQuery);
+                        // result->_drawCallIndex = drawCallIndex;
+                        // result->_materialGuid = materialGuid;
+                        // result->_materialName = trans->GetMaterialName(c, materialGuid);
+                        // result->_modelName = trans->GetObject(c)._model;
                     }
                 }
             }

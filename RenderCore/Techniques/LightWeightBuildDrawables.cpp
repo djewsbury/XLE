@@ -436,4 +436,14 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 	}
+
+	unsigned LightWeightBuildDrawables::GetDrawableCount(
+		DrawableConstructor& constructor,
+		unsigned pktIndex)
+	{
+		using namespace RenderCore;
+		assert(!constructor._cmdStreams.empty());
+		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		return (pktIndex < dimof(cmdStream._drawCallCounts)) ? cmdStream._drawCallCounts[pktIndex] : 0;
+	}
 }}

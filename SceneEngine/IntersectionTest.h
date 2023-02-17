@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "DrawableMetadataLookup.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"        // for CameraDesc
 #include "../Assets/AssetsCore.h"   // for rstring
 #include "../Core/Types.h"
@@ -36,10 +37,7 @@ namespace SceneEngine
         Float3						    _worldSpaceCollision;
         std::pair<uint64_t, uint64_t>   _objectGuid = {0ull, 0ull};
         float						    _distance = std::numeric_limits<float>::max();
-        unsigned					    _drawCallIndex = ~0u;
-        uint64_t					    _materialGuid = 0;
-        ::Assets::rstring			    _materialName;
-        ::Assets::rstring			    _modelName;
+        MetadataProvider                _metadataQuery; 
     };
 
     class IIntersectionScene

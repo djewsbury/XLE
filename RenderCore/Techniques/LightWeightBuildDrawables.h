@@ -41,5 +41,9 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Float4x4*> animatedSkeletonOutput,
 			unsigned deformInstanceIdx = 0,
 			uint32_t viewMask= 1);
+
+		static unsigned GetDrawableCount(
+			DrawableConstructor& constructor,
+			unsigned pktIndex);
 	};
 }}
