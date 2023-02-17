@@ -1113,7 +1113,14 @@ namespace Utility
 			assert(_evaluation.size() == 1);
 			auto& res = _evaluation.back();
 			assert(res.first == TokenDictionary::TokenType::Literal);
-			return res.second;
+			if (res.second._type._type != ImpliedTyping::TypeCat::Void) {
+				return res.second;
+			} else {
+				// expressions that evaluate to "undefined" are considered the same as zero (following the rules
+				// used for binary operations)
+				static unsigned zeroEval = 0;
+				return ImpliedTyping::VariantNonRetained{ImpliedTyping::TypeOf<unsigned>(), MakeOpaqueIteratorRange(zeroEval)};
+			}
 		}
 
 		ExpressionEvaluator::ExpressionEvaluator(const TokenDictionary& dictionary, IteratorRange<const Token*> expression)
