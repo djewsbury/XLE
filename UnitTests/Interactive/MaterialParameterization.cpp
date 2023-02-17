@@ -215,7 +215,7 @@ namespace UnitTests
 
 			if (!specularLight) {
 				LightingEngine::ChainedOperatorTemplate<LightingEngine::SkyTextureProcessorDesc> globalChain2 {};
-				globalChain2._desc._specularCubemapFaceDimension = 128;
+				globalChain2._desc._specularCubemapFaceDimension = 512;
 				globalChain2._desc._specularCubemapFormat = Format::R32G32B32A32_FLOAT;
 				globalChain1._next = &globalChain2;
 			}

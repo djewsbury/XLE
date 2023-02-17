@@ -218,11 +218,11 @@ namespace RenderCore { namespace Techniques
 
 	DrawablesPacket::AllocateStorageResult ManualDrawableGeoConstructor::AllocateStorage(DrawablesPacket::Storage storage, size_t byteCount)
 	{
-		const unsigned storageAligment = 0;
+		const unsigned storageAlignment = 0;
 		if (storage == DrawablesPacket::Storage::Vertex) {
-			return AllocateFrom(_pimpl->_vb->_storage, byteCount, storageAligment);
+			return AllocateFrom(_pimpl->_vb->_storage, byteCount, storageAlignment);
 		} else if (storage == DrawablesPacket::Storage::Index) {
-			return AllocateFrom(_pimpl->_ib->_storage, byteCount, storageAligment);
+			return AllocateFrom(_pimpl->_ib->_storage, byteCount, storageAlignment);
 		} else {
 			assert(0);
 			return {};

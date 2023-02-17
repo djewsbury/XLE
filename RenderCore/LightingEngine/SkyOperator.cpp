@@ -270,8 +270,8 @@ namespace RenderCore { namespace LightingEngine
 						ScopedLock(strongThis->_pendingUpdatesLock);
 						strongThis->_pendingUpdate = true;
 						TRY {
-								strongThis->_pendingSpecularIBL = locator.CreateTextureView();
-								strongThis->_pendingSpecularIBLCompletion = locator.GetCompletionCommandList();
+							strongThis->_pendingSpecularIBL = locator.CreateTextureView();
+							strongThis->_pendingSpecularIBLCompletion = locator.GetCompletionCommandList();
 							const bool useProgressiveResourceAsBackground = false;
 							if (useProgressiveResourceAsBackground) {
 								strongThis->_pendingAmbientRawCubemap = locator.CreateTextureView();

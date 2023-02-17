@@ -35,7 +35,7 @@ namespace RenderCore { namespace Techniques
 	/// Call FulfillWhenNotPending() when finished. This promises to return the completed geos sometime
 	/// in the future. Remember that the promise is fulfilled when the upload is written to a command list,
 	/// not when the command list is queued on the device queue.
-	/// The caller is reponsible for respecting the completion command list given by the Promise object.
+	/// The caller is responsible for respecting the completion command list given by the Promise object.
 	///
 	/// The ManualDrawableGeoConstructor can't be used after FulfillWhenNotPending() is called.
 	class ManualDrawableGeoConstructor
