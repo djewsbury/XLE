@@ -30,14 +30,14 @@ namespace SceneEngine
 
                 Extra = 1<<6
             };
-            typedef unsigned BitField;
+            using BitField = unsigned;
         };
         
-        Type::Enum					    _type = Type::Enum(0);
-        Float3						    _worldSpaceCollision;
-        std::pair<uint64_t, uint64_t>   _objectGuid = {0ull, 0ull};
-        float						    _distance = std::numeric_limits<float>::max();
-        MetadataProvider                _metadataQuery; 
+        Type::Enum			_type = Type::Enum(0);
+        Float3				_worldSpaceIntersectionPt;
+        Float3				_worldSpaceIntersectionNormal;
+        float				_distance = std::numeric_limits<float>::max();
+        MetadataProvider	_metadataQuery; 
     };
 
     class IIntersectionScene

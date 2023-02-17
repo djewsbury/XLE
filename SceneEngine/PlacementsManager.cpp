@@ -50,6 +50,8 @@
 #include <random>
 #include <set>
 
+using namespace Utility::Literals;
+
 namespace SceneEngine
 {
     using SupplementRange = IteratorRange<const uint64_t*>;
@@ -933,20 +935,38 @@ namespace SceneEngine
             // operation, we must register a MetadataProvider for it
             auto objCount = localToWorldI-localToWorldBuffer;
             auto drawableCount = buildDrawablesHelper.GetDrawableCount(context.PktIndex());
+            unsigned advancedObjects = 0;
             while (!context.Finished()) {
                 auto nextIndex = context.NextIndex();
-                if (nextIndex >= drawableCount * objCount) break;
+                if (nextIndex >= (drawableCount-advancedObjects) * objCount) break;
 
-                unsigned objectIdx = nextIndex / drawableCount;
+                unsigned objectIdx = advancedObjects + nextIndex / drawableCount;
                 unsigned drawable = nextIndex % drawableCount;
 
-                context.AddProviderAndAdvance(
-                    [objectIdx, drawable, placementsCache=std::weak_ptr<PlacementsCache>(_placementsCache), renderer=std::weak_ptr<void>{renderInfo._renderers[rendererIdx]}](uint64_t) -> std::any
-                    {
-                        return "Some result";
-                    });
+                context.AdvanceIndexOffset((objectIdx-advancedObjects)*drawableCount);
+                advancedObjects = objectIdx;
+
+                size_t providersStart = context._providers.size();
+                buildDrawablesHelper.LookupMetadataProvider(context);
+                ++advancedObjects;
+
+                auto& obj = objRef[*(start+objectIdx)];
+                for (auto c=providersStart; c<context._providers.size(); ++c) {
+                    // modify the provider to add a little extra context information about the particular object
+                    auto subQuery = std::move(context._providers[c]);
+                    context._providers[c] = 
+                        [subQuery=std::move(subQuery), guid=obj._guid, localToCell=obj._localToCell](uint64_t semantic) -> std::any {
+                            switch (semantic) {
+                            case "PlacementGUID"_h: return guid;
+                            case "LocalToCell"_h: return localToCell;
+                            default:
+                                return subQuery(semantic);
+                            }
+                        };
+                }
             }
-            context.AdvanceIndexOffset(objCount*drawableCount);
+            if (!context.Finished())
+                context.AdvanceIndexOffset((objCount-advancedObjects)*drawableCount);
         }
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////
     }

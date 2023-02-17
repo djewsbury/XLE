@@ -33,10 +33,12 @@ struct GSOutput
 cbuffer RayDefinition
 {
 	uint 	DrawableIndex;
+	uint	PacketIndex;
+	uint 	DummyA, DummyB;
 #if INTERSECTION_TEST == 0
 	float3	RayStart;
-	float3	RayDirection;
 	float	RayLength;
+	float3	RayDirection;
 #elif INTERSECTION_TEST == 1
  	row_major float4x4 IntersectionFrustum;
 #endif
@@ -152,7 +154,8 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 			result.triangleC = float4(input[2].worldPosition, barycentric.z);
 			result.properties.x = asuint(intersectionResult.x);
 			result.properties.y = DrawableIndex;
-			result.properties.zw = 0;
+			result.properties.z = PacketIndex;
+			result.properties.w = 0;
 			result.normal = normalize(
 				  barycentric.x * VSOUT_GetWorldVertexNormal(input[0])
 				+ barycentric.y * VSOUT_GetWorldVertexNormal(input[1])
@@ -173,7 +176,8 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 		result.triangleC = float4(input[2].worldPosition, 0.f);
 		result.properties.x = asuint(1.f);
 		result.properties.y = DrawableIndex;
-		result.properties.zw = 0;
+		result.properties.z = PacketIndex;
+		result.properties.w = 0;
 		outputStream.Append(result);
 	}
 

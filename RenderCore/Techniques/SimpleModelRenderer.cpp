@@ -500,6 +500,7 @@ namespace RenderCore { namespace Techniques
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
 
+		assert(lookupContext.PktIndex() < dimof(cmdStream->_drawCallCounts));
 		if (lookupContext.NextIndex() >= cmdStream->_drawCallCounts[lookupContext.PktIndex()]) {
 			lookupContext.AdvanceIndexOffset(cmdStream->_drawCallCounts[lookupContext.PktIndex()]);
 			return;
@@ -534,7 +535,7 @@ namespace RenderCore { namespace Techniques
 						if (dc._batchFilter != lookupContext.PktIndex()) continue;
 						if (lookupContext.Finished()) break;
 						if (drawCallCounter == lookupContext.NextIndex()) {
-							lookupContext.AddProviderAndAdvance(
+							lookupContext.SetProviderForNextIndex(
 								[drawCallCounter, matGuid = materialGuids[materialGuidsIterator], dc, elementIdx, rendererConstruction=std::weak_ptr<Assets::ModelRendererConstruction>{_rendererConstruction}]
 								(uint64_t semantic) -> std::any
 								{

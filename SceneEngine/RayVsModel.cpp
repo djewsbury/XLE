@@ -47,17 +47,18 @@ namespace SceneEngine
 		struct RayTestBuffer
         {
             Float3 _rayStart;
-            Float3 _rayDirection;
-			float _rayLength;
+            float _rayLength;
+			Float3 _rayDirection;
 		};
 		struct FrustumTestBuffer
 		{
-			unsigned _dummy[3];
 			Float4x4 _frustum;
         };
 		struct Data
 		{
 			unsigned _drawableIndex;
+			unsigned _packetIndex;
+			unsigned _dummy[2];
 			union { 
 				RayTestBuffer _rayTest;
 				FrustumTestBuffer _frustumTest;
@@ -81,6 +82,7 @@ namespace SceneEngine
 		RayDefinitionUniformDelegate()
 		{
 			BindImmediateData(0, s_binding);
+			XlZeroMemory(_data);
 		}
 		static const uint64_t s_binding;
 	};
@@ -100,7 +102,8 @@ namespace SceneEngine
 		Float4 _pt[3];
 		float _intersectionDepth;
 		unsigned _drawableIndex;
-        unsigned _dummy[2];
+		unsigned _packetIndex;
+        unsigned _dummy[1];
 	};
 
 	static const InputElementDesc s_soEles_Normal[] = {
@@ -118,7 +121,8 @@ namespace SceneEngine
 		Float4 _pt[3];
 		float _intersectionDepth;
 		unsigned _drawableIndex;
-        unsigned _dummy[2];
+		unsigned _packetIndex;
+        unsigned _dummy[1];
 		Float4 _normal;
 	};
 
@@ -269,6 +273,7 @@ namespace SceneEngine
 						entry._ptC = Truncate(mappedData[c]._pt[2]); entry._barycentricC = mappedData[c]._pt[2][3];
 						entry._intersectionDepth = mappedData[c]._intersectionDepth;
 						entry._drawableIndex = mappedData[c]._drawableIndex;
+						entry._packetIndex = mappedData[c]._packetIndex;
 						entry._normal = Truncate(mappedData[c]._normal);
 						result.push_back(entry);
 					}
@@ -282,6 +287,7 @@ namespace SceneEngine
 						entry._ptC = Truncate(mappedData[c]._pt[2]); entry._barycentricC = mappedData[c]._pt[2][3];
 						entry._intersectionDepth = mappedData[c]._intersectionDepth;
 						entry._drawableIndex = mappedData[c]._drawableIndex;
+						entry._packetIndex = mappedData[c]._packetIndex;
 						entry._normal = Float3{0,0,0};
 						result.push_back(entry);
 					}
@@ -426,9 +432,12 @@ namespace SceneEngine
 	void ModelIntersectionStateContext::ExecuteDrawables(
 		Techniques::ParsingContext& parsingContext, 
 		RenderCore::Techniques::DrawablesPacket& drawablePkt,
+		unsigned pktIdx,
 		const Techniques::CameraDesc* cameraForLOD)
 	{
 		assert(_pimpl->_pendingUnbind);		// we must not have queried the results yet
+		if (drawablePkt._drawables.empty()) return;
+
 		auto& context = *_pimpl->_threadContext;
 
             // The camera settings can affect the LOD that objects a rendered with.
@@ -458,6 +467,7 @@ namespace SceneEngine
 
 		RenderCore::Techniques::DrawOptions drawOptions;
 		drawOptions._perDrawableUniforms = _pimpl->_res->_rayDefinition.get();
+		_pimpl->_res->_rayDefinition->_data._packetIndex = pktIdx;
 
 		_pimpl->_pipelineAccelerators->LockForReading();
 		TRY {

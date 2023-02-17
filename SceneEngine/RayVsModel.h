@@ -37,6 +37,7 @@ namespace SceneEngine
             Float3 _ptC; float _barycentricC;
 			float _intersectionDepth;
             unsigned _drawableIndex;
+            unsigned _packetIndex;
             Float3 _normal;
 
             static bool CompareDepth(const ResultEntry& lhs, const ResultEntry& rhs)
@@ -49,6 +50,7 @@ namespace SceneEngine
         void ExecuteDrawables(
             RenderCore::Techniques::ParsingContext& parsingContext, 
             RenderCore::Techniques::DrawablesPacket& drawablePkt,
+            unsigned pktIdx,
             const RenderCore::Techniques::CameraDesc* cameraForLOD = nullptr);
 
         enum TestType { RayTest = 0, FrustumTest = 1 };

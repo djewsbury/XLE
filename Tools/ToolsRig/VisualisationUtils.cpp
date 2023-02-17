@@ -555,7 +555,7 @@ namespace ToolsRig
 				threadContext, drawingApparatus._pipelineAccelerators,
 				parserContext.GetPipelineAcceleratorsVisibility() };
 			stateContext.SetRay(worldSpaceRay);
-			stateContext.ExecuteDrawables(parserContext, pkt);
+			stateContext.ExecuteDrawables(parserContext, pkt, 0);
 
 			// Stall if we haven't yet submitted required buffer uploads command lists
 			// (if we bail here, the draw commands are have still be submitted and we will run into ordering problems later)
@@ -579,8 +579,9 @@ namespace ToolsRig
 
 			SceneEngine::IntersectionTestResult result;
 			result._type = SceneEngine::IntersectionTestResult::Type::Extra;
-			result._worldSpaceCollision = 
+			result._worldSpaceIntersectionPt = 
 				worldSpaceRay.first + r._intersectionDepth * Normalize(worldSpaceRay.second - worldSpaceRay.first);
+			result._worldSpaceIntersectionNormal = {0,0,0};
 			result._distance = r._intersectionDepth;
 
 			auto* visContent = dynamic_cast<IVisContent*>(&scene);
@@ -675,7 +676,8 @@ namespace ToolsRig
 
             if (!_scene) return;
 
-			auto intr = FirstRayIntersection(*RenderCore::Techniques::GetThreadContext(), *_drawingApparatus, worldSpaceRay, *_scene);
+			auto threadContext = RenderCore::Techniques::GetThreadContext();
+			auto intr = FirstRayIntersection(*threadContext, *_drawingApparatus, worldSpaceRay, *_scene);
 			if (intr._type != 0) {
 				unsigned drawCallIndex = ~0u;
 				uint64_t materialGuid = ~0ull;
@@ -967,7 +969,8 @@ namespace ToolsRig
 				ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 				overlays.CaptureState();
 				Rect rect { Coord2{0, 0}, Coord2(viewportDims[0], viewportDims[1]) };
-				RenderTrackingOverlay(overlays, rect, *_pimpl->_mouseOver, *_pimpl->_scene);
+				if (writeMaterialName)
+					RenderTrackingOverlay(overlays, rect, *_pimpl->_mouseOver, *_pimpl->_scene);
 				if (_pimpl->_settings._drawBasisAxis)
 					RenderOverlays::DrawBasisAxes(overlays.GetImmediateDrawables(), parserContext);
 				if (_pimpl->_settings._drawGrid)

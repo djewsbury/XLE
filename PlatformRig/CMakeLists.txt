@@ -49,6 +49,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         ../SceneEngine/Noise.cpp
         ../SceneEngine/CharacterScene.cpp
         ../SceneEngine/RigidModelScene.cpp
+        ../SceneEngine/DrawableMetadataLookup.cpp
         )
 
     if (WIN32)

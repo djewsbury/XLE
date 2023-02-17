@@ -24,6 +24,8 @@
 
 #pragma warning(disable:4505)
 
+using namespace Utility::Literals;
+
 namespace SceneEngine
 {
 
@@ -110,38 +112,6 @@ namespace SceneEngine
         return std::make_pair(Float3(0,0,0), false);
     }
 
-    static std::vector<ModelIntersectionStateContext::ResultEntry> PlacementsIntersection(
-        SceneEngine::ModelIntersectionStateContext& intersectionContext, 
-		RenderCore::Techniques::ParsingContext& parsingContext,
-		ModelIntersectionStateContext& stateContext,
-        SceneEngine::PlacementsRenderer& placementsRenderer, const SceneEngine::PlacementCellSet& cellSet,
-        SceneEngine::PlacementGUID object,
-        const RenderCore::Techniques::CameraDesc* cameraForLOD)
-    {
-            // Using the GPU, look for intersections between the ray
-            // and the given model. Since we're using the GPU, we need to
-            // get a device context. 
-		{
-			using namespace RenderCore;
-			using namespace SceneEngine;
-            Techniques::DrawablesPacket pkt[(unsigned)Techniques::Batch::Max];
-            Techniques::DrawablesPacket* pktPtr[(unsigned)Techniques::Batch::Max];
-            for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) pktPtr[c] = &pkt[c];
-			ExecuteSceneContext sceneExeContext;
-            sceneExeContext._views = {&parsingContext.GetProjectionDesc(), &parsingContext.GetProjectionDesc()+1};
-            sceneExeContext._destinationPkts = {pktPtr, &pktPtr[(unsigned)Techniques::Batch::Max]};
-			placementsRenderer.BuildDrawablesSingleView(
-				sceneExeContext,
-				cellSet, &object, &object+1);
-            parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
-            for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
-                intersectionContext.ExecuteDrawables(parsingContext, pkt[c], cameraForLOD);
-            parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
-		}
-
-        return stateContext.GetResults();
-    }
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     RenderCore::Techniques::TechniqueContext MakeIntersectionsTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
@@ -179,60 +149,57 @@ namespace SceneEngine
 
             TRY
             {
-                float rayLength = Magnitude(worldSpaceRay.second - worldSpaceRay.first);
+                using namespace RenderCore;
+                Techniques::DrawablesPacket pkt[(unsigned)Techniques::Batch::Max];
+                Techniques::DrawablesPacket* pktPtr[(unsigned)Techniques::Batch::Max];
+                for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) pktPtr[c] = &pkt[c];
+                ExecuteSceneContext sceneExeContext;
+                sceneExeContext._views = {&parsingContext.GetProjectionDesc(), &parsingContext.GetProjectionDesc()+1};
+                sceneExeContext._destinationPkts = {pktPtr, &pktPtr[(unsigned)Techniques::Batch::Max]};
 
-                // todo -- change to single ModelIntersectionStateContext operation
+                auto& renderer = *placementsEditor.GetManager()->GetRenderer();
                 auto count = trans->GetObjectCount();
-                for (unsigned c=0; c<count; ++c) {
-                    auto guid = trans->GetGuid(c);
+                VLA_UNSAFE_FORCE(PlacementGUID, guids, count);
+                for (unsigned c=0; c<count; ++c)
+                    guids[c] = trans->GetGuid(c);
 
-                    ModelIntersectionStateContext intersectionContext{
+                renderer.BuildDrawablesSingleView(
+                    sceneExeContext,
+                    placementsEditor.GetCellSet(), guids, &guids[count]);
+
+                std::vector<ModelIntersectionStateContext::ResultEntry> modelIntersectionResults;
+                {
+                    ModelIntersectionStateContext intersectionContext {
                         ModelIntersectionStateContext::RayTest,
                         parsingContext.GetThreadContext(), parsingContext.GetTechniqueContext()._pipelineAccelerators,
-                        parsingContext.GetPipelineAcceleratorsVisibility()};
+                        parsingContext.GetPipelineAcceleratorsVisibility() };
                     intersectionContext.SetRay(worldSpaceRay);
-                    auto results = PlacementsIntersection(
-                        intersectionContext, parsingContext, intersectionContext, 
-                        *placementsEditor.GetManager()->GetRenderer(), placementsEditor.GetCellSet(),
-                        guid, cameraForLOD);
+                    parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
+                    for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
+                        intersectionContext.ExecuteDrawables(parsingContext, pkt[c], c, cameraForLOD);
+                    modelIntersectionResults = intersectionContext.GetResults();
+                }
 
-                    bool gotGoodResult = false;
-                    unsigned drawCallIndex = 0;
-                    uint64_t materialGuid = 0;
-                    float intersectionDistance = std::numeric_limits<float>::max();
-                    for (auto i=results.cbegin(); i!=results.cend(); ++i) {
-                        if (i->_intersectionDepth < intersectionDistance) {
-                            // We need to translate from the drawable back to something useful
-                            // to pass back to the caller
-#if 0
-                            auto reverseLookup = placementsEditor.GetManager()->GetRenderer()->ReverseDrawableLookup(
-                                placementsEditor.GetCellSet(), &guid, &guid+1,
-                                i->_drawable);
-                            if (reverseLookup) {
-                                intersectionDistance = i->_intersectionDepth;
-                                drawCallIndex = reverseLookup->_drawCallIndex;
-                                materialGuid = reverseLookup->_materialGuid;
-                                assert(reverseLookup->_guid == guid);
-                                gotGoodResult = true;
-                            }
-#endif
-                        }
-                    }
+                // we only select the first intersection result (which is the closest)
+                if (!modelIntersectionResults.empty()) {
+                    result = IntersectionTestResult {};
+                    result->_type = IntersectionTestResult::Type::Placement;
+                    const float rayLength = Magnitude(worldSpaceRay.second - worldSpaceRay.first);
+                    result->_worldSpaceIntersectionPt = LinearInterpolate(
+                        worldSpaceRay.first, worldSpaceRay.second, 
+                        modelIntersectionResults[0]._intersectionDepth / rayLength);
+                    result->_worldSpaceIntersectionNormal = modelIntersectionResults[0]._normal;
+                    result->_distance = modelIntersectionResults[0]._intersectionDepth;
 
-                    if (gotGoodResult && (!result.has_value() || intersectionDistance < result->_distance)) {
-                        result = IntersectionTestResult{};
-                        result->_type = IntersectionTestResult::Type::Placement;
-                        result->_worldSpaceCollision = LinearInterpolate(
-                            worldSpaceRay.first, worldSpaceRay.second, 
-                            intersectionDistance / rayLength);
-                        result->_distance = intersectionDistance;
-                        result->_objectGuid = guid;
-                        result->_metadataQuery = std::move(result->_metadataQuery);
-                        // result->_drawCallIndex = drawCallIndex;
-                        // result->_materialGuid = materialGuid;
-                        // result->_materialName = trans->GetMaterialName(c, materialGuid);
-                        // result->_modelName = trans->GetObject(c)._model;
-                    }
+                    DrawableMetadataLookupContext lookupContext {
+                        MakeIteratorRange(&modelIntersectionResults[0]._drawableIndex, &modelIntersectionResults[0]._drawableIndex+1),
+                        modelIntersectionResults[0]._packetIndex };
+                    renderer.LookupDrawableMetadata(
+                        lookupContext, sceneExeContext,
+                        placementsEditor.GetCellSet(), guids, &guids[count]);
+
+                    assert(!lookupContext.GetProviders().empty());
+                    result->_metadataQuery = std::move(lookupContext.GetProviders()[0]);
                 }
             }
             CATCH(const ::Assets::Exceptions::RetrievalError&) {}
@@ -252,9 +219,9 @@ namespace SceneEngine
         IntersectionTestResult result;
         using Type = IntersectionTestResult::Type;
 
-		auto& threadContext = *RenderCore::Techniques::GetThreadContext();
+		auto threadContext = RenderCore::Techniques::GetThreadContext();
         auto techniqueContext = MakeIntersectionsTechniqueContext(*context._drawingApparatus);
-		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, *threadContext};
         parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
         parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(context._cameraDesc, context._viewportMaxs - context._viewportMins);
 
@@ -266,7 +233,8 @@ namespace SceneEngine
                 if (distance < result._distance) {
                     result = IntersectionTestResult{};
                     result._type = Type::Terrain;
-                    result._worldSpaceCollision = intersection.first;
+                    result._worldSpaceIntersectionPt = intersection.first;
+                    result._worldSpaceIntersectionNormal = {0,0,0};
                     result._distance = distance;
                 }
             }
@@ -306,7 +274,7 @@ namespace SceneEngine
     {
         using Type = IntersectionTestResult::Type;
 
-        auto& threadContext = *RenderCore::Techniques::GetThreadContext();
+        auto threadContext = RenderCore::Techniques::GetThreadContext();
 
         if ((filter & Type::Placement) && _placementsEditor) {
             auto intersections = _placementsEditor->GetManager()->GetIntersections();
@@ -325,15 +293,22 @@ namespace SceneEngine
                 TRY
                 {
                     auto techniqueContext = MakeIntersectionsTechniqueContext(*context._drawingApparatus);
-					RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+					RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, *threadContext};
                     parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
-                    // note --  we could do this all in a single render call, except that there
-                    //          is no way to associate a low level intersection result with a specific
-                    //          draw call.
+                    using namespace RenderCore;
+                    Techniques::DrawablesPacket pkt[(unsigned)Techniques::Batch::Max];
+                    Techniques::DrawablesPacket* pktPtr[(unsigned)Techniques::Batch::Max];
+                    for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) pktPtr[c] = &pkt[c];
+                    ExecuteSceneContext sceneExeContext;
+                    sceneExeContext._views = {&parsingContext.GetProjectionDesc(), &parsingContext.GetProjectionDesc()+1};
+                    sceneExeContext._destinationPkts = {pktPtr, &pktPtr[(unsigned)Techniques::Batch::Max]};
+
+                    auto& renderer = *_placementsEditor->GetManager()->GetRenderer();
                     auto count = trans->GetObjectCount();
+                    VLA_UNSAFE_FORCE(PlacementGUID, triangleBaseTestGuids, count);
+                    unsigned triangleBasedTestCount = 0;
                     for (unsigned c=0; c<count; ++c) {
-                        
                             //  We only need to test the triangles if the bounding box is 
                             //  intersecting the edge of the frustum... If the entire bounding
                             //  box is within the frustum, then we must have a hit
@@ -341,32 +316,63 @@ namespace SceneEngine
                         auto boundaryTest = TestAABB(
                             Combine(trans->GetObject(c)._localToWorld, worldToProjection),
                             boundary.first, boundary.second, RenderCore::Techniques::GetDefaultClipSpaceType());
-                        if (boundaryTest == CullTestResult::Culled) continue; // (could happen because earlier tests were on the world space bounding box)
-
-                        auto guid = trans->GetGuid(c);
-                        
-                        bool isInside = boundaryTest == CullTestResult::Within;
-                        if (!isInside) {
-                            ModelIntersectionStateContext intersectionContext{
-                                ModelIntersectionStateContext::FrustumTest,
-                                threadContext, context._drawingApparatus->_pipelineAccelerators,
-                                parsingContext.GetPipelineAcceleratorsVisibility()};
-                            intersectionContext.SetFrustum(worldToProjection);
-
-                            auto results = PlacementsIntersection(
-                                intersectionContext, parsingContext, intersectionContext, 
-                                *_placementsEditor->GetManager()->GetRenderer(), _placementsEditor->GetCellSet(), guid,
-                                &context._cameraDesc);
-                            isInside = !results.empty();
-                        }
-
-                        if (isInside) {
+                        if (boundaryTest == CullTestResult::Culled) {
+                            continue; // (could happen because earlier tests were on the world space bounding box)
+                        } else if (boundaryTest == CullTestResult::Within) {
                             IntersectionTestResult r;
                             r._type = Type::Placement;
-                            r._worldSpaceCollision = Float3(0.f, 0.f, 0.f);
+                            r._worldSpaceIntersectionPt = r._worldSpaceIntersectionNormal = {0,0,0};
                             r._distance = 0.f;
-                            r._objectGuid = guid;
+                            r._metadataQuery = [guid=trans->GetGuid(c)](uint64_t semantic) -> std::any {
+                                switch (semantic) {
+                                case "PlacementGUID"_h: return guid;
+                                default: return {};
+                                }
+                            };
                             result.push_back(r);
+                        } else {
+                            triangleBaseTestGuids[triangleBasedTestCount++] = trans->GetGuid(c);
+                        }
+                    }
+
+                    if (triangleBasedTestCount) {
+                        renderer.BuildDrawablesSingleView(
+                            sceneExeContext,
+                            _placementsEditor->GetCellSet(), triangleBaseTestGuids, &triangleBaseTestGuids[triangleBasedTestCount]);
+
+                        std::vector<ModelIntersectionStateContext::ResultEntry> modelIntersectionResults;
+                        {
+                            ModelIntersectionStateContext intersectionContext{
+                                ModelIntersectionStateContext::FrustumTest,
+                                *threadContext, context._drawingApparatus->_pipelineAccelerators,
+                                parsingContext.GetPipelineAcceleratorsVisibility()};
+                            intersectionContext.SetFrustum(worldToProjection);
+                            parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
+                            for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
+                                intersectionContext.ExecuteDrawables(parsingContext, pkt[c], c, &context._cameraDesc);
+                            modelIntersectionResults = intersectionContext.GetResults();
+                        }
+
+                        VLA(unsigned, drawableIndicesToLookup, modelIntersectionResults.size());
+                        for (unsigned c=0; c<modelIntersectionResults.size(); ++c) {
+                            drawableIndicesToLookup[c] = modelIntersectionResults[c]._drawableIndex;
+                            assert(modelIntersectionResults[c]._packetIndex == 0);
+                        }
+
+                        DrawableMetadataLookupContext lookupContext { MakeIteratorRange(&modelIntersectionResults[0]._drawableIndex, &modelIntersectionResults[0]._drawableIndex+1) };
+                        renderer.LookupDrawableMetadata(
+                            lookupContext, sceneExeContext,
+                            _placementsEditor->GetCellSet(), triangleBaseTestGuids, &triangleBaseTestGuids[triangleBasedTestCount]);
+
+                        assert(lookupContext.GetProviders().size() == modelIntersectionResults.size());
+
+                        for (unsigned c=0; c<modelIntersectionResults.size(); ++c) {
+                            IntersectionTestResult r;
+                            r._type = IntersectionTestResult::Type::Placement;
+                            r._worldSpaceIntersectionPt = r._worldSpaceIntersectionNormal = {0,0,0};
+                            r._distance = 0;
+                            r._metadataQuery = std::move(lookupContext.GetProviders()[c]);
+                            result.emplace_back(std::move(r));
                         }
                     }
                 } 

@@ -86,6 +86,7 @@ namespace SceneEngine
 		const IRigidModelScene::Config& cfg = IRigidModelScene::Config{});
 
 	namespace RigidModelSceneInternal { struct Renderer; struct Animator; }
+	class DrawableMetadataLookupContext;
 	struct IRigidModelScene::BuildDrawablesHelper
 	{
 		bool SetRenderer(void* renderer);
@@ -108,6 +109,7 @@ namespace SceneEngine
 		bool IntersectViewFrustumTest(const Float3x4& localToWorld);
 
 		unsigned GetDrawableCount(unsigned pktIndex) const;
+		void LookupMetadataProvider(DrawableMetadataLookupContext& context);
 
 		BuildDrawablesHelper(
 			IRigidModelScene& scene,
@@ -123,6 +125,7 @@ namespace SceneEngine
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> _pkts;
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _views;
 		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
+		IRigidModelScene* _scene;
 	};
 
 	inline auto IRigidModelScene::BeginBuildDrawables(

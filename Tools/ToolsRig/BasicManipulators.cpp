@@ -84,7 +84,7 @@ namespace ToolsRig
 
             auto intr = hitTestScene->FirstRayIntersection(hitTestContext, worldSpaceRay);
             if (intr._type != 0)
-                _visCameraSettings->_focus = intr._worldSpaceCollision;
+                _visCameraSettings->_focus = intr._worldSpaceIntersectionPt;
 			gotSomething = true;
         }
 

@@ -4,6 +4,7 @@
 
 #include "RigidModelScene.h"
 #include "IScene.h"
+#include "DrawableMetadataLookup.h"
 #include "../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"		// just so we can use GetDevice()
@@ -629,6 +630,28 @@ namespace SceneEngine
 			pktIndex);
 	}
 
+	void IRigidModelScene::BuildDrawablesHelper::LookupMetadataProvider(DrawableMetadataLookupContext& context)
+	{
+		std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> modelRendererConstruction;
+
+		// Attempt to lookup a ModelRendererConstruction associated with the active renderer. Unfortunately
+		// there's a bit of overhead here (particularly since we have to lock() a lot of renderers)
+		if (_scene) {
+			auto& actualScene = *checked_cast<RigidModelScene*>(_scene);
+			ScopedLock(actualScene._poolLock);
+			for (const auto& r:actualScene._renderers)
+				if (r._renderer.lock().get() == _activeRenderer) {
+					modelRendererConstruction = r._model->_completedConstruction.get();
+					break;
+				}
+		}
+
+		LightWeightMetadataLookup::SingleInstance(
+			context, 
+			*_activeRenderer->_drawableConstructor,
+			modelRendererConstruction);
+	}
+
 	bool IRigidModelScene::BuildDrawablesHelper::IntersectViewFrustumTest(const Float3x4& localToWorld)
 	{
 		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)
@@ -656,6 +679,7 @@ namespace SceneEngine
 	: _pkts(pkts)
 	, _activeRenderer(nullptr)
 	, _views(views), _complexCullingVolume(complexCullingVolume)
+	, _scene(&scene)
 	{}
 
 	IRigidModelScene::BuildDrawablesHelper::BuildDrawablesHelper(
@@ -664,6 +688,7 @@ namespace SceneEngine
 	: _pkts(executeContext._destinationPkts)
 	, _activeRenderer(nullptr)
 	, _views(executeContext._views), _complexCullingVolume(executeContext._complexCullingVolume)
+	, _scene(&scene)
 	{	
 	}
 

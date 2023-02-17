@@ -568,9 +568,15 @@ namespace ToolsRig
 	{
 		SceneEngine::IntersectionTestResult result;
 		result._type = SceneEngine::IntersectionTestResult::Type::Extra;
-		result._worldSpaceCollision = worldSpaceCollision;
+		result._worldSpaceIntersectionPt = worldSpaceCollision;
+		result._worldSpaceIntersectionNormal = {0,0,0};
 		result._distance = 0.f;
-		result._objectGuid = {0ull, o._id};
+		result._metadataQuery = [id=o._id](uint64_t semantic) -> std::any {
+			switch (semantic) {
+			case "ObjectGUID"_h: return id;
+			default: return {};
+			}
+		};
 		return result;
 	}
 

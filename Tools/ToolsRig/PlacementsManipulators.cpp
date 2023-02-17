@@ -37,12 +37,21 @@
 #include <chrono>
 
 using namespace PlatformRig::Literals;
+using namespace Utility::Literals;
 
 namespace Overlays { class ModelBrowser; }
 
 namespace ToolsRig
 {
     using namespace RenderOverlays::DebuggingDisplay;
+
+    template<typename T>
+		T TryAnyCast(std::any&& any, T defaultValue)
+	{
+		if (any.has_value() && any.type() == typeid(T))
+			return std::any_cast<T>(std::move(any));
+		return defaultValue;
+	}
 
     IPlacementManipulatorSettings::~IPlacementManipulatorSettings() {}
 
@@ -382,8 +391,8 @@ namespace ToolsRig
                         if (collision._type == SceneEngine::IntersectionTestResult::Type::Terrain
                             && _activeSubop._anchorTerrainIntersection._type == SceneEngine::IntersectionTestResult::Type::Terrain) {
                             _activeSubop._parameter = Float3(
-                                collision._worldSpaceCollision[0] - _anchorPoint[0],
-                                collision._worldSpaceCollision[1] - _anchorPoint[1],
+                                collision._worldSpaceIntersectionPt[0] - _anchorPoint[0],
+                                collision._worldSpaceIntersectionPt[1] - _anchorPoint[1],
                                 0.f);
                         }
 
@@ -421,8 +430,8 @@ namespace ToolsRig
                 
                 SceneEngine::PlacementGUID firstHit(0,0);
                 auto hitTestResult = hitTestScene->FirstRayIntersection(hitTestContext, worldSpaceRay);
-                if (hitTestResult._type == SceneEngine::IntersectionTestResult::Type::Placement) {
-                    firstHit = hitTestResult._objectGuid;
+                if (hitTestResult._type == SceneEngine::IntersectionTestResult::Type::Placement && hitTestResult._metadataQuery) {
+                    firstHit = TryAnyCast(hitTestResult._metadataQuery("PlacementGUID"_h), firstHit);
                 }
 
                     // replace the currently active selection
@@ -482,8 +491,11 @@ namespace ToolsRig
                 auto worldSpaceRay = hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition);
                 
                 auto hitTestResult = hitTestScene->FirstRayIntersection(hitTestContext, worldSpaceRay);
-                if (hitTestResult._type == SceneEngine::IntersectionTestResult::Type::Placement) {
-                    auto tempTrans = _editor->Transaction_Begin(&hitTestResult._objectGuid, &hitTestResult._objectGuid + 1);
+                if (hitTestResult._type == SceneEngine::IntersectionTestResult::Type::Placement && hitTestResult._metadataQuery) {
+                    SceneEngine::PlacementGUID firstHit(0,0);
+                    firstHit = TryAnyCast(hitTestResult._metadataQuery("PlacementGUID"_h), firstHit);
+
+                    auto tempTrans = _editor->Transaction_Begin(&firstHit, &firstHit+1);
                     if (tempTrans->GetObjectCount() == 1) {
                         _manInterface->SelectModel(tempTrans->GetObject(0)._model.c_str(), tempTrans->GetObject(0)._model.c_str());
                         _manInterface->SwitchToMode(IPlacementManipulatorSettings::Mode::PlaceSingle);
@@ -713,7 +725,7 @@ namespace ToolsRig
 
                     //  This is a spawn event. We should add a new item of the selected model
                     //  at the point clicked.
-                MoveObject(test._worldSpaceCollision, selectedModel.c_str(), "");
+                MoveObject(test._worldSpaceIntersectionPt, selectedModel.c_str(), "");
             }
         }
 
@@ -850,7 +862,7 @@ namespace ToolsRig
 		if (!hitTestScene) return false;
 
         auto test = hitTestScene->FirstRayIntersection(hitTestContext, hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition), SceneEngine::IntersectionTestResult::Type::Terrain);
-        _hoverPoint = test._worldSpaceCollision;
+        _hoverPoint = test._worldSpaceIntersectionPt;
         _hasHoverPoint = test._type == SceneEngine::IntersectionTestResult::Type::Terrain;
 
         const auto spawnTimeOut = std::chrono::milliseconds(200);
@@ -860,7 +872,7 @@ namespace ToolsRig
                 auto selectedModel = _manInterface->GetSelectedModel();
                 auto selectedMaterial = _manInterface->GetSelectedMaterial();
                 if (now >= (_spawnTimer + spawnTimeOut) && !selectedModel.empty() && !selectedMaterial.empty()) {
-                    PerformScatter(*hitTestScene, test._worldSpaceCollision, selectedModel.c_str(), selectedMaterial.c_str());
+                    PerformScatter(*hitTestScene, test._worldSpaceIntersectionPt, selectedModel.c_str(), selectedMaterial.c_str());
                     _spawnTimer = now;
                 }
                 return true;
@@ -959,10 +971,10 @@ namespace ToolsRig
             //  the origin, and see if that's within the radius.
 
         for (unsigned f=0; f<6; ++f) {
-                //  first, is the origin within the rhumboid. Our pts are arranged in 
+                //  first, is the origin within the rhomboid. Our pts are arranged in 
                 //  winding order. So we can use a simple pt in convex polygon test.
             if (PtInConvexPolygon(faces[f], &faces[f][4], testPts, Float2(0.f, 0.f))) {
-                return true; // pt is inside, so we have an interestion.
+                return true; // pt is inside, so we have an intersection.
             }
 
             for (unsigned e=0; e<4; ++e) {

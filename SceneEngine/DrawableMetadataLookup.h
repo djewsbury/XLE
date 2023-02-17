@@ -7,6 +7,9 @@
 #include <functional>
 #include <vector>
 
+namespace RenderCore { namespace Techniques { class DrawableConstructor; }}
+namespace RenderCore { namespace Assets { class ModelRendererConstruction; }}
+
 namespace SceneEngine
 {
 	using MetadataProvider = std::function<std::any(uint64_t)>;
@@ -17,10 +20,11 @@ namespace SceneEngine
 		unsigned NextIndex() const;
 		bool Finished() const;
 		unsigned PktIndex() const;
-		void AddProviderAndAdvance(MetadataProvider&&);
+		void SetProviderForNextIndex(MetadataProvider&&);
 		void AdvanceIndexOffset(unsigned);
 
 		IteratorRange<MetadataProvider*> GetProviders() { return MakeIteratorRange(_providers); }
+		std::vector<MetadataProvider> _providers;
 
 		DrawableMetadataLookupContext(IteratorRange<const unsigned*> searchIndices, unsigned pktIdx = 0);
 		~DrawableMetadataLookupContext();
@@ -28,7 +32,14 @@ namespace SceneEngine
 		IteratorRange<const unsigned*> _searchIndices;
 		unsigned _searchIndicesOffset;
 		unsigned _pktIndex;
-		std::vector<MetadataProvider> _providers;
+	};
+
+	struct LightWeightMetadataLookup
+	{
+		static void SingleInstance(
+			DrawableMetadataLookupContext& context,
+			RenderCore::Techniques::DrawableConstructor& constructor,
+			const std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>& rendererConstruction);
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +57,7 @@ namespace SceneEngine
 	{
 		return _pktIndex;
 	}
-	inline void DrawableMetadataLookupContext::AddProviderAndAdvance(MetadataProvider&& provider)
+	inline void DrawableMetadataLookupContext::SetProviderForNextIndex(MetadataProvider&& provider)
 	{
 		assert(!Finished());
 		_providers.emplace_back(std::move(provider));
