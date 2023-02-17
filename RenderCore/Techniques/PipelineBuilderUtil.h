@@ -552,7 +552,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					auto d = weakDevice.lock();
 					if (!d) Throw(std::runtime_error("Device shutdown before completion"));
 
-					auto pipelineLayoutActual = MakeCompatibleCompiledPipelineLayout(*d, pipelineLayoutPool.get(), samplerPool.get(), *pipelineLayout, pipelineLayoutInitializer, &vsCode, &psCode);
+					auto pipelineLayoutActual = MakeCompatibleCompiledPipelineLayout(*d, pipelineLayoutPool.get(), samplerPool.get(), *pipelineLayout, pipelineLayoutInitializer, &vsCode, &psCode, &gsCode);
 					Metal::ShaderProgram shaderProgram(
 						Metal::GetObjectFactory(),
 						pipelineLayoutActual, vsCode, gsCode, psCode,

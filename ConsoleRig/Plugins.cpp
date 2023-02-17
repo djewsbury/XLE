@@ -26,12 +26,12 @@ namespace ConsoleRig
 	{
 		auto simplified = MakeSplitPath(name).Rebuild();
 
-		auto i = _pimpl->_pluginLibraries.find(simplified);
-		if (i != _pimpl->_pluginLibraries.end())
-			return i->second;
 		auto i2 = _pimpl->_failedPlugins.find(simplified);
 		if (i2 != _pimpl->_failedPlugins.end())
 			Throw(std::runtime_error(i2->second));
+		auto i = _pimpl->_pluginLibraries.find(simplified);
+		if (i != _pimpl->_pluginLibraries.end())
+			return i->second;
 
 		auto library = std::make_shared<OSServices::AttachableLibrary>(simplified);
 		std::string errorMsg;
@@ -76,6 +76,10 @@ namespace ConsoleRig
 					_pimpl->_pluginLibraries.insert(std::make_pair(c, std::move(library)));
 				} CATCH(const std::exception& e) {
 					Log(Error) << "Plugin (" << c << ") failed during the Initialize method with error msg (" << e.what() << ")" << std::endl;
+					_pimpl->_failedPlugins.insert(std::make_pair(c, e.what()));
+					// we must keep the AttachableLibrary, even after this failure -- it may still be too early to unload the code, because
+					// Initialize() may have registered some pointers with global managers
+					_pimpl->_pluginLibraries.insert(std::make_pair(c, std::move(library)));
 				} CATCH_END
 			} else {
 				auto msg = "Plugin (" + c + ") failed to attach with error msg (" + errorMsg + ")";

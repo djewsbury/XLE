@@ -78,9 +78,9 @@ namespace PlatformRig { namespace Overlays
 				_lastRayTest = worldSpaceRay;
 				_hasLastRayTest = true;
 
-				auto& threadContext = *RenderCore::Techniques::GetThreadContext();
+				auto threadContext = RenderCore::Techniques::GetThreadContext();
 				auto techniqueContext = SceneEngine::MakeIntersectionsTechniqueContext(*_drawingApparatus);
-				RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
+				RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, *threadContext};
 				parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 				parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cameraDesc, viewportDims);
 

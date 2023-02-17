@@ -354,8 +354,9 @@ namespace ToolsRig
 								auto& lightScene = RenderCore::LightingEngine::GetLightScene(*preparedScene->_compiledLightingTechnique);
 								preparedScene->_envSettings->BindScene(lightScene, loadingContext);
 
+								auto threadContext = RenderCore::Techniques::GetThreadContext();
 								auto pendingResources = SceneEngine::PrepareResources(
-									*RenderCore::Techniques::GetThreadContext(),
+									*threadContext,
 									*preparedScene->_compiledLightingTechnique, *preparedScene->_scene);
 								if (pendingResources.valid()) {
 									::Assets::WhenAll(std::move(pendingResources)).ThenConstructToPromise(
