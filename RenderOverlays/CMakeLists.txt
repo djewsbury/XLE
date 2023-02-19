@@ -11,7 +11,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         OverlayContext.cpp
         OverlayPrimitives.cpp
         CommonWidgets.cpp
-        SimpleVisualization.cpp)
+        SimpleVisualization.cpp
+        LayoutEngine.cpp)
     set(OverlaysSrc
         #Overlays/Browser.cpp
         #Overlays/OceanSettings.cpp
@@ -25,5 +26,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
     xle_configure_library(RenderOverlays-${metal_name})
     target_link_libraries(RenderOverlays-${metal_name} PRIVATE RenderCoreTechniques-${metal_name} ForeignMisc freetype)
     target_link_libraries(RenderOverlays-${metal_name} PRIVATE BufferUploads-${metal_name})
+    target_link_libraries(RenderOverlays-${metal_name} PRIVATE yogacore)
 
 endforeach()

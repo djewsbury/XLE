@@ -84,30 +84,5 @@ namespace EntityInterface
 		bool _layoutInvalidated = true;
 	};
 
-    class GuidStackHelper
-	{
-	public:
-		uint64_t MakeGuid(StringSection<> name) { return Hash64(name, _guidStack.top()); }
-		uint64_t MakeGuid(StringSection<> name, StringSection<> concatenation) { return Hash64(name, Hash64(concatenation, _guidStack.top())); }
-
-		void push(uint64_t guid) { return _guidStack.push(guid); }
-		void pop() { return _guidStack.pop(); }
-		uint64_t top() const { return _guidStack.top(); }
-		bool empty() const { return _guidStack.empty(); }
-
-		void Reset()
-		{
-			_guidStack = {};
-			_guidStack.push(DefaultSeed64);
-		}
-
-		GuidStackHelper()
-		{
-			_guidStack.push(DefaultSeed64);
-		}
-	private:
-		std::stack<uint64_t> _guidStack;
-	};
-
     enum class HierarchicalEnabledState { NoImpact, DisableChildren, EnableChildren };
 }

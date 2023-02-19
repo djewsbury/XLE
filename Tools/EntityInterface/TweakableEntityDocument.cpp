@@ -5,6 +5,7 @@
 #include "TweakableEntityDocument.h"
 #include "TweakableEntityDocumentInternal.h"
 #include "FormatterAdapters.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/Streams/OutputStreamFormatter.h"
@@ -126,7 +127,7 @@ namespace EntityInterface
 
 		OutputStreamFormatterWithStubs(OutputStream& str, ArbiterState& arbiterState) : _fmttr(str), _arbiterState(&arbiterState) {}
 	private:
-		GuidStackHelper _guidStack;
+		RenderOverlays::GuidStackHelper _guidStack;
 		ArbiterState* _arbiterState;
 		OutputStreamFormatter _fmttr;
 		std::vector<uint64_t> _hierarchicalEnabledStates;
