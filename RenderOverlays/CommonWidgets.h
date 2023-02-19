@@ -84,9 +84,6 @@ namespace RenderOverlays { namespace CommonWidgets
 	class Input
 	{
 	public:
-		mutable bool _madeChange = false;
-		mutable bool _redoLayout = false;
-
 		DebuggingDisplay::InterfaceState& GetInterfaceState() { return *_interfaceState; }
 		const PlatformRig::InputSnapshot& GetEvent() { return *_input; }
 		HoveringLayer& GetHoverings() { return *_hoverings; }

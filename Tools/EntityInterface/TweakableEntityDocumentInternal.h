@@ -55,6 +55,13 @@ namespace EntityInterface
 			return _workingValues.GetParameterAsString(id).value();
 		}
 
+		void InvalidateModel() { _modelInvalidated = true; }
+		void InvalidateLayout() { _layoutInvalidated = true; }
+		void ResetModel() { _modelInvalidated = false; }
+		void ResetLayout() { _layoutInvalidated = false;}
+		bool IsModelInvalidated() const { return _modelInvalidated; }
+		bool IsLayoutInvalidated() const { return _layoutInvalidated; }
+
 		template<typename Type>
 			bool TryUpdateValueFromString(uint64_t id, StringSection<> editBoxResult)
 		{
@@ -73,6 +80,8 @@ namespace EntityInterface
 	private:
 		std::set<uint64_t> _enabledTweakables;
 		ParameterBox _workingValues;
+		bool _modelInvalidated = true;
+		bool _layoutInvalidated = true;
 	};
 
     class GuidStackHelper
