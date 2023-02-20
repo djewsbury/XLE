@@ -136,7 +136,7 @@ namespace RenderOverlays
 	#pragma warning(disable:4706)   // C4706: assignment within conditional expression
 
 	template<typename CharType>
-		static void CopyString(CharType* dst, int count, const CharType* src)
+		static void CopyString(CharType* dst, size_t count, const CharType* src)
 	{
 		if (!count)
 			return;
@@ -152,7 +152,7 @@ namespace RenderOverlays
 	}
 
 	template<typename CharType>
-		float StringEllipsis(const Font& font, StringSection<CharType> inText, CharType* outText, size_t outTextSize, float width, float spaceExtra, bool outline)
+		float StringEllipsis(CharType* outText, size_t outTextSize, const Font& font, StringSection<CharType> inText, float width, float spaceExtra, bool outline)
 	{
 		if (width <= 0.0f)
 			return 0.0f;
@@ -163,11 +163,7 @@ namespace RenderOverlays
 		while (!text.IsEmpty()) {
 			auto i = text.begin();
 			ucs4 ch = NextCharacter(text);
-			if (ch == '\n') {
-				prevGlyph = 0;
-				x = 0.0f;
-				continue;
-			}
+			assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
 
 			int curGlyph;
 			x += font.GetKerning(prevGlyph, ch, &curGlyph)[0];
@@ -193,6 +189,139 @@ namespace RenderOverlays
 		}
 
 		return x;
+	}
+
+	template<typename CharType>
+		float StringEllipsisDoubleEnded(
+			CharType* outText, size_t outTextSize,
+			const Font& font,
+			StringSection<CharType> inText,
+			StringSection<CharType> separatorList,
+			float width, float spaceExtra, bool outline)
+	{
+		if (width <= 0.0f)
+			return 0.0f;
+
+		int prevGlyphLeft = 0, prevGlyphRight = 0;
+		float leftx = 0.0f, rightx = 0.f;
+
+		// use 4 dots to estimate "..." + some kerning each side
+		auto ellipsisWidth = StringWidth(font, MakeStringSection("...."), spaceExtra, outline);
+
+		auto text = inText;
+		unsigned direction = 0;		// this will prioritize keeping the last token
+		unsigned directionBlocked = 0;
+		while (!text.IsEmpty() && directionBlocked != 3) {
+
+			direction ^= 1;
+
+			if (direction == 0) {
+
+				if (directionBlocked & 1) continue;
+
+				auto start = text.begin();
+				auto i = start;
+				float additionalX = 0;
+				while (i != text.end()) {
+					auto c = *i;
+					ucs4 ch = (ucs4)*i++;
+					assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
+
+					int curGlyph;
+					additionalX += font.GetKerning(prevGlyphLeft, ch, &curGlyph)[0];
+					prevGlyphLeft = curGlyph;
+					additionalX += font.GetGlyphProperties(ch)._xAdvance;
+
+					if(outline) additionalX += 2.0f;
+					if(ch == ' ') additionalX += spaceExtra;
+
+					if (std::find(separatorList.begin(), separatorList.end(), c) != separatorList.end())
+						break;
+				}
+
+				float finalEllipsisBuffer = 0.f;
+				size_t outBufferRequired = (i-inText.begin()) + (inText.end()-text.end());
+				if (!text.IsEmpty()) {
+					finalEllipsisBuffer = ellipsisWidth;
+					outBufferRequired += 3;
+				}
+				outBufferRequired++;		// null terminator
+				if ((leftx+additionalX-rightx+finalEllipsisBuffer) <= width && outBufferRequired < outTextSize) {
+					// it fits, accept this text
+					text._start = i;
+					leftx += additionalX;
+				} else {
+					// we can't fit it
+					directionBlocked |= 1;
+				}
+
+			} else {
+
+				if (directionBlocked & 2) continue;
+
+				auto start = text.end();
+				auto i = start;
+				float additionalX = 0;
+				while (i != text.begin()) {
+					auto c = *(i-1);
+					ucs4 ch = (ucs4)*--i;
+					assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
+
+					int curGlyph;
+					additionalX += font.GetKerningReverse(prevGlyphRight, ch, &curGlyph)[0];
+					prevGlyphRight = curGlyph;
+					additionalX += font.GetGlyphProperties(ch)._xAdvance;
+
+					if(outline) additionalX += 2.0f;
+					if(ch == ' ') additionalX += spaceExtra;
+
+					if (std::find(separatorList.begin(), separatorList.end(), c) != separatorList.end())
+						break;
+				}
+
+				float finalEllipsisBuffer = 0.f;
+				size_t outBufferRequired = (text.begin()-inText.begin()) + (inText.end()-i);
+				if (!text.IsEmpty()) {
+					finalEllipsisBuffer = ellipsisWidth;
+					outBufferRequired += 3;
+				}
+				outBufferRequired++;		// null terminator
+				if ((leftx+additionalX-rightx+finalEllipsisBuffer) <= width && outBufferRequired < outTextSize) {
+					// it fits, accept this text
+					text._end = i;
+					rightx -= additionalX;
+				} else {
+					// we can't fit it
+					directionBlocked |= 2;
+				}
+
+			}
+		}
+
+		if (text.IsEmpty()) {
+			CopyString(outText, outTextSize, inText.begin());
+			return leftx-rightx;
+		}
+
+		if (text.size() == inText.size()) {
+			// nothing was accepted -- fallback to just getting as much of the left most token as possible
+			return StringEllipsis(outText, outTextSize, font, inText, width, spaceExtra, outline);
+		}
+
+		// We didn't fit everything -- we need
+		// {inText.begin(), text.begin()} ... {text.end(), inText.end}
+		assert((size_t(text.begin() - inText.begin()) + 4 + size_t(inText.end() - text.end())) <= outTextSize);
+		auto outTextIterator = outText;
+		CopyString(outTextIterator, text.begin() - inText.begin() + 1, inText.begin());
+		outTextIterator += text.begin() - inText.begin();
+		*outTextIterator++ = '.';
+		*outTextIterator++ = '.';
+		*outTextIterator++ = '.';
+		CopyString(outTextIterator, inText.end() - text.end() + 1, text.end());
+		outTextIterator += inText.end() - text.end();
+		*outTextIterator = 0;
+
+		return StringWidth(font, MakeStringSection(outText), spaceExtra, outline);
 	}
 
 	float CharWidth(const Font& font, ucs4 ch, ucs4 prev)
@@ -313,10 +442,15 @@ namespace RenderOverlays
 	template int CharCountFromWidth(const Font&, StringSection<ucs2> text, float width, float spaceExtra, bool outline);
 	template int CharCountFromWidth(const Font&, StringSection<ucs4> text, float width, float spaceExtra, bool outline);
 
-	template float StringEllipsis(const Font&, StringSection<utf8>, utf8*, size_t, float, float, bool);
-	template float StringEllipsis(const Font&, StringSection<char>, char*, size_t, float, float, bool);
-	template float StringEllipsis(const Font&, StringSection<ucs2>, ucs2*, size_t, float, float, bool);
-	template float StringEllipsis(const Font&, StringSection<ucs4>, ucs4*, size_t, float, float, bool);
+	template float StringEllipsis(utf8*, size_t, const Font&, StringSection<utf8>, float, float, bool);
+	template float StringEllipsis(char*, size_t, const Font&, StringSection<char>, float, float, bool);
+	template float StringEllipsis(ucs2*, size_t, const Font&, StringSection<ucs2>, float, float, bool);
+	template float StringEllipsis(ucs4*, size_t, const Font&, StringSection<ucs4>, float, float, bool);
+
+	template float StringEllipsisDoubleEnded(utf8*, size_t, const Font&, StringSection<utf8>, StringSection<utf8>, float, float, bool);
+	template float StringEllipsisDoubleEnded(char*, size_t, const Font&, StringSection<char>, StringSection<char>, float, float, bool);
+	template float StringEllipsisDoubleEnded(ucs2*, size_t, const Font&, StringSection<ucs2>, StringSection<ucs2>, float, float, bool);
+	template float StringEllipsisDoubleEnded(ucs4*, size_t, const Font&, StringSection<ucs4>, StringSection<ucs4>, float, float, bool);
 
 	// --------------------------------------------------------------------------
 	// Quad

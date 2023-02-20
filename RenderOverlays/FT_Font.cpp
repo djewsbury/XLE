@@ -121,6 +121,22 @@ namespace RenderOverlays
 		return Float2(0.0f, 0.0f);
 	}
 
+	Float2 FTFont::GetKerningReverse(int prevGlyph, ucs4 ch, int* curGlyph) const
+	{
+		int currentGlyph = FT_Get_Char_Index(_face.get(), ch); 
+		if(*curGlyph)
+			*curGlyph = currentGlyph;
+
+		if (prevGlyph) {
+			FT_Vector kerning;
+			FT_Get_Kerning(_face.get(), currentGlyph, prevGlyph, FT_KERNING_DEFAULT, &kerning);
+
+			return Float2((float)kerning.x / 64, (float)kerning.y / 64);
+		}
+
+		return Float2(0.0f, 0.0f);
+	}
+
 	float FTFont::GetKerning(ucs4 prev, ucs4 ch) const
 	{
 		if (prev) {

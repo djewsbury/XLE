@@ -28,6 +28,7 @@ namespace RenderOverlays
 		virtual GlyphProperties GetGlyphProperties(ucs4 ch) const;
 
 		virtual Float2 GetKerning(int prevGlyph, ucs4 ch, int* curGlyph) const;
+		virtual Float2 GetKerningReverse(int prevGlyph, ucs4 ch, int* curGlyph) const;
 		virtual float GetKerning(ucs4 prev, ucs4 ch) const;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }

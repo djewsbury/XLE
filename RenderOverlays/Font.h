@@ -50,6 +50,7 @@ namespace RenderOverlays
 		virtual Bitmap				GetBitmap(ucs4 ch) const = 0;
 
 		virtual Float2		GetKerning(int prevGlyph, ucs4 ch, int* curGlyph) const = 0;
+		virtual Float2 		GetKerningReverse(int prevGlyph, ucs4 ch, int* curGlyph) const = 0;
 		virtual float       GetKerning(ucs4 prev, ucs4 ch) const = 0;
 
 		virtual GlyphProperties		GetGlyphProperties(ucs4 ch) const = 0;
@@ -67,26 +68,35 @@ namespace RenderOverlays
 	float CharWidth(const Font& font, ucs4 ch, ucs4 prev);
 
 	template<typename CharType>
-		float StringWidth(      const Font& font,
+		float StringWidth(		const Font& font,
 								StringSection<CharType> text,
 								float spaceExtra     = 0.0f,
 								bool outline         = false);
 
-    template<typename CharType>
+	template<typename CharType>
 		int CharCountFromWidth( const Font& font,
 								StringSection<CharType> text, 
 								float width, 
 								float spaceExtra     = 0.0f,
 								bool outline         = false);
 
-    template<typename CharType>
-		float StringEllipsis(   const Font& font,
+	template<typename CharType>
+		float StringEllipsis(   CharType* outText, size_t outTextSize,
+								const Font& font,
 								StringSection<CharType> inText,
-								CharType* outText, 
-								size_t outTextSize,
 								float width,
 								float spaceExtra     = 0.0f,
 								bool outline         = false);
+
+	template<typename CharType>
+		float StringEllipsisDoubleEnded(
+			CharType* outText, size_t outTextSize,
+			const Font& font,
+			StringSection<CharType> inText,
+			StringSection<CharType> separatorList,
+			float width,
+			float spaceExtra     = 0.0f,
+			bool outline         = false);
 
 	class Quad
 	{
