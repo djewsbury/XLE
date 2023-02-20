@@ -43,10 +43,9 @@ namespace RenderOverlays { namespace CommonWidgets
 	public:
 		std::shared_ptr<RenderOverlays::Font> _editBoxFont;
 		std::shared_ptr<RenderOverlays::Font> _buttonFont;
+		std::shared_ptr<RenderOverlays::Font> _headingFont;
 
-		DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont)
-		: _editBoxFont(std::move(editBoxFont)), _buttonFont(std::move(buttonFont)) {}
-
+		DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont);
 		static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise);
 	};
 
@@ -70,6 +69,8 @@ namespace RenderOverlays { namespace CommonWidgets
 		DebuggingDisplay::Interactables& GetInteractables() { return *_interactables; }
 		DebuggingDisplay::InterfaceState& GetInterfaceState() { return *_interfaceState; }
 		DefaultFontsBox& GetDefaultFontsBox() { return *_fonts; }
+		static DefaultFontsBox* TryGetDefaultFontsBox();
+		static void StallForDefaultFonts();
 
 		Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState, HoveringLayer& hoverings);
 		Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState);

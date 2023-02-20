@@ -40,6 +40,10 @@ namespace RenderOverlays
 
 		enum ProcessInputResult { Passthrough, Consumed };
 		ProcessInputResult ProcessInput(CommonWidgets::Input& input);
+
+		LayedOutWidgets() = default;
+		LayedOutWidgets(LayedOutWidgets&&) = default;
+		LayedOutWidgets& operator=(LayedOutWidgets&&) = default;
 	};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,7 +111,10 @@ namespace RenderOverlays
 	{
 	public:
 		LayedOutWidgets::NodeDelegates _nodeAttachments;
+		std::function<YGSize(float, YGMeasureMode, float, YGMeasureMode)> _measureDelegate;
+
 		YGNodeRef YGNode() { return _ygNode.get(); }
+		operator YGNodeRef() { return YGNode(); }
 		ImbuedNode(YogaNodePtr&& ygNode, uint64_t guid) : _ygNode(std::move(ygNode)) { _nodeAttachments._guid = guid; }
 	private:
 		YogaNodePtr _ygNode;

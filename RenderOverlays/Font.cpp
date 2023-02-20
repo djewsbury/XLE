@@ -154,8 +154,11 @@ namespace RenderOverlays
 	template<typename CharType>
 		float StringEllipsis(CharType* outText, size_t outTextSize, const Font& font, StringSection<CharType> inText, float width, float spaceExtra, bool outline)
 	{
-		if (width <= 0.0f)
+		if (width <= 0.0f|| outTextSize <= 1) {
+			if (outTextSize != 0)
+				outText[0] = 0;
 			return 0.0f;
+		}
 
 		int prevGlyph = 0;
 		float x = 0.0f;
@@ -199,8 +202,11 @@ namespace RenderOverlays
 			StringSection<CharType> separatorList,
 			float width, float spaceExtra, bool outline)
 	{
-		if (width <= 0.0f)
+		if (width <= 0.0f || outTextSize <= 1) {
+			if (outTextSize != 0)
+				outText[0] = 0;
 			return 0.0f;
+		}
 
 		int prevGlyphLeft = 0, prevGlyphRight = 0;
 		float leftx = 0.0f, rightx = 0.f;

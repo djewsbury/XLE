@@ -7,6 +7,10 @@
 #include "../ConsoleRig/ResourceBox.h"
 #include "../Assets/Continuation.h"
 
+
+#include "../Assets/AssetServices.h"
+#include "../Assets/AssetSetManager.h"
+
 using namespace PlatformRig::Literals;
 
 namespace RenderOverlays { namespace CommonWidgets
@@ -15,8 +19,13 @@ namespace RenderOverlays { namespace CommonWidgets
 	{
 		::Assets::WhenAll(
 			RenderOverlays::MakeFont("DosisBook", 16),
+			RenderOverlays::MakeFont("DosisExtraBold", 20),
 			RenderOverlays::MakeFont("DosisExtraBold", 20)).ThenConstructToPromise(std::move(promise));
 	}
+
+	DefaultFontsBox::DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont)
+	: _editBoxFont(std::move(editBoxFont)), _buttonFont(std::move(buttonFont)), _headingFont(std::move(headingFont))
+	{}
 
 	void Draw::SectionHeader(Rect rectangle, StringSection<> name, bool expanded) const
 	{
@@ -132,16 +141,28 @@ namespace RenderOverlays { namespace CommonWidgets
 			.Draw(*_context, rect, label);
 	}
 
-	Draw::Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState, HoveringLayer& hoverings)
-	: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState), _hoverings(&hoverings) 
+	DefaultFontsBox* Draw::TryGetDefaultFontsBox()
 	{
-		_fonts = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+		return ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+	}
+
+	void Draw::StallForDefaultFonts()
+	{
+		// hack -- just wait for this to be completed
+		while (!ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>())
+			::Assets::Services::GetAssetSets().OnFrameBarrier();
+	}
+
+	Draw::Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState, HoveringLayer& hoverings)
+	: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState), _hoverings(&hoverings)
+	{
+		_fonts = TryGetDefaultFontsBox();
 	}
 
 	Draw::Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState)
 	: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState)
 	{
-		_fonts = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+		_fonts = TryGetDefaultFontsBox();
 	}
 
 	constexpr auto left       = "left"_key;

@@ -39,6 +39,7 @@ namespace RenderOverlays
 
 	void LayoutEngine::InsertChildToStackTop(YGNodeRef node)
 	{
+		assert(!_workingStack.empty());
 		YGNodeInsertChild(_workingStack.top(), node, YGNodeGetChildCount(_workingStack.top()));
 	}
 

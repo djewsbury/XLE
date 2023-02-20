@@ -14,9 +14,14 @@
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderOverlays/LayoutEngine.h"
+#include "../../RenderOverlays/CommonWidgets.h"
+#include "../../RenderOverlays/Font.h"
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StringFormat.h"
+
+#include "../../Foreign/yoga/yoga/YGNode.h"
 
 using namespace Utility::Literals;
 
@@ -31,6 +36,175 @@ namespace PlatformRig { namespace Overlays
 		if (any.has_value() && any.type() == typeid(T))
 			return std::any_cast<T>(std::move(any));
 		return defaultValue;
+	}
+
+	class ToolTipHover
+	{
+	public:
+		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, Coord2 offset);
+
+		ToolTipHover(LayedOutWidgets&& layedOutWidgets);
+		ToolTipHover() = default;
+		ToolTipHover(ToolTipHover&&) = default;
+		ToolTipHover& operator=(ToolTipHover&&) = default;
+		~ToolTipHover();
+	private:
+		LayedOutWidgets _layedOutWidgets;
+	};
+
+	void ToolTipHover::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, Coord2 offset)
+	{
+		CommonWidgets::Draw draw{context, interactables, interfaceState};
+		_layedOutWidgets.Draw(draw);
+	}
+
+	ToolTipHover::ToolTipHover(LayedOutWidgets&& layedOutWidgets)
+	: _layedOutWidgets(std::move(layedOutWidgets)) {}
+	ToolTipHover::~ToolTipHover() {}
+
+	static void Heading(LayoutEngine& layoutEngine, std::string&& label)
+	{
+		auto labelNode = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*labelNode);
+
+		YGNodeStyleSetHeight(*labelNode, CommonWidgets::Draw::baseLineHeight);
+		YGNodeStyleSetFlexGrow(*labelNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
+		YGNodeStyleSetMargin(*labelNode, YGEdgeAll, 2);
+		
+		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			FillRectangle(draw.GetContext(), frame, 0xff8f8f8f);
+			DrawText().Font(*draw.GetDefaultFontsBox()._headingFont).Draw(draw.GetContext(), content, label);
+		};
+	}
+
+	static void KeyValueGroup(LayoutEngine& layoutEngine)
+	{
+		auto baseNode = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*baseNode);
+		layoutEngine.PushNode(*baseNode);
+		
+		YGNodeStyleSetFlexDirection(*baseNode, YGFlexDirectionRow);
+		YGNodeStyleSetJustifyContent(*baseNode, YGJustifySpaceBetween);
+		YGNodeStyleSetAlignItems(*baseNode, YGAlignCenter);
+		
+		YGNodeStyleSetMargin(*baseNode, YGEdgeAll, 2);
+		YGNodeStyleSetFlexGrow(*baseNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
+
+		baseNode->_nodeAttachments._drawDelegate = [](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			FillRectangle(draw.GetContext(), frame, 0xff3f3f8f);
+		};
+	}
+
+	static void KeyName(LayoutEngine& layoutEngine, std::string&& label)
+	{
+		auto labelNode = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*labelNode);
+
+		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+		assert(defaultFonts);
+		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(label)));
+		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
+		YGNodeStyleSetMargin(*labelNode, YGEdgeRight, 8);
+		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
+
+		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			FillRectangle(draw.GetContext(), frame, 0xff3f8f3f);
+			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, label);
+		};
+	}
+
+	static void KeyValue(LayoutEngine& layoutEngine, std::string&& label)
+	{
+		auto labelNode = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*labelNode);
+
+		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+		assert(defaultFonts);
+		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
+		float maxWidth = StringWidth(*defaultFonts->_buttonFont, MakeStringSection(label));
+		YGNodeStyleSetWidth(*labelNode, maxWidth);
+
+		// We can't grow, but we can shrink -- our "width" property is the length of the entire string, and if it's shrunk,
+		// we'll adjust the string with a ellipsis
+		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+		YGNodeStyleSetFlexShrink(*labelNode, 1.f);
+
+		struct AttachedData
+		{
+			std::string _originalLabel;
+			unsigned _cachedWidth = ~0u;
+			std::string _fitLabel;
+		};
+		auto attachedData = std::make_shared<AttachedData>();
+		attachedData->_originalLabel = std::move(label);
+		attachedData->_fitLabel = attachedData->_originalLabel;
+		attachedData->_cachedWidth = (unsigned)maxWidth;
+
+		labelNode->_nodeAttachments._drawDelegate = [attachedData](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			FillRectangle(draw.GetContext(), frame, 0xff8f3f3f);
+
+			// We don't get a notification after layout is finished -- so typically on the first render we may have to adjust
+			// our string to fit
+			auto* font = draw.GetDefaultFontsBox()._buttonFont.get();
+			if (frame.Width() != attachedData->_cachedWidth) {
+				attachedData->_cachedWidth = frame.Width();
+				char buffer[MaxPath];
+				auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), (float)frame.Width());
+				attachedData->_fitLabel = buffer;
+			}
+			DrawText().Font(*font).Alignment(TextAlignment::Right).Draw(draw.GetContext(), content, attachedData->_fitLabel);
+		};
+
+		#if 0
+			labelNode->_measureDelegate = [attachedData](float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) {
+				if (widthMode != YGMeasureMode::YGMeasureModeExactly) {
+					auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+					assert(defaultFonts);
+					char buffer[MaxPath];
+					auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *defaultFonts->_buttonFont, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), width);
+					attachedData->_fitLabel = buffer;
+					return YGSize { fitWidth, defaultFonts->_buttonFont->GetFontProperties()._lineHeight };
+				} else {
+					return YGSize { width, height };
+				}
+			};
+			labelNode->YGNode()->setContext(labelNode);
+			labelNode->YGNode()->setMeasureFunc(
+				[](YGNode* node, float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) -> YGSize {
+					return ((ImbuedNode*)node->getContext())->_measureDelegate(width, widthMode, height, heightMode);
+				});
+		#endif
+	}
+
+	static void SetupToolTipHover(ToolTipHover& hover, SceneEngine::MetadataProvider& metadataQuery)
+	{
+		LayoutEngine le;
+
+		std::string selectedMaterialName, selectedModelName;
+		selectedMaterialName = TryAnyCast(metadataQuery("MaterialName"_h), selectedMaterialName);
+		selectedModelName = TryAnyCast(metadataQuery("ModelScaffold"_h), selectedModelName);
+
+		auto rootNode = le.NewImbuedNode(0);
+		YGNodeStyleSetFlexDirection(*rootNode, YGFlexDirectionColumn);
+		YGNodeStyleSetJustifyContent(*rootNode, YGJustifyFlexStart);
+		YGNodeStyleSetAlignItems(*rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
+
+		YGNodeStyleSetMaxWidth(*rootNode, 768);
+
+		rootNode->_nodeAttachments._drawDelegate = [](auto& draw, auto frame, auto context) {
+			FillRectangle(draw.GetContext(), frame, 0xff3f3f3f);
+		};
+		le.PushRoot(*rootNode);
+		Heading(le, "Placement");
+
+		KeyValueGroup(le); KeyName(le, "Model"); KeyValue(le, std::move(selectedModelName)); le.PopNode();
+		KeyValueGroup(le); KeyName(le, "Material"); KeyValue(le, std::move(selectedMaterialName)); le.PopNode();
+
+		le.PopNode();
+
+		Rect container { {0, 0}, {32, 32} };
+		hover = le.BuildLayedOutWidgets(container);
 	}
 
 	class PlacementsDisplay : public IWidget ///////////////////////////////////////////////////////////
@@ -53,13 +227,7 @@ namespace PlatformRig { namespace Overlays
 					.Draw(context, allocation, "Placements Selector");
 			
 			if (_hasSelectedPlacements) {
-				char meldBuffer[256];
-				DrawText()
-					.Color(0xffcfcfcf)
-					.Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(meldBuffer) << "Model: " << _selectedModelName);
-				DrawText()
-					.Color(0xffcfcfcf)
-					.Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(meldBuffer) << "Material: " << _selectedMaterialName);
+				_hover.Render(context, layout, interactables, interfaceState, {100, 100});
 			}
 
 			if (_hasLastRayTest)
@@ -68,7 +236,7 @@ namespace PlatformRig { namespace Overlays
 
 		virtual ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input)
 		{
-			// Given the camera & viewport find a ray & perform intersection detection withte placements scene
+			// Given the camera & viewport find a ray & perform intersection detection with placements scene
 			if (input.IsRelease_LButton()) {
 				UInt2 viewportDims { 1920, 1080 };	// todo -- get real values
 				auto cameraDesc = ToolsRig::AsCameraDesc(*_camera);
@@ -86,14 +254,14 @@ namespace PlatformRig { namespace Overlays
 
 				auto firstHit = SceneEngine::FirstRayIntersection(parsingContext, *_placementsEditor, worldSpaceRay, &cameraDesc);
 				if (firstHit) {
-					_selectedMaterialName = _selectedModelName = {};
 					if (firstHit->_metadataQuery) {
-						_selectedMaterialName = TryAnyCast(firstHit->_metadataQuery("MaterialName"_h), _selectedMaterialName);
-						_selectedModelName = TryAnyCast(firstHit->_metadataQuery("ModelScaffold"_h), _selectedModelName);
+						SetupToolTipHover(_hover, firstHit->_metadataQuery);
+					} else {
+						_hover = {};
 					}
 					_hasSelectedPlacements = true;
 				} else {
-					_selectedMaterialName = _selectedModelName = {};
+					_hover = {};
 					_hasSelectedPlacements = false;
 				}
 
@@ -115,6 +283,7 @@ namespace PlatformRig { namespace Overlays
 		, _camera(std::move(camera))
 		{
 			_headingFont = RenderOverlays::MakeFont("DosisExtraBold", 20);
+			CommonWidgets::Draw::StallForDefaultFonts();
 		}
 
 	private:
@@ -122,7 +291,7 @@ namespace PlatformRig { namespace Overlays
 		std::shared_ptr<SceneEngine::PlacementsEditor> _placementsEditor;
 		std::shared_ptr<ToolsRig::VisCameraSettings> _camera;
 
-		std::string _selectedModelName, _selectedMaterialName;
+		ToolTipHover _hover;
 		bool _hasSelectedPlacements = false;
 
 		std::pair<Float3, Float3> _lastRayTest;
