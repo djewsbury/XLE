@@ -9,16 +9,25 @@ namespace RenderOverlays
 {
 	using namespace DebuggingDisplay;
 
-	void LayedOutWidgets::Draw(CommonWidgets::Draw& draw)
+	static Rect TransformRect(const Float3x3& transform, const Rect& input)
+	{
+		auto topLeft = transform * Float3(input._topLeft, 1.f);
+		auto bottomRight = transform * Float3(input._bottomRight, 1.f);
+		return { Truncate(topLeft), Truncate(bottomRight) };
+	}
+
+	void LayedOutWidgets::Draw(CommonWidgets::Draw& draw, const Float3x3& transform)
 	{
 		auto i = _nodeAttachments.begin();
 		auto i2 = _layedOutLocations.begin();
 		for (;i!=_nodeAttachments.end(); ++i, ++i2) {
+			auto frame = TransformRect(transform, i2->first);
+			auto content = TransformRect(transform, i2->second);
 			if (i->_drawDelegate)
-				i->_drawDelegate(draw, i2->first, i2->second);
+				i->_drawDelegate(draw, frame, content);
 
 			if (i->_ioDelegate)
-				draw.GetInteractables().Register({i2->second, i->GetGuid()});
+				draw.GetInteractables().Register({content, i->GetGuid()});
 		}
 	}
 
@@ -53,10 +62,10 @@ namespace RenderOverlays
 		_workingStack.pop();
 	}
 
-	void LayoutEngine::PushRoot(YGNodeRef node)
+	void LayoutEngine::PushRoot(YGNodeRef node, Coord2 containerSize)
 	{
 		_workingStack.push(node);
-		_roots.push_back(node);
+		_roots.emplace_back(node, containerSize);
 	}
 
 	YGNodeRef LayoutEngine::NewNode()
@@ -75,38 +84,47 @@ namespace RenderOverlays
 		return res;
 	}
 
-	LayedOutWidgets LayoutEngine::BuildLayedOutWidgets(Rect container)
+	LayedOutWidgets LayoutEngine::BuildLayedOutWidgets()
 	{
 		assert(_workingStack.empty());
 		_guidStack.pop();
 		assert(_guidStack.empty());
+		assert(!_roots.empty());
+		if (_roots.empty())
+			return {};
 
 		LayedOutWidgets result;
 		for (auto& r:_roots)
-			YGNodeCalculateLayout(r, (float)container.Width(), (float)container.Height(), YGDirectionInherit); // YGDirectionLTR);
+			YGNodeCalculateLayout(r.first, (float)r.second[0], (float)r.second[1], YGDirectionInherit); // YGDirectionLTR);
 
 		result._layedOutLocations.reserve(_imbuedNodes.size());
 		for (auto& n:_imbuedNodes)
 			if (n->_nodeAttachments._drawDelegate) {
 				auto ygNode = n->YGNode();
-				Rect frame;
-				frame._topLeft = { YGNodeLayoutGetLeft(ygNode), YGNodeLayoutGetTop(ygNode) };
+				Float2 topLeft { YGNodeLayoutGetLeft(ygNode), YGNodeLayoutGetTop(ygNode) };
 				auto parent = YGNodeGetParent(ygNode);
 				while (parent) {
-					Coord2 parentTopLeft = { YGNodeLayoutGetLeft(parent), YGNodeLayoutGetTop(parent) };
-					frame._topLeft += parentTopLeft;
+					topLeft += Float2 { YGNodeLayoutGetLeft(parent), YGNodeLayoutGetTop(parent) };
 					parent = YGNodeGetParent(parent);
 				}
-				frame._topLeft += container._topLeft;
-				frame._bottomRight[0] = frame._topLeft[0] + (int)YGNodeLayoutGetWidth(ygNode);
-				frame._bottomRight[1] = frame._topLeft[1] + (int)YGNodeLayoutGetHeight(ygNode);
+				Float2 bottomRight;
+				bottomRight[0] = topLeft[0] + (int)YGNodeLayoutGetWidth(ygNode);
+				bottomRight[1] = topLeft[1] + (int)YGNodeLayoutGetHeight(ygNode);
 
-				Rect content = frame;
-				content._topLeft += Coord2{ YGNodeLayoutGetPadding(ygNode, YGEdgeLeft), YGNodeLayoutGetPadding(ygNode, YGEdgeTop) };
-				content._bottomRight -= Coord2{ YGNodeLayoutGetPadding(ygNode, YGEdgeRight), YGNodeLayoutGetPadding(ygNode, YGEdgeBottom) };
+				// transform to final frame & content rect (floor to integer here)
+				Rect frame { topLeft, bottomRight };
+				Rect content {
+					topLeft + Int2{ YGNodeLayoutGetPadding(ygNode, YGEdgeLeft), YGNodeLayoutGetPadding(ygNode, YGEdgeTop) },
+					bottomRight - Int2{ YGNodeLayoutGetPadding(ygNode, YGEdgeRight), YGNodeLayoutGetPadding(ygNode, YGEdgeBottom) }
+				};
 
 				result._layedOutLocations.emplace_back(frame, content);
 			}
+
+		result._dimensions = {
+			YGNodeLayoutGetWidth(_roots[0].first),
+			YGNodeLayoutGetHeight(_roots[0].first)
+		};
 
 		result._nodeAttachments.reserve(_imbuedNodes.size());
 		for (auto& n:_imbuedNodes)

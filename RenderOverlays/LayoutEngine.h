@@ -4,6 +4,7 @@
 
 #pragma once
 #include "OverlayPrimitives.h"
+#include "../../Math/Matrix.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Foreign/yoga/yoga/Yoga.h"
@@ -35,8 +36,9 @@ namespace RenderOverlays
 
 		std::vector<std::pair<Rect, Rect>> _layedOutLocations;
 		std::vector<NodeDelegates> _nodeAttachments;
+		Coord2 _dimensions;
 
-		void Draw(CommonWidgets::Draw& draw);
+		void Draw(CommonWidgets::Draw& draw, const Float3x3& transform);
 
 		enum ProcessInputResult { Passthrough, Consumed };
 		ProcessInputResult ProcessInput(CommonWidgets::Input& input);
@@ -84,13 +86,13 @@ namespace RenderOverlays
 	public:
 		YGNodeRef NewNode();
 		ImbuedNode* NewImbuedNode(uint64_t guid);
-		LayedOutWidgets BuildLayedOutWidgets(Rect container);
+		LayedOutWidgets BuildLayedOutWidgets();
 
 		void InsertChildToStackTop(YGNodeRef);
 		void PushNode(YGNodeRef);
 		void PopNode();
 
-		void PushRoot(YGNodeRef);
+		void PushRoot(YGNodeRef, Coord2 containerSize);
 		GuidStackHelper& GuidStack() { return _guidStack; }
 
 		LayoutEngine();
@@ -98,7 +100,7 @@ namespace RenderOverlays
 
 	private:
 		std::stack<YGNodeRef> _workingStack;
-		std::vector<YGNodeRef> _roots;
+		std::vector<std::pair<YGNodeRef, Coord2>> _roots;
 		GuidStackHelper _guidStack;
 
 		std::vector<std::unique_ptr<ImbuedNode>> _imbuedNodes;

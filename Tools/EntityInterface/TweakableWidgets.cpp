@@ -471,10 +471,10 @@ namespace EntityInterface
 			_hierarchicalEnabledStates.pop_back();
 		}
 
-		YGNodeRef BeginRoot()
+		YGNodeRef BeginRoot(Coord2 containerSize)
 		{
 			auto windowNode = _layoutEngine.NewNode();
-			_layoutEngine.PushRoot(windowNode);
+			_layoutEngine.PushRoot(windowNode, containerSize);
 			return windowNode;
 		}
 
@@ -501,9 +501,9 @@ namespace EntityInterface
 		void WriteKeyedValue(StringSection<> name, StringSection<> value) override {}
 		void WriteSequencedValue(StringSection<> value) override {}
 
-		LayedOutWidgets BuildLayedOutWidgets(Rect container)
+		LayedOutWidgets BuildLayedOutWidgets()
 		{
-			return _layoutEngine.BuildLayedOutWidgets(container);
+			return _layoutEngine.BuildLayedOutWidgets();
 		}
 
 		WidgetsLayoutFormatter(std::shared_ptr<ArbiterState> state) : _state(std::move(state)) {}
@@ -523,22 +523,28 @@ namespace EntityInterface
 
 		void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) override
 		{
+			Rect container = layout.GetMaximumSize();
+			container._topLeft += Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
+			container._bottomRight -= Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
+
 			if (_docInterface->GetArbiterState()->IsLayoutInvalidated()) {
 				_docInterface->GetArbiterState()->ResetLayout();
 				WidgetsLayoutFormatter formatter{_docInterface->GetArbiterState()};
-				formatter.BeginRoot();
+				formatter.BeginRoot({container.Width(), container.Height()});
 				_docInterface->ExecuteOnFormatter(formatter);
 				formatter.EndRoot();
 
-				Rect container = layout.GetMaximumSize();
-				container._topLeft += Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
-				container._bottomRight -= Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
-				_layedOutWidgets = formatter.BuildLayedOutWidgets(container);
+				_layedOutWidgets = formatter.BuildLayedOutWidgets();
 			}
 
 			{
+				Float3x3 transform {
+					1.f, 0.f, container._topLeft[0],
+					0.f, 1.f, container._topLeft[1],
+					0.f, 0.f, 1.f
+				};
 				CommonWidgets::Draw draw{context, interactables, interfaceState, _hoverings};
-				_layedOutWidgets.Draw(draw);
+				_layedOutWidgets.Draw(draw, transform);
 			}
 		}
 

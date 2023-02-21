@@ -47,7 +47,9 @@ namespace PlatformRig { namespace Overlays
 	class ToolTipHover
 	{
 	public:
-		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, Coord2 offset);
+		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform);
+
+		Coord2 GetDimensions() const;
 
 		ToolTipHover(LayedOutWidgets&& layedOutWidgets);
 		ToolTipHover() = default;
@@ -58,10 +60,15 @@ namespace PlatformRig { namespace Overlays
 		LayedOutWidgets _layedOutWidgets;
 	};
 
-	void ToolTipHover::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, Coord2 offset)
+	void ToolTipHover::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform)
 	{
 		CommonWidgets::Draw draw{context, interactables, interfaceState};
-		_layedOutWidgets.Draw(draw);
+		_layedOutWidgets.Draw(draw, transform);
+	}
+
+	Coord2 ToolTipHover::GetDimensions() const
+	{
+		return _layedOutWidgets._dimensions;
 	}
 
 	ToolTipHover::ToolTipHover(LayedOutWidgets&& layedOutWidgets)
@@ -244,12 +251,13 @@ namespace PlatformRig { namespace Overlays
 		auto cellSimilarPlacementCount = TryAnyCast<unsigned>(metadataQuery("Cell_SimilarPlacementCount"_h));
 
 		auto rootNode = le.NewNode();
-		le.PushRoot(rootNode);
+		le.PushRoot(rootNode, {32, 32});
+		YGNodeStyleSetMaxWidth(rootNode, 768);
+		YGNodeStyleSetMaxHeight(rootNode, 1440);		// we need to set some maximum height to allow the dimensions returned in the layout to adapt to the children
+
 		YGNodeStyleSetFlexDirection(rootNode, YGFlexDirectionColumn);
 		YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
 		YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
-
-		YGNodeStyleSetMaxWidth(rootNode, 768);
 
 		Heading(le, "Placement");
 
@@ -281,8 +289,7 @@ namespace PlatformRig { namespace Overlays
 
 		le.PopNode();
 
-		Rect container { {0, 0}, {32, 32} };
-		hover = le.BuildLayedOutWidgets(container);
+		hover = le.BuildLayedOutWidgets();
 	}
 
 	static void SetupToolTipHover(ToolTipHover& hover, const std::exception& e)
@@ -290,7 +297,7 @@ namespace PlatformRig { namespace Overlays
 		LayoutEngine le;
 
 		auto rootNode = le.NewNode();
-		le.PushRoot(rootNode);
+		le.PushRoot(rootNode, {32, 32});
 		YGNodeStyleSetFlexDirection(rootNode, YGFlexDirectionColumn);
 		YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
 		YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
@@ -300,14 +307,13 @@ namespace PlatformRig { namespace Overlays
 
 		le.PopNode();
 
-		Rect container { {0, 0}, {32, 32} };
-		hover = le.BuildLayedOutWidgets(container);
+		hover = le.BuildLayedOutWidgets();
 	}
 
 	class PlacementsDisplay : public IWidget ///////////////////////////////////////////////////////////
 	{
 	public:
-		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
+		void Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
 		{
 			const unsigned lineHeight = 20;
 			const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
@@ -328,7 +334,47 @@ namespace PlatformRig { namespace Overlays
 					context, _selectedPlacementsLocalBoundary, AsFloat3x4(_selectedPlacementsLocalToWorld),
 					ColorB(196, 230, 230));
 
-				_hover.Render(context, layout, interactables, interfaceState, {100, 100});
+				// Place the hover either left or right on the screen; depending on which side has more space
+				// This causes the popup to jump around a bit; but it will often find a pretty logical place to end up
+				UInt2 viewportDims { 1920, 1080 };	// todo -- get real values
+				auto cameraDesc = ToolsRig::AsCameraDesc(*_camera);
+				auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameraDesc, viewportDims);
+				auto localToProj = Combine(_selectedPlacementsLocalToWorld, projDesc._worldToProjection);
+				auto projectionSpaceCorners = FindFrustumIntersectionExtremities(
+					localToProj,
+					_selectedPlacementsLocalBoundary.first, _selectedPlacementsLocalBoundary.second,
+					RenderCore::Techniques::GetDefaultClipSpaceType());
+				Float2 screenSpaceMins { FLT_MAX, FLT_MAX }, screenSpaceMaxs { -FLT_MAX, -FLT_MAX };
+				for (auto proj:projectionSpaceCorners) {
+					proj[0] = (proj[0] / proj[3] * .5f + 0.5f) * viewportDims[0];
+					proj[1] = (proj[1] / proj[3] * .5f + 0.5f) * viewportDims[1];
+					screenSpaceMins[0] = std::min(screenSpaceMins[0], proj[0]);
+					screenSpaceMins[1] = std::min(screenSpaceMins[1], proj[1]);
+					screenSpaceMaxs[0] = std::max(screenSpaceMaxs[0], proj[0]);
+					screenSpaceMaxs[1] = std::max(screenSpaceMaxs[1], proj[1]);
+				}
+
+				if (screenSpaceMins[0] < screenSpaceMaxs[0]) {
+					FillRectangle(context, Rect{screenSpaceMins, screenSpaceMaxs}, ColorB(196, 196, 196, 128));
+
+					float spaceLeft = screenSpaceMins[0];
+					float spaceRight = viewportDims[0] - screenSpaceMaxs[0];
+
+					float left;
+					if (spaceLeft > spaceRight) {
+						left = std::max(0.f, screenSpaceMins[0] - _hover.GetDimensions()[0]);
+					} else {
+						left = screenSpaceMaxs[0];
+					}
+					float top = std::max(0.f, screenSpaceMins[1]);
+					top = std::min(top, (float)viewportDims[1] - std::min(_hover.GetDimensions()[1], (int)viewportDims[1]));
+					Float3x3 transform {
+						1.f, 0.f, left,
+						0.f, 1.f, top,
+						0.f, 0.f, 1.f
+					};
+					_hover.Render(context, layout, interactables, interfaceState, transform);
+				}
 			}
 
 			if (_hasLastRayTest)
