@@ -55,6 +55,9 @@ namespace XLEMath
     public:
         CullTestResult TestSphere(Float3 centerPoint, float radius);
 
+        const Float4* GetFrustumPlanes() const { return _frustumPlanes; }
+        const Float3* GetFrustumCorners() const { return _frustumCorners; }
+
         AccurateFrustumTester(const Float4x4& localToProjection, ClipSpaceType clipSpaceType);
         ~AccurateFrustumTester();
     private:
@@ -115,6 +118,11 @@ namespace XLEMath
         float extrusionLength,
         ClipSpaceType clipSpaceType);
 
+    std::vector<Float4> FindFrustumIntersectionExtremities(
+        const Float4x4& localToProjection,
+        const Float3& mins, const Float3& maxs,
+        ClipSpaceType clipSpaceType);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
         //   B U I L D I N G   P R O J E C T I O N   M A T R I C E S
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -154,8 +162,8 @@ namespace XLEMath
     Float2 CalculateDepthProjRatio_Ortho(const Float4& minimalProjection, ClipSpaceType clipSpaceType);
 
     std::pair<Float3, Float3> BuildRayUnderCursor(
-        Int2 mousePosition, 
-        Float3 absFrustumCorners[], 
+        Int2 mousePosition,
+        Float3 absFrustumCorners[],
         const std::pair<Float2, Float2>& viewport);
 
     void ChangeFarClipPlane(Float4x4& perspectiveProjection, float newFarPlane, ClipSpaceType clipSpaceType);

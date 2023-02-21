@@ -603,6 +603,201 @@ namespace XLEMath
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    static bool WithinFrustum(const Float4& projSpace, ClipSpaceType clipSpaceType)
+    {
+        if (    projSpace[0] < -projSpace[3] || projSpace[0] > projSpace[3]
+            ||  projSpace[1] < -projSpace[3] || projSpace[1] > projSpace[3])
+            return false;
+
+        if (clipSpaceType == ClipSpaceType::StraddlingZero) {
+            return projSpace[2] >= -projSpace[3] || projSpace[2] <= projSpace[3];
+        } else {
+            return projSpace[2] >= 0.f || projSpace[2] <= projSpace[3];
+        }
+    }
+
+    static bool OutsideNegX(Float4 a) { return a[0] < -a[3]; }
+    static bool OutsidePosX(Float4 a) { return a[0] >  a[3]; }
+    static bool OutsideNegY(Float4 a) { return a[1] < -a[3]; }
+    static bool OutsidePosY(Float4 a) { return a[1] >  a[3]; }
+    static bool OutsideNegZ(Float4 a) { return a[2] < 0.f; }
+    static bool OutsidePosZ(Float4 a) { return a[2] >  a[3]; }
+
+    static float InterpolateNegX(Float4 start, Float4 end) { return (start[3] + start[0]) / (start[0] + start[3] - end[0] - end[3]); }
+    static float InterpolatePosX(Float4 start, Float4 end) { return (start[3] - start[0]) / (end[0] - end[3] - start[0] + start[3]); }
+    static float InterpolateNegY(Float4 start, Float4 end) { return (start[3] + start[1]) / (start[1] + start[3] - end[1] - end[3]); }
+    static float InterpolatePosY(Float4 start, Float4 end) { return (start[3] - start[1]) / (end[1] - end[3] - start[1] + start[3]); }
+
+    static float InterpolateNegZ(Float4 start, Float4 end) { return (start[2]) / (start[2] - end[2]); }
+    static float InterpolatePosZ(Float4 start, Float4 end) { return (start[3] - start[2]) / (end[2] - end[3] - start[2] + start[3]); }
+
+    static bool OutsideNegZ_StraddlingZero(Float4 a) { return a[2] < -a[3]; }
+    static float InterpolateNegZ_StraddlingZero(Float4 start, Float4 end) { return (start[3] + start[2]) / (start[2] + start[3] - end[2] - end[3]); }
+
+    struct ClippingTriangle { Float4 A, B, C; };
+    template<bool (*TestFn)(Float4), float (*InterpolationFn)(Float4, Float4)>
+        void ClipTriangleHelper(std::vector<ClippingTriangle>& destination, ClippingTriangle tri)
+    {
+        Float4 input[3] { tri.A, tri.B, tri.C };
+        auto clip0 = TestFn(input[0]);
+        auto clip1 = TestFn(input[1]);
+        auto clip2 = TestFn(input[2]);
+
+        auto A = LinearInterpolate(input[0], input[1], InterpolationFn(input[0], input[1]));
+        auto B = LinearInterpolate(input[1], input[2], InterpolationFn(input[1], input[2]));
+        auto C = LinearInterpolate(input[2], input[0], InterpolationFn(input[2], input[0]));
+
+        if (clip0) {
+
+            if (clip1) {
+
+                if (clip2) {
+                    // 0, 1, 2 -> outside
+                } else {
+                    // 0, 1 -> outside, 2 -> inside
+                    destination.push_back({C, B, input[2]});
+                }
+
+            } else if (clip2) {
+                // 0 -> outside, 1 -> inside, 2 -> outside
+                destination.push_back({A, input[1], B});
+            } else {
+                // 0 -> outside, 1, 2 -> inside
+                destination.push_back({A, input[1], C});
+                destination.push_back({C, input[1], input[2]});
+            }
+            
+        } else if (clip1) {
+
+            if (clip2) {
+                // 0 -> inside, 1, 2 -> outside
+                destination.push_back({input[0], A, C});
+            } else {
+                // 0 -> inside, 1 -> outside, 2 -> inside
+                destination.push_back({input[0], A, input[2]});
+                destination.push_back({input[2], A, B});
+            }
+
+        } else if (clip2) {
+
+            // 0, 1 -> inside, 2 -> outside
+            destination.push_back({input[0], input[1], C});
+            destination.push_back({C, input[1], B});
+
+        } else {
+
+            // all inside
+            destination.push_back(tri);
+
+        }
+    }
+
+    static std::vector<ClippingTriangle> ClipTriangle(Float4 A, Float4 B, Float4 C, ClipSpaceType clipSpaceType)
+    {
+        // Not particularly efficient, but we'll clip by each plane of the projection frustum, one at a time;
+        std::vector<ClippingTriangle> workingTriangles;
+        std::vector<ClippingTriangle> workingTriangles2;
+
+        // Pos & Neg X
+        ClipTriangleHelper<OutsideNegX, InterpolateNegX>(workingTriangles2, {A, B, C});
+        for (auto t:workingTriangles2)
+            ClipTriangleHelper<OutsidePosX, InterpolatePosX>(workingTriangles, t);
+
+        // Pos & Neg Y
+        workingTriangles2.clear();
+        for (auto t:workingTriangles)
+            ClipTriangleHelper<OutsideNegY, InterpolateNegY>(workingTriangles2, t);
+        workingTriangles.clear();
+        for (auto t:workingTriangles2)
+            ClipTriangleHelper<OutsidePosY, InterpolatePosY>(workingTriangles, t);
+
+        // Pos & Neg Z
+        workingTriangles2.clear();
+        if (clipSpaceType == ClipSpaceType::StraddlingZero) {
+            for (auto t:workingTriangles)
+                ClipTriangleHelper<OutsideNegZ_StraddlingZero, InterpolateNegZ_StraddlingZero>(workingTriangles2, t);
+        } else {
+            for (auto t:workingTriangles)
+                ClipTriangleHelper<OutsideNegZ, InterpolateNegZ>(workingTriangles2, t);
+        }
+        workingTriangles.clear();
+        for (auto t:workingTriangles2)
+            ClipTriangleHelper<OutsidePosZ, InterpolatePosZ>(workingTriangles, t);
+
+        return workingTriangles;
+    }
+
+    std::vector<Float4> FindFrustumIntersectionExtremities(
+        const Float4x4& localToProjection, 
+        const Float3& mins, const Float3& maxs,
+        ClipSpaceType clipSpaceType)
+    {
+        // For a given AABB in local space, find a set of points that represent the extremities of the 
+        // intersection with a frustum
+        // If there is no intersection, an empty vector is returned
+        // Results are in 4d homogenous clip space
+        //
+        // This can be useful for finding the min and max coordinates in 2d of a bounding box (ie, if we
+        // just projected it without any clipping, we would not calculate good results if part of the bounding
+        // box is behind the camera, etc)
+        //
+        // We do this in a simple way by interpreting the bounding box as a collection of 12 triangles, and clipping
+        // each triangle against the frustum separately. While not being the most optimal and elegant solution, it 
+        // should give us the correct result
+
+        std::vector<Float4> result;
+
+        Float4 projectionSpaceCorners[8];
+        Float3 localSpaceCorners[8] {
+            { mins[0], mins[1], mins[2] },
+            { maxs[0], mins[1], mins[2] },
+            { mins[0], maxs[1], mins[2] },
+            { maxs[0], maxs[1], mins[2] },
+
+            { mins[0], mins[1], maxs[2] },
+            { maxs[0], mins[1], maxs[2] },
+            { mins[0], maxs[1], maxs[2] },
+            { maxs[0], maxs[1], maxs[2] }
+        };
+        for (unsigned c=0; c<8; ++c)
+            projectionSpaceCorners[c] = localToProjection * Float4{localSpaceCorners[c], 1.f};
+
+        UInt3 faceTriangles[] = {
+            { 0, 1, 2 }, { 2, 1, 3 },
+            { 4, 6, 5 }, { 5, 6, 7 },
+            { 0, 4, 1 }, { 1, 4, 5 },
+            { 2, 3, 6 }, { 6, 3, 7 },
+            { 1, 5, 3 }, { 3, 5, 7 },
+            { 0, 2, 4 }, { 4, 2, 6 }
+        };
+
+        for (auto t:faceTriangles) {
+            auto A = projectionSpaceCorners[t[0]];
+            auto B = projectionSpaceCorners[t[1]];
+            auto C = projectionSpaceCorners[t[2]];
+            if (WithinFrustum(A, clipSpaceType) && WithinFrustum(B, clipSpaceType) && WithinFrustum(C, clipSpaceType)) {
+                result.push_back(A);
+                result.push_back(B);
+                result.push_back(C);
+                continue;
+            }
+
+            // we only need the backfaces, since this will work both when the frustum contains the bounding box, and
+            // where there is an intersection; so we can consider potentially rejecting some of the faces here
+
+            // Some clipping required (note that we'll end up with a lot of dupes)
+            auto clipped = ClipTriangle(A, B, C, clipSpaceType);
+            for (auto tri:clipped) {
+                result.push_back(tri.A);
+                result.push_back(tri.B);
+                result.push_back(tri.C);
+            }
+        }
+        return result;
+    }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
     CullTestResult ArbitraryConvexVolumeTester::TestSphere(Float3 centerPoint, float radius) const
     {
         uint64_t straddlingFlags = 0;
