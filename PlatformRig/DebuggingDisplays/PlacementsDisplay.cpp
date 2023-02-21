@@ -21,8 +21,6 @@
 #include "../../Assets/Marker.h"
 #include "../../Utility/StringFormat.h"
 
-#include "../../Foreign/yoga/yoga/YGNode.h"
-
 using namespace Utility::Literals;
 
 namespace PlatformRig { namespace Overlays
@@ -36,6 +34,14 @@ namespace PlatformRig { namespace Overlays
 		if (any.has_value() && any.type() == typeid(T))
 			return std::any_cast<T>(std::move(any));
 		return defaultValue;
+	}
+
+	template<typename T>
+		std::optional<T> TryAnyCast(std::any&& any)
+	{
+		if (any.has_value() && any.type() == typeid(T))
+			return std::any_cast<T>(std::move(any));
+		return {};
 	}
 
 	class ToolTipHover
@@ -67,32 +73,31 @@ namespace PlatformRig { namespace Overlays
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
 
+		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+		assert(defaultFonts);
+		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_headingFont, MakeStringSection(label)));
 		YGNodeStyleSetHeight(*labelNode, CommonWidgets::Draw::baseLineHeight);
 		YGNodeStyleSetFlexGrow(*labelNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
 		YGNodeStyleSetMargin(*labelNode, YGEdgeAll, 2);
+		YGNodeStyleSetAlignSelf(*labelNode, YGAlignCenter);
 		
 		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			FillRectangle(draw.GetContext(), frame, 0xff8f8f8f);
 			DrawText().Font(*draw.GetDefaultFontsBox()._headingFont).Draw(draw.GetContext(), content, label);
 		};
 	}
 
 	static void KeyValueGroup(LayoutEngine& layoutEngine)
 	{
-		auto baseNode = layoutEngine.NewImbuedNode(0);
-		layoutEngine.InsertChildToStackTop(*baseNode);
-		layoutEngine.PushNode(*baseNode);
+		auto baseNode = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(baseNode);
+		layoutEngine.PushNode(baseNode);
 		
-		YGNodeStyleSetFlexDirection(*baseNode, YGFlexDirectionRow);
-		YGNodeStyleSetJustifyContent(*baseNode, YGJustifySpaceBetween);
-		YGNodeStyleSetAlignItems(*baseNode, YGAlignCenter);
+		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
+		YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
+		YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
 		
-		YGNodeStyleSetMargin(*baseNode, YGEdgeAll, 2);
-		YGNodeStyleSetFlexGrow(*baseNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
-
-		baseNode->_nodeAttachments._drawDelegate = [](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			FillRectangle(draw.GetContext(), frame, 0xff3f3f8f);
-		};
+		YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
+		YGNodeStyleSetFlexGrow(baseNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
 	}
 
 	static void KeyName(LayoutEngine& layoutEngine, std::string&& label)
@@ -109,7 +114,6 @@ namespace PlatformRig { namespace Overlays
 		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
 
 		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			FillRectangle(draw.GetContext(), frame, 0xff3f8f3f);
 			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, label);
 		};
 	}
@@ -142,15 +146,13 @@ namespace PlatformRig { namespace Overlays
 		attachedData->_cachedWidth = (unsigned)maxWidth;
 
 		labelNode->_nodeAttachments._drawDelegate = [attachedData](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			FillRectangle(draw.GetContext(), frame, 0xff8f3f3f);
-
 			// We don't get a notification after layout is finished -- so typically on the first render we may have to adjust
 			// our string to fit
 			auto* font = draw.GetDefaultFontsBox()._buttonFont.get();
-			if (frame.Width() != attachedData->_cachedWidth) {
-				attachedData->_cachedWidth = frame.Width();
+			if (content.Width() != attachedData->_cachedWidth) {
+				attachedData->_cachedWidth = content.Width();
 				char buffer[MaxPath];
-				auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), (float)frame.Width());
+				auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), (float)content.Width());
 				attachedData->_fitLabel = buffer;
 			}
 			DrawText().Font(*font).Alignment(TextAlignment::Right).Draw(draw.GetContext(), content, attachedData->_fitLabel);
@@ -177,29 +179,124 @@ namespace PlatformRig { namespace Overlays
 		#endif
 	}
 
+	static void KeyValue(LayoutEngine& layoutEngine, unsigned value)
+	{
+		auto labelNode = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*labelNode);
+
+		auto str = std::to_string(value);
+
+		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+		assert(defaultFonts);
+		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(str)));
+		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
+		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
+
+		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
+		};
+	}
+
+	static void KeyValueSimple(LayoutEngine& layoutEngine, std::string&& str)
+	{
+		auto labelNode = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*labelNode);
+
+		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+		assert(defaultFonts);
+		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(str)));
+		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
+		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
+
+		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
+		};
+	}
+
+	static void ValueGroup(LayoutEngine& layoutEngine)
+	{
+		auto baseNode = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(baseNode);
+		layoutEngine.PushNode(baseNode);
+		
+		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
+		YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
+		YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
+		
+		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 2);
+		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 2);
+	}
+
 	static void SetupToolTipHover(ToolTipHover& hover, SceneEngine::MetadataProvider& metadataQuery)
 	{
 		LayoutEngine le;
 
 		std::string selectedMaterialName, selectedModelName;
-		selectedMaterialName = TryAnyCast(metadataQuery("MaterialName"_h), selectedMaterialName);
+		selectedMaterialName = TryAnyCast(metadataQuery("MaterialScaffold"_h), selectedMaterialName);
 		selectedModelName = TryAnyCast(metadataQuery("ModelScaffold"_h), selectedModelName);
+		auto drawCallIndex = TryAnyCast<unsigned>(metadataQuery("DrawCallIndex"_h));
+		auto drawCallCount = TryAnyCast<unsigned>(metadataQuery("DrawCallCount"_h));
+		auto indexCount = TryAnyCast<unsigned>(metadataQuery("IndexCount"_h));
+		auto materialName = TryAnyCast<std::string>(metadataQuery("ShortMaterialName"_h));
+		auto cellPlacementCount = TryAnyCast<unsigned>(metadataQuery("Cell_PlacementCount"_h));
+		auto cellSimilarPlacementCount = TryAnyCast<unsigned>(metadataQuery("Cell_SimilarPlacementCount"_h));
 
-		auto rootNode = le.NewImbuedNode(0);
-		YGNodeStyleSetFlexDirection(*rootNode, YGFlexDirectionColumn);
-		YGNodeStyleSetJustifyContent(*rootNode, YGJustifyFlexStart);
-		YGNodeStyleSetAlignItems(*rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
+		auto rootNode = le.NewNode();
+		le.PushRoot(rootNode);
+		YGNodeStyleSetFlexDirection(rootNode, YGFlexDirectionColumn);
+		YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
+		YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
 
-		YGNodeStyleSetMaxWidth(*rootNode, 768);
+		YGNodeStyleSetMaxWidth(rootNode, 768);
 
-		rootNode->_nodeAttachments._drawDelegate = [](auto& draw, auto frame, auto context) {
-			FillRectangle(draw.GetContext(), frame, 0xff3f3f3f);
-		};
-		le.PushRoot(*rootNode);
 		Heading(le, "Placement");
 
-		KeyValueGroup(le); KeyName(le, "Model"); KeyValue(le, std::move(selectedModelName)); le.PopNode();
-		KeyValueGroup(le); KeyName(le, "Material"); KeyValue(le, std::move(selectedMaterialName)); le.PopNode();
+		if (!selectedMaterialName.empty() || !selectedModelName.empty()) {
+			KeyValueGroup(le); KeyName(le, "Model Scaffold"); KeyValue(le, std::move(selectedModelName)); le.PopNode();
+			KeyValueGroup(le); KeyName(le, "Material Scaffold"); KeyValue(le, std::move(selectedMaterialName)); le.PopNode();
+		}
+		if (drawCallIndex && drawCallCount && indexCount && materialName) {
+			KeyValueGroup(le); KeyName(le, "Draw Call Index"); 
+			ValueGroup(le);
+			KeyValue(le, *drawCallIndex);
+			KeyValueSimple(le, "/");
+			KeyValue(le, *drawCallCount);
+			le.PopNode();
+			le.PopNode();
+			KeyValueGroup(le); KeyName(le, "Index Count"); KeyValue(le, *indexCount); le.PopNode();
+			KeyValueGroup(le); KeyName(le, "Material"); KeyValue(le, std::move(*materialName)); le.PopNode();
+		}
+		if (cellPlacementCount && cellSimilarPlacementCount) {
+			KeyValueGroup(le);
+			KeyName(le, "Cell Placements (similar/total)");
+			ValueGroup(le);
+			KeyValue(le, *cellSimilarPlacementCount);
+			KeyValueSimple(le, "/");
+			KeyValue(le, *cellPlacementCount);
+			le.PopNode();
+			le.PopNode();
+		}
+
+		le.PopNode();
+
+		Rect container { {0, 0}, {32, 32} };
+		hover = le.BuildLayedOutWidgets(container);
+	}
+
+	static void SetupToolTipHover(ToolTipHover& hover, const std::exception& e)
+	{
+		LayoutEngine le;
+
+		auto rootNode = le.NewNode();
+		le.PushRoot(rootNode);
+		YGNodeStyleSetFlexDirection(rootNode, YGFlexDirectionColumn);
+		YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
+		YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
+
+		Heading(le, "Exception during query");
+		KeyValueSimple(le, e.what());
 
 		le.PopNode();
 
@@ -227,6 +324,10 @@ namespace PlatformRig { namespace Overlays
 					.Draw(context, allocation, "Placements Selector");
 			
 			if (_hasSelectedPlacements) {
+				DrawBoundingBox(
+					context, _selectedPlacementsLocalBoundary, AsFloat3x4(_selectedPlacementsLocalToWorld),
+					ColorB(196, 230, 230));
+
 				_hover.Render(context, layout, interactables, interfaceState, {100, 100});
 			}
 
@@ -255,7 +356,16 @@ namespace PlatformRig { namespace Overlays
 				auto firstHit = SceneEngine::FirstRayIntersection(parsingContext, *_placementsEditor, worldSpaceRay, &cameraDesc);
 				if (firstHit) {
 					if (firstHit->_metadataQuery) {
-						SetupToolTipHover(_hover, firstHit->_metadataQuery);
+						TRY {
+							_selectedPlacementsLocalBoundary = TryAnyCast(firstHit->_metadataQuery("LocalBoundary"_h), std::make_pair(Zero<Float3>(), Zero<Float3>()));
+							_selectedPlacementsLocalToWorld = TryAnyCast(firstHit->_metadataQuery("LocalToWorld"_h), Identity<Float4x4>());
+							SetupToolTipHover(_hover, firstHit->_metadataQuery);
+						} CATCH (const std::exception& e) {
+							_hover = {};
+							_selectedPlacementsLocalBoundary = std::make_pair(Zero<Float3>(), Zero<Float3>());
+							_selectedPlacementsLocalToWorld = Identity<Float4x4>();
+							SetupToolTipHover(_hover, e);
+						} CATCH_END
 					} else {
 						_hover = {};
 					}
@@ -292,6 +402,8 @@ namespace PlatformRig { namespace Overlays
 		std::shared_ptr<ToolsRig::VisCameraSettings> _camera;
 
 		ToolTipHover _hover;
+		std::pair<Float3, Float3> _selectedPlacementsLocalBoundary;
+		Float4x4 _selectedPlacementsLocalToWorld;
 		bool _hasSelectedPlacements = false;
 
 		std::pair<Float3, Float3> _lastRayTest;

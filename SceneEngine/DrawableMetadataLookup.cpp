@@ -8,6 +8,7 @@
 #include "../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../RenderCore/Assets/MaterialScaffold.h"
 #include "../Utility/MemoryUtils.h"
+#include "../Utility/Streams/PathUtils.h"
 #include "../Core/Exceptions.h"
 #include <any>
 
@@ -63,17 +64,22 @@ namespace SceneEngine
 						if (lookupContext.Finished()) break;
 						if (drawCallCounter == lookupContext.NextIndex()) {
 							lookupContext.SetProviderForNextIndex(
-								[drawCallCounter, matGuid = materialGuids[materialGuidsIterator], dc, elementIdx, rendererConstruction=std::weak_ptr<RenderCore::Assets::ModelRendererConstruction>{rendererConstruction}]
+								[drawCallIndex=unsigned(&dc-AsPointer(cmdStream._drawCalls.begin()+drawCallsRef._start)), drawCallCount=unsigned(drawCallsRef._end-drawCallsRef._start), matGuid = materialGuids[materialGuidsIterator], dc, elementIdx, rendererConstruction=std::weak_ptr<RenderCore::Assets::ModelRendererConstruction>{rendererConstruction}]
 								(uint64_t semantic) -> std::any
 								{
 									switch(semantic) {
-									case "DrawCallIndex"_h: return drawCallCounter;
+									case "DrawCallIndex"_h: return drawCallIndex;	// within the geo
+									case "DrawCallCount"_h: return drawCallCount;	// within the geo
 									case "MaterialGuid"_h: return matGuid;
 									case "IndexCount"_h: return dc._indexCount;
 									case "ElementIndex"_h: return elementIdx;
 									case "MaterialName"_h: 
 										if (auto l = rendererConstruction.lock())
 											return l->GetElement(elementIdx)->GetMaterialScaffold()->DehashMaterialName(matGuid).AsString();
+										return {};
+									case "ShortMaterialName"_h: 
+										if (auto l = rendererConstruction.lock())
+											return MakeFileNameSplitter(l->GetElement(elementIdx)->GetMaterialScaffold()->DehashMaterialName(matGuid)).Parameters().AsString();
 										return {};
 									case "MaterialScaffold"_h:
 										if (auto l = rendererConstruction.lock())

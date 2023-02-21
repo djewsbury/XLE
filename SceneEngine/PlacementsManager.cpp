@@ -249,6 +249,12 @@ namespace SceneEngine
         virtual const uint64_t* GetSupplementsBuffer() const = 0;
         virtual IteratorRange<const std::pair<Float3, Float3>*> GetCellSpaceBoundaries() const = 0;
         virtual std::vector<std::pair<Float3, Float3>> StallAndCalculateCellSpaceBoundaries(IRigidModelScene& cache) const = 0;
+        struct CapturedCellMetadata
+        {
+            unsigned _placementCount = 0, _similarPlacementCount = 0;
+            std::pair<Float3, Float3> _cellSpaceBoundary = { Zero<Float3>(), Zero<Float3>() };
+        };
+        virtual CapturedCellMetadata GetMetadata(uint64_t objectGuid) const = 0;
         virtual ~ICellRenderer();
     };
 
@@ -265,6 +271,30 @@ namespace SceneEngine
         virtual std::vector<std::pair<Float3, Float3>> StallAndCalculateCellSpaceBoundaries(IRigidModelScene& cache) const override
         {
             return { _scaffold.GetCellSpaceBoundaries().begin(), _scaffold.GetCellSpaceBoundaries().end() };
+        }
+        virtual CapturedCellMetadata GetMetadata(uint64_t objectGuid) const override
+        {
+            CapturedCellMetadata result;
+            result._placementCount = (unsigned)_scaffold.GetObjectReferences().size();
+            result._similarPlacementCount = 0;
+            unsigned searchingModelFilenameOffset = ~0u, searchingMaterialFilenameOffset = ~0u;
+            for (auto& i:_scaffold.GetObjectReferences()) {
+                if (i._guid == objectGuid) {
+                    if (!_scaffold.GetCellSpaceBoundaries().empty()) {
+                        result._cellSpaceBoundary = _scaffold.GetCellSpaceBoundaries()[&i - _scaffold.GetObjectReferences().begin()];
+                    } else {
+                        result._cellSpaceBoundary = { Zero<Float3>(), Zero<Float3>() };
+                    }
+                    searchingModelFilenameOffset = i._modelFilenameOffset;
+                    searchingMaterialFilenameOffset = i._materialFilenameOffset;
+                }
+            }
+            if (searchingModelFilenameOffset != ~0u || searchingMaterialFilenameOffset != ~0u) {
+                for (auto& i:_scaffold.GetObjectReferences())
+                    if (i._modelFilenameOffset == searchingModelFilenameOffset && i._materialFilenameOffset == searchingMaterialFilenameOffset)
+                        ++ result._similarPlacementCount;
+            }
+            return result;
         }
     };
 
@@ -502,6 +532,7 @@ namespace SceneEngine
                 ExecuteSceneContext& exeContext,
                 const ICellRenderer& renderInfo,
                 IteratorRange<const unsigned*> objects,
+                uint64_t cellId,
                 const Float3x4& cellToWorld,
                 const uint64_t* filterStart = nullptr, const uint64_t* filterEnd = nullptr);
 
@@ -884,6 +915,7 @@ namespace SceneEngine
             ExecuteSceneContext& exeContext,
             const ICellRenderer& renderInfo,
             IteratorRange<const unsigned*> objects,
+            uint64_t cellId,
             const Float3x4& cellToWorld,
             const uint64_t* filterStart, const uint64_t* filterEnd)
     {
@@ -953,12 +985,43 @@ namespace SceneEngine
                 auto& obj = objRef[*(start+objectIdx)];
                 for (auto c=providersStart; c<context._providers.size(); ++c) {
                     // modify the provider to add a little extra context information about the particular object
+                    auto cellCapturedData = renderInfo.GetMetadata(obj._guid);
                     auto subQuery = std::move(context._providers[c]);
                     context._providers[c] = 
-                        [subQuery=std::move(subQuery), guid=obj._guid, localToCell=obj._localToCell](uint64_t semantic) -> std::any {
+                        [subQuery=std::move(subQuery), objGuid=obj._guid, cellId, localToCell=obj._localToCell, cellToWorld, weakCache=std::weak_ptr<PlacementsCache>{_placementsCache}, weakModel=std::weak_ptr<void>{renderInfo._models[rendererIdx]}, cellCapturedData]
+                        (uint64_t semantic) -> std::any
+                        {
                             switch (semantic) {
-                            case "PlacementGUID"_h: return guid;
+                            case "PlacementGUID"_h: return std::make_pair(cellId, objGuid);
                             case "LocalToCell"_h: return localToCell;
+                            case "LocalToWorld"_h: return AsFloat4x4(Combine(localToCell, cellToWorld));
+                            case "LocalBoundary"_h: 
+                                {
+                                    // get the local space boundary from the object itself
+                                    auto c = weakCache.lock();
+                                    auto m = weakModel.lock();
+                                    if (c && m) {
+                                        auto info = c->GetRigidModelScene().GetModelInfo(m);
+                                        if (info.wait_for(std::chrono::seconds(0)) != std::future_status::ready)        // will typically still be ready, unless it's just been unloaded
+                                            return {};
+                                        return info.get()._boundingBox;
+                                    }
+                                }
+                                return {};
+                            case "Cell_PlacementCount"_h:
+                                if (cellCapturedData._placementCount)
+                                    return cellCapturedData._placementCount;
+                                return {};
+                            case "Cell_SimilarPlacementCount"_h:
+                                if (cellCapturedData._placementCount)
+                                    return cellCapturedData._similarPlacementCount;
+                                return {};
+                            case "CellSpaceBoundary"_h:
+                                if (cellCapturedData._placementCount)
+                                    return cellCapturedData._cellSpaceBoundary;
+                                return {};
+                            case "CellToWorld"_h:
+                                return AsFloat4x4(cellToWorld);
                             default:
                                 return subQuery(semantic);
                             }
@@ -966,7 +1029,7 @@ namespace SceneEngine
                 }
             }
             if (!context.Finished())
-                context.AdvanceIndexOffset((objCount-advancedObjects)*drawableCount);
+                context.AdvanceIndexOffset(unsigned((objCount-advancedObjects)*drawableCount));
         }
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////
     }
@@ -1351,13 +1414,13 @@ namespace SceneEngine
                         auto objectReferences = ovr->second->GetObjectReferences();
                         visibleObjects.resize(objectReferences.size());
                         for (unsigned c=0; c<objectReferences.size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything (note assuming overlay objects already sorted by guid)
-                        _pimpl->LookupDrawableMetadata<true, true>(helper, executeContext, *ovr->second, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+                        _pimpl->LookupDrawableMetadata<true, true>(helper, executeContext, *ovr->second, MakeIteratorRange(visibleObjects), ci->_filenameHash, ci->_cellToWorld, tStart, t);
 
 					} else if (auto* renderInfo = _pimpl->TryGetCellRenderer(*ci)) {
 
 						__declspec(align(16)) auto cellToCullSpace = Combine(ci->_cellToWorld, worldToProjection);
                         _pimpl->CullCell(visibleObjects, cellToCullSpace, renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get());
-                        _pimpl->LookupDrawableMetadata<true, false>(helper, executeContext, *renderInfo, MakeIteratorRange(visibleObjects), ci->_cellToWorld, tStart, t);
+                        _pimpl->LookupDrawableMetadata<true, false>(helper, executeContext, *renderInfo, MakeIteratorRange(visibleObjects), ci->_filenameHash, ci->_cellToWorld, tStart, t);
 
 					}
 
@@ -1381,13 +1444,13 @@ namespace SceneEngine
                     auto objectReferences = ovr->second->GetObjectReferences();
                     visibleObjects.resize(objectReferences.size());
                     for (unsigned c=0; c<objectReferences.size(); ++c) visibleObjects[c] = c; // "fake" post-culling list; just includes everything
-                    _pimpl->LookupDrawableMetadata<false, true>(helper, executeContext, *ovr->second, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                    _pimpl->LookupDrawableMetadata<false, true>(helper, executeContext, *ovr->second, MakeIteratorRange(visibleObjects), i->_filenameHash, i->_cellToWorld);
 
 				} else if (auto* renderInfo = _pimpl->TryGetCellRenderer(*i)) {
 
 					__declspec(align(16)) auto cellToCullSpace = Combine(i->_cellToWorld, worldToProjection);
                     _pimpl->CullCell(visibleObjects, cellToCullSpace, renderInfo->GetCellSpaceBoundaries(), renderInfo->_quadTree.get());
-                    _pimpl->LookupDrawableMetadata<false, false>(helper, executeContext, *renderInfo, MakeIteratorRange(visibleObjects), i->_cellToWorld);
+                    _pimpl->LookupDrawableMetadata<false, false>(helper, executeContext, *renderInfo, MakeIteratorRange(visibleObjects), i->_filenameHash, i->_cellToWorld);
 
 				}
 
@@ -1637,6 +1700,7 @@ namespace SceneEngine
         void Write(IRigidModelScene& cache, const Assets::ResChar destinationFile[]) const;
 		::Assets::Blob Serialize(IRigidModelScene& cache) const;
         std::vector<std::pair<Float3, Float3>> StallAndCalculateCellSpaceBoundaries(IRigidModelScene& cache) const override;
+        CapturedCellMetadata GetMetadata(uint64_t objectGuid) const override;
 
         EditorOverlayCellRenderer(const PlacementsScaffold& copyFrom);
         EditorOverlayCellRenderer();
@@ -1906,6 +1970,11 @@ namespace SceneEngine
             result.push_back(TransformBoundingBox(_objects[c]._localToCell, localSpace));
         }
         return result;
+    }
+
+    auto EditorOverlayCellRenderer::GetMetadata(uint64_t objectGuid) const -> CapturedCellMetadata
+    {
+        return {};
     }
 
     EditorOverlayCellRenderer::EditorOverlayCellRenderer(const PlacementsScaffold& copyFrom)
