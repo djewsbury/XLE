@@ -19,6 +19,7 @@
 #include "../../RenderOverlays/Font.h"
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
 #include "../../Assets/Marker.h"
+#include "../../ConsoleRig/Console.h"
 #include "../../Utility/StringFormat.h"
 
 using namespace Utility::Literals;
@@ -48,6 +49,7 @@ namespace PlatformRig { namespace Overlays
 	{
 	public:
 		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform);
+		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
 
 		Coord2 GetDimensions() const;
 
@@ -66,6 +68,16 @@ namespace PlatformRig { namespace Overlays
 		_layedOutWidgets.Draw(draw, transform);
 	}
 
+	ProcessInputResult ToolTipHover::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& snapshot)
+	{
+		CommonWidgets::HoveringLayer hoveringLayer;
+		CommonWidgets::Input input { interfaceState, snapshot, hoveringLayer };
+		auto result = _layedOutWidgets.ProcessInput(input);
+		if (result == LayedOutWidgets::ProcessInputResult::Consumed)
+			return ProcessInputResult::Consumed;
+		return ProcessInputResult::Passthrough;
+	}
+
 	Coord2 ToolTipHover::GetDimensions() const
 	{
 		return _layedOutWidgets._dimensions;
@@ -75,7 +87,7 @@ namespace PlatformRig { namespace Overlays
 	: _layedOutWidgets(std::move(layedOutWidgets)) {}
 	ToolTipHover::~ToolTipHover() {}
 
-	static void Heading(LayoutEngine& layoutEngine, std::string&& label)
+	static ImbuedNode* Heading(LayoutEngine& layoutEngine, std::string&& label)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
@@ -91,9 +103,10 @@ namespace PlatformRig { namespace Overlays
 		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 			DrawText().Font(*draw.GetDefaultFontsBox()._headingFont).Draw(draw.GetContext(), content, label);
 		};
+		return labelNode;
 	}
 
-	static void KeyValueGroup(LayoutEngine& layoutEngine)
+	static YGNodeRef KeyValueGroup(LayoutEngine& layoutEngine)
 	{
 		auto baseNode = layoutEngine.NewNode();
 		layoutEngine.InsertChildToStackTop(baseNode);
@@ -105,9 +118,25 @@ namespace PlatformRig { namespace Overlays
 		
 		YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
 		YGNodeStyleSetFlexGrow(baseNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
+		return baseNode;
 	}
 
-	static void KeyName(LayoutEngine& layoutEngine, std::string&& label)
+	static YGNodeRef VerticalGroup(LayoutEngine& layoutEngine)
+	{
+		auto baseNode = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(baseNode);
+		layoutEngine.PushNode(baseNode);
+		
+		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionColumn);
+		YGNodeStyleSetJustifyContent(baseNode, YGJustifyFlexStart);
+		YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
+		
+		YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
+		YGNodeStyleSetFlexGrow(baseNode, 0.f);
+		return baseNode;
+	}
+
+	static ImbuedNode* KeyName(LayoutEngine& layoutEngine, std::string&& label)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
@@ -123,9 +152,10 @@ namespace PlatformRig { namespace Overlays
 		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, label);
 		};
+		return labelNode;
 	}
 
-	static void KeyValue(LayoutEngine& layoutEngine, std::string&& label)
+	static ImbuedNode* KeyValue(LayoutEngine& layoutEngine, std::string&& label)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
@@ -184,9 +214,12 @@ namespace PlatformRig { namespace Overlays
 					return ((ImbuedNode*)node->getContext())->_measureDelegate(width, widthMode, height, heightMode);
 				});
 		#endif
+
+		return labelNode;
 	}
 
-	static void KeyValue(LayoutEngine& layoutEngine, unsigned value)
+	template<typename T, typename std::enable_if<std::is_integral_v<T>>::type* =nullptr>
+		static ImbuedNode* KeyValue(LayoutEngine& layoutEngine, T value)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
@@ -203,9 +236,10 @@ namespace PlatformRig { namespace Overlays
 		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
 		};
+		return labelNode;
 	}
 
-	static void KeyValueSimple(LayoutEngine& layoutEngine, std::string&& str)
+	static ImbuedNode* KeyValueSimple(LayoutEngine& layoutEngine, std::string&& str)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
@@ -220,9 +254,10 @@ namespace PlatformRig { namespace Overlays
 		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
 		};
+		return labelNode;
 	}
 
-	static void ValueGroup(LayoutEngine& layoutEngine)
+	static YGNodeRef ValueGroup(LayoutEngine& layoutEngine)
 	{
 		auto baseNode = layoutEngine.NewNode();
 		layoutEngine.InsertChildToStackTop(baseNode);
@@ -234,9 +269,31 @@ namespace PlatformRig { namespace Overlays
 		
 		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 2);
 		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 2);
+		return baseNode;
 	}
 
-	static void SetupToolTipHover(ToolTipHover& hover, SceneEngine::MetadataProvider& metadataQuery)
+	static ImbuedNode* EventButton(LayoutEngine& layoutEngine, std::string&& label, std::function<void()>&& event)
+	{
+		uint64_t interactable = layoutEngine.GuidStack().MakeGuid(label);
+		auto buttonNode = KeyValue(layoutEngine, std::move(label));
+
+		buttonNode->_nodeAttachments._guid = interactable;
+		buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](CommonWidgets::Input& input, Rect, Rect) {
+			if (input.GetEvent().IsPress_LButton()) {
+				input.GetInterfaceState().BeginCapturing(input.GetInterfaceState().TopMostWidget());
+			} else if (input.GetEvent().IsRelease_LButton()) {
+				if (input.GetInterfaceState().GetCapture()._widget._id == interactable) {
+					input.GetInterfaceState().EndCapturing();
+					if (Contains(input.GetInterfaceState().TopMostWidget()._rect, input.GetInterfaceState().MousePosition()))
+						event();
+				}
+			}
+			return IODelegateResult::Consumed;
+		};
+		return buttonNode;
+	}
+
+	static void SetupToolTipHover(ToolTipHover& hover, SceneEngine::MetadataProvider& metadataQuery, SceneEngine::PlacementsEditor& placementsEditor)
 	{
 		LayoutEngine le;
 
@@ -249,6 +306,7 @@ namespace PlatformRig { namespace Overlays
 		auto materialName = TryAnyCast<std::string>(metadataQuery("ShortMaterialName"_h));
 		auto cellPlacementCount = TryAnyCast<unsigned>(metadataQuery("Cell_PlacementCount"_h));
 		auto cellSimilarPlacementCount = TryAnyCast<unsigned>(metadataQuery("Cell_SimilarPlacementCount"_h));
+		auto placementGuid = TryAnyCast<SceneEngine::PlacementGUID>(metadataQuery("PlacementGUID"_h));
 
 		auto rootNode = le.NewNode();
 		le.PushRoot(rootNode, {32, 32});
@@ -284,6 +342,23 @@ namespace PlatformRig { namespace Overlays
 			KeyValueSimple(le, "/");
 			KeyValue(le, *cellPlacementCount);
 			le.PopNode();
+			le.PopNode();
+		}
+		if (placementGuid) {
+			VerticalGroup(le);
+			KeyValueGroup(le);
+			KeyName(le, "Cell");
+			auto cellName = placementsEditor.GetCellSet().DehashCellName(placementGuid->first).AsString();
+			if (!cellName.empty()) KeyValue(le, std::string{cellName});
+			else KeyValue(le, placementGuid->first);
+			le.PopNode();
+			EventButton(le, "Show Quad Tree", [cell=placementGuid->first, cellName]() {
+				// switch to another debugging display that will display the quad tree we're interested in
+				ConsoleRig::Console::GetInstance().Execute("scene:ShowQuadTree(\"" + cellName + "\")");
+			});
+			EventButton(le, "Show Placements", [cell=placementGuid->first, cellName]() {
+				ConsoleRig::Console::GetInstance().Execute("scene:ShowPlacements(\"" + cellName + "\")");
+			});
 			le.PopNode();
 		}
 
@@ -355,7 +430,7 @@ namespace PlatformRig { namespace Overlays
 				}
 
 				if (screenSpaceMins[0] < screenSpaceMaxs[0]) {
-					FillRectangle(context, Rect{screenSpaceMins, screenSpaceMaxs}, ColorB(196, 196, 196, 128));
+					// FillRectangle(context, Rect{screenSpaceMins, screenSpaceMaxs}, ColorB(196, 196, 196, 128));
 
 					float spaceLeft = screenSpaceMins[0];
 					float spaceRight = viewportDims[0] - screenSpaceMaxs[0];
@@ -383,6 +458,9 @@ namespace PlatformRig { namespace Overlays
 
 		virtual ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input)
 		{
+			if (_hover.ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
+				return ProcessInputResult::Consumed;
+
 			// Given the camera & viewport find a ray & perform intersection detection with placements scene
 			if (input.IsRelease_LButton()) {
 				UInt2 viewportDims { 1920, 1080 };	// todo -- get real values
@@ -405,7 +483,7 @@ namespace PlatformRig { namespace Overlays
 						TRY {
 							_selectedPlacementsLocalBoundary = TryAnyCast(firstHit->_metadataQuery("LocalBoundary"_h), std::make_pair(Zero<Float3>(), Zero<Float3>()));
 							_selectedPlacementsLocalToWorld = TryAnyCast(firstHit->_metadataQuery("LocalToWorld"_h), Identity<Float4x4>());
-							SetupToolTipHover(_hover, firstHit->_metadataQuery);
+							SetupToolTipHover(_hover, firstHit->_metadataQuery, *_placementsEditor);
 						} CATCH (const std::exception& e) {
 							_hover = {};
 							_selectedPlacementsLocalBoundary = std::make_pair(Zero<Float3>(), Zero<Float3>());

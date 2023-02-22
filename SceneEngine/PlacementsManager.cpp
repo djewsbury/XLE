@@ -1648,6 +1648,14 @@ namespace SceneEngine
             return {};
         return i->_cellToWorld;
     }
+
+    StringSection<> PlacementCellSet::DehashCellName(uint64_t cellId) const
+    {
+        for (const auto& c:_pimpl->_cells)
+            if (c._filenameHash == cellId)
+                return c._filename;
+        return {};
+    }
  
     PlacementCellSet::PlacementCellSet()
     {

@@ -31,14 +31,16 @@ namespace RenderOverlays
 		}
 	}
 
-	auto LayedOutWidgets::ProcessInput(CommonWidgets::Input& input) -> ProcessInputResult
+	auto LayedOutWidgets::ProcessInput(CommonWidgets::Input& input, const Float3x3& transform) -> ProcessInputResult
 	{
 		auto topMostId = input.GetInterfaceState().TopMostId();
 		auto i = _nodeAttachments.rbegin();		// doing input in reverse order to drawing
 		auto i2 = _layedOutLocations.rbegin();
 		for (;i!=_nodeAttachments.rend(); ++i, ++i2)
 			if (i->_ioDelegate && i->GetGuid() == topMostId) {
-				auto result = i->_ioDelegate(input, i2->first, i2->second);
+				auto frame = TransformRect(transform, i2->first);
+				auto content = TransformRect(transform, i2->second);
+				auto result = i->_ioDelegate(input, frame, content);
 				if (result == IODelegateResult::Consumed)
 					return ProcessInputResult::Consumed;
 			}

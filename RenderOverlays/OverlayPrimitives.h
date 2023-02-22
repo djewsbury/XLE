@@ -94,6 +94,14 @@ namespace RenderOverlays
             &&  smaller._bottomRight[1] <= bigger._bottomRight[1]);
     }
 
+    inline bool Contains(
+        const Rect& rect,
+        const Coord2& pt)
+    {
+        return rect._topLeft[0] <= pt[0] && rect._topLeft[1] <= pt[1]
+            && rect._bottomRight[0] >= pt[0] && rect._bottomRight[1] >= pt[1];
+    }
+
     class Font;
     ::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size);
 

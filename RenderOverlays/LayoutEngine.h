@@ -38,10 +38,10 @@ namespace RenderOverlays
 		std::vector<NodeDelegates> _nodeAttachments;
 		Coord2 _dimensions;
 
-		void Draw(CommonWidgets::Draw& draw, const Float3x3& transform);
+		void Draw(CommonWidgets::Draw& draw, const Float3x3& transform = Identity<Float3x3>());
 
 		enum ProcessInputResult { Passthrough, Consumed };
-		ProcessInputResult ProcessInput(CommonWidgets::Input& input);
+		ProcessInputResult ProcessInput(CommonWidgets::Input& input, const Float3x3& transform = Identity<Float3x3>());
 
 		LayedOutWidgets() = default;
 		LayedOutWidgets(LayedOutWidgets&&) = default;

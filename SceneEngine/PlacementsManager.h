@@ -38,6 +38,7 @@ namespace SceneEngine
     public:
         void Add(StringSection<> placementsInitializer, const Float3x4& cellToWorld, std::pair<Float3, Float3> localSpaceAABB);
         std::optional<Float3x4> GetCellToWorld(StringSection<> placementsInitializer) const;
+        StringSection<> DehashCellName(uint64_t cellId) const;
 
         PlacementCellSet();
         ~PlacementCellSet();
