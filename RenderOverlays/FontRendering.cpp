@@ -372,7 +372,37 @@ namespace RenderOverlays
 
 	template<typename CharType> struct DrawingTags { static const StringSection<CharType> s_changeColor; };
 	template<> const StringSection<ucs4> DrawingTags<ucs4>::s_changeColor = (const ucs4*)"C\0\0\0o\0\0\0l\0\0\0o\0\0\0r\0\0\0:\0\0\0";
+	template<> const StringSection<ucs2> DrawingTags<ucs2>::s_changeColor = (const ucs2*)"C\0o\0l\0o\0r\0:\0";
 	template<> const StringSection<utf8> DrawingTags<utf8>::s_changeColor = "Color:";
+
+	template<typename CharType>
+		StringSection<CharType> FontRenderingControlStatement::TryParse(StringSection<CharType> input)
+	{
+		assert(!input.IsEmpty());
+		if (*input.begin() != '{') return input;
+
+		auto text = input;
+		++text._start;
+		_type = Type::None;
+		if (text.size() > 6 && XlEqStringI({text.begin(), text.begin()+6}, DrawingTags<CharType>::s_changeColor)) {
+			if (text._start+6 != text.end() && *(text._start+6) == '}') {
+				_newColorOverride = 0;
+				text._start += 7;
+				_type = Type::ColorOverride;
+				return text;
+			} else {
+				unsigned parseLength = ParseColorValue(text._start+6, &_newColorOverride);
+				if (parseLength) {
+					text._start += 6 + parseLength;
+					while (text._start!=text.end() && *text._start != '}') ++text._start;
+					if (text._start!=text.end()) ++text._start;
+					_type = Type::ColorOverride;
+					return text;
+				}
+			}
+		}
+		return input;	// no match
+	}
 
 	template<typename CharType, typename WorkingSetType, bool CheckMaxXY, bool SnapCoords>
 		static bool DrawTemplate_Section(
@@ -414,7 +444,17 @@ namespace RenderOverlays
 				x = xScale * (int)(0.5f + x / xScale);
 				y = yScale * (int)(0.5f + y / yScale);
 			}
-			while (!text.IsEmpty() && instanceCount < maxInstancePerCall) {
+			while (instanceCount < maxInstancePerCall) {
+				if (!text.IsEmpty() && expect_evaluation(*text._start == '{', false)) {
+					FontRenderingControlStatement ctrl;
+					text = ctrl.TryParse(text);
+					if (ctrl._type == FontRenderingControlStatement::Type::ColorOverride) {
+						colorOverride = ctrl._newColorOverride;
+						continue;
+					}
+				}
+				if (text.IsEmpty()) break;
+
 				auto ch = GetNext(text);
 
 				// \n, \r\n, \r all considered new lines
@@ -429,26 +469,6 @@ namespace RenderOverlays
 					}
 					++lineIdx;
 					continue;
-				}
-
-				if (expect_evaluation(ch == '{', false)) {
-					if (text.size() > 6 && XlEqStringI({text.begin(), text.begin()+6}, DrawingTags<CharType>::s_changeColor)) {
-						if (text._start+6 != text.end() && *(text._start+6) == '}') {
-							colorOverride = 0;
-							text._start += 7;
-							continue;
-						} else {
-							unsigned newColorOverride = 0;
-							unsigned parseLength = ParseColorValue(text._start+6, &newColorOverride);
-							if (parseLength) {
-								colorOverride = newColorOverride;
-								text._start += 6 + parseLength;
-								while (text._start!=text.end() && *text._start != '}') ++text._start;
-								if (text._start!=text.end()) ++text._start;
-								continue;
-							}
-						}
-					}
 				}
 
 				int curGlyph;
@@ -1621,5 +1641,10 @@ namespace RenderOverlays
 	{
 		return _pimpl->_texture->GetUnderlying();
 	}
+
+	template StringSection<char> FontRenderingControlStatement::TryParse(StringSection<char>);
+	template StringSection<utf8> FontRenderingControlStatement::TryParse(StringSection<utf8>);
+	template StringSection<ucs2> FontRenderingControlStatement::TryParse(StringSection<ucs2>);
+	template StringSection<ucs4> FontRenderingControlStatement::TryParse(StringSection<ucs4>);
 
 }

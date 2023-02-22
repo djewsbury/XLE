@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "Font.h"
+#include "FontRendering.h"		// for FontRenderingControlStatement
 #include "../Utility/UTFUtils.h"
 #include <assert.h>
 
@@ -31,7 +32,11 @@ namespace RenderOverlays
 	{
 		int prevGlyph = 0;
 		float x = 0.0f, prevMaxX = 0.0f;
-		while (!text.IsEmpty()) {
+		while (true) {
+			if (!text.IsEmpty())
+				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
+			if (text.IsEmpty()) break;
+
 			ucs4 ch = NextCharacter(text);
 			if (ch == '\n' || ch == '\r') {
 				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
@@ -40,8 +45,6 @@ namespace RenderOverlays
 				x = 0;
 				continue;
 			}
-
-			// note -- tags like {color:xxxx} not considered
 
 			int curGlyph;
 			x += font.GetKerning(prevGlyph, ch, &curGlyph)[0];
@@ -61,7 +64,11 @@ namespace RenderOverlays
 		int prevGlyph = 0;
 		float x = 0.0f, prevMaxX = 0.0f;
 		unsigned newLineCount = 0;
-		while (!text.IsEmpty()) {
+		while (true) {
+			if (!text.IsEmpty())
+				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
+			if (text.IsEmpty()) break;
+
 			ucs4 ch = NextCharacter(text);
 			if (ch == '\n' || ch == '\r') {
 				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
@@ -71,8 +78,6 @@ namespace RenderOverlays
 				++newLineCount;
 				continue;
 			}
-
-			// note -- tags like {color:xxxx} not considered
 
 			int curGlyph;
 			x += font.GetKerning(prevGlyph, ch, &curGlyph)[0];
@@ -90,7 +95,11 @@ namespace RenderOverlays
 		unsigned NewLineCount(const Font& font, StringSection<CharType> text)
 	{
 		unsigned newLineCount = 0;
-		while (!text.IsEmpty()) {
+		while (true) {
+			if (!text.IsEmpty())
+				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
+			if (text.IsEmpty()) break;
+
 			ucs4 ch = NextCharacter(text);
 			if (ch == '\n' || ch == '\r') {
 				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
@@ -107,7 +116,11 @@ namespace RenderOverlays
 		int charCount = 0;
 
 		float x = 0.0f;
-		while (!text.IsEmpty()) {
+		while (true) {
+			if (!text.IsEmpty())
+				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
+			if (text.IsEmpty()) break;
+
 			ucs4 ch = NextCharacter(text);
 			if (ch == '\n') {
 				prevGlyph = 0;
@@ -163,7 +176,10 @@ namespace RenderOverlays
 		int prevGlyph = 0;
 		float x = 0.0f;
 		auto text = inText;
-		while (!text.IsEmpty()) {
+		while (true) {
+			if (!text.IsEmpty())
+				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
+			if (text.IsEmpty()) break;
 			auto i = text.begin();
 			ucs4 ch = NextCharacter(text);
 			assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
@@ -179,6 +195,8 @@ namespace RenderOverlays
 			if (x > width) {
 				size_t count = size_t(i - inText.begin());
 				if (count > outTextSize - 2) {
+					if (outTextSize != 0)
+						outText[0] = 0;
 					return x;
 				}
 
@@ -192,6 +210,44 @@ namespace RenderOverlays
 		}
 
 		return x;
+	}
+
+	template<typename CharType>
+		static const CharType* SkipControlStatements_Reverse(StringSection<CharType> text)
+	{
+		assert(!text.IsEmpty());
+		if (expect_evaluation(*(text.end()-1) != '}', true))
+			return text.end();
+
+		// since we're iterating backwards, we need to reverse back to find the '{'
+		auto i = text.end()-1;
+		while (i != text.begin() && *(i-1) != '{') --i;
+		if (i == text.begin()) return text.end();
+
+		--i;
+		auto skipped = FontRenderingControlStatement{}.TryParse(MakeStringSection(i, text.end()));
+		if (skipped.begin() != i)
+			return i;	// it is a control statement, return skipped iterator
+		return text.end();
+	}
+
+	template<typename CharType>
+		static StringSection<CharType> FindLastControlStatement(StringSection<CharType> text)
+	{
+		auto originalEnd = text.end();
+		for (;;) {
+			auto i = text.end();
+			while (i != text.begin() && *(i-1) != '{') --i;
+			if (i == text.begin()) return {};
+
+			--i;
+			auto skipped = FontRenderingControlStatement{}.TryParse(MakeStringSection(i, originalEnd));
+			if (skipped.begin() != i)
+				return {i, skipped.begin()};
+
+			// continue for prior '{'
+			text._end = i;
+		}
 	}
 
 	template<typename CharType>
@@ -228,7 +284,11 @@ namespace RenderOverlays
 				auto start = text.begin();
 				auto i = start;
 				float additionalX = 0;
-				while (i != text.end()) {
+				while (true) {
+					if (i != text.end())
+						i = FontRenderingControlStatement{}.TryParse(MakeStringSection(i, text.end()))._start;		// skip any control statements
+					if (i == text.end()) break;
+
 					auto c = *i;
 					ucs4 ch = (ucs4)*i++;
 					assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
@@ -268,7 +328,11 @@ namespace RenderOverlays
 				auto start = text.end();
 				auto i = start;
 				float additionalX = 0;
-				while (i != text.begin()) {
+				while (true) {
+					if (i != text.begin())
+						i = SkipControlStatements_Reverse(MakeStringSection(text.begin(), i));
+					if (i == text.begin()) break;
+
 					auto c = *(i-1);
 					ucs4 ch = (ucs4)*--i;
 					assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
@@ -323,6 +387,16 @@ namespace RenderOverlays
 		*outTextIterator++ = '.';
 		*outTextIterator++ = '.';
 		*outTextIterator++ = '.';
+		// if there is a control statement in the space that we cut out (and we can copy that control statement
+		// into the buffer safely), let's grab that. This avoids most cases where cutting out parts changes the 
+		// color of later parts of the string entirely
+		// but note that we take only a single control statement, so if there are statements controlling different
+		// properties, we'll end up ignoring all except one
+		auto removedControlStatement = FindLastControlStatement(text);
+		if (!removedControlStatement.IsEmpty() && (outTextIterator + removedControlStatement.size() + (inText.end() - text.end()) + 1) <= &outText[outTextSize]) {
+			CopyString(outTextIterator, removedControlStatement.size()+1, removedControlStatement.begin());
+			outTextIterator += removedControlStatement.size();
+		}
 		CopyString(outTextIterator, inText.end() - text.end() + 1, text.end());
 		outTextIterator += inText.end() - text.end();
 		*outTextIterator = 0;

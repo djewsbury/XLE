@@ -55,6 +55,18 @@ namespace RenderOverlays
 						float scale, float depth,
 						ColorB shadowColor);
 
+	struct FontRenderingControlStatement
+	{
+		enum class Type { None, ColorOverride };
+		Type _type = Type::None;
+		union
+		{
+			unsigned _newColorOverride;
+		};
+		template<typename CharType>
+			StringSection<CharType> TryParse(StringSection<CharType> input);
+	};
+
 	class FontRenderingManager
 	{
 	public:
