@@ -496,11 +496,14 @@ namespace RenderCore { namespace LightingEngine
 
 					std::promise<Techniques::ComputePipelineAndLayout> promisedDownsample;
 					auto futureDownsample = promisedDownsample.get_future();
+					ParameterBox fastMipChainSelectors;
+					fastMipChainSelectors.SetParameter("MIP_OFFSET", 1);
+					const ParameterBox* selectorsList[] { &fastMipChainSelectors };
 					strongThis->_pool->CreateComputePipeline(
 						std::move(promisedDownsample),
 						compiledPipelineLayout,
-						BLOOM_COMPUTE_HLSL ":FastMipChain",
-						{});
+						FAST_MIP_CHAIN_COMPUTE_HLSL ":main",
+						selectorsList);
 
 					std::promise<Techniques::ComputePipelineAndLayout> promisedUpsample;
 					auto futureUpsample = promisedUpsample.get_future();
