@@ -347,6 +347,24 @@ namespace RenderOverlays
 			drawCall._topology);
 	}
 
+	void* ImmediateOverlayContext::GetService(uint64_t id)
+	{
+		auto i = LowerBound(_services, id);
+		if (i != _services.end() && i->first == id)
+			return i->second;
+		return nullptr;
+	}
+
+	void ImmediateOverlayContext::AttachService(uint64_t id, void* ptr)
+	{
+		auto i = LowerBound(_services, id);
+		if (i != _services.end() && i->first == id) {
+			i->second = ptr;
+		} else {
+			_services.emplace_back(id, ptr);
+		}
+	}
+
 	ImmediateOverlayContext::ImmediateOverlayContext(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::IImmediateDrawables& immediateDrawables)

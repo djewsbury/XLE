@@ -7,6 +7,7 @@
 #include "MainInputHandler.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../RenderOverlays/OverlayContext.h"
+#include "../RenderOverlays/OverlayEffects.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
 #include "../RenderCore/Techniques/RenderPass.h"
@@ -39,6 +40,9 @@ namespace PlatformRig
         {
             TRY {
                 auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderer.get());
+
+                RenderOverlays::BlurryBackgroundEffect blurryBackground { parserContext };
+                overlayContext->AttachService2(blurryBackground);
             
                 // todo -- we need the viewport that we're going to get when we begin the presentation target; not the viewport that we have now
                 Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };

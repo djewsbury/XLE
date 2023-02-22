@@ -1077,7 +1077,10 @@ namespace RenderCore { namespace Techniques
             auto& i = _entries[b._attachment];
             if (i._currentLayout != b._layout) {
                 auto* resource = (i._poolResource == ~0u) ? i._resource.get() : checked_cast<AttachmentPool*>(_pool)->GetResource(i._poolResource).get();
-                barrierHelper.Add(*resource, i._currentLayout, Metal::BarrierResourceUsage{b._layout, b._shaderStage});
+                if (i._currentLayout == ~0u) {
+                    barrierHelper.Add(*resource, Metal::BarrierResourceUsage::NoState(), Metal::BarrierResourceUsage{b._layout, b._shaderStage});
+                } else
+                    barrierHelper.Add(*resource, i._currentLayout, Metal::BarrierResourceUsage{b._layout, b._shaderStage});
                 i._currentLayout = b._layout;
             }
         }

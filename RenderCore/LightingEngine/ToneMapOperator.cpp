@@ -515,7 +515,7 @@ namespace RenderCore { namespace LightingEngine
 					strongThis->_pool->CreateComputePipeline(
 						std::move(promisedGaussianFilter),
 						compiledPipelineLayout,
-						SEPARABLE_FILTER_2_COMPUTE_HLSL ":Gaussian11RGB",
+						BLOOM_FILTER_COMPUTE_HLSL ":Gaussian11RGB",
 						{});
 
 					UniformsStreamInterface brightPassUsi;

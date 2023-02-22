@@ -115,10 +115,14 @@ namespace RenderOverlays
         virtual RenderCore::BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const = 0;
         virtual void RequireCommandList(RenderCore::BufferUploads::CommandListID) = 0;
 
+        virtual void* GetService(uint64_t) = 0;
+        virtual void AttachService(uint64_t, void*) = 0;
+
+        template<typename Type>
+            Type* GetService() { return (Type*)GetService(typeid(Type).hash_code()); }
+        template<typename Type>
+            void AttachService2(Type& type) { AttachService(typeid(Type).hash_code(), &type); }
+
         virtual ~IOverlayContext();
     };
-
-
-
 }
-

@@ -532,7 +532,7 @@ namespace UnitTests
 		gaussianFilterUsi.BindResourceView(1, "OutputTexture"_h);
 		auto gaussianFilterOperatorFuture = Techniques::CreateComputeOperator(
 			testApparatus._pipelineCollection,
-			SEPARABLE_FILTER_2_COMPUTE_HLSL ":Gaussian11RGB",
+			BLOOM_FILTER_COMPUTE_HLSL ":Gaussian11RGB",
 			ParameterBox{},
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 			gaussianFilterUsi);

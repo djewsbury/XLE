@@ -77,6 +77,9 @@ namespace RenderOverlays
         void ReleaseState() override;
         void SetState(const OverlayState& state) override;
 
+        void* GetService(uint64_t) override;
+        void AttachService(uint64_t, void*) override;
+
         ImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
             RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
@@ -95,6 +98,7 @@ namespace RenderOverlays
         OverlayState _currentState;
         std::shared_ptr<RenderCore::UniformsStreamInterface> _texturedUSI;
         RenderCore::BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
+        std::vector<std::pair<uint64_t, void*>> _services;
 
         class DrawCall;
         IteratorRange<void*>    BeginDrawCall(const DrawCall& drawCall);

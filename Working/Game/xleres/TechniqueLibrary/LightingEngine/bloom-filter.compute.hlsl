@@ -54,7 +54,7 @@ float GaussianWeight1D(float offset, float stdDevSq)
 {
 	// See https://en.wikipedia.org/wiki/Gaussian_blur
 	const float twiceStdDevSq = 2.0 * stdDevSq;
-	const float C = 1.0 / sqrt(pi * twiceStdDevSq);		// can done later, because it's constant for all weights
+	const float C = rsqrt(pi * twiceStdDevSq);		// can done later, because it's constant for all weights
 	return C * exp(-offset*offset / twiceStdDevSq);
 }
 

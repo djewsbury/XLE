@@ -54,6 +54,7 @@
 #define RENDEROVERLAYS_SHAPES_HLSL "xleres/TechniqueLibrary/RenderOverlays/dd/ShapesFrameworkEntry.hlsl"
 #define RENDEROVERLAYS_SHAPES_MATERIAL "xleres/TechniqueLibrary/RenderOverlays/dd/DebuggingShapes.material"
 #define RENDEROVERLAYS_SEL_PRECONFIG "xleres/TechniqueLibrary/RenderOverlays/dd/Preconfiguration.hlsl"
+#define RENDEROVERLAYS_SEPARABLE_FILTER "xleres/TechniqueLibrary/RenderOverlays/dd/separable-filter.compute.hlsl"
 
 #define SCENE_ENGINE_RES "xleres/TechniqueLibrary/SceneEngine"
 
@@ -80,7 +81,7 @@
 #define TONEMAP_ACES_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/tonemap-aces.compute.hlsl"
 #define BLOOM_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/bloom.compute.hlsl"
 #define BLOOM_PIPELINE "xleres/TechniqueLibrary/LightingEngine/bloom.pipeline"
-#define SEPARABLE_FILTER_2_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/separable-filter2.compute.hlsl"
+#define BLOOM_FILTER_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/bloom-filter.compute.hlsl"
 
 #define SKY_PIXEL_HLSL "xleres/TechniqueLibrary/SceneEngine/Effects/Sky.pixel.hlsl"
 
