@@ -21,6 +21,8 @@
 #include "../../Assets/Marker.h"
 #include "../../ConsoleRig/Console.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/Streams/PathUtils.h"
+#include <sstream>
 
 using namespace Utility::Literals;
 
@@ -155,6 +157,21 @@ namespace PlatformRig { namespace Overlays
 		return labelNode;
 	}
 
+	static YGNodeRef ValueGroup(LayoutEngine& layoutEngine)
+	{
+		auto baseNode = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(baseNode);
+		layoutEngine.PushNode(baseNode);
+		
+		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
+		YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
+		YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
+		
+		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 2);
+		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 2);
+		return baseNode;
+	}
+
 	static ImbuedNode* KeyValue(LayoutEngine& layoutEngine, std::string&& label)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
@@ -218,13 +235,36 @@ namespace PlatformRig { namespace Overlays
 		return labelNode;
 	}
 
-	template<typename T, typename std::enable_if<std::is_integral_v<T>>::type* =nullptr>
+	template<typename T, typename std::enable_if<std::is_integral_v<T> || std::is_floating_point_v<T>>::type* =nullptr>
 		static ImbuedNode* KeyValue(LayoutEngine& layoutEngine, T value)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
 
 		auto str = std::to_string(value);
+
+		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+		assert(defaultFonts);
+		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(str)));
+		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
+		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
+
+		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
+		};
+		return labelNode;
+	}
+
+	template<typename T, int N>
+		static ImbuedNode* KeyValue(LayoutEngine& layoutEngine, const VectorTT<T, N>& vector)
+	{
+		auto labelNode = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*labelNode);
+
+		std::stringstream sstr;
+		sstr << vector;
+		auto str = sstr.str();
 
 		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
 		assert(defaultFonts);
@@ -257,20 +297,6 @@ namespace PlatformRig { namespace Overlays
 		return labelNode;
 	}
 
-	static YGNodeRef ValueGroup(LayoutEngine& layoutEngine)
-	{
-		auto baseNode = layoutEngine.NewNode();
-		layoutEngine.InsertChildToStackTop(baseNode);
-		layoutEngine.PushNode(baseNode);
-		
-		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
-		YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
-		YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
-		
-		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 2);
-		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 2);
-		return baseNode;
-	}
 
 	static ImbuedNode* EventButton(LayoutEngine& layoutEngine, std::string&& label, std::function<void()>&& event)
 	{
@@ -292,11 +318,40 @@ namespace PlatformRig { namespace Overlays
 		};
 		return buttonNode;
 	}
+	
+	static std::string ColouriseFilename(StringSection<> filename)
+	{
+		auto split = MakeFileNameSplitter(filename);
+		std::stringstream str;
+		if (!split.DriveAndPath().IsEmpty()) {
+			const bool gradualBrightnessChange = true;
+			if (!gradualBrightnessChange) {
+				str << "{color:9f9f9f}" << split.DriveAndPath();
+			} else {
+				auto splitPath = MakeSplitPath(split.DriveAndPath());
+				if (splitPath.BeginsWithSeparator()) str << "/";
+				for (unsigned c=0; c<splitPath.GetSectionCount(); ++c) {
+					auto brightness = LinearInterpolate(0x5f, 0xcf, c/float(splitPath.GetSectionCount()));
+					if (c != 0) str << "/";
+					str << "{color:" << std::hex << brightness << brightness << brightness << std::dec << "}" << splitPath.GetSection(c);
+				}
+				if (splitPath.EndsWithSeparator()) str << "/";
+			}
+		}
+		if (!split.File().IsEmpty())
+			str << "{color:7f8fdf}" << split.File();
+		if (!split.ExtensionWithPeriod().IsEmpty())
+			str << "{color:df8f7f}" << split.ExtensionWithPeriod();
+		if (!split.ParametersWithDivider().IsEmpty())
+			str << "{color:7fdf8f}" << split.ParametersWithDivider();
+		return str.str();
+	}
 
-	static void SetupToolTipHover(ToolTipHover& hover, SceneEngine::MetadataProvider& metadataQuery, SceneEngine::PlacementsEditor& placementsEditor)
+	static void SetupToolTipHover(ToolTipHover& hover, const SceneEngine::IntersectionTestResult& testResult, SceneEngine::PlacementsEditor& placementsEditor)
 	{
 		LayoutEngine le;
 
+		auto& metadataQuery = testResult._metadataQuery;
 		std::string selectedMaterialName, selectedModelName;
 		selectedMaterialName = TryAnyCast(metadataQuery("MaterialScaffold"_h), selectedMaterialName);
 		selectedModelName = TryAnyCast(metadataQuery("ModelScaffold"_h), selectedModelName);
@@ -307,6 +362,7 @@ namespace PlatformRig { namespace Overlays
 		auto cellPlacementCount = TryAnyCast<unsigned>(metadataQuery("Cell_PlacementCount"_h));
 		auto cellSimilarPlacementCount = TryAnyCast<unsigned>(metadataQuery("Cell_SimilarPlacementCount"_h));
 		auto placementGuid = TryAnyCast<SceneEngine::PlacementGUID>(metadataQuery("PlacementGUID"_h));
+		auto localToCell = TryAnyCast<Float4x4>(metadataQuery("LocalToCell"_h));
 
 		auto rootNode = le.NewNode();
 		le.PushRoot(rootNode, {32, 32});
@@ -320,8 +376,8 @@ namespace PlatformRig { namespace Overlays
 		Heading(le, "Placement");
 
 		if (!selectedMaterialName.empty() || !selectedModelName.empty()) {
-			KeyValueGroup(le); KeyName(le, "Model Scaffold"); KeyValue(le, std::move(selectedModelName)); le.PopNode();
-			KeyValueGroup(le); KeyName(le, "Material Scaffold"); KeyValue(le, std::move(selectedMaterialName)); le.PopNode();
+			KeyValueGroup(le); KeyName(le, "Model Scaffold"); KeyValue(le, ColouriseFilename(selectedModelName)); le.PopNode();
+			KeyValueGroup(le); KeyName(le, "Material Scaffold"); KeyValue(le, ColouriseFilename(selectedMaterialName)); le.PopNode();
 		}
 		if (drawCallIndex && drawCallCount && indexCount && materialName) {
 			KeyValueGroup(le); KeyName(le, "Draw Call Index"); 
@@ -349,7 +405,7 @@ namespace PlatformRig { namespace Overlays
 			KeyValueGroup(le);
 			KeyName(le, "Cell");
 			auto cellName = placementsEditor.GetCellSet().DehashCellName(placementGuid->first).AsString();
-			if (!cellName.empty()) KeyValue(le, std::string{cellName});
+			if (!cellName.empty()) KeyValue(le, ColouriseFilename(cellName));
 			else KeyValue(le, placementGuid->first);
 			le.PopNode();
 			EventButton(le, "Show Quad Tree", [cell=placementGuid->first, cellName]() {
@@ -359,6 +415,38 @@ namespace PlatformRig { namespace Overlays
 			EventButton(le, "Show Placements", [cell=placementGuid->first, cellName]() {
 				ConsoleRig::Console::GetInstance().Execute("scene:ShowPlacements(\"" + cellName + "\")");
 			});
+			le.PopNode();
+		}
+		if (localToCell) {
+			auto* group = VerticalGroup(le);
+			YGNodeStyleSetAlignItems(group, YGAlignStretch);
+			Heading(le, "Local to Cell");
+			ScaleRotationTranslationM decomposed { *localToCell };
+			KeyValueGroup(le); KeyName(le, "Translation"); KeyValue(le, decomposed._translation); le.PopNode();
+			if (!Equivalent(decomposed._scale, {1.f, 1.f, 1.f}, 1e-3f)) {
+				KeyValueGroup(le); KeyName(le, "Scale"); KeyValue(le, decomposed._scale); le.PopNode();
+			}
+			const cml::EulerOrder eulerOrder = cml::euler_order_yxz;
+			Float3 ypr = cml::matrix_to_euler<Float3x3, Float3x3::value_type>(decomposed._rotation, eulerOrder);
+			const char* labels[] = { "Rotate Y", "Rotate X", "Rotate Z" };
+			for (unsigned c=0; c<3; ++c) {
+				if (Equivalent(ypr[c], 0.f, 1e-3f)) continue;
+				KeyValueGroup(le); KeyName(le, labels[c]); KeyValue(le, ypr[c] * 180.f / gPI); le.PopNode();
+			}
+			le.PopNode();
+		}
+		{
+			auto* group = VerticalGroup(le);
+			YGNodeStyleSetAlignItems(group, YGAlignStretch);
+			Heading(le, "Intersection");
+			KeyValueGroup(le);
+			KeyName(le, "Point");
+			KeyValue(le, testResult._worldSpaceIntersectionPt);
+			le.PopNode();
+			KeyValueGroup(le);
+			KeyName(le, "Normal");
+			KeyValue(le, testResult._worldSpaceIntersectionNormal);
+			le.PopNode();
 			le.PopNode();
 		}
 
@@ -483,7 +571,7 @@ namespace PlatformRig { namespace Overlays
 						TRY {
 							_selectedPlacementsLocalBoundary = TryAnyCast(firstHit->_metadataQuery("LocalBoundary"_h), std::make_pair(Zero<Float3>(), Zero<Float3>()));
 							_selectedPlacementsLocalToWorld = TryAnyCast(firstHit->_metadataQuery("LocalToWorld"_h), Identity<Float4x4>());
-							SetupToolTipHover(_hover, firstHit->_metadataQuery, *_placementsEditor);
+							SetupToolTipHover(_hover, *firstHit, *_placementsEditor);
 						} CATCH (const std::exception& e) {
 							_hover = {};
 							_selectedPlacementsLocalBoundary = std::make_pair(Zero<Float3>(), Zero<Float3>());

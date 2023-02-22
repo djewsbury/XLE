@@ -993,7 +993,7 @@ namespace SceneEngine
                         {
                             switch (semantic) {
                             case "PlacementGUID"_h: return std::make_pair(cellId, objGuid);
-                            case "LocalToCell"_h: return localToCell;
+                            case "LocalToCell"_h: return AsFloat4x4(localToCell);
                             case "LocalToWorld"_h: return AsFloat4x4(Combine(localToCell, cellToWorld));
                             case "LocalBoundary"_h: 
                                 {
