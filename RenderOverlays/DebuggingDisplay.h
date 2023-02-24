@@ -161,6 +161,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB outlineColour, float outlineWidth = 1.f);
     void        FillAndOutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB fillColour, ColorB outlineColour, float outlineWidth = 1.f);
 
+    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect);
+
     struct DrawText
     {
         mutable DrawTextFlags::BitField _flags = DrawTextFlags::Shadow;

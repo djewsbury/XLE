@@ -206,6 +206,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial _fillReverseRaisedRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
+        RenderCore::Techniques::ImmediateDrawableMaterial _softShadowRect;
         RenderCore::UniformsStreamInterface _roundedRectUSI;
 
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
@@ -222,7 +223,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
             const RenderCore::Assets::ResolvedMaterial& fillRaisedRoundedRect,
             const RenderCore::Assets::ResolvedMaterial& fillReverseRaisedRoundedRect,
             const RenderCore::Assets::ResolvedMaterial& fillEllipse,
-            const RenderCore::Assets::ResolvedMaterial& outlineEllipse)
+            const RenderCore::Assets::ResolvedMaterial& outlineEllipse,
+            const RenderCore::Assets::ResolvedMaterial& softShadowRect)
         {
             _horizTweakerBarMaterial = BuildImmediateDrawableMaterial(horizTweakerBarMaterial);
             _tagShaderMaterial = BuildImmediateDrawableMaterial(tagShaderMaterial);
@@ -235,6 +237,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _fillReverseRaisedRoundedRect = BuildImmediateDrawableMaterial(fillReverseRaisedRoundedRect);
             _fillEllipse = BuildImmediateDrawableMaterial(fillEllipse);
             _outlineEllipse = BuildImmediateDrawableMaterial(outlineEllipse);
+            _softShadowRect = BuildImmediateDrawableMaterial(softShadowRect);
 
             _roundedRectUSI.BindImmediateData(0, "RoundedRectSettings"_h);
             _fillRoundedRect._uniformStreamInterface = &_roundedRectUSI;
@@ -255,6 +258,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _depVal.RegisterDependency(fillReverseRaisedRoundedRect.GetDependencyValidation());
             _depVal.RegisterDependency(fillEllipse.GetDependencyValidation());
             _depVal.RegisterDependency(outlineEllipse.GetDependencyValidation());
+            _depVal.RegisterDependency(softShadowRect.GetDependencyValidation());
         }
 
         static void ConstructToPromise(std::promise<std::shared_ptr<StandardResources>>&& promise)
@@ -270,8 +274,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto fillReverseRaisedRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillReverseRaisedRoundedRect");
             auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
+            auto softShadowRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
 
-            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse).ThenConstructToPromise(std::move(promise));
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect).ThenConstructToPromise(std::move(promise));
         }
 
         std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
@@ -524,6 +529,27 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         FillRectangle(context, rect, fillColour);
         OutlineRectangle(context, rect, outlineColour, outlineWidth);
+    }
+
+    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect)
+    {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_softShadowRect;
+        const int radiusX = 32, radiusY = 32;
+        context.DrawQuad(
+            ProjectionMode::P2D,
+            AsPixelCoords(Coord2(rect._topLeft - Coord2{radiusX, radiusY})),
+            AsPixelCoords(Coord2(rect._bottomRight + Coord2{radiusX, radiusY})),
+            ColorB::Black, ColorB::Zero,
+            Float2(    - radiusX / float(rect.Width()),     - radiusY / float(rect.Height())),
+            Float2(1.f + radiusX / float(rect.Width()), 1.f + radiusY / float(rect.Height())),
+            Float2(radiusX, radiusY), Float2(radiusX, radiusY),
+            std::move(mat));
     }
 
 #if 0

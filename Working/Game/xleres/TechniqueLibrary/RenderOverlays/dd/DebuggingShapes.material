@@ -114,3 +114,9 @@ OutlineEllipse=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
+
+SoftShadowRect=~
+	Patches=~
+		=~
+			DebuggingShapes.pixel.hlsl::SoftShadowRect
+			Implements=Interfaces.hlsl::TwoLayersShader

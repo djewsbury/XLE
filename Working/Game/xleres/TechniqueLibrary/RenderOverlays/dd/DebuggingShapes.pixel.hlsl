@@ -6,6 +6,7 @@
 
 #include "DebuggingShapes.hlsl"
 #include "../../Framework/SystemUniforms.hlsl"
+#include "../../Math/MathConstants.hlsl"
 
 float4 HorizTweakerBarShader(
 	float4 position,
@@ -116,4 +117,144 @@ float4 GridBackgroundShader(
 	} else {
 		return float4(0.3.xxx, 0.25f);
 	}
+}
+
+float IntegrateCircleCutout(float x, float a, float k)
+{
+	// based on an idea from
+	// https://stackoverflow.com/questions/622287/area-of-intersection-between-circle-and-rectangle
+	// Here we just take a simple integral of a circle equation to find the area
+	// under the curve
+	// combining this integral in various ways allows us to find the area of an intersection of
+	// a circle and rectangle
+
+	// integral of sqrt[a^2 - x^2] + k (w.r.t. x)
+	float a1 = sqrt(a*a - x*x);
+	return 0.5 * (x*a1 + a*a*atan(x/a1)) + k*x;
+}
+
+float CalculateCircleRectangleIntersectionArea(
+	float2 topLeft, float2 bottomRight,
+	float radius)
+{
+	// Given a rectangle an circle (circle at the origin), find the area of the intersection
+	// between them
+
+	//
+	//			0	|	1	|	2
+	//		-------------------------
+	//			3	|	4	|	5
+	//		-------------------------
+	//			6	|	7	|	8
+	//
+	// If the rectangle is region 4 in the area above, we need to know
+	// in which of them does our circle center (ie, the origin), appear?
+
+	float k, x1, x2;
+	if (topLeft.y > 0) {
+		k = -topLeft.y;
+		float q = sqrt(radius*radius - k*k);
+		x1 = max(topLeft.x, -q);
+		x2 = min(bottomRight.x, q);
+		if (x1 > bottomRight.x || x2 < topLeft.x) return 0;
+	}
+	
+	else if (bottomRight.y < 0) {
+		k = bottomRight.y;
+		float q = sqrt(radius*radius - k*k);
+		x1 = max(topLeft.x, -q);
+		x2 = min(bottomRight.x, q);
+		if (x1 > bottomRight.x || x2 < topLeft.x) return 0;
+	}
+	
+	else if (topLeft.x > 0) {
+		k = -topLeft.x;
+		float q = sqrt(radius*radius - k*k);
+		x1 = max(topLeft.y, -q);
+		x2 = min(bottomRight.y, q);
+	}
+	
+	else if (bottomRight.x < 0) {
+		k = bottomRight.x;
+		float q = sqrt(radius*radius - k*k);
+		x1 = max(topLeft.y, -q);
+		x2 = min(bottomRight.y, q);
+	}
+
+	else {
+		
+		// in the center, we need to check if we're in range of a border. In this case we start with
+		// a full circle and cut out segments when we find them
+
+		float area = pi * radius * radius;
+		if (topLeft.y > -radius) {
+			k = topLeft.y;
+			float q = sqrt(radius*radius - k*k);
+			x1 = -q;
+			x2 = q;
+			float i1 = IntegrateCircleCutout(x1, radius, k);
+			float i2 = IntegrateCircleCutout(x2, radius, k);
+			area -= i2 - i1;
+		}
+		
+		if (bottomRight.y < radius) {
+			k = -bottomRight.y;
+			float q = sqrt(radius*radius - k*k);
+			x1 = -q;
+			x2 = q;
+			float i1 = IntegrateCircleCutout(x1, radius, k);
+			float i2 = IntegrateCircleCutout(x2, radius, k);
+			area -= i2 - i1;
+		}
+
+		if (topLeft.x > -radius) {
+			k = topLeft.x;
+			float q = sqrt(radius*radius - k*k);
+			x1 = max(topLeft.y, -q);
+			x2 = min(bottomRight.y, q);
+			float i1 = IntegrateCircleCutout(x1, radius, k);
+			float i2 = IntegrateCircleCutout(x2, radius, k);
+			area -= i2 - i1;
+		}
+
+		if (bottomRight.x < radius) {
+			k = -bottomRight.x;
+			float q = sqrt(radius*radius - k*k);
+			x1 = max(topLeft.y, -q);
+			x2 = min(bottomRight.y, q);
+			float i1 = IntegrateCircleCutout(x1, radius, k);
+			float i2 = IntegrateCircleCutout(x2, radius, k);
+			area -= i2 - i1;
+		}
+
+		return area;
+	}
+
+	float i1 = IntegrateCircleCutout(x1, radius, k);
+	float i2 = IntegrateCircleCutout(x2, radius, k);
+	float area = i2 - i1;
+	return area;
+}
+
+float4 SoftShadowRect(
+	float4 position,
+	float4 color, float4 color1,
+	float2 texCoord0, float2 texCoord1)
+{
+	// Draw a soft shadow for a rectangle
+	// The coordinates in rectangle space are in "texCoord0"
+
+	float dudx = ddx(texCoord0.x), dvdy = ddy(texCoord0.y);
+	float2 topLeft = float2(-texCoord0.x / dudx, -texCoord0.y / dvdy); 
+	float2 bottomRight = float2((1.f - texCoord0.x) / dudx, (1.0f - texCoord0.y) / dvdy);
+
+	// topLeft, bottomRight are the coordinates of the rectangle, in pixel coords, relative to position.xy
+	// Shadowing is equal to the proportion of a circle (centered on the sample point) which intersects
+	// the rectangle
+
+	const float radius = texCoord1.x;
+	float area = CalculateCircleRectangleIntersectionArea(topLeft, bottomRight, radius);
+	float A = area / (pi * radius * radius);
+	return float4(color.rgb, color.a*A);
+
 }
