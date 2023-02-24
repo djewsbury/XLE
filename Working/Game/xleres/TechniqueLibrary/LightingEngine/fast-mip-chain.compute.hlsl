@@ -2,12 +2,14 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "../Utility/Colour.hlsl"
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // 		F A S T   D O W N S A M P L E   W I T H   F F X _ S P D
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // uniform bindings are so it can be used with the tone map operator, which uses a single descriptor set, shared by many shaders
-RWTexture2D<float4>		MipChainUAV[8] : register(u2, space0);
+RWTexture2D<float4>		MipChainUAV[13] : register(u2, space0);
 Texture2D<float3>		InputTexture : register(t3, space0);
 SamplerState 			BilinearClamp : register(s6, space0);
 
@@ -24,6 +26,7 @@ globallycoherent RWBuffer<uint> AtomicBuffer : register(u4, space0);		// global 
 float2 FastMipChain_GetReciprocalInputDims() { return ControlUniforms.A.xy; }
 uint FastMipChain_GetMipCount() { return ControlUniforms.B.z; }
 uint FastMipChain_GetThreadGroupCount() { return ControlUniforms.B.x; }
+bool FastMipChain_SRGBOutput() { return ControlUniforms.B.w; }
 
 // Setup pre-portability-header defines (sets up GLSL/HLSL path, etc)
 #define A_GPU 1
@@ -57,7 +60,14 @@ uint FastMipChain_GetThreadGroupCount() { return ControlUniforms.B.x; }
 	// Loads the 5th mip level, each value is computed by a different thread group
 	// last thread group will access all its elements and compute the subsequent mips
 	AF4 SpdLoad(ASU2 tex){return AF4(MipChainUAV[MIP_OFFSET+5][tex].rgb, 1);}
-	void SpdStore(ASU2 pix, AF4 value, AU1 index){MipChainUAV[MIP_OFFSET+index][pix] = float4(value.xyz, 1);}
+	void SpdStore(ASU2 pix, AF4 value, AU1 index)
+	{
+		if (FastMipChain_SRGBOutput()) {
+			MipChainUAV[MIP_OFFSET+index][pix] = float4(LinearToSRGB_Formal(value.xyz), 1);
+		} else {
+			MipChainUAV[MIP_OFFSET+index][pix] = float4(value.xyz, 1);
+		}
+	}
 
 	// Define the LDS load and store functions
 	AF4 SpdLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
@@ -81,7 +91,14 @@ uint FastMipChain_GetThreadGroupCount() { return ControlUniforms.B.x; }
 	AH4 SpdLoadH(ASU2 tex){return AH4(MipChainUAV[MIP_OFFSET+5][tex].rgb, 1);}
 
 	// Define the store function
-	void SpdStoreH(ASU2 pix, AH4 value, AU1 index){MipChainUAV[MIP_OFFSET+index][pix] = AF4(value.xyz, 1);}
+	void SpdStoreH(ASU2 pix, AH4 value, AU1 index)
+	{
+		if (FastMipChain_SRGBOutput()) {
+			MipChainUAV[MIP_OFFSET+index][pix] = AF4(LinearToSRGB_Formal(value.xyz), 1);
+		} else {
+			MipChainUAV[MIP_OFFSET+index][pix] = AF4(value.xyz, 1);
+		}
+	}
 
 	// Define the lds load and store functions
 	AH4 SpdLoadIntermediateH(AU1 x, AU1 y){return spd_intermediate[x][y];}

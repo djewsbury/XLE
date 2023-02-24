@@ -9,20 +9,46 @@
 #include "../RenderCore/Techniques/PipelineOperators.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/DrawableDelegates.h"		// for IUnformDelegateManager
+#include "../RenderCore/Techniques/CommonResources.h"
+#include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/UniformsStream.h"
+#include "../RenderCore/Metal/Resource.h"		// metal only required for barriers
+#include "../RenderCore/Metal/DeviceContext.h"
 #include "../Assets/Marker.h"
+#include "../Assets/Continuation.h"
+#include "../Assets/Assets.h"
 #include "../xleres/FileList.h"
 
 using namespace Utility::Literals;
 
 namespace RenderOverlays
 {
-	struct CB_BlurControlUniforms
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class GaussianBlurOperator
 	{
-		float _blurWeights[6];
-		uint32_t _srgbConversionOnInput = false;
-		uint32_t _srgbConversionOnOutput = false;
-		void CalculateBlurWeights(float radius);
+	public:
+		struct CB_BlurControlUniforms
+		{
+			float _blurWeights[6];
+			uint32_t _srgbConversionOnInput = false;
+			uint32_t _srgbConversionOnOutput = false;
+			void CalculateBlurWeights(float radius);
+		};
+
+		std::shared_ptr<RenderCore::IResourceView> Execute(
+			RenderCore::Techniques::ParsingContext& parsingContext,
+			float blurRadius,
+			uint64_t inputAttachment = RenderCore::Techniques::AttachmentSemantics::ColorLDR);
+
+		::Assets::DependencyValidation GetDependencyValidation() const { return _pipelineOperator->GetDependencyValidation(); }
+
+		GaussianBlurOperator(std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> pipelineOperator);
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<GaussianBlurOperator>>&& promise,
+			const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool);
+	private:
+		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _pipelineOperator;
 	};
 
 	static float GaussianWeight1D(float offset, float stdDevSq)
@@ -33,7 +59,7 @@ namespace RenderOverlays
 		return C * std::exp(-offset*offset / twiceStdDevSq);
 	}
 
-	void CB_BlurControlUniforms::CalculateBlurWeights(float radius)
+	void GaussianBlurOperator::CB_BlurControlUniforms::CalculateBlurWeights(float radius)
 	{
 		// Calculate radius such that 1.5*stdDev = radius
 		// This is selected because it just tends to match the blur size we get with the large radius blur
@@ -51,25 +77,23 @@ namespace RenderOverlays
 			_blurWeights[c] /= weightSum;
 	}
 
-	static std::shared_ptr<RenderCore::IResourceView> GenerateBlurryBackground(
+	std::shared_ptr<RenderCore::IResourceView> GaussianBlurOperator::Execute(
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		RenderCore::Techniques::IComputeShaderOperator& pipelineOperator)
+		float blurRadius, uint64_t inputAttachment)
 	{
 		using namespace RenderCore;
 
-		// bring up-to-date compute, because it's typically invalidated at this point
-		parsingContext.GetUniformDelegateManager()->BringUpToDateCompute(parsingContext);
-
+		// True gaussian blur, but smaller blur radius
 		Techniques::FrameBufferDescFragment fbFragment;
 		fbFragment._pipelineType = PipelineType::Compute;
-		fbFragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).FinalState(BindFlag::UnorderedAccess);
+		fbFragment.DefineAttachment(inputAttachment).FinalState(BindFlag::UnorderedAccess);
 		fbFragment.DefineAttachment("BlurryBackground"_h).NoInitialState().FinalState(BindFlag::ShaderResource).FixedFormat(Format::R8G8B8A8_UNORM).RequireBindFlags(BindFlag::UnorderedAccess);
 		fbFragment.DefineAttachment("BlurryBackgroundTemp"_h).NoInitialState().FinalState(BindFlag::ShaderResource).FixedFormat(Format::R8G8B8A8_UNORM).RequireBindFlags(BindFlag::UnorderedAccess);
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
 		sp.AppendNonFrameBufferAttachmentView(0, BindFlag::UnorderedAccess);
 		sp.AppendNonFrameBufferAttachmentView(1, BindFlag::UnorderedAccess);
 		sp.AppendNonFrameBufferAttachmentView(2, BindFlag::UnorderedAccess);
-		sp.SetName("blurry-background");
+		sp.SetName("gaussian-blur");
 		fbFragment.AddSubpass(std::move(sp));
 
 		Techniques::RenderPassInstance rpi { parsingContext, fbFragment };
@@ -80,7 +104,7 @@ namespace RenderOverlays
 		});
 
 		CB_BlurControlUniforms params;
-		params.CalculateBlurWeights(4.f);
+		params.CalculateBlurWeights(blurRadius);
 		params._srgbConversionOnInput = false;
 		params._srgbConversionOnOutput = true;
 		IResourceView* srvs[] { rpi.GetNonFrameBufferAttachmentView(0).get(), rpi.GetNonFrameBufferAttachmentView(2).get() };
@@ -88,7 +112,7 @@ namespace RenderOverlays
 		UniformsStream uniforms;
 		uniforms._resourceViews = MakeIteratorRange(srvs);
 		uniforms._immediateData = MakeIteratorRange(immDatas);
-		pipelineOperator.Dispatch(
+		_pipelineOperator->Dispatch(
 			parsingContext,
 			(parsingContext.GetFragmentStitchingContext()._workingProps._width + 7) / 8,
 			(parsingContext.GetFragmentStitchingContext()._workingProps._height + 7) / 8,
@@ -102,7 +126,7 @@ namespace RenderOverlays
 		srvs[1] = rpi.GetNonFrameBufferAttachmentView(1).get();
 		params._srgbConversionOnInput = true;
 		params._srgbConversionOnOutput = true;
-		pipelineOperator.Dispatch(
+		_pipelineOperator->Dispatch(
 			parsingContext,
 			(parsingContext.GetFragmentStitchingContext()._workingProps._width + 7) / 8,
 			(parsingContext.GetFragmentStitchingContext()._workingProps._height + 7) / 8,
@@ -117,31 +141,331 @@ namespace RenderOverlays
 		return rpi.GetNonFrameBufferAttachmentView(1)->GetResource()->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::ColorSRGB});
 	}
 
-	std::shared_ptr<RenderCore::IResourceView> BlurryBackgroundEffect::GetResourceView()
-	{
-		assert(_parsingContext);
-		if (!_backgroundResource) {
-			// generate the blurry background now (at least, if the shader has finished loading)
-			auto *pipelineOperator = _pipelineOperator->TryActualize();
-			if (pipelineOperator)
-				_backgroundResource = GenerateBlurryBackground(*_parsingContext, *pipelineOperator->get());
-		}
-		return _backgroundResource;
-	}
+	GaussianBlurOperator::GaussianBlurOperator(std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> pipelineOperator)
+	: _pipelineOperator(std::move(pipelineOperator)) {}
 
-	BlurryBackgroundEffect::BlurryBackgroundEffect(RenderCore::Techniques::ParsingContext& parsingContext)
-	: _parsingContext(&parsingContext)
+	void GaussianBlurOperator::ConstructToPromise(
+		std::promise<std::shared_ptr<GaussianBlurOperator>>&& promise,
+		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool)
 	{
 		RenderCore::UniformsStreamInterface usi;
 		usi.BindResourceView(0, "InputTexture"_h);
 		usi.BindResourceView(1, "OutputTexture"_h);
 		usi.BindImmediateData(0, "ControlUniforms"_h);
-		_pipelineOperator = RenderCore::Techniques::CreateComputeOperator(
-			parsingContext.GetTechniqueContext()._graphicsPipelinePool,
+		auto futurePipelineOperator = RenderCore::Techniques::CreateComputeOperator(
+			pool,
 			RENDEROVERLAYS_SEPARABLE_FILTER ":Gaussian11RGB",
 			ParameterBox{},
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 			usi);
+		::Assets::WhenAll(std::move(futurePipelineOperator)).ThenConstructToPromise(
+			std::move(promise),
+			[](auto pipelineOperator) {
+				return std::make_shared<GaussianBlurOperator>(std::move(pipelineOperator));
+			});
+	}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class FastMipChainOperator
+	{
+	public:
+		void Execute(
+			RenderCore::IThreadContext& threadContext,
+			IteratorRange<const std::shared_ptr<RenderCore::IResourceView>*> dstUAVs,
+			RenderCore::IResourceView& srcSRV,
+			bool srgbOutput);
+
+		::Assets::DependencyValidation GetDependencyValidation() const { return _op->GetDependencyValidation(); }
+
+		FastMipChainOperator(RenderCore::IDevice& device, std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> op);
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<FastMipChainOperator>>&& promise,
+			const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool);
+	private:
+		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _op;
+		std::shared_ptr<RenderCore::IResourceView> _atomicCounterBufferView;
+	};
+
+	void FastMipChainOperator::Execute(
+		RenderCore::IThreadContext& threadContext,
+		IteratorRange<const std::shared_ptr<RenderCore::IResourceView>*> dstUAVs,
+		RenderCore::IResourceView& srcSRV,
+		bool srgbOutput)
+	{
+		using namespace RenderCore;
+		auto srcDesc = srcSRV.GetResource()->GetDesc();
+		assert(srcDesc._type == ResourceDesc::Type::Texture);
+		UInt2 srcDims { srcDesc._textureDesc._width, srcDesc._textureDesc._height };
+		const auto threadGroupX = (srcDims[0]+63)>>6, threadGroupY = (srcDims[1]+63)>>6;
+		struct FastMipChain_ControlUniforms {
+			Float2 _reciprocalInputDims;
+			unsigned _dummy[2];
+			uint32_t _threadGroupCount;
+			unsigned _dummy2;
+			uint32_t _mipCount;
+			uint32_t _srgbOutput;
+		} controlUniforms {
+			Float2 { 1.f/float(srcDims[0]), 1.f/float(srcDims[1]) },
+			{0,0},
+			threadGroupX * threadGroupY,
+			0,
+			(uint32_t)dstUAVs.size(),
+			srgbOutput
+		};
+		IResourceView* srvs[2+13];
+		srvs[0] = &srcSRV;
+		srvs[1] = _atomicCounterBufferView.get();
+		unsigned c=0;
+		for (; c<dstUAVs.size(); ++c) srvs[2+c] = dstUAVs[c].get();
+		auto* dummySRV = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+		for (; c<13; ++c) srvs[2+c] = dummySRV;
+		UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
+		_op->Dispatch(threadContext, threadGroupX, threadGroupY, 1, UniformsStream { srvs, immDatas });
+	}
+
+	FastMipChainOperator::FastMipChainOperator(RenderCore::IDevice& device, std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> op)
+	: _op(std::move(op))
+	{
+		using namespace RenderCore;
+		auto atomicBuffer = device.CreateResource(
+			CreateDesc(
+				BindFlag::TransferDst | BindFlag::UnorderedAccess | BindFlag::TexelBuffer,
+				LinearBufferDesc::Create(4*4)),
+			"temporary-atomic-counter");
+		_atomicCounterBufferView = atomicBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
+	}
+
+	void FastMipChainOperator::ConstructToPromise(
+		std::promise<std::shared_ptr<FastMipChainOperator>>&& promise,
+		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool)
+	{
+		RenderCore::UniformsStreamInterface usi;
+		usi.BindResourceView(0, "InputTexture"_h);
+		usi.BindResourceView(1, "AtomicBuffer"_h);
+		for (unsigned c=0; c<13; ++c)
+			usi.BindResourceView(2+c, "MipChainUAV"_h+c);
+		usi.BindImmediateData(0, "ControlUniforms"_h);
+		auto futureOp = RenderCore::Techniques::CreateComputeOperator(
+			pool,
+			FAST_MIP_CHAIN_COMPUTE_HLSL ":main",
+			ParameterBox{},
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+			usi);
+
+		::Assets::WhenAll(std::move(futureOp)).ThenConstructToPromise(
+			std::move(promise),
+			[dev=pool->GetDevice()](auto op) {
+				return std::make_shared<FastMipChainOperator>(*dev, std::move(op));
+			});
+	}
+
+	class BroadBlurOperator
+	{
+	public:
+		std::shared_ptr<RenderCore::IResourceView> Execute(
+			RenderCore::Techniques::ParsingContext& parsingContext,
+			uint64_t inputAttachment = RenderCore::Techniques::AttachmentSemantics::ColorLDR);
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		BroadBlurOperator(
+			std::shared_ptr<FastMipChainOperator> downsampleOperator,
+			std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> upsampleOperator);
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<BroadBlurOperator>>&& promise,
+			const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool);
+	private:
+		std::shared_ptr<FastMipChainOperator> _downsampleOperator;
+		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _upsampleOperator;
+		::Assets::DependencyValidation _depVal;
+	};
+
+	std::shared_ptr<RenderCore::IResourceView> BroadBlurOperator::Execute(
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		uint64_t inputAttachment)
+	{
+		using namespace RenderCore;
+
+		// Broad blur, but using mip pyramid approach
+		UInt2 srcDims { parsingContext.GetFragmentStitchingContext()._workingProps._width, parsingContext.GetFragmentStitchingContext()._workingProps._height };
+		auto srcMipCount = IntegerLog2(std::max(srcDims[0], srcDims[1])) + 1;
+		auto upsampleCount = 3u;
+		upsampleCount = std::min(srcMipCount-1u, upsampleCount);
+		UInt2 mipChainTopDims { srcDims[0] >> 1, srcDims[1] >> 1 };
+
+		parsingContext.GetFragmentStitchingContext().DefineAttachment(
+			"BlurryBackground"_h,
+			CreateDesc(
+				BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+				TextureDesc::Plain2D(mipChainTopDims[0], mipChainTopDims[1], Format::R8G8B8A8_UNORM, upsampleCount+1)),
+			"blurry-background",
+			Techniques::PreregisteredAttachment::State::Uninitialized, 0,
+			TextureViewDesc{RenderCore::TextureViewDesc::Aspect::ColorSRGB});
+
+		Techniques::FrameBufferDescFragment fbFragment;
+		fbFragment._pipelineType = PipelineType::Compute;
+		const unsigned colorLDRAttachment = fbFragment.DefineAttachment(inputAttachment).FinalState(BindFlag::UnorderedAccess);
+		const unsigned workingAttachment = fbFragment.DefineAttachment("BlurryBackground"_h).NoInitialState().FinalState(BindFlag::ShaderResource);
+		Techniques::FrameBufferDescFragment::SubpassDesc sp;
+		const auto inputUAV = sp.AppendNonFrameBufferAttachmentView(colorLDRAttachment, BindFlag::UnorderedAccess);
+		const auto allMipsUAV = sp.AppendNonFrameBufferAttachmentView(workingAttachment, BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
+		const auto allMipsSRV = sp.AppendNonFrameBufferAttachmentView(workingAttachment, BindFlag::ShaderResource);
+		TextureViewDesc justTopMip; justTopMip._mipRange = {0, 1};
+		const auto topMipSRV = sp.AppendNonFrameBufferAttachmentView(workingAttachment, BindFlag::ShaderResource, justTopMip);
+		sp.SetName("broad-blur");
+		fbFragment.AddSubpass(std::move(sp));
+
+		Techniques::RenderPassInstance rpi { parsingContext, fbFragment };
+		rpi.AutoNonFrameBufferBarrier({
+			{inputUAV, BindFlag::ShaderResource, ShaderStage::Compute},
+			{allMipsUAV, BindFlag::UnorderedAccess, ShaderStage::Compute}
+		});
+
+		std::vector<std::shared_ptr<IResourceView>> tempUAVs;
+		for (unsigned c=0; c<upsampleCount+1; ++c) {
+			TextureViewDesc justDstMip; justDstMip._mipRange = {c, 1};
+			tempUAVs.push_back(rpi.GetNonFrameBufferAttachmentView(allMipsUAV)->GetResource()->CreateTextureView(BindFlag::UnorderedAccess, justDstMip));
+		}
+
+		// first build mip pyramid
+		_downsampleOperator->Execute(
+			parsingContext.GetThreadContext(),
+			MakeIteratorRange(tempUAVs),
+			*rpi.GetNonFrameBufferAttachmentView(inputUAV),
+			true);
+
+		// now upsample operation
+		{
+			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
+			auto* mipChainResource = tempUAVs[0]->GetResource().get();
+
+			for (unsigned pass=0; pass<upsampleCount; ++pass) {
+				auto srcMip = upsampleCount-pass;
+				auto dstMip = upsampleCount-1-pass;
+
+				// there's a sequence of barriers as we walk up the mip chain
+				// we could potentially do this smarter if we built a system like ffx_spd, but going the other way
+				{
+					Metal::BarrierHelper barrierHelper{metalContext};
+					barrierHelper.Add(
+						*mipChainResource, TextureViewDesc::SubResourceRange{srcMip, 1}, TextureViewDesc::All,
+						Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+						Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+				}
+
+				const unsigned dispatchGroupWidth = 8;
+				const unsigned dispatchGroupHeight = 8;
+				const auto
+					threadGroupX = ((mipChainTopDims[0]>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
+					threadGroupY = ((mipChainTopDims[1]>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
+
+				struct ControlUniforms {
+					Float2 _reciprocalDstDims;
+					unsigned _dummy2[2];
+					UInt2 _threadGroupCount;
+					unsigned _mipIndex;
+					unsigned _dummy3;
+				} controlUniforms {
+					Float2 { 1.f/float(mipChainTopDims[0]>>dstMip), 1.f/float(mipChainTopDims[1]>>dstMip) },
+					{0,0},
+					{ threadGroupX, threadGroupY },
+					dstMip,
+					0
+				};
+				IResourceView* srvs[] { tempUAVs[dstMip].get(), rpi.GetNonFrameBufferAttachmentView(allMipsSRV).get() };
+				UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
+				_upsampleOperator->Dispatch(parsingContext, threadGroupX, threadGroupY, 1, UniformsStream { srvs, immDatas });
+			}
+
+			Metal::BarrierHelper barrierHelper{metalContext};
+			barrierHelper.Add(
+				*mipChainResource, TextureViewDesc::SubResourceRange{0, 1}, TextureViewDesc::All,
+				Metal::BarrierResourceUsage{BindFlag::UnorderedAccess, ShaderStage::Compute},
+				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
+		}
+
+		return rpi.GetNonFrameBufferAttachmentView(3);
+	}
+
+	BroadBlurOperator::BroadBlurOperator(
+		std::shared_ptr<FastMipChainOperator> downsampleOperator,
+		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> upsampleOperator)
+	: _downsampleOperator(std::move(downsampleOperator))
+	, _upsampleOperator(std::move(upsampleOperator))
+	{
+		::Assets::DependencyValidationMarker depVals[] {
+			_downsampleOperator->GetDependencyValidation(),
+			_upsampleOperator->GetDependencyValidation()
+		};
+		_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+	}
+
+	void BroadBlurOperator::ConstructToPromise(
+		std::promise<std::shared_ptr<BroadBlurOperator>>&& promise,
+		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool)
+	{
+		RenderCore::UniformsStreamInterface usi1;
+		usi1.BindResourceView(0, "MipChainUAV"_h);
+		usi1.BindResourceView(1, "MipChainSRV"_h);
+		usi1.BindImmediateData(0, "ControlUniforms"_h);
+		auto futureUpsampleOperator = RenderCore::Techniques::CreateComputeOperator(
+			pool,
+			"xleres/TechniqueLibrary/RenderOverlays/dd/hierarchical-blur.compute.hlsl" ":main",
+			ParameterBox{},
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+			usi1);
+
+		auto futureDownsampleOperator = ::Assets::MakeAssetMarkerPtr<FastMipChainOperator>(pool);
+
+		::Assets::WhenAll(std::move(futureDownsampleOperator), std::move(futureUpsampleOperator)).ThenConstructToPromise(
+			std::move(promise),
+			[](auto downsampleOperator, auto upsampleOperator) {
+				return std::make_shared<BroadBlurOperator>(std::move(downsampleOperator), std::move(upsampleOperator));
+			});
+	}
+
+	std::shared_ptr<RenderCore::IResourceView> BlurryBackgroundEffect::GetResourceView()
+	{
+		assert(_parsingContext);
+		if (!_backgroundResource) {
+			// generate the blurry background now (at least, if the shader has finished loading)
+			if (_gaussianBlur) {
+				auto *op = _gaussianBlur->TryActualize();
+				if (op) {
+					// bring up-to-date compute, because it's typically invalidated at this point
+					_parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*_parsingContext);
+					_backgroundResource = (*op)->Execute(*_parsingContext, 4.0f);
+				}
+			} else {
+				auto *op = _broadBlur->TryActualize();
+				if (op) {
+					// bring up-to-date compute, because it's typically invalidated at this point
+					_parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*_parsingContext);
+					_backgroundResource = (*op)->Execute(*_parsingContext);
+				}
+			}
+		}
+		return _backgroundResource;
+	}
+
+	Float2 BlurryBackgroundEffect::AsTextureCoords(Coord2 screenSpace)
+	{
+		if (_backgroundResource)
+			return {
+				screenSpace[0] / float(_parsingContext->GetFragmentStitchingContext()._workingProps._width),
+				screenSpace[1] / float(_parsingContext->GetFragmentStitchingContext()._workingProps._height) };
+		return {0,0};
+	}
+
+	BlurryBackgroundEffect::BlurryBackgroundEffect(RenderCore::Techniques::ParsingContext& parsingContext, Type type)
+	: _parsingContext(&parsingContext)
+	{
+		if (type == Type::NarrowAccurateBlur) {
+			_gaussianBlur = ::Assets::MakeAssetMarkerPtr<GaussianBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool);
+		} else {
+			_broadBlur = ::Assets::MakeAssetMarkerPtr<BroadBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool);
+		}
 	}
 
 	BlurryBackgroundEffect::~BlurryBackgroundEffect()
