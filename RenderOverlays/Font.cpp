@@ -167,7 +167,7 @@ namespace RenderOverlays
 	template<typename CharType>
 		float StringEllipsis(CharType* outText, size_t outTextSize, const Font& font, StringSection<CharType> inText, float width, float spaceExtra, bool outline)
 	{
-		if (width <= 0.0f|| outTextSize <= 1) {
+		if (width <= 0.0f || outTextSize <= 1) {
 			if (outTextSize != 0)
 				outText[0] = 0;
 			return 0.0f;
@@ -194,22 +194,43 @@ namespace RenderOverlays
 
 			if (x > width) {
 				size_t count = size_t(i - inText.begin());
-				if (count > outTextSize - 2) {
-					if (outTextSize != 0)
-						outText[0] = 0;
-					return x;
-				}
+				if (outTextSize > 5) {	// at least one character, plus ellipsis, plus null terminator
+					count = std::min(count, outTextSize-3);
 
-				CopyString(outText, (int)count, inText.begin());
-				outText[count - 1] = '.';
-				outText[count] = '.';
-				outText[count + 1] = 0;
+					CopyString(outText, (int)count, inText.begin());
+					outText[count - 1] = '.';
+					outText[count    ] = '.';
+					outText[count + 1] = '.';
+					outText[count + 2] = 0;
+				} else {
+					count = std::min(count, outTextSize);
+					CopyString(outText, (int)count, inText.begin());
+				}
 
 				return StringWidth(font, MakeStringSection(outText, &outText[count + 1]), spaceExtra, outline);
 			}
 		}
 
-		return x;
+		if (inText.size() > size_t(outTextSize-1)) {
+			size_t count = inText.size();
+			if (outTextSize > 5) {	// at least one character, plus ellipsis, plus null terminator
+				count = std::min(count, outTextSize-3);
+
+				CopyString(outText, (int)count, inText.begin());
+				outText[count - 1] = '.';
+				outText[count    ] = '.';
+				outText[count + 1] = '.';
+				outText[count + 2] = 0;
+			} else {
+				count = std::min(count, outTextSize);
+				CopyString(outText, (int)count, inText.begin());
+			}
+
+			return StringWidth(font, MakeStringSection(outText), spaceExtra, outline);
+		} else {
+			CopyString(outText, (int)outTextSize, inText.begin());
+			return x;
+		}
 	}
 
 	template<typename CharType>
