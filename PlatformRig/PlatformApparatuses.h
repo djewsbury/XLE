@@ -11,8 +11,8 @@
 
 namespace RenderCore { class IDevice; class IThreadContext; class IPresentationChain; class IAnnotator; }
 namespace RenderCore { namespace BindFlag { using BitField = unsigned; }}
-namespace RenderCore { namespace Techniques { class ImmediateDrawingApparatus; class DrawingApparatus; class FrameRenderingApparatus; }}
-namespace RenderOverlays { class Font; }
+namespace RenderCore { namespace Techniques { class DrawingApparatus; class FrameRenderingApparatus; }}
+namespace RenderOverlays { class Font; class OverlayApparatus; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget; }}
 namespace Assets { class DependencyValidation; }
 namespace OSServices { class DisplaySettingsManager; }
@@ -29,7 +29,7 @@ namespace PlatformRig
 	class DebugOverlaysApparatus
 	{
 	public:
-		std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> _immediateApparatus;
+		std::shared_ptr<RenderOverlays::OverlayApparatus> _immediateApparatus;
 
 		std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> _debugSystem;
 		std::shared_ptr<OverlaySystemSet> _debugScreensOverlaySystem;
@@ -40,7 +40,7 @@ namespace PlatformRig
 		::Assets::DependencyValidation _depValPtr;
 
 		DebugOverlaysApparatus(
-			const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus);
+			const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus);
 		~DebugOverlaysApparatus();
 	};
 

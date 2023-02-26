@@ -20,12 +20,12 @@ namespace RenderCore { namespace Techniques
 {
 	class TechniqueContext;
 	class DrawingApparatus;
-	class ImmediateDrawingApparatus;
 	class PrimaryResourcesApparatus;
 	class FrameRenderingApparatus;
 }}
 
 namespace PlatformRig { class MainInputHandler; class WindowApparatus; class DebugOverlaysApparatus; struct DebugScreenRegistration; }
+namespace RenderOverlays { class OverlayApparatus; }
 
 namespace Sample
 {
@@ -35,7 +35,7 @@ namespace Sample
 		std::shared_ptr<RenderCore::IDevice> _renderDevice;
 
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
-        std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> _immediateDrawingApparatus;
+        std::shared_ptr<RenderOverlays::OverlayApparatus> _overlayApparatus;
         std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> _primaryResourcesApparatus;
         std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> _frameRenderingApparatus;
 		std::shared_ptr<PlatformRig::WindowApparatus> _windowApparatus;

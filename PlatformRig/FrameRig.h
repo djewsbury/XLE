@@ -9,8 +9,9 @@
 #include <vector>
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class SubFrameEvents; class FrameRenderingApparatus; class DrawingApparatus; class TechniqueContext; struct PreregisteredAttachment; class ImmediateDrawingApparatus; }}
-namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class SubFrameEvents; class FrameRenderingApparatus; class DrawingApparatus; class TechniqueContext; struct PreregisteredAttachment; }}
+namespace RenderOverlays { class OverlayApparatus; }
+namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget;  }}
 namespace Utility { class HierarchicalCPUProfiler; }
 
 namespace PlatformRig
@@ -19,7 +20,7 @@ namespace PlatformRig
     class WindowApparatus;
 
     void ReportError(RenderCore::Techniques::ParsingContext&, StringSection<>);
-    void ReportErrorToColorLDR(RenderCore::Techniques::ParsingContext&, RenderCore::Techniques::ImmediateDrawingApparatus&, StringSection<>);
+    void ReportErrorToColorLDR(RenderCore::Techniques::ParsingContext&, RenderOverlays::OverlayApparatus&, StringSection<>);
     std::vector<RenderCore::Techniques::PreregisteredAttachment> InitializeColorLDR(
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*>);
 

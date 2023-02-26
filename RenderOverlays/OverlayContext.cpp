@@ -13,6 +13,7 @@
 #include "../RenderCore/Types.h"
 #include "../RenderCore/StateDesc.h"
 #include "../RenderCore/UniformsStream.h"
+#include "../RenderOverlays/OverlayApparatus.h"
 #include "../Assets/Assets.h"
 #include "../OSServices/Log.h"
 #include "../ConsoleRig/ResourceBox.h"
@@ -352,7 +353,7 @@ namespace RenderOverlays
 	std::unique_ptr<ImmediateOverlayContext>
 		MakeImmediateOverlayContext(
 			RenderCore::IThreadContext& threadContext,
-			RenderCore::Techniques::ImmediateDrawingApparatus& apparatus)
+			RenderOverlays::OverlayApparatus& apparatus)
 	{
 		return MakeImmediateOverlayContext(threadContext, *apparatus._immediateDrawables, apparatus._fontRenderingManager.get());
 	}

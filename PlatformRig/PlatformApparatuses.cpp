@@ -16,6 +16,7 @@
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
+#include "../RenderOverlays/OverlayApparatus.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../OSServices/DisplaySettings.h"
 #include "../Assets/DepVal.h"
@@ -33,7 +34,7 @@ namespace PlatformRig
 	constexpr auto Fn_ShowScreen = ConstHash64Legacy<'show', 'scre', 'en'>::Value;
 
 	DebugOverlaysApparatus::DebugOverlaysApparatus(
-		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus)
+		const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus)
 	{
 		using DebugScreensSystem = RenderOverlays::DebuggingDisplay::DebugScreensSystem;
 		_debugSystem = std::make_shared<DebugScreensSystem>();
@@ -42,7 +43,7 @@ namespace PlatformRig
 		_debugScreensOverlaySystem->AddSystem(CreateDebugScreensOverlay(
 			_debugSystem,
 			immediateDrawingApparatus->_immediateDrawables,
-			immediateDrawingApparatus->_debugShapesSequencers,
+			immediateDrawingApparatus->_shapeRenderingDelegate,
 			immediateDrawingApparatus->_fontRenderingManager));
 
 		auto overlaySwitch = std::make_shared<PlatformRig::OverlaySystemSwitch>();

@@ -9,9 +9,10 @@
 #include <functional>
 
 namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class LightingTechniqueSequence; class LightingTechniqueIterator; class ILightScene; }}
-namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; class ImmediateDrawingApparatus; struct DoubleBufferAttachment; }}
+namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; struct DoubleBufferAttachment; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
+namespace RenderOverlays { class OverlayApparatus; }
 namespace Formatters { class IDynamicFormatter; }
 namespace std { template<typename T> class future; }
 
@@ -26,7 +27,7 @@ namespace ToolsRig
 			virtual void Execute(
 				RenderCore::Techniques::ParsingContext& parsingContext,
 				RenderCore::Techniques::DrawingApparatus& drawingApparatus,
-				RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus) = 0;
+				RenderOverlays::OverlayApparatus& immediateDrawingApparatus) = 0;
 			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
 			virtual auto GetRequiredAttachments() const -> std::vector<std::pair<uint64_t, RenderCore::BindFlag::BitField>> = 0;
 			virtual ~IVisualizeStep() = default;

@@ -7,8 +7,8 @@
 #include <memory>
 
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; }}
-namespace RenderOverlays { class FontRenderingManager; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableDelegate; }}
+namespace RenderOverlays { class FontRenderingManager; class ShapesRenderingDelegate; }
+namespace RenderCore { namespace Techniques { class IImmediateDrawables;  }}
 
 namespace PlatformRig
 {
@@ -17,6 +17,6 @@ namespace PlatformRig
 	std::shared_ptr<IOverlaySystem> CreateDebugScreensOverlay(
 		std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
-		std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> sequencerConfigSet,
+		std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
 		std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer);
 }

@@ -13,7 +13,8 @@
 #pragma warning(disable:4324)
 
 namespace RenderCore { class IThreadContext; class UniformsStreamInterface; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawingApparatus; } }
+namespace RenderCore { namespace Techniques { class IImmediateDrawables; } }
+namespace RenderOverlays { class OverlayApparatus; }
 
 namespace RenderOverlays
 {
@@ -105,5 +106,5 @@ namespace RenderOverlays
     std::unique_ptr<ImmediateOverlayContext>
 		MakeImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
-			RenderCore::Techniques::ImmediateDrawingApparatus& apparatus);
+			RenderOverlays::OverlayApparatus& apparatus);
 }

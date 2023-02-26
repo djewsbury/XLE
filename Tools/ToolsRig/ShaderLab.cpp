@@ -356,7 +356,7 @@ namespace ToolsRig
 		void Execute(
 			RenderCore::Techniques::ParsingContext& parsingContext,
 			RenderCore::Techniques::DrawingApparatus& drawingApparatus,
-			RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus) override
+			RenderOverlays::OverlayApparatus& immediateDrawingApparatus) override
 		{
 			using namespace RenderCore;
 

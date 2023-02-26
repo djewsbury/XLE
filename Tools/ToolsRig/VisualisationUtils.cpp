@@ -17,6 +17,7 @@
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CommonResources.h"
@@ -157,7 +158,7 @@ namespace ToolsRig
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
         SimpleSceneOverlay(
-            const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
+            const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus,
             const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
 			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators);
         ~SimpleSceneOverlay();
@@ -202,7 +203,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
-		std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> _debugShapesSequencers;
+		std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _debugShapesDelegate;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingApparatus;
     };
@@ -292,7 +293,7 @@ namespace ToolsRig
 			overlays.ReleaseState();
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
-			_immediateDrawables->ExecuteDraws(parserContext, _debugShapesSequencers->GetTechniqueDelegate(), rpi);
+			RenderOverlays::ExecuteDraws(parserContext, rpi, *_immediateDrawables, *_debugShapesDelegate);
 
 			StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
 		}
@@ -431,14 +432,14 @@ namespace ToolsRig
 	}
 	
     SimpleSceneOverlay::SimpleSceneOverlay(
-		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
+		const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus,
 		const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
 		const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
     {
 		_pipelineAccelerators = immediateDrawingApparatus->_mainDrawingApparatus->_pipelineAccelerators;
 		_deformAccelerators = deformAccelerators;
 		_immediateDrawables = immediateDrawingApparatus->_immediateDrawables;
-		_debugShapesSequencers = immediateDrawingApparatus->_debugShapesSequencers;
+		_debugShapesDelegate = immediateDrawingApparatus->_shapeRenderingDelegate;
 		_fontRenderingManager = immediateDrawingApparatus->_fontRenderingManager;
 		_lightingApparatus = lightingEngineApparatus;
     }
@@ -446,7 +447,7 @@ namespace ToolsRig
     SimpleSceneOverlay::~SimpleSceneOverlay() {}
 
 	std::shared_ptr<ISimpleSceneOverlay> CreateSimpleSceneOverlay(
-        const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
+        const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus,
         const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
 		const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators)
 	{
@@ -766,7 +767,7 @@ namespace ToolsRig
 		std::shared_ptr<MouseOverTrackingListener> _inputListener;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
-		std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> _debugShapesSequencers;
+		std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _debugShapesDelegate;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 
@@ -920,7 +921,7 @@ namespace ToolsRig
 				}
 
 				if (drawImmediateDrawables)
-					_pimpl->_immediateDrawables->ExecuteDraws(parserContext, _pimpl->_debugShapesSequencers->GetTechniqueDelegate(), rpi);
+					RenderOverlays::ExecuteDraws(parserContext, rpi, *_pimpl->_immediateDrawables, *_pimpl->_debugShapesDelegate);
 			}
 
 			if (doColorByMaterial) {
@@ -983,7 +984,7 @@ namespace ToolsRig
 				overlays.ReleaseState();
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
-				_pimpl->_immediateDrawables->ExecuteDraws(parserContext, _pimpl->_debugShapesSequencers->GetTechniqueDelegate(), rpi);
+				RenderOverlays::ExecuteDraws(parserContext, rpi, *_pimpl->_immediateDrawables, *_pimpl->_debugShapesDelegate);
 
 			CATCH_ASSETS_END(parserContext)
 		}
@@ -1137,14 +1138,14 @@ namespace ToolsRig
 	}
 
     VisualisationOverlay::VisualisationOverlay(
-		const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
+		const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus,
 		const VisOverlaySettings& overlaySettings)
     {
 		using namespace RenderCore;
         _pimpl = std::make_unique<Pimpl>();
 		_pimpl->_pipelineAccelerators = immediateDrawingApparatus->_mainDrawingApparatus->_pipelineAccelerators;
 		_pimpl->_immediateDrawables = immediateDrawingApparatus->_immediateDrawables;
-		_pimpl->_debugShapesSequencers = immediateDrawingApparatus->_debugShapesSequencers;
+		_pimpl->_debugShapesDelegate = immediateDrawingApparatus->_shapeRenderingDelegate;
 		_pimpl->_fontRenderingManager = immediateDrawingApparatus->_fontRenderingManager;
 		_pimpl->_drawingApparatus = immediateDrawingApparatus->_mainDrawingApparatus;
         _pimpl->_settings = overlaySettings;

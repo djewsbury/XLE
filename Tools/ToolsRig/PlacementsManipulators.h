@@ -13,7 +13,8 @@
 
 namespace PlatformRig { class IInputListener; }
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class ParsingContext; class ImmediateDrawingApparatus; class IPipelineAcceleratorPool; } }
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class ParsingContext; class IPipelineAcceleratorPool; } }
+namespace RenderOverlays { class OverlayApparatus; }
 
 namespace SceneEngine
 {
@@ -55,7 +56,7 @@ namespace ToolsRig
             const std::shared_ptr<SceneEngine::PlacementCellSet>& placementCellSet,
             const std::shared_ptr<SceneEngine::TerrainManager>& terrainManager,
             const std::shared_ptr<VisCameraSettings>& camera,
-            const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawablesApparatus);
+            const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawablesApparatus);
         ~PlacementsManipulatorsManager();
     protected:
         class Pimpl;

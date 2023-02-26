@@ -21,7 +21,6 @@ namespace RenderCore
 	namespace Assets { class PredefinedPipelineLayoutFile; class PredefinedDescriptorSetLayout; }
 }
 
-namespace RenderOverlays { class FontRenderingManager; }
 namespace Assets { class Services; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace Utility { class HierarchicalCPUProfiler; }
@@ -87,31 +86,6 @@ namespace RenderCore { namespace Techniques
 
 		DrawingApparatus(DrawingApparatus&) = delete;
 		DrawingApparatus& operator=(DrawingApparatus&) = delete;
-	};
-
-	class ImmediateDrawableDelegate;
-
-	class ImmediateDrawingApparatus
-	{
-	public:
-		std::shared_ptr<DrawingApparatus> _mainDrawingApparatus;
-		std::shared_ptr<IImmediateDrawables> _immediateDrawables;
-
-		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
-		std::shared_ptr<ImmediateDrawableDelegate> _debugShapesSequencers;
-
-		SignalDelegateId _frameBarrierBinding;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
-		::Assets::DependencyValidation _depValPtr;
-
-		ConsoleRig::AttachablePtr<Services> _techniqueServices;
-		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
-
-		ImmediateDrawingApparatus(std::shared_ptr<DrawingApparatus>);
-		~ImmediateDrawingApparatus();
-		ImmediateDrawingApparatus(ImmediateDrawingApparatus&) = delete;
-		ImmediateDrawingApparatus& operator=(ImmediateDrawingApparatus&) = delete;
 	};
 
 	class PrimaryResourcesApparatus

@@ -16,11 +16,10 @@
 namespace RenderCore { class IThreadContext; class FrameBufferProperties; }
 namespace RenderCore { namespace Techniques 
 { 
-    class ProjectionDesc; class ParsingContext; class IImmediateDrawables; class ImmediateDrawingApparatus;
+    class ProjectionDesc; class ParsingContext; class IImmediateDrawables;
     struct PreregisteredAttachment;
-    class ImmediateDrawableDelegate;
 }}
-namespace RenderOverlays { class FontRenderingManager; }
+namespace RenderOverlays { class FontRenderingManager; class OverlayApparatus; class ShapesRenderingDelegate; }
 
 namespace PlatformRig
 {
@@ -119,10 +118,10 @@ namespace PlatformRig
     };
 
     std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
-        RenderCore::Techniques::ImmediateDrawingApparatus&);
+        RenderOverlays::OverlayApparatus&);
 
     std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables>,
-        std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate>,
+        std::shared_ptr<RenderOverlays::ShapesRenderingDelegate>,
         std::shared_ptr<RenderOverlays::FontRenderingManager>);
 }

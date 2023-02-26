@@ -76,7 +76,7 @@ namespace GUILayer
         return _drawingApparatus;
     }
 
-    const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& NativeEngineDevice::GetImmediateDrawingApparatus()
+    const std::shared_ptr<RenderOverlays::OverlayApparatus>& NativeEngineDevice::GetOverlayApparatus()
     {
         return _immediateDrawingApparatus;
     }
@@ -121,7 +121,7 @@ namespace GUILayer
         _techniquesServices = std::make_shared<RenderCore::Techniques::Services>(_renderDevice);
 
         _drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(_renderDevice);
-        _immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(_drawingApparatus);
+        _immediateDrawingApparatus = std::make_shared<RenderOverlays::OverlayApparatus>(_drawingApparatus);
         _primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_renderDevice);
         _frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_renderDevice);
         _lightingEngineApparatus = std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(_drawingApparatus);

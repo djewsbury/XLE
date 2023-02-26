@@ -19,7 +19,6 @@ namespace RenderCore { namespace Techniques
     class IImmediateDrawables;
     class Services;
     class DrawingApparatus;
-    class ImmediateDrawingApparatus;
     class PrimaryResourcesApparatus;
     class FrameRenderingApparatus;
     class TechniqueContext;
@@ -27,6 +26,7 @@ namespace RenderCore { namespace Techniques
 namespace RenderCore { namespace LightingEngine { 
     class LightingEngineApparatus;
 }}
+namespace RenderOverlays { class OverlayApparatus; }
 
 namespace GUILayer
 {
@@ -40,7 +40,7 @@ namespace GUILayer
         int                         GetCreationThreadId() { return _creationThreadId; }
 
         const std::shared_ptr<RenderCore::Techniques::DrawingApparatus>& GetDrawingApparatus();
-        const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& GetImmediateDrawingApparatus();
+        const std::shared_ptr<RenderOverlays::OverlayApparatus>& GetOverlayApparatus();
         const std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus>& GetPrimaryResourcesApparatus();
         const std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus>& GetFrameRenderingApparatus();
         const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& GetLightingEngineApparatus();
@@ -61,7 +61,7 @@ namespace GUILayer
         std::shared_ptr<RenderCore::IThreadContext> _immediateContext;
 
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
-        std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> _immediateDrawingApparatus;
+        std::shared_ptr<RenderOverlays::OverlayApparatus> _immediateDrawingApparatus;
         std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> _primaryResourcesApparatus;
         std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> _frameRenderingApparatus;
         std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingEngineApparatus;

@@ -21,14 +21,13 @@ namespace RenderCore { namespace Techniques
 	class ITechniqueDelegate;
 	class IPipelineAcceleratorPool;
     class IDeformAcceleratorPool;
-    class ImmediateDrawingApparatus;
     class ICustomDrawDelegate;
     class DrawingApparatus;
     class IDrawablesPool;
 }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
 namespace RenderCore { namespace Assets { class RawMaterial; } }
-namespace RenderOverlays { class IOverlayContext; struct Rect; }
+namespace RenderOverlays { class IOverlayContext; struct Rect; class OverlayApparatus; }
 namespace OSServices { class OnChangeCallback; }
 namespace SceneEngine { class IScene; class ILightingStateDelegate; class IRenderStep; class ExecuteSceneContext; class DrawableMetadataLookupContext; }
 namespace Assets { class OperationContext; }
@@ -152,7 +151,7 @@ namespace ToolsRig
     };
 
     std::shared_ptr<ISimpleSceneOverlay> CreateSimpleSceneOverlay(
-        const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
+        const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus,
         const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
         const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators);
 
@@ -178,7 +177,7 @@ namespace ToolsRig
             IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
         VisualisationOverlay(
-            const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawingApparatus,
+            const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus,
 			const VisOverlaySettings& overlaySettings);
         ~VisualisationOverlay();
     protected:

@@ -13,6 +13,7 @@
 #include "ExportedNativeTypes.h"
 #include "../ToolsRig/VisualisationUtils.h"
 #include "../ToolsRig/ManipulatorsRender.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderCore/Types.h"
 #include "../../RenderCore/ResourceDesc.h"
 #include "../../RenderCore/IDevice.h"
@@ -385,7 +386,7 @@ namespace GUILayer
         {
             ToolsRig::ConfigureParsingContext(parserContext, *_visCameraSettings.get());
             
-            auto& immediateDrawables = *EngineDevice::GetInstance()->GetNative().GetImmediateDrawingApparatus()->_immediateDrawables;
+            auto& immediateDrawables = *EngineDevice::GetInstance()->GetNative().GetOverlayApparatus()->_immediateDrawables;
             auto& pipelineAccelerators = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus()->_pipelineAccelerators;
 			auto context = gcnew GUILayer::SimpleRenderingContext(immediateDrawables, RetainedResources, pipelineAccelerators, &parserContext);
 			try
@@ -394,7 +395,7 @@ namespace GUILayer
 
 				{
 					auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
-					immediateDrawables.ExecuteDraws(parserContext, rpi);
+					RenderOverlays::ExecuteDraws(parsingContext, rpi, immediateDrawables, *EngineDevice::GetInstance()->GetNative().GetOverlayApparatus()->_shapeRenderingDelegate);
 				}
 				OnRenderPostProcess(context);
 			}

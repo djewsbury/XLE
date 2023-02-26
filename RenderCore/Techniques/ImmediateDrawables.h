@@ -4,21 +4,14 @@
 
 #pragma once
 
-#include "PipelineAccelerator.h"
-#include "../Assets/RawMaterial.h"
-#include "../UniformsStream.h"
+#include "../Assets/RawMaterial.h"		// for RenderStateSet
 #include "../Types.h"
 #include "../StateDesc.h"
-#include "../RenderUtils.h"		// for SharedPkt
-#include "../../Math/Vector.h"
 #include <memory>
 
-#include <future>
-
-namespace RenderCore { class IThreadContext; class FrameBufferDesc; class SharedPkt; class IResourceView; class ISampler; class UniformsStreamInterface; }
+namespace RenderCore { class IDevice; class IThreadContext; class FrameBufferDesc; class SharedPkt; class IResourceView; class ISampler; class UniformsStreamInterface; }
 namespace Assets { class IAsyncMarker; }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; }}
-// namespace std { template<typename T> class shared_future; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -27,6 +20,8 @@ namespace RenderCore { namespace Techniques
 	class DrawablesPacket;
 	class RenderPassInstance;
 	struct PreparedResourcesVisibility;
+	class ITechniqueDelegate;
+	class IPipelineLayoutDelegate;
 
 	class RetainedUniformsStream
 	{
@@ -34,6 +29,13 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::shared_ptr<IResourceView>> _resourceViews;
 		std::vector<SharedPkt> _immediateData;
 		std::vector<std::shared_ptr<ISampler>> _samplers;
+
+		RetainedUniformsStream();
+		RetainedUniformsStream(const RetainedUniformsStream&);
+		RetainedUniformsStream(RetainedUniformsStream&&);
+		RetainedUniformsStream& operator=(const RetainedUniformsStream&);
+		RetainedUniformsStream& operator=(RetainedUniformsStream&&);
+		~RetainedUniformsStream();
 	};
 
 	class ImmediateDrawableMaterial
@@ -85,18 +87,5 @@ namespace RenderCore { namespace Techniques
 	};
 
 	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IDevice>, std::shared_ptr<IPipelineLayoutDelegate>);
-
-	class ImmediateDrawableDelegate
-	{
-	public:
-		std::shared_ptr<ITechniqueDelegate> GetTechniqueDelegate();
-		const std::shared_ptr<IPipelineLayoutDelegate>& GetPipelineLayoutDelegate();
-
-		ImmediateDrawableDelegate();
-		~ImmediateDrawableDelegate();
-	private:
-		std::shared_ptr<IPipelineLayoutDelegate> _pipelineLayoutDelegate;
-		std::shared_future<std::shared_ptr<ITechniqueDelegate>> _futureTechniqueDelegate;
-	};
 }}
 

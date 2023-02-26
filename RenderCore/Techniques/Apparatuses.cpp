@@ -143,36 +143,6 @@ namespace RenderCore { namespace Techniques
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
-		//   I M M E D I A T E   D R A W I N G   //
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	ImmediateDrawingApparatus::ImmediateDrawingApparatus(std::shared_ptr<DrawingApparatus> mainDrawingApparatus)
-	{
-		_depValPtr = ::Assets::GetDepValSys().Make();
-
-		_mainDrawingApparatus = std::move(mainDrawingApparatus);
-		_depValPtr.RegisterDependency(_mainDrawingApparatus->GetDependencyValidation());
-
-		_debugShapesSequencers = std::make_shared<ImmediateDrawableDelegate>();
-		
-		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_mainDrawingApparatus->_device, _debugShapesSequencers->GetPipelineLayoutDelegate());
-		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
-
-		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
-		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
-			[im=std::weak_ptr<IImmediateDrawables>{_immediateDrawables}]() {
-				auto l = im.lock();
-				if (l) l->OnFrameBarrier();
-			});
-	}
-	
-	ImmediateDrawingApparatus::~ImmediateDrawingApparatus()
-	{
-		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
-		subFrameEvents._onFrameBarrier.Unbind(_frameBarrierBinding);
-	}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 		//   P R I M A R Y   R E S O U R C E S   //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

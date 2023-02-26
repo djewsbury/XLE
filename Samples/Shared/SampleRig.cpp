@@ -10,6 +10,8 @@
 #include "../../PlatformRig/DebugHotKeys.h"
 #include "../../PlatformRig/DebugScreenRegistry.h"
 
+#include "../../RenderOverlays/OverlayApparatus.h"
+
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/Services.h"
@@ -247,11 +249,11 @@ namespace Sample
         SampleGlobals sampleGlobals;
         sampleGlobals._renderDevice = std::move(renderDevice);
         sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(sampleGlobals._renderDevice);
-        sampleGlobals._immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(sampleGlobals._drawingApparatus);
+        sampleGlobals._overlayApparatus = std::make_shared<RenderOverlays::OverlayApparatus>(sampleGlobals._drawingApparatus);
         sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(sampleGlobals._renderDevice);
         sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), sampleGlobals._drawingApparatus.get(), *sampleGlobals._frameRenderingApparatus, config._presentationChainBindFlags);
-        sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._immediateDrawingApparatus);
+        sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._overlayApparatus);
         {
             auto v = sampleGlobals._renderDevice->GetDesc();
             StringMeld<128> meld;

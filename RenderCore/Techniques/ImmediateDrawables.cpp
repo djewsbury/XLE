@@ -19,6 +19,7 @@
 #include "../Metal/DeviceContext.h"		// for CalculateFrameBufferRelevance
 #include "../Format.h"
 #include "../FrameBufferDesc.h"
+#include "../RenderUtils.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
@@ -32,122 +33,6 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace Techniques
 {
-	class ImmediateRendererTechniqueDelegate : public ITechniqueDelegate
-	{
-	public:
-		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
-			const RenderCore::Assets::RenderStateSet& renderStates) override
-		{
-			constexpr uint64_t s_patchShape = "IShape2D_Calculate"_h;
-			constexpr uint64_t s_patchFill = "IFill_Calculate"_h;
-			constexpr uint64_t s_patchOutline = "IOutline_Calculate"_h;
-			constexpr uint64_t s_patchTwoLayersShader = "TwoLayersShader"_h;
-
-			unsigned dsMode = 0;
-			// We're re-purposing the _writeMask flag for depth test and write
-			if (renderStates._flag & RenderCore::Assets::RenderStateSet::Flag::WriteMask) {
-				bool depthWrite = renderStates._writeMask & 1<<0;
-				bool depthTest = renderStates._writeMask & 1<<1;
-				if (depthTest) {
-					dsMode = depthWrite ? 0 : 1;
-				} else {
-					dsMode = 2;
-				}
-			}
-
-			if (shaderPatches.HasPatchType(s_patchShape)) {
-				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				*nascentDesc = *_pipelineDesc[dsMode];
-
-				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntry:ps_*";
-				nascentDesc->_patchExpansions.emplace_back(s_patchShape, ShaderStage::Pixel);
-				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
-				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
-				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-
-				return nascentDesc;
-			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
-				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				*nascentDesc = *_pipelineDesc[dsMode];
-
-				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
-				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
-				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-
-				return nascentDesc;
-			} else if (shaderPatches.HasPatchType(s_patchFill)) {
-				auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-				*nascentDesc = *_pipelineDesc[dsMode];
-
-				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryJustFill:ps_*";
-				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
-				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-
-				return nascentDesc;
-			} else {
-				return _pipelineDesc[dsMode];
-			}
-		}
-
-		virtual std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
-		virtual ::Assets::DependencyValidation GetDependencyValidation() override { return _pipelineLayout->GetDependencyValidation(); }
-
-		ImmediateRendererTechniqueDelegate(std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout) 
-		: _pipelineLayout(std::move(pipelineLayout))
-		{
-			auto templateDesc = std::make_shared<GraphicsPipelineDesc>();
-			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":frameworkEntry:vs_*";
-			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = BASIC_PIXEL_HLSL ":frameworkEntry:ps_*";
-			templateDesc->_techniquePreconfigurationFile = RENDEROVERLAYS_SEL_PRECONFIG;
-
-			templateDesc->_rasterization = CommonResourceBox::s_rsDefault;
-			templateDesc->_blend.push_back(CommonResourceBox::s_abStraightAlpha);
-
-			DepthStencilDesc dsModes[] = {
-				CommonResourceBox::s_dsReadWrite,
-				CommonResourceBox::s_dsReadOnly,
-				CommonResourceBox::s_dsDisable
-			};
-			for (unsigned c=0; c<dimof(dsModes); ++c) {
-				_pipelineDesc[c] = std::make_shared<GraphicsPipelineDesc>(*templateDesc);
-				_pipelineDesc[c]->_depthStencil = dsModes[c];
-			}
-		}
-		~ImmediateRendererTechniqueDelegate() {}
-	private:
-		std::shared_ptr<GraphicsPipelineDesc> _pipelineDesc[3];
-		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
-	};
-
-	void CreateImmediateRendererTechniqueDelegate(
-		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise)
-	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(IMMEDIATE_PIPELINE ":ImmediateDrawables");
-		::Assets::WhenAll(pipelineLayoutFuture).ThenConstructToPromise(
-			std::move(promise),
-			[](auto pipelineLayout) { return std::make_shared<ImmediateRendererTechniqueDelegate>(std::move(pipelineLayout)); });
-	}
-
-	std::shared_ptr<ITechniqueDelegate> ImmediateDrawableDelegate::GetTechniqueDelegate()
-	{
-		return _futureTechniqueDelegate.get();
-	}
-
-	const std::shared_ptr<IPipelineLayoutDelegate>& ImmediateDrawableDelegate::GetPipelineLayoutDelegate()
-	{
-		return _pipelineLayoutDelegate;
-	}
-
-	ImmediateDrawableDelegate::ImmediateDrawableDelegate()
-	{
-		std::promise<std::shared_ptr<ITechniqueDelegate>> promisedTechniqueDelegate;
-		_futureTechniqueDelegate = promisedTechniqueDelegate.get_future();
-		CreateImmediateRendererTechniqueDelegate(std::move(promisedTechniqueDelegate));
-		_pipelineLayoutDelegate = CreatePipelineLayoutDelegate(IMMEDIATE_PIPELINE ":ImmediateDrawables");
-	}
-
-	ImmediateDrawableDelegate::~ImmediateDrawableDelegate() {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -477,6 +362,12 @@ namespace RenderCore { namespace Techniques
 	}
 
 	IImmediateDrawables::~IImmediateDrawables() {}
+	RetainedUniformsStream::RetainedUniformsStream() = default;
+	RetainedUniformsStream::RetainedUniformsStream(const RetainedUniformsStream&) = default;
+	RetainedUniformsStream::RetainedUniformsStream(RetainedUniformsStream&&) = default;
+	RetainedUniformsStream& RetainedUniformsStream::operator=(const RetainedUniformsStream&) = default;
+	RetainedUniformsStream& RetainedUniformsStream::operator=(RetainedUniformsStream&&) = default;
+	RetainedUniformsStream::~RetainedUniformsStream() = default;
 
 }}
 

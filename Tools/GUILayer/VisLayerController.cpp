@@ -140,7 +140,7 @@ namespace GUILayer
 	{
 		auto drawingApparatus = EngineDevice::GetInstance()->GetNative().GetDrawingApparatus();
 		auto immediateDrawables = EngineDevice::GetInstance()->GetNative().GetImmediateDrawables();
-		auto immediateDrawableApparatus = EngineDevice::GetInstance()->GetNative().GetImmediateDrawingApparatus();
+		auto immediateDrawableApparatus = EngineDevice::GetInstance()->GetNative().GetOverlayApparatus();
 		auto lightingEngineApparatus = EngineDevice::GetInstance()->GetNative().GetLightingEngineApparatus();
 		auto primaryResourcesApparatus = EngineDevice::GetInstance()->GetNative().GetPrimaryResourcesApparatus();
 

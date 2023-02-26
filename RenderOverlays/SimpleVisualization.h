@@ -9,13 +9,15 @@
 #include "../Math/Vector.h"
 #include "../Utility/StringFormat.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class ImmediateDrawingApparatus; class IImmediateDrawables; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; }}
 namespace RenderCore { class IThreadContext; }
-namespace RenderOverlays { struct Rect; }
 
 namespace RenderOverlays
 {
+	struct Rect;
 	class IOverlayContext;
+	class OverlayApparatus;
+
 	void DrawBasisAxes(
 		RenderCore::Techniques::IImmediateDrawables&, RenderCore::Techniques::ParsingContext& parserContext, 
 		Float2 ssMins = Float2(8,8), Float2 ssMaxs = Float2(64+8,64+8));
@@ -26,7 +28,7 @@ namespace RenderOverlays
 
 	void FillScreenWithMsg(
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus,
+		OverlayApparatus& immediateDrawingApparatus,
 		StringSection<> msg);
 
 	void RenderLoadingIndicator(

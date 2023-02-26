@@ -8,6 +8,7 @@
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../RenderOverlays/OverlayContext.h"
 #include "../RenderOverlays/OverlayEffects.h"
+#include "../RenderOverlays/ShapesRendering.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
 #include "../RenderCore/Techniques/RenderPass.h"
@@ -25,7 +26,7 @@ namespace PlatformRig
         DebugScreensOverlay(
             std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
             std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
-            std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> sequencerConfigSet,
+            std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
             std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
         : _debugScreensSystem(debugScreensSystem)
         , _inputListener(std::make_shared<PlatformRig::DebugScreensInputHandler>(std::move(debugScreensSystem)))
@@ -73,13 +74,13 @@ namespace PlatformRig
         std::shared_ptr<DebugScreensInputHandler> _inputListener;
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderer;
-        std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> _sequencerConfigSet;
+        std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _sequencerConfigSet;
     };
 
     std::shared_ptr<IOverlaySystem> CreateDebugScreensOverlay(
         std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
-        std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> sequencerConfigSet,
+        std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
         std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
     {
         return std::make_shared<DebugScreensOverlay>(std::move(debugScreensSystem), std::move(immediateDrawables), std::move(sequencerConfigSet), std::move(fontRenderer));

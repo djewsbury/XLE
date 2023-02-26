@@ -8,6 +8,7 @@
 #include "OverlayContext.h"
 #include "Font.h"
 #include "DebuggingDisplay.h"
+#include "OverlayApparatus.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
@@ -132,10 +133,10 @@ namespace RenderOverlays
 
 	void FillScreenWithMsg(
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawingApparatus,
+		OverlayApparatus& immediateDrawingApparatus,
 		StringSection<> msg)
 	{
-		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parsingContext.GetThreadContext(), immediateDrawingApparatus);
+		auto overlayContext = MakeImmediateOverlayContext(parsingContext.GetThreadContext(), immediateDrawingApparatus);
 		Int2 viewportDims{ parsingContext.GetViewport()._width, parsingContext.GetViewport()._height };
 
 		auto font = RenderOverlays::MakeFont("DosisBook", 26)->TryActualize();
@@ -147,7 +148,7 @@ namespace RenderOverlays
 
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext, RenderCore::LoadStore::Clear);
 		parsingContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
-		immediateDrawingApparatus._immediateDrawables->ExecuteDraws(parsingContext, immediateDrawingApparatus._debugShapesSequencers->GetTechniqueDelegate(), rpi);
+		ExecuteDraws(parsingContext, rpi, immediateDrawingApparatus);
 	}
 
 	static void DrawDiamond(RenderOverlays::IOverlayContext& context, const RenderOverlays::Rect& rect, RenderOverlays::ColorB colour)

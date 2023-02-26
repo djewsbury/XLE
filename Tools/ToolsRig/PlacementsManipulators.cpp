@@ -20,6 +20,7 @@
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/Overlays/Browser.h"
 #include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
 //#include "../../RenderOverlays/OverlayUtils.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
@@ -1666,7 +1667,7 @@ namespace ToolsRig
         const std::shared_ptr<SceneEngine::PlacementCellSet>& placementCellSet,
         const std::shared_ptr<SceneEngine::TerrainManager>& terrainManager,
         const std::shared_ptr<VisCameraSettings>& camera,
-        const std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus>& immediateDrawablesApparatus)
+        const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawablesApparatus)
     {
         auto pimpl = std::make_unique<Pimpl>();
         pimpl->_screens = std::make_shared<DebugScreensSystem>();

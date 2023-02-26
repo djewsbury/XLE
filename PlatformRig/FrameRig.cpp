@@ -12,6 +12,10 @@
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../RenderOverlays/OverlayContext.h"
 #include "../RenderOverlays/Font.h"
+#include "../RenderOverlays/OverlayEffects.h"
+#include "../RenderOverlays/ShapesRendering.h"
+#include "../RenderOverlays/DrawText.h"
+#include "../RenderOverlays/OverlayApparatus.h"
 
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
@@ -496,7 +500,6 @@ namespace PlatformRig
         if (!res) return;
 
         using namespace RenderOverlays;
-        using namespace RenderOverlays::DebuggingDisplay;
         auto outerRect = layout.GetMaximumSize();
 
         static Coord rectWidth = 175;
@@ -509,6 +512,10 @@ namespace PlatformRig
         Rect displayRect(
             Coord2(outerRect._bottomRight[0] - rectWidth - padding, outerRect._topLeft[1] + padding),
             Coord2(outerRect._bottomRight[0] - padding, outerRect._topLeft[1] + padding + rectHeight));
+        // displayRect._topLeft[0] -= 64;
+        // displayRect._topLeft[1] += 64;
+        // displayRect._bottomRight[0] -= 64;
+        // displayRect._bottomRight[1] += 64;
         Layout innerLayout(displayRect);
         innerLayout._paddingInternalBorder = margin;
         innerLayout._paddingBetweenAllocations = margin;
@@ -516,10 +523,23 @@ namespace PlatformRig
         static ColorB normalColor = ColorB(70, 31, 0, 0x9f);
         static ColorB mouseOverColor = ColorB(70, 31, 0, 0xff);
         static ColorB pressed = ColorB(128, 50, 0, 0xff);
-        FillAndOutlineRoundedRectangle(context, displayRect, 
-            FormatButton(interfaceState, Id_FrameRigDisplayMain, normalColor, mouseOverColor, pressed), 
-            ColorB::White,
-            (interfaceState.HasMouseOver(Id_FrameRigDisplayMain))?4.f:2.f, 1.f / 4.f);
+        // FillAndOutlineRoundedRectangle(context, displayRect, 
+        //     FormatButton(interfaceState, Id_FrameRigDisplayMain, normalColor, mouseOverColor, pressed), 
+        //     ColorB::White,
+        //     (interfaceState.HasMouseOver(Id_FrameRigDisplayMain))?4.f:2.f, 1.f / 4.f);
+
+        // if (auto* blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()) {
+        //     context.DrawTexturedQuad(
+        //         RenderOverlays::ProjectionMode::P2D,
+        //         {displayRect._topLeft[0], displayRect._topLeft[1], 0.f},
+        //         {displayRect._bottomRight[0], displayRect._bottomRight[1], 0.f},
+        //         blurryBackground->GetResourceView(),
+        //         ColorB::White,
+        //         {displayRect._topLeft[0] / float(outerRect.Width()), displayRect._topLeft[1] / float(outerRect.Height())},
+        //         {displayRect._bottomRight[0] / float(outerRect.Width()), displayRect._bottomRight[1] / float(outerRect.Height())});
+        // }
+
+        // SoftShadowRectangle(context, displayRect);
 
         static ColorB menuBkgrnd(128, 96, 64, 64);
         static ColorB menuBkgrndHigh(128, 96, 64, 192);
@@ -713,7 +733,7 @@ namespace PlatformRig
         StringMeldAppend(parserContext._stringHelpers->_errorString) << error << "\n";
     }
 
-    void ReportErrorToColorLDR(RenderCore::Techniques::ParsingContext& parserContext, RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawing, StringSection<> errorMsg)
+    void ReportErrorToColorLDR(RenderCore::Techniques::ParsingContext& parserContext, RenderOverlays::OverlayApparatus& immediateDrawing, StringSection<> errorMsg)
     {
         using namespace RenderCore;
 
@@ -735,7 +755,7 @@ namespace PlatformRig
         auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
 		immediateDrawing._immediateDrawables->ExecuteDraws(
             parserContext,
-            immediateDrawing._debugShapesSequencers->GetSequencerConfig(rpi));
+            immediateDrawing._shapeRenderingDelegate->GetTechniqueDelegate(), rpi);
     }
 
 }

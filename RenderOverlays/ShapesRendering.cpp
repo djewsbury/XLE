@@ -9,7 +9,14 @@
 #include "ShapesInternal.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
+#include "../RenderCore/Techniques/TechniqueDelegates.h"
+#include "../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../RenderCore/Techniques/PipelineLayoutDelegate.h"
+#include "../RenderCore/Techniques/CommonResources.h"
+#include "../RenderCore/Assets/PredefinedPipelineLayout.h"
+#include "../RenderCore/Assets/RawMaterial.h"
 #include "../RenderCore/Format.h"
+#include "../RenderCore/UniformsStream.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../Assets/Continuation.h"
 #include "../Assets/Marker.h"
@@ -515,6 +522,125 @@ namespace RenderOverlays
 		}
 	}
 
-	///////////////////////////////////////////////////////////////////////////////////
+	    ///////////////////////////////////////////////////////////////////////////////////
+
+	class ShapesRenderingTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
+	{
+	public:
+		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
+			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+			const RenderCore::Assets::RenderStateSet& renderStates) override
+		{
+            using namespace RenderCore;
+			constexpr uint64_t s_patchShape = "IShape2D_Calculate"_h;
+			constexpr uint64_t s_patchFill = "IFill_Calculate"_h;
+			constexpr uint64_t s_patchOutline = "IOutline_Calculate"_h;
+			constexpr uint64_t s_patchTwoLayersShader = "TwoLayersShader"_h;
+
+			unsigned dsMode = 0;
+			// We're re-purposing the _writeMask flag for depth test and write
+			if (renderStates._flag & RenderCore::Assets::RenderStateSet::Flag::WriteMask) {
+				bool depthWrite = renderStates._writeMask & 1<<0;
+				bool depthTest = renderStates._writeMask & 1<<1;
+				if (depthTest) {
+					dsMode = depthWrite ? 0 : 1;
+				} else {
+					dsMode = 2;
+				}
+			}
+
+			if (shaderPatches.HasPatchType(s_patchShape)) {
+				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+				*nascentDesc = *_pipelineDesc[dsMode];
+
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntry:ps_*";
+				nascentDesc->_patchExpansions.emplace_back(s_patchShape, ShaderStage::Pixel);
+				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
+				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
+				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+
+				return nascentDesc;
+			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
+				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+				*nascentDesc = *_pipelineDesc[dsMode];
+
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
+				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
+				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+
+				return nascentDesc;
+			} else if (shaderPatches.HasPatchType(s_patchFill)) {
+				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+				*nascentDesc = *_pipelineDesc[dsMode];
+
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryJustFill:ps_*";
+				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
+				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+
+				return nascentDesc;
+			} else {
+				return _pipelineDesc[dsMode];
+			}
+		}
+
+		virtual std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
+		virtual ::Assets::DependencyValidation GetDependencyValidation() override { return _pipelineLayout->GetDependencyValidation(); }
+
+		ShapesRenderingTechniqueDelegate(std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> pipelineLayout) 
+		: _pipelineLayout(std::move(pipelineLayout))
+		{
+            using namespace RenderCore;
+			auto templateDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":frameworkEntry:vs_*";
+			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = BASIC_PIXEL_HLSL ":frameworkEntry:ps_*";
+			templateDesc->_techniquePreconfigurationFile = RENDEROVERLAYS_SEL_PRECONFIG;
+
+			templateDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
+			templateDesc->_blend.push_back(Techniques::CommonResourceBox::s_abStraightAlpha);
+
+			DepthStencilDesc dsModes[] = {
+				Techniques::CommonResourceBox::s_dsReadWrite,
+				Techniques::CommonResourceBox::s_dsReadOnly,
+				Techniques::CommonResourceBox::s_dsDisable
+			};
+			for (unsigned c=0; c<dimof(dsModes); ++c) {
+				_pipelineDesc[c] = std::make_shared<Techniques::GraphicsPipelineDesc>(*templateDesc);
+				_pipelineDesc[c]->_depthStencil = dsModes[c];
+			}
+		}
+		~ShapesRenderingTechniqueDelegate() {}
+	private:
+		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> _pipelineDesc[3];
+		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> _pipelineLayout;
+	};
+
+	void CreateShapesRenderingTechniqueDelegate(
+		std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>>&& promise)
+	{
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(IMMEDIATE_PIPELINE ":ImmediateDrawables");
+		::Assets::WhenAll(pipelineLayoutFuture).ThenConstructToPromise(
+			std::move(promise),
+			[](auto pipelineLayout) { return std::make_shared<ShapesRenderingTechniqueDelegate>(std::move(pipelineLayout)); });
+	}
+
+	const std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>& ShapesRenderingDelegate::GetTechniqueDelegate()
+	{
+		return _futureTechniqueDelegate.get();
+	}
+
+	const std::shared_ptr<RenderCore::Techniques::IPipelineLayoutDelegate>& ShapesRenderingDelegate::GetPipelineLayoutDelegate()
+	{
+		return _pipelineLayoutDelegate;
+	}
+
+	ShapesRenderingDelegate::ShapesRenderingDelegate()
+	{
+		std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>> promisedTechniqueDelegate;
+		_futureTechniqueDelegate = promisedTechniqueDelegate.get_future();
+		CreateShapesRenderingTechniqueDelegate(std::move(promisedTechniqueDelegate));
+		_pipelineLayoutDelegate = RenderCore::Techniques::CreatePipelineLayoutDelegate(IMMEDIATE_PIPELINE ":ImmediateDrawables");
+	}
+
+	ShapesRenderingDelegate::~ShapesRenderingDelegate() {}
 
 }

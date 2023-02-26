@@ -5,18 +5,20 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "OverlaySystem.h"
-#include "../../PlatformRig/DebuggingDisplays/ConsoleDisplay.h"
-#include "../../RenderOverlays/OverlayContext.h"
-#include "../../RenderOverlays/OverlayEffects.h"
-#include "../../RenderOverlays/DebuggingDisplay.h"
-#include "../../RenderCore/IDevice.h"
-#include "../../RenderCore/Techniques/ParsingContext.h"
-#include "../../RenderCore/Techniques/RenderPassUtils.h"
-#include "../../RenderCore/Techniques/RenderPass.h"
-#include "../../RenderCore/Techniques/ImmediateDrawables.h"
-#include "../../RenderCore/Techniques/Apparatuses.h"
-#include "../../Assets/Assets.h"
-#include "../../ConsoleRig/Console.h"
+#include "../PlatformRig/DebuggingDisplays/ConsoleDisplay.h"
+#include "../RenderOverlays/OverlayApparatus.h"
+#include "../RenderOverlays/OverlayContext.h"
+#include "../RenderOverlays/OverlayEffects.h"
+#include "../RenderOverlays/DebuggingDisplay.h"
+#include "../RenderOverlays/ShapesRendering.h"
+#include "../RenderCore/IDevice.h"
+#include "../RenderCore/Techniques/ParsingContext.h"
+#include "../RenderCore/Techniques/RenderPassUtils.h"
+#include "../RenderCore/Techniques/RenderPass.h"
+#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/Apparatuses.h"
+#include "../Assets/Assets.h"
+#include "../ConsoleRig/Console.h"
 
 using namespace PlatformRig::Literals;
 
@@ -253,7 +255,7 @@ namespace PlatformRig
 
         ConsoleOverlaySystem(
             std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
-            std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> sequencerConfigSet,
+            std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
             std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer);
         ~ConsoleOverlaySystem();
 
@@ -261,7 +263,7 @@ namespace PlatformRig
         typedef RenderOverlays::DebuggingDisplay::DebugScreensSystem DebugScreensSystem;
         std::shared_ptr<DebugScreensSystem> _screens;
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
-        std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> _sequencerConfigSet;
+        std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _sequencerConfigSet;
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderer;
     };
 
@@ -290,7 +292,7 @@ namespace PlatformRig
 
     ConsoleOverlaySystem::ConsoleOverlaySystem(
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
-        std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> sequencerConfigSet,
+        std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
         std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
     : _immediateDrawables(std::move(immediateDrawables))
     , _sequencerConfigSet(std::move(sequencerConfigSet))
@@ -309,16 +311,16 @@ namespace PlatformRig
 
     std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
-        std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> sequencerConfigSet,
+        std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
         std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
     {
         return std::make_shared<ConsoleOverlaySystem>(std::move(immediateDrawables), std::move(sequencerConfigSet), std::move(fontRenderer));
     }
 
     std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
-        RenderCore::Techniques::ImmediateDrawingApparatus& immediateDrawing)
+        RenderOverlays::OverlayApparatus& immediateDrawing)
     {
-        return std::make_shared<ConsoleOverlaySystem>(immediateDrawing._immediateDrawables, immediateDrawing._debugShapesSequencers, immediateDrawing._fontRenderingManager);
+        return std::make_shared<ConsoleOverlaySystem>(immediateDrawing._immediateDrawables, immediateDrawing._shapeRenderingDelegate, immediateDrawing._fontRenderingManager);
     }
 
 }

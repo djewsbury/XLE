@@ -5,6 +5,9 @@
 #pragma once
 
 #include "OverlayPrimitives.h"
+#include <future>
+
+namespace RenderCore { namespace Techniques { class ITechniqueDelegate; class IPipelineLayoutDelegate; }}
 
 namespace RenderOverlays
 {
@@ -62,4 +65,21 @@ namespace RenderOverlays
     void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect);
 
     void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
+
+
+	///////////////////////////////////////////////////////////////////////////////////
+    //          C O N F I G U R A T I O N   U T I L S
+
+	class ShapesRenderingDelegate
+	{
+	public:
+		const std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>& GetTechniqueDelegate();
+		const std::shared_ptr<RenderCore::Techniques::IPipelineLayoutDelegate>& GetPipelineLayoutDelegate();
+
+		ShapesRenderingDelegate();
+		~ShapesRenderingDelegate();
+	private:
+		std::shared_ptr<RenderCore::Techniques::IPipelineLayoutDelegate> _pipelineLayoutDelegate;
+		std::shared_future<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>> _futureTechniqueDelegate;
+	};
 }
