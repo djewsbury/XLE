@@ -120,3 +120,9 @@ SoftShadowRect=~
 		=~
 			DebuggingShapes.pixel.hlsl::SoftShadowRect
 			Implements=Interfaces.hlsl::TwoLayersShader
+
+DashLine=~
+	Patches=~
+		=~
+			CommonBrushes.hlsl::SolidFill_Calculate
+			Implements=Interfaces.hlsl::IFill_Calculate

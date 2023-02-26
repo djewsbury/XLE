@@ -89,6 +89,8 @@ namespace RenderCore { namespace Techniques
 		DrawingApparatus& operator=(DrawingApparatus&) = delete;
 	};
 
+	class SequencerConfigSet;
+
 	class ImmediateDrawingApparatus
 	{
 	public:
@@ -96,6 +98,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IImmediateDrawables> _immediateDrawables;
 
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
+		std::shared_ptr<SequencerConfigSet> _debugShapesSequencers;
 
 		SignalDelegateId _frameBarrierBinding;
 

@@ -163,6 +163,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect);
 
+    void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
+
     struct DrawText
     {
         mutable DrawTextFlags::BitField _flags = DrawTextFlags::Shadow;
@@ -195,6 +197,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     Float3      AsPixelCoords(Float2 input);
     Float3      AsPixelCoords(Float3 input);
     std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect);
+    unsigned  HardwareColor(ColorB input);
 
     ///////////////////////////////////////////////////////////////////////////////////
 

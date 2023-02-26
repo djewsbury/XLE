@@ -71,8 +71,9 @@ namespace PlatformRig { namespace Overlays
 			unsigned entryCount = 0, sourceEntryCount = 0, totalHeightUsedByEntries = 0;
 
 			// fill in the background now, so it doesn't have to be interleaved with rendering the entry text elements
-			context.DrawQuad(
-				RenderOverlays::ProjectionMode::P2D, AsPixelCoords(tableArea.GetMaximumSize()._topLeft), AsPixelCoords(scrollBarLocation._bottomRight),
+			FillRectangle(
+				context,
+				{tableArea.GetMaximumSize()._topLeft, scrollBarLocation._bottomRight},
 				RenderOverlays::ColorB { 0, 0, 0, 145 });
                     
 			const auto headerColor = RenderOverlays::ColorB::Blue;

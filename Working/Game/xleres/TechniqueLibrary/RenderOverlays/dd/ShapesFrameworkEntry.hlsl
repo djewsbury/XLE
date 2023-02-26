@@ -44,3 +44,16 @@ float4 frameworkEntryForTwoLayersShader(
 {
     return TwoLayersShader(position, color0, color1, texCoord0, texCoord1);
 }
+
+float4 frameworkEntryJustFill(
+    float4 position	    : SV_Position,
+    float4 color0		: COLOR0,
+    float2 texCoord0	: TEXCOORD0) : SV_Target0
+{
+    float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
+
+    DebuggingShapesCoords coords =
+        DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
+
+    return IFill_Calculate(coords, color0, 1.0.xx);
+}

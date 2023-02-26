@@ -113,10 +113,10 @@ namespace PlatformRig { namespace Overlays
     {
             // draw a hatched bar behind in the given rect, centred on the given
             // position
-        context.DrawQuad(
-            ProjectionMode::P2D,
-            AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1] + 4)),
-            AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1] - 4)),
+        FillRectangle(
+            context,
+            { Coord2(rect._topLeft[0], rect._topLeft[1] + 4),
+              Coord2(rect._bottomRight[0], rect._bottomRight[1] - 4)},
             settings._barBackgroundColor);
 
         const bool extendFromMiddle = false;
@@ -131,10 +131,10 @@ namespace PlatformRig { namespace Overlays
         } else {
             Coord barMaxWidth = rect._bottomRight[0] - rect._topLeft[0];
             Coord barWidth = Coord(std::min(barSize, 1.f) * float(barMaxWidth));
-            context.DrawQuad(
-                ProjectionMode::P2D,
-                AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
-                AsPixelCoords(Coord2(rect._topLeft[0] + barWidth, rect._bottomRight[1])),
+            FillRectangle(
+                context,
+                { Coord2(rect._topLeft[0], rect._topLeft[1]),
+                  Coord2(rect._topLeft[0] + barWidth, rect._bottomRight[1])},
                 highlighted ? settings._highlightBarColor0 : settings._barColor0);
         }
     }

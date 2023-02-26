@@ -1412,10 +1412,11 @@ namespace ToolsRig
                 Coord2(margin, maxSize._bottomRight[1] - margin - iconSize[1] - 2 * buttonsRectVertPad),
                 Coord2(margin + toolAreaWidth, maxSize._bottomRight[1] - margin));
 
-            context.DrawQuad(
-                ProjectionMode::P2D, 
-                AsPixelCoords(Coord2(buttonsArea._topLeft[0], LinearInterpolate(buttonsArea._topLeft[1], buttonsArea._bottomRight[1], 0.5f))),
-                AsPixelCoords(buttonsArea._bottomRight), ColorB(0, 0, 0));
+            FillRectangle(
+                context,
+                { Coord2(buttonsArea._topLeft[0], LinearInterpolate(buttonsArea._topLeft[1], buttonsArea._bottomRight[1], 0.5f)),
+                  buttonsArea._bottomRight},
+                ColorB(0, 0, 0));
 
             for (unsigned c=0; c<iconCount; ++c) {
                 Coord2 iconTopLeft(buttonsArea._topLeft + Coord2(buttonsRectPadding + c * (iconSize[0] + iconPadding), buttonsRectVertPad));

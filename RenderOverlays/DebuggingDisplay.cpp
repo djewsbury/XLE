@@ -9,6 +9,7 @@
 #include "../RenderOverlays/FontRendering.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Assets/RawMaterial.h"
 #include "../RenderCore/UniformsStream.h"
 #include "../ConsoleRig/Console.h"
@@ -166,6 +167,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         return std::make_tuple(AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight));
     }
+    unsigned  HardwareColor(ColorB input)
+	{
+		// see duplicate in FontRendering.cpp
+		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
+	}
 
     ///////////////////////////////////////////////////////////////////////////////////
 
@@ -207,6 +213,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial _fillEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _softShadowRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _dashLine;
         RenderCore::UniformsStreamInterface _roundedRectUSI;
 
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
@@ -224,7 +231,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
             const RenderCore::Assets::ResolvedMaterial& fillReverseRaisedRoundedRect,
             const RenderCore::Assets::ResolvedMaterial& fillEllipse,
             const RenderCore::Assets::ResolvedMaterial& outlineEllipse,
-            const RenderCore::Assets::ResolvedMaterial& softShadowRect)
+            const RenderCore::Assets::ResolvedMaterial& softShadowRect,
+            const RenderCore::Assets::ResolvedMaterial& dashLine)
         {
             _horizTweakerBarMaterial = BuildImmediateDrawableMaterial(horizTweakerBarMaterial);
             _tagShaderMaterial = BuildImmediateDrawableMaterial(tagShaderMaterial);
@@ -238,6 +246,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _fillEllipse = BuildImmediateDrawableMaterial(fillEllipse);
             _outlineEllipse = BuildImmediateDrawableMaterial(outlineEllipse);
             _softShadowRect = BuildImmediateDrawableMaterial(softShadowRect);
+            _dashLine = BuildImmediateDrawableMaterial(dashLine);
 
             _roundedRectUSI.BindImmediateData(0, "RoundedRectSettings"_h);
             _fillRoundedRect._uniformStreamInterface = &_roundedRectUSI;
@@ -259,6 +268,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             _depVal.RegisterDependency(fillEllipse.GetDependencyValidation());
             _depVal.RegisterDependency(outlineEllipse.GetDependencyValidation());
             _depVal.RegisterDependency(softShadowRect.GetDependencyValidation());
+            _depVal.RegisterDependency(dashLine.GetDependencyValidation());
         }
 
         static void ConstructToPromise(std::promise<std::shared_ptr<StandardResources>>&& promise)
@@ -275,8 +285,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
             auto softShadowRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
+            auto dashLine = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":DashLine");
 
-            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect).ThenConstructToPromise(std::move(promise));
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine).ThenConstructToPromise(std::move(promise));
         }
 
         std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
@@ -296,6 +307,58 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     };
 
+    struct Vertex_PCCTT
+    {
+        Float3 _position; unsigned _colour0; unsigned _colour1; Float2 _texCoord0; Float2 _texCoord1;
+        Vertex_PCCTT(Float3 position, unsigned colour0, unsigned colour1, Float2 texCoord0, Float2 texCoord1) 
+        : _position(position), _colour0(colour0), _colour1(colour1), _texCoord0(texCoord0), _texCoord1(texCoord1) {}
+        static RenderCore::MiniInputElementDesc inputElements2D[];
+    };
+
+    struct Vertex_PCT
+    {
+        Float3 _position; unsigned _colour; Float2 _texCoord;
+        Vertex_PCT(Float3 position, unsigned colour, Float2 texCoord) : _position(position), _colour(colour), _texCoord(texCoord) {}
+        static RenderCore::MiniInputElementDesc inputElements2D[];
+    };
+
+	RenderCore::MiniInputElementDesc Vertex_PCCTT::inputElements2D[] = 
+	{
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR + 1, RenderCore::Format::R8G8B8A8_UNORM },
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT },
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::TEXCOORD + 1, RenderCore::Format::R32G32_FLOAT }
+	};
+
+	RenderCore::MiniInputElementDesc Vertex_PCT::inputElements2D[] = 
+	{
+		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
+	};
+
+    static void DrawPCCTTQuad(
+        IOverlayContext& context,
+        const Float3& mins, const Float3& maxs, 
+        ColorB color0, ColorB color1,
+        const Float2& minTex0, const Float2& maxTex0, 
+        const Float2& minTex1, const Float2& maxTex1,
+        RenderCore::Techniques::ImmediateDrawableMaterial&& material)
+    {
+        auto data = context.DrawGeometry(6, Vertex_PCCTT::inputElements2D, std::move(material)).Cast<Vertex_PCCTT*>();
+        if (data.empty()) return;
+        assert(data.size() == 6);
+		auto col0 = HardwareColor(color0);
+		auto col1 = HardwareColor(color1);
+		data[0] = { Float3(mins[0], mins[1], mins[2]), col0, col1, Float2(minTex0[0], minTex0[1]), Float2(minTex1[0], minTex1[1]) };
+		data[1] = { Float3(mins[0], maxs[1], mins[2]), col0, col1, Float2(minTex0[0], maxTex0[1]), Float2(minTex1[0], maxTex1[1]) };
+		data[2] = { Float3(maxs[0], mins[1], mins[2]), col0, col1, Float2(maxTex0[0], minTex0[1]), Float2(maxTex1[0], minTex1[1]) };
+		data[3] = { Float3(maxs[0], mins[1], mins[2]), col0, col1, Float2(maxTex0[0], minTex0[1]), Float2(maxTex1[0], minTex1[1]) };
+		data[4] = { Float3(mins[0], maxs[1], mins[2]), col0, col1, Float2(minTex0[0], maxTex0[1]), Float2(minTex1[0], maxTex1[1]) };
+		data[5] = { Float3(maxs[0], maxs[1], mins[2]), col0, col1, Float2(maxTex0[0], maxTex0[1]), Float2(maxTex1[0], maxTex1[1]) };
+    }
+
     struct CB_RoundedRectSettings
     {
         float _roundedProportion;
@@ -313,8 +376,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, 0xf }));
 
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(thumbRect._topLeft),
             AsPixelCoords(thumbRect._bottomRight),
             fillColour, ColorB::Zero,
@@ -332,8 +395,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (!res) return;
 
         const float borderWidthPix = 1.f;
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             ColorB::Zero, colour,
@@ -351,8 +414,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (!res) return;
 
         const float borderWidthPix = 1.f;
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             colour, ColorB::Zero,
@@ -376,8 +439,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             ColorB::Zero, colour,
@@ -401,8 +464,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             fillColor, ColorB::Zero,
@@ -427,8 +490,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             fillColor, outlineColour,
@@ -452,8 +515,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             fillColor, ColorB::Zero,
@@ -477,8 +540,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillReverseRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(CB_RoundedRectSettings { roundedProportion, cornerFlags }));
 
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             fillColor, ColorB::Zero,
@@ -541,8 +604,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_softShadowRect;
         const int radiusX = 32, radiusY = 32;
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(Coord2(rect._topLeft - Coord2{radiusX, radiusY})),
             AsPixelCoords(Coord2(rect._bottomRight + Coord2{radiusX, radiusY})),
             ColorB::Black, ColorB::Zero,
@@ -552,52 +615,65 @@ namespace RenderOverlays { namespace DebuggingDisplay
             std::move(mat));
     }
 
-#if 0
-    Coord2 DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, StringSection<> text)
+    void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width)
     {
-        auto* res = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
-        if (res)
-		    return context.DrawText(AsPixelCoords(rect), res->_defaultFont, textStyle ? *textStyle : TextStyle{}, colour, TextAlignment::TopLeft, text);
-        return {0,0};
-    }
+        if (linePts.size() < 2) return;
 
-    Coord2 DrawText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, StringSection<> text)
-    {
-        auto* res = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
-        if (res)
-            return context.DrawText(AsPixelCoords(rect), res->_defaultFont, textStyle ? *textStyle : TextStyle{}, colour, alignment, text);
-        return {0,0};
-    }
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
 
-    Coord2 DrawFormatText(IOverlayContext& context, const Rect& rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], va_list args)
-    {
-        auto* res = ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
-        if (res) {
-            char buffer[4096];
-            vsnprintf(buffer, dimof(buffer), text, args);
-            return context.DrawText(AsPixelCoords(rect), res->_defaultFont, textStyle ? *textStyle : TextStyle{}, colour, alignment, buffer);
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
+
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4), Vertex_PCT::inputElements2D, std::move(mat)).Cast<Vertex_PCT*>();
+        if (data.empty()) return;
+        assert(data.size() == ((linePts.size()-1)*3*4));
+		auto col0 = HardwareColor(colour);
+
+        VLA_UNSAFE_FORCE(Float2, axes, linePts.size()-1);
+        VLA_UNSAFE_FORCE(float, lengths, linePts.size()-1);
+        axes[0] = Float2{ linePts[0][1] - linePts[1][1], linePts[1][0] - linePts[0][0] };
+        lengths[0] = Magnitude(axes[0]);
+        axes[0] /= lengths[0];
+        for (unsigned c=1; c<linePts.size()-1; ++c) {
+            Float2 t0 = Normalize(Float2{ linePts[c-1][1] - linePts[c][1], linePts[c][0] - linePts[c-1][0] });
+            Float2 t1 = Float2{ linePts[c][1] - linePts[c+1][1], linePts[c+1][0] - linePts[c][0] };
+            lengths[c] = Magnitude(t1);
+            t1 /= lengths[c];
+            axes[c] = Normalize(t0+t1);
         }
-        return {0,0};
-    }
 
-    Coord2 DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, const char text[], ...)
-    {
-        va_list args;
-        va_start(args, text);
-        auto result = DrawFormatText(context, rect, textStyle, colour, TextAlignment::TopLeft, text, args);
-        va_end(args);
-        return result;
-    }
+        float x = 0;
+        for (unsigned c=0; c<linePts.size()-1; ++c) {
+            Float3 pt0 = AsPixelCoords(linePts[c]);
+            Float3 pt1 = AsPixelCoords(linePts[c+1]);
 
-    Coord2 DrawFormatText(IOverlayContext& context, const Rect & rect, TextStyle* textStyle, ColorB colour, TextAlignment alignment, const char text[], ...)
-    {
-        va_list args;
-        va_start(args, text);
-        auto result = DrawFormatText(context, rect, textStyle, colour, alignment, text, args);
-        va_end(args);
-        return result;
+            float x2 = x + lengths[c];
+
+            ///////////
+
+            data[ 0+c*12] = Vertex_PCT { pt0, col0, Float2(x, 0) };
+            data[ 1+c*12] = Vertex_PCT { pt0 + Expand(Float2(width * axes[0]), 0.f), col0, Float2(x, 1.f) };
+            data[ 2+c*12] = Vertex_PCT { pt1, col0, Float2(x2, 0) };
+
+            data[ 3+c*12] = Vertex_PCT { pt1, col0, Float2(x2, 0) };
+            data[ 4+c*12] = Vertex_PCT { pt0 + Expand(Float2(width * axes[0]), 0.f), col0, Float2(x, 1.f) };
+            data[ 5+c*12] = Vertex_PCT { pt1 + Expand(Float2(width * axes[0]), 0.f), col0, Float2(x2, 1.f) };
+
+            ///////////
+
+            data[ 6+c*12] = Vertex_PCT { pt0, col0, Float2(x, 0) };
+            data[ 7+c*12] = Vertex_PCT { pt0 + Expand(Float2(-width * axes[0]), 0.f), col0, Float2(x, -1.f) };
+            data[ 8+c*12] = Vertex_PCT { pt1, col0, Float2(x2, 0) };
+
+            data[ 9+c*12] = Vertex_PCT { pt1, col0, Float2(x2, 0) };
+            data[10+c*12] = Vertex_PCT { pt0 + Expand(Float2(-width * axes[0]), 0.f), col0, Float2(x, -1.f) };
+            data[11+c*12] = Vertex_PCT { pt1 + Expand(Float2(-width * axes[0]), 0.f), col0, Float2(x2, -1.f) };
+
+            ///////////
+
+            x = x2;
+        }
     }
-#endif
 
     Coord2 DrawText::Draw(IOverlayContext& context, const Rect& rect, StringSection<> text) const
     {
@@ -887,8 +963,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        context.DrawQuad(
-            ProjectionMode::P2D, AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
+        DrawPCCTTQuad(
+            context,
+            AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
             HeaderBkColor, HeaderBkOutColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(0.f, 0.f),
@@ -1080,8 +1157,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         float t = Saturate((thumbPosition - coordinates.MinValue()) / float(coordinates.MaxValue() - coordinates.MinValue()));
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1])),
             AsPixelCoords(Coord2(r._bottomRight[0], r._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
@@ -1093,8 +1170,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
@@ -1106,8 +1183,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
-        context.DrawQuad(
-            ProjectionMode::P2D,
+        DrawPCCTTQuad(
+            context,
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),

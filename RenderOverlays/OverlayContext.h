@@ -36,18 +36,10 @@ namespace RenderOverlays
         void    DrawTriangle   (ProjectionMode proj, const Float3& v0,    const ColorB& colV0,    const Float3& v1,     
                                 const ColorB& colV1, const Float3& v2,       const ColorB& colV2) override;
 
-        void    DrawQuad(
-            ProjectionMode proj, 
-            const Float3& mins, const Float3& maxs, 
-            ColorB color0, ColorB color1,
-            const Float2& minTex0, const Float2& maxTex0, 
-            const Float2& minTex1, const Float2& maxTex1,
+        IteratorRange<void*> DrawGeometry(
+            unsigned vertexCount,
+            IteratorRange<const RenderCore::MiniInputElementDesc*> inputLayout,
             RenderCore::Techniques::ImmediateDrawableMaterial&& material) override;
-
-        void    DrawQuad(
-            ProjectionMode proj, 
-            const Float3& mins, const Float3& maxs, 
-            ColorB color) override;
 
         void    DrawTexturedQuad(
             ProjectionMode proj, 

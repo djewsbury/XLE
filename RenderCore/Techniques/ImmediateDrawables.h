@@ -13,9 +13,12 @@
 #include "../../Math/Vector.h"
 #include <memory>
 
+#include <future>
+
 namespace RenderCore { class IThreadContext; class FrameBufferDesc; class SharedPkt; class IResourceView; class ISampler; class UniformsStreamInterface; }
 namespace Assets { class IAsyncMarker; }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; }}
+// namespace std { template<typename T> class shared_future; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -66,19 +69,32 @@ namespace RenderCore { namespace Techniques
 		virtual IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) = 0;
 		virtual void ExecuteDraws(
 			ParsingContext& parserContext,
-			const FrameBufferDesc& fbDesc,
-			unsigned subpassIndex) = 0;
+			SequencerConfig& seqConfig) = 0;
 		virtual void AbandonDraws() = 0;
-		void ExecuteDraws(ParsingContext&, const RenderPassInstance&);
 		virtual void PrepareResources(
 			std::promise<PreparedResourcesVisibility>&& promise,
-			const FrameBufferDesc& fbDesc,
-			unsigned subpassIndex) = 0;
+			SequencerConfig& seqConfig) = 0;
 		virtual DrawablesPacket* GetDrawablesPacket() = 0;
 		virtual void OnFrameBarrier() = 0;
 		virtual ~IImmediateDrawables();
 	};
 
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(const std::shared_ptr<IDevice>&);
+	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool);
+
+	class SequencerConfigSet
+	{
+	public:
+		SequencerConfig& GetSequencerConfig(const FrameBufferDesc& fbDesc, unsigned subpassIndex);
+		SequencerConfig& GetSequencerConfig(const RenderPassInstance&);
+
+		std::shared_ptr<IPipelineAcceleratorPool> GetPipelineAccelerators();
+
+		SequencerConfigSet(std::shared_ptr<IDevice> device);
+		~SequencerConfigSet();
+	private:
+		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
+		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_future<std::shared_ptr<ITechniqueDelegate>> _futureTechniqueDelegate;
+	};
 }}
 

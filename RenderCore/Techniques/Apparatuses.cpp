@@ -152,8 +152,10 @@ namespace RenderCore { namespace Techniques
 
 		_mainDrawingApparatus = std::move(mainDrawingApparatus);
 		_depValPtr.RegisterDependency(_mainDrawingApparatus->GetDependencyValidation());
+
+		_debugShapesSequencers = std::make_shared<SequencerConfigSet>(_mainDrawingApparatus->_device);
 		
-		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_mainDrawingApparatus->_device);
+		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_debugShapesSequencers->GetPipelineAccelerators());
 		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
 
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();

@@ -147,7 +147,7 @@ namespace RenderOverlays
 
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext, RenderCore::LoadStore::Clear);
 		parsingContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
-		immediateDrawingApparatus._immediateDrawables->ExecuteDraws(parsingContext, rpi);
+		immediateDrawingApparatus._immediateDrawables->ExecuteDraws(parsingContext, immediateDrawingApparatus._debugShapesSequencers->GetSequencerConfig(rpi));
 	}
 
 	static void DrawDiamond(RenderOverlays::IOverlayContext& context, const RenderOverlays::Rect& rect, RenderOverlays::ColorB colour)

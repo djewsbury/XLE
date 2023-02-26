@@ -733,7 +733,9 @@ namespace PlatformRig
         }
 
         auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
-		immediateDrawing._immediateDrawables->ExecuteDraws(parserContext, rpi);
+		immediateDrawing._immediateDrawables->ExecuteDraws(
+            parserContext,
+            immediateDrawing._debugShapesSequencers->GetSequencerConfig(rpi));
     }
 
 }

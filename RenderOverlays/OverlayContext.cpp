@@ -28,11 +28,10 @@ namespace RenderOverlays
 	class Vertex_PC     { public: Float3 _position; unsigned _colour;                                                               Vertex_PC(Float3 position, unsigned colour) : _position(position), _colour(colour) {};                                          static MiniInputElementDesc inputElements2D[]; static MiniInputElementDesc inputElements3D[]; };
 	class Vertex_PCR    { public: Float3 _position; unsigned _colour; float _radius;                                                Vertex_PCR(Float3 position, unsigned colour, float radius) : _position(position), _colour(colour), _radius(radius) {};          static MiniInputElementDesc inputElements2D[]; static MiniInputElementDesc inputElements3D[]; };
 	class Vertex_PCT    { public: Float3 _position; unsigned _colour; Float2 _texCoord;                                             Vertex_PCT(Float3 position, unsigned colour, Float2 texCoord) : _position(position), _colour(colour), _texCoord(texCoord) {};   static MiniInputElementDesc inputElements2D[]; static MiniInputElementDesc inputElements3D[]; };
-	class Vertex_PCCTT  { public: Float3 _position; unsigned _colour0; unsigned _colour1; Float2 _texCoord0; Float2 _texCoord1;     Vertex_PCCTT(Float3 position, unsigned colour0, unsigned colour1, Float2 texCoord0, Float2 texCoord1) : _position(position), _colour0(colour0), _colour1(colour1), _texCoord0(texCoord0), _texCoord1(texCoord1) {};   static MiniInputElementDesc inputElements2D[]; static MiniInputElementDesc inputElements3D[]; };
 
 	static inline unsigned  HardwareColor(ColorB input)
 	{
-		// see duplicate in FontRendering.cpp
+		// see duplicate in FontRendering.cpp & DebuggingDisplay.cpp
 		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
 	}
 
@@ -56,15 +55,6 @@ namespace RenderOverlays
 		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD, Format::R32G32_FLOAT }
 	};
 
-	MiniInputElementDesc Vertex_PCCTT::inputElements3D[] = 
-	{
-		MiniInputElementDesc{ Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT },
-		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
-		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR + 1, Format::R8G8B8A8_UNORM },
-		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD, Format::R32G32_FLOAT },
-		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD + 1, Format::R32G32_FLOAT }
-	};
-
 	MiniInputElementDesc Vertex_PC::inputElements2D[] = 
 	{
 		MiniInputElementDesc{ Techniques::CommonSemantics::PIXELPOSITION, Format::R32G32B32_FLOAT },
@@ -83,15 +73,6 @@ namespace RenderOverlays
 		MiniInputElementDesc{ Techniques::CommonSemantics::PIXELPOSITION, Format::R32G32B32_FLOAT },
 		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
 		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD, Format::R32G32_FLOAT }
-	};
-
-	MiniInputElementDesc Vertex_PCCTT::inputElements2D[] = 
-	{
-		MiniInputElementDesc{ Techniques::CommonSemantics::PIXELPOSITION, Format::R32G32B32_FLOAT },
-		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
-		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR + 1, Format::R8G8B8A8_UNORM },
-		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD, Format::R32G32_FLOAT },
-		MiniInputElementDesc{ Techniques::CommonSemantics::TEXCOORD + 1, Format::R32G32_FLOAT }
 	};
 
 	class ImmediateOverlayContext::DrawCall
@@ -186,43 +167,12 @@ namespace RenderOverlays
 		data[2] = Vertex(v2, HardwareColor(colV2));
 	}
 	
-	void    ImmediateOverlayContext::DrawQuad(
-		ProjectionMode proj, 
-		const Float3& mins, const Float3& maxs, 
-		ColorB color0, ColorB color1,
-		const Float2& minTex0, const Float2& maxTex0, 
-		const Float2& minTex1, const Float2& maxTex1,
+	IteratorRange<void*> ImmediateOverlayContext::DrawGeometry(
+		unsigned vertexCount,
+		IteratorRange<const RenderCore::MiniInputElementDesc*> inputLayout,
 		RenderCore::Techniques::ImmediateDrawableMaterial&& material)
 	{
-		using Vertex = Vertex_PCCTT;
-		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
-
-		auto data = _immediateDrawables->QueueDraw(6, inputElements, std::move(material), Topology::TriangleList).Cast<Vertex*>();
-		auto col0 = HardwareColor(color0);
-		auto col1 = HardwareColor(color1);
-		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col0, col1, Float2(minTex0[0], minTex0[1]), Float2(minTex1[0], minTex1[1]));
-		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col0, col1, Float2(minTex0[0], maxTex0[1]), Float2(minTex1[0], maxTex1[1]));
-		data[2] = Vertex(Float3(maxs[0], mins[1], mins[2]), col0, col1, Float2(maxTex0[0], minTex0[1]), Float2(maxTex1[0], minTex1[1]));
-		data[3] = Vertex(Float3(maxs[0], mins[1], mins[2]), col0, col1, Float2(maxTex0[0], minTex0[1]), Float2(maxTex1[0], minTex1[1]));
-		data[4] = Vertex(Float3(mins[0], maxs[1], mins[2]), col0, col1, Float2(minTex0[0], maxTex0[1]), Float2(minTex1[0], maxTex1[1]));
-		data[5] = Vertex(Float3(maxs[0], maxs[1], mins[2]), col0, col1, Float2(maxTex0[0], maxTex0[1]), Float2(maxTex1[0], maxTex1[1]));
-	}
-
-	void    ImmediateOverlayContext::DrawQuad(
-			ProjectionMode proj, 
-			const Float3& mins, const Float3& maxs, 
-			ColorB color)
-	{
-		using Vertex = Vertex_PC;
-		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
-		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements}).Cast<Vertex*>();
-		auto col = HardwareColor(color);
-		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col);
-		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col);
-		data[2] = Vertex(Float3(maxs[0], mins[1], mins[2]), col);
-		data[3] = Vertex(Float3(maxs[0], mins[1], mins[2]), col);
-		data[4] = Vertex(Float3(mins[0], maxs[1], mins[2]), col);
-		data[5] = Vertex(Float3(maxs[0], maxs[1], mins[2]), col);
+		return _immediateDrawables->QueueDraw(vertexCount, inputLayout, std::move(material), Topology::TriangleList);
 	}
 
 	void ImmediateOverlayContext::DrawTexturedQuad(
@@ -231,16 +181,16 @@ namespace RenderOverlays
 		std::shared_ptr<RenderCore::IResourceView> textureResource,
 		ColorB color, const Float2& minTex0, const Float2& maxTex0)
 	{
-		using Vertex = Vertex_PCCTT;
+		using Vertex = Vertex_PCT;
 		auto inputElements = (proj == ProjectionMode::P2D) ? MakeIteratorRange(Vertex::inputElements2D) : MakeIteratorRange(Vertex::inputElements3D);
 		auto data = BeginDrawCall(DrawCall{6, Topology::TriangleList, inputElements, std::move(textureResource)}).Cast<Vertex*>();
 		auto col = HardwareColor(color);
-		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col, col, Float2(minTex0[0], minTex0[1]), Float2(0.f, 0.f));
-		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col, col, Float2(minTex0[0], maxTex0[1]), Float2(0.f, 0.f));
-		data[2] = Vertex(Float3(maxs[0], mins[1], mins[2]), col, col, Float2(maxTex0[0], minTex0[1]), Float2(0.f, 0.f));
-		data[3] = Vertex(Float3(maxs[0], mins[1], mins[2]), col, col, Float2(maxTex0[0], minTex0[1]), Float2(0.f, 0.f));
-		data[4] = Vertex(Float3(mins[0], maxs[1], mins[2]), col, col, Float2(minTex0[0], maxTex0[1]), Float2(0.f, 0.f));
-		data[5] = Vertex(Float3(maxs[0], maxs[1], mins[2]), col, col, Float2(maxTex0[0], maxTex0[1]), Float2(0.f, 0.f));
+		data[0] = Vertex(Float3(mins[0], mins[1], mins[2]), col, Float2(minTex0[0], minTex0[1]));
+		data[1] = Vertex(Float3(mins[0], maxs[1], mins[2]), col, Float2(minTex0[0], maxTex0[1]));
+		data[2] = Vertex(Float3(maxs[0], mins[1], mins[2]), col, Float2(maxTex0[0], minTex0[1]));
+		data[3] = Vertex(Float3(maxs[0], mins[1], mins[2]), col, Float2(maxTex0[0], minTex0[1]));
+		data[4] = Vertex(Float3(mins[0], maxs[1], mins[2]), col, Float2(minTex0[0], maxTex0[1]));
+		data[5] = Vertex(Float3(maxs[0], maxs[1], mins[2]), col, Float2(maxTex0[0], maxTex0[1]));
 	}
 
 	Float2 ImmediateOverlayContext::DrawText	 (  const std::tuple<Float3, Float3>& quad, 
