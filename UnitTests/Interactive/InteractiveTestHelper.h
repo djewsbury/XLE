@@ -8,9 +8,10 @@
 #include <utility>
 
 namespace PlatformRig { class IOverlaySystem; class InputContext; class InputSnapshot; class WindowApparatus; }
-namespace RenderCore { namespace Techniques { class DrawingApparatus; class ImmediateDrawingApparatus; class PrimaryResourcesApparatus; class ParsingContext; class CameraDesc; class TechniqueContext; struct PreregisteredAttachment; }}
+namespace RenderCore { namespace Techniques { class DrawingApparatus; class PrimaryResourcesApparatus; class ParsingContext; class CameraDesc; class TechniqueContext; struct PreregisteredAttachment; }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
 namespace RenderCore { class IDevice; class IThreadContext; class FrameBufferProperties; enum class Format; }
+namespace RenderOverlays { class OverlayApparatus; }
 
 namespace UnitTests
 {
@@ -41,7 +42,7 @@ namespace UnitTests
 	{
 	public:
 		virtual std::shared_ptr<RenderCore::Techniques::DrawingApparatus> GetDrawingApparatus() const = 0;
-		virtual std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> GetImmediateDrawingApparatus() const = 0;
+		virtual std::shared_ptr<RenderOverlays::OverlayApparatus> GetOverlayApparatus() const = 0;
 		virtual std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> GetPrimaryResourcesApparatus() const = 0;
 		virtual std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> GetLightingEngineApparatus() const = 0;
 		virtual std::shared_ptr<PlatformRig::WindowApparatus> GetWindowApparatus() const = 0;

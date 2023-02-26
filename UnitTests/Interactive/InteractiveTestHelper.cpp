@@ -10,6 +10,8 @@
 #include "../../PlatformRig/MainInputHandler.h"
 #include "../../PlatformRig/OverlaySystem.h"
 
+#include "../../RenderOverlays/OverlayApparatus.h"
+
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
@@ -47,7 +49,7 @@ namespace UnitTests
 	{
 	public:
 		virtual std::shared_ptr<RenderCore::Techniques::DrawingApparatus> GetDrawingApparatus() const override { return _drawingApparatus; }
-		virtual std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> GetImmediateDrawingApparatus() const override { return _immediateDrawingApparatus; }
+		virtual std::shared_ptr<RenderOverlays::OverlayApparatus> GetOverlayApparatus() const override { return _immediateDrawingApparatus; }
 		virtual std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> GetPrimaryResourcesApparatus() const override { return _primaryResourcesApparatus; }
 		virtual std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> GetLightingEngineApparatus() const override { return _lightingEngineApparatus; }
 		virtual std::shared_ptr<PlatformRig::WindowApparatus> GetWindowApparatus() const override { return _windowApparatus; }
@@ -138,7 +140,8 @@ namespace UnitTests
 		InteractiveTestHelper(EnabledComponents::BitField enabledComponents)
 		{
 			if (!_globalServices) _globalServices = std::make_shared<ConsoleRig::GlobalServices>();
-			_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
+			// _xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
+			_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
 
 			auto osWindow = std::make_unique<PlatformRig::Window>();
 			auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
@@ -151,7 +154,7 @@ namespace UnitTests
 
 			if (enabledComponents & EnabledComponents::RenderCoreTechniques) {
 				_drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(_device);
-				_immediateDrawingApparatus = std::make_shared<RenderCore::Techniques::ImmediateDrawingApparatus>(_drawingApparatus);
+				_immediateDrawingApparatus = std::make_shared<RenderOverlays::OverlayApparatus>(_drawingApparatus);
 			}
 
 			if (enabledComponents & EnabledComponents::LightingEngine) {
@@ -180,7 +183,7 @@ namespace UnitTests
 
 		std::shared_ptr<PlatformRig::WindowApparatus> _windowApparatus;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
-		std::shared_ptr<RenderCore::Techniques::ImmediateDrawingApparatus> _immediateDrawingApparatus;
+		std::shared_ptr<RenderOverlays::OverlayApparatus> _immediateDrawingApparatus;
 		std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> _primaryResourcesApparatus;
 		std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> _frameRenderingApparatus;
 

@@ -6,6 +6,7 @@
 #include "../../EmbeddedRes.h"
 #include "../ReusableDataFiles.h"
 #include "../Metal/MetalTestHelper.h"
+#include "../../../RenderOverlays/ShapesRendering.h"
 #include "../../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
@@ -69,12 +70,15 @@ namespace UnitTests
 		Sampler PointClampSampler;
 	)";
 
-	static void StallForResources(RenderCore::Techniques::IImmediateDrawables& immediateDrawables, const RenderCore::FrameBufferDesc& fbDesc, unsigned subpassIndex)
+	static void StallForResources(
+		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate,
+		const RenderCore::FrameBufferDesc& fbDesc, unsigned subpassIndex)
 	{
 		using namespace RenderCore;
 		std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
 		auto prepareFuture = preparePromise.get_future();
-		immediateDrawables.PrepareResources(std::move(preparePromise), fbDesc, subpassIndex);
+		immediateDrawables.PrepareResources(std::move(preparePromise), techniqueDelegate, fbDesc, subpassIndex);
 		prepareFuture.get();		// stall
 		immediateDrawables.OnFrameBarrier();		// annoyingly we have to call this to flip the pipelines into visibility
 	}
@@ -103,7 +107,8 @@ namespace UnitTests
 		auto sequencerDescriptorSetLayout = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>(
 			s_sequencerDescSetLayout, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
-		auto immediateDrawables = Techniques::CreateImmediateDrawables(testHelper->_device);
+		auto shapeRenderingDelegates = std::make_shared<RenderOverlays::ShapesRenderingDelegate>();
+		auto immediateDrawables = Techniques::CreateImmediateDrawables(testHelper->_device, shapeRenderingDelegates->GetPipelineLayoutDelegate());
 
 		auto techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		techniqueContext->_commonResources = techniqueServices->GetCommonResources();
@@ -120,7 +125,7 @@ namespace UnitTests
 
 		auto sphereGeo = ToolsRig::BuildGeodesicSphere();
 
-		// Try drawing just a basic sphere with no material assigments
+		// Try drawing just a basic sphere with no material assignments
 		{
 			// Use remove the "TEXCOORD" input attribute from the IA (otherwise the system assume there's a texture to read)
 			auto vertexLayout = ToolsRig::Vertex3D_MiniInputLayout;
@@ -133,7 +138,7 @@ namespace UnitTests
 			REQUIRE(data.size() == (sphereGeo.size() * sizeof(decltype(sphereGeo)::value_type)));
 			std::memcpy(data.data(), sphereGeo.data(), data.size());
 			
-			StallForResources(*immediateDrawables, fbHelper.GetDesc(), 0);
+			StallForResources(*immediateDrawables, shapeRenderingDelegates->GetTechniqueDelegate(), fbHelper.GetDesc(), 0);
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -142,7 +147,7 @@ namespace UnitTests
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, UInt2(parsingContext.GetViewport()._width, parsingContext.GetViewport()._height));
-				immediateDrawables->ExecuteDraws(parsingContext, fbHelper.GetDesc(), 0);
+				immediateDrawables->ExecuteDraws(parsingContext, shapeRenderingDelegates->GetTechniqueDelegate(), fbHelper.GetDesc(), 0);
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);
@@ -168,7 +173,7 @@ namespace UnitTests
 			REQUIRE(data.size() == (sphereGeo.size() * sizeof(decltype(sphereGeo)::value_type)));
 			std::memcpy(data.data(), sphereGeo.data(), data.size());
 			
-			StallForResources(*immediateDrawables, fbHelper.GetDesc(), 0);
+			StallForResources(*immediateDrawables, shapeRenderingDelegates->GetTechniqueDelegate(), fbHelper.GetDesc(), 0);
 
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
@@ -177,7 +182,7 @@ namespace UnitTests
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
 				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, UInt2(parsingContext.GetViewport()._width, parsingContext.GetViewport()._height));
-				immediateDrawables->ExecuteDraws(parsingContext, fbHelper.GetDesc(), 0);
+				immediateDrawables->ExecuteDraws(parsingContext, shapeRenderingDelegates->GetTechniqueDelegate(), fbHelper.GetDesc(), 0);
 			}
 
 			auto breakdown = fbHelper.GetFullColorBreakdown(*threadContext);

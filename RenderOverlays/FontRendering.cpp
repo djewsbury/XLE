@@ -92,12 +92,6 @@ namespace RenderOverlays
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::FONTTABLE+1, RenderCore::Format::R32_UINT }
 	};
 
-	static inline unsigned HardwareColor(ColorB input)
-	{
-		// see duplicate in OverlayContext.cpp
-		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
-	}
-
 	void WorkingVertexSetFontResource::PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap, float depth, bool snap)
 	{
 		if (expect_evaluation((_currentIterator + 6) > _currentAllocation.end(), false)) {

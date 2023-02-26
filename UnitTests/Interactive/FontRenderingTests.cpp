@@ -15,6 +15,7 @@
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/FontRendering.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../Math/Transformations.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StringFormat.h"
@@ -74,8 +75,8 @@ namespace UnitTests
 			using namespace RenderCore;
 			using namespace RenderOverlays;
 			auto overlayContext = MakeImmediateOverlayContext(
-				parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables,
-				testHelper.GetImmediateDrawingApparatus()->_fontRenderingManager.get());
+				parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables,
+				testHelper.GetOverlayApparatus()->_fontRenderingManager.get());
 
 			Int2 viewport {parserContext.GetViewport()._width, parserContext.GetViewport()._height};
 			RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{0, 0}, Coord2{viewport[0], viewport[1]}}};
@@ -99,7 +100,7 @@ namespace UnitTests
 					for (auto& c:chrs) c = std::uniform_int_distribution<>(33, 126)(_rng);
 					DrawTextFlags::BitField flags = 0;
 					RenderOverlays::Draw(
-						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables,
+						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables,
 						*_renderingManager, *font, flags,
 						rect._topLeft[0], rect._topLeft[1] + fontProps._ascender, rect._bottomRight[0], rect._bottomRight[1],
 						MakeStringSection(chrs, &chrs[chrCount]),
@@ -110,7 +111,9 @@ namespace UnitTests
 			_renderingManager->AddUploadBarrier(parserContext.GetThreadContext());
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
-			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+			RenderOverlays::ExecuteDraws(
+				parserContext, rpi,
+				*testHelper.GetOverlayApparatus());
 		}
 
 		void Update(RenderCore::IThreadContext& threadContext)

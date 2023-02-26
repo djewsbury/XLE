@@ -14,6 +14,8 @@
 #include "../../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
+#include "../../RenderOverlays/ShapesRendering.h"
 #include "../../PlatformRig/CameraManager.h"
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../Math/ProjectionMath.h"
@@ -220,7 +222,7 @@ namespace UnitTests
 				IInteractiveTestHelper& testHelper) override
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus());
 
 				RenderOverlays::DebuggingDisplay::DrawFrustum(
 					*overlayContext, _worldToProjection,
@@ -246,7 +248,9 @@ namespace UnitTests
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				RenderOverlays::ExecuteDraws(
+					parserContext, rpi,
+					*testHelper.GetOverlayApparatus());
 			}
 
 			Float4x4 _worldToProjection;
@@ -273,7 +277,7 @@ namespace UnitTests
 				IInteractiveTestHelper& testHelper) override
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus());
 
 				for (unsigned c=0; c<_cutawayPoints.size(); ++c) {
 					auto pt0 = _cutawayPoints[c], pt1 = _cutawayPoints[(c+1)%unsigned(_cutawayPoints.size())];
@@ -304,7 +308,9 @@ namespace UnitTests
 				DrawBoxObjects(*overlayContext, frustumTester, MakeIteratorRange(_boxObjects));
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				RenderOverlays::ExecuteDraws(
+					parserContext, rpi,
+					*testHelper.GetOverlayApparatus());
 			}
 
 			std::vector<Float3> _cutawayPoints;
@@ -411,10 +417,10 @@ namespace UnitTests
 				const Float4x4& mainCameraWorldToProjection)
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					threadContext, *testHelper.GetOverlayApparatus());
 
 				using namespace RenderOverlays;
-				DebuggingDisplay::OutlineRectangle(*overlayContext, Rect{Coord2(1,1), Coord2(rect.Width(), rect.Height())}, ColorB { 96, 64, 16 });
+				OutlineRectangle(*overlayContext, Rect{Coord2(1,1), Coord2(rect.Width(), rect.Height())}, ColorB { 96, 64, 16 });
 				DebuggingDisplay::DrawFrustum(
 					*overlayContext, mainCameraWorldToProjection,
 					ColorB { 127, 192, 192 });
@@ -423,7 +429,7 @@ namespace UnitTests
 				parserContext.GetProjectionDesc() = projDesc;
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
 				SetViewport(threadContext, parserContext, rect);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				RenderOverlays::ExecuteDraws(parserContext, rpi, *testHelper.GetOverlayApparatus());
 			}
 
 			void DrawMainView(
@@ -434,17 +440,17 @@ namespace UnitTests
 				const Techniques::ProjectionDesc& projDesc)
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					threadContext, *testHelper.GetOverlayApparatus());
 
 				using namespace RenderOverlays;
-				DebuggingDisplay::OutlineRectangle(*overlayContext, Rect{Coord2(1,1), Coord2(rect.Width(), rect.Height())}, ColorB { 96, 64, 16 });
+				OutlineRectangle(*overlayContext, Rect{Coord2(1,1), Coord2(rect.Width(), rect.Height())}, ColorB { 96, 64, 16 });
 				DrawBoxObjects(*overlayContext, _frustumTester, MakeIteratorRange(_boxObjects));
 				DrawBoxObjectsShadowVolumes(*overlayContext, _frustumTester, MakeIteratorRange(_boxObjects), _lightDirection, 40.f);
 
 				parserContext.GetProjectionDesc() = projDesc;
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Retain);
 				SetViewport(threadContext, parserContext, rect);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				RenderOverlays::ExecuteDraws(parserContext, rpi, *testHelper.GetOverlayApparatus());
 			}
 
 			Techniques::ProjectionDesc MakeProjDesc(Techniques::CameraDesc& cam, const RenderOverlays::Rect& rect)

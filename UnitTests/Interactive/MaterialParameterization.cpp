@@ -20,9 +20,12 @@
 #include "../../RenderCore/Techniques/ManualDrawables.h"
 #include "../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
+#include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Assets/ScaffoldCmdStream.h"
+#include "../../RenderCore/UniformsStream.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/MathSerialization.h"
 #include "catch2/catch_test_macros.hpp"
@@ -207,7 +210,7 @@ namespace UnitTests
 
 		void BuildFutureLightingTechnique()
 		{
-			const bool specularLight = true;
+			const bool specularLight = false;
 			LightingEngine::ChainedOperatorTemplate<LightingEngine::ForwardLightingTechniqueDesc> globalChain0 {};
 			LightingEngine::ChainedOperatorTemplate<LightingEngine::ToneMapAcesOperatorDesc> globalChain1 {};
 			globalChain1._desc._enablePreciseBloom = true;

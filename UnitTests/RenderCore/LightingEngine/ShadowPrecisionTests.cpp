@@ -30,6 +30,7 @@
 #include "../../../RenderOverlays/OverlayContext.h"
 #include "../../../RenderOverlays/DebuggingDisplay.h"
 #include "../../../RenderOverlays/FontRendering.h"
+#include "../../../RenderOverlays/ShapesRendering.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Math/ProjectionMath.h"
@@ -263,10 +264,12 @@ namespace UnitTests
 	{
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
+		std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _shapesRendering;
 
 		ImmediateDrawingHelper(MetalTestHelper& metalHelper)
 		{
-			_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(metalHelper._device);
+			_shapesRendering = std::make_shared<RenderOverlays::ShapesRenderingDelegate>();
+			_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(metalHelper._device, _shapesRendering->GetPipelineLayoutDelegate());
 			// _fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*metalHelper._device);
 		}
 	};
@@ -325,12 +328,12 @@ namespace UnitTests
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext);
 		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> visibilityPromise;
 		auto visibilityFuture = visibilityPromise.get_future();
-		immediateDrawingHelper._immediateDrawables->PrepareResources(std::move(visibilityPromise), rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+		immediateDrawingHelper._immediateDrawables->PrepareResources(std::move(visibilityPromise), immediateDrawingHelper._shapesRendering->GetTechniqueDelegate(), rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 		auto requiredVisibility = visibilityFuture.get(); // stall();
 		immediateDrawingHelper._immediateDrawables->OnFrameBarrier();
 		RenderCore::Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(*RenderCore::Techniques::GetThreadContext(), requiredVisibility._bufferUploadsVisibility);
 		
-		immediateDrawingHelper._immediateDrawables->ExecuteDraws(parsingContext, rpi);
+		immediateDrawingHelper._immediateDrawables->ExecuteDraws(parsingContext, immediateDrawingHelper._shapesRendering->GetTechniqueDelegate(), rpi);
 	}
 
 	static void DrawCascadeColors(

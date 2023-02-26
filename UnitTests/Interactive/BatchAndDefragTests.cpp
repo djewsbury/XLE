@@ -13,6 +13,9 @@
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
+#include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/ShapesRendering.h"
 #include "../../PlatformRig/DebuggingDisplays/BufferUploadDisplay.h"
 #include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../Math/ProjectionMath.h"
@@ -85,8 +88,8 @@ namespace UnitTests
 			using namespace RenderCore;
 			using namespace RenderOverlays;
 			auto overlayContext = MakeImmediateOverlayContext(
-				parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables,
-				testHelper.GetImmediateDrawingApparatus()->_fontRenderingManager.get());
+				parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables,
+				testHelper.GetOverlayApparatus()->_fontRenderingManager.get());
 
 			// draw....
 			float scale = 32.f;
@@ -108,13 +111,13 @@ namespace UnitTests
 						Rect rect{Coord2{x*scale+translation[0], y*scale+translation[1]}, Coord2{(x+1)*scale+translation[0], (y+1)*scale+translation[1]}};
 						if (rect._topLeft[0] >= viewport[0] || rect._topLeft[1] >= viewport[1] || rect._bottomRight[0] <= 0 || rect._bottomRight[1] <= 0) continue;
 						auto color = _allocatedResources.UnrecordedTest(uint64_t(y) << 32ull | x) ? ColorB{0x3f, 0x3f, 0xaf} : ColorB{0x3f, 0x3f, 0x3f};
-						DebuggingDisplay::DrawText().Alignment(TextAlignment::Center).Color(color).Draw(
+						DrawText().Alignment(TextAlignment::Center).Color(color).Draw(
 							*overlayContext, rect,
 							(StringMeldInPlace(buffer) << _gridAllocations[y*_gridWidth+x]/1024).AsStringSection());
 					}
 			}
 
-			DebuggingDisplay::OutlineEllipse(*overlayContext, Rect{Coord2{(_cameraCenter[0]-s_cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]-s_cameraRadiusCells)*scale+translation[1]}, Coord2{(_cameraCenter[0]+s_cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]+s_cameraRadiusCells)*scale+translation[1]}}, ColorB::Red);
+			OutlineEllipse(*overlayContext, Rect{Coord2{(_cameraCenter[0]-s_cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]-s_cameraRadiusCells)*scale+translation[1]}, Coord2{(_cameraCenter[0]+s_cameraRadiusCells)*scale+translation[0], (_cameraCenter[1]+s_cameraRadiusCells)*scale+translation[1]}}, ColorB::Red);
 
 			if (_batchingDisplay0) {
 				// draw on left
@@ -132,7 +135,10 @@ namespace UnitTests
 			}
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
-			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+			RenderOverlays::ExecuteDraws(
+				parserContext, rpi,
+				*testHelper.GetOverlayApparatus()->_immediateDrawables,
+				*testHelper.GetOverlayApparatus()->_shapeRenderingDelegate);
 		}
 
 		virtual bool OnInputEvent(

@@ -19,6 +19,8 @@
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
+#include "../../RenderOverlays/ShapesRendering.h"
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../Assets/IAsyncMarker.h"
 #include "../../Math/ProjectionMath.h"
@@ -732,7 +734,7 @@ namespace UnitTests
 
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables);
 					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, localToWorld3x3, RenderOverlays::ColorB{32, 190, 32});
 					for (const auto&g:_cellField._interiorGroups)
 						DrawBoundary(*overlayContext, _cellField, g, localToWorld3x3, RenderOverlays::ColorB{64, 140, 210});
@@ -740,7 +742,9 @@ namespace UnitTests
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				RenderOverlays::ExecuteDraws(
+					parserContext, rpi,
+					*testHelper.GetOverlayApparatus());
 			}
 
 			virtual bool OnInputEvent(
@@ -794,13 +798,15 @@ namespace UnitTests
 		{
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables);
 				for (const auto& preview:_previews)
 					preview.Draw(*overlayContext, Identity<Float4x4>(), RenderOverlays::ProjectionMode::P3D);		// use 3d so the camera is taken into account
 			}
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
-			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+			RenderOverlays::ExecuteDraws(
+				parserContext, rpi,
+				*testHelper.GetOverlayApparatus());
 		}
 
 		std::vector<StraightSkeletonPreview<float>> _previews;
@@ -1060,12 +1066,14 @@ namespace UnitTests
 			{
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-						parserContext.GetThreadContext(), *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables);
 					_preview.Draw(*overlayContext, Identity<Float4x4>(), RenderOverlays::ProjectionMode::P3D);
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+				RenderOverlays::ExecuteDraws(
+					parserContext, rpi,
+					*testHelper.GetOverlayApparatus());
 			}
 
 			virtual bool OnInputEvent(
@@ -1122,7 +1130,7 @@ namespace UnitTests
 		{
 			{
 				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					*threadContext, *testHelper.GetImmediateDrawingApparatus()->_immediateDrawables);
+					*threadContext, *testHelper.GetOverlayApparatus()->_immediateDrawables);
 				preview.Draw(*overlayContext, Identity<Float4x4>(), RenderOverlays::ProjectionMode::P3D);
 			}
 
@@ -1137,11 +1145,13 @@ namespace UnitTests
 			{
 				std::promise<RenderCore::Techniques::PreparedResourcesVisibility> promise;
 				auto future = promise.get_future();
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->PrepareResources(std::move(promise), fbHelper.GetDesc(), 0);
+				testHelper.GetOverlayApparatus()->_immediateDrawables->PrepareResources(std::move(promise), testHelper.GetOverlayApparatus()->_shapeRenderingDelegate->GetTechniqueDelegate(), fbHelper.GetDesc(), 0);
 				future.get();		// stall
-				testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->OnFrameBarrier();	// flip visible
+				testHelper.GetOverlayApparatus()->_immediateDrawables->OnFrameBarrier();	// flip visible
 			}
-			testHelper.GetImmediateDrawingApparatus()->_immediateDrawables->ExecuteDraws(parserContext, fbHelper.GetDesc(), 0);
+			testHelper.GetOverlayApparatus()->_immediateDrawables->ExecuteDraws(
+				parserContext, testHelper.GetOverlayApparatus()->_shapeRenderingDelegate->GetTechniqueDelegate(),
+				fbHelper.GetDesc(), 0);
 
 			if (parserContext._requiredBufferUploadsCommandList)
 				testHelper.GetPrimaryResourcesApparatus()->_bufferUploads->StallAndMarkCommandListDependency(*threadContext, parserContext._requiredBufferUploadsCommandList);
