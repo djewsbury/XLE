@@ -1,4 +1,6 @@
 #include "HistoricalProfilerDisplay.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/StringFormat.h"

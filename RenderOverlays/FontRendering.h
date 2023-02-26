@@ -6,12 +6,6 @@
 
 #include "Font.h"
 #include "OverlayPrimitives.h"
-#include "../RenderCore/Format.h"
-#include "../Math/Vector.h"
-#include "../Utility/UTFUtils.h"
-#include "../Utility/IteratorUtils.h"
-#include "../Utility/MemoryUtils.h"
-#include "../Utility/IntrusivePtr.h"
 #include <vector>
 #include <memory>
 
@@ -54,6 +48,8 @@ namespace RenderOverlays
 						IteratorRange<const uint8_t*> fontSelectors,
 						float scale, float depth,
 						ColorB shadowColor);
+
+	///////////////////////////////////////////////////////////////////////////////////
 
 	struct FontRenderingControlStatement
 	{

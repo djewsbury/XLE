@@ -7,6 +7,8 @@
 #include "../../RenderCore/Vulkan/Metal/Pools.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/CommonWidgets.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"

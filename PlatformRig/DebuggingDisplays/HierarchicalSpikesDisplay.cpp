@@ -3,6 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "HierarchicalSpikesDisplay.h"
+#include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/ShapesRendering.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Assets/Continuation.h"
 #include "../../Utility/Profiling/CPUProfiler.h"

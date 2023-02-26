@@ -9,6 +9,8 @@
 #include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/Font.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Assets/Continuation.h"
 #include "../../OSServices/TimeUtils.h"

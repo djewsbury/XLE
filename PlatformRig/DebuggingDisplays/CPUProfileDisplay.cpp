@@ -6,6 +6,8 @@
 
 #include "CPUProfileDisplay.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../OSServices/TimeUtils.h"
 #include "../../Assets/Continuation.h"

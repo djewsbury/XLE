@@ -3,6 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "QuickMetricsDisplay.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../Assets/Marker.h"
@@ -14,7 +16,7 @@ namespace PlatformRig { namespace Overlays
 {
 	void    QuickMetricsDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
 	{
-		using namespace RenderOverlays::DebuggingDisplay;
+		using namespace RenderOverlays;
 		const unsigned lineHeight = 20;
 		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
@@ -24,9 +26,9 @@ namespace PlatformRig { namespace Overlays
 		auto scrollArea = layout.AllocateFullHeight(layout.GetWidthRemaining());
 		layout._paddingBetweenAllocations = oldBetweenAllocations;
 
-		ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, _lines.size(), textArea.GetMaximumSize().Height()/(float)lineHeight);
+		DebuggingDisplay::ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, _lines.size(), textArea.GetMaximumSize().Height()/(float)lineHeight);
 		_scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, _scrollOffset);
-		DrawScrollBar(context, scrollCoordinates, _scrollOffset);
+		DebuggingDisplay::DrawScrollBar(context, scrollCoordinates, _scrollOffset);
 		interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});
 
 		if (unsigned(_scrollOffset) < _lines.size()) {

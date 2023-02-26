@@ -6,6 +6,8 @@
 #include "../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/CommonWidgets.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -28,13 +30,13 @@ namespace PlatformRig { namespace Overlays
 
 	void    DeformAcceleratorPoolDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
 	{
-		using namespace RenderOverlays::DebuggingDisplay;
+		using namespace RenderOverlays;
 		const unsigned lineHeight = 20;
 		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
 		{
 			auto titleRect = layout.AllocateFullWidth(30);
-			RenderOverlays::DebuggingDisplay::FillRectangle(context, titleRect, titleBkground);
+			FillRectangle(context, titleRect, titleBkground);
 			titleRect._topLeft[0] += 8;
 			auto* font = _headingFont->TryActualize();
 			if (font)

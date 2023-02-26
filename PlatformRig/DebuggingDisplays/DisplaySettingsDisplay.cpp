@@ -6,6 +6,8 @@
 #include "../OverlappedWindow.h"
 #include "../../OSServices/DisplaySettings.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StringFormat.h"
 

@@ -3,6 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "InvalidAssetDisplay.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Assets/AssetSetManager.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetHeap.h"
@@ -101,14 +103,14 @@ namespace PlatformRig { namespace Overlays
 
 					auto titleRect = layout.AllocateFullWidth(lineHeight);
 					if (titleRect.Height() <= 0) break;
-					RenderOverlays::DebuggingDisplay::FillRectangle(context, titleRect, titleBkground);
-					RenderOverlays::DebuggingDisplay::DrawText().Draw(context, titleRect, r.second._initializer);
+					FillRectangle(context, titleRect, titleBkground);
+					RenderOverlays::DrawText().Draw(context, titleRect, r.second._initializer);
 
 					auto msg = std::stringstream{AsString(r.second._actualizationLog)};
 					for (std::string line; std::getline(msg, line, '\n');) {
 						auto allocation = layout.AllocateFullWidth(lineHeight);
 						if (allocation.Height() <= 0) break;
-						RenderOverlays::DebuggingDisplay::DrawText().Color(0xffcfcfcf).Draw(context, allocation, line);
+						RenderOverlays::DrawText().Color(0xffcfcfcf).Draw(context, allocation, line);
 					}
 				}
 			} CATCH(...) {
@@ -136,12 +138,12 @@ namespace PlatformRig { namespace Overlays
 		const unsigned lineHeight = 20;
 		auto activeOperations = _opContext->GetActiveOperations();
 
-		RenderOverlays::DebuggingDisplay::DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Asset Operation Context");
+		RenderOverlays::DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Asset Operation Context");
 
 		for (const auto&op:activeOperations) {
 			auto allocation = layout.AllocateFullWidth(lineHeight);
 			if (allocation.Height() < lineHeight) break;
-			RenderOverlays::DebuggingDisplay::DrawText().Draw(context, allocation, op);
+			RenderOverlays::DrawText().Draw(context, allocation, op);
 		}
 	}
 

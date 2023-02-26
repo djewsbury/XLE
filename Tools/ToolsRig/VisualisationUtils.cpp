@@ -16,6 +16,7 @@
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CommonResources.h"
@@ -201,7 +202,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
-		std::shared_ptr<RenderCore::Techniques::SequencerConfigSet> _debugShapesSequencers;
+		std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> _debugShapesSequencers;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingApparatus;
     };
@@ -291,7 +292,7 @@ namespace ToolsRig
 			overlays.ReleaseState();
 
 			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
-			_immediateDrawables->ExecuteDraws(parserContext, _debugShapesSequencers->GetSequencerConfig(rpi));
+			_immediateDrawables->ExecuteDraws(parserContext, _debugShapesSequencers->GetTechniqueDelegate(), rpi);
 
 			StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
 		}
@@ -765,7 +766,7 @@ namespace ToolsRig
 		std::shared_ptr<MouseOverTrackingListener> _inputListener;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
-		std::shared_ptr<RenderCore::Techniques::SequencerConfigSet> _debugShapesSequencers;
+		std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> _debugShapesSequencers;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 
@@ -919,7 +920,7 @@ namespace ToolsRig
 				}
 
 				if (drawImmediateDrawables)
-					_pimpl->_immediateDrawables->ExecuteDraws(parserContext, _pimpl->_debugShapesSequencers->GetSequencerConfig(rpi));
+					_pimpl->_immediateDrawables->ExecuteDraws(parserContext, _pimpl->_debugShapesSequencers->GetTechniqueDelegate(), rpi);
 			}
 
 			if (doColorByMaterial) {
@@ -982,7 +983,7 @@ namespace ToolsRig
 				overlays.ReleaseState();
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
-				_pimpl->_immediateDrawables->ExecuteDraws(parserContext, _pimpl->_debugShapesSequencers->GetSequencerConfig(rpi));
+				_pimpl->_immediateDrawables->ExecuteDraws(parserContext, _pimpl->_debugShapesSequencers->GetTechniqueDelegate(), rpi);
 
 			CATCH_ASSETS_END(parserContext)
 		}

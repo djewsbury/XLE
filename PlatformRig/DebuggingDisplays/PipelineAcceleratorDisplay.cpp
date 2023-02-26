@@ -6,6 +6,8 @@
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/CommonWidgets.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
 
@@ -42,6 +44,7 @@ namespace PlatformRig { namespace Overlays
 
 	void    PipelineAcceleratorPoolDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
 	{
+		using namespace RenderOverlays;
 		using namespace RenderOverlays::DebuggingDisplay;
 		const unsigned lineHeight = 20;
 		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };

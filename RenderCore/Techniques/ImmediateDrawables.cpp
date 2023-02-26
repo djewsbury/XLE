@@ -129,47 +129,25 @@ namespace RenderCore { namespace Techniques
 			[](auto pipelineLayout) { return std::make_shared<ImmediateRendererTechniqueDelegate>(std::move(pipelineLayout)); });
 	}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	SequencerConfig& SequencerConfigSet::GetSequencerConfig(
-		const FrameBufferDesc& fbDesc,
-		unsigned subpassIndex)
+	std::shared_ptr<ITechniqueDelegate> ImmediateDrawableDelegate::GetTechniqueDelegate()
 	{
-		auto hash = Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(fbDesc, subpassIndex);
-		auto i = LowerBound(_sequencerConfigs, hash);
-		if (i==_sequencerConfigs.end() || i->first != hash) {
-			auto result = _pipelineAcceleratorPool->CreateSequencerConfig(
-				"immediate-drawables",
-				_futureTechniqueDelegate.get(),		// note -- potential stall here
-				ParameterBox{},
-				fbDesc, subpassIndex);
-			i = _sequencerConfigs.insert(i, std::make_pair(hash, std::move(result)));
-		}
-		return *i->second;
+		return _futureTechniqueDelegate.get();
 	}
 
-	SequencerConfig& SequencerConfigSet::GetSequencerConfig(const RenderPassInstance& rpi)
+	const std::shared_ptr<IPipelineLayoutDelegate>& ImmediateDrawableDelegate::GetPipelineLayoutDelegate()
 	{
-		return GetSequencerConfig(rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+		return _pipelineLayoutDelegate;
 	}
 
-	std::shared_ptr<IPipelineAcceleratorPool> SequencerConfigSet::GetPipelineAccelerators()
-	{
-		return _pipelineAcceleratorPool;
-	}
-
-	SequencerConfigSet::SequencerConfigSet(std::shared_ptr<IDevice> device)
+	ImmediateDrawableDelegate::ImmediateDrawableDelegate()
 	{
 		std::promise<std::shared_ptr<ITechniqueDelegate>> promisedTechniqueDelegate;
 		_futureTechniqueDelegate = promisedTechniqueDelegate.get_future();
 		CreateImmediateRendererTechniqueDelegate(std::move(promisedTechniqueDelegate));
-
-		auto pipelineCollection = std::make_shared<PipelineCollection>(device);
-		auto compiledLayoutPool = CreatePipelineLayoutDelegate(IMMEDIATE_PIPELINE ":ImmediateDrawables");
-		_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, nullptr, pipelineCollection, compiledLayoutPool, 0);
+		_pipelineLayoutDelegate = CreatePipelineLayoutDelegate(IMMEDIATE_PIPELINE ":ImmediateDrawables");
 	}
 
-	SequencerConfigSet::~SequencerConfigSet() {}
+	ImmediateDrawableDelegate::~ImmediateDrawableDelegate() {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -363,13 +341,31 @@ namespace RenderCore { namespace Techniques
 			_lastQueuedDrawVertexCountOffset = 0;
 		}
 
+		SequencerConfig& GetSequencerConfig(const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate, const FrameBufferDesc& fbDesc, unsigned subpassIndex)
+		{
+			auto hash = Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(fbDesc, subpassIndex);
+			auto i = LowerBound(_sequencerConfigs, hash);
+			if (i==_sequencerConfigs.end() || i->first != hash) {
+				auto result = _pipelineAcceleratorPool->CreateSequencerConfig(
+					"immediate-drawables",
+					techniqueDelegate,
+					ParameterBox{},
+					fbDesc, subpassIndex);
+				i = _sequencerConfigs.insert(i, std::make_pair(hash, std::move(result)));
+			}
+			return *i->second;
+		}
+
 		void ExecuteDraws(
 			ParsingContext& parserContext,
-			SequencerConfig& sequencerConfig) override
+			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
+			const FrameBufferDesc& fbDesc,
+			unsigned subpassIndex) override
 		{
 			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
 			if (!_workingPkt._drawables.empty()) {
 				parserContext.GetUniformDelegateManager()->InvalidateUniforms();
+				auto& sequencerConfig = GetSequencerConfig(techniqueDelegate, fbDesc, subpassIndex);
 				Techniques::DrawOptions options;
 				options._pipelineAcceleratorsVisibility = _pipelineAcceleratorsVisibility;
 				Draw(
@@ -383,8 +379,13 @@ namespace RenderCore { namespace Techniques
 			AbandonDraws();	// (this just clears out everything prepared)
 		}
 
-		void PrepareResources(std::promise<PreparedResourcesVisibility>&& promise, SequencerConfig& sequencerConfig) override
+		void PrepareResources(
+			std::promise<PreparedResourcesVisibility>&& promise,
+			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
+			const FrameBufferDesc& fbDesc,
+			unsigned subpassIndex) override
 		{
+			auto& sequencerConfig = GetSequencerConfig(techniqueDelegate, fbDesc, subpassIndex);
 			Techniques::PrepareResources(std::move(promise), *_pipelineAcceleratorPool, sequencerConfig, _workingPkt);
 		}
 
@@ -401,11 +402,13 @@ namespace RenderCore { namespace Techniques
 			_pipelineAcceleratorsVisibility = _pipelineAcceleratorPool->VisibilityBarrier();
 		}
 
-		ImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool)
-		: _pipelineAcceleratorPool(std::move(pipelineAcceleratorPool))
+		ImmediateDrawables(std::shared_ptr<IDevice> device, std::shared_ptr<IPipelineLayoutDelegate> layoutDelegate)
 		{
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
+
+			auto pipelineCollection = std::make_shared<PipelineCollection>(device);
+			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, nullptr, pipelineCollection, layoutDelegate, 0);
 		}
 
 	protected:
@@ -414,6 +417,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<uint64_t, std::shared_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		DrawableWithVertexCount* _lastQueuedDrawable = nullptr;
 		unsigned _lastQueuedDrawVertexCountOffset = 0;
+		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
 		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
 		std::vector<std::shared_ptr<DrawableGeo>> _customGeosInWorkingPkt;
 		VisibilityMarkerId _pipelineAcceleratorsVisibility = 0;
@@ -462,9 +466,14 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool)
+	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IDevice> device, std::shared_ptr<IPipelineLayoutDelegate> layoutDelegate)
 	{
-		return std::make_shared<ImmediateDrawables>(std::move(pipelineAcceleratorPool));
+		return std::make_shared<ImmediateDrawables>(std::move(device), std::move(layoutDelegate));
+	}
+
+	void IImmediateDrawables::ExecuteDraws(ParsingContext& parsingContext, const std::shared_ptr<ITechniqueDelegate>& techDel, const RenderPassInstance& rpi)
+	{
+		ExecuteDraws(parsingContext, techDel, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 	}
 
 	IImmediateDrawables::~IImmediateDrawables() {}

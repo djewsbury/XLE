@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ToneMapSettings.h"
+#include "../DrawText.h"
 #include "../../SceneEngine/Tonemap.h"
 
 namespace Overlays

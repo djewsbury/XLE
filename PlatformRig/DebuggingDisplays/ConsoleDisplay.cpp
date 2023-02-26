@@ -6,6 +6,9 @@
 
 #include "ConsoleDisplay.h"
 #include "../../RenderOverlays/Font.h"
+#include "../../RenderOverlays/OverlayEffects.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/UTFUtils.h"
 #include "../../Utility/PtrUtils.h"
@@ -59,7 +62,18 @@ namespace PlatformRig { namespace Overlays
         static ColorB       borderColor     = ColorB(0xff, 0xff, 0xff, 0x7f);
         static ColorB       entryBoxColor   = ColorB(0x00, 0x00, 0x00, 0x4f);
         static ColorB       textColor       = ColorB(0xff, 0xff, 0xff);
-        FillRectangle(context, consoleMaxSize, backColor);
+        if (auto* blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()) {
+            auto res = blurryBackground->GetResourceView();
+            context.DrawTexturedQuad(
+                RenderOverlays::ProjectionMode::P2D,
+                {consoleMaxSize._topLeft[0], consoleMaxSize._topLeft[1], 0.f},
+                {consoleMaxSize._bottomRight[0], consoleMaxSize._bottomRight[1], 0.f},
+                std::move(res),
+                ColorB::White,
+                blurryBackground->AsTextureCoords(consoleMaxSize._topLeft), blurryBackground->AsTextureCoords(consoleMaxSize._bottomRight));
+        } else {
+            FillRectangle(context, consoleMaxSize, backColor);
+        }
         FillRectangle(context, 
             Rect(   Coord2(consoleMaxSize._topLeft[0],      consoleMaxSize._bottomRight[1]-3),
                     Coord2(consoleMaxSize._bottomRight[0],  consoleMaxSize._bottomRight[1]  )),

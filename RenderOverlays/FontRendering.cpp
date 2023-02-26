@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "FontRendering.h"
+#include "ShapesInternal.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/BufferUploads/IBufferUploads.h"
@@ -15,6 +16,7 @@
 #include "../Assets/Assets.h"
 #include "../Assets/Continuation.h"
 #include "../Math/RectanglePacking.h"
+#include "../ConsoleRig/ResourceBox.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/PtrUtils.h"
@@ -723,10 +725,10 @@ namespace RenderOverlays
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
-                        float x, float y, float maxX, float maxY,
+						float x, float y, float maxX, float maxY,
 						StringSection<> text,
-                        float scale, float depth,
-                        ColorB col)
+						float scale, float depth,
+						ColorB col)
 	{
 		assert(!(flags & DrawTextFlags::Snap));		// we could support this by using the SnapCoords template parameter to DrawTemplate<>
 		if (maxX || maxY) {
@@ -749,10 +751,10 @@ namespace RenderOverlays
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
-                        float x, float y, float maxX, float maxY,
+						float x, float y, float maxX, float maxY,
 						StringSection<ucs4> text,
-                        float scale, float depth,
-                        ColorB col)
+						float scale, float depth,
+						ColorB col)
 	{
 		assert(!(flags & DrawTextFlags::Snap));
 		if (maxX || maxY) {

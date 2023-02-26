@@ -7,6 +7,8 @@
 #include "../../SceneEngine/RigidModelScene.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/CommonWidgets.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Assets/AssetHeap.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"

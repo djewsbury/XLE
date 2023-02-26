@@ -104,8 +104,8 @@ namespace RenderOverlays { namespace CommonWidgets
 		Rect leftRect { valueBox._topLeft, Coord2{(valueBox._topLeft[0]+valueBox._bottomRight[0])/2, valueBox._bottomRight[1]} };
 		Rect rightRect { Coord2{(valueBox._topLeft[0]+valueBox._bottomRight[0])/2, valueBox._topLeft[1]}, valueBox._bottomRight };
 
-		bool leftHighlighted = _interfaceState->HasMouseOver(interactable) && IsInside(leftRect, _interfaceState->MousePosition());
-		bool rightHighlighted = _interfaceState->HasMouseOver(interactable) && IsInside(rightRect, _interfaceState->MousePosition());
+		bool leftHighlighted = _interfaceState->HasMouseOver(interactable) && Contains(leftRect, _interfaceState->MousePosition());
+		bool rightHighlighted = _interfaceState->HasMouseOver(interactable) && Contains(rightRect, _interfaceState->MousePosition());
 		if (leftHighlighted)
 			FillRoundedRectangle(*_context, leftRect, ColorB{58, 58, 58}, 0.4f, Corner::TopLeft|Corner::BottomLeft);
 		if (rightHighlighted)

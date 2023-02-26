@@ -25,7 +25,7 @@ namespace PlatformRig
         DebugScreensOverlay(
             std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
             std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
-            std::shared_ptr<RenderCore::Techniques::SequencerConfigSet> sequencerConfigSet,
+            std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> sequencerConfigSet,
             std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
         : _debugScreensSystem(debugScreensSystem)
         , _inputListener(std::make_shared<PlatformRig::DebugScreensInputHandler>(std::move(debugScreensSystem)))
@@ -61,7 +61,7 @@ namespace PlatformRig
                     rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext);
                 }
                 parserContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
-                _immediateDrawables->ExecuteDraws(parserContext, _sequencerConfigSet->GetSequencerConfig(rpi));
+                _immediateDrawables->ExecuteDraws(parserContext, _sequencerConfigSet->GetTechniqueDelegate(), rpi);
             } CATCH (...) {
                 _immediateDrawables->AbandonDraws();
                 throw;
@@ -73,13 +73,13 @@ namespace PlatformRig
         std::shared_ptr<DebugScreensInputHandler> _inputListener;
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderer;
-        std::shared_ptr<RenderCore::Techniques::SequencerConfigSet> _sequencerConfigSet;
+        std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> _sequencerConfigSet;
     };
 
     std::shared_ptr<IOverlaySystem> CreateDebugScreensOverlay(
         std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
-        std::shared_ptr<RenderCore::Techniques::SequencerConfigSet> sequencerConfigSet,
+        std::shared_ptr<RenderCore::Techniques::ImmediateDrawableDelegate> sequencerConfigSet,
         std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
     {
         return std::make_shared<DebugScreensOverlay>(std::move(debugScreensSystem), std::move(immediateDrawables), std::move(sequencerConfigSet), std::move(fontRenderer));

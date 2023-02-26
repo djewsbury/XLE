@@ -102,7 +102,20 @@ namespace RenderOverlays
             && rect._bottomRight[0] >= pt[0] && rect._bottomRight[1] >= pt[1];
     }
 
-    class Font;
-    ::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size);
+    inline bool IsGood(const Rect& rect)
+    {
+        return  rect._topLeft[0] < rect._bottomRight[0]
+            &&  rect._topLeft[1] < rect._bottomRight[1];
+    }
+
+	///////////////////////////////////////////////////////////////////////////////////
+    //          M I S C
+
+    Float3      AsPixelCoords(Coord2 input);
+    Float3      AsPixelCoords(Coord2 input, float depth);
+    Float3      AsPixelCoords(Float2 input);
+    Float3      AsPixelCoords(Float3 input);
+    std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect);
+    unsigned    HardwareColor(ColorB input);
 
 }

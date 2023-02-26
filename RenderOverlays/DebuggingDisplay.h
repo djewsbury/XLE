@@ -118,71 +118,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
     extern const ColorB   RandomPaletteColorTable[];
     extern const size_t   RandomPaletteColorTable_Size;
 
-    void        OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour);
-    void        FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour);
-
-    namespace Corner
-    {
-        static const auto TopLeft = 1u;
-        static const auto TopRight = 2u;
-        static const auto BottomLeft = 4u;
-        static const auto BottomRight = 8u;
-        using BitField = unsigned;
-    }
-
-    void FillRoundedRectangle(
-        IOverlayContext& context, const Rect& rect, 
-        ColorB fillColor,
-        float roundedProportion = 1.f / 8.f,
-        Corner::BitField cornerFlags = 0xf);
-    void FillAndOutlineRoundedRectangle(
-        IOverlayContext& context, const Rect& rect, 
-        ColorB fillColor, ColorB outlineColour,
-        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
-        Corner::BitField cornerFlags = 0xf);
-    void OutlineRoundedRectangle(
-        IOverlayContext& context, const Rect& rect, 
-        ColorB colour, 
-        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
-        Corner::BitField cornerFlags = 0xf);
-
-    void FillRaisedRoundedRectangle(
-        IOverlayContext& context, const Rect& rect,
-        ColorB fillColor,
-        float roundedProportion = 1.f / 8.f,
-        Corner::BitField cornerFlags = 0xf);
-    void FillDepressedRoundedRectangle(
-        IOverlayContext& context, const Rect& rect,
-        ColorB fillColor,
-        float roundedProportion = 1.f / 8.f,
-        Corner::BitField cornerFlags = 0xf);
-
-    void        FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour);
-    void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB outlineColour, float outlineWidth = 1.f);
-    void        FillAndOutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB fillColour, ColorB outlineColour, float outlineWidth = 1.f);
-
-    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect);
-
-    void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
-
-    struct DrawText
-    {
-        mutable DrawTextFlags::BitField _flags = DrawTextFlags::Shadow;
-        mutable Font* _font = nullptr;
-        mutable ColorB _color = ColorB::White;
-        mutable TextAlignment _alignment = TextAlignment::Left;
-
-        Coord2 Draw(IOverlayContext& context, const Rect& rect, StringSection<>) const;
-        Coord2 FormatAndDraw(IOverlayContext& context, const Rect& rect, const char format[], ...) const;
-        Coord2 FormatAndDraw(IOverlayContext& context, const Rect& rect, const char format[], va_list args) const;
-        
-        Coord2 operator()(IOverlayContext& context, const Rect& rect, StringSection<> text) { return Draw(context, rect, text); }
-
-        const DrawText& Alignment(TextAlignment alignment) const { _alignment = alignment; return *this; }
-        const DrawText& Flags(DrawTextFlags::BitField flags) const { _flags = flags; return *this; }
-        const DrawText& Color(ColorB color) const { _color = color; return *this; }
-        const DrawText& Font(Font& font) const { _font = &font; return *this; }
-    };
 
     void        DrawHistoryGraph(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
     void        DrawHistoryGraph_ExtraLine(IOverlayContext& context, const Rect& rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float minValue, float maxValue);
@@ -191,13 +126,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     void        DrawTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount);
     void        DrawLines(IOverlayContext& context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount);
-
-    Float3      AsPixelCoords(Coord2 input);
-    Float3      AsPixelCoords(Coord2 input, float depth);
-    Float3      AsPixelCoords(Float2 input);
-    Float3      AsPixelCoords(Float3 input);
-    std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect);
-    unsigned  HardwareColor(ColorB input);
 
     ///////////////////////////////////////////////////////////////////////////////////
 
@@ -397,21 +325,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
                                             Interactables&      interactables, InterfaceState& interfaceState);
         bool    ProcessInputPanelControls(  InterfaceState&     interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot&    evnt);
     };
-
-    ///////////////////////////////////////////////////////////////////////////////////
-    inline bool IsGood(const Rect& rect)
-    {
-        return  rect._topLeft[0] < rect._bottomRight[0]
-            &&  rect._topLeft[1] < rect._bottomRight[1];
-    }
-
-    inline bool IsInside(const Rect& rect, const Coord2& pt)
-    {
-        return  (pt[0] >= rect._topLeft[0])
-            &&  (pt[1] >= rect._topLeft[1])
-            &&  (pt[0] < rect._bottomRight[0])
-            &&  (pt[1] < rect._bottomRight[1]);
-    }
 
 }}
 

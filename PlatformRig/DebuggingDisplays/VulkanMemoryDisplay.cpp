@@ -6,6 +6,8 @@
 #include "../../RenderCore/Vulkan/Metal/ObjectFactory.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/CommonWidgets.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -48,7 +50,7 @@ namespace PlatformRig { namespace Overlays
 
 		{
 			auto titleRect = layout.AllocateFullWidth(30);
-			RenderOverlays::DebuggingDisplay::FillRectangle(context, titleRect, titleBkground);
+			FillRectangle(context, titleRect, titleBkground);
 			titleRect._topLeft[0] += 8;
 			auto* font = _headingFont->TryActualize();
 			if (font) {

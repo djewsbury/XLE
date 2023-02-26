@@ -4,6 +4,7 @@
 
 #include "AnimationVisualization.h"
 #include "OverlayContext.h"
+#include "../RenderOverlays/DrawText.h"
 #include "../RenderCore/Assets/SkeletonMachine.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/CommonBindings.h"

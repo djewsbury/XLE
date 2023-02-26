@@ -69,31 +69,33 @@ namespace RenderCore { namespace Techniques
 		virtual IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) = 0;
 		virtual void ExecuteDraws(
 			ParsingContext& parserContext,
-			SequencerConfig& seqConfig) = 0;
+			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
+			const FrameBufferDesc& fbDesc,
+			unsigned subpassIndex) = 0;
 		virtual void AbandonDraws() = 0;
+		void ExecuteDraws(ParsingContext&, const std::shared_ptr<ITechniqueDelegate>&, const RenderPassInstance&);
 		virtual void PrepareResources(
 			std::promise<PreparedResourcesVisibility>&& promise,
-			SequencerConfig& seqConfig) = 0;
+			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
+			const FrameBufferDesc& fbDesc,
+			unsigned subpassIndex) = 0;
 		virtual DrawablesPacket* GetDrawablesPacket() = 0;
 		virtual void OnFrameBarrier() = 0;
 		virtual ~IImmediateDrawables();
 	};
 
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool> pipelineAcceleratorPool);
+	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IDevice>, std::shared_ptr<IPipelineLayoutDelegate>);
 
-	class SequencerConfigSet
+	class ImmediateDrawableDelegate
 	{
 	public:
-		SequencerConfig& GetSequencerConfig(const FrameBufferDesc& fbDesc, unsigned subpassIndex);
-		SequencerConfig& GetSequencerConfig(const RenderPassInstance&);
+		std::shared_ptr<ITechniqueDelegate> GetTechniqueDelegate();
+		const std::shared_ptr<IPipelineLayoutDelegate>& GetPipelineLayoutDelegate();
 
-		std::shared_ptr<IPipelineAcceleratorPool> GetPipelineAccelerators();
-
-		SequencerConfigSet(std::shared_ptr<IDevice> device);
-		~SequencerConfigSet();
+		ImmediateDrawableDelegate();
+		~ImmediateDrawableDelegate();
 	private:
-		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
-		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAcceleratorPool;
+		std::shared_ptr<IPipelineLayoutDelegate> _pipelineLayoutDelegate;
 		std::shared_future<std::shared_ptr<ITechniqueDelegate>> _futureTechniqueDelegate;
 	};
 }}

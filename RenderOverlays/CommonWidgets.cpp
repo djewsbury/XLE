@@ -4,9 +4,10 @@
 
 #include "CommonWidgets.h"
 #include "Font.h"
+#include "ShapesRendering.h"
+#include "DrawText.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../Assets/Continuation.h"
-
 
 #include "../Assets/AssetServices.h"
 #include "../Assets/AssetSetManager.h"

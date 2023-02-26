@@ -7,6 +7,8 @@
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/LayoutEngine.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include <vector>
 #include <set>
 #include <stack>
@@ -335,7 +337,7 @@ namespace EntityInterface
 				};
 				sliderNode->_nodeAttachments._ioDelegate = [interactable, state=_state, leftSideValue, rightSideValue](CommonWidgets::Input& input, Rect frame, Rect content) {
 					if (input.GetHoverings()._hoveringCtrl) {
-						if ((input.GetEvent()._mouseButtonsTransition != 0) && input.GetInterfaceState().GetCapture()._widget._id == interactable && !IsInside(input.GetInterfaceState().GetCapture()._widget._rect, input.GetEvent()._mousePosition)) {
+						if ((input.GetEvent()._mouseButtonsTransition != 0) && input.GetInterfaceState().GetCapture()._widget._id == interactable && !Contains(input.GetInterfaceState().GetCapture()._widget._rect, input.GetEvent()._mousePosition)) {
 							if (state->TryUpdateValueFromString<Type>(interactable, input.GetHoverings()._textEntry._currentLine))
 								state->InvalidateModel();
 							input.GetInterfaceState().EndCapturing();

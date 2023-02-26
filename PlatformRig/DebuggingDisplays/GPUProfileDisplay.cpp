@@ -6,6 +6,8 @@
 
 #include "GPUProfileDisplay.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../RenderCore/IAnnotator.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
