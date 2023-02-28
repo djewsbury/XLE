@@ -17,6 +17,7 @@
 #include "../RenderCore/Assets/RawMaterial.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/UniformsStream.h"
+#include "../Math/Geometry.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../Assets/Continuation.h"
 #include "../Assets/Marker.h"
@@ -430,50 +431,128 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
 
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        const unsigned joinsVertices = 9*2;
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
-        assert(data.size() == ((linePts.size()-1)*3*4));
 		auto col0 = HardwareColor(colour);
 
-        VLA_UNSAFE_FORCE(Float2, axes, linePts.size()-1);
-        VLA_UNSAFE_FORCE(float, lengths, linePts.size()-1);
-        axes[0] = Float2{ linePts[0][1] - linePts[1][1], linePts[1][0] - linePts[0][0] };
-        lengths[0] = Magnitude(axes[0]);
-        axes[0] /= lengths[0];
-        for (unsigned c=1; c<linePts.size()-1; ++c) {
-            Float2 t0 = Normalize(Float2{ linePts[c-1][1] - linePts[c][1], linePts[c][0] - linePts[c-1][0] });
-            Float2 t1 = Float2{ linePts[c][1] - linePts[c+1][1], linePts[c+1][0] - linePts[c][0] };
-            lengths[c] = Magnitude(t1);
-            t1 /= lengths[c];
-            axes[c] = Normalize(t0+t1);
-        }
-
         float x = 0;
+        const float halfWidth = .5f * width;
+        float prevA = 0.f;
+        int nextTriangleSign = 0;
+        Internal::Vertex_PCT* vIterator = data.begin();
         for (unsigned c=0; c<linePts.size()-1; ++c) {
             Float3 pt0 = AsPixelCoords(linePts[c]);
             Float3 pt1 = AsPixelCoords(linePts[c+1]);
 
-            float x2 = x + lengths[c];
+                ///////////
+
+            float a0 = 0.f, a1 = 0.f;
+            Float2 d0{0,0}, d1 = Truncate(Float3(pt1 - pt0));
+            float length = Magnitude(d1);
+            d1 /= length;
+            a0 = -prevA;
+            int triangleSign = nextTriangleSign;
+            if ((c+2) < linePts.size()) {
+                Float3 pt2 = AsPixelCoords(linePts[c+2]);
+                Float2 d2 = Normalize(Truncate(Float3(pt2 - pt1)));
+                float cosTheta = dot(-d1, d2);
+                // tan(A/2) = +/-sqrt((1-cosA)/(1+cosA))
+                a1 = halfWidth / sqrt((1.f-cosTheta)/(1.f+cosTheta));
+                a1 = -a1;
+
+                nextTriangleSign = TriangleSign(Truncate(pt0), Truncate(pt1), Truncate(pt2));
+            }
+            prevA = a1;
+            Float2 axis { -d1[1], d1[0] };
+            float x2 = x + length;
+
+            vIterator[ 0] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1), 0.f),                        col0, Float2(x - a0, 0) };
+            vIterator[ 1] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 + halfWidth * axis), 0.f),     col0, Float2(x - a0, 1.f) };
+            vIterator[ 2] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                        col0, Float2(x2 + a1, 0) };
+
+            vIterator[ 3] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                        col0, Float2(x2 + a1, 0) };
+            vIterator[ 4] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 + halfWidth * axis), 0.f),     col0, Float2(x - a0, 1.f) };
+            vIterator[ 5] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1 + halfWidth * axis), 0.f),     col0, Float2(x2 + a1, 1.f) };
 
             ///////////
 
-            data[ 0+c*12] = Internal::Vertex_PCT { pt0, col0, Float2(x, 0) };
-            data[ 1+c*12] = Internal::Vertex_PCT { pt0 + Expand(Float2(width * axes[0]), 0.f), col0, Float2(x, 1.f) };
-            data[ 2+c*12] = Internal::Vertex_PCT { pt1, col0, Float2(x2, 0) };
+            vIterator[ 8] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1), 0.f),                        col0, Float2(x - a0, 0) };
+            vIterator[ 7] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 - halfWidth * axis), 0.f),     col0, Float2(x - a0, -1.f) };
+            vIterator[ 6] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                        col0, Float2(x2 + a1, 0) };
 
-            data[ 3+c*12] = Internal::Vertex_PCT { pt1, col0, Float2(x2, 0) };
-            data[ 4+c*12] = Internal::Vertex_PCT { pt0 + Expand(Float2(width * axes[0]), 0.f), col0, Float2(x, 1.f) };
-            data[ 5+c*12] = Internal::Vertex_PCT { pt1 + Expand(Float2(width * axes[0]), 0.f), col0, Float2(x2, 1.f) };
+            vIterator[11] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                        col0, Float2(x2 + a1, 0) };
+            vIterator[10] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 - halfWidth * axis), 0.f),     col0, Float2(x - a0, -1.f) };
+            vIterator[ 9] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1 - halfWidth * axis), 0.f),     col0, Float2(x2 + a1, -1.f) };
 
-            ///////////
+            vIterator += 12;
 
-            data[ 6+c*12] = Internal::Vertex_PCT { pt0, col0, Float2(x, 0) };
-            data[ 7+c*12] = Internal::Vertex_PCT { pt0 + Expand(Float2(-width * axes[0]), 0.f), col0, Float2(x, -1.f) };
-            data[ 8+c*12] = Internal::Vertex_PCT { pt1, col0, Float2(x2, 0) };
+            // wedges for the joins
+            if (c!=0) {
 
-            data[ 9+c*12] = Internal::Vertex_PCT { pt1, col0, Float2(x2, 0) };
-            data[10+c*12] = Internal::Vertex_PCT { pt0 + Expand(Float2(-width * axes[0]), 0.f), col0, Float2(x, -1.f) };
-            data[11+c*12] = Internal::Vertex_PCT { pt1 + Expand(Float2(-width * axes[0]), 0.f), col0, Float2(x2, -1.f) };
+                float B = 1.f;
+                Float2 adjAxis = axis;
+                if (triangleSign < 0) {
+                    B = -B;
+                    adjAxis = -adjAxis;
+                }
+
+                // interior side
+                vIterator[ 0] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1), 0.f),                            col0, Float2(x,  0) };
+                vIterator[ 1] = Internal::Vertex_PCT { pt0,                                                         col0, Float2(x,  0) };
+                vIterator[ 2] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 + halfWidth * adjAxis), 0.f),      col0, Float2(x,  B) };
+
+                // exterior side
+                vIterator[ 3] = Internal::Vertex_PCT { pt0,                                                         col0, Float2(x,  0) };
+                vIterator[ 4] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1), 0.f),                            col0, Float2(x,  0) };
+                vIterator[ 5] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 - halfWidth * adjAxis), 0.f),      col0, Float2(x, -B) };
+
+                vIterator[ 6] = Internal::Vertex_PCT { pt0,                                                         col0, Float2(x,  0) };
+                vIterator[ 7] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 - halfWidth * adjAxis), 0.f),      col0, Float2(x, -B) };
+                vIterator[ 8] = Internal::Vertex_PCT { pt0 + Expand(Float2(-a0*d1 - halfWidth * adjAxis), 0.f),     col0, Float2(x, -B) };
+
+                if (triangleSign < 0) {
+                    // swap winding
+                    std::swap(vIterator[0], vIterator[2]);
+                    std::swap(vIterator[3], vIterator[5]);
+                    std::swap(vIterator[6], vIterator[8]);
+                }
+
+                vIterator += 9;
+            }
+
+            if ((c+2) < linePts.size()) {
+
+                float B = 1.f;
+                Float2 adjAxis = axis;
+                if (nextTriangleSign < 0) {
+                    B = -B;
+                    adjAxis = -adjAxis;
+                }
+
+                // interior side
+                vIterator[ 0] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1 + halfWidth * adjAxis), 0.f),      col0, Float2(x2,  B) };
+                vIterator[ 1] = Internal::Vertex_PCT { pt1,                                                         col0, Float2(x2,  0) };
+                vIterator[ 2] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                            col0, Float2(x2,  0) };
+
+                // exterior side
+                vIterator[ 3] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                            col0, Float2(x2,  0) };
+                vIterator[ 4] = Internal::Vertex_PCT { pt1,                                                         col0, Float2(x2,  0) };
+                vIterator[ 5] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1 - halfWidth * adjAxis), 0.f),      col0, Float2(x2, -B) };
+
+                vIterator[ 6] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1 - halfWidth * adjAxis), 0.f),      col0, Float2(x2, -B) };
+                vIterator[ 7] = Internal::Vertex_PCT { pt1,                                                         col0, Float2(x2,  0) };
+                vIterator[ 8] = Internal::Vertex_PCT { pt1 + Expand(Float2(-a1*d1 - halfWidth * adjAxis), 0.f),     col0, Float2(x2, -B) };
+
+                if (nextTriangleSign < 0) {
+                    // swap winding
+                    std::swap(vIterator[0], vIterator[2]);
+                    std::swap(vIterator[3], vIterator[5]);
+                    std::swap(vIterator[6], vIterator[8]);
+                }
+
+                vIterator += 9;
+            }
 
             ///////////
 
