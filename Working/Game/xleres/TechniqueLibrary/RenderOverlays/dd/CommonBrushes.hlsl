@@ -83,4 +83,15 @@ float4 ReverseRaisedFill_Calculate(
     return float4(d * baseColor.rgb, 1.f);
 }
 
+float4 DashLine_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp)
+{
+    const float sectionLength = 16;
+    float sectionCoord = frac(coords.texCoord.x / sectionLength);
+    if (sectionCoord < 0.8f) {
+        return baseColor;
+    } else {
+        return 0;
+    }
+}
+
 #endif

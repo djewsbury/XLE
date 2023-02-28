@@ -13,10 +13,14 @@
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/LayoutEngine.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/Font.h"
+#include "../../RenderOverlays/OverlayEffects.h"
+#include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
 #include "../../Assets/Marker.h"
 #include "../../ConsoleRig/Console.h"
@@ -46,6 +50,21 @@ namespace PlatformRig { namespace Overlays
 			return std::any_cast<T>(std::move(any));
 		return {};
 	}
+
+	struct Vertex_PCT { Float3 _position; unsigned _colour; Float2 _texCoord; Vertex_PCT(Float3 position, unsigned colour, Float2 texCoord) : _position(position), _colour(colour), _texCoord(texCoord) {};   static RenderCore::MiniInputElementDesc inputElements2D[];};
+	RenderCore::MiniInputElementDesc Vertex_PCT::inputElements2D[] =
+	{
+		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
+	};
+
+	struct Vertex_PC { Float3 _position; unsigned _colour; Vertex_PC(Float3 position, unsigned colour) : _position(position), _colour(colour) {};   static RenderCore::MiniInputElementDesc inputElements2D[];};
+	RenderCore::MiniInputElementDesc Vertex_PC::inputElements2D[] =
+	{
+		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM }
+	};
 
 	class ToolTipHover
 	{
@@ -106,6 +125,162 @@ namespace PlatformRig { namespace Overlays
 			DrawText().Font(*draw.GetDefaultFontsBox()._headingFont).Draw(draw.GetContext(), content, label);
 		};
 		return labelNode;
+	}
+
+	static YGNodeRef ToolStyleStyleSectionHeader(LayoutEngine& layoutEngine, std::string&& label)
+	{
+		// we need a container node to put some padding and margins on
+		auto headerContainer = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(headerContainer);
+		layoutEngine.PushNode(headerContainer);
+		YGNodeStyleSetFlexGrow(headerContainer, 1.f);
+		YGNodeStyleSetMargin(headerContainer, YGEdgeBottom, 4);
+		YGNodeStyleSetPadding(headerContainer, YGEdgeLeft, 64);
+		YGNodeStyleSetFlexDirection(headerContainer, YGFlexDirectionRow);
+		YGNodeStyleSetJustifyContent(headerContainer, YGJustifyFlexStart);
+
+		{
+			auto labelNode = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*labelNode);
+
+			const unsigned angleWidth = CommonWidgets::Draw::baseLineHeight/2;
+			const unsigned extraPadding = CommonWidgets::Draw::baseLineHeight;
+
+			auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+			assert(defaultFonts);
+			YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_headingFont, MakeStringSection(label)) + 2*(angleWidth+extraPadding));		// width including padding
+			YGNodeStyleSetHeight(*labelNode, CommonWidgets::Draw::baseLineHeight);
+			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+			
+			YGNodeStyleSetPadding(*labelNode, YGEdgeLeft, angleWidth+extraPadding);
+			YGNodeStyleSetPadding(*labelNode, YGEdgeRight, angleWidth+extraPadding);
+
+			const ColorB headingBkColor = 0xff8ea3d2;
+
+			labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), headingBkColor, angleWidth, extraPadding](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				Coord2 pts[] {
+					{ frame._topLeft[0] + angleWidth, frame._topLeft[1] },
+					{ frame._topLeft[0], (frame._topLeft[1]+frame._bottomRight[1])/2 },
+					{ frame._topLeft[0] + angleWidth, frame._bottomRight[1] },
+
+					{ frame._bottomRight[0] - angleWidth, frame._bottomRight[1] },
+					{ frame._bottomRight[0], (frame._topLeft[1]+frame._bottomRight[1])/2 },
+					{ frame._bottomRight[0] - angleWidth, frame._topLeft[1] }
+				};
+				unsigned indices[] {
+					2, 0, 1,
+					3, 0, 2,
+					5, 0, 3,
+					4, 5, 3
+				};
+				RenderCore::Techniques::ImmediateDrawableMaterial material;
+				auto vertices = draw.GetContext().DrawGeometry(dimof(indices), Vertex_PC::inputElements2D, std::move(material)).Cast<Vertex_PC*>();
+				for (unsigned c=0; c<dimof(indices); ++c)
+					vertices[c] = Vertex_PC { AsPixelCoords(pts[indices[c]]), HardwareColor(headingBkColor) };
+
+				DrawText().Font(*draw.GetDefaultFontsBox()._headingFont).Color(ColorB::Black).Draw(draw.GetContext(), content, label);
+			};
+		}
+
+		layoutEngine.PopNode();		// header container
+
+		return headerContainer;
+	}
+
+	static ImbuedNode* TooltipStyleSectionContainer(LayoutEngine& layoutEngine, std::string&& label)
+	{
+		auto outerContainer = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*outerContainer);
+		layoutEngine.PushNode(*outerContainer);
+
+		const ColorB headingBkColor = 0xff8ea3d2;
+		const unsigned headerHeight = CommonWidgets::Draw::baseLineHeight;
+		
+		outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerHeight](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			Float2 linePts[] {
+				Float2 { frame._topLeft[0], frame._topLeft[1]+headerHeight/2 },
+				Float2 { frame._bottomRight[0], frame._topLeft[1]+headerHeight/2 }
+			};
+			RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
+		};
+
+		/////////////////
+
+		ToolStyleStyleSectionHeader(layoutEngine, std::move(label));
+
+		return outerContainer;
+	}
+
+	static std::pair<YGNodeRef, YGNodeRef> TooltipStyleDoubleSectionContainer(LayoutEngine& layoutEngine, std::string&& leftLabel, std::string&& rightLabel)
+	{
+		auto outerContainer = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*outerContainer);
+		layoutEngine.PushNode(*outerContainer);
+
+		YGNodeStyleSetFlexDirection(*outerContainer, YGFlexDirectionRow);
+		YGNodeStyleSetJustifyContent(*outerContainer, YGJustifySpaceBetween);
+
+		// containers for left, separator, right
+		auto leftOuterContainer = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(leftOuterContainer);
+		YGNodeStyleSetFlexDirection(leftOuterContainer, YGFlexDirectionColumn);
+		YGNodeStyleSetJustifyContent(leftOuterContainer, YGJustifySpaceBetween);
+		YGNodeStyleSetFlexGrow(leftOuterContainer, 1.f);
+
+		auto midSeparator = layoutEngine.NewImbuedNode(0);
+		layoutEngine.InsertChildToStackTop(*midSeparator);
+		YGNodeStyleSetWidth(*midSeparator, 16);
+		YGNodeStyleSetFlexGrow(*midSeparator, 0.f);
+
+		auto rightOuterContainer = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(rightOuterContainer);
+		YGNodeStyleSetFlexDirection(rightOuterContainer, YGFlexDirectionColumn);
+		YGNodeStyleSetJustifyContent(rightOuterContainer, YGJustifySpaceBetween);
+		YGNodeStyleSetFlexGrow(rightOuterContainer, 1.f);
+
+		// headers
+		{
+			layoutEngine.PushNode(leftOuterContainer);
+			ToolStyleStyleSectionHeader(layoutEngine, std::move(leftLabel));
+			layoutEngine.PopNode();
+		}
+		{
+			layoutEngine.PushNode(rightOuterContainer);
+			ToolStyleStyleSectionHeader(layoutEngine, std::move(rightLabel));
+			layoutEngine.PopNode();
+		}
+
+		// draw in separator lines
+		const ColorB headingBkColor = 0xff8ea3d2;
+		const unsigned headerHeight = CommonWidgets::Draw::baseLineHeight;
+		outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerHeight](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			Float2 linePts[] {
+				Float2 { frame._topLeft[0], frame._topLeft[1]+headerHeight/2 },
+				Float2 { frame._bottomRight[0], frame._topLeft[1]+headerHeight/2 }
+			};
+			RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
+		};
+
+		midSeparator->_nodeAttachments._drawDelegate = [headingBkColor, headerHeight](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			Float2 linePts[] {
+				Float2 { (frame._topLeft[0] + frame._bottomRight[0])/2, frame._topLeft[1] + headerHeight/2 },
+				Float2 { (frame._topLeft[0] + frame._bottomRight[0])/2, frame._bottomRight[1] }
+			};
+			RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
+		};
+
+		return {leftOuterContainer, rightOuterContainer};
+	}
+
+	static YGNodeRef LeftRightMargins(LayoutEngine& layoutEngine)
+	{
+		auto baseNode = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(baseNode);
+		layoutEngine.PushNode(baseNode);
+
+		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 64);
+		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 64);
+		return baseNode;
 	}
 
 	static YGNodeRef KeyValueGroup(LayoutEngine& layoutEngine)
@@ -297,7 +472,6 @@ namespace PlatformRig { namespace Overlays
 		return labelNode;
 	}
 
-
 	static ImbuedNode* EventButton(LayoutEngine& layoutEngine, std::string&& label, std::function<void()>&& event)
 	{
 		uint64_t interactable = layoutEngine.GuidStack().MakeGuid(label);
@@ -347,6 +521,23 @@ namespace PlatformRig { namespace Overlays
 		return str.str();
 	}
 
+	static YGNodeRef PopupBorder(LayoutEngine& layoutEngine)
+	{
+		auto baseNode = layoutEngine.NewNode();
+		layoutEngine.InsertChildToStackTop(baseNode);
+		layoutEngine.PushNode(baseNode);
+		
+		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionColumn);
+		YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
+		YGNodeStyleSetAlignItems(baseNode, YGAlignStretch);
+		
+		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 16);
+		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 16);
+		YGNodeStyleSetMargin(baseNode, YGEdgeTop, 16);
+		YGNodeStyleSetMargin(baseNode, YGEdgeBottom, 16);
+		return baseNode;
+	}
+
 	static void SetupToolTipHover(ToolTipHover& hover, const SceneEngine::IntersectionTestResult& testResult, SceneEngine::PlacementsEditor& placementsEditor)
 	{
 		LayoutEngine le;
@@ -373,7 +564,10 @@ namespace PlatformRig { namespace Overlays
 		YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
 		YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
 
-		Heading(le, "Placement");
+		PopupBorder(le);
+
+		TooltipStyleSectionContainer(le, "Placement Details");
+		LeftRightMargins(le);
 
 		if (!selectedMaterialName.empty() || !selectedModelName.empty()) {
 			KeyValueGroup(le); KeyName(le, "Model Scaffold"); KeyValue(le, ColouriseFilename(selectedModelName)); le.PopNode();
@@ -400,57 +594,78 @@ namespace PlatformRig { namespace Overlays
 			le.PopNode();
 			le.PopNode();
 		}
-		if (placementGuid) {
-			VerticalGroup(le);
-			KeyValueGroup(le);
-			KeyName(le, "Cell");
-			auto cellName = placementsEditor.GetCellSet().DehashCellName(placementGuid->first).AsString();
-			if (!cellName.empty()) KeyValue(le, ColouriseFilename(cellName));
-			else KeyValue(le, placementGuid->first);
-			le.PopNode();
-			EventButton(le, "Show Quad Tree", [cell=placementGuid->first, cellName]() {
-				// switch to another debugging display that will display the quad tree we're interested in
-				ConsoleRig::Console::GetInstance().Execute("scene:ShowQuadTree(\"" + cellName + "\")");
-			});
-			EventButton(le, "Show Placements", [cell=placementGuid->first, cellName]() {
-				ConsoleRig::Console::GetInstance().Execute("scene:ShowPlacements(\"" + cellName + "\")");
-			});
-			le.PopNode();
-		}
-		if (localToCell) {
-			auto* group = VerticalGroup(le);
-			YGNodeStyleSetAlignItems(group, YGAlignStretch);
-			Heading(le, "Local to Cell");
-			ScaleRotationTranslationM decomposed { *localToCell };
-			KeyValueGroup(le); KeyName(le, "Translation"); KeyValue(le, decomposed._translation); le.PopNode();
-			if (!Equivalent(decomposed._scale, {1.f, 1.f, 1.f}, 1e-3f)) {
-				KeyValueGroup(le); KeyName(le, "Scale"); KeyValue(le, decomposed._scale); le.PopNode();
-			}
-			const cml::EulerOrder eulerOrder = cml::euler_order_yxz;
-			Float3 ypr = cml::matrix_to_euler<Float3x3, Float3x3::value_type>(decomposed._rotation, eulerOrder);
-			const char* labels[] = { "Rotate Y", "Rotate X", "Rotate Z" };
-			for (unsigned c=0; c<3; ++c) {
-				if (Equivalent(ypr[c], 0.f, 1e-3f)) continue;
-				KeyValueGroup(le); KeyName(le, labels[c]); KeyValue(le, ypr[c] * 180.f / gPI); le.PopNode();
-			}
-			le.PopNode();
-		}
+
+		le.PopNode();		// LeftRightMargins
+		le.PopNode();		// TooltipStyleSectionContainer
+
+		auto split = TooltipStyleDoubleSectionContainer(le, "Cell", "Intersection");
+
 		{
-			auto* group = VerticalGroup(le);
-			YGNodeStyleSetAlignItems(group, YGAlignStretch);
-			Heading(le, "Intersection");
-			KeyValueGroup(le);
-			KeyName(le, "Point");
-			KeyValue(le, testResult._worldSpaceIntersectionPt);
-			le.PopNode();
-			KeyValueGroup(le);
-			KeyName(le, "Normal");
-			KeyValue(le, testResult._worldSpaceIntersectionNormal);
-			le.PopNode();
-			le.PopNode();
+			le.PushNode(split.first);
+
+			if (placementGuid) {
+				VerticalGroup(le);
+				KeyValueGroup(le);
+				KeyName(le, "Cell");
+				auto cellName = placementsEditor.GetCellSet().DehashCellName(placementGuid->first).AsString();
+				if (!cellName.empty()) KeyValue(le, ColouriseFilename(cellName));
+				else KeyValue(le, placementGuid->first);
+				le.PopNode();
+				EventButton(le, "Show Quad Tree", [cell=placementGuid->first, cellName]() {
+					// switch to another debugging display that will display the quad tree we're interested in
+					ConsoleRig::Console::GetInstance().Execute("scene:ShowQuadTree(\"" + cellName + "\")");
+				});
+				EventButton(le, "Show Placements", [cell=placementGuid->first, cellName]() {
+					ConsoleRig::Console::GetInstance().Execute("scene:ShowPlacements(\"" + cellName + "\")");
+				});
+				le.PopNode();
+			}
+			if (localToCell) {
+				auto* group = VerticalGroup(le);
+				YGNodeStyleSetAlignItems(group, YGAlignStretch);
+				Heading(le, "Local to Cell");
+				ScaleRotationTranslationM decomposed { *localToCell };
+				KeyValueGroup(le); KeyName(le, "Translation"); KeyValue(le, decomposed._translation); le.PopNode();
+				if (!Equivalent(decomposed._scale, {1.f, 1.f, 1.f}, 1e-3f)) {
+					KeyValueGroup(le); KeyName(le, "Scale"); KeyValue(le, decomposed._scale); le.PopNode();
+				}
+				const cml::EulerOrder eulerOrder = cml::euler_order_yxz;
+				Float3 ypr = cml::matrix_to_euler<Float3x3, Float3x3::value_type>(decomposed._rotation, eulerOrder);
+				const char* labels[] = { "Rotate Y", "Rotate X", "Rotate Z" };
+				for (unsigned c=0; c<3; ++c) {
+					if (Equivalent(ypr[c], 0.f, 1e-3f)) continue;
+					KeyValueGroup(le); KeyName(le, labels[c]); KeyValue(le, ypr[c] * 180.f / gPI); le.PopNode();
+				}
+				le.PopNode();
+			}
+
+			le.PopNode();	// split.first
 		}
 
-		le.PopNode();
+		{
+			le.PushNode(split.second);
+
+			{
+				auto* group = VerticalGroup(le);
+				YGNodeStyleSetAlignItems(group, YGAlignStretch);
+				Heading(le, "Intersection");
+				KeyValueGroup(le);
+				KeyName(le, "Point");
+				KeyValue(le, testResult._worldSpaceIntersectionPt);
+				le.PopNode();
+				KeyValueGroup(le);
+				KeyName(le, "Normal");
+				KeyValue(le, testResult._worldSpaceIntersectionNormal);
+				le.PopNode();
+				le.PopNode();
+			}
+
+			le.PopNode();	// split.second
+		}
+
+		le.PopNode();	// TooltipStyleDoubleSectionContainer
+		le.PopNode();	// PopupBorder
+		le.PopNode();	// root node
 
 		hover = le.BuildLayedOutWidgets();
 	}
@@ -473,6 +688,160 @@ namespace PlatformRig { namespace Overlays
 		hover = le.BuildLayedOutWidgets();
 	}
 
+	class TopBarRenderer
+	{
+	public:
+		enum class SectionType { Heading, FrameRig };
+		struct SectionRequest
+		{
+			SectionType _type = SectionType::FrameRig;
+			unsigned _width = 0;
+		};
+
+		std::vector<Rect> Render(
+			IOverlayContext& context, Interactables& interactables, InterfaceState& interfaceState,
+			Rect viewport,
+			IteratorRange<const SectionRequest*> sectionRequests);
+	};
+
+	struct TopBarStaticData
+	{
+		unsigned _topMargin = 12;
+		unsigned _height = 42;
+		unsigned _borderMargin = 4;
+		unsigned _borderWidth = 2;
+		unsigned _shadowHeight = 12;
+
+		unsigned _preHeadingMargin = 64;
+		unsigned _headingHeight = 46;
+		unsigned _headingPadding = 8;
+
+		unsigned _frameRigAreaWidth = 160;
+		unsigned _frameRigPaddingLeft = 20;
+		unsigned _frameRigPaddingRight = 20;
+		unsigned _frameRigPaddingTop = 2;
+		unsigned _frameRigPaddingBottom = 2;
+	};
+
+	struct ThemeStaticData
+	{
+		ColorB _semiTransparentTint = 0xff2e3440;
+		ColorB _topBarBorderColor = 0xffffffff;
+		ColorB _headingBkgrnd = 0xffffffff;
+	};
+
+	static RenderCore::UniformsStreamInterface CreateTexturedUSI()
+	{
+		RenderCore::UniformsStreamInterface usi;
+		usi.BindResourceView(0, "InputTexture"_h);
+		return usi;
+	}
+	static RenderCore::UniformsStreamInterface s_texturedUSI = CreateTexturedUSI();
+
+	auto TopBarRenderer::Render(
+		IOverlayContext& context, Interactables& interactables, InterfaceState& interfaceState,
+		Rect viewport,
+		IteratorRange<const SectionRequest*> sectionRequests) -> std::vector<Rect>
+	{
+		// Render the top bar along the top of the viewport, including the areas for the sections 
+		// as requested
+		TopBarStaticData topBarStaticData;
+		ThemeStaticData themeStaticData;
+
+		auto xAtPoint = viewport._bottomRight[0] - (topBarStaticData._height + topBarStaticData._frameRigPaddingLeft + topBarStaticData._frameRigPaddingRight + topBarStaticData._frameRigAreaWidth);
+		auto xAtShoulder = viewport._bottomRight[0] - (topBarStaticData._frameRigPaddingLeft + topBarStaticData._frameRigPaddingRight + topBarStaticData._frameRigAreaWidth);
+
+		Coord2 vertexPositions[6] {
+			{ viewport._topLeft[0], viewport._topLeft[1] + topBarStaticData._topMargin },
+			{ viewport._bottomRight[0], viewport._topLeft[1] + topBarStaticData._topMargin },
+			{ viewport._topLeft[0], viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height },
+			{ xAtPoint, viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height },
+			{ xAtShoulder, viewport._topLeft[1] + topBarStaticData._topMargin + 2 * topBarStaticData._height },
+			{ viewport._bottomRight[0], viewport._topLeft[1] + topBarStaticData._topMargin + 2 * topBarStaticData._height },
+		};
+		unsigned indices[] {
+			1, 0, 3,
+			3, 0, 2,
+			3, 4, 1,
+			1, 4, 5
+		};
+
+		RenderOverlays::BlurryBackgroundEffect* blurryBackground;
+		RenderCore::Techniques::ImmediateDrawableMaterial material;
+		if ((blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()))
+			if (auto res = blurryBackground->GetResourceView()) {
+				material._uniformStreamInterface = &s_texturedUSI;
+				material._uniforms._resourceViews.push_back(std::move(res));
+			}
+
+		auto vertices = context.DrawGeometry(dimof(indices), Vertex_PCT::inputElements2D, std::move(material)).Cast<Vertex_PCT*>();
+		for (unsigned c=0; c<dimof(indices); ++c)
+			vertices[c] = { AsPixelCoords(vertexPositions[indices[c]]), HardwareColor(themeStaticData._semiTransparentTint), Float2(0,0) };
+		if (blurryBackground)
+			for (unsigned c=0; c<dimof(indices); ++c)
+				vertices[c]._texCoord = blurryBackground->AsTextureCoords(vertexPositions[indices[c]]);
+
+		// render dashed line along the top
+		Float2 topDashLine[] {
+			Float2 { viewport._topLeft[0], viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._borderMargin },
+			Float2 { viewport._bottomRight[0], viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._borderMargin }
+		};
+
+		// cosine rule for triangles
+		// c^2 = a^2 + b^2 - 2ab.cos(C)
+		// c is 45 degrees, and A & b are topBarStaticData._borderMargin
+		// float a = topBarStaticData._borderMargin * std::sqrt(2*(1 - std::cos(gPI/4.f)));
+		float a = topBarStaticData._borderMargin * std::tan(gPI/8.0f);
+
+		Float2 bottomDashLine[] {
+			Float2 { viewport._topLeft[0], viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height - topBarStaticData._borderMargin },
+			Float2 { xAtPoint + a, viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height - topBarStaticData._borderMargin },
+
+			Float2 { xAtShoulder + a, viewport._topLeft[1] + topBarStaticData._topMargin + 2*topBarStaticData._height - topBarStaticData._borderMargin },
+			Float2 { viewport._bottomRight[0], viewport._topLeft[1] + topBarStaticData._topMargin + 2*topBarStaticData._height - topBarStaticData._borderMargin }
+		};
+
+		DashLine(context, topDashLine, themeStaticData._topBarBorderColor, (float)topBarStaticData._borderWidth);
+		DashLine(context, bottomDashLine, themeStaticData._topBarBorderColor, (float)topBarStaticData._borderWidth);
+
+		std::vector<Rect> result { sectionRequests.size(), Rect{ Coord2{0,0}, Coord2{0,0}} };
+		auto headingRequest = std::find_if(sectionRequests.begin(), sectionRequests.end(), [](const auto& q) { return q._type == SectionType::Heading; });
+		if (headingRequest != sectionRequests.end()) {
+
+			// allocate a rectangle for the heading
+			Rect frame;
+			frame._topLeft = { viewport._topLeft[0] + topBarStaticData._preHeadingMargin, viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height/2 - topBarStaticData._headingHeight/2 };
+			frame._bottomRight = { 
+				viewport._topLeft[0] + topBarStaticData._preHeadingMargin
+				+ topBarStaticData._headingPadding*2 + headingRequest->_width,
+				viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height/2 + topBarStaticData._headingHeight/2 };
+
+			Rect content;
+			content._topLeft = frame._topLeft + Coord2{ topBarStaticData._headingPadding, topBarStaticData._headingPadding };
+			content._bottomRight = frame._bottomRight - Coord2{ topBarStaticData._headingPadding, topBarStaticData._headingPadding };
+
+			// draw a rhombus around the frame, but with some extra triangles
+			RenderCore::Techniques::ImmediateDrawableMaterial material;
+			auto vertices = context.DrawGeometry(6, Vertex_PC::inputElements2D, std::move(material)).Cast<Vertex_PC*>();
+			Coord2 A = frame._topLeft;
+			Coord2 B { frame._topLeft[0] - topBarStaticData._headingHeight, frame._bottomRight[1] };
+			Coord2 C = frame._bottomRight;
+			Coord2 D { frame._bottomRight[0] + topBarStaticData._headingHeight, frame._topLeft[1] };
+			vertices[0] = Vertex_PC { AsPixelCoords(B), HardwareColor(themeStaticData._headingBkgrnd) };
+			vertices[1] = Vertex_PC { AsPixelCoords(C), HardwareColor(themeStaticData._headingBkgrnd) };
+			vertices[2] = Vertex_PC { AsPixelCoords(A), HardwareColor(themeStaticData._headingBkgrnd) };
+
+			vertices[3] = Vertex_PC { AsPixelCoords(A), HardwareColor(themeStaticData._headingBkgrnd) };
+			vertices[4] = Vertex_PC { AsPixelCoords(C), HardwareColor(themeStaticData._headingBkgrnd) };
+			vertices[5] = Vertex_PC { AsPixelCoords(D), HardwareColor(themeStaticData._headingBkgrnd) };
+
+			result[headingRequest-sectionRequests.begin()] = content;
+
+		}
+
+		return result;
+	}
+
 	class PlacementsDisplay : public IWidget ///////////////////////////////////////////////////////////
 	{
 	public:
@@ -481,16 +850,34 @@ namespace PlatformRig { namespace Overlays
 			const unsigned lineHeight = 20;
 			const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
-			auto allocation = layout.AllocateFullWidth(30);
-			FillRectangle(context, allocation, titleBkground);
-			allocation._topLeft[0] += 8;
-			if (auto* font = _headingFont->TryActualize())
+			// auto allocation = layout.AllocateFullWidth(30);
+			// FillRectangle(context, allocation, titleBkground);
+			// allocation._topLeft[0] += 8;
+			// if (auto* font = _headingFont->TryActualize())
+			// 	DrawText()
+			// 		.Font(**font)
+			// 		.Color({ 191, 123, 0 })
+			// 		.Alignment(RenderOverlays::TextAlignment::Left)
+			// 		.Flags(RenderOverlays::DrawTextFlags::Shadow)
+			// 		.Draw(context, allocation, "Placements Selector");
+
+			const char headingString[] = "Placements Selector";
+			float headingWidth = 0.f;
+			auto* headingFont = _headingFont->TryActualize();
+			if (headingFont)
+				headingWidth = StringWidth(**headingFont, MakeStringSection(headingString));
+
+			TopBarRenderer topBarRenderer;
+			TopBarRenderer::SectionRequest topBarSections[] { {TopBarRenderer::SectionType::Heading, headingWidth }, {TopBarRenderer::SectionType::FrameRig} };
+			auto topBar = topBarRenderer.Render(context, interactables, interfaceState, layout.GetMaximumSize(), topBarSections);
+			assert(topBar.size() == dimof(topBarSections));
+			if (IsGood(topBar[0]) && headingFont)
 				DrawText()
-					.Font(**font)
-					.Color({ 191, 123, 0 })
+					.Font(**headingFont)
+					.Color(ColorB::Black)
 					.Alignment(RenderOverlays::TextAlignment::Left)
 					.Flags(RenderOverlays::DrawTextFlags::Shadow)
-					.Draw(context, allocation, "Placements Selector");
+					.Draw(context, topBar[0], "Placements Selector");
 			
 			if (_hasSelectedPlacements) {
 				DrawBoundingBox(
@@ -536,6 +923,7 @@ namespace PlatformRig { namespace Overlays
 						0.f, 1.f, top,
 						0.f, 0.f, 1.f
 					};
+					FillRectangle(context, Rect{Coord2{left, top}, Coord2{left+_hover.GetDimensions()[0], top+_hover.GetDimensions()[1]}}, ColorB(32, 32, 96, 128));
 					_hover.Render(context, layout, interactables, interfaceState, transform);
 				}
 			}

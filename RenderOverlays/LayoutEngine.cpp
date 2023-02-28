@@ -121,6 +121,9 @@ namespace RenderOverlays
 				};
 
 				result._layedOutLocations.emplace_back(frame, content);
+			} else {
+				Rect zero { Coord2(0,0), Coord2(0,0) };
+				result._layedOutLocations.emplace_back(zero, zero);
 			}
 
 		result._dimensions = {

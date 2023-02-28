@@ -124,5 +124,5 @@ SoftShadowRect=~
 DashLine=~
 	Patches=~
 		=~
-			CommonBrushes.hlsl::SolidFill_Calculate
+			CommonBrushes.hlsl::DashLine_Calculate
 			Implements=Interfaces.hlsl::IFill_Calculate
