@@ -13,8 +13,8 @@
 #include "../Utility/PtrUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../OSServices/RawFS.h"
-#include "../Utility/Streams/TextFormatter.h"
-#include "../Utility/Streams/FormatterUtils.h"
+#include "../Formatters/TextFormatter.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/Conversion.h"
 #include <set>
@@ -214,23 +214,23 @@ namespace RenderOverlays
 
 	////////////////////////////////////////////////////////////////////////////////////
 
-	static void LoadFontNameMapping(TextInputFormatter<utf8>& formatter, std::unordered_map<std::string, std::string>& result)
+	static void LoadFontNameMapping(Formatters::TextInputFormatter<utf8>& formatter, std::unordered_map<std::string, std::string>& result)
 	{
 		StringSection<> name;
 		while (formatter.TryKeyedItem(name)) {
             switch (formatter.PeekNext()) {
-            case FormatterBlob::Value:
+            case Formatters::FormatterBlob::Value:
 				result.insert({name.AsString(), RequireStringValue(formatter).AsString()});
 				break;
 
-			case FormatterBlob::BeginElement:
+			case Formatters::FormatterBlob::BeginElement:
 				RequireBeginElement(formatter);
 				SkipElement(formatter);
 				RequireEndElement(formatter);
 				break;
 
 			default:
-                Throw(FormatException("Unexpected blob", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
             }
         }
 	}
@@ -242,7 +242,7 @@ namespace RenderOverlays
 		size_t blobSize = 0;
 		auto blob = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(cfgFile, &blobSize);
 
-		TextInputFormatter<utf8> formatter(MakeStringSection((const char*)blob.get(), (const char*)PtrAdd(blob.get(), blobSize)));
+		Formatters::TextInputFormatter<utf8> formatter(MakeStringSection((const char*)blob.get(), (const char*)PtrAdd(blob.get(), blobSize)));
 
 		auto locale = std::locale("").name();
 

@@ -13,12 +13,12 @@
 #include "../Utility/UTFUtils.h"
 #include "../Core/Types.h"
 
-namespace Utility 
+namespace Formatters
 {
     template<typename CharType> class TextInputFormatter;
     class TextOutputFormatter;
-    class OutputStream;
 }
+namespace Utility { class OutputStream; }
 
 namespace Assets { class DirectorySearchRules; }
 
@@ -52,7 +52,7 @@ namespace SceneEngine
             unsigned nodeDimsInElements = 32u, unsigned cellTreeDepth = 5u, unsigned nodeOverlap = 2u,
             float elementSpacing = 10.f, float sunPathAngle = 0.f, bool encodedGradientFlags = false);
         TerrainConfig(
-            TextInputFormatter<utf8>& formatter,
+            Formatters::TextInputFormatter<utf8>& formatter,
             const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation&);
         TerrainConfig();

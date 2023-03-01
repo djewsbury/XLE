@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "../Utility/Streams/TextFormatter.h"
+#include "TextFormatter.h"
 #include "../Utility/StringFormat.h"
 
 namespace Assets { class DependencyValidation; }

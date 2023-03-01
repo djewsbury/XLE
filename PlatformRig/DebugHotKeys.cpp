@@ -10,8 +10,8 @@
 #include "../Assets/AssetUtils.h"
 #include "../ConsoleRig/Console.h"
 #include "../OSServices/RawFS.h"
-#include "../Utility/Streams/StreamDOM.h"
-#include "../Utility/Streams/TextFormatter.h"
+#include "../Formatters/StreamDOM.h"
+#include "../Formatters/TextFormatter.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/UTFUtils.h"
 #include "../Utility/Conversion.h"
@@ -38,7 +38,7 @@ namespace PlatformRig
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _validationCallback; }
 
         TableOfKeys(
-			TextInputFormatter<utf8>& formatter,
+			Formatters::TextInputFormatter<utf8>& formatter,
 			const ::Assets::DirectorySearchRules&,
 			const ::Assets::DependencyValidation& depVal);
         TableOfKeys() = default;
@@ -49,12 +49,12 @@ namespace PlatformRig
     };
 
     TableOfKeys::TableOfKeys(
-		TextInputFormatter<utf8>& formatter,
+		Formatters::TextInputFormatter<utf8>& formatter,
 		const ::Assets::DirectorySearchRules&,
 		const ::Assets::DependencyValidation& depVal)
 	: _validationCallback(depVal)
     {
-        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
 
         for (auto attrib:doc.RootElement().attributes()) {
             auto executeString = attrib.Value();

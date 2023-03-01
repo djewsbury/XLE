@@ -10,7 +10,7 @@
 #include "IncludeVulkan.h"
 #include "../../../OSServices/Log.h"
 #include "../../../Utility/Threading/Mutex.h"
-#include "../../../Utility/Streams/TextFormatter.h"
+#include "../../../Formatters/TextFormatter.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "../../../Utility/BitUtils.h"
 #include "../../../xleres/FileList.h"

@@ -6,8 +6,8 @@
 
 #include "GameObjects.h"
 #include "RetainedEntities.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
 #include "../../Utility/Conversion.h"
 
 namespace EntityInterface

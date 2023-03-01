@@ -8,9 +8,9 @@
 #include "../Assets/DepVal.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/IteratorUtils.h"
-#include "../Utility/Streams/FormatterUtils.h"
-#include "../Utility/Streams/TextFormatter.h"
-#include "../Utility/Streams/StreamDOM.h"
+#include "../Formatters/FormatterUtils.h"
+#include "../Formatters/TextFormatter.h"
+#include "../Formatters/StreamDOM.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Foreign/fmt/format.h"
 #include <iostream>
@@ -127,9 +127,9 @@ namespace OSServices
     }
 
     LogConfigurationSet::LogConfigurationSet() {}
-    LogConfigurationSet::LogConfigurationSet(TextInputFormatter<char>& formatter)
+    LogConfigurationSet::LogConfigurationSet(Formatters::TextInputFormatter<char>& formatter)
     {
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             StringSection<char> eleName;
             formatter.TryKeyedItem(eleName);
             RequireBeginElement(formatter);
@@ -141,9 +141,9 @@ namespace OSServices
         }
     }
 
-    auto LogConfigurationSet::LoadConfig(TextInputFormatter<char>& formatter) -> Config
+    auto LogConfigurationSet::LoadConfig(Formatters::TextInputFormatter<char>& formatter) -> Config
     {
-        StreamDOM<TextInputFormatter<char>> doc(formatter);
+        Formatters::StreamDOM<Formatters::TextInputFormatter<char>> doc(formatter);
         Config cfg;
         if (doc.RootElement().Attribute("OutputToConsole")) {
             bool outputToConsole = doc.RootElement().Attribute("OutputToConsole", false);

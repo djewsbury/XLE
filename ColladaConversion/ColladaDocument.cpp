@@ -14,7 +14,7 @@
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Streams/SerializationUtils.h"
-#include "../Utility/Streams/FormatterUtils.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../OSServices/Log.h"
 #include <queue>
 #include <cctype>
@@ -54,24 +54,24 @@ namespace ColladaConversion
 
     static void SkipAllKeyedItems(Formatter& formatter)
     {
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto name = RequireKeyedItem(formatter);
             auto next = formatter.PeekNext();
-            if (next == FormatterBlob::Value) {
+            if (next == Formatters::FormatterBlob::Value) {
                 RequireStringValue(formatter);
-            } else if (next == FormatterBlob::BeginElement) {
+            } else if (next == Formatters::FormatterBlob::BeginElement) {
                 RequireBeginElement(formatter);
                 SkipElement(formatter);
                 RequireEndElement(formatter);
             } else {
-                Throw(FormatException("Expected either value or element", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Expected either value or element", formatter.GetLocation()));
             }
         }
     }
 
     static Section ExtractSingleAttribute(Formatter& formatter, const Formatter::value_type attribName[])
     {
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto name = RequireKeyedItem(formatter);
             switch (formatter.PeekNext()) {
             case Formatter::Blob::BeginElement:
@@ -88,20 +88,20 @@ namespace ColladaConversion
                 }
 
             default:
-                Throw(FormatException("Expected either value or element", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Expected either value or element", formatter.GetLocation()));
             }
         }
 
         return {};
     }
 
-    using RootElementParser = void (DocumentScaffold::*)(XmlInputFormatter<utf8>&);
+    using RootElementParser = void (DocumentScaffold::*)(Formatters::XmlInputFormatter<utf8>&);
 
     #define ON_ELEMENT                                              \
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {                         \
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {                         \
             auto name = RequireKeyedItem(formatter);        \
             switch (formatter.PeekNext()) {                     \
-            case FormatterBlob::BeginElement:                     \
+            case Formatters::FormatterBlob::BeginElement:                     \
                 {                                                   \
                     auto eleName = name;        \
                     RequireBeginElement(formatter);             \
@@ -112,7 +112,7 @@ namespace ColladaConversion
                     break;                                       \
                 }                                                   \
                                                                     \
-            case FormatterBlob::Value:                    \
+            case Formatters::FormatterBlob::Value:                    \
                 {                                                   \
                     auto value = RequireStringValue(formatter);       \
         /**/
@@ -121,7 +121,7 @@ namespace ColladaConversion
                     break;                                       \
                 }                           \
             default:                        \
-                Throw(FormatException("Expected either value or element", formatter.GetLocation()));        \
+                Throw(Formatters::FormatException("Expected either value or element", formatter.GetLocation()));        \
             }                                                   \
         }                                                           \
         /**/
@@ -141,7 +141,7 @@ namespace ColladaConversion
     static bool TryParseAssetDescElement(AssetDesc&desc, Formatter& formatter, Formatter::InteriorSection eleName)
     {
         if (Is(eleName, "unit")) {
-            // Utility::StreamDOM<Formatter> doc(formatter);
+            // Formatters::StreamDOM<Formatter> doc(formatter);
             // _metersPerUnit = doc("meter"), _metersPerUnit);
             auto meter = ExtractSingleAttribute(formatter, "meter");
             desc._metersPerUnit = Parse(meter, desc._metersPerUnit);
@@ -181,13 +181,13 @@ namespace ColladaConversion
     {
         Formatter::InteriorSection rootEle;
         if (!formatter.TryKeyedItem(rootEle) || !Is(rootEle, "COLLADA"))
-            Throw(FormatException("Expecting root COLLADA element", formatter.GetLocation()));
+            Throw(Formatters::FormatException("Expecting root COLLADA element", formatter.GetLocation()));
         RequireBeginElement(formatter);
         
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto name = RequireKeyedItem(formatter);
             switch (formatter.PeekNext()) {
-            case FormatterBlob::BeginElement:
+            case Formatters::FormatterBlob::BeginElement:
                 {
                     RequireBeginElement(formatter);
 
@@ -215,7 +215,7 @@ namespace ColladaConversion
                     break;
                 }
 
-            case FormatterBlob::Value:
+            case Formatters::FormatterBlob::Value:
                 {
                     // we should scan for collada version here
                     RequireStringValue(formatter);
@@ -223,7 +223,7 @@ namespace ColladaConversion
                 }
 
             default:
-                Throw(FormatException("Unexpected blob", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
             }
         }
 
@@ -487,7 +487,7 @@ namespace ColladaConversion
 
         auto eleName = RequireKeyedItem(formatter);
         // there can be attributes in the containing element -- which should should skip now
-        while (formatter.PeekNext() == FormatterBlob::Value) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::Value) {
             RequireStringValue(formatter);
             eleName = RequireKeyedItem(formatter);
         }
@@ -520,10 +520,10 @@ namespace ColladaConversion
 
                 // <texture> can contain <extra> -- so we need
                 // to do a full parse
-            while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+            while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
                 auto name = RequireKeyedItem(formatter);
                 switch (formatter.PeekNext()) {
-                case FormatterBlob::BeginElement:
+                case Formatters::FormatterBlob::BeginElement:
                     {
                         RequireBeginElement(formatter);
                         Log(Warning) << "Skipping (" << name << ") in technique <texture> at " << formatter.GetLocation() << std::endl;
@@ -532,7 +532,7 @@ namespace ColladaConversion
                         break;
                     }
 
-                case FormatterBlob::Value:
+                case Formatters::FormatterBlob::Value:
                     {
                         auto value = RequireStringValue(formatter);
                         if (Is(name, "texture")) _reference = value;
@@ -542,7 +542,7 @@ namespace ColladaConversion
                     }
 
                 default:
-                    Throw(FormatException("Expecting either value or element", formatter.GetLocation()));
+                    Throw(Formatters::FormatException("Expecting either value or element", formatter.GetLocation()));
                 }
             }
             _type = Type::Texture;
@@ -558,7 +558,7 @@ namespace ColladaConversion
             }
 
         } else 
-            Throw(FormatException("Expect either float, color, param or texture element", formatter.GetLocation()));
+            Throw(Formatters::FormatException("Expect either float, color, param or texture element", formatter.GetLocation()));
 
         RequireEndElement(formatter);
     }
@@ -696,7 +696,7 @@ namespace ColladaConversion
                     Param newParam;
                     newParam._offset = workingParamOffset++;
 
-                    while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+                    while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
                         auto name = RequireKeyedItem(formatter);
                         if (Is(name, "name")) {
                             newParam._name = RequireStringValue(formatter);
@@ -810,7 +810,7 @@ namespace ColladaConversion
                         // attributes. Given that the source is XML, the attributes
                         // will always come first.
                     {
-                        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+                        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
                             auto name = RequireKeyedItem(formatter);
                             if (Is(name, "count")) {
                                 auto value = RequireStringValue(formatter);
@@ -931,7 +931,7 @@ namespace ColladaConversion
             : Input()
         {
                 // inputs should have only attributes
-            while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+            while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
                 auto name = RequireKeyedItem(formatter);
                 if (Is(name, "offset")) {
                     auto value = RequireStringValue(formatter);
@@ -955,7 +955,7 @@ namespace ColladaConversion
         {
                 // inputs should have only attributes
             Formatter::InteriorSection name, value;
-            while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+            while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
                 auto name = RequireKeyedItem(formatter);
                 if (Is(name, "semantic")) {
                     _semantic = RequireStringValue(formatter);
@@ -1284,11 +1284,11 @@ namespace ColladaConversion
         bool inController = false;
             
         for (;;) {
-            if (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+            if (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
                 auto name = RequireKeyedItem(formatter);
 
                 switch (formatter.PeekNext()) {
-                case FormatterBlob::BeginElement:
+                case Formatters::FormatterBlob::BeginElement:
                     {
                         RequireBeginElement(formatter);
                         bool eatEndElement = true;
@@ -1314,12 +1314,12 @@ namespace ColladaConversion
                         }
 
                         if (eatEndElement && !formatter.TryEndElement())
-                            Throw(FormatException("Expecting end element", formatter.GetLocation()));
+                            Throw(Formatters::FormatException("Expecting end element", formatter.GetLocation()));
 
                         break;
                     }
 
-                case FormatterBlob::Value:
+                case Formatters::FormatterBlob::Value:
                     {
                         auto value = RequireStringValue(formatter);
                         if (inController) {
@@ -1330,9 +1330,9 @@ namespace ColladaConversion
                     }
 
                 default:
-                    Throw(FormatException("Expected value or element", formatter.GetLocation()));
+                    Throw(Formatters::FormatException("Expected value or element", formatter.GetLocation()));
                 }
-            } else if (formatter.PeekNext() == FormatterBlob::EndElement) {
+            } else if (formatter.PeekNext() == Formatters::FormatterBlob::EndElement) {
                 if (!inController) return;
                 RequireEndElement(formatter);
                 inController = false;
@@ -1484,7 +1484,7 @@ namespace ColladaConversion
 
         RawOperation newOp;
 
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto attribName = RequireKeyedItem(formatter);
             if (Is(attribName, "sid")) {
                 newOp._sid = RequireStringValue(formatter);
@@ -1799,10 +1799,10 @@ namespace ColladaConversion
         _nodes.push_back(RawNode());
 
         for (;;) {
-            if (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+            if (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
                 auto name = RequireKeyedItem(formatter);
                 switch (formatter.PeekNext()) {
-                case FormatterBlob::BeginElement:
+                case Formatters::FormatterBlob::BeginElement:
                     {
                         RequireBeginElement(formatter);
 
@@ -1879,12 +1879,12 @@ namespace ColladaConversion
                         }
 
                         if (eatEndElement && !formatter.TryEndElement())
-                            Throw(FormatException("Expecting end element", formatter.GetLocation()));
+                            Throw(Formatters::FormatException("Expecting end element", formatter.GetLocation()));
 
                         break;
                     }
 
-                case FormatterBlob::Value:
+                case Formatters::FormatterBlob::Value:
                     {
                         auto value = RequireStringValue(formatter);
 
@@ -1906,7 +1906,7 @@ namespace ColladaConversion
                     }
 
                 default:
-                    Throw(FormatException("Expecting value or element", formatter.GetLocation()));
+                    Throw(Formatters::FormatException("Expecting value or element", formatter.GetLocation()));
                 }
             } else if (formatter.PeekNext() == Formatter::Blob::EndElement) {
                     // size 1 means only the "virtual" root node is there

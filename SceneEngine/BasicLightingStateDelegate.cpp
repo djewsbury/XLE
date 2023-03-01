@@ -18,8 +18,8 @@
 #include "../Math/Transformations.h"
 #include "../Math/MathSerialization.h"
 #include "../Utility/StringUtils.h"
-#include "../Utility/Streams/TextFormatter.h"
-#include "../Utility/Streams/FormatterUtils.h"
+#include "../Formatters/TextFormatter.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Conversion.h"
 

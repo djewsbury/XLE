@@ -8,8 +8,8 @@
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Conversion.h"
@@ -508,11 +508,11 @@ namespace EntityInterface
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     static EntityId DeserializeEntity(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         IMutableEntityDocument& interf,
         StringSection<> objType)
     {
-        using Blob = TextInputFormatter<utf8>::Blob;
+        using Blob = Formatters::TextInputFormatter<utf8>::Blob;
                 
         auto beginLoc = formatter.GetLocation();
 
@@ -568,7 +568,7 @@ namespace EntityInterface
         auto id = interf.AssignEntityId();
         auto creationSuccess = interf.CreateEntity(MakeStringAndHash(objType), id, inits);
         if (!creationSuccess)
-            Throw(FormatException("Error while creating object in entity deserialisation", beginLoc));
+            Throw(Formatters::FormatException("Error while creating object in entity deserialisation", beginLoc));
 
         for (const auto&c:children)
             interf.SetParent(c, id, {}, -1);
@@ -579,7 +579,7 @@ namespace EntityInterface
     }
 
     void Deserialize(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         IMutableEntityDocument& interf)
     {
             // Parse the input file, and send the result to the given entity interface

@@ -8,8 +8,8 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../Utility/Streams/FormatterUtils.h"
-#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
+#include "../../Formatters/TextFormatter.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -151,11 +151,11 @@ namespace RenderCore { namespace Techniques
 		StringSection<> keyname;
 		while (fmttr.TryKeyedItem(keyname)) {
 			switch (fmttr.PeekNext()) {
-			case FormatterBlob::BeginElement:
+			case Formatters::FormatterBlob::BeginElement:
 				RequireBeginElement(fmttr);
 				if (XlEqStringI(keyname, "DeformConfigure")) {
 					keyname = RequireKeyedItem(fmttr);
-					if (!XlEqString(keyname, "Name")) Throw(Utility::FormatException("Expecting Name key", fmttr.GetLocation()));
+					if (!XlEqString(keyname, "Name")) Throw(Formatters::FormatException("Expecting Name key", fmttr.GetLocation()));
 					auto name = RequireStringValue(fmttr);
 
 					auto* configure = techniqueServices.FindDeformConfigure(name);
@@ -169,12 +169,12 @@ namespace RenderCore { namespace Techniques
 				RequireEndElement(fmttr);
 				break;
 
-			case FormatterBlob::Value:
+			case Formatters::FormatterBlob::Value:
 				SkipValueOrElement(fmttr);
 				break;
 
 			default:
-				Throw(Utility::FormatException("Expecting element or value", fmttr.GetLocation()));
+				Throw(Formatters::FormatException("Expecting element or value", fmttr.GetLocation()));
 			}
 		}
 	}
@@ -182,9 +182,9 @@ namespace RenderCore { namespace Techniques
 	template void DeserializeDeformerConstruction(
 		DeformerConstruction& dst,
 		const Assets::ModelRendererConstruction&,
-		TextInputFormatter<>&);
+		Formatters::TextInputFormatter<>&);
 
-	auto DeserializeDeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> modelRendererConstruction, TextInputFormatter<>& cfg) -> std::shared_ptr<DeformerConstruction>
+	auto DeserializeDeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> modelRendererConstruction, Formatters::TextInputFormatter<>& cfg) -> std::shared_ptr<DeformerConstruction>
 	{
 		auto deformerConstruction = std::make_shared<DeformerConstruction>(device, modelRendererConstruction);
 		DeserializeDeformerConstruction(*deformerConstruction, *modelRendererConstruction, cfg);
@@ -195,9 +195,9 @@ namespace RenderCore { namespace Techniques
 		return deformerConstruction;
 	}
 
-	TextInputFormatter<char>& IDeformConfigure::EmptyFormatter()
+	Formatters::TextInputFormatter<char>& IDeformConfigure::EmptyFormatter()
 	{
-		static TextInputFormatter<char> dummy;
+		static Formatters::TextInputFormatter<char> dummy;
 		return dummy;
 	}
 

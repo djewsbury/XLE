@@ -82,7 +82,7 @@ namespace RenderCore { namespace Metal_DX11
             const auto* i = _iterator+1;
             for (;;) {
                 if (i == _script.end())
-                    Throw(FormatException(
+                    Throw(Formatters::FormatException(
                         "Missing closing ')' on parameter block",
                         GetStreamLocation()));
                 if (*i == ')') break;
@@ -265,7 +265,7 @@ namespace RenderCore { namespace Metal_DX11
 						formatter.SetPosition(next.second.end());
 						auto expectingAssignment = formatter.PeekNext();
 						if (expectingAssignment.first != Blob::Assignment)
-							Throw(FormatException("Expecting assignment after variable name", formatter.GetStreamLocation()));
+							Throw(Formatters::FormatException("Expecting assignment after variable name", formatter.GetStreamLocation()));
 						formatter.SetPosition(expectingAssignment.second.end());
 
 						ParseAssignmentExpression(formatter, next.second, searchRules);
@@ -278,7 +278,7 @@ namespace RenderCore { namespace Metal_DX11
 						formatter.SetPosition(next.second.end());
 						auto expectingParameters = formatter.PeekNext();
 						if (expectingParameters.first != Blob::ParameterBlock)
-							Throw(FormatException("Expecting parameters block for PassValue statement", formatter.GetStreamLocation()));
+							Throw(Formatters::FormatException("Expecting parameters block for PassValue statement", formatter.GetStreamLocation()));
 						formatter.SetPosition(expectingParameters.second.end());
 
 						std::match_results<const char*> match;
@@ -291,14 +291,14 @@ namespace RenderCore { namespace Metal_DX11
 								MakeStringSection(match[2].first, match[2].second),
 								startLocation);
 						} else {
-							Throw(FormatException("Couldn't parser parameters block for PassValue statement", formatter.GetStreamLocation()));
+							Throw(Formatters::FormatException("Couldn't parser parameters block for PassValue statement", formatter.GetStreamLocation()));
 						}
 
 						break;
 					}
 
 				default:
-					Throw(FormatException("Unexpected token. Statements should start with either an assignment or PassValue instruction", formatter.GetStreamLocation()));
+					Throw(Formatters::FormatException("Unexpected token. Statements should start with either an assignment or PassValue instruction", formatter.GetStreamLocation()));
 				}
 			}
 		} CATCH (const ::Assets::Exceptions::ConstructionError& e) {
@@ -525,7 +525,7 @@ namespace RenderCore { namespace Metal_DX11
         if (   next.first != Blob::Module && next.first != Blob::DeclareInput
             && next.first != Blob::DeclareOutput && next.first != Blob::Call
             && next.first != Blob::Token && next.first != Blob::Alias)
-            Throw(FormatException("Unexpected token after assignment operation", formatter.GetStreamLocation()));
+            Throw(Formatters::FormatException("Unexpected token after assignment operation", formatter.GetStreamLocation()));
         formatter.SetPosition(next.second.end());
 
         if (next.first == Blob::Token) {
@@ -542,7 +542,7 @@ namespace RenderCore { namespace Metal_DX11
                 auto linkingNode = ParseCallExpression(next.second, maybeParams.second, startLoc);
                 auto n = LowerBoundT(_nodes, variableName);
                 if (n != _nodes.end() && XlEqString(n->first, variableName))
-                    Throw(FormatException("Attempting to reassign node that is already assigned. Check for naming conflicts.", startLoc));
+                    Throw(Formatters::FormatException("Attempting to reassign node that is already assigned. Check for naming conflicts.", startLoc));
 
                 _nodes.insert(n, std::make_pair(variableName, std::move(linkingNode)));
             } else {
@@ -555,7 +555,7 @@ namespace RenderCore { namespace Metal_DX11
         auto paramBlockLoc = formatter.GetStreamLocation();
         auto p = formatter.PeekNext();
         if (p.first != Blob::ParameterBlock)
-            Throw(FormatException("Expecting parameter block", formatter.GetStreamLocation()));
+            Throw(Formatters::FormatException("Expecting parameter block", formatter.GetStreamLocation()));
         formatter.SetPosition(p.second.end());
         auto parameterBlock = p.second;
 
@@ -565,7 +565,7 @@ namespace RenderCore { namespace Metal_DX11
             {
                 auto i = LowerBoundT(_modules, variableName);
                 if (i != _modules.end() && XlEqString(i->first, variableName))
-                    Throw(FormatException("Attempting to reassign module that is already assigned. Check for naming conflicts.", startLoc));
+                    Throw(Formatters::FormatException("Attempting to reassign module that is already assigned. Check for naming conflicts.", startLoc));
 
                 auto module = ParseModuleExpression(parameterBlock, searchRules, startLoc);
 				_dependencyValidation.RegisterDependency(module.GetDependencyValidation());
@@ -599,18 +599,18 @@ namespace RenderCore { namespace Metal_DX11
                     auto e = GetLastError(*_graph);
                     StringMeld<1024> buffer;
                     buffer << "D3D error while creating input or output linking node (" << (const char*)e->GetBufferPointer() << ")";
-                    Throw(FormatException(buffer.get(), startLoc));
+                    Throw(Formatters::FormatException(buffer.get(), startLoc));
                 }
 
                 auto i2 = LowerBoundT(_nodes, variableName);
                 if (i2 != _nodes.end() && XlEqString(i2->first, variableName))
-                    Throw(FormatException("Attempting to reassign node that is already assigned. Check for naming conflicts.", startLoc));
+                    Throw(Formatters::FormatException("Attempting to reassign node that is already assigned. Check for naming conflicts.", startLoc));
 
                 // we can use the parameter names to create aliases...
                 for (unsigned c=0; c<params.size(); ++c) {
                     auto i = LowerBoundT(_aliases, params[c]._name);
                     if (i != _aliases.end() && i->first == params[c]._name)
-                        Throw(FormatException("Duplicate parameter name found", startLoc));
+                        Throw(Formatters::FormatException("Duplicate parameter name found", startLoc));
                     AliasTarget target = std::make_pair(linkingNode, c);
                     _aliases.insert(i, std::make_pair(params[c]._name, target));
                 }
@@ -630,7 +630,7 @@ namespace RenderCore { namespace Metal_DX11
                 auto linkingNode = ParseCallExpression(parameterBlock, Section(), paramBlockLoc);
                 auto n = LowerBoundT(_nodes, variableName);
                 if (n != _nodes.end() && XlEqString(n->first, variableName))
-                    Throw(FormatException("Attempting to reassign node that is already assigned. Check for naming conflicts.", startLoc));
+                    Throw(Formatters::FormatException("Attempting to reassign node that is already assigned. Check for naming conflicts.", startLoc));
 
                 _nodes.insert(n, std::make_pair(variableName, std::move(linkingNode)));
             }
@@ -644,7 +644,7 @@ namespace RenderCore { namespace Metal_DX11
                 auto varNameStr = variableName.AsString();
                 auto i = LowerBoundT(_aliases, varNameStr);
                 if (i != _aliases.end() && i->first == varNameStr)
-                    Throw(FormatException("Duplicate alias name found", startLoc));
+                    Throw(Formatters::FormatException("Duplicate alias name found", startLoc));
                 _aliases.insert(i, std::make_pair(varNameStr, target));
             }
             break;
@@ -660,14 +660,14 @@ namespace RenderCore { namespace Metal_DX11
         while (i != fnName.end() && *i != '.') ++i;
 
         if (i == fnName.end())
-            Throw(FormatException("Expected a module and function name in Call instruction.", loc));
+            Throw(Formatters::FormatException("Expected a module and function name in Call instruction.", loc));
 
         auto modulePart = MakeStringSection(fnName.begin(), i);
         auto fnPart = MakeStringSection(i+1, fnName.end());
 
         auto m = LowerBoundT(_modules, modulePart);
         if (m == _modules.end() || !XlEqString(m->first, modulePart))
-            Throw(FormatException("Unknown module variable in Call instruction. Modules should be registered with Module instruction before using.", loc));
+            Throw(Formatters::FormatException("Unknown module variable in Call instruction. Modules should be registered with Module instruction before using.", loc));
 
         auto module = m->second.GetUnderlying();
 
@@ -678,7 +678,7 @@ namespace RenderCore { namespace Metal_DX11
         intrusive_ptr<ID3D11LinkingNode> linkingNode = moveptr(linkingNodeRaw);
         if (!SUCCEEDED(hresult)) {
             auto e = GetLastError(*_graph);
-            Throw(FormatException(StringMeld<1024>() << "D3D error while creating linking node for function call (" << (const char*)e->GetBufferPointer() << ")", loc));
+            Throw(Formatters::FormatException(StringMeld<1024>() << "D3D error while creating linking node for function call (" << (const char*)e->GetBufferPointer() << ")", loc));
         }
 
         _referencedFunctions.insert(LowerBoundT(_referencedFunctions, modulePart), std::make_pair(modulePart, fnPart));
@@ -692,7 +692,7 @@ namespace RenderCore { namespace Metal_DX11
             hresult = _graph->PassValue(resolvedParam.first.get(), resolvedParam.second, linkingNode.get(), index++);
             if (!SUCCEEDED(hresult)) {
                 auto e = GetLastError(*_graph);
-                Throw(FormatException(StringMeld<1024>() << "D3D failure in PassValue statement (" << (const char*)e->GetBufferPointer() << ")", loc));
+                Throw(Formatters::FormatException(StringMeld<1024>() << "D3D failure in PassValue statement (" << (const char*)e->GetBufferPointer() << ")", loc));
             }
         }
 
@@ -711,7 +711,7 @@ namespace RenderCore { namespace Metal_DX11
 
         auto param = std::cregex_iterator(params.begin(), params.end(), CommaSeparatedList);
         if (param == std::cregex_iterator())
-            Throw(FormatException("Expecting module name in Module expression", loc));
+            Throw(Formatters::FormatException("Expecting module name in Module expression", loc));
 
             // First parameter is just the module name -- 
         ::Assets::ResChar resolvedName[MaxPath];
@@ -779,14 +779,14 @@ namespace RenderCore { namespace Metal_DX11
         auto* dot = src.begin();
         while (dot != src.end() && *dot != '.') ++dot;
         if (dot == src.end())
-            Throw(FormatException(StringMeld<256>() << "Unknown alias (" << src.AsString().c_str() << ")", loc));
+            Throw(Formatters::FormatException(StringMeld<256>() << "Unknown alias (" << src.AsString().c_str() << ")", loc));
 
         auto nodeSection = MakeStringSection(src.begin(), dot);
         auto indexSection = MakeStringSection(dot+1, src.end());
 
         auto n = LowerBoundT(_nodes, nodeSection);
         if (n == _nodes.end() || !XlEqString(n->first, nodeSection))
-            Throw(FormatException(StringMeld<256>() << "Could not find node (" << nodeSection.AsString().c_str() << ")", loc));
+            Throw(Formatters::FormatException(StringMeld<256>() << "Could not find node (" << nodeSection.AsString().c_str() << ")", loc));
 
         // Parameters are refered to by index. We could potentially
         // do a lookup to convert string names to their correct indices. We
@@ -809,7 +809,7 @@ namespace RenderCore { namespace Metal_DX11
         auto hresult = _graph->PassValue(src.first.get(), src.second, dst.first.get(), dst.second);
         if (!SUCCEEDED(hresult)) {
             auto e = GetLastError(*_graph);
-            Throw(FormatException(StringMeld<1024>() << "D3D failure in PassValue statement (" << (const char*)e->GetBufferPointer() << ")", loc));
+            Throw(Formatters::FormatException(StringMeld<1024>() << "D3D failure in PassValue statement (" << (const char*)e->GetBufferPointer() << ")", loc));
         }
     }
 

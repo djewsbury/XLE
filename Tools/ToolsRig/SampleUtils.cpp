@@ -10,7 +10,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../ConsoleRig/GlobalServices.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/FormatterUtils.h"
 #include <set>
 
 namespace ToolsRig

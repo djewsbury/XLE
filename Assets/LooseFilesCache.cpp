@@ -13,12 +13,12 @@
 #include "BlockSerializer.h"
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Streams/TextFormatter.h"
-#include "../Utility/Streams/TextOutputFormatter.h"
+#include "../Formatters/TextFormatter.h"
+#include "../Formatters/TextOutputFormatter.h"
 #include "../Utility/Streams/Stream.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/SerializationUtils.h"
-#include "../Utility/Streams/FormatterUtils.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringFormat.h"
@@ -59,7 +59,7 @@ namespace Assets
 		const std::shared_ptr<StoreReferenceCounts>& refCounts,
 		uint64_t refCountHashCode);
 
-	static void SerializationOperator(TextOutputFormatter& formatter, const CompileProductsFile& compileProducts)
+	static void SerializationOperator(Formatters::TextOutputFormatter& formatter, const CompileProductsFile& compileProducts)
 	{
 		formatter.WriteKeyedValue("Invalid", compileProducts._state == AssetState::Ready ? "0" : "1");
 
@@ -90,25 +90,25 @@ namespace Assets
 		}
 	}
 
-	static void DeserializationOperator(TextInputFormatter<utf8>& formatter, CompileProductsFile::Product& result)
+	static void DeserializationOperator(Formatters::TextInputFormatter<utf8>& formatter, CompileProductsFile::Product& result)
 	{
-		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+		while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
 			StringSection<utf8> name, value;
 			if (!formatter.TryKeyedItem(name) || !formatter.TryStringValue(value))
-				Throw(Utility::FormatException("Poorly formed attribute in CompileProductsFile", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Poorly formed attribute in CompileProductsFile", formatter.GetLocation()));
 			if (XlEqString(name, "Artifact")) {
 				result._intermediateArtifact = value.AsString();
 			} else
-				Throw(Utility::FormatException("Unknown attribute in CompileProductsFile", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Unknown attribute in CompileProductsFile", formatter.GetLocation()));
 		}
 	}
 
-	static void DerializeDependencies(TextInputFormatter<utf8>& formatter, CompileProductsFile& result)
+	static void DerializeDependencies(Formatters::TextInputFormatter<utf8>& formatter, CompileProductsFile& result)
 	{
-		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+		while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
 			StringSection<utf8> name, value;
 			if (!formatter.TryKeyedItem(name) || !formatter.TryStringValue(value))
-				Throw(Utility::FormatException("Poorly formed attribute in CompileProductsFile", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Poorly formed attribute in CompileProductsFile", formatter.GetLocation()));
 			if (XlEqString(value, "doesnotexist")) {
 				result._dependencies.push_back(DependentFileState { name.AsString(), 0ull, FileSnapshot::State::DoesNotExist });
 			} else if (XlEqString(value, "shadowed")) {
@@ -118,20 +118,20 @@ namespace Assets
 		}
 	}
 
-	static StringSection<utf8> DeserializeValue(TextInputFormatter<utf8>& formatter)
+	static StringSection<utf8> DeserializeValue(Formatters::TextInputFormatter<utf8>& formatter)
 	{
 		StringSection<utf8> value;
 		if (!formatter.TryStringValue(value))
-			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
+			Throw(Formatters::FormatException("Expecting value", formatter.GetLocation()));
 		return value;
 	}
 
-	static void DeserializationOperator(TextInputFormatter<utf8>& formatter, CompileProductsFile& result)
+	static void DeserializationOperator(Formatters::TextInputFormatter<utf8>& formatter, CompileProductsFile& result)
 	{
-		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
-			TextInputFormatter<utf8>::InteriorSection name;
+		while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
+			Formatters::TextInputFormatter<utf8>::InteriorSection name;
 			if (!formatter.TryKeyedItem(name))
-				Throw(Utility::FormatException("Poorly formed item in CompileProductsFile", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Poorly formed item in CompileProductsFile", formatter.GetLocation()));
 
 			if (XlEqString(name, "Dependencies")) {
 				RequireBeginElement(formatter);
@@ -142,7 +142,7 @@ namespace Assets
 					result._state = AssetState::Invalid;
 				} else
 					result._state = AssetState::Ready;
-			} else if (formatter.PeekNext() == FormatterBlob::BeginElement) {
+			} else if (formatter.PeekNext() == Formatters::FormatterBlob::BeginElement) {
 				RequireBeginElement(formatter);
 				CompileProductsFile::Product product;
 				formatter >> product;
@@ -150,7 +150,7 @@ namespace Assets
 				result._compileProducts.push_back(product);
 				RequireEndElement(formatter);
 			} else
-				Throw(Utility::FormatException("Unknown attribute in CompileProductsFile", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Unknown attribute in CompileProductsFile", formatter.GetLocation()));
 		}
 	}
 
@@ -191,7 +191,7 @@ namespace Assets
 		auto productsFileData = std::make_unique<char[]>(size);
 		productsFile->Read(productsFileData.get(), 1, size);
 
-		TextInputFormatter<> formatter(
+		Formatters::TextInputFormatter<> formatter(
 			MakeStringSection(productsFileData.get(), PtrAdd(productsFileData.get(), size)));
 
 		CompileProductsFile finalProductsFile;
@@ -315,7 +315,7 @@ namespace Assets
 				c._intermediateArtifact = MakeRelativePath(compileProductsDirectorySplit, MakeSplitPath(c._intermediateArtifact));
 			std::shared_ptr<IFileInterface> productsFile = OpenFileInterface(*_filesystem, productsName + ".s", "wb", 0); // note -- no sharing allowed on this file. We take an exclusive lock on it
 			FileOutputStream stream(productsFile);
-			TextOutputFormatter fmtter(stream);
+			Formatters::TextOutputFormatter fmtter(stream);
 			fmtter << simplifedCompileProducts;
 			renameOps.push_back({productsName + ".s", productsName});
 		}

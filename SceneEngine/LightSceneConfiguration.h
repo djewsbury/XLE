@@ -5,8 +5,8 @@
 #include "../../RenderCore/LightingEngine/StandardLightOperators.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../Formatters/IDynamicFormatter.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/Meta/ClassAccessorsImpl.h"
 #include <vector>
 #include <optional>
@@ -123,7 +123,7 @@ namespace SceneEngine
 			if (XlEqString(keyname, "Name")) {
 				objectName = RequireStringValue(fmttr);
 			} else {
-				if constexpr (Utility::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+				if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
 					ImpliedTyping::TypeDesc typeDesc;
 					IteratorRange<const void*> data;
 					if (fmttr.TryRawValue(data, typeDesc)) {
@@ -167,7 +167,7 @@ namespace SceneEngine
 		return objectNameHash;
 	}
 
-	template<typename Type, typename Formatter, typename std::enable_if<!Internal::FormatterTraits<Formatter>::HasTryRawValue>::type* =nullptr>
+	template<typename Type, typename Formatter, typename std::enable_if<!Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue>::type* =nullptr>
 		static void DeserializeViaAccessors(Formatter& fmttr, Type& obj)
 	{
 		auto& accessors = Legacy_GetAccessors<Type>();
@@ -181,7 +181,7 @@ namespace SceneEngine
 		}
 	}
 
-	template<typename Type, typename Formatter, typename std::enable_if<Internal::FormatterTraits<Formatter>::HasTryRawValue>::type* =nullptr>
+	template<typename Type, typename Formatter, typename std::enable_if<Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue>::type* =nullptr>
 		static void DeserializeViaAccessors(Formatter& fmttr, Type& obj)
 	{
 		auto& accessors = Legacy_GetAccessors<Type>();

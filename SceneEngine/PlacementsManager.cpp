@@ -43,8 +43,8 @@
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Streams/TextFormatter.h"
-#include "../Utility/Streams/StreamDOM.h"
+#include "../Formatters/TextFormatter.h"
+#include "../Formatters/StreamDOM.h"
 #include "../Utility/Conversion.h"
 
 #include <random>
@@ -3136,12 +3136,12 @@ namespace SceneEngine
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     WorldPlacementsConfig::WorldPlacementsConfig(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
     : WorldPlacementsConfig()
     {
-        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
         for (auto c:doc.RootElement().children()) {
             Cell cell;
             cell._offset = c.Attribute("Offset", Float3(0,0,0));

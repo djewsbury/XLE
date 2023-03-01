@@ -14,7 +14,7 @@
 #include "../ConsoleRig/GlobalServices.h"
 #include "../Utility/Streams/SerializationUtils.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Streams/StreamDOM.h"
+#include "../Formatters/StreamDOM.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/PtrUtils.h"
@@ -310,8 +310,8 @@ namespace Assets
 				auto rawData = std::unique_ptr<char[]>(new char[int(fileSize)]);
 				markerFile->Read(rawData.get(), 1, size_t(fileSize));
 
-				TextInputFormatter<> formatter(MakeStringSection(rawData.get(), PtrAdd(rawData.get(), fileSize)));
-				StreamDOM<TextInputFormatter<>> doc(formatter);
+				Formatters::TextInputFormatter<> formatter(MakeStringSection(rawData.get(), PtrAdd(rawData.get(), fileSize)));
+				Formatters::StreamDOM<Formatters::TextInputFormatter<>> doc(formatter);
 
 				auto compareVersion = doc.RootElement().Attribute("VersionString").Value();
 				if (XlEqString(compareVersion, _constructorOptions._versionString)) {

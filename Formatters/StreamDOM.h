@@ -8,15 +8,13 @@
 
 #include "TextFormatter.h"
 #include "TextOutputFormatter.h"
-#include "../StringUtils.h"     // (for StringSection)
-#include "../Optional.h"
+#include "../Utility/StringUtils.h"     // (for StringSection)
+#include "../Utility/Optional.h"
+#include "../Utility/ImpliedTyping.h"
 #include <vector>
 #include <string>
 
-#include "../Conversion.h"
-#include "../ImpliedTyping.h"
-
-namespace Utility
+namespace Formatters
 {
     class TextOutputFormatter;
 
@@ -264,11 +262,11 @@ namespace Utility
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    namespace ImpliedTyping
-    {
-        template <typename Type>
-            std::optional<Type> Parse(const char* expressionBegin, const char* expressionEnd);
-    }
+    // namespace ImpliedTyping
+    // {
+    //     template <typename Type>
+    //         std::optional<Type> Parse(const char* expressionBegin, const char* expressionEnd);
+    // }
     
     template<typename Formatter>
         template<typename Type>

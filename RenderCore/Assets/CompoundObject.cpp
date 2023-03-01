@@ -8,9 +8,9 @@
 #include "../../Math/Transformations.h"
 #include "../../Math/MathSerialization.h"
 #include "../../Assets/ConfigFileContainer.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 
 namespace RenderCore { namespace Assets
 {
@@ -26,7 +26,7 @@ namespace RenderCore { namespace Assets
 		StringSection<> keyname;
 		while (fmttr.TryKeyedItem(keyname)) {
 			switch (fmttr.PeekNext()) {
-			case FormatterBlob::BeginElement:
+			case Formatters::FormatterBlob::BeginElement:
 				RequireBeginElement(fmttr);
 				if (XlEqStringI(keyname, "DrawModel")) {
 					auto modelCommand = DeserializeDrawModelCommand(fmttr);
@@ -50,16 +50,16 @@ namespace RenderCore { namespace Assets
 				RequireEndElement(fmttr);
 				break;
 
-			case FormatterBlob::Value:
+			case Formatters::FormatterBlob::Value:
 				if (XlEqString(keyname, "Skeleton")) {
 					auto skeletonName = RequireStringValue(fmttr).AsString();
 					result.SetSkeletonScaffold(loadingContext, skeletonName);
 				} else
-					Throw(Utility::FormatException("Unexpected attribute in CompoundObject", fmttr.GetLocation()));
+					Throw(Formatters::FormatException("Unexpected attribute in CompoundObject", fmttr.GetLocation()));
 				break;
 
 			default:
-				Throw(Utility::FormatException("Expecting element or value", fmttr.GetLocation()));
+				Throw(Formatters::FormatException("Expecting element or value", fmttr.GetLocation()));
 			}
 		}
 	}
@@ -72,11 +72,11 @@ namespace RenderCore { namespace Assets
 	template void DeserializeModelRendererConstruction(
 		ModelRendererConstruction&,
 		std::shared_ptr<::Assets::OperationContext>,
-		TextInputFormatter<>&);
+		Formatters::TextInputFormatter<>&);
 
 	uint64_t CompoundObjectScaffold::GetHash() const { return _modelRendererConstruction->GetHash(); }
 
-	TextInputFormatter<> CompoundObjectScaffold::OpenConfiguration() const
+	Formatters::TextInputFormatter<> CompoundObjectScaffold::OpenConfiguration() const
 	{
 		auto container = ::Assets::ConfigFileContainer<>(_blob, _depVal);
 		return container.GetRootFormatter();
@@ -127,7 +127,7 @@ namespace RenderCore { namespace Assets
 		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
 			auto name = RequireKeyedItem(formatter);
 			if (formatter.PeekNext() != FormatterBlob::Value)
-				Throw(Utility::FormatException("Unexpected element while serializing Weights in DrawModelCommand", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Unexpected element while serializing Weights in DrawModelCommand", formatter.GetLocation()));
 			result.push_back({name.AsString(), Conversion::Convert<float>(RequireStringValue(formatter))});
 		}
 		return result;
@@ -138,14 +138,14 @@ namespace RenderCore { namespace Assets
 	{
 		NascentCompoundObject::DrawModelCommand result;
 
-		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+		while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
 			auto name = RequireKeyedItem(formatter);
 			switch (formatter.PeekNext()) {
-			case FormatterBlob::BeginElement:
-				Throw(Utility::FormatException("Unexpected element while serializing MorphDeformer", formatter.GetLocation()));
+			case Formatters::FormatterBlob::BeginElement:
+				Throw(Formatters::FormatException("Unexpected element while serializing MorphDeformer", formatter.GetLocation()));
 				break;
 
-			case FormatterBlob::Value:
+			case Formatters::FormatterBlob::Value:
 				{
 					if (XlEqString(name, "Model")) {
 						result._model = RequireStringValue(formatter).AsString();
@@ -158,12 +158,12 @@ namespace RenderCore { namespace Assets
 					} else if (XlEqString(name, "DeformerBindPoint")) {
 						result._deformerBindPoint = RequireStringValue(formatter).AsString();
 					} else 
-						Throw(Utility::FormatException(StringMeld<512>() << "Unknown attribute (" << name << ") while serializing DrawModelCommand", formatter.GetLocation()));
+						Throw(Formatters::FormatException(StringMeld<512>() << "Unknown attribute (" << name << ") while serializing DrawModelCommand", formatter.GetLocation()));
 				}
 				break;
 
 			default:
-				Throw(Utility::FormatException("Expecting element or value", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Expecting element or value", formatter.GetLocation()));
 			}
 		}
 
@@ -176,10 +176,10 @@ namespace RenderCore { namespace Assets
 	template<typename Formatter>
 		void NascentCompoundObject::Construct(Formatter& formatter)
 	{
-		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+		while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
 			auto name = RequireKeyedItem(formatter);
 			switch (formatter.PeekNext()) {
-			case FormatterBlob::BeginElement:
+			case Formatters::FormatterBlob::BeginElement:
 				RequireBeginElement(formatter);
 				if (XlEqStringI(name, "DrawModel")) {
 					_commands.emplace_back(DeserializeDrawModelCommand(formatter));
@@ -189,15 +189,15 @@ namespace RenderCore { namespace Assets
 				RequireEndElement(formatter);
 				break;
 
-			case FormatterBlob::Value:
+			case Formatters::FormatterBlob::Value:
 				if (XlEqString(name, "Skeleton")) {
 					_skeleton = RequireStringValue(formatter).AsString();
 				} else
-					Throw(Utility::FormatException("Unexpected attribute in CompoundObject", formatter.GetLocation()));
+					Throw(Formatters::FormatException("Unexpected attribute in CompoundObject", formatter.GetLocation()));
 				break;
 
 			default:
-				Throw(Utility::FormatException("Expecting element or value", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Expecting element or value", formatter.GetLocation()));
 			}
 		}
 	}
@@ -219,7 +219,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	NascentCompoundObject::NascentCompoundObject(
-		TextInputFormatter<>& formatter,
+		Formatters::TextInputFormatter<>& formatter,
 		const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
@@ -241,7 +241,7 @@ namespace RenderCore { namespace Assets
 
 	NascentCompoundObject::~NascentCompoundObject() {}
 
-	void NascentCompoundObject::SerializeMethod(TextOutputFormatter& formatter) const
+	void NascentCompoundObject::SerializeMethod(Formatters::TextOutputFormatter& formatter) const
 	{
 		for (auto&cmd:_commands) {
 			auto ele = formatter.BeginKeyedElement("DrawModel");

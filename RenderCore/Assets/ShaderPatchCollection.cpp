@@ -6,10 +6,10 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/StringFormat.h"
 
@@ -124,7 +124,7 @@ namespace RenderCore { namespace Assets
 	bool operator<(uint64_t lhs, const ShaderPatchCollection& rhs) { return lhs < rhs.GetHash(); }
 
 	static void SerializeInstantiationRequest(
-		TextOutputFormatter& formatter, 
+		Formatters::TextOutputFormatter& formatter, 
 		const ShaderSourceParser::InstantiationRequest& instRequest)
 	{
 		formatter.WriteSequencedValue(instRequest._archiveName);
@@ -137,7 +137,7 @@ namespace RenderCore { namespace Assets
 			formatter.WriteKeyedValue("Implements", instRequest._implementsArchiveName);
 	}
 
-	void SerializationOperator(TextOutputFormatter& formatter, const ShaderPatchCollection& patchCollection)
+	void SerializationOperator(Formatters::TextOutputFormatter& formatter, const ShaderPatchCollection& patchCollection)
 	{
 		for (const auto& p:patchCollection._patches) {
 			auto pele = (p.first.empty()) ? formatter.BeginSequencedElement() : formatter.BeginKeyedElement(p.first);
@@ -174,7 +174,7 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-	static ShaderSourceParser::InstantiationRequest DeserializeInstantiationRequest(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
+	static ShaderSourceParser::InstantiationRequest DeserializeInstantiationRequest(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
 	{
 		ShaderSourceParser::InstantiationRequest result;
 
@@ -186,7 +186,7 @@ namespace RenderCore { namespace Assets
 		while (formatter.TryKeyedItem(bindingName)) {
 			if (XlEqString(bindingName, "Implements")) {
 				if (!result._implementsArchiveName.empty())
-					Throw(FormatException("Multiple \"Implements\" specifications found", formatter.GetLocation()));
+					Throw(Formatters::FormatException("Multiple \"Implements\" specifications found", formatter.GetLocation()));
 				result._implementsArchiveName = ResolveArchiveName(RequireStringValue(formatter), searchRules);
 			} else {
 				RequireBeginElement(formatter);
@@ -198,18 +198,18 @@ namespace RenderCore { namespace Assets
 			}
 		}
 
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected data while deserializating InstantiationRequest", formatter.GetLocation()));
+		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected data while deserializating InstantiationRequest", formatter.GetLocation()));
 
 		return result;
 	}
 
-	ShaderPatchCollection::ShaderPatchCollection(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	ShaderPatchCollection::ShaderPatchCollection(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
 		for (;;) {
 			auto next = formatter.PeekNext();
-			if (next == FormatterBlob::KeyedItem) {
+			if (next == Formatters::FormatterBlob::KeyedItem) {
 				auto name = RequireKeyedItem(formatter);
 				
 				if (XlEqString(name, "DescriptorSet")) {
@@ -220,13 +220,13 @@ namespace RenderCore { namespace Assets
 					continue;
 				}
 				
-				if (formatter.PeekNext() != FormatterBlob::BeginElement)
-					Throw(FormatException(StringMeld<256>() << "Unexpected attribute (" << name << ") in ShaderPatchCollection", formatter.GetLocation()));
+				if (formatter.PeekNext() != Formatters::FormatterBlob::BeginElement)
+					Throw(Formatters::FormatException(StringMeld<256>() << "Unexpected attribute (" << name << ") in ShaderPatchCollection", formatter.GetLocation()));
 
 				RequireBeginElement(formatter);
 				_patches.emplace_back(std::make_pair(name.AsString(), DeserializeInstantiationRequest(formatter, searchRules)));
 				RequireEndElement(formatter);
-			} else if (next == FormatterBlob::BeginElement) {
+			} else if (next == Formatters::FormatterBlob::BeginElement) {
 				RequireBeginElement(formatter);
 				_patches.emplace_back(std::make_pair(std::string{}, DeserializeInstantiationRequest(formatter, searchRules)));
 				RequireEndElement(formatter);
@@ -234,26 +234,26 @@ namespace RenderCore { namespace Assets
 				break;
 		}
 
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected data while deserializating ShaderPatchCollection", formatter.GetLocation()));
+		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected data while deserializating ShaderPatchCollection", formatter.GetLocation()));
 
 		SortAndCalculateHash();
 	}
 
-	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	{
 		std::vector<ShaderPatchCollection> result;
 		while (formatter.TryBeginElement()) {
 			result.emplace_back(ShaderPatchCollection(formatter, searchRules, depVal));
 			RequireEndElement(formatter);
 		}
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected data while deserializating ShaderPatchCollection", formatter.GetLocation()));
+		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected data while deserializating ShaderPatchCollection", formatter.GetLocation()));
 		std::sort(result.begin(), result.end());
 		return result;
 	}
 
-	void SerializeShaderPatchCollectionSet(TextOutputFormatter& formatter, IteratorRange<const ShaderPatchCollection*> patchCollections)
+	void SerializeShaderPatchCollectionSet(Formatters::TextOutputFormatter& formatter, IteratorRange<const ShaderPatchCollection*> patchCollections)
 	{
 		for (const auto& p:patchCollections) {
 			auto ele = formatter.BeginSequencedElement();

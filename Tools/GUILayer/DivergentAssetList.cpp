@@ -18,10 +18,10 @@
 #include "../../OSServices/RawFS.h"
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/Streams/Data.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/Threading/ThreadingUtils.h"
 #include "../../Utility/Conversion.h"
 #include "MarshalString.h"
@@ -328,12 +328,12 @@ namespace GUILayer
 		return AsByteArray((const uint8*)AsPointer(blob->begin()), (const uint8*)AsPointer(blob->end()));
 	}
 
-    static auto DeserializeAllMaterials(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
+    static auto DeserializeAllMaterials(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
         -> std::vector<std::pair<::Assets::rstring, RenderCore::Assets::RawMaterial>>
     {
         std::vector<std::pair<::Assets::rstring, RenderCore::Assets::RawMaterial>> result;
 
-        using Blob = TextInputFormatter<utf8>::Blob;
+        using Blob = Formatters::TextInputFormatter<utf8>::Blob;
         StringSection<> name;
         while (formatter.TryKeyedItem(name)) {
             switch(formatter.PeekNext()) {
@@ -346,7 +346,7 @@ namespace GUILayer
                             Conversion::Convert<::Assets::rstring>(name.AsString()), std::move(mat)));
 
                     if (!formatter.TryEndElement())
-                        Throw(Utility::FormatException("Expecting end element", formatter.GetLocation()));
+                        Throw(Formatters::FormatException("Expecting end element", formatter.GetLocation()));
                 }
                 break;
 
@@ -355,7 +355,7 @@ namespace GUILayer
                 break;
 
             default:
-                Throw(Utility::FormatException("Expected either value or element", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Expected either value or element", formatter.GetLocation()));
             }
         }
 
@@ -386,7 +386,7 @@ namespace GUILayer
         std::vector<std::pair<::Assets::rstring, RenderCore::Assets::RawMaterial>> preMats;
         if (!originalFile.empty()) {
             auto searchRules = ::Assets::DefaultDirectorySearchRules(filename);
-            TextInputFormatter<utf8> formatter(originalFile);
+            Formatters::TextInputFormatter<utf8> formatter(originalFile);
             preMats = DeserializeAllMaterials(formatter, searchRules);
         }
 

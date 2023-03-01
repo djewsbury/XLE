@@ -53,8 +53,8 @@
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../OSServices/LegacyFileStreams.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
 #include "../../Utility/Conversion.h"
 #include <memory>
 

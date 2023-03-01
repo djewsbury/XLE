@@ -7,9 +7,9 @@
 #include "StreamDOM.h"
 #include "TextFormatter.h"
 #include "XmlFormatter.h"
-#include "../StringFormat.h"
+#include "../Utility/StringFormat.h"
 
-namespace Utility
+namespace Formatters
 {
 
     template <typename Formatter>

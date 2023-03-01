@@ -8,9 +8,9 @@
 #include "../Assets/IFileSystem.h"
 #include "../Assets/AssetUtils.h"
 #include "../OSServices/Log.h"
-#include "../Utility/Streams/TextFormatter.h"
+#include "../Formatters/TextFormatter.h"
 #include "../Utility/Streams/PreprocessorInterpreter.h"
-#include "../Utility/Streams/FormatterUtils.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../Utility/StringFormat.h"
 #include <sstream>
 
@@ -180,7 +180,7 @@ namespace ShaderSourceParser
 					if (XlEqStringI(MakeStringSection(i2, i3), "include")) {
 						auto includeFile = ParseIncludeDirective(MakeStringSection(i3, lineDetails._line.end()));
 						if (includeFile.IsEmpty())
-							Throw(::Utility::FormatException("Could not interpret #include directive", StreamLocation{unsigned(i3-lineDetails._line.begin()), sourceLineIndex}));
+							Throw(Formatters::FormatException("Could not interpret #include directive", Formatters::StreamLocation{unsigned(i3-lineDetails._line.begin()), sourceLineIndex}));
 
 						// Commit the working block to our output stream
 						// We must also include the text that becomes before the #include on this line -- because it
@@ -308,11 +308,11 @@ namespace ShaderSourceParser
 			_hash = Hash64(r.first, Hash64(r.second, _hash));
 	}
 
-	ManualSelectorFiltering::ManualSelectorFiltering(TextInputFormatter<>& formatter)
+	ManualSelectorFiltering::ManualSelectorFiltering(Formatters::TextInputFormatter<>& formatter)
 	{
-		while (formatter.PeekNext() == FormatterBlob::KeyedItem || formatter.PeekNext() == FormatterBlob::Value) {
+		while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem || formatter.PeekNext() == Formatters::FormatterBlob::Value) {
 
-			if (formatter.PeekNext() == FormatterBlob::Value) {
+			if (formatter.PeekNext() == Formatters::FormatterBlob::Value) {
 
 				// a selector name alone becomes a whitelist setting
 				auto selectorName = RequireStringValue(formatter);
@@ -320,11 +320,11 @@ namespace ShaderSourceParser
 
 			} else {
 				auto selectorName = RequireKeyedItem(formatter);
-				if (formatter.PeekNext() == FormatterBlob::BeginElement) {
+				if (formatter.PeekNext() == Formatters::FormatterBlob::BeginElement) {
 					RequireBeginElement(formatter);
 
 					for (;;) {
-						if (formatter.PeekNext() == FormatterBlob::EndElement) break;
+						if (formatter.PeekNext() == Formatters::FormatterBlob::EndElement) break;
 
 						auto filterType = RequireKeyedItem(formatter);
 						auto value = RequireStringValue(formatter);
@@ -333,7 +333,7 @@ namespace ShaderSourceParser
 						} else if (XlEqStringI(filterType, "set")) {
 							_setValues.SetParameter(selectorName, value);
 						} else {
-							Throw(FormatException("Expecting \"whitelist\", \"blacklist\" or \"set\"", formatter.GetLocation()));
+							Throw(Formatters::FormatException("Expecting \"whitelist\", \"blacklist\" or \"set\"", formatter.GetLocation()));
 						}
 					}
 
@@ -345,8 +345,8 @@ namespace ShaderSourceParser
 			}
 		}
 
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected blob when deserializing selector filtering", formatter.GetLocation()));
+		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected blob when deserializing selector filtering", formatter.GetLocation()));
 
 		GenerateHash();
 	}

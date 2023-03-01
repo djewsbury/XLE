@@ -12,7 +12,7 @@
 
 namespace SceneEngine { class VolumetricFogManager; class ShallowSurfaceManager; class EnvironmentSettings; }
 
-namespace Utility 
+namespace Formatters 
 { 
     class TextOutputFormatter; 
     template<typename CharType> class TextInputFormatter;

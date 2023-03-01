@@ -15,7 +15,7 @@
 namespace FixedFunctionModel { class ModelCache; }
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ParsingContext; }}
-namespace Utility
+namespace Formatters
 {
     template<typename Type> class TextInputFormatter;
     class TextOutputFormatter;
@@ -65,7 +65,7 @@ namespace SceneEngine
         ::Assets::DirectorySearchRules _searchRules;
 
         VegetationSpawnConfig(
-            Utility::TextInputFormatter<utf8>& formatter,
+            Formatters::TextInputFormatter<utf8>& formatter,
             const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation& depVal);
         VegetationSpawnConfig();

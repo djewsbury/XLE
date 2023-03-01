@@ -31,7 +31,7 @@ target_link_libraries(UnitTests-Core PRIVATE Formatters ConsoleRig Assets OSServ
 #
 add_library(UnitTestDynLibrary SHARED ConsoleRig/UnitTestDynLibrary.cpp)
 xle_configure_dll(UnitTestDynLibrary)
-target_link_libraries(UnitTestDynLibrary PRIVATE ConsoleRig Assets OSServices Utility ForeignMisc)
+target_link_libraries(UnitTestDynLibrary PRIVATE ConsoleRig Assets OSServices Formatters Utility ForeignMisc)
 
 add_dependencies(UnitTests-Core UnitTestDynLibrary)
 

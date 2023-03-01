@@ -18,12 +18,13 @@
 #include "../../Assets/CompileAndAsyncManager.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
-#include "../../Utility/Streams/StreamDOM.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
+#include "../../Formatters/StreamDOM.h"
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
+#include "../../Utility/Conversion.h"
 
 namespace RenderCore
 {
@@ -57,7 +58,7 @@ namespace RenderCore { namespace Assets
 		static std::pair<std::unique_ptr<uint8_t[], PODAlignedDeletor>, size_t> SerializeViaStreamFormatterToBuffer(const Type& type)
 	{
 		MemoryOutputStream<utf8> strm;
-		{ TextOutputFormatter fmtter{strm}; fmtter << type; }
+		{ Formatters::TextOutputFormatter fmtter{strm}; fmtter << type; }
 		auto strmBuffer = MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End());
 		std::unique_ptr<uint8_t[], PODAlignedDeletor> result { (uint8_t*)XlMemAlign(strmBuffer.size(), sizeof(uint64_t)) };
 		std::memcpy(result.get(), strmBuffer.begin(), strmBuffer.size());

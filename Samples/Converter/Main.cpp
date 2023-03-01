@@ -17,7 +17,7 @@
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/StreamDOM.h"
+#include "../../Formatters/StreamDOM.h"
 #include "../../OSServices/FileSystemMonitor.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../OSServices/RawFS.h"

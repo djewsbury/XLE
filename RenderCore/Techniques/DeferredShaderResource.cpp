@@ -16,8 +16,8 @@
 
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../OSServices/RawFS.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/StreamDOM.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/StreamDOM.h"
 #include "../../Utility/ParameterBox.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include <chrono>
@@ -38,7 +38,7 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::DependencyValidation&				GetDependencyValidation() const     { return _depVal; }
 
 		TextureMetaData(
-			TextInputFormatter<utf8>& input, 
+			Formatters::TextInputFormatter<utf8>& input, 
 			const ::Assets::DirectorySearchRules&, 
 			const ::Assets::DependencyValidation& depVal);
         TextureMetaData() = default;
@@ -47,12 +47,12 @@ namespace RenderCore { namespace Techniques
 	};
 
 	TextureMetaData::TextureMetaData(
-		TextInputFormatter<utf8>& input, 
+		Formatters::TextInputFormatter<utf8>& input, 
 		const ::Assets::DirectorySearchRules&, 
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
-		StreamDOM<TextInputFormatter<utf8>> dom(input);
+		Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> dom(input);
         if (!dom.RootElement().children().empty()) {
             auto colorSpace = dom.RootElement().children().begin()->Attribute("colorSpace");
             if (colorSpace) {

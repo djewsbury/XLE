@@ -13,7 +13,7 @@
 
 namespace Assets { class DependencyValidation; class DirectorySearchRules; }
 
-namespace Utility
+namespace Formatters
 {
 	template<typename Type> struct StreamDOMElement;
 	template<typename Type> class TextInputFormatter;
@@ -29,7 +29,7 @@ namespace ColladaConversion
 		String AsNative(StringSection<utf8> input) const;
 		bool IsSuppressed(StringSection<utf8> input) const;
 
-		BindingConfig(const Utility::StreamDOMElement<TextInputFormatter<utf8>>& source);
+		BindingConfig(const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& source);
 		BindingConfig();
 		~BindingConfig();
 	private:
@@ -46,7 +46,7 @@ namespace ColladaConversion
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		ImportConfiguration(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation&);
+		ImportConfiguration(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation&);
 		ImportConfiguration();
 		~ImportConfiguration();
 	private:

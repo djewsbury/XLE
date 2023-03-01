@@ -12,9 +12,9 @@
 #include "MemoryUtils.h"
 #include "StringFormat.h"
 #include "Conversion.h"
-#include "Streams/TextFormatter.h"
-#include "Streams/TextOutputFormatter.h"
-#include "Streams/FormatterUtils.h"
+#include "../Formatters/TextFormatter.h"
+#include "../Formatters/TextOutputFormatter.h"
+#include "../Formatters/FormatterUtils.h"
 #include <algorithm>
 #include <utility>
 #include <sstream>
@@ -461,7 +461,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        void    ParameterBox::SerializeWithCharType(TextOutputFormatter& stream) const
+        void    ParameterBox::SerializeWithCharType(Formatters::TextOutputFormatter& stream) const
     {
         std::vector<CharType> tmpBuffer;
         std::vector<CharType> nameBuffer;
@@ -543,7 +543,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        ParameterBox::ParameterBox(TextInputFormatter<CharType>& fmttr)
+        ParameterBox::ParameterBox(Formatters::TextInputFormatter<CharType>& fmttr)
     {
         using namespace ImpliedTyping;
         _cachedHash = _cachedParameterNameHash = 0;
@@ -608,8 +608,8 @@ namespace Utility
     {
     }
 
-    template void ParameterBox::SerializeWithCharType<utf8>(TextOutputFormatter& stream) const;
-    template ParameterBox::ParameterBox(TextInputFormatter<utf8>&);
+    template void ParameterBox::SerializeWithCharType<utf8>(Formatters::TextOutputFormatter& stream) const;
+    template ParameterBox::ParameterBox(Formatters::TextInputFormatter<utf8>&);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

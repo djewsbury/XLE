@@ -73,9 +73,9 @@ namespace Utility
 
         using Token = ConditionalProcessingTokenizer::Token;
 
-        StreamLocation GetLocation() const
+        Formatters::StreamLocation GetLocation() const
         {
-            StreamLocation result;
+            Formatters::StreamLocation result;
             result._charIndex = 1 + unsigned(size_t(_input.begin()) - size_t(_lineStart));
             result._lineIndex = 1 + _lineIndex;
             return result;
@@ -332,7 +332,7 @@ namespace Utility
         if (    XlEqStringI(directive._value, "define") || XlEqStringI(directive._value, "undef")
             ||  XlEqStringI(directive._value, "line") || XlEqStringI(directive._value, "error") || XlEqStringI(directive._value, "pragma")) {
 
-            Throw(FormatException(StringMeld<256>() << "Unexpected preprocessor directive: " << directive._value << ". This directive is not supported.", directive._start));
+            Throw(Formatters::FormatException(StringMeld<256>() << "Unexpected preprocessor directive: " << directive._value << ". This directive is not supported.", directive._start));
 
         } else if (XlEqStringI(directive._value, "if")) {
 
@@ -345,7 +345,7 @@ namespace Utility
 
             auto symbol = PreProc_GetNextToken();
             if (symbol._value.IsEmpty())
-                Throw(FormatException("Expected token in #ifdef", directive._start));
+                Throw(Formatters::FormatException("Expected token in #ifdef", directive._start));
 
             _preprocessorContext._conditionsStack.push_back({"defined(" + symbol._value.AsString() + ")"});
 
@@ -355,7 +355,7 @@ namespace Utility
 
             auto symbol = PreProc_GetNextToken();
             if (symbol._value.IsEmpty())
-                Throw(FormatException("Expected token in #ifndef", directive._start));
+                Throw(Formatters::FormatException("Expected token in #ifndef", directive._start));
 
             _preprocessorContext._conditionsStack.push_back({"!defined(" + symbol._value.AsString() + ")"});
 
@@ -364,7 +364,7 @@ namespace Utility
         } else if (XlEqStringI(directive._value, "elif") || XlEqStringI(directive._value, "else") || XlEqStringI(directive._value, "endif")) {
 
             if (_preprocessorContext._conditionsStack.empty())
-                Throw(FormatException(
+                Throw(Formatters::FormatException(
                     StringMeld<256>() << "endif/else/elif when there has been no if",
                     directive._start));
 
@@ -372,7 +372,7 @@ namespace Utility
             _preprocessorContext._conditionsStack.erase(_preprocessorContext._conditionsStack.end()-1);
 
             if (prevCondition._elseCondition && !XlEqStringI(directive._value, "endif"))
-                Throw(FormatException(
+                Throw(Formatters::FormatException(
                     StringMeld<256>() << "else/elif after an else",
                     directive._start));
 
@@ -395,14 +395,14 @@ namespace Utility
             auto& state = *(_fileStates.end()-1);
             auto symbol = state._helper.PreProc_GetBracketedToken();
             if (symbol._value.IsEmpty())
-                Throw(FormatException("Expected file to include after #include directive", directive._start));
+                Throw(Formatters::FormatException("Expected file to include after #include directive", directive._start));
 
             if (!_includeHandler)
-                Throw(FormatException("No include handler provided to handle #include directive", directive._start));
+                Throw(Formatters::FormatException("No include handler provided to handle #include directive", directive._start));
 
             auto newFile = _includeHandler->OpenFile(symbol._value, state._filenameForRelativeIncludeSearch);
             if (!newFile._fileContents || !newFile._fileContentsSize)
-                Throw(FormatException(("Could not open included file (or empty file): " + symbol._value.AsString()).c_str(), directive._start));
+                Throw(Formatters::FormatException(("Could not open included file (or empty file): " + symbol._value.AsString()).c_str(), directive._start));
 
             auto hashedName = HashFilenameAndPath(MakeStringSection(newFile._filename));
             auto existing = std::find_if(_fileStates.begin(), _fileStates.end(),
@@ -425,7 +425,7 @@ namespace Utility
 
         } else {
 
-            Throw(FormatException(
+            Throw(Formatters::FormatException(
                 StringMeld<256>() << "Unknown preprocessor directive: " << directive._value,
                 directive._start));
 
@@ -440,7 +440,7 @@ namespace Utility
         return state._helper.ReadUntilEndOfLine();
     }
 
-    StreamLocation ConditionalProcessingTokenizer::GetLocation() const
+    Formatters::StreamLocation ConditionalProcessingTokenizer::GetLocation() const
     {
         assert(!_fileStates.empty());
         auto& state = *(_fileStates.end()-1);
@@ -680,7 +680,7 @@ namespace Utility
                     if (!disablePushCount) {
                         auto symbol = helper.PreProc_GetNextToken();
                         if (symbol._value.IsEmpty())
-                            Throw(FormatException("Expected token in #ifdef", directive._start));
+                            Throw(Formatters::FormatException("Expected token in #ifdef", directive._start));
 
                         Internal::ExpressionTokenList expr;
                         expr.push_back(tokenDictionary.GetOrAddToken(Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString()));
@@ -701,7 +701,7 @@ namespace Utility
                     if (!disablePushCount) {
                         auto symbol = helper.PreProc_GetNextToken();
                         if (symbol._value.IsEmpty())
-                            Throw(FormatException("Expected token in #ifndef", directive._start));
+                            Throw(Formatters::FormatException("Expected token in #ifndef", directive._start));
 
                         Internal::ExpressionTokenList expr;
                         expr.push_back(tokenDictionary.GetOrAddToken(Internal::TokenDictionary::TokenType::IsDefinedTest, symbol._value.AsString()));
@@ -722,7 +722,7 @@ namespace Utility
 
                     if (!disablePushCount) {
                         if (conditionsStack.empty())
-                            Throw(FormatException(
+                            Throw(Formatters::FormatException(
                                 StringMeld<256>() << "endif/else/elif when there has been no if",
                                 directive._start));
 
@@ -767,7 +767,7 @@ namespace Utility
                     if (!disablePushCount) {
                         auto symbol = helper.PreProc_GetNextToken();
                         if (symbol._value.IsEmpty())
-                            Throw(FormatException("Expected token in #define", directive._start));
+                            Throw(Formatters::FormatException("Expected token in #define", directive._start));
 
                         auto remainingLine = helper.ReadUntilEndOfLine();
                         bool foundNonWhitespaceChar = false;
@@ -875,10 +875,10 @@ namespace Utility
                     if (!disablePushCount) {
                         auto symbol = helper.PreProc_GetBracketedToken();
                         if (symbol._value.IsEmpty())
-                            Throw(FormatException("Expected file to include after #include directive", directive._start));
+                            Throw(Formatters::FormatException("Expected file to include after #include directive", directive._start));
 
                         if (!_includeHandler)
-                            Throw(FormatException("No include handler provided to handle #include directive", directive._start));
+                            Throw(Formatters::FormatException("No include handler provided to handle #include directive", directive._start));
 
                         // todo -- do we need any #pragma once type functionality to prevent infinite recursion
                         // or just searching through too many files
@@ -896,19 +896,19 @@ namespace Utility
                     if (XlEqString(pragmaType._value, "selector_filtering")) {
 
                         auto token = helper.PreProc_GetNextToken();
-                        if (!XlEqString(token._value, "(")) Throw(FormatException("Expecting #pragma selector_filtering(<cmd>)", directive._start));
+                        if (!XlEqString(token._value, "(")) Throw(Formatters::FormatException("Expecting #pragma selector_filtering(<cmd>)", directive._start));
                         token = helper.PreProc_GetNextToken();
                         if (XlEqString(token._value, "push_disable")) {
                             ++disablePushCount;
                         } else if (XlEqString(token._value, "pop")) {
                             if (disablePushCount == 0)
-                                Throw(FormatException("Unbalanced pushes/pops for selector_filtering pragma", directive._start));
+                                Throw(Formatters::FormatException("Unbalanced pushes/pops for selector_filtering pragma", directive._start));
                             --disablePushCount;
                         } else {
-                            Throw(FormatException("Expecting either push_disable or pop", directive._start));
+                            Throw(Formatters::FormatException("Expecting either push_disable or pop", directive._start));
                         }
                         token = helper.PreProc_GetNextToken();
-                        if (!XlEqString(token._value, ")")) Throw(FormatException("Expecting #pragma selector_filtering(<cmd>)", directive._start));
+                        if (!XlEqString(token._value, ")")) Throw(Formatters::FormatException("Expecting #pragma selector_filtering(<cmd>)", directive._start));
                         helper.ReadUntilEndOfLine();
 
                     } else {
@@ -922,7 +922,7 @@ namespace Utility
 
                 } else {
 
-                    Throw(FormatException(
+                    Throw(Formatters::FormatException(
                         StringMeld<256>() << "Unknown preprocessor directive: " << directive._value,
                         directive._start));
 
@@ -930,7 +930,7 @@ namespace Utility
             }
 
             if (disablePushCount != 0)
-                Throw(FormatException("Unbounded selector_filtering pragma", helper.GetLocation()));
+                Throw(Formatters::FormatException("Unbounded selector_filtering pragma", helper.GetLocation()));
 
             PreprocessorAnalysis result;
             result._tokenDictionary = std::move(tokenDictionary);

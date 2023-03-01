@@ -14,7 +14,7 @@
     #define OSSERVICES_ENABLE_LOG
 #endif
 
-namespace Utility
+namespace Formatters
 {
     template<typename CharType>
         class TextInputFormatter;
@@ -128,7 +128,7 @@ namespace OSServices
         void Set(StringSection<> id, MessageTargetConfiguration& cfg);
 
         LogConfigurationSet();
-        LogConfigurationSet(TextInputFormatter<char>& formatter);
+        LogConfigurationSet(Formatters::TextInputFormatter<char>& formatter);
         ~LogConfigurationSet();
     private:
         class Config
@@ -140,10 +140,10 @@ namespace OSServices
 
         std::vector<std::pair<std::string, Config>> _configs;
 
-        Config LoadConfig(TextInputFormatter<char>& formatter);
+        Config LoadConfig(Formatters::TextInputFormatter<char>& formatter);
     };
 
-    inline void DeserializationOperator(TextInputFormatter<char>& str, LogConfigurationSet& cls)
+    inline void DeserializationOperator(Formatters::TextInputFormatter<char>& str, LogConfigurationSet& cls)
     {
         cls = LogConfigurationSet(str);
     }

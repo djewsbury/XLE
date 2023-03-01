@@ -13,11 +13,11 @@
 #include "../ConsoleRig/GlobalServices.h"		// for GetLibVersionDesc
 #include "../OSServices/AttachableLibrary.h"
 #include "../Utility/Streams/ConditionalPreprocessingTokenizer.h"
-#include "../Utility/Streams/TextOutputFormatter.h"
+#include "../Formatters/TextOutputFormatter.h"
 #include "../Utility/Streams/StreamTypes.h"
 #include "../Utility/Streams/SerializationUtils.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Streams/FormatterUtils.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/FastParseValue.h"
@@ -35,7 +35,7 @@ namespace ShaderSourceParser
 	constexpr auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
 
 	void SerializationOperator(
-		Utility::TextOutputFormatter& formatter,
+		Formatters::TextOutputFormatter& formatter,
 		const SelectorFilteringRules& input)
 	{
 		auto e = formatter.BeginKeyedElement("TokenDictionary");
@@ -175,7 +175,7 @@ namespace ShaderSourceParser
 	}
 
 	SelectorFilteringRules::SelectorFilteringRules(
-		TextInputFormatter<utf8>& formatter, 
+		Formatters::TextInputFormatter<utf8>& formatter, 
 		const ::Assets::DirectorySearchRules&,
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
@@ -190,7 +190,7 @@ namespace ShaderSourceParser
 				while (formatter.TryStringValue(value)) {
 					auto colon = std::find(value.begin(), value.end(), ':');
 					if (colon == value.end())
-						Throw(Utility::FormatException("Missing colon in token", formatter.GetLocation()));
+						Throw(Formatters::FormatException("Missing colon in token", formatter.GetLocation()));
 
 					Utility::Internal::TokenDictionary::TokenDefinition token;
 					token._type = Utility::Internal::AsTokenType({value.begin(), colon});
@@ -307,7 +307,7 @@ namespace ShaderSourceParser
 			}
 
 			MemoryOutputStream<> memStream;
-			TextOutputFormatter fmttr(memStream);
+			Formatters::TextOutputFormatter fmttr(memStream);
 			fmttr << filteringRules;
 
 			std::vector<::Assets::ICompileOperation::SerializedArtifact> artifacts;

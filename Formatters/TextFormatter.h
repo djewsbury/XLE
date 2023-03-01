@@ -4,19 +4,19 @@
 
 #pragma once
 
-#include "../StringUtils.h"
-#include "../../Assets/AssetsCore.h"		// require for assets exceptions
-#include "../../Core/Exceptions.h"
+#include "../Assets/AssetsCore.h"		// require for assets exceptions
+#include "../Utility/StringUtils.h"
+#include "../Core/Exceptions.h"
 #include <assert.h>
 
-namespace Utility
+namespace Utility { template<typename Iterator> class IteratorRange; }
+
+namespace Formatters
 {
 	struct StreamLocation { unsigned _charIndex, _lineIndex; ::Assets::DependencyValidation _depVal; };
 
 	template<typename CharType>
 		class TextStreamMarker;
-
-	template<typename Iterator> class IteratorRange;
 
 	enum class FormatterBlob
 	{

@@ -13,7 +13,7 @@
 #include "../Utility/UTFUtils.h"
 #include <vector>
 
-namespace Utility 
+namespace Formatters
 { 
     template<typename CharType> class TextInputFormatter;
     class TextOutputFormatter;

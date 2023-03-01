@@ -11,5 +11,5 @@ add_library(
     SEffect.cpp
     SRawGeometry.cpp)
 xle_configure_dll(ColladaConversion)
-target_link_libraries(ColladaConversion PRIVATE RenderCoreAssets ConsoleRig Assets OSServices Utility ForeignMisc)
+target_link_libraries(ColladaConversion PRIVATE RenderCoreAssets ConsoleRig Assets OSServices Formatters Utility ForeignMisc)
 xle_configure_binary_output(ColladaConversion)

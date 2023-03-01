@@ -6,13 +6,13 @@
 
 #pragma once
 
-#include "../Utility/Streams/XmlFormatter.h"
-#include "../Utility/Streams/StreamDOM.h"
+#include "../Formatters/XmlFormatter.h"
+#include "../Formatters/StreamDOM.h"
 #include <vector>
 
 namespace ColladaConversion 
 {
-    using Formatter = XmlInputFormatter<utf8>;
+    using Formatter = Formatters::XmlInputFormatter<utf8>;
     using Section = Formatter::InteriorSection;
 
     class DocScopeId
@@ -32,7 +32,7 @@ namespace ColladaConversion
 
 namespace ColladaConversion { namespace DataFlow
 {
-    using Formatter = XmlInputFormatter<utf8>;
+    using Formatter = Formatters::XmlInputFormatter<utf8>;
     using Section = Formatter::InteriorSection;
     
     /// <summary>Data type for a collada array</summary>
@@ -117,7 +117,7 @@ namespace ColladaConversion { namespace DataFlow
 
         const Accessor* FindAccessorForTechnique(const utf8 techniqueProfile[] = "technique_common") const;
 
-        const StreamLocation GetLocation() const { return _location; }
+        const Formatters::StreamLocation GetLocation() const { return _location; }
 
         Source() : _type(ArrayType::Unspecified), _arrayCount(0), _accessorsCount(0) {}
         Source(Formatter& formatter);
@@ -139,7 +139,7 @@ namespace ColladaConversion { namespace DataFlow
         std::vector<std::pair<Accessor, Section>> _accessorsOverflow;
         unsigned _accessorsCount;
 
-        StreamLocation _location;
+        Formatters::StreamLocation _location;
     };
 
 

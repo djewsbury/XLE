@@ -25,7 +25,7 @@
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/FormatterUtils.h"
 #include <memory>
 
 using namespace Utility::Literals;

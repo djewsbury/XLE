@@ -9,9 +9,9 @@
 #include "ClassAccessorsImpl.h"
 
 #include "../../OSServices/Log.h"
-#include "../Streams/TextFormatter.h"
-#include "../Streams/TextOutputFormatter.h"
-#include "../Streams/FormatterUtils.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../StringFormat.h"
 #include "../ParameterBox.h"
 #include "../MemoryUtils.h"
@@ -30,16 +30,16 @@ namespace Utility
     {
         for (;;) {
             switch (formatter.PeekNext()) {
-            case FormatterBlob::KeyedItem:
+            case Formatters::FormatterBlob::KeyedItem:
                 {
                     auto name = RequireKeyedItem(formatter);
 
-                    if (formatter.PeekNext() == FormatterBlob::Value) {
+                    if (formatter.PeekNext() == Formatters::FormatterBlob::Value) {
                         auto value = RequireStringValue(formatter);
                         if (!props.SetFromString(obj, name, value)) {
                             std::cout << "Failure while assigning property during deserialization -- " << name << std::endl;
                         }
-                    } else if (formatter.PeekNext() == FormatterBlob::BeginElement) {
+                    } else if (formatter.PeekNext() == Formatters::FormatterBlob::BeginElement) {
 #if SUPPORT_POLYMORPHIC_EXTENSIONS
                         auto* legacyExtensions = dynamic_cast<const Legacy::ClassAccessorsWithChildLists*>(&props)
                         if (legacyExtensions) {
@@ -57,22 +57,22 @@ namespace Utility
                         } else 
 #endif
                         {
-                            Throw(FormatException("Children elements not supported for this type", formatter.GetLocation()));
+                            Throw(Formatters::FormatException("Children elements not supported for this type", formatter.GetLocation()));
                         }
                     } else {
-                        Throw(FormatException("Expecting either a value or an element", formatter.GetLocation()));
+                        Throw(Formatters::FormatException("Expecting either a value or an element", formatter.GetLocation()));
                     }
                 }
                 break;
                     
-            case FormatterBlob::Value:
-            case FormatterBlob::BeginElement:
-            case FormatterBlob::CharacterData:
+            case Formatters::FormatterBlob::Value:
+            case Formatters::FormatterBlob::BeginElement:
+            case Formatters::FormatterBlob::CharacterData:
                 assert(0);
                 break;
 
-            case FormatterBlob::EndElement:
-            case FormatterBlob::None:
+            case Formatters::FormatterBlob::EndElement:
+            case Formatters::FormatterBlob::None:
                 return;
             }
         }
@@ -81,7 +81,7 @@ namespace Utility
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     void AccessorSerialize(
-        TextOutputFormatter& formatter,
+        Formatters::TextOutputFormatter& formatter,
         const void* obj, const ClassAccessors& accessors)
     {
         for (const auto&p:accessors.GetProperties()) {
@@ -113,7 +113,7 @@ namespace Utility
 
     template
         void AccessorDeserialize(
-            TextInputFormatter<utf8>& formatter,
+            Formatters::TextInputFormatter<utf8>& formatter,
             void* obj, const ClassAccessors& props);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -13,7 +13,7 @@
 #include <future>
 
 namespace RenderCore { namespace Assets { class ModelRendererConstruction; }}
-namespace Utility { template<typename T> class TextInputFormatter; }
+namespace Formatters { template<typename T> class TextInputFormatter; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -97,7 +97,7 @@ namespace RenderCore { namespace Techniques
 
 	// caller should wait on the renderer construction before calling DeserializeDeformerConstruction();
 	std::shared_ptr<RenderCore::Techniques::DeformerConstruction> DeserializeDeformerConstruction(
-		std::shared_ptr<RenderCore::IDevice>, std::shared_ptr<Assets::ModelRendererConstruction>, TextInputFormatter<char>& cfg);
+		std::shared_ptr<RenderCore::IDevice>, std::shared_ptr<Assets::ModelRendererConstruction>, Formatters::TextInputFormatter<char>& cfg);
 
 	template<typename Formatter>
 		void DeserializeDeformerConstruction(
@@ -110,10 +110,10 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual void Configure(
 			DeformerConstruction& construction,
-			TextInputFormatter<char>& fmttr = EmptyFormatter()) = 0;
+			Formatters::TextInputFormatter<char>& fmttr = EmptyFormatter()) = 0;
 		virtual ~IDeformConfigure();
 
-		static TextInputFormatter<char>& EmptyFormatter();
+		static Formatters::TextInputFormatter<char>& EmptyFormatter();
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////

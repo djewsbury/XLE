@@ -11,8 +11,8 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../OSServices/Log.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../OSServices/RawFS.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
@@ -22,7 +22,7 @@
 
 namespace RenderCore { namespace Techniques
 {
-	using Formatter = TextInputFormatter<utf8>;
+	using Formatter = Formatters::TextInputFormatter<utf8>;
 
 	static void LoadInheritedParameterBoxes(
 		TechniqueEntry& dst, Formatter& formatter, 
@@ -35,7 +35,7 @@ namespace RenderCore { namespace Techniques
 			//  Inherit lists should take the form "FileName:Setting"
 			//  The "setting" should be a top-level item in the file
 
-		while (formatter.PeekNext() == FormatterBlob::Value) {
+		while (formatter.PeekNext() == Formatters::FormatterBlob::Value) {
 
 			auto value = RequireStringValue(formatter);
 		
@@ -52,7 +52,7 @@ namespace RenderCore { namespace Techniques
 				if (s != settingsTable._settings.end() && s->first == settingHash) {
 					dst.MergeIn(s->second);
 				} else 
-					Throw(FormatException("Inherited object not found", formatter.GetLocation()));
+					Throw(Formatters::FormatException("Inherited object not found", formatter.GetLocation()));
 
 				if (std::find(inherited.begin(), inherited.end(), settingsTable.GetDependencyValidation()) == inherited.end()) {
 					inherited.push_back(settingsTable.GetDependencyValidation());
@@ -64,12 +64,12 @@ namespace RenderCore { namespace Techniques
 				if (s != localSettings.end() && s->first == settingHash) {
 					dst.MergeIn(s->second);
 				} else
-					Throw(FormatException("Inherited object not found", formatter.GetLocation()));
+					Throw(Formatters::FormatException("Inherited object not found", formatter.GetLocation()));
 			}
 		}
 
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected blob when deserializing inherited list", formatter.GetLocation()));
+		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected blob when deserializing inherited list", formatter.GetLocation()));
 	}
 	
 	static TechniqueEntry ParseTechniqueEntry(
@@ -101,18 +101,18 @@ namespace RenderCore { namespace Techniques
 			} else if (XlEqString(name, "PipelineLayout")) {
 				result._pipelineLayoutName = RequireStringValue(formatter).AsString();
 			} else {
-				Throw(FormatException("Unknown mapped item while reading technique", formatter.GetLocation()));
+				Throw(Formatters::FormatException("Unknown mapped item while reading technique", formatter.GetLocation()));
 			}
 		}
 
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected blob when deserializing technique entry", formatter.GetLocation()));
+		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected blob when deserializing technique entry", formatter.GetLocation()));
 
 		return result;
 	}
 
 	TechniqueSetFile::TechniqueSetFile(
-		Utility::TextInputFormatter<utf8>& formatter, 
+		Formatters::TextInputFormatter<utf8>& formatter, 
 		const ::Assets::DirectorySearchRules& searchRules, 
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
@@ -135,8 +135,8 @@ namespace RenderCore { namespace Techniques
 			RequireEndElement(formatter);
 		}
 
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected blob while reading stream", formatter.GetLocation()));
+		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected blob while reading stream", formatter.GetLocation()));
 
 		for (auto i=inherited.begin(); i!=inherited.end(); ++i) {
 			_depVal.RegisterDependency(*i);
@@ -295,7 +295,7 @@ namespace RenderCore { namespace Techniques
 				RequireBeginElement(formatter);
 				
 				// we should find a list of other technique configuration files to inherit from
-				while (formatter.PeekNext() == FormatterBlob::Value) {
+				while (formatter.PeekNext() == Formatters::FormatterBlob::Value) {
 					auto inheritSrc = RequireStringValue(formatter);
 					::Assets::ResChar resolvedFile[MaxPath];
 					XlCopyNString(resolvedFile, (const ::Assets::ResChar*)inheritSrc._start, inheritSrc._end-inheritSrc._start);
@@ -318,7 +318,7 @@ namespace RenderCore { namespace Techniques
 				// We should find a list of the actual techniques to use, as attributes
 				// The attribute name defines the how to apply the technique, and the attribute value is
 				// the name of the technique itself
-				while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+				while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
 					auto attribName = RequireKeyedItem(formatter);
 					auto value = RequireStringValue(formatter);
 
@@ -343,7 +343,7 @@ namespace RenderCore { namespace Techniques
 							if (i != setFile._settings.end() && i->first == hash) {
 								_entries[index] = i->second;		// (don't merge in; this a replace)
 							} else 
-								Throw(FormatException("Could not resolve requested technique setting", formatter.GetLocation()));
+								Throw(Formatters::FormatException("Could not resolve requested technique setting", formatter.GetLocation()));
 
 							if (std::find(inheritedAssets.begin(), inheritedAssets.end(), setFile.GetDependencyValidation()) == inheritedAssets.end()) {
 								inheritedAssets.push_back(setFile.GetDependencyValidation());
@@ -367,8 +367,8 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected blob while reading stream", formatter.GetLocation()));
+		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected blob while reading stream", formatter.GetLocation()));
 	}
 
 	TechniqueEntry& Technique::GetEntry(unsigned idx)

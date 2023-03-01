@@ -12,8 +12,8 @@
 #include "../Assets/AssetServices.h"
 #include "../Assets/IFileSystem.h"
 #include "../Math/Transformations.h"
-#include "../Utility/Streams/TextFormatter.h"
-#include "../Utility/Streams/StreamDOM.h"
+#include "../Formatters/TextFormatter.h"
+#include "../Formatters/StreamDOM.h"
 #include "../OSServices/RawFS.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/Stream.h"
@@ -139,12 +139,12 @@ namespace SceneEngine
     }
 
     TerrainConfig::TerrainConfig(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
     : TerrainConfig()
     {
-        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
         _nodeDimsInElements     = doc("NodeDims", _nodeDimsInElements);
         _cellTreeDepth          = doc("CellTreeDepth", _cellTreeDepth);
         _nodeOverlap            = doc("NodeOverlap", _nodeOverlap);
@@ -298,9 +298,9 @@ namespace SceneEngine
         size_t fileSize = 0;
         auto sourceFile = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(filename, &fileSize);
 
-        TextInputFormatter<utf8> formatter(
+        Formatters::TextInputFormatter<utf8> formatter(
             MemoryMappedInputStream(sourceFile.get(), PtrAdd(sourceFile.get(), fileSize)));
-        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
 
         auto heightRanges = doc.Element("CellHeightRange");
         if (heightRanges) {

@@ -18,64 +18,64 @@ namespace EntityInterface
 	class FormatOverlappingDocuments : public Formatters::IDynamicInputFormatter
 	{
 	public:
-		FormatterBlob PeekNext() override
+		Formatters::FormatterBlob PeekNext() override
 		{
 			for (;;) {
 				auto virtualState = GetVirtualElementsBlob();
-				if (virtualState != FormatterBlob::None)
+				if (virtualState != Formatters::FormatterBlob::None)
 					return virtualState;
 
-				if (_activeMount == _mounts.end()) return FormatterBlob::None;
+				if (_activeMount == _mounts.end()) return Formatters::FormatterBlob::None;
 
 				auto next = _activeMount->_formatter->PeekNext();
-				if (next == FormatterBlob::None) {
+				if (next == Formatters::FormatterBlob::None) {
 					_state = State::EndVirtualElements;
 				} else
 					return next;
 			}
 		}
 
-		FormatterBlob GetVirtualElementsBlob()
+		Formatters::FormatterBlob GetVirtualElementsBlob()
 		{
 			if (_state == State::BeginVirtualElements) {
 				if (_pendingVirtualBeginElement)
-					return FormatterBlob::BeginElement;
+					return Formatters::FormatterBlob::BeginElement;
 				assert(_activeMount != _mounts.end());
 				if (_activeFormatterExternalMountIterator != _activeMount->_externalMountPoint.end())
-					return FormatterBlob::KeyedItem;
+					return Formatters::FormatterBlob::KeyedItem;
 				_state = State::Formatter;
 			} else if (_state == State::EndVirtualElements) {
 				assert(_activeMount != _mounts.end());
 				if (_activeFormatterExternalMountIterator != _activeMount->_externalMountPoint.begin())
-					return FormatterBlob::EndElement;
+					return Formatters::FormatterBlob::EndElement;
 				++_activeMount;
 				BeginActiveFormatter();
 				return GetVirtualElementsBlob();
 			} else if (_activeMount != _mounts.end()) {
 				// If the underlying formatter just ended, we need to transition to the EndVirtualElements state
-				if (_activeMount->_formatter->PeekNext() == FormatterBlob::None) {
+				if (_activeMount->_formatter->PeekNext() == Formatters::FormatterBlob::None) {
 					_state = State::EndVirtualElements;
 					return GetVirtualElementsBlob();
 				}
 			}
 
-			return FormatterBlob::None;
+			return Formatters::FormatterBlob::None;
 		}
 
         bool TryBeginElement() override
 		{
 			auto virtualState = GetVirtualElementsBlob();
-			if (virtualState == FormatterBlob::None) {
+			if (virtualState == Formatters::FormatterBlob::None) {
 				if (_activeMount == _mounts.end()) return false;
 				auto result = _activeMount->_formatter->TryBeginElement();
-				if (!result && _activeMount->_formatter->PeekNext() == FormatterBlob::None) {
+				if (!result && _activeMount->_formatter->PeekNext() == Formatters::FormatterBlob::None) {
 					_state = State::EndVirtualElements;
 					return TryBeginElement();
 				}
 				_currentElementDepth += unsigned(result);
 				return result;
 			} else {
-				if (virtualState == FormatterBlob::BeginElement) {
+				if (virtualState == Formatters::FormatterBlob::BeginElement) {
 					_pendingVirtualBeginElement = false;
 					return true;
 				}
@@ -86,13 +86,13 @@ namespace EntityInterface
 		bool TryEndElement() override
 		{
 			auto virtualState = GetVirtualElementsBlob();
-			if (virtualState == FormatterBlob::None) {
+			if (virtualState == Formatters::FormatterBlob::None) {
 				if (_activeMount == _mounts.end()) return false;
 				bool result = _activeMount->_formatter->TryEndElement();
 				_currentElementDepth -= unsigned(result);
 				return result;
 			} else {
-				if (virtualState == FormatterBlob::EndElement) {
+				if (virtualState == Formatters::FormatterBlob::EndElement) {
 					assert(!_pendingVirtualBeginElement);
 					assert(_activeFormatterExternalMountIterator != _activeMount->_externalMountPoint.begin());
 					// drop back one section in _activeMount->_externalMountPoint
@@ -109,17 +109,17 @@ namespace EntityInterface
 		bool TryKeyedItem(StringSection<>& name) override
 		{
 			auto virtualState = GetVirtualElementsBlob();
-			if (virtualState == FormatterBlob::None) {
+			if (virtualState == Formatters::FormatterBlob::None) {
 				if (_activeMount == _mounts.end()) return false;
 				auto result = _activeMount->_formatter->TryKeyedItem(name);
-				if (!result && _activeMount->_formatter->PeekNext() == FormatterBlob::None) {
+				if (!result && _activeMount->_formatter->PeekNext() == Formatters::FormatterBlob::None) {
 					++_activeMount;
 					BeginActiveFormatter();
 					return TryKeyedItem(name);
 				}
 				return result;
 			} else {
-				if (virtualState == FormatterBlob::KeyedItem) {
+				if (virtualState == Formatters::FormatterBlob::KeyedItem) {
 					auto i = _activeFormatterExternalMountIterator;
 					while (i!=_activeMount->_externalMountPoint.end() && *i != s_fnRules.GetSeparator<char>()) ++i;
 					name = MakeStringSection(_activeFormatterExternalMountIterator, i);
@@ -135,17 +135,17 @@ namespace EntityInterface
 		bool TryKeyedItem(uint64_t& name) override
 		{
 			auto virtualState = GetVirtualElementsBlob();
-			if (virtualState == FormatterBlob::None) {
+			if (virtualState == Formatters::FormatterBlob::None) {
 				if (_activeMount == _mounts.end()) return false;
 				auto result = _activeMount->_formatter->TryKeyedItem(name);
-				if (!result && _activeMount->_formatter->PeekNext() == FormatterBlob::None) {
+				if (!result && _activeMount->_formatter->PeekNext() == Formatters::FormatterBlob::None) {
 					++_activeMount;
 					BeginActiveFormatter();
 					return TryKeyedItem(name);
 				}
 				return result;
 			} else {
-				if (virtualState == FormatterBlob::KeyedItem) {
+				if (virtualState == Formatters::FormatterBlob::KeyedItem) {
 					auto i = _activeFormatterExternalMountIterator;
 					while (i!=_activeMount->_externalMountPoint.end() && *i != s_fnRules.GetSeparator<char>()) ++i;
 					name = Hash64(MakeStringSection(_activeFormatterExternalMountIterator, i));
@@ -160,10 +160,10 @@ namespace EntityInterface
 
 		bool TryStringValue(StringSection<>& value) override
 		{
-			if (GetVirtualElementsBlob() == FormatterBlob::None) {
+			if (GetVirtualElementsBlob() == Formatters::FormatterBlob::None) {
 				if (_activeMount == _mounts.end()) return false;
 				auto result = _activeMount->_formatter->TryStringValue(value);
-				if (!result && _activeMount->_formatter->PeekNext() == FormatterBlob::None) {
+				if (!result && _activeMount->_formatter->PeekNext() == Formatters::FormatterBlob::None) {
 					++_activeMount;
 					BeginActiveFormatter();
 					return TryStringValue(value);
@@ -176,10 +176,10 @@ namespace EntityInterface
 
 		bool TryRawValue(IteratorRange<const void*>& value, ImpliedTyping::TypeDesc& typeDesc) override
 		{
-			if (GetVirtualElementsBlob() == FormatterBlob::None) {
+			if (GetVirtualElementsBlob() == Formatters::FormatterBlob::None) {
 				if (_activeMount == _mounts.end()) return false;
 				auto result = _activeMount->_formatter->TryRawValue(value, typeDesc);
-				if (!result && _activeMount->_formatter->PeekNext() == FormatterBlob::None) {
+				if (!result && _activeMount->_formatter->PeekNext() == Formatters::FormatterBlob::None) {
 					++_activeMount;
 					BeginActiveFormatter();
 					return TryRawValue(value, typeDesc);
@@ -192,10 +192,10 @@ namespace EntityInterface
 
 		virtual bool TryCastValue(IteratorRange<void*> destination, const ImpliedTyping::TypeDesc& type) override
 		{
-			if (GetVirtualElementsBlob() == FormatterBlob::None) {
+			if (GetVirtualElementsBlob() == Formatters::FormatterBlob::None) {
 				if (_activeMount == _mounts.end()) return {};
 				auto result = _activeMount->_formatter->TryCastValue(destination, type);
-				if (!result && _activeMount->_formatter->PeekNext() == FormatterBlob::None) {
+				if (!result && _activeMount->_formatter->PeekNext() == Formatters::FormatterBlob::None) {
 					++_activeMount;
 					BeginActiveFormatter();
 					return TryCastValue(destination, type);
@@ -209,12 +209,12 @@ namespace EntityInterface
 		void SkipValueOrElement() override
 		{
 			auto virtualState = GetVirtualElementsBlob();
-			if (virtualState != FormatterBlob::None) {
-				if (virtualState == FormatterBlob::BeginElement) {
+			if (virtualState != Formatters::FormatterBlob::None) {
+				if (virtualState == Formatters::FormatterBlob::BeginElement) {
 					// just swap state from BeginVirtualElements to EndVirtualElements
 					assert(_state == State::BeginVirtualElements);
 					_state = State::EndVirtualElements;
-					assert(GetVirtualElementsBlob() == FormatterBlob::EndElement);
+					assert(GetVirtualElementsBlob() == Formatters::FormatterBlob::EndElement);
 					TryEndElement();		// since we advance _activeFormatterExternalMountIterator in TryKeyedItem, we must reverse back over that now
 				}
 			} else {
@@ -223,7 +223,7 @@ namespace EntityInterface
 			}
 		}
 
-        StreamLocation GetLocation() const override 
+        Formatters::StreamLocation GetLocation() const override 
 		{
 			if (_activeMount == _mounts.end()) return {};
 			return _activeMount->_formatter->GetLocation();

@@ -26,7 +26,7 @@
 #include "../../Assets/Marker.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../OSServices/Log.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../xleres/FileList.h"
 #include <sstream>
 
@@ -121,7 +121,7 @@ namespace ToolsRig
 					first = false;
 					str << c.first;
 				}
-				Throw(FormatException(str.str().c_str(), formatter.GetLocation()));
+				Throw(Formatters::FormatException(str.str().c_str(), formatter.GetLocation()));
 			}
 
 			RequireBeginElement(formatter);
@@ -215,7 +215,7 @@ namespace ToolsRig
 
 							RequireEndElement(*formatter);
 						} else {
-							Throw(FormatException(StringMeld<256>() << "Unknown top level instruction: " << keyname, formatter->GetLocation()));
+							Throw(Formatters::FormatException(StringMeld<256>() << "Unknown top level instruction: " << keyname, formatter->GetLocation()));
 						}
 					}
 
@@ -297,7 +297,7 @@ namespace ToolsRig
 						first = false;
 						str << c.first;
 					}
-					Throw(FormatException(str.str().c_str(), formatter->GetLocation()));
+					Throw(Formatters::FormatException(str.str().c_str(), formatter->GetLocation()));
 				}
 
 				RequireBeginElement(*formatter);
@@ -515,7 +515,7 @@ namespace ToolsRig
 						formatter.SkipValueOrElement();
 				}
 				if (attachmentName.IsEmpty())
-					Throw(FormatException("Expecting 'Attachment' key", formatter.GetLocation()));
+					Throw(Formatters::FormatException("Expecting 'Attachment' key", formatter.GetLocation()));
 				return std::make_shared<VisualizeAttachment>(attachmentName, shader.value());
 			});
 	}

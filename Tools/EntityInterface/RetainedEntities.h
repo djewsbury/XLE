@@ -14,7 +14,7 @@
 #include <functional>
 #include <iosfwd>
 
-namespace Utility { template<typename Type> class TextInputFormatter; }
+namespace Formatters { template<typename Type> class TextInputFormatter; }
 
 namespace EntityInterface
 {
@@ -164,7 +164,7 @@ namespace EntityInterface
     };
 
     void Deserialize(
-        Utility::TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         IMutableEntityDocument& interf);
 }
 

@@ -9,7 +9,7 @@
 #include "Assets.h"
 #include "IFileSystem.h"
 #include "../Utility/StringUtils.h"
-#include "../Utility/Streams/FormatterUtils.h"
+#include "../Formatters/FormatterUtils.h"
 #include <regex>
 
 namespace Assets
@@ -41,13 +41,13 @@ namespace Assets
 
 		for (;;) {
 			switch (formatter.PeekNext()) {
-			case FormatterBlob::KeyedItem:
+			case Formatters::FormatterBlob::KeyedItem:
                 {
                     auto eleName = RequireKeyedItem(formatter);
 
-                    if (XlEqStringI(eleName, immediateConfigName) && formatter.PeekNext() == FormatterBlob::BeginElement) {
+                    if (XlEqStringI(eleName, immediateConfigName) && formatter.PeekNext() == Formatters::FormatterBlob::BeginElement) {
                         if (!formatter.TryBeginElement())
-                            Throw(Utility::FormatException("Poorly formed begin element in config file", formatter.GetLocation()));
+                            Throw(Formatters::FormatException("Poorly formed begin element in config file", formatter.GetLocation()));
 
                         // We can access a nested item using ':' as a separator
                         // For example, "first:second:third" will look for "first" at
@@ -63,13 +63,13 @@ namespace Assets
                     continue;
                 }
                         
-            case FormatterBlob::BeginElement:
+            case Formatters::FormatterBlob::BeginElement:
                 RequireBeginElement(formatter);
                 SkipElement(formatter);    // skip the whole element; it's not required
                 RequireEndElement(formatter);
                 continue;
 
-			case Formatter::Blob::Value:
+			case Formatters::FormatterBlob::Value:
 				{
 					typename Formatter::InteriorSection value;
 					formatter.TryStringValue(value);
@@ -228,6 +228,6 @@ namespace Assets
     //  working currently
     template std::vector<TextChunk<char>> ReadCompoundTextDocument(StringSection<char>);
 
-	template class ConfigFileContainer<TextInputFormatter<utf8>>;
+	template class ConfigFileContainer<Formatters::TextInputFormatter<utf8>>;
 }
 

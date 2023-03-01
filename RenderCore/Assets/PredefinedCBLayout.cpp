@@ -53,7 +53,7 @@ namespace RenderCore { namespace Assets
 			ConditionalProcessingTokenizer tokenizer{configSection};
             Parse(tokenizer);
             if (!tokenizer.Remaining().IsEmpty())
-    			Throw(FormatException("Additional tokens found, expecting end of file", tokenizer.GetLocation()));
+    			Throw(Formatters::FormatException("Additional tokens found, expecting end of file", tokenizer.GetLocation()));
 		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 			Throw(::Assets::Exceptions::ConstructionError(e, _validationCallback));
 		} CATCH (const std::exception& e) {
@@ -74,7 +74,7 @@ namespace RenderCore { namespace Assets
         ConditionalProcessingTokenizer tokenizer{source};
         Parse(tokenizer);
         if (!tokenizer.Remaining().IsEmpty())
-			Throw(FormatException("Additional tokens found, expecting end of file", tokenizer.GetLocation()));
+			Throw(Formatters::FormatException("Additional tokens found, expecting end of file", tokenizer.GetLocation()));
     }
 
     PredefinedCBLayout::PredefinedCBLayout(
@@ -196,7 +196,7 @@ namespace RenderCore { namespace Assets
 
         auto name = streamIterator.GetNextToken();
         if (name._value.IsEmpty())
-            Throw(FormatException("Expecting variable name", name._start));
+            Throw(Formatters::FormatException("Expecting variable name", name._start));
 
         StringSection<> arrayCount;
         if (XlEqString(streamIterator.PeekNextToken()._value, "[")) {
@@ -204,12 +204,12 @@ namespace RenderCore { namespace Assets
 
             auto count = streamIterator.GetNextToken();
             if (count._value.IsEmpty() || XlEqString(count._value, "]"))
-                Throw(FormatException("Expecting array count", count._start));
+                Throw(Formatters::FormatException("Expecting array count", count._start));
 
             arrayCount = count._value;
             auto token = streamIterator.GetNextToken();
             if (!XlEqString(token._value, "]"))
-                Throw(FormatException("Expecting closing array brace", token._start));
+                Throw(Formatters::FormatException("Expecting closing array brace", token._start));
         }
 
         PredefinedCBLayout::NameAndType result;
@@ -219,7 +219,7 @@ namespace RenderCore { namespace Assets
 
         auto size = result._type.GetSize();
         if (!size) {
-            Throw(FormatException(
+            Throw(Formatters::FormatException(
                 StringMeld<256>() << "Problem parsing type (" << type._value << ") in PredefinedCBLayout. Type size is: " << size,
                 type._start));
         }
@@ -234,7 +234,7 @@ namespace RenderCore { namespace Assets
             auto equalsToken = streamIterator.GetNextToken();      // skip the one we peeked
 
             if (!arrayCount.IsEmpty())
-                Throw(FormatException(
+                Throw(Formatters::FormatException(
                     "Attempting to provide an default for an array type in PredefinedCBLayout (this isn't supported)",
                     equalsToken._start));
 
@@ -265,7 +265,7 @@ namespace RenderCore { namespace Assets
                     auto* end = &buffer1[std::min(dimof(buffer1), (size_t)defaultType.GetSize())];
                     defaults.SetParameter((const utf8*)result._name.c_str(), MakeIteratorRange(buffer1, end), result._type);
                 } else {
-                    Throw(FormatException(
+                    Throw(Formatters::FormatException(
                         "Default initialiser can't be cast to same type as variable in PredefinedCBLayout: ",
                         startLocation));
                 }
@@ -276,7 +276,7 @@ namespace RenderCore { namespace Assets
         } else {
             auto token = streamIterator.GetNextToken();
             if (!XlEqString(token._value, ";"))
-                Throw(FormatException("Expecting ';' to finish statement", token._start));
+                Throw(Formatters::FormatException("Expecting ';' to finish statement", token._start));
         }
 
         return result;
@@ -586,24 +586,24 @@ namespace RenderCore { namespace Assets
             if (currentLayoutName.empty()) {
                 auto token = iterator.GetNextToken();
                 if (!XlEqString(token._value, "struct"))
-                    Throw(FormatException(StringMeld<256>() << "Expecting 'struct' keyword, but got " << token._value, token._start));
+                    Throw(Formatters::FormatException(StringMeld<256>() << "Expecting 'struct' keyword, but got " << token._value, token._start));
 
                 auto layoutName = iterator.GetNextToken();
                 if (layoutName._value.IsEmpty())
-                    Throw(FormatException("Expecting identifier after struct keyword", token._start));
+                    Throw(Formatters::FormatException("Expecting identifier after struct keyword", token._start));
 
                 currentLayoutName = layoutName._value.AsString();
 
                 token = iterator.GetNextToken();
                 if (!XlEqString(token._value, "{"))
-                    Throw(FormatException(StringMeld<256>() << "Expecting '{', but got " << token._value, token._start));
+                    Throw(Formatters::FormatException(StringMeld<256>() << "Expecting '{', but got " << token._value, token._start));
             }
 
             if (XlEqString(next._value, "}")) {
                 iterator.GetNextToken();
                 auto token = iterator.GetNextToken();
                 if (!XlEqString(token._value, ";"))
-                    Throw(FormatException(StringMeld<256>() << "Expecting ; after }, but got " << token._value, token._start));
+                    Throw(Formatters::FormatException(StringMeld<256>() << "Expecting ; after }, but got " << token._value, token._start));
 
                 for (unsigned c=0; c<dimof(currentLayout->_cbSizeByLanguage); ++c) {
                     currentLayout->_cbSizeByLanguageNoPostfix[c] = currentLayoutCBIterator[c];

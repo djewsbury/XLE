@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "TextFormatter.h"
+#include "../../Formatters/TextFormatter.h"
 #include "PreprocessorInterpreter.h"
 #include "../StringUtils.h"
 #include <string>
@@ -48,13 +48,13 @@ namespace Utility
         struct Token
         {
             StringSection<> _value;
-            StreamLocation _start, _end;
+            Formatters::StreamLocation _start, _end;
         };
 
         Token GetNextToken();
         Token PeekNextToken();
 
-        StreamLocation GetLocation() const;
+        Formatters::StreamLocation GetLocation() const;
         StringSection<> Remaining() const;
 
         class PreprocessorParseContext

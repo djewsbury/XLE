@@ -32,7 +32,7 @@ namespace RenderCore { namespace Assets
 
 		auto layoutName = iterator.GetNextToken();
 		if (layoutName._value.IsEmpty())
-			Throw(FormatException("Expecting identifier after type keyword", layoutName._start));
+			Throw(Formatters::FormatException("Expecting identifier after type keyword", layoutName._start));
 
 		result._name = layoutName._value.AsString();
 		result._type = type;
@@ -41,15 +41,15 @@ namespace RenderCore { namespace Assets
 		if (XlEqString(token._value, "[")) {
 			auto countToken = iterator.GetNextToken();
 			if (XlEqString(countToken._value, "]"))
-				Throw(FormatException("Expecting expecting array count, but got empty array brackets", token._start));
+				Throw(Formatters::FormatException("Expecting expecting array count, but got empty array brackets", token._start));
 
 			auto* parseEnd = FastParseValue(countToken._value, result._arrayElementCount);
 			if (parseEnd != countToken._value.end())
-				Throw(FormatException(StringMeld<256>() << "Expecting unsigned integer value for array count, but got " << countToken._value, token._start));
+				Throw(Formatters::FormatException(StringMeld<256>() << "Expecting unsigned integer value for array count, but got " << countToken._value, token._start));
 
 			auto closeBracket = iterator.GetNextToken();
 			if (!XlEqString(closeBracket._value, "]"))
-				Throw(FormatException(StringMeld<256>() << "Expecting expecting closing bracket for array, but got " << closeBracket._value, token._start));
+				Throw(Formatters::FormatException(StringMeld<256>() << "Expecting expecting closing bracket for array, but got " << closeBracket._value, token._start));
 
 			token = iterator.GetNextToken();
 		}
@@ -59,7 +59,7 @@ namespace RenderCore { namespace Assets
 
 			const char* parseEnd = FastParseValue(token._value, result._slotIdx);
 			if (parseEnd != token._value.end())
-				Throw(FormatException(StringMeld<256>() << "Expecting integer slot index value, but got " << token._value, token._start));
+				Throw(Formatters::FormatException(StringMeld<256>() << "Expecting integer slot index value, but got " << token._value, token._start));
 
 			token = iterator.GetNextToken();
 		}
@@ -71,7 +71,7 @@ namespace RenderCore { namespace Assets
 			for (;;) {
 				auto next = iterator.PeekNextToken();
 				if (next._value.IsEmpty())
-					Throw(FormatException(StringMeld<256>() << "Unexpected end of file while parsing layout for (" << result._name << ") at " << next._value, next._start));
+					Throw(Formatters::FormatException(StringMeld<256>() << "Unexpected end of file while parsing layout for (" << result._name << ") at " << next._value, next._start));
 
 				if (XlEqString(next._value, "}")) {
 					iterator.GetNextToken();		// (advance over the })
@@ -93,7 +93,7 @@ namespace RenderCore { namespace Assets
 
 			token = iterator.GetNextToken();
 			if (token._value.IsEmpty())
-				Throw(FormatException(StringMeld<256>() << "Unexpected end of file while parsing fixed sampler for (" << result._name << ") at " << token._value, token._start));
+				Throw(Formatters::FormatException(StringMeld<256>() << "Unexpected end of file while parsing fixed sampler for (" << result._name << ") at " << token._value, token._start));
 			assert(XlEqString(token._value, "}"));
 			token = iterator.GetNextToken();		
 
@@ -102,7 +102,7 @@ namespace RenderCore { namespace Assets
 		}
 
 		if (!XlEqString(token._value, ";"))
-			Throw(FormatException(StringMeld<256>() << "Expecting ; after resource, but got " << token._value, token._start));
+			Throw(Formatters::FormatException(StringMeld<256>() << "Expecting ; after resource, but got " << token._value, token._start));
 
 		_slots.push_back(result);
 	}
@@ -231,7 +231,7 @@ namespace RenderCore { namespace Assets
 					if (c != 0) meld << ", ";
 					meld << s_descriptorTypeNames[c].first;
 				}
-				Throw(FormatException(meld, token._start));
+				Throw(Formatters::FormatException(meld, token._start));
 			}
 		}
 
@@ -273,7 +273,7 @@ namespace RenderCore { namespace Assets
 		ConditionalProcessingTokenizer iterator{inputData, searchRules.GetBaseFile(), &includeHandler};
 		Parse(iterator);
 		if (!iterator.Remaining().IsEmpty())
-			Throw(FormatException("Additional tokens found, expecting end of file", iterator.GetLocation()));
+			Throw(Formatters::FormatException("Additional tokens found, expecting end of file", iterator.GetLocation()));
 	}
 
 	uint64_t PredefinedDescriptorSetLayout::CalculateHash(uint64_t seed) const
@@ -344,35 +344,35 @@ namespace RenderCore { namespace Assets
 
 			if (XlEqString(next._value, "Filter")) {
 				if (!XlEqString(iterator.GetNextToken()._value, "="))
-					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
+					Throw(Formatters::FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
 				next = iterator.GetNextToken();
 				auto filterMode = AsFilterMode(next._value);
 				if (!filterMode)
-					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown filter mode (" << next._value << ")", iterator.GetLocation()));
+					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown filter mode (" << next._value << ")", iterator.GetLocation()));
 				result._filter = filterMode.value();
 			} else if (XlEqString(next._value, "AddressU") || XlEqString(next._value, "AddressV") || XlEqString(next._value, "AddressW") ) {
 				auto prop = next._value;
 				if (!XlEqString(iterator.GetNextToken()._value, "="))
-					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
+					Throw(Formatters::FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
 				next = iterator.GetNextToken();
 				auto addressMode = AsAddressMode(next._value);
 				if (!addressMode)
-					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown address mode (" << next._value << ")", iterator.GetLocation()));
+					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown address mode (" << next._value << ")", iterator.GetLocation()));
 				if (XlEqString(prop, "AddressU")) result._addressU = addressMode.value();
 				if (XlEqString(prop, "AddressV")) result._addressV = addressMode.value();
 				else result._addressW = addressMode.value();
 			} else if (XlEqString(next._value, "Comparison")) {
 				if (!XlEqString(iterator.GetNextToken()._value, "="))
-					Throw(FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
+					Throw(Formatters::FormatException("Expecting '=' after field in sampler desc", iterator.GetLocation()));
 				next = iterator.GetNextToken();
 				auto compareMode = AsCompareOp(next._value);
 				if (!compareMode)
-					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown comparison mode (" << next._value << ")", iterator.GetLocation()));
+					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown comparison mode (" << next._value << ")", iterator.GetLocation()));
 				result._comparison = compareMode.value();
 			} else {
 				auto flag = AsSamplerDescFlag(next._value);
 				if (!flag)
-					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown sampler field (" << next._value << ")", iterator.GetLocation()));
+					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown sampler field (" << next._value << ")", iterator.GetLocation()));
 				result._flags |= flag.value();
 			}
 
@@ -380,7 +380,7 @@ namespace RenderCore { namespace Assets
 			if (next._value.IsEmpty() || XlEqString(next._value, "}"))
 				break;
 			if (!XlEqString(next._value, ","))
-				Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Expecting comma between values in sampler declaration", iterator.GetLocation()));
+				Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Expecting comma between values in sampler declaration", iterator.GetLocation()));
 			iterator.GetNextToken();
 		}
 

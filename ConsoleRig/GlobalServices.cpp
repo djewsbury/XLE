@@ -26,7 +26,7 @@
 #include "../OSServices/AttachableLibrary.h"
 #include "../OSServices/TimeUtils.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Streams/TextFormatter.h"
+#include "../Formatters/TextFormatter.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/MemoryUtils.h"
@@ -380,7 +380,7 @@ namespace ConsoleRig
         if (!file.get() || !fileSize)
             return std::make_pair(nullptr, depVal);
         
-        TextInputFormatter<char> fmtr(MakeStringSection((const char*)file.get(), (const char*)PtrAdd(file.get(), fileSize)));
+        Formatters::TextInputFormatter<char> fmtr(MakeStringSection((const char*)file.get(), (const char*)PtrAdd(file.get(), fileSize)));
         return std::make_pair(
             std::make_shared<OSServices::LogConfigurationSet>(fmtr),
             depVal);

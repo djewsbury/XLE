@@ -105,7 +105,7 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 
-		TextInputFormatter<utf8> formattr { techniqueText.Cast<utf8>() };
+		Formatters::TextInputFormatter<utf8> formattr { techniqueText.Cast<utf8>() };
 		RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, {}, {});
 		return ::Assets::ActualizePtr<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection);
 	}

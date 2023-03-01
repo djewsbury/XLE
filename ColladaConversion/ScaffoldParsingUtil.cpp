@@ -11,22 +11,22 @@
 
 namespace ColladaConversion
 {
-    bool BeginsWith(const XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[])
+    bool BeginsWith(const Formatters::XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[])
     {
         auto matchLen = XlStringSize(match);
         if ((section._end - section._start) < ptrdiff_t(matchLen)) return false;
-        return Is(XmlInputFormatter<utf8>::InteriorSection(section._start, section._start + matchLen), match);
+        return Is(Formatters::XmlInputFormatter<utf8>::InteriorSection(section._start, section._start + matchLen), match);
     }
 
-    bool EndsWith(const XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[])
+    bool EndsWith(const Formatters::XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[])
     {
         auto matchLen = XlStringSize(match);
         if ((section._end - section._start) < ptrdiff_t(matchLen)) return false;
-        return Is(XmlInputFormatter<utf8>::InteriorSection(section._end - matchLen, section._end), match);
+        return Is(Formatters::XmlInputFormatter<utf8>::InteriorSection(section._end - matchLen, section._end), match);
     }
 }
 
-namespace Utility
+namespace Formatters
 {
     std::ostream& SerializationOperator(std::ostream& os, const StreamLocation& loc)
     {

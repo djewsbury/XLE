@@ -28,7 +28,7 @@ namespace RenderCore { namespace Assets
 		for (;;) {
 			auto next = iterator.PeekNextToken();
 			if (next._value.IsEmpty())
-				Throw(FormatException("Unexpected end of file while parsing layout at" , next._start));
+				Throw(Formatters::FormatException("Unexpected end of file while parsing layout at" , next._start));
 
 			if (XlEqString(next._value, "}")) {
 				break;
@@ -45,12 +45,12 @@ namespace RenderCore { namespace Assets
 				auto name = iterator.GetNextToken();
 				auto semi = iterator.GetNextToken();
 				if (name._value.IsEmpty() || !XlEqString(semi._value, ";"))
-					Throw(FormatException("Expecting identifier name and then ;", name._start));
+					Throw(Formatters::FormatException("Expecting identifier name and then ;", name._start));
 
 				// lookup this descriptor set in list of already registered descriptor sets
 				auto i = _descriptorSets.find(name._value.AsString());
 				if (i == _descriptorSets.end())
-					Throw(FormatException(StringMeld<256>() << "Descriptor set with the name (" << name._value << ") has not been declared", name._start));
+					Throw(Formatters::FormatException(StringMeld<256>() << "Descriptor set with the name (" << name._value << ") has not been declared", name._start));
 
 				result->_descriptorSets.push_back({name._value.AsString(), i->second, pipelineType, isAuto});
 			} else if (XlEqString(next._value, "VSPushConstants") 
@@ -61,35 +61,35 @@ namespace RenderCore { namespace Assets
 				auto name = iterator.GetNextToken();
 				auto openBrace = iterator.GetNextToken();
 				if (name._value.IsEmpty() || !XlEqString(openBrace._value, "{"))
-					Throw(FormatException("Expecting identifier name and then {", name._start));
+					Throw(Formatters::FormatException("Expecting identifier name and then {", name._start));
 
 				auto newLayout = std::make_shared<PredefinedCBLayout>(iterator, _depVal);
 
 				if (XlEqString(next._value, "VSPushConstants")) {
 					if (result->_vsPushConstants.second)
-						Throw(FormatException("Multiple VS push constant buffers declared. Only one is supported", next._start));
+						Throw(Formatters::FormatException("Multiple VS push constant buffers declared. Only one is supported", next._start));
 					result->_vsPushConstants = std::make_pair(name._value.AsString(), newLayout);
 				} else if (XlEqString(next._value, "PSPushConstants")) {
 					if (result->_psPushConstants.second)
-						Throw(FormatException("Multiple PS push constant buffers declared. Only one is supported", next._start));
+						Throw(Formatters::FormatException("Multiple PS push constant buffers declared. Only one is supported", next._start));
 					result->_psPushConstants = std::make_pair(name._value.AsString(), newLayout);
 				} else if (XlEqString(next._value, "CSPushConstants")) {
 					if (result->_csPushConstants.second)
-						Throw(FormatException("Multiple CS push constant buffers declared. Only one is supported", next._start));
+						Throw(Formatters::FormatException("Multiple CS push constant buffers declared. Only one is supported", next._start));
 					result->_csPushConstants = std::make_pair(name._value.AsString(), newLayout);
 				} else {
 					assert(XlEqString(next._value, "GSPushConstants"));
 					if (result->_gsPushConstants.second)
-						Throw(FormatException("Multiple GS push constant buffers declared. Only one is supported", next._start));
+						Throw(Formatters::FormatException("Multiple GS push constant buffers declared. Only one is supported", next._start));
 					result->_gsPushConstants = std::make_pair(name._value.AsString(), newLayout);
 				}
 
 				auto closeBrace = iterator.GetNextToken();
 				auto semi = iterator.GetNextToken();
 				if (!XlEqString(closeBrace._value, "}") || !XlEqString(semi._value, ";"))
-					Throw(FormatException("Expecting } and then ;", closeBrace._start));
+					Throw(Formatters::FormatException("Expecting } and then ;", closeBrace._start));
 			} else
-				Throw(FormatException("Expecting DescriptorSet, GraphicsDescriptorSet, ComputeDescriptorSet, AutoDescriptorSet, VSPushConstants, PSPushConstants, GSPushConstants or CSPushConstants", iterator.GetLocation()));
+				Throw(Formatters::FormatException("Expecting DescriptorSet, GraphicsDescriptorSet, ComputeDescriptorSet, AutoDescriptorSet, VSPushConstants, PSPushConstants, GSPushConstants or CSPushConstants", iterator.GetLocation()));
 		}
 
 		return result;
@@ -106,17 +106,17 @@ namespace RenderCore { namespace Assets
 
 				auto conditions = tokenizer._preprocessorContext.GetCurrentConditionString();
 				if (!conditions.empty())
-					Throw(FormatException("Preprocessor conditions are not supported wrapping a descriptor set or pipeline layout entry", tokenizer.GetLocation()));
+					Throw(Formatters::FormatException("Preprocessor conditions are not supported wrapping a descriptor set or pipeline layout entry", tokenizer.GetLocation()));
 
 				auto name = tokenizer.GetNextToken();
 				auto openBrace = tokenizer.GetNextToken();
 				if (name._value.IsEmpty() || !XlEqString(openBrace._value, "{"))
-					Throw(FormatException("Expecting identifier name and then {", name._start));
+					Throw(Formatters::FormatException("Expecting identifier name and then {", name._start));
 
 				if (XlEqString(token._value, "DescriptorSet")) {
 					auto existing = _descriptorSets.find(name._value.AsString());
 					if (existing != _descriptorSets.end())
-						Throw(FormatException(StringMeld<256>() << "Descriptor set with name (" << name._value << ") declared multiple times", name._start));
+						Throw(Formatters::FormatException(StringMeld<256>() << "Descriptor set with name (" << name._value << ") declared multiple times", name._start));
 
 					auto newLayout = std::make_shared<PredefinedDescriptorSetLayout>(tokenizer, _depVal);
 					_descriptorSets.insert(std::make_pair(name._value.AsString(), newLayout));
@@ -124,7 +124,7 @@ namespace RenderCore { namespace Assets
 					assert(XlEqString(token._value, "PipelineLayout"));
 					auto existing = _pipelineLayouts.find(name._value.AsString());
 					if (existing != _pipelineLayouts.end())
-						Throw(FormatException(StringMeld<256>() << "Pipeline layout with name (" << name._value << ") declared multiple times", name._start));
+						Throw(Formatters::FormatException(StringMeld<256>() << "Pipeline layout with name (" << name._value << ") declared multiple times", name._start));
 
 					auto newLayout = ParsePipelineLayout(tokenizer);
 					_pipelineLayouts.insert(std::make_pair(name._value.AsString(), newLayout));
@@ -133,15 +133,15 @@ namespace RenderCore { namespace Assets
 				auto closeBrace = tokenizer.GetNextToken();
 				auto semi = tokenizer.GetNextToken();
 				if (!XlEqString(closeBrace._value, "}") || !XlEqString(semi._value, ";"))
-					Throw(FormatException("Expecting } and then ;", closeBrace._start));
+					Throw(Formatters::FormatException("Expecting } and then ;", closeBrace._start));
 
 			} else {
-				Throw(FormatException(StringMeld<256>() << "Expecting either 'DescriptorSet' or 'PipelineLayout' keyword, but got " << token._value, token._start));
+				Throw(Formatters::FormatException(StringMeld<256>() << "Expecting either 'DescriptorSet' or 'PipelineLayout' keyword, but got " << token._value, token._start));
 			}
 		}
 
 		if (!tokenizer.Remaining().IsEmpty())
-			Throw(FormatException("Additional tokens found, expecting end of file", tokenizer.GetLocation()));
+			Throw(Formatters::FormatException("Additional tokens found, expecting end of file", tokenizer.GetLocation()));
 	}
 
 	PredefinedPipelineLayoutFile::PredefinedPipelineLayoutFile(

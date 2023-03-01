@@ -15,7 +15,8 @@
 #include <functional>
 
 namespace RenderCore { namespace Techniques { class ParsingContext; class DrawablesPacket; class ICustomDrawDelegate; } }
-namespace Utility { class OutputStream; template<typename CharType> class TextInputFormatter; }
+namespace Utility { class OutputStream; }
+namespace Formatters { template<typename CharType> class TextInputFormatter; }
 namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
 namespace XLEMath { class ArbitraryConvexVolumeTester; }

@@ -14,7 +14,7 @@
 #include "../../../Assets/Continuation.h"
 #include "../../../Assets/Assets.h"
 #include "../../../ConsoleRig/GlobalServices.h"
-#include "../../../Utility/Streams/FormatterUtils.h"
+#include "../../../Formatters/FormatterUtils.h"
 #include <string>
 #include <sstream>
 #include "catch2/catch_test_macros.hpp"
@@ -50,7 +50,7 @@ namespace UnitTests
 	};
 
 	template<typename Type, typename CharType>
-		Type RequireCastValue(TextInputFormatter<CharType>& formatter)
+		Type RequireCastValue(Formatters::TextInputFormatter<CharType>& formatter)
 	{
 		StringSection<> stringValue;
 		if (!formatter.TryStringValue(stringValue))
@@ -149,7 +149,7 @@ namespace UnitTests
 			// ensure that the first few values we read match what we expect from the input file
 			auto fmttr = RequireActualize(mountingTree->BeginFormatter("cfg"));
 			RequireBlobsFromCfg1(*fmttr);
-			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);
+			REQUIRE(fmttr->PeekNext() == Formatters::FormatterBlob::None);
 		}
 
 		SECTION("Internal section in IDynamicInputFormatter") {
@@ -157,15 +157,15 @@ namespace UnitTests
 			// Ie, "InternalPoint" is just an element within a document, but we'll treat it as the start point for the formatter
 			auto fmttr = RequireActualize(cfg1Document->BeginFormatter("InternalPoint"));
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "A");
-			REQUIRE(Utility::RequireStringValue(*fmttr).AsString() == "B");
+			REQUIRE(Formatters::RequireStringValue(*fmttr).AsString() == "B");
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "C");
-			REQUIRE(Utility::RequireStringValue(*fmttr).AsString() == "D");
+			REQUIRE(Formatters::RequireStringValue(*fmttr).AsString() == "D");
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "SomethingInside");
 			RequireBeginElement(*fmttr);
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "E");
-			REQUIRE(Utility::RequireStringValue(*fmttr).AsString() == "F");
+			REQUIRE(Formatters::RequireStringValue(*fmttr).AsString() == "F");
 			RequireEndElement(*fmttr);
-			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
+			REQUIRE(fmttr->PeekNext() == Formatters::FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
 		}
 
 		SECTION("Deep internal section in IDynamicInputFormatter") {
@@ -173,8 +173,8 @@ namespace UnitTests
 			// this time, we're 2 sections deap
 			auto fmttr = RequireActualize(cfg1Document->BeginFormatter("InternalPoint/SomethingInside"));
 			REQUIRE(RequireKeyedItem(*fmttr).AsString() == "E");
-			REQUIRE(Utility::RequireStringValue(*fmttr).AsString() == "F");
-			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
+			REQUIRE(Formatters::RequireStringValue(*fmttr).AsString() == "F");
+			REQUIRE(fmttr->PeekNext() == Formatters::FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
 		}
 
 		SECTION("Simple external section in IDynamicInputFormatter") {
@@ -195,7 +195,7 @@ namespace UnitTests
 			RequireBlobsFromCfg2(*fmttr);
 			RequireEndElement(*fmttr);
 			RequireEndElement(*fmttr);
-			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);
+			REQUIRE(fmttr->PeekNext() == Formatters::FormatterBlob::None);
 
 			// auto str = ::Assets::AsString(fmttrFuture->GetActualizationLog());
 			// REQUIRE(str == "[mountPt/one/two/] internal:  external: one/two\n");
@@ -242,7 +242,7 @@ namespace UnitTests
 
 			// followed by blobs from the second
 			RequireBlobsFromCfg2(*fmttr);
-			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);
+			REQUIRE(fmttr->PeekNext() == Formatters::FormatterBlob::None);
 		}
 	}
 

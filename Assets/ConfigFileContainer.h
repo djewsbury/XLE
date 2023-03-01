@@ -8,12 +8,12 @@
 
 #include "DepVal.h"
 #include "AssetsCore.h"		// (for ResChar)
-#include "../Utility/Streams/TextFormatter.h"
+#include "../Formatters/TextFormatter.h"
 #include "../Utility/StringFormat.h"
 #include <memory>
 #include <vector>
 
-namespace Utility
+namespace Formatters
 {
     template<typename> class TextInputFormatter;
 }
@@ -52,7 +52,7 @@ namespace Assets
     ///     fully functional asset, with a dependency validation, relative path rules and
     ///     reporting correctly to the InvalidAssetManager.
     /// </example>
-    template<typename Formatter = TextInputFormatter<utf8>>
+    template<typename Formatter = Formatters::TextInputFormatter<utf8>>
         class ConfigFileContainer
     {
     public:

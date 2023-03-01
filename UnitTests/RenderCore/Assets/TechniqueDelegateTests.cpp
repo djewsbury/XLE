@@ -54,8 +54,8 @@
 #include "../../../OSServices/Log.h"
 #include "../../../OSServices/FileSystemMonitor.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
-#include "../../../Utility/Streams/TextFormatter.h"
-#include "../../../Utility/Streams/TextOutputFormatter.h"
+#include "../../../Formatters/TextFormatter.h"
+#include "../../../Formatters/TextOutputFormatter.h"
 #include "../../../Utility/Streams/StreamTypes.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "thousandeyes/futures/then.h"
@@ -463,7 +463,7 @@ namespace UnitTests
 			main=~
 				ut-data/minimal_perpixel.graph::Minimal_PerPixel
 			)--";
-			TextInputFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			auto patchCollectionMarker = testApparatus._pipelineLayoutDelegate->CompileShaderPatchCollection(&patchCollection);
 			patchCollectionMarker->StallWhilePending();
@@ -519,7 +519,7 @@ namespace UnitTests
 						normalGenerator=~
 							ut-data/spherical_generators.hlsl::MainSphericalToNormal
 					)--";
-					TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragmentsNoDeform) };
+					Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragmentsNoDeform) };
 					patchCollectionNoDeform = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 				}
 
@@ -534,7 +534,7 @@ namespace UnitTests
 					deform=~
 						ut-data/spherical.graph::DeformPositionImplementation
 					)--";
-					TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragmentsWithDeform) };
+					Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragmentsWithDeform) };
 					patchCollectionWithDeform = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 				}
 
@@ -617,7 +617,7 @@ namespace UnitTests
 					normalGenerator=~
 						ut-data/spherical_generators.hlsl::MainSphericalToNormal
 				)--";
-				TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragments) };
+				Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragments) };
 				auto patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 				
 				auto techniqueDelegate = std::make_shared<UnitTestTechniqueDelegate>();

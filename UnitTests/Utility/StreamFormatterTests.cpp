@@ -6,11 +6,11 @@
 
 #include "../../Math/Vector.h"
 #include "../../Math/MathSerialization.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/StreamDOM.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/StreamDOM.h"
+#include "../../Formatters/XmlFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/Streams/SerializationUtils.h"
-#include "../../Utility/Streams/XmlFormatter.h"
-#include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/ImpliedTyping.h"
@@ -37,7 +37,7 @@ namespace UnitTests
         UInt2 _c3 = {2, 3};
     };
 
-    void DeserializationOperator(const StreamDOMElement<TextInputFormatter<utf8>>& str, TestClass& cls)
+    void DeserializationOperator(const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& str, TestClass& cls)
     {
         cls._c1 = str.Attribute("c1").As<int>().value();
         cls._c2 = str.Attribute("c2", 600);
@@ -50,8 +50,8 @@ namespace UnitTests
 
         SECTION("Using StreamDOMElement::As() to invoke DeserializationOperator")
         {
-            TextInputFormatter<utf8> formatter(MakeStringSection(testString));
-            StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+            Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testString));
+            Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
             auto testClass = doc.RootElement().As<TestClass>();
             REQUIRE( testClass._c1 == 10 );
             REQUIRE( testClass._c2 == 50 );
@@ -60,8 +60,8 @@ namespace UnitTests
 
         SECTION("Using operator>> to invoke DeserializationOperator")
         {
-            TextInputFormatter<utf8> formatter(MakeStringSection(testString));
-            StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+            Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testString));
+            Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
             TestClass testClass;
             doc.RootElement() >> testClass;
             REQUIRE( testClass._c1 == 10 );
@@ -83,7 +83,7 @@ Element =~
         anotherThing = value
     AnotherValue = something
 Value2 = value2)";
-            TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithNestedElements));
+            Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithNestedElements));
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
             REQUIRE(RequireStringValue(formatter).AsString() == "value0");
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value1");
@@ -129,7 +129,7 @@ Value2 = value2)";
         =~
             =~
 )";
-            TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithSequences));
+            Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithSequences));
             RequireBeginElement(formatter);
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
             REQUIRE(RequireStringValue(formatter).AsString() == "value");
@@ -178,7 +178,7 @@ Value0 = value; Value1 = value2
 =~; mappedEle=~; =~;
 =~; value=1; =~; value=2; =~; value=3
 )";
-            TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithCompressedElements));
+            Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithCompressedElements));
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
             REQUIRE(RequireStringValue(formatter).AsString() == "value");
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value1");
@@ -231,7 +231,7 @@ Value0 = value; Value1 = value2
 
         )";
 
-        XmlInputFormatter<utf8> formatter(MakeStringSection(testStringXML));
+        Formatters::XmlInputFormatter<utf8> formatter(MakeStringSection(testStringXML));
         formatter._allowCharacterData = true;
         REQUIRE(RequireKeyedItem(formatter).AsString() == "element");
         RequireBeginElement(formatter);
@@ -386,7 +386,7 @@ EnvSettings=~
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     static void DeserializationOperator(
-        const Utility::StreamDOMElement<TextInputFormatter<utf8>>& src,
+        const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& src,
         ExampleSerializableObject::StrataMaterial& mat)
     {
         static const utf8* TextureNames[] = { "Texture0", "Texture1", "Slopes" };
@@ -408,7 +408,7 @@ EnvSettings=~
     }
 
     static void DeserializationOperator(
-        const Utility::StreamDOMElement<TextInputFormatter<utf8>>& src,
+        const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& src,
         ExampleSerializableObject::GradFlagMaterial& mat)
     {
         mat._id = src.Attribute("MaterialId", 0);
@@ -434,7 +434,7 @@ EnvSettings=~
     }
 
     static void DeserializationOperator(
-        const Utility::StreamDOMElement<TextInputFormatter<utf8>>& src,
+        const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& src,
         ExampleSerializableObject::ProcTextureSetting& mat)
     {
         mat._name = src.Attribute("Name").Value().AsString();
@@ -445,7 +445,7 @@ EnvSettings=~
     }
 
     static void DeserializationOperator(
-        const Utility::StreamDOMElement<TextInputFormatter<utf8>>& doc,
+        const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& doc,
         ExampleSerializableObject& result)
     {
         for (const auto& matCfg:doc.children()) {
@@ -468,12 +468,12 @@ EnvSettings=~
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     static void DeserializationOperator(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         ExampleSerializableObject::StrataMaterial& result)
     {
         static const utf8* TextureNames[] = { "Texture0", "Texture1", "Slopes" };
         
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto name = RequireKeyedItem(formatter);
 
             if (XlEqString(name, "MaterialId")) {
@@ -481,13 +481,13 @@ EnvSettings=~
             } else if (XlEqString(name, "Strata")) {
                 RequireBeginElement(formatter);
 
-                while (formatter.PeekNext() != FormatterBlob::EndElement) {
+                while (formatter.PeekNext() != Formatters::FormatterBlob::EndElement) {
                     auto ignoredName = RequireKeyedItem(formatter);
                     (void)ignoredName;
                     RequireBeginElement(formatter);
 
                     ExampleSerializableObject::StrataMaterial::Strata newStrata;
-                    while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+                    while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
                         auto name = RequireKeyedItem(formatter);
                         auto value = RequireStringValue(formatter);
 
@@ -506,7 +506,7 @@ EnvSettings=~
                                     break;
                                 }
                             if (t == dimof(TextureNames))
-                                Throw(FormatException("Unknown attribute encountered", formatter.GetLocation()));
+                                Throw(Formatters::FormatException("Unknown attribute encountered", formatter.GetLocation()));
                         }
                     }
                     RequireEndElement(formatter);
@@ -515,16 +515,16 @@ EnvSettings=~
 
                 RequireEndElement(formatter);
             } else {
-                Throw(FormatException("Unknown item encountered", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Unknown item encountered", formatter.GetLocation()));
             }
         }
     }
     
     static void DeserializationOperator(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         ExampleSerializableObject::GradFlagMaterial& result)
     {
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto name = RequireKeyedItem(formatter);
             auto value = RequireStringValue(formatter);
 
@@ -550,19 +550,19 @@ EnvSettings=~
                     ImpliedTyping::TypeDesc{ImpliedTyping::TypeCat::Float, dimof(result._mappingConstant)},
                     MakeIteratorRange(buffer), parsedType);
             } else
-                Throw(FormatException("Unknown attribute encountered", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Unknown attribute encountered", formatter.GetLocation()));
         }
 
         auto next = formatter.PeekNext();
-        if (next != FormatterBlob::EndElement && next != FormatterBlob::None)
-            Throw(FormatException("Unexpected blob", formatter.GetLocation()));
+        if (next != Formatters::FormatterBlob::EndElement && next != Formatters::FormatterBlob::None)
+            Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
     }
     
     static void DeserializationOperator(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         ExampleSerializableObject::ProcTextureSetting& result)
     {
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto name = RequireKeyedItem(formatter);
             auto value = RequireStringValue(formatter);
 
@@ -577,19 +577,19 @@ EnvSettings=~
             } else if (XlEqString(name, "Gain")) {
                 result._gain = ImpliedTyping::ConvertFullMatch<decltype(result._gain)>(value).value();
             } else
-                Throw(FormatException("Unknown attribute encountered", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Unknown attribute encountered", formatter.GetLocation()));
         }
 
         auto next = formatter.PeekNext();
-        if (next != FormatterBlob::EndElement && next != FormatterBlob::None)
-            Throw(FormatException("Unexpected blob", formatter.GetLocation()));
+        if (next != Formatters::FormatterBlob::EndElement && next != Formatters::FormatterBlob::None)
+            Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
     }
     
     static void DeserializationOperator(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         ExampleSerializableObject& result)
     {
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto name = RequireKeyedItem(formatter);
 
             if (XlEqString(name, "DiffuseDims")) {
@@ -617,12 +617,12 @@ EnvSettings=~
                 result._procTextures.push_back(std::move(newMaterial));
                 RequireEndElement(formatter);
             } else
-                Throw(FormatException("Unknown mapping encountered", formatter.GetLocation()));
+                Throw(Formatters::FormatException("Unknown mapping encountered", formatter.GetLocation()));
         }
 
         auto next = formatter.PeekNext();
-        if (next != FormatterBlob::EndElement && next != FormatterBlob::None)
-            Throw(FormatException("Unexpected blob", formatter.GetLocation()));
+        if (next != Formatters::FormatterBlob::EndElement && next != Formatters::FormatterBlob::None)
+            Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -631,7 +631,7 @@ EnvSettings=~
         const std::basic_string<utf8>& testString, unsigned iterationCount)
     {
         for (unsigned c=0; c<iterationCount; ++c) {
-            TextInputFormatter<utf8> formatter{MakeStringSection(testString)};
+            Formatters::TextInputFormatter<utf8> formatter{MakeStringSection(testString)};
             ExampleSerializableObject matConfig;
             formatter >> matConfig;
             (void)matConfig;
@@ -642,8 +642,8 @@ EnvSettings=~
         const std::basic_string<utf8>& testString, unsigned iterationCount)
     {
         for (unsigned c=0; c<iterationCount; ++c) {
-            TextInputFormatter<utf8> formatter(MakeStringSection(testString));
-            StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+            Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testString));
+            Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
             ExampleSerializableObject matConfig;
             doc.RootElement() >> matConfig;
             (void)matConfig;
@@ -653,8 +653,8 @@ EnvSettings=~
     TEST_CASE( "StreamFormatter-BasicDOMInterface", "[utility]" )
     {
         // Load an aribtrary file, and use the basic interface of the StreamDOM<> class 
-        TextInputFormatter<utf8> formatter(MakeStringSection(testString));
-        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+        Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testString));
+        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
         auto rootElement = doc.RootElement();
 
         SECTION("C++11 syntax element iteration") {
@@ -698,8 +698,8 @@ EnvSettings=~
         void InitStreamDOMForCharacterType()
     {
         auto converted = Conversion::Convert<std::basic_string<CharType>>(testString2);
-        TextInputFormatter<CharType> formatter(MakeStringSection(converted));
-        StreamDOM<TextInputFormatter<CharType>> doc(formatter);
+        Formatters::TextInputFormatter<CharType> formatter(MakeStringSection(converted));
+        Formatters::StreamDOM<Formatters::TextInputFormatter<CharType>> doc(formatter);
     }
 
     TEST_CASE( "StreamFormatter-TestDOMParse", "[utility]" )

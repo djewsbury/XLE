@@ -21,8 +21,8 @@
 #include "../../../Utility/StringFormat.h"
 #include "../../../Utility/Threading/ThreadingUtils.h"
 #include "../../../Utility/Conversion.h"
-#include "../../../Utility/Streams/StreamDOM.h"
-#include "../../../Utility/Streams/XmlFormatter.h"
+#include "../../../Formatters/StreamDOM.h"
+#include "../../../Formatters/XmlFormatter.h"
 #include "../../../Core/SelectConfiguration.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
@@ -32,8 +32,8 @@ namespace UnitTests
     __declspec(noinline) static void StreamDomPerformanceTest(const utf8*start, const utf8*end, uint64 iterationCount)
     {
         for (uint64 c=0; c<iterationCount; ++c) {
-            XmlInputFormatter<utf8> formatter(MakeStringSection(start, end));
-            StreamDOM<XmlInputFormatter<utf8>> doc(formatter);
+            Formatters::XmlInputFormatter<utf8> formatter(MakeStringSection(start, end));
+            Formatters::StreamDOM<Formatters::XmlInputFormatter<utf8>> doc(formatter);
             (void) doc;
         }
     }

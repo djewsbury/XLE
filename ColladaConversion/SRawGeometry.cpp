@@ -69,7 +69,7 @@ namespace ColladaConversion
     {
         auto accessor = source.FindAccessorForTechnique();
         if (!accessor)
-            Throw(FormatException("Vertex data source missing accessor for technique_common", source.GetLocation()));
+            Throw(Formatters::FormatException("Vertex data source missing accessor for technique_common", source.GetLocation()));
 
         auto sourceType = source.GetType();
 
@@ -78,13 +78,13 @@ namespace ColladaConversion
             // see, and throw an exception if we get something wierd
         auto paramCount = accessor->GetParamCount();
         if (paramCount < 1 || paramCount > 4)
-            Throw(FormatException("Too many or too few parameters in vertex data source", source.GetLocation()));
+            Throw(Formatters::FormatException("Too many or too few parameters in vertex data source", source.GetLocation()));
 
         for (size_t c=0; c<paramCount; ++c)
             if (accessor->GetParam(c)._offset != c) {
-                Throw(FormatException("Accessor params appear out-of-order, or not sequential", source.GetLocation()));
+                Throw(Formatters::FormatException("Accessor params appear out-of-order, or not sequential", source.GetLocation()));
             } /*else if (accessor->GetParam(c)._type != sourceType) {
-                Throw(FormatException("Accessor params type doesn't match source array type", source.GetLocation()));
+                Throw(Formatters::FormatException("Accessor params type doesn't match source array type", source.GetLocation()));
             }*/
 
         unsigned parsedTypeSize;
@@ -106,7 +106,7 @@ namespace ColladaConversion
             }
             parsedTypeSize = sizeof(unsigned);
         } else
-            Throw(FormatException("Data source type is not supported for vertex data", source.GetLocation()));
+            Throw(Formatters::FormatException("Data source type is not supported for vertex data", source.GetLocation()));
 
         _offset = accessor->GetOffset() * parsedTypeSize;
         _stride = accessor->GetStride() * parsedTypeSize;
@@ -350,7 +350,7 @@ namespace ColladaConversion
         ComposingUnifiedVertices& composingUnified)
     {
         if (geoPrim.GetPrimitiveDataCount() != 1)
-            Throw(FormatException("Expecting only a single <p> element", geoPrim.GetLocation()));
+            Throw(Formatters::FormatException("Expecting only a single <p> element", geoPrim.GetLocation()));
 
             // Simpliest arrangement. We should have a single <p> element with
             // just a single of indices. Parse in those value, and we will use
@@ -391,11 +391,11 @@ namespace ColladaConversion
             // element per polygon, and also supports holes in polygons)
 
         if (geoPrim.GetPrimitiveDataCount() != 1)
-            Throw(FormatException("Expecting only a single <p> element", geoPrim.GetLocation()));
+            Throw(Formatters::FormatException("Expecting only a single <p> element", geoPrim.GetLocation()));
 
         auto vcountSrc = geoPrim.GetVCountArray();
         if (!(vcountSrc._end > vcountSrc._start))
-            Throw(FormatException("Expecting a single <vcount> element", geoPrim.GetLocation()));
+            Throw(Formatters::FormatException("Expecting a single <vcount> element", geoPrim.GetLocation()));
 
         std::vector<unsigned> vcount(geoPrim.GetPrimitiveCount());
         ParseXMLList(AsPointer(vcount.begin()), (unsigned)vcount.size(), vcountSrc);
@@ -646,7 +646,7 @@ namespace ColladaConversion
             } else if (type == PrimitiveTopology::Polygons) {
                 drawOperations.push_back(LoadPolygons(geoPrim, workingPrim, vertexTemp, composingUnified));
             } else 
-                Throw(FormatException("Unsupported primitive type found", geoPrim.GetLocation()));
+                Throw(Formatters::FormatException("Unsupported primitive type found", geoPrim.GetLocation()));
         }
 
             //
@@ -1078,7 +1078,7 @@ namespace ColladaConversion
             // value of _bindStride to something sensible. In normal cases, it should be 2.
             // But maybe some unusual exporters will add extra elements.
         if (_bindStride > 4)
-            Throw(FormatException("Too many <input> elements within <vertex_weights> in controller", controller.GetLocation()));
+            Throw(Formatters::FormatException("Too many <input> elements within <vertex_weights> in controller", controller.GetLocation()));
 
         _vcount = controller.GetInfluenceCountPerVertexArray();
         _v = controller.GetInfluencesArray();
@@ -1101,7 +1101,7 @@ namespace ColladaConversion
 
         size_t vertexCount = controller.GetVerticesWithWeightsCount();
         if (vertexCount >= std::numeric_limits<uint16>::max()) {
-            Throw(FormatException(
+            Throw(Formatters::FormatException(
                 "Exceeded maximum number of vertices supported by skinning controller", controller.GetLocation()));
         }
         
@@ -1118,7 +1118,7 @@ namespace ColladaConversion
         for (size_t vertex=0; vertex<vertexCount; ++vertex) {
             auto influenceCount = vIterator.GetNextInfluenceCount();
             if (influenceCount > AbsoluteMaxJointInfluenceCount)
-                Throw(FormatException(
+                Throw(Formatters::FormatException(
                     "Too many influences per vertex in skinning controller", controller.GetLocation()));
 
 			float weights[AbsoluteMaxJointInfluenceCount];

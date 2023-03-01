@@ -9,17 +9,17 @@
 #include "ScaffoldDataFlow.h"
 #include "../Math/Vector.h"
 #include "../Math/Matrix.h"
-#include "../Utility/Streams/XmlFormatter.h"
-#include "../Utility/Streams/StreamDOM.h"
+#include "../Formatters/XmlFormatter.h"
+#include "../Formatters/StreamDOM.h"
 #include <vector>
 #include <memory>
 #include <functional>
 
 namespace ColladaConversion
 {
-    using Formatter = XmlInputFormatter<utf8>;
+    using Formatter = Formatters::XmlInputFormatter<utf8>;
     using Section = Formatter::InteriorSection;
-    using SubDoc = Utility::StreamDOM<Formatter>;
+    using SubDoc = Formatters::StreamDOM<Formatter>;
     using String = std::basic_string<Formatter::value_type>;
 
     class Effect;
@@ -248,7 +248,7 @@ namespace ColladaConversion
         Section GetMaterialBinding() const { return _materialBinding; }
         unsigned GetPrimitiveCount() const { return _primitiveCount; }
 
-        const StreamLocation& GetLocation() const { return _location; }
+        const Formatters::StreamLocation& GetLocation() const { return _location; }
 
         GeometryPrimitives(Formatter& formatter, Section type);
         GeometryPrimitives();
@@ -271,7 +271,7 @@ namespace ColladaConversion
         Section _vcount;
         Section _materialBinding;
         unsigned _primitiveCount;
-        StreamLocation _location;
+        Formatters::StreamLocation _location;
     };
 
     class MeshGeometry
@@ -326,7 +326,7 @@ namespace ColladaConversion
         Section GetName() const                         { return _name; }
         Section GetBaseMesh() const                     { return _baseMesh; }
         Section GetBindShapeMatrix() const              { return _bindShapeMatrix; }
-        StreamLocation GetLocation() const              { return _location; }
+        Formatters::StreamLocation GetLocation() const              { return _location; }
         unsigned GetVerticesWithWeightsCount() const    { return _verticesWithWeightsCount; }
 
         const InputsCollection& GetJointInputs() const { return _jointInputs; }
@@ -358,7 +358,7 @@ namespace ColladaConversion
         Section _influences;                // (this is the <v> element)
         std::vector<DataFlow::Input> _influenceInputs;
 
-        StreamLocation _location;
+        Formatters::StreamLocation _location;
 
         // std::vector<DataFlow::Source> _sources;
         InputsCollection _jointInputs;

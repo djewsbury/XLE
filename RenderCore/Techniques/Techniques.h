@@ -56,7 +56,7 @@ namespace RenderCore { namespace Techniques
 		const TechniqueEntry* FindEntry(uint64_t hashName) const;
 
 		TechniqueSetFile(
-            Utility::TextInputFormatter<utf8>& formatter, 
+            Formatters::TextInputFormatter<utf8>& formatter, 
 			const ::Assets::DirectorySearchRules& searchRules, 
 			const ::Assets::DependencyValidation& depVal);
 		~TechniqueSetFile();
@@ -81,7 +81,7 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Assets::PredefinedCBLayout		_cbLayout;
 
         void ParseConfigFile(
-            TextInputFormatter<utf8>& formatter, 
+            Formatters::TextInputFormatter<utf8>& formatter, 
 			StringSection<::Assets::ResChar> containingFileName,
             const ::Assets::DirectorySearchRules& searchRules,
             std::vector<::Assets::DependencyValidation>& inheritedAssets);

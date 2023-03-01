@@ -9,7 +9,7 @@
 #include "TextFormatter.h"        // (for FormatException and StreamLocation)
 #include <stack>
 
-namespace Utility
+namespace Formatters
 {
     /// <summary>Deserializes element and attribute data from xml</summary>
     /// This is an input deserializer for xml data that handles just element and
@@ -25,7 +25,7 @@ namespace Utility
     /// these things. There is some support for reading character data. But it is limited
     /// and intended for simple tasks.
     template<typename CharType>
-        class XL_UTILITY_API XmlInputFormatter
+        class XmlInputFormatter
     {
     public:
         FormatterBlob PeekNext();

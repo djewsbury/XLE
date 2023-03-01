@@ -251,7 +251,7 @@ namespace ColladaConversion
             || !Is(src.FindAccessorForTechnique()->GetParam(0)._type, "name")
             || src.GetType() != DataFlow::ArrayType::Name) {
 
-            Throw(FormatException("Cannot understand interpolation source for animation sampler. Expecting simple list of names (such as BEZIER, LINEAR, etc)", src.GetLocation()));
+            Throw(Formatters::FormatException("Cannot understand interpolation source for animation sampler. Expecting simple list of names (such as BEZIER, LINEAR, etc)", src.GetLocation()));
         }
 
         const auto* end = src.GetArrayData()._end;
@@ -266,7 +266,7 @@ namespace ColladaConversion
             Section newSection(start, i);
 
             if (type._end > type._start && !XlEqString(type, newSection))
-                Throw(FormatException("Found animation sampler with inconsistant interpolation types", src.GetLocation()));
+                Throw(Formatters::FormatException("Found animation sampler with inconsistant interpolation types", src.GetLocation()));
             type = newSection;
         }
 

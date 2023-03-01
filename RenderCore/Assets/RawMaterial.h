@@ -15,7 +15,7 @@
 #include <string>
 
 namespace Assets { class DependencyValidation; class DirectorySearchRules; }
-namespace Utility { class TextOutputFormatter; }
+namespace Formatters { class TextOutputFormatter; }
 
 namespace RenderCore { namespace Assets
 {
@@ -174,11 +174,11 @@ namespace RenderCore { namespace Assets
 		const ::Assets::DependencyValidation&	GetDependencyValidation() const { return _depVal; }
 		const ::Assets::DirectorySearchRules&	GetDirectorySearchRules() const { return _searchRules; }
 
-        void SerializeMethod(TextOutputFormatter& formatter) const;
+        void SerializeMethod(Formatters::TextOutputFormatter& formatter) const;
         
         RawMaterial();
         RawMaterial(
-            TextInputFormatter<utf8>& formatter, 
+            Formatters::TextInputFormatter<utf8>& formatter, 
             const ::Assets::DirectorySearchRules&,
 			const ::Assets::DependencyValidation& depVal);
         ~RawMaterial();

@@ -9,16 +9,16 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../OSServices/Log.h"
 #include "../../OSServices/RawFS.h"
-#include "../../Utility/Streams/StreamDOM.h"
-#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Formatters/StreamDOM.h"
+#include "../../Formatters/TextFormatter.h"
 #include "../../Utility/StringFormat.h"
 
 namespace ColladaConversion
 {
-    ImportConfiguration::ImportConfiguration(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal)
+    ImportConfiguration::ImportConfiguration(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal)
     : _depVal(depVal)
     {
-        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
 
         _resourceBindings = BindingConfig(doc.RootElement().Element("Resources"));
         _constantsBindings = BindingConfig(doc.RootElement().Element("Constants"));
@@ -28,7 +28,7 @@ namespace ColladaConversion
     ImportConfiguration::~ImportConfiguration()
     {}
 
-    BindingConfig::BindingConfig(const Utility::StreamDOMElement<TextInputFormatter<utf8>>& source)
+    BindingConfig::BindingConfig(const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& source)
     {
         auto bindingRenames = source.Element("Rename");
         if (bindingRenames) {

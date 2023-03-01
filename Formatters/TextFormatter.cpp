@@ -6,19 +6,19 @@
 
 #include "TextFormatter.h"
 #include "TextOutputFormatter.h"
-#include "Stream.h"
-#include "../BitUtils.h"
-#include "../PtrUtils.h"
-#include "../StringFormat.h"
-#include "../Conversion.h"
-#include "../../Assets/IFileSystem.h"       // for DependentFileState
-#include "../../Core/Exceptions.h"
+#include "../Assets/IFileSystem.h"       // for DependentFileState
+#include "../Utility/Streams/Stream.h"
+#include "../Utility/BitUtils.h"
+#include "../Utility/PtrUtils.h"
+#include "../Utility/StringFormat.h"
+#include "../Utility/Conversion.h"
+#include "../Core/Exceptions.h"
 #include <assert.h>
 #include <algorithm>
 
 #pragma warning(disable:4702)		// warning C4702: unreachable code
 
-namespace Utility
+namespace Formatters
 {
     static const unsigned TabWidth = 4;
     

@@ -11,8 +11,7 @@
 #include <optional>
 
 namespace Assets { class OperationContext; class DirectorySearchRules; }
-namespace Utility { class TextOutputFormatter; template<typename T> class TextInputFormatter; }
-namespace Formatters { class IDynamicInputFormatter; }
+namespace Formatters { class IDynamicInputFormatter; class TextOutputFormatter; template<typename T> class TextInputFormatter; }
 
 namespace RenderCore { namespace Assets
 {
@@ -38,12 +37,12 @@ namespace RenderCore { namespace Assets
 
 		std::string _skeleton;
 
-		void SerializeMethod(TextOutputFormatter& formatter) const;
+		void SerializeMethod(Formatters::TextOutputFormatter& formatter) const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const;
 		
 		NascentCompoundObject(
-			TextInputFormatter<char>&,
+			Formatters::TextInputFormatter<char>&,
 			const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation& depVal);
 		NascentCompoundObject(
@@ -66,7 +65,7 @@ namespace RenderCore { namespace Assets
 	{
 	public:
 		auto GetModelRendererConstruction() const -> const std::shared_ptr<ModelRendererConstruction>& { return _modelRendererConstruction; }
-		TextInputFormatter<char> OpenConfiguration() const;
+		Formatters::TextInputFormatter<char> OpenConfiguration() const;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const;

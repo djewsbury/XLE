@@ -16,7 +16,7 @@
 #include "../Assets/IFileSystem.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Conversion.h"
-#include "../Utility/Streams/FormatterUtils.h"
+#include "../Formatters/FormatterUtils.h"
 #include <regex>
 #include <tuple>
 #include <set>
@@ -35,7 +35,7 @@ namespace ShaderSourceParser
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
         TemplateItem(
-            TextInputFormatter<utf8>& formatter,
+            Formatters::TextInputFormatter<utf8>& formatter,
             const ::Assets::DirectorySearchRules&,
 			const ::Assets::DependencyValidation& depVal)
         {

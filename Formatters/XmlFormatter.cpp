@@ -6,7 +6,7 @@
 
 #include "XmlFormatter.h"
 
-namespace Utility
+namespace Formatters
 {
 
     template<typename CharType>

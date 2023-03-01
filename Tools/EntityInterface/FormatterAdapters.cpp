@@ -7,7 +7,7 @@
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ConfigFileContainer.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/FormatterUtils.h"
 
 namespace EntityInterface
 {
@@ -16,14 +16,14 @@ namespace EntityInterface
 		class TextFormatterAdapter : public Formatters::IDynamicInputFormatter
 	{
 	public:
-		virtual FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
+		virtual Formatters::FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
 
 		virtual bool TryBeginElement() override { return _fmttr.TryBeginElement(); }
 		virtual bool TryEndElement() override { return _fmttr.TryEndElement(); }
 		virtual bool TryKeyedItem(StringSection<>& name) override { return _fmttr.TryKeyedItem(name); }
 		virtual bool TryKeyedItem(uint64_t& name) override
 		{
-			return Utility::TryKeyedItem(_fmttr, name);
+			return Formatters::TryKeyedItem(_fmttr, name);
 		}
 
 		virtual bool TryStringValue(StringSection<>& value) override
@@ -53,10 +53,10 @@ namespace EntityInterface
 
 		virtual void SkipValueOrElement() override
 		{
-			Utility::SkipValueOrElement(_fmttr);
+			Formatters::SkipValueOrElement(_fmttr);
 		}
 
-		virtual StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
+		virtual Formatters::StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _cfgFile->GetDependencyValidation(); }
 
 		TextFormatterAdapter(
@@ -143,14 +143,14 @@ namespace EntityInterface
 	class MemoryStreamTextFormatterAdapter : public Formatters::IDynamicInputFormatter
 	{
 	public:
-		virtual FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
+		virtual Formatters::FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
 
 		virtual bool TryBeginElement() override { return _fmttr.TryBeginElement(); }
 		virtual bool TryEndElement() override { return _fmttr.TryEndElement(); }
 		virtual bool TryKeyedItem(StringSection<>& name) override { return _fmttr.TryKeyedItem(name); }
 		virtual bool TryKeyedItem(uint64_t& name) override 
 		{
-			return Utility::TryKeyedItem(_fmttr, name);
+			return Formatters::TryKeyedItem(_fmttr, name);
 		}
 
 		virtual bool TryStringValue(StringSection<>& value) override
@@ -180,22 +180,22 @@ namespace EntityInterface
 
 		virtual void SkipValueOrElement() override
 		{
-			Utility::SkipValueOrElement(_fmttr);
+			Formatters::SkipValueOrElement(_fmttr);
 		}
 
-		virtual StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
+		virtual Formatters::StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
 		MemoryStreamTextFormatterAdapter(MemoryOutputStream<>&& stream, ::Assets::DependencyValidation&& depVal)
 		: _stream(std::move(stream))
 		, _depVal(std::move(depVal))
 		{
-			_fmttr = TextStreamMarker<char>{MakeIteratorRange(_stream.GetBuffer().Begin(), _stream.GetBuffer().End()), _depVal};
+			_fmttr = Formatters::TextStreamMarker<char>{MakeIteratorRange(_stream.GetBuffer().Begin(), _stream.GetBuffer().End()), _depVal};
 		}
 
 	private:
 		MemoryOutputStream<> _stream;
-		TextInputFormatter<> _fmttr;
+		Formatters::TextInputFormatter<> _fmttr;
 		::Assets::DependencyValidation _depVal;
 	};
 

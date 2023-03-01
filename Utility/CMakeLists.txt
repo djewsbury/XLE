@@ -43,10 +43,7 @@ set(StreamsSrc
     Streams/DataSerialize.cpp
     Streams/PathUtils.cpp
     Streams/PreprocessorInterpreter.cpp
-    Streams/Stream.cpp
-    Streams/StreamDOM.cpp
-    Streams/TextFormatter.cpp
-    Streams/XmlFormatter.cpp)
+    Streams/Stream.cpp)
 set(ThreadingSrc Threading/CompletionThreadPool.cpp)
 set(ProfilingSrc Profiling/CPUProfiler.cpp Profiling/SuppressionProfiler.cpp)
 set(MetaSrc Meta/AccessorSerialize.cpp Meta/ClassAccessors.cpp)

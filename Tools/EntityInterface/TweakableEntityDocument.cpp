@@ -8,7 +8,7 @@
 #include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/Marker.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/ParameterBox.h"
@@ -129,7 +129,7 @@ namespace EntityInterface
 	private:
 		RenderOverlays::GuidStackHelper _guidStack;
 		ArbiterState* _arbiterState;
-		TextOutputFormatter _fmttr;
+		Formatters::TextOutputFormatter _fmttr;
 		std::vector<uint64_t> _hierarchicalEnabledStates;
 
 		uint64_t MakeGuid(StringSection<> name) { return Hash64(name, _guidStack.top()); }

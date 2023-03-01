@@ -78,7 +78,7 @@ namespace ColladaConversion
 
     static void ParseExtraForTextures(
         RenderCore::Assets::RawMaterial& matSettings,
-        const Utility::StreamDOM<Formatter>& extra, const ParameterSet& params,
+        const Formatters::StreamDOM<Formatter>& extra, const ParameterSet& params,
         const URIResolveContext& pubEles,
         const ImportConfiguration& cfg, const std::string& effectName)
     {

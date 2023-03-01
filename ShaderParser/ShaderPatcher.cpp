@@ -19,7 +19,7 @@
 #include "../Utility/StringFormat.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/Conversion.h"
-#include "../Utility/Streams/TextFormatter.h"
+#include "../Formatters/TextFormatter.h"
 #include "../Utility/Streams/PreprocessorInterpreter.h"
 #include <sstream>
 #include <set>

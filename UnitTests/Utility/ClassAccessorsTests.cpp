@@ -5,8 +5,8 @@
 #include "../../Utility/Meta/ClassAccessors.h"
 #include "../../Utility/Meta/ClassAccessorsImpl.h"
 #include "../../Utility/Meta/AccessorSerialize.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Math/Vector.h"
 #include "../../Math/MathSerialization.h"
@@ -267,7 +267,7 @@ namespace UnitTests
         SECTION("Serialize") {
             MemoryOutputStream<char> stream;
             {
-                TextOutputFormatter formatter(stream);
+                Formatters::TextOutputFormatter formatter(stream);
 
                 TestClass ex{};
                 ex._intMember = 30;
@@ -281,7 +281,7 @@ namespace UnitTests
 
         SECTION("Deserialize") {
             std::string input{"IntMember = -342i; VectorMember = {30, 31, 32, 33}"};
-            TextInputFormatter<char> formatter(MakeStringSection(input));
+            Formatters::TextInputFormatter<char> formatter(MakeStringSection(input));
             TestClass ex{};
             AccessorDeserialize(formatter, &ex, accessors);
 

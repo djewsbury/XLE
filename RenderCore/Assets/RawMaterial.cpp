@@ -11,13 +11,14 @@
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
-#include "../../Utility/Streams/TextFormatter.h"
-#include "../../Utility/Streams/TextOutputFormatter.h"
-#include "../../Utility/Streams/StreamDOM.h"
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/TextOutputFormatter.h"
+#include "../../Formatters/StreamDOM.h"
 #include "../../Utility/Streams/PathUtils.h"
-#include "../../Utility/Streams/FormatterUtils.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/Conversion.h"
 
 namespace RenderCore { namespace Assets
 {
@@ -56,7 +57,7 @@ namespace RenderCore { namespace Assets
     };
     
     static Blend DeserializeBlend(
-        const StreamDOMElement<TextInputFormatter<utf8>>& ele, const utf8 name[])
+        const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& ele, const utf8 name[])
     {
         if (ele) {
             auto child = ele.Attribute(name);
@@ -73,7 +74,7 @@ namespace RenderCore { namespace Assets
     }
 
     static BlendOp DeserializeBlendOp(
-        const StreamDOMElement<TextInputFormatter<utf8>>& ele, const utf8 name[])
+        const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& ele, const utf8 name[])
     {
         if (ele) {
             auto child = ele.Attribute(name);
@@ -89,11 +90,11 @@ namespace RenderCore { namespace Assets
         return BlendOp::NoBlending;
     }
 
-    static RenderStateSet DeserializeStateSet(TextInputFormatter<utf8>& formatter)
+    static RenderStateSet DeserializeStateSet(Formatters::TextInputFormatter<utf8>& formatter)
     {
         RenderStateSet result;
 
-        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
         auto rootElement = doc.RootElement();
 
         {
@@ -191,7 +192,7 @@ namespace RenderCore { namespace Assets
         return stateSet._flag != 0;
     }
 
-    static void SerializeStateSet(TextOutputFormatter& formatter, const RenderStateSet& stateSet)
+    static void SerializeStateSet(Formatters::TextOutputFormatter& formatter, const RenderStateSet& stateSet)
     {
         if (stateSet._flag & RenderStateSet::Flag::DoubleSided)
             formatter.WriteKeyedValue("DoubleSided", AutoAsString(stateSet._doubleSided));
@@ -217,7 +218,7 @@ namespace RenderCore { namespace Assets
         }
     }
 
-    static SamplerDesc DeserializeSamplerState(TextInputFormatter<>& formatter)
+    static SamplerDesc DeserializeSamplerState(Formatters::TextInputFormatter<>& formatter)
     {
         // See also SamplerDesc ParseFixedSampler(ConditionalProcessingTokenizer& iterator) in PredefinedDescriptorSetLayout
         // Possibly we could create a IDynamicInputFormatter<> wrapper for ConditionalProcessingTokenizer and use that to make a single
@@ -230,13 +231,13 @@ namespace RenderCore { namespace Assets
 				auto value = RequireStringValue(formatter);
 				auto filterMode = AsFilterMode(value);
 				if (!filterMode)
-					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown filter mode (" << value << ")", formatter.GetLocation()));
+					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown filter mode (" << value << ")", formatter.GetLocation()));
 				result._filter = filterMode.value();
 			} else if (XlEqString(keyname, "AddressU") || XlEqString(keyname, "AddressV") || XlEqString(keyname, "AddressW") ) {
 				auto value = RequireStringValue(formatter);
                 auto addressMode = AsAddressMode(value);
 				if (!addressMode)
-					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown address mode (" << value << ")", formatter.GetLocation()));
+					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown address mode (" << value << ")", formatter.GetLocation()));
 				if (XlEqString(keyname, "AddressU")) result._addressU = addressMode.value();
 				if (XlEqString(keyname, "AddressV")) result._addressV = addressMode.value();
 				else result._addressW = addressMode.value();
@@ -244,12 +245,12 @@ namespace RenderCore { namespace Assets
 				auto value = RequireStringValue(formatter);
 				auto compareMode = AsCompareOp(value);
 				if (!compareMode)
-					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown comparison mode (" << value << ")", formatter.GetLocation()));
+					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown comparison mode (" << value << ")", formatter.GetLocation()));
 				result._comparison = compareMode.value();
 			} else {
 				auto flag = AsSamplerDescFlag(keyname);
 				if (!flag)
-					Throw(FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown sampler field (" << keyname << ")", formatter.GetLocation()));
+					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown sampler field (" << keyname << ")", formatter.GetLocation()));
 				result._flags |= flag.value();
 			}
 		}
@@ -257,7 +258,7 @@ namespace RenderCore { namespace Assets
 		return result;
     }
 
-    static TextOutputFormatter& SerializeSamplerDesc(TextOutputFormatter& str, const SamplerDesc& sampler)
+    static Formatters::TextOutputFormatter& SerializeSamplerDesc(Formatters::TextOutputFormatter& str, const SamplerDesc& sampler)
     {
         str.WriteKeyedValue("Filter", AsString(sampler._filter));
         str.WriteKeyedValue("AddressU", AsString(sampler._addressU));
@@ -270,7 +271,7 @@ namespace RenderCore { namespace Assets
         return str;
     }
 
-    std::vector<std::pair<std::string, SamplerDesc>> DeserializeSamplerStates(TextInputFormatter<>& formatter)
+    std::vector<std::pair<std::string, SamplerDesc>> DeserializeSamplerStates(Formatters::TextInputFormatter<>& formatter)
     {
         std::vector<std::pair<std::string, SamplerDesc>> result;
         StringSection<> keyName;
@@ -278,7 +279,7 @@ namespace RenderCore { namespace Assets
             auto str = keyName.AsString();
             auto i = std::find_if(result.begin(), result.end(), [str](const auto& q) { return q.first==str; });
             if (i != result.end())
-                Throw(FormatException(StringMeld<256>() << "Multiple samplers with the same name (" << str << ")", formatter.GetLocation()));
+                Throw(Formatters::FormatException(StringMeld<256>() << "Multiple samplers with the same name (" << str << ")", formatter.GetLocation()));
             RequireBeginElement(formatter);
             result.emplace_back(str, DeserializeSamplerState(formatter));
             RequireEndElement(formatter);
@@ -286,7 +287,7 @@ namespace RenderCore { namespace Assets
         return result;
     }
 
-    static TextOutputFormatter& SerializeSamplerStates(TextOutputFormatter& str, const std::vector<std::pair<std::string, SamplerDesc>>& samplers)
+    static Formatters::TextOutputFormatter& SerializeSamplerStates(Formatters::TextOutputFormatter& str, const std::vector<std::pair<std::string, SamplerDesc>>& samplers)
     {
         for (const auto& s:samplers) {
             auto ele = str.BeginKeyedElement(s.first);
@@ -331,21 +332,21 @@ namespace RenderCore { namespace Assets
     RawMaterial::RawMaterial() {}
 
     std::vector<::Assets::rstring> 
-        DeserializeInheritList(TextInputFormatter<utf8>& formatter)
+        DeserializeInheritList(Formatters::TextInputFormatter<utf8>& formatter)
     {
         std::vector<::Assets::rstring> result;
-        while (formatter.PeekNext() == FormatterBlob::Value)
+        while (formatter.PeekNext() == Formatters::FormatterBlob::Value)
             result.push_back(RequireStringValue(formatter).AsString());
         return result;
     }
 
     RawMaterial::RawMaterial(
-		TextInputFormatter<utf8>& formatter, 
+		Formatters::TextInputFormatter<utf8>& formatter, 
 		const ::Assets::DirectorySearchRules& searchRules, 
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal), _searchRules(searchRules)
     {
-        while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
+        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto eleName = RequireKeyedItem(formatter);
 
                 // first, load inherited settings.
@@ -382,13 +383,13 @@ namespace RenderCore { namespace Assets
             }
         }
 
-        if (formatter.PeekNext() != FormatterBlob::EndElement && formatter.PeekNext() != FormatterBlob::None)
-			Throw(FormatException("Unexpected data while deserializating RawMaterial", formatter.GetLocation()));
+        if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
+			Throw(Formatters::FormatException("Unexpected data while deserializating RawMaterial", formatter.GetLocation()));
     }
 
     RawMaterial::~RawMaterial() {}
 
-    void RawMaterial::SerializeMethod(TextOutputFormatter& formatter) const
+    void RawMaterial::SerializeMethod(Formatters::TextOutputFormatter& formatter) const
     {
 		if (!_patchCollection.GetPatches().empty()) {
 			auto ele = formatter.BeginKeyedElement("Patches");
@@ -556,7 +557,7 @@ namespace RenderCore { namespace Assets
             //  to the geometry export (eg, .dae file).
 
         if (blob && !blob->empty()) {
-            TextInputFormatter<utf8> formatter(MakeIteratorRange(*blob).template Cast<const void*>());
+            Formatters::TextInputFormatter<utf8> formatter(MakeIteratorRange(*blob).template Cast<const void*>());
 
             StringSection<> keyName;
             while (formatter.TryKeyedItem(keyName)) {

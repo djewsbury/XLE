@@ -5,13 +5,13 @@
 #pragma once
 
 #include "TextFormatter.h"
-#include "../ImpliedTyping.h"
-#include "../StreamUtils.h"		// for StreamIndent
+#include "../Utility/ImpliedTyping.h"
+#include "../Utility/StreamUtils.h"		// for StreamIndent
 
-namespace Utility
+namespace Utility { namespace ImpliedTyping { class TypeDesc; } }
+
+namespace Formatters
 {
-	namespace ImpliedTyping { class TypeDesc; }
-
 	namespace Internal
 	{
 		template<typename Type> static auto HasTryCharacterData_Helper(int) -> decltype(std::declval<Type>().TryCharacterData(std::declval<StringSection<typename Type::value_type>&>()), std::true_type{});
@@ -26,11 +26,11 @@ namespace Utility
 		template<typename...> static auto HasTryStringValue_Helper(...) -> std::false_type;
 		template<typename Type> struct HasTryStringValue : decltype(HasTryStringValue_Helper<Type>(0)) {};
 
-		template<typename Type> static auto HasTryRawValue_Helper(int) -> decltype(std::declval<Type>().TryRawValue(std::declval<IteratorRange<const void*>&>(), std::declval<ImpliedTyping::TypeDesc&>()), std::true_type{});
+		template<typename Type> static auto HasTryRawValue_Helper(int) -> decltype(std::declval<Type>().TryRawValue(std::declval<IteratorRange<const void*>&>(), std::declval<Utility::ImpliedTyping::TypeDesc&>()), std::true_type{});
 		template<typename...> static auto HasTryRawValue_Helper(...) -> std::false_type;
 		template<typename Type> struct HasTryRawValue : decltype(HasTryRawValue_Helper<Type>(0)) {};
 
-		template<typename Type> static auto HasTryCastValue_Helper(int) -> decltype(std::declval<Type>().TryCastValue(std::declval<IteratorRange<const void*>>(), std::declval<const ImpliedTyping::TypeDesc&>()), std::true_type{});
+		template<typename Type> static auto HasTryCastValue_Helper(int) -> decltype(std::declval<Type>().TryCastValue(std::declval<IteratorRange<const void*>>(), std::declval<const Utility::ImpliedTyping::TypeDesc&>()), std::true_type{});
 		template<typename...> static auto HasTryCastValue_Helper(...) -> std::false_type;
 		template<typename Type> struct HasTryCastValue : decltype(HasTryCastValue_Helper<Type>(0)) {};
 
@@ -85,8 +85,8 @@ namespace Utility
 				break;
 
 			case FormatterBlob::Value:
-				if constexpr(Internal::FormatterTraits<Formatter>::HasTryRawValue) {
-					ImpliedTyping::TypeDesc type;
+				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+					Utility::ImpliedTyping::TypeDesc type;
 					IteratorRange<const void*> data;
 					if (!formatter.TryRawValue(data, type))
 						Throw(FormatException(
@@ -99,7 +99,7 @@ namespace Utility
 				break;
 
 			case FormatterBlob::CharacterData:
-				if constexpr(Internal::FormatterTraits<Formatter>::HasCharacterData) {
+				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
 					if (!formatter.TryCharacterData(dummy0))
 						Throw(FormatException(
 							"Malformed value while skipping forward", formatter.GetLocation()));
@@ -114,7 +114,7 @@ namespace Utility
 		}
 	}
 
-	template<typename Formatter, typename std::enable_if<!Internal::FormatterTraits<Formatter>::HasSkipValueOrElement>::type* =nullptr>
+	template<typename Formatter, typename std::enable_if<!Formatters::Internal::FormatterTraits<Formatter>::HasSkipValueOrElement>::type* =nullptr>
 		void SkipValueOrElement(Formatter& formatter)
 	{
 		typename Formatter::InteriorSection dummy0;
@@ -133,7 +133,7 @@ namespace Utility
 		}
 	}
 
-	template<typename Formatter, typename std::enable_if<Internal::FormatterTraits<Formatter>::HasSkipValueOrElement>::type* =nullptr>
+	template<typename Formatter, typename std::enable_if<Formatters::Internal::FormatterTraits<Formatter>::HasSkipValueOrElement>::type* =nullptr>
 		void SkipValueOrElement(Formatter& formatter)
 	{
 		formatter.SkipValueOrElement();
@@ -143,14 +143,14 @@ namespace Utility
 		void RequireBeginElement(Formatter& formatter)
 	{
 		if (!formatter.TryBeginElement())
-			Throw(Utility::FormatException("Expecting begin element", formatter.GetLocation()));
+			Throw(FormatException("Expecting begin element", formatter.GetLocation()));
 	}
 
 	template<typename Formatter>
 		void RequireEndElement(Formatter& formatter)
 	{
 		if (!formatter.TryEndElement())
-			Throw(Utility::FormatException("Expecting end element", formatter.GetLocation()));
+			Throw(FormatException("Expecting end element", formatter.GetLocation()));
 	}
 
 	template<typename Formatter>
@@ -158,23 +158,23 @@ namespace Utility
 	{
 		typename Formatter::InteriorSection name;
 		if (!formatter.TryKeyedItem(name))
-			Throw(Utility::FormatException("Expecting keyed item", formatter.GetLocation()));
+			Throw(FormatException("Expecting keyed item", formatter.GetLocation()));
 		return name;
 	}
 
 	template<typename Formatter>
-		IteratorRange<const void*> RequireRawValue(Formatter& formatter, ImpliedTyping::TypeDesc& typeDesc)
+		IteratorRange<const void*> RequireRawValue(Formatter& formatter, Utility::ImpliedTyping::TypeDesc& typeDesc)
 	{
-		if constexpr(Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+		if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
 			IteratorRange<const void*> value;
 			if (!formatter.TryRawValue(value, typeDesc))
-				Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
+				Throw(FormatException("Expecting value", formatter.GetLocation()));
 			return value;
 		} else {
 			typename Formatter::InteriorSection stringValue;
 			if (!formatter.TryStringValue(stringValue))
-				Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
-			typeDesc = {ImpliedTyping::TypeOf<typename Formatter::InteriorSection::value_type>()._type, (uint32_t)stringValue.size(), ImpliedTyping::TypeHint::String};
+				Throw(FormatException("Expecting value", formatter.GetLocation()));
+			typeDesc = {Utility::ImpliedTyping::TypeOf<typename Formatter::InteriorSection::value_type>()._type, (uint32_t)stringValue.size(), Utility::ImpliedTyping::TypeHint::String};
 			return {stringValue.begin(), stringValue.end()};
 		}
 	}
@@ -184,14 +184,14 @@ namespace Utility
 	{
 		typename Formatter::InteriorSection value;
 		if (!formatter.TryStringValue(value))
-			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
+			Throw(FormatException("Expecting value", formatter.GetLocation()));
 		return value;
 	}
 
 	template<typename Formatter>
 		bool ReversedEndian(Formatter& formatter)
 	{
-		if constexpr (Internal::FormatterTraits<Formatter>::HasReversedEndian) {
+		if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasReversedEndian) {
 			return formatter.ReversedEndian();
 		} else {
 			return false;
@@ -201,23 +201,23 @@ namespace Utility
 	template<typename Type, typename Formatter>
 		Type RequireCastValue(Formatter& formatter)
 	{
-		if constexpr(Internal::FormatterTraits<Formatter>::HasTryCastValue) {
+		if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryCastValue) {
 			Type result;
-			if (!formatter.TryCastValue(MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>()))
-				Throw(Utility::FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
+			if (!formatter.TryCastValue(MakeOpaqueIteratorRange(result), Utility::ImpliedTyping::TypeOf<Type>()))
+				Throw(FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
 			return result;
-		} else if constexpr(Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+		} else if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
 			IteratorRange<const void*> value;
-			ImpliedTyping::TypeDesc typeDesc;
+			Utility::ImpliedTyping::TypeDesc typeDesc;
 			if (!formatter.TryRawValue(value, typeDesc))
-				Throw(Utility::FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
-			return ImpliedTyping::VariantNonRetained{typeDesc, value, ReversedEndian(formatter)}.RequireCastValue<Type>();
+				Throw(FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
+			return Utility::ImpliedTyping::VariantNonRetained{typeDesc, value, ReversedEndian(formatter)}.RequireCastValue<Type>();
 		} else {
 			typename Formatter::InteriorSection value;
 			Type result;
 			if (	!formatter.TryStringValue(value)
-				|| 	!ImpliedTyping::ConvertFullMatch(value, MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Type>()))
-				Throw(Utility::FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
+				|| 	!Utility::ImpliedTyping::ConvertFullMatch(value, MakeOpaqueIteratorRange(result), Utility::ImpliedTyping::TypeOf<Type>()))
+				Throw(FormatException(StringMeld<256>() << "Expecting value of type " << typeid(Type).name(), formatter.GetLocation()));
 			return result;
 		}
 	}
@@ -225,7 +225,7 @@ namespace Utility
 	template<typename Formatter>
 		bool TryKeyedItem(Formatter& fmttr, uint64_t& keyname)
 	{
-		if constexpr (Internal::FormatterTraits<Formatter>::HasTryKeyedItemHash) {
+		if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasTryKeyedItemHash) {
 			return fmttr.TryKeyedItem(keyname);
 		} else {
 			StringSection<> stringKeyName;
@@ -258,7 +258,7 @@ namespace Utility
 	{
 		typename Formatter::InteriorSection value;
 		if (!formatter.TryCharacterData(value))
-			Throw(Utility::FormatException("Expecting character data", formatter.GetLocation()));
+			Throw(FormatException("Expecting character data", formatter.GetLocation()));
 		return value;
 	}
 
@@ -267,10 +267,10 @@ namespace Utility
 	{
 		typename Formatter::InteriorSection value;
 		if (!formatter.TryStringValue(value))
-			Throw(Utility::FormatException("Expecting value", formatter.GetLocation()));
+			Throw(FormatException("Expecting value", formatter.GetLocation()));
 		auto result = StringToEnum(value);
 		if (!result.has_value())
-			Throw(Utility::FormatException(StringMeld<256>() << "Could not interpret (" << value << ") as (" << typeid(EnumType).name() << ")", formatter.GetLocation()));
+			Throw(FormatException(StringMeld<256>() << "Could not interpret (" << value << ") as (" << typeid(EnumType).name() << ")", formatter.GetLocation()));
 		return result.value();
 	}
 
@@ -296,7 +296,7 @@ namespace Utility
 				indent -= 4;
 				break;
 			case FormatterBlob::CharacterData:
-				if constexpr(Internal::FormatterTraits<Formatter>::HasCharacterData) {
+				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
 					str << "<<" << RequireCharacterData(formatter) << ">>";
 				} else
 					assert(0);
@@ -331,7 +331,7 @@ namespace Utility
 				first = true;
 				break;
 			case FormatterBlob::CharacterData:
-				if constexpr(Internal::FormatterTraits<Formatter>::HasCharacterData) {
+				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
 					str << "CharacterData[" << RequireCharacterData(formatter) << "]";
 				} else
 					assert(0);

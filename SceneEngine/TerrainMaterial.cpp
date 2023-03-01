@@ -110,7 +110,7 @@ namespace SceneEngine
     }
 
     TerrainMaterialConfig::TerrainMaterialConfig(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
     : TerrainMaterialConfig()
@@ -142,8 +142,8 @@ namespace SceneEngine
         : _hgrid(100.f), _gain(.5f) {}
 }
 
-#include "../Utility/Streams/TextFormatter.h"
-#include "../Utility/Streams/StreamDOM.h"
+#include "../Formatters/TextFormatter.h"
+#include "../Formatters/StreamDOM.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/Conversion.h"
 
@@ -162,12 +162,12 @@ namespace SceneEngine
     static const utf8* TextureNames[] = { "Texture0", "Texture1", "Slopes" };
 
     TerrainMaterialConfig::TerrainMaterialConfig(
-        TextInputFormatter<utf8>& formatter,
+        Formatters::TextInputFormatter<utf8>& formatter,
         const ::Assets::DirectorySearchRules& searchRules,
         bool)
     : TerrainMaterialConfig()
     {
-        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
+        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
 
         for (auto matCfg=doc.FirstChild(); matCfg; matCfg=matCfg.NextSibling()) {
             if (XlEqString(matCfg.Name(), "StrataMaterial")) {

@@ -32,8 +32,8 @@
 #include "../../../OSServices/Log.h"
 #include "../../../OSServices/FileSystemMonitor.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
-#include "../../../Utility/Streams/TextFormatter.h"
-#include "../../../Utility/Streams/TextOutputFormatter.h"
+#include "../../../Formatters/TextFormatter.h"
+#include "../../../Formatters/TextOutputFormatter.h"
 #include "../../../Utility/Streams/StreamTypes.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "catch2/catch_test_macros.hpp"
@@ -223,7 +223,7 @@ namespace UnitTests
 		{
 			// Normally a ShaderPatchCollection is deserialized from a material file
 			// We'll test the serialization and deserialization code here, and ensure
-			TextInputFormatter<> formattr { MakeStringSection(s_exampleTechniqueFragments) };
+			Formatters::TextInputFormatter<> formattr { MakeStringSection(s_exampleTechniqueFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 			// Verify that a few things got deserialized correctly
@@ -240,12 +240,12 @@ namespace UnitTests
 
 			// Write out the patch collection again
 			MemoryOutputStream<char> strm;
-			TextOutputFormatter outFmttr(strm);
+			Formatters::TextOutputFormatter outFmttr(strm);
 			SerializationOperator(outFmttr, patchCollection);
 
 			// Now let's verify that we can deserialize in what we just wrote out
 			auto& serializedStream = strm.GetBuffer();
-			TextInputFormatter<utf8> formattr2 { MakeStringSection(serializedStream.Begin(), serializedStream.End()) };
+			Formatters::TextInputFormatter<utf8> formattr2 { MakeStringSection(serializedStream.Begin(), serializedStream.End()) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection2(formattr2, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 			// we should have the same contents in both patch collections
@@ -257,7 +257,7 @@ namespace UnitTests
 		{
 			// Ensure that we can correctly compile the shader graph in the test data
 			// (otherwise the following tests won't work)
-			TextInputFormatter<utf8> formattr { MakeStringSection(s_exampleTechniqueFragments) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_exampleTechniqueFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 			std::vector<ShaderSourceParser::InstantiationRequest> instantiations;
@@ -272,7 +272,7 @@ namespace UnitTests
 
 		SECTION( "ShaderSourceParser::InstantiateShader with rename" )
 		{
-			TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithRename) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithRename) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 			std::vector<ShaderSourceParser::InstantiationRequest> instantiations;
@@ -300,7 +300,7 @@ namespace UnitTests
 
 			const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64Legacy<'Inst', 'shdr'>::Value;
 			
-			TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			auto compiledCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, *matDescSetLayout);
 			std::vector<uint64_t> instantiations { "PerPixel"_h };
@@ -324,7 +324,7 @@ namespace UnitTests
 
 		SECTION( "CompileShaderPatchCollection1" )
 		{
-			TextInputFormatter<utf8> formattr { MakeStringSection(s_exampleTechniqueFragments) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_exampleTechniqueFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 			using RenderCore::Techniques::CompiledShaderPatchCollection;
@@ -346,7 +346,7 @@ namespace UnitTests
 
 		SECTION( "CompileShaderPatchCollection2" )
 		{
-			TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 			using RenderCore::Techniques::CompiledShaderPatchCollection;
@@ -379,7 +379,7 @@ namespace UnitTests
 					"shader_with_selectors_adapter.graph"	// incorrect path
 				};
 
-				TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
+				Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
 				RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 				for (unsigned c=0; c<std::max(dimof(dependenciesToCheck), dimof(nonDependencies)); ++c) {

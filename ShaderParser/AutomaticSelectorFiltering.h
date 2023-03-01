@@ -6,13 +6,13 @@
 
 #include "../Assets/AssetsCore.h"
 #include "../Assets/IntermediateCompilers.h"
-#include "../Utility/Streams/TextFormatter.h"
+#include "../Formatters/TextFormatter.h"
 #include "../Utility/Streams/PreprocessorInterpreter.h"
 #include "../Utility/MemoryUtils.h"
 #include <memory>
 #include <iosfwd>
 
-namespace Utility { class TextOutputFormatter; }
+namespace Formatters { class TextOutputFormatter; }
 namespace Assets { class DirectorySearchRules; }
 
 namespace ShaderSourceParser
@@ -37,11 +37,11 @@ namespace ShaderSourceParser
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		friend void SerializationOperator(
-			Utility::TextOutputFormatter& formatter,
+			Formatters::TextOutputFormatter& formatter,
 			const SelectorFilteringRules& input);
 
 		SelectorFilteringRules(
-			TextInputFormatter<utf8>& formatter, 
+			Formatters::TextInputFormatter<utf8>& formatter, 
 			const ::Assets::DirectorySearchRules&,
 			const ::Assets::DependencyValidation& depVal);
 		SelectorFilteringRules(const std::unordered_map<std::string, std::string>& relevanceStrings);

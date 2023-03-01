@@ -4,13 +4,13 @@
 
 #pragma once
 
-#include "../StringUtils.h"
+#include "../Utility/StringUtils.h"
 #include <vector>
 
-namespace Utility
-{
-	class OutputStream;
+namespace Utility { class OutputStream; }
 
+namespace Formatters
+{
 	#define STREAM_FORMATTER_CHECK_ELEMENTS
 
 	class TextOutputFormatter
@@ -30,11 +30,11 @@ namespace Utility
 		
 		void NewLine();
 
-		TextOutputFormatter(OutputStream& stream);
+		TextOutputFormatter(Utility::OutputStream& stream);
 		~TextOutputFormatter();
 
 	protected:
-		OutputStream*   _stream;
+		Utility::OutputStream*   _stream;
 		unsigned        _currentIndentLevel;
 		unsigned		_indentLevelAtStartOfLine;
 		bool            _hotLine;

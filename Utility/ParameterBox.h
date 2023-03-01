@@ -15,10 +15,14 @@
 #include <string>
 #include <vector>
 
-namespace Utility
+namespace Formatters
 {
     class TextOutputFormatter;
     template<typename CharType> class TextInputFormatter;
+}
+
+namespace Utility
+{
     static constexpr const unsigned NativeRepMaxSize = MaxPath * 4;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,12 +148,12 @@ namespace Utility
         ////////////////////////////////////////////////////////////////////////////////////////
 
         template<typename CharType>
-            void    SerializeWithCharType(TextOutputFormatter& stream) const;
+            void    SerializeWithCharType(Formatters::TextOutputFormatter& stream) const;
 
         ParameterBox();
         ParameterBox(std::initializer_list<std::pair<const utf8*, const char*>>);
         template<typename CharType>
-            ParameterBox(TextInputFormatter<CharType>& stream);
+            ParameterBox(Formatters::TextInputFormatter<CharType>& stream);
         ParameterBox(ParameterBox&& moveFrom) never_throws;
         ParameterBox& operator=(ParameterBox&& moveFrom) never_throws;
 		
