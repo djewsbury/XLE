@@ -159,6 +159,10 @@ namespace Assets
 				actualizedDepVal = e.GetDependencyValidation();
 				actualizationLog = e.GetActualizationLog();
 				state = AssetState::Invalid;
+			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+				actualizedDepVal = e.GetDependencyValidation();
+				actualizationLog = AsBlob(e);
+				state = AssetState::Invalid;
 			} CATCH (const std::exception& e) {
 				actualizedDepVal = {};
 				actualizationLog = AsBlob(e);

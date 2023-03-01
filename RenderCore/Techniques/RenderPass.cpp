@@ -2613,6 +2613,16 @@ namespace RenderCore { namespace Techniques
                 debugInfo << "Fragment [" << std::distance(fragments.begin(), f) << "] " << *f;
             #endif
 
+            // sanity check to ensure that all attachment resources make sense
+            for (auto& sp:f->GetSubpasses()) {
+                for (auto a:sp.GetOutputs()) assert(a._resourceName < f->GetAttachments().size());
+                assert(sp.GetDepthStencil()._resourceName == ~0u || sp.GetDepthStencil()._resourceName < f->GetAttachments().size());
+                assert(sp.GetResolveDepthStencil()._resourceName == ~0u || sp.GetResolveDepthStencil()._resourceName < f->GetAttachments().size());
+                for (auto a:sp.GetInputs()) assert(a._resourceName < f->GetAttachments().size());
+                for (auto a:sp.GetResolveOutputs()) assert(a._resourceName < f->GetAttachments().size());
+                for (auto a:sp.GetNonFrameBufferAttachmentViews()) assert(a._resourceName < f->GetAttachments().size());
+            }
+
             /////////////////////////////////////////////////////////////////////////////
             using AttachmentAndDirection = std::pair<AttachmentName, DirectionFlags::BitField>;
             std::vector<AttachmentAndDirection> sortedInterfaceAttachments;

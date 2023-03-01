@@ -147,6 +147,9 @@ namespace Utility
             // convert into the destination type, with special case handling to-and-from strings
             template<typename DestType>
                 DestType RequireCastValue() const;
+
+            template<typename DestType>
+                std::optional<DestType> TryCastValue() const;
         };
         TypeDesc TryBinaryOperator(
             IteratorRange<void*> dst,
@@ -268,6 +271,50 @@ namespace Utility
                         DestType result;
                         if (!Cast(MakeOpaqueIteratorRange(result), TypeOf<DestType>(), _data, _type))
                             Throw(std::runtime_error(std::string{"Failed casting to "} + typeid(DestType).name()));
+                        return result;
+                    }
+                }
+            }
+        }
+
+        template<typename DestType>
+            std::optional<DestType> VariantNonRetained::TryCastValue() const
+        {
+            if (_type._type == TypeCat::Void)
+                return {};
+
+            bool srcIsString = ((_type._type == TypeCat::Int8) || (_type._type == TypeCat::UInt8)) && _type._typeHint == TypeHint::String;
+            if constexpr (std::is_same_v<std::decay_t<DestType>, std::string>) {
+                if (srcIsString) {
+                    std::string result;
+                    result.resize(std::min((size_t)_type._arrayCount, _data.size()));
+                    std::memcpy(result.data(), _data.begin(), result.size());
+                    return result;
+                } else {
+                    if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
+                        ReversedEndianHelper helper { _data, _type };
+                        return AsString(helper._reversedData, _type);
+                    } else
+                        return AsString(_data, _type);
+                }
+            } else {
+                if (srcIsString) {
+                    DestType casted;
+                    auto str = MakeStringSection((const char*)_data.begin(), (const char*)_data.end());
+                    if (ConvertFullMatch(str, MakeOpaqueIteratorRange(casted), TypeOf<DestType>()))
+                        return casted;
+                    return {};
+                } else {
+                    if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
+                        ReversedEndianHelper helper { _data, _type };
+                        DestType result;
+                        if (!Cast(MakeOpaqueIteratorRange(result), TypeOf<DestType>(), helper._reversedData, _type))
+                            return {};
+                        return result;
+                    } else {
+                        DestType result;
+                        if (!Cast(MakeOpaqueIteratorRange(result), TypeOf<DestType>(), _data, _type))
+                            return {};
                         return result;
                     }
                 }

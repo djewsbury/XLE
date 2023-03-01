@@ -28,7 +28,7 @@ namespace Sample
 
 		auto camera = std::make_shared<ToolsRig::VisCameraSettings>();
 		auto modelLayer = ToolsRig::CreateSimpleSceneOverlay(
-			globals._immediateDrawingApparatus,
+			globals._overlayApparatus,
 			std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(globals._drawingApparatus),
 			globals._drawingApparatus->_deformAccelerators);
 		modelLayer->Set(camera);
@@ -40,7 +40,7 @@ namespace Sample
 		overlaySettings._drawWireframe = false;
 
 		auto visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(
-			globals._immediateDrawingApparatus,
+			globals._overlayApparatus,
 			overlaySettings);
 		visOverlay->Set(camera);
 		AddSystem(visOverlay);
