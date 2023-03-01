@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "StreamFormatter.h"
+#include "TextFormatter.h"
 #include "PreprocessorInterpreter.h"
 #include "../StringUtils.h"
 #include <string>

@@ -100,7 +100,7 @@ namespace RenderCore { namespace Assets
 					auto i = std::lower_bound(_patchCollections.begin(), _patchCollections.end(), ref._hashId, [](const auto& q, auto lhs) { return q->GetHash() < lhs; });
 					if (i == _patchCollections.end() || (*i)->GetHash() != ref._hashId) {
 						// we have to deserialize via text format
-						InputStreamFormatter<> inputFormatter{MakeIteratorRange(ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize))};
+						TextInputFormatter<> inputFormatter{MakeIteratorRange(ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize))};
 						auto patchCollection = std::make_shared<Assets::ShaderPatchCollection>(inputFormatter, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 						_patchCollections.insert(i, std::move(patchCollection));
 					}

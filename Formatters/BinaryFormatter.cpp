@@ -392,7 +392,7 @@ namespace Formatters
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	BinaryFormatter::BinaryFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data)
+	BinaryInputFormatter::BinaryInputFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data)
 	: _evalContext(&evalContext)
 	, _dataIterator(data)
 	{
@@ -400,7 +400,7 @@ namespace Formatters
 		_queuedNext = Blob::None;
 	}
 
-	void BinaryFormatter::PushPattern(std::shared_ptr<BinarySchemata> schemata, BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams, uint32_t templateParamsTypeField)
+	void BinaryInputFormatter::PushPattern(std::shared_ptr<BinarySchemata> schemata, BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams, uint32_t templateParamsTypeField)
 	{
 		_queuedNext = Blob::None;
 		BlockContext newContext;
@@ -415,7 +415,7 @@ namespace Formatters
 		_blockStack.emplace_back(std::move(newContext));
 	}
 
-	int64_t BinaryFormatter::EvaluateExpression(IteratorRange<const Utility::Internal::Token*> expressionCommands, const Utility::Internal::TokenDictionary& tokenDictionary)
+	int64_t BinaryInputFormatter::EvaluateExpression(IteratorRange<const Utility::Internal::Token*> expressionCommands, const Utility::Internal::TokenDictionary& tokenDictionary)
 	{
 		TRY {
 			uint8_t stringParseOutputBuffer[1024];
@@ -441,7 +441,7 @@ namespace Formatters
 						// If the value is a string; let's attempt to parse it before we send the results to the 
 						if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
 							if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
-								Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
+								Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryInputFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
 							auto parsedType = ImpliedTyping::ParseFullMatch(
 								MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
 								MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
@@ -499,7 +499,7 @@ namespace Formatters
 		} CATCH_END
 	}
 
-	BinaryFormatter::Blob BinaryFormatter::PeekNext()
+	BinaryInputFormatter::Blob BinaryInputFormatter::PeekNext()
 	{
 		if (_blockStack.empty()) return Blob::None;
 		if (_queuedNext != Blob::None) return _queuedNext;
@@ -589,7 +589,7 @@ namespace Formatters
 		}
 	}
 
-	bool BinaryFormatter::TryKeyedItem(StringSection<>& name)
+	bool BinaryInputFormatter::TryKeyedItem(StringSection<>& name)
 	{
 		if (_blockStack.empty()) return false;
 		auto& workingBlock = _blockStack.back();
@@ -621,7 +621,7 @@ namespace Formatters
 		return true;
 	}
 
-	bool BinaryFormatter::TryPeekKeyedItem(StringSection<>& name)
+	bool BinaryInputFormatter::TryPeekKeyedItem(StringSection<>& name)
 	{
 		// TryKeyedItem only changes _queuedNext -- so we can effectively "peek"
 		// at it by just changing _queuedNext back ....
@@ -631,7 +631,7 @@ namespace Formatters
 		return true;
 	}
 
-	bool BinaryFormatter::TryKeyedItem(uint64_t& name)
+	bool BinaryInputFormatter::TryKeyedItem(uint64_t& name)
 	{
 		if (_blockStack.empty()) return false;
 		auto& workingBlock = _blockStack.back();
@@ -664,7 +664,7 @@ namespace Formatters
 		return true;
 	}
 
-	bool BinaryFormatter::TryPeekKeyedItem(uint64_t& name)
+	bool BinaryInputFormatter::TryPeekKeyedItem(uint64_t& name)
 	{
 		auto res = TryKeyedItem(name);
 		if (!res) return false;
@@ -672,7 +672,7 @@ namespace Formatters
 		return true;
 	}
 
-	bool BinaryFormatter::TryBeginBlock(unsigned& evaluatedTypeId)
+	bool BinaryInputFormatter::TryBeginBlock(unsigned& evaluatedTypeId)
 	{
 		if (_blockStack.empty()) return false;
 
@@ -730,7 +730,7 @@ namespace Formatters
 		return true;
 	}
 
-	bool BinaryFormatter::TryEndBlock()
+	bool BinaryInputFormatter::TryEndBlock()
 	{
 		if (_blockStack.size() <= 1) return false;
 		if (_blockStack.back()._pendingArrayMembers || _blockStack.back()._pendingEndArray) return false;
@@ -742,7 +742,7 @@ namespace Formatters
 		return true;
 	}
 
-	bool BinaryFormatter::TryRawValue(IteratorRange<const void*>& resultData, ImpliedTyping::TypeDesc& resultTypeDesc, unsigned& evaluatedTypeId) 
+	bool BinaryInputFormatter::TryRawValue(IteratorRange<const void*>& resultData, ImpliedTyping::TypeDesc& resultTypeDesc, unsigned& evaluatedTypeId) 
 	{
 		if (_blockStack.empty()) return false;
 
@@ -814,7 +814,7 @@ namespace Formatters
 		}
 	}
 
-	bool BinaryFormatter::TryBeginArray(unsigned& count, unsigned& evaluatedTypeId)
+	bool BinaryInputFormatter::TryBeginArray(unsigned& count, unsigned& evaluatedTypeId)
 	{
 		if (_blockStack.empty()) return false;
 
@@ -852,7 +852,7 @@ namespace Formatters
 		return true;
 	}
 
-	bool BinaryFormatter::TryEndArray()
+	bool BinaryInputFormatter::TryEndArray()
 	{
 		if (_blockStack.empty()) return false;
 		auto& workingBlock = _blockStack.back();
@@ -864,7 +864,7 @@ namespace Formatters
 		return true;
 	}
 
-	IteratorRange<const void*> BinaryFormatter::SkipArrayElements(unsigned count)
+	IteratorRange<const void*> BinaryInputFormatter::SkipArrayElements(unsigned count)
 	{
 		if (_blockStack.empty())
 			Throw(std::runtime_error("SkipArrayElements called on uninitialized formatter"));
@@ -895,11 +895,11 @@ namespace Formatters
 		}
 	}
 
-	IteratorRange<const void*> BinaryFormatter::SkipNextBlob()
+	IteratorRange<const void*> BinaryInputFormatter::SkipNextBlob()
 	{
 		auto next = PeekNext();
 		auto start = GetRemainingData();
-		if (next == BinaryFormatter::Blob::BeginArray) {
+		if (next == BinaryInputFormatter::Blob::BeginArray) {
 			unsigned count = 0;
 			unsigned evalTypeId = 0;
 			TryBeginArray(count, evalTypeId);
@@ -907,7 +907,7 @@ namespace Formatters
 			if (!TryEndArray())
 				Throw(std::runtime_error("Expecting end array after skipping array elements while skipping binary blob"));
 			return {start.begin(), GetRemainingData().begin()};
-		} else if (next == BinaryFormatter::Blob::BeginBlock) {
+		} else if (next == BinaryInputFormatter::Blob::BeginBlock) {
 			unsigned evalBlockId;
 			TryBeginBlock(evalBlockId);
 			auto fixedSize = TryCalculateFixedSize(evalBlockId);
@@ -918,18 +918,18 @@ namespace Formatters
 				_blockStack.pop_back();
 				_queuedNext = Blob::None;
 			} else {
-				while (PeekNext() != BinaryFormatter::Blob::EndBlock)
+				while (PeekNext() != BinaryInputFormatter::Blob::EndBlock)
 					SkipNextBlob();
 				TryEndBlock();
 			}
 			return {start.begin(), GetRemainingData().begin()};
-		} else if (next == BinaryFormatter::Blob::ValueMember) {
+		} else if (next == BinaryInputFormatter::Blob::ValueMember) {
 			IteratorRange<const void*> data;
 			ImpliedTyping::TypeDesc typeDesc; 
 			unsigned evaluatedTypeId;
 			TryRawValue(data, typeDesc, evaluatedTypeId);
 			return data;
-		} else if (next == BinaryFormatter::Blob::KeyedItem) {
+		} else if (next == BinaryInputFormatter::Blob::KeyedItem) {
 			StringSection<> name;
 			TryKeyedItem(name);
 			auto skip = SkipNextBlob();
@@ -938,7 +938,7 @@ namespace Formatters
 			Throw(std::runtime_error("Expecting array, block or member while skipping binary blob"));
 	}
 
-	std::optional<size_t> BinaryFormatter::TryCalculateFixedSize(unsigned evalTypeId)
+	std::optional<size_t> BinaryInputFormatter::TryCalculateFixedSize(unsigned evalTypeId)
 	{
 		// we need to tell the eval context what local variables will be in scope for this type
 		std::vector<uint64_t> localVars;
@@ -950,7 +950,7 @@ namespace Formatters
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void BinaryBlockMatch::ParseValue(BinaryFormatter& formatter, const std::string& name, unsigned parentId)
+	void BinaryBlockMatch::ParseValue(BinaryInputFormatter& formatter, const std::string& name, unsigned parentId)
 	{
 		unsigned evaluatedTypeId = ~0u;
 		unsigned arrayCount = 0;
@@ -989,19 +989,19 @@ namespace Formatters
 			for (unsigned c=0; c<arrayCount; ++c)
 				ParseValue(formatter, (StringMeld<256>() << "<Element " << c << ">").AsString(), newParentId);
 			_members[newParentId].second._data.second = formatter.GetRemainingData().begin();
-			assert(formatter.PeekNext() == BinaryFormatter::Blob::EndArray);
+			assert(formatter.PeekNext() == BinaryInputFormatter::Blob::EndArray);
 			if (!formatter.TryEndArray())
 				Throw(std::runtime_error("Expected end array"));
 		} else
 			Throw(std::runtime_error("Expected value type blob in SerializeValue"));
 	}
 
-	void BinaryBlockMatch::ParseBlock(BinaryFormatter& formatter, unsigned parentId)
+	void BinaryBlockMatch::ParseBlock(BinaryInputFormatter& formatter, unsigned parentId)
 	{
 		for (;;) {
 			auto next = formatter.PeekNext();
 			switch (next) {
-			case BinaryFormatter::Blob::KeyedItem:
+			case BinaryInputFormatter::Blob::KeyedItem:
 				{
 					StringSection<> name;
 					formatter.TryKeyedItem(name);
@@ -1009,21 +1009,21 @@ namespace Formatters
 				}
 				break;
 
-			case BinaryFormatter::Blob::BeginBlock:
-			case BinaryFormatter::Blob::BeginArray:
-			case BinaryFormatter::Blob::EndArray:
-			case BinaryFormatter::Blob::ValueMember:
+			case BinaryInputFormatter::Blob::BeginBlock:
+			case BinaryInputFormatter::Blob::BeginArray:
+			case BinaryInputFormatter::Blob::EndArray:
+			case BinaryInputFormatter::Blob::ValueMember:
 				Throw(std::runtime_error("Unexpected blob in SerializeBlock"));
 				break;
 
-			case BinaryFormatter::Blob::EndBlock:
-			case BinaryFormatter::Blob::None:
+			case BinaryInputFormatter::Blob::EndBlock:
+			case BinaryInputFormatter::Blob::None:
 				return;
 			}
 		}
 	}
 
-	BinaryBlockMatch::BinaryBlockMatch(BinaryFormatter& formatter)
+	BinaryBlockMatch::BinaryBlockMatch(BinaryInputFormatter& formatter)
 	: _evalContext(&formatter.GetEvaluationContext())
 	{
 		unsigned blockType = 0;
@@ -1065,42 +1065,42 @@ namespace Formatters
 		return 0;
 	}
 
-	void SkipUntilEndBlock(BinaryFormatter& formatter)
+	void SkipUntilEndBlock(BinaryInputFormatter& formatter)
 	{
 		for (;;) {
 			auto next = formatter.PeekNext();
 			switch (next) {
-			case BinaryFormatter::Blob::KeyedItem:
+			case BinaryInputFormatter::Blob::KeyedItem:
 				formatter.SkipNextBlob();
 				break;
 
-			case BinaryFormatter::Blob::BeginBlock:
-			case BinaryFormatter::Blob::BeginArray:
-			case BinaryFormatter::Blob::EndArray:
-			case BinaryFormatter::Blob::ValueMember:
+			case BinaryInputFormatter::Blob::BeginBlock:
+			case BinaryInputFormatter::Blob::BeginArray:
+			case BinaryInputFormatter::Blob::EndArray:
+			case BinaryInputFormatter::Blob::ValueMember:
 				Throw(std::runtime_error("Unexpected blob in SerializeBlock"));
 
-			case BinaryFormatter::Blob::EndBlock:
-			case BinaryFormatter::Blob::None:
+			case BinaryInputFormatter::Blob::EndBlock:
+			case BinaryInputFormatter::Blob::None:
 				return;
 			}
 		}
 	}
 
-	unsigned RequireBeginBlock(BinaryFormatter& formatter)
+	unsigned RequireBeginBlock(BinaryInputFormatter& formatter)
 	{
 		unsigned res = ~0u;
 		if (!formatter.TryBeginBlock(res))
 			Throw(std::runtime_error("Unexpected blob while looking for begin block in binary formatter"));
 		return res;
 	}
-	void RequireEndBlock(BinaryFormatter& formatter)
+	void RequireEndBlock(BinaryInputFormatter& formatter)
 	{
 		if (!formatter.TryEndBlock())
 			Throw(std::runtime_error("Unexpected blob while looking for end block in binary formatter"));
 	}
 
-	StringSection<> RequireKeyedItem(BinaryFormatter& formatter)
+	StringSection<> RequireKeyedItem(BinaryInputFormatter& formatter)
 	{
 		StringSection<> result;
 		if (!formatter.TryKeyedItem(result))
@@ -1108,7 +1108,7 @@ namespace Formatters
 		return result;
 	}
 
-	uint64_t RequireKeyedItemHash(BinaryFormatter& formatter)
+	uint64_t RequireKeyedItemHash(BinaryInputFormatter& formatter)
 	{
 		uint64_t result;
 		if (!formatter.TryKeyedItem(result))
@@ -1116,7 +1116,7 @@ namespace Formatters
 		return result;
 	}
 	
-	std::pair<unsigned, unsigned> RequireBeginArray(BinaryFormatter& formatter)
+	std::pair<unsigned, unsigned> RequireBeginArray(BinaryInputFormatter& formatter)
 	{
 		unsigned count = 0, typeId = ~0u;
 		if (!formatter.TryBeginArray(count, typeId))
@@ -1124,13 +1124,13 @@ namespace Formatters
 		return {count, typeId};
 	}
 
-	void RequireEndArray(BinaryFormatter& formatter)
+	void RequireEndArray(BinaryInputFormatter& formatter)
 	{
 		if (!formatter.TryEndArray())
 			Throw(std::runtime_error("Unexpected blob while looking for end array in binary formatter"));
 	}
 
-	StringSection<> RequireStringValue(BinaryFormatter& formatter)
+	StringSection<> RequireStringValue(BinaryInputFormatter& formatter)
 	{
 		IteratorRange<const void*> valueData;
 		ImpliedTyping::TypeDesc valueTypeDesc;
@@ -1183,7 +1183,7 @@ namespace Formatters
 		str << "Unknown enum value (" << value << ")" << std::endl; 
 	}
 
-	static std::ostream& SerializeValue(std::ostream& str, BinaryFormatter& formatter, StringSection<> name, unsigned indent = 0)
+	static std::ostream& SerializeValue(std::ostream& str, BinaryInputFormatter& formatter, StringSection<> name, unsigned indent = 0)
 	{
 		unsigned evaluatedTypeId;
 		unsigned arrayCount = 0;
@@ -1238,7 +1238,7 @@ namespace Formatters
 			str << " " << name << "[" << arrayCount << "]" << std::endl;
 			for (unsigned c=0; c<arrayCount; ++c)
 				SerializeValue(str, formatter, StringMeld<256>() << "<Element " << c << ">", indent+4);
-			assert(formatter.PeekNext() == BinaryFormatter::Blob::EndArray);
+			assert(formatter.PeekNext() == BinaryInputFormatter::Blob::EndArray);
 			if (!formatter.TryEndArray())
 				Throw(std::runtime_error("Expected end array"));
 		} else
@@ -1246,12 +1246,12 @@ namespace Formatters
 		return str;
 	}
 
-	std::ostream& SerializeBlock(std::ostream& str, BinaryFormatter& formatter, unsigned indent)
+	std::ostream& SerializeBlock(std::ostream& str, BinaryInputFormatter& formatter, unsigned indent)
 	{
 		for (;;) {
 			auto next = formatter.PeekNext();
 			switch (next) {
-			case BinaryFormatter::Blob::KeyedItem:
+			case BinaryInputFormatter::Blob::KeyedItem:
 				{
 					StringSection<> name;
 					formatter.TryKeyedItem(name);
@@ -1259,14 +1259,14 @@ namespace Formatters
 				}
 				break;
 
-			case BinaryFormatter::Blob::BeginBlock:
-			case BinaryFormatter::Blob::BeginArray:
-			case BinaryFormatter::Blob::EndArray:
-			case BinaryFormatter::Blob::ValueMember:
+			case BinaryInputFormatter::Blob::BeginBlock:
+			case BinaryInputFormatter::Blob::BeginArray:
+			case BinaryInputFormatter::Blob::EndArray:
+			case BinaryInputFormatter::Blob::ValueMember:
 				Throw(std::runtime_error("Unexpected blob in SerializeBlock"));
 
-			case BinaryFormatter::Blob::EndBlock:
-			case BinaryFormatter::Blob::None:
+			case BinaryInputFormatter::Blob::EndBlock:
+			case BinaryInputFormatter::Blob::None:
 				return str;
 			}
 		}

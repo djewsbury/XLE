@@ -4,7 +4,7 @@
 
 #include "../../../Assets/AssetsCore.h"
 #include "../../../Assets/AssetUtils.h"
-#include "../../../Utility/Streams/StreamFormatter.h"
+#include "../../../Utility/Streams/TextFormatter.h"
 #include "../../../Utility/IntrusivePtr.h"
 #include "../../../Utility/Threading/CompletionThreadPool.h"
 #include <memory>

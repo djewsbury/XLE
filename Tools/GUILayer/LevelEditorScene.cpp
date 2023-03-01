@@ -53,8 +53,8 @@
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../OSServices/LegacyFileStreams.h"
-#include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Utility/Streams/TextOutputFormatter.h"
 #include "../../Utility/Conversion.h"
 #include <memory>
 
@@ -365,7 +365,7 @@ namespace GUILayer
         OutputStream& stream, uint64_t docId, 
         EntityInterface::RetainedEntities* flexObjects) -> StreamWriterResult
     {
-        OutputStreamFormatter formatter(stream);
+        TextOutputFormatter formatter(stream);
 #if defined(GUILAYER_SCENEENGINE)
         EntityInterface::ExportGameObjects(formatter, *flexObjects);
 #endif
@@ -383,7 +383,7 @@ namespace GUILayer
     static auto WriteEnvSettings(OutputStream& stream, uint64_t docId, EntityInterface::RetainedEntities* flexObjects) 
         -> StreamWriterResult
     {
-        OutputStreamFormatter formatter(stream);
+        TextOutputFormatter formatter(stream);
 #if defined(GUILAYER_SCENEENGINE)
         EntityInterface::ExportEnvSettings(formatter, *flexObjects, docId);
 #endif
@@ -401,7 +401,7 @@ namespace GUILayer
         OutputStream& stream, 
         IEnumerable<EditorSceneManager::PlacementCellRef>^ cells) -> StreamWriterResult
     {
-        OutputStreamFormatter formatter(stream);
+        TextOutputFormatter formatter(stream);
         for each(auto c in cells) {
             auto ele = formatter.BeginKeyedElement("CellRef");
             formatter.WriteKeyedValue("Offset", ImpliedTyping::AsString(AsFloat3(c.Offset)));
@@ -486,7 +486,7 @@ namespace GUILayer
     static auto WriteTerrainCfg(OutputStream& stream, SceneEngine::TerrainConfig& cfg) 
         -> StreamWriterResult
     {
-        OutputStreamFormatter formatter(stream);
+        TextOutputFormatter formatter(stream);
         cfg.Write(formatter);
         return StreamWriterResult::Text;
     }
@@ -527,7 +527,7 @@ namespace GUILayer
     static auto WriteVegetationSpawnConfig(OutputStream& stream, SceneEngine::VegetationSpawnManager* man) 
         -> StreamWriterResult
     {
-        Utility::OutputStreamFormatter formatter(stream);
+        Utility::TextOutputFormatter formatter(stream);
         man->GetConfig().Write(formatter);
         return StreamWriterResult::Text;
     }

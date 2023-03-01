@@ -95,7 +95,7 @@ namespace ColladaConversion
         return {};
     }
 
-    using RootElementParser = void (DocumentScaffold::*)(XmlInputStreamFormatter<utf8>&);
+    using RootElementParser = void (DocumentScaffold::*)(XmlInputFormatter<utf8>&);
 
     #define ON_ELEMENT                                              \
         while (formatter.PeekNext() == FormatterBlob::KeyedItem) {                         \

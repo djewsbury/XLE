@@ -16,7 +16,7 @@ namespace Utility
 
 	#define STREAM_FORMATTER_CHECK_ELEMENTS
 
-	class XL_UTILITY_API OutputStreamFormatter
+	class XL_UTILITY_API TextOutputFormatter
 	{
 	public:
 		using ElementId = unsigned;
@@ -33,8 +33,8 @@ namespace Utility
 		
 		void NewLine();
 
-		OutputStreamFormatter(OutputStream& stream);
-		~OutputStreamFormatter();
+		TextOutputFormatter(OutputStream& stream);
+		~TextOutputFormatter();
 
 	protected:
 		OutputStream*   _stream;
@@ -56,7 +56,7 @@ namespace Utility
 	{
 		template<typename T> struct HasSerializeMethod
 		{
-			template<typename U, void (U::*)(OutputStreamFormatter&) const> struct FunctionSignature {};
+			template<typename U, void (U::*)(TextOutputFormatter&) const> struct FunctionSignature {};
 			template<typename U> static std::true_type Test1(FunctionSignature<U, &U::SerializeMethod>*);
 			template<typename U> static std::false_type Test1(...);
 			static const bool Result = decltype(Test1<T>(0))::value;
@@ -64,7 +64,7 @@ namespace Utility
 	}
 
 	template<typename Type, typename std::enable_if<Internal::HasSerializeMethod<Type>::Result>::type* =nullptr>
-		inline void SerializationOperator(OutputStreamFormatter& formatter, const Type& input)
+		inline void SerializationOperator(TextOutputFormatter& formatter, const Type& input)
 	{
 		input.SerializeMethod(formatter);
 	}

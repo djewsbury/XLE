@@ -22,7 +22,7 @@
 #include "../Assets/AnimationBindings.h"		// required for extracting base transforms
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 
 using namespace Utility::Literals;
 

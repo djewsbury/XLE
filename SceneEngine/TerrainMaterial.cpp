@@ -95,7 +95,7 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void TerrainMaterialConfig::Write(OutputStreamFormatter& formatter) const
+    void TerrainMaterialConfig::Write(TextOutputFormatter& formatter) const
     {
         AccessorSerialize(formatter, *this);
     }
@@ -110,7 +110,7 @@ namespace SceneEngine
     }
 
     TerrainMaterialConfig::TerrainMaterialConfig(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
     : TerrainMaterialConfig()
@@ -142,7 +142,7 @@ namespace SceneEngine
         : _hgrid(100.f), _gain(.5f) {}
 }
 
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/Streams/StreamDOM.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/Conversion.h"
@@ -162,12 +162,12 @@ namespace SceneEngine
     static const utf8* TextureNames[] = { "Texture0", "Texture1", "Slopes" };
 
     TerrainMaterialConfig::TerrainMaterialConfig(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         const ::Assets::DirectorySearchRules& searchRules,
         bool)
     : TerrainMaterialConfig()
     {
-        StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
 
         for (auto matCfg=doc.FirstChild(); matCfg; matCfg=matCfg.NextSibling()) {
             if (XlEqString(matCfg.Name(), "StrataMaterial")) {

@@ -11,8 +11,8 @@
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
-#include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Utility/Streams/TextOutputFormatter.h"
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Streams/FormatterUtils.h"
@@ -56,7 +56,7 @@ namespace RenderCore { namespace Assets
     };
     
     static Blend DeserializeBlend(
-        const StreamDOMElement<InputStreamFormatter<utf8>>& ele, const utf8 name[])
+        const StreamDOMElement<TextInputFormatter<utf8>>& ele, const utf8 name[])
     {
         if (ele) {
             auto child = ele.Attribute(name);
@@ -73,7 +73,7 @@ namespace RenderCore { namespace Assets
     }
 
     static BlendOp DeserializeBlendOp(
-        const StreamDOMElement<InputStreamFormatter<utf8>>& ele, const utf8 name[])
+        const StreamDOMElement<TextInputFormatter<utf8>>& ele, const utf8 name[])
     {
         if (ele) {
             auto child = ele.Attribute(name);
@@ -89,11 +89,11 @@ namespace RenderCore { namespace Assets
         return BlendOp::NoBlending;
     }
 
-    static RenderStateSet DeserializeStateSet(InputStreamFormatter<utf8>& formatter)
+    static RenderStateSet DeserializeStateSet(TextInputFormatter<utf8>& formatter)
     {
         RenderStateSet result;
 
-        StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
         auto rootElement = doc.RootElement();
 
         {
@@ -191,7 +191,7 @@ namespace RenderCore { namespace Assets
         return stateSet._flag != 0;
     }
 
-    static void SerializeStateSet(OutputStreamFormatter& formatter, const RenderStateSet& stateSet)
+    static void SerializeStateSet(TextOutputFormatter& formatter, const RenderStateSet& stateSet)
     {
         if (stateSet._flag & RenderStateSet::Flag::DoubleSided)
             formatter.WriteKeyedValue("DoubleSided", AutoAsString(stateSet._doubleSided));
@@ -217,10 +217,10 @@ namespace RenderCore { namespace Assets
         }
     }
 
-    static SamplerDesc DeserializeSamplerState(InputStreamFormatter<>& formatter)
+    static SamplerDesc DeserializeSamplerState(TextInputFormatter<>& formatter)
     {
         // See also SamplerDesc ParseFixedSampler(ConditionalProcessingTokenizer& iterator) in PredefinedDescriptorSetLayout
-        // Possibly we could create a IDynamicFormatter<> wrapper for ConditionalProcessingTokenizer and use that to make a single
+        // Possibly we could create a IDynamicInputFormatter<> wrapper for ConditionalProcessingTokenizer and use that to make a single
         // deserialization method?
         char exceptionBuffer[256];
         SamplerDesc result{};
@@ -257,7 +257,7 @@ namespace RenderCore { namespace Assets
 		return result;
     }
 
-    static OutputStreamFormatter& SerializeSamplerDesc(OutputStreamFormatter& str, const SamplerDesc& sampler)
+    static TextOutputFormatter& SerializeSamplerDesc(TextOutputFormatter& str, const SamplerDesc& sampler)
     {
         str.WriteKeyedValue("Filter", AsString(sampler._filter));
         str.WriteKeyedValue("AddressU", AsString(sampler._addressU));
@@ -270,7 +270,7 @@ namespace RenderCore { namespace Assets
         return str;
     }
 
-    std::vector<std::pair<std::string, SamplerDesc>> DeserializeSamplerStates(InputStreamFormatter<>& formatter)
+    std::vector<std::pair<std::string, SamplerDesc>> DeserializeSamplerStates(TextInputFormatter<>& formatter)
     {
         std::vector<std::pair<std::string, SamplerDesc>> result;
         StringSection<> keyName;
@@ -286,7 +286,7 @@ namespace RenderCore { namespace Assets
         return result;
     }
 
-    static OutputStreamFormatter& SerializeSamplerStates(OutputStreamFormatter& str, const std::vector<std::pair<std::string, SamplerDesc>>& samplers)
+    static TextOutputFormatter& SerializeSamplerStates(TextOutputFormatter& str, const std::vector<std::pair<std::string, SamplerDesc>>& samplers)
     {
         for (const auto& s:samplers) {
             auto ele = str.BeginKeyedElement(s.first);
@@ -331,7 +331,7 @@ namespace RenderCore { namespace Assets
     RawMaterial::RawMaterial() {}
 
     std::vector<::Assets::rstring> 
-        DeserializeInheritList(InputStreamFormatter<utf8>& formatter)
+        DeserializeInheritList(TextInputFormatter<utf8>& formatter)
     {
         std::vector<::Assets::rstring> result;
         while (formatter.PeekNext() == FormatterBlob::Value)
@@ -340,7 +340,7 @@ namespace RenderCore { namespace Assets
     }
 
     RawMaterial::RawMaterial(
-		InputStreamFormatter<utf8>& formatter, 
+		TextInputFormatter<utf8>& formatter, 
 		const ::Assets::DirectorySearchRules& searchRules, 
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal), _searchRules(searchRules)
@@ -388,7 +388,7 @@ namespace RenderCore { namespace Assets
 
     RawMaterial::~RawMaterial() {}
 
-    void RawMaterial::SerializeMethod(OutputStreamFormatter& formatter) const
+    void RawMaterial::SerializeMethod(TextOutputFormatter& formatter) const
     {
 		if (!_patchCollection.GetPatches().empty()) {
 			auto ele = formatter.BeginKeyedElement("Patches");
@@ -556,7 +556,7 @@ namespace RenderCore { namespace Assets
             //  to the geometry export (eg, .dae file).
 
         if (blob && !blob->empty()) {
-            InputStreamFormatter<utf8> formatter(MakeIteratorRange(*blob).template Cast<const void*>());
+            TextInputFormatter<utf8> formatter(MakeIteratorRange(*blob).template Cast<const void*>());
 
             StringSection<> keyName;
             while (formatter.TryKeyedItem(keyName)) {

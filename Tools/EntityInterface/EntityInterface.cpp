@@ -15,7 +15,7 @@ namespace EntityInterface
 {
 	static FilenameRules s_fnRules('/', true);
 
-	class FormatOverlappingDocuments : public Formatters::IDynamicFormatter
+	class FormatOverlappingDocuments : public Formatters::IDynamicInputFormatter
 	{
 	public:
 		FormatterBlob PeekNext() override
@@ -240,7 +240,7 @@ namespace EntityInterface
 		}
 
 		FormatOverlappingDocuments(
-			IteratorRange<std::shared_ptr<Formatters::IDynamicFormatter>*> mounts,
+			IteratorRange<std::shared_ptr<Formatters::IDynamicInputFormatter>*> mounts,
 			IteratorRange<const std::string*> externalMountPoints,
 			::Assets::Blob log)
 		: _log(std::move(log))
@@ -260,7 +260,7 @@ namespace EntityInterface
 	private:
 		struct Mount
 		{
-			std::shared_ptr<Formatters::IDynamicFormatter> _formatter;
+			std::shared_ptr<Formatters::IDynamicInputFormatter> _formatter;
 			std::string _externalMountPoint;
 		};
 		std::vector<Mount> _mounts;
@@ -342,7 +342,7 @@ namespace EntityInterface
 			return {};
 		}
 
-		std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> inputMountPoint) const
+		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> inputMountPoint) const
 		{
 			ScopedLock(_mountsLock);
 
@@ -410,7 +410,7 @@ namespace EntityInterface
 
 			struct Helper
 			{
-				std::vector<std::future<std::shared_ptr<Formatters::IDynamicFormatter>>> _futureFormatters;
+				std::vector<std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>>> _futureFormatters;
 				std::vector<std::string> _externalPosition;
 			};
 			auto helper = std::make_shared<Helper>();
@@ -421,7 +421,7 @@ namespace EntityInterface
 				helper->_externalPosition.push_back(o._externalPosition);
 			}
 
-			std::promise<std::shared_ptr<Formatters::IDynamicFormatter>> promise;
+			std::promise<std::shared_ptr<Formatters::IDynamicInputFormatter>> promise;
 			auto future = promise.get_future();
 			::Assets::PollToPromise(
 				std::move(promise),
@@ -433,7 +433,7 @@ namespace EntityInterface
 					return ::Assets::PollStatus::Finish;
 				},
 				[helper, actualizationLog]() mutable {
-					std::vector<std::shared_ptr<Formatters::IDynamicFormatter>> actualized;
+					std::vector<std::shared_ptr<Formatters::IDynamicInputFormatter>> actualized;
 					actualized.resize(helper->_futureFormatters.size());
 					auto a=actualized.begin();
 					for (auto& p:helper->_futureFormatters) {

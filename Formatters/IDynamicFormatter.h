@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/StringFormat.h"
 
 namespace Assets { class DependencyValidation; }
@@ -12,7 +12,7 @@ namespace Utility { namespace ImpliedTyping { class TypeDesc; }}
 
 namespace Formatters
 {
-    class IDynamicFormatter
+    class IDynamicInputFormatter
     {
     public:
         using InteriorSection = StringSection<>;
@@ -41,6 +41,6 @@ namespace Formatters
         virtual StreamLocation GetLocation() const = 0;
         virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 
-        virtual ~IDynamicFormatter() = default;
+        virtual ~IDynamicInputFormatter() = default;
     };
 }

@@ -16,7 +16,7 @@ namespace Formatters
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class BinaryFormatter
+	class BinaryInputFormatter
 	{
 	public:
 		enum class Blob { KeyedItem, ValueMember, BeginBlock, EndBlock, BeginArray, EndArray, None };
@@ -47,7 +47,7 @@ namespace Formatters
 		IteratorRange<const unsigned*> GetPassedConditionSymbols() const { return _passedConditionSymbols; }
 		const BinarySchemata& GetSchemata() const { return *_blockStack.front()._schemata; }
 
-		BinaryFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data);
+		BinaryInputFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data);
 	private:
 		struct BlockContext
 		{
@@ -80,15 +80,15 @@ namespace Formatters
 		int64_t EvaluateExpression(IteratorRange<const Utility::Internal::Token*>, const Utility::Internal::TokenDictionary&);
 	};
 
-	void SkipUntilEndBlock(BinaryFormatter&);
-	unsigned RequireBeginBlock(BinaryFormatter&);
-	void RequireEndBlock(BinaryFormatter&);
-	StringSection<> RequireKeyedItem(BinaryFormatter&);
-	uint64_t RequireKeyedItemHash(BinaryFormatter&);
-	std::pair<unsigned, unsigned> RequireBeginArray(BinaryFormatter&);
-	void RequireEndArray(BinaryFormatter&);
-	StringSection<> RequireStringValue(BinaryFormatter&);
-	std::ostream& SerializeBlock(std::ostream& str, BinaryFormatter& formatter, unsigned indent = 0);
+	void SkipUntilEndBlock(BinaryInputFormatter&);
+	unsigned RequireBeginBlock(BinaryInputFormatter&);
+	void RequireEndBlock(BinaryInputFormatter&);
+	StringSection<> RequireKeyedItem(BinaryInputFormatter&);
+	uint64_t RequireKeyedItemHash(BinaryInputFormatter&);
+	std::pair<unsigned, unsigned> RequireBeginArray(BinaryInputFormatter&);
+	void RequireEndArray(BinaryInputFormatter&);
+	StringSection<> RequireStringValue(BinaryInputFormatter&);
+	std::ostream& SerializeBlock(std::ostream& str, BinaryInputFormatter& formatter, unsigned indent = 0);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -181,10 +181,10 @@ namespace Formatters
 		BinaryMemberToken operator[](const std::string& name) const;
 		BinaryMemberToken operator[](unsigned idx) const;
 
-		void ParseBlock(BinaryFormatter& formatter, unsigned parentId = ~0u);
-		void ParseValue(BinaryFormatter& formatter, const std::string& name, unsigned parentId = ~0u);
+		void ParseBlock(BinaryInputFormatter& formatter, unsigned parentId = ~0u);
+		void ParseValue(BinaryInputFormatter& formatter, const std::string& name, unsigned parentId = ~0u);
 
-		BinaryBlockMatch(BinaryFormatter& formatter);
+		BinaryBlockMatch(BinaryInputFormatter& formatter);
 		BinaryBlockMatch(const EvaluationContext& evalContext);
 		BinaryBlockMatch();
 
@@ -341,14 +341,14 @@ namespace Formatters
 	inline BinaryMemberToken BinaryMemberIterator::get() const { return BinaryMemberToken{_i, _containingRange, *_evalContext}; }
 	inline BinaryMemberToken BinaryMemberIterator::operator*() const { return get(); }
 
-	inline bool BinaryFormatter::TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc)
+	inline bool BinaryInputFormatter::TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc)
 	{
 		unsigned evaluatedTypeId;
 		return TryRawValue(data, typeDesc, evaluatedTypeId);
 	}
 
 	template<typename Type>
-		Type RequireCastValue(BinaryFormatter& formatter)
+		Type RequireCastValue(BinaryInputFormatter& formatter)
 	{
 		IteratorRange<const void*> data;
 		ImpliedTyping::TypeDesc typeDesc;

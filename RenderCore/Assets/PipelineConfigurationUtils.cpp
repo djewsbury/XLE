@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PipelineConfigurationUtils.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/MemoryUtils.h"
@@ -58,10 +58,10 @@ namespace RenderCore { namespace Assets
 	}
 
 	void DeserializationOperator(
-		InputStreamFormatter<>& formatter,
+		TextInputFormatter<>& formatter,
 		LegacyRegisterBindingDesc& result)
 	{
-		StreamDOM<InputStreamFormatter<>> dom(formatter);
+		StreamDOM<TextInputFormatter<>> dom(formatter);
 		auto element = dom.RootElement();
 		for (auto e:element.children()) {
 			auto name = e.Name();

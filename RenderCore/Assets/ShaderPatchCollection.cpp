@@ -6,8 +6,8 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Utility/Streams/TextOutputFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/Conversion.h"
@@ -124,7 +124,7 @@ namespace RenderCore { namespace Assets
 	bool operator<(uint64_t lhs, const ShaderPatchCollection& rhs) { return lhs < rhs.GetHash(); }
 
 	static void SerializeInstantiationRequest(
-		OutputStreamFormatter& formatter, 
+		TextOutputFormatter& formatter, 
 		const ShaderSourceParser::InstantiationRequest& instRequest)
 	{
 		formatter.WriteSequencedValue(instRequest._archiveName);
@@ -137,7 +137,7 @@ namespace RenderCore { namespace Assets
 			formatter.WriteKeyedValue("Implements", instRequest._implementsArchiveName);
 	}
 
-	void SerializationOperator(OutputStreamFormatter& formatter, const ShaderPatchCollection& patchCollection)
+	void SerializationOperator(TextOutputFormatter& formatter, const ShaderPatchCollection& patchCollection)
 	{
 		for (const auto& p:patchCollection._patches) {
 			auto pele = (p.first.empty()) ? formatter.BeginSequencedElement() : formatter.BeginKeyedElement(p.first);
@@ -174,7 +174,7 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-	static ShaderSourceParser::InstantiationRequest DeserializeInstantiationRequest(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
+	static ShaderSourceParser::InstantiationRequest DeserializeInstantiationRequest(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
 	{
 		ShaderSourceParser::InstantiationRequest result;
 
@@ -204,7 +204,7 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	ShaderPatchCollection::ShaderPatchCollection(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	ShaderPatchCollection::ShaderPatchCollection(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
 		for (;;) {
@@ -240,7 +240,7 @@ namespace RenderCore { namespace Assets
 		SortAndCalculateHash();
 	}
 
-	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	{
 		std::vector<ShaderPatchCollection> result;
 		while (formatter.TryBeginElement()) {
@@ -253,7 +253,7 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	void SerializeShaderPatchCollectionSet(OutputStreamFormatter& formatter, IteratorRange<const ShaderPatchCollection*> patchCollections)
+	void SerializeShaderPatchCollectionSet(TextOutputFormatter& formatter, IteratorRange<const ShaderPatchCollection*> patchCollections)
 	{
 		for (const auto& p:patchCollections) {
 			auto ele = formatter.BeginSequencedElement();

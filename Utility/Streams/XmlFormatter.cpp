@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "XmlStreamFormatter.h"
+#include "XmlFormatter.h"
 
 namespace Utility
 {
@@ -131,7 +131,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        auto XmlInputStreamFormatter<CharType>::PeekNext() -> Blob
+        auto XmlInputFormatter<CharType>::PeekNext() -> Blob
     {
         if (_primed != Blob::None) return _primed;
 
@@ -293,7 +293,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool XmlInputStreamFormatter<CharType>::TryBeginElement()
+        bool XmlInputFormatter<CharType>::TryBeginElement()
         {
             if (PeekNext() != Blob::BeginElement) return false;
 
@@ -324,7 +324,7 @@ namespace Utility
         }
 
     template<typename CharType>
-        bool XmlInputStreamFormatter<CharType>::TryKeyedItem(StringSection<CharType>& name)
+        bool XmlInputFormatter<CharType>::TryKeyedItem(StringSection<CharType>& name)
         {
             if (PeekNext() != Blob::KeyedItem) return false;
 
@@ -374,7 +374,7 @@ namespace Utility
         }
 
     template<typename CharType>
-        bool XmlInputStreamFormatter<CharType>::TryEndElement() 
+        bool XmlInputFormatter<CharType>::TryEndElement() 
     {
         if (PeekNext() != Blob::EndElement) return false;
 
@@ -419,7 +419,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool XmlInputStreamFormatter<CharType>::TryStringValue(InteriorSection& value)
+        bool XmlInputFormatter<CharType>::TryStringValue(InteriorSection& value)
     {
         if (PeekNext() != Blob::Value) return false;
 
@@ -441,7 +441,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool XmlInputStreamFormatter<CharType>::TryCharacterData(StringSection<CharType>& cdata)
+        bool XmlInputFormatter<CharType>::TryCharacterData(StringSection<CharType>& cdata)
     {
         assert(_allowCharacterData);
         if (PeekNext() != Blob::CharacterData) return false;
@@ -477,13 +477,13 @@ namespace Utility
     }
 
     template<typename CharType>
-        StreamLocation XmlInputStreamFormatter<CharType>::GetLocation() const
+        StreamLocation XmlInputFormatter<CharType>::GetLocation() const
     {
         return _marker.GetLocation();
     }
 
     template<typename CharType>
-        XmlInputStreamFormatter<CharType>::XmlInputStreamFormatter(const TextStreamMarker<CharType>& marker)
+        XmlInputFormatter<CharType>::XmlInputFormatter(const TextStreamMarker<CharType>& marker)
         : _marker(marker)
     {
         _primed = Blob::None;
@@ -492,8 +492,8 @@ namespace Utility
     }
 
     template<typename CharType>
-        XmlInputStreamFormatter<CharType>::~XmlInputStreamFormatter() {}
+        XmlInputFormatter<CharType>::~XmlInputFormatter() {}
 
-    template class XmlInputStreamFormatter<utf8>;
+    template class XmlInputFormatter<utf8>;
 }
 

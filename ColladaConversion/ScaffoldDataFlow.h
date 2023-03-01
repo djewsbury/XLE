@@ -6,13 +6,13 @@
 
 #pragma once
 
-#include "../Utility/Streams/XmlStreamFormatter.h"
+#include "../Utility/Streams/XmlFormatter.h"
 #include "../Utility/Streams/StreamDOM.h"
 #include <vector>
 
 namespace ColladaConversion 
 {
-    using Formatter = XmlInputStreamFormatter<utf8>;
+    using Formatter = XmlInputFormatter<utf8>;
     using Section = Formatter::InteriorSection;
 
     class DocScopeId
@@ -32,7 +32,7 @@ namespace ColladaConversion
 
 namespace ColladaConversion { namespace DataFlow
 {
-    using Formatter = XmlInputStreamFormatter<utf8>;
+    using Formatter = XmlInputFormatter<utf8>;
     using Section = Formatter::InteriorSection;
     
     /// <summary>Data type for a collada array</summary>

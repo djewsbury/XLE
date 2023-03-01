@@ -5,7 +5,7 @@
 #pragma once
 
 #include "../Utility/ParameterBox.h"
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include <unordered_map>
 #include <string>
 #include <set>
@@ -34,7 +34,7 @@ namespace ShaderSourceParser
 
 		ManualSelectorFiltering();
 		~ManualSelectorFiltering();
-		ManualSelectorFiltering(InputStreamFormatter<>&);
+		ManualSelectorFiltering(TextInputFormatter<>&);
 	private:
 		ParameterBox _setValues;
 		std::unordered_map<std::string, std::string> _relevanceMap;

@@ -8,22 +8,22 @@
 
 #include "DepVal.h"
 #include "AssetsCore.h"		// (for ResChar)
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/StringFormat.h"
 #include <memory>
 #include <vector>
 
 namespace Utility
 {
-    template<typename> class InputStreamFormatter;
+    template<typename> class TextInputFormatter;
 }
 
 namespace Assets
 {
-    /// <summary>Container file with with one child that is initialized via InputStreamFormatter</summary>
+    /// <summary>Container file with with one child that is initialized via TextInputFormatter</summary>
     ///
     /// Represents a file that contains a single serialized item. That item must be a type that
-    /// can be deserialized with InputStreamFormatter.
+    /// can be deserialized with TextInputFormatter.
     ///
     /// <example>
     ///     Consider a configuration object like:
@@ -31,7 +31,7 @@ namespace Assets
     ///         class Config
     ///         {
     ///         public:
-    ///             Config( InputStreamFormatter<utf8>& formatter,
+    ///             Config( TextInputFormatter<utf8>& formatter,
     ///                     const ::Assets::DirectorySearchRules&);
     ///             ~Config();
     ///         };
@@ -52,7 +52,7 @@ namespace Assets
     ///     fully functional asset, with a dependency validation, relative path rules and
     ///     reporting correctly to the InvalidAssetManager.
     /// </example>
-    template<typename Formatter = InputStreamFormatter<utf8>>
+    template<typename Formatter = TextInputFormatter<utf8>>
         class ConfigFileContainer
     {
     public:

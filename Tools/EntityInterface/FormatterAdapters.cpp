@@ -13,7 +13,7 @@ namespace EntityInterface
 {
 
     template<typename Formatter> 
-		class TextFormatterAdapter : public Formatters::IDynamicFormatter
+		class TextFormatterAdapter : public Formatters::IDynamicInputFormatter
 	{
 	public:
 		virtual FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
@@ -78,7 +78,7 @@ namespace EntityInterface
 		Formatter _fmttr;
 	};
 
-    std::shared_ptr<Formatters::IDynamicFormatter> CreateDynamicFormatter(
+    std::shared_ptr<Formatters::IDynamicInputFormatter> CreateDynamicFormatter(
         std::shared_ptr<::Assets::ConfigFileContainer<>> cfgFile,
         StringSection<> internalSection)
     {
@@ -88,12 +88,12 @@ namespace EntityInterface
     class TextEntityDocument : public IEntityDocument
 	{
 	public:
-		virtual std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> internalPoint) override
+		virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> internalPoint) override
 		{
 			if (!_srcFile || ::Assets::IsInvalidated(*_srcFile))
 				_srcFile = ::Assets::MakeAssetMarkerPtr<::Assets::ConfigFileContainer<>>(_src);
 
-			std::promise<std::shared_ptr<Formatters::IDynamicFormatter>> promise;
+			std::promise<std::shared_ptr<Formatters::IDynamicInputFormatter>> promise;
 			auto result = promise.get_future();
 			::Assets::WhenAll(_srcFile).ThenConstructToPromise(
 				std::move(promise),
@@ -140,7 +140,7 @@ namespace EntityInterface
 		return std::make_shared<TextEntityDocument>(filename.AsString());
 	}
 
-	class MemoryStreamTextFormatterAdapter : public Formatters::IDynamicFormatter
+	class MemoryStreamTextFormatterAdapter : public Formatters::IDynamicInputFormatter
 	{
 	public:
 		virtual FormatterBlob PeekNext() override { return _fmttr.PeekNext(); }
@@ -195,11 +195,11 @@ namespace EntityInterface
 
 	private:
 		MemoryOutputStream<> _stream;
-		InputStreamFormatter<> _fmttr;
+		TextInputFormatter<> _fmttr;
 		::Assets::DependencyValidation _depVal;
 	};
 
-	std::shared_ptr<Formatters::IDynamicFormatter> CreateDynamicFormatter(
+	std::shared_ptr<Formatters::IDynamicInputFormatter> CreateDynamicFormatter(
         MemoryOutputStream<>&& formatter,
 		::Assets::DependencyValidation&& depVal)
 	{

@@ -18,8 +18,8 @@
 #include "../../OSServices/RawFS.h"
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/Streams/Data.h"
-#include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Utility/Streams/TextOutputFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/Threading/ThreadingUtils.h"
@@ -328,12 +328,12 @@ namespace GUILayer
 		return AsByteArray((const uint8*)AsPointer(blob->begin()), (const uint8*)AsPointer(blob->end()));
 	}
 
-    static auto DeserializeAllMaterials(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
+    static auto DeserializeAllMaterials(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
         -> std::vector<std::pair<::Assets::rstring, RenderCore::Assets::RawMaterial>>
     {
         std::vector<std::pair<::Assets::rstring, RenderCore::Assets::RawMaterial>> result;
 
-        using Blob = InputStreamFormatter<utf8>::Blob;
+        using Blob = TextInputFormatter<utf8>::Blob;
         StringSection<> name;
         while (formatter.TryKeyedItem(name)) {
             switch(formatter.PeekNext()) {
@@ -362,7 +362,7 @@ namespace GUILayer
         return result;
     }
 
-    static void SerializeAllMaterials(OutputStreamFormatter& formatter, std::vector<std::pair<std::string, RenderCore::Assets::RawMaterial>>& mats)
+    static void SerializeAllMaterials(TextOutputFormatter& formatter, std::vector<std::pair<std::string, RenderCore::Assets::RawMaterial>>& mats)
     {
         for (const auto&m:mats) {
             auto ele = formatter.BeginKeyedElement(m.first);
@@ -372,7 +372,7 @@ namespace GUILayer
     }
 
     static void MergeAndSerialize(
-        OutputStreamFormatter& output,
+        TextOutputFormatter& output,
         IteratorRange<const void*> originalFile,
         StringSection<::Assets::ResChar> filename,
         StringSection<::Assets::ResChar> section,
@@ -386,7 +386,7 @@ namespace GUILayer
         std::vector<std::pair<::Assets::rstring, RenderCore::Assets::RawMaterial>> preMats;
         if (!originalFile.empty()) {
             auto searchRules = ::Assets::DefaultDirectorySearchRules(filename);
-            InputStreamFormatter<utf8> formatter(originalFile);
+            TextInputFormatter<utf8> formatter(originalFile);
             preMats = DeserializeAllMaterials(formatter, searchRules);
         }
 
@@ -425,7 +425,7 @@ namespace GUILayer
 			auto originalFile = TryLoadOriginalFileAsBlob(splitName.AllExceptParameters());
 
 			MemoryOutputStream<utf8> strm;
-			OutputStreamFormatter fmtter(strm);
+			TextOutputFormatter fmtter(strm);
 			MergeAndSerialize(fmtter, MakeIteratorRange(*originalFile),
 				splitName.AllExceptParameters(), splitName.Parameters(),
 				*GetWorkingCopy<RenderCore::Assets::RawMaterial>(divAsset));
@@ -501,7 +501,7 @@ namespace GUILayer
             auto originalFile = TryLoadOriginalFileAsBlob(splitName.AllExceptParameters());
             
             MemoryOutputStream<utf8> strm;
-            OutputStreamFormatter fmtter(strm);
+            TextOutputFormatter fmtter(strm);
             MergeAndSerialize(fmtter, MakeIteratorRange(*originalFile), 
                 splitName.AllExceptParameters(), splitName.Parameters(), 
 				*GetWorkingCopy<RawMaterial>(*asset));

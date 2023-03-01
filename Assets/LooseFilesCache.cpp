@@ -13,8 +13,8 @@
 #include "BlockSerializer.h"
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Streams/StreamFormatter.h"
-#include "../Utility/Streams/OutputStreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
+#include "../Utility/Streams/TextOutputFormatter.h"
 #include "../Utility/Streams/Stream.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Streams/SerializationUtils.h"
@@ -59,7 +59,7 @@ namespace Assets
 		const std::shared_ptr<StoreReferenceCounts>& refCounts,
 		uint64_t refCountHashCode);
 
-	static void SerializationOperator(OutputStreamFormatter& formatter, const CompileProductsFile& compileProducts)
+	static void SerializationOperator(TextOutputFormatter& formatter, const CompileProductsFile& compileProducts)
 	{
 		formatter.WriteKeyedValue("Invalid", compileProducts._state == AssetState::Ready ? "0" : "1");
 
@@ -90,7 +90,7 @@ namespace Assets
 		}
 	}
 
-	static void DeserializationOperator(InputStreamFormatter<utf8>& formatter, CompileProductsFile::Product& result)
+	static void DeserializationOperator(TextInputFormatter<utf8>& formatter, CompileProductsFile::Product& result)
 	{
 		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
 			StringSection<utf8> name, value;
@@ -103,7 +103,7 @@ namespace Assets
 		}
 	}
 
-	static void DerializeDependencies(InputStreamFormatter<utf8>& formatter, CompileProductsFile& result)
+	static void DerializeDependencies(TextInputFormatter<utf8>& formatter, CompileProductsFile& result)
 	{
 		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
 			StringSection<utf8> name, value;
@@ -118,7 +118,7 @@ namespace Assets
 		}
 	}
 
-	static StringSection<utf8> DeserializeValue(InputStreamFormatter<utf8>& formatter)
+	static StringSection<utf8> DeserializeValue(TextInputFormatter<utf8>& formatter)
 	{
 		StringSection<utf8> value;
 		if (!formatter.TryStringValue(value))
@@ -126,10 +126,10 @@ namespace Assets
 		return value;
 	}
 
-	static void DeserializationOperator(InputStreamFormatter<utf8>& formatter, CompileProductsFile& result)
+	static void DeserializationOperator(TextInputFormatter<utf8>& formatter, CompileProductsFile& result)
 	{
 		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
-			InputStreamFormatter<utf8>::InteriorSection name;
+			TextInputFormatter<utf8>::InteriorSection name;
 			if (!formatter.TryKeyedItem(name))
 				Throw(Utility::FormatException("Poorly formed item in CompileProductsFile", formatter.GetLocation()));
 
@@ -191,7 +191,7 @@ namespace Assets
 		auto productsFileData = std::make_unique<char[]>(size);
 		productsFile->Read(productsFileData.get(), 1, size);
 
-		InputStreamFormatter<> formatter(
+		TextInputFormatter<> formatter(
 			MakeStringSection(productsFileData.get(), PtrAdd(productsFileData.get(), size)));
 
 		CompileProductsFile finalProductsFile;
@@ -315,7 +315,7 @@ namespace Assets
 				c._intermediateArtifact = MakeRelativePath(compileProductsDirectorySplit, MakeSplitPath(c._intermediateArtifact));
 			std::shared_ptr<IFileInterface> productsFile = OpenFileInterface(*_filesystem, productsName + ".s", "wb", 0); // note -- no sharing allowed on this file. We take an exclusive lock on it
 			FileOutputStream stream(productsFile);
-			OutputStreamFormatter fmtter(stream);
+			TextOutputFormatter fmtter(stream);
 			fmtter << simplifedCompileProducts;
 			renameOps.push_back({productsName + ".s", productsName});
 		}

@@ -13,7 +13,7 @@ namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; cl
 namespace RenderCore { class FrameBufferProperties; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace RenderOverlays { class OverlayApparatus; }
-namespace Formatters { class IDynamicFormatter; }
+namespace Formatters { class IDynamicInputFormatter; }
 namespace std { template<typename T> class future; }
 
 namespace ToolsRig
@@ -44,14 +44,14 @@ namespace ToolsRig
 		};
 
 		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
-			std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter,
+			std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter,
 			::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
 			::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> lightScene,
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
 
 		::Assets::PtrToMarkerPtr<IVisualizeStep> BuildVisualizeStep(
-			std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter);
+			std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter);
 
 		struct OperationConstructorContext
 		{
@@ -69,12 +69,12 @@ namespace ToolsRig
 			unsigned _completionCommandList = 0;
 			::Assets::DependencyValidation _depVal;
 		};
-		using OperationConstructor = std::function<void(Formatters::IDynamicFormatter&, OperationConstructorContext&, RenderCore::LightingEngine::LightingTechniqueSequence*)>;
+		using OperationConstructor = std::function<void(Formatters::IDynamicInputFormatter&, OperationConstructorContext&, RenderCore::LightingEngine::LightingTechniqueSequence*)>;
 		void RegisterOperation(
 			StringSection<> name,
 			OperationConstructor&& constructor);
 
-		using VisualizeStepConstructor = std::function<std::shared_ptr<IVisualizeStep>(Formatters::IDynamicFormatter&, OperationConstructorContext&)>;
+		using VisualizeStepConstructor = std::function<std::shared_ptr<IVisualizeStep>(Formatters::IDynamicInputFormatter&, OperationConstructorContext&)>;
 		void RegisterVisualizeStep(
 			StringSection<> name,
 			VisualizeStepConstructor&& constructor);

@@ -17,7 +17,7 @@
 #include "../../../Assets/DepVal.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/AssetSetManager.h"
-#include "../../../Utility/Streams/StreamFormatter.h"
+#include "../../../Utility/Streams/TextFormatter.h"
 #include "../../../Utility/Streams/StreamDOM.h"
 #include "../../../Utility/Streams/SerializationUtils.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION

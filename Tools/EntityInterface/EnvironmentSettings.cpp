@@ -22,8 +22,8 @@
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Conversion.h"
-#include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Utility/Streams/TextOutputFormatter.h"
 #include "../../Utility/Meta/AccessorSerialize.h"
 #include <memory>
 
@@ -159,7 +159,7 @@ namespace EntityInterface
 
     template<typename CharType>
         void SerializeBody(
-            OutputStreamFormatter& formatter,
+            TextOutputFormatter& formatter,
             const RetainedEntity& obj,
             const RetainedEntities& entities)
     {
@@ -174,7 +174,7 @@ namespace EntityInterface
 
     template<typename CharType>
         void SerializationOperator(
-            OutputStreamFormatter& formatter,
+            TextOutputFormatter& formatter,
             const RetainedEntity& obj,
             const RetainedEntities& entities)
     {
@@ -186,7 +186,7 @@ namespace EntityInterface
     }
 
     void ExportEnvSettings(
-        OutputStreamFormatter& formatter,
+        TextOutputFormatter& formatter,
         const RetainedEntities& flexGobInterface,
         DocumentId docId)
     {

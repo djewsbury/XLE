@@ -50,7 +50,7 @@ namespace UnitTests
 	};
 
 	template<typename Type, typename CharType>
-		Type RequireCastValue(InputStreamFormatter<CharType>& formatter)
+		Type RequireCastValue(TextInputFormatter<CharType>& formatter)
 	{
 		StringSection<> stringValue;
 		if (!formatter.TryStringValue(stringValue))
@@ -64,7 +64,7 @@ namespace UnitTests
 	}
 
 	template<typename Type>
-		Type RequireCastValue(Formatters::IDynamicFormatter& formatter)
+		Type RequireCastValue(Formatters::IDynamicInputFormatter& formatter)
 	{
 		Type midwayBuffer;
 		if (!formatter.TryCastValue(MakeOpaqueIteratorRange(midwayBuffer), ImpliedTyping::TypeOf<Type>()))
@@ -72,7 +72,7 @@ namespace UnitTests
 		return midwayBuffer;
 	}
 
-	static void RequireBlobsFromCfg1(Formatters::IDynamicFormatter& fmttr)
+	static void RequireBlobsFromCfg1(Formatters::IDynamicInputFormatter& fmttr)
 	{
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "SomeProperty");
 		REQUIRE(RequireCastValue<unsigned>(fmttr) == 1);
@@ -88,7 +88,7 @@ namespace UnitTests
 		fmttr.SkipValueOrElement();		// skip InternalPoint
 	}
 
-	static void RequireBlobsFromCfg2(Formatters::IDynamicFormatter& fmttr)
+	static void RequireBlobsFromCfg2(Formatters::IDynamicInputFormatter& fmttr)
 	{
 		REQUIRE(RequireKeyedItem(fmttr).AsString() == "ASequence");
 		RequireBeginElement(fmttr);
@@ -145,14 +145,14 @@ namespace UnitTests
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//
 
-		SECTION("Read values through IDynamicFormatter") {
+		SECTION("Read values through IDynamicInputFormatter") {
 			// ensure that the first few values we read match what we expect from the input file
 			auto fmttr = RequireActualize(mountingTree->BeginFormatter("cfg"));
 			RequireBlobsFromCfg1(*fmttr);
 			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);
 		}
 
-		SECTION("Internal section in IDynamicFormatter") {
+		SECTION("Internal section in IDynamicInputFormatter") {
 			// Begin a formatter from a start point within a document
 			// Ie, "InternalPoint" is just an element within a document, but we'll treat it as the start point for the formatter
 			auto fmttr = RequireActualize(cfg1Document->BeginFormatter("InternalPoint"));
@@ -168,7 +168,7 @@ namespace UnitTests
 			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
 		}
 
-		SECTION("Deep internal section in IDynamicFormatter") {
+		SECTION("Deep internal section in IDynamicInputFormatter") {
 			// Begin a formatter from a start point within a document
 			// this time, we're 2 sections deap
 			auto fmttr = RequireActualize(cfg1Document->BeginFormatter("InternalPoint/SomethingInside"));
@@ -177,7 +177,7 @@ namespace UnitTests
 			REQUIRE(fmttr->PeekNext() == FormatterBlob::None);		// "None" here, rather than EndElement, because we're emulating a subfile with the internal point
 		}
 
-		SECTION("Simple external section in IDynamicFormatter") {
+		SECTION("Simple external section in IDynamicInputFormatter") {
 			// Begin a formatter from a start point that isn't actually within a document, but
 			// a document is mounted somewhere below.
 			// In other words, we have to make a few virtual elements that will surround the

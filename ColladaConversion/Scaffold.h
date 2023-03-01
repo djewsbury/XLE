@@ -9,7 +9,7 @@
 #include "ScaffoldDataFlow.h"
 #include "../Math/Vector.h"
 #include "../Math/Matrix.h"
-#include "../Utility/Streams/XmlStreamFormatter.h"
+#include "../Utility/Streams/XmlFormatter.h"
 #include "../Utility/Streams/StreamDOM.h"
 #include <vector>
 #include <memory>
@@ -17,7 +17,7 @@
 
 namespace ColladaConversion
 {
-    using Formatter = XmlInputStreamFormatter<utf8>;
+    using Formatter = XmlInputFormatter<utf8>;
     using Section = Formatter::InteriorSection;
     using SubDoc = Utility::StreamDOM<Formatter>;
     using String = std::basic_string<Formatter::value_type>;

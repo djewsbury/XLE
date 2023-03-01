@@ -282,7 +282,7 @@ namespace RenderCore { namespace Techniques
 	class CPUSkinDeformConfigure : public IDeformConfigure
 	{
 	public:
-		void Configure(DeformerConstruction& deformerConstruction, InputStreamFormatter<char>&) override
+		void Configure(DeformerConstruction& deformerConstruction, TextInputFormatter<char>&) override
 		{
 			// We'll create one CPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
 			// within that one element
@@ -768,7 +768,7 @@ namespace RenderCore { namespace Techniques
 	class GPUSkinDeformConfigure : public IDeformConfigure
 	{
 	public:
-		void Configure(DeformerConstruction& deformerConstruction, InputStreamFormatter<char>&) override
+		void Configure(DeformerConstruction& deformerConstruction, TextInputFormatter<char>&) override
 		{
 			// We'll create one GPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
 			// within that one element

@@ -6,10 +6,10 @@
 
 #include "../../Math/Vector.h"
 #include "../../Math/MathSerialization.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/Streams/SerializationUtils.h"
-#include "../../Utility/Streams/XmlStreamFormatter.h"
+#include "../../Utility/Streams/XmlFormatter.h"
 #include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/StringFormat.h"
@@ -37,7 +37,7 @@ namespace UnitTests
         UInt2 _c3 = {2, 3};
     };
 
-    void DeserializationOperator(const StreamDOMElement<InputStreamFormatter<utf8>>& str, TestClass& cls)
+    void DeserializationOperator(const StreamDOMElement<TextInputFormatter<utf8>>& str, TestClass& cls)
     {
         cls._c1 = str.Attribute("c1").As<int>().value();
         cls._c2 = str.Attribute("c2", 600);
@@ -50,8 +50,8 @@ namespace UnitTests
 
         SECTION("Using StreamDOMElement::As() to invoke DeserializationOperator")
         {
-            InputStreamFormatter<utf8> formatter(MakeStringSection(testString));
-            StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+            TextInputFormatter<utf8> formatter(MakeStringSection(testString));
+            StreamDOM<TextInputFormatter<utf8>> doc(formatter);
             auto testClass = doc.RootElement().As<TestClass>();
             REQUIRE( testClass._c1 == 10 );
             REQUIRE( testClass._c2 == 50 );
@@ -60,8 +60,8 @@ namespace UnitTests
 
         SECTION("Using operator>> to invoke DeserializationOperator")
         {
-            InputStreamFormatter<utf8> formatter(MakeStringSection(testString));
-            StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+            TextInputFormatter<utf8> formatter(MakeStringSection(testString));
+            StreamDOM<TextInputFormatter<utf8>> doc(formatter);
             TestClass testClass;
             doc.RootElement() >> testClass;
             REQUIRE( testClass._c1 == 10 );
@@ -83,7 +83,7 @@ Element =~
         anotherThing = value
     AnotherValue = something
 Value2 = value2)";
-            InputStreamFormatter<utf8> formatter(MakeStringSection(testStringWithNestedElements));
+            TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithNestedElements));
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
             REQUIRE(RequireStringValue(formatter).AsString() == "value0");
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value1");
@@ -129,7 +129,7 @@ Value2 = value2)";
         =~
             =~
 )";
-            InputStreamFormatter<utf8> formatter(MakeStringSection(testStringWithSequences));
+            TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithSequences));
             RequireBeginElement(formatter);
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
             REQUIRE(RequireStringValue(formatter).AsString() == "value");
@@ -178,7 +178,7 @@ Value0 = value; Value1 = value2
 =~; mappedEle=~; =~;
 =~; value=1; =~; value=2; =~; value=3
 )";
-            InputStreamFormatter<utf8> formatter(MakeStringSection(testStringWithCompressedElements));
+            TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithCompressedElements));
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
             REQUIRE(RequireStringValue(formatter).AsString() == "value");
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value1");
@@ -231,7 +231,7 @@ Value0 = value; Value1 = value2
 
         )";
 
-        XmlInputStreamFormatter<utf8> formatter(MakeStringSection(testStringXML));
+        XmlInputFormatter<utf8> formatter(MakeStringSection(testStringXML));
         formatter._allowCharacterData = true;
         REQUIRE(RequireKeyedItem(formatter).AsString() == "element");
         RequireBeginElement(formatter);
@@ -258,8 +258,8 @@ Value0 = value; Value1 = value2
             auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>();
             auto blob = ::Assets::MainFileSystem::TryLoadFileAsBlob("/home/davidj/code/XLE/Working/Game/Model/Galleon/Galleon.DAE");
             MemoryMappedInputStream inputStream  { AsPointer(blob->begin()), AsPointer(blob->end()) };
-            XmlInputStreamFormatter<utf8> formatter ( inputStream );
-            StreamDOM<XmlInputStreamFormatter<utf8>> dom ( formatter );
+            XmlInputFormatter<utf8> formatter ( inputStream );
+            StreamDOM<XmlInputFormatter<utf8>> dom ( formatter );
             REQUIRE(dom.RootElement().Element("COLLADA").Attribute("version").Value().AsString() == "1.4.1");
             REQUIRE(dom.RootElement().Element("COLLADA").Element("library_effects").Element("effect").Attribute("id").Value().AsString() == "galleon_01");
             (void)dom;
@@ -386,7 +386,7 @@ EnvSettings=~
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     static void DeserializationOperator(
-        const Utility::StreamDOMElement<InputStreamFormatter<utf8>>& src,
+        const Utility::StreamDOMElement<TextInputFormatter<utf8>>& src,
         ExampleSerializableObject::StrataMaterial& mat)
     {
         static const utf8* TextureNames[] = { "Texture0", "Texture1", "Slopes" };
@@ -408,7 +408,7 @@ EnvSettings=~
     }
 
     static void DeserializationOperator(
-        const Utility::StreamDOMElement<InputStreamFormatter<utf8>>& src,
+        const Utility::StreamDOMElement<TextInputFormatter<utf8>>& src,
         ExampleSerializableObject::GradFlagMaterial& mat)
     {
         mat._id = src.Attribute("MaterialId", 0);
@@ -434,7 +434,7 @@ EnvSettings=~
     }
 
     static void DeserializationOperator(
-        const Utility::StreamDOMElement<InputStreamFormatter<utf8>>& src,
+        const Utility::StreamDOMElement<TextInputFormatter<utf8>>& src,
         ExampleSerializableObject::ProcTextureSetting& mat)
     {
         mat._name = src.Attribute("Name").Value().AsString();
@@ -445,7 +445,7 @@ EnvSettings=~
     }
 
     static void DeserializationOperator(
-        const Utility::StreamDOMElement<InputStreamFormatter<utf8>>& doc,
+        const Utility::StreamDOMElement<TextInputFormatter<utf8>>& doc,
         ExampleSerializableObject& result)
     {
         for (const auto& matCfg:doc.children()) {
@@ -468,7 +468,7 @@ EnvSettings=~
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     static void DeserializationOperator(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         ExampleSerializableObject::StrataMaterial& result)
     {
         static const utf8* TextureNames[] = { "Texture0", "Texture1", "Slopes" };
@@ -521,7 +521,7 @@ EnvSettings=~
     }
     
     static void DeserializationOperator(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         ExampleSerializableObject::GradFlagMaterial& result)
     {
         while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
@@ -559,7 +559,7 @@ EnvSettings=~
     }
     
     static void DeserializationOperator(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         ExampleSerializableObject::ProcTextureSetting& result)
     {
         while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
@@ -586,7 +586,7 @@ EnvSettings=~
     }
     
     static void DeserializationOperator(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         ExampleSerializableObject& result)
     {
         while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
@@ -631,7 +631,7 @@ EnvSettings=~
         const std::basic_string<utf8>& testString, unsigned iterationCount)
     {
         for (unsigned c=0; c<iterationCount; ++c) {
-            InputStreamFormatter<utf8> formatter{MakeStringSection(testString)};
+            TextInputFormatter<utf8> formatter{MakeStringSection(testString)};
             ExampleSerializableObject matConfig;
             formatter >> matConfig;
             (void)matConfig;
@@ -642,8 +642,8 @@ EnvSettings=~
         const std::basic_string<utf8>& testString, unsigned iterationCount)
     {
         for (unsigned c=0; c<iterationCount; ++c) {
-            InputStreamFormatter<utf8> formatter(MakeStringSection(testString));
-            StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+            TextInputFormatter<utf8> formatter(MakeStringSection(testString));
+            StreamDOM<TextInputFormatter<utf8>> doc(formatter);
             ExampleSerializableObject matConfig;
             doc.RootElement() >> matConfig;
             (void)matConfig;
@@ -653,8 +653,8 @@ EnvSettings=~
     TEST_CASE( "StreamFormatter-BasicDOMInterface", "[utility]" )
     {
         // Load an aribtrary file, and use the basic interface of the StreamDOM<> class 
-        InputStreamFormatter<utf8> formatter(MakeStringSection(testString));
-        StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+        TextInputFormatter<utf8> formatter(MakeStringSection(testString));
+        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
         auto rootElement = doc.RootElement();
 
         SECTION("C++11 syntax element iteration") {
@@ -698,8 +698,8 @@ EnvSettings=~
         void InitStreamDOMForCharacterType()
     {
         auto converted = Conversion::Convert<std::basic_string<CharType>>(testString2);
-        InputStreamFormatter<CharType> formatter(MakeStringSection(converted));
-        StreamDOM<InputStreamFormatter<CharType>> doc(formatter);
+        TextInputFormatter<CharType> formatter(MakeStringSection(converted));
+        StreamDOM<TextInputFormatter<CharType>> doc(formatter);
     }
 
     TEST_CASE( "StreamFormatter-TestDOMParse", "[utility]" )

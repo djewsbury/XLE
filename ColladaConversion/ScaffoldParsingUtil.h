@@ -6,22 +6,22 @@
 
 #pragma once
 
-#include "../Utility/Streams/XmlStreamFormatter.h"
+#include "../Utility/Streams/XmlFormatter.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/FastParseValue.h"
 
 namespace ColladaConversion
 {
-    inline bool Is(const XmlInputStreamFormatter<utf8>::InteriorSection& section, const utf8 match[])
+    inline bool Is(const XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[])
     {
         return XlEqString(section, match);
     }
 
-    bool BeginsWith(const XmlInputStreamFormatter<utf8>::InteriorSection& section, const utf8 match[]);
-    bool EndsWith(const XmlInputStreamFormatter<utf8>::InteriorSection& section, const utf8 match[]);
+    bool BeginsWith(const XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[]);
+    bool EndsWith(const XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[]);
 
     template <typename Enum, unsigned Count>
-        static Enum ParseEnum(const XmlInputStreamFormatter<utf8>::InteriorSection& section, const std::pair<Enum, const utf8*> (&table)[Count])
+        static Enum ParseEnum(const XmlInputFormatter<utf8>::InteriorSection& section, const std::pair<Enum, const utf8*> (&table)[Count])
     {
         static_assert(Count > 0, "Enum names table must have at least one entry");
         for (unsigned c=0; c<Count; ++c)
@@ -38,8 +38,8 @@ namespace ColladaConversion
     }
     
     template<typename Type>
-        auto ParseXMLList(Type dest[], unsigned destCount, XmlInputStreamFormatter<utf8>::InteriorSection section, unsigned* outEleCount = nullptr) 
-            -> decltype(XmlInputStreamFormatter<utf8>::InteriorSection::_start)
+        auto ParseXMLList(Type dest[], unsigned destCount, XmlInputFormatter<utf8>::InteriorSection section, unsigned* outEleCount = nullptr) 
+            -> decltype(XmlInputFormatter<utf8>::InteriorSection::_start)
     {
         assert(destCount > 0);
 
@@ -88,7 +88,7 @@ namespace ColladaConversion
     }
 
     template<typename Type>
-        static Type Parse(const XmlInputStreamFormatter<utf8>::InteriorSection& section, const Type& def)
+        static Type Parse(const XmlInputFormatter<utf8>::InteriorSection& section, const Type& def)
     {
             // ImpliedType::Parse is actually a fairly expensing parsing operation...
             // maybe we could get a faster result by just calling the standard library

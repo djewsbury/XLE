@@ -15,8 +15,8 @@
 
 namespace Utility 
 {
-    template<typename CharType> class InputStreamFormatter;
-    class OutputStreamFormatter;
+    template<typename CharType> class TextInputFormatter;
+    class TextOutputFormatter;
     class OutputStream;
 }
 
@@ -52,7 +52,7 @@ namespace SceneEngine
             unsigned nodeDimsInElements = 32u, unsigned cellTreeDepth = 5u, unsigned nodeOverlap = 2u,
             float elementSpacing = 10.f, float sunPathAngle = 0.f, bool encodedGradientFlags = false);
         TerrainConfig(
-            InputStreamFormatter<utf8>& formatter,
+            TextInputFormatter<utf8>& formatter,
             const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation&);
         TerrainConfig();

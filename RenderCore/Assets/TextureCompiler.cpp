@@ -13,7 +13,7 @@
 #include "../../Assets/DeferredConstruction.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/StreamDOM.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/BitUtils.h"
 #include "../../Core/Exceptions.h"
@@ -162,7 +162,7 @@ namespace RenderCore { namespace Assets
 		CompressonatorTexture& operator=(CompressonatorTexture&&) = default;;
 	};
 
-	TextureCompilationRequest MakeTextureCompilationRequest(StreamDOMElement<InputStreamFormatter<>>& operationElement, std::string srcFN)
+	TextureCompilationRequest MakeTextureCompilationRequest(StreamDOMElement<TextInputFormatter<>>& operationElement, std::string srcFN)
 	{
 		TextureCompilationRequest result;
 		auto type = operationElement.Name();
@@ -391,8 +391,8 @@ namespace RenderCore { namespace Assets
 			if (!inputBlockSize)
 				Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Empty or missing file while loading: " + srcFN));
 			auto inputData = MakeStringSection((const char*)dataHolder.get(), (const char*)PtrAdd(dataHolder.get(), inputBlockSize));
-			InputStreamFormatter<> inputFormatter{inputData};
-			StreamDOM<InputStreamFormatter<>> dom(inputFormatter);
+			TextInputFormatter<> inputFormatter{inputData};
+			StreamDOM<TextInputFormatter<>> dom(inputFormatter);
 			if (dom.RootElement().children().empty())
 				Throw(std::runtime_error("Missing compilation operation in file: " + srcFN));
 

@@ -60,7 +60,7 @@ namespace ToolsRig
 	void PluginConfiguration::ConstructToPromise(
 		std::promise<std::shared_ptr<PluginConfiguration>>&& promise,
 		std::shared_ptr<::Assets::OperationContext> opContext,
-		Formatters::IDynamicFormatter& formatter)
+		Formatters::IDynamicInputFormatter& formatter)
 	{
 		ConfiguredPlugins configuredPlugins;
 		TRY {

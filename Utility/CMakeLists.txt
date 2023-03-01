@@ -45,8 +45,8 @@ set(StreamsSrc
     Streams/PreprocessorInterpreter.cpp
     Streams/Stream.cpp
     Streams/StreamDOM.cpp
-    Streams/StreamFormatter.cpp
-    Streams/XmlStreamFormatter.cpp)
+    Streams/TextFormatter.cpp
+    Streams/XmlFormatter.cpp)
 set(ThreadingSrc Threading/CompletionThreadPool.cpp)
 set(ProfilingSrc Profiling/CPUProfiler.cpp Profiling/SuppressionProfiler.cpp)
 set(MetaSrc Meta/AccessorSerialize.cpp Meta/ClassAccessors.cpp)

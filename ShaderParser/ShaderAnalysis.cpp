@@ -8,7 +8,7 @@
 #include "../Assets/IFileSystem.h"
 #include "../Assets/AssetUtils.h"
 #include "../OSServices/Log.h"
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/Streams/PreprocessorInterpreter.h"
 #include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/StringFormat.h"
@@ -308,7 +308,7 @@ namespace ShaderSourceParser
 			_hash = Hash64(r.first, Hash64(r.second, _hash));
 	}
 
-	ManualSelectorFiltering::ManualSelectorFiltering(InputStreamFormatter<>& formatter)
+	ManualSelectorFiltering::ManualSelectorFiltering(TextInputFormatter<>& formatter)
 	{
 		while (formatter.PeekNext() == FormatterBlob::KeyedItem || formatter.PeekNext() == FormatterBlob::Value) {
 

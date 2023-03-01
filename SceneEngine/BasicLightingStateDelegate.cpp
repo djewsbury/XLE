@@ -18,7 +18,7 @@
 #include "../Math/Transformations.h"
 #include "../Math/MathSerialization.h"
 #include "../Utility/StringUtils.h"
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Conversion.h"
@@ -122,7 +122,7 @@ namespace SceneEngine
 
         void        BindCfg(MergedLightingEngineCfg& cfg) override;
 
-		BasicLightingStateDelegate(Formatters::IDynamicFormatter& formatter);
+		BasicLightingStateDelegate(Formatters::IDynamicInputFormatter& formatter);
 		~BasicLightingStateDelegate();
 
 		static void ConstructToPromise(
@@ -157,7 +157,7 @@ namespace SceneEngine
 
         SwirlingPointLights _swirlingLights;
 
-        void DeserializeLightSources(Formatters::IDynamicFormatter& formatter);
+        void DeserializeLightSources(Formatters::IDynamicInputFormatter& formatter);
     };
 
     void BasicLightingStateDelegate::PreRender(
@@ -335,7 +335,7 @@ namespace SceneEngine
         std::sort(_sunSourceHashToShadowOperatorId.begin(), _sunSourceHashToShadowOperatorId.end(), CompareFirst<uint64_t, unsigned>());
     }
 
-    void BasicLightingStateDelegate::DeserializeLightSources(Formatters::IDynamicFormatter& formatter)
+    void BasicLightingStateDelegate::DeserializeLightSources(Formatters::IDynamicInputFormatter& formatter)
     {
         StringSection<> keyname;
         while (formatter.TryKeyedItem(keyname)) {
@@ -429,7 +429,7 @@ namespace SceneEngine
 	}
 
 	BasicLightingStateDelegate::BasicLightingStateDelegate(
-		Formatters::IDynamicFormatter& formatter)
+		Formatters::IDynamicInputFormatter& formatter)
     : _depVal(formatter.GetDependencyValidation())
 	{
          // we have to parse through the configuration file and discover all of the operators that it's going to need

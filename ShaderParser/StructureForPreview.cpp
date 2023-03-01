@@ -35,7 +35,7 @@ namespace ShaderSourceParser
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
         TemplateItem(
-            InputStreamFormatter<utf8>& formatter,
+            TextInputFormatter<utf8>& formatter,
             const ::Assets::DirectorySearchRules&,
 			const ::Assets::DependencyValidation& depVal)
         {

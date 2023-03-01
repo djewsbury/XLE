@@ -9,10 +9,10 @@
 #include <vector>
 #include <string>
 
-namespace Formatter { class IDynamicFormatter; }
+namespace Formatter { class IDynamicInputFormatter; }
 namespace Assets { class OperationContext; }
 namespace EntityInterface { using EntityId = uint64_t; }
-namespace Formatters { class IDynamicFormatter; }
+namespace Formatters { class IDynamicInputFormatter; }
 namespace std { template<typename T> class future; }
 
 namespace ToolsRig
@@ -35,7 +35,7 @@ namespace ToolsRig
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<PluginConfiguration>>&& promise,
 			std::shared_ptr<::Assets::OperationContext> opContext,
-			Formatters::IDynamicFormatter& formatter);
+			Formatters::IDynamicInputFormatter& formatter);
 
 		PluginConfiguration(PluginConfiguration&&) = delete;
 		PluginConfiguration& operator=(PluginConfiguration&&) = delete;

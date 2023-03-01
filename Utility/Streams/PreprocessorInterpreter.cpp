@@ -1029,7 +1029,7 @@ namespace Utility
 								_evaluation.emplace_back(TokenType::Literal, v);
 							}
 						} else {
-							// Our array could potentially be undefined. The BinaryFormatter requires that lookups on undefined array evaluates to undefined
+							// Our array could potentially be undefined. The BinaryInputFormatter requires that lookups on undefined array evaluates to undefined
 							_evaluation.emplace_back(TokenType::Literal, EvaluatedValue{});
 						}
 					} else {

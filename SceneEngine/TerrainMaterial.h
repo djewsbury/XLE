@@ -15,8 +15,8 @@
 
 namespace Utility 
 { 
-    template<typename CharType> class InputStreamFormatter;
-    class OutputStreamFormatter;
+    template<typename CharType> class TextInputFormatter;
+    class TextOutputFormatter;
 }
 
 namespace SceneEngine
@@ -81,14 +81,14 @@ namespace SceneEngine
 
         TerrainMaterialConfig();
         TerrainMaterialConfig(
-            InputStreamFormatter<utf8>& formatter,
+            TextInputFormatter<utf8>& formatter,
             const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation& depVal);
         ~TerrainMaterialConfig();
 
             // the following constructor is intended for performance comparisons only
         TerrainMaterialConfig(
-            InputStreamFormatter<utf8>& formatter,
+            TextInputFormatter<utf8>& formatter,
             const ::Assets::DirectorySearchRules& searchRules,
             bool);
 

@@ -11,18 +11,18 @@
 
 namespace ColladaConversion
 {
-    bool BeginsWith(const XmlInputStreamFormatter<utf8>::InteriorSection& section, const utf8 match[])
+    bool BeginsWith(const XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[])
     {
         auto matchLen = XlStringSize(match);
         if ((section._end - section._start) < ptrdiff_t(matchLen)) return false;
-        return Is(XmlInputStreamFormatter<utf8>::InteriorSection(section._start, section._start + matchLen), match);
+        return Is(XmlInputFormatter<utf8>::InteriorSection(section._start, section._start + matchLen), match);
     }
 
-    bool EndsWith(const XmlInputStreamFormatter<utf8>::InteriorSection& section, const utf8 match[])
+    bool EndsWith(const XmlInputFormatter<utf8>::InteriorSection& section, const utf8 match[])
     {
         auto matchLen = XlStringSize(match);
         if ((section._end - section._start) < ptrdiff_t(matchLen)) return false;
-        return Is(XmlInputStreamFormatter<utf8>::InteriorSection(section._end - matchLen, section._end), match);
+        return Is(XmlInputFormatter<utf8>::InteriorSection(section._end - matchLen, section._end), match);
     }
 }
 

@@ -11,8 +11,8 @@
 #include <optional>
 
 namespace Assets { class OperationContext; class DirectorySearchRules; }
-namespace Utility { class OutputStreamFormatter; template<typename T> class InputStreamFormatter; }
-namespace Formatters { class IDynamicFormatter; }
+namespace Utility { class TextOutputFormatter; template<typename T> class TextInputFormatter; }
+namespace Formatters { class IDynamicInputFormatter; }
 
 namespace RenderCore { namespace Assets
 {
@@ -38,16 +38,16 @@ namespace RenderCore { namespace Assets
 
 		std::string _skeleton;
 
-		void SerializeMethod(OutputStreamFormatter& formatter) const;
+		void SerializeMethod(TextOutputFormatter& formatter) const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const;
 		
 		NascentCompoundObject(
-			InputStreamFormatter<char>&,
+			TextInputFormatter<char>&,
 			const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation& depVal);
 		NascentCompoundObject(
-			Formatters::IDynamicFormatter&,
+			Formatters::IDynamicInputFormatter&,
 			const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation& depVal);
 		NascentCompoundObject();
@@ -66,7 +66,7 @@ namespace RenderCore { namespace Assets
 	{
 	public:
 		auto GetModelRendererConstruction() const -> const std::shared_ptr<ModelRendererConstruction>& { return _modelRendererConstruction; }
-		InputStreamFormatter<char> OpenConfiguration() const;
+		TextInputFormatter<char> OpenConfiguration() const;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const;

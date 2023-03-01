@@ -16,7 +16,7 @@
 
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../OSServices/RawFS.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 #include "../../Utility/Streams/StreamDOM.h"
 #include "../../Utility/ParameterBox.h"
 #include "../../ConsoleRig/ResourceBox.h"
@@ -38,7 +38,7 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::DependencyValidation&				GetDependencyValidation() const     { return _depVal; }
 
 		TextureMetaData(
-			InputStreamFormatter<utf8>& input, 
+			TextInputFormatter<utf8>& input, 
 			const ::Assets::DirectorySearchRules&, 
 			const ::Assets::DependencyValidation& depVal);
         TextureMetaData() = default;
@@ -47,12 +47,12 @@ namespace RenderCore { namespace Techniques
 	};
 
 	TextureMetaData::TextureMetaData(
-		InputStreamFormatter<utf8>& input, 
+		TextInputFormatter<utf8>& input, 
 		const ::Assets::DirectorySearchRules&, 
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
-		StreamDOM<InputStreamFormatter<utf8>> dom(input);
+		StreamDOM<TextInputFormatter<utf8>> dom(input);
         if (!dom.RootElement().children().empty()) {
             auto colorSpace = dom.RootElement().children().begin()->Attribute("colorSpace");
             if (colorSpace) {

@@ -8,14 +8,14 @@
 
 #include "../../Core/Types.h"
 
-namespace Utility { class OutputStreamFormatter; }
+namespace Utility { class TextOutputFormatter; }
 
 namespace EntityInterface
 {
     class RetainedEntities;
 
     void ExportGameObjects(
-        Utility::OutputStreamFormatter& formatter,
+        Utility::TextOutputFormatter& formatter,
         const RetainedEntities& flexGobInterface);
 }
 

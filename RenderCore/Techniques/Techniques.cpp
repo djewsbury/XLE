@@ -11,7 +11,7 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../OSServices/Log.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 #include "../../Utility/Streams/FormatterUtils.h"
 #include "../../OSServices/RawFS.h"
 #include "../../Utility/IteratorUtils.h"
@@ -22,7 +22,7 @@
 
 namespace RenderCore { namespace Techniques
 {
-	using Formatter = InputStreamFormatter<utf8>;
+	using Formatter = TextInputFormatter<utf8>;
 
 	static void LoadInheritedParameterBoxes(
 		TechniqueEntry& dst, Formatter& formatter, 
@@ -112,7 +112,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	TechniqueSetFile::TechniqueSetFile(
-		Utility::InputStreamFormatter<utf8>& formatter, 
+		Utility::TextInputFormatter<utf8>& formatter, 
 		const ::Assets::DirectorySearchRules& searchRules, 
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)

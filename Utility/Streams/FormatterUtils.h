@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "StreamFormatter.h"
+#include "TextFormatter.h"
 #include "../ImpliedTyping.h"
 #include "../StreamUtils.h"		// for StreamIndent
 

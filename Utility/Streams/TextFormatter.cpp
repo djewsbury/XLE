@@ -4,8 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "StreamFormatter.h"
-#include "OutputStreamFormatter.h"
+#include "TextFormatter.h"
+#include "TextOutputFormatter.h"
 #include "Stream.h"
 #include "../BitUtils.h"
 #include "../PtrUtils.h"
@@ -78,7 +78,7 @@ namespace Utility
         return true;
     }
 
-    auto OutputStreamFormatter::BeginKeyedElement(StringSection<utf8> name) -> ElementId
+    auto TextOutputFormatter::BeginKeyedElement(StringSection<utf8> name) -> ElementId
     {
         DoNewLine();
 
@@ -111,7 +111,7 @@ namespace Utility
         #endif
     }
 
-    auto OutputStreamFormatter::BeginSequencedElement() -> ElementId
+    auto TextOutputFormatter::BeginSequencedElement() -> ElementId
     {
         DoNewLine();
 
@@ -132,7 +132,7 @@ namespace Utility
         #endif
     }
 
-    void OutputStreamFormatter::DoNewLine()
+    void TextOutputFormatter::DoNewLine()
     {
         if (_pendingHeader) {
             WriteConst(*_stream, FormatterConstants<utf8>::HeaderPrefix, _currentLineLength);
@@ -157,7 +157,7 @@ namespace Utility
         }
     }
 
-    void OutputStreamFormatter::WriteKeyedValue(
+    void TextOutputFormatter::WriteKeyedValue(
         StringSection<utf8> name,
         StringSection<utf8> value)
     {
@@ -199,14 +199,14 @@ namespace Utility
         _hotLine = true;
     }
 
-    void OutputStreamFormatter::WriteSequencedValue(
+    void TextOutputFormatter::WriteSequencedValue(
 		StringSection<utf8> value)
     {
         // it turns out this is identical to a "keyed" value, just with an empty name
         WriteKeyedValue({}, value);
     }
 
-    void OutputStreamFormatter::EndElement(ElementId id)
+    void TextOutputFormatter::EndElement(ElementId id)
     {
         if (_currentIndentLevel == 0)
             Throw(::Exceptions::BasicLabel("Unexpected EndElement in OutputStreamFormatter"));
@@ -221,12 +221,12 @@ namespace Utility
         --_currentIndentLevel;
     }
 
-    void OutputStreamFormatter::NewLine()
+    void TextOutputFormatter::NewLine()
     {
         DoNewLine();
     }
 
-    OutputStreamFormatter::OutputStreamFormatter(OutputStream& stream) 
+    TextOutputFormatter::TextOutputFormatter(OutputStream& stream) 
     : _stream(&stream)
     {
         _currentIndentLevel = 0;
@@ -236,7 +236,7 @@ namespace Utility
         _pendingHeader = true;
     }
 
-    OutputStreamFormatter::~OutputStreamFormatter()
+    TextOutputFormatter::~TextOutputFormatter()
     {
         assert(_currentIndentLevel == 0);
     }
@@ -337,7 +337,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        auto InputStreamFormatter<CharType>::PeekNext() -> Blob
+        auto TextInputFormatter<CharType>::PeekNext() -> Blob
     {
         if (_primed != FormatterBlob::None) return _primed;
 
@@ -486,7 +486,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        void InputStreamFormatter<CharType>::ReadHeader()
+        void TextInputFormatter<CharType>::ReadHeader()
     {
         const CharType* aNameStart = nullptr;
         const CharType* aNameEnd = nullptr;
@@ -541,7 +541,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool InputStreamFormatter<CharType>::TryBeginElement()
+        bool TextInputFormatter<CharType>::TryBeginElement()
     {
         if (PeekNext() != FormatterBlob::BeginElement) return false;
 
@@ -558,7 +558,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool InputStreamFormatter<CharType>::TryEndElement()
+        bool TextInputFormatter<CharType>::TryEndElement()
     {
         if (PeekNext() != FormatterBlob::EndElement) return false;
 
@@ -573,7 +573,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool InputStreamFormatter<CharType>::TryKeyedItem(StringSection<CharType>& name)
+        bool TextInputFormatter<CharType>::TryKeyedItem(StringSection<CharType>& name)
     {
         if (PeekNext() != FormatterBlob::KeyedItem) return false;
 
@@ -620,7 +620,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        bool InputStreamFormatter<CharType>::TryStringValue(StringSection<CharType>& value)
+        bool TextInputFormatter<CharType>::TryStringValue(StringSection<CharType>& value)
     {
         if (PeekNext() != FormatterBlob::Value) return false;
 
@@ -635,7 +635,7 @@ namespace Utility
     }
 
 	template<typename CharType>
-		bool InputStreamFormatter<CharType>::TryCharacterData(StringSection<CharType>&)
+		bool TextInputFormatter<CharType>::TryCharacterData(StringSection<CharType>&)
 	{
         // CharacterData never appears with in this format files. However it might appear in
         // XML or some other format
@@ -643,15 +643,15 @@ namespace Utility
 	}
 
     template<typename CharType>
-        StreamLocation InputStreamFormatter<CharType>::GetLocation() const
+        StreamLocation TextInputFormatter<CharType>::GetLocation() const
     {
         return _marker.GetLocation();
     }
 
     template<typename CharType>
-        InputStreamFormatter<CharType> InputStreamFormatter<CharType>::CreateChildFormatter()
+        TextInputFormatter<CharType> TextInputFormatter<CharType>::CreateChildFormatter()
     {
-        InputStreamFormatter<CharType> result = *this;
+        TextInputFormatter<CharType> result = *this;
         // reset the baseline to be where we are now
         // _parentBaseLine must stay unchanged, because this still represents the indentation
         // for the end of this element
@@ -660,7 +660,7 @@ namespace Utility
     }
 
     template<typename CharType>
-        InputStreamFormatter<CharType>::InputStreamFormatter(const TextStreamMarker<CharType>& marker) 
+        TextInputFormatter<CharType>::TextInputFormatter(const TextStreamMarker<CharType>& marker) 
         : _marker(marker)
     {
         _primed = FormatterBlob::None;
@@ -673,11 +673,11 @@ namespace Utility
     }
 
     template<typename CharType>
-        InputStreamFormatter<CharType>::~InputStreamFormatter()
+        TextInputFormatter<CharType>::~TextInputFormatter()
     {}
 
 	template<typename CharType>
-		InputStreamFormatter<CharType>::InputStreamFormatter()
+		TextInputFormatter<CharType>::TextInputFormatter()
 	{
 		_primed = FormatterBlob::None;
 		_activeLineSpaces = _parentBaseLine = 0;
@@ -691,7 +691,7 @@ namespace Utility
 	}
 
 	template<typename CharType>
-		InputStreamFormatter<CharType>::InputStreamFormatter(const InputStreamFormatter& cloneFrom)
+		TextInputFormatter<CharType>::TextInputFormatter(const TextInputFormatter& cloneFrom)
 	: _marker(cloneFrom._marker)
 	, _primed(cloneFrom._primed)
 	, _activeLineSpaces(cloneFrom._activeLineSpaces)
@@ -708,7 +708,7 @@ namespace Utility
 	}
 
 	template<typename CharType>
-		InputStreamFormatter<CharType>& InputStreamFormatter<CharType>::operator=(const InputStreamFormatter& cloneFrom)
+		TextInputFormatter<CharType>& TextInputFormatter<CharType>::operator=(const TextInputFormatter& cloneFrom)
 	{
 		_marker = cloneFrom._marker;
 		_primed = cloneFrom._primed;
@@ -788,7 +788,7 @@ namespace Utility
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    template class InputStreamFormatter<utf8>;
+    template class TextInputFormatter<utf8>;
     template class TextStreamMarker<utf8>;
 }
 

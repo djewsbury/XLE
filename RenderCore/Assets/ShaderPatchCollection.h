@@ -11,7 +11,7 @@
 #include <utility>
 #include <iosfwd>
 
-namespace Utility { template<typename Char> class InputStreamFormatter; class OutputStreamFormatter; }
+namespace Utility { template<typename Char> class TextInputFormatter; class TextOutputFormatter; }
 namespace Assets { class BlockSerializer; }
 
 namespace RenderCore { namespace Assets
@@ -39,10 +39,10 @@ namespace RenderCore { namespace Assets
 		friend bool operator<(uint64_t lhs, const ShaderPatchCollection& rhs);
 
 		friend std::ostream& SerializationOperator(std::ostream& str, const ShaderPatchCollection&);
-		friend void SerializationOperator(OutputStreamFormatter& formatter, const ShaderPatchCollection& patchCollection);
+		friend void SerializationOperator(TextOutputFormatter& formatter, const ShaderPatchCollection& patchCollection);
 
 		ShaderPatchCollection();
-		ShaderPatchCollection(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal);
+		ShaderPatchCollection(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal);
 		ShaderPatchCollection(IteratorRange<const std::pair<std::string, ShaderSourceParser::InstantiationRequest>*> patches);
 		ShaderPatchCollection(std::vector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>>&& patches);
 		~ShaderPatchCollection();
@@ -56,7 +56,7 @@ namespace RenderCore { namespace Assets
 		void SortAndCalculateHash();
 	};
 	
-	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(InputStreamFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal);
-	void SerializeShaderPatchCollectionSet(OutputStreamFormatter& formatter, IteratorRange<const ShaderPatchCollection*> patchCollections);
+	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal);
+	void SerializeShaderPatchCollectionSet(TextOutputFormatter& formatter, IteratorRange<const ShaderPatchCollection*> patchCollections);
 }}
 

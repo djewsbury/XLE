@@ -100,7 +100,7 @@ namespace ToolsRig
 	}
 
 	static void ParseSequenceOperators(
-		Formatters::IDynamicFormatter& formatter,
+		Formatters::IDynamicInputFormatter& formatter,
 		ShaderLab::OperationConstructorContext& constructorContext,
 		RenderCore::LightingEngine::LightingTechniqueSequence& sequence,
 		const std::vector<std::pair<std::string, ShaderLab::OperationConstructor>>& operationConstructors)
@@ -135,7 +135,7 @@ namespace ToolsRig
 	}
 	
 	::Assets::PtrToMarkerPtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
-		std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter,
+		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter,
 		::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
 		::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> futureLightScene,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
@@ -149,7 +149,7 @@ namespace ToolsRig
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
 			[preregAttachments=std::move(preregAttachments), futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
-				std::shared_ptr<Formatters::IDynamicFormatter> formatter;
+				std::shared_ptr<Formatters::IDynamicInputFormatter> formatter;
 				TRY {
 					auto l = weakThis.lock();
 					if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
@@ -268,7 +268,7 @@ namespace ToolsRig
 	}
 
 	::Assets::PtrToMarkerPtr<ShaderLab::IVisualizeStep> ShaderLab::BuildVisualizeStep(
-		std::future<std::shared_ptr<Formatters::IDynamicFormatter>> futureFormatter)
+		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter)
 	{
 		auto result = std::make_shared<::Assets::MarkerPtr<ShaderLab::IVisualizeStep>>();
 		auto weakThis = weak_from_this();
@@ -500,7 +500,7 @@ namespace ToolsRig
 	{
 		shaderLab.RegisterVisualizeStep(
 			"VisualizeAttachment",
-			[](Formatters::IDynamicFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
+			[](Formatters::IDynamicInputFormatter& formatter, ToolsRig::ShaderLab::OperationConstructorContext& context) {
 				std::optional<VisualizeAttachmentShader> shader;
 				StringSection<> attachmentName;
 				StringSection<> keyname;

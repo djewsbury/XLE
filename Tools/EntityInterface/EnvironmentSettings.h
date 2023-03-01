@@ -14,8 +14,8 @@ namespace SceneEngine { class VolumetricFogManager; class ShallowSurfaceManager;
 
 namespace Utility 
 { 
-    class OutputStreamFormatter; 
-    template<typename CharType> class InputStreamFormatter;
+    class TextOutputFormatter; 
+    template<typename CharType> class TextInputFormatter;
 }
 
 namespace EntityInterface
@@ -36,7 +36,7 @@ namespace EntityInterface
         const RetainedEntities& flexGobInterface);
 
     void ExportEnvSettings(
-        OutputStreamFormatter& formatter,
+        TextOutputFormatter& formatter,
         const RetainedEntities& flexGobInterface,
         DocumentId docId);
 

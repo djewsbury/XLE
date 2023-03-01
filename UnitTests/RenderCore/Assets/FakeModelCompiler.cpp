@@ -14,8 +14,8 @@
 #include "../../../ConsoleRig/GlobalServices.h"			// for ConsoleRig::GetLibVersionDesc()
 #include "../../../OSServices/AttachableLibrary.h"
 #include "../../../Utility/Streams/StreamTypes.h"
-#include "../../../Utility/Streams/StreamFormatter.h"
-#include "../../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../../Utility/Streams/TextFormatter.h"
+#include "../../../Utility/Streams/TextOutputFormatter.h"
 
 namespace UnitTests
 {
@@ -87,7 +87,7 @@ namespace UnitTests
 		MemoryOutputStream<char> strm;
 
 		{
-			OutputStreamFormatter formatter(strm);
+			TextOutputFormatter formatter(strm);
 
 			RenderCore::Assets::RawMaterial material0;
 			material0._uniforms = {

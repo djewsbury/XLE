@@ -17,8 +17,8 @@ namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ParsingContext; }}
 namespace Utility
 {
-    template<typename Type> class InputStreamFormatter;
-    class OutputStreamFormatter;
+    template<typename Type> class TextInputFormatter;
+    class TextOutputFormatter;
 }
 
 namespace SceneEngine
@@ -65,13 +65,13 @@ namespace SceneEngine
         ::Assets::DirectorySearchRules _searchRules;
 
         VegetationSpawnConfig(
-            Utility::InputStreamFormatter<utf8>& formatter,
+            Utility::TextInputFormatter<utf8>& formatter,
             const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation& depVal);
         VegetationSpawnConfig();
         ~VegetationSpawnConfig();
 
-        void        Write(OutputStreamFormatter& formatter) const;
+        void        Write(TextOutputFormatter& formatter) const;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 

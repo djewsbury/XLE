@@ -12,7 +12,7 @@
 #include "../Assets/AssetServices.h"
 #include "../Assets/IFileSystem.h"
 #include "../Math/Transformations.h"
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/Streams/StreamDOM.h"
 #include "../OSServices/RawFS.h"
 #include "../Utility/Streams/PathUtils.h"
@@ -139,12 +139,12 @@ namespace SceneEngine
     }
 
     TerrainConfig::TerrainConfig(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
     : TerrainConfig()
     {
-        StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
         _nodeDimsInElements     = doc("NodeDims", _nodeDimsInElements);
         _cellTreeDepth          = doc("CellTreeDepth", _cellTreeDepth);
         _nodeOverlap            = doc("NodeOverlap", _nodeOverlap);
@@ -176,7 +176,7 @@ namespace SceneEngine
 		_depVal = depVal;
     }
 
-    void TerrainConfig::Write(OutputStreamFormatter& formatter) const
+    void TerrainConfig::Write(TextOutputFormatter& formatter) const
     {
         SerializationOperator(formatter, "NodeDims", _nodeDimsInElements);
         SerializationOperator(formatter, "CellTreeDepth", _cellTreeDepth);
@@ -281,7 +281,7 @@ namespace SceneEngine
 
     void TerrainCachedData::Write(OutputStream& stream) const
     {
-        OutputStreamFormatter formatter(stream);
+        TextOutputFormatter formatter(stream);
         auto heightRange = formatter.BeginElement("CellHeightRange");
         for (auto l=_cells.cbegin(); l!=_cells.cend(); ++l) {
             auto cell = formatter.BeginElement("Cell");
@@ -298,9 +298,9 @@ namespace SceneEngine
         size_t fileSize = 0;
         auto sourceFile = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(filename, &fileSize);
 
-        InputStreamFormatter<utf8> formatter(
+        TextInputFormatter<utf8> formatter(
             MemoryMappedInputStream(sourceFile.get(), PtrAdd(sourceFile.get(), fileSize)));
-        StreamDOM<InputStreamFormatter<utf8>> doc(formatter);
+        StreamDOM<TextInputFormatter<utf8>> doc(formatter);
 
         auto heightRanges = doc.Element("CellHeightRange");
         if (heightRanges) {
@@ -364,7 +364,7 @@ namespace SceneEngine
         //     auto& scaffold = ::Assets::Legacy::GetAssetDep<TerrainMaterialScaffold>();
         //     scaffold.Write(stream);
         // }
-        Utility::OutputStreamFormatter formatter(stream);
+        Utility::TextOutputFormatter formatter(stream);
         cfg.Write(formatter);
     }
 

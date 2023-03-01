@@ -17,8 +17,8 @@
 
 namespace Utility
 {
-    class OutputStreamFormatter;
-    template<typename CharType> class InputStreamFormatter;
+    class TextOutputFormatter;
+    template<typename CharType> class TextInputFormatter;
     static constexpr const unsigned NativeRepMaxSize = MaxPath * 4;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,12 +144,12 @@ namespace Utility
         ////////////////////////////////////////////////////////////////////////////////////////
 
         template<typename CharType>
-            void    SerializeWithCharType(OutputStreamFormatter& stream) const;
+            void    SerializeWithCharType(TextOutputFormatter& stream) const;
 
         ParameterBox();
         ParameterBox(std::initializer_list<std::pair<const utf8*, const char*>>);
         template<typename CharType>
-            ParameterBox(InputStreamFormatter<CharType>& stream);
+            ParameterBox(TextInputFormatter<CharType>& stream);
         ParameterBox(ParameterBox&& moveFrom) never_throws;
         ParameterBox& operator=(ParameterBox&& moveFrom) never_throws;
 		

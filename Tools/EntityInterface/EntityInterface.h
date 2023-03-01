@@ -9,14 +9,14 @@
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/ImpliedTyping.h"
 #include "../../Utility/StringUtils.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 #include "../../Core/Types.h"
 #include <memory>
 #include <vector>
 #include <string>
 
 namespace Assets { class DependencyValidation; class DirectorySearchRules; }
-namespace Formatters { class IDynamicFormatter; }
+namespace Formatters { class IDynamicInputFormatter; }
 namespace std { template<typename T> class future; }
 
 namespace EntityInterface
@@ -27,7 +27,7 @@ namespace EntityInterface
     class IEntityDocument
     {
     public:
-        virtual std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> internalPoint) = 0;
+        virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> internalPoint) = 0;
         virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
         virtual const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const = 0;
 
@@ -49,7 +49,7 @@ namespace EntityInterface
         // returns a dependency validation that advances if any properties at that mount point,
         // (or underneath) change 
         virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const = 0;
-        virtual std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> mountPoint) const = 0;
+        virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> mountPoint) const = 0;
 
         virtual ~IEntityMountingTree() = default;
     };

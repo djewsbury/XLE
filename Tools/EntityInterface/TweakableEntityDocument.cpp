@@ -8,7 +8,7 @@
 #include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/Marker.h"
-#include "../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../Utility/Streams/TextOutputFormatter.h"
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/ParameterBox.h"
@@ -129,7 +129,7 @@ namespace EntityInterface
 	private:
 		RenderOverlays::GuidStackHelper _guidStack;
 		ArbiterState* _arbiterState;
-		OutputStreamFormatter _fmttr;
+		TextOutputFormatter _fmttr;
 		std::vector<uint64_t> _hierarchicalEnabledStates;
 
 		uint64_t MakeGuid(StringSection<> name) { return Hash64(name, _guidStack.top()); }
@@ -170,7 +170,7 @@ namespace EntityInterface
 		void IncreaseValidationIndex() override { _depVal.IncreaseValidationIndex(); }
 		std::shared_ptr<ArbiterState> GetArbiterState() override { return _arbiterState; }
 
-		virtual std::future<std::shared_ptr<Formatters::IDynamicFormatter>> BeginFormatter(StringSection<> internalPoint) override
+		virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> internalPoint) override
 		{
 			MemoryOutputStream<> outputStream;
 			{
@@ -178,7 +178,7 @@ namespace EntityInterface
 				ExecuteOnFormatter(fmttr);
 			}
 
-			std::promise<std::shared_ptr<Formatters::IDynamicFormatter>> promise;
+			std::promise<std::shared_ptr<Formatters::IDynamicInputFormatter>> promise;
 			auto result = promise.get_future();
 			promise.set_value(CreateDynamicFormatter(std::move(outputStream), ::Assets::DependencyValidation{_depVal}));
 			return result;

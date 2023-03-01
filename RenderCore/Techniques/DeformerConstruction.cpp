@@ -9,7 +9,7 @@
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Streams/FormatterUtils.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -182,9 +182,9 @@ namespace RenderCore { namespace Techniques
 	template void DeserializeDeformerConstruction(
 		DeformerConstruction& dst,
 		const Assets::ModelRendererConstruction&,
-		InputStreamFormatter<>&);
+		TextInputFormatter<>&);
 
-	auto DeserializeDeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> modelRendererConstruction, InputStreamFormatter<>& cfg) -> std::shared_ptr<DeformerConstruction>
+	auto DeserializeDeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> modelRendererConstruction, TextInputFormatter<>& cfg) -> std::shared_ptr<DeformerConstruction>
 	{
 		auto deformerConstruction = std::make_shared<DeformerConstruction>(device, modelRendererConstruction);
 		DeserializeDeformerConstruction(*deformerConstruction, *modelRendererConstruction, cfg);
@@ -195,9 +195,9 @@ namespace RenderCore { namespace Techniques
 		return deformerConstruction;
 	}
 
-	InputStreamFormatter<char>& IDeformConfigure::EmptyFormatter()
+	TextInputFormatter<char>& IDeformConfigure::EmptyFormatter()
 	{
-		static InputStreamFormatter<char> dummy;
+		static TextInputFormatter<char> dummy;
 		return dummy;
 	}
 

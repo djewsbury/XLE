@@ -6,8 +6,8 @@
 
 #include "GameObjects.h"
 #include "RetainedEntities.h"
-#include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Utility/Streams/TextOutputFormatter.h"
 #include "../../Utility/Conversion.h"
 
 namespace EntityInterface
@@ -19,7 +19,7 @@ namespace EntityInterface
 
     template<typename CharType>
         void SerializationOperator(
-            OutputStreamFormatter& formatter,
+            TextOutputFormatter& formatter,
             const RetainedEntity& obj,
             const RetainedEntities& entities)
     {
@@ -38,7 +38,7 @@ namespace EntityInterface
     }
 
     void ExportGameObjects(
-        OutputStreamFormatter& formatter,
+        TextOutputFormatter& formatter,
         const RetainedEntities& flexGobInterface)
     {
             // Export the registered game objects, in a generic format

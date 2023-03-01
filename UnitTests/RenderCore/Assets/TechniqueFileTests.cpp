@@ -55,7 +55,7 @@ namespace UnitTests
 						SELECTOR_0=1
 			)--";
 
-			InputStreamFormatter<utf8> formattr { MakeStringSection(techniqueFile) };
+			TextInputFormatter<utf8> formattr { MakeStringSection(techniqueFile) };
 			RenderCore::Techniques::TechniqueSetFile techniqueSetFile(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			(void)techniqueSetFile;
 
@@ -101,7 +101,7 @@ namespace UnitTests
 						SELECTOR_2=4
 			)--";
 
-			InputStreamFormatter<utf8> formattr { MakeStringSection(techniqueFile) };
+			TextInputFormatter<utf8> formattr { MakeStringSection(techniqueFile) };
 			RenderCore::Techniques::TechniqueSetFile techniqueSetFile(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			(void)techniqueSetFile;
 

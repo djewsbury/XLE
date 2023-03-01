@@ -7,16 +7,16 @@
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Utility/Streams/StreamTypes.h"
 
-namespace Formatters { class IDynamicFormatter; }
+namespace Formatters { class IDynamicInputFormatter; }
 namespace EntityInterface
 {
     class IEntityDocument;
 
-    std::shared_ptr<Formatters::IDynamicFormatter> CreateDynamicFormatter(
+    std::shared_ptr<Formatters::IDynamicInputFormatter> CreateDynamicFormatter(
         std::shared_ptr<::Assets::ConfigFileContainer<>> cfgFile,
         StringSection<> internalSection);
 
-    std::shared_ptr<Formatters::IDynamicFormatter> CreateDynamicFormatter(
+    std::shared_ptr<Formatters::IDynamicInputFormatter> CreateDynamicFormatter(
         MemoryOutputStream<>&& formatter,
         ::Assets::DependencyValidation&& depVal);
 

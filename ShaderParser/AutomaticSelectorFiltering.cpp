@@ -13,7 +13,7 @@
 #include "../ConsoleRig/GlobalServices.h"		// for GetLibVersionDesc
 #include "../OSServices/AttachableLibrary.h"
 #include "../Utility/Streams/ConditionalPreprocessingTokenizer.h"
-#include "../Utility/Streams/OutputStreamFormatter.h"
+#include "../Utility/Streams/TextOutputFormatter.h"
 #include "../Utility/Streams/StreamTypes.h"
 #include "../Utility/Streams/SerializationUtils.h"
 #include "../Utility/Streams/PathUtils.h"
@@ -35,7 +35,7 @@ namespace ShaderSourceParser
 	constexpr auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
 
 	void SerializationOperator(
-		Utility::OutputStreamFormatter& formatter,
+		Utility::TextOutputFormatter& formatter,
 		const SelectorFilteringRules& input)
 	{
 		auto e = formatter.BeginKeyedElement("TokenDictionary");
@@ -175,7 +175,7 @@ namespace ShaderSourceParser
 	}
 
 	SelectorFilteringRules::SelectorFilteringRules(
-		InputStreamFormatter<utf8>& formatter, 
+		TextInputFormatter<utf8>& formatter, 
 		const ::Assets::DirectorySearchRules&,
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
@@ -307,7 +307,7 @@ namespace ShaderSourceParser
 			}
 
 			MemoryOutputStream<> memStream;
-			OutputStreamFormatter fmttr(memStream);
+			TextOutputFormatter fmttr(memStream);
 			fmttr << filteringRules;
 
 			std::vector<::Assets::ICompileOperation::SerializedArtifact> artifacts;
@@ -339,6 +339,8 @@ namespace ShaderSourceParser
 				SelectorFilteringRules::CompileProcessType,
 				::Assets::GetDepValSys().Make(depFileStates)
 			};
+		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, handler.MakeDependencyValidation()));
 		} CATCH(const std::exception& e) {
 			Throw(::Assets::Exceptions::ConstructionError(e, handler.MakeDependencyValidation()));
 		} CATCH_END

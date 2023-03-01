@@ -9,7 +9,7 @@
 #include "../Utility/StringFormat.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/Streams/FormatterUtils.h"
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/Streams/StreamDOM.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Foreign/fmt/format.h"
@@ -127,7 +127,7 @@ namespace OSServices
     }
 
     LogConfigurationSet::LogConfigurationSet() {}
-    LogConfigurationSet::LogConfigurationSet(InputStreamFormatter<char>& formatter)
+    LogConfigurationSet::LogConfigurationSet(TextInputFormatter<char>& formatter)
     {
         while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
             StringSection<char> eleName;
@@ -141,9 +141,9 @@ namespace OSServices
         }
     }
 
-    auto LogConfigurationSet::LoadConfig(InputStreamFormatter<char>& formatter) -> Config
+    auto LogConfigurationSet::LoadConfig(TextInputFormatter<char>& formatter) -> Config
     {
-        StreamDOM<InputStreamFormatter<char>> doc(formatter);
+        StreamDOM<TextInputFormatter<char>> doc(formatter);
         Config cfg;
         if (doc.RootElement().Attribute("OutputToConsole")) {
             bool outputToConsole = doc.RootElement().Attribute("OutputToConsole", false);

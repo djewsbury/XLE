@@ -496,7 +496,7 @@ namespace EntityInterface
 			return HierarchicalEnabledState::NoImpact;
 		}
 
-		// Stubs for OutputStreamFormatter
+		// Stubs for TextOutputFormatter
 		ElementId BeginKeyedElement(StringSection<> name) override { return 0; }
 		ElementId BeginSequencedElement() override { return 0; }
 		void EndElement(ElementId) override {}

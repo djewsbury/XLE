@@ -7,7 +7,7 @@
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetUtils.h"
 #include "../Math/Vector.h"
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/MemoryUtils.h"
 #include <vector>
 
@@ -28,7 +28,7 @@ namespace SceneEngine
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
         WorldPlacementsConfig(
-            Utility::InputStreamFormatter<>& formatter,
+            Utility::TextInputFormatter<>& formatter,
             const ::Assets::DirectorySearchRules& searchRules,
 			const ::Assets::DependencyValidation& depVal);
         WorldPlacementsConfig();

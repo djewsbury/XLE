@@ -17,8 +17,8 @@
 #include "../OSServices/LegacyFileStreams.h"
 #include "../OSServices/AttachableLibrary.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Streams/StreamFormatter.h"
-#include "../Utility/Streams/OutputStreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
+#include "../Utility/Streams/TextOutputFormatter.h"
 #include "../Utility/Streams/Stream.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/HeapUtils.h"
@@ -215,7 +215,7 @@ namespace Assets
 	static std::vector<std::pair<std::string, std::string>> TryParseStringTable(IteratorRange<const void*> data)
 	{
 		std::vector<std::pair<std::string, std::string>> result;
-		InputStreamFormatter<char> formatter(data);
+		TextInputFormatter<char> formatter(data);
 
 		for (;;) {
 			auto next = formatter.PeekNext();
@@ -235,7 +235,7 @@ namespace Assets
 	static std::vector<std::pair<uint64_t, DependentFileState>> TryParseDependenciesTable(IteratorRange<const void*> data)
 	{
 		std::vector<std::pair<uint64_t, DependentFileState>> result;
-		InputStreamFormatter<char> formatter(data);
+		TextInputFormatter<char> formatter(data);
 
 		while (formatter.PeekNext() == FormatterBlob::KeyedItem) {
 			StringSection<> eleName;
@@ -568,7 +568,7 @@ namespace Assets
 				std::unique_ptr<IFileInterface> outputFile;
 				if (TryOpen(outputFile, *_filesystem, MakeStringSection(debugFilename), "wb") == MainFileSystem::IOReason::Success) {
 					FileOutputStream stream(std::move(outputFile));
-					OutputStreamFormatter formatter(stream);
+					TextOutputFormatter formatter(stream);
 					for (const auto&i:attachedStrings)
 						formatter.WriteKeyedValue(i.first, i.second);
 				}
@@ -611,7 +611,7 @@ namespace Assets
 				std::unique_ptr<IFileInterface> outputFile;
 				if (TryOpen(outputFile, *_filesystem, MakeStringSection(depsFilename), "wb") == MainFileSystem::IOReason::Success) {
 					FileOutputStream stream(std::move(outputFile));
-					OutputStreamFormatter formatter(stream);
+					TextOutputFormatter formatter(stream);
 					for (auto i=depsData.begin(); i!=depsData.end();) {
 						auto objEnd = i+1;
 						while (objEnd != depsData.end() && objEnd->first == i->first) ++objEnd;

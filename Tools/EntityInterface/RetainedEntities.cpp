@@ -8,7 +8,7 @@
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../Utility/Streams/StreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
 #include "../../Utility/Streams/FormatterUtils.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -508,11 +508,11 @@ namespace EntityInterface
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     static EntityId DeserializeEntity(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         IMutableEntityDocument& interf,
         StringSection<> objType)
     {
-        using Blob = InputStreamFormatter<utf8>::Blob;
+        using Blob = TextInputFormatter<utf8>::Blob;
                 
         auto beginLoc = formatter.GetLocation();
 
@@ -579,7 +579,7 @@ namespace EntityInterface
     }
 
     void Deserialize(
-        InputStreamFormatter<utf8>& formatter,
+        TextInputFormatter<utf8>& formatter,
         IMutableEntityDocument& interf)
     {
             // Parse the input file, and send the result to the given entity interface

@@ -310,8 +310,8 @@ namespace Assets
 				auto rawData = std::unique_ptr<char[]>(new char[int(fileSize)]);
 				markerFile->Read(rawData.get(), 1, size_t(fileSize));
 
-				InputStreamFormatter<> formatter(MakeStringSection(rawData.get(), PtrAdd(rawData.get(), fileSize)));
-				StreamDOM<InputStreamFormatter<>> doc(formatter);
+				TextInputFormatter<> formatter(MakeStringSection(rawData.get(), PtrAdd(rawData.get(), fileSize)));
+				StreamDOM<TextInputFormatter<>> doc(formatter);
 
 				auto compareVersion = doc.RootElement().Attribute("VersionString").Value();
 				if (XlEqString(compareVersion, _constructorOptions._versionString)) {

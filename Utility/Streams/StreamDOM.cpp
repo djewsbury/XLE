@@ -5,8 +5,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "StreamDOM.h"
-#include "StreamFormatter.h"
-#include "XmlStreamFormatter.h"
+#include "TextFormatter.h"
+#include "XmlFormatter.h"
 #include "../StringFormat.h"
 
 namespace Utility
@@ -455,19 +455,19 @@ namespace Utility
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    template class StreamDOM<InputStreamFormatter<utf8>>;
-    template class StreamDOM<XmlInputStreamFormatter<utf8>>;
+    template class StreamDOM<TextInputFormatter<utf8>>;
+    template class StreamDOM<XmlInputFormatter<utf8>>;
 
-    template struct StreamDOMElement<InputStreamFormatter<utf8>>;
-    template struct StreamDOMElement<XmlInputStreamFormatter<utf8>>;
+    template struct StreamDOMElement<TextInputFormatter<utf8>>;
+    template struct StreamDOMElement<XmlInputFormatter<utf8>>;
 
-    template class StreamDOMAttribute<InputStreamFormatter<utf8>>;
-    template class StreamDOMAttribute<XmlInputStreamFormatter<utf8>>;
+    template class StreamDOMAttribute<TextInputFormatter<utf8>>;
+    template class StreamDOMAttribute<XmlInputFormatter<utf8>>;
     
-    template class Internal::DocElementIterator<InputStreamFormatter<utf8>>;
-    template class Internal::DocElementIterator<XmlInputStreamFormatter<utf8>>;
+    template class Internal::DocElementIterator<TextInputFormatter<utf8>>;
+    template class Internal::DocElementIterator<XmlInputFormatter<utf8>>;
 
-    template class Internal::DocAttributeIterator<InputStreamFormatter<utf8>>;
-    template class Internal::DocAttributeIterator<XmlInputStreamFormatter<utf8>>;
+    template class Internal::DocAttributeIterator<TextInputFormatter<utf8>>;
+    template class Internal::DocAttributeIterator<XmlInputFormatter<utf8>>;
 
 }

@@ -29,7 +29,7 @@
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/StreamTypes.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Streams/OutputStreamFormatter.h"
+#include "../Utility/Streams/TextOutputFormatter.h"
 #include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/PtrUtils.h"
 #include "../Core/SelectConfiguration.h"
@@ -446,7 +446,7 @@ namespace ColladaConversion
 
     static void SerializeMatTable(OutputStream& stream, const ColladaCompileOp& model)
     {
-        OutputStreamFormatter formatter(stream);
+        TextOutputFormatter formatter(stream);
 
         std::vector<std::pair<NascentObjectGuid, RenderCore::Assets::RawMaterial>> compiledEffects;
 
@@ -580,7 +580,7 @@ namespace ColladaConversion
 
 		auto mainFileDepVal = ::Assets::GetDepValSys().Make(filePath);
 		result->_fileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(filePath, 0, "r", OSServices::FileShareMode::Read);
-		XmlInputStreamFormatter<utf8> formatter { result->_fileData.GetData(), mainFileDepVal };
+		XmlInputFormatter<utf8> formatter { result->_fileData.GetData(), mainFileDepVal };
 		formatter._allowCharacterData = true;
 
 		result->_name = identifier.AsString();

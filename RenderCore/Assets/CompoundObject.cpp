@@ -8,8 +8,8 @@
 #include "../../Math/Transformations.h"
 #include "../../Math/MathSerialization.h"
 #include "../../Assets/ConfigFileContainer.h"
-#include "../../Utility/Streams/StreamFormatter.h"
-#include "../../Utility/Streams/OutputStreamFormatter.h"
+#include "../../Utility/Streams/TextFormatter.h"
+#include "../../Utility/Streams/TextOutputFormatter.h"
 #include "../../Utility/Streams/FormatterUtils.h"
 
 namespace RenderCore { namespace Assets
@@ -67,16 +67,16 @@ namespace RenderCore { namespace Assets
 	template void DeserializeModelRendererConstruction(
 		ModelRendererConstruction&,
 		std::shared_ptr<::Assets::OperationContext>,
-		Formatters::IDynamicFormatter&);
+		Formatters::IDynamicInputFormatter&);
 
 	template void DeserializeModelRendererConstruction(
 		ModelRendererConstruction&,
 		std::shared_ptr<::Assets::OperationContext>,
-		InputStreamFormatter<>&);
+		TextInputFormatter<>&);
 
 	uint64_t CompoundObjectScaffold::GetHash() const { return _modelRendererConstruction->GetHash(); }
 
-	InputStreamFormatter<> CompoundObjectScaffold::OpenConfiguration() const
+	TextInputFormatter<> CompoundObjectScaffold::OpenConfiguration() const
 	{
 		auto container = ::Assets::ConfigFileContainer<>(_blob, _depVal);
 		return container.GetRootFormatter();
@@ -219,7 +219,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	NascentCompoundObject::NascentCompoundObject(
-		InputStreamFormatter<>& formatter,
+		TextInputFormatter<>& formatter,
 		const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
@@ -228,7 +228,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	NascentCompoundObject::NascentCompoundObject(
-		Formatters::IDynamicFormatter& formatter,
+		Formatters::IDynamicInputFormatter& formatter,
 		const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
@@ -241,7 +241,7 @@ namespace RenderCore { namespace Assets
 
 	NascentCompoundObject::~NascentCompoundObject() {}
 
-	void NascentCompoundObject::SerializeMethod(OutputStreamFormatter& formatter) const
+	void NascentCompoundObject::SerializeMethod(TextOutputFormatter& formatter) const
 	{
 		for (auto&cmd:_commands) {
 			auto ele = formatter.BeginKeyedElement("DrawModel");

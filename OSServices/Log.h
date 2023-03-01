@@ -17,7 +17,7 @@
 namespace Utility
 {
     template<typename CharType>
-        class InputStreamFormatter;
+        class TextInputFormatter;
 }
 
 namespace OSServices
@@ -128,7 +128,7 @@ namespace OSServices
         void Set(StringSection<> id, MessageTargetConfiguration& cfg);
 
         LogConfigurationSet();
-        LogConfigurationSet(InputStreamFormatter<char>& formatter);
+        LogConfigurationSet(TextInputFormatter<char>& formatter);
         ~LogConfigurationSet();
     private:
         class Config
@@ -140,10 +140,10 @@ namespace OSServices
 
         std::vector<std::pair<std::string, Config>> _configs;
 
-        Config LoadConfig(InputStreamFormatter<char>& formatter);
+        Config LoadConfig(TextInputFormatter<char>& formatter);
     };
 
-    inline void DeserializationOperator(InputStreamFormatter<char>& str, LogConfigurationSet& cls)
+    inline void DeserializationOperator(TextInputFormatter<char>& str, LogConfigurationSet& cls)
     {
         cls = LogConfigurationSet(str);
     }

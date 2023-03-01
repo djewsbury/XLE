@@ -9,8 +9,8 @@
 #include "ClassAccessorsImpl.h"
 
 #include "../../OSServices/Log.h"
-#include "../Streams/StreamFormatter.h"
-#include "../Streams/OutputStreamFormatter.h"
+#include "../Streams/TextFormatter.h"
+#include "../Streams/TextOutputFormatter.h"
 #include "../Streams/FormatterUtils.h"
 #include "../StringFormat.h"
 #include "../ParameterBox.h"
@@ -81,7 +81,7 @@ namespace Utility
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     void AccessorSerialize(
-        OutputStreamFormatter& formatter,
+        TextOutputFormatter& formatter,
         const void* obj, const ClassAccessors& accessors)
     {
         for (const auto&p:accessors.GetProperties()) {
@@ -113,7 +113,7 @@ namespace Utility
 
     template
         void AccessorDeserialize(
-            InputStreamFormatter<utf8>& formatter,
+            TextInputFormatter<utf8>& formatter,
             void* obj, const ClassAccessors& props);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

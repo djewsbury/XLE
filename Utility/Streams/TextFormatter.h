@@ -29,7 +29,7 @@ namespace Utility
 	};
 
 	template<typename CharType=char>
-		class XL_UTILITY_API InputStreamFormatter
+		class XL_UTILITY_API TextInputFormatter
 	{
 	public:
 		FormatterBlob PeekNext();
@@ -46,20 +46,20 @@ namespace Utility
 		// root. Otherwise the formatter will return the same sequence of blobs
 		// This means that when the child formatter reaches the end of the current element, it
 		// will return FormatterBlob::None instead of FormatterBlob::EndElement
-		InputStreamFormatter<CharType> CreateChildFormatter();		
+		TextInputFormatter<CharType> CreateChildFormatter();		
 
 		using value_type = CharType;
 		using InteriorSection = StringSection<CharType>;
 		using Blob = FormatterBlob;
 
-		InputStreamFormatter(const TextStreamMarker<CharType>& marker);
-		InputStreamFormatter(StringSection<CharType> source, ::Assets::DependencyValidation = {});
-		InputStreamFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation = {});
-		~InputStreamFormatter();
+		TextInputFormatter(const TextStreamMarker<CharType>& marker);
+		TextInputFormatter(StringSection<CharType> source, ::Assets::DependencyValidation = {});
+		TextInputFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation = {});
+		~TextInputFormatter();
 
-		InputStreamFormatter();
-		InputStreamFormatter(const InputStreamFormatter& cloneFrom);
-		InputStreamFormatter& operator=(const InputStreamFormatter& cloneFrom);
+		TextInputFormatter();
+		TextInputFormatter(const TextInputFormatter& cloneFrom);
+		TextInputFormatter& operator=(const TextInputFormatter& cloneFrom);
 	protected:
 		TextStreamMarker<CharType> _marker;
 		FormatterBlob _primed;
@@ -122,11 +122,11 @@ namespace Utility
 
 
 	template<typename CharType>
-		inline InputStreamFormatter<CharType>::InputStreamFormatter(StringSection<CharType> source, ::Assets::DependencyValidation depVal)
-		: InputStreamFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
+		inline TextInputFormatter<CharType>::TextInputFormatter(StringSection<CharType> source, ::Assets::DependencyValidation depVal)
+		: TextInputFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
 	template<typename CharType>
-		inline InputStreamFormatter<CharType>::InputStreamFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation depVal)
-		: InputStreamFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
+		inline TextInputFormatter<CharType>::TextInputFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation depVal)
+		: TextInputFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
 }
 
 using namespace Utility;

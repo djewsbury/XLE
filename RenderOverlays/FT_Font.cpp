@@ -13,7 +13,7 @@
 #include "../Utility/PtrUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../OSServices/RawFS.h"
-#include "../Utility/Streams/StreamFormatter.h"
+#include "../Utility/Streams/TextFormatter.h"
 #include "../Utility/Streams/FormatterUtils.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/Conversion.h"
@@ -214,7 +214,7 @@ namespace RenderOverlays
 
 	////////////////////////////////////////////////////////////////////////////////////
 
-	static void LoadFontNameMapping(InputStreamFormatter<utf8>& formatter, std::unordered_map<std::string, std::string>& result)
+	static void LoadFontNameMapping(TextInputFormatter<utf8>& formatter, std::unordered_map<std::string, std::string>& result)
 	{
 		StringSection<> name;
 		while (formatter.TryKeyedItem(name)) {
@@ -242,7 +242,7 @@ namespace RenderOverlays
 		size_t blobSize = 0;
 		auto blob = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(cfgFile, &blobSize);
 
-		InputStreamFormatter<utf8> formatter(MakeStringSection((const char*)blob.get(), (const char*)PtrAdd(blob.get(), blobSize)));
+		TextInputFormatter<utf8> formatter(MakeStringSection((const char*)blob.get(), (const char*)PtrAdd(blob.get(), blobSize)));
 
 		auto locale = std::locale("").name();
 

@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include "StreamFormatter.h"
-#include "OutputStreamFormatter.h"
+#include "TextFormatter.h"
+#include "TextOutputFormatter.h"
 #include "../StringUtils.h"     // (for StringSection)
 #include "../Optional.h"
 #include <vector>
@@ -18,7 +18,7 @@
 
 namespace Utility
 {
-    class OutputStreamFormatter;
+    class TextOutputFormatter;
 
     template<typename Formatter> struct StreamDOMElement;
     template<typename Formatter> class StreamDOMAttribute;
@@ -300,7 +300,7 @@ namespace Utility
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     template<typename Type, typename CharType>
-        inline void SerializationOperator(OutputStreamFormatter& formatter, const CharType name[], const Type& obj)
+        inline void SerializationOperator(TextOutputFormatter& formatter, const CharType name[], const Type& obj)
     {
         formatter.WriteKeyedValue(
             name, 
@@ -308,19 +308,19 @@ namespace Utility
     }
 
     template<typename CharType>
-        inline void SerializationOperator(OutputStreamFormatter& formatter, const CharType name[], const CharType str[])
+        inline void SerializationOperator(TextOutputFormatter& formatter, const CharType name[], const CharType str[])
     {
         formatter.WriteKeyedValue(name, str);
     }
 
     template<typename CharType>
-        inline void SerializationOperator(OutputStreamFormatter& formatter, const CharType name[], const std::basic_string<CharType>& str)
+        inline void SerializationOperator(TextOutputFormatter& formatter, const CharType name[], const std::basic_string<CharType>& str)
     {
         formatter.WriteKeyedValue(name, str);
     }
 
     template<typename FirstType, typename SecondType, typename CharType>
-        inline void SerializationOperator(OutputStreamFormatter& formatter, const CharType name[], const std::pair<FirstType, SecondType>& obj)
+        inline void SerializationOperator(TextOutputFormatter& formatter, const CharType name[], const std::pair<FirstType, SecondType>& obj)
     {
         auto ele = formatter.BeginKeyedElement(name);
         SerializationOperator(formatter, "First", obj.first);

@@ -10,7 +10,7 @@
 
 namespace Utility
 {
-    class OutputStreamFormatter;
+    class TextOutputFormatter;
     class ClassAccessors;
     class ParameterBox;
 }
@@ -25,7 +25,7 @@ namespace Utility
             void* obj, const ClassAccessors& props);
 
     void AccessorSerialize(
-        OutputStreamFormatter& formatter,
+        TextOutputFormatter& formatter,
         const void* obj, const ClassAccessors& props);
 
     void SetParameters(
@@ -65,7 +65,7 @@ namespace Utility
     /// serialization of relatively small types.
     template<typename Type>
         void AccessorSerialize(
-            OutputStreamFormatter& formatter,
+            TextOutputFormatter& formatter,
             const Type& obj)
         {
             const auto& props = Legacy_GetAccessors<Type>();

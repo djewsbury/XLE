@@ -16,7 +16,7 @@
 
 namespace Utility
 {
-	template<typename CharType> class InputStreamFormatter;
+	template<typename CharType> class TextInputFormatter;
 }
 namespace std { template<typename T> class shared_future; }
 
@@ -59,7 +59,7 @@ namespace Assets
 		public:
 			using DivAsset = DivergentAsset<AssetType>;
 
-			static const bool Constructor_Formatter = std::is_constructible<AssetType, InputStreamFormatter<utf8>&, const DirectorySearchRules&, const DependencyValidation&>::value;
+			static const bool Constructor_Formatter = std::is_constructible<AssetType, TextInputFormatter<utf8>&, const DirectorySearchRules&, const DependencyValidation&>::value;
 			static const bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>&, const DirectorySearchRules&, const DependencyValidation&>::value;
 			static const bool Constructor_ChunkFileContainer = std::is_constructible<AssetType, const ChunkFileContainer&>::value && !std::is_same_v<AssetType, ChunkFileContainer>;
 			static const bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, const DirectorySearchRules&, const DependencyValidation&>::value;
@@ -88,9 +88,9 @@ namespace Assets
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////
 
-		const ConfigFileContainer<InputStreamFormatter<utf8>>& GetConfigFileContainer(StringSection<> identifier);
+		const ConfigFileContainer<TextInputFormatter<utf8>>& GetConfigFileContainer(StringSection<> identifier);
 		const ChunkFileContainer& GetChunkFileContainer(StringSection<> identifier);
-		std::shared_future<std::shared_ptr<ConfigFileContainer<InputStreamFormatter<utf8>>>> GetConfigFileContainerFuture(StringSection<> identifier);
+		std::shared_future<std::shared_ptr<ConfigFileContainer<TextInputFormatter<utf8>>>> GetConfigFileContainerFuture(StringSection<> identifier);
 		std::shared_future<std::shared_ptr<ChunkFileContainer>> GetChunkFileContainerFuture(StringSection<> identifier);
 
         template <typename... Params> uint64_t BuildParamHash(const Params&... initialisers);
@@ -123,7 +123,7 @@ namespace Assets
 
 	//
 	//		Auto construct to:
-	//			(InputStreamFormatter<utf8>&, const DirectorySearchRules&, const DependencyValidation&)
+	//			(TextInputFormatter<utf8>&, const DirectorySearchRules&, const DependencyValidation&)
 	//
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_Formatter)>
 		AssetType AutoConstructAsset(StringSection<> initializer)

@@ -6,14 +6,14 @@
 
 #pragma once
 
-#include "StreamFormatter.h"        // (for FormatException and StreamLocation)
+#include "TextFormatter.h"        // (for FormatException and StreamLocation)
 #include <stack>
 
 namespace Utility
 {
     /// <summary>Deserializes element and attribute data from xml</summary>
     /// This is an input deserializer for xml data that handles just element and
-    /// attributes. The interface is compatible with InputStreamFormatter, and
+    /// attributes. The interface is compatible with TextInputFormatter, and
     /// can be used as a drop-in replacement when required.
     /// 
     /// It's a hand-written perform oriented parser. It should perform reasonable
@@ -25,7 +25,7 @@ namespace Utility
     /// these things. There is some support for reading character data. But it is limited
     /// and intended for simple tasks.
     template<typename CharType>
-        class XL_UTILITY_API XmlInputStreamFormatter
+        class XL_UTILITY_API XmlInputFormatter
     {
     public:
         FormatterBlob PeekNext();
@@ -44,10 +44,10 @@ namespace Utility
 
         bool _allowCharacterData = false;
 
-        XmlInputStreamFormatter(const TextStreamMarker<CharType>& marker);
-        XmlInputStreamFormatter(StringSection<CharType> source, ::Assets::DependencyValidation = {});
-		XmlInputStreamFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation = {});
-        ~XmlInputStreamFormatter();
+        XmlInputFormatter(const TextStreamMarker<CharType>& marker);
+        XmlInputFormatter(StringSection<CharType> source, ::Assets::DependencyValidation = {});
+		XmlInputFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation = {});
+        ~XmlInputFormatter();
     protected:
         TextStreamMarker<CharType> _marker;
         Blob _primed;
@@ -66,11 +66,11 @@ namespace Utility
     };
 
     template<typename CharType>
-		inline XmlInputStreamFormatter<CharType>::XmlInputStreamFormatter(StringSection<CharType> source, ::Assets::DependencyValidation depVal)
-		: XmlInputStreamFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
+		inline XmlInputFormatter<CharType>::XmlInputFormatter(StringSection<CharType> source, ::Assets::DependencyValidation depVal)
+		: XmlInputFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
 	template<typename CharType>
-		inline XmlInputStreamFormatter<CharType>::XmlInputStreamFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation depVal)
-		: XmlInputStreamFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
+		inline XmlInputFormatter<CharType>::XmlInputFormatter(IteratorRange<const void*> source, ::Assets::DependencyValidation depVal)
+		: XmlInputFormatter(TextStreamMarker<CharType>{source, std::move(depVal)}) {}
 }
 
 using namespace Utility;
