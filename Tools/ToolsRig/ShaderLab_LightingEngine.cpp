@@ -155,19 +155,19 @@ namespace ToolsRig
 				StringSection<> keyname;
 				while (formatter.TryKeyedItem(keyname)) {
 					if (XlEqString(keyname, "SearchSteps"))
-						desc._searchSteps = RequireCastValue<unsigned>(formatter);
+						desc._searchSteps = Formatters::RequireCastValue<unsigned>(formatter);
 					else if (XlEqString(keyname, "MaxWorldSpaceDistance"))
-						desc._maxWorldSpaceDistance = RequireCastValue<float>(formatter);
+						desc._maxWorldSpaceDistance = Formatters::RequireCastValue<float>(formatter);
 					else if (XlEqString(keyname, "SampleBothDirections"))
-						desc._sampleBothDirections = RequireCastValue<bool>(formatter);
+						desc._sampleBothDirections = Formatters::RequireCastValue<bool>(formatter);
 					else if (XlEqString(keyname, "LateTemporalFiltering"))
-						desc._lateTemporalFiltering = RequireCastValue<bool>(formatter);
+						desc._lateTemporalFiltering = Formatters::RequireCastValue<bool>(formatter);
 					else if (XlEqString(keyname, "EnableFiltering"))
-						desc._enableFiltering = RequireCastValue<bool>(formatter);
+						desc._enableFiltering = Formatters::RequireCastValue<bool>(formatter);
 					else if (XlEqString(keyname, "EnableHierarchicalStepping"))
-						desc._enableHierarchicalStepping = RequireCastValue<bool>(formatter);
+						desc._enableHierarchicalStepping = Formatters::RequireCastValue<bool>(formatter);
 					else if (XlEqString(keyname, "ThicknessHeuristicFactor"))
-						desc._thicknessHeuristicFactor = RequireCastValue<float>(formatter);
+						desc._thicknessHeuristicFactor = Formatters::RequireCastValue<float>(formatter);
 					else
 						formatter.SkipValueOrElement();
 				}

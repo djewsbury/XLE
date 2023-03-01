@@ -152,9 +152,9 @@ namespace RenderCore { namespace Assets
 					} else if (XlEqString(name, "Material")) {
 						result._material = RequireStringValue(formatter).AsString();
 					} else if (XlEqString(name, "Scale")) {
-						result._scale = RequireCastValue<Float3>(formatter);
+						result._scale = Formatters::RequireCastValue<Float3>(formatter);
 					} else if (XlEqString(name, "Translation")) {
-						result._translation = RequireCastValue<Float3>(formatter);
+						result._translation = Formatters::RequireCastValue<Float3>(formatter);
 					} else if (XlEqString(name, "DeformerBindPoint")) {
 						result._deformerBindPoint = RequireStringValue(formatter).AsString();
 					} else 

@@ -510,7 +510,7 @@ namespace ToolsRig
 						if (!shader)
 							shader = DefaultVisualizeAttachmentShader(attachmentName);
 					} else if (XlEqString(keyname, "Shader")) {
-						shader = RequireEnum<VisualizeAttachmentShader, AsVisualizeAttachmentShader>(formatter);
+						shader = Formatters::RequireEnum<VisualizeAttachmentShader, AsVisualizeAttachmentShader>(formatter);
 					} else
 						formatter.SkipValueOrElement();
 				}
