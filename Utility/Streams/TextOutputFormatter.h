@@ -4,11 +4,8 @@
 
 #pragma once
 
-#include "../Detail/API.h"
-#include "../UTFUtils.h"
 #include "../StringUtils.h"
 #include <vector>
-#include <assert.h>
 
 namespace Utility
 {
@@ -16,20 +13,20 @@ namespace Utility
 
 	#define STREAM_FORMATTER_CHECK_ELEMENTS
 
-	class XL_UTILITY_API TextOutputFormatter
+	class TextOutputFormatter
 	{
 	public:
 		using ElementId = unsigned;
 
-		ElementId BeginKeyedElement(StringSection<utf8> name);
+		ElementId BeginKeyedElement(StringSection<> name);
 		ElementId BeginSequencedElement();
 		void EndElement(ElementId);
 
 		void WriteKeyedValue(
-			StringSection<utf8> name,
-			StringSection<utf8> value);
+			StringSection<> name,
+			StringSection<> value);
 		void WriteSequencedValue(
-			StringSection<utf8> value);
+			StringSection<> value);
 		
 		void NewLine();
 

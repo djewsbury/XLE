@@ -78,7 +78,7 @@ namespace Utility
         return true;
     }
 
-    auto TextOutputFormatter::BeginKeyedElement(StringSection<utf8> name) -> ElementId
+    auto TextOutputFormatter::BeginKeyedElement(StringSection<> name) -> ElementId
     {
         DoNewLine();
 
@@ -151,15 +151,15 @@ namespace Utility
             if (_currentIndentLevel > dimof(tabBuffer))
                 Throw(::Exceptions::BasicLabel("Excessive indent level found in OutputStreamFormatter (%i)", _currentIndentLevel));
             std::fill(tabBuffer, &tabBuffer[_currentIndentLevel], FormatterConstants<utf8>::Tab);
-            _stream->Write(StringSection<utf8>(tabBuffer, &tabBuffer[_currentIndentLevel]));
+            _stream->Write(StringSection<>(tabBuffer, &tabBuffer[_currentIndentLevel]));
             _hotLine = false;
             _currentLineLength = _currentIndentLevel * TabWidth;
         }
     }
 
     void TextOutputFormatter::WriteKeyedValue(
-        StringSection<utf8> name,
-        StringSection<utf8> value)
+        StringSection<> name,
+        StringSection<> value)
     {
         const unsigned idealLineLength = 100;
         bool forceNewLine = 
@@ -200,7 +200,7 @@ namespace Utility
     }
 
     void TextOutputFormatter::WriteSequencedValue(
-		StringSection<utf8> value)
+		StringSection<> value)
     {
         // it turns out this is identical to a "keyed" value, just with an empty name
         WriteKeyedValue({}, value);

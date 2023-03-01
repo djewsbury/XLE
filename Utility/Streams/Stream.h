@@ -11,7 +11,7 @@
 
 namespace Utility
 {
-    class OutputStream 
+    class OutputStream
     {
     public:
         using size_type = size_t;

@@ -4,10 +4,8 @@
 
 #pragma once
 
-#include "../../Assets/AssetsCore.h"		// require for assets exceptions
 #include "../StringUtils.h"
-#include "../PtrUtils.h"
-#include "../IteratorUtils.h"
+#include "../../Assets/AssetsCore.h"		// require for assets exceptions
 #include "../../Core/Exceptions.h"
 #include <assert.h>
 
@@ -17,6 +15,8 @@ namespace Utility
 
 	template<typename CharType>
 		class TextStreamMarker;
+
+	template<typename Iterator> class IteratorRange;
 
 	enum class FormatterBlob
 	{
@@ -29,7 +29,7 @@ namespace Utility
 	};
 
 	template<typename CharType=char>
-		class XL_UTILITY_API TextInputFormatter
+		class TextInputFormatter
 	{
 	public:
 		FormatterBlob PeekNext();
@@ -46,7 +46,7 @@ namespace Utility
 		// root. Otherwise the formatter will return the same sequence of blobs
 		// This means that when the child formatter reaches the end of the current element, it
 		// will return FormatterBlob::None instead of FormatterBlob::EndElement
-		TextInputFormatter<CharType> CreateChildFormatter();		
+		TextInputFormatter<CharType> CreateChildFormatter();
 
 		using value_type = CharType;
 		using InteriorSection = StringSection<CharType>;
