@@ -21,11 +21,17 @@
 #include "../../RenderOverlays/OverlayEffects.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../Formatters/IDynamicFormatter.h"
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
+#include "../../Tools/ToolsRig/ToolsRigServices.h"
+#include "../../Tools/EntityInterface/EntityInterface.h"
 #include "../../Assets/Marker.h"
+#include "../../Assets/Assets.h"
+#include "../../Math/MathSerialization.h"
 #include "../../ConsoleRig/Console.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "../../Formatters/FormatterUtils.h"
 #include <sstream>
 
 using namespace Utility::Literals;
@@ -721,13 +727,111 @@ namespace PlatformRig { namespace Overlays
 		unsigned _frameRigPaddingRight = 20;
 		unsigned _frameRigPaddingTop = 2;
 		unsigned _frameRigPaddingBottom = 2;
+
+		TopBarStaticData() = default;
+
+		template<typename Formatter>
+			TopBarStaticData(Formatter& fmttr)
+		{
+			uint64_t keyname;
+			while (TryKeyedItem(fmttr, keyname)) {
+				switch (keyname) {
+				case "TopMargin"_h: _topMargin = Formatters::RequireCastValue<decltype(_topMargin)>(fmttr); break;
+				case "Height"_h: _height = Formatters::RequireCastValue<decltype(_height)>(fmttr); break;
+				case "BorderMargin"_h: _borderMargin = Formatters::RequireCastValue<decltype(_borderMargin)>(fmttr); break;
+				case "BorderWidth"_h: _borderWidth = Formatters::RequireCastValue<decltype(_borderWidth)>(fmttr); break;
+				case "ShadowHeight"_h: _height = Formatters::RequireCastValue<decltype(_shadowHeight)>(fmttr); break;
+
+				case "PreHeadingMargin"_h: _preHeadingMargin = Formatters::RequireCastValue<decltype(_height)>(fmttr); break;
+				case "HeadingHeight"_h: _headingHeight = Formatters::RequireCastValue<decltype(_headingHeight)>(fmttr); break;
+				case "HeadingPadding"_h: _headingPadding = Formatters::RequireCastValue<decltype(_headingPadding)>(fmttr); break;
+
+				case "FrameRigAreaWidth"_h: _frameRigAreaWidth = Formatters::RequireCastValue<decltype(_frameRigAreaWidth)>(fmttr); break;
+				case "FrameRigPaddingLeft"_h: _frameRigPaddingLeft = Formatters::RequireCastValue<decltype(_frameRigPaddingLeft)>(fmttr); break;
+				case "FrameRigPaddingRight"_h: _frameRigPaddingRight = Formatters::RequireCastValue<decltype(_frameRigPaddingRight)>(fmttr); break;
+				case "FrameRigPaddingTop"_h: _frameRigPaddingTop = Formatters::RequireCastValue<decltype(_frameRigPaddingTop)>(fmttr); break;
+				case "FrameRigPaddingBottom"_h: _frameRigPaddingBottom = Formatters::RequireCastValue<decltype(_frameRigPaddingBottom)>(fmttr); break;
+				default: SkipValueOrElement(fmttr); break;
+				}
+			}
+		}
 	};
+
+	static ColorB DeserializeColor(Formatters::IDynamicInputFormatter& fmttr)
+	{
+		IteratorRange<const void*> value;
+		ImpliedTyping::TypeDesc typeDesc;
+		if (!fmttr.TryRawValue(value, typeDesc))
+			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
+
+		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
+			return *intForm;
+		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
+			return ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
+			return ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+		} else {
+			Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
+		}
+	}
 
 	struct ThemeStaticData
 	{
 		ColorB _semiTransparentTint = 0xff2e3440;
 		ColorB _topBarBorderColor = 0xffffffff;
 		ColorB _headingBkgrnd = 0xffffffff;
+		
+		ThemeStaticData() = default;
+
+		template<typename Formatter>
+			ThemeStaticData(Formatter& fmttr)
+		{
+			uint64_t keyname;
+			while (TryKeyedItem(fmttr, keyname)) {
+				switch (keyname) {
+				case "SemiTransparentTint"_h: _semiTransparentTint = DeserializeColor(fmttr); break;
+				case "TopBarBorderColor"_h: _topBarBorderColor = DeserializeColor(fmttr); break;
+				case "HeadingBackground"_h: _headingBkgrnd = DeserializeColor(fmttr); break;
+				default: SkipValueOrElement(fmttr); break;
+				}
+			}
+		}
+	};
+
+	template<typename T>
+		class MountedData
+	{
+	public:
+		operator const T&() const { return _data; }
+		const T& get() const { return _data; };
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		MountedData(Formatters::IDynamicInputFormatter& fmttr)
+		: _data(fmttr), _depVal(fmttr.GetDependencyValidation())
+		{}
+		MountedData() = default;
+
+		static void ConstructToPromise(
+			std::promise<MountedData>&& promise,
+			StringSection<> mountLocation)
+		{
+			::Assets::WhenAll(ToolsRig::Services::GetEntityMountingTree().BeginFormatter(mountLocation)).ThenConstructToPromise(
+				std::move(promise),
+				[](auto fmttr) { return MountedData{*fmttr}; });
+		}
+
+		static const T& LoadOrDefault(StringSection<> mountLocation)
+		{
+			auto marker = ::Assets::MakeAssetMarker<MountedData>(mountLocation);
+			if (auto* actualized = marker->TryActualize())
+				return actualized->get();
+			static T def;
+			return def;
+		}
+	private:
+		T _data;
+		::Assets::DependencyValidation _depVal;
 	};
 
 	static RenderCore::UniformsStreamInterface CreateTexturedUSI()
@@ -745,8 +849,8 @@ namespace PlatformRig { namespace Overlays
 	{
 		// Render the top bar along the top of the viewport, including the areas for the sections 
 		// as requested
-		TopBarStaticData topBarStaticData;
-		ThemeStaticData themeStaticData;
+		auto& topBarStaticData = MountedData<TopBarStaticData>::LoadOrDefault("cfg/displays/topbar");
+		auto& themeStaticData = MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
 
 		auto xAtPoint = viewport._bottomRight[0] - (topBarStaticData._height + topBarStaticData._frameRigPaddingLeft + topBarStaticData._frameRigPaddingRight + topBarStaticData._frameRigAreaWidth);
 		auto xAtShoulder = viewport._bottomRight[0] - (topBarStaticData._frameRigPaddingLeft + topBarStaticData._frameRigPaddingRight + topBarStaticData._frameRigAreaWidth);
@@ -868,7 +972,7 @@ namespace PlatformRig { namespace Overlays
 				headingWidth = StringWidth(**headingFont, MakeStringSection(headingString));
 
 			TopBarRenderer topBarRenderer;
-			TopBarRenderer::SectionRequest topBarSections[] { {TopBarRenderer::SectionType::Heading, headingWidth }, {TopBarRenderer::SectionType::FrameRig} };
+			TopBarRenderer::SectionRequest topBarSections[] { {TopBarRenderer::SectionType::Heading, (unsigned)headingWidth }, {TopBarRenderer::SectionType::FrameRig} };
 			auto topBar = topBarRenderer.Render(context, interactables, interfaceState, layout.GetMaximumSize(), topBarSections);
 			assert(topBar.size() == dimof(topBarSections));
 			if (IsGood(topBar[0]) && headingFont)
