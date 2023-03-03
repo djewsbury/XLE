@@ -53,24 +53,32 @@ namespace Assets
 			return result;
 		}
 
-		DependencyValidation MakeOrReuse(IteratorRange<const DependencyValidationMarker*> dependencyAssets) override SEALED
+		DependencyValidation MakeOrReuse(IteratorRange<const DependencyValidationMarker*> dependencyAssetsInit) override SEALED
 		{
+			VLA(DependencyValidationMarker, dependencyAssets, dependencyAssetsInit.size());
+			for (unsigned c=0; c<dependencyAssetsInit.size(); ++c)
+				dependencyAssets[c] = dependencyAssetsInit[c];
+
+			// sort and remove duplicates
+			std::sort(dependencyAssets, &dependencyAssets[dependencyAssetsInit.size()]);
+			auto count = std::unique(dependencyAssets, &dependencyAssets[dependencyAssetsInit.size()]) - dependencyAssets;
+
 			unsigned validCount = 0;
-			for (auto marker:dependencyAssets)
+			for (auto marker:MakeIteratorRange(dependencyAssets, &dependencyAssets[count]))
 				if (marker != DependencyValidationMarker_Invalid)
 					++validCount;
 			if (!validCount) return {};
 			
 			ScopedLock(_lock);
 			if (validCount == 1)
-				for (auto marker:dependencyAssets)
+				for (auto marker:MakeIteratorRange(dependencyAssets, &dependencyAssets[count]))
 					if (marker != DependencyValidationMarker_Invalid) {
 						++_entries[marker]._refCount;
 						return marker;
 					}
 
 			DependencyValidation result = MakeAlreadyLocked();
-			for (auto marker:dependencyAssets)
+			for (auto marker:MakeIteratorRange(dependencyAssets, &dependencyAssets[count]))
 				if (marker != DependencyValidationMarker_Invalid)
 					RegisterAssetDependencyAlreadyLocked(result._marker, marker);
 			return result;
