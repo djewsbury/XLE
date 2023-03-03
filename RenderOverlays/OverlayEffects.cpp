@@ -290,7 +290,7 @@ namespace RenderOverlays
 		// Broad blur, but using mip pyramid approach
 		UInt2 srcDims { parsingContext.GetFragmentStitchingContext()._workingProps._width, parsingContext.GetFragmentStitchingContext()._workingProps._height };
 		auto srcMipCount = IntegerLog2(std::max(srcDims[0], srcDims[1])) + 1;
-		auto upsampleCount = 3u;
+		auto upsampleCount = 4u;
 		upsampleCount = std::min(srcMipCount-1u, upsampleCount);
 		UInt2 mipChainTopDims { srcDims[0] >> 1, srcDims[1] >> 1 };
 

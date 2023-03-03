@@ -30,6 +30,7 @@
 #include "../../Math/MathSerialization.h"
 #include "../../ConsoleRig/Console.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/FastParseValue.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/FormatterUtils.h"
 #include <sstream>
@@ -71,6 +72,60 @@ namespace PlatformRig { namespace Overlays
 		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
 		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM }
 	};
+
+	template<typename T>
+		class MountedData
+	{
+	public:
+		operator const T&() const { return _data; }
+		const T& get() const { return _data; };
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		MountedData(Formatters::IDynamicInputFormatter& fmttr)
+		: _data(fmttr), _depVal(fmttr.GetDependencyValidation())
+		{}
+		MountedData() = default;
+
+		static void ConstructToPromise(
+			std::promise<MountedData>&& promise,
+			StringSection<> mountLocation)
+		{
+			::Assets::WhenAll(ToolsRig::Services::GetEntityMountingTree().BeginFormatter(mountLocation)).ThenConstructToPromise(
+				std::move(promise),
+				[](auto fmttr) { return MountedData{*fmttr}; });
+		}
+
+		static const T& LoadOrDefault(StringSection<> mountLocation)
+		{
+			auto marker = ::Assets::MakeAssetMarker<MountedData>(mountLocation);
+			if (auto* actualized = marker->TryActualize())
+				return actualized->get();
+			static T def;
+			return def;
+		}
+	private:
+		T _data;
+		::Assets::DependencyValidation _depVal;
+	};
+
+	static ColorB DeserializeColor(Formatters::IDynamicInputFormatter& fmttr)
+	{
+		IteratorRange<const void*> value;
+		ImpliedTyping::TypeDesc typeDesc;
+		if (!fmttr.TryRawValue(value, typeDesc))
+			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
+
+		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
+			return *intForm;
+		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
+			return ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
+			return ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+		} else {
+			Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
+		}
+	}
 
 	class ToolTipHover
 	{
@@ -114,7 +169,7 @@ namespace PlatformRig { namespace Overlays
 	: _layedOutWidgets(std::move(layedOutWidgets)) {}
 	ToolTipHover::~ToolTipHover() {}
 
-	static ImbuedNode* Heading(LayoutEngine& layoutEngine, std::string&& label)
+	static ImbuedNode* MinimalHeading(LayoutEngine& layoutEngine, std::string&& label)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
@@ -133,334 +188,18 @@ namespace PlatformRig { namespace Overlays
 		return labelNode;
 	}
 
-	static YGNodeRef ToolStyleStyleSectionHeader(LayoutEngine& layoutEngine, std::string&& label)
-	{
-		// we need a container node to put some padding and margins on
-		auto headerContainer = layoutEngine.NewNode();
-		layoutEngine.InsertChildToStackTop(headerContainer);
-		layoutEngine.PushNode(headerContainer);
-		YGNodeStyleSetFlexGrow(headerContainer, 1.f);
-		YGNodeStyleSetMargin(headerContainer, YGEdgeBottom, 4);
-		YGNodeStyleSetPadding(headerContainer, YGEdgeLeft, 64);
-		YGNodeStyleSetFlexDirection(headerContainer, YGFlexDirectionRow);
-		YGNodeStyleSetJustifyContent(headerContainer, YGJustifyFlexStart);
-
-		{
-			auto labelNode = layoutEngine.NewImbuedNode(0);
-			layoutEngine.InsertChildToStackTop(*labelNode);
-
-			const unsigned angleWidth = CommonWidgets::Draw::baseLineHeight/2;
-			const unsigned extraPadding = CommonWidgets::Draw::baseLineHeight;
-
-			auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
-			assert(defaultFonts);
-			YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_headingFont, MakeStringSection(label)) + 2*(angleWidth+extraPadding));		// width including padding
-			YGNodeStyleSetHeight(*labelNode, CommonWidgets::Draw::baseLineHeight);
-			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
-			
-			YGNodeStyleSetPadding(*labelNode, YGEdgeLeft, angleWidth+extraPadding);
-			YGNodeStyleSetPadding(*labelNode, YGEdgeRight, angleWidth+extraPadding);
-
-			const ColorB headingBkColor = 0xff8ea3d2;
-
-			labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), headingBkColor, angleWidth, extraPadding](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-				Coord2 pts[] {
-					{ frame._topLeft[0] + angleWidth, frame._topLeft[1] },
-					{ frame._topLeft[0], (frame._topLeft[1]+frame._bottomRight[1])/2 },
-					{ frame._topLeft[0] + angleWidth, frame._bottomRight[1] },
-
-					{ frame._bottomRight[0] - angleWidth, frame._bottomRight[1] },
-					{ frame._bottomRight[0], (frame._topLeft[1]+frame._bottomRight[1])/2 },
-					{ frame._bottomRight[0] - angleWidth, frame._topLeft[1] }
-				};
-				unsigned indices[] {
-					2, 0, 1,
-					3, 0, 2,
-					5, 0, 3,
-					4, 5, 3
-				};
-				RenderCore::Techniques::ImmediateDrawableMaterial material;
-				auto vertices = draw.GetContext().DrawGeometry(dimof(indices), Vertex_PC::inputElements2D, std::move(material)).Cast<Vertex_PC*>();
-				for (unsigned c=0; c<dimof(indices); ++c)
-					vertices[c] = Vertex_PC { AsPixelCoords(pts[indices[c]]), HardwareColor(headingBkColor) };
-
-				DrawText().Font(*draw.GetDefaultFontsBox()._headingFont).Color(ColorB::Black).Draw(draw.GetContext(), content, label);
-			};
-		}
-
-		layoutEngine.PopNode();		// header container
-
-		return headerContainer;
-	}
-
-	static ImbuedNode* TooltipStyleSectionContainer(LayoutEngine& layoutEngine, std::string&& label)
-	{
-		auto outerContainer = layoutEngine.NewImbuedNode(0);
-		layoutEngine.InsertChildToStackTop(*outerContainer);
-		layoutEngine.PushNode(*outerContainer);
-
-		const ColorB headingBkColor = 0xff8ea3d2;
-		const unsigned headerHeight = CommonWidgets::Draw::baseLineHeight;
-		
-		outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerHeight](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			Float2 linePts[] {
-				Float2 { frame._topLeft[0], frame._topLeft[1]+headerHeight/2 },
-				Float2 { frame._bottomRight[0], frame._topLeft[1]+headerHeight/2 }
-			};
-			RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
-		};
-
-		/////////////////
-
-		ToolStyleStyleSectionHeader(layoutEngine, std::move(label));
-
-		return outerContainer;
-	}
-
-	static std::pair<YGNodeRef, YGNodeRef> TooltipStyleDoubleSectionContainer(LayoutEngine& layoutEngine, std::string&& leftLabel, std::string&& rightLabel)
-	{
-		auto outerContainer = layoutEngine.NewImbuedNode(0);
-		layoutEngine.InsertChildToStackTop(*outerContainer);
-		layoutEngine.PushNode(*outerContainer);
-
-		YGNodeStyleSetFlexDirection(*outerContainer, YGFlexDirectionRow);
-		YGNodeStyleSetJustifyContent(*outerContainer, YGJustifySpaceBetween);
-
-		// containers for left, separator, right
-		auto leftOuterContainer = layoutEngine.NewNode();
-		layoutEngine.InsertChildToStackTop(leftOuterContainer);
-		YGNodeStyleSetFlexDirection(leftOuterContainer, YGFlexDirectionColumn);
-		YGNodeStyleSetJustifyContent(leftOuterContainer, YGJustifySpaceBetween);
-		YGNodeStyleSetFlexGrow(leftOuterContainer, 1.f);
-
-		auto midSeparator = layoutEngine.NewImbuedNode(0);
-		layoutEngine.InsertChildToStackTop(*midSeparator);
-		YGNodeStyleSetWidth(*midSeparator, 16);
-		YGNodeStyleSetFlexGrow(*midSeparator, 0.f);
-
-		auto rightOuterContainer = layoutEngine.NewNode();
-		layoutEngine.InsertChildToStackTop(rightOuterContainer);
-		YGNodeStyleSetFlexDirection(rightOuterContainer, YGFlexDirectionColumn);
-		YGNodeStyleSetJustifyContent(rightOuterContainer, YGJustifySpaceBetween);
-		YGNodeStyleSetFlexGrow(rightOuterContainer, 1.f);
-
-		// headers
-		{
-			layoutEngine.PushNode(leftOuterContainer);
-			ToolStyleStyleSectionHeader(layoutEngine, std::move(leftLabel));
-			layoutEngine.PopNode();
-		}
-		{
-			layoutEngine.PushNode(rightOuterContainer);
-			ToolStyleStyleSectionHeader(layoutEngine, std::move(rightLabel));
-			layoutEngine.PopNode();
-		}
-
-		// draw in separator lines
-		const ColorB headingBkColor = 0xff8ea3d2;
-		const unsigned headerHeight = CommonWidgets::Draw::baseLineHeight;
-		outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerHeight](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			Float2 linePts[] {
-				Float2 { frame._topLeft[0], frame._topLeft[1]+headerHeight/2 },
-				Float2 { frame._bottomRight[0], frame._topLeft[1]+headerHeight/2 }
-			};
-			RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
-		};
-
-		midSeparator->_nodeAttachments._drawDelegate = [headingBkColor, headerHeight](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			Float2 linePts[] {
-				Float2 { (frame._topLeft[0] + frame._bottomRight[0])/2, frame._topLeft[1] + headerHeight/2 },
-				Float2 { (frame._topLeft[0] + frame._bottomRight[0])/2, frame._bottomRight[1] }
-			};
-			RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
-		};
-
-		return {leftOuterContainer, rightOuterContainer};
-	}
-
-	static YGNodeRef LeftRightMargins(LayoutEngine& layoutEngine)
+	static YGNodeRef LeftRightMargins(LayoutEngine& layoutEngine, float marginPx)
 	{
 		auto baseNode = layoutEngine.NewNode();
 		layoutEngine.InsertChildToStackTop(baseNode);
 		layoutEngine.PushNode(baseNode);
 
-		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 64);
-		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 64);
+		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, marginPx);
+		YGNodeStyleSetMargin(baseNode, YGEdgeRight, marginPx);
 		return baseNode;
 	}
 
-	static YGNodeRef KeyValueGroup(LayoutEngine& layoutEngine)
-	{
-		auto baseNode = layoutEngine.NewNode();
-		layoutEngine.InsertChildToStackTop(baseNode);
-		layoutEngine.PushNode(baseNode);
-		
-		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
-		YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
-		YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
-		
-		YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-		YGNodeStyleSetFlexGrow(baseNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
-		return baseNode;
-	}
-
-	static YGNodeRef VerticalGroup(LayoutEngine& layoutEngine)
-	{
-		auto baseNode = layoutEngine.NewNode();
-		layoutEngine.InsertChildToStackTop(baseNode);
-		layoutEngine.PushNode(baseNode);
-		
-		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionColumn);
-		YGNodeStyleSetJustifyContent(baseNode, YGJustifyFlexStart);
-		YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
-		
-		YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-		YGNodeStyleSetFlexGrow(baseNode, 0.f);
-		return baseNode;
-	}
-
-	static ImbuedNode* KeyName(LayoutEngine& layoutEngine, std::string&& label)
-	{
-		auto labelNode = layoutEngine.NewImbuedNode(0);
-		layoutEngine.InsertChildToStackTop(*labelNode);
-
-		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
-		assert(defaultFonts);
-		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(label)));
-		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
-		YGNodeStyleSetMargin(*labelNode, YGEdgeRight, 8);
-		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
-		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
-
-		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, label);
-		};
-		return labelNode;
-	}
-
-	static YGNodeRef ValueGroup(LayoutEngine& layoutEngine)
-	{
-		auto baseNode = layoutEngine.NewNode();
-		layoutEngine.InsertChildToStackTop(baseNode);
-		layoutEngine.PushNode(baseNode);
-		
-		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
-		YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
-		YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
-		
-		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 2);
-		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 2);
-		return baseNode;
-	}
-
-	static ImbuedNode* KeyValue(LayoutEngine& layoutEngine, std::string&& label)
-	{
-		auto labelNode = layoutEngine.NewImbuedNode(0);
-		layoutEngine.InsertChildToStackTop(*labelNode);
-
-		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
-		assert(defaultFonts);
-		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
-		float maxWidth = StringWidth(*defaultFonts->_buttonFont, MakeStringSection(label));
-		YGNodeStyleSetWidth(*labelNode, maxWidth);
-
-		// We can't grow, but we can shrink -- our "width" property is the length of the entire string, and if it's shrunk,
-		// we'll adjust the string with a ellipsis
-		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
-		YGNodeStyleSetFlexShrink(*labelNode, 1.f);
-
-		struct AttachedData
-		{
-			std::string _originalLabel;
-			unsigned _cachedWidth = ~0u;
-			std::string _fitLabel;
-		};
-		auto attachedData = std::make_shared<AttachedData>();
-		attachedData->_originalLabel = std::move(label);
-		attachedData->_fitLabel = attachedData->_originalLabel;
-		attachedData->_cachedWidth = (unsigned)maxWidth;
-
-		labelNode->_nodeAttachments._drawDelegate = [attachedData](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			// We don't get a notification after layout is finished -- so typically on the first render we may have to adjust
-			// our string to fit
-			auto* font = draw.GetDefaultFontsBox()._buttonFont.get();
-			if (content.Width() != attachedData->_cachedWidth) {
-				attachedData->_cachedWidth = content.Width();
-				char buffer[MaxPath];
-				auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), (float)content.Width());
-				attachedData->_fitLabel = buffer;
-			}
-			DrawText().Font(*font).Alignment(TextAlignment::Right).Draw(draw.GetContext(), content, attachedData->_fitLabel);
-		};
-
-		#if 0
-			labelNode->_measureDelegate = [attachedData](float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) {
-				if (widthMode != YGMeasureMode::YGMeasureModeExactly) {
-					auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
-					assert(defaultFonts);
-					char buffer[MaxPath];
-					auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *defaultFonts->_buttonFont, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), width);
-					attachedData->_fitLabel = buffer;
-					return YGSize { fitWidth, defaultFonts->_buttonFont->GetFontProperties()._lineHeight };
-				} else {
-					return YGSize { width, height };
-				}
-			};
-			labelNode->YGNode()->setContext(labelNode);
-			labelNode->YGNode()->setMeasureFunc(
-				[](YGNode* node, float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) -> YGSize {
-					return ((ImbuedNode*)node->getContext())->_measureDelegate(width, widthMode, height, heightMode);
-				});
-		#endif
-
-		return labelNode;
-	}
-
-	template<typename T, typename std::enable_if<std::is_integral_v<T> || std::is_floating_point_v<T>>::type* =nullptr>
-		static ImbuedNode* KeyValue(LayoutEngine& layoutEngine, T value)
-	{
-		auto labelNode = layoutEngine.NewImbuedNode(0);
-		layoutEngine.InsertChildToStackTop(*labelNode);
-
-		auto str = std::to_string(value);
-
-		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
-		assert(defaultFonts);
-		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(str)));
-		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
-		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
-		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
-
-		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
-		};
-		return labelNode;
-	}
-
-	template<typename T, int N>
-		static ImbuedNode* KeyValue(LayoutEngine& layoutEngine, const VectorTT<T, N>& vector)
-	{
-		auto labelNode = layoutEngine.NewImbuedNode(0);
-		layoutEngine.InsertChildToStackTop(*labelNode);
-
-		std::stringstream sstr;
-		sstr << vector;
-		auto str = sstr.str();
-
-		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
-		assert(defaultFonts);
-		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(str)));
-		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
-		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
-		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
-
-		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
-		};
-		return labelNode;
-	}
-
-	static ImbuedNode* KeyValueSimple(LayoutEngine& layoutEngine, std::string&& str)
+	ImbuedNode* MinimalLabel(LayoutEngine& layoutEngine, std::string&& str)
 	{
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
@@ -478,27 +217,6 @@ namespace PlatformRig { namespace Overlays
 		return labelNode;
 	}
 
-	static ImbuedNode* EventButton(LayoutEngine& layoutEngine, std::string&& label, std::function<void()>&& event)
-	{
-		uint64_t interactable = layoutEngine.GuidStack().MakeGuid(label);
-		auto buttonNode = KeyValue(layoutEngine, std::move(label));
-
-		buttonNode->_nodeAttachments._guid = interactable;
-		buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](CommonWidgets::Input& input, Rect, Rect) {
-			if (input.GetEvent().IsPress_LButton()) {
-				input.GetInterfaceState().BeginCapturing(input.GetInterfaceState().TopMostWidget());
-			} else if (input.GetEvent().IsRelease_LButton()) {
-				if (input.GetInterfaceState().GetCapture()._widget._id == interactable) {
-					input.GetInterfaceState().EndCapturing();
-					if (Contains(input.GetInterfaceState().TopMostWidget()._rect, input.GetInterfaceState().MousePosition()))
-						event();
-				}
-			}
-			return IODelegateResult::Consumed;
-		};
-		return buttonNode;
-	}
-	
 	static std::string ColouriseFilename(StringSection<> filename)
 	{
 		auto split = MakeFileNameSplitter(filename);
@@ -527,23 +245,470 @@ namespace PlatformRig { namespace Overlays
 		return str.str();
 	}
 
-	static YGNodeRef PopupBorder(LayoutEngine& layoutEngine)
+	class ToolTipStyler
 	{
-		auto baseNode = layoutEngine.NewNode();
-		layoutEngine.InsertChildToStackTop(baseNode);
-		layoutEngine.PushNode(baseNode);
-		
-		YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionColumn);
-		YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
-		YGNodeStyleSetAlignItems(baseNode, YGAlignStretch);
-		
-		YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 16);
-		YGNodeStyleSetMargin(baseNode, YGEdgeRight, 16);
-		YGNodeStyleSetMargin(baseNode, YGEdgeTop, 16);
-		YGNodeStyleSetMargin(baseNode, YGEdgeBottom, 16);
-		return baseNode;
-	}
+	public:
+		YGNodeRef SectionHeader(LayoutEngine& layoutEngine, std::string&& label)
+		{
+			// we need a container node to put some padding and margins on
+			auto headerContainer = layoutEngine.NewNode();
+			layoutEngine.InsertChildToStackTop(headerContainer);
+			layoutEngine.PushNode(headerContainer);
+			YGNodeStyleSetFlexGrow(headerContainer, 1.f);
+			YGNodeStyleSetMargin(headerContainer, YGEdgeVertical, (float)_staticData->_sectionHeaderVertMargins);
+			YGNodeStyleSetPadding(headerContainer, YGEdgeVertical, (float)_staticData->_sectionHeaderVertPadding);
+			YGNodeStyleSetPadding(headerContainer, YGEdgeLeft, 64);
+			YGNodeStyleSetFlexDirection(headerContainer, YGFlexDirectionRow);
+			YGNodeStyleSetJustifyContent(headerContainer, YGJustifyFlexStart);
 
+			{
+				auto labelNode = layoutEngine.NewImbuedNode(0);
+				layoutEngine.InsertChildToStackTop(*labelNode);
+
+				const auto heightWithVertPadding = _headingFont->GetFontProperties()._lineHeight + 2*_staticData->_sectionHeaderVertPadding;
+				const auto angleWidth = heightWithVertPadding/2;
+				const auto extraPadding = heightWithVertPadding;
+
+				YGNodeStyleSetWidth(*labelNode, StringWidth(*_headingFont, MakeStringSection(label)) + 2*(angleWidth+extraPadding));		// width including padding
+				YGNodeStyleSetHeight(*labelNode, _headingFont->GetFontProperties()._lineHeight);
+				YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+				
+				YGNodeStyleSetPadding(*labelNode, YGEdgeLeft, float(angleWidth+extraPadding));
+				YGNodeStyleSetPadding(*labelNode, YGEdgeRight, float(angleWidth+extraPadding));
+
+				const ColorB headingBkColor = 0xff8ea3d2;
+
+				labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), headingBkColor, angleWidth, extraPadding, font=_headingFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+					Coord2 pts[] {
+						{ frame._topLeft[0] + angleWidth, frame._topLeft[1] },
+						{ frame._topLeft[0], (frame._topLeft[1]+frame._bottomRight[1])/2 },
+						{ frame._topLeft[0] + angleWidth, frame._bottomRight[1] },
+
+						{ frame._bottomRight[0] - angleWidth, frame._bottomRight[1] },
+						{ frame._bottomRight[0], (frame._topLeft[1]+frame._bottomRight[1])/2 },
+						{ frame._bottomRight[0] - angleWidth, frame._topLeft[1] }
+					};
+					unsigned indices[] {
+						2, 0, 1,
+						3, 0, 2,
+						5, 0, 3,
+						4, 5, 3
+					};
+					RenderCore::Techniques::ImmediateDrawableMaterial material;
+					auto vertices = draw.GetContext().DrawGeometry(dimof(indices), Vertex_PC::inputElements2D, std::move(material)).Cast<Vertex_PC*>();
+					for (unsigned c=0; c<dimof(indices); ++c)
+						vertices[c] = Vertex_PC { AsPixelCoords(pts[indices[c]]), HardwareColor(headingBkColor) };
+
+					DrawText().Font(*font).Color(ColorB::Black).Flags(0).Draw(draw.GetContext(), content, label);
+				};
+			}
+
+			layoutEngine.PopNode();		// header container
+
+			return headerContainer;
+		}
+
+		ImbuedNode* SectionContainer(LayoutEngine& layoutEngine, std::string&& label)
+		{
+			auto outerContainer = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*outerContainer);
+			layoutEngine.PushNode(*outerContainer);
+
+			const ColorB headingBkColor = _staticData->_sectionHeaderBkColor;
+			const auto headerHeight = _headingFont->GetFontProperties()._lineHeight + 2*_staticData->_sectionHeaderVertPadding;
+			const auto headerLineOffset = _staticData->_sectionHeaderVertMargins + headerHeight/2;
+			
+			outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				Float2 linePts[] {
+					Float2 { frame._topLeft[0], frame._topLeft[1]+headerLineOffset },
+					Float2 { frame._bottomRight[0], frame._topLeft[1]+headerLineOffset }
+				};
+				RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
+			};
+
+			/////////////////
+
+			SectionHeader(layoutEngine, std::move(label));
+
+			return outerContainer;
+		}
+
+		std::pair<YGNodeRef, YGNodeRef> DoubleSectionContainer(LayoutEngine& layoutEngine, std::string&& leftLabel, std::string&& rightLabel)
+		{
+			auto outerContainer = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*outerContainer);
+			layoutEngine.PushNode(*outerContainer);
+
+			YGNodeStyleSetFlexDirection(*outerContainer, YGFlexDirectionRow);
+			YGNodeStyleSetJustifyContent(*outerContainer, YGJustifySpaceBetween);
+
+			// containers for left, separator, right
+			auto leftOuterContainer = layoutEngine.NewNode();
+			layoutEngine.InsertChildToStackTop(leftOuterContainer);
+			YGNodeStyleSetFlexDirection(leftOuterContainer, YGFlexDirectionColumn);
+			YGNodeStyleSetJustifyContent(leftOuterContainer, YGJustifySpaceBetween);
+			YGNodeStyleSetFlexGrow(leftOuterContainer, 1.f);
+
+			auto midSeparator = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*midSeparator);
+			YGNodeStyleSetWidth(*midSeparator, 16);
+			YGNodeStyleSetFlexGrow(*midSeparator, 0.f);
+
+			auto rightOuterContainer = layoutEngine.NewNode();
+			layoutEngine.InsertChildToStackTop(rightOuterContainer);
+			YGNodeStyleSetFlexDirection(rightOuterContainer, YGFlexDirectionColumn);
+			YGNodeStyleSetJustifyContent(rightOuterContainer, YGJustifySpaceBetween);
+			YGNodeStyleSetFlexGrow(rightOuterContainer, 1.f);
+
+			// headers
+			{
+				layoutEngine.PushNode(leftOuterContainer);
+				SectionHeader(layoutEngine, std::move(leftLabel));
+				layoutEngine.PopNode();
+			}
+			{
+				layoutEngine.PushNode(rightOuterContainer);
+				SectionHeader(layoutEngine, std::move(rightLabel));
+				layoutEngine.PopNode();
+			}
+
+			// draw in separator lines
+			const ColorB headingBkColor = _staticData->_sectionHeaderBkColor;
+			const auto headerHeight = _headingFont->GetFontProperties()._lineHeight + 2*_staticData->_sectionHeaderVertPadding;
+			const auto headerLineOffset = _staticData->_sectionHeaderVertMargins + headerHeight/2;
+			outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				Float2 linePts[] {
+					Float2 { frame._topLeft[0], frame._topLeft[1]+headerLineOffset },
+					Float2 { frame._bottomRight[0], frame._topLeft[1]+headerLineOffset }
+				};
+				RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
+			};
+
+			midSeparator->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				Float2 linePts[] {
+					Float2 { (frame._topLeft[0] + frame._bottomRight[0])/2, frame._topLeft[1] + headerLineOffset },
+					Float2 { (frame._topLeft[0] + frame._bottomRight[0])/2, frame._bottomRight[1] }
+				};
+				RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
+			};
+
+			return {leftOuterContainer, rightOuterContainer};
+		}
+
+		YGNodeRef KeyValueGroup(LayoutEngine& layoutEngine)
+		{
+			auto baseNode = layoutEngine.NewNode();
+			layoutEngine.InsertChildToStackTop(baseNode);
+			layoutEngine.PushNode(baseNode);
+			
+			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
+			YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
+			YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
+			
+			YGNodeStyleSetMargin(baseNode, YGEdgeVertical, (float)_staticData->_keyValueGroupVertMargins);
+			YGNodeStyleSetFlexGrow(baseNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
+			return baseNode;
+		}
+
+		YGNodeRef VerticalGroup(LayoutEngine& layoutEngine)
+		{
+			auto baseNode = layoutEngine.NewNode();
+			layoutEngine.InsertChildToStackTop(baseNode);
+			layoutEngine.PushNode(baseNode);
+			
+			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionColumn);
+			YGNodeStyleSetJustifyContent(baseNode, YGJustifyFlexStart);
+			YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
+			
+			YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
+			YGNodeStyleSetFlexGrow(baseNode, 0.f);
+			return baseNode;
+		}
+
+		ImbuedNode* KeyName(LayoutEngine& layoutEngine, std::string&& label)
+		{
+			auto labelNode = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*labelNode);
+
+			YGNodeStyleSetWidth(*labelNode, StringWidth(*_valueFont, MakeStringSection(label)));
+			YGNodeStyleSetHeight(*labelNode, _valueFont->GetFontProperties()._lineHeight);
+			YGNodeStyleSetMargin(*labelNode, YGEdgeRight, 8);
+			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+			YGNodeStyleSetFlexShrink(*labelNode, 0.f);
+
+			labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				DrawText().Font(*font).Draw(draw.GetContext(), content, label);
+			};
+			return labelNode;
+		}
+
+		YGNodeRef ValueGroup(LayoutEngine& layoutEngine)
+		{
+			auto baseNode = layoutEngine.NewNode();
+			layoutEngine.InsertChildToStackTop(baseNode);
+			layoutEngine.PushNode(baseNode);
+			
+			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
+			YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
+			YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
+			
+			YGNodeStyleSetMargin(baseNode, YGEdgeLeft, 2);
+			YGNodeStyleSetMargin(baseNode, YGEdgeRight, 2);
+			return baseNode;
+		}
+
+		ImbuedNode* KeyValue(LayoutEngine& layoutEngine, std::string&& label)
+		{
+			auto labelNode = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*labelNode);
+
+			YGNodeStyleSetHeight(*labelNode, _valueFont->GetFontProperties()._lineHeight);
+			float maxWidth = StringWidth(*_valueFont, MakeStringSection(label));
+			YGNodeStyleSetWidth(*labelNode, maxWidth);
+
+			// We can't grow, but we can shrink -- our "width" property is the length of the entire string, and if it's shrunk,
+			// we'll adjust the string with a ellipsis
+			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+			YGNodeStyleSetFlexShrink(*labelNode, 1.f);
+
+			struct AttachedData
+			{
+				std::string _originalLabel;
+				unsigned _cachedWidth = ~0u;
+				std::string _fitLabel;
+			};
+			auto attachedData = std::make_shared<AttachedData>();
+			attachedData->_originalLabel = std::move(label);
+			attachedData->_fitLabel = attachedData->_originalLabel;
+			attachedData->_cachedWidth = (unsigned)maxWidth;
+
+			labelNode->_nodeAttachments._drawDelegate = [attachedData, font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				// We don't get a notification after layout is finished -- so typically on the first render we may have to adjust
+				// our string to fit
+				if (content.Width() != attachedData->_cachedWidth) {
+					attachedData->_cachedWidth = content.Width();
+					char buffer[MaxPath];
+					auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), (float)content.Width());
+					attachedData->_fitLabel = buffer;
+				}
+				DrawText().Font(*font).Alignment(TextAlignment::Right).Draw(draw.GetContext(), content, attachedData->_fitLabel);
+			};
+
+			#if 0
+				labelNode->_measureDelegate = [attachedData](float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) {
+					if (widthMode != YGMeasureMode::YGMeasureModeExactly) {
+						auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+						assert(defaultFonts);
+						char buffer[MaxPath];
+						auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *defaultFonts->_buttonFont, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), width);
+						attachedData->_fitLabel = buffer;
+						return YGSize { fitWidth, defaultFonts->_buttonFont->GetFontProperties()._lineHeight };
+					} else {
+						return YGSize { width, height };
+					}
+				};
+				labelNode->YGNode()->setContext(labelNode);
+				labelNode->YGNode()->setMeasureFunc(
+					[](YGNode* node, float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) -> YGSize {
+						return ((ImbuedNode*)node->getContext())->_measureDelegate(width, widthMode, height, heightMode);
+					});
+			#endif
+
+			return labelNode;
+		}
+
+		template<typename T, typename std::enable_if<std::is_integral_v<T> || std::is_floating_point_v<T>>::type* =nullptr>
+			ImbuedNode* KeyValue(LayoutEngine& layoutEngine, T value)
+		{
+			auto labelNode = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*labelNode);
+
+			auto str = std::to_string(value);
+
+			YGNodeStyleSetWidth(*labelNode, StringWidth(*_valueFont, MakeStringSection(str)));
+			YGNodeStyleSetHeight(*labelNode, _valueFont->GetFontProperties()._lineHeight);
+			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+			YGNodeStyleSetFlexShrink(*labelNode, 0.f);
+
+			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				DrawText().Font(*font).Draw(draw.GetContext(), content, str);
+			};
+			return labelNode;
+		}
+
+		template<typename T, int N>
+			ImbuedNode* KeyValue(LayoutEngine& layoutEngine, const VectorTT<T, N>& vector)
+		{
+			auto labelNode = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*labelNode);
+
+			std::stringstream sstr;
+			sstr << vector;
+			auto str = sstr.str();
+
+			YGNodeStyleSetWidth(*labelNode, StringWidth(*_valueFont, MakeStringSection(str)));
+			YGNodeStyleSetHeight(*labelNode, _valueFont->GetFontProperties()._lineHeight);
+			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+			YGNodeStyleSetFlexShrink(*labelNode, 0.f);
+
+			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				DrawText().Font(*font).Draw(draw.GetContext(), content, str);
+			};
+			return labelNode;
+		}
+
+		ImbuedNode* KeyValueSimple(LayoutEngine& layoutEngine, std::string&& str)
+		{
+			auto labelNode = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*labelNode);
+
+			YGNodeStyleSetWidth(*labelNode, StringWidth(*_valueFont, MakeStringSection(str)));
+			YGNodeStyleSetHeight(*labelNode, _valueFont->GetFontProperties()._lineHeight);
+			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+			YGNodeStyleSetFlexShrink(*labelNode, 0.f);
+
+			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				DrawText().Font(*font).Draw(draw.GetContext(), content, str);
+			};
+			return labelNode;
+		}
+
+		ImbuedNode* ExpandingConnectorLine(LayoutEngine& layoutEngine)
+		{
+			auto connectorNode = layoutEngine.NewImbuedNode(0);
+			layoutEngine.InsertChildToStackTop(*connectorNode);
+
+			YGNodeStyleSetHeight(*connectorNode, _valueFont->GetFontProperties()._lineHeight);
+			YGNodeStyleSetMinWidth(*connectorNode, 0.f);
+			YGNodeStyleSetFlexGrow(*connectorNode, 1.0f);
+
+			ColorB color = _staticData->_expandingConnectorColor;
+			connectorNode->_nodeAttachments._drawDelegate = [font=_valueFont, dotWidth=_dotWidth, color](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				// Rendering these could actually end up a little expensive, because the majority of glyphs could end up being these
+				char buffer[256];
+				auto count = std::min(unsigned(dimof(buffer)-1), content.Width() / dotWidth);
+				std::memset(buffer, '.', count);
+				buffer[count] = '\0';
+				DrawText().Font(*font).Flags(0).Color(color).Draw(draw.GetContext(), content, buffer);
+			};
+			return connectorNode;
+		}
+
+		ImbuedNode* EventButton(LayoutEngine& layoutEngine, std::string&& label, std::function<void()>&& event)
+		{
+			uint64_t interactable = layoutEngine.GuidStack().MakeGuid(label);
+			auto buttonNode = KeyValue(layoutEngine, std::move(label));
+
+			buttonNode->_nodeAttachments._guid = interactable;
+			buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](CommonWidgets::Input& input, Rect, Rect) {
+				if (input.GetEvent().IsPress_LButton()) {
+					input.GetInterfaceState().BeginCapturing(input.GetInterfaceState().TopMostWidget());
+				} else if (input.GetEvent().IsRelease_LButton()) {
+					if (input.GetInterfaceState().GetCapture()._widget._id == interactable) {
+						input.GetInterfaceState().EndCapturing();
+						if (Contains(input.GetInterfaceState().TopMostWidget()._rect, input.GetInterfaceState().MousePosition()))
+							event();
+					}
+				}
+				return IODelegateResult::Consumed;
+			};
+			return buttonNode;
+		}
+
+		YGNodeRef PopupBorder(LayoutEngine& layoutEngine)
+		{
+			auto baseNode = layoutEngine.NewNode();
+			layoutEngine.InsertChildToStackTop(baseNode);
+			layoutEngine.PushNode(baseNode);
+			
+			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionColumn);
+			YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
+			YGNodeStyleSetAlignItems(baseNode, YGAlignStretch);
+			
+			YGNodeStyleSetMargin(baseNode, YGEdgeAll, _staticData->_popupMargin);
+			return baseNode;
+		}
+
+		struct StaticData
+		{
+			std::string _headingFont;
+			std::string _valueFont;
+			unsigned _popupMargin = 16;
+			unsigned _valueAreaHorzMargins = 64;
+
+			unsigned _sectionHeaderVertMargins = 12;
+			unsigned _sectionHeaderVertPadding = 8;
+			ColorB _sectionHeaderBkColor = 0xff8ea3d2;
+
+			unsigned _keyValueGroupVertMargins = 4;
+
+			ColorB _expandingConnectorColor = 0xff47476b;
+
+			StaticData() = default;
+			template<typename Formatter>
+				StaticData(Formatter& fmttr)
+			{
+				uint64_t keyname;
+				while (fmttr.TryKeyedItem(keyname)) {
+					switch (keyname) {
+					case "HeadingFont"_h: _headingFont = RequireStringValue(fmttr).AsString(); break;
+					case "ValueFont"_h: _valueFont = RequireStringValue(fmttr).AsString(); break;
+					case "PopupMargin"_h: _popupMargin = Formatters::RequireCastValue<decltype(_popupMargin)>(fmttr); break;
+					case "ValueAreaHorizMargins"_h: _valueAreaHorzMargins = Formatters::RequireCastValue<decltype(_valueAreaHorzMargins)>(fmttr); break;
+
+					case "SectionHeaderVertMargins"_h: _sectionHeaderVertMargins = Formatters::RequireCastValue<decltype(_sectionHeaderVertMargins)>(fmttr); break;
+					case "SectionHeaderVertPadding"_h: _sectionHeaderVertPadding = Formatters::RequireCastValue<decltype(_sectionHeaderVertPadding)>(fmttr); break;
+					case "SectionHeaderBkColor"_h: _sectionHeaderBkColor = DeserializeColor(fmttr); break;
+
+					case "KeyValueGroupVertMargins"_h: _keyValueGroupVertMargins = Formatters::RequireCastValue<decltype(_keyValueGroupVertMargins)>(fmttr); break;
+
+					case "ExpandingConnectorColor"_h: _expandingConnectorColor = DeserializeColor(fmttr); break;
+
+					default: SkipValueOrElement(fmttr); break;
+					}
+				}
+			}
+		};
+		
+		const StaticData* _staticData;
+		std::shared_ptr<Font> _headingFont;
+		std::shared_ptr<Font> _valueFont;
+
+		ToolTipStyler()
+		{
+			_staticData = &MountedData<StaticData>::LoadOrDefault("cfg/displays/tooltipstyler");
+			_headingFont = ActualizeFont(_staticData->_headingFont);
+			_valueFont = ActualizeFont(_staticData->_valueFont);
+
+			_dotWidth = StringWidth(*_valueFont, MakeStringSection("..")) - StringWidth(*_valueFont, MakeStringSection("."));
+		}
+
+	private:
+		std::shared_ptr<Font> ActualizeFont(StringSection<> name)
+		{
+			::Assets::PtrToMarkerPtr<Font> futureFont;
+			if (name.IsEmpty()) {
+				futureFont = MakeFont("Petra", 16);
+			} else {
+				auto colon = name.end();
+				while (colon != name.begin() && *(colon-1) != ':') --colon;
+				if (colon != name.begin()) {
+					uint32_t fontSize = 0;
+					auto* parseEnd = FastParseValue(MakeStringSection(colon, name.end()), fontSize);
+					if (parseEnd != name.end())
+						Throw(std::runtime_error(StringMeld<128>() << "Could not interpret font name (" << name << ")"));
+					futureFont = MakeFont({name.begin(), colon-1}, fontSize);
+				} else {
+					futureFont = MakeFont(name, 16);
+				}
+			}
+
+			return futureFont->Actualize();		// stall
+		}
+
+		unsigned _dotWidth = 8;
+	};
+	
 	static void SetupToolTipHover(ToolTipHover& hover, const SceneEngine::IntersectionTestResult& testResult, SceneEngine::PlacementsEditor& placementsEditor)
 	{
 		LayoutEngine le;
@@ -570,33 +735,34 @@ namespace PlatformRig { namespace Overlays
 		YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
 		YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
 
-		PopupBorder(le);
+		ToolTipStyler styler;
+		styler.PopupBorder(le);
 
-		TooltipStyleSectionContainer(le, "Placement Details");
-		LeftRightMargins(le);
+		styler.SectionContainer(le, "Placement Details");
+		LeftRightMargins(le, styler._staticData->_valueAreaHorzMargins);
 
 		if (!selectedMaterialName.empty() || !selectedModelName.empty()) {
-			KeyValueGroup(le); KeyName(le, "Model Scaffold"); KeyValue(le, ColouriseFilename(selectedModelName)); le.PopNode();
-			KeyValueGroup(le); KeyName(le, "Material Scaffold"); KeyValue(le, ColouriseFilename(selectedMaterialName)); le.PopNode();
+			styler.KeyValueGroup(le); styler.KeyName(le, "Model Scaffold"); styler.ExpandingConnectorLine(le); styler.KeyValue(le, ColouriseFilename(selectedModelName)); le.PopNode();
+			styler.KeyValueGroup(le); styler.KeyName(le, "Material Scaffold"); styler.ExpandingConnectorLine(le); styler.KeyValue(le, ColouriseFilename(selectedMaterialName)); le.PopNode();
 		}
 		if (drawCallIndex && drawCallCount && indexCount && materialName) {
-			KeyValueGroup(le); KeyName(le, "Draw Call Index"); 
-			ValueGroup(le);
-			KeyValue(le, *drawCallIndex);
-			KeyValueSimple(le, "/");
-			KeyValue(le, *drawCallCount);
+			styler.KeyValueGroup(le); styler.KeyName(le, "Draw Call Index"); styler.ExpandingConnectorLine(le);
+			styler.ValueGroup(le);
+			styler.KeyValue(le, *drawCallIndex);
+			styler.KeyValueSimple(le, "/");
+			styler.KeyValue(le, *drawCallCount);
 			le.PopNode();
 			le.PopNode();
-			KeyValueGroup(le); KeyName(le, "Index Count"); KeyValue(le, *indexCount); le.PopNode();
-			KeyValueGroup(le); KeyName(le, "Material"); KeyValue(le, std::move(*materialName)); le.PopNode();
+			styler.KeyValueGroup(le); styler.KeyName(le, "Index Count"); styler.ExpandingConnectorLine(le); styler.KeyValue(le, *indexCount); le.PopNode();
+			styler.KeyValueGroup(le); styler.KeyName(le, "Material"); styler.ExpandingConnectorLine(le); styler.KeyValue(le, std::move(*materialName)); le.PopNode();
 		}
 		if (cellPlacementCount && cellSimilarPlacementCount) {
-			KeyValueGroup(le);
-			KeyName(le, "Cell Placements (similar/total)");
-			ValueGroup(le);
-			KeyValue(le, *cellSimilarPlacementCount);
-			KeyValueSimple(le, "/");
-			KeyValue(le, *cellPlacementCount);
+			styler.KeyValueGroup(le);
+			styler.KeyName(le, "Cell Placements (similar/total)"); styler.ExpandingConnectorLine(le);
+			styler.ValueGroup(le);
+			styler.KeyValue(le, *cellSimilarPlacementCount);
+			styler.KeyValueSimple(le, "/");
+			styler.KeyValue(le, *cellPlacementCount);
 			le.PopNode();
 			le.PopNode();
 		}
@@ -604,43 +770,43 @@ namespace PlatformRig { namespace Overlays
 		le.PopNode();		// LeftRightMargins
 		le.PopNode();		// TooltipStyleSectionContainer
 
-		auto split = TooltipStyleDoubleSectionContainer(le, "Cell", "Intersection");
+		auto split = styler.DoubleSectionContainer(le, "Cell", "Intersection");
 
 		{
 			le.PushNode(split.first);
 
 			if (placementGuid) {
-				VerticalGroup(le);
-				KeyValueGroup(le);
-				KeyName(le, "Cell");
+				styler.VerticalGroup(le);
+				styler.KeyValueGroup(le);
+				styler.KeyName(le, "Cell");
 				auto cellName = placementsEditor.GetCellSet().DehashCellName(placementGuid->first).AsString();
-				if (!cellName.empty()) KeyValue(le, ColouriseFilename(cellName));
-				else KeyValue(le, placementGuid->first);
+				if (!cellName.empty()) styler.KeyValue(le, ColouriseFilename(cellName));
+				else styler.KeyValue(le, placementGuid->first);
 				le.PopNode();
-				EventButton(le, "Show Quad Tree", [cell=placementGuid->first, cellName]() {
+				styler.EventButton(le, "Show Quad Tree", [cell=placementGuid->first, cellName]() {
 					// switch to another debugging display that will display the quad tree we're interested in
 					ConsoleRig::Console::GetInstance().Execute("scene:ShowQuadTree(\"" + cellName + "\")");
 				});
-				EventButton(le, "Show Placements", [cell=placementGuid->first, cellName]() {
+				styler.EventButton(le, "Show Placements", [cell=placementGuid->first, cellName]() {
 					ConsoleRig::Console::GetInstance().Execute("scene:ShowPlacements(\"" + cellName + "\")");
 				});
 				le.PopNode();
 			}
 			if (localToCell) {
-				auto* group = VerticalGroup(le);
+				auto* group = styler.VerticalGroup(le);
 				YGNodeStyleSetAlignItems(group, YGAlignStretch);
-				Heading(le, "Local to Cell");
+				MinimalHeading(le, "Local to Cell");
 				ScaleRotationTranslationM decomposed { *localToCell };
-				KeyValueGroup(le); KeyName(le, "Translation"); KeyValue(le, decomposed._translation); le.PopNode();
+				styler.KeyValueGroup(le); styler.KeyName(le, "Translation"); styler.KeyValue(le, decomposed._translation); le.PopNode();
 				if (!Equivalent(decomposed._scale, {1.f, 1.f, 1.f}, 1e-3f)) {
-					KeyValueGroup(le); KeyName(le, "Scale"); KeyValue(le, decomposed._scale); le.PopNode();
+					styler.KeyValueGroup(le); styler.KeyName(le, "Scale"); styler.KeyValue(le, decomposed._scale); le.PopNode();
 				}
 				const cml::EulerOrder eulerOrder = cml::euler_order_yxz;
 				Float3 ypr = cml::matrix_to_euler<Float3x3, Float3x3::value_type>(decomposed._rotation, eulerOrder);
 				const char* labels[] = { "Rotate Y", "Rotate X", "Rotate Z" };
 				for (unsigned c=0; c<3; ++c) {
 					if (Equivalent(ypr[c], 0.f, 1e-3f)) continue;
-					KeyValueGroup(le); KeyName(le, labels[c]); KeyValue(le, ypr[c] * 180.f / gPI); le.PopNode();
+					styler.KeyValueGroup(le); styler.KeyName(le, labels[c]); styler.KeyValue(le, ypr[c] * 180.f / gPI); le.PopNode();
 				}
 				le.PopNode();
 			}
@@ -652,16 +818,16 @@ namespace PlatformRig { namespace Overlays
 			le.PushNode(split.second);
 
 			{
-				auto* group = VerticalGroup(le);
+				auto* group = styler.VerticalGroup(le);
 				YGNodeStyleSetAlignItems(group, YGAlignStretch);
-				Heading(le, "Intersection");
-				KeyValueGroup(le);
-				KeyName(le, "Point");
-				KeyValue(le, testResult._worldSpaceIntersectionPt);
+				MinimalHeading(le, "Intersection");
+				styler.KeyValueGroup(le);
+				styler.KeyName(le, "Point");
+				styler.KeyValue(le, testResult._worldSpaceIntersectionPt);
 				le.PopNode();
-				KeyValueGroup(le);
-				KeyName(le, "Normal");
-				KeyValue(le, testResult._worldSpaceIntersectionNormal);
+				styler.KeyValueGroup(le);
+				styler.KeyName(le, "Normal");
+				styler.KeyValue(le, testResult._worldSpaceIntersectionNormal);
 				le.PopNode();
 				le.PopNode();
 			}
@@ -686,8 +852,8 @@ namespace PlatformRig { namespace Overlays
 		YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
 		YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);		// stretch out each item to fill the entire row
 
-		Heading(le, "Exception during query");
-		KeyValueSimple(le, e.what());
+		MinimalHeading(le, "Exception during query");
+		MinimalLabel(le, e.what());
 
 		le.PopNode();
 
@@ -757,29 +923,15 @@ namespace PlatformRig { namespace Overlays
 		}
 	};
 
-	static ColorB DeserializeColor(Formatters::IDynamicInputFormatter& fmttr)
-	{
-		IteratorRange<const void*> value;
-		ImpliedTyping::TypeDesc typeDesc;
-		if (!fmttr.TryRawValue(value, typeDesc))
-			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
-
-		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
-			return *intForm;
-		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
-			return ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
-		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
-			return ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
-		} else {
-			Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
-		}
-	}
-
 	struct ThemeStaticData
 	{
 		ColorB _semiTransparentTint = 0xff2e3440;
 		ColorB _topBarBorderColor = 0xffffffff;
 		ColorB _headingBkgrnd = 0xffffffff;
+
+		unsigned _shadowOffset0 = 8;
+		unsigned _shadowOffset1 = 8;
+		unsigned _shadowSoftnessRadius = 16;
 		
 		ThemeStaticData() = default;
 
@@ -792,46 +944,13 @@ namespace PlatformRig { namespace Overlays
 				case "SemiTransparentTint"_h: _semiTransparentTint = DeserializeColor(fmttr); break;
 				case "TopBarBorderColor"_h: _topBarBorderColor = DeserializeColor(fmttr); break;
 				case "HeadingBackground"_h: _headingBkgrnd = DeserializeColor(fmttr); break;
+				case "ShadowOffset0"_h: _shadowOffset0 = Formatters::RequireCastValue<decltype(_shadowOffset0)>(fmttr); break;
+				case "ShadowOffset1"_h: _shadowOffset1 = Formatters::RequireCastValue<decltype(_shadowOffset1)>(fmttr); break;
+				case "ShadowSoftnessRadius"_h: _shadowSoftnessRadius = Formatters::RequireCastValue<decltype(_shadowSoftnessRadius)>(fmttr); break;
 				default: SkipValueOrElement(fmttr); break;
 				}
 			}
 		}
-	};
-
-	template<typename T>
-		class MountedData
-	{
-	public:
-		operator const T&() const { return _data; }
-		const T& get() const { return _data; };
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-
-		MountedData(Formatters::IDynamicInputFormatter& fmttr)
-		: _data(fmttr), _depVal(fmttr.GetDependencyValidation())
-		{}
-		MountedData() = default;
-
-		static void ConstructToPromise(
-			std::promise<MountedData>&& promise,
-			StringSection<> mountLocation)
-		{
-			::Assets::WhenAll(ToolsRig::Services::GetEntityMountingTree().BeginFormatter(mountLocation)).ThenConstructToPromise(
-				std::move(promise),
-				[](auto fmttr) { return MountedData{*fmttr}; });
-		}
-
-		static const T& LoadOrDefault(StringSection<> mountLocation)
-		{
-			auto marker = ::Assets::MakeAssetMarker<MountedData>(mountLocation);
-			if (auto* actualized = marker->TryActualize())
-				return actualized->get();
-			static T def;
-			return def;
-		}
-	private:
-		T _data;
-		::Assets::DependencyValidation _depVal;
 	};
 
 	static RenderCore::UniformsStreamInterface CreateTexturedUSI()
@@ -954,17 +1073,6 @@ namespace PlatformRig { namespace Overlays
 			const unsigned lineHeight = 20;
 			const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
-			// auto allocation = layout.AllocateFullWidth(30);
-			// FillRectangle(context, allocation, titleBkground);
-			// allocation._topLeft[0] += 8;
-			// if (auto* font = _headingFont->TryActualize())
-			// 	DrawText()
-			// 		.Font(**font)
-			// 		.Color({ 191, 123, 0 })
-			// 		.Alignment(RenderOverlays::TextAlignment::Left)
-			// 		.Flags(RenderOverlays::DrawTextFlags::Shadow)
-			// 		.Draw(context, allocation, "Placements Selector");
-
 			const char headingString[] = "Placements Selector";
 			float headingWidth = 0.f;
 			auto* headingFont = _headingFont->TryActualize();
@@ -980,7 +1088,7 @@ namespace PlatformRig { namespace Overlays
 					.Font(**headingFont)
 					.Color(ColorB::Black)
 					.Alignment(RenderOverlays::TextAlignment::Left)
-					.Flags(RenderOverlays::DrawTextFlags::Shadow)
+					.Flags(0)
 					.Draw(context, topBar[0], "Placements Selector");
 			
 			if (_hasSelectedPlacements) {
@@ -1011,6 +1119,7 @@ namespace PlatformRig { namespace Overlays
 				if (screenSpaceMins[0] < screenSpaceMaxs[0]) {
 					// FillRectangle(context, Rect{screenSpaceMins, screenSpaceMaxs}, ColorB(196, 196, 196, 128));
 
+					auto& themeStaticData = MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
 					float spaceLeft = screenSpaceMins[0];
 					float spaceRight = viewportDims[0] - screenSpaceMaxs[0];
 
@@ -1027,7 +1136,33 @@ namespace PlatformRig { namespace Overlays
 						0.f, 1.f, top,
 						0.f, 0.f, 1.f
 					};
-					FillRectangle(context, Rect{Coord2{left, top}, Coord2{left+_hover.GetDimensions()[0], top+_hover.GetDimensions()[1]}}, ColorB(32, 32, 96, 128));
+
+					Rect outerRect{Coord2{left, top}, Coord2{left+_hover.GetDimensions()[0], top+_hover.GetDimensions()[1]}};
+
+					SoftShadowRectangle(
+						context,
+						{outerRect._topLeft + Coord2(themeStaticData._shadowOffset0, themeStaticData._shadowOffset0), outerRect._bottomRight + Coord2(themeStaticData._shadowOffset1, themeStaticData._shadowOffset1)},
+						themeStaticData._shadowSoftnessRadius);
+
+					static ColorB borderColor = ColorB(32, 96, 128, 192);
+					OutlineRectangle(
+						context,
+						{outerRect._topLeft, outerRect._bottomRight + Coord2(1,1)},
+						borderColor, 1.0f);
+
+					RenderOverlays::BlurryBackgroundEffect* blurryBackground;
+					if ((blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>())) {
+						ColorAdjust colAdj;
+						colAdj._luminanceOffset = 0.025f; colAdj._saturationMultiplier = 0.65f;
+						// auto baseColor = ColorB::FromNormalized(LinearToSRGB_Formal(.55f * .65f), LinearToSRGB_Formal(.55f * .7f), 0.55f);
+						
+						auto baseColor = themeStaticData._semiTransparentTint;
+						ColorAdjustRectangle(
+							context, outerRect,
+							{outerRect._topLeft[0] / (float)viewportDims[0], outerRect._topLeft[1] / (float)viewportDims[1]}, {outerRect._bottomRight[0] / (float)viewportDims[0], outerRect._bottomRight[1] / (float)viewportDims[1]},
+							blurryBackground->GetResourceView(), colAdj, baseColor);
+					} else
+						FillRectangle(context, outerRect, ColorB(32, 32, 96, 128));
 					_hover.Render(context, layout, interactables, interfaceState, transform);
 				}
 			}
@@ -1096,7 +1231,7 @@ namespace PlatformRig { namespace Overlays
 		, _placementsEditor(std::move(placements))
 		, _camera(std::move(camera))
 		{
-			_headingFont = RenderOverlays::MakeFont("DosisExtraBold", 20);
+			_headingFont = RenderOverlays::MakeFont("OrbitronBlack", 20);
 			CommonWidgets::Draw::StallForDefaultFonts();
 		}
 

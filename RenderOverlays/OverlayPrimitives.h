@@ -118,4 +118,17 @@ namespace RenderOverlays
     std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect);
     unsigned    HardwareColor(ColorB input);
 
+    inline float LinearToSRGB_Formal(float input)
+    {
+        return std::max(std::min(input*12.92f, 0.0031308f),1.055f*std::pow(input,0.41666f)-0.055f);
+    }
+
+    inline float SRGBToLinear_Formal(float input)
+    {
+        if (input <= 0.04045f) {
+            return input / 12.92f;
+        } else
+            return std::pow((input+0.055f)/1.055f, 2.4f);
+    }
+
 }

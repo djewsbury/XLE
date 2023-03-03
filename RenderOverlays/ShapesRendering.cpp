@@ -41,7 +41,9 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _softShadowRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _dashLine;
+        RenderCore::Techniques::ImmediateDrawableMaterial _fillColorAdjust;
         RenderCore::UniformsStreamInterface _roundedRectUSI;
+        RenderCore::UniformsStreamInterface _colorAdjustUSI;
 
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
         ::Assets::DependencyValidation _depVal;
@@ -56,7 +58,8 @@ namespace RenderOverlays
             const RenderCore::Assets::ResolvedMaterial& fillEllipse,
             const RenderCore::Assets::ResolvedMaterial& outlineEllipse,
             const RenderCore::Assets::ResolvedMaterial& softShadowRect,
-            const RenderCore::Assets::ResolvedMaterial& dashLine)
+            const RenderCore::Assets::ResolvedMaterial& dashLine,
+            const RenderCore::Assets::ResolvedMaterial& fillColorAdjust)
         {
             _fillRoundedRect = BuildImmediateDrawableMaterial(fillRoundedRect);
             _fillAndOutlineRoundedRect = BuildImmediateDrawableMaterial(fillAndOutlineRoundedRect);
@@ -68,6 +71,7 @@ namespace RenderOverlays
             _outlineEllipse = BuildImmediateDrawableMaterial(outlineEllipse);
             _softShadowRect = BuildImmediateDrawableMaterial(softShadowRect);
             _dashLine = BuildImmediateDrawableMaterial(dashLine);
+            _fillColorAdjust = BuildImmediateDrawableMaterial(fillColorAdjust);
 
             _roundedRectUSI.BindImmediateData(0, "RoundedRectSettings"_h);
             _fillRoundedRect._uniformStreamInterface = &_roundedRectUSI;
@@ -76,17 +80,24 @@ namespace RenderOverlays
             _fillRaisedRoundedRect._uniformStreamInterface = &_roundedRectUSI;
             _fillReverseRaisedRoundedRect._uniformStreamInterface = &_roundedRectUSI;
 
-            _depVal = ::Assets::GetDepValSys().Make();
-            _depVal.RegisterDependency(fillRoundedRect.GetDependencyValidation());
-            _depVal.RegisterDependency(fillAndOutlineRoundedRect.GetDependencyValidation());
-            _depVal.RegisterDependency(outlineRoundedRect.GetDependencyValidation());
-            _depVal.RegisterDependency(fillRaisedRect.GetDependencyValidation());
-            _depVal.RegisterDependency(fillRaisedRoundedRect.GetDependencyValidation());
-            _depVal.RegisterDependency(fillReverseRaisedRoundedRect.GetDependencyValidation());
-            _depVal.RegisterDependency(fillEllipse.GetDependencyValidation());
-            _depVal.RegisterDependency(outlineEllipse.GetDependencyValidation());
-            _depVal.RegisterDependency(softShadowRect.GetDependencyValidation());
-            _depVal.RegisterDependency(dashLine.GetDependencyValidation());
+            _colorAdjustUSI.BindImmediateData(0, "ColorAdjustSettings"_h);
+            _colorAdjustUSI.BindResourceView(0, "DiffuseTexture"_h);
+            _fillColorAdjust._uniformStreamInterface = &_colorAdjustUSI;
+
+            ::Assets::DependencyValidationMarker depVals[] {
+                fillRoundedRect.GetDependencyValidation(),
+                fillAndOutlineRoundedRect.GetDependencyValidation(),
+                outlineRoundedRect.GetDependencyValidation(),
+                fillRaisedRect.GetDependencyValidation(),
+                fillRaisedRoundedRect.GetDependencyValidation(),
+                fillReverseRaisedRoundedRect.GetDependencyValidation(),
+                fillEllipse.GetDependencyValidation(),
+                outlineEllipse.GetDependencyValidation(),
+                softShadowRect.GetDependencyValidation(),
+                dashLine.GetDependencyValidation(),
+                fillColorAdjust.GetDependencyValidation()
+            };
+            _depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
         }
 
         static void ConstructToPromise(std::promise<std::shared_ptr<StandardResources>>&& promise)
@@ -101,8 +112,9 @@ namespace RenderOverlays
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
             auto softShadowRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
             auto dashLine = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":DashLine");
+            auto fillColorAdjust = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillColorAdjust");
 
-            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine).ThenConstructToPromise(std::move(promise));
+            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, fillColorAdjust).ThenConstructToPromise(std::move(promise));
         }
 
         std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
@@ -401,7 +413,7 @@ namespace RenderOverlays
             RenderCore::Techniques::ImmediateDrawableMaterial{res->_fillRaisedRect});
     }
 
-    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect)
+    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, unsigned softnessRadius)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -410,7 +422,7 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_softShadowRect;
-        const int radiusX = 32, radiusY = 32;
+        const int radiusX = softnessRadius, radiusY = softnessRadius;
         Internal::DrawPCCTTQuad(
             context,
             AsPixelCoords(Coord2(rect._topLeft - Coord2{radiusX, radiusY})),
@@ -419,6 +431,30 @@ namespace RenderOverlays
             Float2(    - radiusX / float(rect.Width()),     - radiusY / float(rect.Height())),
             Float2(1.f + radiusX / float(rect.Width()), 1.f + radiusY / float(rect.Height())),
             Float2(radiusX, radiusY), Float2(radiusX, radiusY),
+            std::move(mat));
+    }
+
+    void        ColorAdjustRectangle(
+        IOverlayContext& context, const Rect& rect,
+        Float2 texCoordMin, Float2 texCoordMax,
+        std::shared_ptr<RenderCore::IResourceView> tex, const ColorAdjust& colorAdjust, ColorB modulation)
+    {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillColorAdjust;
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
+        mat._uniforms._resourceViews.emplace_back(std::move(tex));
+        Internal::DrawPCCTTQuad(
+            context,
+            AsPixelCoords(rect._topLeft),
+            AsPixelCoords(rect._bottomRight),
+            modulation, ColorB::Zero,
+            texCoordMin, texCoordMax,
+            Float2(0.f, 0.f), Float2(0.f, 0.f),
             std::move(mat));
     }
 
@@ -655,6 +691,8 @@ namespace RenderOverlays
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryJustFill:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+                nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_COLOR_LINEAR1", 0);
+                nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_TEXCOORD1", 0);
 
 				return nascentDesc;
 			} else {

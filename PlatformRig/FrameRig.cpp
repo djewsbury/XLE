@@ -486,14 +486,46 @@ namespace PlatformRig
         static void ConstructToPromise(std::promise<std::shared_ptr<FrameRigResources>>&& promise)
         {
             ::Assets::WhenAll(
-                RenderOverlays::MakeFont("Shojumaru", 32),
-                RenderOverlays::MakeFont("PoiretOne", 14),
+                RenderOverlays::MakeFont("OrbitronBlack", 32), // RenderOverlays::MakeFont("Shojumaru", 32),
+                RenderOverlays::MakeFont("Metropolitano", 12),
                 RenderOverlays::MakeFont("Raleway", 20),
                 RenderOverlays::MakeFont("Anka", 20)).ThenConstructToPromise(std::move(promise));
         }
     };
 
-    void    FrameRigDisplay::Render(IOverlayContext& context, Layout& layout, 
+    static void DrawMainStats(
+        IOverlayContext& context,
+        Layout& layout,
+        FrameRigResources& res,
+        const std::tuple<float, float, float>& fpsStats,
+        const AccumulatedAllocations::CurrentHeapMetrics& heapMetrics,
+        unsigned frameAllocationCount)
+    {
+        const Coord rectWidth = layout.GetMaximumSize().Width();
+        const unsigned fpsAreaWidth = 80;
+
+        char buffer[64];
+
+        DrawText()
+            .Font(*res._frameRateFont)
+            .Alignment(TextAlignment::Left)
+            .Draw(context, layout.AllocateFullHeight(fpsAreaWidth), StringMeldInPlace(buffer) << std::setprecision(1) << std::fixed << 1.f / std::get<0>(fpsStats));
+
+        auto remaining = layout.AllocateFullHeightFraction(1.f);
+        auto middle = (remaining._topLeft[1] + remaining._bottomRight[1])/2;
+
+        DrawText()
+            .Font(*res._smallFrameRateFont)
+            .Alignment(TextAlignment::BottomLeft)
+            .Draw(context, {remaining._topLeft, {remaining._bottomRight[0], middle-2}}, StringMeldInPlace(buffer) << std::setprecision(1) << std::fixed << (1.f / std::get<2>(fpsStats)) << "-" << (1.f / std::get<1>(fpsStats)));
+
+        DrawText()
+            .Font(*res._smallFrameRateFont)
+            .Alignment(TextAlignment::TopLeft)
+            .Draw(context, {{remaining._topLeft[0], middle+2}, remaining._bottomRight}, StringMeldInPlace(buffer) << std::setprecision(2) << std::fixed << heapMetrics._usage / (1024.f*1024.f) << "M (" << frameAllocationCount << ")");
+    }
+
+    void    FrameRigDisplay::Render(IOverlayContext& context, Layout& layout,
                                     Interactables& interactables, InterfaceState& interfaceState)
     {
         auto* res = ConsoleRig::TryActualizeCachedBox<FrameRigResources>();
@@ -502,7 +534,7 @@ namespace PlatformRig
         using namespace RenderOverlays;
         auto outerRect = layout.GetMaximumSize();
 
-        static Coord rectWidth = 175;
+        static Coord rectWidth = 200;
         static Coord padding = 12;
         static Coord margin = 8;
         const auto bigLineHeight = Coord(res->_frameRateFont->GetFontProperties()._lineHeight);
@@ -512,10 +544,6 @@ namespace PlatformRig
         Rect displayRect(
             Coord2(outerRect._bottomRight[0] - rectWidth - padding, outerRect._topLeft[1] + padding),
             Coord2(outerRect._bottomRight[0] - padding, outerRect._topLeft[1] + padding + rectHeight));
-        // displayRect._topLeft[0] -= 64;
-        // displayRect._topLeft[1] += 64;
-        // displayRect._bottomRight[0] -= 64;
-        // displayRect._bottomRight[1] += 64;
         Layout innerLayout(displayRect);
         innerLayout._paddingInternalBorder = margin;
         innerLayout._paddingBetweenAllocations = margin;
@@ -523,46 +551,15 @@ namespace PlatformRig
         static ColorB normalColor = ColorB(70, 31, 0, 0x9f);
         static ColorB mouseOverColor = ColorB(70, 31, 0, 0xff);
         static ColorB pressed = ColorB(128, 50, 0, 0xff);
-        // FillAndOutlineRoundedRectangle(context, displayRect, 
-        //     FormatButton(interfaceState, Id_FrameRigDisplayMain, normalColor, mouseOverColor, pressed), 
-        //     ColorB::White,
-        //     (interfaceState.HasMouseOver(Id_FrameRigDisplayMain))?4.f:2.f, 1.f / 4.f);
-
-        // if (auto* blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()) {
-        //     context.DrawTexturedQuad(
-        //         RenderOverlays::ProjectionMode::P2D,
-        //         {displayRect._topLeft[0], displayRect._topLeft[1], 0.f},
-        //         {displayRect._bottomRight[0], displayRect._bottomRight[1], 0.f},
-        //         blurryBackground->GetResourceView(),
-        //         ColorB::White,
-        //         {displayRect._topLeft[0] / float(outerRect.Width()), displayRect._topLeft[1] / float(outerRect.Height())},
-        //         {displayRect._bottomRight[0] / float(outerRect.Width()), displayRect._bottomRight[1] / float(outerRect.Height())});
-        // }
-
-        // SoftShadowRectangle(context, displayRect);
-
         static ColorB menuBkgrnd(128, 96, 64, 64);
         static ColorB menuBkgrndHigh(128, 96, 64, 192);
         static ColorB tabHeaderColor(0xffffffff);
 
         auto f = _frameRate->GetPerformanceStats();
-
-        DrawText()
-            .Alignment(TextAlignment::Left)
-            .Font(*res->_frameRateFont)
-            .Draw(context, innerLayout.Allocate(Coord2(80, bigLineHeight)), StringMeld<64>() << std::setprecision(1) << std::fixed << 1.f / std::get<0>(f));
-
-        DrawText()
-            .Font(*res->_smallFrameRateFont)
-            .Alignment(TextAlignment::Left)
-			.Draw(context, innerLayout.Allocate(Coord2(rectWidth - 80 - innerLayout._paddingInternalBorder*2 - innerLayout._paddingBetweenAllocations, smallLineHeight * 2)), StringMeld<64>() << std::setprecision(1) << std::fixed << (1.f / std::get<2>(f)) << "-" << (1.f / std::get<1>(f)));
-
         auto heapMetrics = AccumulatedAllocations::GetCurrentHeapMetrics();
         auto frameAllocations = _prevFrameAllocationCount->_allocationCount;
 
-        DrawText()
-            .Alignment(TextAlignment::Center)
-            .FormatAndDraw(context, innerLayout.AllocateFullWidth(smallLineHeight), "%.2fM (%i)", heapMetrics._usage / (1024.f*1024.f), frameAllocations);
+        DrawMainStats(context, innerLayout, *res, f, heapMetrics, frameAllocations);
 
         interactables.Register({displayRect, Id_FrameRigDisplayMain});
 

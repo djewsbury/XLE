@@ -6,8 +6,10 @@
 
 #include "OverlayPrimitives.h"
 #include <future>
+#include <memory>
 
 namespace RenderCore { namespace Techniques { class ITechniqueDelegate; class IPipelineLayoutDelegate; }}
+namespace RenderCore { class IResourceView; }
 
 namespace RenderOverlays
 {
@@ -62,10 +64,19 @@ namespace RenderOverlays
     void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB outlineColour, float outlineWidth = 1.f);
     void        FillAndOutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB fillColour, ColorB outlineColour, float outlineWidth = 1.f);
 
-    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect);
+    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, unsigned softnessRadius = 32);
 
     void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
 
+    struct ColorAdjust
+    {
+        float _saturationMultiplier = 1.f;
+        float _luminanceOffset = 0.f;
+    };
+    void        ColorAdjustRectangle(
+        IOverlayContext& context, const Rect& rect,
+        Float2 texCoordMin, Float2 texCoordMax,
+        std::shared_ptr<RenderCore::IResourceView>, const ColorAdjust&, ColorB modulation=ColorB::White);
 
 	///////////////////////////////////////////////////////////////////////////////////
     //          C O N F I G U R A T I O N   U T I L S

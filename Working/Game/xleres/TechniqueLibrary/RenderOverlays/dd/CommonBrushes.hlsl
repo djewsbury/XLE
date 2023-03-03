@@ -9,6 +9,7 @@
 
 #include "Interfaces.hlsl"
 #include "../../Framework/CommonResources.hlsl"
+#include "../../Utility/Colour.hlsl"
 
 float4 SolidFill_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp) { return baseColor; }
 float4 NoFill_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp) { return 0.0.xxxx; }
@@ -85,13 +86,39 @@ float4 ReverseRaisedFill_Calculate(
 
 float4 DashLine_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp)
 {
-    const float sectionLength = 16;
+    const float sectionLength = 12;
     float sectionCoord = frac(coords.texCoord.x / sectionLength);
-    if (sectionCoord < 0.8f) {
+    if (sectionCoord < 0.9f) {
         return baseColor;
     } else {
         return 0;
     }
 }
 
+cbuffer ColorAdjustSettings
+{
+    float SaturationMultiplier;
+    float LuminanceOffset;
+}
+
+Texture2D DiffuseTexture;
+
+float3 DoColorAdjust3(float3 input)
+{
+    float luminance = SRGBLuminance(input);
+    const float saturationMultiplier = SaturationMultiplier;
+    const float luminanceOffset = LuminanceOffset;
+    return float3(
+        luminanceOffset + ((1-luminanceOffset) * lerp(luminance, input.x, saturationMultiplier)),
+        luminanceOffset + ((1-luminanceOffset) * lerp(luminance, input.y, saturationMultiplier)),
+        luminanceOffset + ((1-luminanceOffset) * lerp(luminance, input.z, saturationMultiplier)));
+}
+
+float4 ColorAdjust_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp)
+{
+    float4 texColor = DiffuseTexture.SampleLevel(ClampingSampler, DebuggingShapesCoords_GetTexCoord0(coords), 0);
+    return float4(DoColorAdjust3(texColor.rgb), texColor.a) * baseColor;
+}
+
 #endif
+

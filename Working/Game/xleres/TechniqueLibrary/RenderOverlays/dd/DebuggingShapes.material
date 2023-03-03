@@ -126,3 +126,9 @@ DashLine=~
 		=~
 			CommonBrushes.hlsl::DashLine_Calculate
 			Implements=Interfaces.hlsl::IFill_Calculate
+
+FillColorAdjust=~
+	Patches=~
+		=~
+			CommonBrushes.hlsl::ColorAdjust_Calculate
+			Implements=Interfaces.hlsl::IFill_Calculate
