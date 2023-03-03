@@ -1090,17 +1090,23 @@ namespace PlatformRig { namespace Overlays
 					.Alignment(RenderOverlays::TextAlignment::Left)
 					.Flags(0)
 					.Draw(context, topBar[0], "Placements Selector");
-			
-			if (_hasSelectedPlacements) {
+
+			auto* parsingContext = (RenderCore::Techniques::ParsingContext*)context.GetService(typeid(RenderCore::Techniques::ParsingContext).hash_code());
+			if (parsingContext) {
+				auto& vp = parsingContext->GetViewport();
+				_lastCamera = { parsingContext->GetProjectionDesc(), Float2{vp._x, vp._y}, Float2{vp._x+vp._width, vp._y+vp._height}};
+			} else
+				_lastCamera = {};
+
+			if (_hasSelectedPlacements && parsingContext) {
 				DrawBoundingBox(
 					context, _selectedPlacementsLocalBoundary, AsFloat3x4(_selectedPlacementsLocalToWorld),
 					ColorB(196, 230, 230));
 
 				// Place the hover either left or right on the screen; depending on which side has more space
 				// This causes the popup to jump around a bit; but it will often find a pretty logical place to end up
-				UInt2 viewportDims { 1920, 1080 };	// todo -- get real values
-				auto cameraDesc = ToolsRig::AsCameraDesc(*_camera);
-				auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameraDesc, viewportDims);
+				UInt2 viewportDims { parsingContext->GetViewport()._width, parsingContext->GetViewport()._height };
+				auto projDesc = parsingContext->GetProjectionDesc();
 				auto localToProj = Combine(_selectedPlacementsLocalToWorld, projDesc._worldToProjection);
 				auto projectionSpaceCorners = FindFrustumIntersectionExtremities(
 					localToProj,
@@ -1178,40 +1184,41 @@ namespace PlatformRig { namespace Overlays
 
 			// Given the camera & viewport find a ray & perform intersection detection with placements scene
 			if (input.IsRelease_LButton()) {
-				UInt2 viewportDims { 1920, 1080 };	// todo -- get real values
-				auto cameraDesc = ToolsRig::AsCameraDesc(*_camera);
-				auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
-					cameraDesc, input._mousePosition, {0,0}, viewportDims);
+				if (_lastCamera.has_value()) {
+					auto worldSpaceRay = RenderCore::Techniques::BuildRayUnderCursor(
+						input._mousePosition, _lastCamera->_projDesc,
+						{_lastCamera->_viewportTopLeft, _lastCamera->_viewportBottomRight});
 
-				_lastRayTest = worldSpaceRay;
-				_hasLastRayTest = true;
+					_lastRayTest = worldSpaceRay;
+					_hasLastRayTest = true;
 
-				auto threadContext = RenderCore::Techniques::GetThreadContext();
-				auto techniqueContext = SceneEngine::MakeIntersectionsTechniqueContext(*_drawingApparatus);
-				RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, *threadContext};
-				parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
-				parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cameraDesc, viewportDims);
+					auto threadContext = RenderCore::Techniques::GetThreadContext();
+					auto techniqueContext = SceneEngine::MakeIntersectionsTechniqueContext(*_drawingApparatus);
+					RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, *threadContext};
+					parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
+					parsingContext.GetProjectionDesc() = _lastCamera->_projDesc;
 
-				auto firstHit = SceneEngine::FirstRayIntersection(parsingContext, *_placementsEditor, worldSpaceRay, &cameraDesc);
-				if (firstHit) {
-					if (firstHit->_metadataQuery) {
-						TRY {
-							_selectedPlacementsLocalBoundary = TryAnyCast(firstHit->_metadataQuery("LocalBoundary"_h), std::make_pair(Zero<Float3>(), Zero<Float3>()));
-							_selectedPlacementsLocalToWorld = TryAnyCast(firstHit->_metadataQuery("LocalToWorld"_h), Identity<Float4x4>());
-							SetupToolTipHover(_hover, *firstHit, *_placementsEditor);
-						} CATCH (const std::exception& e) {
+					auto firstHit = SceneEngine::FirstRayIntersection(parsingContext, *_placementsEditor, worldSpaceRay, nullptr);
+					if (firstHit) {
+						if (firstHit->_metadataQuery) {
+							TRY {
+								_selectedPlacementsLocalBoundary = TryAnyCast(firstHit->_metadataQuery("LocalBoundary"_h), std::make_pair(Zero<Float3>(), Zero<Float3>()));
+								_selectedPlacementsLocalToWorld = TryAnyCast(firstHit->_metadataQuery("LocalToWorld"_h), Identity<Float4x4>());
+								SetupToolTipHover(_hover, *firstHit, *_placementsEditor);
+							} CATCH (const std::exception& e) {
+								_hover = {};
+								_selectedPlacementsLocalBoundary = std::make_pair(Zero<Float3>(), Zero<Float3>());
+								_selectedPlacementsLocalToWorld = Identity<Float4x4>();
+								SetupToolTipHover(_hover, e);
+							} CATCH_END
+						} else {
 							_hover = {};
-							_selectedPlacementsLocalBoundary = std::make_pair(Zero<Float3>(), Zero<Float3>());
-							_selectedPlacementsLocalToWorld = Identity<Float4x4>();
-							SetupToolTipHover(_hover, e);
-						} CATCH_END
+						}
+						_hasSelectedPlacements = true;
 					} else {
 						_hover = {};
+						_hasSelectedPlacements = false;
 					}
-					_hasSelectedPlacements = true;
-				} else {
-					_hover = {};
-					_hasSelectedPlacements = false;
 				}
 
 				return ProcessInputResult::Consumed;
@@ -1225,11 +1232,9 @@ namespace PlatformRig { namespace Overlays
 
 		PlacementsDisplay(
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
-			std::shared_ptr<SceneEngine::PlacementsEditor> placements, 
-			std::shared_ptr<ToolsRig::VisCameraSettings> camera)
+			std::shared_ptr<SceneEngine::PlacementsEditor> placements)
 		: _drawingApparatus(std::move(drawingApparatus))
 		, _placementsEditor(std::move(placements))
-		, _camera(std::move(camera))
 		{
 			_headingFont = RenderOverlays::MakeFont("OrbitronBlack", 20);
 			CommonWidgets::Draw::StallForDefaultFonts();
@@ -1238,7 +1243,6 @@ namespace PlatformRig { namespace Overlays
 	private:
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 		std::shared_ptr<SceneEngine::PlacementsEditor> _placementsEditor;
-		std::shared_ptr<ToolsRig::VisCameraSettings> _camera;
 
 		ToolTipHover _hover;
 		std::pair<Float3, Float3> _selectedPlacementsLocalBoundary;
@@ -1248,15 +1252,17 @@ namespace PlatformRig { namespace Overlays
 		std::pair<Float3, Float3> _lastRayTest;
 		bool _hasLastRayTest = false;
 
+		struct LastCamera { RenderCore::Techniques::ProjectionDesc _projDesc; Float2 _viewportTopLeft; UInt2 _viewportBottomRight; };
+		std::optional<LastCamera> _lastCamera;
+
 		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
 	};
 
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreatePlacementsDisplay(
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
-		std::shared_ptr<SceneEngine::PlacementsEditor> placements,
-		std::shared_ptr<ToolsRig::VisCameraSettings> camera)
+		std::shared_ptr<SceneEngine::PlacementsEditor> placements)
 	{
-		return std::make_shared<PlacementsDisplay>(std::move(drawingApparatus), std::move(placements), std::move(camera));
+		return std::make_shared<PlacementsDisplay>(std::move(drawingApparatus), std::move(placements));
 	}
 
 }}

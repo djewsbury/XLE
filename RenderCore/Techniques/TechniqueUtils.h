@@ -109,7 +109,11 @@ namespace RenderCore { namespace Techniques
     std::pair<Float3, Float3> BuildRayUnderCursor(
         Int2 mousePosition, const CameraDesc& sceneCamera, 
         const std::pair<Float2, Float2>& viewport);
-    
+
+    std::pair<Float3, Float3> BuildRayUnderCursor(
+        Int2 mousePosition, const ProjectionDesc& projDesc,
+        const std::pair<Float2, Float2>& viewport);
+
     GlobalTransformConstants BuildGlobalTransformConstants(const ProjectionDesc& projDesc);
     GlobalTransformConstants BuildGlobalTransformConstants(const ProjectionDesc& projDesc, const ProjectionDesc& prevProjDesc);
 

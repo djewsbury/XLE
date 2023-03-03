@@ -92,6 +92,15 @@ namespace RenderCore { namespace Techniques
         return XLEMath::BuildRayUnderCursor(mousePosition, frustumCorners, viewport);
     }
 
+    std::pair<Float3, Float3> BuildRayUnderCursor(
+        Int2 mousePosition, const ProjectionDesc& projDesc,
+        const std::pair<Float2, Float2>& viewport)
+    {
+        Float3 frustumCorners[8];
+        CalculateAbsFrustumCorners(frustumCorners, projDesc._worldToProjection, RenderCore::Techniques::GetDefaultClipSpaceType());
+        return XLEMath::BuildRayUnderCursor(mousePosition, frustumCorners, viewport);
+    }
+
     ProjectionDesc::ProjectionDesc()
     {
 		if ((size_t(this) % 16) != 0) {

@@ -17,7 +17,6 @@ namespace PlatformRig { namespace Overlays
 {
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreatePlacementsDisplay(
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
-		std::shared_ptr<SceneEngine::PlacementsEditor> placements,
-		std::shared_ptr<ToolsRig::VisCameraSettings> camera);
+		std::shared_ptr<SceneEngine::PlacementsEditor> placements);
 }}
 
