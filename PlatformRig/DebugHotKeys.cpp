@@ -24,7 +24,7 @@ namespace PlatformRig
     class HotKeyInputHandler : public IInputListener
     {
     public:
-        bool    OnInputEvent(const InputContext& context, const InputSnapshot& evnt);
+        ProcessInputResult    OnInputEvent(const InputContext& context, const OSServices::InputSnapshot& evnt);
 
         HotKeyInputHandler(StringSection<> filename) : _filename(filename.AsString()) {}
     protected:
@@ -61,7 +61,7 @@ namespace PlatformRig
             if (!executeString.IsEmpty()) {
                 auto keyName = attrib.Name();
                 auto p = std::make_pair(
-                    PlatformRig::KeyId_Make(keyName),
+                    OSServices::KeyId_Make(keyName),
                     executeString.AsString());
                 _table.push_back(p);
             }
@@ -69,7 +69,7 @@ namespace PlatformRig
     }
     TableOfKeys::~TableOfKeys() {}
 
-    bool    HotKeyInputHandler::OnInputEvent(const PlatformRig::InputContext& context, const PlatformRig::InputSnapshot& evnt)
+    auto HotKeyInputHandler::OnInputEvent(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& evnt) -> ProcessInputResult
     {
         constexpr auto ctrlKey = "control"_key;
         if (evnt.IsHeld(ctrlKey)) {
@@ -78,13 +78,13 @@ namespace PlatformRig
                 for (auto i=t->GetTable().cbegin(); i!=t->GetTable().cend(); ++i) {
                     if (evnt.IsPress(i->first)) {
                         ConsoleRig::Console::GetInstance().Execute(i->second);
-                        return true;
+                        return ProcessInputResult::Consumed;
                     }
                 }
             }
         }
 
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     std::unique_ptr<IInputListener> MakeHotKeysHandler(StringSection<> filename)

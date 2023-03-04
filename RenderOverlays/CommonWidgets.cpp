@@ -194,8 +194,8 @@ namespace RenderOverlays { namespace CommonWidgets
 	}
 
 	template<typename CharType>
-		DebuggingDisplay::ProcessInputResult TextEntry<CharType>::ProcessInput(
-			DebuggingDisplay::InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input,
+		PlatformRig::ProcessInputResult TextEntry<CharType>::ProcessInput(
+			DebuggingDisplay::InterfaceState& interfaceState, const OSServices::InputSnapshot& input,
 			const std::function<std::vector<std::basic_string<CharType>>(const std::basic_string<CharType>&)>& autocompleteFn)
 	{
 		bool consume = false;
@@ -295,7 +295,7 @@ namespace RenderOverlays { namespace CommonWidgets
 			consume = true;
 		}
 
-		return consume ? DebuggingDisplay::ProcessInputResult::Consumed : DebuggingDisplay::ProcessInputResult::Passthrough;
+		return consume ? PlatformRig::ProcessInputResult::Consumed : PlatformRig::ProcessInputResult::Passthrough;
 	}
 
 	template<typename CharType>

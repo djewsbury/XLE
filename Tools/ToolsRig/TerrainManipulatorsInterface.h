@@ -9,7 +9,8 @@
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include <memory>
 
-namespace PlatformRig { class InputSnapshot; class IInputListener; }
+namespace OSServices { class InputSnapshot; }
+namespace PlatformRig { class IInputListener; }
 namespace RenderOverlays { class IOverlayContext; namespace DebuggingDisplay { class InterfaceState; struct Layout; class Interactables; class DebugScreensSystem; }; class Font; }
 namespace SceneEngine { class TerrainManager; class IIntersectionScene; }
 namespace RenderCore { class IThreadContext; }
@@ -58,7 +59,7 @@ namespace ToolsRig
         void    Render( RenderOverlays::IOverlayContext& context, RenderOverlays::DebuggingDisplay::Layout& layout, 
                         RenderOverlays::DebuggingDisplay::Interactables&interactables, 
                         RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState);
-        ProcessInputResult    ProcessInput(RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
         ManipulatorsDisplay(std::shared_ptr<ManipulatorsInterface> interf);
         ~ManipulatorsDisplay();

@@ -28,30 +28,32 @@ namespace ToolsRig
     class ManipulatorsInterface::InputListener : public PlatformRig::IInputListener
     {
     public:
-        bool OnInputEvent(
+        PlatformRig::ProcessInputResult OnInputEvent(
 			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt);
+			const OSServices::InputSnapshot& evnt) override;
         InputListener(std::shared_ptr<ManipulatorsInterface> parent);
     private:
         std::weak_ptr<ManipulatorsInterface> _parent;
     };
 
-    bool    ManipulatorsInterface::InputListener::OnInputEvent(
+    PlatformRig::ProcessInputResult    ManipulatorsInterface::InputListener::OnInputEvent(
 		const PlatformRig::InputContext& context,
-		const PlatformRig::InputSnapshot& evnt)
+		const OSServices::InputSnapshot& evnt)
     {
         auto p = _parent.lock();
         if (p) {
-			SceneEngine::IntersectionTestContext intersectionContext {
-				AsCameraDesc(*p->_camera),
-				context._viewMins, context._viewMaxs,
-				p->_drawingApparatus };
+            if (auto* view = context.GetService<PlatformRig::WindowingSystemView>()) {
+                SceneEngine::IntersectionTestContext intersectionContext {
+                    AsCameraDesc(*p->_camera),
+                    view->_viewMins, view->_viewMaxs,
+                    p->_drawingApparatus };
 
-            if (auto a = p->GetActiveManipulator()) {
-                return a->OnInputEvent(evnt, intersectionContext, p->_intersectionTestScene.get());
+                if (auto a = p->GetActiveManipulator()) {
+                    return a->OnInputEvent(evnt, intersectionContext, p->_intersectionTestScene.get()) ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
+                }
             }
         }
-        return false;
+        return ProcessInputResult::Passthrough;
     }
 
     ManipulatorsInterface::InputListener::InputListener(std::shared_ptr<ManipulatorsInterface> parent)
@@ -342,7 +344,7 @@ namespace ToolsRig
         }
     }
 
-    bool HandleManipulatorsControls(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input, IManipulator& manipulator)
+    bool HandleManipulatorsControls(InterfaceState& interfaceState, const OSServices::InputSnapshot& input, IManipulator& manipulator)
     {
         if (input.IsHeld_LButton()) {
             auto topMost = interfaceState.TopMostWidget();
@@ -383,7 +385,7 @@ namespace ToolsRig
         DrawManipulatorControls(context, layout, interactables, interfaceState, *activeManipulator, "Terrain tools");
     }
 
-    auto    ManipulatorsDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
+    auto    ManipulatorsDisplay::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) -> ProcessInputResult
     {
         auto topMost = interfaceState.TopMostWidget();
         if (input.IsRelease_LButton()) {

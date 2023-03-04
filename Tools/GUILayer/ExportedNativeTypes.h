@@ -11,7 +11,7 @@ namespace ToolsRig { class IManipulator; class VisCameraSettings; }
 namespace SceneEngine { class LightingParserContext; class IIntersectionScene; class PlacementsEditor; }
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class CameraDesc; class ParsingContext; class ITechniqueDelegate; } }
-namespace PlatformRig { class InputSnapshot; }
+namespace OSServices { class InputSnapshot; }
 namespace Assets { class DirectorySearchRules; }
 namespace ConsoleRig { class IProgress; class GlobalServices; }
 
@@ -27,7 +27,7 @@ namespace ConsoleRig { class IProgress; class GlobalServices; }
 #pragma make_public(RenderCore::Techniques::ParsingContext)
 #pragma make_public(RenderCore::Techniques::ITechniqueDelegate)
 #pragma make_public(RenderCore::IThreadContext)
-#pragma make_public(PlatformRig::InputSnapshot)
+#pragma make_public(OSServices::InputSnapshot)
 #pragma make_public(Assets::DirectorySearchRules)
 #pragma make_public(ConsoleRig::IProgress)
 #pragma make_public(ConsoleRig::GlobalServices)

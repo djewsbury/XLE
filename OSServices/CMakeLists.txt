@@ -4,10 +4,11 @@ set(Src
     RawFS.cpp
     Log.cpp
     LegacyFileStreams.cpp
+    InputSnapshot.cpp
     )
 
 if (WIN32)
-    set(WinAPISrc WinAPI/System_WinAPI.cpp WinAPI/FileSystemMonitor_WinAPI.cpp WinAPI/RawFS_WinAPI.cpp WinAPI/PollingThread_WinAPI.cpp WinAPI/AttachableLibrary_WinAPI.cpp WinAPI/DisplaySettings_WinAPI.cpp)
+    set(WinAPISrc WinAPI/System_WinAPI.cpp WinAPI/FileSystemMonitor_WinAPI.cpp WinAPI/RawFS_WinAPI.cpp WinAPI/PollingThread_WinAPI.cpp WinAPI/AttachableLibrary_WinAPI.cpp WinAPI/DisplaySettings_WinAPI.cpp WinAPI/InputTranslator.cpp WinAPI/OverlappedWindow.cpp WinAPI/RunLoop_WinAPI.cpp)
 elseif (NOT APPLE)
     set(LinuxSrc Linux/System_Linux.cpp Linux/FileSystemMonitor_Linux.cpp Linux/PollingThread_epoll.cpp RawFS_Posix.cpp RawFS_stdio.cpp Posix/AttachableLibrary_Posix.cpp)
 elseif (APPLE)

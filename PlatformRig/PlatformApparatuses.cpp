@@ -6,7 +6,6 @@
 #include "FrameRig.h"
 #include "PlatformRigUtil.h"
 #include "OverlaySystem.h"
-#include "OverlappedWindow.h"
 #include "MainInputHandler.h"
 #include "DebugScreensOverlay.h"
 #include "DebugScreenRegistry.h"
@@ -19,6 +18,7 @@
 #include "../RenderOverlays/OverlayApparatus.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../OSServices/DisplaySettings.h"
+#include "../OSServices/OverlappedWindow.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetServices.h"
 #include "../Assets/AssetSetManager.h"
@@ -88,7 +88,7 @@ namespace PlatformRig
 	}
 
 	WindowApparatus::WindowApparatus(
-		std::shared_ptr<Window> osWindow,
+		std::shared_ptr<OSServices::Window> osWindow,
 		RenderCore::Techniques::DrawingApparatus* drawingApparatus,
 		RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
 		RenderCore::BindFlag::BitField presentationChainBindFlags)
@@ -119,16 +119,19 @@ namespace PlatformRig
 		ConsoleRig::CrossModule::GetInstance()._services.Call<void>(Fn_ShowScreen, screenName);
 	}
 
-	void CommonEventHandling(PlatformRig::WindowApparatus& windowApparatus, PlatformRig::SystemMessageVariant& msgPump)
+	void CommonEventHandling(PlatformRig::WindowApparatus& windowApparatus, OSServices::SystemMessageVariant& msgPump)
     {
-        if (std::holds_alternative<PlatformRig::InputSnapshot>(msgPump)) {
+        if (std::holds_alternative<OSServices::InputSnapshot>(msgPump)) {
 
-            auto context = windowApparatus._osWindow->MakeInputContext();
-            windowApparatus._mainInputHandler->OnInputEvent(context, std::get<PlatformRig::InputSnapshot>(msgPump));
+			auto clientRect = windowApparatus._osWindow->GetRect();
+            PlatformRig::InputContext context;
+			PlatformRig::WindowingSystemView view { {clientRect.first._x, clientRect.first._y}, {clientRect.second._x, clientRect.second._y} };
+			context.AttachService2(view);
+            windowApparatus._mainInputHandler->OnInputEvent(context, std::get<OSServices::InputSnapshot>(msgPump));
 
-        } else if (std::holds_alternative<PlatformRig::WindowResize>(msgPump)) {
+        } else if (std::holds_alternative<OSServices::WindowResize>(msgPump)) {
 
-            auto resize = std::get<PlatformRig::WindowResize>(msgPump);
+            auto resize = std::get<OSServices::WindowResize>(msgPump);
             auto& frameRig = *windowApparatus._frameRig;
 
             frameRig.GetTechniqueContext()._frameBufferPool->Reset();

@@ -7,7 +7,8 @@
 #include <memory>
 #include <utility>
 
-namespace PlatformRig { class IOverlaySystem; class InputContext; class InputSnapshot; class WindowApparatus; }
+namespace OSServices { class InputSnapshot; }
+namespace PlatformRig { class IOverlaySystem; class InputContext; class WindowApparatus; }
 namespace RenderCore { namespace Techniques { class DrawingApparatus; class PrimaryResourcesApparatus; class ParsingContext; class CameraDesc; class TechniqueContext; struct PreregisteredAttachment; }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
 namespace RenderCore { class IDevice; class IThreadContext; class FrameBufferProperties; enum class Format; }
@@ -27,7 +28,7 @@ namespace UnitTests
 		virtual void OnUpdate(float deltaTime);
 		virtual bool OnInputEvent(
 			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt,
+			const OSServices::InputSnapshot& evnt,
 			IInteractiveTestHelper& testHelper);
 
 		virtual void OnRenderTargetUpdate(

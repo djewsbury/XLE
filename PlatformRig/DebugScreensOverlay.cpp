@@ -17,9 +17,10 @@
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../Math/Vector.h"
 
+using namespace PlatformRig::Literals;
+
 namespace PlatformRig
 {
-    
     class DebugScreensOverlay : public IOverlaySystem
     {
     public:
@@ -29,14 +30,26 @@ namespace PlatformRig
             std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
             std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
         : _debugScreensSystem(debugScreensSystem)
-        , _inputListener(std::make_shared<PlatformRig::DebugScreensInputHandler>(std::move(debugScreensSystem)))
         , _immediateDrawables(std::move(immediateDrawables))
         , _sequencerConfigSet(std::move(sequencerConfigSet))
         , _fontRenderer(std::move(fontRenderer))
         {
         }
 
-        std::shared_ptr<IInputListener> GetInputListener() override  { return _inputListener; }
+        ProcessInputResult ProcessInput(const InputContext& context, const OSServices::InputSnapshot& evnt) override
+        {
+            constexpr auto escape = "escape"_key;
+            if (evnt.IsPress(escape)) {
+                if (_debugScreensSystem && _debugScreensSystem->CurrentScreen(0)) {
+                    _debugScreensSystem->SwitchToScreen(0, StringSection<>{});
+                    return ProcessInputResult::Consumed;
+                }
+            }
+
+            if (_debugScreensSystem)
+                return _debugScreensSystem->OnInputEvent(context, evnt);
+            return ProcessInputResult::Passthrough;
+        }
 
         void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override
@@ -72,7 +85,6 @@ namespace PlatformRig
 
     private:
         std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> _debugScreensSystem;
-        std::shared_ptr<DebugScreensInputHandler> _inputListener;
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderer;
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _sequencerConfigSet;

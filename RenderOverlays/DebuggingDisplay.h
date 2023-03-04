@@ -45,7 +45,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
     typedef uint32 KeyId;
 
     class InterfaceState;
-    enum class ProcessInputResult { Passthrough, Consumed };
 
     ///////////////////////////////////////////////////////////////////////////////////
     class Interactables
@@ -106,11 +105,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
 		using Layout = RenderOverlays::DebuggingDisplay::Layout;
 		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
 		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
-		using InputSnapshot = PlatformRig::InputSnapshot;
-        using ProcessInputResult = RenderOverlays::DebuggingDisplay::ProcessInputResult;
+		using InputSnapshot = OSServices::InputSnapshot;
+        using ProcessInputResult = PlatformRig::ProcessInputResult;
 
         virtual void                    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState);
-        virtual ProcessInputResult      ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+        virtual ProcessInputResult      ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
         virtual                         ~IWidget();
     };
 
@@ -227,7 +226,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             Coord   ValueToPixels(float value) const;
         };
 
-        IWidget::ProcessInputResult                ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+        IWidget::ProcessInputResult                ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
         float               CalculateCurrentOffset(const Coordinates& coordinates) const;
         float               CalculateCurrentOffset(const Coordinates& coordinates, float oldValue) const;
         InteractableId      GetID() const;
@@ -266,7 +265,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     class DebugScreensSystem : public PlatformRig::IInputListener
     {
     public:
-        bool        OnInputEvent(const PlatformRig::InputContext& context, const PlatformRig::InputSnapshot& evnt);
+        PlatformRig::ProcessInputResult        OnInputEvent(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& evnt);
         void        Render(IOverlayContext& overlayContext, const Rect& viewport);
         bool        IsAnythingVisible();
         bool        IsAnyPanelActive();
@@ -323,7 +322,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         void    RenderPanelControls(        IOverlayContext&    context,
                                             unsigned            panelIndex, const std::string& name, Layout&layout, bool allowDestroy,
                                             Interactables&      interactables, InterfaceState& interfaceState);
-        bool    ProcessInputPanelControls(  InterfaceState&     interfaceState, const PlatformRig::InputContext& inputContext, const PlatformRig::InputSnapshot&    evnt);
+        bool    ProcessInputPanelControls(  InterfaceState&     interfaceState, const PlatformRig::InputContext& inputContext, const OSServices::InputSnapshot&    evnt);
     };
 
 }}

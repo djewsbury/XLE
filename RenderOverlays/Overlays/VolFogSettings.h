@@ -21,7 +21,7 @@ namespace Overlays
         VolumetricFogSettings(SceneEngine::VolumetricFogMaterial& materialSettings);
         ~VolumetricFogSettings();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
     private:
         ScrollBar   _scrollers[15];

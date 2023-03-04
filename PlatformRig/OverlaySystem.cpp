@@ -26,55 +26,41 @@ namespace PlatformRig
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class OverlaySystemSwitch::InputListener : public IInputListener
+    ProcessInputResult    OverlaySystemSwitch::ProcessInput(const InputContext& context, const OSServices::InputSnapshot& evnt)
     {
-    public:
-        virtual bool    OnInputEvent(const InputContext& context, const InputSnapshot& evnt)
-        {
-            using namespace RenderOverlays::DebuggingDisplay;
-            constexpr auto shiftKey = "shift"_key;
-            if (evnt.IsHeld(shiftKey)) {
-                for (auto i=_parent->_childSystems.cbegin(); i!=_parent->_childSystems.cend(); ++i) {
-                    if (evnt.IsPress(i->first)) {
-                        auto newIndex = std::distance(_parent->_childSystems.cbegin(), i);
+        using namespace RenderOverlays::DebuggingDisplay;
+        constexpr auto shiftKey = "shift"_key;
+        if (evnt.IsHeld(shiftKey)) {
+            for (auto i=_childSystems.cbegin(); i!=_childSystems.cend(); ++i) {
+                if (evnt.IsPress(i->first)) {
+                    auto newIndex = std::distance(_childSystems.cbegin(), i);
 
-                        if (_parent->_activeChildIndex >= 0 && _parent->_activeChildIndex < signed(_parent->_childSystems.size())) {
-                            _parent->_childSystems[_parent->_activeChildIndex].second->SetActivationState(false);
-                        }
-                            
-                        if (signed(newIndex) != _parent->_activeChildIndex) {
-                            _parent->_activeChildIndex = signed(newIndex);
-                            if (_parent->_activeChildIndex >= 0 && _parent->_activeChildIndex < signed(_parent->_childSystems.size())) {
-                                _parent->_childSystems[_parent->_activeChildIndex].second->SetActivationState(true);
-                            }
-                        } else {
-                            _parent->_activeChildIndex = -1;
-                        }
-
-                        return true;
+                    if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size())) {
+                        _childSystems[_activeChildIndex].second->SetActivationState(false);
                     }
+                        
+                    if (signed(newIndex) != _activeChildIndex) {
+                        _activeChildIndex = signed(newIndex);
+                        if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size())) {
+                            _childSystems[_activeChildIndex].second->SetActivationState(true);
+                        }
+                    } else {
+                        _activeChildIndex = -1;
+                    }
+
+                    return ProcessInputResult::Consumed;
                 }
             }
-
-            if (_parent->_activeChildIndex >= 0 && _parent->_activeChildIndex < signed(_parent->_childSystems.size())) {
-
-                    //  if we have an active overlay system, we always consume all input!
-                    //  Nothing gets through to the next level
-                _parent->_childSystems[_parent->_activeChildIndex].second->GetInputListener()->OnInputEvent(context, evnt);
-                return true;
-            }
-
-            return false;
         }
 
-        InputListener(OverlaySystemSwitch* parent) : _parent(parent) {}
-    protected:
-        OverlaySystemSwitch* _parent;
-    };
+        if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size())) {
 
-    std::shared_ptr<IInputListener> OverlaySystemSwitch::GetInputListener()
-    {
-        return _inputListener;
+                //  if we have an active overlay system, we always consume all input!
+                //  Nothing gets through to the next level
+            return _childSystems[_activeChildIndex].second->ProcessInput(context, evnt);
+        }
+
+        return ProcessInputResult::Passthrough;
     }
 
     void OverlaySystemSwitch::Render(
@@ -128,39 +114,24 @@ namespace PlatformRig
 
     OverlaySystemSwitch::OverlaySystemSwitch() 
     : _activeChildIndex(-1)
-    {
-        _inputListener = std::make_shared<InputListener>(this);
-    }
+    {}
 
     OverlaySystemSwitch::~OverlaySystemSwitch() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class OverlaySystemSet::InputListener : public IInputListener
+    ProcessInputResult OverlaySystemSet::ProcessInput(
+        const InputContext& context,
+        const OSServices::InputSnapshot& evnt)
     {
-    public:
-        virtual bool    OnInputEvent(const InputContext& context, const InputSnapshot& evnt)
-        {
-            if (!_parent) return false;
-            
-            for (auto i=_parent->_childSystems.begin(); i!=_parent->_childSystems.end(); ++i) {
-                auto listener = (*i)->GetInputListener();
-                if (listener && listener->OnInputEvent(context, evnt)) {
-                    return true;
-                }
-            }
-
-            return false;
+        for (auto i=_childSystems.begin(); i!=_childSystems.end(); ++i) {
+            auto c = (*i)->ProcessInput(context, evnt);
+            if (c != ProcessInputResult::Passthrough)
+                return c;
         }
 
-        void ReleaseOverlaySystemSet() { _parent = nullptr; }
-
-        InputListener(OverlaySystemSet* parent) : _parent(parent) {}
-    protected:
-        OverlaySystemSet* _parent;
-    };
-
-    std::shared_ptr<IInputListener> OverlaySystemSet::GetInputListener()         { return _inputListener; }
+        return ProcessInputResult::Passthrough;
+    }
 
     void OverlaySystemSet::Render(
         RenderCore::Techniques::ParsingContext& parsingContext) 
@@ -223,24 +194,23 @@ namespace PlatformRig
     OverlaySystemSet::OverlaySystemSet() 
     : _activeChildIndex(-1)
     {
-        _inputListener = std::make_shared<InputListener>(this);
     }
 
     OverlaySystemSet::~OverlaySystemSet() 
     {
-        if (_inputListener)
-            _inputListener->ReleaseOverlaySystemSet();
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	std::shared_ptr<IInputListener> IOverlaySystem::GetInputListener() { return nullptr; }
 	void IOverlaySystem::SetActivationState(bool newState) {}
 	auto IOverlaySystem::GetOverlayState() const -> OverlayState { return {}; }
     void IOverlaySystem::OnRenderTargetUpdate(
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
         const RenderCore::FrameBufferProperties& fbProps,
         IteratorRange<const RenderCore::Format*> systemAttachmentFormats) {}
+    ProcessInputResult IOverlaySystem::ProcessInput(
+        const InputContext& context,
+        const OSServices::InputSnapshot& evnt) { return ProcessInputResult::Passthrough; }
     IOverlaySystem::~IOverlaySystem() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -248,7 +218,9 @@ namespace PlatformRig
     class ConsoleOverlaySystem : public IOverlaySystem
     {
     public:
-        std::shared_ptr<IInputListener> GetInputListener() override;
+        virtual ProcessInputResult ProcessInput(
+			const InputContext& context,
+			const OSServices::InputSnapshot& evnt) override;
         void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
         void SetActivationState(bool) override;
@@ -267,9 +239,11 @@ namespace PlatformRig
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderer;
     };
 
-    std::shared_ptr<IInputListener> ConsoleOverlaySystem::GetInputListener()
+    ProcessInputResult ConsoleOverlaySystem::ProcessInput(
+        const InputContext& context,
+        const OSServices::InputSnapshot& evnt)
     {
-        return _screens;
+        return _screens->OnInputEvent(context, evnt);
     }
 
     void ConsoleOverlaySystem::Render(
@@ -321,6 +295,27 @@ namespace PlatformRig
         RenderOverlays::OverlayApparatus& immediateDrawing)
     {
         return std::make_shared<ConsoleOverlaySystem>(immediateDrawing._immediateDrawables, immediateDrawing._shapeRenderingDelegate, immediateDrawing._fontRenderingManager);
+    }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class BridgingInputListener : public IInputListener
+    {
+    public:
+        ProcessInputResult OnInputEvent(
+			const InputContext& context,
+			const OSServices::InputSnapshot& evnt)
+        {
+            return _overlays->ProcessInput(context, evnt);
+        }
+        BridgingInputListener(std::shared_ptr<IOverlaySystem> overlays) : _overlays(std::move(overlays)) {}
+    private:
+        std::shared_ptr<IOverlaySystem> _overlays;
+    };
+
+    std::shared_ptr<IInputListener> CreateInputListener(std::shared_ptr<IOverlaySystem> overlays)
+    {
+        return std::make_shared<BridgingInputListener>(std::move(overlays));
     }
 
 }

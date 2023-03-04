@@ -44,7 +44,7 @@ namespace Sample
 
         bool OnInputEvent(
 			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt)
+			const OSServices::InputSnapshot& evnt)
         {
             return  _screens->OnInputEvent(context, evnt)
                 ||  _manipInputListener->OnInputEvent(context, evnt);

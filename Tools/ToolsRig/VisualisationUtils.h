@@ -169,7 +169,9 @@ namespace ToolsRig
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
 		virtual OverlayState GetOverlayState() const override;
-        virtual std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override;
+        virtual PlatformRig::ProcessInputResult ProcessInput(
+			const PlatformRig::InputContext& context,
+			const OSServices::InputSnapshot& evnt) override;
 
         virtual void OnRenderTargetUpdate(
             IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,

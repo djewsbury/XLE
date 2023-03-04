@@ -108,7 +108,7 @@ namespace UnitTests
 
 		virtual bool OnInputEvent(
 			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt,
+			const OSServices::InputSnapshot& evnt,
 			IInteractiveTestHelper& testHelper) override
 		{
 			const bool interactWithSphereObject = evnt.IsHeld("shift"_key);
@@ -117,7 +117,7 @@ namespace UnitTests
 					_sphereObjects.push_back(VolumeClipTestingOverlay::SphereObject { Zero<Float3>(), 1.0f });
 
 				if (evnt.IsHeld_LButton()) {
-					auto ray = testHelper.ScreenToWorldSpaceRay(evnt._mousePosition);
+					auto ray = testHelper.ScreenToWorldSpaceRay({evnt._mousePosition._x, evnt._mousePosition._y});
 					auto intr = RayVsPlane(ray.first, ray.second, Float4(0,1,0,0));
 					(_sphereObjects.end()-1)->_center = LinearInterpolate(ray.first, ray.second, intr);
 				}
@@ -131,7 +131,7 @@ namespace UnitTests
 					_boxObjects.push_back(BoxObject { Zero<Float3>(), Float3{1.0f, 1.0f, 1.0f}, 0.f });
 
 				if (evnt.IsHeld_LButton()) {
-					auto ray = testHelper.ScreenToWorldSpaceRay(evnt._mousePosition);
+					auto ray = testHelper.ScreenToWorldSpaceRay({evnt._mousePosition._x, evnt._mousePosition._y});
 					auto intr = RayVsPlane(ray.first, ray.second, Float4(0,1,0,0));
 					(_boxObjects.end()-1)->_center = LinearInterpolate(ray.first, ray.second, intr);
 				}
@@ -469,7 +469,7 @@ namespace UnitTests
 
 			virtual bool OnInputEvent(
 				const PlatformRig::InputContext& context,
-				const PlatformRig::InputSnapshot& evnt,
+				const OSServices::InputSnapshot& evnt,
 				IInteractiveTestHelper& testHelper) override
 			{
 				PlatformRig::Camera::UpdateCamera_Slew(_mainCamera, 1.f/60.f/100.f, evnt);

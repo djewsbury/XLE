@@ -11,7 +11,7 @@
 
 namespace RenderCore { namespace Techniques { class CameraDesc; } }
 
-namespace PlatformRig { class InputSnapshot; }
+namespace OSServices { class InputSnapshot; }
 namespace PlatformRig { namespace Camera
 {
     class UnitCamManager;
@@ -19,7 +19,7 @@ namespace PlatformRig { namespace Camera
     class CameraInputHandler
     {
     public:
-        void Update(float dt, const InputSnapshot& accumulatedInputState, const Float3x4& playerCharacterLocalToWorld);
+        void Update(float dt, const OSServices::InputSnapshot& accumulatedInputState, const Float3x4& playerCharacterLocalToWorld);
         const RenderCore::Techniques::CameraDesc& GetCurrentState() const { return _camera; }
         
         CameraInputHandler(
@@ -34,7 +34,7 @@ namespace PlatformRig { namespace Camera
         float _charactersScale;
     };
 
-    void UpdateCamera_Slew(RenderCore::Techniques::CameraDesc& camera, float dt, const InputSnapshot& input);
-    void UpdateCamera_Orbit(RenderCore::Techniques::CameraDesc& camera, float dt, Float3& focusPoint, const InputSnapshot& input);
+    void UpdateCamera_Slew(RenderCore::Techniques::CameraDesc& camera, float dt, const OSServices::InputSnapshot& input);
+    void UpdateCamera_Orbit(RenderCore::Techniques::CameraDesc& camera, float dt, Float3& focusPoint, const OSServices::InputSnapshot& input);
 }}
 

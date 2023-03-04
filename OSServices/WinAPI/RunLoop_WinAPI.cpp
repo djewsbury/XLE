@@ -6,7 +6,7 @@
 #include "../../Utility/IteratorUtils.h"
 #include <chrono>
 
-namespace PlatformRig
+namespace OSServices
 {
 	auto OSRunLoop_BasicTimer::ScheduleTimeoutEvent(std::chrono::steady_clock::time_point timePoint, TimeoutCallback&& callback) -> EventId
 	{

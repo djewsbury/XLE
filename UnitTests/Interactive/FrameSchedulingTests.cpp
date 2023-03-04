@@ -15,7 +15,7 @@
 #include "../../RenderCore/Metal/DeviceContext.h"
 #include "../../RenderCore/Metal/Shader.h"
 #include "../../RenderCore/Metal/InputLayout.h"
-#include "../../PlatformRig/OverlappedWindow.h"
+#include "../../OSServices/OverlappedWindow.h"
 #include "../../OSServices/TimeUtils.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetServices.h"
@@ -292,7 +292,7 @@ namespace UnitTests
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
 		const UInt2 outputSize { 1920, 1080 };
-		auto osWindow = std::make_unique<PlatformRig::Window>();
+		auto osWindow = std::make_unique<OSServices::Window>();
 		osWindow->Resize(outputSize[0], outputSize[1]);
 
 		RenderCore::PresentationChainDesc pChainDesc;

@@ -116,7 +116,7 @@ namespace ToolsRig
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     bool    CommonManipulator::OnInputEvent(
-        const PlatformRig::InputSnapshot& evnt, 
+        const OSServices::InputSnapshot& evnt, 
         const SceneEngine::IntersectionTestContext& hitTestContext,
         const SceneEngine::IIntersectionScene* hitTestScene)
     {
@@ -194,7 +194,7 @@ namespace ToolsRig
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     bool    RectangleManipulator::OnInputEvent(
-        const PlatformRig::InputSnapshot& evnt, 
+        const OSServices::InputSnapshot& evnt, 
         const SceneEngine::IntersectionTestContext& hitTestContext,
         const SceneEngine::IIntersectionScene* hitTestScene)
     {

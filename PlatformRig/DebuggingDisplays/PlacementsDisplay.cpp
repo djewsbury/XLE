@@ -131,7 +131,7 @@ namespace PlatformRig { namespace Overlays
 	{
 	public:
 		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform);
-		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
 		Coord2 GetDimensions() const;
 
@@ -150,7 +150,7 @@ namespace PlatformRig { namespace Overlays
 		_layedOutWidgets.Draw(draw, transform);
 	}
 
-	ProcessInputResult ToolTipHover::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& snapshot)
+	ProcessInputResult ToolTipHover::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& snapshot)
 	{
 		CommonWidgets::HoveringLayer hoveringLayer;
 		CommonWidgets::Input input { interfaceState, snapshot, hoveringLayer };
@@ -1177,7 +1177,7 @@ namespace PlatformRig { namespace Overlays
 				context.DrawLines(ProjectionMode::P3D, &_lastRayTest.first, 2, ColorB{255, 128, 128});
 		}
 
-		virtual ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input)
+		virtual ProcessInputResult ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input)
 		{
 			if (_hover.ProcessInput(interfaceState, input) == ProcessInputResult::Consumed)
 				return ProcessInputResult::Consumed;
@@ -1186,7 +1186,7 @@ namespace PlatformRig { namespace Overlays
 			if (input.IsRelease_LButton()) {
 				if (_lastCamera.has_value()) {
 					auto worldSpaceRay = RenderCore::Techniques::BuildRayUnderCursor(
-						input._mousePosition, _lastCamera->_projDesc,
+						{input._mousePosition._x, input._mousePosition._y}, _lastCamera->_projDesc,
 						{_lastCamera->_viewportTopLeft, _lastCamera->_viewportBottomRight});
 
 					_lastRayTest = worldSpaceRay;

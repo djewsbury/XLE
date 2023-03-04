@@ -75,7 +75,7 @@ namespace Overlays
         }
     }
 
-    auto    TestMaterialSettings::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
+    auto    TestMaterialSettings::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) -> ProcessInputResult
     {
             // allow the scroller we're currently dragging to go first...
         for (unsigned c=0; c<dimof(_scrollers); ++c)

@@ -6,7 +6,7 @@
 
 using namespace System::Collections::Generic;
 
-namespace PlatformRig { class InputSnapshot; }
+namespace OSServices { class InputSnapshot; }
 namespace ToolsRig { class IManipulator; }
 
 namespace GUILayer
@@ -68,7 +68,7 @@ namespace GUILayer
         ~NativeManipulatorLayer();
 
     private:
-        bool SendInputEvent(IViewContext^ vc, const PlatformRig::InputSnapshot& evnt);
+        bool SendInputEvent(IViewContext^ vc, const OSServices::InputSnapshot& evnt);
         ActiveManipulatorContext^ _manipContext;
     };
 }

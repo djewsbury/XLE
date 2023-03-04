@@ -26,7 +26,7 @@ namespace PlatformRig { namespace Overlays
 		~QuickMetricsDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
-		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
+		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override;
 		
 		std::vector<std::pair<Style, StringSection<>>> _lines;
 		uint32_t _frameBarrierSignal = ~0u;

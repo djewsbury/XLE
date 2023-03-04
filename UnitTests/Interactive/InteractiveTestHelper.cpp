@@ -6,7 +6,7 @@
 #include "../EmbeddedRes.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/PlatformApparatuses.h"
-#include "../../PlatformRig/OverlappedWindow.h"
+#include "../../OSServices/OverlappedWindow.h"
 #include "../../PlatformRig/MainInputHandler.h"
 #include "../../PlatformRig/OverlaySystem.h"
 
@@ -68,18 +68,18 @@ namespace UnitTests
 			overlaySystem->OnRenderTargetUpdate(overlayConfig._preregAttachments, overlayConfig._fbProps, overlayConfig._systemAttachmentFormats);
 			if (_drawingApparatus)
 				_drawingApparatus->_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_windowApparatus->_immediateContext);
-			_windowApparatus->_mainInputHandler->AddListener(adapter->GetInputListener());
+			_windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(adapter));
 			_windowApparatus->_osWindow->Show();
 			for (;;) {
-				auto msg = PlatformRig::Window::SingleWindowMessagePump(*_windowApparatus->_osWindow);
+				auto msg = OSServices::Window::SingleWindowMessagePump(*_windowApparatus->_osWindow);
 				PlatformRig::CommonEventHandling(*_windowApparatus, msg);
 
-				if (std::holds_alternative<PlatformRig::ShutdownRequest>(msg)) {
+				if (std::holds_alternative<OSServices::ShutdownRequest>(msg)) {
 					break;
-				} else if (std::holds_alternative<PlatformRig::Idle>(msg)) {
+				} else if (std::holds_alternative<OSServices::Idle>(msg)) {
 
-					auto& idle = std::get<PlatformRig::Idle>(msg);
-					if (idle._state == PlatformRig::IdleState::Background) {
+					auto& idle = std::get<OSServices::Idle>(msg);
+					if (idle._state == OSServices::IdleState::Background) {
 						// Bail if we're minimized (don't have to check this in the foreground case)
 						auto presChainDesc = _windowApparatus->_presentationChain->GetDesc();
 						if (!(presChainDesc._width * presChainDesc._height)) {
@@ -99,9 +99,9 @@ namespace UnitTests
 					} CATCH_END
 
 					auto frameResult = _windowApparatus->_frameRig->ShutdownFrame(parsingContext);
-					_windowApparatus->_frameRig->IntermedialSleep(*_windowApparatus, idle._state == PlatformRig::IdleState::Background, frameResult);
+					_windowApparatus->_frameRig->IntermedialSleep(*_windowApparatus, idle._state == OSServices::IdleState::Background, frameResult);
 
-				} else if (std::holds_alternative<PlatformRig::WindowResize>(msg)) {
+				} else if (std::holds_alternative<OSServices::WindowResize>(msg)) {
 
 					auto newOverlayConfig = _windowApparatus->_frameRig->GetOverlayConfiguration(*_windowApparatus->_presentationChain);
 					if (newOverlayConfig._hash != overlayConfig._hash) {
@@ -140,10 +140,9 @@ namespace UnitTests
 		InteractiveTestHelper(EnabledComponents::BitField enabledComponents)
 		{
 			if (!_globalServices) _globalServices = std::make_shared<ConsoleRig::GlobalServices>();
-			// _xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
-			_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
+			_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
-			auto osWindow = std::make_unique<PlatformRig::Window>();
+			auto osWindow = std::make_unique<OSServices::Window>();
 			auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
 
 			_device = renderAPI->CreateDevice(0, renderAPI->QueryFeatureCapability(0));
@@ -209,9 +208,11 @@ namespace UnitTests
 			parserContext.GetProjectionDesc() = oldProjDesc;
 		}
 
-        virtual std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override
+		virtual PlatformRig::ProcessInputResult ProcessInput(
+			const PlatformRig::InputContext& context,
+			const OSServices::InputSnapshot& evnt) override
 		{
-			return _childInputListener;
+			return _childInputListener->OnInputEvent(context, evnt);
 		}
 
 		virtual void OnRenderTargetUpdate(
@@ -225,13 +226,13 @@ namespace UnitTests
 		class ChildInputListener : public PlatformRig::IInputListener
 		{
 		public:
-			virtual bool OnInputEvent(
+			virtual PlatformRig::ProcessInputResult OnInputEvent(
 				const PlatformRig::InputContext& context,
-				const PlatformRig::InputSnapshot& evnt) override
+				const OSServices::InputSnapshot& evnt) override
 			{
 				auto testHelper = _parent->_testHelper.lock();
 				REQUIRE(testHelper);
-				return _parent->_overlaySystem->OnInputEvent(context, evnt, *testHelper);
+				return _parent->_overlaySystem->OnInputEvent(context, evnt, *testHelper) ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
 			}
 			ChildInputListener(OverlayAdapter* parent) : _parent(parent) {}
 			OverlayAdapter* _parent;
@@ -269,7 +270,7 @@ namespace UnitTests
 	void IInteractiveTestOverlay::OnUpdate(float deltaTime) {}
 	bool IInteractiveTestOverlay::OnInputEvent(
 		const PlatformRig::InputContext& context,
-		const PlatformRig::InputSnapshot& evnt,
+		const OSServices::InputSnapshot& evnt,
 		IInteractiveTestHelper& testHelper)
 	{
 		return false;

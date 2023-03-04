@@ -10,14 +10,12 @@
 #include <vector>
 #include <memory>
 
-namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; }}
-
 namespace PlatformRig
 {
     class MainInputHandler : public IInputListener
     {
     public:
-        bool    OnInputEvent(const InputContext& context, const InputSnapshot& evnt);
+        ProcessInputResult    OnInputEvent(const InputContext& context, const OSServices::InputSnapshot& evnt) override;
         void    AddListener(std::shared_ptr<IInputListener> listener);
         void    RemoveListened(IInputListener&);
 
@@ -26,17 +24,5 @@ namespace PlatformRig
     private:
         std::vector<std::shared_ptr<IInputListener>> _listeners;
     };
-
-    class DebugScreensInputHandler : public IInputListener
-    {
-    public:
-        bool    OnInputEvent(const InputContext& context, const InputSnapshot& evnt);
-
-        DebugScreensInputHandler(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreens);
-        ~DebugScreensInputHandler();
-    private:
-        std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem>       _debugScreens;
-    };
-
 }
 

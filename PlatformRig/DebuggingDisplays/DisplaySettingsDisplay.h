@@ -7,12 +7,11 @@
 #include <memory>
 
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
-namespace OSServices { class DisplaySettingsManager; }
-namespace PlatformRig { class Window; }
+namespace OSServices { class DisplaySettingsManager; class Window; }
 
 namespace PlatformRig { namespace Overlays
 {
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateDisplaySettingsDisplay(
 		std::shared_ptr<OSServices::DisplaySettingsManager> dispSettings,
-		std::shared_ptr<Window> window);
+		std::shared_ptr<OSServices::Window> window);
 }}

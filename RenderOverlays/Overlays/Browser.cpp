@@ -408,7 +408,7 @@ namespace Overlays
 
     static const std::string Slashes("/\\");
 
-    auto    SharedBrowser::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
+    auto    SharedBrowser::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) -> ProcessInputResult
     {
         if (input._wheelDelta && interfaceState.HasMouseOver(Id_MainSurface)) {
             _mainScrollBar.ProcessDelta(float(-input._wheelDelta));
@@ -555,7 +555,7 @@ namespace Overlays
         return std::make_pair(&_pimpl->_srv, hashedName);   // note, here, the hashedName only considered the model name, not the material name
     }
 
-    auto ModelBrowser::SpecialProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> SpecialProcessInputResult
+    auto ModelBrowser::SpecialProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) -> SpecialProcessInputResult
     {
         if (SharedBrowser::ProcessInput(interfaceState, input)) {
             return true;

@@ -7,24 +7,25 @@
 #include "RunLoop_WinAPI.h"
 #include "InputTranslator.h"
 #include "../OverlappedWindow.h"
-#include "../InputListener.h"
-#include "../../OSServices/DisplaySettings.h"
+#include "../InputSnapshot.h"
+#include "../DisplaySettings.h"
+#include "../Log.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Utility/UTFUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/FunctionUtils.h"
-#include "../../OSServices/WinAPI/WinAPIWrapper.h"
-#include "../../OSServices/Log.h"
 #include "../../Core/Exceptions.h"
 #include <queue>
 #include <windowsx.h>
 
-namespace OSServices { void OnDisplaySettingsChange(unsigned, unsigned); }
+#include "WinAPIWrapper.h"
 
-namespace PlatformRig
+namespace OSServices
 {
+    void OnDisplaySettingsChange(unsigned, unsigned);
+
 	static std::shared_ptr<IOSRunLoop> s_osRunLoop;
 
 	IOSRunLoop* GetOSRunLoop()
@@ -84,8 +85,8 @@ namespace PlatformRig
         Signal<SystemMessageVariant&&> _onMessageImmediate;
         std::queue<SystemMessageVariant> _systemMessages;
 
-        std::shared_ptr<OSServices::DisplaySettingsManager> _displaySettingsManager;
-        OSServices::DisplaySettingsManager::MonitorId _capturedMonitorId = ~0u;
+        std::shared_ptr<DisplaySettingsManager> _displaySettingsManager;
+        DisplaySettingsManager::MonitorId _capturedMonitorId = ~0u;
 
         bool _shown = false;
 
@@ -104,7 +105,7 @@ namespace PlatformRig
 
         case WM_DISPLAYCHANGE:
             {
-                OSServices::OnDisplaySettingsChange(unsigned(lparam & 0xffff), unsigned(lparam >> 16u));
+                OnDisplaySettingsChange(unsigned(lparam & 0xffff), unsigned(lparam >> 16u));
                 auto pimpl = (Window::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
                 if (pimpl && pimpl->_hwnd == hwnd) {
                     pimpl->_onMessageImmediate.Invoke(SystemDisplayChange{});
@@ -145,7 +146,7 @@ namespace PlatformRig
 
         case WM_NCCREATE:
             {
-                auto& extFn = OSServices::Windows::GetExtensionFunctions();
+                auto& extFn = Windows::GetExtensionFunctions();
                 if (extFn.Fn_EnableNonClientDpiScaling)
                     extFn.Fn_EnableNonClientDpiScaling(hwnd);        // requires windows 10
             }
@@ -265,13 +266,6 @@ namespace PlatformRig
         ::ShowWindow(_pimpl->_hwnd, newState ? SW_SHOWNORMAL : SW_HIDE);
     }
 
-    InputContext Window::MakeInputContext()
-    {
-        RECT clientRect;
-		GetClientRect(_pimpl->_hwnd, &clientRect);
-		return { Coord2{clientRect.left, clientRect.top}, Coord2{clientRect.right, clientRect.bottom} };
-    }
-
     static constexpr LONG s_styleOverlapped = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME;
     static constexpr LONG s_styleExOverlapped = 0;
 
@@ -279,7 +273,7 @@ namespace PlatformRig
     static constexpr LONG s_styleExFullscreen = WS_EX_TOPMOST;
 
     void Window::CaptureMonitor(
-        std::shared_ptr<OSServices::DisplaySettingsManager> displaySettings,
+        std::shared_ptr<DisplaySettingsManager> displaySettings,
         unsigned monitorId)
     {
         assert(displaySettings);
@@ -328,7 +322,7 @@ namespace PlatformRig
 
     unsigned Window::GetDPI() const
     {
-        auto& extFn = OSServices::Windows::GetExtensionFunctions();
+        auto& extFn = Windows::GetExtensionFunctions();
         if (extFn.Fn_GetDpiForWindow)           // Windows 10
             return extFn.Fn_GetDpiForWindow(_pimpl->_hwnd);
 
@@ -353,7 +347,7 @@ namespace PlatformRig
             //      ---<>--- Register window class ---<>---
             //
 
-        OSServices::Windows::WNDCLASSEX wc;
+        Windows::WNDCLASSEX wc;
         XlZeroMemory(wc);
         XlSetMemory(&wc, 0, sizeof(wc));
 
@@ -373,12 +367,12 @@ namespace PlatformRig
         wc.hIconSm          = NULL;
 
             //       (Ignore class registration failure errors)
-        (*OSServices::Windows::Fn_RegisterClassEx)(&wc);
+        (*Windows::Fn_RegisterClassEx)(&wc);
 
             //
             //      ---<>--- Create the window itself ---<>---
             //
-        _pimpl->_hwnd = (*OSServices::Windows::Fn_CreateWindowEx)(
+        _pimpl->_hwnd = (*Windows::Fn_CreateWindowEx)(
             s_styleExOverlapped, windowClassName.c_str(), 
             NULL, s_styleOverlapped, 
             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -396,7 +390,7 @@ namespace PlatformRig
 		_pimpl->_runLoop = std::make_shared<OSRunLoop_BasicTimer>(_pimpl->_hwnd);
 		SetOSRunLoop(_pimpl->_runLoop);
 
-        auto& extFn = OSServices::Windows::GetExtensionFunctions();
+        auto& extFn = Windows::GetExtensionFunctions();
         if (extFn.Fn_GetWindowDpiAwarenessContext && extFn.Fn_GetWindowDpiAwarenessContext(_pimpl->_hwnd) == DPI_AWARENESS_CONTEXT_UNAWARE) {
             Log(Warning) << "Window is begin created in non-DPI aware mode. This is non-ideal and will lead to wierdness on some versions of Windows and some configurations" << std::endl;
             Log(Warning) << "In this mode, Windows will scale windows based on OS DPI settings for the output monitor" << std::endl;
@@ -413,7 +407,7 @@ namespace PlatformRig
 		_pimpl->_inputTranslator.reset();
         ::DestroyWindow(_pimpl->_hwnd);
         auto windowClassName = Conversion::Convert<std::string>(CurrentModule::GetInstance().HashId());
-        (*OSServices::Windows::Fn_UnregisterClass)(windowClassName.c_str(), CurrentModule::GetInstance().Handle());
+        (*Windows::Fn_UnregisterClass)(windowClassName.c_str(), CurrentModule::GetInstance().Handle());
     }
 
     const void* Window::GetUnderlyingHandle() const
@@ -421,11 +415,11 @@ namespace PlatformRig
         return _pimpl->_hwnd;
     }
 
-    std::pair<Int2, Int2> Window::GetRect() const
+    std::pair<Coord2, Coord2> Window::GetRect() const
     {
         RECT clientRect;
         GetClientRect(_pimpl->_hwnd, &clientRect);
-        return std::make_pair(Int2(clientRect.left, clientRect.top), Int2(clientRect.right, clientRect.bottom));
+        return std::make_pair(Coord2(clientRect.left, clientRect.top), Coord2(clientRect.right, clientRect.bottom));
     }
 
     void Window::Resize(unsigned width, unsigned height)

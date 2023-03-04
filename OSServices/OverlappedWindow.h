@@ -6,23 +6,22 @@
 
 #pragma once
 
-#include "../Math/Vector.h"
+#include "OSServicesPrimitives.h"
 #include <memory>       // for unique_ptr
 #include <functional>
 #include <chrono>
 #include <variant>
 
 namespace Utility { template<typename... Args> class Signal; }
-namespace OSServices { class DisplaySettingsManager; }
 
-namespace PlatformRig
+namespace OSServices
 {
+    class DisplaySettingsManager;
     struct SystemDisplayChange {};
     struct WindowResize { signed _newWidth = 0, _newHeight = 0; };
     struct ShutdownRequest {};
     struct Idle;
     class InputSnapshot;
-    class InputContext;
     class Window;
 
     using SystemMessageVariant = std::variant<InputSnapshot, SystemDisplayChange, WindowResize, ShutdownRequest, Idle>;
@@ -61,7 +60,7 @@ namespace PlatformRig
     {
     public:
         const void* GetUnderlyingHandle() const;
-        std::pair<Int2, Int2> GetRect() const;
+        std::pair<Coord2, Coord2> GetRect() const;
         void SetTitle(const char titleText[]);
         void Resize(unsigned width, unsigned height);
         void Show(bool newState = true);
@@ -72,14 +71,13 @@ namespace PlatformRig
         // This is typically invoked during an OS event, in a thread determined by the OS
         // Most clients may prefer to receive messages via SingleWindowMessagePump() instead
         Utility::Signal<SystemMessageVariant&&>& OnMessageImmediate();
-        InputContext MakeInputContext();
 
         void CaptureMonitor(
-            std::shared_ptr<OSServices::DisplaySettingsManager>,
-            unsigned monitorId);     // OSServices::DisplaySettingsManager::MonitorId
+            std::shared_ptr<DisplaySettingsManager>,
+            unsigned monitorId);     // DisplaySettingsManager::MonitorId
         void ReleaseMonitor();
 
-        unsigned GetDPI() const;    // return DPI using OS heustrics (ie, on Windows 96 means 100% scaling)
+        unsigned GetDPI() const;    // return DPI using OS heuristics (ie, on Windows 96 means 100% scaling)
 
         Window();
         ~Window();

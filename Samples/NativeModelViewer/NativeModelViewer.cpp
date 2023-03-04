@@ -83,11 +83,13 @@ namespace Sample
 			std::make_shared<PlatformRig::Overlays::OperationContextDisplay>(loadingContext));
 	}
 
-	auto NativeModelViewerOverlay::GetInputListener() -> std::shared_ptr<PlatformRig::IInputListener>
-	{ 
-		return OverlaySystemSet::GetInputListener(); 
+	auto NativeModelViewerOverlay::ProcessInput(
+		const PlatformRig::InputContext& context,
+		const OSServices::InputSnapshot& evnt) -> PlatformRig::ProcessInputResult
+	{
+		return OverlaySystemSet::ProcessInput(context, evnt);
 	}
-	
+
 	void NativeModelViewerOverlay::SetActivationState(bool newState) 
 	{
 		OverlaySystemSet::SetActivationState(newState);

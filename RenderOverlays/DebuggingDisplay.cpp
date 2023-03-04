@@ -98,7 +98,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    auto            ScrollBar::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> IWidget::ProcessInputResult
+    auto            ScrollBar::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) -> IWidget::ProcessInputResult
     {
         const bool overScrollBar = (interfaceState.TopMostId() == _id);
         _draggingScrollBar = (_draggingScrollBar || overScrollBar) && (input._mouseButtonsDown&1);
@@ -700,7 +700,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     ///////////////////////////////////////////////////////////////////////////////////
     void    IWidget::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) {}
-    auto    IWidget::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult { return ProcessInputResult::Passthrough; }
+    auto    IWidget::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) -> ProcessInputResult { return ProcessInputResult::Passthrough; }
     IWidget::~IWidget() {}
 
     InteractableId  InteractableId_Make(StringSection<char> name)   { return Hash64(name.begin(), name.end()); }
@@ -716,13 +716,13 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return InterfaceState(viewInputContext, mousePosition, mouseButtonsHeld, interactables.Intersect(mousePosition), capture);
     }
 
-    bool DebugScreensSystem::OnInputEvent(const PlatformRig::InputContext& context, const PlatformRig::InputSnapshot& evnt)
+    PlatformRig::ProcessInputResult DebugScreensSystem::OnInputEvent(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& evnt)
     {
         bool consumedEvent      = false;
         _currentMouseHeld       = evnt._mouseButtonsDown;
         if (_currentMouse[0] != evnt._mousePosition[0] || _currentMouse[1] != evnt._mousePosition[1]) {
-            Coord2 drift = evnt._mousePosition - _currentMouse;
-            _currentMouse = evnt._mousePosition;
+            auto drift = Coord2{evnt._mousePosition._x, evnt._mousePosition._y} - _currentMouse;
+            _currentMouse = {evnt._mousePosition._x, evnt._mousePosition._y};
             auto capture = _currentInterfaceState.GetCapture();
             capture._driftDuringCapture += Coord2{std::abs(drift[0]), std::abs(drift[1])};
             _currentInterfaceState  = BuildInterfaceState(_currentInteractables, context, _currentMouse, _currentMouseHeld, capture);
@@ -751,7 +751,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             consumedEvent |= ProcessInputPanelControls(_currentInterfaceState, context, evnt);
         }
 
-        return consumedEvent;
+        return consumedEvent ? PlatformRig::ProcessInputResult::Consumed : PlatformRig::ProcessInputResult::Passthrough;
     }
 
     static const char* s_PanelControlsButtons[] = {"<", ">", "H", "V", "X"};
@@ -850,7 +850,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     bool    DebugScreensSystem::ProcessInputPanelControls(  InterfaceState& interfaceState, 
                                                             const PlatformRig::InputContext& inputContext,
-															const PlatformRig::InputSnapshot& evnt)
+															const OSServices::InputSnapshot& evnt)
     {
         if (interfaceState.TopMostId() && evnt.IsRelease_LButton()) {
             InteractableId topMostWidget = interfaceState.TopMostId();
@@ -1128,7 +1128,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     DebugScreensSystem::DebugScreensSystem() 
     {
-        _currentMouse = Coord2(0,0);
+        _currentMouse = {0,0};
         _currentMouseHeld = 0;
         _nextWidgetChangeCallbackIndex = 0;
 

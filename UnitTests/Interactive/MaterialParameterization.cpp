@@ -169,18 +169,21 @@ namespace UnitTests
 
 		bool OnInputEvent(
 			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt,
+			const OSServices::InputSnapshot& evnt,
 			IInteractiveTestHelper& testHelper) override
 		{
 			if (evnt._wheelDelta) {
 				// zoom in by adjusting the edges in the camera desc
-				float xRatio = 1.f - std::clamp((evnt._mousePosition[0] - context._viewMins[0]) / float(context._viewMaxs[0] - context._viewMins[0]), 0.f, 1.f);
-				float yRatio = 1.f - std::clamp((evnt._mousePosition[1] - context._viewMins[1]) / float(context._viewMaxs[1] - context._viewMins[1]), 0.f, 1.f);
-				float movement = 0.1f / 120.0f * evnt._wheelDelta;
-				_camera._left = LinearInterpolate(_camera._left, _camera._right, movement * (1-xRatio));
-				_camera._right = LinearInterpolate(_camera._right, _camera._left, movement * xRatio);
-				_camera._top = LinearInterpolate(_camera._top, _camera._bottom, movement * (1-yRatio));
-				_camera._bottom = LinearInterpolate(_camera._bottom, _camera._top, movement * yRatio);
+				auto* view = context.GetService<PlatformRig::WindowingSystemView>();
+				if (view) {
+					float xRatio = 1.f - std::clamp((evnt._mousePosition[0] - view->_viewMins[0]) / float(view->_viewMaxs[0] - view->_viewMins[0]), 0.f, 1.f);
+					float yRatio = 1.f - std::clamp((evnt._mousePosition[1] - view->_viewMins[1]) / float(view->_viewMaxs[1] - view->_viewMins[1]), 0.f, 1.f);
+					float movement = 0.1f / 120.0f * evnt._wheelDelta;
+					_camera._left = LinearInterpolate(_camera._left, _camera._right, movement * (1-xRatio));
+					_camera._right = LinearInterpolate(_camera._right, _camera._left, movement * xRatio);
+					_camera._top = LinearInterpolate(_camera._top, _camera._bottom, movement * (1-yRatio));
+					_camera._bottom = LinearInterpolate(_camera._bottom, _camera._top, movement * yRatio);
+				}
 			}
 			if ((evnt._mouseDelta[0] || evnt._mouseDelta[1]) && evnt.IsHeld_LButton() && !evnt.IsPress_LButton()) {
 				_camera._left -= evnt._mouseDelta[0] / 20.f;

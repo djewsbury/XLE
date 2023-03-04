@@ -67,7 +67,7 @@
 
         \code{.cpp}
 
-            //  PlatformRig::WindowsSupport::VanillaWindow represents a simple window.
+            //  OSServices::WindowsSupport::VanillaWindow represents a simple window.
             //  The window is created in the constructor, and destroyed in the destructor.
             //  Note that normally we should create the window, and handle the Win32 message
             //  loop in the same thread. So, by creating the window here, this thread becomes
@@ -76,7 +76,7 @@
             //  We need a window, even in fullscreen modes. In DirectX11, there is no "exclusive
             //  mode" any more. So, the easiest way to go fullscreen is to just make a window that
             //  covers the entire screen.
-        PlatformRig::OverlappedWindow window;
+        OSServices::OverlappedWindow window;
         auto clientRect = window.GetRect();
 
             //  Construct the "Console" object from ConsoleRig. This is a standard debugging

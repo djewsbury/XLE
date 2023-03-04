@@ -7,19 +7,21 @@
 #include "MainInputHandler.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../Utility/StringUtils.h"
+#include "../Utility/MemoryUtils.h"
 #include <assert.h>
 
 using namespace PlatformRig::Literals;
 
 namespace PlatformRig
 {
-    bool    MainInputHandler::OnInputEvent(const InputContext& context, const InputSnapshot& evnt)
+    ProcessInputResult    MainInputHandler::OnInputEvent(const InputContext& context, const OSServices::InputSnapshot& evnt)
     {
-        bool consumed = false;
-        for (auto i=_listeners.cbegin(); i!=_listeners.cend() && !consumed; ++i) {
-            consumed |= (*i)->OnInputEvent(context, evnt);
+        for (auto i=_listeners.cbegin(); i!=_listeners.cend(); ++i) {
+            auto c = (*i)->OnInputEvent(context, evnt);
+            if (c != ProcessInputResult::Passthrough)
+                return c;
         }
-        return consumed;
+        return ProcessInputResult::Passthrough;
     }
 
     void    MainInputHandler::AddListener(std::shared_ptr<IInputListener> listener)
@@ -43,28 +45,25 @@ namespace PlatformRig
     MainInputHandler::~MainInputHandler() {}
 
 
-
-    bool    DebugScreensInputHandler::OnInputEvent(const InputContext& context, const InputSnapshot& evnt)
+    void* InputContext::GetService(uint64_t id) const
     {
-        constexpr auto escape = "escape"_key;
-        if (evnt.IsPress(escape)) {
-            if (_debugScreens->CurrentScreen(0)) {
-                _debugScreens->SwitchToScreen(0, StringSection<>{});
-                return true;
-            }
-        }
-
-        if (_debugScreens) {
-            if (_debugScreens->OnInputEvent(context, evnt))
-                return true;
-        }
-        return false;
+        auto i = LowerBound(_services, id);
+		if (i != _services.end() && i->first == id)
+			return i->second;
+		return nullptr;
     }
 
-    DebugScreensInputHandler::DebugScreensInputHandler(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreens)
-    : _debugScreens(std::move(debugScreens)) 
-    {}
+    void InputContext::AttachService(uint64_t id, void* ptr)
+    {
+        auto i = LowerBound(_services, id);
+		if (i != _services.end() && i->first == id) {
+			i->second = ptr;
+		} else {
+			_services.emplace_back(id, ptr);
+		}
+    }
 
-    DebugScreensInputHandler::~DebugScreensInputHandler() {}
+    InputContext::InputContext() = default;
+    InputContext::~InputContext() = default;
 }
 

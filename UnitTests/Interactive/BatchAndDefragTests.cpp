@@ -143,7 +143,7 @@ namespace UnitTests
 
 		virtual bool OnInputEvent(
 			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt,
+			const OSServices::InputSnapshot& evnt,
 			IInteractiveTestHelper& testHelper) override
 		{
 			if (evnt._pressedChar == ' ') { _pauseMovement = !_pauseMovement; return true; }

@@ -30,9 +30,9 @@ extern "C" __declspec(dllimport) short __stdcall GetKeyState(int nVirtKey);
 
 namespace GUILayer
 {
-    static void SetupModifierKeys(PlatformRig::InputSnapshot& evnt)
+    static void SetupModifierKeys(OSServices::InputSnapshot& evnt)
     {
-        typedef PlatformRig::InputSnapshot::ActiveButton ActiveButton;
+        typedef OSServices::InputSnapshot::ActiveButton ActiveButton;
         constexpr auto shift = "shift"_key;
         constexpr auto control = "control"_key;
         constexpr auto alt = "alt"_key;
@@ -127,7 +127,7 @@ namespace GUILayer
 
     bool NativeManipulatorLayer::SendInputEvent(
         IViewContext^ vc, 
-		const PlatformRig::InputSnapshot& evnt)
+		const OSServices::InputSnapshot& evnt)
 	{
 		auto underlying = _manipContext->GetNativeManipulator();
         if (!underlying) return false;

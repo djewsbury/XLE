@@ -7,7 +7,7 @@
 #include "../Core/Types.h"
 #include "../Math/Transformations.h"
 
-namespace PlatformRig { class InputSnapshot; }
+namespace OSServices { class InputSnapshot; }
 
 namespace PlatformRig { namespace Camera
 {
@@ -120,7 +120,7 @@ namespace PlatformRig { namespace Camera
         };
         void InitUnitCamera();
         void AlignUnitToCamera(ClientUnit* unit, float yaw);
-        OutputCamera UpdateUnitCamera(float dt, ClientUnit* myUnit, const InputSnapshot& snapShot);
+        OutputCamera UpdateUnitCamera(float dt, ClientUnit* myUnit, const OSServices::InputSnapshot& snapShot);
 
         float GetCameraMaxDistance() const;
         float GetCameraMaxDistanceScaleFactor() const;

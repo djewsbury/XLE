@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "OverlappedWindow.h"
+#include "../OSServices/OverlappedWindow.h"
 #include "../RenderCore/IDevice_Forward.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/FunctionUtils.h"

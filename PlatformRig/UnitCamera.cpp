@@ -379,7 +379,7 @@ namespace PlatformRig { namespace Camera
         return Clamp(-0.002f * float(mouseMovement[1]), -limit, limit);
     }
 
-    static RenderOverlays::Coord2 prevMousePosition(0, 0);
+    static OSServices::Coord2 prevMousePosition(0, 0);
 
     static Float3 GetCameraTargetPos(const ClientUnit& unit, float unitScaleFactor)
     {
@@ -398,7 +398,7 @@ namespace PlatformRig { namespace Camera
         return Float3(ypr[2], ypr[0], ypr[1]);
     }
 
-    UnitCamManager::OutputCamera UnitCamManager::UpdateUnitCamera(float dt, ClientUnit* unit, const InputSnapshot& snapShot)
+    UnitCamManager::OutputCamera UnitCamManager::UpdateUnitCamera(float dt, ClientUnit* unit, const OSServices::InputSnapshot& snapShot)
     {
         ++_frameId;
 
@@ -412,8 +412,8 @@ namespace PlatformRig { namespace Camera
             auto relativeMouse = snapShot._mousePosition;
             relativeMouse[0] -= prevMousePosition[0];
             relativeMouse[1] -= prevMousePosition[1];
-            deltaRot[2] = GetCameraYawInput(dt, relativeMouse);
-            deltaRot[0] = GetCameraPitchInput(dt, relativeMouse);
+            deltaRot[2] = GetCameraYawInput(dt, {relativeMouse._x, relativeMouse._y});
+            deltaRot[0] = GetCameraPitchInput(dt, {relativeMouse._x, relativeMouse._y});
         }
         prevMousePosition = snapShot._mousePosition;
 

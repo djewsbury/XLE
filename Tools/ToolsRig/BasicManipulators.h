@@ -26,7 +26,7 @@ namespace ToolsRig
     class ManipulatorStack : public PlatformRig::IInputListener
     {
     public:
-        bool    OnInputEvent(const PlatformRig::InputContext& context, const PlatformRig::InputSnapshot& evnt);
+        ProcessInputResult    OnInputEvent(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& evnt);
         void    Register(uint64_t id, std::shared_ptr<ToolsRig::IManipulator> manipulator);
 
 		void	Set(const std::shared_ptr<SceneEngine::IIntersectionScene>& intersectionScene);

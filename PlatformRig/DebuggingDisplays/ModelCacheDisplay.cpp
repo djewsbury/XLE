@@ -24,7 +24,7 @@ namespace PlatformRig { namespace Overlays
 		~ModelCacheDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
-		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
+		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override;
 		
 		std::shared_ptr<SceneEngine::IRigidModelScene> _modelCache;
 
@@ -231,7 +231,7 @@ namespace PlatformRig { namespace Overlays
 	{
 	public:
 		void Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) override;
-		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
+		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override;
 		ModelCacheGeoBufferDisplay(std::shared_ptr<SceneEngine::IRigidModelScene> modelCache);
 	protected:
 		std::shared_ptr<BatchingDisplay> _vbDisplay, _ibDisplay;
@@ -267,7 +267,7 @@ namespace PlatformRig { namespace Overlays
 		}
 	}
 
-	ProcessInputResult ModelCacheGeoBufferDisplay::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input)
+	ProcessInputResult ModelCacheGeoBufferDisplay::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input)
 	{
 		if (_vbDisplay) {
 			auto res = _vbDisplay->ProcessInput(interfaceState, input);

@@ -36,7 +36,7 @@ namespace GUILayer
         _frameRig->UpdatePresentationChain(*_presentationChain);
     }
 
-    void WindowRig::OnInputEvent(const PlatformRig::InputSnapshot& snapshot)
+    void WindowRig::OnInputEvent(const OSServices::InputSnapshot& snapshot)
     {
         _mainInputHandler->OnInputEvent(MakeInputContext(), snapshot);
     }

@@ -6,12 +6,10 @@
 
 #pragma once
 
-#include "../InputListener.h"
-#include "../../Math/Vector.h"
-#include "../../Utility/UTFUtils.h"
-#include <vector>
+#include "../InputSnapshot.h"
+#include <memory>
 
-namespace PlatformRig
+namespace OSServices
 {
     class InputTranslator
     {
@@ -24,7 +22,7 @@ namespace PlatformRig
         InputSnapshot    OnMouseWheel        (signed wheelDelta);
         InputSnapshot    OnFocusChange       ();
 
-        Int2    GetMousePosition();
+        Coord2    GetMousePosition();
 
         InputTranslator(const void* hwnd);
         ~InputTranslator();

@@ -55,6 +55,8 @@ namespace ToolsRig
 		return defaultValue;
 	}
 
+    static Int2 AsInt2(OSServices::Coord2 i) { return {i._x, i._y}; }
+
     IPlacementManipulatorSettings::~IPlacementManipulatorSettings() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +69,7 @@ namespace ToolsRig
         void    RenderToScene(  RenderCore::IThreadContext& context, 
                                 RenderCore::Techniques::ParsingContext& parserContext,
                                 const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
-        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
         PlacementsWidgets(
             const std::shared_ptr<SceneEngine::PlacementsEditor>& editor, 
@@ -107,7 +109,7 @@ namespace ToolsRig
     {
     public:
         bool OnInputEvent(
-            const PlatformRig::InputSnapshot& evnt,
+            const OSServices::InputSnapshot& evnt,
             const SceneEngine::IntersectionTestContext& hitTestContext,
             const SceneEngine::IIntersectionScene* hitTestScene);
         void Render(
@@ -216,7 +218,7 @@ namespace ToolsRig
     }
 
     bool SelectAndEdit::OnInputEvent(
-        const PlatformRig::InputSnapshot& evnt,
+        const OSServices::InputSnapshot& evnt,
         const SceneEngine::IntersectionTestContext& hitTestContext,
         const SceneEngine::IIntersectionScene* hitTestScene)
     {
@@ -250,12 +252,12 @@ namespace ToolsRig
                 _activeSubop = SubOperation();
                 _activeSubop._type = newSubOp;
                 _activeSubop._axisRestriction = SubOperation::NoAxis;
-                _activeSubop._cursorStart = evnt._mousePosition;
+                _activeSubop._cursorStart = AsInt2(evnt._mousePosition);
 
                 if (newSubOp == SubOperation::MoveAcrossTerrainSurface) {
                     _activeSubop._anchorTerrainIntersection = hitTestScene->FirstRayIntersection(
                         hitTestContext,
-                        hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition), SceneEngine::IntersectionTestResult::Type::Terrain);
+                        hitTestContext.CalculateWorldSpaceRay(AsInt2(evnt._mousePosition)), SceneEngine::IntersectionTestResult::Type::Terrain);
                 }
             }
 
@@ -307,7 +309,7 @@ namespace ToolsRig
                             //  first started this operation
 
                         auto ssAnchor = hitTestContext.ProjectToScreenSpace(_anchorPoint);
-                        float ssDist1 = Magnitude(evnt._mousePosition - ssAnchor);
+                        float ssDist1 = Magnitude(Float2{evnt._mousePosition._x, evnt._mousePosition._y} - ssAnchor);
                         float ssDist0 = Magnitude(_activeSubop._cursorStart - ssAnchor);
                         float scaleFactor = 1.f;
                         if (ssDist0 > 0.f) {
@@ -361,7 +363,7 @@ namespace ToolsRig
                         auto initialRay = hitTestContext.CalculateWorldSpaceRay(_activeSubop._cursorStart);
                         float initialDst = RayVsPlane(initialRay.first, initialRay.second, plane);
 
-                        auto newRay = hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition);
+                        auto newRay = hitTestContext.CalculateWorldSpaceRay(AsInt2(evnt._mousePosition));
                         float newDst = RayVsPlane(newRay.first, newRay.second, plane);
                         if (newDst >= 0.f && newDst <= 1.f && initialDst >= 0.f && initialDst <= 1.f) {
                             auto startPt = LinearInterpolate(initialRay.first, initialRay.second, initialDst);
@@ -389,7 +391,7 @@ namespace ToolsRig
                             //  We want to find an intersection point with the terrain, and then 
                             //  compare the XY coordinates of that to the anchor point
 
-                        auto collision = hitTestScene->FirstRayIntersection(hitTestContext, hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition), SceneEngine::IntersectionTestResult::Type::Terrain);
+                        auto collision = hitTestScene->FirstRayIntersection(hitTestContext, hitTestContext.CalculateWorldSpaceRay(AsInt2(evnt._mousePosition)), SceneEngine::IntersectionTestResult::Type::Terrain);
                         if (collision._type == SceneEngine::IntersectionTestResult::Type::Terrain
                             && _activeSubop._anchorTerrainIntersection._type == SceneEngine::IntersectionTestResult::Type::Terrain) {
                             _activeSubop._parameter = Float3(
@@ -428,7 +430,7 @@ namespace ToolsRig
 
             } else {
 
-                auto worldSpaceRay = hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition);
+                auto worldSpaceRay = hitTestContext.CalculateWorldSpaceRay(AsInt2(evnt._mousePosition));
                 
                 SceneEngine::PlacementGUID firstHit(0,0);
                 auto hitTestResult = hitTestScene->FirstRayIntersection(hitTestContext, worldSpaceRay);
@@ -490,7 +492,7 @@ namespace ToolsRig
                 //  Then, tell the manager to switch to placement mode
 
             if (_manInterface) {
-                auto worldSpaceRay = hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition);
+                auto worldSpaceRay = hitTestContext.CalculateWorldSpaceRay(AsInt2(evnt._mousePosition));
                 
                 auto hitTestResult = hitTestScene->FirstRayIntersection(hitTestContext, worldSpaceRay);
                 if (hitTestResult._type == SceneEngine::IntersectionTestResult::Type::Placement && hitTestResult._metadataQuery) {
@@ -628,7 +630,7 @@ namespace ToolsRig
     {
     public:
         bool OnInputEvent(
-            const PlatformRig::InputSnapshot& evnt,
+            const OSServices::InputSnapshot& evnt,
             const SceneEngine::IntersectionTestContext& hitTestContext,
             const SceneEngine::IIntersectionScene* hitTestScene);
         void Render(
@@ -704,7 +706,7 @@ namespace ToolsRig
     }
 
     bool PlaceSingle::OnInputEvent(
-        const PlatformRig::InputSnapshot& evnt,
+        const OSServices::InputSnapshot& evnt,
         const SceneEngine::IntersectionTestContext& hitTestContext,
         const SceneEngine::IIntersectionScene* hitTestScene)
     {
@@ -722,7 +724,7 @@ namespace ToolsRig
         if (_rendersSinceHitTest > 0 && hitTestScene) {
             _rendersSinceHitTest = 0;
 
-            auto test = hitTestScene->FirstRayIntersection(hitTestContext, hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition), SceneEngine::IntersectionTestResult::Type::Terrain);
+            auto test = hitTestScene->FirstRayIntersection(hitTestContext, hitTestContext.CalculateWorldSpaceRay(AsInt2(evnt._mousePosition)), SceneEngine::IntersectionTestResult::Type::Terrain);
             if (test._type == SceneEngine::IntersectionTestResult::Type::Terrain) {
 
                     //  This is a spawn event. We should add a new item of the selected model
@@ -814,7 +816,7 @@ namespace ToolsRig
     {
     public:
         bool OnInputEvent(
-            const PlatformRig::InputSnapshot& evnt,
+            const OSServices::InputSnapshot& evnt,
             const SceneEngine::IntersectionTestContext& hitTestContext,
             const SceneEngine::IIntersectionScene* hitTestScene);
         void Render(
@@ -851,7 +853,7 @@ namespace ToolsRig
     };
 
     bool ScatterPlacements::OnInputEvent(
-        const PlatformRig::InputSnapshot& evnt,
+        const OSServices::InputSnapshot& evnt,
         const SceneEngine::IntersectionTestContext& hitTestContext,
         const SceneEngine::IIntersectionScene* hitTestScene)
     {
@@ -863,7 +865,7 @@ namespace ToolsRig
 
 		if (!hitTestScene) return false;
 
-        auto test = hitTestScene->FirstRayIntersection(hitTestContext, hitTestContext.CalculateWorldSpaceRay(evnt._mousePosition), SceneEngine::IntersectionTestResult::Type::Terrain);
+        auto test = hitTestScene->FirstRayIntersection(hitTestContext, hitTestContext.CalculateWorldSpaceRay(AsInt2(evnt._mousePosition)), SceneEngine::IntersectionTestResult::Type::Terrain);
         _hoverPoint = test._worldSpaceIntersectionPt;
         _hasHoverPoint = test._type == SceneEngine::IntersectionTestResult::Type::Terrain;
 
@@ -1489,7 +1491,7 @@ namespace ToolsRig
         }
     }
 
-    auto PlacementsWidgets::ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) -> ProcessInputResult
+    auto PlacementsWidgets::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) -> ProcessInputResult
     {
         if (interfaceState.TopMostId() == Id_SelectedModel && input.IsRelease_LButton()) {
             _browserActive = !_browserActive;
@@ -1547,13 +1549,15 @@ namespace ToolsRig
         if (interfaceState.GetMouseOverStack().empty()) {
 
             const auto& inputContext = interfaceState.GetViewInputContext();
-			SceneEngine::IntersectionTestContext intersectionContext {
-				AsCameraDesc(*_camera),
-				inputContext._viewMins, inputContext._viewMaxs,
-				_drawingApparatus };
+            if (auto* view = inputContext.GetService<PlatformRig::WindowingSystemView>()) {
+                SceneEngine::IntersectionTestContext intersectionContext {
+                    AsCameraDesc(*_camera),
+                    view->_viewMins, view->_viewMaxs,
+                    _drawingApparatus };
 
-            if (_manipulators[_activeManipulatorIndex]->OnInputEvent(input, intersectionContext, _intersectionTestScene.get()))
-				return ProcessInputResult::Consumed;
+                if (_manipulators[_activeManipulatorIndex]->OnInputEvent(input, intersectionContext, _intersectionTestScene.get()))
+                    return ProcessInputResult::Consumed;
+            }
         }
 
         return ProcessInputResult::Passthrough;

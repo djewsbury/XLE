@@ -22,7 +22,7 @@ namespace PlatformRig { namespace Overlays
 		~DeformAcceleratorPoolDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
-		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override;
+		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override;
 		
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAccelerators;
 		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;

@@ -337,7 +337,8 @@ namespace EntityInterface
 				};
 				sliderNode->_nodeAttachments._ioDelegate = [interactable, state=_state, leftSideValue, rightSideValue](CommonWidgets::Input& input, Rect frame, Rect content) {
 					if (input.GetHoverings()._hoveringCtrl) {
-						if ((input.GetEvent()._mouseButtonsTransition != 0) && input.GetInterfaceState().GetCapture()._widget._id == interactable && !Contains(input.GetInterfaceState().GetCapture()._widget._rect, input.GetEvent()._mousePosition)) {
+						Int2 mp { input.GetEvent()._mousePosition._x, input.GetEvent()._mousePosition._y };
+						if ((input.GetEvent()._mouseButtonsTransition != 0) && input.GetInterfaceState().GetCapture()._widget._id == interactable && !Contains(input.GetInterfaceState().GetCapture()._widget._rect, mp)) {
 							if (state->TryUpdateValueFromString<Type>(interactable, input.GetHoverings()._textEntry._currentLine))
 								state->InvalidateModel();
 							input.GetInterfaceState().EndCapturing();
@@ -550,7 +551,7 @@ namespace EntityInterface
 			}
 		}
 
-		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) override
+		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override
 		{
 			ProcessInputResult pir = ProcessInputResult::Passthrough;
 			if (_docInterface->TryLock()) {

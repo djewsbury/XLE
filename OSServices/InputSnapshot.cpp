@@ -2,10 +2,10 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "InputListener.h"
+#include "InputSnapshot.h"
 #include "../Utility/MemoryUtils.h"
 
-namespace PlatformRig
+namespace OSServices
 {
 
     static void AddOrChangeButton(std::vector<InputSnapshot::ActiveButton>& container, const InputSnapshot::ActiveButton& newButton)
@@ -63,7 +63,7 @@ namespace PlatformRig
         _mouseButtonsDblClk = 0;
         _pressedChar = 0;
         _wheelDelta = 0;
-        _mouseDelta = Int2(0,0);
+        _mouseDelta = Coord2(0,0);
         for (auto a = _activeButtons.begin(); a!=_activeButtons.end();) {
             if (a->_state) {
                 a->_transition = false;
@@ -74,7 +74,6 @@ namespace PlatformRig
         }
     }
 
-	KeyId           KeyId_Make(StringSection<char> name)            { return Hash32(name.begin(), name.end()); }
+    OSServices::KeyId           KeyId_Make(StringSection<char> name)            { return Hash32(name.begin(), name.end()); }
 
-	IInputListener::~IInputListener() {}
 }

@@ -15,7 +15,7 @@ namespace Sample
 {
     bool SampleInputHandler::OnInputEvent(
 		const RenderOverlays::DebuggingDisplay::InputContext& context,
-        const PlatformRig::InputSnapshot& evnt)
+        const OSServices::InputSnapshot& evnt)
     {
         using namespace RenderOverlays::DebuggingDisplay;
             //  on left button release; if we ctrl-clicked the terrain

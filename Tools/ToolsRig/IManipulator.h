@@ -16,7 +16,7 @@ namespace SceneEngine
     class IIntersectionScene;
 }
 
-namespace PlatformRig { class InputSnapshot; }
+namespace OSServices { class InputSnapshot; }
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ParsingContext; class IPipelineAcceleratorPool; }}
 
@@ -26,7 +26,7 @@ namespace ToolsRig
     {
     public:
         virtual bool OnInputEvent(
-            const PlatformRig::InputSnapshot& evnt, 
+            const OSServices::InputSnapshot& evnt, 
 			const SceneEngine::IntersectionTestContext& hitTestContext,
             const SceneEngine::IIntersectionScene* hitTestScene) = 0;
         virtual void Render(

@@ -111,12 +111,12 @@ namespace Sample
     {
     public:
         void    Update(float deltaTime);
-        void    Accumulate(const PlatformRig::InputSnapshot& evnt);
+        void    Accumulate(const OSServices::InputSnapshot& evnt);
         PlayerCharacter(uint64 id, const CharacterModel& model, std::shared_ptr<AnimationDecisionTree> animDecisionTree);
     protected:
         std::shared_ptr<AnimationDecisionTree>  _animDecisionTree;
-        PlatformRig::InputSnapshot              _accumulatedState;
-        PlatformRig::InputSnapshot              _prevAccumulatedState;
+        OSServices::InputSnapshot              _accumulatedState;
+        OSServices::InputSnapshot              _prevAccumulatedState;
 
         struct StateBundleContents
         {

@@ -12,7 +12,8 @@
 #include <vector>
 
 namespace RenderCore { namespace Techniques { class DrawingApparatus; class FrameRenderingApparatus; } }
-namespace PlatformRig { class InputSnapshot; class InputContext; class MainInputHandler; }
+namespace OSServices { class InputSnapshot; }
+namespace PlatformRig { class InputContext; class MainInputHandler; }
 
 namespace GUILayer
 {
@@ -24,7 +25,7 @@ namespace GUILayer
         std::shared_ptr<RenderCore::IPresentationChain>& GetPresentationChain() { return _presentationChain; }
 
         void OnResize(unsigned newWidth, unsigned newHeight);
-        void OnInputEvent(const PlatformRig::InputSnapshot&);
+        void OnInputEvent(const OSServices::InputSnapshot&);
 
         WindowRig(
             std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,

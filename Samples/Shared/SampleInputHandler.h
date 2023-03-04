@@ -20,7 +20,7 @@ namespace Sample
     public:
         bool OnInputEvent(
 			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt);
+			const OSServices::InputSnapshot& evnt);
 
         SampleInputHandler(
             std::shared_ptr<PlatformRig::Camera::ICameraAttach> playerCharacter, 

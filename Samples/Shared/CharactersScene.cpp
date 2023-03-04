@@ -345,7 +345,7 @@ namespace Sample
     class PlayerCharacterInterf : public IPlayerCharacter
     {
     public:
-        bool OnInputEvent(const RenderOverlays::DebuggingDisplay::InputContext& context, const PlatformRig::InputSnapshot& evnt)
+        bool OnInputEvent(const RenderOverlays::DebuggingDisplay::InputContext& context, const OSServices::InputSnapshot& evnt)
         {
             if (_scene->_playerCharacter)
                 _scene->_playerCharacter->Accumulate(evnt);

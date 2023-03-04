@@ -218,7 +218,7 @@ namespace Sample
         _animDecisionTree = std::move(animDecisionTree);
     }
 
-    void    PlayerCharacter::Accumulate(const PlatformRig::InputSnapshot& evnt)
+    void    PlayerCharacter::Accumulate(const OSServices::InputSnapshot& evnt)
     {
         _accumulatedState.Accumulate(evnt, _prevAccumulatedState);
     }

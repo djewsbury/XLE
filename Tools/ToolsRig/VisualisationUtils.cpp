@@ -11,7 +11,7 @@
 #include "../../SceneEngine/IntersectionTest.h"
 #include "../../SceneEngine/BasicLightingStateDelegate.h"
 #include "../../SceneEngine/ExecuteScene.h"
-#include "../../PlatformRig/OverlappedWindow.h"	// (for GetOSRunLoop())
+#include "../../OSServices/OverlappedWindow.h"	// (for GetOSRunLoop())
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/HighlightEffects.h"
@@ -617,12 +617,12 @@ namespace ToolsRig
     class MouseOverTrackingListener : public PlatformRig::IInputListener, public std::enable_shared_from_this<MouseOverTrackingListener>
     {
     public:
-        bool OnInputEvent(
+        ProcessInputResult OnInputEvent(
 			const PlatformRig::InputContext& context,
-			const PlatformRig::InputSnapshot& evnt)
+			const OSServices::InputSnapshot& evnt)
         {
-			if (evnt._mouseDelta == PlatformRig::Coord2 { 0, 0 })
-				return false;
+			if (evnt._mouseDelta == OSServices::Coord2 { 0, 0 })
+				return ProcessInputResult::Passthrough;
 
 			// Limit the update frequency by ensuring that enough time has
 			// passed since the last time we did an update. If there hasn't
@@ -640,9 +640,9 @@ namespace ToolsRig
 			auto time = std::chrono::steady_clock::now();
 			const auto timePeriod = std::chrono::milliseconds(200u);
 			_timeoutContext = context;
-			_timeoutMousePosition = evnt._mousePosition;
+			_timeoutMousePosition = {evnt._mousePosition._x, evnt._mousePosition._y};
 			if ((time - _timeOfLastCalculate) < timePeriod) {
-				auto* osRunLoop = PlatformRig::GetOSRunLoop();
+				auto* osRunLoop = OSServices::GetOSRunLoop();
 				if (_timeoutEvent == ~0u && osRunLoop) {
 					std::weak_ptr<MouseOverTrackingListener> weakThis = weak_from_this();
 					_timeoutEvent = osRunLoop->ScheduleTimeoutEvent(
@@ -659,27 +659,44 @@ namespace ToolsRig
 						});
 				}
 			} else {
-				auto* osRunLoop = PlatformRig::GetOSRunLoop();
+				auto* osRunLoop = OSServices::GetOSRunLoop();
 				if (_timeoutEvent != ~0u && osRunLoop) {
 					osRunLoop->RemoveEvent(_timeoutEvent);
 					_timeoutEvent = ~0u;
 				}
 
-				CalculateForMousePosition(context, evnt._mousePosition);
+				CalculateForMousePosition(context, {evnt._mousePosition._x, evnt._mousePosition._y});
 				_timeOfLastCalculate = time;
 			}
 
-			return false;
+			return ProcessInputResult::Passthrough;
 		}
 
 		void CalculateForMousePosition(
 			const PlatformRig::InputContext& context,
 			PlatformRig::Coord2 mousePosition)
 		{
-            auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
-				AsCameraDesc(*_camera), mousePosition, context._viewMins, context._viewMaxs);
+			auto* view = context.GetService<PlatformRig::WindowingSystemView>();
+        	if (!view) {
+				if (_mouseOver->_hasMouseOver) {
+					_mouseOver->_hasMouseOver = false;
+					_mouseOver->_metadataQuery = {};
+					_mouseOver->_changeEvent.Invoke();
+				}
+				return;
+			}
 
-            if (!_scene) return;
+            auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
+				AsCameraDesc(*_camera), mousePosition, view->_viewMins, view->_viewMaxs);
+
+            if (!_scene) {
+				if (_mouseOver->_hasMouseOver) {
+					_mouseOver->_hasMouseOver = false;
+					_mouseOver->_metadataQuery = {};
+					_mouseOver->_changeEvent.Invoke();
+				}
+				return;
+			}
 
 			auto threadContext = RenderCore::Techniques::GetThreadContext();
 			auto intr = FirstRayIntersection(*threadContext, *_drawingApparatus, worldSpaceRay, *_scene);
@@ -991,7 +1008,9 @@ namespace ToolsRig
 
 		const bool dummyCalculation = false;
 		if constexpr (dummyCalculation) {
-			PlatformRig::InputContext inputContext { {0, 0}, {256, 256} };
+			PlatformRig::InputContext inputContext;
+			PlatformRig::WindowingSystemView view { {0, 0}, {256, 256} };
+			inputContext.AttachService2(view);
 			PlatformRig::Coord2 mousePosition {128, 128};
 			_pimpl->_inputListener->CalculateForMousePosition(inputContext, mousePosition);
 		}
@@ -1051,9 +1070,13 @@ namespace ToolsRig
 		return { refreshMode };
 	}
 
-	std::shared_ptr<PlatformRig::IInputListener> VisualisationOverlay::GetInputListener()
+	PlatformRig::ProcessInputResult VisualisationOverlay::ProcessInput(
+		const PlatformRig::InputContext& context,
+		const OSServices::InputSnapshot& evnt)
 	{
-		return _pimpl->_inputListener;
+		if (_pimpl->_inputListener)
+			return _pimpl->_inputListener->OnInputEvent(context, evnt);
+		return PlatformRig::ProcessInputResult::Passthrough;
 	}
 
 	void VisualisationOverlay::OnRenderTargetUpdate(
@@ -1160,7 +1183,9 @@ namespace ToolsRig
 	class InputLayer : public PlatformRig::IOverlaySystem
     {
     public:
-        std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override;
+        virtual PlatformRig::ProcessInputResult ProcessInput(
+			const PlatformRig::InputContext& context,
+			const OSServices::InputSnapshot& evnt) override;
 
         void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
@@ -1171,10 +1196,12 @@ namespace ToolsRig
         std::shared_ptr<PlatformRig::IInputListener> _listener;
     };
 
-    auto InputLayer::GetInputListener() -> std::shared_ptr<PlatformRig::IInputListener>
-    {
-        return _listener;
-    }
+	PlatformRig::ProcessInputResult InputLayer::ProcessInput(
+		const PlatformRig::InputContext& context,
+		const OSServices::InputSnapshot& evnt)
+	{
+		return _listener->OnInputEvent(context, evnt);
+	}
 
     void InputLayer::Render(
 		RenderCore::Techniques::ParsingContext&) {}

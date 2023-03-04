@@ -35,7 +35,7 @@ namespace PlatformRig { namespace Overlays
 		using Layout = RenderOverlays::DebuggingDisplay::Layout;
 		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
 		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
-		using InputSnapshot = PlatformRig::InputSnapshot;
+		using InputSnapshot = OSServices::InputSnapshot;
 
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
 

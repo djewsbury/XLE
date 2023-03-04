@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "OverlappedWindow.h"		// for SystemMessageVariant
+#include "../OSServices/OverlappedWindow.h"		// for SystemMessageVariant
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../Assets/DepVal.h"
 #include <memory>
@@ -15,13 +15,12 @@ namespace RenderCore { namespace Techniques { class DrawingApparatus; class Fram
 namespace RenderOverlays { class Font; class OverlayApparatus; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget; }}
 namespace Assets { class DependencyValidation; }
-namespace OSServices { class DisplaySettingsManager; }
+namespace OSServices { class DisplaySettingsManager; class Window; }
 namespace Utility { class HierarchicalCPUProfiler; }
 
 namespace PlatformRig
 {
 	class OverlaySystemSet;
-	class Window;
 	class MainInputHandler;
 	class FrameRig;
 	class IDebugScreenRegistry;
@@ -51,7 +50,7 @@ namespace PlatformRig
 	class WindowApparatus
 	{
 	public:
-		std::shared_ptr<Window> _osWindow;
+		std::shared_ptr<OSServices::Window> _osWindow;
 		std::shared_ptr<RenderCore::IThreadContext> _immediateContext;
 		std::shared_ptr<RenderCore::IPresentationChain> _presentationChain;
 		std::shared_ptr<MainInputHandler> _mainInputHandler;
@@ -62,14 +61,14 @@ namespace PlatformRig
 		::Assets::DependencyValidation _depValPtr;
 
 		WindowApparatus(
-			std::shared_ptr<Window> osWindow,
+			std::shared_ptr<OSServices::Window> osWindow,
 			RenderCore::Techniques::DrawingApparatus* drawingApparatus,
 			RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
 			RenderCore::BindFlag::BitField presentationChainBindFlags=0);
 		~WindowApparatus();
 	};
 
-	void CommonEventHandling(WindowApparatus& windowApparatus, SystemMessageVariant& msgPump);
+	void CommonEventHandling(WindowApparatus& windowApparatus, OSServices::SystemMessageVariant& msgPump);
 
 }
 

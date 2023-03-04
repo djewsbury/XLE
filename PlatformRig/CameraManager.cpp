@@ -15,7 +15,7 @@ using namespace PlatformRig::Literals;
 
 namespace PlatformRig { namespace Camera
 {
-    void UpdateCamera_Slew(RenderCore::Techniques::CameraDesc& camera, float dt, const InputSnapshot& input)
+    void UpdateCamera_Slew(RenderCore::Techniques::CameraDesc& camera, float dt, const OSServices::InputSnapshot& input)
     {
             // (Derived from Archeage/x2standalone camera mode)
         const float cl_sensitivity = 20.f;
@@ -110,7 +110,7 @@ namespace PlatformRig { namespace Camera
         camera._cameraToWorld = Expand(rotationPart, camPos);
     }
 
-    void UpdateCamera_Orbit(RenderCore::Techniques::CameraDesc& camera, float dt, Float3& focusPoint, const InputSnapshot& input)
+    void UpdateCamera_Orbit(RenderCore::Techniques::CameraDesc& camera, float dt, Float3& focusPoint, const OSServices::InputSnapshot& input)
     {
         const float cl_sensitivity   = 20.f;
         const float fr_fspeed_scale  = 1.f;
@@ -174,7 +174,7 @@ namespace PlatformRig { namespace Camera
         camera._cameraToWorld = cameraToWorld;
     }
 
-    void CameraInputHandler::Update(float dt, const InputSnapshot& accumulatedInputState, const Float3x4& playerCharacterLocalToWorld)
+    void CameraInputHandler::Update(float dt, const OSServices::InputSnapshot& accumulatedInputState, const Float3x4& playerCharacterLocalToWorld)
     {
         constexpr auto shift = "shift"_key;
         constexpr auto tab = "tab"_key;

@@ -5,7 +5,6 @@
 #include "SampleRig.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/PlatformApparatuses.h"
-#include "../../PlatformRig/OverlappedWindow.h"
 #include "../../PlatformRig/MainInputHandler.h"
 #include "../../PlatformRig/DebugHotKeys.h"
 #include "../../PlatformRig/DebugScreenRegistry.h"
@@ -32,6 +31,7 @@
 #include "../../Assets/AssetSetManager.h"
 
 #include "../../OSServices/Log.h"
+#include "../../OSServices/OverlappedWindow.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../ConsoleRig/Console.h"
@@ -109,7 +109,7 @@ namespace Sample
             IteratorRange<const RenderCore::Format*> _systemAttachmentFormats;
         };
 
-        using MsgVariant = VariantCat<PlatformRig::SystemMessageVariant, RenderFrame, UpdateFrame, OnRenderTargetUpdate>;
+        using MsgVariant = VariantCat<OSServices::SystemMessageVariant, RenderFrame, UpdateFrame, OnRenderTargetUpdate>;
         MsgVariant Pump();
 
         MessageLoop(std::shared_ptr<PlatformRig::WindowApparatus> apparatus);
@@ -123,7 +123,7 @@ namespace Sample
         Pending _pending = Pending::None;
 
         std::optional<RenderCore::Techniques::ParsingContext> _activeParsingContext;
-        PlatformRig::IdleState _lastIdleState = PlatformRig::IdleState::Foreground;
+        OSServices::IdleState _lastIdleState = OSServices::IdleState::Foreground;
         PlatformRig::FrameRig::OverlayConfiguration _lastOverlayConfiguration;
     };
 
@@ -146,7 +146,7 @@ namespace Sample
                 auto frameResult = _apparatus->_frameRig->ShutdownFrame(parsingContext);
 
                 // ------- Yield some process time when appropriate ------
-                _apparatus->_frameRig->IntermedialSleep(*_apparatus, _lastIdleState == PlatformRig::IdleState::Background, frameResult);
+                _apparatus->_frameRig->IntermedialSleep(*_apparatus, _lastIdleState == OSServices::IdleState::Background, frameResult);
             }
             break;       // break and continue with next event
 
@@ -155,14 +155,14 @@ namespace Sample
         }
 
         assert(!_activeParsingContext);
-        auto msgPump = PlatformRig::Window::SingleWindowMessagePump(*_apparatus->_osWindow);
+        auto msgPump = OSServices::Window::SingleWindowMessagePump(*_apparatus->_osWindow);
         PlatformRig::CommonEventHandling(*_apparatus, msgPump);
-        if (std::holds_alternative<PlatformRig::Idle>(msgPump)) {
+        if (std::holds_alternative<OSServices::Idle>(msgPump)) {
 
              // if we don't have any immediate OS events to process, it may be time to render
-            auto& idle = std::get<PlatformRig::Idle>(msgPump);
+            auto& idle = std::get<OSServices::Idle>(msgPump);
 
-            if (idle._state == PlatformRig::IdleState::Background) {
+            if (idle._state == OSServices::IdleState::Background) {
                 // Bail if we're minimized (don't have to check this in the foreground case)
                 auto presChainDesc = _apparatus->_presentationChain->GetDesc();
                 if (!(presChainDesc._width * presChainDesc._height)) {
@@ -175,7 +175,7 @@ namespace Sample
             _lastIdleState = idle._state;
             return UpdateFrame { _apparatus->_frameRig->GetSmoothedDeltaTime() * Tweakable("TimeScale", 1.0f) };
 
-        } else if (std::holds_alternative<PlatformRig::WindowResize>(msgPump)) {
+        } else if (std::holds_alternative<OSServices::WindowResize>(msgPump)) {
 
             // slightly awkward here -- we return PlatformRig::WindowResize only if we're not returning OnRenderTargetUpdate
             auto newConfig = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
@@ -222,7 +222,7 @@ namespace Sample
         auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>();
         auto rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
 
-        auto osWindow = std::make_unique<PlatformRig::Window>();
+        auto osWindow = std::make_unique<OSServices::Window>();
         if (config._initialWindowSize)
             osWindow->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
         if (auto* vulkanInstance = query_interface_cast<RenderCore::IAPIInstanceVulkan*>(renderAPI.get())) {
@@ -284,10 +284,8 @@ namespace Sample
         Log(Verbose) << "Call OnStartup, prepare first frame and show window" << std::endl;
         sampleOverlay->OnStartup(sampleGlobals);
         sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.dat"));
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->GetInputListener());
-        auto sampleListener = sampleOverlay->GetInputListener();
-        if (sampleListener)
-            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(sampleListener);
+        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem));
+        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleOverlay));
 
         frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
         sampleRigApparatus._techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
@@ -342,7 +340,7 @@ namespace Sample
             }
 
                     // ------- Quit -------------------------------------------
-            else if (std::holds_alternative<PlatformRig::ShutdownRequest>(msg)) {
+            else if (std::holds_alternative<OSServices::ShutdownRequest>(msg)) {
                 break;
             } 
         }

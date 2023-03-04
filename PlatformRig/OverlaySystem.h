@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "InputListener.h"      // for ProcessInputResult
 #include "../../RenderCore/IDevice_Forward.h"
 #include "../../RenderCore/FrameBufferDesc.h"
 #include "../../Math/Matrix.h"
@@ -23,7 +24,7 @@ namespace RenderOverlays { class FontRenderingManager; class OverlayApparatus; c
 
 namespace PlatformRig
 {
-	class IInputListener;
+    class InputContext;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     class IOverlaySystem
@@ -32,7 +33,10 @@ namespace PlatformRig
 		virtual void Render(
 			RenderCore::Techniques::ParsingContext& parserContext) = 0; 
 
-        virtual std::shared_ptr<IInputListener> GetInputListener();
+        virtual ProcessInputResult ProcessInput(
+			const InputContext& context,
+			const OSServices::InputSnapshot& evnt);
+
         virtual void SetActivationState(bool newState);
 
 		enum class RefreshMode { EventBased, RegularAnimation };
@@ -50,11 +54,15 @@ namespace PlatformRig
         virtual ~IOverlaySystem();
     };
 
+    std::shared_ptr<IInputListener> CreateInputListener(std::shared_ptr<IOverlaySystem>);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     class OverlaySystemSwitch : public IOverlaySystem
     {
     public:
-        std::shared_ptr<IInputListener> GetInputListener() override;
+        virtual ProcessInputResult ProcessInput(
+			const InputContext& context,
+			const OSServices::InputSnapshot& evnt) override;
 
         void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
@@ -72,11 +80,8 @@ namespace PlatformRig
         ~OverlaySystemSwitch();
 
     private:
-        class InputListener;
-
         signed _activeChildIndex;
         std::vector<std::pair<uint32_t,std::shared_ptr<IOverlaySystem>>> _childSystems;
-        std::shared_ptr<InputListener> _inputListener;
 
         std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
         RenderCore::FrameBufferProperties _fbProps;
@@ -87,7 +92,9 @@ namespace PlatformRig
     class OverlaySystemSet : public IOverlaySystem
     {
     public:
-        std::shared_ptr<IInputListener> GetInputListener() override;
+        virtual ProcessInputResult ProcessInput(
+			const InputContext& context,
+			const OSServices::InputSnapshot& evnt) override;
 
         void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
@@ -106,11 +113,8 @@ namespace PlatformRig
         ~OverlaySystemSet();
 
     private:
-        class InputListener;
-
         signed _activeChildIndex;
         std::vector<std::shared_ptr<IOverlaySystem>> _childSystems;
-        std::shared_ptr<InputListener> _inputListener;
 
         std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
         RenderCore::FrameBufferProperties _fbProps;

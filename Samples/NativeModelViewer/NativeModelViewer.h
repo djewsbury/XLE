@@ -25,7 +25,9 @@ namespace Sample
 
 		void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
-		std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override;
+		PlatformRig::ProcessInputResult ProcessInput(
+			const PlatformRig::InputContext& context,
+			const OSServices::InputSnapshot& evnt) override;
         void SetActivationState(bool newState) override;
 
 		virtual void OnRenderTargetUpdate(

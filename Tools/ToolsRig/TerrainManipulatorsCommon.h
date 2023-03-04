@@ -43,7 +43,7 @@ namespace ToolsRig
     public:
             // IManipulator interface
         virtual bool    OnInputEvent(
-            const PlatformRig::InputSnapshot& evnt, 
+            const OSServices::InputSnapshot& evnt, 
             const SceneEngine::IntersectionTestContext& hitTestContext,
             const SceneEngine::IIntersectionScene* hitTestScene);
         virtual void    Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext);
@@ -71,7 +71,7 @@ namespace ToolsRig
     public:
             // IManipulator interface
         virtual bool    OnInputEvent(
-            const PlatformRig::InputSnapshot& evnt, 
+            const OSServices::InputSnapshot& evnt, 
             const SceneEngine::IntersectionTestContext& hitTestContext,
             const SceneEngine::IIntersectionScene* hitTestScene);
         virtual void    Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext);

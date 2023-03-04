@@ -22,8 +22,8 @@ namespace RenderOverlays { namespace CommonWidgets
 		std::vector<std::basic_string<CharType>>    _autoComplete;
 		unsigned                                    _autoCompleteCursor = 0;
 
-		DebuggingDisplay::ProcessInputResult    ProcessInput(
-			DebuggingDisplay::InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input,
+		PlatformRig::ProcessInputResult    ProcessInput(
+			DebuggingDisplay::InterfaceState& interfaceState, const OSServices::InputSnapshot& input,
 			const std::function<std::vector<std::basic_string<CharType>>(const std::basic_string<CharType>&)>& autocompleteFn = nullptr);
 
 		void Reset(const std::basic_string<CharType>& currentLine);
@@ -86,14 +86,14 @@ namespace RenderOverlays { namespace CommonWidgets
 	{
 	public:
 		DebuggingDisplay::InterfaceState& GetInterfaceState() { return *_interfaceState; }
-		const PlatformRig::InputSnapshot& GetEvent() { return *_input; }
+		const OSServices::InputSnapshot& GetEvent() { return *_input; }
 		HoveringLayer& GetHoverings() { return *_hoverings; }
 
-		Input(DebuggingDisplay::InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input, HoveringLayer& hoverings)
+		Input(DebuggingDisplay::InterfaceState& interfaceState, const OSServices::InputSnapshot& input, HoveringLayer& hoverings)
 		: _interfaceState(&interfaceState), _input(&input), _hoverings(&hoverings) {}
 	private:
 		DebuggingDisplay::InterfaceState* _interfaceState;
-		const PlatformRig::InputSnapshot* _input;
+		const OSServices::InputSnapshot* _input;
 		HoveringLayer* _hoverings;
 	};
 

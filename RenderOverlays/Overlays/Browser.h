@@ -21,7 +21,7 @@ namespace Overlays
         SharedBrowser(const char baseDirectory[], const std::string& headerName, unsigned itemDimensions, const std::string& fileFilter);
         ~SharedBrowser();
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
     private:
         class Pimpl;
@@ -44,7 +44,7 @@ namespace Overlays
                 : _consumed(consumed), _selectedModel(selected) {}
         };
         virtual SpecialProcessInputResult SpecialProcessInput(
-            InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input) = 0;
+            InterfaceState& interfaceState, const OSServices::InputSnapshot& input) = 0;
 
         virtual Coord2  GetPreviewSize() const = 0;
     };
@@ -56,7 +56,7 @@ namespace Overlays
         ~ModelBrowser();
 
         SpecialProcessInputResult SpecialProcessInput(
-            InterfaceState& interfaceState, const PlatformRig::InputSnapshot& input);
+            InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
         Coord2  GetPreviewSize() const;
         auto    GetSRV(RenderCore::IThreadContext& context, const std::basic_string<ucs2>&) -> std::pair<const RenderCore::IResourceView*, uint64>;

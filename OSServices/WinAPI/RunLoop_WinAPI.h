@@ -5,11 +5,12 @@
 #pragma once
 
 #include "../OverlappedWindow.h"
-#include "../../OSServices/WinAPI/IncludeWindows.h"
 #include <vector>
 #include <chrono>
 
-namespace PlatformRig
+#include "IncludeWindows.h"
+
+namespace OSServices
 {
 	class OSRunLoop_BasicTimer : public IOSRunLoop
 	{

@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DisplaySettingsDisplay.h"
-#include "../OverlappedWindow.h"
+#include "../../OSServices/OverlappedWindow.h"
 #include "../../OSServices/DisplaySettings.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/ShapesRendering.h"
@@ -179,7 +179,7 @@ namespace PlatformRig { namespace Overlays
 			return ProcessInputResult::Passthrough;
 		}
 
-		DisplaySettingsDisplay(std::shared_ptr<OSServices::DisplaySettingsManager> dispSettings, std::shared_ptr<Window> window)
+		DisplaySettingsDisplay(std::shared_ptr<OSServices::DisplaySettingsManager> dispSettings, std::shared_ptr<OSServices::Window> window)
 		: _dispSettings(std::move(dispSettings))
 		, _window(std::move(window))
 		{
@@ -190,7 +190,7 @@ namespace PlatformRig { namespace Overlays
 		std::shared_ptr<OSServices::DisplaySettingsManager> _dispSettings;
 		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
 		OSServices::DisplaySettingsManager::MonitorId _activeMonitorId = 0;
-		std::shared_ptr<Window> _window;
+		std::shared_ptr<OSServices::Window> _window;
 
 		enum MenuMode { MainMenu, SelectMonitor, ChangeMode };
 		MenuMode _menuMode = MenuMode::MainMenu;
@@ -201,7 +201,7 @@ namespace PlatformRig { namespace Overlays
 		OSServices::DisplaySettingsManager::DisplaySettingsManager::ToggleableState _hdrState = OSServices::DisplaySettingsManager::DisplaySettingsManager::ToggleableState::LeaveUnchanged;
 	};
 
-	std::shared_ptr<IWidget> CreateDisplaySettingsDisplay(std::shared_ptr<OSServices::DisplaySettingsManager> dispSettings, std::shared_ptr<Window> window)
+	std::shared_ptr<IWidget> CreateDisplaySettingsDisplay(std::shared_ptr<OSServices::DisplaySettingsManager> dispSettings, std::shared_ptr<OSServices::Window> window)
 	{
 		return std::make_shared<DisplaySettingsDisplay>(std::move(dispSettings), std::move(window));
 	}

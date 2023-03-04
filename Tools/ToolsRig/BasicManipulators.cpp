@@ -22,7 +22,7 @@ namespace ToolsRig
     {
     public:
         bool OnInputEvent(
-            const PlatformRig::InputSnapshot& evnt, 
+            const OSServices::InputSnapshot& evnt, 
             const SceneEngine::IntersectionTestContext& hitTestContext,
             const SceneEngine::IIntersectionScene* hitTestScene);
         void Render(
@@ -52,7 +52,7 @@ namespace ToolsRig
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     bool CameraMovementManipulator::OnInputEvent(
-        const PlatformRig::InputSnapshot& evnt, 
+        const OSServices::InputSnapshot& evnt, 
         const SceneEngine::IntersectionTestContext& hitTestContext,
         const SceneEngine::IIntersectionScene* hitTestScene)
     {
@@ -80,7 +80,7 @@ namespace ToolsRig
         constexpr auto ctrl = "control"_key;
         if (evnt.IsHeld(ctrl) && evnt.IsPress_LButton() && hitTestScene) {
             auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
-				AsCameraDesc(*_visCameraSettings), evnt._mousePosition, hitTestContext._viewportMins, hitTestContext._viewportMaxs);
+				AsCameraDesc(*_visCameraSettings), {evnt._mousePosition._x, evnt._mousePosition._y}, hitTestContext._viewportMins, hitTestContext._viewportMaxs);
 
             auto intr = hitTestScene->FirstRayIntersection(hitTestContext, worldSpaceRay);
             if (intr._type != 0)
@@ -206,13 +206,16 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    bool    ManipulatorStack::OnInputEvent(
+    auto ManipulatorStack::OnInputEvent(
 		const PlatformRig::InputContext& context,
-		const PlatformRig::InputSnapshot& evnt)
+		const OSServices::InputSnapshot& evnt) -> ProcessInputResult
     {
+        auto* view = context.GetService<PlatformRig::WindowingSystemView>();
+        if (!view) return PlatformRig::ProcessInputResult::Passthrough;
+
 		SceneEngine::IntersectionTestContext intersectionContext {
 			AsCameraDesc(*_camera),
-			context._viewMins, context._viewMaxs,
+			view->_viewMins, view->_viewMaxs,
 			_drawingApparatus };
 
         if (!_activeManipulators.empty()) {
@@ -226,7 +229,7 @@ namespace ToolsRig
 				i->second->OnInputEvent(evnt, intersectionContext, _intersectionScene.get());
 		}
 
-        return false;
+        return ProcessInputResult::Consumed;
     }
 
     void    ManipulatorStack::Register(uint64_t id, std::shared_ptr<ToolsRig::IManipulator> manipulator)

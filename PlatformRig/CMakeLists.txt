@@ -5,7 +5,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         CameraManager.cpp
         DebugHotKeys.cpp
         FrameRig.cpp
-        InputListener.cpp
         MainInputHandler.cpp
         OverlaySystem.cpp
         PlatformApparatuses.cpp
@@ -53,7 +52,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         )
 
     if (WIN32)
-        set(WinSrc WinAPI/AllocationProfiler.cpp WinAPI/InputTranslator.cpp WinAPI/OverlappedWindow.cpp WinAPI/RunLoop_WinAPI.cpp)
+        set(WinSrc WinAPI/AllocationProfiler.cpp)
     endif()
 
     add_library(PlatformRig-${metal_name} STATIC ${Src} ${WinSrc} ${DebuggingDisplaysSrc} ${MiniSceneEngineSrc})
