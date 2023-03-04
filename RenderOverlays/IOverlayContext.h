@@ -111,9 +111,9 @@ namespace RenderOverlays
         virtual void AttachService(uint64_t, void*) = 0;
 
         template<typename Type>
-            Type* GetService() { return (Type*)GetService(typeid(Type).hash_code()); }
+            Type* GetService() { return (Type*)GetService(typeid(std::decay_t<Type>).hash_code()); }
         template<typename Type>
-            void AttachService2(Type& type) { AttachService(typeid(Type).hash_code(), &type); }
+            void AttachService2(Type& type) { AttachService(typeid(std::decay_t<Type>).hash_code(), &type); }
 
         virtual ~IOverlayContext();
     };

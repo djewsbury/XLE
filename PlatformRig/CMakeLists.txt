@@ -12,7 +12,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         Screenshot.cpp
         UnitCamera.cpp
         DebugScreensOverlay.cpp
-        DebugScreenRegistry.cpp)
+        DebugScreenRegistry.cpp
+        TopBar.cpp)
 
     set(DebuggingDisplaysSrc 
         #InitDebugDisplays.cpp

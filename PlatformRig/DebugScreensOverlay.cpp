@@ -5,6 +5,7 @@
 #include "DebugScreensOverlay.h"
 #include "OverlaySystem.h"
 #include "MainInputHandler.h"
+#include "TopBar.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../RenderOverlays/OverlayContext.h"
 #include "../RenderOverlays/OverlayEffects.h"
@@ -55,16 +56,20 @@ namespace PlatformRig
             RenderCore::Techniques::ParsingContext& parserContext) override
         {
             TRY {
+                Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
+                assert(viewportDims[0] * viewportDims[1]);
+
                 auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderer.get());
 
                 RenderOverlays::BlurryBackgroundEffect blurryBackground { parserContext };
                 overlayContext->AttachService2(blurryBackground);
                 overlayContext->AttachService2(parserContext);
+
+                auto topBarManager = CreateTopBarManager({{0,0}, viewportDims});
+                overlayContext->AttachService2(*topBarManager);
             
-                // todo -- we need the viewport that we're going to get when we begin the presentation target; not the viewport that we have now
-                Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
-                assert(viewportDims[0] * viewportDims[1]);
                 _debugScreensSystem->Render(*overlayContext, RenderOverlays::Rect{ {0,0}, viewportDims });
+                topBarManager->RenderFrame(*overlayContext);
 
                 RenderCore::Techniques::RenderPassInstance rpi;
                 auto i = std::find_if(

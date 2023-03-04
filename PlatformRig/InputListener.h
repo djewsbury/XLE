@@ -30,9 +30,9 @@ namespace PlatformRig
         void AttachService(uint64_t, void*);
 
         template<typename Type>
-            Type* GetService() const { return (Type*)GetService(typeid(Type).hash_code()); }
+            Type* GetService() const { return (Type*)GetService(typeid(std::decay_t<Type>).hash_code()); }
         template<typename Type>
-            void AttachService2(Type& type) { AttachService(typeid(Type).hash_code(), &type); }
+            void AttachService2(Type& type) { AttachService(typeid(std::decay_t<Type>).hash_code(), &type); }
 
         InputContext();
         ~InputContext();

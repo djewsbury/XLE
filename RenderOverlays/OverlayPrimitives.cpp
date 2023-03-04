@@ -4,6 +4,9 @@
 
 #include "OverlayPrimitives.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
+#include "../RenderCore/Techniques/CommonBindings.h"
+#include "../RenderCore/Format.h"
+#include "../RenderCore/Types.h"
 
 namespace RenderOverlays
 {
@@ -28,6 +31,38 @@ namespace RenderOverlays
 		// see duplicate in FontRendering.cpp
 		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
 	}
+
+	static RenderCore::MiniInputElementDesc Vertex_PCT_inputElements2D[] =
+	{
+		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
+	};
+
+	static RenderCore::MiniInputElementDesc Vertex_PCT_inputElements3D[] = 
+	{
+		{ RenderCore::Techniques::CommonSemantics::POSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
+	};
+	
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PCT::s_inputElements2D = Vertex_PCT_inputElements2D;
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PCT::s_inputElements3D = Vertex_PCT_inputElements3D;
+
+	static RenderCore::MiniInputElementDesc Vertex_PC_inputElements2D[] =
+	{
+		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM }
+	};
+
+	static RenderCore::MiniInputElementDesc Vertex_PC_inputElements3D[] = 
+	{
+		{ RenderCore::Techniques::CommonSemantics::POSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM }
+	};
+
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements2D = Vertex_PC_inputElements2D;
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements3D = Vertex_PC_inputElements3D;
 
 }
 

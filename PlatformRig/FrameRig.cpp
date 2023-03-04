@@ -6,6 +6,7 @@
 #include "AllocationProfiler.h"
 #include "OverlaySystem.h"
 #include "PlatformApparatuses.h"
+#include "TopBar.h"
 
 #include "../RenderCore/IAnnotator.h"
 #include "../RenderCore/IDevice.h"
@@ -544,6 +545,8 @@ namespace PlatformRig
         Rect displayRect(
             Coord2(outerRect._bottomRight[0] - rectWidth - padding, outerRect._topLeft[1] + padding),
             Coord2(outerRect._bottomRight[0] - padding, outerRect._topLeft[1] + padding + rectHeight));
+        if (auto* topBar = context.GetService<ITopBarManager>())
+            displayRect = topBar->RegisterFrameRigDisplay(context);
         Layout innerLayout(displayRect);
         innerLayout._paddingInternalBorder = margin;
         innerLayout._paddingBetweenAllocations = margin;

@@ -20,7 +20,7 @@ namespace RenderOverlays
 {
 	using namespace RenderCore;
 
-	class Vertex_PC
+	class VisVertex_PC
 	{
 	public:
 		Float3      _position;
@@ -64,7 +64,7 @@ namespace RenderOverlays
 		material._stateSet._writeMask = 0;		// disable depth read & write
 		auto workingVertices = overlayContext.GetImmediateDrawables().QueueDraw(
 			vertexCount, MakeIteratorRange(s_vertexInputLayout), 
-			material, Topology::TriangleList).Cast<Vertex_PC*>();
+			material, Topology::TriangleList).Cast<VisVertex_PC*>();
 		size_t workingVertexIterator = 0;
 
 		// Draw a sprite for each output matrix location

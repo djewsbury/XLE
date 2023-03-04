@@ -5,6 +5,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PlacementsDisplay.h"
+#include "../ThemeStaticData.h"
+#include "../TopBar.h"
 #include "../../SceneEngine/PlacementsManager.h"
 #include "../../SceneEngine/RayVsModel.h"
 #include "../../SceneEngine/IntersectionTest.h"
@@ -21,10 +23,10 @@
 #include "../../RenderOverlays/OverlayEffects.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/OverlayPrimitives.h"
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
-#include "../../Tools/ToolsRig/ToolsRigServices.h"
-#include "../../Tools/EntityInterface/EntityInterface.h"
+#include "../../Tools/EntityInterface/MountedData.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/Assets.h"
 #include "../../Math/MathSerialization.h"
@@ -56,75 +58,6 @@ namespace PlatformRig { namespace Overlays
 		if (any.has_value() && any.type() == typeid(T))
 			return std::any_cast<T>(std::move(any));
 		return {};
-	}
-
-	struct Vertex_PCT { Float3 _position; unsigned _colour; Float2 _texCoord; Vertex_PCT(Float3 position, unsigned colour, Float2 texCoord) : _position(position), _colour(colour), _texCoord(texCoord) {};   static RenderCore::MiniInputElementDesc inputElements2D[];};
-	RenderCore::MiniInputElementDesc Vertex_PCT::inputElements2D[] =
-	{
-		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
-		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
-		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
-	};
-
-	struct Vertex_PC { Float3 _position; unsigned _colour; Vertex_PC(Float3 position, unsigned colour) : _position(position), _colour(colour) {};   static RenderCore::MiniInputElementDesc inputElements2D[];};
-	RenderCore::MiniInputElementDesc Vertex_PC::inputElements2D[] =
-	{
-		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
-		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM }
-	};
-
-	template<typename T>
-		class MountedData
-	{
-	public:
-		operator const T&() const { return _data; }
-		const T& get() const { return _data; };
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-
-		MountedData(Formatters::IDynamicInputFormatter& fmttr)
-		: _data(fmttr), _depVal(fmttr.GetDependencyValidation())
-		{}
-		MountedData() = default;
-
-		static void ConstructToPromise(
-			std::promise<MountedData>&& promise,
-			StringSection<> mountLocation)
-		{
-			::Assets::WhenAll(ToolsRig::Services::GetEntityMountingTree().BeginFormatter(mountLocation)).ThenConstructToPromise(
-				std::move(promise),
-				[](auto fmttr) { return MountedData{*fmttr}; });
-		}
-
-		static const T& LoadOrDefault(StringSection<> mountLocation)
-		{
-			auto marker = ::Assets::MakeAssetMarker<MountedData>(mountLocation);
-			if (auto* actualized = marker->TryActualize())
-				return actualized->get();
-			static T def;
-			return def;
-		}
-	private:
-		T _data;
-		::Assets::DependencyValidation _depVal;
-	};
-
-	static ColorB DeserializeColor(Formatters::IDynamicInputFormatter& fmttr)
-	{
-		IteratorRange<const void*> value;
-		ImpliedTyping::TypeDesc typeDesc;
-		if (!fmttr.TryRawValue(value, typeDesc))
-			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
-
-		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
-			return *intForm;
-		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
-			return ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
-		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
-			return ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
-		} else {
-			Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
-		}
 	}
 
 	class ToolTipHover
@@ -295,7 +228,7 @@ namespace PlatformRig { namespace Overlays
 						4, 5, 3
 					};
 					RenderCore::Techniques::ImmediateDrawableMaterial material;
-					auto vertices = draw.GetContext().DrawGeometry(dimof(indices), Vertex_PC::inputElements2D, std::move(material)).Cast<Vertex_PC*>();
+					auto vertices = draw.GetContext().DrawGeometry(dimof(indices), Vertex_PC::s_inputElements2D, std::move(material)).Cast<Vertex_PC*>();
 					for (unsigned c=0; c<dimof(indices); ++c)
 						vertices[c] = Vertex_PC { AsPixelCoords(pts[indices[c]]), HardwareColor(headingBkColor) };
 
@@ -676,7 +609,7 @@ namespace PlatformRig { namespace Overlays
 
 		ToolTipStyler()
 		{
-			_staticData = &MountedData<StaticData>::LoadOrDefault("cfg/displays/tooltipstyler");
+			_staticData = &EntityInterface::MountedData<StaticData>::LoadOrDefault("cfg/displays/tooltipstyler");
 			_headingFont = ActualizeFont(_staticData->_headingFont);
 			_valueFont = ActualizeFont(_staticData->_valueFont);
 
@@ -860,211 +793,6 @@ namespace PlatformRig { namespace Overlays
 		hover = le.BuildLayedOutWidgets();
 	}
 
-	class TopBarRenderer
-	{
-	public:
-		enum class SectionType { Heading, FrameRig };
-		struct SectionRequest
-		{
-			SectionType _type = SectionType::FrameRig;
-			unsigned _width = 0;
-		};
-
-		std::vector<Rect> Render(
-			IOverlayContext& context, Interactables& interactables, InterfaceState& interfaceState,
-			Rect viewport,
-			IteratorRange<const SectionRequest*> sectionRequests);
-	};
-
-	struct TopBarStaticData
-	{
-		unsigned _topMargin = 12;
-		unsigned _height = 42;
-		unsigned _borderMargin = 4;
-		unsigned _borderWidth = 2;
-		unsigned _shadowHeight = 12;
-
-		unsigned _preHeadingMargin = 64;
-		unsigned _headingHeight = 46;
-		unsigned _headingPadding = 8;
-
-		unsigned _frameRigAreaWidth = 160;
-		unsigned _frameRigPaddingLeft = 20;
-		unsigned _frameRigPaddingRight = 20;
-		unsigned _frameRigPaddingTop = 2;
-		unsigned _frameRigPaddingBottom = 2;
-
-		TopBarStaticData() = default;
-
-		template<typename Formatter>
-			TopBarStaticData(Formatter& fmttr)
-		{
-			uint64_t keyname;
-			while (TryKeyedItem(fmttr, keyname)) {
-				switch (keyname) {
-				case "TopMargin"_h: _topMargin = Formatters::RequireCastValue<decltype(_topMargin)>(fmttr); break;
-				case "Height"_h: _height = Formatters::RequireCastValue<decltype(_height)>(fmttr); break;
-				case "BorderMargin"_h: _borderMargin = Formatters::RequireCastValue<decltype(_borderMargin)>(fmttr); break;
-				case "BorderWidth"_h: _borderWidth = Formatters::RequireCastValue<decltype(_borderWidth)>(fmttr); break;
-				case "ShadowHeight"_h: _height = Formatters::RequireCastValue<decltype(_shadowHeight)>(fmttr); break;
-
-				case "PreHeadingMargin"_h: _preHeadingMargin = Formatters::RequireCastValue<decltype(_height)>(fmttr); break;
-				case "HeadingHeight"_h: _headingHeight = Formatters::RequireCastValue<decltype(_headingHeight)>(fmttr); break;
-				case "HeadingPadding"_h: _headingPadding = Formatters::RequireCastValue<decltype(_headingPadding)>(fmttr); break;
-
-				case "FrameRigAreaWidth"_h: _frameRigAreaWidth = Formatters::RequireCastValue<decltype(_frameRigAreaWidth)>(fmttr); break;
-				case "FrameRigPaddingLeft"_h: _frameRigPaddingLeft = Formatters::RequireCastValue<decltype(_frameRigPaddingLeft)>(fmttr); break;
-				case "FrameRigPaddingRight"_h: _frameRigPaddingRight = Formatters::RequireCastValue<decltype(_frameRigPaddingRight)>(fmttr); break;
-				case "FrameRigPaddingTop"_h: _frameRigPaddingTop = Formatters::RequireCastValue<decltype(_frameRigPaddingTop)>(fmttr); break;
-				case "FrameRigPaddingBottom"_h: _frameRigPaddingBottom = Formatters::RequireCastValue<decltype(_frameRigPaddingBottom)>(fmttr); break;
-				default: SkipValueOrElement(fmttr); break;
-				}
-			}
-		}
-	};
-
-	struct ThemeStaticData
-	{
-		ColorB _semiTransparentTint = 0xff2e3440;
-		ColorB _topBarBorderColor = 0xffffffff;
-		ColorB _headingBkgrnd = 0xffffffff;
-
-		unsigned _shadowOffset0 = 8;
-		unsigned _shadowOffset1 = 8;
-		unsigned _shadowSoftnessRadius = 16;
-		
-		ThemeStaticData() = default;
-
-		template<typename Formatter>
-			ThemeStaticData(Formatter& fmttr)
-		{
-			uint64_t keyname;
-			while (TryKeyedItem(fmttr, keyname)) {
-				switch (keyname) {
-				case "SemiTransparentTint"_h: _semiTransparentTint = DeserializeColor(fmttr); break;
-				case "TopBarBorderColor"_h: _topBarBorderColor = DeserializeColor(fmttr); break;
-				case "HeadingBackground"_h: _headingBkgrnd = DeserializeColor(fmttr); break;
-				case "ShadowOffset0"_h: _shadowOffset0 = Formatters::RequireCastValue<decltype(_shadowOffset0)>(fmttr); break;
-				case "ShadowOffset1"_h: _shadowOffset1 = Formatters::RequireCastValue<decltype(_shadowOffset1)>(fmttr); break;
-				case "ShadowSoftnessRadius"_h: _shadowSoftnessRadius = Formatters::RequireCastValue<decltype(_shadowSoftnessRadius)>(fmttr); break;
-				default: SkipValueOrElement(fmttr); break;
-				}
-			}
-		}
-	};
-
-	static RenderCore::UniformsStreamInterface CreateTexturedUSI()
-	{
-		RenderCore::UniformsStreamInterface usi;
-		usi.BindResourceView(0, "InputTexture"_h);
-		return usi;
-	}
-	static RenderCore::UniformsStreamInterface s_texturedUSI = CreateTexturedUSI();
-
-	auto TopBarRenderer::Render(
-		IOverlayContext& context, Interactables& interactables, InterfaceState& interfaceState,
-		Rect viewport,
-		IteratorRange<const SectionRequest*> sectionRequests) -> std::vector<Rect>
-	{
-		// Render the top bar along the top of the viewport, including the areas for the sections 
-		// as requested
-		auto& topBarStaticData = MountedData<TopBarStaticData>::LoadOrDefault("cfg/displays/topbar");
-		auto& themeStaticData = MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
-
-		auto xAtPoint = viewport._bottomRight[0] - (topBarStaticData._height + topBarStaticData._frameRigPaddingLeft + topBarStaticData._frameRigPaddingRight + topBarStaticData._frameRigAreaWidth);
-		auto xAtShoulder = viewport._bottomRight[0] - (topBarStaticData._frameRigPaddingLeft + topBarStaticData._frameRigPaddingRight + topBarStaticData._frameRigAreaWidth);
-
-		Coord2 vertexPositions[6] {
-			{ viewport._topLeft[0], viewport._topLeft[1] + topBarStaticData._topMargin },
-			{ viewport._bottomRight[0], viewport._topLeft[1] + topBarStaticData._topMargin },
-			{ viewport._topLeft[0], viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height },
-			{ xAtPoint, viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height },
-			{ xAtShoulder, viewport._topLeft[1] + topBarStaticData._topMargin + 2 * topBarStaticData._height },
-			{ viewport._bottomRight[0], viewport._topLeft[1] + topBarStaticData._topMargin + 2 * topBarStaticData._height },
-		};
-		unsigned indices[] {
-			1, 0, 3,
-			3, 0, 2,
-			3, 4, 1,
-			1, 4, 5
-		};
-
-		RenderOverlays::BlurryBackgroundEffect* blurryBackground;
-		RenderCore::Techniques::ImmediateDrawableMaterial material;
-		if ((blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()))
-			if (auto res = blurryBackground->GetResourceView()) {
-				material._uniformStreamInterface = &s_texturedUSI;
-				material._uniforms._resourceViews.push_back(std::move(res));
-			}
-
-		auto vertices = context.DrawGeometry(dimof(indices), Vertex_PCT::inputElements2D, std::move(material)).Cast<Vertex_PCT*>();
-		for (unsigned c=0; c<dimof(indices); ++c)
-			vertices[c] = { AsPixelCoords(vertexPositions[indices[c]]), HardwareColor(themeStaticData._semiTransparentTint), Float2(0,0) };
-		if (blurryBackground)
-			for (unsigned c=0; c<dimof(indices); ++c)
-				vertices[c]._texCoord = blurryBackground->AsTextureCoords(vertexPositions[indices[c]]);
-
-		// render dashed line along the top
-		Float2 topDashLine[] {
-			Float2 { viewport._topLeft[0], viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._borderMargin },
-			Float2 { viewport._bottomRight[0], viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._borderMargin }
-		};
-
-		// cosine rule for triangles
-		// c^2 = a^2 + b^2 - 2ab.cos(C)
-		// c is 45 degrees, and A & b are topBarStaticData._borderMargin
-		// float a = topBarStaticData._borderMargin * std::sqrt(2*(1 - std::cos(gPI/4.f)));
-		float a = topBarStaticData._borderMargin * std::tan(gPI/8.0f);
-
-		Float2 bottomDashLine[] {
-			Float2 { viewport._topLeft[0], viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height - topBarStaticData._borderMargin },
-			Float2 { xAtPoint + a, viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height - topBarStaticData._borderMargin },
-
-			Float2 { xAtShoulder + a, viewport._topLeft[1] + topBarStaticData._topMargin + 2*topBarStaticData._height - topBarStaticData._borderMargin },
-			Float2 { viewport._bottomRight[0], viewport._topLeft[1] + topBarStaticData._topMargin + 2*topBarStaticData._height - topBarStaticData._borderMargin }
-		};
-
-		DashLine(context, topDashLine, themeStaticData._topBarBorderColor, (float)topBarStaticData._borderWidth);
-		DashLine(context, bottomDashLine, themeStaticData._topBarBorderColor, (float)topBarStaticData._borderWidth);
-
-		std::vector<Rect> result { sectionRequests.size(), Rect{ Coord2{0,0}, Coord2{0,0}} };
-		auto headingRequest = std::find_if(sectionRequests.begin(), sectionRequests.end(), [](const auto& q) { return q._type == SectionType::Heading; });
-		if (headingRequest != sectionRequests.end()) {
-
-			// allocate a rectangle for the heading
-			Rect frame;
-			frame._topLeft = { viewport._topLeft[0] + topBarStaticData._preHeadingMargin, viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height/2 - topBarStaticData._headingHeight/2 };
-			frame._bottomRight = { 
-				viewport._topLeft[0] + topBarStaticData._preHeadingMargin
-				+ topBarStaticData._headingPadding*2 + headingRequest->_width,
-				viewport._topLeft[1] + topBarStaticData._topMargin + topBarStaticData._height/2 + topBarStaticData._headingHeight/2 };
-
-			Rect content;
-			content._topLeft = frame._topLeft + Coord2{ topBarStaticData._headingPadding, topBarStaticData._headingPadding };
-			content._bottomRight = frame._bottomRight - Coord2{ topBarStaticData._headingPadding, topBarStaticData._headingPadding };
-
-			// draw a rhombus around the frame, but with some extra triangles
-			RenderCore::Techniques::ImmediateDrawableMaterial material;
-			auto vertices = context.DrawGeometry(6, Vertex_PC::inputElements2D, std::move(material)).Cast<Vertex_PC*>();
-			Coord2 A = frame._topLeft;
-			Coord2 B { frame._topLeft[0] - topBarStaticData._headingHeight, frame._bottomRight[1] };
-			Coord2 C = frame._bottomRight;
-			Coord2 D { frame._bottomRight[0] + topBarStaticData._headingHeight, frame._topLeft[1] };
-			vertices[0] = Vertex_PC { AsPixelCoords(B), HardwareColor(themeStaticData._headingBkgrnd) };
-			vertices[1] = Vertex_PC { AsPixelCoords(C), HardwareColor(themeStaticData._headingBkgrnd) };
-			vertices[2] = Vertex_PC { AsPixelCoords(A), HardwareColor(themeStaticData._headingBkgrnd) };
-
-			vertices[3] = Vertex_PC { AsPixelCoords(A), HardwareColor(themeStaticData._headingBkgrnd) };
-			vertices[4] = Vertex_PC { AsPixelCoords(C), HardwareColor(themeStaticData._headingBkgrnd) };
-			vertices[5] = Vertex_PC { AsPixelCoords(D), HardwareColor(themeStaticData._headingBkgrnd) };
-
-			result[headingRequest-sectionRequests.begin()] = content;
-
-		}
-
-		return result;
-	}
-
 	class PlacementsDisplay : public IWidget ///////////////////////////////////////////////////////////
 	{
 	public:
@@ -1073,23 +801,19 @@ namespace PlatformRig { namespace Overlays
 			const unsigned lineHeight = 20;
 			const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
-			const char headingString[] = "Placements Selector";
-			float headingWidth = 0.f;
-			auto* headingFont = _headingFont->TryActualize();
-			if (headingFont)
-				headingWidth = StringWidth(**headingFont, MakeStringSection(headingString));
-
-			TopBarRenderer topBarRenderer;
-			TopBarRenderer::SectionRequest topBarSections[] { {TopBarRenderer::SectionType::Heading, (unsigned)headingWidth }, {TopBarRenderer::SectionType::FrameRig} };
-			auto topBar = topBarRenderer.Render(context, interactables, interfaceState, layout.GetMaximumSize(), topBarSections);
-			assert(topBar.size() == dimof(topBarSections));
-			if (IsGood(topBar[0]) && headingFont)
-				DrawText()
-					.Font(**headingFont)
-					.Color(ColorB::Black)
-					.Alignment(RenderOverlays::TextAlignment::Left)
-					.Flags(0)
-					.Draw(context, topBar[0], "Placements Selector");
+			if (auto* topBar = context.GetService<ITopBarManager>()) {
+				const char headingString[] = "Placements Selector";
+				if (auto* headingFont = _headingFont->TryActualize()) {
+					auto rect = topBar->RegisterScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+					if (IsGood(rect) && headingFont)
+						DrawText()
+							.Font(**headingFont)
+							.Color(ColorB::Black)
+							.Alignment(RenderOverlays::TextAlignment::Left)
+							.Flags(0)
+							.Draw(context, rect, headingString);
+				}
+			}
 
 			auto* parsingContext = (RenderCore::Techniques::ParsingContext*)context.GetService(typeid(RenderCore::Techniques::ParsingContext).hash_code());
 			if (parsingContext) {
@@ -1125,7 +849,7 @@ namespace PlatformRig { namespace Overlays
 				if (screenSpaceMins[0] < screenSpaceMaxs[0]) {
 					// FillRectangle(context, Rect{screenSpaceMins, screenSpaceMaxs}, ColorB(196, 196, 196, 128));
 
-					auto& themeStaticData = MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
+					auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
 					float spaceLeft = screenSpaceMins[0];
 					float spaceRight = viewportDims[0] - screenSpaceMaxs[0];
 

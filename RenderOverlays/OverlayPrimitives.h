@@ -7,6 +7,8 @@
 #include "../Assets/AssetsCore.h"
 #include "../Math/Vector.h"
 
+namespace RenderCore { class MiniInputElementDesc; }
+
 namespace RenderOverlays
 {
     enum class TextAlignment 
@@ -107,6 +109,26 @@ namespace RenderOverlays
         return  rect._topLeft[0] < rect._bottomRight[0]
             &&  rect._topLeft[1] < rect._bottomRight[1];
     }
+
+    ///////////////////////////////////////////////////////////////////////////////////
+    //          V E R T E X   T Y P E S
+
+	struct Vertex_PCT
+    {
+        Float3 _position;
+        unsigned _colour;
+        Float2 _texCoord;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements2D;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements3D;
+    };
+
+    struct Vertex_PC
+    {
+        Float3 _position;
+        unsigned _colour;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements2D;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements3D;
+    };
 
 	///////////////////////////////////////////////////////////////////////////////////
     //          M I S C

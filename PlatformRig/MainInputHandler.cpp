@@ -59,7 +59,7 @@ namespace PlatformRig
 		if (i != _services.end() && i->first == id) {
 			i->second = ptr;
 		} else {
-			_services.emplace_back(id, ptr);
+			_services.insert(i, std::make_pair(id, ptr));
 		}
     }
 

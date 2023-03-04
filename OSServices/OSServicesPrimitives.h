@@ -17,10 +17,10 @@ namespace OSServices
 		constexpr int operator[](unsigned idx) const { if (idx == 0) return _x; else { assert(idx == 1); return _y; } }
 		constexpr int& operator[](unsigned idx) { if (idx == 0) return _x; else { assert(idx == 1); return _y; } }
 
-		constexpr friend Coord2 operator-(const Coord2& lhs, const Coord2& rhs) { return {lhs._x - rhs._x, lhs._y - rhs._y }; }
-		constexpr friend Coord2 operator+(const Coord2& lhs, const Coord2& rhs) { return {lhs._x + rhs._x, lhs._y + rhs._y }; }
-		constexpr Coord2& operator+=(const Coord2& other) { _x += other._y; _y += other._y; return *this; }
-		constexpr Coord2& operator-=(const Coord2& other) { _x -= other._y; _y -= other._y; return *this; }
+		constexpr friend Coord2 operator-(const Coord2& lhs, const Coord2& rhs) { return { lhs._x - rhs._x, lhs._y - rhs._y }; }
+		constexpr friend Coord2 operator+(const Coord2& lhs, const Coord2& rhs) { return { lhs._x + rhs._x, lhs._y + rhs._y }; }
+		constexpr Coord2& operator+=(const Coord2& other) { _x += other._x; _y += other._y; return *this; }
+		constexpr Coord2& operator-=(const Coord2& other) { _x -= other._x; _y -= other._y; return *this; }
 		constexpr friend bool operator==(const Coord2& lhs, const Coord2& rhs) { return (lhs._x == rhs._x) && (lhs._y == rhs._y); }
 		constexpr friend bool operator!=(const Coord2& lhs, const Coord2& rhs) { return (lhs._x != rhs._x) || (lhs._y != rhs._y); }
 	};
