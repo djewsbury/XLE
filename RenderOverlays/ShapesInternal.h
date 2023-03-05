@@ -6,6 +6,7 @@
 
 #include "OverlayPrimitives.h"
 #include "../Math/Vector.h"
+#include "../Assets/DepVal.h"
 #include <memory>
 #include <future>
 
@@ -20,12 +21,16 @@ namespace RenderOverlays { namespace Internal
 		std::shared_ptr<Font> _defaultFont;
 		std::shared_ptr<Font> _tableHeaderFont;
 		std::shared_ptr<Font> _tableValuesFont;
+		::Assets::DependencyValidation _depVal;
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		DefaultFontsBox(
 			std::shared_ptr<Font> defaultFont,
 			std::shared_ptr<Font> headerFont,
-			std::shared_ptr<Font> valuesFont)
-		: _defaultFont(std::move(defaultFont)), _tableHeaderFont(std::move(headerFont)), _tableValuesFont(std::move(valuesFont))
+			std::shared_ptr<Font> valuesFont,
+			::Assets::DependencyValidation depVal)
+		: _defaultFont(std::move(defaultFont)), _tableHeaderFont(std::move(headerFont)), _tableValuesFont(std::move(valuesFont)), _depVal(std::move(depVal))
 		{}
 
 		static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise);

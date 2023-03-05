@@ -64,6 +64,7 @@ namespace RenderOverlays
     };
 
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size);
+	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> pathAndSize);		// use "<fontname>:<size>"
 
 	float CharWidth(const Font& font, ucs4 ch, ucs4 prev);
 

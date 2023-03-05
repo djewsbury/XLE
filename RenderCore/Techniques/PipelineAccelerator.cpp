@@ -1367,11 +1367,10 @@ namespace RenderCore { namespace Techniques
 	{
 		std::stringstream str;
 		str.fill('0');
-		unsigned counter = 0;
+		bool first = true;
 		for (auto e:selectors) {
-			if ((counter%countPerLine) == (countPerLine-1)) str << "\n";
-			else if (counter != 0) str << ", ";
-			++counter;
+			if (!first) str << ", ";
+			first = false;
 			str << "{color:" << std::hex << std::setw(6) << (e.HashName() & 0xffffff) << std::setw(0) << "}";
 			str << e.Name() << ":" << e.ValueAsString();
 		};

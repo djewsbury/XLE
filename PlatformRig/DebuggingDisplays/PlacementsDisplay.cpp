@@ -623,19 +623,8 @@ namespace PlatformRig { namespace Overlays
 			if (name.IsEmpty()) {
 				futureFont = MakeFont("Petra", 16);
 			} else {
-				auto colon = name.end();
-				while (colon != name.begin() && *(colon-1) != ':') --colon;
-				if (colon != name.begin()) {
-					uint32_t fontSize = 0;
-					auto* parseEnd = FastParseValue(MakeStringSection(colon, name.end()), fontSize);
-					if (parseEnd != name.end())
-						Throw(std::runtime_error(StringMeld<128>() << "Could not interpret font name (" << name << ")"));
-					futureFont = MakeFont({name.begin(), colon-1}, fontSize);
-				} else {
-					futureFont = MakeFont(name, 16);
-				}
+				futureFont = MakeFont(name);
 			}
-
 			return futureFont->Actualize();		// stall
 		}
 

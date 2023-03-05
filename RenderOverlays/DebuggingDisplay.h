@@ -258,7 +258,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         TableElement(const char label[],  ColorB bkColour = ColorB(0xff000000)) : _label(label), _bkColour(bkColour) {}
         TableElement() : _bkColour(0xff000000) {}
     };
-    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, ColorB bkColor, Interactables* interactables=NULL);
+    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, Interactables* interactables=NULL);
     Coord DrawTableEntry(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry);
 
     ///////////////////////////////////////////////////////////////////////////////////

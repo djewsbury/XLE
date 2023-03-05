@@ -67,6 +67,7 @@ namespace RenderOverlays
     void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, unsigned softnessRadius = 32);
 
     void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
+    void        SolidLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
 
     struct ColorAdjust
     {

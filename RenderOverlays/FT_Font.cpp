@@ -17,6 +17,7 @@
 #include "../Formatters/FormatterUtils.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/Conversion.h"
+#include "../Utility/FastParseValue.h"
 #include <set>
 #include <algorithm>
 #include <assert.h>
@@ -210,6 +211,21 @@ namespace RenderOverlays
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size)
 	{
 		return std::reinterpret_pointer_cast<::Assets::MarkerPtr<Font>>(::Assets::MakeAssetMarkerPtr<FTFont>(path, size));
+	}
+
+	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> pathAndSize)
+	{
+		auto colon = pathAndSize.end();
+		while (colon != pathAndSize.begin() && *(colon-1) != ':') --colon;
+		if (colon != pathAndSize.begin()) {
+			uint32_t fontSize = 0;
+			auto* parseEnd = FastParseValue(MakeStringSection(colon, pathAndSize.end()), fontSize);
+			if (parseEnd != pathAndSize.end())
+				Throw(std::runtime_error(StringMeld<128>() << "Could not interpret font name (" << pathAndSize << ")"));
+			return MakeFont({pathAndSize.begin(), colon-1}, fontSize);
+		} else {
+			return MakeFont(pathAndSize, 16);
+		}
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////

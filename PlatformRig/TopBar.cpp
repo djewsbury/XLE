@@ -26,7 +26,7 @@ namespace PlatformRig
 		unsigned _height = 42;
 		unsigned _borderMargin = 4;
 		unsigned _borderWidth = 2;
-		unsigned _shadowHeight = 12;
+		unsigned _underBarMargin = 8;
 
 		unsigned _preHeadingMargin = 64;
 		unsigned _headingHeight = 46;
@@ -50,7 +50,7 @@ namespace PlatformRig
 				case "Height"_h: _height = Formatters::RequireCastValue<decltype(_height)>(fmttr); break;
 				case "BorderMargin"_h: _borderMargin = Formatters::RequireCastValue<decltype(_borderMargin)>(fmttr); break;
 				case "BorderWidth"_h: _borderWidth = Formatters::RequireCastValue<decltype(_borderWidth)>(fmttr); break;
-				case "ShadowHeight"_h: _height = Formatters::RequireCastValue<decltype(_shadowHeight)>(fmttr); break;
+				case "UnderBarMargin"_h: _underBarMargin = Formatters::RequireCastValue<decltype(_underBarMargin)>(fmttr); break;
 
 				case "PreHeadingMargin"_h: _preHeadingMargin = Formatters::RequireCastValue<decltype(_height)>(fmttr); break;
 				case "HeadingHeight"_h: _headingHeight = Formatters::RequireCastValue<decltype(_headingHeight)>(fmttr); break;
@@ -265,6 +265,9 @@ namespace PlatformRig
 		Rect content;
 		content._topLeft = frame._topLeft + Coord2 { _topBarStaticData._headingPadding, _topBarStaticData._headingPadding };
 		content._bottomRight = frame._bottomRight - Coord2{ _topBarStaticData._headingPadding, _topBarStaticData._headingPadding };
+
+		// Adjust the layout down, because we may have cut off some of the usable area for the display
+		layout._maximumSize._topLeft[1] = std::max(layout._maximumSize._topLeft[1], int(_topBarStaticData._topMargin + 2*_topBarStaticData._height + _topBarStaticData._underBarMargin));
 		return content;
 	}
 

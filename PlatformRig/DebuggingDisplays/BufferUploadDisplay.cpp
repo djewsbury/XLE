@@ -643,12 +643,11 @@ namespace PlatformRig { namespace Overlays
         float averageCommandListLatency = commandListLatencyCount?float(double(commandListLatencySum/TimeMarker(commandListLatencyCount)) * _reciprocalTimerFrequency):0.f;
 
         const auto lineHeight = 20u;
-        const ColorB headerColor = ColorB::Blue;
         std::pair<std::string, unsigned> headers0[] = { std::make_pair("Name", 300), std::make_pair("Value", 3000) };
         std::pair<std::string, unsigned> headers1[] = { std::make_pair("Name", 300), std::make_pair("Tex", 150), std::make_pair("Geo", 150), std::make_pair("Uniforms", 300) };
         char buffer[256];
             
-        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), headerColor, &interactables);
+        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), &interactables);
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Ave latency"), 
                 std::make_pair("Value", XlDynFormatString("%6.2f ms", averageTransactionLatency * 1000.f)) });
@@ -702,7 +701,7 @@ namespace PlatformRig { namespace Overlays
                 std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesLockedDueToOrdering}).AsString()) });
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), headerColor, &interactables);
+        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), &interactables);
         DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Recent creates"), 
                 std::make_pair("Tex", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::Texture])),
@@ -739,10 +738,9 @@ namespace PlatformRig { namespace Overlays
         Interactables& interactables, InterfaceState& interfaceState)
     {
         const auto lineHeight = 20u;
-        const ColorB headerColor = ColorB::Blue;
         std::pair<std::string, unsigned> headers[] = { std::make_pair("Name", 500), std::make_pair("Latency (ms)", 160), std::make_pair("Type", 80), std::make_pair("Description", 3000) };
             
-        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers), headerColor, &interactables);
+        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers), &interactables);
 
         unsigned frameCounter = 0;
         for (auto i=_frames.rbegin(); i!=_frames.rend(); ++i, ++frameCounter) {

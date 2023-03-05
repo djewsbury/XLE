@@ -16,6 +16,9 @@
 #include "../RenderCore/Assets/RawMaterial.h"
 #include "../RenderCore/UniformsStream.h"
 #include "../ConsoleRig/Console.h"
+#include "../Tools/EntityInterface/MountedData.h"
+#include "../Formatters/IDynamicFormatter.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../Math/Transformations.h"
 #include "../Math/ProjectionMath.h"
 #include "../ConsoleRig/ResourceBox.h"       // for FindCachedBox
@@ -160,11 +163,85 @@ namespace RenderOverlays { namespace DebuggingDisplay
         _pendingDelta = 0.f;
     }
 
+    static ColorB DeserializeColor(Formatters::IDynamicInputFormatter& fmttr)
+	{
+		IteratorRange<const void*> value;
+		ImpliedTyping::TypeDesc typeDesc;
+		if (!fmttr.TryRawValue(value, typeDesc))
+			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
+
+		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
+			return *intForm;
+		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
+			return ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
+			return ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+		} else {
+			Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
+		}
+	}
+
+    struct ScrollBarStaticData
+	{
+        unsigned _sectionHeight = 8;
+        unsigned _sectionMargin = 2;
+        unsigned _inactiveHalfWidth = 2;
+        ColorB _colorA = 0xffa3be8c;
+        ColorB _colorB = 0xffebcb8b;
+        ColorB _colorC = 0xffbf616a;
+
+        ScrollBarStaticData() = default;
+        template<typename Formatter>
+            ScrollBarStaticData(Formatter& fmttr)
+        {
+            uint64_t keyname;
+            while (fmttr.TryKeyedItem(keyname)) {
+                switch (keyname) {
+                case "SectionHeight"_h: _sectionHeight = Formatters::RequireCastValue<decltype(_sectionHeight)>(fmttr); break;
+                case "SectionMargin"_h: _sectionMargin = Formatters::RequireCastValue<decltype(_sectionMargin)>(fmttr); break;
+                case "InactiveHalfWidth"_h: _inactiveHalfWidth = Formatters::RequireCastValue<decltype(_inactiveHalfWidth)>(fmttr); break;
+                case "ColorA"_h: _colorA = DeserializeColor(fmttr); break;
+                case "ColorB"_h: _colorB = DeserializeColor(fmttr); break;
+                case "ColorC"_h: _colorC = DeserializeColor(fmttr); break;
+                default: SkipValueOrElement(fmttr); break;
+                }
+            }
+        }
+    };
+
     void DrawScrollBar(IOverlayContext& context, const ScrollBar::Coordinates& coordinates, float thumbPosition, ColorB fillColour)
     {
         const Rect thumbRect = coordinates.Thumb(thumbPosition);
-        const float roundedProportion = 2.f/5.f;
-        FillRaisedRoundedRectangle(context, thumbRect, fillColour, roundedProportion);
+
+        auto& staticData = EntityInterface::MountedData<ScrollBarStaticData>::LoadOrDefault("cfg/displays/scrollbar");
+        unsigned sectionCount = (coordinates.ScrollArea().Height() - staticData._sectionMargin) / (staticData._sectionHeight + staticData._sectionMargin);
+        if (sectionCount == 0) return;
+
+        auto middle = (coordinates.ScrollArea()._topLeft[0] + coordinates.ScrollArea()._bottomRight[1]) / 2;
+
+        ColorB colors[] { staticData._colorA, staticData._colorB, staticData._colorC };
+        for (unsigned c=0; c<sectionCount; ++c) {
+            int top = coordinates.ScrollArea()._topLeft[1] + staticData._sectionMargin + c * (staticData._sectionHeight + staticData._sectionMargin);
+            int bottom = top + staticData._sectionHeight;
+            bool active = top <= thumbRect._bottomRight[1] && bottom >= thumbRect._topLeft[1];
+            if (active) {
+                FillRectangle(
+                    context,
+                    {
+                        Coord2 { coordinates.ScrollArea()._topLeft[0], top },
+                        Coord2 { coordinates.ScrollArea()._bottomRight[0], bottom }
+                    },
+                    colors[c * dimof(colors) / sectionCount]);
+            } else {
+                FillRectangle(
+                    context,
+                    {
+                        Coord2 { middle - staticData._inactiveHalfWidth, top },
+                        Coord2 { middle + staticData._inactiveHalfWidth, bottom }
+                    },
+                    colors[c * dimof(colors) / sectionCount]);
+            }
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -419,38 +496,125 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
-    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, ColorB bkColor, Interactables* interactables)
+
+    struct TableStaticData
+	{
+        ColorB _frameColor = 0xffefe9d9;
+        ColorB _headerLabelColor = 0xffffffff;
+        unsigned _headerLabelHorzPadding = 8;
+        unsigned _headerLabelLeftMargin = 16;
+        unsigned _frameWidth = 4;
+        unsigned _downStrokeLength = 32;
+
+        TableStaticData() = default;
+        template<typename Formatter>
+            TableStaticData(Formatter& fmttr)
+        {
+            uint64_t keyname;
+            while (fmttr.TryKeyedItem(keyname)) {
+                switch (keyname) {
+                case "FrameColor"_h: _frameColor = DeserializeColor(fmttr); break;
+                case "HeaderLabelColor"_h: _headerLabelColor = DeserializeColor(fmttr); break;
+                case "HeaderLabelHorzPadding"_h: _headerLabelHorzPadding = Formatters::RequireCastValue<decltype(_headerLabelHorzPadding)>(fmttr); break;
+                case "HeaderLabelLeftMargin"_h: _headerLabelLeftMargin = Formatters::RequireCastValue<decltype(_headerLabelLeftMargin)>(fmttr); break;
+                case "FrameWidth"_h: _frameWidth = Formatters::RequireCastValue<decltype(_frameWidth)>(fmttr); break;
+                case "DownStrokeLength"_h: _downStrokeLength = Formatters::RequireCastValue<decltype(_downStrokeLength)>(fmttr); break;
+                default: SkipValueOrElement(fmttr); break;
+                }
+            }
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////
+    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, Interactables* interactables)
     {
-        static const ColorB HeaderTextColor     ( 255, 255, 255, 255 );
-        static const ColorB HeaderBkColor       (  96,  96,  96, 196 );
-        static const ColorB HeaderBkOutColor    ( 255, 255, 255, 255 );
-        static const ColorB SepColor            ( 255, 255, 255, 255 );
-
-        FillRaisedRectangle(context, rect, HeaderBkColor);
-
+        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
         Layout tempLayout(rect);
         tempLayout._paddingInternalBorder = 0;
+        auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
+        unsigned lastLabelRight = rect._topLeft[0];
+        VLA_UNSAFE_FORCE(Rect, labelRects, fieldHeaders.size());
+        unsigned labelRectCount = 0;
         for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
-            Rect r = tempLayout.AllocateFullHeight(i->second);
-            if (!i->first.empty() && i->second) {
-                if (i != fieldHeaders.begin())
-                    context.DrawLine(ProjectionMode::P2D,
-                        AsPixelCoords(Coord2(r._topLeft[0], r._topLeft[1]+2)), SepColor,
-                        AsPixelCoords(Coord2(r._topLeft[0], r._bottomRight[1]-2)), SepColor,
-                        1.f);
-                r._topLeft[0] += 8;
-
-                const ColorB colour = HeaderTextColor;
-                DrawText()
-                    .Font(*ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont)
-                    .Alignment(TextAlignment::Left)
-                    .Color(colour)
-                    .Flags(DrawTextFlags::Outline)
-                    .Draw(context, r, MakeStringSection(i->first));
-
-                if (interactables)
-                    interactables->Register({r, InteractableId_Make(MakeStringSection(i->first))});
+            if (!i->second) {
+                labelRects[labelRectCount++] = Rect{{0,0}, {-1,-1}};
+                continue;
             }
+
+            // calculate rectangles for the label area
+            auto labelWidth = StringWidth(fnt, MakeStringSection(i->first), 0.f, true);
+            auto r = tempLayout.AllocateFullHeight(i->second);
+            Rect labelFrame { 
+                { r._topLeft[0] + staticData._headerLabelLeftMargin, r._topLeft[1] },
+                { r._topLeft[0] + staticData._headerLabelLeftMargin + 2*staticData._headerLabelHorzPadding + 2*staticData._frameWidth + int(labelWidth), r._bottomRight[1] }
+            };
+            labelFrame._bottomRight[1] = std::min(labelFrame._bottomRight[1], r._bottomRight[1]);
+            Rect labelContent {
+                { labelFrame._topLeft[0] + staticData._headerLabelHorzPadding + staticData._frameWidth, r._topLeft[1] },
+                { labelFrame._topLeft[0] + staticData._headerLabelHorzPadding + staticData._frameWidth + int(labelWidth), r._bottomRight[1] }
+            };
+            labelFrame._bottomRight[1] = std::min(labelContent._bottomRight[1], labelFrame._bottomRight[1]);
+            
+            // down strokes separating columns
+            float middle = float(rect._topLeft[1] + rect._bottomRight[1]) / 2.f;
+            float downStrokeEnd = middle + staticData._downStrokeLength;
+            if (lastLabelRight == rect._topLeft[0]) {
+                Float2 downwardStroke[] {
+                    { rect._topLeft[0], middle },
+                    { rect._topLeft[0], downStrokeEnd }
+                };
+                SolidLine(context, downwardStroke, staticData._frameColor, staticData._frameWidth);
+            }
+            {
+                Float2 downwardStroke[] {
+                    { r._bottomRight[0], middle },
+                    { r._bottomRight[0], downStrokeEnd }
+                };
+                SolidLine(context, downwardStroke, staticData._frameColor, staticData._frameWidth);
+            }
+
+            // strokes along the top
+            {
+                Float2 horizStroke[] {
+                    { lastLabelRight, middle },
+                    { labelFrame._topLeft[0], middle }
+                };
+                SolidLine(context, horizStroke, staticData._frameColor, staticData._frameWidth);
+                Float2 A[] {
+                    { labelFrame._topLeft[0], labelFrame._topLeft[1] },
+                    { labelFrame._topLeft[0], labelFrame._bottomRight[1] }
+                };
+                SolidLine(context, A, staticData._frameColor, staticData._frameWidth);
+                Float2 B[] {
+                    { labelFrame._bottomRight[0], labelFrame._topLeft[1] },
+                    { labelFrame._bottomRight[0], labelFrame._bottomRight[1] }
+                };
+                SolidLine(context, B, staticData._frameColor, staticData._frameWidth);
+            }
+            lastLabelRight = labelFrame._bottomRight[0];
+
+            labelRects[labelRectCount++] = labelContent;
+        }
+
+        // last stroke along the top
+        {
+            float middle = float(rect._topLeft[1] + rect._bottomRight[1]) / 2.f;
+            Float2 horizStroke[] {
+                { lastLabelRight, middle },
+                { rect._bottomRight[0], middle }
+            };
+            SolidLine(context, horizStroke, staticData._frameColor, staticData._frameWidth);
+        }
+
+        for (unsigned c=0; c<labelRectCount; ++c) {
+            auto labelContent = labelRects[c];
+            if (!IsGood(labelContent)) continue;
+            DrawText()
+                .Font(fnt)
+                .Alignment(TextAlignment::Left)
+                .Color(staticData._headerLabelColor)
+                .Flags(DrawTextFlags::Outline)
+                .Draw(context, labelContent, MakeStringSection(fieldHeaders[c].first));
         }
     }
 

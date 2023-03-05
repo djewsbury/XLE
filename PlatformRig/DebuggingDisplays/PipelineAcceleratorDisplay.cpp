@@ -3,13 +3,16 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PipelineAcceleratorDisplay.h"
+#include "../TopBar.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/StreamUtils.h"
 
 using namespace PlatformRig::Literals;
 
@@ -25,6 +28,8 @@ namespace PlatformRig { namespace Overlays
 		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override;
 		
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
+		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _tableValuesFont;
 
 		RenderOverlays::DebuggingDisplay::ScrollBar _scrollBar;
 		float _paScrollOffset = 0.f;
@@ -40,6 +45,11 @@ namespace PlatformRig { namespace Overlays
         interactables.Register({buttonRect, id});
     }
 
+	static std::string WordWrapString(const RenderOverlays::Font& fnt, StringSection<> str, float maxWidth)
+	{
+		return StringSplitByWidth(fnt, str, maxWidth, MakeStringSection(" \t"), MakeStringSection("")).Concatenate();
+	}
+
 	const char* s_tabNames[] = { "pipeline-accelerators", "sequencer-configs", "stats" };
 
 	void    PipelineAcceleratorPoolDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
@@ -48,6 +58,20 @@ namespace PlatformRig { namespace Overlays
 		using namespace RenderOverlays::DebuggingDisplay;
 		const unsigned lineHeight = 20;
 		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
+
+		if (auto* topBar = context.GetService<ITopBarManager>()) {
+			const char headingString[] = "Pipeline Accelerators";
+			if (auto* headingFont = _headingFont->TryActualize()) {
+				auto rect = topBar->RegisterScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+				if (IsGood(rect) && headingFont)
+					DrawText()
+						.Font(**headingFont)
+						.Color(ColorB::Black)
+						.Alignment(RenderOverlays::TextAlignment::Left)
+						.Flags(0)
+						.Draw(context, rect, headingString);
+			}
+		}
 
 		{
 			Layout buttonsLayout(layout.AllocateFullWidth(2*lineHeight));
@@ -71,17 +95,19 @@ namespace PlatformRig { namespace Overlays
 				context,
 				{tableArea.GetMaximumSize()._topLeft, scrollBarLocation._bottomRight},
 				RenderOverlays::ColorB { 0, 0, 0, 145 });
-                    
-			const auto headerColor = RenderOverlays::ColorB::Blue;
+
+			auto* tableValuesFont = _tableValuesFont->TryActualize();
+
             std::vector<Float3> lines;
 			lines.reserve(records._pipelineAccelerators.size()*2);
 			if (_tab == 0) {
+				unsigned matSelectorsWidth = 750, geoSelectorsWidth = 1000;
 				std::pair<std::string, unsigned> headers0[] = { 
-					std::make_pair("Patches", 190), std::make_pair("IA", 190), std::make_pair("States", 100), 
-					std::make_pair("MatSelectors", 750),
-					std::make_pair("GeoSelectors", 750) };
+					std::make_pair("Patches", 190), std::make_pair("IA", 190), std::make_pair("States", 140),
+					std::make_pair("MatSelectors", matSelectorsWidth),
+					std::make_pair("GeoSelectors", geoSelectorsWidth) };
 
-				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), headerColor, &interactables);
+				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), &interactables);
 				for (const auto& r:records._pipelineAccelerators) {
 					if (entryCount < _paScrollOffset) {
 						++entryCount;
@@ -91,8 +117,10 @@ namespace PlatformRig { namespace Overlays
 					entries["Patches"] = (StringMeld<32>() << std::hex << r._shaderPatchesHash).AsString();
 					entries["States"] = (StringMeld<32>() << std::hex << r._stateSetHash).AsString();
 					entries["IA"] = (StringMeld<32>() << std::hex << r._inputAssemblyHash).AsString();
-					entries["MatSelectors"] = r._materialSelectors;
-					entries["GeoSelectors"] = r._geoSelectors;
+					if (tableValuesFont) {
+						entries["MatSelectors"] = WordWrapString(**tableValuesFont, r._materialSelectors, matSelectorsWidth);
+						entries["GeoSelectors"] = WordWrapString(**tableValuesFont, r._geoSelectors, geoSelectorsWidth);
+					}
 					Layout sizingLayout = tableArea;
 					auto rect = sizingLayout.AllocateFullWidthFraction(1.f);
 					if (rect.Height() <= 0) break;
@@ -110,7 +138,7 @@ namespace PlatformRig { namespace Overlays
 					std::make_pair("SeqSelectors", 3000),
 				};
 
-				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), headerColor, &interactables);
+				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), &interactables);
 				for (const auto& cfg:records._sequencerConfigs) {
 					if (entryCount < _cfgScrollOffset) {
 						++entryCount;
@@ -185,6 +213,8 @@ namespace PlatformRig { namespace Overlays
 		auto scrollBarId = RenderOverlays::DebuggingDisplay::InteractableId_Make("PipelineAccelerators_ScrollBar");
 		scrollBarId += IntegerHash64((uint64_t)this);
 		_scrollBar = RenderOverlays::DebuggingDisplay::ScrollBar(scrollBarId);
+		_headingFont = RenderOverlays::MakeFont("OrbitronBlack", 20);
+		_tableValuesFont = RenderOverlays::MakeFont("Petra", 20);
 	}
 
 	PipelineAcceleratorPoolDisplay::~PipelineAcceleratorPoolDisplay()

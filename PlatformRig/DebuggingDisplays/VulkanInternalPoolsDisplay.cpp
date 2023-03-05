@@ -81,12 +81,10 @@ namespace PlatformRig { namespace Overlays
 			char buffer[256];
 			DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "Descriptor sets -- allocated: " << metrics._setsAllocated << ", reserved: " << metrics._setsReserved).AsStringSection());
 
-			const ColorB headerColor = ColorB::Blue;
-
 			{
 				auto originalInternalBorder = layout._paddingInternalBorder;
 				// layout._paddingInternalBorder = 0;
-				DrawTableHeaders(context, layout.AllocateFullWidth(headerLineHeight), MakeIteratorRange(s_headers0), headerColor, &interactables);
+				DrawTableHeaders(context, layout.AllocateFullWidth(headerLineHeight), MakeIteratorRange(s_headers0), &interactables);
 				
 				for (unsigned c=0; c<dimof(s_descriptorTypeNames); ++c)
 					DrawTableEntry(
@@ -100,7 +98,7 @@ namespace PlatformRig { namespace Overlays
 			{
 				auto originalInternalBorder = layout._paddingInternalBorder;
 				// layout._paddingInternalBorder = 0;
-				DrawTableHeaders(context, layout.AllocateFullWidth(headerLineHeight), MakeIteratorRange(s_headers1), headerColor, &interactables);
+				DrawTableHeaders(context, layout.AllocateFullWidth(headerLineHeight), MakeIteratorRange(s_headers1), &interactables);
 				
 				for (const auto&g:metrics._reusableGroups)
 					DrawTableEntry(

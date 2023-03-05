@@ -17,6 +17,9 @@
 #include "../RenderCore/Assets/RawMaterial.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/UniformsStream.h"
+#include "../Tools/EntityInterface/MountedData.h"
+#include "../Formatters/IDynamicFormatter.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../Math/Geometry.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../Assets/Continuation.h"
@@ -41,6 +44,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _softShadowRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _dashLine;
+        RenderCore::Techniques::ImmediateDrawableMaterial _solidNoBorder;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillColorAdjust;
         RenderCore::UniformsStreamInterface _roundedRectUSI;
         RenderCore::UniformsStreamInterface _colorAdjustUSI;
@@ -59,6 +63,7 @@ namespace RenderOverlays
             const RenderCore::Assets::ResolvedMaterial& outlineEllipse,
             const RenderCore::Assets::ResolvedMaterial& softShadowRect,
             const RenderCore::Assets::ResolvedMaterial& dashLine,
+            const RenderCore::Assets::ResolvedMaterial& solidNoBorder,
             const RenderCore::Assets::ResolvedMaterial& fillColorAdjust)
         {
             _fillRoundedRect = BuildImmediateDrawableMaterial(fillRoundedRect);
@@ -71,6 +76,7 @@ namespace RenderOverlays
             _outlineEllipse = BuildImmediateDrawableMaterial(outlineEllipse);
             _softShadowRect = BuildImmediateDrawableMaterial(softShadowRect);
             _dashLine = BuildImmediateDrawableMaterial(dashLine);
+            _solidNoBorder = BuildImmediateDrawableMaterial(solidNoBorder);
             _fillColorAdjust = BuildImmediateDrawableMaterial(fillColorAdjust);
 
             _roundedRectUSI.BindImmediateData(0, "RoundedRectSettings"_h);
@@ -95,6 +101,7 @@ namespace RenderOverlays
                 outlineEllipse.GetDependencyValidation(),
                 softShadowRect.GetDependencyValidation(),
                 dashLine.GetDependencyValidation(),
+                solidNoBorder.GetDependencyValidation(),
                 fillColorAdjust.GetDependencyValidation()
             };
             _depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
@@ -112,9 +119,10 @@ namespace RenderOverlays
             auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
             auto softShadowRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
             auto dashLine = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":DashLine");
+            auto solidNoBorder = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SolidNoBorder");
             auto fillColorAdjust = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillColorAdjust");
 
-            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, fillColorAdjust).ThenConstructToPromise(std::move(promise));
+            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, solidNoBorder, fillColorAdjust).ThenConstructToPromise(std::move(promise));
         }
 
         std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
@@ -458,18 +466,8 @@ namespace RenderOverlays
             std::move(mat));
     }
 
-    void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width)
+    void WriteInLineVertices(IteratorRange<Internal::Vertex_PCT*> data, IteratorRange<const Float2*> linePts, ColorB colour, float width)
     {
-        if (linePts.size() < 2) return;
-
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
-
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
-
-        const unsigned joinsVertices = 9*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
-        if (data.empty()) return;
 		auto col0 = HardwareColor(colour);
 
         float x = 0;
@@ -596,6 +594,38 @@ namespace RenderOverlays
         }
     }
 
+    void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width)
+    {
+        if (linePts.size() < 2) return;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
+
+        const unsigned joinsVertices = 9*2;
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        if (data.empty()) return;
+
+        WriteInLineVertices(data, linePts, colour, width);
+    }
+
+    void        SolidLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width)
+    {
+        if (linePts.size() < 2) return;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_solidNoBorder;
+
+        const unsigned joinsVertices = 9*2;
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        if (data.empty()) return;
+
+        WriteInLineVertices(data, linePts, colour, width);
+    }
+
 	///////////////////////////////////////////////////////////////////////////////////
 
 	Coord2 DrawText::Draw(IOverlayContext& context, const Rect& rect, StringSection<> text) const
@@ -628,12 +658,66 @@ namespace RenderOverlays
 
 	namespace Internal
 	{
+        struct DefaultFontsStaticData
+        {
+            std::string _defaultFont = "Petra:16";
+            std::string _tableHeaderFont = "DosisExtraBold:20";
+            std::string _tableValuesFont = "Petra:20";
+
+            DefaultFontsStaticData() = default;
+            template<typename Formatter>
+                DefaultFontsStaticData(Formatter& fmttr)
+            {
+                uint64_t keyname;
+                while (fmttr.TryKeyedItem(keyname)) {
+                    switch (keyname) {
+                    case "Default"_h: _defaultFont = Formatters::RequireStringValue(fmttr).AsString(); break;
+                    case "TableHeader"_h: _tableHeaderFont = Formatters::RequireStringValue(fmttr).AsString(); break;
+                    case "TableValues"_h: _tableValuesFont = Formatters::RequireStringValue(fmttr).AsString(); break;
+                    default: SkipValueOrElement(fmttr); break;
+                    }
+                }
+            }
+        };
+
 		void DefaultFontsBox::ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise)
 		{
-			::Assets::WhenAll(
-				RenderOverlays::MakeFont("Petra", 16),
-				RenderOverlays::MakeFont("DosisExtraBold", 20),
-				RenderOverlays::MakeFont("Petra", 20)).ThenConstructToPromise(std::move(promise));
+            auto marker = ::Assets::MakeAssetMarker<EntityInterface::MountedData<DefaultFontsStaticData>>("cfg/displays/font");
+            #if 0
+                ::Assets::WhenAll(marker).ThenConstructToPromise(
+                    std::move(promise),
+                    [](auto&& promise, auto staticData) {
+                        ::Assets::WhenAll(
+                            RenderOverlays::MakeFont(staticData.get()._defaultFont),
+                            RenderOverlays::MakeFont(staticData.get()._tableHeaderFont),
+                            RenderOverlays::MakeFont(staticData.get()._tableValuesFont)).ThenConstructToPromise(
+                                std::move(promise),
+                                [depVal = staticData.GetDependencyValidation()](auto f0, auto f1, auto f2) mutable {
+                                    return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(depVal));
+                                });
+                    });
+            #else
+                ::Assets::WhenAll(marker).Then(
+                    [promise=std::move(promise)](auto futureStaticData) mutable {
+                        DefaultFontsStaticData staticData;
+                        ::Assets::DependencyValidation depVal;
+                        TRY {
+                            auto sd = futureStaticData.get();
+                            staticData = sd.get();
+                            depVal = sd.GetDependencyValidation();
+                        } CATCH(...) {
+                        } CATCH_END
+
+                        ::Assets::WhenAll(
+                            RenderOverlays::MakeFont(staticData._defaultFont),
+                            RenderOverlays::MakeFont(staticData._tableHeaderFont),
+                            RenderOverlays::MakeFont(staticData._tableValuesFont)).ThenConstructToPromise(
+                                std::move(promise),
+                                [depVal = std::move(depVal)](auto f0, auto f1, auto f2) mutable {
+                                    return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(depVal));
+                                });
+                    });
+            #endif
 		}
 	}
 
