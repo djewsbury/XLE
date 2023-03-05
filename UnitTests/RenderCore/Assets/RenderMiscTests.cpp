@@ -197,6 +197,17 @@ namespace UnitTests
 		}
 
 		{
+			// utf8 test data
+			// reference -- https://www.w3.org/2001/06/utf-8-test/UTF-8-demo.html
+			// "From a speech of Demosthenes in the 4th century BC:"
+			const char input[] = u8"Οὐχὶ ταὐτὰ παρίσταταί μοι γιγνώσκειν, ὦ ἄνδρες ᾿Αθηναῖοι, ὅταν τ᾿ εἰς τὰ πράγματα ἀποβλέψω καὶ ὅταν πρὸς τοὺς";
+			char buffer[1024];
+			const float restrictedWidth = 512;
+			auto ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(input), MakeStringSection(" "), restrictedWidth);
+			REQUIRE(ellipsisWidth <= restrictedWidth);
+		}
+
+		{
 			// invalid cases
 			char singleSizeBuffer[1];
 			float ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(singleSizeBuffer, dimof(singleSizeBuffer), *font, MakeStringSection("filename.txt"), MakeStringSection("/\\"), 1024.f);
@@ -248,6 +259,60 @@ namespace UnitTests
 		}
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);
+	}
+
+	TEST_CASE( "StringWordBreak", "[renderoverlays]" )
+	{
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
+
+		auto futureFont = RenderOverlays::MakeFont("Petra", 16);
+		futureFont->StallWhilePending();
+		auto font = futureFont->Actualize();
+
+		const char longString[] = "abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 12345678901234567890";
+		const char longString2[] = "\r\rabcdefghijklmnopqrstuvwxyz ABCDEFGHI\r\n\r\nJKLMNOPQRSTUVWXYZ 12345678901234567890\n";
+
+		{
+			auto split0 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection(longString), 64.f, MakeStringSection(" \t"), {});
+			REQUIRE(split0._sections.size() == 3);
+
+			auto split1 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection(longString2), 64.f, MakeStringSection(" \t"), {});
+			REQUIRE(split1._sections.size() == 7);
+
+			auto split2 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection(longString2), FLT_MAX, MakeStringSection(" \t"), {});
+			// the splitting here is very specific:
+			// note that the final \n has no effect on the result
+			REQUIRE(split2._sections.size() == 5);
+			REQUIRE(split2._sections[0].IsEmpty());
+			REQUIRE(split2._sections[1].IsEmpty());
+			REQUIRE(split2._sections[2].AsString() == "abcdefghijklmnopqrstuvwxyz ABCDEFGHI");
+			REQUIRE(split2._sections[3].IsEmpty());
+			REQUIRE(split2._sections[4].AsString() == "JKLMNOPQRSTUVWXYZ 12345678901234567890");
+		}
+
+		{
+			// various odd cases
+			auto split0 = RenderOverlays::StringSplitByWidth(*font, {}, FLT_MAX, MakeStringSection(" \t"), {});
+			REQUIRE(split0._sections.size() == 0);
+			REQUIRE(split0._maxLineWidth == 0.f);
+			auto split1 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection("         "), FLT_MAX, MakeStringSection(" \t"), {});
+			REQUIRE(split1._sections.size() == 0);
+			REQUIRE(split1._maxLineWidth == 0.f);
+			auto split2 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection("- - - - - - - - -"), 0.f, MakeStringSection(" \t"), {});
+			REQUIRE(split2._sections.size() == 9);
+			REQUIRE(split2._maxLineWidth == RenderOverlays::StringWidth(*font, MakeStringSection("-")));
+
+			// trailing whitespace is just excluded, regardless of explicit newlines before it
+			auto split3 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection("---\n             "), FLT_MAX, MakeStringSection(" \t"), {});
+			REQUIRE(split3._sections.size() == 1);
+			REQUIRE(split3._sections[0].size() == 3);
+
+			auto split4 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection("---             "), 0.f, MakeStringSection(" \t"), {});
+			REQUIRE(split4._sections.size() == 1);
+			REQUIRE(split4._sections[0].size() == 3);
+		}
+
 	}
 }
 

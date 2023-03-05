@@ -98,6 +98,36 @@ namespace RenderOverlays
 			float spaceExtra     = 0.0f,
 			bool outline         = false);
 
+	template<typename CharType>
+		struct StringSplitByWidthResult
+	{
+		std::vector<StringSection<CharType>> _sections;
+		float _maxLineWidth = 0.f;
+
+		std::basic_string<CharType> Concatenate() const;
+	};
+
+	/// <summary>Split a string on token boundaries to try to avoid exceeding any line exceeding a given width in pixels</summary>
+	/// Used to word-wrap text. Returns internal pointers into the input string buffer representing separate lines.
+	///
+	/// If an individual token is longer than the given width, this function will not attempt to split it. Instead that token will
+	/// end up on a line of it's own. To detect when this occurs, check "_maxLineWidth" in the result.
+	///
+	/// This can also be used to find the maximum width of a block of text with line breaks already included. To do this, set
+	/// maxWidth to some very large value and check count of in "_sections" and "_maxLineWidth" in the result
+	///
+	/// Don't include '\n' or '\n' in either whitespaceDividers or nonWhitespaceDividers, since newline handling is built into the
+	/// algorithm
+	template<typename CharType>
+		StringSplitByWidthResult<CharType> StringSplitByWidth(
+			const Font& font,
+			StringSection<CharType> text,
+			float maxWidth,
+			StringSection<CharType> whitespaceDividers,		// when a line is split by whitespace, the whitespace is removed entirely
+			StringSection<CharType> nonWhitespaceDividers,
+			float spaceExtra     = 0.0f,
+			bool outline         = false);
+
 	class Quad
 	{
 	public:

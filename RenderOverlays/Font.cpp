@@ -310,8 +310,9 @@ namespace RenderOverlays
 						i = FontRenderingControlStatement{}.TryParse(MakeStringSection(i, text.end()))._start;		// skip any control statements
 					if (i == text.end()) break;
 
-					auto c = *i;
-					ucs4 ch = (ucs4)*i++;
+					StringSection<CharType> t { i, text.end() };
+					ucs4 ch = NextCharacter(t);
+					i = t.begin();
 					assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
 
 					int curGlyph;
@@ -322,7 +323,7 @@ namespace RenderOverlays
 					if(outline) additionalX += 2.0f;
 					if(ch == ' ') additionalX += spaceExtra;
 
-					if (std::find(separatorList.begin(), separatorList.end(), c) != separatorList.end())
+					if (std::find(separatorList.begin(), separatorList.end(), (CharType)ch) != separatorList.end())
 						break;
 				}
 
@@ -354,8 +355,14 @@ namespace RenderOverlays
 						i = SkipControlStatements_Reverse(MakeStringSection(text.begin(), i));
 					if (i == text.begin()) break;
 
-					auto c = *(i-1);
-					ucs4 ch = (ucs4)*--i;
+					ucs4 ch;
+					if constexpr (std::is_same_v<CharType, utf8>) {
+						size_t idx = int(i-text.begin());
+						utf8_dec(text.begin(), &idx);
+						i = text.begin()+idx;
+						ch = utf8_nextchar(text.begin(), &idx);
+					} else
+						ch = (ucs4)*--i;
 					assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
 
 					int curGlyph;
@@ -366,7 +373,7 @@ namespace RenderOverlays
 					if(outline) additionalX += 2.0f;
 					if(ch == ' ') additionalX += spaceExtra;
 
-					if (std::find(separatorList.begin(), separatorList.end(), c) != separatorList.end())
+					if (std::find(separatorList.begin(), separatorList.end(), (CharType)ch) != separatorList.end())
 						break;
 				}
 
@@ -423,6 +430,163 @@ namespace RenderOverlays
 		*outTextIterator = 0;
 
 		return StringWidth(font, MakeStringSection(outText), spaceExtra, outline);
+	}
+
+	template<typename CharType>
+		StringSplitByWidthResult<CharType> StringSplitByWidth(
+			const Font& font,
+			StringSection<CharType> text,
+			float maxWidth,
+			StringSection<CharType> whitespaceDividers,
+			StringSection<CharType> nonWhitespaceDividers,
+			float spaceExtra,
+			bool outline)
+	{
+		StringSplitByWidthResult<CharType> result;
+
+		float currentLineWidth = 0.f;
+		int currentLinePrevGlyph = 0;
+		StringSection<CharType> currentLine { text.begin(), text.begin() };
+
+		while (!text.IsEmpty()) {
+			// find the next token (but start by finding a pre-whitespace block if it exists)
+			auto preWhitespaceBegin = text.begin();
+			float preWhitespaceWidth = 0.f;
+			int prevGlyph = 0;
+			Utility::ucs4 ch = 0;
+			for (;;) {
+				if (!text.IsEmpty())
+					text._start = FontRenderingControlStatement{}.TryParse(text)._start;		// skip any control statements
+				if (text.IsEmpty()) break;
+				auto t = text;
+				ch = NextCharacter(t);
+				bool isWhitespace = std::find(whitespaceDividers.begin(), whitespaceDividers.end(), ch) != whitespaceDividers.end();
+				bool isExplicitNewLine = ch == '\r' || ch == '\n';
+				if (!isWhitespace || isExplicitNewLine) break;
+
+				int curGlyph;
+				preWhitespaceWidth += font.GetKerning(prevGlyph, ch, &curGlyph)[0];
+				prevGlyph = curGlyph;
+				preWhitespaceWidth += font.GetGlyphProperties(ch)._xAdvance;
+
+				if(outline) preWhitespaceWidth += 2.0f;
+				if(ch == ' ') preWhitespaceWidth += spaceExtra;
+				text = t;
+			}
+
+			if (text.IsEmpty()) break;		// reject trailing whitespace
+
+			// if we end on a newline, we need to handle that specifically
+			if (!text.IsEmpty() && (ch == '\r' || ch == '\n')) {
+				ch = NextCharacter(text);
+				// newline types supported -- "\r", "\r\n", "\n"
+				if (ch == '\r' && !text.IsEmpty()) {
+					auto t = text;
+					ch = NextCharacter(t);
+					if (ch == '\n')
+						text = t;
+				}
+
+				// break the current line (excluding any whitespace that we just scanned past in the preWhitespace block)
+				result._maxLineWidth = std::max(result._maxLineWidth, currentLineWidth);
+				result._sections.emplace_back(currentLine);
+				currentLinePrevGlyph = 0;
+				currentLine = { text.begin(), text.begin() };
+				currentLineWidth = 0;
+				continue;
+			}
+
+			// now the main token part
+			auto tokenBegin = text.begin();
+			float nextTokenWidth = 0.f;
+			prevGlyph = 0;	// (restart kerning)
+			for (;;) {
+				if (!text.IsEmpty())
+					text._start = FontRenderingControlStatement{}.TryParse(text)._start;		// skip any control statements
+				if (text.IsEmpty()) break;
+				auto t = text;
+				ch = NextCharacter(t);
+
+				bool isWhitespace = std::find(whitespaceDividers.begin(), whitespaceDividers.end(), ch) != whitespaceDividers.end();
+				bool isNonWhitespaceDivider = std::find(nonWhitespaceDividers.begin(), nonWhitespaceDividers.end(), ch) != nonWhitespaceDividers.end();
+				bool isExplicitNewLine = ch == '\r' || ch == '\n';
+
+				if ((isWhitespace || isNonWhitespaceDivider) && text._start != tokenBegin) break;
+				if (isExplicitNewLine) break;
+
+				int curGlyph;
+				nextTokenWidth += font.GetKerning(prevGlyph, ch, &curGlyph)[0];
+				prevGlyph = curGlyph;
+				nextTokenWidth += font.GetGlyphProperties(ch)._xAdvance;
+
+				if(outline) nextTokenWidth += 2.0f;
+				if(ch == ' ') nextTokenWidth += spaceExtra;
+				text = t;
+
+				if (isNonWhitespaceDivider) break;	// dividers are treated as single character tokens
+			}
+
+			// find the kerning required to append the new token onto the current line
+			float appendKerning = 0, prewhitespaceKerning = 0;
+			if (tokenBegin != text.end()) {
+				StringSection t { tokenBegin, text.end() };
+				auto ch = NextCharacter(t);
+				int curGlyph;
+				appendKerning = font.GetKerning(currentLinePrevGlyph, ch, &curGlyph)[0];
+
+				if (preWhitespaceBegin != tokenBegin) {
+					StringSection t { preWhitespaceBegin, tokenBegin };
+					ch = NextCharacter(t);
+					int curGlyph2;
+					prewhitespaceKerning = font.GetKerning(curGlyph, ch, &curGlyph2)[0];
+				}
+			}
+
+			if ((currentLineWidth + preWhitespaceWidth + nextTokenWidth + appendKerning + prewhitespaceKerning) <= maxWidth) {
+				// append this to the current line, and continue on
+				currentLineWidth += preWhitespaceWidth + nextTokenWidth + appendKerning + prewhitespaceKerning;
+				currentLine._end = text.begin();
+				currentLinePrevGlyph = prevGlyph;
+				continue;
+			} else {
+				// line break...
+				if (!currentLine.IsEmpty()) {
+					result._maxLineWidth = std::max(result._maxLineWidth, currentLineWidth);
+					result._sections.emplace_back(currentLine);
+				}
+				currentLinePrevGlyph = prevGlyph;
+				currentLine = { tokenBegin, text.begin() };		// note that we don't include "prewhitespace" block here
+				currentLineWidth = nextTokenWidth;
+			}
+		}
+
+		if (!currentLine.IsEmpty()) {
+			result._maxLineWidth = std::max(result._maxLineWidth, currentLineWidth);
+			result._sections.emplace_back(currentLine);
+		}
+
+		return result;
+	}
+
+	template<typename CharType>
+		std::basic_string<CharType> StringSplitByWidthResult<CharType>::Concatenate() const
+	{
+		size_t size = 0;
+		bool first = true;
+		for (auto s:_sections) {
+			if (!first) ++size;
+			first = false;
+			size += s.size();
+		}
+		std::basic_string<CharType> result;
+		result.reserve(size);
+		first = true;
+		for (auto s:_sections) {
+			if (!first) result.push_back((CharType)'\r');
+			first = false;
+			result.insert(result.end(), s.begin(), s.end());
+		}
+		return result;
 	}
 
 	float CharWidth(const Font& font, ucs4 ch, ucs4 prev)
@@ -552,6 +716,15 @@ namespace RenderOverlays
 	template float StringEllipsisDoubleEnded(char*, size_t, const Font&, StringSection<char>, StringSection<char>, float, float, bool);
 	template float StringEllipsisDoubleEnded(ucs2*, size_t, const Font&, StringSection<ucs2>, StringSection<ucs2>, float, float, bool);
 	template float StringEllipsisDoubleEnded(ucs4*, size_t, const Font&, StringSection<ucs4>, StringSection<ucs4>, float, float, bool);
+
+	template StringSplitByWidthResult<utf8> StringSplitByWidth(const Font&, StringSection<utf8>, float, StringSection<utf8>, StringSection<utf8>, float, bool);
+	template StringSplitByWidthResult<char> StringSplitByWidth(const Font&, StringSection<char>, float, StringSection<char>, StringSection<char>, float, bool);
+	template StringSplitByWidthResult<ucs2> StringSplitByWidth(const Font&, StringSection<ucs2>, float, StringSection<ucs2>, StringSection<ucs2>, float, bool);
+	template StringSplitByWidthResult<ucs4> StringSplitByWidth(const Font&, StringSection<ucs4>, float, StringSection<ucs4>, StringSection<ucs4>, float, bool);
+
+	template struct StringSplitByWidthResult<utf8>;
+	template struct StringSplitByWidthResult<ucs2>;
+	template struct StringSplitByWidthResult<ucs4>;
 
 	// --------------------------------------------------------------------------
 	// Quad

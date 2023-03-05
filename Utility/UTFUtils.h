@@ -58,16 +58,16 @@ namespace Utility
 
     // return next character, updating an index variable
     // i := byte offset
-    XL_UTILITY_API ucs4 utf8_nextchar(const utf8* s, int* i);
+    XL_UTILITY_API ucs4 utf8_nextchar(const utf8* s, size_t* i);
 	XL_UTILITY_API ucs4 utf8_nextchar(utf8 const*& iterator, utf8 const* end);
 
     // count the number of characters in a UTF-8 string
     XL_UTILITY_API size_t utf8_strlen(const utf8* s);
 
     // move to next character
-    XL_UTILITY_API void utf8_inc(const utf8* s, int* i);
+    XL_UTILITY_API void utf8_inc(const utf8* s, size_t* i);
     // move to previous character
-    XL_UTILITY_API void utf8_dec(const utf8* s, int*i);
+    XL_UTILITY_API void utf8_dec(const utf8* s, size_t*i);
 
     // next utf-8 sequence length
     XL_UTILITY_API int utf8_seqlen(const utf8* s);
