@@ -14,6 +14,7 @@
 #include "../RenderCore/UniformsStream.h"
 #include "../RenderCore/Metal/Resource.h"		// metal only required for barriers
 #include "../RenderCore/Metal/DeviceContext.h"
+#include "../ConsoleRig/Console.h"
 #include "../Assets/Marker.h"
 #include "../Assets/Continuation.h"
 #include "../Assets/Assets.h"
@@ -30,10 +31,13 @@ namespace RenderOverlays
 	public:
 		struct CB_BlurControlUniforms
 		{
-			float _blurWeights[6];
 			uint32_t _srgbConversionOnInput = false;
 			uint32_t _srgbConversionOnOutput = false;
-			void CalculateBlurWeights(float radius);
+			uint32_t _dummy[2];
+			Float4 _blurWeights[];
+
+			void CalculateBlurWeights(float radius, unsigned blurTapCount);
+			static unsigned CalculateSize(unsigned blurTapCount);
 		};
 
 		std::shared_ptr<RenderCore::IResourceView> Execute(
@@ -43,12 +47,14 @@ namespace RenderOverlays
 
 		::Assets::DependencyValidation GetDependencyValidation() const { return _pipelineOperator->GetDependencyValidation(); }
 
-		GaussianBlurOperator(std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> pipelineOperator);
+		GaussianBlurOperator(std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> pipelineOperator, unsigned tapCount = 11);
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<GaussianBlurOperator>>&& promise,
-			const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool);
+			const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool,
+			unsigned tapCount);
 	private:
 		std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> _pipelineOperator;
+		unsigned _tapCount;
 	};
 
 	static float GaussianWeight1D(float offset, float stdDevSq)
@@ -59,22 +65,29 @@ namespace RenderOverlays
 		return C * std::exp(-offset*offset / twiceStdDevSq);
 	}
 
-	void GaussianBlurOperator::CB_BlurControlUniforms::CalculateBlurWeights(float radius)
+	unsigned GaussianBlurOperator::CB_BlurControlUniforms::CalculateSize(unsigned blurTapCount)
+	{
+		auto weightCount = 1+(blurTapCount-1)/2;
+		return sizeof(uint32_t)*4*weightCount;
+	}
+
+	void GaussianBlurOperator::CB_BlurControlUniforms::CalculateBlurWeights(float radius, unsigned blurTapCount)
 	{
 		// Calculate radius such that 1.5*stdDev = radius
 		// This is selected because it just tends to match the blur size we get with the large radius blur
 		float stdDevSq = radius * radius / (1.5f * 1.5f);
 		float weightSum = 0;
-		for (unsigned c=0; c<dimof(_blurWeights); ++c) {
-			_blurWeights[c] = GaussianWeight1D(float(c), stdDevSq);
-			weightSum += _blurWeights[c];
-			if (c!=0) weightSum += _blurWeights[c];
+		auto weightCount = 1+(blurTapCount-1)/2;
+		for (unsigned c=0; c<weightCount; ++c) {
+			_blurWeights[c] = Float4{GaussianWeight1D(float(c), stdDevSq), 0.f, 0.f, 0.f};
+			weightSum += _blurWeights[c][0];
+			if (c!=0) weightSum += _blurWeights[c][0];
 		}
 
 		// renormalize weights, to ensure we don't darken the colour, even when blur radius is too big for
 		// the kernel to handle
-		for (unsigned c=0; c<dimof(_blurWeights); ++c)
-			_blurWeights[c] /= weightSum;
+		for (unsigned c=0; c<weightCount; ++c)
+			_blurWeights[c][0] /= weightSum;
 	}
 
 	std::shared_ptr<RenderCore::IResourceView> GaussianBlurOperator::Execute(
@@ -103,35 +116,50 @@ namespace RenderOverlays
 			{2, BindFlag::UnorderedAccess, ShaderStage::Compute}
 		});
 
-		CB_BlurControlUniforms params;
-		params.CalculateBlurWeights(blurRadius);
-		params._srgbConversionOnInput = false;
-		params._srgbConversionOnOutput = true;
-		IResourceView* srvs[] { rpi.GetNonFrameBufferAttachmentView(0).get(), rpi.GetNonFrameBufferAttachmentView(2).get() };
-		UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(params) };
+		auto paramsSize = CB_BlurControlUniforms::CalculateSize(_tapCount);
+		uint8_t paramsBlock[paramsSize];
+		CB_BlurControlUniforms& params = *new (paramsBlock) CB_BlurControlUniforms;
+		params.CalculateBlurWeights(blurRadius, _tapCount);
+		
+		IResourceView* srvs[2];
+		UniformsStream::ImmediateData immDatas[] { MakeIteratorRange(paramsBlock, paramsBlock + paramsSize) };
 		UniformsStream uniforms;
 		uniforms._resourceViews = MakeIteratorRange(srvs);
 		uniforms._immediateData = MakeIteratorRange(immDatas);
-		_pipelineOperator->Dispatch(
-			parsingContext,
-			(parsingContext.GetFragmentStitchingContext()._workingProps._width + 7) / 8,
-			(parsingContext.GetFragmentStitchingContext()._workingProps._height + 7) / 8,
-			1,
-			uniforms);
+		const unsigned blockSize = 16;
 
-		// Blur again, since with the kernel, successive blurs is the same as blurring with
+		// Blur multiple times, since with the kernel successive blurs is the same as blurring with
 		// a broader kernel
+		unsigned blurPassCount = Tweakable("BlurPassCount", 4);
+		blurPassCount = std::clamp(blurPassCount, 2u, 16u);
+		blurPassCount &= (~1u);		// use even number of passes
+		for (unsigned c=0; c<blurPassCount; ++c) {
+			// input
+			if (c==0) {
+				srvs[0] = rpi.GetNonFrameBufferAttachmentView(0).get();
+			} else {
+				if (c&1) {
+					srvs[0] = rpi.GetNonFrameBufferAttachmentView(2).get();
+				} else {
+					srvs[0] = rpi.GetNonFrameBufferAttachmentView(1).get();
+				}
+			}
+			// output
+			if (c&1) {
+				srvs[1] = rpi.GetNonFrameBufferAttachmentView(1).get();
+			} else {
+				srvs[1] = rpi.GetNonFrameBufferAttachmentView(2).get();
+			}
 
-		srvs[0] = rpi.GetNonFrameBufferAttachmentView(2).get();
-		srvs[1] = rpi.GetNonFrameBufferAttachmentView(1).get();
-		params._srgbConversionOnInput = true;
-		params._srgbConversionOnOutput = true;
-		_pipelineOperator->Dispatch(
-			parsingContext,
-			(parsingContext.GetFragmentStitchingContext()._workingProps._width + 7) / 8,
-			(parsingContext.GetFragmentStitchingContext()._workingProps._height + 7) / 8,
-			1,
-			uniforms);
+			params._srgbConversionOnInput = (c==0) ? false : true;
+			params._srgbConversionOnOutput = true;
+			_pipelineOperator->Dispatch(
+				parsingContext,
+				(parsingContext.GetFragmentStitchingContext()._workingProps._width + blockSize - 1) / blockSize,
+				(parsingContext.GetFragmentStitchingContext()._workingProps._height + blockSize - 1) / blockSize,
+				1,
+				uniforms);
+		}
 
 		rpi.AutoNonFrameBufferBarrier({
 			{1, BindFlag::ShaderResource, ShaderStage::Compute}
@@ -141,27 +169,31 @@ namespace RenderOverlays
 		return rpi.GetNonFrameBufferAttachmentView(1)->GetResource()->CreateTextureView(BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::ColorSRGB});
 	}
 
-	GaussianBlurOperator::GaussianBlurOperator(std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> pipelineOperator)
-	: _pipelineOperator(std::move(pipelineOperator)) {}
+	GaussianBlurOperator::GaussianBlurOperator(std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> pipelineOperator, unsigned tapCount)
+	: _pipelineOperator(std::move(pipelineOperator)), _tapCount(tapCount) {}
 
 	void GaussianBlurOperator::ConstructToPromise(
 		std::promise<std::shared_ptr<GaussianBlurOperator>>&& promise,
-		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool)
+		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool,
+		unsigned tapCount)
 	{
+		assert((tapCount&1) == 1);		// tap count must be odd (and should generally be 11 or higher)
 		RenderCore::UniformsStreamInterface usi;
 		usi.BindResourceView(0, "InputTexture"_h);
 		usi.BindResourceView(1, "OutputTexture"_h);
 		usi.BindImmediateData(0, "ControlUniforms"_h);
+		ParameterBox selectors;
+		selectors.SetParameter("TAP_COUNT", tapCount);
 		auto futurePipelineOperator = RenderCore::Techniques::CreateComputeOperator(
 			pool,
-			RENDEROVERLAYS_SEPARABLE_FILTER ":Gaussian11RGB",
-			ParameterBox{},
+			RENDEROVERLAYS_SEPARABLE_FILTER ":GaussianRGB",
+			std::move(selectors),
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 			usi);
 		::Assets::WhenAll(std::move(futurePipelineOperator)).ThenConstructToPromise(
 			std::move(promise),
-			[](auto pipelineOperator) {
-				return std::make_shared<GaussianBlurOperator>(std::move(pipelineOperator));
+			[tapCount](auto pipelineOperator) {
+				return std::make_shared<GaussianBlurOperator>(std::move(pipelineOperator), tapCount);
 			});
 	}
 
@@ -295,7 +327,7 @@ namespace RenderOverlays
 		UInt2 mipChainTopDims { srcDims[0] >> 1, srcDims[1] >> 1 };
 
 		parsingContext.GetFragmentStitchingContext().DefineAttachment(
-			"BlurryBackground"_h,
+			"BroadBlurryBackground"_h,
 			CreateDesc(
 				BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 				TextureDesc::Plain2D(mipChainTopDims[0], mipChainTopDims[1], Format::R8G8B8A8_UNORM, upsampleCount+1)),
@@ -306,7 +338,7 @@ namespace RenderOverlays
 		Techniques::FrameBufferDescFragment fbFragment;
 		fbFragment._pipelineType = PipelineType::Compute;
 		const unsigned colorLDRAttachment = fbFragment.DefineAttachment(inputAttachment).FinalState(BindFlag::UnorderedAccess);
-		const unsigned workingAttachment = fbFragment.DefineAttachment("BlurryBackground"_h).NoInitialState().FinalState(BindFlag::ShaderResource);
+		const unsigned workingAttachment = fbFragment.DefineAttachment("BroadBlurryBackground"_h).NoInitialState().FinalState(BindFlag::ShaderResource);
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
 		const auto inputUAV = sp.AppendNonFrameBufferAttachmentView(colorLDRAttachment, BindFlag::UnorderedAccess);
 		const auto allMipsUAV = sp.AppendNonFrameBufferAttachmentView(workingAttachment, BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
@@ -435,7 +467,7 @@ namespace RenderOverlays
 				if (op) {
 					// bring up-to-date compute, because it's typically invalidated at this point
 					_parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*_parsingContext);
-					_backgroundResource = (*op)->Execute(*_parsingContext, 4.0f);
+					_backgroundResource = (*op)->Execute(*_parsingContext, Tweakable("BlurRadius", 20.0f));
 				}
 			} else {
 				auto *op = _broadBlur->TryActualize();
@@ -446,7 +478,7 @@ namespace RenderOverlays
 				}
 			}
 		}
-		return _backgroundResource;
+		return _backgroundResource ? _backgroundResource : RenderCore::Techniques::Services::GetCommonResources()->_black2DSRV;
 	}
 
 	Float2 BlurryBackgroundEffect::AsTextureCoords(Coord2 screenSpace)
@@ -462,7 +494,8 @@ namespace RenderOverlays
 	: _parsingContext(&parsingContext)
 	{
 		if (type == Type::NarrowAccurateBlur) {
-			_gaussianBlur = ::Assets::MakeAssetMarkerPtr<GaussianBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool);
+			const unsigned tapCount = Tweakable("BlurTapCount", 31);
+			_gaussianBlur = ::Assets::MakeAssetMarkerPtr<GaussianBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool, tapCount);
 		} else {
 			_broadBlur = ::Assets::MakeAssetMarkerPtr<BroadBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool);
 		}

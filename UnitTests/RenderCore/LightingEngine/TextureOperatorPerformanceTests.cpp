@@ -510,7 +510,7 @@ namespace UnitTests
 			"tone-map-aces");
 
 		auto brightPassFilter = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, BLOOM_COMPUTE_HLSL ":BrightPassFilter");
-		auto fastMipChain = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, BLOOM_COMPUTE_HLSL ":FastMipChain");
+		auto fastMipChain = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, FAST_MIP_CHAIN_COMPUTE_HLSL ":main");
 		auto upsampleStep = ActualizePipeline(*testApparatus._pipelineCollection, compiledPipelineLayout, BLOOM_COMPUTE_HLSL ":UpsampleStep");
 
 		const unsigned s_shaderMipChainUniformCount = 8;		// must be kept up to date with the shader
@@ -530,10 +530,12 @@ namespace UnitTests
 		UniformsStreamInterface gaussianFilterUsi;
 		gaussianFilterUsi.BindResourceView(0, "InputTexture"_h);
 		gaussianFilterUsi.BindResourceView(1, "OutputTexture"_h);
+		ParameterBox selectors;
+		selectors.SetParameter("TAP_COUNT", 11);
 		auto gaussianFilterOperatorFuture = Techniques::CreateComputeOperator(
 			testApparatus._pipelineCollection,
-			BLOOM_FILTER_COMPUTE_HLSL ":Gaussian11RGB",
-			ParameterBox{},
+			RENDEROVERLAYS_SEPARABLE_FILTER ":GaussianRGB",
+			std::move(selectors),
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 			gaussianFilterUsi);
 		gaussianFilterOperatorFuture->StallWhilePending();
