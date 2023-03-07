@@ -62,8 +62,6 @@ namespace RenderCore { namespace Techniques
 				result[2*4+3] = lhs[2*4+0] * rhs[0*4+3] + lhs[2*4+1] * rhs[1*4+3] + lhs[2*4+2] * rhs[2*4+3] + lhs[2*4+3];
 				return resultm;
 			}
-		#else
-			#define Combine_NoDebugOverhead Combine
 		#endif
 
 		static std::shared_ptr<UniformsStreamInterface> MakeLocalTransformUSI()
@@ -74,6 +72,12 @@ namespace RenderCore { namespace Techniques
 		}
 		static std::shared_ptr<UniformsStreamInterface> s_localTransformUSI = MakeLocalTransformUSI();
 	}
+	
+	#if _DEBUG
+		#define Combine_NoDebugOverhead Internal::Combine_NoDebugOverhead
+	#else
+		#define Combine_NoDebugOverhead Combine
+	#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -200,7 +204,7 @@ namespace RenderCore { namespace Techniques
 				{
 					assert(elementIdx != ~0u);
 					auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
-					nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 				}
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
@@ -216,7 +220,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto localTransform = geoSpaceToNodeSpace ? Internal::Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -281,10 +285,10 @@ namespace RenderCore { namespace Techniques
 					auto animatedIdx =_skeletonBinding.ModelJointToMachineOutput(elementIdx, transformMarker);
 					if (animatedIdx < animatedSkeletonOutput.size()) {
 						auto& animatedTransform = animatedSkeletonOutput[animatedIdx];
-						nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
+						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
 					} else {
 						auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
-						nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 					}
 				}
 				break;
@@ -301,7 +305,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto localTransform = geoSpaceToNodeSpace ? Internal::Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -373,10 +377,10 @@ namespace RenderCore { namespace Techniques
 					auto animatedIdx =_skeletonBinding.ModelJointToMachineOutput(elementIdx, transformMarker);
 					if (animatedIdx < animatedSkeletonOutput.size()) {
 						auto& animatedTransform = animatedSkeletonOutput[animatedIdx];
-						nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
+						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&animatedTransform, localToWorld3x4);
 					} else {
 						auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
-						nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+						nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 					}
 				}
 				break;
@@ -395,7 +399,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto localTransform = geoSpaceToNodeSpace ? Internal::Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
+					auto localTransform = geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld; // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
@@ -455,7 +459,7 @@ namespace RenderCore { namespace Techniques
 				{
 					assert(elementIdx != ~0u);
 					auto& baseTransform = _skeletonBinding.ModelJointToUnanimatedTransform(elementIdx, transformMarker);
-					nodeSpaceToWorld = Internal::Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
+					nodeSpaceToWorld = Combine_NoDebugOverhead(*(const Float3x4*)&baseTransform, localToWorld3x4);
 				}
 				break;
 			case (uint32_t)Assets::ModelCommand::SetMaterialAssignments:
@@ -472,7 +476,7 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto localToWorld = AsFloat4x4(geoSpaceToNodeSpace ? Internal::Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld); // todo -- don't have to recalculate this every draw call
+					auto localToWorld = AsFloat4x4(geoSpaceToNodeSpace ? Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, nodeSpaceToWorld) : nodeSpaceToWorld); // todo -- don't have to recalculate this every draw call
 					for (const auto& dc:MakeIteratorRange(cmdStream->_drawCalls.begin()+drawCallsRef._start, cmdStream->_drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
 						auto& drawable = *drawables[dc._batchFilter]++;
