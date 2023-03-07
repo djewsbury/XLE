@@ -448,21 +448,21 @@ namespace RenderOverlays
 		int currentLinePrevGlyph = 0;
 		StringSection<CharType> currentLine { text.begin(), text.begin() };
 
-		while (!text.IsEmpty()) {
+		while (true) {
 			// find the next token (but start by finding a pre-whitespace block if it exists)
 			auto preWhitespaceBegin = text.begin();
 			float preWhitespaceWidth = 0.f;
 			int prevGlyph = 0;
 			Utility::ucs4 ch = 0;
 			for (;;) {
-				if (!text.IsEmpty())
-					text._start = FontRenderingControlStatement{}.TryParse(text)._start;		// skip any control statements
-				if (text.IsEmpty()) break;
 				auto t = text;
+				if (!t.IsEmpty())
+					t._start = FontRenderingControlStatement{}.TryParse(t)._start;		// skip any control statements
+				if (t.IsEmpty()) { ch = 0; break; }
 				ch = NextCharacter(t);
 				bool isWhitespace = std::find(whitespaceDividers.begin(), whitespaceDividers.end(), ch) != whitespaceDividers.end();
 				bool isExplicitNewLine = ch == '\r' || ch == '\n';
-				if (!isWhitespace || isExplicitNewLine) break;
+				if (!isWhitespace || isExplicitNewLine) break;		// not that when we break here, we don't absorb any final control statements
 
 				int curGlyph;
 				preWhitespaceWidth += font.GetKerning(prevGlyph, ch, &curGlyph)[0];
@@ -478,6 +478,7 @@ namespace RenderOverlays
 
 			// if we end on a newline, we need to handle that specifically
 			if (!text.IsEmpty() && (ch == '\r' || ch == '\n')) {
+				text._start = FontRenderingControlStatement{}.TryParse(text)._start;		// skip any control statements
 				ch = NextCharacter(text);
 				// newline types supported -- "\r", "\r\n", "\n"
 				if (ch == '\r' && !text.IsEmpty()) {
@@ -555,7 +556,7 @@ namespace RenderOverlays
 					result._sections.emplace_back(currentLine);
 				}
 				currentLinePrevGlyph = prevGlyph;
-				currentLine = { tokenBegin, text.begin() };		// note that we don't include "prewhitespace" block here
+				currentLine = { tokenBegin, text.begin() };		// note that we don't include "prewhitespace" block here -- this can sometimes exclude control statements
 				currentLineWidth = nextTokenWidth;
 			}
 		}
