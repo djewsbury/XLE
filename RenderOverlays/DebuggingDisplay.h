@@ -82,11 +82,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
         const Capture& GetCapture() const                     { return _capture;  }
 
         const std::vector<Interactables::Widget>& GetMouseOverStack() const         { return _mouseOverStack; }
-        const PlatformRig::InputContext& GetViewInputContext() const                { return _viewInputContext; }
+        const PlatformRig::WindowingSystemView& GetWindowingSystemView() const      { return _viewInputContext; }
 
         InterfaceState();
         InterfaceState( const PlatformRig::InputContext& viewInputContext,
-                        const Coord2& mousePosition, unsigned mouseButtonsHeld, 
+                        const Coord2& mousePosition, unsigned mouseButtonsHeld,
                         const std::vector<Interactables::Widget>& mouseStack,
                         const Capture& capture);
     protected:
@@ -94,7 +94,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         Capture     _capture;
         Coord2      _mousePosition;
         unsigned    _mouseButtonsHeld;
-        PlatformRig::InputContext _viewInputContext;
+        PlatformRig::WindowingSystemView _viewInputContext;
     };
 
     ///////////////////////////////////////////////////////////////////////////////////

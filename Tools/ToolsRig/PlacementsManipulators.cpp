@@ -1548,11 +1548,11 @@ namespace ToolsRig
 
         if (interfaceState.GetMouseOverStack().empty()) {
 
-            const auto& inputContext = interfaceState.GetViewInputContext();
-            if (auto* view = inputContext.GetService<PlatformRig::WindowingSystemView>()) {
+            const auto& view = interfaceState.GetWindowingSystemView();
+            if (view._viewMaxs[0] > view._viewMins[0] && view._viewMaxs[1] > view._viewMins[1]) {
                 SceneEngine::IntersectionTestContext intersectionContext {
                     AsCameraDesc(*_camera),
-                    view->_viewMins, view->_viewMaxs,
+                    view._viewMins, view._viewMaxs,
                     _drawingApparatus };
 
                 if (_manipulators[_activeManipulatorIndex]->OnInputEvent(input, intersectionContext, _intersectionTestScene.get()))

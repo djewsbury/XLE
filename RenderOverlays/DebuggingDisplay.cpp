@@ -1322,9 +1322,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
     :   _mousePosition(mousePosition)
     ,   _mouseButtonsHeld(mouseButtonsHeld)
     ,   _mouseOverStack(mouseStack)
-    ,   _viewInputContext(viewInputContext)
     ,   _capture(capture)
-    {}
+    {
+        if (auto* v=viewInputContext.GetService<PlatformRig::WindowingSystemView>())
+            _viewInputContext = *v;
+    }
 
     bool InterfaceState::HasMouseOver(InteractableId id) 
     { 

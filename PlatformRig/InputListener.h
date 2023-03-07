@@ -36,6 +36,8 @@ namespace PlatformRig
 
         InputContext();
         ~InputContext();
+        InputContext(InputContext&&) = delete;
+        InputContext& operator=(InputContext&&) = delete;
     private:
         std::vector<std::pair<uint64_t, void*>> _services;
 	};

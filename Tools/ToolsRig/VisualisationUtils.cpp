@@ -639,7 +639,9 @@ namespace ToolsRig
 			// The preferred option may depend on the particular use case.
 			auto time = std::chrono::steady_clock::now();
 			const auto timePeriod = std::chrono::milliseconds(200u);
-			_timeoutContext = context;
+			_timeoutContext = {};
+			if (auto* v = context.GetService<PlatformRig::WindowingSystemView>())
+				_timeoutContext = *v;
 			_timeoutMousePosition = {evnt._mousePosition._x, evnt._mousePosition._y};
 			if ((time - _timeOfLastCalculate) < timePeriod) {
 				auto* osRunLoop = OSServices::GetOSRunLoop();
@@ -650,11 +652,11 @@ namespace ToolsRig
 						[weakThis]() {
 							auto l = weakThis.lock();
 							if (l) {
+								PlatformRig::InputContext context;
+								context.AttachService2(l->_timeoutContext);
 								l->_timeOfLastCalculate = std::chrono::steady_clock::now();
-								l->CalculateForMousePosition(
-									l->_timeoutContext,
-									l->_timeoutMousePosition);
-								l->_timeoutEvent = ~0u;								
+								l->CalculateForMousePosition(context, l->_timeoutMousePosition);
+								l->_timeoutEvent = ~0u;
 							}
 						});
 				}
@@ -746,7 +748,7 @@ namespace ToolsRig
 		std::shared_ptr<SceneEngine::IScene> _scene;
 		std::chrono::time_point<std::chrono::steady_clock> _timeOfLastCalculate;
 
-		PlatformRig::InputContext _timeoutContext;
+		PlatformRig::WindowingSystemView _timeoutContext;
 		PlatformRig::Coord2 _timeoutMousePosition;
 		unsigned _timeoutEvent = ~0u;
     };
