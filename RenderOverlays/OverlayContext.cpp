@@ -179,13 +179,15 @@ namespace RenderOverlays
 		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
 		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
 		Float2 alignedPosition = AlignText(font, q, alignment, text);
+		if (!(flags & DrawTextFlags::Clip))
+			q.max = {0,0};
 		return Draw(
 			*_threadContext,
 			*_immediateDrawables, 
 			*_fontRenderingManager,
 			font, flags,
 			alignedPosition[0], alignedPosition[1],
-			0.f, 0.f, // q.max[0], q.max[1],
+			q.max[0], q.max[1],
 			text,
 			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
 			col);
@@ -214,7 +216,7 @@ namespace RenderOverlays
 			*_fontRenderingManager,
 			fontTable,
 			alignedPosition[0], alignedPosition[1],
-			0.f, 0.f, // q.max[0], q.max[1],
+			0.f, 0.f,
 			text, colors, fontSelectors,
 			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
 			shadowColor);

@@ -20,7 +20,7 @@ namespace RenderOverlays
 
     namespace DrawTextFlags
     {
-        enum Flags { Shadow = 1u<<0u, Outline = 1u<<1u, Snap = 1u<<2u };
+        enum Flags { Shadow = 1u<<0u, Outline = 1u<<1u, Snap = 1u<<2u, Clip = 1u<<3u };
         using BitField = unsigned;
     };
 

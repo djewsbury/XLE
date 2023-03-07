@@ -431,7 +431,7 @@ namespace RenderOverlays
 		float x = iterator[0], y = iterator[1];
 		float xScale = scale;
 		float yScale = scale;
-		{
+		if (!CheckMaxXY || (y + yScale * font.GetFontProperties()._lineHeight) <= maxY) {
 			int prevGlyph = 0;
 			float yAtLineStart = y;
 			unsigned lineIdx = 0;
@@ -464,6 +464,12 @@ namespace RenderOverlays
 						y = yScale * (int)(0.5f + y / yScale);
 					}
 					++lineIdx;
+
+					if (CheckMaxXY && (y + yScale * font.GetFontProperties()._lineHeight) > maxY) {
+						text._start = text._end;		// end iteration
+						break;
+					}
+
 					continue;
 				}
 
@@ -475,6 +481,8 @@ namespace RenderOverlays
 
 				instances[instanceCount++] = { ch, Float2{x, y}, colorOverride.a?colorOverride:color, lineIdx };
 			}
+		} else {
+			text._start = text._end;		// end iteration
 		}
 
 		if (!instanceCount) {
@@ -553,7 +561,7 @@ namespace RenderOverlays
 				baseX, baseY, 
 				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true))
+			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true))
 				break;		// this one will render
 		}
 
@@ -582,10 +590,10 @@ namespace RenderOverlays
 				}
 
 				Quad pos = Quad::MinMax(
-					baseX, baseY, 
+					baseX, baseY,
 					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-				if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true)) {
+				if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true)) {
 					Quad shadowPos;
 					shadowPos = pos;
 					shadowPos.min[0] -= xScale;
@@ -654,7 +662,7 @@ namespace RenderOverlays
 					baseX, baseY, 
 					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-				if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true)) {
+				if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true)) {
 					Quad shadowPos = pos;
 					shadowPos.min[0] += xScale;
 					shadowPos.max[0] += xScale;
@@ -680,7 +688,7 @@ namespace RenderOverlays
 				baseX, baseY, 
 				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
 
-			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX && pos.max[1] <= maxY), true))
+			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true))
 				workingVertices.PushQuad(pos, inst->_color, bitmap, depth);
 		}
 
