@@ -19,12 +19,11 @@ namespace RenderOverlays
 	class BlurryBackgroundEffect
 	{
 	public:
-		std::shared_ptr<RenderCore::IResourceView> GetResourceView();
+		enum class Type { NarrowAccurateBlur, BroadBlur };
+		std::shared_ptr<RenderCore::IResourceView> GetResourceView(Type type = Type::BroadBlur);
 		Float2 AsTextureCoords(Coord2 screenSpace);
 
-		enum class Type { NarrowAccurateBlur, BroadBlur };
-
-		BlurryBackgroundEffect(RenderCore::Techniques::ParsingContext& parsingContext, Type type = Type::BroadBlur);
+		BlurryBackgroundEffect(RenderCore::Techniques::ParsingContext& parsingContext);
 		~BlurryBackgroundEffect();
 	private:
 		RenderCore::Techniques::ParsingContext* _parsingContext;

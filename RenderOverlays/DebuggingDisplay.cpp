@@ -217,7 +217,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         unsigned sectionCount = (coordinates.ScrollArea().Height() - staticData._sectionMargin) / (staticData._sectionHeight + staticData._sectionMargin);
         if (sectionCount == 0) return;
 
-        auto middle = (coordinates.ScrollArea()._topLeft[0] + coordinates.ScrollArea()._bottomRight[1]) / 2;
+        auto middle = (coordinates.ScrollArea()._topLeft[0] + coordinates.ScrollArea()._bottomRight[0]) / 2;
 
         ColorB colors[] { staticData._colorA, staticData._colorB, staticData._colorC };
         for (unsigned c=0; c<sectionCount; ++c) {
@@ -473,26 +473,28 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    void        DrawTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount)
+    void        FillTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount)
     {
-        std::vector<Float3> pixelCoords;
-        pixelCoords.resize(triangleCount*3);
-        for (unsigned c=0; c<triangleCount*3; ++c) {
+        VLA_UNSAFE_FORCE(Float3, pixelCoords, triangleCount*3);
+        for (unsigned c=0; c<triangleCount*3; ++c)
             pixelCoords[c] = AsPixelCoords(Coord2(triangleCoordinates[c][0], triangleCoordinates[c][1]));
-        }
+        context.DrawTriangles(ProjectionMode::P2D, pixelCoords, triangleCount*3, triangleColours);
+    }
 
-        context.DrawTriangles(ProjectionMode::P2D, AsPointer(pixelCoords.begin()), triangleCount*3, triangleColours);
+    void        FillTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], ColorB colour, unsigned triangleCount)
+    {
+        VLA_UNSAFE_FORCE(Float3, pixelCoords, triangleCount*3);
+        for (unsigned c=0; c<triangleCount*3; ++c)
+            pixelCoords[c] = AsPixelCoords(Coord2(triangleCoordinates[c][0], triangleCoordinates[c][1]));
+        context.DrawTriangles(ProjectionMode::P2D, pixelCoords, triangleCount*3, colour);
     }
 
     void        DrawLines(IOverlayContext& context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount)
     {
-        std::vector<Float3> pixelCoords;
-        pixelCoords.resize(lineCount*2);
-        for (unsigned c=0; c<lineCount*2; ++c) {
+        VLA_UNSAFE_FORCE(Float3, pixelCoords, lineCount*2);
+        for (unsigned c=0; c<lineCount*2; ++c)
             pixelCoords[c] = AsPixelCoords(Coord2(lineCoordinates[c][0], lineCoordinates[c][1]));
-        }
-
-        context.DrawLines(ProjectionMode::P2D, AsPointer(pixelCoords.begin()), lineCount*2, lineColours);
+        context.DrawLines(ProjectionMode::P2D, pixelCoords, lineCount*2, lineColours);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -501,10 +503,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
 	{
         ColorB _frameColor = 0xffefe9d9;
         ColorB _headerLabelColor = 0xffffffff;
-        unsigned _headerLabelHorzPadding = 8;
-        unsigned _headerLabelLeftMargin = 16;
-        unsigned _frameWidth = 4;
-        unsigned _downStrokeLength = 32;
+        int _headerLabelHorzPadding = 16;
+        int _headerLabelLeftMargin = 16;
+        int _frameLineWeight = 4;
+        int _downStrokeLength = 24;
+        int _downStrokeWeight = 2;
+        int _leftAndRightBorderArea = 16;
+        int _valueHorizPadding = 6;
+        int _headerAreaHeight = 60;
 
         TableStaticData() = default;
         template<typename Formatter>
@@ -517,8 +523,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 case "HeaderLabelColor"_h: _headerLabelColor = DeserializeColor(fmttr); break;
                 case "HeaderLabelHorzPadding"_h: _headerLabelHorzPadding = Formatters::RequireCastValue<decltype(_headerLabelHorzPadding)>(fmttr); break;
                 case "HeaderLabelLeftMargin"_h: _headerLabelLeftMargin = Formatters::RequireCastValue<decltype(_headerLabelLeftMargin)>(fmttr); break;
-                case "FrameWidth"_h: _frameWidth = Formatters::RequireCastValue<decltype(_frameWidth)>(fmttr); break;
+                case "FrameLineWeight"_h: _frameLineWeight = Formatters::RequireCastValue<decltype(_frameLineWeight)>(fmttr); break;
                 case "DownStrokeLength"_h: _downStrokeLength = Formatters::RequireCastValue<decltype(_downStrokeLength)>(fmttr); break;
+                case "DownStrokeWeight"_h: _downStrokeWeight = Formatters::RequireCastValue<decltype(_downStrokeWeight)>(fmttr); break;
+                case "LeftAndRightBorderArea"_h: _leftAndRightBorderArea = Formatters::RequireCastValue<decltype(_leftAndRightBorderArea)>(fmttr); break;
+                case "ValueHorizPadding"_h: _valueHorizPadding = Formatters::RequireCastValue<decltype(_valueHorizPadding)>(fmttr); break;
+                case "HeaderAreaHeight"_h: _headerAreaHeight = Formatters::RequireCastValue<decltype(_headerAreaHeight)>(fmttr); break;
                 default: SkipValueOrElement(fmttr); break;
                 }
             }
@@ -526,70 +536,92 @@ namespace RenderOverlays { namespace DebuggingDisplay
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
-    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, Interactables* interactables)
+    Coord DrawTableHeaders(IOverlayContext& context, const Rect& initialRect, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders, Interactables* interactables)
     {
         auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
-        Layout tempLayout(rect);
-        tempLayout._paddingInternalBorder = 0;
         auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
-        unsigned lastLabelRight = rect._topLeft[0];
+        auto fntLineHeight = fnt.GetFontProperties()._lineHeight;
+
+        Layout tempLayout(
+            Rect { initialRect._topLeft, { initialRect._bottomRight[0], std::min(initialRect._topLeft[1] + int(fntLineHeight)*2, initialRect._bottomRight[1])} });
+        tempLayout._paddingInternalBorder = 0;
+        tempLayout._paddingBetweenAllocations = 0;
+        float middle = float(tempLayout.GetMaximumSize()._topLeft[1] + tempLayout.GetMaximumSize()._bottomRight[1]) / 2.f;
+        float downStrokeEnd = middle + staticData._downStrokeLength;
+        float longDownStrokeEnd = middle + 2*staticData._downStrokeLength;
+
+        unsigned lastLabelRight = tempLayout.GetMaximumSize()._topLeft[0];
+        {
+            auto leftArea = tempLayout.AllocateFullHeight(staticData._leftAndRightBorderArea);
+            lastLabelRight = (leftArea._topLeft[0] + leftArea._bottomRight[0])/2;
+        }
+        unsigned rightMostDownStroke = tempLayout.GetMaximumSize()._bottomRight[0] - staticData._leftAndRightBorderArea / 2;
+        tempLayout._maximumSize._bottomRight[0] -= staticData._leftAndRightBorderArea;
+
         VLA_UNSAFE_FORCE(Rect, labelRects, fieldHeaders.size());
         unsigned labelRectCount = 0;
         for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
-            if (!i->second) {
-                labelRects[labelRectCount++] = Rect{{0,0}, {-1,-1}};
-                continue;
-            }
+            assert(i->second);
 
             // calculate rectangles for the label area
-            auto labelWidth = StringWidth(fnt, MakeStringSection(i->first), 0.f, true);
-            auto r = tempLayout.AllocateFullHeight(i->second);
+            auto labelWidth = StringWidth(fnt, MakeStringSection(i->first));
+            unsigned additionalPadding = 0;
+            if (i!=fieldHeaders.begin()) additionalPadding += staticData._valueHorizPadding/2;
+            if ((i+1)!=fieldHeaders.end()) additionalPadding += staticData._valueHorizPadding/2;
+            Rect r;
+            if ((i+1) != fieldHeaders.end())
+                r = tempLayout.AllocateFullHeight(i->second+additionalPadding);
+            else
+                r = tempLayout.AllocateFullHeight(tempLayout.GetWidthRemaining());     // allocate remaining space
+            i->second = std::max(0u, r.Width() - additionalPadding);      // update width with final calculated value
+
             Rect labelFrame { 
                 { r._topLeft[0] + staticData._headerLabelLeftMargin, r._topLeft[1] },
-                { r._topLeft[0] + staticData._headerLabelLeftMargin + 2*staticData._headerLabelHorzPadding + 2*staticData._frameWidth + int(labelWidth), r._bottomRight[1] }
+                { r._topLeft[0] + staticData._headerLabelLeftMargin + 2*staticData._headerLabelHorzPadding + 2*staticData._frameLineWeight + int(labelWidth), r._bottomRight[1] }
             };
             labelFrame._bottomRight[1] = std::min(labelFrame._bottomRight[1], r._bottomRight[1]);
             Rect labelContent {
-                { labelFrame._topLeft[0] + staticData._headerLabelHorzPadding + staticData._frameWidth, r._topLeft[1] },
-                { labelFrame._topLeft[0] + staticData._headerLabelHorzPadding + staticData._frameWidth + int(labelWidth), r._bottomRight[1] }
+                { labelFrame._topLeft[0] + staticData._headerLabelHorzPadding + staticData._frameLineWeight, r._topLeft[1] },
+                { labelFrame._topLeft[0] + staticData._headerLabelHorzPadding + staticData._frameLineWeight + int(labelWidth), r._bottomRight[1] }
             };
             labelFrame._bottomRight[1] = std::min(labelContent._bottomRight[1], labelFrame._bottomRight[1]);
-            
+
             // down strokes separating columns
-            float middle = float(rect._topLeft[1] + rect._bottomRight[1]) / 2.f;
-            float downStrokeEnd = middle + staticData._downStrokeLength;
-            if (lastLabelRight == rect._topLeft[0]) {
+            if (i != fieldHeaders.begin()) {
                 Float2 downwardStroke[] {
-                    { rect._topLeft[0], middle },
-                    { rect._topLeft[0], downStrokeEnd }
+                    { r._topLeft[0], middle },
+                    { r._topLeft[0], downStrokeEnd }
                 };
-                SolidLine(context, downwardStroke, staticData._frameColor, staticData._frameWidth);
-            }
-            {
-                Float2 downwardStroke[] {
-                    { r._bottomRight[0], middle },
-                    { r._bottomRight[0], downStrokeEnd }
-                };
-                SolidLine(context, downwardStroke, staticData._frameColor, staticData._frameWidth);
+                SolidLine(context, downwardStroke, staticData._frameColor, staticData._downStrokeWeight);
             }
 
             // strokes along the top
             {
-                Float2 horizStroke[] {
-                    { lastLabelRight, middle },
-                    { labelFrame._topLeft[0], middle }
-                };
-                SolidLine(context, horizStroke, staticData._frameColor, staticData._frameWidth);
+                if (i == fieldHeaders.begin()) {
+                    Float2 horizStroke[] {
+                        { lastLabelRight, longDownStrokeEnd },
+                        { lastLabelRight, middle },
+                        { labelFrame._topLeft[0], middle }
+                    };
+                    SolidLine(context, horizStroke, staticData._frameColor, staticData._frameLineWeight);
+                } else {
+                    Float2 horizStroke[] {
+                        { lastLabelRight, middle },
+                        { labelFrame._topLeft[0], middle }
+                    };
+                    SolidLine(context, horizStroke, staticData._frameColor, staticData._frameLineWeight);
+                }
+
                 Float2 A[] {
-                    { labelFrame._topLeft[0], labelFrame._topLeft[1] },
-                    { labelFrame._topLeft[0], labelFrame._bottomRight[1] }
+                    { labelFrame._topLeft[0], middle - fntLineHeight/2 },
+                    { labelFrame._topLeft[0], middle + fntLineHeight/2 }
                 };
-                SolidLine(context, A, staticData._frameColor, staticData._frameWidth);
+                SolidLine(context, A, staticData._frameColor, staticData._frameLineWeight);
                 Float2 B[] {
-                    { labelFrame._bottomRight[0], labelFrame._topLeft[1] },
-                    { labelFrame._bottomRight[0], labelFrame._bottomRight[1] }
+                    { labelFrame._bottomRight[0], middle - fntLineHeight/2 },
+                    { labelFrame._bottomRight[0], middle + fntLineHeight/2 }
                 };
-                SolidLine(context, B, staticData._frameColor, staticData._frameWidth);
+                SolidLine(context, B, staticData._frameColor, staticData._frameLineWeight);
             }
             lastLabelRight = labelFrame._bottomRight[0];
 
@@ -598,12 +630,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         // last stroke along the top
         {
-            float middle = float(rect._topLeft[1] + rect._bottomRight[1]) / 2.f;
             Float2 horizStroke[] {
                 { lastLabelRight, middle },
-                { rect._bottomRight[0], middle }
+                { rightMostDownStroke, middle },
+                { rightMostDownStroke, longDownStrokeEnd }
             };
-            SolidLine(context, horizStroke, staticData._frameColor, staticData._frameWidth);
+            SolidLine(context, horizStroke, staticData._frameColor, staticData._frameLineWeight);
         }
 
         for (unsigned c=0; c<labelRectCount; ++c) {
@@ -612,46 +644,127 @@ namespace RenderOverlays { namespace DebuggingDisplay
             DrawText()
                 .Font(fnt)
                 .Alignment(TextAlignment::Left)
-                .Color(staticData._headerLabelColor)
-                .Flags(DrawTextFlags::Outline)
+                .Color(RandomPaletteColorTable[c * RandomPaletteColorTable_Size / labelRectCount])
+                .Flags(DrawTextFlags::Shadow)
                 .Draw(context, labelContent, MakeStringSection(fieldHeaders[c].first));
         }
+
+        return staticData._headerAreaHeight;
+    }
+
+    Rect DrawEmbeddedInRightEdge(IOverlayContext& context, const Rect& rect)
+    {
+        // Sometimes we embed widgets in the frame of a table (such as a scrollbar)
+        // Here we draw something into the frame to highlight it, and calculate the correct position for the embedded widget
+        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
+
+        auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
+
+        Rect frame {
+            { rect._bottomRight[0] - staticData._leftAndRightBorderArea, rect._topLeft[1] + fnt.GetFontProperties()._lineHeight + 2 * staticData._downStrokeLength },
+            { rect._bottomRight[0], rect._bottomRight[1] - staticData._headerAreaHeight / 2 - 2 * staticData._downStrokeLength }
+        };
+
+        Float2 A[] {
+            frame._topLeft,
+            {frame._bottomRight[0], frame._topLeft[1]}
+        };
+        Float2 B[] {
+            {frame._topLeft[0], frame._bottomRight[1]},
+            frame._bottomRight
+        };
+        SolidLine(context, A, staticData._frameColor, staticData._frameLineWeight);
+        SolidLine(context, B, staticData._frameColor, staticData._frameLineWeight);
+
+        return {
+            frame._topLeft + Coord2{ staticData._frameLineWeight, staticData._frameLineWeight },
+            frame._bottomRight - Coord2{ staticData._frameLineWeight, staticData._frameLineWeight }
+        };
+    }
+
+    void DrawTableBase(IOverlayContext& context, const Rect& rect)
+    {
+        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
+
+        auto middle = (rect._topLeft[1] + rect._bottomRight[1]) / 2;
+        Float2 stroke[] {
+            { rect._topLeft[0] + staticData._leftAndRightBorderArea/2, middle - 2*staticData._downStrokeLength },
+            { rect._topLeft[0] + staticData._leftAndRightBorderArea/2, middle },
+            { rect._bottomRight[0] - staticData._leftAndRightBorderArea/2, middle },
+            { rect._bottomRight[0] - staticData._leftAndRightBorderArea/2, middle - 2*staticData._downStrokeLength }
+        };
+        SolidLine(context, stroke, staticData._frameColor, staticData._frameLineWeight);
+    }
+
+    static Rect AllocateTableEntry(Layout& layout, const TableStaticData& staticData, unsigned width, bool first, bool last)
+    {
+        Rect r;
+        unsigned additionalPadding = 0;
+        if (!first) additionalPadding += staticData._valueHorizPadding/2;
+        if (!last) additionalPadding += staticData._valueHorizPadding/2;
+        if (!last)
+            r = layout.AllocateFullHeight(width + additionalPadding);
+        else
+            r = layout.AllocateFullHeight(std::max(0, layout.GetWidthRemaining()));     // allocate remaining space        
+        if (!first) r._topLeft[0] += staticData._valueHorizPadding/2;
+        if (!last) r._bottomRight[0] -= staticData._valueHorizPadding/2;
+        return r;
     }
 
     Coord DrawTableEntry(       IOverlayContext& context,
                                 const Rect& rect, 
                                 IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, 
-                                const std::map<std::string, TableElement>& entry)
+                                const std::map<std::string, TableElement>& entry,
+                                bool highlighted)
     {
-        static const ColorB TextColor   ( 255, 255, 255, 255 );
-        
-        static const ColorB BkOutColor  ( 255, 255, 255, 255 );
-        static const ColorB SepColor    ( 255, 255, 255, 255 );
+        static const ColorB TextColor ( 255, 255, 255, 255 );
 
         auto* fonts = ConsoleRig::TryActualizeCachedBox<Internal::DefaultFontsBox>();
         if (!fonts) return 0;
         
+        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
         Layout tempLayout(rect);
         tempLayout._paddingInternalBorder = 0;
-        Coord heightUsed = 0;
-        for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
-            if (i->second) {
-                auto s = entry.find(i->first);
-                Rect r = tempLayout.AllocateFullHeight(i->second);
-                if (s != entry.end() && !s->second._label.empty()) {
-                    r._topLeft[0] += 8;
+        tempLayout._paddingBetweenAllocations = 0;
 
-                    const ColorB colour = TextColor;
-                    auto textSpace = DrawText()
-                        .Alignment(TextAlignment::TopLeft)
-                        .Color(colour)
-                        .Font(*fonts->_tableValuesFont)
-                        .Flags(DrawTextFlags::Shadow)
-                        .Draw(context, r, MakeStringSection(s->second._label));
-                    heightUsed = std::max(textSpace[1] - r._topLeft[1], heightUsed);
+        auto leftArea = tempLayout.AllocateFullHeight(staticData._leftAndRightBorderArea);
+        tempLayout._maximumSize._bottomRight[0] -= staticData._leftAndRightBorderArea;
+
+        if (highlighted) {
+            // when highlighted, we need to calculate the height we're going to need before we draw the values
+            auto layoutCopy = tempLayout;
+            Coord heightUsed = 0;
+            for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
+                assert(i->second);
+                auto s = entry.find(i->first);
+                auto r = AllocateTableEntry(layoutCopy, staticData, i->second, i==fieldHeaders.begin(), (i+1)==fieldHeaders.end());
+
+                if (s != entry.end() && !s->second._label.empty() && IsGood(r)) {
+                    auto lineCount = StringSplitByWidth(*fonts->_tableValuesFont, MakeStringSection(s->second._label), FLT_MAX, {}, {}, 0.f, false)._sections.size();
+                    heightUsed = std::max(heightUsed, Coord(lineCount * fonts->_tableValuesFont->GetFontProperties()._lineHeight));
                 }
             }
+            FillRectangle(context, {rect._topLeft, {rect._bottomRight[0], std::min(rect._topLeft[1] + heightUsed, rect._bottomRight[1])}}, ColorB::White);
         }
+
+        Coord heightUsed = 0;
+        for (auto i=fieldHeaders.begin(); i!=fieldHeaders.end(); ++i) {
+            assert(i->second);
+
+            auto s = entry.find(i->first);
+            auto r = AllocateTableEntry(tempLayout, staticData, i->second, i==fieldHeaders.begin(), (i+1)==fieldHeaders.end());
+
+            if (s != entry.end() && !s->second._label.empty() && IsGood(r)) {
+                auto textSpace = DrawText()
+                    .Alignment(TextAlignment::TopLeft)
+                    .Color(highlighted ? ColorB::Black : TextColor)
+                    .Font(*fonts->_tableValuesFont)
+                    .Flags((highlighted ? 0 : DrawTextFlags::Shadow) | DrawTextFlags::Clip)
+                    .Draw(context, r, MakeStringSection(s->second._label));
+                heightUsed = std::max(textSpace[1] - r._topLeft[1], heightUsed);
+            }
+        }
+
         return heightUsed;
     }
 
@@ -1521,126 +1634,126 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     const ColorB RandomPaletteColorTable[] = 
     {
-        ColorB( 205,74,74   ),
-        ColorB( 204,102,102 ),
-        ColorB( 188,93,88   ),
-        ColorB( 255,83,73   ),
-        ColorB( 253,94,83   ),
-        ColorB( 253,124,110 ),
-        ColorB( 253,188,180 ),
-        ColorB( 255,110,74  ),
-        ColorB( 255,160,137 ),
-        ColorB( 234,126,93  ),
-        ColorB( 180,103,77  ),
-        ColorB( 165,105,79  ),
-        ColorB( 255,117,56  ),
-        ColorB( 255,127,73  ),
-        ColorB( 221,148,117 ),
-        ColorB( 255,130,67  ),
-        ColorB( 255,164,116 ),
-        ColorB( 159,129,112 ),
-        ColorB( 205,149,117 ),
-        ColorB( 239,205,184 ),
-        ColorB( 214,138,89  ),
-        ColorB( 222,170,136 ),
-        ColorB( 250,167,108 ),
         ColorB( 255,207,171 ),
-        ColorB( 255,189,136 ),
-        ColorB( 253,217,181 ),
-        ColorB( 255,163,67  ),
-        ColorB( 239,219,197 ),
-        ColorB( 255,182,83  ),
-        ColorB( 231,198,151 ),
-        ColorB( 138,121,93  ),
-        ColorB( 250,231,181 ),
-        ColorB( 255,207,72  ),
-        ColorB( 252,217,117 ),
-        ColorB( 253,219,109 ),
-        ColorB( 252,232,131 ),
-        ColorB( 240,232,145 ),
-        ColorB( 236,234,190 ),
-        ColorB( 186,184,108 ),
-        ColorB( 253,252,116 ),
-        ColorB( 253,252,116 ),
-        ColorB( 255,255,153 ),
-        ColorB( 197,227,132 ),
-        ColorB( 178,236,93  ),
-        ColorB( 135,169,107 ),
-        ColorB( 168,228,160 ),
-        ColorB( 29,249,20   ),
-        ColorB( 118,255,122 ),
-        ColorB( 113,188,120 ),
-        ColorB( 109,174,129 ),
-        ColorB( 159,226,191 ),
-        ColorB( 28,172,120  ),
-        ColorB( 48,186,143  ),
-        ColorB( 69,206,162  ),
-        ColorB( 59,176,143  ),
-        ColorB( 28,211,162  ),
-        ColorB( 23,128,109  ),
-        ColorB( 21,128,120  ),
-        ColorB( 31,206,203  ),
-        ColorB( 120,219,226 ),
-        ColorB( 119,221,231 ),
-        ColorB( 128,218,235 ),
-        ColorB( 65,74,76    ),
-        ColorB( 25,158,189  ),
-        ColorB( 28,169,201  ),
-        ColorB( 29,172,214  ),
-        ColorB( 154,206,235 ),
-        ColorB( 26,72,118   ),
-        ColorB( 25,116,210  ),
-        ColorB( 43,108,196  ),
-        ColorB( 31,117,254  ),
-        ColorB( 197,208,230 ),
-        ColorB( 176,183,198 ),
-        ColorB( 93,118,203  ),
-        ColorB( 162,173,208 ),
-        ColorB( 151,154,170 ),
-        ColorB( 173,173,214 ),
-        ColorB( 115,102,189 ),
-        ColorB( 116,66,200  ),
-        ColorB( 120,81,169  ),
-        ColorB( 157,129,186 ),
-        ColorB( 146,110,174 ),
-        ColorB( 205,164,222 ),
-        ColorB( 143,80,157  ),
-        ColorB( 195,100,197 ),
+        ColorB( 165,105,79  ),
         ColorB( 251,126,253 ),
-        ColorB( 252,116,253 ),
-        ColorB( 142,69,133  ),
-        ColorB( 255,29,206  ),
-        ColorB( 255,29,206  ),
-        ColorB( 255,72,208  ),
-        ColorB( 230,168,215 ),
-        ColorB( 192,68,143  ),
-        ColorB( 110,81,96   ),
-        ColorB( 221,68,146  ),
-        ColorB( 255,67,164  ),
-        ColorB( 246,100,175 ),
-        ColorB( 252,180,213 ),
+        ColorB( 252,232,131 ),
+        ColorB( 250,231,181 ),
+        ColorB( 197,227,132 ),
+        ColorB( 255,207,72  ),
         ColorB( 255,188,217 ),
-        ColorB( 247,83,148  ),
-        ColorB( 255,170,204 ),
-        ColorB( 227,37,107  ),
-        ColorB( 253,215,228 ),
-        ColorB( 202,55,103  ),
-        ColorB( 222,93,131  ),
-        ColorB( 252,137,172 ),
-        ColorB( 247,128,161 ),
-        ColorB( 200,56,90   ),
-        ColorB( 238,32,77   ),
-        ColorB( 255,73,108  ),
-        ColorB( 239,152,170 ),
-        ColorB( 252,108,133 ),
         ColorB( 252,40,71   ),
-        ColorB( 255,155,170 ),
-        ColorB( 203,65,84   ),
-        ColorB( 237,237,237 ),
+        ColorB( 151,154,170 ),
+        ColorB( 252,108,133 ),
+        ColorB( 252,116,253 ),
+        ColorB( 65,74,76    ),
+        ColorB( 239,205,184 ),
+        ColorB( 253,215,228 ),
+        ColorB( 255,170,204 ),
+        ColorB( 119,221,231 ),
+        ColorB( 118,255,122 ),
+        ColorB( 204,102,102 ),
+        ColorB( 25,116,210  ),
+        ColorB( 247,128,161 ),
+        ColorB( 48,186,143  ),
+        ColorB( 253,217,181 ),
+        ColorB( 239,152,170 ),
+        ColorB( 173,173,214 ),
+        ColorB( 231,198,151 ),
+        ColorB( 227,37,107  ),
+        ColorB( 109,174,129 ),
         ColorB( 219,215,210 ),
-        ColorB( 205,197,194 ),
+        ColorB( 138,121,93  ),
+        ColorB( 113,188,120 ),
+        ColorB( 222,93,131  ),
+        ColorB( 28,169,201  ),
+        ColorB( 29,249,20   ),
+        ColorB( 31,206,203  ),
+        ColorB( 180,103,77  ),
+        ColorB( 221,148,117 ),
+        ColorB( 253,188,180 ),
+        ColorB( 35,35,35    ),
+        ColorB( 26,72,118   ),
+        ColorB( 205,164,222 ),
+        ColorB( 253,252,116 ),
+        ColorB( 29,172,214  ),
+        ColorB( 255,83,73   ),
+        ColorB( 93,118,203  ),
+        ColorB( 25,158,189  ),
+        ColorB( 240,232,145 ),
+        ColorB( 255,182,83  ),
+        ColorB( 253,124,110 ),
+        ColorB( 255,29,206  ),
+        ColorB( 115,102,189 ),
+        ColorB( 237,237,237 ),
+        ColorB( 162,173,208 ),
+        ColorB( 221,68,146  ),
+        ColorB( 120,219,226 ),
+        ColorB( 159,129,112 ),
+        ColorB( 222,170,136 ),
+        ColorB( 69,206,162  ),
+        ColorB( 205,74,74   ),
+        ColorB( 252,137,172 ),
+        ColorB( 255,117,56  ),
+        ColorB( 178,236,93  ),
+        ColorB( 255,127,73  ),
+        ColorB( 143,80,157  ),
+        ColorB( 110,81,96   ),
+        ColorB( 234,126,93  ),
+        ColorB( 186,184,108 ),
+        ColorB( 188,93,88   ),
+        ColorB( 120,81,169  ),
+        ColorB( 31,117,254  ),
+        ColorB( 159,226,191 ),
+        ColorB( 28,211,162  ),
+        ColorB( 176,183,198 ),
+        ColorB( 252,180,213 ),
+        ColorB( 253,94,83   ),
+        ColorB( 135,169,107 ),
+        ColorB( 202,55,103  ),
+        ColorB( 255,67,164  ),
+        ColorB( 205,149,117 ),
+        ColorB( 239,219,197 ),
+        ColorB( 195,100,197 ),
+        ColorB( 23,128,109  ),
+        ColorB( 255,110,74  ),
+        ColorB( 246,100,175 ),
+        ColorB( 255,164,116 ),
+        ColorB( 28,172,120  ),
+        ColorB( 200,56,90   ),
+        ColorB( 255,155,170 ),
+        ColorB( 214,138,89  ),
+        ColorB( 142,69,133  ),
+        ColorB( 247,83,148  ),
+        ColorB( 197,208,230 ),
+        ColorB( 59,176,143  ),
+        ColorB( 203,65,84   ),
+        ColorB( 116,66,200  ),
+        ColorB( 255,73,108  ),
+        ColorB( 255,29,206  ),
+        ColorB( 128,218,235 ),
+        ColorB( 21,128,120  ),
+        ColorB( 43,108,196  ),
+        ColorB( 255,72,208  ),
+        ColorB( 255,160,137 ),
+        ColorB( 253,252,116 ),
+        ColorB( 250,167,108 ),
+        ColorB( 157,129,186 ),
+        ColorB( 253,219,109 ),
+        ColorB( 238,32,77   ),
+        ColorB( 252,217,117 ),
+        ColorB( 255,255,153 ),
+        ColorB( 255,163,67  ),
         ColorB( 149,145,140 ),
-        ColorB( 35,35,35    )
+        ColorB( 230,168,215 ),
+        ColorB( 146,110,174 ),
+        ColorB( 236,234,190 ),
+        ColorB( 192,68,143  ),
+        ColorB( 205,197,194 ),
+        ColorB( 168,228,160 ),
+        ColorB( 154,206,235 ),
+        ColorB( 255,189,136 ),
+        ColorB( 255,130,67  )
     };
 
     const size_t RandomPaletteColorTable_Size = dimof(RandomPaletteColorTable);

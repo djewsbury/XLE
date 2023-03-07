@@ -36,6 +36,8 @@ namespace RenderOverlays { namespace Internal
 		static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise);
 	};
 
+	DefaultFontsBox* TryGetDefaultFontsBox();
+
 	void DrawPCCTTQuad(
 		IOverlayContext& context,
 		const Float3& mins, const Float3& maxs, 

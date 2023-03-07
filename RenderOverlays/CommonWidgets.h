@@ -129,7 +129,7 @@ namespace RenderOverlays { namespace CommonWidgets
 			leftColor, leftColor, leftColor,
 			rightColor, rightColor, rightColor
 		};
-		DrawTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
+		FillTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
 
 		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(*_context, {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, name);
 		StringMeld<256> valueStr;

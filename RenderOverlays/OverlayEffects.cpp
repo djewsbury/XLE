@@ -22,6 +22,8 @@
 
 using namespace Utility::Literals;
 
+#pragma warning(disable:4200)		// nonstandard extension used: zero-sized array in struct/union
+
 namespace RenderOverlays
 {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +70,7 @@ namespace RenderOverlays
 	unsigned GaussianBlurOperator::CB_BlurControlUniforms::CalculateSize(unsigned blurTapCount)
 	{
 		auto weightCount = 1+(blurTapCount-1)/2;
-		return sizeof(uint32_t)*4*weightCount;
+		return sizeof(uint32_t)*4*(1+weightCount);
 	}
 
 	void GaussianBlurOperator::CB_BlurControlUniforms::CalculateBlurWeights(float radius, unsigned blurTapCount)
@@ -117,7 +119,7 @@ namespace RenderOverlays
 		});
 
 		auto paramsSize = CB_BlurControlUniforms::CalculateSize(_tapCount);
-		uint8_t paramsBlock[paramsSize];
+		VLA(uint8_t, paramsBlock, paramsSize);
 		CB_BlurControlUniforms& params = *new (paramsBlock) CB_BlurControlUniforms;
 		params.CalculateBlurWeights(blurRadius, _tapCount);
 		
@@ -457,12 +459,12 @@ namespace RenderOverlays
 			});
 	}
 
-	std::shared_ptr<RenderCore::IResourceView> BlurryBackgroundEffect::GetResourceView()
+	std::shared_ptr<RenderCore::IResourceView> BlurryBackgroundEffect::GetResourceView(Type type)
 	{
 		assert(_parsingContext);
 		if (!_backgroundResource) {
 			// generate the blurry background now (at least, if the shader has finished loading)
-			if (_gaussianBlur) {
+			if (type == Type::NarrowAccurateBlur) {
 				auto *op = _gaussianBlur->TryActualize();
 				if (op) {
 					// bring up-to-date compute, because it's typically invalidated at this point
@@ -470,6 +472,7 @@ namespace RenderOverlays
 					_backgroundResource = (*op)->Execute(*_parsingContext, Tweakable("BlurRadius", 20.0f));
 				}
 			} else {
+				assert(type == Type::BroadBlur);
 				auto *op = _broadBlur->TryActualize();
 				if (op) {
 					// bring up-to-date compute, because it's typically invalidated at this point
@@ -490,15 +493,12 @@ namespace RenderOverlays
 		return {0,0};
 	}
 
-	BlurryBackgroundEffect::BlurryBackgroundEffect(RenderCore::Techniques::ParsingContext& parsingContext, Type type)
+	BlurryBackgroundEffect::BlurryBackgroundEffect(RenderCore::Techniques::ParsingContext& parsingContext)
 	: _parsingContext(&parsingContext)
 	{
-		if (type == Type::NarrowAccurateBlur) {
-			const unsigned tapCount = Tweakable("BlurTapCount", 31);
-			_gaussianBlur = ::Assets::MakeAssetMarkerPtr<GaussianBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool, tapCount);
-		} else {
-			_broadBlur = ::Assets::MakeAssetMarkerPtr<BroadBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool);
-		}
+		const unsigned tapCount = Tweakable("BlurTapCount", 31);
+		_gaussianBlur = ::Assets::MakeAssetMarkerPtr<GaussianBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool, tapCount);
+		_broadBlur = ::Assets::MakeAssetMarkerPtr<BroadBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool);
 	}
 
 	BlurryBackgroundEffect::~BlurryBackgroundEffect()

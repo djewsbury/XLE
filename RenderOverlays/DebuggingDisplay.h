@@ -123,7 +123,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     void        DrawBarGraph(IOverlayContext& context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
 
-    void        DrawTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount);
+    void        FillTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount);
+    void        FillTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], ColorB colour, unsigned triangleCount);
     void        DrawLines(IOverlayContext& context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount);
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -258,8 +259,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         TableElement(const char label[],  ColorB bkColour = ColorB(0xff000000)) : _label(label), _bkColour(bkColour) {}
         TableElement() : _bkColour(0xff000000) {}
     };
-    void DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, Interactables* interactables=NULL);
-    Coord DrawTableEntry(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry);
+    Coord DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders, Interactables* interactables=NULL);
+    void DrawTableBase(IOverlayContext& context, const Rect& rect);
+    Rect DrawEmbeddedInRightEdge(IOverlayContext& context, const Rect& rect);
+    Coord DrawTableEntry(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted = false);
 
     ///////////////////////////////////////////////////////////////////////////////////
     class DebugScreensSystem : public PlatformRig::IInputListener

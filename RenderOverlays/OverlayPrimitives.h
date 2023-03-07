@@ -74,6 +74,8 @@ namespace RenderOverlays
 
         Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }
         Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
+
+        static Rect Invalid() { return Rect { {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}, {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}}; }
     };
 
     inline bool Intersects(const Rect& lhs, const Rect& rhs)

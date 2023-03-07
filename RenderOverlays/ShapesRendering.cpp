@@ -602,6 +602,7 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
+        mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
 
         const unsigned joinsVertices = 9*2;
         auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
@@ -618,6 +619,7 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_solidNoBorder;
+        mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
 
         const unsigned joinsVertices = 9*2;
         auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
@@ -719,6 +721,11 @@ namespace RenderOverlays
                     });
             #endif
 		}
+
+        DefaultFontsBox* TryGetDefaultFontsBox()
+        {
+            return ConsoleRig::TryActualizeCachedBox<Internal::DefaultFontsBox>();
+        }
 	}
 
 	    ///////////////////////////////////////////////////////////////////////////////////
@@ -736,21 +743,25 @@ namespace RenderOverlays
 			constexpr uint64_t s_patchOutline = "IOutline_Calculate"_h;
 			constexpr uint64_t s_patchTwoLayersShader = "TwoLayersShader"_h;
 
-			unsigned dsMode = 0;
+			unsigned pipelineBase = 0;
 			// We're re-purposing the _writeMask flag for depth test and write
 			if (renderStates._flag & RenderCore::Assets::RenderStateSet::Flag::WriteMask) {
 				bool depthWrite = renderStates._writeMask & 1<<0;
 				bool depthTest = renderStates._writeMask & 1<<1;
 				if (depthTest) {
-					dsMode = depthWrite ? 0 : 1;
+					pipelineBase = depthWrite ? 0 : 1;
 				} else {
-					dsMode = 2;
+					pipelineBase = 2;
 				}
 			}
 
+            bool doubleSided = (renderStates._flag & RenderCore::Assets::RenderStateSet::Flag::DoubleSided) && renderStates._doubleSided;
+            if (doubleSided)
+                pipelineBase += 3;
+
 			if (shaderPatches.HasPatchType(s_patchShape)) {
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-				*nascentDesc = *_pipelineDesc[dsMode];
+				*nascentDesc = *_pipelineDesc[pipelineBase];
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntry:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchShape, ShaderStage::Pixel);
@@ -761,7 +772,7 @@ namespace RenderOverlays
 				return nascentDesc;
 			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-				*nascentDesc = *_pipelineDesc[dsMode];
+				*nascentDesc = *_pipelineDesc[pipelineBase];
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
@@ -770,7 +781,7 @@ namespace RenderOverlays
 				return nascentDesc;
 			} else if (shaderPatches.HasPatchType(s_patchFill)) {
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-				*nascentDesc = *_pipelineDesc[dsMode];
+				*nascentDesc = *_pipelineDesc[pipelineBase];
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryJustFill:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
@@ -780,7 +791,7 @@ namespace RenderOverlays
 
 				return nascentDesc;
 			} else {
-				return _pipelineDesc[dsMode];
+				return _pipelineDesc[pipelineBase];
 			}
 		}
 
@@ -804,14 +815,17 @@ namespace RenderOverlays
 				Techniques::CommonResourceBox::s_dsReadOnly,
 				Techniques::CommonResourceBox::s_dsDisable
 			};
-			for (unsigned c=0; c<dimof(dsModes); ++c) {
-				_pipelineDesc[c] = std::make_shared<Techniques::GraphicsPipelineDesc>(*templateDesc);
-				_pipelineDesc[c]->_depthStencil = dsModes[c];
-			}
+            for (unsigned q=0; q<2; ++q)
+                for (unsigned c=0; c<dimof(dsModes); ++c) {
+                    _pipelineDesc[c+q*3] = std::make_shared<Techniques::GraphicsPipelineDesc>(*templateDesc);
+                    _pipelineDesc[c+q*3]->_depthStencil = dsModes[c];
+                    if (q == 1)
+                        _pipelineDesc[c+q*3]->_rasterization = Techniques::CommonResourceBox::s_rsCullDisable;
+                }
 		}
 		~ShapesRenderingTechniqueDelegate() {}
 	private:
-		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> _pipelineDesc[3];
+		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> _pipelineDesc[6];
 		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> _pipelineLayout;
 	};
 

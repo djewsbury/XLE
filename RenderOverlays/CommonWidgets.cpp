@@ -44,7 +44,7 @@ namespace RenderOverlays { namespace CommonWidgets
 				flipperRectCenter + Coord2(-4, +4)
 			};
 			ColorB arrowColors[] { ColorB::White, ColorB::White, ColorB::White };
-			DrawTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
+			FillTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
 		} else {
 			auto flipperRectCenter = (flipperRect._topLeft+flipperRect._bottomRight)/2;
 			Coord2 arrows[] = {
@@ -53,7 +53,7 @@ namespace RenderOverlays { namespace CommonWidgets
 				flipperRectCenter + Coord2(-4, -4)
 			};
 			ColorB arrowColors[] { ColorB::White, ColorB::White, ColorB::White };
-			DrawTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
+			FillTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
 		}
 
 		DrawText().Alignment(TextAlignment::Left).Draw(*_context, titleRect, name);
