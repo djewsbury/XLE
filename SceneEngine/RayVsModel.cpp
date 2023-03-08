@@ -26,6 +26,7 @@
 #include "../RenderCore/Techniques/CommonUtils.h"
 #include "../Assets/Assets.h"
 #include "../Assets/DepVal.h"
+#include "../Assets/ConfigFileContainer.h"
 #include "../Math/Transformations.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../xleres/FileList.h"

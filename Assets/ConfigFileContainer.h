@@ -7,16 +7,15 @@
 #pragma once
 
 #include "DepVal.h"
-#include "AssetsCore.h"		// (for ResChar)
+#include "AssetsCore.h"
+#include "AssetTraits.h"
 #include "../Formatters/TextFormatter.h"
 #include "../Utility/StringFormat.h"
+#include "../Utility/StringUtils.h"
 #include <memory>
 #include <vector>
 
-namespace Formatters
-{
-    template<typename> class TextInputFormatter;
-}
+namespace std { template<typename T> class shared_future; }
 
 namespace Assets
 {
@@ -31,7 +30,7 @@ namespace Assets
     ///         class Config
     ///         {
     ///         public:
-    ///             Config( TextInputFormatter<utf8>& formatter,
+    ///             Config( TextInputFormatter<>& formatter,
     ///                     const ::Assets::DirectorySearchRules&);
     ///             ~Config();
     ///         };
@@ -52,23 +51,23 @@ namespace Assets
     ///     fully functional asset, with a dependency validation, relative path rules and
     ///     reporting correctly to the InvalidAssetManager.
     /// </example>
-    template<typename Formatter = Formatters::TextInputFormatter<utf8>>
+    template<typename Formatter = Formatters::TextInputFormatter<>>
         class ConfigFileContainer
     {
     public:
 		Formatter GetRootFormatter() const;
 		Formatter GetFormatter(StringSection<typename Formatter::value_type>) const;
 
-		static std::unique_ptr<ConfigFileContainer> CreateNew(StringSection<ResChar> initialiser);
+		static std::unique_ptr<ConfigFileContainer> CreateNew(StringSection<> initialiser);
 
-        ConfigFileContainer(StringSection<ResChar> initializer);
-		ConfigFileContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar> = {});
+        ConfigFileContainer(StringSection<> initializer);
+		ConfigFileContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<> = {});
         ~ConfigFileContainer();
 
         const DependencyValidation& GetDependencyValidation() const   { return _validationCallback; }
     protected:
 		Blob _fileData; 
-		DependencyValidation _validationCallback;		
+		DependencyValidation _validationCallback;
     };
 
     template<typename CharType>
@@ -83,7 +82,144 @@ namespace Assets
 
     template<typename CharType>
         std::vector<TextChunk<CharType>> ReadCompoundTextDocument(StringSection<CharType> doc);
-    
+
     void CleanupConfigFileGlobals();
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class DirectorySearchRules;
+
+    namespace Internal
+    {
+		const ConfigFileContainer<Formatters::TextInputFormatter<>>& GetConfigFileContainer(StringSection<> identifier);
+		std::shared_future<std::shared_ptr<ConfigFileContainer<Formatters::TextInputFormatter<>>>> GetConfigFileContainerFuture(StringSection<> identifier);
+
+		template<typename AssetType>
+            static const bool HasConstructor_Formatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&, const DirectorySearchRules&, const DependencyValidation&>::value;
+    }
+
+    #define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
+
+	//
+	//		Auto construct to:
+	//			(Formatters::TextInputFormatter<>&, const DirectorySearchRules&, const DependencyValidation&)
+	//
+	template<typename AssetType, ENABLE_IF(Internal::HasConstructor_Formatter<AssetType>)>
+		AssetType AutoConstructAsset(StringSection<char> initializer)
+	{
+		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)
+		// See also AutoConstructToPromise<> variation of this function
+		const char* p = XlFindChar(initializer, ':');
+		if (p) {
+			char buffer[256];
+			XlCopyString(buffer, MakeStringSection(initializer.begin(), p));
+			const auto& container = Internal::GetConfigFileContainer(buffer);
+			TRY {
+				auto fmttr = container.GetFormatter(MakeStringSection(p+1, initializer.end()));
+				return Internal::InvokeAssetConstructor<AssetType>(
+					fmttr,
+					DefaultDirectorySearchRules(buffer),
+					container.GetDependencyValidation());
+			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
+			} CATCH (const std::exception& e) {
+				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
+			} CATCH_END
+		} else {
+			const auto& container = Internal::GetConfigFileContainer(initializer);
+			TRY { 
+				auto fmttr = container.GetRootFormatter();
+				return Internal::InvokeAssetConstructor<AssetType>(
+					fmttr,
+					DefaultDirectorySearchRules(initializer),
+					container.GetDependencyValidation());
+			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
+			} CATCH (const std::exception& e) {
+				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
+			} CATCH_END
+		}
+	}
+
+	template<typename AssetType, ENABLE_IF(Internal::HasConstructor_Formatter<AssetType>)>
+		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
+	{
+		TRY {
+			auto container = ConfigFileContainer<>(blob, depVal);
+			auto fmttr = requestParameters.IsEmpty() ? container.GetRootFormatter() : container.GetFormatter(requestParameters);
+			return Internal::InvokeAssetConstructor<AssetType>(
+				fmttr,
+				DirectorySearchRules{},
+				container.GetDependencyValidation());
+		} CATCH(const Exceptions::ExceptionWithDepVal& e) {
+			Throw(Exceptions::ConstructionError(e, depVal));
+		} CATCH(const std::exception& e) {
+			Throw(Exceptions::ConstructionError(e, depVal));
+		} CATCH_END
+	}
+
+	template<
+		typename Promise, 
+		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedType<Promise>>::Constructor_Formatter
+					&& !Internal::AssetTraits<Internal::PromisedType<Promise>>::HasCompileProcessType
+					&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, StringSection<>>::value
+					&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>)>
+		void AutoConstructToPromise(Promise&& promise, StringSection<> initializer)
+	{
+		const char* p = XlFindChar(initializer, ':');
+		if (p) {
+			std::string containerName = MakeStringSection(initializer.begin(), p).AsString();
+			std::string sectionName = MakeStringSection((const utf8*)(p+1), (const utf8*)initializer.end()).AsString();
+			auto containerFuture = Internal::GetConfigFileContainerFuture(MakeStringSection(containerName));
+			WhenAll(containerFuture).ThenConstructToPromise(
+				std::move(promise),
+				[containerName, sectionName](const std::shared_ptr<ConfigFileContainer<>>& container) {
+					auto fmttr = container->GetFormatter(sectionName);
+					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(
+						fmttr, 
+						DefaultDirectorySearchRules(containerName),
+						container->GetDependencyValidation());
+				});
+		} else {
+			std::string containerName = initializer.AsString();
+			auto containerFuture = Internal::GetConfigFileContainerFuture(MakeStringSection(containerName));
+			WhenAll(containerFuture).ThenConstructToPromise(
+				std::move(promise),
+				[containerName](const std::shared_ptr<ConfigFileContainer<>>& container) {
+					auto fmttr = container->GetRootFormatter();
+					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(
+						fmttr, 
+						DefaultDirectorySearchRules(containerName),
+						container->GetDependencyValidation());
+				});
+		}
+	}
+
+	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_Formatter)>
+		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
+	{
+		TRY {
+			auto container = ConfigFileContainer<>(blob, depVal);
+			auto fmttr = requestParameters.IsEmpty() ? container.GetRootFormatter() : container.GetFormatter(requestParameters.Cast<utf8>());
+			return Internal::InvokeAssetConstructor<AssetType>(
+				fmttr,
+				DirectorySearchRules{},
+				container.GetDependencyValidation());
+		} CATCH(const Exceptions::ExceptionWithDepVal& e) {
+			Throw(Exceptions::ConstructionError(e, depVal));
+		} CATCH(const std::exception& e) {
+			Throw(Exceptions::ConstructionError(e, depVal));
+		} CATCH_END
+	}
+
 }
 
+#if 0
+namespace std
+{
+	template<typename AssetType, ENABLE_IF(::Assets::Internal::HasConstructor_Formatter<AssetType>)>
+		AssetType AutoConstructAsset(string&& initializer) { return ::Assets::AutoConstructAsset<AssetType>(initializer); }
+}
+#endif
+
+#undef ENABLE_IF

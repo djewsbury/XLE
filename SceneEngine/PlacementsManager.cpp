@@ -26,6 +26,7 @@
 #include "../Assets/ChunkFile.h"
 #include "../Assets/AssetHeapLRU.h"
 #include "../Assets/ContinuationUtil.h"
+#include "../Assets/ConfigFileContainer.h"
 
 #include "../RenderCore/RenderUtils.h"
 

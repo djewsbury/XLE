@@ -13,6 +13,7 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/AssetServices.h"
+#include "../../Assets/ConfigFileContainer.h"
 
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../OSServices/RawFS.h"

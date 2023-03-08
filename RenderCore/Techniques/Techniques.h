@@ -13,7 +13,6 @@
 #include "../../Utility/ParameterBox.h"
 #include <string>
 #include <vector>
-#include <unordered_map>
 
 namespace RenderCore { class UniformsStreamInterface; class IThreadContext; }
 

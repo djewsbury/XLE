@@ -13,6 +13,7 @@
 #include "../UniformsStream.h"
 #include "../../Assets/AssetHeap.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ConfigFileContainer.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/Streams/PathUtils.h"
 

@@ -30,6 +30,7 @@
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
+#include "../../../Assets/ConfigFileContainer.h"
 #include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"

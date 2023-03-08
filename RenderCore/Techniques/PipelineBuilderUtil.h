@@ -15,6 +15,7 @@
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ConfigFileContainer.h"
 #include "../../Utility/Streams/PathUtils.h"
 
 namespace RenderCore { namespace Techniques { namespace Internal

@@ -15,7 +15,19 @@
 #include "../ConsoleRig/GlobalServices.h"
 #include "../OSServices/Log.h"
 #include "../Utility/Threading/CompletionThreadPool.h"
+#include "../Utility/StringUtils.h"		// required for implied StringSection<> constructor
 #include <memory>
+
+// todo -- ConfigFileContainer.h is required early, because the overrides that can be called by
+// ApplyAutoConstructToPromise_impl must come before that function.
+//
+// In the C++ standard, this is 14.6.4.2 -- only lookups using ADl can use the context from template
+// instantiation.
+//
+// However it would be preferable to break that dependency, because it would given us more flexibility 
+// for expanding the range of AutoConstructAsset() overrides
+// hm... it's difficult though because ADL isn't exactly what we want here
+#include "ConfigFileContainer.h"
 
 namespace Assets
 {
@@ -43,12 +55,6 @@ namespace Assets
 
 		template<typename AssetType, typename... Params>
 			using HasDirectAutoConstructAsset = HasDirectAutoConstructAsset_<AssetType, Params&&...>;
-
-		template<typename Promise>
-			using PromisedType = std::decay_t<decltype(std::declval<Promise>().get_future().get())>;
-
-		template<typename Promise>
-			using PromisedTypeRemPtr = RemoveSmartPtrType<PromisedType<Promise>>;
 	}
 	
 	// If we can construct an AssetType directly from the given parameters, then enable an implementation of
@@ -274,8 +280,31 @@ namespace Assets
 			});
 	}
 
+	namespace Internal
+	{
+		template<typename Promise, typename Tuple, std::size_t ... I>
+			auto ApplyAutoConstructToPromise_impl(Promise&& promise, Tuple&& t, std::index_sequence<I...>)
+		{
+			if constexpr (Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, std::tuple_element_t<I, Tuple>&&...>::value) {
+				return AutoConstructToPromiseSynchronously(std::move(promise), std::get<I>(std::forward<Tuple>(t))...);
+			} else {
+				// same as above, but since we're not required to go through AutoConstructToPromiseSynchronously, we can
+				// make this just slightly simpler
+				// this can sometimes produce clearer compiler error messages if something does wrong
+				promise.set_value(AutoConstructAsset<Internal::PromisedType<Promise>>(std::get<I>(std::forward<Tuple>(t))...));
+			}
+		}
+
+		template<typename Ty, typename Tuple>
+			auto ApplyAutoConstructToPromise(Ty&& promise, Tuple&& t)
+		{
+			using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
+			return ApplyAutoConstructToPromise_impl(std::move(promise), std::move(t), Indices{});
+		}
+	}
+
 	template<
-		typename Promise, typename... Params, 
+		typename Promise, typename... Params,
 		typename std::enable_if<	!Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
 								&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
 		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
@@ -283,10 +312,19 @@ namespace Assets
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[initializersTuple=std::tuple{MakeStoreableInAny(initialisers)...}, promise=std::move(promise)]() mutable {
 				TRY {
-					// Use std::apply to achieve AutoConstructToPromiseSynchronously(promise, initialisers...)
-					using OverrideType = void(*)(Promise&&, decltype(MakeStoreableInAny(std::declval<Params>()))&&...);
-					auto* ptr = (OverrideType)&AutoConstructToPromiseSynchronously;
-					std::apply(ptr, std::tuple_cat(std::make_tuple(std::move(promise)), std::move(initializersTuple)));
+
+					#if 0
+						// We can use std::apply to achieve AutoConstructToPromiseSynchronously(promise, initialisers...)
+						// however, this approach seems brittle; particularly as the types in the tuple are often not the
+						// same as the AutoConstructToPromiseSynchronously override uses
+						// This approach also does not produce clear compile error messages when a variation can't be found
+						using OverrideType = void(*)(Promise&&, decltype(MakeStoreableInAny(std::declval<Params>()))&&...);
+						auto* ptr = (OverrideType)&AutoConstructToPromiseSynchronously;
+						std::apply(ptr, std::tuple_cat(std::make_tuple(std::move(promise)), std::move(initializersTuple)));
+					#else
+						Internal::ApplyAutoConstructToPromise(std::move(promise), std::move(initializersTuple));
+					#endif
+
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -307,60 +345,6 @@ namespace Assets
 		} CATCH(...) {
 			Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
 		} CATCH_END
-	}
-
-	template<
-		typename Promise, 
-		typename std::enable_if_t<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::Constructor_Formatter 
-								&& !Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, StringSection<>>::value
-								&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>
-								>* =nullptr>
-		void AutoConstructToPromise(Promise&& promise, StringSection<> initializer)
-	{
-		const char* p = XlFindChar(initializer, ':');
-		if (p) {
-			std::string containerName = MakeStringSection(initializer.begin(), p).AsString();
-			std::string sectionName = MakeStringSection((const utf8*)(p+1), (const utf8*)initializer.end()).AsString();
-			auto containerFuture = Internal::GetConfigFileContainerFuture(MakeStringSection(containerName));
-			WhenAll(containerFuture).ThenConstructToPromise(
-				std::move(promise),
-				[containerName, sectionName](const std::shared_ptr<ConfigFileContainer<>>& container) {
-					auto fmttr = container->GetFormatter(sectionName);
-					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(
-						fmttr, 
-						DefaultDirectorySearchRules(containerName),
-						container->GetDependencyValidation());
-				});
-		} else {
-			std::string containerName = initializer.AsString();
-			auto containerFuture = Internal::GetConfigFileContainerFuture(MakeStringSection(containerName));
-			WhenAll(containerFuture).ThenConstructToPromise(
-				std::move(promise),
-				[containerName](const std::shared_ptr<ConfigFileContainer<>>& container) {
-					auto fmttr = container->GetRootFormatter();
-					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(
-						fmttr, 
-						DefaultDirectorySearchRules(containerName),
-						container->GetDependencyValidation());
-				});
-		}
-	}
-
-	template<
-		typename Promise,
-		typename std::enable_if_t<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::Constructor_ChunkFileContainer 
-								&& !Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, StringSection<>>::value
-								>* =nullptr>
-		void AutoConstructToPromise(Promise&& promise, StringSection<> initializer)
-	{
-		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
-		WhenAll(containerFuture).ThenConstructToPromise(
-			std::move(promise),
-			[](const std::shared_ptr<ChunkFileContainer>& container) {
-				return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(*container);
-			});
 	}
 
 	template<

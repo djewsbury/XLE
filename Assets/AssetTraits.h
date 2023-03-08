@@ -5,8 +5,6 @@
 #pragma once
 
 #include "AssetsCore.h"		// (for ResChar)
-#include "AssetUtils.h"     // (for DirectorySearchRules)
-#include "ConfigFileContainer.h"
 #include "ChunkFileContainer.h"
 #include "DepVal.h"
 #include "IFileSystem.h"
@@ -23,13 +21,13 @@ namespace std { template<typename T> class shared_future; }
 namespace Assets
 {
 	template <typename Asset> class DivergentAsset;
-	template <typename Formatter> class ConfigFileContainer;
 	class DirectorySearchRules;
 	class ChunkFileContainer;
 	class ArtifactRequest;
     class IArtifactCollection;
+	DirectorySearchRules DefaultDirectorySearchRules(StringSection<ResChar>);
 
-	#define ENABLE_IF(X) typename std::enable_if<X>::type* = nullptr
+	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
 
 	namespace Internal
 	{
@@ -59,7 +57,6 @@ namespace Assets
 		public:
 			using DivAsset = DivergentAsset<AssetType>;
 
-			static const bool Constructor_Formatter = std::is_constructible<AssetType, Formatters::TextInputFormatter<utf8>&, const DirectorySearchRules&, const DependencyValidation&>::value;
 			static const bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>&, const DirectorySearchRules&, const DependencyValidation&>::value;
 			static const bool Constructor_ChunkFileContainer = std::is_constructible<AssetType, const ChunkFileContainer&>::value && !std::is_same_v<AssetType, ChunkFileContainer>;
 			static const bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, const DirectorySearchRules&, const DependencyValidation&>::value;
@@ -71,6 +68,12 @@ namespace Assets
 		template<typename AssetType> static auto RemoveSmartPtr_Helper(int) -> typename AssetType::element_type;
 		template<typename AssetType, typename...> static auto RemoveSmartPtr_Helper(...) -> AssetType;
 		template<typename AssetType> using RemoveSmartPtrType = decltype(RemoveSmartPtr_Helper<AssetType>(0));
+
+		template<typename Promise>
+			using PromisedType = std::decay_t<decltype(std::declval<Promise>().get_future().get())>;
+
+		template<typename Promise>
+			using PromisedTypeRemPtr = RemoveSmartPtrType<PromisedType<Promise>>;
 
 		template<typename AssetType>
 			using AssetTraits = AssetTraits_<std::decay_t<RemoveSmartPtrType<AssetType>>>;
@@ -88,9 +91,7 @@ namespace Assets
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////
 
-		const ConfigFileContainer<Formatters::TextInputFormatter<utf8>>& GetConfigFileContainer(StringSection<> identifier);
 		const ChunkFileContainer& GetChunkFileContainer(StringSection<> identifier);
-		std::shared_future<std::shared_ptr<ConfigFileContainer<Formatters::TextInputFormatter<utf8>>>> GetConfigFileContainerFuture(StringSection<> identifier);
 		std::shared_future<std::shared_ptr<ChunkFileContainer>> GetChunkFileContainerFuture(StringSection<> identifier);
 
         template <typename... Params> uint64_t BuildParamHash(const Params&... initialisers);
@@ -123,64 +124,6 @@ namespace Assets
 
 	//
 	//		Auto construct to:
-	//			(Formatters::TextInputFormatter<utf8>&, const DirectorySearchRules&, const DependencyValidation&)
-	//
-	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_Formatter)>
-		AssetType AutoConstructAsset(StringSection<> initializer)
-	{
-		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)
-		// See also AutoConstructToPromise<> variation of this function
-		const char* p = XlFindChar(initializer, ':');
-		if (p) {
-			char buffer[256];
-			XlCopyString(buffer, MakeStringSection(initializer.begin(), p));
-			const auto& container = Internal::GetConfigFileContainer(buffer);
-			TRY {
-				auto fmttr = container.GetFormatter(MakeStringSection((const utf8*)(p+1), (const utf8*)initializer.end()));
-				return Internal::InvokeAssetConstructor<AssetType>(
-					fmttr, 
-					DefaultDirectorySearchRules(buffer),
-					container.GetDependencyValidation());
-			} CATCH (const Exceptions::ConstructionError& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH (const std::exception& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH_END
-		} else {
-			const auto& container = Internal::GetConfigFileContainer(initializer);
-			TRY { 
-				auto fmttr = container.GetRootFormatter();
-				return Internal::InvokeAssetConstructor<AssetType>(
-					fmttr,
-					DefaultDirectorySearchRules(initializer),
-					container.GetDependencyValidation());
-			} CATCH (const Exceptions::ConstructionError& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH (const std::exception& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH_END
-		}
-	}
-
-	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_Formatter)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
-	{
-		TRY {
-			auto container = ConfigFileContainer<>(blob, depVal);
-			auto fmttr = requestParameters.IsEmpty() ? container.GetRootFormatter() : container.GetFormatter(requestParameters.Cast<utf8>());
-			return Internal::InvokeAssetConstructor<AssetType>(
-				fmttr,
-				DirectorySearchRules{},
-				container.GetDependencyValidation());
-		} CATCH(const Exceptions::ConstructionError& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH(const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH_END
-	}
-	
-	//
-	//		Auto construct to:
 	//			(const ChunkFileContainer&)
 	//
 	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer)>
@@ -190,7 +133,7 @@ namespace Assets
 		const auto& container = Internal::GetChunkFileContainer(initializer);
 		TRY {
 			return Internal::InvokeAssetConstructor<AssetType>(container);
-		} CATCH (const Exceptions::ConstructionError& e) {
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
 		} CATCH (const std::exception& e) {
 			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
@@ -202,7 +145,7 @@ namespace Assets
 	{
 		TRY {
 			return Internal::InvokeAssetConstructor<AssetType>(ChunkFileContainer(blob, depVal, requestParameters));
-		} CATCH (const Exceptions::ConstructionError& e) {
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
@@ -221,7 +164,7 @@ namespace Assets
 		TRY {
 			auto chunks = container.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), container.GetDependencyValidation());
-		} CATCH (const Exceptions::ConstructionError& e) {
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
 		} CATCH (const std::exception& e) {
 			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
@@ -234,7 +177,7 @@ namespace Assets
 		TRY {
 			auto chunks = ChunkFileContainer(blob, depVal, requestParameters).ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), depVal);
-		} CATCH (const Exceptions::ConstructionError& e) {
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
@@ -247,7 +190,7 @@ namespace Assets
 		TRY {
 			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
-		} CATCH (const Exceptions::ConstructionError& e) {
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
 		} CATCH (const std::exception& e) {
 			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
@@ -268,7 +211,7 @@ namespace Assets
 				*file,
 				DefaultDirectorySearchRules(initializer),
 				depVal);
-		} CATCH (const Exceptions::ConstructionError& e) {
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
@@ -295,7 +238,7 @@ namespace Assets
 				MakeStringSection(block.get(), PtrAdd(block.get(), size)),
 				DefaultDirectorySearchRules(initializer),
 				depVal);
-		} CATCH (const Exceptions::ConstructionError& e) {
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));

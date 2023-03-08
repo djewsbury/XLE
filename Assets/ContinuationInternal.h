@@ -20,6 +20,8 @@
 
 namespace Assets { namespace Internal
 {
+	::Assets::Blob FailedContinuationActualizeError(unsigned, ::Assets::Blob&&);
+
 	template<size_t I = 0, typename... Tp>
 		void CheckAssetState(
 			AssetState& currentState, 
@@ -38,10 +40,7 @@ namespace Assets { namespace Internal
 			if constexpr(I+1 != sizeof...(Tp))
 				CheckAssetState<I+1>(currentState, actualizationBlob, exceptionDepVal, actualized, futures);
 		} else {
-			std::stringstream str;
-			str << "Failed to actualize subasset number (" << I << "): ";
-			if (queriedLog) { str << AsString(queriedLog); } else { str << std::string("<<no log>>"); }
-			actualizationBlob = AsBlob(str.str());
+			actualizationBlob = FailedContinuationActualizeError(I, std::move(queriedLog));
 			exceptionDepVal = queriedDepVal;
 		}
 	}
@@ -229,10 +228,7 @@ namespace Assets { namespace Internal
 			if constexpr(I+1 != sizeof...(Futures))
 				TryQueryFutures_<I+1>(currentState, actualizationBlob, exceptionDepVal, completedFutures, actualized);
 		} else {
-			std::stringstream str;
-			str << "Failed to actualize subasset number (" << I << "): ";
-			if (queriedLog) { str << AsString(queriedLog); } else { str << std::string("<<no log>>"); }
-			actualizationBlob = AsBlob(str.str());
+			actualizationBlob = FailedContinuationActualizeError(I, std::move(queriedLog));
 			exceptionDepVal = queriedDepVal;
 		}
 	}

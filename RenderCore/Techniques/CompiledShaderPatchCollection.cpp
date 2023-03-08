@@ -18,6 +18,7 @@
 #include "../../ShaderParser/DescriptorSetInstantiation.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ConfigFileContainer.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Threading/CompletionThreadPool.h"

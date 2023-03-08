@@ -600,5 +600,18 @@ namespace Assets
     FileOutputStream::FileOutputStream(const std::shared_ptr<IFileInterface>& file) : _file(file) {}
     FileOutputStream::FileOutputStream(std::unique_ptr<IFileInterface>&& file) : _file(std::move(file)) {}
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    namespace Internal
+	{
+        ::Assets::Blob FailedContinuationActualizeError(unsigned idx, ::Assets::Blob&& blob)
+        {
+            std::stringstream str;
+			str << "Failed to actualize subasset number (" << idx << "): ";
+			if (blob) { str << AsString(std::move(blob)); } else { str << std::string("<<no log>>"); }
+            return AsBlob(str.str());
+        }
+    }
+
 }
 

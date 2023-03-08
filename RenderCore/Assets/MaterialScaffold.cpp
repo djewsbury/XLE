@@ -7,6 +7,7 @@
 #include "MaterialScaffold.h"
 #include "ShaderPatchCollection.h"
 #include "MaterialMachine.h"
+#include "../../Formatters/TextFormatter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Utility/Streams/SerializationUtils.h"

@@ -13,6 +13,7 @@
 #include "../IDevice.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ConfigFileContainer.h"
 #include "../../xleres/FileList.h"
 
 namespace RenderCore { namespace LightingEngine

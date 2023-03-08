@@ -25,6 +25,7 @@
 #include "../Assets/InitializerPack.h"
 #include "../Assets/IntermediatesStore.h"
 #include "../Assets/AssetTraits.h"
+#include "../Assets/ConfigFileContainer.h"
 
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/StreamTypes.h"

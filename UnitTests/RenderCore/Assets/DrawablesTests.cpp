@@ -31,6 +31,7 @@
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/Assets.h"
+#include "../../../Assets/ConfigFileContainer.h"
 #include "../../../Math/MathSerialization.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Tools/ToolsRig/VisualisationGeo.h"

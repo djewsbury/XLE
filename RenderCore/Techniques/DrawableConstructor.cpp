@@ -23,6 +23,7 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Formatters/TextFormatter.h"
+#include "../../Utility/StringFormat.h"
 
 using namespace Utility::Literals;
 
