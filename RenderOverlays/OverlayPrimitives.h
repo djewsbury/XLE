@@ -155,4 +155,8 @@ namespace RenderOverlays
             return std::pow((input+0.055f)/1.055f, 2.4f);
     }
 
+    ///////////////////////////////////////////////////////////////////////////////////
+    //          U T I L I T I E S
+    std::string ColouriseFilename(StringSection<> filename);
+
 }

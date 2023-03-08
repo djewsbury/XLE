@@ -33,7 +33,6 @@
 #include "../../ConsoleRig/Console.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
-#include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/FormatterUtils.h"
 #include <sstream>
 
@@ -148,34 +147,6 @@ namespace PlatformRig { namespace Overlays
 			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
 		};
 		return labelNode;
-	}
-
-	static std::string ColouriseFilename(StringSection<> filename)
-	{
-		auto split = MakeFileNameSplitter(filename);
-		std::stringstream str;
-		if (!split.DriveAndPath().IsEmpty()) {
-			const bool gradualBrightnessChange = true;
-			if (!gradualBrightnessChange) {
-				str << "{color:9f9f9f}" << split.DriveAndPath();
-			} else {
-				auto splitPath = MakeSplitPath(split.DriveAndPath());
-				if (splitPath.BeginsWithSeparator()) str << "/";
-				for (unsigned c=0; c<splitPath.GetSectionCount(); ++c) {
-					auto brightness = LinearInterpolate(0x5f, 0xcf, c/float(splitPath.GetSectionCount()));
-					if (c != 0) str << "/";
-					str << "{color:" << std::hex << brightness << brightness << brightness << std::dec << "}" << splitPath.GetSection(c);
-				}
-				if (splitPath.EndsWithSeparator()) str << "/";
-			}
-		}
-		if (!split.File().IsEmpty())
-			str << "{color:7f8fdf}" << split.File();
-		if (!split.ExtensionWithPeriod().IsEmpty())
-			str << "{color:df8f7f}" << split.ExtensionWithPeriod();
-		if (!split.ParametersWithDivider().IsEmpty())
-			str << "{color:7fdf8f}" << split.ParametersWithDivider();
-		return str.str();
 	}
 
 	class ToolTipStyler
@@ -793,7 +764,7 @@ namespace PlatformRig { namespace Overlays
 			if (auto* topBar = context.GetService<ITopBarManager>()) {
 				const char headingString[] = "Placements Selector";
 				if (auto* headingFont = _headingFont->TryActualize()) {
-					auto rect = topBar->RegisterScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+					auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
 					if (IsGood(rect) && headingFont)
 						DrawText()
 							.Font(**headingFont)

@@ -187,7 +187,7 @@ namespace PlatformRig { namespace Overlays
 		if (auto* topBar = context.GetService<ITopBarManager>()) {
 			const char headingString[] = "Pipeline Accelerators";
 			if (auto* headingFont = _screenHeadingFont->TryActualize()) {
-				auto rect = topBar->RegisterScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+				auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
 				if (IsGood(rect) && headingFont)
 					DrawText()
 						.Font(**headingFont)
@@ -204,6 +204,12 @@ namespace PlatformRig { namespace Overlays
 			ColorAdjust colAdj;
 			colAdj._luminanceOffset = 0.025f; colAdj._saturationMultiplier = 0.65f;
 			auto outerRect = Layout{layout}.AllocateFullWidthFraction(1.f);
+
+			SoftShadowRectangle(
+				context,
+				{outerRect._topLeft + Coord2(themeStaticData._shadowOffset0, themeStaticData._shadowOffset0), outerRect._bottomRight + Coord2(themeStaticData._shadowOffset1, themeStaticData._shadowOffset1)},
+				themeStaticData._shadowSoftnessRadius);
+
 			ColorAdjustRectangle(
 				context, outerRect,
 				blurryBackground->AsTextureCoords(outerRect._topLeft), blurryBackground->AsTextureCoords(outerRect._bottomRight),
@@ -263,7 +269,7 @@ namespace PlatformRig { namespace Overlays
 					std::make_pair("mat-selectors", matSelectorsWidth),
 					std::make_pair("geo-selectors", geoSelectorsWidth) };
 
-				auto headersHeight = DrawTableHeaders(context, tableArea.GetMaximumSize(), MakeIteratorRange(headers0), &interactables);
+				auto headersHeight = DrawTableHeaders(context, tableArea.GetMaximumSize(), MakeIteratorRange(headers0));
 				tableArea.AllocateFullWidth(headersHeight);
 				Rect baseRect = tableArea.GetMaximumSize();
 				baseRect._topLeft[1] = baseRect._bottomRight[1] - headersHeight/2;
@@ -306,7 +312,7 @@ namespace PlatformRig { namespace Overlays
 					std::make_pair("sequencer-selectors", 3000),
 				};
 
-				auto headersHeight = DrawTableHeaders(context, tableArea.GetMaximumSize(), MakeIteratorRange(headers0), &interactables);
+				auto headersHeight = DrawTableHeaders(context, tableArea.GetMaximumSize(), MakeIteratorRange(headers0));
 				tableArea.AllocateFullWidth(headersHeight);
 				Rect baseRect = tableArea.GetMaximumSize();
 				baseRect._topLeft[1] = baseRect._bottomRight[1] - headersHeight/2;

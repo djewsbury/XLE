@@ -5,12 +5,17 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "BufferUploadDisplay.h"
+#include "../ThemeStaticData.h"
+#include "../TopBar.h"
 #include "../../RenderCore/BufferUploads/Metrics.h"
 #include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/Font.h"
 #include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/ShapesInternal.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/OverlayEffects.h"
+#include "../../Tools/EntityInterface/MountedData.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Assets/Continuation.h"
 #include "../../OSServices/TimeUtils.h"
@@ -24,6 +29,8 @@
 #include <assert.h>
 
 #pragma warning(disable:4127)       // warning C4127: conditional expression is constant
+
+using namespace Utility::Literals;
 
 namespace PlatformRig { namespace Overlays
 {
@@ -105,21 +112,19 @@ namespace PlatformRig { namespace Overlays
         return "Unknown";
     }
 
-    static std::string BuildDescription(const RenderCore::ResourceDesc& desc)
+    template<typename Stream>
+        static void Description(Stream&& str, const RenderCore::ResourceDesc& desc)
     {
         using namespace RenderCore;
-        char buffer[2048];
+        str << TypeString(desc) << " ";
         if (desc._type == RenderCore::ResourceDesc::Type::Texture) {
             const TextureDesc& tDesc = desc._textureDesc;
-            xl_snprintf(buffer, dimof(buffer), "(%4ix%4i) mips:(%i), array:(%i)", 
-                tDesc._width, tDesc._height, tDesc._mipCount, tDesc._arrayCount);
+            str << tDesc._width << "x" << tDesc._height << " " << (unsigned)tDesc._mipCount << "m";
+            if (tDesc._arrayCount)
+                str << " " << (unsigned)tDesc._arrayCount << "a";
         } else if (desc._type == RenderCore::ResourceDesc::Type::LinearBuffer) {
-            xl_snprintf(buffer, dimof(buffer), "%6.2fkb", 
-                desc._linearBufferDesc._sizeInBytes/1024.f);
-        } else {
-            buffer[0] = '\0';
+            str << Utility::ByteCount(desc._linearBufferDesc._sizeInBytes);
         }
-        return std::string(buffer);
     }
 
     static unsigned& GetFrameID() 
@@ -209,65 +214,99 @@ namespace PlatformRig { namespace Overlays
         auto* fonts = ConsoleRig::TryActualizeCachedBox<BUFontBox>();
         if (!fonts) return;
 
-            // bkgrnd
-        FillRectangle(
-            context, 
-            Rect(fullSize._topLeft, Coord2(fullSize._bottomRight[0], fullSize._topLeft[1]+layout._paddingInternalBorder)),
-            edge);
-        FillRectangle(
-            context, 
-            Rect(Coord2(fullSize._topLeft[0], fullSize._bottomRight[1]-layout._paddingInternalBorder), fullSize._bottomRight),
-            edge);
-        FillRectangle(
-            context, 
-            Rect(Coord2(fullSize._topLeft[0], fullSize._topLeft[1]+layout._paddingInternalBorder), Coord2(fullSize._bottomRight[0], fullSize._bottomRight[1]-layout._paddingInternalBorder)),
-            middle);
-
-        layout.AllocateFullHeight(75);
-
-        const std::vector<GraphTabs::Enum>* dropDown = nullptr;
-        Rect dropDownRect;
+        const std::pair<const char*, std::vector<GraphTabs::Enum>>* dropDown = nullptr;
+        Rect dropDownMenuRect;
         static const unsigned dropDownInternalBorder = 10;
 
-        for (const auto& g:GraphTabs::Groups) {
-            auto rect = layout.AllocateFullHeight(150);
+        if (auto* topBar = context.GetService<ITopBarManager>()) {
 
-            auto hash = Hash64(g.first);
-            if (interfaceState.HasMouseOver(hash)) {
-                FillRectangle(context, rect, mouseOver);
-                DrawTopLeftRight(context, rect, ColorB::White);
-                dropDown = &g.second;
-                
-                unsigned count = (unsigned)g.second.size();
-                Coord2 dropDownSize(
-                    300,
-                    count * 20 + (count-1) * layout._paddingBetweenAllocations + 2 * dropDownInternalBorder);
-                dropDownRect._topLeft = Coord2(rect._topLeft[0], rect._bottomRight[1]);
-                dropDownRect._bottomRight = dropDownRect._topLeft + dropDownSize;
-                interactables.Register({dropDownRect, hash});
+            for (const auto& g:GraphTabs::Groups) {
+                auto rect = topBar->Menu(context, StringWidth(*fonts->_font, MakeStringSection(g.first)));
+                if (IsGood(rect)) {
+                    auto hash = Hash64(g.first);
+                    bool droppedDown = interfaceState.HasMouseOver(hash);
+                    if (droppedDown) {
+                        dropDown = &g;
+                        dropDownMenuRect = rect;
+                    } else {
+                        DrawText()
+                            .Font(*fonts->_font)
+                            .Color(ColorB::Black)
+                            .Alignment(RenderOverlays::TextAlignment::Left)
+                            .Flags(0)
+                            .Draw(context, rect, g.first);
+                    }
+                    interactables.Register({rect, hash});
+                }
             }
 
-            DrawText()
-                .Font(*fonts->_font)
-                .Flags(DrawTextFlags::Shadow)
-                .Alignment(TextAlignment::Center)
-                .Color(text)
-                .Draw(context, rect, g.first);
+        } else {
 
-            interactables.Register({rect, hash});
+                // non-top-bar menu rendering
+            FillRectangle(
+                context, 
+                Rect(fullSize._topLeft, Coord2(fullSize._bottomRight[0], fullSize._topLeft[1]+layout._paddingInternalBorder)),
+                edge);
+            FillRectangle(
+                context, 
+                Rect(Coord2(fullSize._topLeft[0], fullSize._bottomRight[1]-layout._paddingInternalBorder), fullSize._bottomRight),
+                edge);
+            FillRectangle(
+                context, 
+                Rect(Coord2(fullSize._topLeft[0], fullSize._topLeft[1]+layout._paddingInternalBorder), Coord2(fullSize._bottomRight[0], fullSize._bottomRight[1]-layout._paddingInternalBorder)),
+                middle);
+
+            layout.AllocateFullHeight(75);
+
+            for (const auto& g:GraphTabs::Groups) {
+                auto rect = layout.AllocateFullHeight(150);
+
+                auto hash = Hash64(g.first);
+                if (interfaceState.HasMouseOver(hash)) {
+                    dropDown = &g;
+                    dropDownMenuRect = rect;
+                } else {
+                    DrawText()
+                        .Font(*fonts->_font)
+                        .Flags(DrawTextFlags::Shadow)
+                        .Alignment(TextAlignment::Center)
+                        .Color(text)
+                        .Draw(context, rect, g.first);
+                }
+
+                interactables.Register({rect, hash});
+            }
         }
 
         if (dropDown) {
+            FillRectangle(context, dropDownMenuRect, mouseOver);
+            DrawTopLeftRight(context, dropDownMenuRect, ColorB::White);
+            
+            unsigned count = (unsigned)dropDown->second.size();
+            Coord2 dropDownSize(
+                300,
+                count * 20 + (count-1) * layout._paddingBetweenAllocations + 2 * dropDownInternalBorder);
+            Rect dropDownRect;
+            dropDownRect._topLeft = Coord2(dropDownMenuRect._topLeft[0], dropDownMenuRect._bottomRight[1]);
+            dropDownRect._bottomRight = dropDownRect._topLeft + dropDownSize;
+            interactables.Register({dropDownRect, Hash64(dropDown->first)});
+
             FillRectangle(context, dropDownRect, mouseOver);
             DrawBottomLeftRight(context, dropDownRect, ColorB::White);
+            DrawText()
+                .Font(*fonts->_font)
+                .Color(ColorB::White)
+                .Alignment(RenderOverlays::TextAlignment::Left)
+                .Flags(0)
+                .Draw(context, dropDownMenuRect, dropDown->first);
 
             Layout dd(dropDownRect);
             dd._paddingInternalBorder = dropDownInternalBorder;
-            for (unsigned c=0; c<dropDown->size(); ++c) {
+            for (unsigned c=0; c<dropDown->second.size(); ++c) {
                 auto rect = dd.AllocateFullWidth(20);
                 auto col = smallText;
 
-                const auto* name = GraphTabs::Names[unsigned(dropDown->begin()[c])];
+                const auto* name = GraphTabs::Names[unsigned(dropDown->second.begin()[c])];
                 auto hash = Hash64(name);
                 if (interfaceState.HasMouseOver(hash))
                     col = ColorB::White;
@@ -279,7 +318,7 @@ namespace PlatformRig { namespace Overlays
                     .Color(col)
                     .Draw(context, rect, name);
 
-                if ((c+1) != dropDown->size())
+                if ((c+1) != dropDown->second.size())
                     context.DrawLine(ProjectionMode::P2D,
                         AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), col,
                         AsPixelCoords(rect._bottomRight), col);
@@ -603,6 +642,27 @@ namespace PlatformRig { namespace Overlays
         };
     }
 
+    static void DrawTableBackground(IOverlayContext& context, Layout& layout)
+    {
+        auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
+
+		if (auto* blurryBackground = context.GetService<BlurryBackgroundEffect>()) {
+			ColorAdjust colAdj;
+			colAdj._luminanceOffset = 0.025f; colAdj._saturationMultiplier = 0.65f;
+			auto outerRect = Layout{layout}.AllocateFullWidthFraction(1.f);
+			SoftShadowRectangle(
+				context,
+				{outerRect._topLeft + Coord2(themeStaticData._shadowOffset0, themeStaticData._shadowOffset0), outerRect._bottomRight + Coord2(themeStaticData._shadowOffset1, themeStaticData._shadowOffset1)},
+				themeStaticData._shadowSoftnessRadius);
+			ColorAdjustRectangle(
+				context, outerRect,
+				blurryBackground->AsTextureCoords(outerRect._topLeft), blurryBackground->AsTextureCoords(outerRect._bottomRight),
+				blurryBackground->GetResourceView(RenderOverlays::BlurryBackgroundEffect::Type::NarrowAccurateBlur),
+				colAdj, themeStaticData._semiTransparentTint);
+		} else
+			FillRectangle(context, Layout{layout}.AllocateFullWidthFraction(1.f), RenderOverlays::ColorB { 0, 0, 0, 145 });
+    }
+
     void    BufferUploadDisplay::DrawStatistics(
         IOverlayContext& context, Layout& layout, 
         Interactables& interactables, InterfaceState& interfaceState,
@@ -646,103 +706,111 @@ namespace PlatformRig { namespace Overlays
         std::pair<std::string, unsigned> headers0[] = { std::make_pair("Name", 300), std::make_pair("Value", 3000) };
         std::pair<std::string, unsigned> headers1[] = { std::make_pair("Name", 300), std::make_pair("Tex", 150), std::make_pair("Geo", 150), std::make_pair("Uniforms", 300) };
         char buffer[256];
-            
-        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), &interactables);
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+
+        DrawTableBackground(context, layout);
+        DrawTableHeaders(context, layout, MakeIteratorRange(headers0));
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Ave latency"), 
                 std::make_pair("Value", XlDynFormatString("%6.2f ms", averageTransactionLatency * 1000.f)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Command list latency"), 
                 std::make_pair("Value", XlDynFormatString("%6.2f ms", averageCommandListLatency * 1000.f)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "GPU theoretical MB/second"), 
                 std::make_pair("Value", XlDynFormatString("%6.2f MB/s", gpuMetrics._slidingAverageBytesPerSecond/float(1024.f*1024.f))) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "GPU ave cost"), 
                 std::make_pair("Value", XlDynFormatString("%6.2f ms", gpuMetrics._slidingAverageCostMS)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Thread activity"), 
                 std::make_pair("Value", XlDynFormatString("%6.3f%% (%i)", (float(processingTimeSum))?(100.f * (1.0f-(waitTimeSum/float(processingTimeSum)))):0.f, wakeCountSum)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Prepare staging steps (peak)"), 
                 std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedPrepareStaging, mostRecentResults._assemblyLineMetrics._peakPrepareStaging)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Transfer staging steps (peak)"),
                 std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedTransferStagingToFinal, mostRecentResults._assemblyLineMetrics._peakTransferStagingToFinal)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Create from pkt steps (peak)"),
                 std::make_pair("Value", XlDynFormatString("%i (%i)", mostRecentResults._assemblyLineMetrics._queuedCreateFromDataPacket, mostRecentResults._assemblyLineMetrics._peakCreateFromDataPacket)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Transaction count"),
                 std::make_pair("Value", XlDynFormatString("%i/%i", mostRecentResults._assemblyLineMetrics._transactionCount, mostRecentResults._assemblyLineMetrics._temporaryTransactionsAllocated)) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Staging allocated"),
                 std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesAllocated}).AsString()) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Staging max next block"),
                 std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._maxNextBlockBytes}).AsString()) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Staging awaiting device"),
                 std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesAwaitingDevice}).AsString()) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers0), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers0), 
             {   std::make_pair("Name", "Staging locked on ordering"),
                 std::make_pair("Value", (StringMeldInPlace(buffer) << ByteCount{mostRecentResults._assemblyLineMetrics._stagingPageMetrics._bytesLockedDueToOrdering}).AsString()) });
+        DrawTableBase(context, layout);
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), &interactables);
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
+        DrawTableHeaders(context, layout, MakeIteratorRange(headers1));
+        DrawTableEntry(context, layout, MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Recent creates"), 
                 std::make_pair("Tex", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::Texture])),
                 std::make_pair("Geo", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::GeometryBuffer])),
                 std::make_pair("Uniforms", XlDynFormatString("%i", mostRecentResults._countCreations[(unsigned)UploadDataType::UniformBuffer])) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc creates"), 
                 std::make_pair("Tex", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::Texture])),
                 std::make_pair("Geo", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::GeometryBuffer])),
                 std::make_pair("Uniforms", XlDynFormatString("%i", _accumulatedCreateCount[(unsigned)UploadDataType::UniformBuffer])) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc creates (MB)"), 
                 std::make_pair("Tex", (StringMeldInPlace(buffer) << ByteCount{_accumulatedCreateBytes[(unsigned)UploadDataType::Texture]}).AsString()),
                 std::make_pair("Geo", (StringMeldInPlace(buffer) << ByteCount{_accumulatedCreateBytes[(unsigned)UploadDataType::GeometryBuffer]}).AsString()),
                 std::make_pair("Uniforms", (StringMeldInPlace(buffer) << ByteCount{_accumulatedCreateBytes[(unsigned)UploadDataType::UniformBuffer]}).AsString()) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc uploads"), 
                 std::make_pair("Tex", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::Texture])),
                 std::make_pair("Geo", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::GeometryBuffer])),
                 std::make_pair("Uniforms", XlDynFormatString("%i", _accumulatedUploadCount[(unsigned)UploadDataType::UniformBuffer])) });
 
-        DrawTableEntry(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers1), 
+        DrawTableEntry(context, layout, MakeIteratorRange(headers1), 
             {   std::make_pair("Name", "Acc uploads (MB)"), 
                 std::make_pair("Tex", (StringMeldInPlace(buffer) << ByteCount{_accumulatedUploadBytes[(unsigned)UploadDataType::Texture]}).AsString()),
                 std::make_pair("Geo", (StringMeldInPlace(buffer) << ByteCount{_accumulatedUploadBytes[(unsigned)UploadDataType::GeometryBuffer]}).AsString()),
                 std::make_pair("Uniforms", (StringMeldInPlace(buffer) << ByteCount{_accumulatedUploadBytes[(unsigned)UploadDataType::UniformBuffer]}).AsString()) });
+        DrawTableBase(context, layout);
     }
 
     void    BufferUploadDisplay::DrawRecentRetirements(
         IOverlayContext& context, Layout& layout, 
         Interactables& interactables, InterfaceState& interfaceState)
     {
-        const auto lineHeight = 20u;
-        std::pair<std::string, unsigned> headers[] = { std::make_pair("Name", 500), std::make_pair("Latency (ms)", 160), std::make_pair("Type", 80), std::make_pair("Description", 3000) };
-            
-        DrawTableHeaders(context, layout.AllocateFullWidth(lineHeight), MakeIteratorRange(headers), &interactables);
+        std::pair<std::string, unsigned> headers[] = { std::make_pair("Latency (ms)", 180), std::make_pair("Description", 220), std::make_pair("Name", 5000) };
+
+        DrawTableBackground(context, layout);
+        DrawTableHeaders(context, layout, MakeIteratorRange(headers));
+
+        Font* tableValuesFont = nullptr;
+        if (auto* table = RenderOverlays::Internal::TryGetDefaultFontsBox())
+            tableValuesFont = table->_tableValuesFont.get();
 
         unsigned frameCounter = 0;
+        char buffer[256], buffer2[1024];
         for (auto i=_frames.rbegin(); i!=_frames.rend(); ++i, ++frameCounter) {
             if (_lockedFrameId != ~unsigned(0x0) && i->_frameId != _lockedFrameId) {
                 continue;
@@ -750,19 +818,21 @@ namespace PlatformRig { namespace Overlays
             for (int cl=int(i->_commandListEnd)-1; cl>=int(i->_commandListStart); --cl) {
                 const auto& commandList = _recentHistory[cl];
                 for (unsigned i2=0; i2<commandList.RetirementCount(); ++i2) {
-                    Rect rect = layout.AllocateFullWidth(lineHeight);
-                    if (!(IsGood(rect) && rect._bottomRight[1] < layout._maximumSize._bottomRight[1] && rect._topLeft[1] >= layout._maximumSize._topLeft[1]))
-                        break;
-
                     const auto& retire = commandList.Retirement(i2);
-                    DrawTableEntry(context, rect, MakeIteratorRange(headers), 
-                        {   std::make_pair("Name", retire._name), 
+                    Description(StringMeldInPlace(buffer), retire._desc);
+                    auto name = ColouriseFilename(retire._name);
+                    if (tableValuesFont)
+                        StringEllipsisDoubleEnded(buffer2, dimof(buffer2), *tableValuesFont, MakeStringSection(name), MakeStringSection("/\\"), (float)headers[2].second);
+                    bool success = DrawTableEntry(context, layout, MakeIteratorRange(headers),
+                        {   std::make_pair("Name", buffer2),
                             std::make_pair("Latency (ms)", XlDynFormatString("%6.2f", float(double(retire._retirementTime-retire._requestTime)*_reciprocalTimerFrequency*1000.))),
-                            std::make_pair("Type", TypeString(retire._desc)),
-                            std::make_pair("Description", BuildDescription(retire._desc)) });
+                            std::make_pair("Description", std::string{buffer}) });
+                    if (!success) break;
                 }
             }
         }
+
+        DrawTableBase(context, layout);
     }
 
     void    BufferUploadDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
@@ -804,8 +874,26 @@ namespace PlatformRig { namespace Overlays
 
             //      Present these frame by frame results visually.
             //      But also show information about the recent history (retired textures, etc)
-        layout.AllocateFullWidthFraction(0.01f);
-        Layout menuBar = layout.AllocateFullWidthFraction(.125f);
+
+        auto* fonts = ConsoleRig::TryActualizeCachedBox<BUFontBox>();
+        if (!fonts) return;
+
+        Layout menuBar{Rect::Invalid()};
+        if (auto* topBar = context.GetService<ITopBarManager>()) {
+
+            const char headingString[] = "Buffer Uploads";
+            auto rect = topBar->ScreenTitle(context, layout, StringWidth(*fonts->_font, MakeStringSection(headingString)));
+            DrawText()
+                .Font(*fonts->_font)
+                .Color(ColorB::Black)
+                .Alignment(RenderOverlays::TextAlignment::Left)
+                .Flags(0)
+                .Draw(context, rect, headingString);
+
+        } else {
+            menuBar = layout.AllocateFullWidthFraction(.125f);
+        }
+
         Layout displayArea = layout.AllocateFullWidthFraction(1.f);
 
         if (_graphsMode == GraphTabs::Statistics) {

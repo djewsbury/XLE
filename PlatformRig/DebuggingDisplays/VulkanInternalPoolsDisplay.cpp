@@ -37,7 +37,7 @@ namespace PlatformRig { namespace Overlays
 			if (auto* topBar = context.GetService<ITopBarManager>()) {
 				const char headingString[] = "Vulkan Internal Pools";
 				if (auto* headingFont = _screenHeadingFont->TryActualize()) {
-					auto rect = topBar->RegisterScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+					auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
 					if (IsGood(rect) && headingFont)
 						DrawText()
 							.Font(**headingFont)
@@ -99,37 +99,35 @@ namespace PlatformRig { namespace Overlays
 			{
 				std::pair<std::string, unsigned> headers0[] = { std::make_pair("Descriptor Allocations (Type)", 800), std::make_pair("Allocated", 200), std::make_pair("Reserved", 200) };
 
-				auto height = DrawTableHeaders(context, Layout{layout}.AllocateFullHeightFraction(1.f), MakeIteratorRange(headers0), &interactables);
-				layout.AllocateFullWidth(height);
+				DrawTableHeaders(context, layout, MakeIteratorRange(headers0));
 				
 				for (unsigned c=0; c<dimof(s_descriptorTypeNames); ++c) {
-					auto height = DrawTableEntry(
-						context, Layout{layout}.AllocateFullHeightFraction(1.f), MakeIteratorRange(headers0),
+					DrawTableEntry(
+						context, layout, MakeIteratorRange(headers0),
 						{	std::make_pair(headers0[0].first, s_descriptorTypeNames[c]), 
 							std::make_pair(headers0[1].first, std::to_string(metrics._descriptorsAllocated[c])),
 							std::make_pair(headers0[2].first, std::to_string(metrics._descriptorsReserved[c])) });
-					layout.AllocateFullWidth(height + 8);
+					layout.AllocateFullWidth(8);
 				}
 
-				DrawTableBase(context, layout.AllocateFullWidth(height/2));
+				DrawTableBase(context, layout);
 			}
 
 			{
 				std::pair<std::string, unsigned> headers1[] = { std::make_pair("Reusable Sets (Layout)", 800), std::make_pair("Allocated", 200), std::make_pair("Reserved", 200) };
 
-				auto height = DrawTableHeaders(context, Layout{layout}.AllocateFullHeightFraction(1.f), MakeIteratorRange(headers1), &interactables);
-				layout.AllocateFullWidth(height);
+				DrawTableHeaders(context, layout, MakeIteratorRange(headers1));
 				
 				for (const auto&g:metrics._reusableGroups) {
-					auto height = DrawTableEntry(
-						context, Layout{layout}.AllocateFullHeightFraction(1.f), MakeIteratorRange(headers1),
+					DrawTableEntry(
+						context, layout, MakeIteratorRange(headers1),
 						{	std::make_pair(headers1[0].first, g._layoutName), 
 							std::make_pair(headers1[1].first, std::to_string(g._allocatedCount)),
 							std::make_pair(headers1[2].first, std::to_string(g._reservedCount)) });
-					layout.AllocateFullWidth(height + 8);
+					layout.AllocateFullWidth(8);
 				}
 
-				DrawTableBase(context, layout.AllocateFullWidth(height/2));
+				DrawTableBase(context, layout);
 			}
 		}
 

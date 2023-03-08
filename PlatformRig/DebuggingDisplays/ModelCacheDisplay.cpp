@@ -84,7 +84,7 @@ namespace PlatformRig { namespace Overlays
 				std::pair<std::string, unsigned> headers0[] = { 
 					std::make_pair("Model", 900), std::make_pair("Material", 900) };
 
-				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), &interactables);
+				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0));
 				for (const auto& r:_rendererRecords) {
 					if (entryCount < (unsigned)_scrollOffsets[_tab]) {
 						++entryCount;
@@ -110,7 +110,7 @@ namespace PlatformRig { namespace Overlays
 					std::make_pair("Name", 3000)
 				};
 
-				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0), &interactables);
+				DrawTableHeaders(context, tableArea.AllocateFullWidth(28), MakeIteratorRange(headers0));
                 auto recordList = (_tab == 1) ? MakeIteratorRange(_modelRecords) : MakeIteratorRange(_materialRecords);
 				for (const auto& r:recordList) {
 					if (entryCount < (unsigned)_scrollOffsets[_tab]) {

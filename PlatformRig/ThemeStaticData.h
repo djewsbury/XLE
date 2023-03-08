@@ -18,6 +18,7 @@ namespace PlatformRig
 		RenderOverlays::ColorB _semiTransparentTint = 0xff2e3440;
 		RenderOverlays::ColorB _topBarBorderColor = 0xffffffff;
 		RenderOverlays::ColorB _headingBkgrnd = 0xffffffff;
+		RenderOverlays::ColorB _menuBkgrnd[6] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff };
 
 		unsigned _shadowOffset0 = 8;
 		unsigned _shadowOffset1 = 8;
@@ -34,6 +35,12 @@ namespace PlatformRig
 				case "SemiTransparentTint"_h: _semiTransparentTint = DeserializeColor(fmttr); break;
 				case "TopBarBorderColor"_h: _topBarBorderColor = DeserializeColor(fmttr); break;
 				case "HeadingBackground"_h: _headingBkgrnd = DeserializeColor(fmttr); break;
+				case "MenuBackground0"_h: _menuBkgrnd[0] = DeserializeColor(fmttr); break;
+				case "MenuBackground1"_h: _menuBkgrnd[1] = DeserializeColor(fmttr); break;
+				case "MenuBackground2"_h: _menuBkgrnd[2] = DeserializeColor(fmttr); break;
+				case "MenuBackground3"_h: _menuBkgrnd[3] = DeserializeColor(fmttr); break;
+				case "MenuBackground4"_h: _menuBkgrnd[4] = DeserializeColor(fmttr); break;
+				case "MenuBackground5"_h: _menuBkgrnd[5] = DeserializeColor(fmttr); break;
 				case "ShadowOffset0"_h: _shadowOffset0 = Formatters::RequireCastValue<decltype(_shadowOffset0)>(fmttr); break;
 				case "ShadowOffset1"_h: _shadowOffset1 = Formatters::RequireCastValue<decltype(_shadowOffset1)>(fmttr); break;
 				case "ShadowSoftnessRadius"_h: _shadowSoftnessRadius = Formatters::RequireCastValue<decltype(_shadowSoftnessRadius)>(fmttr); break;

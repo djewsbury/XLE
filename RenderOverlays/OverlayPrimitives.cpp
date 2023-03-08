@@ -7,6 +7,9 @@
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Types.h"
+#include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/StringFormat.h"
+#include <sstream>
 
 namespace RenderOverlays
 {
@@ -63,6 +66,34 @@ namespace RenderOverlays
 
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements2D = Vertex_PC_inputElements2D;
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements3D = Vertex_PC_inputElements3D;
+
+	std::string ColouriseFilename(StringSection<> filename)
+	{
+		auto split = MakeFileNameSplitter(filename);
+		std::stringstream str;
+		if (!split.DriveAndPath().IsEmpty()) {
+			const bool gradualBrightnessChange = true;
+			if (!gradualBrightnessChange) {
+				str << "{color:9f9f9f}" << split.DriveAndPath();
+			} else {
+				auto splitPath = MakeSplitPath(split.DriveAndPath());
+				if (splitPath.BeginsWithSeparator()) str << "/";
+				for (unsigned c=0; c<splitPath.GetSectionCount(); ++c) {
+					auto brightness = LinearInterpolate(0x5f, 0xcf, c/float(splitPath.GetSectionCount()));
+					if (c != 0) str << "/";
+					str << "{color:" << std::hex << brightness << brightness << brightness << std::dec << "}" << splitPath.GetSection(c);
+				}
+				if (splitPath.EndsWithSeparator()) str << "/";
+			}
+		}
+		if (!split.File().IsEmpty())
+			str << "{color:7f8fdf}" << split.File();
+		if (!split.ExtensionWithPeriod().IsEmpty())
+			str << "{color:df8f7f}" << split.ExtensionWithPeriod();
+		if (!split.ParametersWithDivider().IsEmpty())
+			str << "{color:7fdf8f}" << split.ParametersWithDivider();
+		return str.str();
+	}
 
 }
 

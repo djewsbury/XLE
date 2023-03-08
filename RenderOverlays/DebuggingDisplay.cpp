@@ -536,7 +536,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
-    Coord DrawTableHeaders(IOverlayContext& context, const Rect& initialRect, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders, Interactables* interactables)
+    Coord DrawTableHeaders(IOverlayContext& context, const Rect& initialRect, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders)
     {
         auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
         auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
@@ -682,11 +682,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
         };
     }
 
-    void DrawTableBase(IOverlayContext& context, const Rect& rect)
+    Coord DrawTableBase(IOverlayContext& context, const Rect& rect)
     {
         auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
+        auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
+        auto fntLineHeight = fnt.GetFontProperties()._lineHeight;
 
-        auto middle = (rect._topLeft[1] + rect._bottomRight[1]) / 2;
+        auto bottom = std::min(rect._topLeft[1] + int(fntLineHeight)*2, rect._bottomRight[1]);
+        auto middle = (rect._topLeft[1] + bottom) / 2;
         Float2 stroke[] {
             { rect._topLeft[0] + staticData._leftAndRightBorderArea/2, middle - 2*staticData._downStrokeLength },
             { rect._topLeft[0] + staticData._leftAndRightBorderArea/2, middle },
@@ -694,6 +697,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             { rect._bottomRight[0] - staticData._leftAndRightBorderArea/2, middle - 2*staticData._downStrokeLength }
         };
         SolidLine(context, stroke, staticData._frameColor, staticData._frameLineWeight);
+        return fntLineHeight*2;
     }
 
     static Rect AllocateTableEntry(Layout& layout, const TableStaticData& staticData, unsigned width, bool first, bool last)
@@ -712,7 +716,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     Coord DrawTableEntry(       IOverlayContext& context,
-                                const Rect& rect, 
+                                const Rect& rect,
                                 IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, 
                                 const std::map<std::string, TableElement>& entry,
                                 bool highlighted)
@@ -766,6 +770,31 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
 
         return heightUsed;
+    }
+
+    void DrawTableHeaders(IOverlayContext& context, Layout& layout, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders)
+    {
+        auto rect = Layout{layout}.AllocateFullWidthFraction(1.f);
+        if (!IsGood(rect)) return;
+        auto height = DrawTableHeaders(context, rect, fieldHeaders);
+        layout.AllocateFullWidth(height);
+    }
+
+    void DrawTableBase(IOverlayContext& context, Layout& layout)
+    {
+        auto rect = Layout{layout}.AllocateFullWidthFraction(1.f);
+        if (!IsGood(rect)) return;
+        auto height = DrawTableBase(context, rect);
+        layout.AllocateFullWidth(height);
+    }
+
+    bool DrawTableEntry(IOverlayContext& context, Layout& layout, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted)
+    {
+        auto rect = Layout{layout}.AllocateFullWidthFraction(1.f);
+        if (!IsGood(rect)) return false;
+        auto height = DrawTableEntry(context, rect, fieldHeaders, entry, highlighted);
+        layout.AllocateFullWidth(height);
+        return true;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////

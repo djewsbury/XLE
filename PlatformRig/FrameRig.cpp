@@ -546,7 +546,7 @@ namespace PlatformRig
             Coord2(outerRect._bottomRight[0] - rectWidth - padding, outerRect._topLeft[1] + padding),
             Coord2(outerRect._bottomRight[0] - padding, outerRect._topLeft[1] + padding + rectHeight));
         if (auto* topBar = context.GetService<ITopBarManager>())
-            displayRect = topBar->RegisterFrameRigDisplay(context);
+            displayRect = topBar->FrameRigDisplay(context);
         Layout innerLayout(displayRect);
         innerLayout._paddingInternalBorder = margin;
         innerLayout._paddingBetweenAllocations = margin;

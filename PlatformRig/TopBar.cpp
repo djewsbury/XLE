@@ -78,25 +78,23 @@ namespace PlatformRig
 			IOverlayContext& context,
 			Rect outerRect);
 
-		void RenderScreenTitleBkgrnd(
+		void RenderObjectBkgrnd(
 			IOverlayContext& context,
-			Rect rect);
+			Rect rect, ColorB col, unsigned height);
 
-		Rect RegisterScreenTitle(RenderOverlays::IOverlayContext&, Layout& layout, float requestedWidth) override;
-		Rect RegisterFrameRigDisplay(RenderOverlays::IOverlayContext&) override;
+		Rect ScreenTitle(RenderOverlays::IOverlayContext&, Layout& layout, float requestedWidth) override;
+		Rect Menu(RenderOverlays::IOverlayContext&, float requestedWidth) override;
+		Rect FrameRigDisplay(RenderOverlays::IOverlayContext&) override;
 		void RenderFrame(IOverlayContext& context) override;
 
-		TopBarManager(const Rect& outerRect)
-		: _topBarStaticData(EntityInterface::MountedData<TopBarStaticData>::LoadOrDefault("cfg/displays/topbar"))
-		, _themeStaticData(EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme"))
-		, _outerRect(outerRect)
-		{}
-
+		TopBarManager(const Rect& outerRect);
 	private:
 		const TopBarStaticData& _topBarStaticData;
 		const ThemeStaticData& _themeStaticData;
 		Rect _outerRect;
 		bool _renderedFrame = false;
+		Layout _layout;
+		unsigned _menusAllocated = 0;
 	};
 
 	static RenderCore::UniformsStreamInterface CreateTexturedUSI()
@@ -221,27 +219,27 @@ namespace PlatformRig
 		DashLine(context, dashLine, _themeStaticData._topBarBorderColor, (float)_topBarStaticData._borderWidth);
 	}
 
-	void TopBarManager::RenderScreenTitleBkgrnd(
+	void TopBarManager::RenderObjectBkgrnd(
 		IOverlayContext& context,
-		Rect frame)
+		Rect frame, ColorB col, unsigned height)
 	{
 		// draw a rhombus around the frame, but with some extra triangles
 		RenderCore::Techniques::ImmediateDrawableMaterial material;
 		auto vertices = context.DrawGeometry(6, Vertex_PC::s_inputElements2D, std::move(material)).Cast<Vertex_PC*>();
-		Coord2 A = frame._topLeft;
-		Coord2 B { frame._topLeft[0] - _topBarStaticData._headingHeight, frame._bottomRight[1] };
-		Coord2 C = frame._bottomRight;
-		Coord2 D { frame._bottomRight[0] + _topBarStaticData._headingHeight, frame._topLeft[1] };
-		vertices[0] = Vertex_PC { AsPixelCoords(B), HardwareColor(_themeStaticData._headingBkgrnd) };
-		vertices[1] = Vertex_PC { AsPixelCoords(C), HardwareColor(_themeStaticData._headingBkgrnd) };
-		vertices[2] = Vertex_PC { AsPixelCoords(A), HardwareColor(_themeStaticData._headingBkgrnd) };
+		Coord2 A { frame._topLeft[0], (frame._topLeft[1] + frame._bottomRight[1] - height) / 2 };
+		Coord2 B { frame._topLeft[0] - height, (frame._topLeft[1] + frame._bottomRight[1] + height) / 2 };
+		Coord2 C { frame._bottomRight[0], (frame._topLeft[1] + frame._bottomRight[1] + height) / 2 };
+		Coord2 D { frame._bottomRight[0] + height, (frame._topLeft[1] + frame._bottomRight[1] - height) / 2 };
+		vertices[0] = Vertex_PC { AsPixelCoords(B), HardwareColor(col) };
+		vertices[1] = Vertex_PC { AsPixelCoords(C), HardwareColor(col) };
+		vertices[2] = Vertex_PC { AsPixelCoords(A), HardwareColor(col) };
 
-		vertices[3] = Vertex_PC { AsPixelCoords(A), HardwareColor(_themeStaticData._headingBkgrnd) };
-		vertices[4] = Vertex_PC { AsPixelCoords(C), HardwareColor(_themeStaticData._headingBkgrnd) };
-		vertices[5] = Vertex_PC { AsPixelCoords(D), HardwareColor(_themeStaticData._headingBkgrnd) };
+		vertices[3] = Vertex_PC { AsPixelCoords(A), HardwareColor(col) };
+		vertices[4] = Vertex_PC { AsPixelCoords(C), HardwareColor(col) };
+		vertices[5] = Vertex_PC { AsPixelCoords(D), HardwareColor(col) };
 	}
 
-	Rect TopBarManager::RegisterScreenTitle(RenderOverlays::IOverlayContext& overlayContext, Layout& layout, float requestedWidth)
+	Rect TopBarManager::ScreenTitle(RenderOverlays::IOverlayContext& overlayContext, Layout& layout, float requestedWidth)
 	{
 		// awkwardly, we render the parts we're interested in on demand, because we don't actually know the state of the bar until
 		// we get to this point
@@ -250,17 +248,9 @@ namespace PlatformRig
 			_renderedFrame = true;
 		}
 
-		Rect frame;
-		frame._topLeft = {
-			int(_outerRect._topLeft[0] + _topBarStaticData._preHeadingMargin),
-			int(_outerRect._topLeft[1] + _topBarStaticData._topMargin + _topBarStaticData._height/2 - _topBarStaticData._headingHeight/2)
-		};
-		frame._bottomRight = {
-			int(_outerRect._topLeft[0] + _topBarStaticData._preHeadingMargin + _topBarStaticData._headingPadding*2 + requestedWidth),
-			int(_outerRect._topLeft[1] + _topBarStaticData._topMargin + _topBarStaticData._height/2 + _topBarStaticData._headingHeight/2)
-		};
-
-		RenderScreenTitleBkgrnd(overlayContext, frame);
+		Rect frame = _layout.AllocateFullHeight(_topBarStaticData._headingPadding*2 + requestedWidth);
+		RenderObjectBkgrnd(overlayContext, frame, _themeStaticData._headingBkgrnd, _topBarStaticData._headingHeight);
+		_layout.AllocateFullHeight(_topBarStaticData._headingHeight);		// extra space for the border
 
 		Rect content;
 		content._topLeft = frame._topLeft + Coord2 { _topBarStaticData._headingPadding, _topBarStaticData._headingPadding };
@@ -271,7 +261,25 @@ namespace PlatformRig
 		return content;
 	}
 
-	Rect TopBarManager::RegisterFrameRigDisplay(RenderOverlays::IOverlayContext& overlayContext)
+	Rect TopBarManager::Menu(RenderOverlays::IOverlayContext& overlayContext, float requestedWidth)
+	{
+		if (!_renderedFrame) {
+			RenderExpandedBar(overlayContext, _outerRect);
+			_renderedFrame = true;
+		}
+
+		Rect frame = _layout.AllocateFullHeight(_topBarStaticData._headingPadding*2 + requestedWidth);
+		RenderObjectBkgrnd(overlayContext, frame, _themeStaticData._menuBkgrnd[std::min(_menusAllocated, (unsigned)dimof(_themeStaticData._menuBkgrnd))], _topBarStaticData._headingHeight);
+		_layout.AllocateFullHeight(_topBarStaticData._headingHeight);		// extra space for the border
+		++_menusAllocated;
+
+		Rect content;
+		content._topLeft = frame._topLeft + Coord2 { _topBarStaticData._headingPadding, _topBarStaticData._headingPadding };
+		content._bottomRight = frame._bottomRight - Coord2{ _topBarStaticData._headingPadding, _topBarStaticData._headingPadding };
+		return content;
+	}
+
+	Rect TopBarManager::FrameRigDisplay(RenderOverlays::IOverlayContext& overlayContext)
 	{
 		if (!_renderedFrame) {
 			RenderMinimalBar(overlayContext, _outerRect);
@@ -290,6 +298,26 @@ namespace PlatformRig
 			RenderMinimalBar(context, _outerRect);
 			_renderedFrame = true;
 		}
+	}
+
+	TopBarManager::TopBarManager(const Rect& outerRect)
+	: _topBarStaticData(EntityInterface::MountedData<TopBarStaticData>::LoadOrDefault("cfg/displays/topbar"))
+	, _themeStaticData(EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme"))
+	, _outerRect(outerRect)
+	, _layout {
+		{
+			{
+				int(outerRect._topLeft[0] + _topBarStaticData._preHeadingMargin),
+				int(outerRect._topLeft[1] + _topBarStaticData._topMargin + _topBarStaticData._height/2 - _topBarStaticData._headingHeight/2)
+			},
+			{
+				int(outerRect._bottomRight[0] - _topBarStaticData._frameRigPaddingRight - _topBarStaticData._frameRigAreaWidth),
+				int(outerRect._topLeft[1] + _topBarStaticData._topMargin + _topBarStaticData._height/2 + _topBarStaticData._headingHeight/2)
+			}
+		}}
+	{
+		_layout._paddingInternalBorder = 0;
+		_layout._paddingBetweenAllocations = 0;
 	}
 
 	std::shared_ptr<ITopBarManager> CreateTopBarManager(const RenderOverlays::Rect& outerRect)

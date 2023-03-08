@@ -259,10 +259,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
         TableElement(const char label[],  ColorB bkColour = ColorB(0xff000000)) : _label(label), _bkColour(bkColour) {}
         TableElement() : _bkColour(0xff000000) {}
     };
-    Coord DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders, Interactables* interactables=NULL);
-    void DrawTableBase(IOverlayContext& context, const Rect& rect);
+    Coord DrawTableHeaders(IOverlayContext& context, const Rect& rect, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders);
+    Coord DrawTableBase(IOverlayContext& context, const Rect& rect);
     Rect DrawEmbeddedInRightEdge(IOverlayContext& context, const Rect& rect);
     Coord DrawTableEntry(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted = false);
+
+    void DrawTableHeaders(IOverlayContext& context, Layout& layout, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders);
+    void DrawTableBase(IOverlayContext& context, Layout& layout);
+    bool DrawTableEntry(IOverlayContext& context, Layout& layout, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted = false);
 
     ///////////////////////////////////////////////////////////////////////////////////
     class DebugScreensSystem : public PlatformRig::IInputListener
