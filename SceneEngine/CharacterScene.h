@@ -10,7 +10,7 @@
 #include <memory>
 
 namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; }}
-namespace RenderCore { namespace BufferUploads { class IManager; }}
+namespace RenderCore { namespace BufferUploads { class IManager; using CommandListID = uint32_t; }}
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Assets { class SkeletonMachine; class ModelRendererConstruction;  }}
 namespace Assets { class OperationContext; }
@@ -43,6 +43,8 @@ namespace SceneEngine
 		virtual void OnFrameBarrier() = 0;
 		virtual void CancelConstructions() = 0;
 		virtual std::shared_ptr<Assets::OperationContext> GetLoadingContext() = 0;
+
+		virtual RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) = 0;
 
 		virtual ~ICharacterScene();
 	};

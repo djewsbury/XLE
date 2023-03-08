@@ -123,6 +123,8 @@ namespace SceneEngine
 		void OnFrameBarrier() override;
 		void CancelConstructions() override;
 
+		RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) override;
+
 		std::shared_ptr<Assets::OperationContext> GetLoadingContext() override;
 
 		CharacterScene(
@@ -440,6 +442,11 @@ namespace SceneEngine
 
 		_renderers.emplace_back(newEntry);
 		return newEntry;
+	}
+
+	RenderCore::BufferUploads::CommandListID CharacterScene::GetCompletionCommandList(void* renderer)
+	{
+		return ((const CharacterSceneInternal::RendererEntry*)renderer)->_renderer._completionCmdList;
 	}
 
 	unsigned CharacterInstanceAllocate(void* renderer)
