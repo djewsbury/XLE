@@ -39,44 +39,27 @@ namespace Assets
 		std::shared_ptr<IIntermediateCompileMarker> BeginCompileOperation(CompileRequestCode targetCode, InitializerPack&&);
 	}
 
+	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
+
 	namespace Internal
 	{
 		// Note -- here's a useful pattern that can turn any expression in a SFINAE condition
 		// Taken from stack overflow -- https://stackoverflow.com/questions/257288/is-it-possible-to-write-a-template-to-check-for-a-functions-existence
 		// If the expression in the first decltype() is invalid, we will trigger SFINAE and fall back to std::false_type
-		template<typename AssetType, typename... Params>
-			static auto HasDirectAutoConstructAsset_Helper(int) -> decltype(AutoConstructAsset<AssetType>(std::declval<Params>()...), std::true_type{});
+		template<typename PromiseType>
+			static auto HasConstructToPromiseFromBlob_Helper(int) -> decltype(PromisedTypeRemPtr<PromiseType>::ConstructToPromise(std::declval<PromiseType&&>(), std::declval<Blob&&>(), std::declval<DependencyValidation&&>(), std::declval<StringSection<>>()), std::true_type{});
 
 		template<typename...>
-			static auto HasDirectAutoConstructAsset_Helper(...) -> std::false_type;
+			static auto HasConstructToPromiseFromBlob_Helper(...) -> std::false_type;
 
-		template<typename AssetType, typename... Params>
-			struct HasDirectAutoConstructAsset_ : decltype(HasDirectAutoConstructAsset_Helper<AssetType, Params&&...>(0)) {};
+		template<typename PromiseType>
+			struct HasConstructToPromiseFromBlob_ : decltype(HasConstructToPromiseFromBlob_Helper<PromiseType>(0)) {};
 
-		template<typename AssetType, typename... Params>
-			using HasDirectAutoConstructAsset = HasDirectAutoConstructAsset_<AssetType, Params&&...>;
-	}
-	
-	// If we can construct an AssetType directly from the given parameters, then enable an implementation of
-	// AutoConstructToPromise to do exactly that.
-	// The compile operation version can work for any given initializer arguments, but the direct construction
-	// version will only work when the arguments match one of the asset type's constructors. So, we need to avoid 
-	// ambiguities between these implementations when they overlap.
-	// To achieve this, we either need to use namespace tricks, or to use SFINAE to disable the implementation 
-	// we don't need.
-	template<
-		typename Promise, typename... Params, 
-		typename std::enable_if<Internal::HasDirectAutoConstructAsset<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
-		void AutoConstructToPromiseSynchronously(Promise&& promise, Params&&... initialisers)
-	{
-		TRY {
-			promise.set_value(AutoConstructAsset<Internal::PromisedType<Promise>>(std::forward<Params>(initialisers)...));
-		} CATCH (...) {
-			promise.set_exception(std::current_exception());
-		} CATCH_END
+		template<typename PromiseType>
+			using HasConstructToPromiseFromBlob = HasConstructToPromiseFromBlob_<PromiseType>;
 	}
 
-	template<typename Promise, typename std::enable_if_t<!Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests>* =nullptr>
+	template<typename Promise, ENABLE_IF(Internal::HasConstructToPromiseFromBlob<Promise>::value)>
 		void AutoConstructToPromiseSynchronously(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
@@ -101,36 +84,25 @@ namespace Assets
 		} CATCH_END
 	}
 
-	template<typename Promise, typename std::enable_if_t<Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests>* =nullptr>
-		void AutoConstructToPromiseSynchronously(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
-	{
-		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
-			promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)}));
-			return;
-		}
-
-		TRY {
-			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::PromisedTypeRemPtr<Promise>::ChunkRequests));
-			AutoConstructToPromiseSynchronously(promise, MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
-		} CATCH(...) {
-			promise.set_exception(std::current_exception());
-		} CATCH_END
-	}
-
-	template<
-		typename Promise, typename... Params, 
-		typename std::enable_if<Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+	template<typename Promise, typename... Params>
 		void AutoConstructToPromiseSynchronously(Promise&& promise, Params&&... initialisers)
 	{
-		// Note that there are identical overrides for AutoConstructToPromise & AutoConstructToPromiseSynchronously
-		TRY {
-			Internal::PromisedTypeRemPtr<Promise>::ConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
-		} CATCH(const std::exception& e) {
-			Log(Error) << "Suppressing exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
-			Log(Error) << e.what() << std::endl
-		} CATCH(...) {
-			Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
-		} CATCH_END
+		if constexpr (Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
+			TRY {
+				Internal::PromisedTypeRemPtr<Promise>::ConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+			} CATCH(const std::exception& e) {
+				Log(Error) << "Suppressing exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
+				Log(Error) << e.what() << std::endl;
+			} CATCH(...) {
+				Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
+			} CATCH_END
+		} else {
+			TRY {
+				promise.set_value(AutoConstructAsset<Internal::PromisedType<Promise>>(std::forward<Params>(initialisers)...));
+			} CATCH (...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+		}
 	}
 
 	template<typename Promise>
@@ -257,9 +229,9 @@ namespace Assets
 	}
 
 	template<
-		typename Promise, typename... Params, 
-		typename std::enable_if<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		typename Promise, typename... Params,
+		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
+				&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
 		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
@@ -269,9 +241,9 @@ namespace Assets
 	}
 
 	template<
-		typename Promise, typename... Params, 
-		typename std::enable_if<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		typename Promise, typename... Params,
+		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
+				&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
 		void AutoConstructToPromise(Promise&& promise, std::shared_ptr<OperationContext> opContext, Params&&... initialisers)
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
@@ -285,14 +257,7 @@ namespace Assets
 		template<typename Promise, typename Tuple, std::size_t ... I>
 			auto ApplyAutoConstructToPromise_impl(Promise&& promise, Tuple&& t, std::index_sequence<I...>)
 		{
-			if constexpr (Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, std::tuple_element_t<I, Tuple>&&...>::value) {
-				return AutoConstructToPromiseSynchronously(std::move(promise), std::get<I>(std::forward<Tuple>(t))...);
-			} else {
-				// same as above, but since we're not required to go through AutoConstructToPromiseSynchronously, we can
-				// make this just slightly simpler
-				// this can sometimes produce clearer compiler error messages if something does wrong
-				promise.set_value(AutoConstructAsset<Internal::PromisedType<Promise>>(std::get<I>(std::forward<Tuple>(t))...));
-			}
+			return AutoConstructToPromiseSynchronously(std::move(promise), std::get<I>(std::forward<Tuple>(t))...);
 		}
 
 		template<typename Ty, typename Tuple>
@@ -305,8 +270,8 @@ namespace Assets
 
 	template<
 		typename Promise, typename... Params,
-		typename std::enable_if<	!Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		ENABLE_IF(	!Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType
+				&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
 		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
@@ -333,7 +298,7 @@ namespace Assets
 
 	template<
 		typename Promise, typename... Params, 
-		typename std::enable_if<Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value>::type* = nullptr>
+		ENABLE_IF(Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
 		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
 		// Note that there are identical overrides for AutoConstructToPromise & AutoConstructToPromiseSynchronously
@@ -349,10 +314,9 @@ namespace Assets
 
 	template<
 		typename Promise,
-		typename std::enable_if_t<	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests 
-								&&  !Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-								&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, StringSection<>>::value
-								>* =nullptr>
+		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests 
+				&&  !Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
+				&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, StringSection<>>::value)>
 		void AutoConstructToPromise(Promise&& promise, StringSection<> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
@@ -397,5 +361,7 @@ namespace Assets
 		AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
 		return future;
 	}
+
+	#undef ENABLE_IF
 }
 
