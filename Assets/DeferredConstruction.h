@@ -23,10 +23,36 @@
 // for expanding the range of AutoConstructAsset() overrides
 // hm... it's difficult though because ADL isn't exactly what we want here
 #include "ConfigFileContainer.h"
+// #include "IArtifact.h"
 
 namespace Assets
 {
 	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
+
+	namespace Internal
+	{
+		template<typename AssetOrPtrType, typename... Params>
+			static auto HasConstructToPromiseClassOverride_Helper(int) -> decltype(
+				Internal::RemoveSmartPtrType<AssetOrPtrType>::ConstructToPromise(std::declval<std::promise<AssetOrPtrType>&&>(), std::declval<Params>()...),
+				std::true_type{});
+
+		template<typename...>
+			static auto HasConstructToPromiseClassOverride_Helper(...) -> std::false_type;
+
+		template<typename AssetOrPtrType, typename... Params>
+			struct HasConstructToPromiseClassOverride : decltype(HasConstructToPromiseClassOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
+
+		template<typename PromiseType, typename... Params>
+			static auto HasConstructToPromiseFreeOverride_Helper(int) -> decltype(
+				AutoConstructToPromiseOverride(std::declval<PromiseType&&>(), std::declval<Params>()...),
+				std::true_type{});
+
+		template<typename...>
+			static auto HasConstructToPromiseFreeOverride_Helper(...) -> std::false_type;
+
+		template<typename PromiseType, typename... Params>
+			struct HasConstructToPromiseFreeOverride : decltype(HasConstructToPromiseFreeOverride_Helper<PromiseType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
+	}
 
 	template<typename Promise, typename... Params>
 		void AutoConstructToPromiseSynchronously(Promise&& promise, Params&&... initialisers)
@@ -65,9 +91,7 @@ namespace Assets
 		}
 	}
 
-	template<
-		typename Promise, typename... Params,
-		ENABLE_IF(	!Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
+	template<typename Promise, typename... Params>
 		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
 		// note very similar "AutoConstructToPromiseSynchronously"
@@ -79,6 +103,15 @@ namespace Assets
 				Log(Error) << e.what() << std::endl;
 			} CATCH(...) {
 				Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
+			} CATCH_END
+		} else if constexpr (Internal::HasConstructToPromiseFreeOverride<Promise, Params&&...>::value) {
+			TRY {
+				AutoConstructToPromiseOverride(std::move(promise), std::forward<Params>(initialisers)...);
+			} CATCH(const std::exception& e) {
+				Log(Error) << "Suppressing exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
+				Log(Error) << e.what() << std::endl;
+			} CATCH(...) {
+				Log(Error) << "Suppressing unknown exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
 			} CATCH_END
 		} else {
 			ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(

@@ -10,6 +10,7 @@
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/Continuation.h"
 #include "../../Utility/UTFUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../ConsoleRig/Console.h"

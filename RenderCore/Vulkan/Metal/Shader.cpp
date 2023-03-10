@@ -14,6 +14,8 @@
 #include "../../Types.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/DepVal.h"
+#include "../../../Assets/Continuation.h"
+#include "../../../Assets/IArtifact.h"
 #include "../../../Utility/StringUtils.h"
 #include "../../../Utility/StringFormat.h"
 
@@ -174,6 +176,8 @@ namespace RenderCore { namespace Metal_Vulkan
     ComputeShader::~ComputeShader() {}
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static_assert(::Assets::Internal::HasConstructToPromiseFreeOverride<std::promise<CompiledShaderByteCode>, StringSection<>, StringSection<>>::value);
 
 	static std::shared_future<CompiledShaderByteCode> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
 	{

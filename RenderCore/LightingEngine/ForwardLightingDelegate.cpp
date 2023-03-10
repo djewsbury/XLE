@@ -29,6 +29,7 @@
 #include "../Techniques/Services.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 #include "../Utility/MemoryUtils.h"

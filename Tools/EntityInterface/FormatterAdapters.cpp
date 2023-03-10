@@ -6,7 +6,9 @@
 #include "EntityInterface.h"
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/AssetUtils.h"
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/Continuation.h"
 #include "../../Formatters/FormatterUtils.h"
 
 namespace EntityInterface

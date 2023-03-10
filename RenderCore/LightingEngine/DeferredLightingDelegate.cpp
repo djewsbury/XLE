@@ -31,6 +31,8 @@
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/Continuation.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../xleres/FileList.h"
 

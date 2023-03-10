@@ -88,6 +88,7 @@ namespace Assets
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     class DirectorySearchRules;
+	DirectorySearchRules DefaultDirectorySearchRules(StringSection<ResChar>);
 
     namespace Internal
     {
@@ -161,10 +162,8 @@ namespace Assets
 	template<
 		typename Promise, 
 		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedType<Promise>>::Constructor_Formatter
-					&& !Internal::AssetTraits<Internal::PromisedType<Promise>>::HasCompileProcessType
-					&& !Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, StringSection<>>::value
 					&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>)>
-		void AutoConstructToPromise(Promise&& promise, StringSection<> initializer)
+		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)
 	{
 		const char* p = XlFindChar(initializer, ':');
 		if (p) {

@@ -25,6 +25,7 @@
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/Continuation.h"
 #include "../../Math/Transformations.h"
 #include "../../xleres/FileList.h"
 

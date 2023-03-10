@@ -11,6 +11,7 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/AssetUtils.h"
 #include "../../OSServices/Log.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/FormatterUtils.h"

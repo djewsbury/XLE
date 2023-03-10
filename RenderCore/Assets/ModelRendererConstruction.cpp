@@ -9,6 +9,7 @@
 #include "MaterialScaffold.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
+#include "../../Assets/IArtifact.h"
 
 namespace RenderCore { namespace Assets
 {

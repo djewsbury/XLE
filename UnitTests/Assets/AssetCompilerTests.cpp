@@ -14,6 +14,7 @@
 #include "../../Assets/InitializerPack.h"
 #include "../../Assets/DeferredConstruction.h"
 #include "../../Assets/AssetServices.h"
+#include "../../Assets/IArtifact.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../OSServices/AttachableLibrary.h"
@@ -574,6 +575,8 @@ namespace UnitTests
 
 		{
 			std::unique_lock<std::mutex> pauseLock { TestCompileOperation::s_pauseCompilationLock };
+
+			static_assert(::Assets::Internal::HasConstructToPromiseFreeOverride<std::promise<TestChunkRequestsAssetWithCompileProcessType>, std::shared_ptr<::Assets::OperationContext>, const char*>::value);
 
 			// begin a compile (it don't complete yet because of the pause lock)
 			auto futureByPtr = ::Assets::ConstructToMarkerPtr<TestChunkRequestsAssetWithCompileProcessType>(opContext, "unit-test-asset-op-context");

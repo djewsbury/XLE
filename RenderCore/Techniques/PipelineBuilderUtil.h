@@ -16,6 +16,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/IArtifact.h"
 #include "../../Utility/Streams/PathUtils.h"
 
 namespace RenderCore { namespace Techniques { namespace Internal

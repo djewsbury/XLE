@@ -11,6 +11,7 @@
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
+#include "../../Assets/IArtifact.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
 #include "../../Formatters/StreamDOM.h"

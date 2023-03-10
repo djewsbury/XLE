@@ -27,6 +27,7 @@
 #include "../Assets/Assets.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/ConfigFileContainer.h"
+#include "../Assets/Continuation.h"
 #include "../Math/Transformations.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../xleres/FileList.h"

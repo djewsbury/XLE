@@ -229,6 +229,13 @@ namespace Assets
 			using HasConstructToPromiseFromBlob = HasConstructToPromiseFromBlob_<PromiseType>;
 	}
 
+}
+
+#include "ChunkFileContainer.h"	// todo -- hack
+
+namespace Assets
+{
+
 	//
 	//		Auto construct to:
 	//			(IteratorRange<ArtifactRequestResult*>, DependencyValidation&&)
@@ -446,24 +453,22 @@ namespace Assets
 
 	template<
 		typename Promise, typename... Params,
-		ENABLE_IF(	Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-				&& !Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
-		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
+		ENABLE_IF(Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType)>
+		void AutoConstructToPromiseOverride(Promise&& promise, Params&&... initialisers)
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[initPack=InitializerPack{initialisers...}, promise=std::move(promise)]() mutable {
+			[initPack=InitializerPack{std::forward<Params>(initialisers)...}, promise=std::move(promise)]() mutable {
 				DefaultCompilerConstructionSynchronously(std::move(promise), Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack));
 			});
 	}
 
 	template<
 		typename Promise, typename... Params,
-		ENABLE_IF(	Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-				&& !Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
-		void AutoConstructToPromise(Promise&& promise, std::shared_ptr<OperationContext> opContext, Params&&... initialisers)
+		ENABLE_IF(Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType)>
+		void AutoConstructToPromiseOverride(Promise&& promise, std::shared_ptr<OperationContext> opContext, Params&&... initialisers)
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[initPack=InitializerPack{initialisers...}, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
+			[initPack=InitializerPack{std::forward<Params>(initialisers)...}, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
 				DefaultCompilerConstructionSynchronously(std::move(promise), Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack), opContext.get());
 			});
 	}
@@ -471,9 +476,8 @@ namespace Assets
 	template<
 		typename Promise,
 		ENABLE_IF(	Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests 
-				&&  !Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-				&&  !Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, StringSection<>>::value)>
-		void AutoConstructToPromise(Promise&& promise, StringSection<> initializer)
+				&&  !Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType)>
+		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
 		WhenAll(containerFuture).ThenConstructToPromise(
@@ -484,8 +488,50 @@ namespace Assets
 			});
 	}
 
-	#undef ENABLE_IF
-
 }
 
+#if 0
+namespace Utility
+{
+	template<
+		typename Promise, typename... Params,
+		ENABLE_IF(::Assets::Internal::AssetTraits2<::Assets::Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType)>
+		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> p0, StringSection<> p1)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[initPack=::Assets::InitializerPack{p0, p1}, promise=std::move(promise)]() mutable {
+				::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), ::Assets::Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack));
+			});
+	}
+}
+#endif
+
+#if 1	// hack -- for testing
+namespace std
+{
+	template<
+		typename PromisedType, typename... Params,
+		ENABLE_IF(::Assets::Internal::AssetTraits2<PromisedType>::HasCompileProcessType)>
+		void AutoConstructToPromiseOverride(std::promise<PromisedType>&& promise, Params&&... initialisers)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[initPack=::Assets::InitializerPack{std::forward<Params>(initialisers)...}, promise=std::move(promise)]() mutable {
+				::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), ::Assets::Internal::RemoveSmartPtrType<PromisedType>::CompileProcessType, std::move(initPack));
+			});
+	}
+
+	template<
+		typename PromisedType, typename... Params,
+		ENABLE_IF(::Assets::Internal::AssetTraits2<PromisedType>::HasCompileProcessType)>
+		void AutoConstructToPromiseOverride(std::promise<PromisedType>&& promise, std::shared_ptr<::Assets::OperationContext> opContext, Params&&... initialisers)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[initPack=::Assets::InitializerPack{std::forward<Params>(initialisers)...}, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
+				::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), ::Assets::Internal::RemoveSmartPtrType<PromisedType>::CompileProcessType, std::move(initPack), opContext.get());
+			});
+	}
+}
+#endif
+
+#undef ENABLE_IF
 

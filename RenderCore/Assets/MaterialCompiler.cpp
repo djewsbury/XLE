@@ -16,6 +16,7 @@
 #include "../../Assets/MemoryFile.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/CompileAndAsyncManager.h"
+#include "../../Assets/IArtifact.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/TextFormatter.h"

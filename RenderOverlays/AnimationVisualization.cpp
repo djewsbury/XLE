@@ -14,6 +14,7 @@
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Types.h"
 #include "../Assets/Assets.h"
+#include "../Assets/Continuation.h"
 #include "../ConsoleRig/ResourceBox.h"
 
 namespace RenderOverlays

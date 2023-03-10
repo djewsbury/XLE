@@ -32,6 +32,7 @@
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/ConfigFileContainer.h"
+#include "../../../Assets/Continuation.h"
 #include "../../../Utility/ArithmeticUtils.h"
 #include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"

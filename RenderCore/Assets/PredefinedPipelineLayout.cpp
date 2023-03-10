@@ -11,6 +11,7 @@
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/PreprocessorIncludeHandler.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/Continuation.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"

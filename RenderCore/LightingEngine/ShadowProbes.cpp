@@ -18,6 +18,7 @@
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 
 using namespace Utility::Literals;

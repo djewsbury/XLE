@@ -10,6 +10,7 @@
 #include "../../Formatters/TextFormatter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/BlockSerializer.h"
+#include "../../Assets/IArtifact.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 
 namespace RenderCore { namespace Assets

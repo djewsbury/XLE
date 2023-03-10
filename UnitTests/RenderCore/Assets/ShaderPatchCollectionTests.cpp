@@ -28,6 +28,7 @@
 #include "../../../Assets/InitializerPack.h"
 #include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/AssetServices.h"
+#include "../../../Assets/IArtifact.h"
 #include "../../../ConsoleRig/Console.h"
 #include "../../../OSServices/Log.h"
 #include "../../../OSServices/FileSystemMonitor.h"

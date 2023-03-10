@@ -16,6 +16,7 @@
 #include "../Techniques/CommonBindings.h"
 #include "../../Utility/PtrUtils.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 #include <utility>
 

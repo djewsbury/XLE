@@ -20,6 +20,7 @@
 #include "../../RenderCore/BufferView.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/Continuation.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/StringFormat.h"
 #include "../../xleres/FileList.h"
