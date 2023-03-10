@@ -162,7 +162,7 @@ namespace Assets
 		typename Promise, 
 		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedType<Promise>>::Constructor_Formatter
 					&& !Internal::AssetTraits<Internal::PromisedType<Promise>>::HasCompileProcessType
-					&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, StringSection<>>::value
+					&& !Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, StringSection<>>::value
 					&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>)>
 		void AutoConstructToPromise(Promise&& promise, StringSection<> initializer)
 	{

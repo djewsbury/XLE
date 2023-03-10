@@ -5,8 +5,6 @@
 #pragma once
 
 #include "AssetsCore.h"		// (for ResChar)
-#include "ChunkFileContainer.h"
-#include "DepVal.h"
 #include "IFileSystem.h"
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
@@ -20,7 +18,6 @@ namespace std { template<typename T> class shared_future; }
 
 namespace Assets
 {
-	template <typename Asset> class DivergentAsset;
 	class DirectorySearchRules;
 	class ChunkFileContainer;
 	class ArtifactRequest;
@@ -34,37 +31,10 @@ namespace Assets
 		template <typename AssetType>
 			class AssetTraits_
 		{
-		private:
-			struct HasCompileProcessTypeHelper
-			{
-				struct FakeBase { static const uint64_t CompileProcessType; };
-				struct TestSubject : public FakeBase, public AssetType {};
-
-				template <typename C, C> struct Check;
-
-				// This technique is based on an implementation from StackOverflow. Here, taking the address
-				// of the static member variable in TestSubject would be ambiguous, iff CompileProcessType 
-				// is actually a member of AssetType (otherwise, the member in FakeBase is found)
-				template <typename C> static std::false_type Test(Check<const uint64_t*, &C::CompileProcessType> *);
-				template <typename> static std::true_type Test(...);
-
-				static const bool value = decltype(Test<TestSubject>(0))::value;
-			};
-
-			template<typename T> static auto HasChunkRequestsHelper(int) -> decltype(&T::ChunkRequests[0], std::true_type{});
-			template<typename...> static auto HasChunkRequestsHelper(...) -> std::false_type;
-
 		public:
-			using DivAsset = DivergentAsset<AssetType>;
-
 			static const bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>, DirectorySearchRules&&, DependencyValidation&&>::value;
 			static const bool Constructor_ChunkFileContainer = std::is_constructible<AssetType, const ChunkFileContainer&>::value && !std::is_same_v<AssetType, ChunkFileContainer>;
 			static const bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, DirectorySearchRules&&, DependencyValidation&&>::value;
-			static const bool Constructor_Blob = std::is_constructible<AssetType, ::Assets::Blob&&, DependencyValidation&&, StringSection<>>::value;
-			static const bool Constructor_ArtifactRequestResult = std::is_constructible<AssetType, IteratorRange<ArtifactRequestResult*>, DependencyValidation&&>::value;
-
-			static const bool HasCompileProcessType = HasCompileProcessTypeHelper::value;
-			static const bool HasChunkRequests = decltype(HasChunkRequestsHelper<AssetType>(0))::value;
 		};
 
 		template<typename AssetType> static auto RemoveSmartPtr_Helper(int) -> typename AssetType::element_type;
@@ -81,15 +51,15 @@ namespace Assets
 			using AssetTraits = AssetTraits_<std::decay_t<RemoveSmartPtrType<AssetType>>>;
 
 		template<typename AssetOrPtrType, typename... Params>
-			static auto HasConstructToPromiseOverride_Helper(int) -> decltype(
+			static auto HasConstructToPromiseClassOverride_Helper(int) -> decltype(
 				Internal::RemoveSmartPtrType<AssetOrPtrType>::ConstructToPromise(std::declval<std::promise<AssetOrPtrType>&&>(), std::declval<Params>()...), 
 				std::true_type{});
 
 		template<typename...>
-			static auto HasConstructToPromiseOverride_Helper(...) -> std::false_type;
+			static auto HasConstructToPromiseClassOverride_Helper(...) -> std::false_type;
 
 		template<typename AssetOrPtrType, typename... Params>
-			struct HasConstructToPromiseOverride : decltype(HasConstructToPromiseOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
+			struct HasConstructToPromiseClassOverride : decltype(HasConstructToPromiseClassOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -151,67 +121,6 @@ namespace Assets
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH_END
-	}
-
-	//
-	//		Auto construct to:
-	//			(IteratorRange<ArtifactRequestResult>, const DependencyValidation&)
-	//
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::HasChunkRequests)>
-		AssetType AutoConstructAsset(StringSection<> initializer)
-	{
-		// See also AutoConstructToPromise<> variation of this function
-		const auto& container = Internal::GetChunkFileContainer(initializer);
-		TRY {
-			auto chunks = container.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
-			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), container.GetDependencyValidation());
-		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-		} CATCH (const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-		} CATCH_END
-	}
-
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::HasChunkRequests)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
-	{
-		TRY {
-			auto chunks = ChunkFileContainer(blob, depVal, requestParameters).ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
-			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), depVal);
-		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH (const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH_END
-	}
-
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::HasChunkRequests)>
-		AssetType AutoConstructAsset(const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = 0)
-	{
-		TRY {
-			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
-			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
-		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
-		} CATCH (const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
-		} CATCH_END
-	}
-
-	template<typename AssetType, typename... Params, ENABLE_IF(!Internal::AssetTraits<AssetType>::HasChunkRequests)>
-		AssetType AutoConstructAsset(const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::RemoveSmartPtrType<AssetType>::CompileProcessType)
-	{
-		TRY {
-			ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
-			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
-			if (chunks.empty() || !chunks[0]._sharedBlob)
-				Throw(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), AsBlob("Default compilation result chunk not found")});
-			return AutoConstructAsset<AssetType>(std::move(chunks[0]._sharedBlob), artifactCollection.GetDependencyValidation(), StringSection<>{});
-		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
-		} CATCH (const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
 		} CATCH_END
 	}
 

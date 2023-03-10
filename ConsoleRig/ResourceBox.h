@@ -69,7 +69,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToPromiseClassOverride<std::shared_ptr<Box>, Params...>::value,
 			Box&> FindCachedBox(Params&&... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -91,7 +91,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			!::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && !::Assets::Internal::HasConstructToPromiseClassOverride<std::shared_ptr<Box>, Params...>::value,
 			Box&> FindCachedBox(Params&&... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -110,7 +110,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseClassOverride<std::shared_ptr<Box>, Params...>::value,
 			Box&> FindCachedBox(Params&&... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -134,7 +134,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseClassOverride<std::shared_ptr<Box>, Params...>::value,
 			Box&> FindCachedBox(Params&&... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -155,7 +155,7 @@ namespace ConsoleRig
 	
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
+			::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseClassOverride<std::shared_ptr<Box>, Params...>::value,
 			Box*> TryActualizeCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
@@ -183,7 +183,7 @@ namespace ConsoleRig
 
 	template <typename Box, typename... Params> 
 		std::enable_if_t<
-			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseOverride<std::shared_ptr<Box>, Params...>::value,
+			!::Assets::Internal::HasGetDependencyValidation<Box>::value && ::Assets::Internal::HasConstructToPromiseClassOverride<std::shared_ptr<Box>, Params...>::value,
 			Box*> TryActualizeCachedBox(Params... params)
 	{
 		auto hashValue = ::Assets::Internal::BuildParamHash(params...);

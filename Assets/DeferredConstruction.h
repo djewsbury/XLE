@@ -7,12 +7,7 @@
 #include "InitializerPack.h"
 #include "Marker.h"
 #include "AssetTraits.h"
-#include "Continuation.h"
-#include "ContinuationUtil.h"
-#include "IArtifact.h"
-#include "IntermediateCompilers.h"
-#include "OperationContext.h"
-#include "../ConsoleRig/GlobalServices.h"
+#include "../ConsoleRig/GlobalServices.h"		// for GetLongTaskThreadPool
 #include "../OSServices/Log.h"
 #include "../Utility/Threading/CompletionThreadPool.h"
 #include "../Utility/StringUtils.h"		// required for implied StringSection<> constructor
@@ -31,63 +26,12 @@
 
 namespace Assets
 {
-	class IIntermediateCompileMarker;
-	class OperationContext;
-
-	namespace Internal 
-	{
-		std::shared_ptr<IIntermediateCompileMarker> BeginCompileOperation(CompileRequestCode targetCode, InitializerPack&&);
-	}
-
 	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
-
-	namespace Internal
-	{
-		// Note -- here's a useful pattern that can turn any expression in a SFINAE condition
-		// Taken from stack overflow -- https://stackoverflow.com/questions/257288/is-it-possible-to-write-a-template-to-check-for-a-functions-existence
-		// If the expression in the first decltype() is invalid, we will trigger SFINAE and fall back to std::false_type
-		template<typename PromiseType>
-			static auto HasConstructToPromiseFromBlob_Helper(int) -> decltype(PromisedTypeRemPtr<PromiseType>::ConstructToPromise(std::declval<PromiseType&&>(), std::declval<Blob&&>(), std::declval<DependencyValidation&&>(), std::declval<StringSection<>>()), std::true_type{});
-
-		template<typename...>
-			static auto HasConstructToPromiseFromBlob_Helper(...) -> std::false_type;
-
-		template<typename PromiseType>
-			struct HasConstructToPromiseFromBlob_ : decltype(HasConstructToPromiseFromBlob_Helper<PromiseType>(0)) {};
-
-		template<typename PromiseType>
-			using HasConstructToPromiseFromBlob = HasConstructToPromiseFromBlob_<PromiseType>;
-	}
-
-	template<typename Promise, ENABLE_IF(Internal::HasConstructToPromiseFromBlob<Promise>::value)>
-		void AutoConstructToPromiseSynchronously(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
-	{
-		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
-			promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)}));
-			return;
-		}
-
-		TRY {
-			ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
-			auto reqRes = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
-			if (!reqRes.empty()) {
-				AutoConstructToPromiseSynchronously(
-					promise,
-					std::move(reqRes[0]._sharedBlob),
-					artifactCollection.GetDependencyValidation(),
-					artifactCollection.GetRequestParameters());
-			} else {
-				promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), AsBlob("Default compilation result chunk not found")}));
-			}
-		} CATCH(...) {
-			promise.set_exception(std::current_exception());
-		} CATCH_END
-	}
 
 	template<typename Promise, typename... Params>
 		void AutoConstructToPromiseSynchronously(Promise&& promise, Params&&... initialisers)
 	{
-		if constexpr (Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
+		if constexpr (Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
 			TRY {
 				Internal::PromisedTypeRemPtr<Promise>::ConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
 			} CATCH(const std::exception& e) {
@@ -103,153 +47,6 @@ namespace Assets
 				promise.set_exception(std::current_exception());
 			} CATCH_END
 		}
-	}
-
-	template<typename Promise>
-		void AutoConstructToPromiseFromPendingCompile(Promise&& promise, const ArtifactCollectionFuture& pendingCompile, CompileRequestCode targetCode = Internal::RemoveSmartPtrType<Internal::PromisedType<Promise>>::CompileProcessType)
-	{
-		::Assets::PollToPromise(
-			std::move(promise),
-			[pendingCompile](auto timeout) {
-				auto stallResult = pendingCompile.StallWhilePending(timeout);
-				if (stallResult.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending)
-					return ::Assets::PollStatus::Continue;
-				return ::Assets::PollStatus::Finish;
-			},
-			[pendingCompile, targetCode](Promise&& promise) {
-				TRY {
-					AutoConstructToPromiseSynchronously(std::move(promise), pendingCompile.GetArtifactCollection(), targetCode);
-				} CATCH (...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
-			});
-	}
-
-	template<typename Promise>
-		static void DefaultCompilerConstructionSynchronously(
-			Promise&& promise,
-			CompileRequestCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
-			InitializerPack&& initializerPack,
-			OperationContext* operationContext = nullptr)
-	{
-		// Begin a compilation operation via the registered compilers for this type.
-		// Our deferred constructor will wait for the completion of that compilation operation,
-		// and then construct the final asset from the result
-		// We use the "short" task pool here, because we're assuming that construction of the asset
-		// from a precompiled result is quick, but actual compilation would take much longer
-
-		TRY {
-			std::string initializerLabel;
-			#if defined(_DEBUG)
-				initializerLabel = initializerPack.ArchivableName();
-			#else
-				if (operationContext) initializerLabel = initializerPack.ArchivableName();
-			#endif
-
-			auto marker = Internal::BeginCompileOperation(targetCode, std::move(initializerPack));
-			if (!marker) {
-				#if defined(_DEBUG)
-					Throw(std::runtime_error("No compiler found for asset (" + initializerLabel + ")"));
-				#else
-					Throw(std::runtime_error("No compiler found for asset"));
-				#endif
-			}
-
-			// Attempt to load the existing asset immediately. In some cases we should fall back to a recompile (such as, if the
-			// version number is bad). We could attempt to push this into a background thread, also
-
-			auto artifactQuery = marker->GetArtifact(targetCode);
-			if (artifactQuery.first) {
-				AutoConstructToPromiseSynchronously(std::move(promise), *artifactQuery.first, targetCode);
-			} else {
-				assert(artifactQuery.second.Valid());
-				AutoConstructToPromiseFromPendingCompile(std::move(promise), artifactQuery.second, targetCode);
-
-				if (operationContext) {
-					auto operation = operationContext->Begin(Concatenate("Compiling (", initializerLabel, ") with compiler (", marker->GetCompilerDescription(), ")"));
-					operation.EndWithFuture(artifactQuery.second.ShareFuture());
-				}
-			}
-		} CATCH(...) {
-			promise.set_exception(std::current_exception());
-		} CATCH_END
-	}
-
-	template<typename Promise>
-		static void DefaultCompilerConstructionSynchronously(
-			Promise&& promise,
-			CompileRequestCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
-			InitializerPack&& initializerPack,
-			VariantFunctions&& progressiveResultConduit,
-			OperationContext* operationContext = nullptr)
-	{
-		// Begin a compilation operation via the registered compilers for this type.
-		// Our deferred constructor will wait for the completion of that compilation operation,
-		// and then construct the final asset from the result
-		// We use the "short" task pool here, because we're assuming that construction of the asset
-		// from a precompiled result is quick, but actual compilation would take much longer
-
-		TRY {
-			std::string initializerLabel;
-			#if defined(_DEBUG)
-				initializerLabel = initializerPack.ArchivableName();
-			#else
-				if (operationContext) initializerLabel = initializerPack.ArchivableName();
-			#endif
-
-			auto marker = Internal::BeginCompileOperation(targetCode, std::move(initializerPack));
-			if (!marker) {
-				#if defined(_DEBUG)
-					Throw(std::runtime_error("No compiler found for asset (" + initializerLabel + ")"));
-				#else
-					Throw(std::runtime_error("No compiler found for asset"));
-				#endif
-			}
-
-			marker->AttachConduit(std::move(progressiveResultConduit));
-
-			// Attempt to load the existing asset immediately. In some cases we should fall back to a recompile (such as, if the
-			// version number is bad). We could attempt to push this into a background thread, also
-
-			auto artifactQuery = marker->GetArtifact(targetCode);
-			if (artifactQuery.first) {
-				AutoConstructToPromiseSynchronously(std::move(promise), *artifactQuery.first, targetCode);
-			} else {
-				assert(artifactQuery.second.Valid());
-				AutoConstructToPromiseFromPendingCompile(std::move(promise), artifactQuery.second, targetCode);
-
-				if (operationContext) {
-					auto operation = operationContext->Begin(Concatenate("Compiling (", initializerLabel, ") with compiler (", marker->GetCompilerDescription(), ")"));
-					operation.EndWithFuture(artifactQuery.second.ShareFuture());
-				}
-			}
-		} CATCH(...) {
-			promise.set_exception(std::current_exception());
-		} CATCH_END
-	}
-
-	template<
-		typename Promise, typename... Params,
-		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-				&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
-		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
-	{
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[initPack=InitializerPack{initialisers...}, promise=std::move(promise)]() mutable {
-				DefaultCompilerConstructionSynchronously(std::move(promise), Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack));
-			});
-	}
-
-	template<
-		typename Promise, typename... Params,
-		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-				&& !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
-		void AutoConstructToPromise(Promise&& promise, std::shared_ptr<OperationContext> opContext, Params&&... initialisers)
-	{
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[initPack=InitializerPack{initialisers...}, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
-				DefaultCompilerConstructionSynchronously(std::move(promise), Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack), opContext.get());
-			});
 	}
 
 	namespace Internal
@@ -270,62 +67,29 @@ namespace Assets
 
 	template<
 		typename Promise, typename... Params,
-		ENABLE_IF(	!Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType
-				&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
+		ENABLE_IF(	!Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
 		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[initializersTuple=std::tuple{MakeStoreableInAny(initialisers)...}, promise=std::move(promise)]() mutable {
-				TRY {
-
-					#if 0
-						// We can use std::apply to achieve AutoConstructToPromiseSynchronously(promise, initialisers...)
-						// however, this approach seems brittle; particularly as the types in the tuple are often not the
-						// same as the AutoConstructToPromiseSynchronously override uses
-						// This approach also does not produce clear compile error messages when a variation can't be found
-						using OverrideType = void(*)(Promise&&, decltype(MakeStoreableInAny(std::declval<Params>()))&&...);
-						auto* ptr = (OverrideType)&AutoConstructToPromiseSynchronously;
-						std::apply(ptr, std::tuple_cat(std::make_tuple(std::move(promise)), std::move(initializersTuple)));
-					#else
+		// note very similar "AutoConstructToPromiseSynchronously"
+		if constexpr (Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
+			TRY {
+				Internal::PromisedTypeRemPtr<Promise>::ConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+			} CATCH(const std::exception& e) {
+				Log(Error) << "Suppressing exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
+				Log(Error) << e.what() << std::endl;
+			} CATCH(...) {
+				Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
+			} CATCH_END
+		} else {
+			ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+				[initializersTuple=std::tuple{MakeStoreableInAny(initialisers)...}, promise=std::move(promise)]() mutable {
+					TRY {
 						Internal::ApplyAutoConstructToPromise(std::move(promise), std::move(initializersTuple));
-					#endif
-
-				} CATCH(...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
-			});
-	}
-
-	template<
-		typename Promise, typename... Params, 
-		ENABLE_IF(Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, Params&&...>::value)>
-		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
-	{
-		// Note that there are identical overrides for AutoConstructToPromise & AutoConstructToPromiseSynchronously
-		TRY {
-			Internal::PromisedTypeRemPtr<Promise>::ConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
-		} CATCH(const std::exception& e) {
-			Log(Error) << "Suppressing exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
-			Log(Error) << e.what() << std::endl;
-		} CATCH(...) {
-			Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
-		} CATCH_END
-	}
-
-	template<
-		typename Promise,
-		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests 
-				&&  !Internal::AssetTraits<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType 
-				&&  !Internal::HasConstructToPromiseOverride<Internal::PromisedType<Promise>, StringSection<>>::value)>
-		void AutoConstructToPromise(Promise&& promise, StringSection<> initializer)
-	{
-		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
-		WhenAll(containerFuture).ThenConstructToPromise(
-			std::move(promise),
-			[](const std::shared_ptr<ChunkFileContainer>& container) {
-				auto chunks = container->ResolveRequests(MakeIteratorRange(Internal::PromisedTypeRemPtr<Promise>::ChunkRequests));
-				return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(MakeIteratorRange(chunks), container->GetDependencyValidation());
-			});
+					} CATCH(...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
 	}
 
 	template<typename AssetType, typename... Params>

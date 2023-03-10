@@ -4,6 +4,7 @@
 #if !defined(__CLR_VER)
 #include "Marker.h"
 #include "DeferredConstruction.h"
+#include "InitializerPack.h"
 #include "../Utility/Threading/Mutex.h"
 #endif
 #include "../Utility/MemoryUtils.h"
