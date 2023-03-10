@@ -24,9 +24,8 @@
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/DepVal.h"
-#include "../../../Assets/DeferredConstruction.h"
+#include "../../../Assets/AssetTraits.h"
 #include "../../../Assets/InitializerPack.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/IArtifact.h"
 #include "../../../ConsoleRig/Console.h"
@@ -214,7 +213,7 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto mnt1 = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::EnableChangeMonitoring));
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
 
 		RenderCore::Assets::PredefinedPipelineLayoutFile pipelineLayoutFile(TechniqueTestApparatus::UnitTestPipelineLayout, {}, {});

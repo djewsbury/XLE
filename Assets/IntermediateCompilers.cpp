@@ -92,8 +92,7 @@ namespace Assets
 
 		virtual void FlushCachedMarkers() override;
 
-		IntermediateCompilers(
-			const std::shared_ptr<IntermediatesStore>& store);
+		IntermediateCompilers(std::shared_ptr<IntermediatesStore> store);
         ~IntermediateCompilers();
     protected:
 		class Marker;
@@ -604,18 +603,17 @@ namespace Assets
 		_markers.clear();
 	}
 
-	IntermediateCompilers::IntermediateCompilers(
-		const std::shared_ptr<IntermediatesStore>& store)
-	: _store(store)
+	IntermediateCompilers::IntermediateCompilers(std::shared_ptr<IntermediatesStore> store)
+	: _store(std::move(store))
 	{ 
 	}
 	IntermediateCompilers::~IntermediateCompilers() {}
 
 	IIntermediateCompileMarker::~IIntermediateCompileMarker() {}
 
-	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(const std::shared_ptr<IntermediatesStore>& store)
+	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(std::shared_ptr<IntermediatesStore> store)
 	{
-		return std::make_shared<IntermediateCompilers>(store);
+		return std::make_shared<IntermediateCompilers>(std::move(store));
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

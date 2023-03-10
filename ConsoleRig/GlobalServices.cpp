@@ -16,8 +16,8 @@
 #include "../Assets/MountingTree.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetSetManager.h"
-#include "../Assets/CompileAndAsyncManager.h"
 #include "../Assets/IntermediatesStore.h"
+#include "../Assets/IntermediateCompilers.h"
 #include "../Assets/ContinuationExecutor.h"
 #include "../Utility/Threading/CompletionThreadPool.h"
 #include "../OSServices/RawFS.h"
@@ -36,6 +36,7 @@
 #include <assert.h>
 #include <random>
 #include <typeinfo>
+#include <filesystem>
 
 extern "C" const char ConsoleRig_VersionString[];
 extern "C" const char ConsoleRig_BuildDateString[];
@@ -192,6 +193,8 @@ namespace ConsoleRig
             return i->second.get();
         }
 		IBoxTable::~IBoxTable() {}
+
+        static std::shared_ptr<::Assets::IntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,7 +214,8 @@ namespace ConsoleRig
         AttachablePtr<::Assets::IDependencyValidationSystem> _depValSys;
         std::shared_ptr<::Assets::IFileSystem> _defaultFilesystem;
         std::shared_ptr<::Assets::MountingTree> _mountingTree;
-        AttachablePtr<::Assets::CompileAndAsyncManager> _compileAndAsyncManager;
+        AttachablePtr<::Assets::IntermediatesStore> _intermediatesStore;
+        AttachablePtr<::Assets::IIntermediateCompilers> _intermediatesCompilers;
         AttachablePtr<::Assets::AssetSetManager> _assetsSetsManager;
 	};
 
@@ -239,8 +243,13 @@ namespace ConsoleRig
         _pimpl->_defaultFilesystem = ::Assets::CreateFileSystem_OS({}, _pimpl->_pollingThread, ::Assets::OSFileSystemFlags::AllowAbsolute);
         _pimpl->_mountingTree = std::make_shared<::Assets::MountingTree>(s_defaultFilenameRules);
 
-        if (!_pimpl->_compileAndAsyncManager)
-            _pimpl->_compileAndAsyncManager = std::make_shared<::Assets::CompileAndAsyncManager>(cfg._inMemoryOnlyIntermediates ? nullptr : _pimpl->_defaultFilesystem);
+        if (!_pimpl->_intermediatesStore) {
+            auto store = Internal::CreateIntermediatesStore(cfg._inMemoryOnlyIntermediates ? nullptr : _pimpl->_defaultFilesystem);
+            _pimpl->_intermediatesStore = store;
+            _pimpl->_intermediatesCompilers = ::Assets::CreateIntermediateCompilers(store);
+        }
+
+        assert(_pimpl->_intermediatesCompilers);
 
         if (!_pimpl->_assetsSetsManager)
             _pimpl->_assetsSetsManager = std::make_shared<::Assets::AssetSetManager>();
@@ -269,8 +278,9 @@ namespace ConsoleRig
         _pimpl->_shortTaskPool = nullptr;
         _pimpl->_longTaskPool = nullptr;
         _pimpl->_logCfg = nullptr;
+        _pimpl->_intermediatesCompilers = nullptr;
+        _pimpl->_intermediatesStore = nullptr;
         _pimpl->_assetsSetsManager = nullptr;
-        _pimpl->_compileAndAsyncManager = nullptr;
         _pimpl->_mountingTree = nullptr;
         _pimpl->_defaultFilesystem = nullptr;
         _pimpl->_depValSys = nullptr;
@@ -453,6 +463,36 @@ namespace ConsoleRig
 
     LogCentralConfiguration::~LogCentralConfiguration() 
     {
+    }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    namespace Internal
+    {
+        std::shared_ptr<::Assets::IntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem)
+        {
+            const char storeVersionString[] = "0.0.0";
+            #if defined(_DEBUG)
+                #if TARGET_64BIT
+                    const char storeConfigString[] = "d64";
+                #else
+                    const char storeConfigString[] = "d";
+                #endif
+            #else
+                #if TARGET_64BIT
+                    const char storeConfigString[] = "r64";
+                #else
+                    const char storeConfigString[] = "r";
+                #endif
+            #endif
+
+            auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
+            if (intermediatesFilesystem) {
+                return std::make_shared<::Assets::IntermediatesStore>(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString);
+            } else {
+                return std::make_shared<::Assets::IntermediatesStore>();
+            }
+        }
     }
 
 }

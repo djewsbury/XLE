@@ -223,9 +223,9 @@ namespace Assets
 		{
 			// This can be called while the asset set manager is being shutdown; at that time it is
 			// not available as a singleton
-			if (Services::HasAssetSets()) {
-				Services::GetAssetSets().DeregisterFrameBarrierCallback(markerId);
-				Services::GetAssetSets().HintMarkerUpdated(typeHint);
+			if (auto assetSets = Services::GetAssetSetsPtr()) {
+				assetSets->DeregisterFrameBarrierCallback(markerId);
+				assetSets->HintMarkerUpdated(typeHint);
 			}
 		}
 

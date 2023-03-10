@@ -17,7 +17,6 @@
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/AssetTraits.h"
 #include "../../../Assets/AssetServices.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Math/Vector.h"
 #include "../../../Math/MathSerialization.h"
@@ -71,7 +70,7 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
 		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 
 		auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 		auto modelRegistration = UnitTests::RegisterFakeModelCompiler(compilers);
@@ -176,7 +175,7 @@ namespace UnitTests
 		cfg._inMemoryOnlyIntermediates = true;
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 
 		auto modelRegistration = UnitTests::RegisterFakeModelCompiler(compilers);
 
@@ -232,7 +231,7 @@ namespace UnitTests
 	{
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 
 		{

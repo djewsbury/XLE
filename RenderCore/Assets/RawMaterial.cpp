@@ -7,7 +7,7 @@
 #include "RawMaterial.h"
 #include "../StateDesc.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/DeferredConstruction.h"
+#include "../../Assets/AssetTraits.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"

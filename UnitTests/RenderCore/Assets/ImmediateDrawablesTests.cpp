@@ -29,7 +29,6 @@
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/AssetSetManager.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../../Math/Transformations.h"
@@ -99,7 +98,7 @@ namespace UnitTests
 		techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());
 		techniqueServices->RegisterTextureLoader("*", RenderCore::Assets::CreateWICTextureLoader());
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
 		auto shaderCompilerRegistration = RegisterShaderCompiler(testHelper->_shaderSource, compilers, GetDefaultShaderCompilationFlags(*testHelper->_device));
 		auto shaderCompiler2Registration = Techniques::RegisterInstantiateShaderGraphCompiler(testHelper->_shaderSource, compilers);

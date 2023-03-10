@@ -4,17 +4,16 @@
 
 #pragma once
 
-#include "AssetsCore.h"		// (for ResChar)
 #include "IFileSystem.h"
+#include "InitializerPack.h"
+#include "Marker.h"		// used by ConstructToMarker
+#include "../OSServices/Log.h"
+#include "../Utility/Threading/CompletionThreadPool.h"
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
 #include <assert.h>
-
-namespace Formatters
-{
-	template<typename CharType> class TextInputFormatter;
-}
-namespace std { template<typename T> class shared_future; }
+#include <memory>
+#include <future>
 
 namespace Assets
 {
@@ -22,7 +21,7 @@ namespace Assets
 	class ArtifactChunkContainer;
 	class ArtifactRequest;
     class IArtifactCollection;
-	DirectorySearchRules DefaultDirectorySearchRules(StringSection<ResChar>);
+	DirectorySearchRules DefaultDirectorySearchRules(StringSection<>);
 
 	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
 
@@ -135,7 +134,174 @@ namespace Assets
 		return Internal::InvokeAssetConstructor<AssetType>(std::forward<Params>(initialisers)...);
 	}
 
-	#undef ENABLE_IF
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	/// <summary>Helper class for defeating C++ unqualified name lookup rules</summary>
+	///
+	/// When an unqualified function is referenced from a template function/method, normally the 
+	/// function declaration must be visible in the compilation context of the first pass of that 
+	/// template function/method.
+	///
+	/// In other words, even if there is an implementation or override for the function visible to
+	/// the instantiation context, it can't be used unless it was also visible to the first pass.
+	///
+	/// In practices, this requires the DeferredConstruction header to be included after all possible
+	/// overrides of AutoConstructToPromiseOverride (and other similar functions)
+	///
+	/// However, the above rule is broken for the case of argument dependant lookup (ADL). In that case, all
+	/// possibilities in the instantiation context are considered.
+	/// In the C++ standard, this is 14.6.4.2
+	///
+	/// We want AutoConstructToPromiseOverride to take on this ADL behaviour, to enable greater flexibility
+	/// and avoid awkward restrictions about include order.
+	///
+	/// To do this, we replace std::promise<> with an near-identical class in Assets, and this causes
+	/// ADL to kick in and find the AutoConstructToPromiseOverride implementations in Assets. This works
+	/// even if all of the arguments in AutoConstructToPromiseOverride are templated -- ie, it's just the
+	/// fact that we're passing in an object from the Assets namespace that causes all of the overrides
+	/// in Assets to be found with the preferred behaviour.
+	///
+	template<typename T>
+		class WrappedPromise : public std::promise<T>
+	{
+	public:
+		WrappedPromise(std::promise<T>&& p) : std::promise<T>(std::move(p)) {}
+		WrappedPromise() {}
+		using std::promise<T>::operator=;
+	};
+
+	namespace Internal
+	{
+		template<typename AssetOrPtrType, typename... Params>
+			static auto HasConstructToPromiseClassOverride_Helper(int) -> decltype(
+				Internal::RemoveSmartPtrType<AssetOrPtrType>::ConstructToPromise(std::declval<std::promise<AssetOrPtrType>&&>(), std::declval<Params>()...),
+				std::true_type{});
+
+		template<typename...>
+			static auto HasConstructToPromiseClassOverride_Helper(...) -> std::false_type;
+
+		template<typename AssetOrPtrType, typename... Params>
+			struct HasConstructToPromiseClassOverride : decltype(HasConstructToPromiseClassOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
+
+		template<typename AssetOrPtrType, typename... Params>
+			static auto HasConstructToPromiseFreeOverride_Helper(int) -> decltype(
+				AutoConstructToPromiseOverride(std::declval<WrappedPromise<AssetOrPtrType>&&>(), std::declval<Params>()...),
+				std::true_type{});
+
+		template<typename...>
+			static auto HasConstructToPromiseFreeOverride_Helper(...) -> std::false_type;
+
+		template<typename AssetOrPtrType, typename... Params>
+			struct HasConstructToPromiseFreeOverride : decltype(HasConstructToPromiseFreeOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
+
+		ThreadPool& GetLongTaskThreadPool();
+	}
+
+	template<typename Promise, typename... Params>
+		void AutoConstructToPromiseSynchronously(Promise&& promise, Params&&... initialisers)
+	{
+		if constexpr (Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
+			TRY {
+				Internal::PromisedTypeRemPtr<Promise>::ConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+			} CATCH(const std::exception& e) {
+				Log(Error) << "Suppressing exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
+				Log(Error) << e.what() << std::endl;
+			} CATCH(...) {
+				Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
+			} CATCH_END
+		} else {
+			TRY {
+				promise.set_value(AutoConstructAsset<Internal::PromisedType<Promise>>(std::forward<Params>(initialisers)...));
+			} CATCH (...) {
+				promise.set_exception(std::current_exception());
+			} CATCH_END
+		}
+	}
+
+	namespace Internal
+	{
+		template<typename Promise, typename Tuple, std::size_t ... I>
+			auto ApplyAutoConstructToPromise_impl(Promise&& promise, Tuple&& t, std::index_sequence<I...>)
+		{
+			return AutoConstructToPromiseSynchronously(std::move(promise), std::get<I>(std::forward<Tuple>(t))...);
+		}
+
+		template<typename Ty, typename Tuple>
+			auto ApplyAutoConstructToPromise(Ty&& promise, Tuple&& t)
+		{
+			using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
+			return ApplyAutoConstructToPromise_impl(std::move(promise), std::move(t), Indices{});
+		}
+	}
+
+	template<typename Promise, typename... Params>
+		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
+	{
+		// note very similar "AutoConstructToPromiseSynchronously"
+		if constexpr (Internal::HasConstructToPromiseClassOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
+			TRY {
+				Internal::PromisedTypeRemPtr<Promise>::ConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+			} CATCH(const std::exception& e) {
+				Log(Error) << "Suppressing exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
+				Log(Error) << e.what() << std::endl;
+			} CATCH(...) {
+				Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
+			} CATCH_END
+		} else if constexpr (Internal::HasConstructToPromiseFreeOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
+			TRY {
+				AutoConstructToPromiseOverride(WrappedPromise<Internal::PromisedType<Promise>>{std::move(promise)}, std::forward<Params>(initialisers)...);
+			} CATCH(const std::exception& e) {
+				Log(Error) << "Suppressing exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
+				Log(Error) << e.what() << std::endl;
+			} CATCH(...) {
+				Log(Error) << "Suppressing unknown exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
+			} CATCH_END
+		} else {
+			Internal::GetLongTaskThreadPool().Enqueue(
+				[initializersTuple=std::tuple{MakeStoreableInAny(initialisers)...}, promise=std::move(promise)]() mutable {
+					TRY {
+						Internal::ApplyAutoConstructToPromise(std::move(promise), std::move(initializersTuple));
+					} CATCH(...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+	}
+
+	template<typename AssetType, typename... Params>
+		std::shared_ptr<Marker<AssetType>> ConstructToMarker(Params&&... initialisers)
+	{
+		auto future = std::make_shared<Marker<AssetType>>(Internal::AsString(initialisers...));
+		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
+		return future;
+	}
+
+	template<typename AssetType, typename... Params>
+		std::shared_ptr<MarkerPtr<AssetType>> ConstructToMarkerPtr(Params&&... initialisers)
+	{
+		auto future = std::make_shared<MarkerPtr<AssetType>>(Internal::AsString(initialisers...));
+		AutoConstructToPromise(future->AdoptPromise(), std::forward<Params>(initialisers)...);
+		return future;
+	}
+
+	template<typename AssetType, typename... Params>
+		std::future<AssetType> ConstructToFuture(Params&&... initialisers)
+	{
+		std::promise<AssetType> promise;
+		auto future = promise.get_future();
+		AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+		return future;
+	}
+
+	template<typename AssetType, typename... Params>
+		std::future<std::shared_ptr<AssetType>> ConstructToFuturePtr(Params&&... initialisers)
+	{
+		std::promise<std::shared_ptr<AssetType>> promise;
+		auto future = promise.get_future();
+		AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+		return future;
+	}
+
+	#undef ENABLE_IF
 }
 

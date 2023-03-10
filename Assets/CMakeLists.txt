@@ -10,7 +10,6 @@ set(Src
     ChunkFileContainer.cpp
     ChunkFileWriter.cpp
     ArtifactCollectionFuture.cpp
-    CompileAndAsyncManager.cpp
     ConfigFileContainer.cpp
     DepVal.cpp
     IntermediatesStore.cpp

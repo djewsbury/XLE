@@ -8,7 +8,6 @@
 
 #include "../Assets/Marker.h"
 #include "../Assets/AssetTraits.h"
-#include "../Assets/DeferredConstruction.h"
 #include "../Assets/InitializerPack.h"
 #include "../OSServices/Log.h"
 #include "../Utility/MemoryUtils.h"

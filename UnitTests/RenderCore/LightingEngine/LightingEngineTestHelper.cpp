@@ -26,7 +26,6 @@
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/AssetSetManager.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
@@ -55,7 +54,7 @@ namespace UnitTests
 		_bufferUploads = BufferUploads::CreateManager(*_metalTestHelper->_device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		_compilerRegistrations.push_back(ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers));
 		_compilerRegistrations.push_back(RenderCore::RegisterShaderCompiler(_metalTestHelper->_shaderSource, compilers, GetDefaultShaderCompilationFlags(*_metalTestHelper->_device)));
 		_compilerRegistrations.push_back(RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(_metalTestHelper->_shaderSource, compilers));
@@ -94,8 +93,8 @@ namespace UnitTests
 	{
 		// we have to clear the asset sets here, because we're starting to pull down manager
 		// like the drawables pool
-		if (::Assets::Services::HasAssetSets())
-			::Assets::Services::GetAssetSets().Clear();
+		if (auto assetSets = ::Assets::Services::GetAssetSetsPtr())
+			assetSets->Clear();
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

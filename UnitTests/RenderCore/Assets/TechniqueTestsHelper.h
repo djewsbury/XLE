@@ -9,7 +9,6 @@
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 

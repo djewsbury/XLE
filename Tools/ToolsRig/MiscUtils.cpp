@@ -7,7 +7,6 @@
 #include "../../RenderCore/Assets/ModelScaffold.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../Assets/AssetServices.h"
-#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/OperationContext.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Utility/Threading/Mutex.h"
@@ -16,19 +15,19 @@ namespace ToolsRig
 {
 	std::vector<std::pair<std::string, std::string>> GetModelExtensions()
 	{
-		return ::Assets::Services::GetAsyncMan().GetIntermediateCompilers().GetExtensionsForTargetCode(
+		return ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(
 			RenderCore::Assets::ModelScaffold::CompileProcessType);
 	}
 
 	std::vector<std::pair<std::string, std::string>> GetAnimationSetExtensions()
 	{
-		return ::Assets::Services::GetAsyncMan().GetIntermediateCompilers().GetExtensionsForTargetCode(
+		return ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(
 			RenderCore::Assets::AnimationSetScaffold::CompileProcessType);
 	}
 
 	CompilationTarget::BitField FindCompilationTargets(StringSection<> ext)
 	{
-		auto types = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers().GetTargetCodesForExtension(ext);
+		auto types = ::Assets::Services::GetIntermediateCompilers().GetTargetCodesForExtension(ext);
 		CompilationTarget::BitField result = 0;
 		for (auto t:types) {
 			if (t == RenderCore::Assets::ModelScaffold::CompileProcessType) {

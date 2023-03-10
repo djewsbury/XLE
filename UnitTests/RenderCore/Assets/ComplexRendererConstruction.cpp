@@ -13,7 +13,6 @@
 #include "../../../RenderCore/Techniques/ResourceConstructionContext.h"
 #include "../../../Assets/IntermediatesStore.h"
 #include "../../../Assets/IntermediateCompilers.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/InitializerPack.h"
 #include "../../../Assets/AssetTraits.h"
@@ -32,7 +31,7 @@ namespace UnitTests
 		using namespace RenderCore;
 
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 		auto modelRegistration = UnitTests::RegisterFakeModelCompiler(compilers);
 		auto testHelper = MakeTestHelper();

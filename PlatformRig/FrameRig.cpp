@@ -48,7 +48,6 @@
 #include "../RenderCore/Metal/DeviceContext.h"
 #include "../RenderCore/Vulkan/IDeviceVulkan.h"
 
-#include "../Assets/CompileAndAsyncManager.h"
 #include "../Assets/IntermediatesStore.h"
 #include "../Assets/AssetServices.h"
 
@@ -144,7 +143,7 @@ namespace PlatformRig
                 using namespace std::chrono_literals;
                 static auto startTime = std::chrono::steady_clock::now();
                 if ((std::chrono::steady_clock::now() - startTime) > 20s) {
-                    ::Assets::Services::GetAsyncMan().GetIntermediateStore()->FlushToDisk();
+                    ::Assets::Services::GetIntermediatesStore().FlushToDisk();
                     startTime = std::chrono::steady_clock::now();
                 }
             }

@@ -30,7 +30,7 @@ namespace UnitTests
 		_techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());
 		_techniqueServices->RegisterTextureLoader("*", RenderCore::Assets::CreateWICTextureLoader());
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		_filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
 		_shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(testHelper._shaderSource, compilers, GetDefaultShaderCompilationFlags(*testHelper._device));
 		_shaderCompiler2Registration = RenderCore::Techniques::RegisterInstantiateShaderGraphCompiler(testHelper._shaderSource, compilers);
@@ -66,8 +66,8 @@ namespace UnitTests
 	{
 		// we have to clear the asset sets here, because we're starting to pull down manager
 		// like the drawables pool
-		if (::Assets::Services::HasAssetSets())
-			::Assets::Services::GetAssetSets().Clear();
+		if (auto assetSets = ::Assets::Services::GetAssetSetsPtr())
+			assetSets->Clear();
 	}
 
 	RenderCore::Techniques::PreparedResourcesVisibility PrepareAndStall(

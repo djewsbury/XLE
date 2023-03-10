@@ -33,6 +33,7 @@ namespace Assets
 			ArtifactTargetCode	_targetCode;
 			const char*			_name;
 		};
+		using SerializedArtifact = ::Assets::SerializedArtifact;
 		virtual std::vector<TargetDesc> GetTargets() const = 0;
 		virtual std::vector<SerializedArtifact> SerializeTarget(unsigned idx) = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;

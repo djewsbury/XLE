@@ -21,7 +21,7 @@
 #include "../../RenderCore/Assets/TextureCompiler.h"
 #include "../../Tools/ToolsRig/ShaderLab.h"
 #include "../../Assets/Continuation.h"
-#include "../../Assets/DeferredConstruction.h"
+#include "../../Assets/AssetTraits.h"
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/MemoryUtils.h"

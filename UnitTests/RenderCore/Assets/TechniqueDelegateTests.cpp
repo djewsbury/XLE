@@ -46,7 +46,6 @@
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/AssetTraits.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/Assets.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Math/MathSerialization.h"
@@ -451,7 +450,7 @@ namespace UnitTests
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto mnt1 = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_techDelUTData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::EnableChangeMonitoring));
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		auto filteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
 
 		auto testHelper = MakeTestHelper();

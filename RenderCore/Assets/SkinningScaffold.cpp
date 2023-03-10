@@ -7,13 +7,7 @@
 #include "SkeletonMachine.h"
 #include "AnimationScaffoldInternal.h"
 #include "ModelScaffold.h"
-// #include "ModelImmutableData.h"
-// #include "RawAnimationCurve.h"
 #include "AssetUtils.h"
-// #include "../../Assets/ChunkFileContainer.h"
-// #include "../../Assets/DeferredConstruction.h"
-// #include "../../Math/Quaternion.h"
-// #include "../../OSServices/Log.h"
 
 namespace RenderCore { namespace Assets
 {

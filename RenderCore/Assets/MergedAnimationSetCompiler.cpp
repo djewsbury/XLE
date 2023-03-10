@@ -10,7 +10,6 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Assets/AssetServices.h"
-#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/IArtifact.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
@@ -79,7 +78,7 @@ namespace RenderCore { namespace Assets
 			Throw(std::runtime_error("Expecting merged anim set request to end with '/*'"));
 		auto baseFolder = MakeStringSection((const char*)AsPointer(baseFolderSrc.begin()), splitPath.GetSection(splitPath.GetSectionCount()-2).end()).AsString();
 
-		auto& intermediateCompilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& intermediateCompilers = ::Assets::Services::GetIntermediateCompilers();
 
 		auto walk = ::Assets::MainFileSystem::BeginWalk(baseFolder);
 		std::vector<std::string> files;

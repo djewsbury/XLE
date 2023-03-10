@@ -83,7 +83,7 @@ namespace Assets
 		virtual ~IIntermediateCompilers() = default;
 	};
 
-	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(const std::shared_ptr<IntermediatesStore>& store);
+	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(std::shared_ptr<IntermediatesStore> store);
 
 	class CompilerRegistration
 	{

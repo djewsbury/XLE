@@ -8,7 +8,6 @@
 #include "../../../Assets/Assets.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/ICompileOperation.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../ConsoleRig/Console.h"

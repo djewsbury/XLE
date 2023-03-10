@@ -9,15 +9,19 @@
 namespace Assets
 {
     class AssetSetManager;
-    class CompileAndAsyncManager;
+    class IIntermediateCompilers;
+    class IntermediatesStore;
 
     class Services
     {
     public:
         static AssetSetManager& GetAssetSets();
+        static IIntermediateCompilers& GetIntermediateCompilers();
+        static IntermediatesStore& GetIntermediatesStore();
+
         static std::shared_ptr<AssetSetManager> GetAssetSetsPtr();
-        static CompileAndAsyncManager& GetAsyncMan();
-        static bool HasAssetSets();
+        static std::shared_ptr<IIntermediateCompilers> GetIntermediateCompilersPtr();
+        static std::shared_ptr<IntermediatesStore> GetIntermediatesStorePtr();
     };
 }
 

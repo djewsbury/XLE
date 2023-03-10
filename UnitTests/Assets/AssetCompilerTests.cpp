@@ -3,7 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../UnitTestHelper.h"
-#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/ICompileOperation.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/IntermediateCompilers.h"
@@ -12,7 +11,6 @@
 #include "../../Assets/ChunkFileWriter.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/InitializerPack.h"
-#include "../../Assets/DeferredConstruction.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/IArtifact.h"
 #include "../../ConsoleRig/GlobalServices.h"
@@ -520,7 +518,7 @@ namespace UnitTests
 		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		uint64_t outputTypes[] = { Type_UnitTestArtifact };
 		auto registration = compilers.RegisterCompiler(
 			"UnitTestCompiler",
@@ -554,7 +552,7 @@ namespace UnitTests
 		cfg._inMemoryOnlyIntermediates = true;
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		uint64_t outputTypes[] = { Type_UnitTestArtifact };
 		auto registration = compilers.RegisterCompiler(
 			"UnitTestCompiler",

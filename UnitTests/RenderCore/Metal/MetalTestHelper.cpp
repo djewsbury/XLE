@@ -85,8 +85,8 @@ namespace UnitTests
 
 	MetalTestHelper::~MetalTestHelper()
 	{
-		if (::Assets::Services::HasAssetSets())
-			::Assets::Services::GetAssetSets().Clear();
+		if (auto assetSets = ::Assets::Services::GetAssetSetsPtr())
+			assetSets->Clear();
 		_pipelineLayout.reset();
 		_shaderSource.reset();
 		_device.reset();

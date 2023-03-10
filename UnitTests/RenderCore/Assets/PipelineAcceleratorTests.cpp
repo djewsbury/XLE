@@ -41,7 +41,6 @@
 #include "../../../Assets/AssetTraits.h"
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/Assets.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/ConfigFileContainer.h"
 #include "../../../Math/Matrix.h"
 #include "../../../Math/MathSerialization.h"

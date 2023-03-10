@@ -15,7 +15,6 @@
 #include "../../Assets/NascentChunk.h"
 #include "../../Assets/MemoryFile.h"
 #include "../../Assets/AssetServices.h"
-#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/ICompileOperation.h"
 #include "../../OSServices/AttachableLibrary.h"

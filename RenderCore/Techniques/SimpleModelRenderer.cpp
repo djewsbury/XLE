@@ -20,7 +20,6 @@
 #include "../Assets/MaterialScaffold.h"		// for metadata query
 #include "../Assets/AnimationBindings.h"
 #include "../Assets/CompoundObject.h"
-#include "../Assets/CompileAndAsyncManager.h"
 #include "../Assets/IArtifact.h"
 #include "../Assets/IntermediateCompilers.h"
 #include "../../Formatters/TextFormatter.h"
@@ -791,7 +790,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		StringSection<> modelScaffoldName)
 	{
-		if (::Assets::Services::GetAsyncMan().GetIntermediateCompilers().HasAssociatedCompiler(Assets::CompoundObjectScaffold::CompileProcessType, modelScaffoldName)) {
+		if (::Assets::Services::GetIntermediateCompilers().HasAssociatedCompiler(Assets::CompoundObjectScaffold::CompileProcessType, modelScaffoldName)) {
 			// This is a compound object
 			::Assets::WhenAll(::Assets::MakeAsset<Assets::CompoundObjectScaffold>(modelScaffoldName)).ThenConstructToPromise(
 				std::move(promise),

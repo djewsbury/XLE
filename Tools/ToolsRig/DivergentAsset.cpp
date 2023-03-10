@@ -6,7 +6,6 @@
 
 #include "DivergentAsset.h"
 
-#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Utility/Threading/Mutex.h"
 

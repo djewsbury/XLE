@@ -168,7 +168,7 @@ namespace UnitTests
 
 		TechniqueTestApparatus techniqueTestApparatus(*testHelper);
 		auto pipelineAcceleratorPool = techniqueTestApparatus._pipelineAccelerators;
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(

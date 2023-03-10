@@ -35,7 +35,6 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IntermediateCompilers.h"
-#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../xleres/FileList.h"
 
@@ -53,7 +52,7 @@ namespace RenderCore { namespace Techniques
 		_shaderCompiler = CreateDefaultShaderCompiler(*device);
 		_shaderSource = CreateMinimalShaderSource(_shaderCompiler);
 		
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		_shaderFilteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
 
 		RenderCore::ILowLevelCompiler::CompilationFlags::BitField shaderCompilerFlags = 0;
@@ -158,7 +157,7 @@ namespace RenderCore { namespace Techniques
 		_techniqueServices->RegisterTextureLoader("*.[hH][dD][rR]", RenderCore::Assets::CreateHDRTextureLoader());
 		_techniqueServices->SetFallbackTextureLoader(RenderCore::Assets::CreateWICTextureLoader());
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		_materialCompilerRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 		_mergedAnimSetCompilerRegistration = RenderCore::Assets::RegisterMergedAnimationSetCompiler(compilers);
 		_modelCompilers = ::Assets::DiscoverCompileOperations(compilers, "*Conversion.dll");

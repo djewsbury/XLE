@@ -9,6 +9,7 @@
 #include "DepVal.h"
 #include "AssetsCore.h"
 #include "AssetTraits.h"
+#include "AssetUtils.h"		// for DirectorySearchRules
 #include "../Formatters/TextFormatter.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/StringUtils.h"

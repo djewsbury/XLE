@@ -3,7 +3,7 @@
 #include "DepVal.h"
 #if !defined(__CLR_VER)
 #include "Marker.h"
-#include "DeferredConstruction.h"
+#include "AssetTraits.h"
 #include "InitializerPack.h"
 #include "../Utility/Threading/Mutex.h"
 #endif

@@ -10,7 +10,6 @@
 #include "../RenderCore/Assets/Services.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../BufferUploads/IBufferUploads.h"
-#include "../Assets/CompileAndAsyncManager.h"
 #include "../Assets/AssetServices.h"
 #include "../ConsoleRig/Console.h"
 #include "../OSServices/Log.h"

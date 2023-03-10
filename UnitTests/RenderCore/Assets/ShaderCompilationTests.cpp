@@ -15,8 +15,7 @@
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/IArtifact.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
-#include "../../../Assets/DeferredConstruction.h"
+#include "../../../Assets/AssetTraits.h"
 #include "../../../Assets/InitializerPack.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/IntermediatesStore.h"
@@ -87,7 +86,7 @@ namespace UnitTests
 
 		auto compilerRegistration = RenderCore::RegisterShaderCompiler(
 			customShaderSource, 
-			::Assets::Services::GetAsyncMan().GetIntermediateCompilers(),
+			::Assets::Services::GetIntermediateCompilers(),
 			GetDefaultShaderCompilationFlags(*testHelper->_device));
 
 		SECTION("MinimalShaderSource") {
@@ -143,7 +142,7 @@ namespace UnitTests
 			}
 		}
 
-		::Assets::Services::GetAsyncMan().GetIntermediateStore()->FlushToDisk();
+		::Assets::Services::GetIntermediatesStore().FlushToDisk();
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt);
 	}
 
@@ -224,7 +223,7 @@ namespace UnitTests
 		// ensure that we're beginning from clean temporaries directory for this test
 		// (clean out all of the intermediates folders before we register the compilers)
 		{
-			auto baseDirectory = ::Assets::Services::GetAsyncMan().GetIntermediateStore()->GetBaseDirectory();
+			auto baseDirectory = ::Assets::Services::GetIntermediatesStore().GetBaseDirectory();
 			auto tempDirPath = std::filesystem::path{baseDirectory} / "shader-selector-filtering-compiler";
 			std::filesystem::remove_all(tempDirPath);
 			std::filesystem::create_directories(tempDirPath);
@@ -239,7 +238,7 @@ namespace UnitTests
 		auto xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto testHelper = MakeTestHelper();
 
-		auto& compilers = ::Assets::Services::GetAsyncMan().GetIntermediateCompilers();
+		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		auto countingShaderSource = std::make_shared<CountingShaderSource>(testHelper->_shaderSource);
 		auto shaderCompilerRegistration = RenderCore::RegisterShaderCompiler(countingShaderSource, compilers, GetDefaultShaderCompilationFlags(*testHelper->_device));
 
@@ -308,7 +307,7 @@ namespace UnitTests
 
 			// After a flush to disk, retrieving from the cache should still work
 
-			::Assets::Services::GetAsyncMan().GetIntermediateStore()->FlushToDisk();
+			::Assets::Services::GetIntermediatesStore().FlushToDisk();
 
 			{
 				auto initialSuccessfulFuture = BeginShaderCompile("xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main:vs_*");
@@ -327,7 +326,7 @@ namespace UnitTests
 
 			REQUIRE(countingShaderSource->_compileFromFileCount.load() == initialCount+3);
 			compilers.FlushCachedMarkers();
-			::Assets::Services::GetAsyncMan().GetIntermediateStore()->FlushToDisk();
+			::Assets::Services::GetIntermediatesStore().FlushToDisk();
 
 			{
 				auto initialSuccessfulFuture = BeginShaderCompile("xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main:vs_*");
@@ -339,7 +338,7 @@ namespace UnitTests
 			}
 		}
 
-		::Assets::Services::GetAsyncMan().GetIntermediateStore()->FlushToDisk();
+		::Assets::Services::GetIntermediatesStore().FlushToDisk();
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xleresmnt);
 	}
 	

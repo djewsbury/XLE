@@ -10,7 +10,7 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/InitializerPack.h"
 #include "../../Assets/IArtifact.h"
-#include "../../Assets/DeferredConstruction.h"
+#include "../../Assets/AssetTraits.h"
 #include "../../Assets/ICompileOperation.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Formatters/StreamDOM.h"

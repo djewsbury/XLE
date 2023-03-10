@@ -27,7 +27,6 @@
 #include "../../../Assets/MountingTree.h"
 #include "../../../Assets/MemoryFile.h"
 #include "../../../Assets/Assets.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Math/MathSerialization.h"
 #include "../../../Math/Transformations.h"

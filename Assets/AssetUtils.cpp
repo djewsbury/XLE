@@ -11,7 +11,6 @@
 #include "IFileSystem.h"
 #include "NascentChunk.h"		// (for AsBlob)
 #include "AssetServices.h"
-#include "CompileAndAsyncManager.h"
 #include "IntermediateCompilers.h"
 #include "IArtifact.h"
 #include "../OSServices/Log.h"
@@ -586,7 +585,7 @@ namespace Assets
 		std::shared_ptr<IIntermediateCompileMarker> BeginCompileOperation(
 			CompileRequestCode targetCode, InitializerPack&& initializers)
 		{
-			auto& compilers = Services::GetAsyncMan().GetIntermediateCompilers();
+			auto& compilers = Services::GetIntermediateCompilers();
 			return compilers.Prepare(targetCode, std::move(initializers));
 		}
 	}

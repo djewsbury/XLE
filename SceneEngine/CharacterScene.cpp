@@ -24,7 +24,6 @@
 #include "../RenderCore/Assets/AnimationScaffoldInternal.h"
 #include "../RenderCore/Assets/CompoundObject.h"
 #include "../Assets/AssetTraits.h"
-#include "../Assets/DeferredConstruction.h"
 #include "../Assets/ConfigFileContainer.h"
 #include "../Assets/Continuation.h"
 #include "../Assets/IArtifact.h"
