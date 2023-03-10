@@ -23,7 +23,7 @@
 #include "../Assets/AssetTraits.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/Assets.h"
-#include "../Assets/ChunkFile.h"
+#include "../Assets/ChunkFileWriter.h"
 #include "../Assets/AssetHeapLRU.h"
 #include "../Assets/ContinuationUtil.h"
 #include "../Assets/ConfigFileContainer.h"
@@ -1905,9 +1905,8 @@ namespace SceneEngine
 
     void EditorOverlayCellRenderer::Write(IRigidModelScene& cache, const Assets::ResChar destinationFile[]) const
     {
-        using namespace Assets::ChunkFile;
 		auto libVersion = ConsoleRig::GetLibVersionDesc();
-        SimpleChunkFileWriter fileWriter(
+        ::Assets::SimpleChunkFileWriter fileWriter(
 			::Assets::MainFileSystem::OpenBasicFile(destinationFile, "wb", 0),
             1, libVersion._versionString, libVersion._buildDateString);
         fileWriter.BeginChunk(ChunkType_Placements, s_PlacementsChunkVersionNumber, "Placements");

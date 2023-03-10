@@ -245,7 +245,7 @@ namespace Assets
 			for (unsigned t=0; t<targets.size(); ++t) {
 				const auto& target = targets[t];
 
-				std::vector<ICompileOperation::SerializedArtifact> serializedArtifacts;
+				std::vector<SerializedArtifact> serializedArtifacts;
 				AssetState state = AssetState::Pending;
 				std::vector<DependencyValidation> targetDependencies = compilerDepVals;
 				targetDependencies.push_back(compileOperation->GetDependencyValidation());

@@ -27,6 +27,7 @@
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
 
 #include "../../Assets/Assets.h"
+#include "../../Assets/IArtifact.h"
 
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Conversion.h"

@@ -13,7 +13,7 @@
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkinToChunks(
+	std::vector<::Assets::SerializedArtifact> SerializeSkinToChunks(
 		const std::string& name,
 		const NascentModel& model,
 		const NascentSkeleton& embeddedSkeleton,
@@ -22,7 +22,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return model.SerializeToChunks(name, embeddedSkeleton, nativeSettings);
 	}
 
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkeletonToChunks(
+	std::vector<::Assets::SerializedArtifact> SerializeSkeletonToChunks(
 		const std::string& name,
 		const NascentSkeleton& skeleton)
 	{
@@ -33,16 +33,16 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto metricsBlock = ::Assets::AsBlob(metricsStream);
 
 		return {
-			::Assets::ICompileOperation::SerializedArtifact{
+			::Assets::SerializedArtifact{
 				RenderCore::Assets::ChunkType_Skeleton, 0, name, 
 				std::move(block)},
-			::Assets::ICompileOperation::SerializedArtifact{
+			::Assets::SerializedArtifact{
 				RenderCore::Assets::ChunkType_Metrics, 0, "skel-" + name, 
 				std::move(metricsBlock)}
 		};
 	}
 
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeAnimationsToChunks(
+	std::vector<::Assets::SerializedArtifact> SerializeAnimationsToChunks(
 		const std::string& name,
 		const NascentAnimationSet& animationSet)
 	{
@@ -55,10 +55,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto metricsBlock = ::Assets::AsBlob(metricsStream);
 
 		return {
-			::Assets::ICompileOperation::SerializedArtifact{
+			::Assets::SerializedArtifact{
 				RenderCore::Assets::ChunkType_AnimationSet, 0, name, 
 				std::move(block)},
-			::Assets::ICompileOperation::SerializedArtifact{
+			::Assets::SerializedArtifact{
 				RenderCore::Assets::ChunkType_Metrics, 0, "anim-" + name, 
 				std::move(metricsBlock)}
 		};

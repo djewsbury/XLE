@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include "IntermediatesStore.h"
-#include "ICompileOperation.h"
 #include "AssetsCore.h"
 #include "../OSServices/AttachableLibrary.h"
 #include "../Utility/IteratorUtils.h"
@@ -15,13 +13,16 @@ namespace Assets
 {
 	struct DependentFileState;
 	class IFileSystem;
+	struct SerializedArtifact;
+	class IArtifactCollection;
+	class StoreReferenceCounts;
 
 	class LooseFilesStorage
 	{
 	public:
 		std::shared_ptr<IArtifactCollection> StoreCompileProducts(
 			StringSection<> archivableName,
-			IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
+			IteratorRange<const SerializedArtifact*> artifacts,
 			::Assets::AssetState state,
 			IteratorRange<const DependentFileState*> dependencies,
 			const std::shared_ptr<StoreReferenceCounts>& storeRefCounts,

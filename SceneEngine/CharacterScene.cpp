@@ -26,6 +26,8 @@
 #include "../Assets/AssetTraits.h"
 #include "../Assets/DeferredConstruction.h"
 #include "../Assets/ConfigFileContainer.h"
+#include "../Assets/Continuation.h"
+#include "../Assets/IArtifact.h"
 #include "../Math/ProjectionMath.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/BitUtils.h"

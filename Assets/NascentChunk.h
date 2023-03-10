@@ -5,15 +5,12 @@
 #pragma once
 
 #include "AssetsCore.h"
-#include "ChunkFile.h"
-#include "BlockSerializer.h"
 #include "../Utility/IteratorUtils.h"
 #include <memory>
 
-namespace Assets { class BlockSerializer; }
-
 namespace Assets
 {
+	class BlockSerializer;
 	Blob AsBlob(const BlockSerializer& serializer);
 	Blob AsBlob(IteratorRange<const void*>);
 

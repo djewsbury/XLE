@@ -5,7 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ChunkFileContainer.h"
-#include "ChunkFile.h"
+#include "ChunkFileWriter.h"
 #include "BlockSerializer.h"
 #include "DepVal.h"
 #include "IFileSystem.h"
@@ -15,14 +15,14 @@
 
 namespace Assets
 {
-    std::vector<ArtifactRequestResult> ChunkFileContainer::ResolveRequests(
+    std::vector<ArtifactRequestResult> ArtifactChunkContainer::ResolveRequests(
         IteratorRange<const ArtifactRequest*> requests) const
     {
 		auto file = OpenFile();
         return ResolveRequests(*file, requests);
     }
 
-	std::shared_ptr<IFileInterface> ChunkFileContainer::OpenFile() const
+	std::shared_ptr<IFileInterface> ArtifactChunkContainer::OpenFile() const
 	{
 		std::shared_ptr<IFileInterface> result;
 		if (_blob)
@@ -30,18 +30,17 @@ namespace Assets
 		return MainFileSystem::OpenFileInterface(_filename.c_str(), "rb");
 	}
 
-    std::vector<ArtifactRequestResult> ChunkFileContainer::ResolveRequests(
+    std::vector<ArtifactRequestResult> ArtifactChunkContainer::ResolveRequests(
         IFileInterface& file, IteratorRange<const ArtifactRequest*> requests) const
     {
         auto initialOffset = file.TellP();
-        auto chunks = ChunkFile::LoadChunkTable(file);
+        auto chunks = LoadChunkTable(file);
         
         std::vector<ArtifactRequestResult> result;
         result.reserve(requests.size());
 
             // First scan through and check to see if we
             // have all of the chunks we need
-        using ChunkHeader = ChunkFile::ChunkHeader;
         for (auto r=requests.begin(); r!=requests.end(); ++r) {
             auto prevWithSameCode = std::find_if(requests.begin(), r, [r](const auto& t) { return t._chunkTypeCode == r->_chunkTypeCode; });
             if (prevWithSameCode != r)
@@ -119,24 +118,24 @@ namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    ChunkFileContainer::ChunkFileContainer(std::string assetTypeName, DependencyValidation depVal)
+    ArtifactChunkContainer::ArtifactChunkContainer(std::string assetTypeName, DependencyValidation depVal)
     : _filename(std::move(assetTypeName))
     , _validationCallback(std::move(depVal))
     {}
-    ChunkFileContainer::ChunkFileContainer(StringSection<> assetTypeName)
+    ArtifactChunkContainer::ArtifactChunkContainer(StringSection<> assetTypeName)
     : _filename(assetTypeName.AsString())
     {
 		_validationCallback = GetDepValSys().Make(_filename);
     }
 
-	ChunkFileContainer::ChunkFileContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar>)
+	ArtifactChunkContainer::ArtifactChunkContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar>)
 	: _filename("<<in memory>>")
 	, _blob(blob), _validationCallback(depVal)
 	{			
 	}
 
-	ChunkFileContainer::ChunkFileContainer() {}
-    ChunkFileContainer::~ChunkFileContainer() {}
+	ArtifactChunkContainer::ArtifactChunkContainer() {}
+    ArtifactChunkContainer::~ArtifactChunkContainer() {}
 
 }
 

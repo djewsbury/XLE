@@ -10,7 +10,7 @@
 #include <utility>
 #include <memory>
 
-namespace Assets { class ChunkFileContainer; }
+namespace Assets { class ArtifactChunkContainer; }
 namespace XLEMath { enum class ClipSpaceType; }
 
 namespace SceneEngine
@@ -40,7 +40,7 @@ namespace SceneEngine
             size_t objCount, float cellSize,
 			Orientation orientation = Orientation::ZUp);
 
-		GenericGridPartitioning(const ::Assets::ChunkFileContainer& chunkFile);
+		GenericGridPartitioning(const ::Assets::ArtifactChunkContainer& chunkFile);
 		GenericGridPartitioning(std::unique_ptr<uint8[], PODAlignedDeletor>&& dataBlock);
 		GenericGridPartitioning();
         ~GenericGridPartitioning();

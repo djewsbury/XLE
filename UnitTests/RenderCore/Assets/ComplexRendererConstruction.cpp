@@ -17,6 +17,7 @@
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/InitializerPack.h"
 #include "../../../Assets/AssetTraits.h"
+#include "../../../Assets/IArtifact.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../ConsoleRig/GlobalServices.h"
 #include "../../../OSServices/Log.h"

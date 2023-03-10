@@ -21,6 +21,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/IArtifact.h"
 #include "../../OSServices/TimeUtils.h"
 
 #pragma warning(disable:4505)

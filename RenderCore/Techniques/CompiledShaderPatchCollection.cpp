@@ -20,6 +20,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/IArtifact.h"
+#include "../../Assets/ICompileOperation.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Threading/CompletionThreadPool.h"
@@ -386,9 +387,9 @@ namespace RenderCore { namespace Techniques
 			};
 		}
 		
-		virtual std::vector<SerializedArtifact> SerializeTarget(unsigned idx) override
+		virtual std::vector<::Assets::SerializedArtifact> SerializeTarget(unsigned idx) override
 		{
-			std::vector<SerializedArtifact> result;
+			std::vector<::Assets::SerializedArtifact> result;
 			if (_byteCode._payload)
 				result.push_back({
 					CompileProcess_InstantiateShaderGraph, 0, "main",

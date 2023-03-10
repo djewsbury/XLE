@@ -11,6 +11,7 @@
 #include "../../Assets/InitializerPack.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/DeferredConstruction.h"
+#include "../../Assets/ICompileOperation.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Formatters/StreamDOM.h"
 #include "../../Formatters/TextFormatter.h"
@@ -229,7 +230,7 @@ namespace RenderCore { namespace Assets
 				TargetDesc { TextureCompilerProcessType, _serializedArtifacts[0]._name.c_str() }
 			};
 		}
-		std::vector<SerializedArtifact>	SerializeTarget(unsigned idx)
+		std::vector<::Assets::SerializedArtifact>	SerializeTarget(unsigned idx)
 		{
 			assert(idx == 0);
 			return _serializedArtifacts;
@@ -373,7 +374,7 @@ namespace RenderCore { namespace Assets
 						Throw(std::runtime_error("Compression library failed while processing texture compiler file: " + srcFN));
 				}
 
-			_serializedArtifacts = std::vector<SerializedArtifact>{
+			_serializedArtifacts = std::vector<::Assets::SerializedArtifact>{
 				{
 					TextureCompilerProcessType, 0, MakeFileNameSplitter(srcFN).File().AsString() + ".dds", destinationBlob
 				}
@@ -412,7 +413,7 @@ namespace RenderCore { namespace Assets
 	private:
 		std::vector<::Assets::DependencyValidation> _dependencies;
 		::Assets::DependencyValidation _cfgFileDepVal;
-		std::vector<SerializedArtifact> _serializedArtifacts;
+		std::vector<::Assets::SerializedArtifact> _serializedArtifacts;
 	};
 
 	::Assets::CompilerRegistration RegisterTextureCompiler(

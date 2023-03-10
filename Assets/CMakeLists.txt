@@ -8,7 +8,7 @@ set(Src
     AsyncMarkerGroup.cpp
     BlockSerializer.cpp
     ChunkFileContainer.cpp
-    ChunkFile.cpp
+    ChunkFileWriter.cpp
     ArtifactCollectionFuture.cpp
     CompileAndAsyncManager.cpp
     ConfigFileContainer.cpp

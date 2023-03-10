@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "NascentChunk.h"
+#include "BlockSerializer.h"
 
 namespace Assets
 {

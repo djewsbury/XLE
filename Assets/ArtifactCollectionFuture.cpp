@@ -8,6 +8,7 @@
 #include "BlockSerializer.h"
 #include "ChunkFileContainer.h"
 #include "MemoryFile.h"
+#include "ICompileOperation.h"
 #include "../ConsoleRig/GlobalServices.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
@@ -112,7 +113,7 @@ namespace Assets
 	StringSection<ResChar>	ChunkFileArtifactCollection::GetRequestParameters() const { return MakeStringSection(_requestParameters); }
 	std::vector<ArtifactRequestResult> ChunkFileArtifactCollection::ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const
 	{
-		ChunkFileContainer chunkFile;
+		ArtifactChunkContainer chunkFile;
 		return chunkFile.ResolveRequests(*_file, requests);
 	}
 	AssetState ChunkFileArtifactCollection::GetAssetState() const { return AssetState::Ready; }
@@ -149,7 +150,7 @@ namespace Assets
 	std::vector<ArtifactRequestResult> BlobArtifactCollection::ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const
 	{
 		// We need to look through the list of chunks and try to match the given requests
-		// This is very similar to ChunkFileContainer::ResolveRequests
+		// This is very similar to ArtifactChunkContainer::ResolveRequests
 
 		std::vector<ArtifactRequestResult> result;
 		result.reserve(requests.size());
@@ -197,7 +198,7 @@ namespace Assets
 		return _state; 
 	}
 	BlobArtifactCollection::BlobArtifactCollection(
-		IteratorRange<const ICompileOperation::SerializedArtifact*> chunks, 
+		IteratorRange<const SerializedArtifact*> chunks, 
 		AssetState state,
 		const DependencyValidation& depVal, const std::string& collectionName, const rstring& requestParams)
 	: _chunks(chunks.begin(), chunks.end()), _state(state), _depVal(depVal), _collectionName(collectionName), _requestParams(requestParams) {}

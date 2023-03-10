@@ -611,6 +611,11 @@ namespace Assets
 			if (blob) { str << AsString(std::move(blob)); } else { str << std::string("<<no log>>"); }
             return AsBlob(str.str());
         }
+
+        ThreadPool& GetLongTaskThreadPool()
+        {
+            return ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool();
+        }
     }
 
 }

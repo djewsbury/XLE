@@ -310,9 +310,9 @@ namespace ShaderSourceParser
 			Formatters::TextOutputFormatter fmttr(memStream);
 			fmttr << filteringRules;
 
-			std::vector<::Assets::ICompileOperation::SerializedArtifact> artifacts;
+			std::vector<::Assets::SerializedArtifact> artifacts;
 			{
-				::Assets::ICompileOperation::SerializedArtifact artifact;
+				::Assets::SerializedArtifact artifact;
 				artifact._chunkTypeCode = SelectorFilteringRules::CompileProcessType;
 				artifact._name = "filtering-rules";
 				artifact._version = 1;
@@ -321,7 +321,7 @@ namespace ShaderSourceParser
 			}
 
 			{
-				::Assets::ICompileOperation::SerializedArtifact artifact;
+				::Assets::SerializedArtifact artifact;
 				artifact._chunkTypeCode = ChunkType_Metrics;
 				artifact._name = "metrics";
 				artifact._version = 1;

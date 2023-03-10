@@ -5,13 +5,14 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ArchiveCache.h"
-#include "ChunkFile.h"
+#include "ChunkFileWriter.h"
 #include "ChunkFileContainer.h"
 #include "IFileSystem.h"
 #include "AssetUtils.h"
 #include "DepVal.h"
 #include "BlockSerializer.h"
 #include "IntermediatesStore.h"		// (for TryRegisterDependency)
+#include "ICompileOperation.h"
 #include "../OSServices/Log.h"
 #include "../OSServices/RawFS.h"
 #include "../OSServices/LegacyFileStreams.h"
@@ -83,7 +84,7 @@ namespace Assets
 	{
 	public:
 		uint64_t          			_objectId = 0;
-		std::vector<ICompileOperation::SerializedArtifact>    _data;
+		std::vector<SerializedArtifact>    _data;
 		::Assets::AssetState		_state;
 		std::vector<DependentFileState> _deps;
 		DependencyValidation 		_depValPtr;
@@ -109,7 +110,7 @@ namespace Assets
 	void ArchiveCache::Commit(
 		uint64_t objectId,
 		const std::string& attachedStringName,
-		IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
+		IteratorRange<const SerializedArtifact*> artifacts,
 		::Assets::AssetState state,
 		IteratorRange<const DependentFileState*> dependentFiles,
 		std::function<void()>&& onFlush)
@@ -124,7 +125,7 @@ namespace Assets
 		if (i == _pendingCommits.end() || i->_objectId != objectId)
 			i = _pendingCommits.insert(i, PendingCommit {objectId} );
 
-		i->_data = std::vector<ICompileOperation::SerializedArtifact> { artifacts.begin(), artifacts.end() };
+		i->_data = std::vector<SerializedArtifact> { artifacts.begin(), artifacts.end() };
 		i->_deps = std::vector<DependentFileState> { dependentFiles.begin(), dependentFiles.end() };
 		i->_depValPtr = GetDepValSys().Make(MakeIteratorRange(i->_deps));
 		i->_state = state;
@@ -145,7 +146,6 @@ namespace Assets
 
 	static bool LoadArtifactBlockList(IFileSystem& fs, StringSection<> filename, std::vector<ArtifactDirectoryBlock>& blocks)
 	{
-		using namespace Assets::ChunkFile;
 		std::unique_ptr<IFileInterface> directoryFile;
 		if (TryOpen(directoryFile, fs, filename, "rb") != MainFileSystem::IOReason::Success)
 			return false;
@@ -180,7 +180,6 @@ namespace Assets
 
 	static bool LoadCollectionBlockList(IFileSystem& fs, StringSection<> filename, std::vector<CollectionDirectoryBlock>& collections)
 	{
-		using namespace Assets::ChunkFile;
 		std::unique_ptr<IFileInterface> directoryFile;
 		if (TryOpen(directoryFile, fs, filename, "rb") != MainFileSystem::IOReason::Success)
 			return false;
@@ -334,7 +333,6 @@ namespace Assets
 			//  Note that the table of blocks is stored in order of id (for fast
 			//  searches) not in the order that they appear in the file.
 
-		using namespace Assets::ChunkFile;
 		{
 			DirectoryChunk dirHdr;
 			std::vector<CollectionDirectoryBlock> collections;
@@ -647,7 +645,6 @@ namespace Assets
 	
 	auto ArchiveCache::GetMetrics() const -> Metrics
 	{
-		using namespace Assets::ChunkFile;
 		if (!_filesystem) return {};
 
 			// We need to open the file and get metrics information

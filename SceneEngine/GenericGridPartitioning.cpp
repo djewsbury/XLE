@@ -318,7 +318,7 @@ namespace SceneEngine
 		return *this;
 	}
 
-	GenericGridPartitioning::GenericGridPartitioning(const ::Assets::ChunkFileContainer& chunkFile)
+	GenericGridPartitioning::GenericGridPartitioning(const ::Assets::ArtifactChunkContainer& chunkFile)
 	: _depVal(chunkFile.GetDependencyValidation())
     {
         auto chunks = chunkFile.ResolveRequests(MakeIteratorRange(GridPartitioningChunkRequests));

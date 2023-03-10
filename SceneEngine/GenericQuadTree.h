@@ -11,7 +11,7 @@
 #include <memory>
 #include <iosfwd>
 
-namespace Assets { class ChunkFileContainer; }
+namespace Assets { class ArtifactChunkContainer; }
 namespace XLEMath { enum class ClipSpaceType; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
 namespace RenderOverlays { class IOverlayContext; }
@@ -92,7 +92,7 @@ namespace SceneEngine
 
         std::ostream& SerializeMethod(std::ostream&) const;
 
-		GenericQuadTree(const ::Assets::ChunkFileContainer& chunkFile);
+		GenericQuadTree(const ::Assets::ArtifactChunkContainer& chunkFile);
 		GenericQuadTree(DataBlock&& dataBlock);
 		GenericQuadTree();
         ~GenericQuadTree();

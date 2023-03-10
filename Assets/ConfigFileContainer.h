@@ -160,7 +160,7 @@ namespace Assets
 	}
 
 	template<
-		typename Promise, 
+		typename Promise,
 		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedType<Promise>>::Constructor_Formatter
 					&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>)>
 		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)

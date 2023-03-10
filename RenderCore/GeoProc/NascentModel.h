@@ -9,7 +9,6 @@
 #include "../Types.h"
 #include "../StateDesc.h"
 #include "../Assets/TransformationCommands.h"		// for ITransformationMachineOptimizer
-#include "../../Assets/ICompileOperation.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/UTFUtils.h"
 #include "../../Utility/IteratorUtils.h"
@@ -18,6 +17,7 @@
 #include <vector>
 
 namespace RenderCore { namespace Assets { struct ModelDefaultPoseData; }}
+namespace Assets { struct SerializedArtifact; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
@@ -97,7 +97,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		void AttachNameToSkinControllerBlock(NascentObjectGuid id, std::string name);
 		void AttachNameToCommand(NascentObjectGuid id, std::string name);
 
-		std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeToChunks(
+		std::vector<::Assets::SerializedArtifact> SerializeToChunks(
 			const std::string& name,
 			const NascentSkeleton& embeddedSkeleton,
 			const NativeVBSettings& nativeSettings) const;

@@ -21,6 +21,8 @@
 #include "../Assets/AnimationBindings.h"
 #include "../Assets/CompoundObject.h"
 #include "../Assets/CompileAndAsyncManager.h"
+#include "../Assets/IArtifact.h"
+#include "../Assets/IntermediateCompilers.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"

@@ -177,8 +177,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static_assert(::Assets::Internal::HasConstructToPromiseFreeOverride<std::promise<CompiledShaderByteCode>, StringSection<>, StringSection<>>::value);
-
 	static std::shared_future<CompiledShaderByteCode> MakeByteCodeFuture(ShaderStage stage, StringSection<> initializer, StringSection<> definesTable)
 	{
 		char profileStr[] = "?s_";

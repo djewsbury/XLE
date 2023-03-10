@@ -19,7 +19,7 @@ namespace std { template<typename T> class shared_future; }
 namespace Assets
 {
 	class DirectorySearchRules;
-	class ChunkFileContainer;
+	class ArtifactChunkContainer;
 	class ArtifactRequest;
     class IArtifactCollection;
 	DirectorySearchRules DefaultDirectorySearchRules(StringSection<ResChar>);
@@ -33,7 +33,7 @@ namespace Assets
 		{
 		public:
 			static const bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>, DirectorySearchRules&&, DependencyValidation&&>::value;
-			static const bool Constructor_ChunkFileContainer = std::is_constructible<AssetType, const ChunkFileContainer&>::value && !std::is_same_v<AssetType, ChunkFileContainer>;
+			static const bool Constructor_ChunkFileContainer = std::is_constructible<AssetType, const ArtifactChunkContainer&>::value && !std::is_same_v<AssetType, ArtifactChunkContainer>;
 			static const bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, DirectorySearchRules&&, DependencyValidation&&>::value;
 		};
 
@@ -49,12 +49,6 @@ namespace Assets
 
 		template<typename AssetType>
 			using AssetTraits = AssetTraits_<std::decay_t<RemoveSmartPtrType<AssetType>>>;
-
-
-			///////////////////////////////////////////////////////////////////////////////////////////////////
-
-		const ChunkFileContainer& GetChunkFileContainer(StringSection<> identifier);
-		std::shared_future<std::shared_ptr<ChunkFileContainer>> GetChunkFileContainerFuture(StringSection<> identifier);
 
         template <typename... Params> uint64_t BuildParamHash(const Params&... initialisers);
 
@@ -86,37 +80,7 @@ namespace Assets
 
 	//
 	//		Auto construct to:
-	//			(const ChunkFileContainer&)
-	//
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer)>
-		AssetType AutoConstructAsset(StringSection<> initializer)
-	{
-		// See also AutoConstructToPromise<> variation of this function
-		const auto& container = Internal::GetChunkFileContainer(initializer);
-		TRY {
-			return Internal::InvokeAssetConstructor<AssetType>(container);
-		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-		} CATCH (const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-		} CATCH_END
-	}
-
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
-	{
-		TRY {
-			return Internal::InvokeAssetConstructor<AssetType>(ChunkFileContainer(blob, depVal, requestParameters));
-		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH (const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH_END
-	}
-
-	//
-	//		Auto construct to:
-	//			(IFileInterface&, const DirectorySearchRules&, const DependencyValidation&)
+	//			(IFileInterface&, DirectorySearchRules&&, DependencyValidation&&)
 	//
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_FileSystem)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
@@ -137,7 +101,7 @@ namespace Assets
 
 	//
 	//		Auto construct to:
-	//			(StringSection<utf8>&, const DirectorySearchRules&, const DependencyValidation&)
+	//			(StringSection<>, DirectorySearchRules&&, DependencyValidation&&)
 	//
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_TextFile)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
@@ -165,7 +129,7 @@ namespace Assets
 	//
 	//		Auto construct entry point
 	//
-	template<typename AssetType, typename... Params, typename std::enable_if<std::is_constructible<Internal::RemoveSmartPtrType<AssetType>, Params&&...>::value>::type* = nullptr>
+	template<typename AssetType, typename... Params, ENABLE_IF(std::is_constructible<Internal::RemoveSmartPtrType<AssetType>, Params&&...>::value)>
 		static AssetType AutoConstructAsset(Params&&... initialisers)
 	{
 		return Internal::InvokeAssetConstructor<AssetType>(std::forward<Params>(initialisers)...);

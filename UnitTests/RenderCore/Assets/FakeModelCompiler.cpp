@@ -13,6 +13,7 @@
 #include "../../../RenderCore/StateDesc.h"
 #include "../../../ConsoleRig/GlobalServices.h"			// for ConsoleRig::GetLibVersionDesc()
 #include "../../../OSServices/AttachableLibrary.h"
+#include "../../../Assets/ICompileOperation.h"
 #include "../../../Utility/Streams/StreamTypes.h"
 #include "../../../Formatters/TextFormatter.h"
 #include "../../../Formatters/TextOutputFormatter.h"
@@ -29,7 +30,7 @@ namespace UnitTests
 	public:
 		::Assets::DependencyValidation GetDependencyValidation() const override { return ::Assets::GetDepValSys().Make(_dependencies); }
 		std::vector<TargetDesc> GetTargets() const override { return _targets; }
-		std::vector<SerializedArtifact> SerializeTarget(unsigned idx) override
+		std::vector<::Assets::SerializedArtifact> SerializeTarget(unsigned idx) override
 		{
 			if (idx >= _targets.size())
 				return {};
@@ -73,16 +74,16 @@ namespace UnitTests
 		std::vector<TargetDesc> _targets;
 		std::string _modelName;
 
-		std::vector<SerializedArtifact> SerializeModel();
-		std::vector<SerializedArtifact> SerializeRawMat();
-		std::vector<SerializedArtifact> SerializeSkeleton();
+		std::vector<::Assets::SerializedArtifact> SerializeModel();
+		std::vector<::Assets::SerializedArtifact> SerializeRawMat();
+		std::vector<::Assets::SerializedArtifact> SerializeSkeleton();
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////
 		//   M A T E R I A L   T A B L E   //
 	///////////////////////////////////////////////////////////////////////////////////////////////
 
-	auto FakeModelCompileOperation::SerializeRawMat() -> std::vector<SerializedArtifact>
+	auto FakeModelCompileOperation::SerializeRawMat() -> std::vector<::Assets::SerializedArtifact>
 	{
 		MemoryOutputStream<char> strm;
 
@@ -110,7 +111,7 @@ namespace UnitTests
 		}
 
 		return {
-			::Assets::ICompileOperation::SerializedArtifact{
+			::Assets::SerializedArtifact{
 				Type_RawMat, 0, _modelName,
 				::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))}
 		};
@@ -150,7 +151,7 @@ namespace UnitTests
 		return result;
 	}
 
-	auto FakeModelCompileOperation::SerializeSkeleton() -> std::vector<SerializedArtifact>
+	auto FakeModelCompileOperation::SerializeSkeleton() -> std::vector<::Assets::SerializedArtifact>
 	{
 		auto nascentSkeleton = GenerateNascentSkeleton();
 
@@ -224,7 +225,7 @@ namespace UnitTests
 		return result;
 	}
 	
-	auto FakeModelCompileOperation::SerializeModel() -> std::vector<SerializedArtifact>
+	auto FakeModelCompileOperation::SerializeModel() -> std::vector<::Assets::SerializedArtifact>
 	{
 		auto model = GenerateModel();
 		auto embeddedSkeleton = GenerateNascentSkeleton();

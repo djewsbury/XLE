@@ -50,9 +50,6 @@ namespace RenderCore { namespace Assets
 	/// see RenderCore::Assets::Simple::ModelScaffold for more information about the scaffold
 	/// concept.
 	///
-	/// The ModelScaffold is loaded from a chunk-format file. See the Assets::ChunkFile
-	/// namespace for information about chunk files.
-	///
 	/// <seealso cref="ModelRenderer"/>
 	class ModelScaffold
 	{

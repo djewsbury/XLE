@@ -16,6 +16,15 @@ namespace Assets
 	class InitializerPack;
 	using ArtifactTargetCode = uint64_t;
 
+	struct SerializedArtifact
+	{
+		uint64_t		_chunkTypeCode;
+		unsigned		_version;
+		std::string		_name;
+		::Assets::Blob	_data;
+		::Assets::DependencyValidation _depVal;
+	};
+
 	class ICompileOperation
 	{
 	public:
@@ -23,14 +32,6 @@ namespace Assets
 		{
 			ArtifactTargetCode	_targetCode;
 			const char*			_name;
-		};
-		struct SerializedArtifact
-		{
-			uint64_t		_chunkTypeCode;
-			unsigned		_version;
-			std::string		_name;
-			::Assets::Blob	_data;
-			::Assets::DependencyValidation _depVal;
 		};
 		virtual std::vector<TargetDesc> GetTargets() const = 0;
 		virtual std::vector<SerializedArtifact> SerializeTarget(unsigned idx) = 0;
@@ -43,7 +44,7 @@ namespace Assets
 
 	struct SimpleCompilerResult
 	{
-		std::vector<::Assets::ICompileOperation::SerializedArtifact> _artifacts;
+		std::vector<SerializedArtifact> _artifacts;
 		uint64_t _targetCode;
 		::Assets::DependencyValidation _depVal;
 	};

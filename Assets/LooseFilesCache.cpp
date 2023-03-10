@@ -6,11 +6,12 @@
 #include "IntermediatesStore.h"
 #include "AssetUtils.h"
 #include "IFileSystem.h"
-#include "ChunkFile.h"
+#include "ChunkFileWriter.h"
 #include "ChunkFileContainer.h"
 #include "IArtifact.h"
 #include "DepVal.h"
 #include "BlockSerializer.h"
+#include "ICompileOperation.h"
 #include "../OSServices/Log.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Formatters/TextFormatter.h"
@@ -240,7 +241,7 @@ namespace Assets
 
 	std::shared_ptr<IArtifactCollection> LooseFilesStorage::StoreCompileProducts(
 		StringSection<> archivableName,
-		IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
+		IteratorRange<const SerializedArtifact*> artifacts,
 		::Assets::AssetState state,
 		IteratorRange<const DependentFileState*> dependencies,
 		const std::shared_ptr<StoreReferenceCounts>& storeRefCounts,
@@ -265,7 +266,7 @@ namespace Assets
 
 		// Will we create one chunk file that will contain most of the artifacts
 		// However, some special artifacts (eg, metric files), can become separate files
-		std::vector<ICompileOperation::SerializedArtifact> chunksInMainFile;
+		std::vector<SerializedArtifact> chunksInMainFile;
 		for (const auto&a:artifacts)
 			if (a._chunkTypeCode == ChunkType_Metrics) {
 				std::string metricsName;
@@ -301,7 +302,7 @@ namespace Assets
 		} else if (!chunksInMainFile.empty()) {
 			auto mainBlobName = productsName + ".chunk";
 			auto outputFile = OpenFileInterface(*_filesystem, mainBlobName + ".s", "wb", 0);
-			ChunkFile::BuildChunkFile(*outputFile, MakeIteratorRange(chunksInMainFile), _compilerVersionInfo);
+			BuildChunkFile(*outputFile, MakeIteratorRange(chunksInMainFile), _compilerVersionInfo);
 			compileProductsFile._compileProducts.push_back({ChunkType_Multi, mainBlobName});
 			renameOps.push_back({mainBlobName + ".s", mainBlobName});
 		}
@@ -469,7 +470,7 @@ namespace Assets
 					if (prod._type == ChunkType_Multi) {
 						// open with no sharing
 						auto mainChunkFile = OpenFileInterface(*_filesystem, prod._intermediateArtifact, "rb", 0);
-						ChunkFileContainer temp(prod._intermediateArtifact, _depVal);
+						ArtifactChunkContainer temp(prod._intermediateArtifact, _depVal);
 						auto fromMulti = temp.ResolveRequests(*mainChunkFile, MakeIteratorRange(requestsForMulti));
 						for (size_t c=0; c<fromMulti.size(); ++c)
 							result[requestsForMultiMapping[c]] = std::move(fromMulti[c]);

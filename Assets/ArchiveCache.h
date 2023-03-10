@@ -30,7 +30,7 @@ namespace Assets
 		void Commit(
 			uint64_t objectId,
 			const std::string& attachedStringName,
-			IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
+			IteratorRange<const SerializedArtifact*> artifacts,
 			::Assets::AssetState state,
 			IteratorRange<const DependentFileState*> dependentFiles,
 			std::function<void()>&& onFlush = {});

@@ -997,7 +997,7 @@ namespace SceneEngine
 		return *this;
 	}
 
-	GenericQuadTree::GenericQuadTree(const ::Assets::ChunkFileContainer& chunkFile) 
+	GenericQuadTree::GenericQuadTree(const ::Assets::ArtifactChunkContainer& chunkFile) 
 	: _depVal(chunkFile.GetDependencyValidation())
     {
         auto chunks = chunkFile.ResolveRequests(MakeIteratorRange(QuadTreeChunkRequests));

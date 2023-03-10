@@ -182,7 +182,7 @@ namespace Assets
 	std::shared_ptr<IArtifactCollection> IntermediatesStore::StoreCompileProducts(
 		StringSection<> archivableName,
 		CompileProductsGroupId groupId,
-		IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
+		IteratorRange<const SerializedArtifact*> artifacts,
 		::Assets::AssetState state,
 		IteratorRange<const DependencyValidation*> depVals)
 	{
@@ -237,7 +237,7 @@ namespace Assets
 		ArchiveEntryId entryId,
 		StringSection<> entryDescriptiveName,
 		CompileProductsGroupId groupId,
-		IteratorRange<const ICompileOperation::SerializedArtifact*> artifacts,
+		IteratorRange<const SerializedArtifact*> artifacts,
 		::Assets::AssetState state,
 		IteratorRange<const DependencyValidation*> depVals)
 	{

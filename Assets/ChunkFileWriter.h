@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "ICompileOperation.h"
 #include "../OSServices/RawFS.h"
 #include "../Utility/StringUtils.h"
 #include "../Core/Types.h"
@@ -18,18 +17,17 @@ namespace Utility { class OutputStream; }
 namespace Assets { class IFileInterface; }
 namespace OSServices { class LibVersionDesc; }
 
-namespace Assets { namespace ChunkFile
+namespace Assets
 {
-    using TypeIdentifier = uint64_t;
-    using SizeType = uint32_t;
-
-    static const TypeIdentifier TypeIdentifier_Unknown = 0;
-
 #pragma pack(push)
 #pragma pack(1)
     class ChunkHeader
     {
     public:
+        using TypeIdentifier = uint64_t;
+        using SizeType = uint32_t;
+        static const TypeIdentifier TypeIdentifier_Unknown = 0;
+
         TypeIdentifier  _chunkTypeCode;
         unsigned        _chunkVersion;
         char            _name[32];      // fixed size for serialisation convenience
@@ -82,16 +80,17 @@ namespace Assets { namespace ChunkFile
 
     ChunkHeader FindChunk(
         const utf8 filename[], std::vector<ChunkHeader>& hdrs,
-        TypeIdentifier chunkType, unsigned expectedVersion);
+        ChunkHeader::TypeIdentifier chunkType, unsigned expectedVersion);
 
     std::unique_ptr<uint8[]> RawChunkAsMemoryBlock(
-        const utf8 filename[], TypeIdentifier chunkType, unsigned expectedVersion);
+        const utf8 filename[], ChunkHeader::TypeIdentifier chunkType, unsigned expectedVersion);
 
+    struct SerializedArtifact;
     void BuildChunkFile(
 		IFileInterface& file,
-		IteratorRange<const ICompileOperation::SerializedArtifact*> chunks,
+		IteratorRange<const SerializedArtifact*> chunks,
 		const OSServices::LibVersionDesc& versionInfo,
-		std::function<bool(const ICompileOperation::SerializedArtifact&)> predicate = {});
+		std::function<bool(const SerializedArtifact&)> predicate = {});
 
     namespace Internal
     {
@@ -106,7 +105,7 @@ namespace Assets { namespace ChunkFile
             ~SimpleChunkFileWriterT();
 
             void BeginChunk(
-                ChunkFile::TypeIdentifier type,
+                ChunkHeader::TypeIdentifier type,
                 unsigned version, const char name[]);
             void FinishCurrentChunk();
 
@@ -117,7 +116,7 @@ namespace Assets { namespace ChunkFile
 
         protected:
 			Writer _writer;
-            ChunkFile::ChunkHeader _activeChunk;
+            ChunkHeader _activeChunk;
             size_t _activeChunkStart;
             bool _hasActiveChunk;
             unsigned _chunkCount;
@@ -127,5 +126,5 @@ namespace Assets { namespace ChunkFile
 
     using SimpleChunkFileWriter = Internal::SimpleChunkFileWriterT<OSServices::BasicFile>;
 
-}}
+}
 

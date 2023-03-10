@@ -297,7 +297,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return result;
 	}
 
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> NascentModel::SerializeToChunks(const std::string& name, const NascentSkeleton& embeddedSkeleton, const NativeVBSettings& nativeSettings) const
+	std::vector<::Assets::SerializedArtifact> NascentModel::SerializeToChunks(const std::string& name, const NascentSkeleton& embeddedSkeleton, const NativeVBSettings& nativeSettings) const
 	{
 		::Assets::BlockSerializer serializer;
 		auto recall = serializer.CreateRecall(sizeof(unsigned));
@@ -492,13 +492,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		return
 			{
-				::Assets::ICompileOperation::SerializedArtifact{
+				::Assets::SerializedArtifact{
 					RenderCore::Assets::ChunkType_ModelScaffold, ModelScaffoldVersion, name,
 					std::move(scaffoldBlock)},
-				::Assets::ICompileOperation::SerializedArtifact{
+				::Assets::SerializedArtifact{
 					RenderCore::Assets::ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, name,
 					std::move(largeResourcesBlock)},
-				::Assets::ICompileOperation::SerializedArtifact{
+				::Assets::SerializedArtifact{
 					RenderCore::Assets::ChunkType_Metrics, 0, "skin-" + name, 
 					std::move(metricsBlock)}
 			};

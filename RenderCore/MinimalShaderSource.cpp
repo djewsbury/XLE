@@ -236,9 +236,9 @@ namespace RenderCore
 			};
 		}
 		
-		virtual std::vector<SerializedArtifact> SerializeTarget(unsigned idx) override
+		virtual std::vector<::Assets::SerializedArtifact> SerializeTarget(unsigned idx) override
 		{
-			std::vector<SerializedArtifact> result;
+			std::vector<::Assets::SerializedArtifact> result;
 			if (_byteCode._payload)
 				result.push_back({
 					ChunkType_CompiledShaderByteCode, 0, "main",

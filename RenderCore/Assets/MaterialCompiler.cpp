@@ -10,13 +10,14 @@
 #include "MaterialMachine.h"
 #include "AssetUtils.h"
 #include "../../Assets/BlockSerializer.h"
-#include "../../Assets/ChunkFile.h"
+#include "../../Assets/ChunkFileWriter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/NascentChunk.h"
 #include "../../Assets/MemoryFile.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/IArtifact.h"
+#include "../../Assets/ICompileOperation.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/TextFormatter.h"
@@ -236,7 +237,7 @@ namespace RenderCore { namespace Assets
 		blockSerializer.PushSizeValueAtRecall(outerRecall);
 
 		return {
-			std::vector<::Assets::ICompileOperation::SerializedArtifact>{
+			std::vector<::Assets::SerializedArtifact>{
 				{
 					ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
 					(StringMeld<256>() << sourceModel << "&" << sourceMaterial).AsString(),

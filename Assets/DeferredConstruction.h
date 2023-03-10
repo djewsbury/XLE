@@ -7,27 +7,48 @@
 #include "InitializerPack.h"
 #include "Marker.h"
 #include "AssetTraits.h"
-#include "../ConsoleRig/GlobalServices.h"		// for GetLongTaskThreadPool
 #include "../OSServices/Log.h"
 #include "../Utility/Threading/CompletionThreadPool.h"
 #include "../Utility/StringUtils.h"		// required for implied StringSection<> constructor
 #include <memory>
 
-// todo -- ConfigFileContainer.h is required early, because the overrides that can be called by
-// ApplyAutoConstructToPromise_impl must come before that function.
-//
-// In the C++ standard, this is 14.6.4.2 -- only lookups using ADl can use the context from template
-// instantiation.
-//
-// However it would be preferable to break that dependency, because it would given us more flexibility 
-// for expanding the range of AutoConstructAsset() overrides
-// hm... it's difficult though because ADL isn't exactly what we want here
-#include "ConfigFileContainer.h"
-// #include "IArtifact.h"
-
 namespace Assets
 {
 	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
+
+	/// <summary>Helper class for defeating C++ unqualified name lookup rules</summary>
+	///
+	/// When an unqualified function is referenced from a template function/method, normally the 
+	/// function declaration must be visible in the compilation context of the first pass of that 
+	/// template function/method.
+	///
+	/// In other words, even if there is an implementation or override for the function visible to
+	/// the instantiation context, it can't be used unless it was also visible to the first pass.
+	///
+	/// In practices, this requires the DeferredConstruction header to be included after all possible
+	/// overrides of AutoConstructToPromiseOverride (and other similar functions)
+	///
+	/// However, the above rule is broken for the case of argument dependant lookup (ADL). In that case, all
+	/// possibilities in the instantiation context are considered.
+	/// In the C++ standard, this is 14.6.4.2
+	///
+	/// We want AutoConstructToPromiseOverride to take on this ADL behaviour, to enable greater flexibility
+	/// and avoid awkward restrictions about include order.
+	///
+	/// To do this, we replace std::promise<> with an near-identical class in Assets, and this causes
+	/// ADL to kick in and find the AutoConstructToPromiseOverride implementations in Assets. This works
+	/// even if all of the arguments in AutoConstructToPromiseOverride are templated -- ie, it's just the
+	/// fact that we're passing in an object from the Assets namespace that causes all of the overrides
+	/// in Assets to be found with the preferred behaviour.
+	///
+	template<typename T>
+		class WrappedPromise : public std::promise<T>
+	{
+	public:
+		WrappedPromise(std::promise<T>&& p) : std::promise<T>(std::move(p)) {}
+		WrappedPromise() {}
+		using std::promise<T>::operator=;
+	};
 
 	namespace Internal
 	{
@@ -42,16 +63,18 @@ namespace Assets
 		template<typename AssetOrPtrType, typename... Params>
 			struct HasConstructToPromiseClassOverride : decltype(HasConstructToPromiseClassOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
 
-		template<typename PromiseType, typename... Params>
+		template<typename AssetOrPtrType, typename... Params>
 			static auto HasConstructToPromiseFreeOverride_Helper(int) -> decltype(
-				AutoConstructToPromiseOverride(std::declval<PromiseType&&>(), std::declval<Params>()...),
+				AutoConstructToPromiseOverride(std::declval<WrappedPromise<AssetOrPtrType>&&>(), std::declval<Params>()...),
 				std::true_type{});
 
 		template<typename...>
 			static auto HasConstructToPromiseFreeOverride_Helper(...) -> std::false_type;
 
-		template<typename PromiseType, typename... Params>
-			struct HasConstructToPromiseFreeOverride : decltype(HasConstructToPromiseFreeOverride_Helper<PromiseType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
+		template<typename AssetOrPtrType, typename... Params>
+			struct HasConstructToPromiseFreeOverride : decltype(HasConstructToPromiseFreeOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
+
+		ThreadPool& GetLongTaskThreadPool();
 	}
 
 	template<typename Promise, typename... Params>
@@ -104,9 +127,9 @@ namespace Assets
 			} CATCH(...) {
 				Log(Error) << "Suppressing unknown exception thrown from ConstructToPromise override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
 			} CATCH_END
-		} else if constexpr (Internal::HasConstructToPromiseFreeOverride<Promise, Params&&...>::value) {
+		} else if constexpr (Internal::HasConstructToPromiseFreeOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
 			TRY {
-				AutoConstructToPromiseOverride(std::move(promise), std::forward<Params>(initialisers)...);
+				AutoConstructToPromiseOverride(WrappedPromise<Internal::PromisedType<Promise>>{std::move(promise)}, std::forward<Params>(initialisers)...);
 			} CATCH(const std::exception& e) {
 				Log(Error) << "Suppressing exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
 				Log(Error) << e.what() << std::endl;
@@ -114,7 +137,7 @@ namespace Assets
 				Log(Error) << "Suppressing unknown exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
 			} CATCH_END
 		} else {
-			ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			Internal::GetLongTaskThreadPool().Enqueue(
 				[initializersTuple=std::tuple{MakeStoreableInAny(initialisers)...}, promise=std::move(promise)]() mutable {
 					TRY {
 						Internal::ApplyAutoConstructToPromise(std::move(promise), std::move(initializersTuple));

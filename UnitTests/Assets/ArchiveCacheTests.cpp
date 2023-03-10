@@ -24,64 +24,64 @@ namespace UnitTests
 	static const auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
 	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
 
-	static ::Assets::ICompileOperation::SerializedArtifact s_artifactsObj1[] {
-		::Assets::ICompileOperation::SerializedArtifact {
+	static ::Assets::SerializedArtifact s_artifactsObj1[] {
+		::Assets::SerializedArtifact {
 			"artifact-one"_h,
 			1,
 			"artifact-one",
 			::Assets::AsBlob("artifact-one-contents") },
-		::Assets::ICompileOperation::SerializedArtifact {
+		::Assets::SerializedArtifact {
 			"artifact-two"_h,
 			5,
 			"artifact-two",
 			::Assets::AsBlob("artifact-two-contents") },
-		::Assets::ICompileOperation::SerializedArtifact {
+		::Assets::SerializedArtifact {
 			ChunkType_Metrics,
 			1,
 			"artifact-info",
 			::Assets::AsBlob("This is metrics associated with a collection of artifacts") },
-		::Assets::ICompileOperation::SerializedArtifact {
+		::Assets::SerializedArtifact {
 			ChunkType_Log,
 			1,
 			"artifact-more-info",
 			::Assets::AsBlob("This is a log file associated with the item") }
 	};
 
-	static ::Assets::ICompileOperation::SerializedArtifact s_artifactsObj2[] {
-		::Assets::ICompileOperation::SerializedArtifact {
+	static ::Assets::SerializedArtifact s_artifactsObj2[] {
+		::Assets::SerializedArtifact {
 			"artifact-one"_h,
 			1,
 			"item-two-artifact-one",
 			::Assets::AsBlob("item-two-artifact-one-contents") },
-		::Assets::ICompileOperation::SerializedArtifact {
+		::Assets::SerializedArtifact {
 			"artifact-two"_h,
 			5,
 			"item-two-artifact-two",
 			::Assets::AsBlob("item-two-artifact-two-contents") },
-		::Assets::ICompileOperation::SerializedArtifact {
+		::Assets::SerializedArtifact {
 			ChunkType_Metrics,
 			1,
 			"item-two-artifact-info",
 			::Assets::AsBlob("item-two-metrics") },
-		::Assets::ICompileOperation::SerializedArtifact {
+		::Assets::SerializedArtifact {
 			ChunkType_Log,
 			1,
 			"item-two-artifact-more-info",
 			::Assets::AsBlob("item-two-log") }
 	};
 
-	static ::Assets::ICompileOperation::SerializedArtifact s_artifactsObj2Replacement[] {
-		::Assets::ICompileOperation::SerializedArtifact {
+	static ::Assets::SerializedArtifact s_artifactsObj2Replacement[] {
+		::Assets::SerializedArtifact {
 			"artifact-one"_h,
 			1,
 			"item-two-replacement-artifact-one",
 			::Assets::AsBlob("item-two-replacement-artifact-one-contents") },
-		::Assets::ICompileOperation::SerializedArtifact {
+		::Assets::SerializedArtifact {
 			"artifact-two"_h,
 			5,
 			"item-two-replacement-artifact-two",
 			::Assets::AsBlob("item-two-replacement-artifact-two-contents") },
-		::Assets::ICompileOperation::SerializedArtifact {
+		::Assets::SerializedArtifact {
 			ChunkType_Log,
 			1,
 			"item-two-replacement-artifact-more-info",

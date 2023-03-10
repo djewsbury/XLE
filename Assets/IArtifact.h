@@ -8,8 +8,8 @@
 	#error This file cannot be included in CLR builds
 #endif
 
+#include "ChunkFileContainer.h"
 #include "IAsyncMarker.h"
-#include "ICompileOperation.h"
 #include "AssetsCore.h"
 #include "Continuation.h"
 #include "ContinuationUtil.h"
@@ -24,35 +24,6 @@
 
 namespace Assets
 {
-	class IFileInterface;
-	using ArtifactReopenFunction = std::function<std::shared_ptr<IFileInterface>()>;
-
-    class ArtifactRequest
-    {
-    public:
-		const char*		_name;		// for debugging purposes, to make it easier to track requests
-        uint64_t 		_chunkTypeCode;
-        unsigned        _expectedVersion;
-        
-        enum class DataType
-        {
-            ReopenFunction, 
-			Raw, BlockSerializer,
-			SharedBlob,
-			Filename
-        };
-        DataType        _dataType;
-    };
-
-    class ArtifactRequestResult
-    {
-    public:
-        std::unique_ptr<uint8[], PODAlignedDeletor> _buffer;
-        size_t                                      _bufferSize = 0;
-		Blob										_sharedBlob;
-		ArtifactReopenFunction						_reopenFunction;
-		std::string 								_artifactFilename;
-    };
 
 	class IArtifactCollection
 	{
@@ -113,6 +84,26 @@ namespace Assets
 		DEBUG_ONLY(std::string _initializer;)
     };
 
+	/// <summary>Returned from a IAssetCompiler on response to a compile request</summary>
+	/// After receiving a compile marker, the caller can choose to either attempt to 
+	/// retrieve an existing artifact from a previous compile, or begin a new 
+	/// asynchronous compile operation.
+	/// GetArtifact() will retrieve and existing, but if it can't be found, or is out of
+	///		date, will start a new compile
+	/// InvokeCompile() will always begin a new compile, even if there's a valid completed
+	///		artifact. If the same compile has been begun by another caller during this same
+	///		session, then there is a chance that the compile isn't begun again and we return
+	///		a future to the same result
+	class IIntermediateCompileMarker
+	{
+	public:
+		virtual std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> GetArtifact(ArtifactTargetCode) = 0;
+		virtual ArtifactCollectionFuture InvokeCompile(CompileRequestCode targetCode) = 0;
+		virtual std::string GetCompilerDescription() const = 0;
+		virtual void AttachConduit(VariantFunctions&&) = 0;
+		virtual ~IIntermediateCompileMarker();
+	};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class ChunkFileArtifactCollection : public IArtifactCollection
@@ -133,6 +124,8 @@ namespace Assets
 		std::string _requestParameters;
 	};
 
+	struct SerializedArtifact;
+
 	class BlobArtifactCollection : public IArtifactCollection
 	{
 	public:
@@ -141,14 +134,14 @@ namespace Assets
 		StringSection<ResChar> GetRequestParameters() const override;
 		AssetState GetAssetState() const override;
 		BlobArtifactCollection(
-			IteratorRange<const ICompileOperation::SerializedArtifact*> chunks, 
+			IteratorRange<const SerializedArtifact*> chunks, 
 			AssetState state,
 			const DependencyValidation& depVal, 
 			const std::string& collectionName = {},
 			const std::string& requestParams = {});
 		~BlobArtifactCollection();
 	private:
-		std::vector<ICompileOperation::SerializedArtifact> _chunks;
+		std::vector<SerializedArtifact> _chunks;
 		AssetState _state;
 		DependencyValidation _depVal;
 		std::string _collectionName;
@@ -173,68 +166,13 @@ namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
-
-	namespace Internal 
+	class IIntermediateCompileMarker;
+	namespace Internal
 	{
 		std::shared_ptr<IIntermediateCompileMarker> BeginCompileOperation(CompileRequestCode targetCode, InitializerPack&&);
-
-		template <typename AssetType>
-			class AssetTraits2_
-		{
-		private:
-			struct HasCompileProcessTypeHelper
-			{
-				struct FakeBase { static const uint64_t CompileProcessType; };
-				struct TestSubject : public FakeBase, public AssetType {};
-
-				template <typename C, C> struct Check;
-
-				// This technique is based on an implementation from StackOverflow. Here, taking the address
-				// of the static member variable in TestSubject would be ambiguous, iff CompileProcessType 
-				// is actually a member of AssetType (otherwise, the member in FakeBase is found)
-				template <typename C> static std::false_type Test(Check<const uint64_t*, &C::CompileProcessType> *);
-				template <typename> static std::true_type Test(...);
-
-				static const bool value = decltype(Test<TestSubject>(0))::value;
-			};
-
-			template<typename T> static auto HasChunkRequestsHelper(int) -> decltype(&T::ChunkRequests[0], std::true_type{});
-			template<typename...> static auto HasChunkRequestsHelper(...) -> std::false_type;
-
-		public:
-			static const bool Constructor_Blob = std::is_constructible<AssetType, ::Assets::Blob&&, DependencyValidation&&, StringSection<>>::value;
-			static const bool Constructor_ArtifactRequestResult = std::is_constructible<AssetType, IteratorRange<ArtifactRequestResult*>, DependencyValidation&&>::value;
-
-			static const bool HasCompileProcessType = HasCompileProcessTypeHelper::value;
-			static const bool HasChunkRequests = decltype(HasChunkRequestsHelper<AssetType>(0))::value;
-		};
-
-		template<typename AssetType>
-			using AssetTraits2 = AssetTraits2_<std::decay_t<RemoveSmartPtrType<AssetType>>>;
-
-		// Note -- here's a useful pattern that can turn any expression in a SFINAE condition
-		// Taken from stack overflow -- https://stackoverflow.com/questions/257288/is-it-possible-to-write-a-template-to-check-for-a-functions-existence
-		// If the expression in the first decltype() is invalid, we will trigger SFINAE and fall back to std::false_type
-		template<typename PromiseType>
-			static auto HasConstructToPromiseFromBlob_Helper(int) -> decltype(PromisedTypeRemPtr<PromiseType>::ConstructToPromise(std::declval<PromiseType&&>(), std::declval<Blob&&>(), std::declval<DependencyValidation&&>(), std::declval<StringSection<>>()), std::true_type{});
-
-		template<typename...>
-			static auto HasConstructToPromiseFromBlob_Helper(...) -> std::false_type;
-
-		template<typename PromiseType>
-			struct HasConstructToPromiseFromBlob_ : decltype(HasConstructToPromiseFromBlob_Helper<PromiseType>(0)) {};
-
-		template<typename PromiseType>
-			using HasConstructToPromiseFromBlob = HasConstructToPromiseFromBlob_<PromiseType>;
 	}
 
-}
-
-#include "ChunkFileContainer.h"	// todo -- hack
-
-namespace Assets
-{
+	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
 
 	//
 	//		Auto construct to:
@@ -259,7 +197,7 @@ namespace Assets
 		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
-			auto chunks = ChunkFileContainer(blob, depVal, requestParameters).ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+			auto chunks = ArtifactChunkContainer(blob, depVal, requestParameters).ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), depVal);
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
@@ -351,7 +289,7 @@ namespace Assets
 	template<typename Promise>
 		static void DefaultCompilerConstructionSynchronously(
 			Promise&& promise,
-			CompileRequestCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
+			CompileRequestCode targetCode,		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
 			InitializerPack&& initializerPack,
 			OperationContext* operationContext = nullptr)
 	{
@@ -401,7 +339,7 @@ namespace Assets
 	template<typename Promise>
 		static void DefaultCompilerConstructionSynchronously(
 			Promise&& promise,
-			CompileRequestCode targetCode, 		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
+			CompileRequestCode targetCode,		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
 			InitializerPack&& initializerPack,
 			VariantFunctions&& progressiveResultConduit,
 			OperationContext* operationContext = nullptr)
@@ -473,65 +411,5 @@ namespace Assets
 			});
 	}
 
-	template<
-		typename Promise,
-		ENABLE_IF(	Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests 
-				&&  !Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType)>
-		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)
-	{
-		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);
-		WhenAll(containerFuture).ThenConstructToPromise(
-			std::move(promise),
-			[](const std::shared_ptr<ChunkFileContainer>& container) {
-				auto chunks = container->ResolveRequests(MakeIteratorRange(Internal::PromisedTypeRemPtr<Promise>::ChunkRequests));
-				return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(MakeIteratorRange(chunks), container->GetDependencyValidation());
-			});
-	}
-
+	#undef ENABLE_IF
 }
-
-#if 0
-namespace Utility
-{
-	template<
-		typename Promise, typename... Params,
-		ENABLE_IF(::Assets::Internal::AssetTraits2<::Assets::Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType)>
-		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> p0, StringSection<> p1)
-	{
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[initPack=::Assets::InitializerPack{p0, p1}, promise=std::move(promise)]() mutable {
-				::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), ::Assets::Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack));
-			});
-	}
-}
-#endif
-
-#if 1	// hack -- for testing
-namespace std
-{
-	template<
-		typename PromisedType, typename... Params,
-		ENABLE_IF(::Assets::Internal::AssetTraits2<PromisedType>::HasCompileProcessType)>
-		void AutoConstructToPromiseOverride(std::promise<PromisedType>&& promise, Params&&... initialisers)
-	{
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[initPack=::Assets::InitializerPack{std::forward<Params>(initialisers)...}, promise=std::move(promise)]() mutable {
-				::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), ::Assets::Internal::RemoveSmartPtrType<PromisedType>::CompileProcessType, std::move(initPack));
-			});
-	}
-
-	template<
-		typename PromisedType, typename... Params,
-		ENABLE_IF(::Assets::Internal::AssetTraits2<PromisedType>::HasCompileProcessType)>
-		void AutoConstructToPromiseOverride(std::promise<PromisedType>&& promise, std::shared_ptr<::Assets::OperationContext> opContext, Params&&... initialisers)
-	{
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[initPack=::Assets::InitializerPack{std::forward<Params>(initialisers)...}, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
-				::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), ::Assets::Internal::RemoveSmartPtrType<PromisedType>::CompileProcessType, std::move(initPack), opContext.get());
-			});
-	}
-}
-#endif
-
-#undef ENABLE_IF
-

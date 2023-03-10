@@ -4,9 +4,10 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ChunkFile.h"
+#include "ChunkFileWriter.h"
 #include "AssetsCore.h"
 #include "IFileSystem.h"
+#include "ICompileOperation.h"      // for SerializedArtifact
 #include "../OSServices/AttachableLibrary.h"
 #include "../OSServices/RawFS.h"
 #include "../Utility/Streams/Stream.h"
@@ -14,7 +15,7 @@
 #include "../Utility/MemoryUtils.h"
 #include <tuple>
 
-namespace Assets { namespace ChunkFile
+namespace Assets
 {
     ChunkFileHeader MakeChunkFileHeader(unsigned chunkCount, const char buildVersionString[], const char buildDateString[])
     {
@@ -53,13 +54,13 @@ namespace Assets { namespace ChunkFile
         return result;
     }
 
-    ChunkFile::ChunkHeader FindChunk(
+    ChunkHeader FindChunk(
         const utf8 filename[],
-        std::vector<ChunkFile::ChunkHeader>& hdrs,
-        ChunkFile::TypeIdentifier chunkType,
+        std::vector<ChunkHeader>& hdrs,
+        ChunkHeader::TypeIdentifier chunkType,
         unsigned expectedVersion)
     {
-        ChunkFile::ChunkHeader scaffoldChunk;
+        ChunkHeader scaffoldChunk;
         for (auto i=hdrs.begin(); i!=hdrs.end(); ++i) {
             if (i->_chunkTypeCode == chunkType) {
                 scaffoldChunk = *i;
@@ -80,11 +81,11 @@ namespace Assets { namespace ChunkFile
 
     std::unique_ptr<uint8[]> RawChunkAsMemoryBlock(
         const utf8 filename[],
-        ChunkFile::TypeIdentifier chunkType,
+        ChunkHeader::TypeIdentifier chunkType,
         unsigned expectedVersion)
     {
         auto file = Assets::MainFileSystem::OpenFileInterface(filename, "rb");
-        auto chunks = ChunkFile::LoadChunkTable(*file);
+        auto chunks = LoadChunkTable(*file);
 
         auto scaffoldChunk = FindChunk(filename, chunks, chunkType, expectedVersion);
         auto rawMemoryBlock = std::make_unique<uint8[]>(scaffoldChunk._size);
@@ -95,16 +96,15 @@ namespace Assets { namespace ChunkFile
 
     void BuildChunkFile(
         IFileInterface& file,
-        IteratorRange<const ICompileOperation::SerializedArtifact*> chunks,
+        IteratorRange<const SerializedArtifact*> chunks,
         const OSServices::LibVersionDesc& versionInfo,
-        std::function<bool(const ICompileOperation::SerializedArtifact&)> predicate)
+        std::function<bool(const SerializedArtifact&)> predicate)
     {
         unsigned chunksForMainFile = 0;
 		for (const auto& c:chunks)
             if (!predicate || predicate(c))
                 ++chunksForMainFile;
 
-        using namespace Assets::ChunkFile;
         auto header = MakeChunkFileHeader(
             chunksForMainFile, 
             versionInfo._versionString, versionInfo._buildDateString);
@@ -113,12 +113,12 @@ namespace Assets { namespace ChunkFile
         unsigned trackingOffset = unsigned(file.TellP() + sizeof(ChunkHeader) * chunksForMainFile);
         for (const auto& c:chunks)
             if (!predicate || predicate(c)) {
-				ChunkFile::ChunkHeader hdr;
+				ChunkHeader hdr;
 				hdr._chunkTypeCode = c._chunkTypeCode;
 				hdr._chunkVersion = c._version;
 				XlCopyString(hdr._name, c._name);
                 hdr._fileOffset = trackingOffset;
-				hdr._size = (ChunkFile::SizeType)c._data->size();
+				hdr._size = (ChunkHeader::SizeType)c._data->size();
                 file.Write(&hdr, sizeof(hdr), 1);
                 trackingOffset += hdr._size;
             }
@@ -162,7 +162,7 @@ namespace Assets { namespace ChunkFile
 
         template<typename Writer>
             void SimpleChunkFileWriterT<Writer>::BeginChunk(   
-                ChunkFile::TypeIdentifier type,
+                ChunkHeader::TypeIdentifier type,
                 unsigned version, const char name[])
         {
             if (_hasActiveChunk) {
@@ -173,7 +173,7 @@ namespace Assets { namespace ChunkFile
             _activeChunk._chunkVersion = version;
             XlCopyString(_activeChunk._name, name);
             _activeChunkStart = _writer.TellP();
-            _activeChunk._fileOffset = (ChunkFile::SizeType)_activeChunkStart;
+            _activeChunk._fileOffset = (ChunkHeader::SizeType)_activeChunkStart;
             _activeChunk._size = 0; // unknown currently
 
             _hasActiveChunk = true;
@@ -182,11 +182,10 @@ namespace Assets { namespace ChunkFile
         template<typename Writer>
             void SimpleChunkFileWriterT<Writer>::FinishCurrentChunk()
         {
-            using namespace Assets::ChunkFile;
             auto oldLoc = _writer.TellP();
             auto chunkHeaderLoc = sizeof(ChunkFileHeader) + _activeChunkIndex * sizeof(ChunkHeader);
             _writer.Seek(chunkHeaderLoc);
-            _activeChunk._size = (ChunkFile::SizeType)std::max(size_t(0), oldLoc - _activeChunkStart);
+            _activeChunk._size = (ChunkHeader::SizeType)std::max(size_t(0), oldLoc - _activeChunkStart);
 			_writer.Write(&_activeChunk, sizeof(ChunkHeader), 1);
             _writer.Seek(oldLoc);
             ++_activeChunkIndex;
@@ -221,5 +220,5 @@ namespace Assets { namespace ChunkFile
 
     template class Internal::SimpleChunkFileWriterT<OSServices::BasicFile>;
 
-}}
+}
 

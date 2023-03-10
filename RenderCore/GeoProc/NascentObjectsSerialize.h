@@ -13,17 +13,17 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	class NascentAnimationSet;
 	struct NativeVBSettings;
 
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkinToChunks(
+	std::vector<::Assets::SerializedArtifact> SerializeSkinToChunks(
 		const std::string& name,
 		const NascentModel& model,
 		const NascentSkeleton& embeddedSkeleton,
 		const NativeVBSettings& nativeSettings);
 
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeSkeletonToChunks(
+	std::vector<::Assets::SerializedArtifact> SerializeSkeletonToChunks(
 		const std::string& name,
 		const NascentSkeleton& skeleton);
 
-	std::vector<::Assets::ICompileOperation::SerializedArtifact> SerializeAnimationsToChunks(
+	std::vector<::Assets::SerializedArtifact> SerializeAnimationsToChunks(
 		const std::string& name,
 		const NascentAnimationSet& animationSet);
 }}}

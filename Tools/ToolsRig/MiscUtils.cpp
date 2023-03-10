@@ -9,6 +9,7 @@
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/OperationContext.h"
+#include "../../Assets/IntermediateCompilers.h"
 #include "../../Utility/Threading/Mutex.h"
 
 namespace ToolsRig

@@ -20,6 +20,9 @@
 #include "../RenderCore/Assets/MaterialScaffold.h"
 #include "../Math/ProjectionMath.h"
 #include "../Assets/AssetHeapLRU.h"
+#include "../Assets/Continuation.h"
+#include "../Assets/IArtifact.h"
+#include "../Assets/IntermediateCompilers.h"
 #include "../Utility/HeapUtils.h"
 #include <unordered_map>
 

@@ -9,7 +9,7 @@
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/IntermediatesStore.h"
 #include "../../Assets/MemoryFile.h"
-#include "../../Assets/ChunkFile.h"
+#include "../../Assets/ChunkFileWriter.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/InitializerPack.h"
 #include "../../Assets/DeferredConstruction.h"
@@ -53,7 +53,7 @@ namespace UnitTests
 
 		static std::mutex s_pauseCompilationLock;
 
-		virtual std::vector<SerializedArtifact>	SerializeTarget(unsigned idx) override
+		virtual std::vector<::Assets::SerializedArtifact>	SerializeTarget(unsigned idx) override
 		{
 			ScopedLock(s_pauseCompilationLock);
 
@@ -64,9 +64,9 @@ namespace UnitTests
 				Throw(std::runtime_error("Throw from serialize target requested"));
 
 			// Blobs written here will become chunks in the output file
-			std::vector<SerializedArtifact> result;
+			std::vector<::Assets::SerializedArtifact> result;
 			{
-				SerializedArtifact opRes;
+				::Assets::SerializedArtifact opRes;
 				opRes._chunkTypeCode = Type_UnitTestArtifact;
 				opRes._version = 1;
 				opRes._name = "unitary-artifact";
@@ -74,7 +74,7 @@ namespace UnitTests
 				result.emplace_back(std::move(opRes));
 			}
 			{
-				SerializedArtifact opRes;
+				::Assets::SerializedArtifact opRes;
 				opRes._chunkTypeCode = Type_UnitTestExtraArtifact;
 				opRes._version = 1;
 				opRes._name = "unitary-artifact-extra";
@@ -86,7 +86,7 @@ namespace UnitTests
 			// client that initiated the compile. It's just gets written to the intermediate assets
 			// store and is mostly used for debugging purposes
 			{
-				SerializedArtifact opRes;
+				::Assets::SerializedArtifact opRes;
 				opRes._chunkTypeCode = ConstHash64Legacy<'Metr', 'ics'>::Value;
 				opRes._version = 1;
 				opRes._name = "unitary-artifact-metrics";
@@ -576,7 +576,7 @@ namespace UnitTests
 		{
 			std::unique_lock<std::mutex> pauseLock { TestCompileOperation::s_pauseCompilationLock };
 
-			static_assert(::Assets::Internal::HasConstructToPromiseFreeOverride<std::promise<TestChunkRequestsAssetWithCompileProcessType>, std::shared_ptr<::Assets::OperationContext>, const char*>::value);
+			static_assert(::Assets::Internal::HasConstructToPromiseFreeOverride<TestChunkRequestsAssetWithCompileProcessType, std::shared_ptr<::Assets::OperationContext>, const char*>::value);
 
 			// begin a compile (it don't complete yet because of the pause lock)
 			auto futureByPtr = ::Assets::ConstructToMarkerPtr<TestChunkRequestsAssetWithCompileProcessType>(opContext, "unit-test-asset-op-context");

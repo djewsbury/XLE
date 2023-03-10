@@ -14,9 +14,9 @@ namespace Assets { namespace Internal
 		return ::Assets::Legacy::GetAsset<ConfigFileContainer<>>(identifier);
 	}
 
-	const ChunkFileContainer& GetChunkFileContainer(StringSection<ResChar> identifier)
+	const ArtifactChunkContainer& GetChunkFileContainer(StringSection<ResChar> identifier)
 	{
-		return ::Assets::Legacy::GetAsset<ChunkFileContainer>(identifier);
+		return ::Assets::Legacy::GetAsset<ArtifactChunkContainer>(identifier);
 	}
 
 	std::shared_future<std::shared_ptr<ConfigFileContainer<>>> GetConfigFileContainerFuture(StringSection<ResChar> identifier)
@@ -24,9 +24,9 @@ namespace Assets { namespace Internal
 		return ::Assets::MakeAssetPtr<ConfigFileContainer<>>(identifier);
 	}
 
-	std::shared_future<std::shared_ptr<ChunkFileContainer>> GetChunkFileContainerFuture(StringSection<ResChar> identifier)
+	std::shared_future<std::shared_ptr<ArtifactChunkContainer>> GetChunkFileContainerFuture(StringSection<ResChar> identifier)
 	{
-		return ::Assets::MakeAssetPtr<ChunkFileContainer>(identifier);
+		return ::Assets::MakeAssetPtr<ArtifactChunkContainer>(identifier);
 	}
 }}
 
