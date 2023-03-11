@@ -29,14 +29,14 @@ namespace EntityInterface
 
 		static void ConstructToPromise(
 			std::promise<MountedData>&& promise,
-			StringSection<> mountLocation)
+			::Assets::Initializer<> mountLocation)
 		{
 			::Assets::WhenAll(ToolsRig::Services::GetEntityMountingTree().BeginFormatter(mountLocation)).ThenConstructToPromise(
 				std::move(promise),
 				[](auto fmttr) { return MountedData{*fmttr}; });
 		}
 
-		static const T& LoadOrDefault(StringSection<> mountLocation)
+		static const T& LoadOrDefault(::Assets::Initializer<> mountLocation)
 		{
 			auto marker = ::Assets::MakeAssetMarker<MountedData>(mountLocation);
 			if (auto* actualized = marker->TryActualize())

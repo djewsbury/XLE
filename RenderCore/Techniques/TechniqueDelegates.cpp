@@ -116,8 +116,7 @@ namespace RenderCore { namespace Techniques
 		const RasterizationDesc& rasterization,
 		const DepthStencilDesc& depthStencil)
 	{
-		const char* techFile = ILLUM_LEGACY_TECH;
-		auto techniqueFuture = ::Assets::MakeAssetPtr<Technique>(techFile);
+		auto techniqueFuture = ::Assets::MakeAssetPtr<Technique>(ILLUM_LEGACY_TECH);
 		::Assets::WhenAll(techniqueFuture).CheckImmediately().ThenConstructToPromise(
 			std::move(promise),
 			[techniqueIndex, blend, rasterization, depthStencil](auto&& promise, auto technique) {

@@ -15,7 +15,6 @@
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StringUtils.h"
-#include "../../xleres/FileList.h"
 #include <stack>
 #include <iomanip>
 #include <functional>

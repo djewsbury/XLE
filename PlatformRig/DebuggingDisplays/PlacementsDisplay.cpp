@@ -37,6 +37,7 @@
 #include <sstream>
 
 using namespace Utility::Literals;
+using namespace Assets::Literals;
 
 namespace PlatformRig { namespace Overlays
 {
@@ -580,7 +581,7 @@ namespace PlatformRig { namespace Overlays
 
 		ToolTipStyler()
 		{
-			_staticData = &EntityInterface::MountedData<StaticData>::LoadOrDefault("cfg/displays/tooltipstyler");
+			_staticData = &EntityInterface::MountedData<StaticData>::LoadOrDefault("cfg/displays/tooltipstyler"_initializer);
 			_headingFont = ActualizeFont(_staticData->_headingFont);
 			_valueFont = ActualizeFont(_staticData->_valueFont);
 
@@ -809,7 +810,7 @@ namespace PlatformRig { namespace Overlays
 				if (screenSpaceMins[0] < screenSpaceMaxs[0]) {
 					// FillRectangle(context, Rect{screenSpaceMins, screenSpaceMaxs}, ColorB(196, 196, 196, 128));
 
-					auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
+					auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme"_initializer);
 					float spaceLeft = screenSpaceMins[0];
 					float spaceRight = viewportDims[0] - screenSpaceMaxs[0];
 

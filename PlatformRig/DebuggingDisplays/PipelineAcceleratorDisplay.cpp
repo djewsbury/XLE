@@ -23,6 +23,7 @@
 
 using namespace PlatformRig::Literals;
 using namespace Utility::Literals;
+using namespace Assets::Literals;
 
 namespace PlatformRig { namespace Overlays
 {
@@ -81,7 +82,7 @@ namespace PlatformRig { namespace Overlays
 		// Find the spacing required to make this work...
 		assert(!buttonWidths.empty());
 		assert(buttonWidths.size() == result.size());
-		auto& staticData = EntityInterface::MountedData<ComboBarStaticData>::LoadOrDefault("cfg/displays/combobar");
+		auto& staticData = EntityInterface::MountedData<ComboBarStaticData>::LoadOrDefault("cfg/displays/combobar"_initializer);
 		unsigned totalButtonWidth = 0, minimalWidth = 0;
 		auto tiltWidth = outerRect.Height() / 4;
 		for (auto w:buttonWidths) {
@@ -198,7 +199,7 @@ namespace PlatformRig { namespace Overlays
 			}
 		}
 
-		auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
+		auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme"_initializer);
 
 		if (auto* blurryBackground = context.GetService<BlurryBackgroundEffect>()) {
 			ColorAdjust colAdj;

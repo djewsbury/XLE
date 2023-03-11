@@ -14,6 +14,7 @@
 #include <vector>
 
 using namespace Utility::Literals;
+using namespace Assets::Literals;
 
 namespace PlatformRig
 {
@@ -301,8 +302,8 @@ namespace PlatformRig
 	}
 
 	TopBarManager::TopBarManager(const Rect& outerRect)
-	: _topBarStaticData(EntityInterface::MountedData<TopBarStaticData>::LoadOrDefault("cfg/displays/topbar"))
-	, _themeStaticData(EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme"))
+	: _topBarStaticData(EntityInterface::MountedData<TopBarStaticData>::LoadOrDefault("cfg/displays/topbar"_initializer))
+	, _themeStaticData(EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme"_initializer))
 	, _outerRect(outerRect)
 	, _layout {
 		{

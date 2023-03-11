@@ -76,7 +76,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (::Assets::IsInvalidated(_techniqueSetFile)) {
 			_techniqueSetFile = ::Assets::MarkerPtr<Techniques::TechniqueSetFile>{};
-			::Assets::AutoConstructToPromise(_techniqueSetFile.AdoptPromise(), MakeStringSection(ILLUM_TECH));
+			::Assets::AutoConstructToPromise(_techniqueSetFile.AdoptPromise(), ILLUM_TECH);
 		}
 		return _techniqueSetFile.ShareFuture();
 	}
@@ -84,7 +84,7 @@ namespace RenderCore { namespace LightingEngine
 	SharedTechniqueDelegateBox::SharedTechniqueDelegateBox(IDevice& device, ShaderLanguage shaderLanguage, SamplerPool* samplerPool)
 	{
 		_depVal = ::Assets::GetDepValSys().Make();
-		::Assets::AutoConstructToPromise(_techniqueSetFile.AdoptPromise(), MakeStringSection(ILLUM_TECH));
+		::Assets::AutoConstructToPromise(_techniqueSetFile.AdoptPromise(), ILLUM_TECH);
 		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
 		Techniques::CreateTechniqueDelegate_PreDepth(_depthOnlyDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthOnly);
 		Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotion);

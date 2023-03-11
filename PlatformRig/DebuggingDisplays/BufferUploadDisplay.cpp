@@ -31,6 +31,7 @@
 #pragma warning(disable:4127)       // warning C4127: conditional expression is constant
 
 using namespace Utility::Literals;
+using namespace Assets::Literals;
 
 namespace PlatformRig { namespace Overlays
 {
@@ -644,7 +645,7 @@ namespace PlatformRig { namespace Overlays
 
     static void DrawTableBackground(IOverlayContext& context, Layout& layout)
     {
-        auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme");
+        auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme"_initializer);
 
 		if (auto* blurryBackground = context.GetService<BlurryBackgroundEffect>()) {
 			ColorAdjust colAdj;

@@ -36,6 +36,7 @@
 
 using namespace Utility::Literals;
 using namespace PlatformRig::Literals;
+using namespace Assets::Literals;
 
 #pragma warning(disable:4244)   // conversion from 'int' to 'float', possible loss of data
 
@@ -213,7 +214,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         const Rect thumbRect = coordinates.Thumb(thumbPosition);
 
-        auto& staticData = EntityInterface::MountedData<ScrollBarStaticData>::LoadOrDefault("cfg/displays/scrollbar");
+        auto& staticData = EntityInterface::MountedData<ScrollBarStaticData>::LoadOrDefault("cfg/displays/scrollbar"_initializer);
         unsigned sectionCount = (coordinates.ScrollArea().Height() - staticData._sectionMargin) / (staticData._sectionHeight + staticData._sectionMargin);
         if (sectionCount == 0) return;
 
@@ -538,7 +539,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     ///////////////////////////////////////////////////////////////////////////////////
     Coord DrawTableHeaders(IOverlayContext& context, const Rect& initialRect, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders)
     {
-        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
+        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table"_initializer);
         auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
         auto fntLineHeight = fnt.GetFontProperties()._lineHeight;
 
@@ -656,7 +657,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         // Sometimes we embed widgets in the frame of a table (such as a scrollbar)
         // Here we draw something into the frame to highlight it, and calculate the correct position for the embedded widget
-        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
+        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table"_initializer);
 
         auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
 
@@ -684,7 +685,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     Coord DrawTableBase(IOverlayContext& context, const Rect& rect)
     {
-        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
+        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table"_initializer);
         auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
         auto fntLineHeight = fnt.GetFontProperties()._lineHeight;
 
@@ -726,7 +727,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         auto* fonts = ConsoleRig::TryActualizeCachedBox<Internal::DefaultFontsBox>();
         if (!fonts) return 0;
         
-        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table");
+        auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table"_initializer);
         Layout tempLayout(rect);
         tempLayout._paddingInternalBorder = 0;
         tempLayout._paddingBetweenAllocations = 0;

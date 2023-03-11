@@ -1,6 +1,10 @@
 
 #pragma once
 
+#include "../Assets/InitializerPack.h"
+
+using namespace Assets::Literals;
+
 #define SKINNING_VERTEX_HLSL "xleres/TechniqueLibrary/Core/Animation/skinning.vertex.hlsl"
 #define SKINNING_GEO_HLSL "xleres/TechniqueLibrary/Core/Animation/skinning.geo.hlsl"
 #define SKINNING_VIA_TBUFFER "xleres/TechniqueLibrary/Core/Animation/skinning_viatbuffer.hlsl"
@@ -9,21 +13,21 @@
 #define ILLUM_FORWARD_PIXEL_HLSL "xleres/Forward/illum.pixel.hlsl"
 #define ILLUM_FORWARD_UNLIT_PIXEL_HLSL "xleres/TechniqueLibrary/Standard/unlit.pixel.hlsl"
 
-#define ILLUM_TECH "xleres/TechniqueLibrary/Config/Illum.tech"
-#define UNLIT_TECH "xleres/TechniqueLibrary/Config/Legacy/Unlit.tech"
-#define ILLUM_LEGACY_TECH "xleres/TechniqueLibrary/Config/Legacy/IllumLegacy.tech"
-#define ILLUM_LEGACY_DS "xleres/TechniqueLibrary/Config/Legacy/IllumLegacy.ds"
+#define ILLUM_TECH "xleres/TechniqueLibrary/Config/Illum.tech"_initializer
+#define UNLIT_TECH "xleres/TechniqueLibrary/Config/Legacy/Unlit.tech"_initializer
+#define ILLUM_LEGACY_TECH "xleres/TechniqueLibrary/Config/Legacy/IllumLegacy.tech"_initializer
+#define ILLUM_LEGACY_DS "xleres/TechniqueLibrary/Config/Legacy/IllumLegacy.ds"_initializer
 
-#define MAIN_PIPELINE "xleres/TechniqueLibrary/Config/main.pipeline"
-#define IMMEDIATE_PIPELINE "xleres/TechniqueLibrary/Config/immediate.pipeline"
-#define LIGHTING_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/light-resolve-operator.pipeline"
-#define GENERAL_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/general-operator.pipeline"
-#define SHADOW_TEMPLATE_DS "xleres/TechniqueLibrary/Config/shadow-template.pipeline"
-#define SEQUENCER_DS "xleres/TechniqueLibrary/Config/sequencer.pipeline"
-#define NOPATCHES_MATERIAL_DS "xleres/TechniqueLibrary/Config/nopatches-material.pipeline"
+#define MAIN_PIPELINE "xleres/TechniqueLibrary/Config/main.pipeline"_initializer
+#define IMMEDIATE_PIPELINE "xleres/TechniqueLibrary/Config/immediate.pipeline"_initializer
+#define LIGHTING_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/light-resolve-operator.pipeline"_initializer
+#define GENERAL_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/general-operator.pipeline"_initializer
+#define SHADOW_TEMPLATE_DS "xleres/TechniqueLibrary/Config/shadow-template.pipeline"_initializer
+#define SEQUENCER_DS "xleres/TechniqueLibrary/Config/sequencer.pipeline"_initializer
+#define NOPATCHES_MATERIAL_DS "xleres/TechniqueLibrary/Config/nopatches-material.pipeline"_initializer
 
-#define ROOT_SIGNATURE_CFG "xleres/TechniqueLibrary/System/RootSignature.cfg"
-#define ROOT_SIGNATURE_COMPUTE_CFG "xleres/TechniqueLibrary/System/RootSignatureCS.cfg"
+#define ROOT_SIGNATURE_CFG "xleres/TechniqueLibrary/System/RootSignature.cfg"_initializer
+#define ROOT_SIGNATURE_COMPUTE_CFG "xleres/TechniqueLibrary/System/RootSignatureCS.cfg"_initializer
 
 #define BASIC2D_VERTEX_HLSL "xleres/TechniqueLibrary/Basic/basic2D.vertex.hlsl"
 #define BASIC3D_VERTEX_HLSL "xleres/TechniqueLibrary/Basic/basic3D.vertex.hlsl"
@@ -38,7 +42,7 @@
 #define DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL "xleres/Deferred/light-resolve-operator.vertex.hlsl"
 #define DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL "xleres/Deferred/light-resolve-operator.pixel.hlsl"
 
-#define FORWARD_PIPELINE "xleres/TechniqueLibrary/Config/forward.pipeline"
+#define FORWARD_PIPELINE "xleres/TechniqueLibrary/Config/forward.pipeline"_initializer
 
 #define CASCADE_VIS_HLSL "xleres/Deferred/debugging/cascadevis.pixel.hlsl"
 #define HIGHLIGHT_VIS_PIXEL_HLSL "xleres/TechniqueLibrary/ToolsRig/Vis/HighlightVis.pixel.hlsl"
@@ -58,19 +62,19 @@
 
 #define SCENE_ENGINE_RES "xleres/TechniqueLibrary/SceneEngine"
 
-#define AREA_LIGHT_TECH "xleres/TechniqueLibrary/ToolsRig/arealight.material"
-#define MESH_MARKER_TECH "xleres/TechniqueLibrary/Config/Legacy/MeshMarker.tech"
+#define AREA_LIGHT_TECH "xleres/TechniqueLibrary/ToolsRig/arealight.material"_initializer
+#define MESH_MARKER_TECH "xleres/TechniqueLibrary/Config/Legacy/MeshMarker.tech"_initializer
 
-#define NORMALS_FITTING_TEXTURE "xleres/DefaultResources/normalsfitting.dds:LT"
-#define DISTINCT_COLORS_TEXTURE "xleres/DefaultResources/distinctcolors.dds:T"
-#define BALANCED_NOISE_TEXTURE "xleres/DefaultResources/balanced_noise.dds:LT"
+#define NORMALS_FITTING_TEXTURE "xleres/DefaultResources/normalsfitting.dds:LT"_initializer
+#define DISTINCT_COLORS_TEXTURE "xleres/DefaultResources/distinctcolors.dds:T"_initializer
+#define BALANCED_NOISE_TEXTURE "xleres/DefaultResources/balanced_noise.dds:LT"_initializer
 
 #define SSR_CLASSIFY_TILES_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-classify-tiles.compute.hlsl"
 #define SSR_INTERSECT_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-intersect.compute.hlsl"
 #define SSR_RESOLVE_SPATIAL_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-resolve-spatial.compute.hlsl"
 #define SSR_RESOLVE_TEMPORAL_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-resolve-temporal.compute.hlsl"
 #define SSR_REFLECTIONS_BLUR_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-reflections-blur.compute.hlsl"
-#define SSR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/ssr.pipeline"
+#define SSR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/ssr.pipeline"_initializer
 
 #define HIERARCHICAL_DEPTHS_HLSL "xleres/TechniqueLibrary/LightingEngine/hierarchical-depths.compute.hlsl"
 
@@ -80,7 +84,7 @@
 #define AO_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/ao.compute.hlsl"
 #define TONEMAP_ACES_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/tonemap-aces.compute.hlsl"
 #define BLOOM_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/bloom.compute.hlsl"
-#define BLOOM_PIPELINE "xleres/TechniqueLibrary/LightingEngine/bloom.pipeline"
+#define BLOOM_PIPELINE "xleres/TechniqueLibrary/LightingEngine/bloom.pipeline"_initializer
 #define BLOOM_FILTER_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/bloom-filter.compute.hlsl"
 #define FAST_MIP_CHAIN_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/fast-mip-chain.compute.hlsl"
 
@@ -90,10 +94,10 @@
 
 #define IBL_PREFILTER_HLSL "xleres/ToolsHelper/IBLPrefilter.hlsl"
 #define EQUIRECTANGULAR_TO_CUBE_HLSL "xleres/ToolsHelper/EquirectangularToCube.hlsl"
-#define TOOLSHELPER_OPERATORS_PIPELINE "xleres/ToolsHelper/operators.pipeline"
+#define TOOLSHELPER_OPERATORS_PIPELINE "xleres/ToolsHelper/operators.pipeline"_initializer
 
 #define SKIN_COMPUTE_HLSL "xleres/Deform/skin.compute.hlsl"
-#define SKIN_PIPELINE "xleres/Deform/skin.pipeline"
+#define SKIN_PIPELINE "xleres/Deform/skin.pipeline"_initializer
 #define DEFORM_ENTRY_HLSL "xleres/Deform/deform-entry.compute.hlsl"
 
-#define GLOSS_LUT_TEXTURE "xleres/TechniqueLibrary/LightingEngine/glosslut.texture"
+#define GLOSS_LUT_TEXTURE "xleres/TechniqueLibrary/LightingEngine/glosslut.texture"_initializer
