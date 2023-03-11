@@ -112,10 +112,6 @@ namespace Assets
 		PtrToFuture newFuture;
 		{
 			ScopedLock(_lock);
-			auto shadowing = LowerBound(_shadowingAssets, hash);
-			if (shadowing != _shadowingAssets.end() && shadowing->first == hash)
-				return shadowing->second;
-
 			auto i = LowerBound(_assets, hash);
 			if (i != _assets.end() && i->first == hash)
 				if (!IsInvalidated(*i->second))

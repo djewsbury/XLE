@@ -85,6 +85,7 @@ namespace Assets
 
 		template<typename T> static auto HasHash64Override_(int) -> decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()), std::true_type{});
 		template<typename...> static auto HasHash64Override_(...) -> std::false_type;
+		template<typename T> constexpr bool HasHash64Override = decltype(HasHash64Override_<T>(0))::value;
 
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().GetHash(), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().GetGUID(), std::true_type{});
@@ -96,7 +97,7 @@ namespace Assets
 		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_enum<T>::value && !std::is_integral<T>::value, std::true_type>::type;
 		static inline auto HasSimpleHashing_(nullptr_t) -> std::true_type;
 		template<typename...> static auto HasSimpleHashing_(...) -> std::false_type;
-		template<typename T> constexpr bool HasSimpleHashing = decltype(HasSimpleHashing_<T>(0))::value || decltype(HasHash64Override_<T>(0))::value;
+		template<typename T> constexpr bool HasSimpleHashing = decltype(HasSimpleHashing_<T>(0))::value;
 
 
 		template<typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
@@ -114,7 +115,7 @@ namespace Assets
 		template<typename T, decltype(std::declval<const T&>().CalculateHash(uint64_t(0)))* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p.CalculateHash(seed); }
 
-		template<typename T, decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()))* = nullptr>
+		template<typename T, decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()))* = nullptr, typename std::enable_if_t<!HasSimpleHashing<T>>* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return Hash64(p, seed); }
 
 		template<typename T, decltype(std::declval<const T&>().get().GetHash())* = nullptr>
@@ -126,7 +127,7 @@ namespace Assets
 		template<typename T, decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)))* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p.get().CalculateHash(seed); }
 
-		template<typename T, decltype(Hash64(std::declval<const T&>().get(), std::declval<uint64_t>()))* = nullptr>
+		template<typename T, decltype(Hash64(std::declval<const T&>().get(), std::declval<uint64_t>()))* = nullptr, typename std::enable_if_t<!HasSimpleHashing<T>>* = nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return Hash64(p.get(), seed); }
 
 		inline uint64_t HashParam_Chain(nullptr_t, uint64_t seed) { return seed+1; }
@@ -134,21 +135,21 @@ namespace Assets
 		template<
 			typename T, 
 			decltype(std::declval<const T&>().begin() != std::declval<const T&>().end())* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T>>* =nullptr>
+			std::enable_if_t<!HasSimpleHashing<T> && !HasHash64Override<T>>* =nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) 
-			{
-				auto i = p.begin(), end=p.end();
-				if (i == end) return seed;
-				auto res = seed;
-				for (;i!=end; ++i)
-					res = HashParam_Chain(*i, res);
-				return res;
-			}
+		{
+			auto i = p.begin(), end=p.end();
+			if (i == end) return seed;
+			auto res = seed;
+			for (;i!=end; ++i)
+				res = HashParam_Chain(*i, res);
+			return res;
+		}
 
 		template<
 			typename T, 
 			decltype(HashParam_Chain(*std::declval<const T&>(), std::declval<uint64_t>()))* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T>>* =nullptr>
+			std::enable_if_t<!HasSimpleHashing<T> && !HasHash64Override<T>>* =nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p ? HashParam_Chain(*p, seed) : seed; }
 
 
@@ -168,7 +169,7 @@ namespace Assets
 		template<typename T, decltype(std::declval<const T&>().CalculateHash(uint64_t(0)))* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return p.CalculateHash(DefaultSeed64); }
 
-		template<typename T, decltype(Hash64(std::declval<const T&>()))* = nullptr, typename std::enable_if<!decltype(HasSimpleHashing_<T>(0))::value>::type* = nullptr>
+		template<typename T, decltype(Hash64(std::declval<const T&>()))* = nullptr, typename std::enable_if_t<!HasSimpleHashing<T>>* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return Hash64(p); }
 
 		template<typename T, decltype(std::declval<const T&>().get().GetHash())* = nullptr>
@@ -180,7 +181,7 @@ namespace Assets
 		template<typename T, decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)))* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return p.get().CalculateHash(DefaultSeed64); }
 
-		template<typename T, decltype(Hash64(std::declval<const T&>().get()))* = nullptr, typename std::enable_if<!decltype(HasSimpleHashing_<decltype(std::declval<const T&>().get())>(0))::value>::type* = nullptr>
+		template<typename T, decltype(Hash64(std::declval<const T&>().get()))* = nullptr, typename std::enable_if_t<!HasSimpleHashing<T>>* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return Hash64(p.get()); }
 
 		inline uint64_t HashParam_Single(nullptr_t) { return 0; }
@@ -188,24 +189,24 @@ namespace Assets
 		template<
 			typename T, 
 			decltype(std::declval<const T&>().begin() != std::declval<const T&>().end())* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T>>* =nullptr>
-			uint64_t HashParam_Single(const T& p) 
-			{
-				auto i = p.begin(), end=p.end();
-				if (i == end) return 0;
-				auto res = HashParam_Single(*i++);
-				for (;i!=end; ++i)
-					res = HashParam_Chain(*i, res);
-				return res;
-			}
+			std::enable_if_t<!HasSimpleHashing<T> && !HasHash64Override<T>>* =nullptr>
+			uint64_t HashParam_Single(const T& p)
+		{
+			auto i = p.begin(), end=p.end();
+			if (i == end) return 0;
+			auto res = HashParam_Single(*i++);
+			for (;i!=end; ++i)
+				res = HashParam_Chain(*i, res);
+			return res;
+		}
 
 		template<
 			typename T, 
 			decltype(HashParam_Single(*std::declval<const T&>()))* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T>>* =nullptr>
+			std::enable_if_t<!HasSimpleHashing<T> && !HasHash64Override<T>>* =nullptr>
 			uint64_t HashParam_Single(const T& p) { return p ? HashParam_Single(*p) : DefaultSeed64; }
 
-		
+
 
 		template <typename FirstParam, typename... Params>
 			uint64_t BuildParamHash(const FirstParam& firstInitializer, const Params&... initialisers)
@@ -229,33 +230,33 @@ namespace Assets
 		template<typename Type>
 			static decltype(std::declval<std::ostream&>() << std::declval<const Type&>())
 				StreamWithHashFallback(std::ostream& str, const Type& value, bool allowFilesystemCharacters)
-			{
-				if (allowFilesystemCharacters) {
-					return str << value; 
-				} else {
-					// Unfortunately we can't filter the text passed through a stream
-					// easily without using some temporary buffer. Boost seems to have some
-					// classes to do this, but that seems like it's unlikely to reach the 
-					// standard library
-					StringMeld<256> temp;
-					temp.AsOStream() << value;
-					for (auto& chr:temp.AsIteratorRange())
-						if (chr == '/' || chr == '\\') chr = '-';
-					return str << temp.AsStringSection();
-				}
+		{
+			if (allowFilesystemCharacters) {
+				return str << value; 
+			} else {
+				// Unfortunately we can't filter the text passed through a stream
+				// easily without using some temporary buffer. Boost seems to have some
+				// classes to do this, but that seems like it's unlikely to reach the 
+				// standard library
+				StringMeld<256> temp;
+				temp.AsOStream() << value;
+				for (auto& chr:temp.AsIteratorRange())
+					if (chr == '/' || chr == '\\') chr = '-';
+				return str << temp.AsStringSection();
+			}
 			}
 
 		template<typename Type>
 			std::enable_if_t<!decltype(IsStreamable<Type>(0))::value && decltype(IsHashable<Type>(0))::value, std::ostream>& StreamWithHashFallback(std::ostream& str, const Type& value, bool allowFilesystemCharacters)
-			{
-				return str << HashParam_Single(value);
-			}
+		{
+			return str << HashParam_Single(value);
+		}
 
 		template<typename Type>
 			std::enable_if_t<!decltype(IsStreamable<Type>(0))::value && !decltype(IsHashable<Type>(0))::value, std::ostream>&  StreamWithHashFallback(std::ostream& str, const std::shared_ptr<Type>& value, bool allowFilesystemCharacters)
-			{
-				return str;
-			}
+		{
+			return str;
+		}
 
 		template <typename Object>
 			inline void StreamDashSeparated(std::basic_stringstream<char>& result, const Object& obj, bool allowFilesystemCharacters)
