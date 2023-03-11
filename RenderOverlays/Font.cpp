@@ -149,19 +149,15 @@ namespace RenderOverlays
 	#pragma warning(disable:4706)   // C4706: assignment within conditional expression
 
 	template<typename CharType>
-		static void CopyString(CharType* dst, size_t count, const CharType* src)
+		static void CopyString(CharType* dst, size_t dstSize, StringSection<CharType> src)
 	{
-		if (!count)
+		if (!dstSize)
 			return;
 
-		if (!src) {
-			*dst = 0;
-			return;
-		}
-
-		while (--count && (*dst++ = *src++))
-			;
-		*dst = 0;
+		assert(!src.IsEmpty());
+		auto finalCount = std::min(dstSize-1, src.size());
+		std::copy(src.begin(), src.begin()+finalCount, dst);
+		dst[finalCount] = '\0';
 	}
 
 	template<typename CharType>
@@ -195,16 +191,16 @@ namespace RenderOverlays
 			if (x > width) {
 				size_t count = size_t(i - inText.begin());
 				if (outTextSize > 5) {	// at least one character, plus ellipsis, plus null terminator
-					count = std::min(count, outTextSize-3);
+					if (count) --count;	// go back one character to ensure we have room for the ellipsis itself
+					count = std::min(count, outTextSize-4);
 
-					CopyString(outText, (int)count, inText.begin());
-					outText[count - 1] = '.';
-					outText[count    ] = '.';
+					std::copy(inText.begin(), inText.begin()+count, outText);
+					outText[count + 0] = '.';
 					outText[count + 1] = '.';
-					outText[count + 2] = 0;
+					outText[count + 2] = '.';
+					outText[count + 3] = 0;
 				} else {
-					count = std::min(count, outTextSize);
-					CopyString(outText, (int)count, inText.begin());
+					CopyString(outText, outTextSize, {inText.begin(), inText.begin()+count});
 				}
 
 				return StringWidth(font, MakeStringSection(outText, &outText[count + 1]), spaceExtra, outline);
@@ -214,21 +210,21 @@ namespace RenderOverlays
 		if (inText.size() > size_t(outTextSize-1)) {
 			size_t count = inText.size();
 			if (outTextSize > 5) {	// at least one character, plus ellipsis, plus null terminator
-				count = std::min(count, outTextSize-3);
+				if (count) --count;
+				count = std::min(count, outTextSize-4);
 
-				CopyString(outText, (int)count, inText.begin());
-				outText[count - 1] = '.';
-				outText[count    ] = '.';
+				std::copy(inText.begin(), inText.begin()+count, outText);
+				outText[count + 0] = '.';
 				outText[count + 1] = '.';
-				outText[count + 2] = 0;
+				outText[count + 2] = '.';
+				outText[count + 3] = 0;
 			} else {
-				count = std::min(count, outTextSize);
-				CopyString(outText, (int)count, inText.begin());
+				CopyString(outText, outTextSize, {inText.begin(), inText.begin()+count});
 			}
 
 			return StringWidth(font, MakeStringSection(outText), spaceExtra, outline);
 		} else {
-			CopyString(outText, (int)outTextSize, inText.begin());
+			CopyString(outText, outTextSize, inText);
 			return x;
 		}
 	}
@@ -397,7 +393,7 @@ namespace RenderOverlays
 		}
 
 		if (text.IsEmpty()) {
-			CopyString(outText, outTextSize, inText.begin());
+			CopyString(outText, outTextSize, inText);
 			return leftx-rightx;
 		}
 
@@ -410,7 +406,7 @@ namespace RenderOverlays
 		// {inText.begin(), text.begin()} ... {text.end(), inText.end}
 		assert((size_t(text.begin() - inText.begin()) + 4 + size_t(inText.end() - text.end())) <= outTextSize);
 		auto outTextIterator = outText;
-		CopyString(outTextIterator, text.begin() - inText.begin() + 1, inText.begin());
+		CopyString(outTextIterator, outTextSize, {inText.begin(), text.begin()});
 		outTextIterator += text.begin() - inText.begin();
 		*outTextIterator++ = '.';
 		*outTextIterator++ = '.';
@@ -422,10 +418,10 @@ namespace RenderOverlays
 		// properties, we'll end up ignoring all except one
 		auto removedControlStatement = FindLastControlStatement(text);
 		if (!removedControlStatement.IsEmpty() && (outTextIterator + removedControlStatement.size() + (inText.end() - text.end()) + 1) <= &outText[outTextSize]) {
-			CopyString(outTextIterator, removedControlStatement.size()+1, removedControlStatement.begin());
+			CopyString(outTextIterator, outText+outTextSize-outTextIterator, removedControlStatement);
 			outTextIterator += removedControlStatement.size();
 		}
-		CopyString(outTextIterator, inText.end() - text.end() + 1, text.end());
+		CopyString(outTextIterator, outText+outTextSize-outTextIterator, {text.end(), inText.end()});
 		outTextIterator += inText.end() - text.end();
 		*outTextIterator = 0;
 
