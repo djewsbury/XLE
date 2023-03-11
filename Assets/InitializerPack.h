@@ -38,22 +38,65 @@ template<typename Type>
 	
 namespace Assets 
 {
+
+	/// <summary>String initializer with constexpr hash</summary>
+	/// Though assets initializers can be any type, strings are one of the most useful.
+	/// This utility class imbues a StringSection<> with a hash value. The hash value will
+	/// be generated at compile time for literal strings
+	template<typename CharType=char>
+		class Initializer : public StringSection<CharType>
+	{
+	public:
+		uint64_t GetHash() const { return _hash; }
+
+		constexpr Initializer(const CharType* start, const CharType* end) : StringSection<CharType>{start, end}, _hash(ConstHash64(start, end-start)) {}
+        constexpr Initializer() : _hash(0) {}
+        constexpr Initializer(const CharType* nullTerm) : StringSection<CharType>{nullTerm}, _hash(ConstHash64(AsStringView())) {}
+        Initializer(std::nullptr_t) = delete;
+		constexpr Initializer(std::basic_string_view<CharType> view) : StringSection<CharType>{view}, _hash(ConstHash64(view)) {}
+		constexpr Initializer(const CharType* start, size_t len) : StringSection<CharType>{start, len}, _hash(ConstHash64(start, len)) {}
+        template<size_t N>
+            constexpr Initializer(CharType (&fixedSize)[N]) : StringSection<CharType>{fixedSize, fixedSize+N-1}, _hash(ConstHash64(fixedSize, N-1)) { static_assert(N != 0); }
+        
+		template<typename CT, typename A>
+			Initializer(const std::basic_string<CharType, CT, A>& str) : StringSection<CharType>{str}, _hash(ConstHash64(str.data(), str.size())) {}
+	private:
+		uint64_t _hash;
+	};
+
+	namespace Literals
+	{
+        XLE_CONSTEVAL_OR_CONSTEXPR Initializer<char> operator"" _initializer(const char* str, const size_t len) never_throws { return Initializer{str, len}; }
+	}
+
+	template<typename CharType>
+		constexpr Initializer<CharType> MakeInitializer(const CharType* start, const CharType* end) { return Initializer<CharType>{start, end}; }
+
+	template<typename CharType>
+		constexpr Initializer<CharType> MakeInitializer(const CharType* start, size_t len) { return Initializer<CharType>{start, len}; }
+
+	template<typename CharType, size_t N>
+		constexpr Initializer<CharType> MakeInitializer(CharType (&fixedSize)[N]) { static_assert(N != 0); return Initializer<CharType>{fixedSize, N-1}; }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 	namespace Internal
 	{
+
+		template<typename T> static auto HasHash64Override_(int) -> decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()), std::true_type{});
+		template<typename...> static auto HasHash64Override_(...) -> std::false_type;
 
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().GetHash(), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().GetGUID(), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().CalculateHash(uint64_t(0)), std::true_type{});
-		template<typename T> static auto HasSimpleHashing_(int) -> decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().GetHash(), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().GetGUID(), std::true_type{});
 		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)), std::true_type{});
-		template<typename T> static auto HasSimpleHashing_(int) -> decltype(Hash64(std::declval<const T&>().get(), std::declval<uint64_t>()), std::true_type{});
 		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_integral<T>::value, std::true_type>::type;
 		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_enum<T>::value && !std::is_integral<T>::value, std::true_type>::type;
 		static inline auto HasSimpleHashing_(nullptr_t) -> std::true_type;
 		template<typename...> static auto HasSimpleHashing_(...) -> std::false_type;
-		template<typename T> struct HasSimpleHashing : decltype(HasSimpleHashing_<T>(0)) {};
+		template<typename T> constexpr bool HasSimpleHashing = decltype(HasSimpleHashing_<T>(0))::value || decltype(HasHash64Override_<T>(0))::value;
 
 
 		template<typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
@@ -91,7 +134,7 @@ namespace Assets
 		template<
 			typename T, 
 			decltype(std::declval<const T&>().begin() != std::declval<const T&>().end())* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T>::value>* =nullptr>
+			std::enable_if_t<!HasSimpleHashing<T>>* =nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) 
 			{
 				auto i = p.begin(), end=p.end();
@@ -105,7 +148,7 @@ namespace Assets
 		template<
 			typename T, 
 			decltype(HashParam_Chain(*std::declval<const T&>(), std::declval<uint64_t>()))* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T>::value>* =nullptr>
+			std::enable_if_t<!HasSimpleHashing<T>>* =nullptr>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p ? HashParam_Chain(*p, seed) : seed; }
 
 
@@ -125,7 +168,7 @@ namespace Assets
 		template<typename T, decltype(std::declval<const T&>().CalculateHash(uint64_t(0)))* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return p.CalculateHash(DefaultSeed64); }
 
-		template<typename T, decltype(Hash64(std::declval<const T&>()))* = nullptr>
+		template<typename T, decltype(Hash64(std::declval<const T&>()))* = nullptr, typename std::enable_if<!decltype(HasSimpleHashing_<T>(0))::value>::type* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return Hash64(p); }
 
 		template<typename T, decltype(std::declval<const T&>().get().GetHash())* = nullptr>
@@ -137,7 +180,7 @@ namespace Assets
 		template<typename T, decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)))* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return p.get().CalculateHash(DefaultSeed64); }
 
-		template<typename T, decltype(Hash64(std::declval<const T&>().get()))* = nullptr>
+		template<typename T, decltype(Hash64(std::declval<const T&>().get()))* = nullptr, typename std::enable_if<!decltype(HasSimpleHashing_<decltype(std::declval<const T&>().get())>(0))::value>::type* = nullptr>
 			uint64_t HashParam_Single(const T& p) { return Hash64(p.get()); }
 
 		inline uint64_t HashParam_Single(nullptr_t) { return 0; }
@@ -145,7 +188,7 @@ namespace Assets
 		template<
 			typename T, 
 			decltype(std::declval<const T&>().begin() != std::declval<const T&>().end())* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T>::value>* =nullptr>
+			std::enable_if_t<!HasSimpleHashing<T>>* =nullptr>
 			uint64_t HashParam_Single(const T& p) 
 			{
 				auto i = p.begin(), end=p.end();
@@ -159,7 +202,7 @@ namespace Assets
 		template<
 			typename T, 
 			decltype(HashParam_Single(*std::declval<const T&>()))* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T>::value>* =nullptr>
+			std::enable_if_t<!HasSimpleHashing<T>>* =nullptr>
 			uint64_t HashParam_Single(const T& p) { return p ? HashParam_Single(*p) : DefaultSeed64; }
 
 		

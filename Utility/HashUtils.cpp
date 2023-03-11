@@ -12,6 +12,11 @@
 #include "../Foreign/Hash/MurmurHash2.h"
 #include "../Foreign/Hash/MurmurHash3.h"
 #include <assert.h>
+#include <atomic>
+
+#if defined(_DEBUG)
+    #define RECORD_RUNTIME_HASH_STATS
+#endif
 
 // Some platforms don't support unaligned reads of integer types. Let's take a cautious
 // route and just enforce the buffer to always be aligned to the integer size
@@ -19,6 +24,11 @@
 
 namespace Utility
 {
+    #if defined(RECORD_RUNTIME_HASH_STATS)
+        static std::atomic<size_t> s_runtimeHashCount = 0;
+        static std::atomic<size_t> s_runtimeHashBytes = 0;
+    #endif
+
     uint64_t Hash64(const void* begin, const void* end, uint64_t seed)
     {
                 //
@@ -33,6 +43,12 @@ namespace Utility
                 //      "MurmurHash64A" is optimised for 64 bit processors; 
                 //      "MurmurHash64B" is for 32 bit processors.
                 //
+
+        #if defined(RECORD_RUNTIME_HASH_STATS)
+            ++s_runtimeHashCount;
+            s_runtimeHashBytes += size_t(end)-size_t(begin);
+        #endif
+
         const bool crossPlatformHash = true;
         auto sizeInBytes = size_t(end)-size_t(begin);
 
@@ -76,6 +92,11 @@ namespace Utility
 
     uint32_t Hash32(const void* begin, const void* end, uint32_t seed)
     {
+        #if defined(RECORD_RUNTIME_HASH_STATS)
+            ++s_runtimeHashCount;
+            s_runtimeHashBytes += size_t(end)-size_t(begin);
+        #endif
+
         #if ENFORCE_ALIGNED_READS
             // We must ensure that we're only performing aligned reads
             auto sizeInBytes = size_t(end)-size_t(begin);
@@ -122,6 +143,15 @@ namespace Utility
         key = key ^ (key >> 28);
         key = key + (key << 31);
         return key;
+    }
+
+    XL_UTILITY_API std::pair<size_t, size_t> GetRuntimeHashStats()
+    {
+        #if defined(RECORD_RUNTIME_HASH_STATS)
+            return {s_runtimeHashCount.load(), s_runtimeHashBytes.load()};
+        #else
+            return {0,0};
+        #endif
     }
 }
 

@@ -118,6 +118,14 @@ namespace Utility
     uint32_t IntegerHash32(uint32_t key);
     uint64_t IntegerHash64(uint64_t key);
 
+    /// <summary>Returns some statistics related to use of Hash64 & Hash32</summary>
+    /// In first & second in the result:
+    ///   1. the number of runtime hashes calculated since startup
+    ///   2. the sum total bytes in runtime hashes since startup
+    /// These values may not be calculated in all builds. When not available, the result
+    /// will be {0,0}
+    XL_UTILITY_API std::pair<size_t, size_t> GetRuntimeHashStats();
+
         ////////////   C O M P I L E  -  T I M E  -  H A S H I N G   ////////////
 
     ///
@@ -440,8 +448,8 @@ namespace Utility
     XLE_CONSTEVAL_OR_CONSTEXPR uint64_t ConstHash64(std::string_view v, uint64_t seed=DefaultSeed64) { return Internal::ConstHash64_1(v.data(), v.size(), seed); }
     XLE_CONSTEVAL_OR_CONSTEXPR uint32_t ConstHash32(std::string_view v, uint32_t seed=DefaultSeed32) { return Internal::ConstHash32_1(v.data(), v.size(), seed); }
     
-    template<int N> XLE_CONSTEVAL_OR_CONSTEXPR uint64_t ConstHash64(char (&key)[N], uint64_t seed=DefaultSeed64) { return Internal::ConstHash64_1(key, N, seed); }
-    template<int N> XLE_CONSTEVAL_OR_CONSTEXPR uint32_t ConstHash32(char (&key)[N], uint32_t seed=DefaultSeed32) { return Internal::ConstHash32_1(key, N, seed); }
+    template<int N> XLE_CONSTEVAL_OR_CONSTEXPR uint64_t ConstHash64(char (&key)[N], uint64_t seed=DefaultSeed64) { static_assert(N != 0); return Internal::ConstHash64_1(key, N-1, seed); }
+    template<int N> XLE_CONSTEVAL_OR_CONSTEXPR uint32_t ConstHash32(char (&key)[N], uint32_t seed=DefaultSeed32) { static_assert(N != 0); return Internal::ConstHash32_1(key, N-1, seed); }
 
     namespace Literals
     {

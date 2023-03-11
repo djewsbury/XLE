@@ -200,8 +200,6 @@ namespace UnitTests
 				auto resultOne = std::get<1>(tuple).get();
 				auto resultTwo = std::get<2>(tuple).get();
 
-				int c=0;
-				(void)c;
 				test = true;
 			});
 
@@ -211,11 +209,7 @@ namespace UnitTests
 		{
 			unsigned _result = 26394629;
 			TripleConstructor(unsigned zero, unsigned one, unsigned two)
-			:_result(zero+one+two)
-			{
-				int c=0;
-				(void)c;
-			}
+			:_result(zero+one+two) {}
 			TripleConstructor() {}
 			TripleConstructor(TripleConstructor&&) = default;
 			TripleConstructor& operator=(TripleConstructor&&) = default;
@@ -502,6 +496,41 @@ namespace UnitTests
 		// Internally std::promise<> holds a pointer to another object. In the VS libraries, it's called _Associated_state
 		// This contains a mutex and condition variable. The promised type is stored within the same heap block
 		// calling wait_for() always invokes a mutex lock/unlock and std::condition_variable::wait_for combo 
+	}
+
+
+	TEST_CASE( "Assets-StringInitializers", "[assets]" )
+	{
+		auto initialStats = GetRuntimeHashStats();
+
+		// MakeInitializer
+		auto i0 = ::Assets::MakeInitializer("initializer0");
+		char str1[] = "initializer1";
+		auto i1 = ::Assets::MakeInitializer(str1);
+		char str2[] = "initializer2";
+		auto i2 = ::Assets::MakeInitializer(str2, std::strlen(str2));
+
+		// literal suffix
+		using namespace Assets::Literals;
+		auto i3 = "initializer3"_initializer;
+
+		auto finalStats = GetRuntimeHashStats();
+
+		// runtime hash functions should not be invoked in any of these cases
+		REQUIRE(initialStats.first == finalStats.first);
+		REQUIRE(initialStats.second == finalStats.second);
+
+		REQUIRE(i0.GetHash() != 0);
+		REQUIRE(i1.GetHash() != 0);
+		REQUIRE(i2.GetHash() != 0);
+		REQUIRE(i3.GetHash() != 0);
+		REQUIRE(i0.GetHash() != i1.GetHash());
+		REQUIRE(i0.GetHash() != i2.GetHash());
+		REQUIRE(i0.GetHash() != i3.GetHash());
+		REQUIRE(i0.GetHash() == Hash64("initializer0"));
+		REQUIRE(i1.GetHash() == Hash64("initializer1"));
+		REQUIRE(i2.GetHash() == Hash64("initializer2"));
+		REQUIRE(i3.GetHash() == Hash64("initializer3"));
 	}
 
 }

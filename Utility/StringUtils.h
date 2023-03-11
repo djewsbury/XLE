@@ -118,6 +118,8 @@ namespace Utility
         size_t Length() const                           { return size_t(_end - _start); }
         bool IsEmpty() const                            { return _end <= _start; }
         std::basic_string<CharType> AsString() const    { return std::basic_string<CharType>(_start, _end); }
+        std::basic_string_view<CharType> AsStringView() const { return std::basic_string_view<CharType>{_start, size_t(_end-_start)}; }
+        operator std::basic_string_view<CharType>() const { return AsStringView(); }
 
 		template<typename OtherCharType>
 			StringSection<OtherCharType> Cast() const { return StringSection<OtherCharType>((const OtherCharType*)_start, (const OtherCharType*)_end); }
@@ -132,6 +134,10 @@ namespace Utility
         StringSection() : _start(nullptr), _end(nullptr) {}
         StringSection(const CharType* nullTerm) : _start(nullTerm), _end(XlStringEnd(_start)) {}
         StringSection(std::nullptr_t) = delete;      // prevent construction from nullptr constant (tends to be a common error)
+        StringSection(std::basic_string_view<CharType> view) : _start(view.begin()), _end(view.end()) {}
+        StringSection(const CharType* start, size_t len) : _start(start), _end(start+len) {}
+        template<size_t N>
+            constexpr StringSection(CharType (&fixedSize)[N]) : _start(fixedSize), _end(fixedSize+N-1) { static_assert(N != 0); }
         
 		template<typename CT, typename A>
 			StringSection(const std::basic_string<CharType, CT, A>& str) : _start(AsPointer(str.cbegin())), _end(AsPointer(str.cend())) {}
