@@ -466,6 +466,7 @@ namespace Assets
 
 			// look for the main chunk file in the compile products -- we'll use this for resolving the remaining requests
 			if (!requestsForMulti.empty()) {
+				bool foundMulti = false;
 				for (const auto&prod:_productsFile._compileProducts)
 					if (prod._type == ChunkType_Multi) {
 						// open with no sharing
@@ -474,8 +475,14 @@ namespace Assets
 						auto fromMulti = temp.ResolveRequests(*mainChunkFile, MakeIteratorRange(requestsForMulti));
 						for (size_t c=0; c<fromMulti.size(); ++c)
 							result[requestsForMultiMapping[c]] = std::move(fromMulti[c]);
+						foundMulti = true;
 						break;
 					}
+				if (!foundMulti)
+					Throw(Exceptions::ConstructionError(
+						Exceptions::ConstructionError::Reason::MissingFile,
+						_depVal,
+						StringMeld<128>() << "Missing chunk (" << requestsForMulti[0]._name << ")"));
 			}
 				
 			return result;
