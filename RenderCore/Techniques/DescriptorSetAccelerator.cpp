@@ -180,7 +180,7 @@ namespace RenderCore { namespace Techniques
 			for (unsigned a=0; a<std::max(s._arrayElementCount, 1u); ++a) {
 
 				bool gotBinding = false;
-				auto hashName = Hash64(s._name) + a;
+				auto hashName = s._nameHash + a;
 				std::optional<std::string> boundResource = machineHelper._resourceBindings ? machineHelper._resourceBindings->GetParameterAsString(hashName) : std::optional<std::string>{};
 				if (boundResource.has_value() && !boundResource.value().empty()) {
 					if (s._type != DescriptorType::SampledTexture)
@@ -411,7 +411,7 @@ namespace RenderCore { namespace Techniques
 		auto* bind = bindTypesAndIdx;
 		for (unsigned slotIdx=0; slotIdx<layout._slots.size(); ++slotIdx) {
 			const auto& slot = layout._slots[slotIdx];
-			auto hash = Hash64(slot._name);
+			auto hash = slot._nameHash;
 
 			auto i = std::find(usi.GetResourceViewBindings().begin(), usi.GetResourceViewBindings().end(), hash);
 			if (i != usi.GetResourceViewBindings().end()) {

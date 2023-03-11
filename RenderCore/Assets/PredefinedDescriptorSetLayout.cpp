@@ -35,6 +35,7 @@ namespace RenderCore { namespace Assets
 			Throw(Formatters::FormatException("Expecting identifier after type keyword", layoutName._start));
 
 		result._name = layoutName._value.AsString();
+		result._nameHash = Hash64(result._name);
 		result._type = type;
 
 		auto token = iterator.GetNextToken();
@@ -280,7 +281,7 @@ namespace RenderCore { namespace Assets
 	{
 		uint64_t result = seed;
 		for (const auto& slot:_slots) {
-			result = Hash64(slot._name, result);
+			result = HashCombine(slot._nameHash, result);
 			result = HashCombine(result, slot._slotIdx);
 			if (!slot._conditions.empty())
 				result = Hash64(slot._conditions, result);
@@ -311,7 +312,7 @@ namespace RenderCore { namespace Assets
 			if (result._slotNames[s._slotIdx] == 0ull) {
 				auto count = std::max(s._arrayElementCount, 1u);
 				result._slots[s._slotIdx] = DescriptorSlot{s._type, count};
-				result._slotNames[s._slotIdx] = Hash64(s._name);
+				result._slotNames[s._slotIdx] = s._nameHash;
 			}
 		}
 		if (samplerPool && !_fixedSamplers.empty()) {

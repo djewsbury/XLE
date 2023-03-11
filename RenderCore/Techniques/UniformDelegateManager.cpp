@@ -447,7 +447,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t immediateDatasWeNeed = 0ull;
 
 		for (unsigned slotIdx=0; slotIdx<_descSetLayout._slots.size(); ++slotIdx) {
-			auto hashName = Hash64(_descSetLayout._slots[slotIdx]._name);
+			auto hashName = _descSetLayout._slots[slotIdx]._nameHash;
 
 			if (_descSetLayout._slots[slotIdx]._type == DescriptorType::Sampler) {
 				auto samplerBinding = std::find(delegateHelper._finalUSI.GetSamplerBindings().begin(), delegateHelper._finalUSI.GetSamplerBindings().end(), hashName);

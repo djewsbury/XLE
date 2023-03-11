@@ -182,7 +182,7 @@ namespace RenderCore { namespace LightingEngine
 					_projections._fullProj[c]._worldToProjTransform = Combine(worldToCamera[c], cameraToProjection[c]);
 					_projections._minimalProjection[c] = ExtractMinimalProjection(cameraToProjection[c]);
 				}
-				_projections._normalProjCount = projCount;
+				_projections._normalProjCount = (unsigned)projCount;
 			}
 
 			virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) override
@@ -211,7 +211,7 @@ namespace RenderCore { namespace LightingEngine
 					_projections._fullProj[c]._worldToProjTransform = Combine(_projections._definitionViewMatrix, projTransform);
 					_projections._minimalProjection[c] = ExtractMinimalProjection(projTransform);
 				}
-				_projections._normalProjCount = projCount;
+				_projections._normalProjCount = (unsigned)projCount;
 			}
 
 			virtual Float4x4 GetWorldToOrthoView() const override
@@ -393,13 +393,13 @@ namespace RenderCore { namespace LightingEngine
 		_descSetSlotBindings.reserve(descSetLayout->_slots.size());
 		for (unsigned c=0; c<descSetLayout->_slots.size(); ++c) {
 			const auto& s = descSetLayout->_slots[c];
-			if (s._name == "DMShadow") {
+			if (s._nameHash == "DMShadow"_h64) {
 				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ResourceView, 0, c});
-			} else if (s._name == "ShadowProjection") {
+			} else if (s._nameHash == "ShadowProjection"_h64) {
 				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 0, c});
-			} else if (s._name == "ShadowResolveParameters") {
+			} else if (s._nameHash == "ShadowResolveParameters"_h64) {
 				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 1, c});
-			} else if (s._name == "ScreenToShadowProjection") {
+			} else if (s._nameHash == "ScreenToShadowProjection"_h64) {
 				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 2, c});
 			}
 		}

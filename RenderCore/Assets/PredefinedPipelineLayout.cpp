@@ -218,7 +218,7 @@ namespace RenderCore { namespace Assets
 				if (result._slots[s]._type == DescriptorType::Sampler) {
 					// look for a fixed sampler in the predefined layout
 					auto name = result._slotNames[s];
-					auto i = std::find_if(predefinedLayout->_slots.begin(), predefinedLayout->_slots.end(), [name](const auto& c) { return Hash64(c._name) == name; });
+					auto i = std::find_if(predefinedLayout->_slots.begin(), predefinedLayout->_slots.end(), [name](const auto& c) { return c._nameHash == name; });
 					if (i != predefinedLayout->_slots.end() && i->_fixedSamplerIdx != ~0u) {
 						if (result._fixedSamplers.size() <= s)
 							result._fixedSamplers.resize(s+1);
@@ -235,11 +235,11 @@ namespace RenderCore { namespace Assets
 		IteratorRange<const PipelineLayoutInitializer**> autoInitializers,
 		ShaderLanguage language, bool callerPassedAutoInitializers, SamplerPool* samplerPool) const
 	{
-		unsigned descSetCount = 0;
+		size_t descSetCount = 0;
 		if (autoInitializers.empty()) { 
 			descSetCount = _descriptorSets.size();
 		} else {
-			for (auto& sig:autoInitializers) descSetCount = std::max(unsigned(sig->GetDescriptorSets().size()), descSetCount);
+			for (auto& sig:autoInitializers) descSetCount = std::max(sig->GetDescriptorSets().size(), descSetCount);
 		}
 		std::vector<PipelineLayoutInitializer::DescriptorSetBinding> descriptorSetBindings;
 		descriptorSetBindings.resize(descSetCount);

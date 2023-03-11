@@ -36,12 +36,12 @@ namespace ShaderSourceParser
 			ParameterBox _defaults;
 		};
 		std::unordered_map<std::string, WorkingCB> workingCBs;
-		std::set<std::string> objectsAlreadyStored;
+		std::set<uint64_t> objectsAlreadyStored;
 		auto result = std::make_shared<RenderCore::Assets::PredefinedDescriptorSetLayout>();
 
 		// hack -- skip DiffuseTexture and NormalsTexture, because these are provided by the system headers
-		// objectsAlreadyStored.insert("DiffuseTexture");
-		// objectsAlreadyStored.insert("NormalsTexture");
+		// objectsAlreadyStored.insert("DiffuseTexture"_h64);
+		// objectsAlreadyStored.insert("NormalsTexture"_h64);
 
 		using DescriptorSlot = RenderCore::Assets::PredefinedDescriptorSetLayout::ConditionalDescriptorSlot;
 
@@ -83,13 +83,15 @@ namespace ShaderSourceParser
 
 				newSlot._cbIdx = (unsigned)std::distance(workingCBs.begin(), cbi);
 				newSlot._name = cbName;
+				newSlot._nameHash = Hash64(newSlot._name);
 				newSlot._type = RenderCore::DescriptorType::UniformBuffer;
 			} else {
 				newSlot._name = MakeGlobalName(c._name);
+				newSlot._nameHash = Hash64(newSlot._name);
 			}
 
-			if (objectsAlreadyStored.find(newSlot._name) == objectsAlreadyStored.end()) {
-				objectsAlreadyStored.insert(newSlot._name);
+			if (objectsAlreadyStored.find(newSlot._nameHash) == objectsAlreadyStored.end()) {
+				objectsAlreadyStored.insert(newSlot._nameHash);
 				result->_slots.push_back(newSlot);
 			}
 		}

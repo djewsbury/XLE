@@ -26,6 +26,7 @@ namespace RenderCore { namespace Assets
 		struct ConditionalDescriptorSlot
 		{
 			std::string _name;
+			uint64_t _nameHash = 0ull;
 			DescriptorType _type;
 			unsigned _arrayElementCount = 0u;
 			unsigned _slotIdx = ~0u;
