@@ -48,8 +48,14 @@
 #include "../RenderCore/Metal/DeviceContext.h"
 #include "../RenderCore/Vulkan/IDeviceVulkan.h"
 
+#include "../RenderOverlays/LayoutEngine.h"
+#include "../RenderOverlays/CommonWidgets.h"
 #include "../Assets/IntermediatesStore.h"
 #include "../Assets/AssetServices.h"
+#include "../Formatters/FormatterUtils.h"
+#include "../Tools/EntityInterface/MountedData.h"
+
+using namespace Assets::Literals;
 
 namespace PlatformRig
 {
@@ -119,6 +125,8 @@ namespace PlatformRig
         std::string _errorMsg;
 
         std::weak_ptr<DebugScreensSystem> _debugSystem;
+
+        void RenderScreenSelector(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const Rect& displayRect);
     };
 
     static RenderCore::TextureViewDesc MakeDefaultPresentationChainView(RenderCore::Format);
@@ -525,45 +533,23 @@ namespace PlatformRig
             .Draw(context, {{remaining._topLeft[0], middle+2}, remaining._bottomRight}, StringMeldInPlace(buffer) << std::setprecision(2) << std::fixed << heapMetrics._usage / (1024.f*1024.f) << "M (" << frameAllocationCount << ")");
     }
 
-    void    FrameRigDisplay::Render(IOverlayContext& context, Layout& layout,
-                                    Interactables& interactables, InterfaceState& interfaceState)
+    void FrameRigDisplay::RenderScreenSelector(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const Rect& displayRect)
     {
         auto* res = ConsoleRig::TryActualizeCachedBox<FrameRigResources>();
         if (!res) return;
 
-        using namespace RenderOverlays;
-        auto outerRect = layout.GetMaximumSize();
+        const Coord margin = 8;
 
-        static Coord rectWidth = 200;
-        static Coord padding = 12;
-        static Coord margin = 8;
-        const auto bigLineHeight = Coord(res->_frameRateFont->GetFontProperties()._lineHeight);
-        const auto smallLineHeight = Coord(res->_smallFrameRateFont->GetFontProperties()._lineHeight);
+        const ColorB normalColor = ColorB(70, 31, 0, 0x9f);
+        const ColorB mouseOverColor = ColorB(70, 31, 0, 0xff);
+        const ColorB pressed = ColorB(128, 50, 0, 0xff);
+        const ColorB menuBkgrnd(128, 96, 64, 64);
+        const ColorB menuBkgrndHigh(128, 96, 64, 192);
+        const ColorB tabHeaderColor(0xffffffff);
+
         const auto tabHeadingLineHeight = Coord(res->_tabHeadingFont->GetFontProperties()._lineHeight);
-        const Coord rectHeight = bigLineHeight + 3 * margin + smallLineHeight;
-        Rect displayRect(
-            Coord2(outerRect._bottomRight[0] - rectWidth - padding, outerRect._topLeft[1] + padding),
-            Coord2(outerRect._bottomRight[0] - padding, outerRect._topLeft[1] + padding + rectHeight));
-        if (auto* topBar = context.GetService<ITopBarManager>())
-            displayRect = topBar->FrameRigDisplay(context);
-        Layout innerLayout(displayRect);
-        innerLayout._paddingInternalBorder = margin;
-        innerLayout._paddingBetweenAllocations = margin;
 
-        static ColorB normalColor = ColorB(70, 31, 0, 0x9f);
-        static ColorB mouseOverColor = ColorB(70, 31, 0, 0xff);
-        static ColorB pressed = ColorB(128, 50, 0, 0xff);
-        static ColorB menuBkgrnd(128, 96, 64, 64);
-        static ColorB menuBkgrndHigh(128, 96, 64, 192);
-        static ColorB tabHeaderColor(0xffffffff);
-
-        auto f = _frameRate->GetPerformanceStats();
-        auto heapMetrics = AccumulatedAllocations::GetCurrentHeapMetrics();
-        auto frameAllocations = _prevFrameAllocationCount->_allocationCount;
-
-        DrawMainStats(context, innerLayout, *res, f, heapMetrics, frameAllocations);
-
-        interactables.Register({displayRect, Id_FrameRigDisplayMain});
+        auto outerRect = layout.GetMaximumSize();
 
         auto ds = _debugSystem.lock();
         if (ds) {
@@ -658,6 +644,207 @@ namespace PlatformRig
                     }
                 }
             }
+        }
+    }
+
+    struct FrameRigDisplayStaticData
+    {
+        unsigned _verticalOffset = 100;
+
+        FrameRigDisplayStaticData() = default;
+
+        template<typename Formatter>
+            FrameRigDisplayStaticData(Formatter& fmttr)
+        {
+            uint64_t keyname;
+            while (TryKeyedItem(fmttr, keyname)) {
+                switch (keyname) {
+                default: SkipValueOrElement(fmttr); break;
+                }
+            }
+        }
+    };
+
+    class KeyIndicatorListStyler
+    {
+    public:
+        YGNodeRef KeyIndicator(RenderOverlays::LayoutEngine& layoutEngine, std::string&& key, std::string&& label)
+		{
+            auto* frameNode = layoutEngine.NewNode();
+            layoutEngine.InsertChildToStackTop(frameNode);
+            layoutEngine.PushNode(frameNode);
+
+            YGNodeStyleSetFlexDirection(frameNode, YGFlexDirectionRow);
+			YGNodeStyleSetJustifyContent(frameNode, YGJustifyFlexEnd);
+			YGNodeStyleSetAlignItems(frameNode, YGAlignStretch);
+            YGNodeStyleSetFlexGrow(frameNode, 0.f);
+
+            YGNodeStyleSetPadding(frameNode, YGEdgeVertical, 4);
+
+            struct AttachedData
+            {
+                std::string _label, _key;
+
+                unsigned _cachedLabelWidth = ~0u;
+				std::string _fitLabel;
+            };
+            auto attachedData = std::make_shared<AttachedData>();
+            attachedData->_label = std::move(label);
+            attachedData->_key = std::move(key);
+
+            auto lineHeight = _font->GetFontProperties()._lineHeight;
+
+            {
+                auto labelNode = layoutEngine.NewImbuedNode(0);
+                layoutEngine.InsertChildToStackTop(*labelNode);
+
+                YGNodeStyleSetWidth(*labelNode, StringWidth(*_font, MakeStringSection(attachedData->_label)) + 4 + lineHeight/2);
+                YGNodeStyleSetHeight(*labelNode, lineHeight + 4*2);
+                YGNodeStyleSetPadding(*labelNode, YGEdgeVertical, 4);
+                YGNodeStyleSetPadding(*labelNode, YGEdgeLeft, 2 + lineHeight/2);
+                YGNodeStyleSetPadding(*labelNode, YGEdgeRight, 2);
+                YGNodeStyleSetFlexGrow(*labelNode, 0.f);
+                YGNodeStyleSetFlexShrink(*labelNode, 1.f);
+
+                labelNode->_nodeAttachments._drawDelegate = [font=_font, attachedData, lineHeight](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+                    if (content.Width() != attachedData->_cachedLabelWidth) {
+                        attachedData->_cachedLabelWidth = content.Width();
+                        char buffer[MaxPath];
+                        auto fitWidth = StringEllipsis(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_label), (float)content.Width());
+                        attachedData->_fitLabel = buffer;
+                    }
+                    frame._bottomRight[0] += lineHeight/2;      // extend over the arrow of the "key" part
+                    draw.KeyIndicatorLabel(frame, content, attachedData->_fitLabel);
+                };
+            }
+
+            {
+                auto keyNode = layoutEngine.NewImbuedNode(0);
+			    layoutEngine.InsertChildToStackTop(*keyNode);
+
+                YGNodeStyleSetWidth(*keyNode, StringWidth(*_font, MakeStringSection(attachedData->_key)) + 8 + lineHeight);
+                YGNodeStyleSetHeight(*keyNode, lineHeight + 4*2);
+                YGNodeStyleSetPadding(*keyNode, YGEdgeVertical, 4);
+                YGNodeStyleSetPadding(*keyNode, YGEdgeLeft, 4 + lineHeight/2);
+                YGNodeStyleSetPadding(*keyNode, YGEdgeRight, 4 + lineHeight/2);
+                YGNodeStyleSetFlexGrow(*keyNode, 0.f);
+                YGNodeStyleSetFlexShrink(*keyNode, 0.f);
+
+                keyNode->_nodeAttachments._drawDelegate = [font=_font, attachedData](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+                    draw.KeyIndicatorKey(frame, content, attachedData->_key);
+                };
+            }
+
+            layoutEngine.PopNode();
+			return frameNode;
+        }
+
+        struct StaticData
+        {
+            std::string _font;
+            unsigned _borderWeight = 2;
+
+            StaticData() = default;
+
+            template<typename Formatter>
+                StaticData(Formatter& fmttr)
+            {
+                uint64_t keyname;
+                while (TryKeyedItem(fmttr, keyname)) {
+                    switch (keyname) {
+                    default: SkipValueOrElement(fmttr); break;
+                    }
+                }
+            }
+        };
+
+        const StaticData* _staticData;
+		std::shared_ptr<Font> _font;
+
+		KeyIndicatorListStyler()
+		{
+			_staticData = &EntityInterface::MountedData<StaticData>::LoadOrDefault("cfg/displays/keyindicatorstyler"_initializer);
+			_font = ActualizeFont(_staticData->_font);
+		}
+
+    private:
+        std::shared_ptr<Font> ActualizeFont(StringSection<> name)
+		{
+			::Assets::PtrToMarkerPtr<Font> futureFont;
+			if (name.IsEmpty()) {
+				futureFont = MakeFont("Metropolitano", 16);
+			} else {
+				futureFont = MakeFont(name);
+			}
+			return futureFont->Actualize();		// stall
+		}
+    };
+
+    void    FrameRigDisplay::Render(IOverlayContext& context, Layout& layout,
+                                    Interactables& interactables, InterfaceState& interfaceState)
+    {
+        auto* res = ConsoleRig::TryActualizeCachedBox<FrameRigResources>();
+        if (!res) return;
+
+        using namespace RenderOverlays;
+        auto outerRect = layout.GetMaximumSize();
+        auto* staticData = &EntityInterface::MountedData<FrameRigDisplayStaticData>::LoadOrDefault("cfg/displays/framerig"_initializer);
+
+        {
+            const Coord rectWidth = 200;
+            const Coord padding = 12;
+            const Coord margin = 8;
+            const auto bigLineHeight = Coord(res->_frameRateFont->GetFontProperties()._lineHeight);
+            const auto smallLineHeight = Coord(res->_smallFrameRateFont->GetFontProperties()._lineHeight);
+            const Coord rectHeight = bigLineHeight + 3 * margin + smallLineHeight;
+            Rect displayRect(
+                Coord2(outerRect._bottomRight[0] - rectWidth - padding, outerRect._topLeft[1] + padding),
+                Coord2(outerRect._bottomRight[0] - padding, outerRect._topLeft[1] + padding + rectHeight));
+            if (auto* topBar = context.GetService<ITopBarManager>())
+                displayRect = topBar->FrameRigDisplay(context);
+            Layout innerLayout(displayRect);
+            innerLayout._paddingInternalBorder = margin;
+            innerLayout._paddingBetweenAllocations = margin;
+
+            auto f = _frameRate->GetPerformanceStats();
+            auto heapMetrics = AccumulatedAllocations::GetCurrentHeapMetrics();
+            auto frameAllocations = _prevFrameAllocationCount->_allocationCount;
+
+            DrawMainStats(context, innerLayout, *res, f, heapMetrics, frameAllocations);
+
+            interactables.Register({displayRect, Id_FrameRigDisplayMain});
+        }
+
+        {
+            auto outerKeyHelpRect = outerRect;
+            outerKeyHelpRect._topLeft[1] += staticData->_verticalOffset;
+
+            LayoutEngine le;
+            auto rootNode = le.NewNode();
+            le.PushRoot(rootNode, {32, 32});
+            YGNodeStyleSetMaxWidth(rootNode, outerKeyHelpRect.Width());
+            YGNodeStyleSetMaxHeight(rootNode, outerKeyHelpRect.Height());
+
+            YGNodeStyleSetFlexDirection(rootNode, YGFlexDirectionColumn);
+            YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
+            YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);
+
+            KeyIndicatorListStyler styler;
+            styler.KeyIndicator(le, "H", "Help");
+            styler.KeyIndicator(le, "C", "Compile Progress");
+
+            le.PopNode();	// root node
+
+		    auto layedOutWidgets = le.BuildLayedOutWidgets();
+
+            outerKeyHelpRect._topLeft[0] = outerKeyHelpRect._bottomRight[0] - layedOutWidgets._dimensions[0];
+            CommonWidgets::Draw draw{context, interactables, interfaceState};
+            Float3x3 transform {
+                1.f, 0.f, outerKeyHelpRect._topLeft[0],
+                0.f, 1.f, outerKeyHelpRect._topLeft[1],
+                0.f, 0.f, 1.f
+            };
+		    layedOutWidgets.Draw(draw, transform);
         }
 
         if (!_errorMsg.empty()) {

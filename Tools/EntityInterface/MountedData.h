@@ -6,6 +6,7 @@
 
 #include "EntityInterface.h"
 #include "../ToolsRig/ToolsRigServices.h"
+#include "../../Formatters/IDynamicFormatter.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"

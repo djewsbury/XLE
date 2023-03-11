@@ -65,6 +65,9 @@ namespace RenderOverlays { namespace CommonWidgets
 		void RectangleContainer(const Rect& rect) const;
 		void ButtonBasic(const Rect& rect, uint64_t interactable, StringSection<> label) const;
 
+		void KeyIndicatorLabel(const Rect& frame, const Rect& labelContent, StringSection<> label);
+		void KeyIndicatorKey(const Rect& frame, const Rect& labelContent, StringSection<> label);
+
 		IOverlayContext& GetContext() { return *_context; }
 		DebuggingDisplay::Interactables& GetInteractables() { return *_interactables; }
 		DebuggingDisplay::InterfaceState& GetInterfaceState() { return *_interfaceState; }

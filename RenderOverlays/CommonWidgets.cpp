@@ -142,6 +142,51 @@ namespace RenderOverlays { namespace CommonWidgets
 			.Draw(*_context, rect, label);
 	}
 
+	void Draw::KeyIndicatorLabel(const Rect& frame, const Rect& labelContent, StringSection<> label)
+	{
+		const Coord arrowWidth = labelContent.Height()/2;
+		Coord2 A { frame._topLeft[0] + arrowWidth, frame._topLeft[1] };
+		Coord2 B { frame._bottomRight[0], frame._topLeft[1] };
+		Coord2 C { frame._bottomRight[0], frame._bottomRight[1] };
+		Coord2 D { frame._topLeft[0] + arrowWidth, frame._bottomRight[1] };
+		Coord2 E { frame._topLeft[0], (frame._topLeft[1] + frame._bottomRight[1])/2 };
+
+		Coord2 triangles[] {
+			E, D, A,
+			A, D, B,
+			B, D, C
+		};
+		DebuggingDisplay::FillTriangles(*_context, triangles, ColorB{0xff35376e}, dimof(triangles)/3);
+
+		Float2 linePts[] {
+			B, A, E, D, C
+		};
+		SolidLine(*_context, linePts, ColorB::White, 3.0f);
+
+		DrawText().Color(ColorB::White).Draw(*_context, labelContent, label);
+	}
+
+	void Draw::KeyIndicatorKey(const Rect& frame, const Rect& labelContent, StringSection<> label)
+	{
+		const Coord arrowWidth = labelContent.Height()/2;
+		Coord2 A { frame._topLeft[0] + arrowWidth, frame._topLeft[1] - 2 };
+		Coord2 B { frame._bottomRight[0], frame._topLeft[1] - 2 };
+		Coord2 C { frame._bottomRight[0] - arrowWidth, (frame._topLeft[1] + frame._bottomRight[1])/2 };
+		Coord2 D { frame._bottomRight[0], frame._bottomRight[1] + 1 };
+		Coord2 E { frame._topLeft[0] + arrowWidth, frame._bottomRight[1] + 1 };
+		Coord2 F { frame._topLeft[0], (frame._topLeft[1] + frame._bottomRight[1])/2 };
+
+		Coord2 triangles[] {
+			B, A, C,
+			C, A, F,
+			F, E, C,
+			C, E, D
+		};
+		DebuggingDisplay::FillTriangles(*_context, triangles, ColorB::White, dimof(triangles)/3);
+
+		DrawText().Color(ColorB::Black).Draw(*_context, labelContent, label);
+	}
+
 	DefaultFontsBox* Draw::TryGetDefaultFontsBox()
 	{
 		return ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
