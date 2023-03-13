@@ -31,21 +31,22 @@ namespace RenderOverlays
 		}
 	}
 
-	auto LayedOutWidgets::ProcessInput(CommonWidgets::Input& input, const Float3x3& transform) -> ProcessInputResult
+	auto LayedOutWidgets::ProcessInput(const PlatformRig::InputContext& inputContext, const OSServices::InputSnapshot& evnt, const Float3x3& transform) -> PlatformRig::ProcessInputResult
 	{
-		auto topMostId = input.GetInterfaceState().TopMostId();
+		auto* interfaceState = inputContext.GetService<DebuggingDisplay::InterfaceState>();
+		auto topMostId = interfaceState->TopMostId();
 		auto i = _nodeAttachments.rbegin();		// doing input in reverse order to drawing
 		auto i2 = _layedOutLocations.rbegin();
 		for (;i!=_nodeAttachments.rend(); ++i, ++i2)
 			if (i->_ioDelegate && i->GetGuid() == topMostId) {
 				auto frame = TransformRect(transform, i2->first);
 				auto content = TransformRect(transform, i2->second);
-				auto result = i->_ioDelegate(input, frame, content);
-				if (result == IODelegateResult::Consumed)
-					return ProcessInputResult::Consumed;
+				auto result = i->_ioDelegate(inputContext, evnt, frame, content);
+				if (result != PlatformRig::ProcessInputResult::Passthrough)
+					return result;
 			}
 
-		return ProcessInputResult::Passthrough;
+		return PlatformRig::ProcessInputResult::Passthrough;
 	}
 
 	void LayoutEngine::InsertChildToStackTop(YGNodeRef node)

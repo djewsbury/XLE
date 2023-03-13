@@ -4,19 +4,21 @@
 
 #pragma once
 #include "OverlayPrimitives.h"
-#include "../../Math/Matrix.h"
-#include "../../Utility/StringUtils.h"
-#include "../../Utility/MemoryUtils.h"
-#include "../../Foreign/yoga/yoga/Yoga.h"
+#include "../PlatformRig/InputListener.h"		// for ProcessInputResult
+#include "../Math/Matrix.h"
+#include "../Utility/StringUtils.h"
+#include "../Utility/MemoryUtils.h"
+#include "../Foreign/yoga/yoga/Yoga.h"
 #include <stack>
 #include <vector>
 #include <memory>
 
+namespace PlatformRig { class InputContext; }
+namespace OSServices { class InputSnapshot; }
+
 namespace RenderOverlays
 {
 	namespace CommonWidgets { class Draw; class Input; }
-
-	enum class IODelegateResult { Passthrough, Consumed };
 
 	class LayedOutWidgets
 	{
@@ -24,7 +26,7 @@ namespace RenderOverlays
 		struct NodeDelegates
 		{
 			std::function<void(CommonWidgets::Draw&, Rect frame, Rect content)> _drawDelegate;
-			std::function<IODelegateResult(CommonWidgets::Input&, Rect frame, Rect content)> _ioDelegate;
+			std::function<PlatformRig::ProcessInputResult(const PlatformRig::InputContext&, const OSServices::InputSnapshot&, Rect frame, Rect content)> _ioDelegate;
 			uint64_t _guid;
 
 			uint64_t GetGuid() const { return _guid; }
@@ -40,8 +42,7 @@ namespace RenderOverlays
 
 		void Draw(CommonWidgets::Draw& draw, const Float3x3& transform = Identity<Float3x3>());
 
-		enum ProcessInputResult { Passthrough, Consumed };
-		ProcessInputResult ProcessInput(CommonWidgets::Input& input, const Float3x3& transform = Identity<Float3x3>());
+		PlatformRig::ProcessInputResult ProcessInput(const PlatformRig::InputContext&, const OSServices::InputSnapshot&, const Float3x3& transform = Identity<Float3x3>());
 
 		LayedOutWidgets() = default;
 		LayedOutWidgets(LayedOutWidgets&&) = default;

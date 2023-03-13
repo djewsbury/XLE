@@ -86,11 +86,9 @@ namespace PlatformRig { namespace Overlays
 	ProcessInputResult ToolTipHover::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& snapshot)
 	{
 		CommonWidgets::HoveringLayer hoveringLayer;
-		CommonWidgets::Input input { interfaceState, snapshot, hoveringLayer };
-		auto result = _layedOutWidgets.ProcessInput(input);
-		if (result == LayedOutWidgets::ProcessInputResult::Consumed)
-			return ProcessInputResult::Consumed;
-		return ProcessInputResult::Passthrough;
+		PlatformRig::InputContext inputContext;
+		inputContext.AttachService2(interfaceState);
+		return _layedOutWidgets.ProcessInput(inputContext, snapshot);
 	}
 
 	Coord2 ToolTipHover::GetDimensions() const
@@ -505,17 +503,20 @@ namespace PlatformRig { namespace Overlays
 			auto buttonNode = KeyValue(layoutEngine, std::move(label));
 
 			buttonNode->_nodeAttachments._guid = interactable;
-			buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](CommonWidgets::Input& input, Rect, Rect) {
-				if (input.GetEvent().IsPress_LButton()) {
-					input.GetInterfaceState().BeginCapturing(input.GetInterfaceState().TopMostWidget());
-				} else if (input.GetEvent().IsRelease_LButton()) {
-					if (input.GetInterfaceState().GetCapture()._widget._id == interactable) {
-						input.GetInterfaceState().EndCapturing();
-						if (Contains(input.GetInterfaceState().TopMostWidget()._rect, input.GetInterfaceState().MousePosition()))
+			buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](auto& input, auto& evnt, Rect, Rect) {
+				auto* interfaceState = input.GetService<DebuggingDisplay::InterfaceState>();
+				if (!interfaceState) return PlatformRig::ProcessInputResult::Passthrough;
+
+				if (evnt.IsPress_LButton()) {
+					interfaceState->BeginCapturing(interfaceState->TopMostWidget());
+				} else if (evnt.IsRelease_LButton()) {
+					if (interfaceState->GetCapture()._widget._id == interactable) {
+						interfaceState->EndCapturing();
+						if (Contains(interfaceState->TopMostWidget()._rect, interfaceState->MousePosition()))
 							event();
 					}
 				}
-				return IODelegateResult::Consumed;
+				return PlatformRig::ProcessInputResult::Consumed;
 			};
 			return buttonNode;
 		}

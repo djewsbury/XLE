@@ -69,6 +69,9 @@ namespace RenderOverlays
     void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
     void        SolidLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
 
+    void        DashLineInset(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
+    void        SolidLineInset(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
+
     struct ColorAdjust
     {
         float _saturationMultiplier = 1.f;

@@ -11,21 +11,61 @@
 
 #include "../Assets/AssetServices.h"
 #include "../Assets/AssetSetManager.h"
+#include "../Tools/EntityInterface/MountedData.h"
+#include "../Formatters/IDynamicFormatter.h"
+#include "../Formatters/FormatterUtils.h"
 
 using namespace PlatformRig::Literals;
 
 namespace RenderOverlays { namespace CommonWidgets
 {
+	struct CommonWidgetsStaticData
+	{
+		std::string _editBoxFont = "DosisBook:16";
+		std::string _buttonFont = "DosisExtraBold:20";
+		std::string _headingFont = "DosisExtraBold:20";
+
+		CommonWidgetsStaticData() = default;
+
+		template<typename Formatter>
+			CommonWidgetsStaticData(Formatter& fmttr)
+		{
+			uint64_t keyname;
+			while (TryKeyedItem(fmttr, keyname)) {
+				switch (keyname) {
+				default: SkipValueOrElement(fmttr); break;
+				}
+			}
+		}
+	};
+
 	void DefaultFontsBox::ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise)
 	{
-		::Assets::WhenAll(
-			RenderOverlays::MakeFont("DosisBook", 16),
-			RenderOverlays::MakeFont("DosisExtraBold", 20),
-			RenderOverlays::MakeFont("DosisExtraBold", 20)).ThenConstructToPromise(std::move(promise));
+		auto marker = ::Assets::MakeAssetMarker<EntityInterface::MountedData<CommonWidgetsStaticData>>("cfg/displays/commonwidgets");
+		::Assets::WhenAll(marker).Then(
+			[promise=std::move(promise)](auto futureStaticData) mutable {
+				CommonWidgetsStaticData staticData;
+				::Assets::DependencyValidation depVal;
+				TRY {
+					auto sd = futureStaticData.get();
+					staticData = sd.get();
+					depVal = sd.GetDependencyValidation();
+				} CATCH(...) {
+				} CATCH_END
+
+				::Assets::WhenAll(
+					RenderOverlays::MakeFont(staticData._editBoxFont),
+					RenderOverlays::MakeFont(staticData._buttonFont),
+					RenderOverlays::MakeFont(staticData._headingFont)).ThenConstructToPromise(
+						std::move(promise),
+						[depVal = std::move(depVal)](auto f0, auto f1, auto f2) mutable {
+							return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(depVal));
+						});
+			});
 	}
 
-	DefaultFontsBox::DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont)
-	: _editBoxFont(std::move(editBoxFont)), _buttonFont(std::move(buttonFont)), _headingFont(std::move(headingFont))
+	DefaultFontsBox::DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont, ::Assets::DependencyValidation depVal)
+	: _editBoxFont(std::move(editBoxFont)), _buttonFont(std::move(buttonFont)), _headingFont(std::move(headingFont)), _depVal(std::move(depVal))
 	{}
 
 	void Draw::SectionHeader(Rect rectangle, StringSection<> name, bool expanded) const
@@ -159,9 +199,9 @@ namespace RenderOverlays { namespace CommonWidgets
 		DebuggingDisplay::FillTriangles(*_context, triangles, ColorB{0xff35376e}, dimof(triangles)/3);
 
 		Float2 linePts[] {
-			B, A, E, D, C
+			C, D, E, A, B
 		};
-		SolidLine(*_context, linePts, ColorB::White, 3.0f);
+		SolidLineInset(*_context, linePts, ColorB::White, 4.0f);
 
 		DrawText().Color(ColorB::White).Draw(*_context, labelContent, label);
 	}
@@ -169,11 +209,11 @@ namespace RenderOverlays { namespace CommonWidgets
 	void Draw::KeyIndicatorKey(const Rect& frame, const Rect& labelContent, StringSection<> label)
 	{
 		const Coord arrowWidth = labelContent.Height()/2;
-		Coord2 A { frame._topLeft[0] + arrowWidth, frame._topLeft[1] - 2 };
-		Coord2 B { frame._bottomRight[0], frame._topLeft[1] - 2 };
+		Coord2 A { frame._topLeft[0] + arrowWidth, frame._topLeft[1] };
+		Coord2 B { frame._bottomRight[0], frame._topLeft[1] };
 		Coord2 C { frame._bottomRight[0] - arrowWidth, (frame._topLeft[1] + frame._bottomRight[1])/2 };
-		Coord2 D { frame._bottomRight[0], frame._bottomRight[1] + 1 };
-		Coord2 E { frame._topLeft[0] + arrowWidth, frame._bottomRight[1] + 1 };
+		Coord2 D { frame._bottomRight[0], frame._bottomRight[1] };
+		Coord2 E { frame._topLeft[0] + arrowWidth, frame._bottomRight[1] };
 		Coord2 F { frame._topLeft[0], (frame._topLeft[1] + frame._bottomRight[1])/2 };
 
 		Coord2 triangles[] {
@@ -185,6 +225,70 @@ namespace RenderOverlays { namespace CommonWidgets
 		DebuggingDisplay::FillTriangles(*_context, triangles, ColorB::White, dimof(triangles)/3);
 
 		DrawText().Color(ColorB::Black).Draw(*_context, labelContent, label);
+	}
+
+	struct KeyIndicatorBreakdown
+	{
+		Rect _labelFrame, _labelContent;
+		Rect _keyFrame, _keyContent;
+	};
+
+	struct KeyIndicatorPrecalculatedData
+	{
+		std::string _fitLabel, _fitKey;
+		Coord _keyWidth;
+	};
+
+	static KeyIndicatorBreakdown BuildKeyIndicatorBreakdown(Coord width, Coord height, Coord keyWidth)
+	{
+		const unsigned arrowWidth = height / 2;
+		const unsigned hpadding = 2;
+		const unsigned vpadding = 2;
+		const unsigned borderWeight = 4;
+
+		KeyIndicatorBreakdown result;
+		result._labelFrame =
+			{
+				{ 0, 0 },
+				{ width - arrowWidth - keyWidth - 2*hpadding, height }
+			};
+
+		result._labelContent =
+			{
+				{ arrowWidth + hpadding, borderWeight + vpadding },
+				{ result._labelFrame._bottomRight[0] - arrowWidth - hpadding, height - borderWeight - vpadding }
+			};
+
+		result._keyFrame = 
+			{
+				{ width - 2 * arrowWidth - 2 * hpadding - keyWidth, 0 },
+				{ width, height },
+			};
+
+		result._keyContent =
+			{
+				{ result._keyFrame._topLeft[0] + arrowWidth + hpadding, borderWeight + vpadding },
+				{ result._keyFrame._bottomRight[0] - arrowWidth - hpadding, height - borderWeight - vpadding }
+
+			};
+
+		return result;
+	}
+
+	void Draw::KeyIndicator(const Rect& frame, const void* precalculatedData)
+	{
+		auto& precalc = *(const KeyIndicatorPrecalculatedData*)precalculatedData;
+		auto breakdown = BuildKeyIndicatorBreakdown(frame.Width(), frame.Height(), precalc._keyWidth);
+		breakdown._labelFrame._topLeft += frame._topLeft;
+		breakdown._labelFrame._bottomRight += frame._topLeft;
+		breakdown._labelContent._topLeft += frame._topLeft;
+		breakdown._labelContent._bottomRight += frame._topLeft;
+		breakdown._keyFrame._topLeft += frame._topLeft;
+		breakdown._keyFrame._bottomRight += frame._topLeft;
+		breakdown._keyContent._topLeft += frame._topLeft;
+		breakdown._keyContent._bottomRight += frame._topLeft;
+		KeyIndicatorLabel(breakdown._labelFrame, breakdown._labelContent, precalc._fitLabel);
+		KeyIndicatorKey(breakdown._keyFrame, breakdown._keyContent, precalc._fitKey);
 	}
 
 	DefaultFontsBox* Draw::TryGetDefaultFontsBox()
@@ -209,6 +313,43 @@ namespace RenderOverlays { namespace CommonWidgets
 	: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState)
 	{
 		_fonts = TryGetDefaultFontsBox();
+	}
+
+	Measure::MeasuredRectangle Measure::KeyIndicator(StringSection<> label, StringSection<> key)
+	{
+		auto labelWidth = StringWidth(*_fonts->_buttonFont, label);
+		auto keyWidth = StringWidth(*_fonts->_buttonFont, key);
+
+		const unsigned hpadding = 2;
+		const unsigned vpadding = 2;
+		const unsigned borderWeight = 4;
+		const unsigned height = _fonts->_buttonFont->GetFontProperties()._lineHeight + 2*vpadding + 2*borderWeight;
+		const unsigned arrowWidth = height / 2;
+
+		Measure::MeasuredRectangle result;
+		result._minHeight = result._height = height;
+		result._minWidth = 4 * hpadding + 3 * arrowWidth + keyWidth;
+		result._width = result._minWidth + labelWidth;
+		return result;
+	}
+
+	std::shared_ptr<void> Measure::KeyIndicator_Precalculate(Coord width, Coord height, StringSection<> label, StringSection<> key)
+	{
+		auto result = std::make_shared<KeyIndicatorPrecalculatedData>();
+		result->_fitKey = key.AsString();
+		result->_keyWidth = StringWidth(*_fonts->_buttonFont, key);
+
+		auto breakdown = BuildKeyIndicatorBreakdown(width, height, result->_keyWidth);
+
+		VLA(char, buffer, label.Length()+4);
+		StringEllipsis(buffer, label.Length()+4, *_fonts->_buttonFont, label, breakdown._labelContent.Width());
+		result->_fitLabel = buffer;
+		return result;
+	}
+
+	Measure::Measure()
+	{
+		_fonts = Draw::TryGetDefaultFontsBox();
 	}
 
 	constexpr auto left       = "left"_key;

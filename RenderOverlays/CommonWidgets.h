@@ -44,8 +44,11 @@ namespace RenderOverlays { namespace CommonWidgets
 		std::shared_ptr<RenderOverlays::Font> _editBoxFont;
 		std::shared_ptr<RenderOverlays::Font> _buttonFont;
 		std::shared_ptr<RenderOverlays::Font> _headingFont;
+		::Assets::DependencyValidation _depVal;
 
-		DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont);
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont, ::Assets::DependencyValidation depVal);
 		static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise);
 	};
 
@@ -65,6 +68,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		void RectangleContainer(const Rect& rect) const;
 		void ButtonBasic(const Rect& rect, uint64_t interactable, StringSection<> label) const;
 
+		void KeyIndicator(const Rect& frame, const void* precalculatedData);
 		void KeyIndicatorLabel(const Rect& frame, const Rect& labelContent, StringSection<> label);
 		void KeyIndicatorKey(const Rect& frame, const Rect& labelContent, StringSection<> label);
 
@@ -85,19 +89,16 @@ namespace RenderOverlays { namespace CommonWidgets
 		DefaultFontsBox* _fonts;
 	};
 
-	class Input
+	class Measure
 	{
 	public:
-		DebuggingDisplay::InterfaceState& GetInterfaceState() { return *_interfaceState; }
-		const OSServices::InputSnapshot& GetEvent() { return *_input; }
-		HoveringLayer& GetHoverings() { return *_hoverings; }
+		struct MeasuredRectangle { Coord _minWidth, _width, _minHeight, _height; };
+		MeasuredRectangle KeyIndicator(StringSection<> label, StringSection<> key);
+		std::shared_ptr<void> KeyIndicator_Precalculate(Coord width, Coord height, StringSection<> label, StringSection<> key);
 
-		Input(DebuggingDisplay::InterfaceState& interfaceState, const OSServices::InputSnapshot& input, HoveringLayer& hoverings)
-		: _interfaceState(&interfaceState), _input(&input), _hoverings(&hoverings) {}
+		Measure();
 	private:
-		DebuggingDisplay::InterfaceState* _interfaceState;
-		const OSServices::InputSnapshot* _input;
-		HoveringLayer* _hoverings;
+		DefaultFontsBox* _fonts;
 	};
 
 	template<typename Type>

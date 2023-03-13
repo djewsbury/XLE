@@ -594,6 +594,92 @@ namespace RenderOverlays
         }
     }
 
+    void WriteInLineVerticesInset(IteratorRange<Internal::Vertex_PCT*> data, IteratorRange<const Float2*> linePts, ColorB colour, float width)
+    {
+		auto col0 = HardwareColor(colour);
+
+        float x = 0;
+        float prevA = 0.f;
+        int nextTriangleSign = 0;
+        Internal::Vertex_PCT* vIterator = data.begin();
+        for (unsigned c=0; c<linePts.size()-1; ++c) {
+            Float3 pt0 = AsPixelCoords(linePts[c]);
+            Float3 pt1 = AsPixelCoords(linePts[c+1]);
+
+                ///////////
+
+            float a0 = 0.f, a1 = 0.f;
+            Float2 d0{0,0}, d1 = Truncate(Float3(pt1 - pt0));
+            float length = Magnitude(d1);
+            d1 /= length;
+            a0 = -prevA;
+            int triangleSign = nextTriangleSign;
+            if ((c+2) < linePts.size()) {
+                Float3 pt2 = AsPixelCoords(linePts[c+2]);
+                Float2 d2 = Normalize(Truncate(Float3(pt2 - pt1)));
+                float cosTheta = dot(-d1, d2);
+                // tan(A/2) = +/-sqrt((1-cosA)/(1+cosA))
+                a1 = width / sqrt((1.f-cosTheta)/(1.f+cosTheta));
+                a1 = -a1;
+
+                nextTriangleSign = TriangleSign(Truncate(pt0), Truncate(pt1), Truncate(pt2));
+            }
+            prevA = a1;
+            Float2 axis { -d1[1], d1[0] };
+            float x2 = x + length;
+
+            vIterator[ 0] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1), 0.f),                    col0, Float2(x - a0, 0) };
+            vIterator[ 1] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 + width * axis), 0.f),     col0, Float2(x - a0, 1.f) };
+            vIterator[ 2] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                    col0, Float2(x2 + a1, 0) };
+
+            vIterator[ 3] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                    col0, Float2(x2 + a1, 0) };
+            vIterator[ 4] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 + width * axis), 0.f),     col0, Float2(x - a0, 1.f) };
+            vIterator[ 5] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1 + width * axis), 0.f),     col0, Float2(x2 + a1, 1.f) };
+
+            vIterator += 6;
+
+            // wedges for the joins
+            // technically we could do this with one fewer triangle per wedge; but it's just slightly more convenient to do it this way right now
+            if (c!=0) {
+
+                vIterator[ 0] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 + width * axis), 0.f),     col0, Float2(x,  1) };
+                vIterator[ 1] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1), 0.f),                    col0, Float2(x,  0) };
+                vIterator[ 2] = Internal::Vertex_PCT { pt0,                                                 col0, Float2(x,  0) };
+                vIterator += 3;
+
+                if (triangleSign < 0) {
+                    vIterator[ 0] = Internal::Vertex_PCT { pt0 + Expand(Float2(-a0*d1 + width * axis), 0.f),    col0, Float2(x,  1) };
+                    vIterator[ 1] = Internal::Vertex_PCT { pt0 + Expand(Float2(a0*d1 + width * axis), 0.f),     col0, Float2(x,  1) };
+                    vIterator[ 2] = Internal::Vertex_PCT { pt0,                                                 col0, Float2(x,  0) };
+                } else {
+                    vIterator[ 0] = vIterator[ 1] = vIterator[ 2] = Internal::Vertex_PCT { pt0, col0, Float2(x,  0) };
+                }
+                vIterator += 3;
+            }
+
+            if ((c+2) < linePts.size()) {
+
+                vIterator[ 0] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1 + width * axis), 0.f),         col0, Float2(x2,  1) };
+                vIterator[ 1] = Internal::Vertex_PCT { pt1,                                                     col0, Float2(x2,  0) };
+                vIterator[ 2] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1), 0.f),                        col0, Float2(x2,  0) };
+                vIterator += 3;
+
+                if (nextTriangleSign < 0) {
+                    vIterator[ 0] = Internal::Vertex_PCT { pt1,                                                     col0, Float2(x2,  0) };
+                    vIterator[ 1] = Internal::Vertex_PCT { pt1 + Expand(Float2(a1*d1 + width * axis), 0.f),         col0, Float2(x2,  1) };
+                    vIterator[ 2] = Internal::Vertex_PCT { pt1 + Expand(Float2(-a1*d1 + width * axis), 0.f),        col0, Float2(x2,  1) };
+                } else {
+                    vIterator[ 0] = vIterator[ 1] = vIterator[ 2] = Internal::Vertex_PCT { pt0, col0, Float2(x,  0) };
+                }
+                vIterator += 3;
+            }
+
+            ///////////
+
+            x = x2;
+        }
+    }
+
     void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width)
     {
         if (linePts.size() < 2) return;
@@ -626,6 +712,38 @@ namespace RenderOverlays
         if (data.empty()) return;
 
         WriteInLineVertices(data, linePts, colour, width);
+    }
+
+    void        DashLineInset(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width)
+    {
+        if (linePts.size() < 2) return;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
+
+        const unsigned joinsVertices = 6*2;
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*2 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        if (data.empty()) return;
+
+        WriteInLineVerticesInset(data, linePts, colour, width);
+    }
+
+    void        SolidLineInset(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width)
+    {
+        if (linePts.size() < 2) return;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_solidNoBorder;
+
+        const unsigned joinsVertices = 6*2;
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*2 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        if (data.empty()) return;
+
+        WriteInLineVerticesInset(data, linePts, colour, width);
     }
 
 	///////////////////////////////////////////////////////////////////////////////////

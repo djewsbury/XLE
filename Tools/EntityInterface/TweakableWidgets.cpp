@@ -61,9 +61,9 @@ namespace EntityInterface
 				_state->InitializeValue(interactable, initialValue);
 			
 				auto mainCtrl = BeginSharedLeftRightCtrl(name, interactable);
-				mainCtrl->_nodeAttachments._ioDelegate = [interactable, state=_state, minValue, maxValue](CommonWidgets::Input& input, Rect frame, Rect content) {
-					bool leftSide = input.GetEvent()._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
-					if (input.GetEvent().IsRelease_LButton()) {
+				mainCtrl->_nodeAttachments._ioDelegate = [interactable, state=_state, minValue, maxValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
+					bool leftSide = evnt._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
+					if (evnt.IsRelease_LButton()) {
 						auto currentValue = state->GetWorkingValue<Type>(interactable);
 						auto newValue = currentValue;
 						if (leftSide) 	newValue = std::max(minValue, currentValue/2);
@@ -71,10 +71,10 @@ namespace EntityInterface
 						if (newValue != currentValue) {
 							state->SetWorkingValue(interactable, newValue);
 							state->InvalidateModel();
-							return IODelegateResult::Consumed;
+							return PlatformRig::ProcessInputResult::Consumed;
 						}
 					}
-					return IODelegateResult::Passthrough;
+					return PlatformRig::ProcessInputResult::Passthrough;
 				};
 
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
@@ -99,9 +99,9 @@ namespace EntityInterface
 				_state->InitializeValue(interactable, initialValue);
 			
 				auto mainCtrl = BeginSharedLeftRightCtrl(name, interactable);
-				mainCtrl->_nodeAttachments._ioDelegate = [interactable, state=_state, minValue, maxValue](CommonWidgets::Input& input, Rect frame, Rect content) {
-					bool leftSide = input.GetEvent()._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
-					if (input.GetEvent().IsRelease_LButton()) {
+				mainCtrl->_nodeAttachments._ioDelegate = [interactable, state=_state, minValue, maxValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
+					bool leftSide = evnt._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
+					if (evnt.IsRelease_LButton()) {
 						auto currentValue = state->GetWorkingValue<Type>(interactable);
 						auto newValue = currentValue;
 						if (leftSide) 	newValue = std::max(minValue, currentValue-1);
@@ -109,10 +109,10 @@ namespace EntityInterface
 						if (newValue != currentValue) {
 							state->SetWorkingValue(interactable, newValue);
 							state->InvalidateModel();
-							return IODelegateResult::Consumed;
+							return PlatformRig::ProcessInputResult::Consumed;
 						}
 					}
-					return IODelegateResult::Passthrough;
+					return PlatformRig::ProcessInputResult::Passthrough;
 				};
 
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
@@ -171,13 +171,13 @@ namespace EntityInterface
 						OutlineRoundedRectangle(draw.GetContext(), frame, selected ? ColorB{96, 96, 96} : ColorB{64, 64, 64}, 1.f, 0.4f, corners);
 						DrawText().Alignment(TextAlignment::Center).Draw(draw.GetContext(), content, nameStr);
 					};
-					node->_nodeAttachments._ioDelegate = [interactable, state=_state, value=options[c].first](CommonWidgets::Input& input, Rect, Rect) {
-						if (input.GetEvent().IsRelease_LButton()) {
+					node->_nodeAttachments._ioDelegate = [interactable, state=_state, value=options[c].first](auto&, auto& evnt, Rect, Rect) {
+						if (evnt.IsRelease_LButton()) {
 							state->SetWorkingValue(interactable, value);
 							state->InvalidateModel();
-							return IODelegateResult::Consumed;
+							return PlatformRig::ProcessInputResult::Consumed;
 						}
-						return IODelegateResult::Consumed;
+						return PlatformRig::ProcessInputResult::Consumed;
 					};
 				}
 
@@ -211,15 +211,15 @@ namespace EntityInterface
 			stateBox->_nodeAttachments._drawDelegate = [interactable, state=_state](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 				draw.CheckBox(content, state->GetWorkingValue<bool>(interactable));
 			};
-			stateBox->_nodeAttachments._ioDelegate = [interactable, state=_state, invalidatesLayout](CommonWidgets::Input& input, Rect, Rect) {
-				if (input.GetEvent().IsRelease_LButton()) {
+			stateBox->_nodeAttachments._ioDelegate = [interactable, state=_state, invalidatesLayout](auto&, auto& evnt, Rect, Rect) {
+				if (evnt.IsRelease_LButton()) {
 					state->SetWorkingValue(interactable, !state->GetWorkingValue<bool>(interactable));
 					state->InvalidateModel();
 					if (invalidatesLayout)
 						state->InvalidateLayout();
-					return IODelegateResult::Consumed;
+					return PlatformRig::ProcessInputResult::Consumed;
 				}
-				return IODelegateResult::Consumed;
+				return PlatformRig::ProcessInputResult::Consumed;
 			};
 		}
 
@@ -268,14 +268,14 @@ namespace EntityInterface
 				draw.XToggleButton(frame);
 			};
 
-			newNode->_nodeAttachments._ioDelegate = [ctrlGuid, state=_state](CommonWidgets::Input& input, Rect, Rect) {
-				if (input.GetEvent().IsRelease_LButton()) {
+			newNode->_nodeAttachments._ioDelegate = [ctrlGuid, state=_state](auto&, auto& evnt, Rect, Rect) {
+				if (evnt.IsRelease_LButton()) {
 					state->ToggleEnable(ctrlGuid);
 					state->InvalidateModel();
 					state->InvalidateLayout();
-					return IODelegateResult::Consumed;
+					return PlatformRig::ProcessInputResult::Consumed;
 				}
-				return IODelegateResult::Consumed;
+				return PlatformRig::ProcessInputResult::Consumed;
 			};
 		}
 
@@ -293,14 +293,14 @@ namespace EntityInterface
 					draw.DisabledStateControl(frame, nameStr);
 				};
 
-				baseNode->_nodeAttachments._ioDelegate = [interactable, state=_state](CommonWidgets::Input& input, Rect, Rect) {
-					if (input.GetEvent().IsRelease_LButton()) {
+				baseNode->_nodeAttachments._ioDelegate = [interactable, state=_state](auto&, auto& evnt, Rect, Rect) {
+					if (evnt.IsRelease_LButton()) {
 						state->ToggleEnable(interactable);
 						state->InvalidateModel();
 						state->InvalidateLayout();
-						return IODelegateResult::Consumed;
+						return PlatformRig::ProcessInputResult::Consumed;
 					}
-					return IODelegateResult::Consumed;
+					return PlatformRig::ProcessInputResult::Consumed;
 				};
 			} else {
 				baseNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString()](CommonWidgets::Draw& draw, Rect frame, Rect content) {
@@ -335,55 +335,59 @@ namespace EntityInterface
 				sliderNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), state=_state, interactable, leftSideValue, rightSideValue](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 					draw.Bounded(frame, interactable, nameStr, state->GetWorkingValue<Type>(interactable), leftSideValue, rightSideValue);
 				};
-				sliderNode->_nodeAttachments._ioDelegate = [interactable, state=_state, leftSideValue, rightSideValue](CommonWidgets::Input& input, Rect frame, Rect content) {
-					if (input.GetHoverings()._hoveringCtrl) {
-						Int2 mp { input.GetEvent()._mousePosition._x, input.GetEvent()._mousePosition._y };
-						if ((input.GetEvent()._mouseButtonsTransition != 0) && input.GetInterfaceState().GetCapture()._widget._id == interactable && !Contains(input.GetInterfaceState().GetCapture()._widget._rect, mp)) {
-							if (state->TryUpdateValueFromString<Type>(interactable, input.GetHoverings()._textEntry._currentLine))
+				sliderNode->_nodeAttachments._ioDelegate = [interactable, state=_state, leftSideValue, rightSideValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
+					auto* hoverings = inputContext.GetService<RenderOverlays::CommonWidgets::HoveringLayer>();
+					auto* interfaceState = inputContext.GetService<RenderOverlays::DebuggingDisplay::InterfaceState>();
+					if (!hoverings || !interfaceState) return PlatformRig::ProcessInputResult::Passthrough;
+
+					if (hoverings->_hoveringCtrl) {
+						Int2 mp { evnt._mousePosition._x, evnt._mousePosition._y };
+						if ((evnt._mouseButtonsTransition != 0) && interfaceState->GetCapture()._widget._id == interactable && !Contains(interfaceState->GetCapture()._widget._rect, mp)) {
+							if (state->TryUpdateValueFromString<Type>(interactable, hoverings->_textEntry._currentLine))
 								state->InvalidateModel();
-							input.GetInterfaceState().EndCapturing();
-							input.GetHoverings()._hoveringCtrl = 0;
-							return IODelegateResult::Consumed;
+							interfaceState->EndCapturing();
+							hoverings->_hoveringCtrl = 0;
+							return PlatformRig::ProcessInputResult::Consumed;
 						} 
 
-						if (input.GetEvent().IsPress(enter)) {
-							if (state->TryUpdateValueFromString<Type>(interactable, input.GetHoverings()._textEntry._currentLine))
+						if (evnt.IsPress(enter)) {
+							if (state->TryUpdateValueFromString<Type>(interactable, hoverings->_textEntry._currentLine))
 								state->InvalidateModel();
-							input.GetInterfaceState().EndCapturing();
-							input.GetHoverings()._hoveringCtrl = 0;
-						} else if (input.GetEvent().IsPress(escape)) {
-							input.GetInterfaceState().EndCapturing();
-							input.GetHoverings()._hoveringCtrl = 0;
+							interfaceState->EndCapturing();
+							hoverings->_hoveringCtrl = 0;
+						} else if (evnt.IsPress(escape)) {
+							interfaceState->EndCapturing();
+							hoverings->_hoveringCtrl = 0;
 						} else {
-							input.GetHoverings()._textEntry.ProcessInput(input.GetInterfaceState(), input.GetEvent());
+							hoverings->_textEntry.ProcessInput(*interfaceState, evnt);
 						}
 					} else {
-						if (input.GetEvent().IsPress_LButton()) {
-							input.GetInterfaceState().BeginCapturing(input.GetInterfaceState().TopMostWidget());
-						} else if (input.GetInterfaceState().GetCapture()._widget._id == interactable) {
+						if (evnt.IsPress_LButton()) {
+							interfaceState->BeginCapturing(interfaceState->TopMostWidget());
+						} else if (interfaceState->GetCapture()._widget._id == interactable) {
 							const unsigned driftThreshold = 4;
-							if (input.GetInterfaceState().GetCapture()._driftDuringCapture[0] < driftThreshold && input.GetInterfaceState().GetCapture()._driftDuringCapture[1] < driftThreshold) {
+							if (interfaceState->GetCapture()._driftDuringCapture[0] < driftThreshold && interfaceState->GetCapture()._driftDuringCapture[1] < driftThreshold) {
 								// inside drift threshold
-								if (input.GetEvent().IsRelease_LButton()) {
-									input.GetHoverings()._hoveringCtrl = interactable;
-									input.GetHoverings()._textEntry.Reset(state->GetWorkingValueAsString(interactable));
+								if (evnt.IsRelease_LButton()) {
+									hoverings->_hoveringCtrl = interactable;
+									hoverings->_textEntry.Reset(state->GetWorkingValueAsString(interactable));
 								}
 							} else {
 								// outside of drift threshold
-								if (input.GetEvent().IsHeld_LButton()) {
+								if (evnt.IsHeld_LButton()) {
 									// dragging while captured
-									float alpha = (input.GetEvent()._mousePosition[0] - input.GetInterfaceState().TopMostWidget()._rect._topLeft[0]) / float(input.GetInterfaceState().TopMostWidget()._rect._bottomRight[0] - input.GetInterfaceState().TopMostWidget()._rect._topLeft[0]);
+									float alpha = (evnt._mousePosition[0] - interfaceState->TopMostWidget()._rect._topLeft[0]) / float(interfaceState->TopMostWidget()._rect._bottomRight[0] - interfaceState->TopMostWidget()._rect._topLeft[0]);
 									alpha = std::max(0.f, std::min(1.f, alpha));
 									auto newValue = LinearInterpolate(leftSideValue, rightSideValue, alpha);
 									state->SetWorkingValue(interactable, newValue);
 									state->InvalidateModel();
 								}
-								if (input.GetEvent().IsRelease_LButton())
-									input.GetInterfaceState().EndCapturing();
+								if (evnt.IsRelease_LButton())
+									interfaceState->EndCapturing();
 							}
 						}
 					}
-					return IODelegateResult::Consumed;
+					return PlatformRig::ProcessInputResult::Consumed;
 				};
 				_layoutEngine.InsertChildToStackTop(sliderNode->YGNode());
 
@@ -427,14 +431,14 @@ namespace EntityInterface
 					draw.SectionHeader(content, nameStr, isOpen);
 				};
 
-				headerContainer->_nodeAttachments._ioDelegate = [containerGuid, state=_state](CommonWidgets::Input& input, Rect, Rect) {
-					if (input.GetEvent().IsRelease_LButton()) {
+				headerContainer->_nodeAttachments._ioDelegate = [containerGuid, state=_state](auto&, auto& evnt, Rect, Rect) {
+					if (evnt.IsRelease_LButton()) {
 						state->ToggleEnable(containerGuid);
 						state->InvalidateModel();
 						state->InvalidateLayout();
-						return IODelegateResult::Consumed;
+						return PlatformRig::ProcessInputResult::Consumed;
 					}
-					return IODelegateResult::Passthrough;
+					return PlatformRig::ProcessInputResult::Passthrough;
 				};
 			}
 
@@ -556,9 +560,10 @@ namespace EntityInterface
 			ProcessInputResult pir = ProcessInputResult::Passthrough;
 			if (_docInterface->TryLock()) {
 				TRY {
-					CommonWidgets::Input widgets{interfaceState, input, _hoverings};
-					auto q = _layedOutWidgets.ProcessInput(widgets);
-					pir = q == LayedOutWidgets::ProcessInputResult::Consumed ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
+					PlatformRig::InputContext inputContext;
+					inputContext.AttachService2(_hoverings);
+					inputContext.AttachService2(interfaceState);
+					pir = _layedOutWidgets.ProcessInput(inputContext, input);
 					
 					if (_docInterface->GetArbiterState()->IsModelInvalidated()) {
 						_docInterface->IncreaseValidationIndex();
