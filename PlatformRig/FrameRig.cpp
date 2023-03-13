@@ -48,6 +48,7 @@
 #include "../RenderCore/Metal/DeviceContext.h"
 #include "../RenderCore/Vulkan/IDeviceVulkan.h"
 
+// for display rendering (below)
 #include "../RenderOverlays/LayoutEngine.h"
 #include "../RenderOverlays/CommonWidgets.h"
 #include "../Assets/IntermediatesStore.h"
@@ -57,6 +58,7 @@
 
 using namespace Assets::Literals;
 using namespace PlatformRig::Literals;
+using namespace Utility::Literals;
 
 namespace PlatformRig
 {
@@ -660,6 +662,7 @@ namespace PlatformRig
             uint64_t keyname;
             while (TryKeyedItem(fmttr, keyname)) {
                 switch (keyname) {
+                case "VerticalOffset"_h: _verticalOffset = Formatters::RequireCastValue<decltype(_verticalOffset)>(fmttr); break;
                 default: SkipValueOrElement(fmttr); break;
                 }
             }

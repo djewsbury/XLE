@@ -52,6 +52,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise);
 	};
 
+	struct CommonWidgetsStaticData;
 	class Draw
 	{
 	public:
@@ -87,6 +88,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		DebuggingDisplay::InterfaceState* _interfaceState;
 		HoveringLayer* _hoverings;
 		DefaultFontsBox* _fonts;
+		const CommonWidgetsStaticData* _staticData;
 	};
 
 	class Measure
@@ -99,6 +101,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		Measure();
 	private:
 		DefaultFontsBox* _fonts;
+		const CommonWidgetsStaticData* _staticData;
 	};
 
 	template<typename Type>

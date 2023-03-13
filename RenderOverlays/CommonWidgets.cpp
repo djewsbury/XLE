@@ -16,14 +16,36 @@
 #include "../Formatters/FormatterUtils.h"
 
 using namespace PlatformRig::Literals;
+using namespace Utility::Literals;
 
 namespace RenderOverlays { namespace CommonWidgets
 {
+	static ColorB DeserializeColor(Formatters::IDynamicInputFormatter& fmttr)
+	{
+		IteratorRange<const void*> value;
+		ImpliedTyping::TypeDesc typeDesc;
+		if (!fmttr.TryRawValue(value, typeDesc))
+			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
+
+		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
+			return *intForm;
+		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
+			return ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
+			return ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+		} else {
+			Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
+		}
+	}
+
 	struct CommonWidgetsStaticData
 	{
 		std::string _editBoxFont = "DosisBook:16";
 		std::string _buttonFont = "DosisExtraBold:20";
 		std::string _headingFont = "DosisExtraBold:20";
+
+		unsigned _keyIndicatorBorderWeight = 4;
+		ColorB _keyIndicatorHighlight = ColorB{0xff35376e};
 
 		CommonWidgetsStaticData() = default;
 
@@ -33,6 +55,13 @@ namespace RenderOverlays { namespace CommonWidgets
 			uint64_t keyname;
 			while (TryKeyedItem(fmttr, keyname)) {
 				switch (keyname) {
+				case "EditBoxFont"_h: _editBoxFont = Formatters::RequireStringValue(fmttr).AsString(); break;
+				case "ButtonFont"_h: _buttonFont = Formatters::RequireStringValue(fmttr).AsString(); break;
+				case "HeadingFont"_h: _headingFont = Formatters::RequireStringValue(fmttr).AsString(); break;
+
+				case "KeyIndicatorBorderWeight"_h: _keyIndicatorBorderWeight = Formatters::RequireCastValue<decltype(_keyIndicatorBorderWeight)>(fmttr); break;
+				case "KeyIndicatorHighlight"_h: _keyIndicatorHighlight = DeserializeColor(fmttr); break;
+
 				default: SkipValueOrElement(fmttr); break;
 				}
 			}
@@ -196,12 +225,12 @@ namespace RenderOverlays { namespace CommonWidgets
 			A, D, B,
 			B, D, C
 		};
-		DebuggingDisplay::FillTriangles(*_context, triangles, ColorB{0xff35376e}, dimof(triangles)/3);
+		DebuggingDisplay::FillTriangles(*_context, triangles, _staticData->_keyIndicatorHighlight, dimof(triangles)/3);
 
 		Float2 linePts[] {
 			C, D, E, A, B
 		};
-		SolidLineInset(*_context, linePts, ColorB::White, 4.0f);
+		SolidLineInset(*_context, linePts, ColorB::White, _staticData->_keyIndicatorBorderWeight);
 
 		DrawText().Color(ColorB::White).Draw(*_context, labelContent, label);
 	}
@@ -239,12 +268,12 @@ namespace RenderOverlays { namespace CommonWidgets
 		Coord _keyWidth;
 	};
 
-	static KeyIndicatorBreakdown BuildKeyIndicatorBreakdown(Coord width, Coord height, Coord keyWidth)
+	static KeyIndicatorBreakdown BuildKeyIndicatorBreakdown(Coord width, Coord height, Coord keyWidth, const CommonWidgetsStaticData& staticData)
 	{
 		const unsigned arrowWidth = height / 2;
 		const unsigned hpadding = 2;
 		const unsigned vpadding = 2;
-		const unsigned borderWeight = 4;
+		const unsigned borderWeight = staticData._keyIndicatorBorderWeight;
 
 		KeyIndicatorBreakdown result;
 		result._labelFrame =
@@ -278,7 +307,7 @@ namespace RenderOverlays { namespace CommonWidgets
 	void Draw::KeyIndicator(const Rect& frame, const void* precalculatedData)
 	{
 		auto& precalc = *(const KeyIndicatorPrecalculatedData*)precalculatedData;
-		auto breakdown = BuildKeyIndicatorBreakdown(frame.Width(), frame.Height(), precalc._keyWidth);
+		auto breakdown = BuildKeyIndicatorBreakdown(frame.Width(), frame.Height(), precalc._keyWidth, *_staticData);
 		breakdown._labelFrame._topLeft += frame._topLeft;
 		breakdown._labelFrame._bottomRight += frame._topLeft;
 		breakdown._labelContent._topLeft += frame._topLeft;
@@ -307,12 +336,14 @@ namespace RenderOverlays { namespace CommonWidgets
 	: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState), _hoverings(&hoverings)
 	{
 		_fonts = TryGetDefaultFontsBox();
+		_staticData = &EntityInterface::MountedData<CommonWidgetsStaticData>::LoadOrDefault("cfg/displays/commonwidgets");
 	}
 
 	Draw::Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState)
 	: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState)
 	{
 		_fonts = TryGetDefaultFontsBox();
+		_staticData = &EntityInterface::MountedData<CommonWidgetsStaticData>::LoadOrDefault("cfg/displays/commonwidgets");
 	}
 
 	Measure::MeasuredRectangle Measure::KeyIndicator(StringSection<> label, StringSection<> key)
@@ -322,7 +353,7 @@ namespace RenderOverlays { namespace CommonWidgets
 
 		const unsigned hpadding = 2;
 		const unsigned vpadding = 2;
-		const unsigned borderWeight = 4;
+		const unsigned borderWeight = _staticData->_keyIndicatorBorderWeight;
 		const unsigned height = _fonts->_buttonFont->GetFontProperties()._lineHeight + 2*vpadding + 2*borderWeight;
 		const unsigned arrowWidth = height / 2;
 
@@ -339,7 +370,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		result->_fitKey = key.AsString();
 		result->_keyWidth = StringWidth(*_fonts->_buttonFont, key);
 
-		auto breakdown = BuildKeyIndicatorBreakdown(width, height, result->_keyWidth);
+		auto breakdown = BuildKeyIndicatorBreakdown(width, height, result->_keyWidth, *_staticData);
 
 		VLA(char, buffer, label.Length()+4);
 		StringEllipsis(buffer, label.Length()+4, *_fonts->_buttonFont, label, breakdown._labelContent.Width());
@@ -350,6 +381,7 @@ namespace RenderOverlays { namespace CommonWidgets
 	Measure::Measure()
 	{
 		_fonts = Draw::TryGetDefaultFontsBox();
+		_staticData = &EntityInterface::MountedData<CommonWidgetsStaticData>::LoadOrDefault("cfg/displays/commonwidgets");
 	}
 
 	constexpr auto left       = "left"_key;
