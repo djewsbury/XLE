@@ -410,11 +410,6 @@ namespace PlatformRig { namespace Overlays
 						return YGSize { width, height };
 					}
 				};
-				labelNode->YGNode()->setContext(labelNode);
-				labelNode->YGNode()->setMeasureFunc(
-					[](YGNode* node, float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) -> YGSize {
-						return ((ImbuedNode*)node->getContext())->_measureDelegate(width, widthMode, height, heightMode);
-					});
 			#endif
 
 			return labelNode;

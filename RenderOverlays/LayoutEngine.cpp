@@ -5,6 +5,8 @@
 #include "LayoutEngine.h"
 #include "CommonWidgets.h"
 
+#include "../Foreign/yoga/yoga/YGNode.h"
+
 namespace RenderOverlays
 {
 	using namespace DebuggingDisplay;
@@ -95,6 +97,15 @@ namespace RenderOverlays
 		assert(!_roots.empty());
 		if (_roots.empty())
 			return {};
+
+		for (auto& n:_imbuedNodes)
+			if (n->_measureDelegate) {
+				n->YGNode()->setContext(n.get());
+				n->YGNode()->setMeasureFunc(
+					[](YGNode* node, float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) -> YGSize {
+						return ((ImbuedNode*)node->getContext())->_measureDelegate(width, widthMode, height, heightMode);
+					});
+			}
 
 		LayedOutWidgets result;
 		for (auto& r:_roots)

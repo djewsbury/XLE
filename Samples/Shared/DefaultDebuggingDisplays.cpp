@@ -18,6 +18,7 @@
 #include "../../PlatformRig/DebuggingDisplays/CPUProfileDisplay.h"
 #include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"
 #include "../../PlatformRig/DebuggingDisplays/DisplaySettingsDisplay.h"
+#include "../../PlatformRig/DebuggingDisplays/HelpDisplay.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetSetManager.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
@@ -66,6 +67,17 @@ namespace Sample
 		globals._displayRegistrations.emplace_back(
 			"Display Settings",
 			PlatformRig::Overlays::CreateDisplaySettingsDisplay(globals._windowApparatus->_displaySettings, globals._windowApparatus->_osWindow));
+
+		auto helpDisplay = PlatformRig::Overlays::CreateHelpDisplay();
+		helpDisplay->AddKey("Ctrl ←", "Prev Screen");
+		helpDisplay->AddKey("Ctrl →", "Next Screen");
+		helpDisplay->AddKey("Esc", "Back");
+		helpDisplay->AddKey("~", "Console");
+		helpDisplay->AddText("Bound keys can access {color:66d0a4}full-screen overlays{color:} which breakdown profiling and debugging information");
+		helpDisplay->AddText("On first startup, certain compilation operations may heavily consume system resources. This may take several minutes. See the {color:74bfe3}Compile Progress{color:} screen for details.");
+		globals._displayRegistrations.emplace_back(
+			"[Console] Key Binding Help",
+			std::move(helpDisplay));
 	}
 
 }

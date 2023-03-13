@@ -32,6 +32,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DebuggingDisplays/PipelineAcceleratorDisplay.cpp
         DebuggingDisplays/ModelCacheDisplay.cpp
         DebuggingDisplays/DisplaySettingsDisplay.cpp
+        DebuggingDisplays/HelpDisplay.cpp
         )
 
     if (${metal_macro} STREQUAL "SELECT_VULKAN")

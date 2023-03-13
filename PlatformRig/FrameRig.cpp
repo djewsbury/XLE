@@ -56,6 +56,7 @@
 #include "../Tools/EntityInterface/MountedData.h"
 
 using namespace Assets::Literals;
+using namespace PlatformRig::Literals;
 
 namespace PlatformRig
 {
@@ -700,7 +701,8 @@ namespace PlatformRig
             interactables.Register({displayRect, Id_FrameRigDisplayMain});
         }
 
-        {
+        auto ds = _debugSystem.lock();
+        if (ds && !ds->CurrentScreen(0)) {
             Layout outerKeyHelpRect = outerRect;
             outerKeyHelpRect._maximumSize._topLeft[1] += staticData->_verticalOffset;
 
@@ -748,7 +750,7 @@ namespace PlatformRig
             }
 
             auto ds = _debugSystem.lock();
-            const auto screens = ds->GetWidgets();
+            const auto& screens = ds->GetWidgets();
             if (ds) {
                 if (std::find_if(screens.cbegin(), screens.cend(),
                     [&](const DebugScreensSystem::WidgetAndName& w) { return w._hashCode == topMost._id; }) != screens.cend()) {
@@ -758,6 +760,12 @@ namespace PlatformRig
                     return ProcessInputResult::Consumed;
                 }
             }
+        } else if (input.IsPress("h"_key)) {
+            if (auto ds = _debugSystem.lock())
+                if (!ds->CurrentScreen(0)) {
+                    ds->SwitchToScreen(0, "[Console] Key Binding Help");
+                    return ProcessInputResult::Consumed;
+                }
         }
 
         return ProcessInputResult::Passthrough;
