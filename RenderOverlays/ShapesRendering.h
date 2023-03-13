@@ -82,6 +82,14 @@ namespace RenderOverlays
         Float2 texCoordMin, Float2 texCoordMax,
         std::shared_ptr<RenderCore::IResourceView>, const ColorAdjust&, ColorB modulation=ColorB::White);
 
+    void        ColorAdjustAndOutlineRoundedRectangle(
+        IOverlayContext& context, const Rect& rect,
+        Float2 texCoordMin, Float2 texCoordMax,
+        std::shared_ptr<RenderCore::IResourceView>, const ColorAdjust&, ColorB modulation=ColorB::White,
+        ColorB outlineColour=ColorB::Black,
+        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
+        Corner::BitField cornerFlags = 0xf);
+
 	///////////////////////////////////////////////////////////////////////////////////
     //          C O N F I G U R A T I O N   U T I L S
 

@@ -48,8 +48,13 @@ namespace RenderOverlays { namespace Internal
 
 	struct CB_RoundedRectSettings
 	{
-		float _roundedProportion;
-		unsigned _cornerFlags;
+		float _roundedProportion = 1.f / 8.f;
+		unsigned _cornerFlags = 0xf;
 		unsigned _dummy[2];
+	};
+
+	struct CB_ShapesFramework
+	{
+		float _borderSizePix = 1.f;
 	};
 }}

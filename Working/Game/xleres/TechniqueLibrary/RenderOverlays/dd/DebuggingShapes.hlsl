@@ -15,7 +15,7 @@
 
 ShapeResult TagShape_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc)
 {
-	float2 texCoord = DebuggingShapesCoords_GetTexCoord0(coords);
+	float2 texCoord = DebuggingShapesCoords_GetShapeRelativeCoords(coords);
 	float2 minCoords = shapeDesc._minCoords, maxCoords = shapeDesc._maxCoords;
 	float aspectRatio = GetAspectRatio(coords);
 
@@ -66,7 +66,7 @@ float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coord
     float2 tagMin = minCoords + border * GetUDDS(coords) + border * GetVDDS(coords);
     float2 tagMax = maxCoords - border * GetUDDS(coords) - border * GetVDDS(coords);
 
-	ShapeDesc shapeDesc = MakeShapeDesc(tagMin, tagMax, 0.f, 0.f);
+	ShapeDesc shapeDesc = MakeShapeDesc(tagMin, tagMax, 0.f);
 	float2 dhdp = 0.0.xxx;
 	float accentuate = 8.f;
 	ScreenSpaceDerivatives_Template(TagShape_Calculate, coords, shapeDesc);
@@ -85,7 +85,7 @@ float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coord
 void RenderHorizTweakerBarShader(   float2 minCoords, float2 maxCoords, float thumbPosition,
                         DebuggingShapesCoords coords, inout float4 result)
 {
-	ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, 0.f, thumbPosition);
+	ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, 0.f);
 	float2 dhdp = 0.0.xxx;
 	float accentuate = 8.f;
 	ScreenSpaceDerivatives_Template(ScrollBarShape_Calculate, coords, shapeDesc);

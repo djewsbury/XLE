@@ -8,25 +8,30 @@
 #include "BrushUtils.hlsl"
 #include "../../Framework/SystemUniforms.hlsl"
 
+cbuffer ShapesFramework : register(b0, space0)
+{
+    float BorderSizePix;
+}
+
 float4 frameworkEntry(
-    float4 position	    : SV_Position,
-    float4 color0		: COLOR0,
-    float4 color1		: COLOR1,
-    float2 texCoord0	: TEXCOORD0,
-    float2 texCoord1	: TEXCOORD1) : SV_Target0
+    float4 position	            : SV_Position,
+    float4 color0		        : COLOR0,
+    float4 color1		        : COLOR1,
+    float2 texCoord0	        : TEXCOORD0,
+    float2 shapeRelativeCoords	: TEXCOORD1) : SV_Target0
 {
     float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
 
     DebuggingShapesCoords coords =
-        DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
+        DebuggingShapesCoords_Make(position, shapeRelativeCoords, outputDimensions);
 
-    ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, texCoord1.x, texCoord1.y);
+    ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, BorderSizePix);
 
     float2 dhdp = ScreenSpaceDerivatives(coords, shapeDesc);
 
     ShapeResult shape = IShape2D_Calculate(coords, shapeDesc);
-    float4 fill = IFill_Calculate(coords, color0, dhdp); fill.a *= shape._fill;
-    float4 outline = IOutline_Calculate(coords, color1, dhdp); outline.a *= shape._border;
+    float4 fill = IFill_Calculate(coords, texCoord0, color0, dhdp); fill.a *= shape._fill;
+    float4 outline = IOutline_Calculate(coords, texCoord0, color1, dhdp); outline.a *= shape._border;
 
     float3 A = fill.rgb * fill.a;
     float a = 1.f - fill.a;
@@ -55,5 +60,5 @@ float4 frameworkEntryJustFill(
     DebuggingShapesCoords coords =
         DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
 
-    return IFill_Calculate(coords, color0, 1.0.xx);
+    return IFill_Calculate(coords, texCoord0, color0, 1.0.xx);
 }

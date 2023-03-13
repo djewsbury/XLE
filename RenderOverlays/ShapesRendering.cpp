@@ -46,8 +46,11 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial _dashLine;
         RenderCore::Techniques::ImmediateDrawableMaterial _solidNoBorder;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillColorAdjust;
+        RenderCore::Techniques::ImmediateDrawableMaterial _colorAdjustAndOutlineRoundedRect;
         RenderCore::UniformsStreamInterface _roundedRectUSI;
         RenderCore::UniformsStreamInterface _colorAdjustUSI;
+        RenderCore::UniformsStreamInterface _rrColorAdjustUSI;
+        RenderCore::UniformsStreamInterface _frameworkUSI;
 
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
         ::Assets::DependencyValidation _depVal;
@@ -64,7 +67,8 @@ namespace RenderOverlays
             const RenderCore::Assets::ResolvedMaterial& softShadowRect,
             const RenderCore::Assets::ResolvedMaterial& dashLine,
             const RenderCore::Assets::ResolvedMaterial& solidNoBorder,
-            const RenderCore::Assets::ResolvedMaterial& fillColorAdjust)
+            const RenderCore::Assets::ResolvedMaterial& fillColorAdjust,
+            const RenderCore::Assets::ResolvedMaterial& colorAdjustAndOutlineRoundedRect)
         {
             _fillRoundedRect = BuildImmediateDrawableMaterial(fillRoundedRect);
             _fillAndOutlineRoundedRect = BuildImmediateDrawableMaterial(fillAndOutlineRoundedRect);
@@ -78,8 +82,10 @@ namespace RenderOverlays
             _dashLine = BuildImmediateDrawableMaterial(dashLine);
             _solidNoBorder = BuildImmediateDrawableMaterial(solidNoBorder);
             _fillColorAdjust = BuildImmediateDrawableMaterial(fillColorAdjust);
+            _colorAdjustAndOutlineRoundedRect = BuildImmediateDrawableMaterial(colorAdjustAndOutlineRoundedRect);
 
             _roundedRectUSI.BindImmediateData(0, "RoundedRectSettings"_h);
+            _roundedRectUSI.BindImmediateData(1, "ShapesFramework"_h);
             _fillRoundedRect._uniformStreamInterface = &_roundedRectUSI;
             _fillAndOutlineRoundedRect._uniformStreamInterface = &_roundedRectUSI;
             _outlineRoundedRect._uniformStreamInterface = &_roundedRectUSI;
@@ -89,6 +95,16 @@ namespace RenderOverlays
             _colorAdjustUSI.BindImmediateData(0, "ColorAdjustSettings"_h);
             _colorAdjustUSI.BindResourceView(0, "DiffuseTexture"_h);
             _fillColorAdjust._uniformStreamInterface = &_colorAdjustUSI;
+
+            _rrColorAdjustUSI.BindImmediateData(0, "ColorAdjustSettings"_h);
+            _rrColorAdjustUSI.BindImmediateData(1, "RoundedRectSettings"_h);
+            _rrColorAdjustUSI.BindImmediateData(2, "ShapesFramework"_h);
+            _rrColorAdjustUSI.BindResourceView(0, "DiffuseTexture"_h);
+            _colorAdjustAndOutlineRoundedRect._uniformStreamInterface = &_rrColorAdjustUSI;
+
+            _frameworkUSI.BindImmediateData(0, "ShapesFramework"_h);
+            _fillEllipse._uniformStreamInterface = &_frameworkUSI;
+            _outlineEllipse._uniformStreamInterface = &_frameworkUSI;
 
             ::Assets::DependencyValidationMarker depVals[] {
                 fillRoundedRect.GetDependencyValidation(),
@@ -102,7 +118,8 @@ namespace RenderOverlays
                 softShadowRect.GetDependencyValidation(),
                 dashLine.GetDependencyValidation(),
                 solidNoBorder.GetDependencyValidation(),
-                fillColorAdjust.GetDependencyValidation()
+                fillColorAdjust.GetDependencyValidation(),
+                colorAdjustAndOutlineRoundedRect.GetDependencyValidation()
             };
             _depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
         }
@@ -121,8 +138,9 @@ namespace RenderOverlays
             auto dashLine = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":DashLine");
             auto solidNoBorder = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SolidNoBorder");
             auto fillColorAdjust = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillColorAdjust");
+            auto colorAdjustAndOutlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":ColorAdjustAndOutlineRoundedRect");
 
-            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, solidNoBorder, fillColorAdjust).ThenConstructToPromise(std::move(promise));
+            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, solidNoBorder, fillColorAdjust, colorAdjustAndOutlineRoundedRect).ThenConstructToPromise(std::move(promise));
         }
 
         std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
@@ -206,14 +224,17 @@ namespace RenderOverlays
         if (!res) return;
 
         const float borderWidthPix = 1.f;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineEllipse;
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidthPix }));
+
         Internal::DrawPCCTTQuad(
             context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             ColorB::Zero, colour,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            Float2(borderWidthPix, 0.f), Float2(borderWidthPix, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{res->_outlineEllipse});
+            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            std::move(mat));
     }
 
     void FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -225,14 +246,17 @@ namespace RenderOverlays
         if (!res) return;
 
         const float borderWidthPix = 1.f;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillEllipse;
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidthPix }));
+        
         Internal::DrawPCCTTQuad(
             context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             colour, ColorB::Zero,
-            Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            Float2(borderWidthPix, 0.f), Float2(borderWidthPix, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{res->_fillEllipse});
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
+            std::move(mat));
     }
 
     void OutlineRoundedRectangle(
@@ -249,14 +273,15 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { width }));
 
         Internal::DrawPCCTTQuad(
             context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             ColorB::Zero, colour,
-            Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            Float2(width, roundedProportion), Float2(width, roundedProportion),
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
             std::move(mat));
     }
 
@@ -274,6 +299,7 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
 
         Internal::DrawPCCTTQuad(
             context,
@@ -281,7 +307,7 @@ namespace RenderOverlays
             AsPixelCoords(rect._bottomRight),
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            Float2(1.f, roundedProportion), Float2(1.f, roundedProportion),
+            Float2{0.f, 0.f}, Float2{1.f, 1.f},
             std::move(mat));
     }
 
@@ -300,6 +326,7 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidth }));
 
         Internal::DrawPCCTTQuad(
             context,
@@ -307,7 +334,7 @@ namespace RenderOverlays
             AsPixelCoords(rect._bottomRight),
             fillColor, outlineColour,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            Float2(borderWidth, roundedProportion), Float2(borderWidth, roundedProportion),
+            Float2{0.f, 0.f}, Float2{1.f, 1.f},
             std::move(mat));
     }
 
@@ -325,6 +352,7 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
 
         Internal::DrawPCCTTQuad(
             context,
@@ -332,7 +360,7 @@ namespace RenderOverlays
             AsPixelCoords(rect._bottomRight),
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            Float2(1.f, roundedProportion), Float2(1.f, roundedProportion),
+            Float2{0.f, 0.f}, Float2{1.f, 1.f},
             std::move(mat));
     }
 
@@ -350,6 +378,7 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillReverseRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
 
         Internal::DrawPCCTTQuad(
             context,
@@ -357,7 +386,7 @@ namespace RenderOverlays
             AsPixelCoords(rect._bottomRight),
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            Float2(1.f, roundedProportion), Float2(1.f, roundedProportion),
+            Float2{0.f, 0.f}, Float2{1.f, 1.f},
             std::move(mat));
     }
 
@@ -417,7 +446,7 @@ namespace RenderOverlays
             AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight),
             fillColor, fillColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
-            Float2(0.f, 0.f), Float2(0.f, 0.f),
+            Float2{0.f, 0.f}, Float2{1.f, 1.f},
             RenderCore::Techniques::ImmediateDrawableMaterial{res->_fillRaisedRect});
     }
 
@@ -462,7 +491,36 @@ namespace RenderOverlays
             AsPixelCoords(rect._bottomRight),
             modulation, ColorB::Zero,
             texCoordMin, texCoordMax,
-            Float2(0.f, 0.f), Float2(0.f, 0.f),
+            Float2{0.f, 0.f}, Float2{1.f, 1.f},
+            std::move(mat));
+    }
+
+    void        ColorAdjustAndOutlineRoundedRectangle(
+        IOverlayContext& context, const Rect& rect,
+        Float2 texCoordMin, Float2 texCoordMax,
+        std::shared_ptr<RenderCore::IResourceView> tex, const ColorAdjust& colorAdjust, ColorB modulation,
+        ColorB outlineColour,
+        float outlineWidth, float roundedProportion,
+        Corner::BitField cornerFlags)
+    {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_colorAdjustAndOutlineRoundedRect;
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
+        mat._uniforms._resourceViews.emplace_back(std::move(tex));
+        Internal::DrawPCCTTQuad(
+            context,
+            AsPixelCoords(rect._topLeft),
+            AsPixelCoords(rect._bottomRight),
+            modulation, outlineColour,
+            texCoordMin, texCoordMax,
+            Float2{0.f, 0.f}, Float2{1.f, 1.f},
             std::move(mat));
     }
 
@@ -950,7 +1008,7 @@ namespace RenderOverlays
 	void CreateShapesRenderingTechniqueDelegate(
 		std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>>&& promise)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(IMMEDIATE_PIPELINE ":ImmediateDrawables");
+		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(RENDEROVERLAYS_SHAPES_PIPELINE ":ImmediateDrawables");
 		::Assets::WhenAll(pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
 			[](auto pipelineLayout) { return std::make_shared<ShapesRenderingTechniqueDelegate>(std::move(pipelineLayout)); });
@@ -971,7 +1029,7 @@ namespace RenderOverlays
 		std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>> promisedTechniqueDelegate;
 		_futureTechniqueDelegate = promisedTechniqueDelegate.get_future();
 		CreateShapesRenderingTechniqueDelegate(std::move(promisedTechniqueDelegate));
-		_pipelineLayoutDelegate = RenderCore::Techniques::CreatePipelineLayoutDelegate(IMMEDIATE_PIPELINE ":ImmediateDrawables");
+		_pipelineLayoutDelegate = RenderCore::Techniques::CreatePipelineLayoutDelegate(RENDEROVERLAYS_SHAPES_PIPELINE ":ImmediateDrawables");
 	}
 
 	ShapesRenderingDelegate::~ShapesRenderingDelegate() {}

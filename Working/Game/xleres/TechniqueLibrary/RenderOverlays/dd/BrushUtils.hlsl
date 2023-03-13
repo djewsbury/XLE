@@ -18,7 +18,7 @@
         [unroll] for (uint x=0; x<5; ++x) {                                                         \
             float2 texCoordOffset = ((x-2.f) * GetUDDS(coords)) + ((y-2.f) * GetVDDS(coords));      \
             DebuggingShapesCoords offsetCoords = coords;                                            \
-            offsetCoords.texCoord += texCoordOffset;                                                \
+            offsetCoords.shapeRelativeCoords += texCoordOffset;                                     \
             float t = ShapeFn(offsetCoords, shapeDesc)._fill;                                       \
             dhdp.x += ScharrHoriz5x5[x][y] * t;                                                     \
             dhdp.y += ScharrVert5x5[x][y] * t;                                                      \

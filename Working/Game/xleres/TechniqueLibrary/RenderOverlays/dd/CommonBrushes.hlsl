@@ -11,11 +11,12 @@
 #include "../../Framework/CommonResources.hlsl"
 #include "../../Utility/Colour.hlsl"
 
-float4 SolidFill_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp) { return baseColor; }
-float4 NoFill_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp) { return 0.0.xxxx; }
+float4 SolidFill_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp) { return baseColor; }
+float4 NoFill_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp) { return 0.0.xxxx; }
 
 float4 CrossHatchFill_Calculate(
     DebuggingShapesCoords coords,
+    float2 baseTex,
     float4 baseColor,
     float2 dhdp)
 {
@@ -48,6 +49,7 @@ float3 NormalToSurface(float2 dhdp)
 
 float4 RaisedRefractiveFill_Calculate(
     DebuggingShapesCoords coords,
+    float2 baseTex,
     float4 baseColor,
     float2 dhdp)
 {
@@ -64,6 +66,7 @@ float4 RaisedRefractiveFill_Calculate(
 
 float4 RaisedFill_Calculate(
     DebuggingShapesCoords coords,
+    float2 baseTex,
     float4 baseColor,
     float2 dhdp)
 {
@@ -75,6 +78,7 @@ float4 RaisedFill_Calculate(
 
 float4 ReverseRaisedFill_Calculate(
     DebuggingShapesCoords coords,
+    float2 baseTex,
     float4 baseColor,
     float2 dhdp)
 {
@@ -84,10 +88,10 @@ float4 ReverseRaisedFill_Calculate(
     return float4(d * baseColor.rgb, 1.f);
 }
 
-float4 DashLine_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp)
+float4 DashLine_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp)
 {
     const float sectionLength = 12;
-    float sectionCoord = frac(coords.texCoord.x / sectionLength);
+    float sectionCoord = frac(baseTex.x / sectionLength);
     if (sectionCoord < 0.9f) {
         return baseColor;
     } else {
@@ -114,9 +118,9 @@ float3 DoColorAdjust3(float3 input)
         luminanceOffset + ((1-luminanceOffset) * lerp(luminance, input.z, saturationMultiplier)));
 }
 
-float4 ColorAdjust_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp)
+float4 ColorAdjust_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp)
 {
-    float4 texColor = DiffuseTexture.SampleLevel(ClampingSampler, DebuggingShapesCoords_GetTexCoord0(coords), 0);
+    float4 texColor = DiffuseTexture.SampleLevel(ClampingSampler, baseTex, 0);
     return float4(DoColorAdjust3(texColor.rgb), texColor.a) * baseColor;
 }
 

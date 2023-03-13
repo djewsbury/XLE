@@ -52,8 +52,8 @@ float4 SmallGridBackground(
 		return float4(.5f*float3(0.35f, 0.5f, 0.35f), 1.f);
 	}
 
-	float xPixels = DebuggingShapesCoords_GetTexCoord0(coords).x / GetUDDS(coords).x;
-	float yPixels = DebuggingShapesCoords_GetTexCoord0(coords).y / GetVDDS(coords).y;
+	float xPixels = DebuggingShapesCoords_GetShapeRelativeCoords(coords).x / GetUDDS(coords).x;
+	float yPixels = DebuggingShapesCoords_GetShapeRelativeCoords(coords).y / GetVDDS(coords).y;
 
 	uint pixelsFromThumb = uint(abs(texCoord0.x - texCoord1.x) / GetUDDS(coords).x + 0.5f);
 	if (pixelsFromThumb < 3) {
@@ -98,14 +98,14 @@ float4 GridBackgroundShader(
 
 	float brightness = 0.f;
 
-	float xPixels = DebuggingShapesCoords_GetTexCoord0(coords).x / GetUDDS(coords).x;
+	float xPixels = DebuggingShapesCoords_GetShapeRelativeCoords(coords).x / GetUDDS(coords).x;
 	if (uint(xPixels)%64==63) {
 		brightness = 1.f;
 	} else if (uint(xPixels)%8==7) {
 		brightness = 0.5f;
 	}
 
-	float yPixels = DebuggingShapesCoords_GetTexCoord0(coords).y / GetVDDS(coords).y;
+	float yPixels = DebuggingShapesCoords_GetShapeRelativeCoords(coords).y / GetVDDS(coords).y;
 	if (uint(yPixels)%64==63) {
 		brightness = max(brightness, 1.f);
 	} else if (uint(yPixels)%8==7) {

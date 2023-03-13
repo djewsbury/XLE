@@ -13,7 +13,7 @@ struct DebuggingShapesCoords
 {
     float4 position;
     float2 outputDimensions;
-    float2 texCoord;
+    float2 shapeRelativeCoords;
 
     float aspectRatio;
     float2 udds;
@@ -22,7 +22,7 @@ struct DebuggingShapesCoords
 
 float4 GetPosition(DebuggingShapesCoords coords) { return coords.position; }
 float2 GetOutputDimensions(DebuggingShapesCoords coords) { return coords.outputDimensions; }
-float2 DebuggingShapesCoords_GetTexCoord0(DebuggingShapesCoords coords) { return coords.texCoord; }
+float2 DebuggingShapesCoords_GetShapeRelativeCoords(DebuggingShapesCoords coords) { return coords.shapeRelativeCoords; }
 
 #if 0
     float2 GetUDDS(DebuggingShapesCoords coords) { return float2(ddx(VSOUT_GetTexCoord0(coords).x), ddy(VSOUT_GetTexCoord0(coords).x)); }
@@ -42,14 +42,14 @@ float2 DebuggingShapesCoords_GetTexCoord0(DebuggingShapesCoords coords) { return
 
 float2 GetRefractionCoords(DebuggingShapesCoords coords) { return coords.position.xy/coords.outputDimensions.xy; }
 
-DebuggingShapesCoords DebuggingShapesCoords_Make(float4 position, float2 texCoord, float2 outputDimensions)
+DebuggingShapesCoords DebuggingShapesCoords_Make(float4 position, float2 shapeRelativeCoords, float2 outputDimensions)
 {
     DebuggingShapesCoords result;
     result.outputDimensions = outputDimensions;
-    result.texCoord = texCoord;
+    result.shapeRelativeCoords = shapeRelativeCoords;
 
-    result.udds = float2(ddx(texCoord.x), ddy(texCoord.x));
-    result.vdds = float2(ddx(texCoord.y), ddy(texCoord.y));
+    result.udds = float2(ddx(shapeRelativeCoords.x), ddy(shapeRelativeCoords.x));
+    result.vdds = float2(ddx(shapeRelativeCoords.y), ddy(shapeRelativeCoords.y));
 
     result.position = position;
 
@@ -73,16 +73,14 @@ struct ShapeDesc
 {
     float2 _minCoords, _maxCoords;
     float _borderSizePix;
-    float _param0;
 };
 
-ShapeDesc MakeShapeDesc(float2 minCoords, float2 maxCoords, float borderSizePix, float param0)
+ShapeDesc MakeShapeDesc(float2 minCoords, float2 maxCoords, float borderSizePix)
 {
     ShapeDesc result;
     result._minCoords = minCoords;
     result._maxCoords = maxCoords;
     result._borderSizePix = borderSizePix;
-    result._param0 = param0;
     return result;
 }
 
@@ -100,8 +98,8 @@ ShapeResult MakeShapeResult(float fill, float border)  { ShapeResult temp; temp.
     //   I N T E R F A C E S
 
 ShapeResult IShape2D_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc);
-float4 IOutline_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp);
-float4 IFill_Calculate(DebuggingShapesCoords coords, float4 baseColor, float2 dhdp);
+float4 IOutline_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp);
+float4 IFill_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp);
 
 float4 TwoLayersShader(float4 position, float4 color, float4 color1, float2 texCoord0, float2 texCoord1);
 

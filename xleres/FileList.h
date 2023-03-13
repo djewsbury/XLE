@@ -19,7 +19,6 @@ using namespace Assets::Literals;
 #define ILLUM_LEGACY_DS "xleres/TechniqueLibrary/Config/Legacy/IllumLegacy.ds"_initializer
 
 #define MAIN_PIPELINE "xleres/TechniqueLibrary/Config/main.pipeline"_initializer
-#define IMMEDIATE_PIPELINE "xleres/TechniqueLibrary/Config/immediate.pipeline"_initializer
 #define LIGHTING_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/light-resolve-operator.pipeline"_initializer
 #define GENERAL_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/general-operator.pipeline"_initializer
 #define SHADOW_TEMPLATE_DS "xleres/TechniqueLibrary/Config/shadow-template.pipeline"_initializer
@@ -59,6 +58,7 @@ using namespace Assets::Literals;
 #define RENDEROVERLAYS_SHAPES_MATERIAL "xleres/TechniqueLibrary/RenderOverlays/dd/DebuggingShapes.material"
 #define RENDEROVERLAYS_SEL_PRECONFIG "xleres/TechniqueLibrary/RenderOverlays/dd/Preconfiguration.hlsl"
 #define RENDEROVERLAYS_SEPARABLE_FILTER "xleres/TechniqueLibrary/RenderOverlays/dd/separable-filter.compute.hlsl"
+#define RENDEROVERLAYS_SHAPES_PIPELINE "xleres/TechniqueLibrary/RenderOverlays/dd/ShapesFramework.pipeline"
 
 #define SCENE_ENGINE_RES "xleres/TechniqueLibrary/SceneEngine"
 

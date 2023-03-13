@@ -21,7 +21,7 @@ ShapeResult RoundedRectShape_Calculate(
     DebuggingShapesCoords coords,
     ShapeDesc shapeDesc)
 {
-    float2 texCoord = DebuggingShapesCoords_GetTexCoord0(coords);
+    float2 texCoord = DebuggingShapesCoords_GetShapeRelativeCoords(coords);
     float2 minCoords = shapeDesc._minCoords, maxCoords = shapeDesc._maxCoords;
     [branch] if (
             texCoord.x < minCoords.x || texCoord.x > maxCoords.x
@@ -86,7 +86,7 @@ ShapeResult Ellipse_Calculate(
     DebuggingShapesCoords coords,
     ShapeDesc shapeDesc)
 {
-    float2 texCoord = DebuggingShapesCoords_GetTexCoord0(coords);
+    float2 texCoord = DebuggingShapesCoords_GetShapeRelativeCoords(coords);
     float2 minCoords = shapeDesc._minCoords, maxCoords = shapeDesc._maxCoords;
     float borderSizePix = shapeDesc._borderSizePix;
     minCoords.x += borderSizePix*GetUDDS(coords).x;
@@ -128,7 +128,7 @@ ShapeResult RectShape_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDes
 {
         // we'll assume pixel-perfect coords, so we don't have handle
         // partially covered pixels on the edges.
-    float2 texCoord = DebuggingShapesCoords_GetTexCoord0(coords);
+    float2 texCoord = DebuggingShapesCoords_GetShapeRelativeCoords(coords);
     float2 minCoords = shapeDesc._minCoords, maxCoords = shapeDesc._maxCoords;
     bool fill =
             texCoord.x >= minCoords.x && texCoord.x < maxCoords.x
@@ -147,8 +147,8 @@ ShapeResult ScrollBarShape_Calculate(DebuggingShapesCoords coords, ShapeDesc sha
 {
     float2 minCoords = shapeDesc._minCoords;
     float2 maxCoords = shapeDesc._maxCoords;
-    float thumbPosition = shapeDesc._param0;
-    float2 texCoord = DebuggingShapesCoords_GetTexCoord0(coords);
+    float thumbPosition = 0; // shapeDesc._param0; (broken after repurposing texCoord1 for shapeRelativeCoords)
+    float2 texCoord = DebuggingShapesCoords_GetShapeRelativeCoords(coords);
     float aspectRatio = GetAspectRatio(coords);
 
     const float thumbWidth = coords.udds.x * 10;
@@ -158,7 +158,7 @@ ShapeResult ScrollBarShape_Calculate(DebuggingShapesCoords coords, ShapeDesc sha
     float2 baseLineMin = float2(minCoords.x, lerp(minCoords.y, maxCoords.y, 0.5f) - baseLineWidth/2);
     float2 baseLineMax = float2(maxCoords.x, lerp(minCoords.y, maxCoords.y, 0.5f) + baseLineWidth/2);
     //float result = 0.5f * RoundedRectShape(baseLineMin, baseLineMax, texCoord, aspectRatio, 0.4f);
-    float result = 0.25f * RoundedRectShape_Calculate(coords, MakeShapeDesc(baseLineMin, baseLineMax, 0.f, 0.4f))._fill;
+    float result = 0.25f * RoundedRectShape_Calculate(coords, MakeShapeDesc(baseLineMin, baseLineMax, 0.f))._fill;
 
         //	Add small markers at fractional positions along the scroll bar
     float markerPositions[7] = { .125f, .25f, .375f, .5f,   .625f, .75f, .875f };
@@ -169,7 +169,7 @@ ShapeResult ScrollBarShape_Calculate(DebuggingShapesCoords coords, ShapeDesc sha
         float2 markerMin = float2(x - markerWidth/2, lerp(minCoords.y, maxCoords.y, 0.5f*(1.f-markerHeights[c])));
         float2 markerMax = float2(x + markerWidth/2, lerp(minCoords.y, maxCoords.y, 0.5f+0.5f*markerHeights[c]));
         // result = max(result, 0.75f*RectShape(markerMin, markerMax, texCoord));
-        result = max(result, 0.25f*RectShape_Calculate(coords, MakeShapeDesc(markerMin, markerMax, 0.f, 0.f))._fill);
+        result = max(result, 0.25f*RectShape_Calculate(coords, MakeShapeDesc(markerMin, markerMax, 0.f))._fill);
     }
 
     float2 thumbCenter = float2(

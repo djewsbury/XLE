@@ -1,8 +1,14 @@
-#include "sequencer.pipeline"
+#include "../../Config/sequencer.pipeline"
 
 DescriptorSet Material {};
 DescriptorSet Spacer {};
-DescriptorSet Numeric {};
+DescriptorSet Numeric
+{
+	UniformBuffer ShapesFramework : 0
+	{
+		float BorderSizePix = 1.0;
+	};
+};
 
 PipelineLayout ImmediateDrawables
 {
