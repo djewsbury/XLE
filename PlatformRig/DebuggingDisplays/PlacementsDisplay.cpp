@@ -33,6 +33,7 @@
 #include "../../ConsoleRig/Console.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
+#include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/FormatterUtils.h"
 #include <sstream>
 

@@ -26,6 +26,7 @@
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/BitUtils.h"
+#include "../../Utility/Streams/PathUtils.h"
 #include <assert.h>
 
 #pragma warning(disable:4127)       // warning C4127: conditional expression is constant

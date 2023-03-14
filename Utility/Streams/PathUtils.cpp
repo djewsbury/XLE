@@ -8,6 +8,7 @@
 #include "../PtrUtils.h"
 #include "../IteratorUtils.h"
 #include "../MemoryUtils.h"
+#include "../StringFormat.h"	// for StringSection<> streaming in ColouriseFilename
 #include "../../Core/SelectConfiguration.h"
 #include <utility>
 #include <sstream>
@@ -755,6 +756,35 @@ namespace Utility
 		} else {
 			return HashFilenameAndPath_Internal<false>(filename, rules, seed);
 		}
+	}
+
+	std::string ColouriseFilename(StringSection<> filename)
+	{
+		auto split = MakeFileNameSplitter(filename);
+		std::stringstream str;
+		if (!split.DriveAndPath().IsEmpty()) {
+			const bool gradualBrightnessChange = true;
+			if (!gradualBrightnessChange) {
+				str << "{color:9f9f9f}" << split.DriveAndPath();
+			} else {
+				auto splitPath = MakeSplitPath(split.DriveAndPath());
+				if (splitPath.BeginsWithSeparator()) str << "/";
+				for (unsigned c=0; c<splitPath.GetSectionCount(); ++c) {
+					float alpha = c/float(splitPath.GetSectionCount());
+					auto brightness = unsigned(0x5f * (1-alpha) + 0xcf * alpha) & 0xff;
+					if (c != 0) str << "/";
+					str << "{color:" << std::hex << brightness << brightness << brightness << std::dec << "}" << splitPath.GetSection(c);
+				}
+				if (splitPath.EndsWithSeparator()) str << "/";
+			}
+		}
+		if (!split.File().IsEmpty())
+			str << "{color:7f8fdf}" << split.File();
+		if (!split.ExtensionWithPeriod().IsEmpty())
+			str << "{color:df8f7f}" << split.ExtensionWithPeriod();
+		if (!split.ParametersWithDivider().IsEmpty())
+			str << "{color:7fdf8f}" << split.ParametersWithDivider();
+		return str.str();
 	}
 
     FilenameRules s_defaultFilenameRules('/', true);

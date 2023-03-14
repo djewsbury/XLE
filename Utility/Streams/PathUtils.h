@@ -175,6 +175,8 @@ namespace Utility
 	template<typename CharType>
 		uint64_t HashFilenameAndPath(StringSection<CharType> filename, const FilenameRules& rules = s_defaultFilenameRules, uint64_t seed = s_FNV_init64);
 
+    std::string ColouriseFilename(StringSection<> filename);
+
     namespace Legacy
     {
         XL_UTILITY_API void XlConcatPath(char* dst, int count, const char* a, const char* b, const char* bEnd);
