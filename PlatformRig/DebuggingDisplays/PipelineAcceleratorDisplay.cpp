@@ -124,7 +124,7 @@ namespace PlatformRig { namespace Overlays
 			}
 
 			if (activeHighlight == c) {
-				Coord2 highlight[] {
+				Float2 highlight[] {
 					Coord2 { leftX0, outerRect._bottomRight[1] },
 					Coord2 { rightX0, outerRect._bottomRight[1] },
 					Coord2 { leftX1, outerRect._topLeft[1] },

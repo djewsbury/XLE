@@ -43,5 +43,6 @@ namespace PlatformRig { namespace Overlays
 		~OperationContextDisplay();
 	private:
 		std::shared_ptr<::Assets::OperationContext> _opContext;
+		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
 	};
 }}

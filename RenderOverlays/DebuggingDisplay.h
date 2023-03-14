@@ -123,8 +123,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     void        DrawBarGraph(IOverlayContext& context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory);
 
-    void        FillTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount);
-    void        FillTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], ColorB colour, unsigned triangleCount);
+    void        FillTriangles(IOverlayContext& context, const Float2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount);
+    void        FillTriangles(IOverlayContext& context, const Float2 triangleCoordinates[], ColorB colour, unsigned triangleCount);
     void        DrawLines(IOverlayContext& context, const Coord2 lineCoordinates[], const ColorB lineColours[], unsigned lineCount);
 
     ///////////////////////////////////////////////////////////////////////////////////

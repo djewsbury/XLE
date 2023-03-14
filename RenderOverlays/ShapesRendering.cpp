@@ -215,7 +215,7 @@ namespace RenderOverlays
         }
     }
 
-    void OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
+    void OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour, float outlineWidth)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -223,9 +223,8 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        const float borderWidthPix = 1.f;
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineEllipse;
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidthPix }));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
 
         Internal::DrawPCCTTQuad(
             context,

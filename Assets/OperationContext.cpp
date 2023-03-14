@@ -4,6 +4,7 @@
 
 #include "OperationContext.h"
 #include "../Core/Exceptions.h"
+#include <chrono>
 
 namespace Assets
 {
@@ -14,6 +15,8 @@ namespace Assets
 		{
 			Internal::VariantFutureSet::Id _future = ~0u;
 			std::string _description, _msg;
+			std::chrono::steady_clock::time_point _beginTime;
+			std::optional<std::pair<unsigned, unsigned>> _progress;
 		};
 		std::vector<std::pair<OperationId, RegisteredOp>> _ops;
 		OperationId _nextOperationId = 1u;
@@ -33,7 +36,7 @@ namespace Assets
 	{
 		ScopedLock(_mutex);
 		auto id = _pimpl->_nextOperationId++;
-		_pimpl->_ops.emplace_back(id, Pimpl::RegisteredOp{~0u, desc});
+		_pimpl->_ops.emplace_back(id, Pimpl::RegisteredOp{~0u, desc, {}, std::chrono::steady_clock::now()});
 		return {id, *this};
 	}
 
@@ -59,10 +62,10 @@ namespace Assets
 		assert(0);		// didn't find it
 	}
 
-	std::vector<std::string> OperationContext::GetActiveOperations()
+	auto OperationContext::GetActiveOperations() -> std::vector<OperationDesc>
 	{
 		ScopedLock(_mutex);
-		std::vector<std::string> result;
+		std::vector<OperationDesc> result;
 		result.reserve(_pimpl->_ops.size());
 		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i) {
 			if (i->second._future != ~0u) {
@@ -70,8 +73,12 @@ namespace Assets
 				if (status == std::future_status::ready)
 					continue;		// already completed, implicitly removed
 			}
-			if (!i->second._msg.empty()) result.push_back(i->second._description + "; " + i->second._msg);
-			else result.push_back(i->second._description);
+			OperationDesc desc;
+			desc._description = i->second._description;
+			desc._msg = i->second._msg;
+			desc._progress = i->second._progress;
+			desc._beginTime = i->second._beginTime;
+			result.emplace_back(std::move(desc));
 		}
 		return result;
 	}

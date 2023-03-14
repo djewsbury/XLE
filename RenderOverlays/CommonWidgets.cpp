@@ -107,7 +107,7 @@ namespace RenderOverlays { namespace CommonWidgets
 
 		if (!expanded) {
 			auto flipperRectCenter = (flipperRect._topLeft+flipperRect._bottomRight)/2;
-			Coord2 arrows[] = {
+			Float2 arrows[] = {
 				flipperRectCenter + Coord2( 4,  0),
 				flipperRectCenter + Coord2(-4, -4),
 				flipperRectCenter + Coord2(-4, +4)
@@ -116,7 +116,7 @@ namespace RenderOverlays { namespace CommonWidgets
 			FillTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
 		} else {
 			auto flipperRectCenter = (flipperRect._topLeft+flipperRect._bottomRight)/2;
-			Coord2 arrows[] = {
+			Float2 arrows[] = {
 				flipperRectCenter + Coord2( 0,  4),
 				flipperRectCenter + Coord2(+4, -4),
 				flipperRectCenter + Coord2(-4, -4)
@@ -220,7 +220,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		Coord2 D { frame._topLeft[0] + arrowWidth, frame._bottomRight[1] };
 		Coord2 E { frame._topLeft[0], (frame._topLeft[1] + frame._bottomRight[1])/2 };
 
-		Coord2 triangles[] {
+		Float2 triangles[] {
 			E, D, A,
 			A, D, B,
 			B, D, C
@@ -245,7 +245,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		Coord2 E { frame._topLeft[0] + arrowWidth, frame._bottomRight[1] };
 		Coord2 F { frame._topLeft[0], (frame._topLeft[1] + frame._bottomRight[1])/2 };
 
-		Coord2 triangles[] {
+		Float2 triangles[] {
 			B, A, C,
 			C, A, F,
 			F, E, C,

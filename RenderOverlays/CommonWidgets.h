@@ -121,7 +121,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		// FillDepressedRoundedRectangle(context, valueBox, ColorB{38, 38, 38}, 0.4f);
 		OutlineRoundedRectangle(*_context, valueBox, ColorB{0x7f, 0x7f, 0x7f}, 1.f, 0.4f);
 
-		Coord2 arrows[] = {
+		Float2 arrows[] = {
 			Coord2(valueBox._topLeft[0] + 8, (valueBox._topLeft[1]+valueBox._bottomRight[1])/2),
 			Coord2(valueBox._topLeft[0] + 14, (valueBox._topLeft[1]+valueBox._bottomRight[1])/2+4),
 			Coord2(valueBox._topLeft[0] + 14, (valueBox._topLeft[1]+valueBox._bottomRight[1])/2-4),

@@ -18,7 +18,7 @@ namespace RenderOverlays
 	///////////////////////////////////////////////////////////////////////////////////
     //          2 D   S H A P E   R E N D E R I N G
 
-    void        OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour);
+    void        OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour, float outlineWidth = 1.f);
     void        FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour);
 
     namespace Corner

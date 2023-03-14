@@ -474,19 +474,19 @@ namespace RenderOverlays { namespace DebuggingDisplay
         }
     }
 
-    void        FillTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount)
+    void        FillTriangles(IOverlayContext& context, const Float2 triangleCoordinates[], const ColorB triangleColours[], unsigned triangleCount)
     {
         VLA_UNSAFE_FORCE(Float3, pixelCoords, triangleCount*3);
         for (unsigned c=0; c<triangleCount*3; ++c)
-            pixelCoords[c] = AsPixelCoords(Coord2(triangleCoordinates[c][0], triangleCoordinates[c][1]));
+            pixelCoords[c] = AsPixelCoords(triangleCoordinates[c]);
         context.DrawTriangles(ProjectionMode::P2D, pixelCoords, triangleCount*3, triangleColours);
     }
 
-    void        FillTriangles(IOverlayContext& context, const Coord2 triangleCoordinates[], ColorB colour, unsigned triangleCount)
+    void        FillTriangles(IOverlayContext& context, const Float2 triangleCoordinates[], ColorB colour, unsigned triangleCount)
     {
         VLA_UNSAFE_FORCE(Float3, pixelCoords, triangleCount*3);
         for (unsigned c=0; c<triangleCount*3; ++c)
-            pixelCoords[c] = AsPixelCoords(Coord2(triangleCoordinates[c][0], triangleCoordinates[c][1]));
+            pixelCoords[c] = AsPixelCoords(triangleCoordinates[c]);
         context.DrawTriangles(ProjectionMode::P2D, pixelCoords, triangleCount*3, colour);
     }
 

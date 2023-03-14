@@ -66,6 +66,7 @@ namespace Assets
 				void EndWithFuture(std::shared_future<FutureObj>);
 			operator bool() const { return _context != nullptr; }
 			void SetMessage(std::string);
+			void SetProgress(unsigned completed, unsigned total);
 
 			OperationHelper();
 			~OperationHelper();
@@ -81,7 +82,14 @@ namespace Assets
 		template<typename Service>
 			std::shared_ptr<Service> GetService();
 
-		std::vector<std::string> GetActiveOperations();
+		struct OperationDesc
+		{
+			std::string _description;
+			std::string _msg;
+			std::chrono::steady_clock::time_point _beginTime;
+			std::optional<std::pair<unsigned, unsigned>> _progress;
+		};
+		std::vector<OperationDesc> GetActiveOperations();
 
 		void End(OperationId);
 		template<typename FutureObj>
