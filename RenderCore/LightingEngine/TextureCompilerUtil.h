@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../../Assets/DepVal.h"
+#include "../../Assets/OperationContext.h"
 #include "../../Utility/StringFormat.h"
 #include <memory>
 #include <vector>
@@ -27,8 +28,9 @@ namespace RenderCore { namespace LightingEngine
 	std::shared_ptr<BufferUploads::IAsyncDataSource> EquirectFilter(
 		BufferUploads::IAsyncDataSource& dataSrc,
 		const TextureDesc& targetDesc,
-		EquirectFilterMode filter = EquirectFilterMode::ToCubeMap,
-		const EquirectFilterParams& params = {},
+		EquirectFilterMode filter,
+		const EquirectFilterParams& params,
+		::Assets::OperationContext::OperationHelper& opHelper,
 		const ProgressiveTextureFn& progressiveResults = {});
 
 	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(

@@ -153,7 +153,7 @@ namespace PlatformRig { namespace Overlays
 		unsigned _borderWeight = 3;
 		float _innerRadius = .75f;
 		unsigned _sectionCount = 3*4;
-		float _rotationTimeMS = 1000.f;
+		float _rotationTimeMS = 3000.f;
 
 		OperationContextStaticData() = default;
 
@@ -207,9 +207,10 @@ namespace PlatformRig { namespace Overlays
 				trianglePts[t*6+5] = center + innerRadius * Float2 { c1, s1 };
 			}
 
-			auto col = staticData._complete;
+			auto col = staticData._incomplete;
 			if (s == brightSection) col = staticData._bright0;
 			else if ((s+1)%sectionCount == brightSection) col = staticData._bright1;
+			else if ((s+1)/float(sectionCount) <= progress) col = staticData._complete;
 
 			RenderOverlays::DebuggingDisplay::FillTriangles(context, trianglePts, col, (divisionCount-1)*2);
 		}
@@ -245,11 +246,20 @@ namespace PlatformRig { namespace Overlays
 
 		auto fnt = RenderOverlays::MakeFont(staticData._font)->TryActualize();
 		if (!fnt) return;
-
 		const auto lineHeight = (*fnt)->GetFontProperties()._lineHeight;
-		for (const auto&op:activeOperations) {
+
+		if (_offset) {
+			const auto* text = "^ ^ ^";
+			RenderOverlays::DrawText()
+				.Font(**fnt)
+				.Alignment(RenderOverlays::TextAlignment::Center)
+				.Draw(context, layout.AllocateFullWidth(lineHeight), MakeStringSection(text));
+		}
+		
+		for (auto op=activeOperations.begin()+std::min(activeOperations.size(), (size_t)_offset); op!=activeOperations.end(); ++op) {
 			auto h = lineHeight * 2 + 2 * (sectionPadding + sectionMargin);
 			auto section = layout.AllocateFullWidth(h);
+			if (section.Height() < h) break;
 
 			if (blurryBackground) {
 				RenderOverlays::ColorAdjustAndOutlineRoundedRectangle(
@@ -270,34 +280,38 @@ namespace PlatformRig { namespace Overlays
 			char buffer[1024];
 			{
 				auto description = textArea.AllocateFullWidth(lineHeight);
-				RenderOverlays::StringEllipsis(buffer, dimof(buffer), **fnt, MakeStringSection(op._description), description.Width());
+				RenderOverlays::StringEllipsis(buffer, dimof(buffer), **fnt, MakeStringSection(op->_description), description.Width());
 				RenderOverlays::DrawText()
 					.Font(**fnt)
-					.Draw(context, description, RenderOverlays::ColouriseFilename(buffer));
+					.Draw(context, description, buffer);
 			}
-			if (!op._msg.empty()) {
+			if (!op->_msg.empty()) {
 				auto msg = textArea.AllocateFullWidth(lineHeight);
-				RenderOverlays::StringEllipsis(buffer, dimof(buffer), **fnt, MakeStringSection(op._msg), msg.Width());
+				RenderOverlays::StringEllipsis(buffer, dimof(buffer), **fnt, MakeStringSection(op->_msg), msg.Width());
 				RenderOverlays::DrawText()
 					.Font(**fnt)
 					.Color(staticData._message)
 					.Draw(context, msg, buffer);
 			}
 
-			if (op._progress && op._progress->second) {
-				DrawProgressCircle(context, circleArea, op._progress->first / float(op._progress->second), now - op._beginTime, staticData);
+			if (op->_progress && op->_progress->second) {
+				DrawProgressCircle(context, circleArea, op->_progress->first / float(op->_progress->second), now - op->_beginTime, staticData);
 			} else {
-				DrawProgressCircle(context, circleArea, .5f, now - op._beginTime, staticData);
+				DrawProgressCircle(context, circleArea, .5f, now - op->_beginTime, staticData);
 			}
 		}
+	}
 
-		/*
-		for (const auto&op:activeOperations) {
-			auto allocation = layout.AllocateFullWidth(lineHeight);
-			if (allocation.Height() < lineHeight) break;
-			RenderOverlays::DrawText().Draw(context, allocation, op);
+	ProcessInputResult OperationContextDisplay::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input)
+	{
+		if (input._wheelDelta > 0) {
+			_offset = std::max(0, _offset-1);
+			return ProcessInputResult::Consumed;
+		} else if (input._wheelDelta < 0) {
+			++_offset;
+			return ProcessInputResult::Consumed;
 		}
-		*/
+		return ProcessInputResult::Passthrough;
 	}
 
 	OperationContextDisplay::OperationContextDisplay(std::shared_ptr<::Assets::OperationContext> opContext) : _opContext(opContext)

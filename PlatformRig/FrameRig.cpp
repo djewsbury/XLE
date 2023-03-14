@@ -53,6 +53,7 @@
 #include "../RenderOverlays/CommonWidgets.h"
 #include "../Assets/IntermediatesStore.h"
 #include "../Assets/AssetServices.h"
+#include "../Assets/OperationContext.h"
 #include "../Formatters/FormatterUtils.h"
 #include "../Tools/EntityInterface/MountedData.h"
 
@@ -119,6 +120,7 @@ namespace PlatformRig
 
         FrameRigDisplay(
             std::shared_ptr<DebugScreensSystem> debugSystem,
+            std::shared_ptr<Assets::OperationContext> loadingContext,
             const AccumulatedAllocations::Snapshot& prevFrameAllocationCount, const FrameRateRecorder& frameRate);
         ~FrameRigDisplay();
     protected:
@@ -128,6 +130,7 @@ namespace PlatformRig
         std::string _errorMsg;
 
         std::weak_ptr<DebugScreensSystem> _debugSystem;
+        std::shared_ptr<Assets::OperationContext> _loadingContext;
 
         void RenderScreenSelector(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const Rect& displayRect);
     };
@@ -712,10 +715,15 @@ namespace PlatformRig
             CommonWidgets::Measure measure;
             CommonWidgets::Draw draw{context, interactables, interfaceState};
 
-            const char* keys[] { "H", "C" };
-            const char* keyLabels[] { "Help", "Compile Progress" };
+            std::vector<const char*> keys, keyLabels;
+            keys.push_back("H"); keyLabels.push_back("Help");
 
-            for (unsigned c=0; c<dimof(keys); ++c) {
+            if (_loadingContext && !_loadingContext->IsIdle()) {
+                keys.push_back("C");
+                keyLabels.push_back("Compile Progress");
+            }
+
+            for (unsigned c=0; c<keys.size(); ++c) {
                 auto measure0 = measure.KeyIndicator(keyLabels[c], keys[c]);
 
                 auto frame = outerKeyHelpRect.AllocateFullWidth(measure0._height);
@@ -769,6 +777,12 @@ namespace PlatformRig
                     ds->SwitchToScreen(0, "[Console] Key Binding Help");
                     return ProcessInputResult::Consumed;
                 }
+        } else if (input.IsPress("c"_key) && _loadingContext && !_loadingContext->IsIdle()) {
+            if (auto ds = _debugSystem.lock())
+                if (!ds->CurrentScreen(0)) {
+                    ds->SwitchToScreen(0, "Loading Context");
+                    return ProcessInputResult::Consumed;
+                }
         }
 
         return ProcessInputResult::Passthrough;
@@ -776,11 +790,13 @@ namespace PlatformRig
 
     FrameRigDisplay::FrameRigDisplay(
         std::shared_ptr<DebugScreensSystem> debugSystem,
+        std::shared_ptr<Assets::OperationContext> loadingContext,
         const AccumulatedAllocations::Snapshot& prevFrameAllocationCount, const FrameRateRecorder& frameRate)
     {
         _frameRate = &frameRate;
         _prevFrameAllocationCount = &prevFrameAllocationCount;
         _debugSystem = std::move(debugSystem);
+        _loadingContext = std::move(loadingContext);
         _subMenuOpen = 0;
 
         RenderOverlays::CommonWidgets::Draw::StallForDefaultFonts();
@@ -789,10 +805,10 @@ namespace PlatformRig
     FrameRigDisplay::~FrameRigDisplay()
     {}
 
-    std::shared_ptr<IWidget> FrameRig::CreateDisplay(std::shared_ptr<DebugScreensSystem> debugSystem)
+    std::shared_ptr<IWidget> FrameRig::CreateDisplay(std::shared_ptr<DebugScreensSystem> debugSystem, std::shared_ptr<Assets::OperationContext> loadingContext)
     {
         if (!_pimpl->_frameRigDisplay)
-            _pimpl->_frameRigDisplay = std::make_shared<FrameRigDisplay>(std::move(debugSystem), _pimpl->_prevFrameAllocationCount, _pimpl->_frameRate);
+            _pimpl->_frameRigDisplay = std::make_shared<FrameRigDisplay>(std::move(debugSystem), std::move(loadingContext), _pimpl->_prevFrameAllocationCount, _pimpl->_frameRate);
         return _pimpl->_frameRigDisplay;
     }
 

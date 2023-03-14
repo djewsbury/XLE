@@ -37,7 +37,8 @@ namespace Assets
 		ScopedLock(_mutex);
 		auto id = _pimpl->_nextOperationId++;
 		_pimpl->_ops.emplace_back(id, Pimpl::RegisteredOp{~0u, desc, {}, std::chrono::steady_clock::now()});
-		return {id, *this};
+		assert(shared_from_this().get() == this);
+		return {id, shared_from_this()};
 	}
 
 	void OperationContext::End(OperationId id)
@@ -57,6 +58,29 @@ namespace Assets
 		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i)
 			if (i->first == id) {
 				i->second._msg = std::move(str);
+				return;
+			}
+		assert(0);		// didn't find it
+	}
+
+	void OperationContext::SetDescription(OperationId id, std::string str)
+	{
+		ScopedLock(_mutex);
+		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i)
+			if (i->first == id) {
+				i->second._description = std::move(str);
+				return;
+			}
+		assert(0);		// didn't find it
+	}
+
+	void OperationContext::SetProgress(OperationId id, unsigned completed, unsigned total)
+	{
+		assert(completed <= total);
+		ScopedLock(_mutex);
+		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i)
+			if (i->first == id) {
+				i->second._progress = { completed, total };
 				return;
 			}
 		assert(0);		// didn't find it
@@ -83,6 +107,20 @@ namespace Assets
 		return result;
 	}
 
+	bool OperationContext::IsIdle()
+	{
+		ScopedLock(_mutex);
+		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i) {
+			if (i->second._future != ~0u) {
+				auto status = _futures.WaitFor(i->second._future, std::chrono::steady_clock::duration{0});
+				if (status == std::future_status::ready)
+					continue;		// already completed, implicitly removed
+			}
+			return false;
+		}
+		return true;
+	}
+
 	static uint64_t s_nextOperationContextGuid = 0;
 	OperationContext::OperationContext()
 	: _guid(++s_nextOperationContextGuid)
@@ -99,29 +137,45 @@ namespace Assets
 		_context->SetMessage(_opId, std::move(str));
 	}
 
+	void OperationContext::OperationHelper::SetDescription(std::string str)
+	{
+		assert(_context);
+		_context->SetDescription(_opId, std::move(str));
+	}
+
+	void OperationContext::OperationHelper::SetProgress(unsigned completed, unsigned total)
+	{
+		assert(_context);
+		_context->SetProgress(_opId, completed, total);
+	}
+
 	OperationContext::OperationHelper::OperationHelper() = default;
 	OperationContext::OperationHelper::~OperationHelper()
 	{
-		if (_context) _context->End(_opId);
+		if (_context && !_endFunctionInvoked) _context->End(_opId);
 	}
 	OperationContext::OperationHelper::OperationHelper(OperationHelper&& moveFrom)
 	{
 		_context = moveFrom._context;
 		_opId = moveFrom._opId;
+		_endFunctionInvoked = moveFrom._endFunctionInvoked;
 		moveFrom._context = nullptr;
 		moveFrom._opId = ~0u;
+		moveFrom._endFunctionInvoked = false;
 	}
 	OperationContext::OperationHelper& OperationContext::OperationHelper::operator=(OperationHelper&& moveFrom)
 	{
-		if (_context) _context->End(_opId);
+		if (_context && !_endFunctionInvoked) _context->End(_opId);
 		_context = moveFrom._context;
 		_opId = moveFrom._opId;
+		_endFunctionInvoked = moveFrom._endFunctionInvoked;
 		moveFrom._context = nullptr;
 		moveFrom._opId = ~0u;
+		moveFrom._endFunctionInvoked = false;
 		return *this;
 	}
-	OperationContext::OperationHelper::OperationHelper(OperationId id, OperationContext& context)
-	: _context(&context), _opId(id) {}
+	OperationContext::OperationHelper::OperationHelper(OperationId id, std::shared_ptr<OperationContext> context)
+	: _context(std::move(context)), _opId(id), _endFunctionInvoked(false) {}
 
 
 	namespace Internal

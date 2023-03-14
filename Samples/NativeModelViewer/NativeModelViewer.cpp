@@ -12,6 +12,7 @@
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"
 #include "../../PlatformRig/DebugScreenRegistry.h"
+#include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../Assets/OperationContext.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/StringFormat.h"
@@ -53,10 +54,9 @@ namespace Sample
 			AddSystem(ToolsRig::MakeLayerForInput(manipulators));
 		}
 
-		auto loadingContext = std::make_shared<::Assets::OperationContext>();
 		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(
 			globals._drawingApparatus->_drawablesPool, globals._drawingApparatus->_pipelineAccelerators, globals._drawingApparatus->_deformAccelerators,
-			loadingContext);
+			globals._windowApparatus->_mainLoadingContext);
 		_overlayBinder->AttachSceneOverlay(modelLayer);
 		_overlayBinder->AttachVisualisationOverlay(visOverlay);
 
@@ -78,9 +78,6 @@ namespace Sample
 		} CATCH(...) {
 		} CATCH_END*/
 
-		_displayRegistrations.emplace_back(
-			"LoadingContext",
-			std::make_shared<PlatformRig::Overlays::OperationContextDisplay>(loadingContext));
 	}
 
 	auto NativeModelViewerOverlay::ProcessInput(

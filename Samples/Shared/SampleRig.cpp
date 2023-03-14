@@ -277,7 +277,7 @@ namespace Sample
             //  It just provides a convenient architecture for visualizing important information.
         Log(Verbose) << "Setup tools and debugging" << std::endl;
         auto& frameRig = *sampleGlobals._windowApparatus->_frameRig;
-        PlatformRig::SetSystemDisplay(*sampleGlobals._debugOverlaysApparatus->_debugSystem, frameRig.CreateDisplay(sampleGlobals._debugOverlaysApparatus->_debugSystem));
+        PlatformRig::SetSystemDisplay(*sampleGlobals._debugOverlaysApparatus->_debugSystem, frameRig.CreateDisplay(sampleGlobals._debugOverlaysApparatus->_debugSystem, sampleGlobals._windowApparatus->_mainLoadingContext));
         InstallDefaultDebuggingDisplays(sampleGlobals);
 
             // Final startup operations

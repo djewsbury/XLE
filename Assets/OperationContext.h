@@ -54,7 +54,7 @@ namespace Assets
 	}
 
 	/// <summary>Track progress of long operations</summary>
-	class OperationContext
+	class OperationContext : public std::enable_shared_from_this<OperationContext>
 	{
 	public:
 		using OperationId = uint32_t;
@@ -66,6 +66,7 @@ namespace Assets
 				void EndWithFuture(std::shared_future<FutureObj>);
 			operator bool() const { return _context != nullptr; }
 			void SetMessage(std::string);
+			void SetDescription(std::string);
 			void SetProgress(unsigned completed, unsigned total);
 
 			OperationHelper();
@@ -73,9 +74,10 @@ namespace Assets
 			OperationHelper(OperationHelper&&);
 			OperationHelper& operator=(OperationHelper&&);
 		private:
-			OperationHelper(OperationId, OperationContext&);
-			OperationContext* _context = nullptr;
+			OperationHelper(OperationId, std::shared_ptr<OperationContext>);
+			std::shared_ptr<OperationContext> _context = nullptr;
 			OperationId _opId = ~0u;
+			bool _endFunctionInvoked = false;
 			friend class OperationContext;
 		};
 
@@ -90,11 +92,14 @@ namespace Assets
 			std::optional<std::pair<unsigned, unsigned>> _progress;
 		};
 		std::vector<OperationDesc> GetActiveOperations();
+		bool IsIdle();
 
 		void End(OperationId);
 		template<typename FutureObj>
 			void EndWithFuture(OperationId, std::shared_future<FutureObj>);
+		void SetDescription(OperationId, std::string);
 		void SetMessage(OperationId, std::string);
+		void SetProgress(OperationId, unsigned completed, unsigned total);
 
 		OperationContext();
 		~OperationContext();
@@ -115,10 +120,9 @@ namespace Assets
 		void OperationContext::OperationHelper::EndWithFuture(std::shared_future<FutureObj> future)
 	{
 		assert(_context);
+		assert(!_endFunctionInvoked);
 		_context->EndWithFuture(_opId, std::move(future));
-		// we now release our reference this to operation, because it's tracked alongside the future
-		_context = nullptr;
-		_opId = ~0u;
+		_endFunctionInvoked = true;
 	}
 
 	template<typename FutureObj>

@@ -97,8 +97,8 @@ namespace Assets
 	class IIntermediateCompileMarker
 	{
 	public:
-		virtual std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> GetArtifact(ArtifactTargetCode) = 0;
-		virtual ArtifactCollectionFuture InvokeCompile(CompileRequestCode targetCode) = 0;
+		virtual std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> GetArtifact(ArtifactTargetCode, OperationContext* opContext = nullptr) = 0;
+		virtual ArtifactCollectionFuture InvokeCompile(CompileRequestCode targetCode, OperationContext* opContext = nullptr) = 0;
 		virtual std::string GetCompilerDescription() const = 0;
 		virtual void AttachConduit(VariantFunctions&&) = 0;
 		virtual ~IIntermediateCompileMarker();
@@ -300,11 +300,8 @@ namespace Assets
 		// from a precompiled result is quick, but actual compilation would take much longer
 
 		TRY {
-			std::string initializerLabel;
 			#if defined(_DEBUG)
-				initializerLabel = initializerPack.ArchivableName();
-			#else
-				if (operationContext) initializerLabel = initializerPack.ArchivableName();
+				auto initializerLabel = initializerPack.ArchivableName();
 			#endif
 
 			auto marker = Internal::BeginCompileOperation(targetCode, std::move(initializerPack));
@@ -319,17 +316,12 @@ namespace Assets
 			// Attempt to load the existing asset immediately. In some cases we should fall back to a recompile (such as, if the
 			// version number is bad). We could attempt to push this into a background thread, also
 
-			auto artifactQuery = marker->GetArtifact(targetCode);
+			auto artifactQuery = marker->GetArtifact(targetCode, operationContext);
 			if (artifactQuery.first) {
 				AutoConstructToPromiseSynchronously(std::move(promise), *artifactQuery.first, targetCode);
 			} else {
 				assert(artifactQuery.second.Valid());
 				AutoConstructToPromiseFromPendingCompile(std::move(promise), artifactQuery.second, targetCode);
-
-				if (operationContext) {
-					auto operation = operationContext->Begin(Concatenate("Compiling (", initializerLabel, ") with compiler (", marker->GetCompilerDescription(), ")"));
-					operation.EndWithFuture(artifactQuery.second.ShareFuture());
-				}
 			}
 		} CATCH(...) {
 			promise.set_exception(std::current_exception());
@@ -351,11 +343,8 @@ namespace Assets
 		// from a precompiled result is quick, but actual compilation would take much longer
 
 		TRY {
-			std::string initializerLabel;
 			#if defined(_DEBUG)
-				initializerLabel = initializerPack.ArchivableName();
-			#else
-				if (operationContext) initializerLabel = initializerPack.ArchivableName();
+				auto initializerLabel = initializerPack.ArchivableName();
 			#endif
 
 			auto marker = Internal::BeginCompileOperation(targetCode, std::move(initializerPack));
@@ -372,17 +361,12 @@ namespace Assets
 			// Attempt to load the existing asset immediately. In some cases we should fall back to a recompile (such as, if the
 			// version number is bad). We could attempt to push this into a background thread, also
 
-			auto artifactQuery = marker->GetArtifact(targetCode);
+			auto artifactQuery = marker->GetArtifact(targetCode, operationContext);
 			if (artifactQuery.first) {
 				AutoConstructToPromiseSynchronously(std::move(promise), *artifactQuery.first, targetCode);
 			} else {
 				assert(artifactQuery.second.Valid());
 				AutoConstructToPromiseFromPendingCompile(std::move(promise), artifactQuery.second, targetCode);
-
-				if (operationContext) {
-					auto operation = operationContext->Begin(Concatenate("Compiling (", initializerLabel, ") with compiler (", marker->GetCompilerDescription(), ")"));
-					operation.EndWithFuture(artifactQuery.second.ShareFuture());
-				}
 			}
 		} CATCH(...) {
 			promise.set_exception(std::current_exception());

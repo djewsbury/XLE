@@ -37,12 +37,14 @@ namespace PlatformRig { namespace Overlays
 		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
 		using InputSnapshot = OSServices::InputSnapshot;
 
-		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
+		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
+		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override;
 
 		OperationContextDisplay(std::shared_ptr<::Assets::OperationContext>);
 		~OperationContextDisplay();
 	private:
 		std::shared_ptr<::Assets::OperationContext> _opContext;
 		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
+		int _offset = 0;
 	};
 }}

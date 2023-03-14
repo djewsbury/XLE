@@ -22,6 +22,7 @@
 #include "../Assets/DepVal.h"
 #include "../Assets/AssetServices.h"
 #include "../Assets/AssetSetManager.h"
+#include "../Assets/OperationContext.h"
 #include "../Utility/Profiling/CPUProfiler.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/FunctionUtils.h"
@@ -109,6 +110,8 @@ namespace PlatformRig
 		_displaySettings = std::make_shared<OSServices::DisplaySettingsManager>();
 
 		_mainInputHandler = std::make_shared<PlatformRig::MainInputHandler>();
+
+		_mainLoadingContext = std::make_shared<Assets::OperationContext>();
 	}
 	
 	WindowApparatus::~WindowApparatus()

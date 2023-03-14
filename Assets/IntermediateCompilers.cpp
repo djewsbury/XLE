@@ -13,6 +13,7 @@
 #include "CompilerLibrary.h"
 #include "ArchiveCache.h"
 #include "IFileSystem.h"
+#include "OperationContext.h"
 #include "../OSServices/AttachableLibrary.h"
 #include "../ConsoleRig/GlobalServices.h"
 #include "../ConsoleRig/Plugins.h"
@@ -110,8 +111,8 @@ namespace Assets
     {
     public:
 		using IdentifiersList = IteratorRange<const StringSection<>*>;
-        std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> GetArtifact(CompileRequestCode) override;
-		ArtifactCollectionFuture InvokeCompile(CompileRequestCode targetCode) override;
+        std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> GetArtifact(CompileRequestCode, OperationContext*) override;
+		ArtifactCollectionFuture InvokeCompile(CompileRequestCode targetCode, OperationContext*) override;
 		std::string GetCompilerDescription() const override;
 		RegisteredCompilerId GetRegisteredCompilerId() { return _registeredCompilerId; }
 		void StallForActiveFuture();
@@ -138,12 +139,13 @@ namespace Assets
 			const ExtensionAndDelegate& delegate,
 			const InitializerPack& initializers,
 			const VariantFunctions& conduit,
+			OperationContext::OperationHelper&& contextHelper,
 			std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& compileMarker,
 			IntermediatesStore* destinationStore);
-		std::future<ArtifactCollectionFuture::ArtifactCollectionSet> InvokeCompileInternal();
+		std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> InvokeCompileInternal(OperationContext::OperationHelper&&);
     };
 
-    std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> IntermediateCompilers::Marker::GetArtifact(CompileRequestCode targetCode)
+    std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> IntermediateCompilers::Marker::GetArtifact(CompileRequestCode targetCode, OperationContext* opContext)
     {
 		auto d = _delegate.lock();
 		if (!d) return {};
@@ -173,7 +175,11 @@ namespace Assets
 				return {std::move(existingCollection), ArtifactCollectionFuture{}};
 		}
 
-		auto invokedCompile = InvokeCompileInternal();
+		OperationContext::OperationHelper contextHelper;
+		if (opContext)
+			contextHelper = opContext->Begin(Concatenate("Compiling (", _initializers.ArchivableName(), ") with compiler (", GetCompilerDescription(), ")"));
+
+		auto invokedCompile = InvokeCompileInternal(std::move(contextHelper));
 		// awkward ptr setup so we can track references on _activeFuture
 		auto newFuture = std::make_shared<std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet>>(std::move(invokedCompile));
 		_activeFuture = newFuture;
@@ -182,13 +188,17 @@ namespace Assets
 		return { nullptr, std::move(result) };
     }
 
-	ArtifactCollectionFuture IntermediateCompilers::Marker::InvokeCompile(CompileRequestCode targetCode)
+	ArtifactCollectionFuture IntermediateCompilers::Marker::InvokeCompile(CompileRequestCode targetCode, OperationContext* opContext)
 	{
 		ScopedLock(_activeFutureLock);
 		if (auto f = _activeFuture.lock())
 			return ArtifactCollectionFuture{std::move(f), targetCode};
 
-		auto invokedCompile = InvokeCompileInternal();
+		OperationContext::OperationHelper contextHelper;
+		if (opContext)
+			contextHelper = opContext->Begin(Concatenate("Compiling (", _initializers.ArchivableName(), ") with compiler (", GetCompilerDescription(), ")"));
+
+		auto invokedCompile = InvokeCompileInternal(std::move(contextHelper));
 		auto newFuture = std::make_shared<std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet>>(std::move(invokedCompile));
 		_activeFuture = newFuture;
 		ArtifactCollectionFuture result{std::move(newFuture), targetCode};
@@ -207,6 +217,7 @@ namespace Assets
 		const ExtensionAndDelegate& delegate,
 		const InitializerPack& initializers,
 		const VariantFunctions& conduit,
+		OperationContext::OperationHelper&& opHelper,
 		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& promise,
 		IntermediatesStore* destinationStore)
     {
@@ -216,7 +227,7 @@ namespace Assets
         {
 			std::shared_ptr<ICompileOperation> compileOperation;
 			if (delegate._delegateWithConduit) {
-				compileOperation = delegate._delegateWithConduit(initializers, conduit);
+				compileOperation = delegate._delegateWithConduit(initializers, std::move(opHelper), conduit);
 			} else
             	compileOperation = delegate._delegate(initializers);
 			if (!compileOperation)
@@ -338,10 +349,10 @@ namespace Assets
 		return {};
 	}
 
-    std::future<ArtifactCollectionFuture::ArtifactCollectionSet> IntermediateCompilers::Marker::InvokeCompileInternal()
+    std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> IntermediateCompilers::Marker::InvokeCompileInternal(OperationContext::OperationHelper&& opContextHelper)
     {
 		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet> promise;
-		auto result = promise.get_future();
+		std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> result = promise.get_future();
 
 		VariantFunctions conduit;
 		{
@@ -349,11 +360,14 @@ namespace Assets
 			conduit = std::move(_conduit);
 		}
 
+		if (opContextHelper)
+			opContextHelper.EndWithFuture(result);
+
 		// Unfortunately we have to copy _initializers here, because we 
 		// must allow for this marker to be reused (and both InvokeCompile 
 		// and GetExistingAsset use _initializers)
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[weakDelegate=std::weak_ptr<ExtensionAndDelegate>{_delegate}, store=_intermediateStore, inits=_initializers, conduit=std::move(conduit), promise=std::move(promise)]() mutable {
+			[weakDelegate=std::weak_ptr<ExtensionAndDelegate>{_delegate}, store=_intermediateStore, inits=_initializers, conduit=std::move(conduit), opContextHelper=std::move(opContextHelper), promise=std::move(promise)]() mutable {
 			auto d = weakDelegate.lock();
 			if (!d) {
 				promise.set_exception(std::make_exception_ptr(std::runtime_error("Request expired before it was completed")));
@@ -363,7 +377,7 @@ namespace Assets
 			++d->_activeOperationCount;
 			if (!d->_shuttingDown) {
 				TRY {
-					PerformCompile(*d, inits, conduit, std::move(promise), store.get());
+					PerformCompile(*d, inits, std::move(conduit), std::move(opContextHelper), std::move(promise), store.get());
 				} CATCH (...) {
 					--d->_activeOperationCount;
 					promise.set_exception(std::current_exception());
@@ -788,7 +802,7 @@ namespace Assets
 	ICompileOperation::~ICompileOperation() {}
 	ICompilerDesc::~ICompilerDesc() {}
 
-	class SimpleCompilerAdapter : public ::Assets::ICompileOperation
+	class SimpleCompilerAdapter : public ICompileOperation
 	{
 	public:
 		std::vector<TargetDesc> GetTargets() const override
@@ -803,7 +817,7 @@ namespace Assets
 			assert(idx == 0);
 			return _serializedArtifacts;
 		}
-		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
+		DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
 		SimpleCompilerAdapter(SimpleCompilerResult&& compilerResult)
 		: _serializedArtifacts(std::move(compilerResult._artifacts))
@@ -813,8 +827,8 @@ namespace Assets
 
 	private:
 		std::vector<SerializedArtifact> _serializedArtifacts;
-		::Assets::DependencyValidation _depVal;
-		::Assets::ArtifactTargetCode _targetCode;
+		DependencyValidation _depVal;
+		ArtifactTargetCode _targetCode;
 	};
 
 	CompilerRegistration RegisterSimpleCompiler(

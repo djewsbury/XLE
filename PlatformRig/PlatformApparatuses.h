@@ -14,7 +14,7 @@ namespace RenderCore { namespace BindFlag { using BitField = unsigned; }}
 namespace RenderCore { namespace Techniques { class DrawingApparatus; class FrameRenderingApparatus; }}
 namespace RenderOverlays { class Font; class OverlayApparatus; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget; }}
-namespace Assets { class DependencyValidation; }
+namespace Assets { class DependencyValidation; class OperationContext; }
 namespace OSServices { class DisplaySettingsManager; class Window; }
 namespace Utility { class HierarchicalCPUProfiler; }
 
@@ -56,6 +56,7 @@ namespace PlatformRig
 		std::shared_ptr<MainInputHandler> _mainInputHandler;
 		std::shared_ptr<FrameRig> _frameRig;
 		std::shared_ptr<OSServices::DisplaySettingsManager> _displaySettings;
+		std::shared_ptr<Assets::OperationContext> _mainLoadingContext;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depValPtr; }
 		::Assets::DependencyValidation _depValPtr;

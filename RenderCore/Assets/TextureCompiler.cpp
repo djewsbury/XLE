@@ -17,6 +17,7 @@
 #include "../../Formatters/TextFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/BitUtils.h"
+#include "../../Utility/StringFormat.h"
 #include "../../Core/Exceptions.h"
 
 #include "thousandeyes/futures/then.h"
@@ -242,7 +243,7 @@ namespace RenderCore { namespace Assets
 			return ::Assets::GetDepValSys().MakeOrReuse(markers);
 		}
 
-		void Initialize(TextureCompilationRequest request, std::string srcFN, const VariantFunctions& conduit)
+		void Initialize(TextureCompilationRequest request, std::string srcFN, ::Assets::OperationContext::OperationHelper&& opHelper, const VariantFunctions& conduit)
 		{
 			std::shared_ptr<BufferUploads::IAsyncDataSource> srcPkt;
 			if (request._operation != TextureCompilationRequest::Operation::ComputeShader) {
@@ -258,6 +259,11 @@ namespace RenderCore { namespace Assets
 				intermediateFunction = &conduit.Get<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0);
 
 			if (request._operation == TextureCompilationRequest::Operation::EquirectToCubeMap) {
+				if (opHelper) {
+					opHelper.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-cubemap{color:} compilation: ", ColouriseFilename(request._srcFile)));
+					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
+				}
+
 				auto srcDst = srcPkt->GetDesc();
 				srcDst.wait();
 				auto targetDesc = srcDst.get()._textureDesc;
@@ -267,9 +273,14 @@ namespace RenderCore { namespace Assets
 				targetDesc._arrayCount = 0u;
 				targetDesc._mipCount = (request._mipMapFilter == TextureCompilationRequest::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToCubeMap, {}, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToCubeMap, {}, opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterGlossySpecular) {
+				if (opHelper) {
+					opHelper.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-specular{color:} compilation: ", ColouriseFilename(request._srcFile)));
+					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
+				}
+
 				auto srcDst = srcPkt->GetDesc();
 				srcDst.wait();
 				auto targetDesc = srcDst.get()._textureDesc;
@@ -283,9 +294,14 @@ namespace RenderCore { namespace Assets
 				LightingEngine::EquirectFilterParams params;
 				params._sampleCount = request._sampleCount;
 				params._idealCmdListCostMS = request._commandListIntervalMS;
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecular, params, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecular, params, opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference) {
+				if (opHelper) {
+					opHelper.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-specular-reference{color:} compilation: ", ColouriseFilename(request._srcFile)));
+					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
+				}
+
 				auto srcDst = srcPkt->GetDesc();
 				srcDst.wait();
 				auto targetDesc = srcDst.get()._textureDesc;
@@ -296,9 +312,14 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecularReference, {}, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecularReference, {}, opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterDiffuseReference) {
+				if (opHelper) {
+					opHelper.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-diffuse-reference{color:} compilation: ", ColouriseFilename(request._srcFile)));
+					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
+				}
+
 				auto srcDst = srcPkt->GetDesc();
 				srcDst.wait();
 				auto targetDesc = srcDst.get()._textureDesc;
@@ -309,13 +330,23 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = 1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToDiffuseReference, {}, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToDiffuseReference, {}, opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ProjectToSphericalHarmonic) {
+				if (opHelper) {
+					opHelper.SetDescription(Concatenate("{color:66d0a4}Equirectangular-project-to-spherical-harmonic{color:} compilation: ", ColouriseFilename(request._srcFile)));
+					opHelper.SetMessage((StringMeld<256>() << request._coefficientCount << " coefficients").AsString());
+				}
+
 				auto targetDesc = TextureDesc::Plain2D(request._coefficientCount, 1, Format::R32G32B32A32_FLOAT);
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ProjectToSphericalHarmonic, {}, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ProjectToSphericalHarmonic, {}, opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ComputeShader) {
+				if (opHelper) {
+					opHelper.SetDescription(Concatenate("Generating texture from {color:66d0a4}compute shader{color:}: ", ColouriseFilename(request._shader)));
+					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
+				}
+
 				auto targetDesc = TextureDesc::Plain2D(
 					request._width,
 					request._height,
@@ -326,6 +357,10 @@ namespace RenderCore { namespace Assets
 				srcPkt = LightingEngine::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			}
+
+			if (opHelper)
+				opHelper.SetMessage(Concatenate("Compressing to pixel format ", MakeStringSection(AsString(request._format))));
+
 			CompressonatorTexture input{*srcPkt};
 
 			auto dstDesc = input._srcDesc;
@@ -381,7 +416,7 @@ namespace RenderCore { namespace Assets
 			};
 		}
 
-		TextureCompileOperation(std::string srcFN, const VariantFunctions& conduit)
+		TextureCompileOperation(std::string srcFN, ::Assets::OperationContext::OperationHelper&& opHelper, const VariantFunctions& conduit)
 		{
 			// load the given file and perform texture processing operations
 			size_t inputBlockSize = 0;
@@ -400,14 +435,14 @@ namespace RenderCore { namespace Assets
 			auto operationElement = *dom.RootElement().children().begin();
 			auto request = MakeTextureCompilationRequest(operationElement, srcFN);
 
-			Initialize(request, srcFN, conduit);
+			Initialize(request, srcFN, std::move(opHelper), conduit);
 		}
 
-		TextureCompileOperation(TextureCompilationRequest request, const VariantFunctions& conduit)
+		TextureCompileOperation(TextureCompilationRequest request, ::Assets::OperationContext::OperationHelper&& opHelper, const VariantFunctions& conduit)
 		{
 			std::stringstream str;
 			str << request;
-			Initialize(request, str.str(), conduit);
+			Initialize(request, str.str(), std::move(opHelper), conduit);
 		}
 
 	private:
@@ -425,12 +460,12 @@ namespace RenderCore { namespace Assets
 			"texture-compiler",
 			ConsoleRig::GetLibVersionDesc(),
 			{},
-			[](const ::Assets::InitializerPack& initializers, const auto& conduit) {
+			[](const ::Assets::InitializerPack& initializers, auto&& operationContextHelper, const auto& conduit) {
 				auto paramType = initializers.GetInitializer<unsigned>(0);
 				if (paramType == 0) {
-					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<std::string>(1), conduit);
+					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<std::string>(1), std::move(operationContextHelper), conduit);
 				} else {
-					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<TextureCompilationRequest>(1), conduit);
+					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<TextureCompilationRequest>(1), std::move(operationContextHelper), conduit);
 				}
 			}};
 

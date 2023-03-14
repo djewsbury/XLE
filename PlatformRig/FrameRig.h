@@ -13,6 +13,7 @@ namespace RenderCore { namespace Techniques { class ParsingContext; class SubFra
 namespace RenderOverlays { class OverlayApparatus; }
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; class IWidget;  }}
 namespace Utility { class HierarchicalCPUProfiler; }
+namespace Assets { class OperationContext; }
 
 namespace PlatformRig
 {
@@ -68,7 +69,7 @@ namespace PlatformRig
 
         RenderCore::Techniques::TechniqueContext& GetTechniqueContext();
 
-        auto CreateDisplay(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugSystem) -> std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>;
+        auto CreateDisplay(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem>, std::shared_ptr<Assets::OperationContext>) -> std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>;
 
         FrameRig(
             RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,

@@ -68,6 +68,10 @@ namespace Sample
 			"Display Settings",
 			PlatformRig::Overlays::CreateDisplaySettingsDisplay(globals._windowApparatus->_displaySettings, globals._windowApparatus->_osWindow));
 
+		globals._displayRegistrations.emplace_back(
+			"Loading Context",
+			std::make_shared<PlatformRig::Overlays::OperationContextDisplay>(globals._windowApparatus->_mainLoadingContext));
+
 		auto helpDisplay = PlatformRig::Overlays::CreateHelpDisplay();
 		helpDisplay->AddKey("Ctrl ←", "Prev Screen");
 		helpDisplay->AddKey("Ctrl →", "Next Screen");

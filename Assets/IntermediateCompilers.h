@@ -5,6 +5,7 @@
 #pragma once
 
 #include "AssetUtils.h"
+#include "OperationContext.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringUtils.h"
 #include <memory>
@@ -31,7 +32,7 @@ namespace Assets
 		
 		struct SplitArchiveName { std::string _archive; uint64_t _entryId = 0ull; std::string _descriptiveName; };
 		using CompileOperationDelegate = std::function<std::shared_ptr<ICompileOperation>(const InitializerPack&)>;
-		using CompileOperationDelegate2 = std::function<std::shared_ptr<ICompileOperation>(const InitializerPack&, const VariantFunctions&)>;
+		using CompileOperationDelegate2 = std::function<std::shared_ptr<ICompileOperation>(const InitializerPack&, OperationContext::OperationHelper&&, const VariantFunctions&)>;
 		using ArchiveNameDelegate = std::function<SplitArchiveName(ArtifactTargetCode, const InitializerPack&)>;
 
 		using RegisteredCompilerId = uint64_t;

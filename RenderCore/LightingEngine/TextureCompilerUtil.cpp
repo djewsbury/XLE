@@ -86,6 +86,8 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		bool Finished() const { return _samplesProcessed == _totalSampleCount; }
+		unsigned TotalSampleCount() const { return _totalSampleCount; }
+		unsigned SamplesProcessedCount () const { return _samplesProcessed; }
 
 		void CommitAndTimeCommandList(IThreadContext& threadContext, const Uniforms& uniforms, StringSection<> name)
 		{
@@ -122,6 +124,7 @@ namespace RenderCore { namespace LightingEngine
 		BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc,
 		EquirectFilterMode filter,
 		const EquirectFilterParams& params,
+		::Assets::OperationContext::OperationHelper& opHelper,
 		const ProgressiveTextureFn& progressiveResults)
 	{
 		// We need to create a texture from the data source and run a shader process on it to generate
@@ -204,6 +207,15 @@ namespace RenderCore { namespace LightingEngine
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
 
 		if (filter == EquirectFilterMode::ToCubeMap || filter == EquirectFilterMode::ProjectToSphericalHarmonic) {
+			unsigned totalDispatchCount = 0, completedDispatchCount = 0;
+			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip)
+				if (filter == EquirectFilterMode::ToCubeMap) {
+					auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+					auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
+					totalDispatchCount += passCount;
+				} else
+					++totalDispatchCount;
+
 			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
 				TextureViewDesc view;
 				view._mipRange = {mip, 1};
@@ -220,10 +232,12 @@ namespace RenderCore { namespace LightingEngine
 					for (unsigned p=0; p<passCount; ++p) {
 						struct FilterPassParams { unsigned _mipIndex, _passIndex, _passCount, _dummy; } filterPassParams { mip, p, passCount, 0 };
 						dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
+						++completedDispatchCount; if (opHelper) opHelper.SetProgress(completedDispatchCount, totalDispatchCount);
 					}
 				} else {
 					assert(filter == EquirectFilterMode::ProjectToSphericalHarmonic);
 					dispatchGroup.Dispatch(targetDesc._width, 1, 1);
+					++completedDispatchCount; if (opHelper) opHelper.SetProgress(completedDispatchCount, totalDispatchCount);
 				}
 
 				dispatchGroup = {};
@@ -299,6 +313,9 @@ namespace RenderCore { namespace LightingEngine
 				samplingShaderHelpers.push_back(BalancedSamplingShaderHelper{totalSampleCount, params._idealCmdListCostMS});
 			}
 
+			uint64_t totalSampleCount = 0, samplesCompleted = 0;
+			for (auto& s:samplingShaderHelpers) totalSampleCount += s.TotalSampleCount();
+
 			// We need to mip all of the mips at the same time, rather than one mip at a time, so we will loop
 			// better mips until they are all done
 			// we record the samples/time separately for each mip, because it depends on the number of pixels
@@ -320,6 +337,7 @@ namespace RenderCore { namespace LightingEngine
 					const auto& samplerHelper = samplerHelpers[mip];
 					resViews[4] = samplerHelper._pixelToSampleIndex.get();
 					resViews[5] = samplerHelper._pixelToSampleIndexParams.get();
+					auto initialCompletedSamples = samplingShaderHelper.SamplesProcessedCount();
 
 					struct ControlUniforms
 					{
@@ -336,6 +354,11 @@ namespace RenderCore { namespace LightingEngine
 					us._immediateData = immDatas;
 
 					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, us);
+
+					// update the progress tracker (reduce sample counts a little bit, to avoid exceeding 32 bit integers)
+					samplesCompleted += samplingShaderHelper.SamplesProcessedCount() - initialCompletedSamples;
+					if (opHelper)
+						opHelper.SetProgress(unsigned(samplesCompleted>>8ull), unsigned(totalSampleCount>>8ull));
 
 					if (samplingShaderHelper.Finished()) {
 						i = activeMips.erase(i);
