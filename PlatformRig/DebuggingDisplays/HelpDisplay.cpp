@@ -51,7 +51,6 @@ namespace PlatformRig { namespace Overlays
 			frame._bottomRight += Coord2(64, 64);
 
 			if (auto* blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()) {
-				SoftShadowRectangle(context, {frame._topLeft, frame._bottomRight + Coord2{16, 16}}, 12);
 				RenderOverlays::ColorAdjust colorAdjust;
 				ColorAdjustAndOutlineRoundedRectangle(
 					context, frame,
@@ -72,19 +71,19 @@ namespace PlatformRig { namespace Overlays
 			_lastTransform = transform;
 		}
 
-		void AddKey(StringSection<> key, StringSection<> helpText)
+		void AddKey(StringSection<> key, StringSection<> helpText) override
 		{
 			_keyHelps.emplace_back(KeyHelp{key.AsString(), helpText.AsString()});
 			_layoutInvalidated = true;
 		}
 
-		void AddText(StringSection<> text)
+		void AddText(StringSection<> text) override
 		{
 			_textBlocks.emplace_back(TextBlock{text.AsString()});
 			_layoutInvalidated = true;
 		}
 
-		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input)
+		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) override
 		{
 			if (_lastTransform) {
 				CommonWidgets::HoveringLayer hoveringLayer;

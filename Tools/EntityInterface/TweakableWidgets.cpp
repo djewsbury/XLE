@@ -335,7 +335,7 @@ namespace EntityInterface
 				sliderNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), state=_state, interactable, leftSideValue, rightSideValue](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 					draw.Bounded(frame, interactable, nameStr, state->GetWorkingValue<Type>(interactable), leftSideValue, rightSideValue);
 				};
-				sliderNode->_nodeAttachments._ioDelegate = [interactable, state=_state, leftSideValue, rightSideValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
+				sliderNode->_nodeAttachments._ioDelegate = [interactable, state=_state, leftSideValue, rightSideValue](const PlatformRig::InputContext& inputContext, auto& evnt, Rect frame, Rect content) {
 					auto* hoverings = inputContext.GetService<RenderOverlays::CommonWidgets::HoveringLayer>();
 					auto* interfaceState = inputContext.GetService<RenderOverlays::DebuggingDisplay::InterfaceState>();
 					if (!hoverings || !interfaceState) return PlatformRig::ProcessInputResult::Passthrough;

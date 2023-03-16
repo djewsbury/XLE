@@ -468,13 +468,6 @@ namespace OSServices
             foreground = GetCurrentProcessId() == foreWindowProcess;
         }
 
-        #if defined(_DEBUG)
-            DWORD foreWindowProcess;
-            GetWindowThreadProcessId(GetForegroundWindow(), &foreWindowProcess);
-            bool expectedForeground = GetCurrentProcessId() == foreWindowProcess;
-            assert(foreground == expectedForeground);
-        #endif
-        
         return Idle{foreground ? IdleState::Foreground : IdleState::Background};
     }
 

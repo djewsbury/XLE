@@ -297,7 +297,7 @@ namespace PlatformRig { namespace Overlays
 			if (op->_progress && op->_progress->second) {
 				DrawProgressCircle(context, circleArea, op->_progress->first / float(op->_progress->second), now - op->_beginTime, staticData);
 			} else {
-				DrawProgressCircle(context, circleArea, .5f, now - op->_beginTime, staticData);
+				DrawProgressCircle(context, circleArea, 0.f, now - op->_beginTime, staticData);
 			}
 		}
 	}

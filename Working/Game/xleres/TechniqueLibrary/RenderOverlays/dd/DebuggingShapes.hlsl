@@ -74,7 +74,7 @@ float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coord
 	float t = TagShape_Calculate(coords, shapeDesc)._fill;
 	if (t > 0.f) {
 		const float3 baseColor = float3(0.333f, 0.333f, 0.333f);
-		return RaisedFill_Calculate(coords, float4(baseColor, 1.f), accentuate*dhdp);
+		return RaisedFill_Calculate(coords, float2(0,0), float4(baseColor, 1.f), accentuate*dhdp);
 	} else {
 		const float borderSize = 6.f;
 		return float4(0.75.xxx, BorderFromDerivatives(dhdp, t, borderSize));

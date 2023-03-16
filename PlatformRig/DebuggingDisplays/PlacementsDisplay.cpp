@@ -499,7 +499,7 @@ namespace PlatformRig { namespace Overlays
 			auto buttonNode = KeyValue(layoutEngine, std::move(label));
 
 			buttonNode->_nodeAttachments._guid = interactable;
-			buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](auto& input, auto& evnt, Rect, Rect) {
+			buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](const InputContext& input, auto& evnt, Rect, Rect) {
 				auto* interfaceState = input.GetService<DebuggingDisplay::InterfaceState>();
 				if (!interfaceState) return PlatformRig::ProcessInputResult::Passthrough;
 

@@ -710,7 +710,7 @@ namespace Assets
 	{
 		_filesAndContents.reserve(filesAndContents.size());
 		for (const auto&i:filesAndContents) {
-			auto fnHash = HashFilename(MakeStringSection(i.first), _filenameRules);
+			auto fnHash = HashFilenameAndPath(MakeStringSection(i.first), _filenameRules);
 			auto i2 = LowerBound(_filesAndContents, fnHash);
 			assert(i2 == _filesAndContents.end() || i2->first != fnHash);
 			_filesAndContents.insert(i2, {fnHash, i.second});
@@ -718,7 +718,7 @@ namespace Assets
 
 		_staticFilesAndContents.reserve(staticFilesAndContents.size());
 		for (const auto&i:staticFilesAndContents) {
-			auto fnHash = HashFilename(MakeStringSection(i.first), _filenameRules);
+			auto fnHash = HashFilenameAndPath(MakeStringSection(i.first), _filenameRules);
 			auto i2 = LowerBound(_staticFilesAndContents, fnHash);
 			assert(i2 == _staticFilesAndContents.end() || i2->first != fnHash);
 			_staticFilesAndContents.insert(i2, {fnHash, i.second});

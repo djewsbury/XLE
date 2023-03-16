@@ -226,6 +226,9 @@ namespace Assets
 	template<typename AssetType, typename... Params, ENABLE_IF(!Internal::AssetTraits2<AssetType>::HasChunkRequests)>
 		AssetType AutoConstructAsset(const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::RemoveSmartPtrType<AssetType>::CompileProcessType)
 	{
+		if (artifactCollection.GetAssetState() == AssetState::Invalid)
+			Throw(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)});
+
 		TRY {
 			ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
 			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
