@@ -114,13 +114,6 @@ size_t XlStringSizeSafe(const char* str, const char* end)
     return p - str;
 }
 
-size_t XlStringSize(const ucs4* str)
-{
-    auto* i = str;
-	while (*i) ++i;
-	return i - str;
-}
-
 size_t XlStringSizeSafe(const ucs4* str, const ucs4* end)
 {
     const ucs4* p;
@@ -172,31 +165,6 @@ size_t XlGlyphCount(const utf16* s)
     return l;
 }
 
-size_t XlStringSize(const utf8* s)
-{
-    // This should return the size in bytes of the string (not the number of
-    // characters)
-    return std::strlen((const char*)s);
-}
-
-size_t XlStringSize(const utf16* str)
-{
-    // string size returns the number of fixed sized "utf16" elements in the string
-	// (even if this is not the same as the number of characters)
-    auto* i = str;
-	while (*i) ++i;
-	return i - str;
-}
-
-size_t XlStringSize(const ucs2* str)
-{
-	// string size returns the number of fixed sized "ucs2" elements in the string
-	// (even if this is not the same as the number of characters)
-	auto* i = str;
-	while (*i) ++i;
-	return i - str;
-}
-
 size_t XlGlyphCount(const ucs4* str)
 {
     // TODO: enhance
@@ -207,15 +175,6 @@ size_t XlGlyphCount(const ucs4* str)
     while (*e++)
         ;
     return e - str - 1;
-}
-
-size_t XlStringSize(const wchar_t* str)
-{
-    // string size returns the number of fixed sized "wchar_t" elements in the string
-	// (even if this is not the same as the number of characters)
-    auto* i = str;
-	while (*i) ++i;
-	return i - str;
 }
 
 // count is buffer size in char

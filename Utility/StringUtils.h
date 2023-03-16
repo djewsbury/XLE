@@ -31,7 +31,7 @@ namespace Utility
             // (note that counts are array length in number of chars/ucs2s/ucs4s/utf16s etc)
     
         ////////////   U T F 8   O V E R R I D E S   ////////////
-    XL_UTILITY_API size_t   XlStringSize        (const utf8* str);
+    constexpr      size_t   XlStringSize        (const utf8* str);
     XL_UTILITY_API size_t   XlGlyphCount        (const utf8* str);
     XL_UTILITY_API void     XlCopyString        (utf8* dst, size_t size, const utf8* src);
     XL_UTILITY_API void     XlCopyNString       (utf8* dst, size_t count, const utf8*src, size_t length);
@@ -45,13 +45,13 @@ namespace Utility
 		////////////   U T F 1 6   O V E R R I D E S   ////////////
 	XL_UTILITY_API void     XlCopyString(utf16* dst, size_t size, const utf16* src);
 	XL_UTILITY_API void     XlCopyNString(utf16* dst, size_t count, const utf16*src, size_t length);
-    XL_UTILITY_API size_t   XlStringSize        (const utf16* str);
+    constexpr      size_t   XlStringSize        (const utf16* str);
     XL_UTILITY_API size_t   XlGlyphCount        (const utf16* str);
     XL_UTILITY_API void     XlCopyString        (utf16* dst, size_t size, const utf16* src);
     XL_UTILITY_API void     XlCopyNString       (utf16* dst, size_t count, const utf16*src, size_t length);
 
         ////////////   U C S 2   O V E R R I D E S   ////////////
-    XL_UTILITY_API size_t   XlStringSize        (const ucs2* str);
+    constexpr      size_t   XlStringSize        (const ucs2* str);
     XL_UTILITY_API size_t   XlGlyphCount        (const ucs2* str);
     XL_UTILITY_API void     XlCopyString        (ucs2* dst, size_t size, const ucs2* src);
     XL_UTILITY_API void     XlCopyNString       (ucs2* dst, size_t count, const ucs2*src, size_t length);
@@ -63,7 +63,7 @@ namespace Utility
     XL_UTILITY_API size_t   XlCompareStringI    (const ucs2* x, const ucs2* y);
 
         ////////////   U C S 4   O V E R R I D E S   ////////////
-    XL_UTILITY_API size_t   XlStringSize        (const ucs4* str);
+    constexpr      size_t   XlStringSize        (const ucs4* str);
     XL_UTILITY_API size_t   XlStringSizeSafe    (const ucs4* str, const ucs4* end);
     XL_UTILITY_API size_t   XlGlyphCount        (const ucs4* str);
     XL_UTILITY_API void     XlCopyString        (ucs4* dst, size_t count, const ucs4* src);
@@ -75,7 +75,7 @@ namespace Utility
     XL_UTILITY_API int      XlCompareStringI    (const ucs4* x, const ucs4* y);
 
         ////////////   w c h a r _ t   O V E R R I D E S   ////////////
-    XL_UTILITY_API size_t   XlStringSize        (const wchar_t* str);
+    constexpr      size_t   XlStringSize        (const wchar_t* str);
     XL_UTILITY_API size_t   XlGlyphCount        (const wchar_t* str);
     XL_UTILITY_API void     XlCopyString        (wchar_t* dst, size_t size, const wchar_t* src);
     XL_UTILITY_API void     XlCopyNString       (wchar_t* dst, size_t count, const wchar_t*src, size_t length);
@@ -84,13 +84,57 @@ namespace Utility
     XL_UTILITY_API void     XlCopyString_SafeUtfN      (utf8* dst, size_t size, const utf8* src, const uint32_t numSeq);
     XL_UTILITY_API void     XlCatSafeUtf        (utf8* dst, size_t size, const utf8* src);
 
+    constexpr size_t XlStringSize(const utf8* str)
+    {
+        // This should return the size in bytes of the string (not the number of
+        // characters)
+        auto* i = str;
+        while (*i) ++i;
+        return i - str;
+    }
+
+    constexpr size_t XlStringSize(const utf16* str)
+    {
+        // string size returns the number of fixed sized "utf16" elements in the string
+        // (even if this is not the same as the number of characters)
+        auto* i = str;
+        while (*i) ++i;
+        return i - str;
+    }
+
+    constexpr size_t XlStringSize(const ucs2* str)
+    {
+        // string size returns the number of fixed sized "ucs2" elements in the string
+        // (even if this is not the same as the number of characters)
+        auto* i = str;
+        while (*i) ++i;
+        return i - str;
+    }
+
+    constexpr size_t XlStringSize(const ucs4* str)
+    {
+        // string size returns the number of fixed sized "ucs4" elements in the string
+        // (even if this is not the same as the number of characters)
+        auto* i = str;
+        while (*i) ++i;
+        return i - str;
+    }
+
+    constexpr size_t XlStringSize(const wchar_t* str)
+    {
+        // string size returns the number of fixed sized "wchar_t" elements in the string
+        // (even if this is not the same as the number of characters)
+        auto* i = str;
+        while (*i) ++i;
+        return i - str;
+    }
 
     template <typename CharType>
-        const CharType* XlStringEnd(const CharType nullTermStr[])
+        constexpr const CharType* XlStringEnd(const CharType nullTermStr[])
             { return &nullTermStr[XlStringSize(nullTermStr)]; }
 
     template <typename CharType>
-        CharType* XlStringEnd(CharType nullTermStr[])
+        constexpr CharType* XlStringEnd(CharType nullTermStr[])
             { return &nullTermStr[XlStringSize(nullTermStr)]; }
 
         ////////////   S T R I N G   S E C T I O N   ////////////
@@ -130,21 +174,24 @@ namespace Utility
 
         const CharType& operator[](size_t index) const { assert(index < Length()); return _start[index]; }
 
-        StringSection(const CharType* start, const CharType* end) : _start(start), _end(end) {}
-        StringSection() : _start(nullptr), _end(nullptr) {}
-        StringSection(const CharType* nullTerm) : _start(nullTerm), _end(XlStringEnd(_start)) {}
+        constexpr StringSection(const CharType* start, const CharType* end) : _start(start), _end(end) {}
+        constexpr StringSection() : _start(nullptr), _end(nullptr) {}
+        constexpr StringSection(const CharType* nullTerm) : _start(nullTerm), _end(XlStringEnd(_start)) {}
         StringSection(std::nullptr_t) = delete;      // prevent construction from nullptr constant (tends to be a common error)
-        StringSection(std::basic_string_view<CharType> view) : _start(view.begin()), _end(view.end()) {}
-        StringSection(const CharType* start, size_t len) : _start(start), _end(start+len) {}
-        template<size_t N>
-            constexpr StringSection(CharType (&fixedSize)[N]) : _start(fixedSize), _end(fixedSize+N-1) { static_assert(N != 0); }
+        constexpr StringSection(std::basic_string_view<CharType> view) : _start(view.begin()), _end(view.end()) {}
+        constexpr StringSection(const CharType* start, size_t len) : _start(start), _end(start+len) {}
+
+        // Note -- we can't use a constructor such as the following, because we can't distinguish between a string literal, and
+        // any other char buffer (which might be larger than the string it actually contains)
+        // template<size_t N>
+        //     constexpr StringSection(CharType (&fixedSize)[N]) : _start(fixedSize), _end(fixedSize+N-1) { static_assert(N != 0); }
         
 		template<typename CT, typename A>
 			StringSection(const std::basic_string<CharType, CT, A>& str) : _start(AsPointer(str.cbegin())), _end(AsPointer(str.cend())) {}
     };
 
     template<typename Iterator>
-        inline auto MakeStringSection(Iterator start, Iterator end)
+        constexpr auto MakeStringSection(Iterator start, Iterator end)
             -> StringSection<typename std::decay<decltype(*AsPointer(std::declval<Iterator>()))>::type>
         {
             using CharType = typename std::decay<decltype(*AsPointer(std::declval<Iterator>()))>::type;
@@ -152,16 +199,19 @@ namespace Utility
         }
 
     template<typename CharType>
-        inline StringSection<CharType> MakeStringSection(const CharType* nullTerm)
+        constexpr StringSection<CharType> MakeStringSection(const CharType* nullTerm)
         {
             return StringSection<CharType>(nullTerm);
         }
 
     template<typename CharType, typename CT, typename A>
-        inline StringSection<CharType> MakeStringSection(const std::basic_string<CharType, CT, A>& str)
+        constexpr StringSection<CharType> MakeStringSection(const std::basic_string<CharType, CT, A>& str)
         {
             return StringSection<CharType>(AsPointer(str.cbegin()), AsPointer(str.cend()));
         }
+
+    template<typename CharType>
+		constexpr StringSection<CharType> MakeStringSection(std::basic_string_view<CharType> view) { return StringSection<CharType>{view}; }
 
         ////////////   S T R I N G   S E A R C H I N G   ////////////
     XL_UTILITY_API const char*  XlFindChar          (const char* s, const char ch);

@@ -51,12 +51,10 @@ namespace Assets
 
 		constexpr Initializer(const CharType* start, const CharType* end) : StringSection<CharType>{start, end}, _hash(ConstHash64(start, end-start)) {}
         constexpr Initializer() : _hash(0) {}
-        constexpr Initializer(const CharType* nullTerm) : StringSection<CharType>{nullTerm}, _hash(ConstHash64(AsStringView())) {}
+        constexpr Initializer(const CharType* nullTerm) : StringSection<CharType>{nullTerm}, _hash(ConstHash64(StringSection<CharType>::AsStringView())) {}
         Initializer(std::nullptr_t) = delete;
 		constexpr Initializer(std::basic_string_view<CharType> view) : StringSection<CharType>{view}, _hash(ConstHash64(view)) {}
 		constexpr Initializer(const CharType* start, size_t len) : StringSection<CharType>{start, len}, _hash(ConstHash64(start, len)) {}
-        template<size_t N>
-            constexpr Initializer(CharType (&fixedSize)[N]) : StringSection<CharType>{fixedSize, fixedSize+N-1}, _hash(ConstHash64(fixedSize, N-1)) { static_assert(N != 0); }
         
 		template<typename CT, typename A>
 			Initializer(const std::basic_string<CharType, CT, A>& str) : StringSection<CharType>{str}, _hash(ConstHash64(str.data(), str.size())) {}
@@ -75,8 +73,11 @@ namespace Assets
 	template<typename CharType>
 		constexpr Initializer<CharType> MakeInitializer(const CharType* start, size_t len) { return Initializer<CharType>{start, len}; }
 
-	template<typename CharType, size_t N>
-		constexpr Initializer<CharType> MakeInitializer(CharType (&fixedSize)[N]) { static_assert(N != 0); return Initializer<CharType>{fixedSize, N-1}; }
+	template<typename CharType>
+		constexpr Initializer<CharType> MakeInitializer(std::basic_string_view<CharType> view) { return Initializer<CharType>{view}; }
+
+	template<typename CharType>
+		constexpr Initializer<CharType> MakeInitializer(const CharType* nullTerm) { return Initializer<CharType>{nullTerm}; }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
