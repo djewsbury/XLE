@@ -14,6 +14,7 @@ namespace RenderCore { class FrameBufferProperties; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace RenderOverlays { class OverlayApparatus; }
 namespace Formatters { class IDynamicInputFormatter; }
+namespace Assets { class OperationContext; }
 namespace std { template<typename T> class future; }
 
 namespace ToolsRig
@@ -66,6 +67,7 @@ namespace ToolsRig
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 			std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 			std::shared_ptr<RenderCore::LightingEngine::ILightScene> _lightScene;
+			std::shared_ptr<::Assets::OperationContext> _loadingContext;
 			unsigned _completionCommandList = 0;
 			::Assets::DependencyValidation _depVal;
 		};
@@ -81,13 +83,15 @@ namespace ToolsRig
 
 		ShaderLab(
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
-			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads);
+			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
+			std::shared_ptr<::Assets::OperationContext> loadingContext);
 		~ShaderLab();
 	private:
 		std::vector<std::pair<std::string, OperationConstructor>> _operationConstructors;
 		std::vector<std::pair<std::string, VisualizeStepConstructor>> _visualizeStepConstructors;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 		std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
+		std::shared_ptr<::Assets::OperationContext> _loadingContext;
 	};
 
 	void RegisterVisualizeAttachment(ShaderLab&);

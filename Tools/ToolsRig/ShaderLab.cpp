@@ -172,6 +172,7 @@ namespace ToolsRig
 					constructorContext._depVal = ::Assets::GetDepValSys().Make();
 					constructorContext._drawingApparatus = l->_drawingApparatus;
 					constructorContext._bufferUploads = l->_bufferUploads;
+					constructorContext._loadingContext = l->_loadingContext;
 					constructorContext._lightScene = lightScene;
 
 					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>();
@@ -329,9 +330,10 @@ namespace ToolsRig
 		_visualizeStepConstructors.emplace_back(name.AsString(), std::move(constructor));
 	}
 
-	ShaderLab::ShaderLab(std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus, std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads)
+	ShaderLab::ShaderLab(std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus, std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads, std::shared_ptr<::Assets::OperationContext> loadingContext)
 	: _drawingApparatus(std::move(drawingApparatus))
 	, _bufferUploads(std::move(bufferUploads))
+	, _loadingContext(std::move(loadingContext))
 	{}
 
 	ShaderLab::~ShaderLab(){}

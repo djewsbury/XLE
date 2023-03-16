@@ -10,6 +10,8 @@
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
 
+namespace Assets { class OperationContext; }
+
 namespace RenderCore { namespace LightingEngine 
 {
 	class SHCoefficients
@@ -30,6 +32,7 @@ namespace RenderCore { namespace LightingEngine
 
 		static void ConstructToPromise(
 			std::promise<SHCoefficientsAsset>&&,
+			std::shared_ptr<::Assets::OperationContext>,
 			StringSection<> initializer);
 		SHCoefficientsAsset() = default;
 	protected:
