@@ -326,7 +326,7 @@ namespace Utility
         dst = *reinterpret_cast<float*>(&result);
 
             // Explicit exponent isn't handled well... We just multiplying with the FPU
-            // it's simple, but it may not be the most accurate method. We
+            // it's simple, but it may not be the most accurate method.
         if (explicitExponent)
             dst *= std::pow(10.f, float(explicitExponent));
 
@@ -369,15 +369,14 @@ namespace Utility
 
         const CharType* newEnd = nullptr;
         const bool UseExperimentalFloatParser = true;
-        if (constant_expression<UseExperimentalFloatParser>::result()) {
+        if constexpr (UseExperimentalFloatParser) {
             newEnd = ExperimentalFloatParser(dst, input.begin(), input.end());
         } else {
-            // CharType replaced = *end;
-            // *const_cast<CharType*>(end) = '\0';
-            char* newEndT = nullptr;
-            dst = std::strtof((const char*)input.begin(), &newEndT);        // note -- there is a risk of running off the string, beyond "end" in some cases!
-            // *const_cast<CharType*>(end) = replaced;
-            newEnd = (const CharType*)newEndT;
+            CharType buffer[32];
+            XlCopyString(buffer, input);
+            CharType* endParse = nullptr;
+            dst = std::strtof(buffer, &endParse);        // note -- there is a risk of running off the string, beyond "end" in some cases!
+            newEnd = input.begin() + (endParse-buffer);
         }
 
         assert(newEnd <= input.end());
@@ -387,8 +386,15 @@ namespace Utility
     template<typename CharType>
         const CharType* FastParseValue(StringSection<CharType> input, double& dst)
     {
-        assert(0);      // not implemented
-        return input.begin();
+        // note -- unoptimized
+        // it's normal for clients to call this with a very long input string, expecting us to return the first
+        // character that cannot be parsed as a double. Since std::strtod must take null terminated input, there's
+        // no good efficient way for us to feed in the minimal string (at least, without modify the characters in "input")
+        CharType buffer[48];
+        XlCopyString(buffer, input);
+        CharType* endParse = nullptr;
+        dst = std::strtod(buffer, &endParse);
+        return input.begin() + (endParse-buffer);
     }
 
     template const utf8* FastParseValue(StringSection<utf8> input, int32_t& dst);

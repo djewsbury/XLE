@@ -392,13 +392,13 @@ namespace Utility { namespace ImpliedTyping
     }
 
     template<>
-        static float FlipEndianHelper(const void* input)
+        float FlipEndianHelper(const void* input)
     {
         return FloatBits(FlipEndian(*(const uint32_t*)input));
     }
 
     template<>
-        static double FlipEndianHelper(const void* input)
+        double FlipEndianHelper(const void* input)
     {
         return DoubleBits(FlipEndian(*(const uint64_t*)input));
     }
@@ -1047,7 +1047,7 @@ namespace Utility { namespace ImpliedTyping
 
         case 'f':
         case 'F':
-            if (XlEqString(expression, "false") || XlEqString(expression, "False") || XlEqString(expression, "FALSE")) {
+            if (XlBeginsWith(expression, "false") || XlBeginsWith(expression, "False") || XlBeginsWith(expression, "FALSE")) {
                 boolValue = false;
                 boolCandidateLength = 5;
             }
@@ -1055,7 +1055,7 @@ namespace Utility { namespace ImpliedTyping
 
         case 'n':
         case 'N':
-            if (XlEqString(expression, "no") || XlEqString(expression, "No") || XlEqString(expression, "NO")) {
+            if (XlBeginsWith(expression, "no") || XlBeginsWith(expression, "No") || XlBeginsWith(expression, "NO")) {
                 boolCandidateLength = 2;
                 boolValue = false;
             } else {
@@ -1097,12 +1097,21 @@ namespace Utility { namespace ImpliedTyping
             if (parseEnd != expression.begin())
                 i64 = int64_t(d); // fall through
         } else if (parseEnd != expression.end() && (*parseEnd == 'x') && i64 == 0) {
-            // this was actually a "0x" hex prefix
-            if ((parseEnd+1) == expression.end() || *(parseEnd+1) == '+'  || *(parseEnd+1) == '-')      // can't follow this with either empty string, + or -
-                return {expression.begin(), false};
-            parseEnd = FastParseValue(MakeStringSection(parseEnd+1, expression.end()), i64, 16);
-            if (*expression.begin() == '-')      // "-0x" is still possible
-                i64 = -i64;
+            // might have been a "0x" hex prefix
+            parseEnd = expression.begin();
+            bool negative = false;
+            if (*parseEnd == '+') parseEnd++;
+            else if (*parseEnd == '-') { negative = true; parseEnd++; }
+            if (*parseEnd == '0' && *(parseEnd+1) == 'x') {
+                parseEnd+=2;
+                if (parseEnd == expression.end() || *parseEnd == '+'  || *parseEnd == '-')      // can't follow this with either empty string, + or -
+                    return {expression.begin(), false};
+                parseEnd = FastParseValue(MakeStringSection(parseEnd, expression.end()), i64, 16);
+                if (negative)      // "-0x" is still possible
+                    i64 = -i64;
+            } else {
+                parseEnd = expression.begin();
+            }
         }
 
         if (parseEnd != expression.begin()) {
@@ -1144,12 +1153,21 @@ namespace Utility { namespace ImpliedTyping
             if (parseEnd != expression.begin())
                 ui64 = uint64_t(i64); // fall through
         } else if (parseEnd != expression.end() && (*parseEnd == 'x') && ui64 == 0) {
-            // this was actually a "0x" hex prefix
-            if ((parseEnd+1) == expression.end() || *(parseEnd+1) == '+'  || *(parseEnd+1) == '-')      // can't follow this with either empty string, + or -
-                return {expression.begin(), false};
-            parseEnd = FastParseValue(MakeStringSection(parseEnd+1, expression.end()), ui64, 16);
-            if (*expression.begin() == '-')      // "-0x" is still possible
-                ui64 = -int64_t(ui64);
+            // might have been a "0x" hex prefix
+            parseEnd = expression.begin();
+            bool negative = false;
+            if (*parseEnd == '+') parseEnd++;
+            else if (*parseEnd == '-') { negative = true; parseEnd++; }
+            if (*parseEnd == '0' && *(parseEnd+1) == 'x') {
+                parseEnd+=2;
+                if (parseEnd == expression.end() || *parseEnd == '+'  || *parseEnd == '-')      // can't follow this with either empty string, + or -
+                    return {expression.begin(), false};
+                parseEnd = FastParseValue(MakeStringSection(parseEnd, expression.end()), ui64, 16);
+                if (negative)      // "-0x" is still possible
+                    ui64 = -int64_t(ui64);
+            } else {
+                parseEnd = expression.begin();
+            }
         }
 
         if (parseEnd != expression.begin()) {
@@ -1166,6 +1184,58 @@ namespace Utility { namespace ImpliedTyping
             if (parseEnd != expression.begin()) {
                 destBuffer = DestinationType(b);
                 return {parseEnd, true};
+            }
+
+            return {parseEnd, false};
+        }
+    }
+
+    template<typename DestinationType, typename CharType>
+        ConvertResult<CharType> ConvertFloatHelper(StringSection<CharType> expression, DestinationType& destBuffer)
+    {
+        DestinationType f;
+        auto parseEnd = FastParseValue(expression, f);
+        if (parseEnd != expression.begin()) {
+            if (parseEnd != expression.end() && IsIntegerTrailer(*parseEnd)) ++parseEnd;
+            destBuffer = f;
+            return {parseEnd, true};
+        } else {
+
+            if ((*parseEnd == 'x') && f == 0) {
+
+                // might have been a "0x" hex prefix
+                int64_t i64;
+                parseEnd = expression.begin();
+                bool negative = false;
+                if (*parseEnd == '+') parseEnd++;
+                else if (*parseEnd == '-') { negative = true; parseEnd++; }
+                if (*parseEnd == '0' && *(parseEnd+1) == 'x') {
+                    parseEnd+=2;
+                    if (parseEnd == expression.end() || *parseEnd == '+'  || *parseEnd == '-')      // can't follow this with either empty string, + or -
+                        return {expression.begin(), false};
+                    parseEnd = FastParseValue(MakeStringSection(parseEnd, expression.end()), i64, 16);
+                    if (negative)      // "-0x" is still possible
+                        i64 = -i64;
+                } else {
+                    parseEnd = expression.begin();
+                }
+
+                if (parseEnd != expression.begin()) {
+                    if (parseEnd != expression.end() && IsIntegerTrailer(*parseEnd)) ++parseEnd;
+                    destBuffer = i64;
+                    return {parseEnd, true};
+                }
+
+            } else {
+
+                // attempt bool to integer version
+                bool b;
+                parseEnd = FastParseBool(expression, b);
+                if (parseEnd != expression.begin()) {
+                    destBuffer = DestinationType(b);
+                    return {parseEnd, true};
+                }
+
             }
 
             return {parseEnd, false};
@@ -1275,30 +1345,10 @@ namespace Utility { namespace ImpliedTyping
                 return ConvertUnsignedIntegerHelper<uint64_t>(MakeStringSection(i, expression.end()), *(uint64_t*)destinationBuffer.begin());
 
             case TypeCat::Float:
-                {
-                    float f;
-                    parseEnd = FastParseValue(MakeStringSection(i, expression.end()), f);
-                    if (parseEnd != i) {
-                        *(float*)destinationBuffer.begin() = f;
-                        if (parseEnd != destinationBuffer.end() && (*parseEnd == 'f' || *parseEnd == 'F')) ++parseEnd;
-                        return {parseEnd, true};
-                    } else {
-                        return {parseEnd, false};
-                    }
-                }
+                return ConvertFloatHelper<float>(MakeStringSection(i, expression.end()), *(float*)destinationBuffer.begin());
 
             case TypeCat::Double:
-                {
-                    double d;
-                    parseEnd = FastParseValue(MakeStringSection(i, expression.end()), d);
-                    if (parseEnd != i) {
-                        *(double*)destinationBuffer.begin() = d;
-                        if (parseEnd != destinationBuffer.end() && (*parseEnd == 'f' || *parseEnd == 'F')) ++parseEnd;
-                        return {parseEnd, true};
-                    } else {
-                        return {parseEnd, false};
-                    }
-                }
+                return ConvertFloatHelper<double>(MakeStringSection(i, expression.end()), *(double*)destinationBuffer.begin());
 
             default:
                 assert(0);
