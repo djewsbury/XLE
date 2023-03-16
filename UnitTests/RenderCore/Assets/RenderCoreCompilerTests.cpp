@@ -64,7 +64,6 @@ namespace UnitTests
 
 	TEST_CASE( "RenderCoreCompilation-Materials", "[rendercore_assets]" )
 	{
-		UnitTest_SetWorkingDirectory();
 		auto cfg = GetStartupConfig();
 		cfg._inMemoryOnlyIntermediates = true;
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
@@ -170,7 +169,6 @@ namespace UnitTests
 
 	TEST_CASE( "RenderCoreCompilation-Models", "[rendercore_assets]" )
 	{
-		UnitTest_SetWorkingDirectory();
 		auto cfg = GetStartupConfig();
 		cfg._inMemoryOnlyIntermediates = true;
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);

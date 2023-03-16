@@ -236,18 +236,6 @@ namespace UnitTests
 		auto testStorageTexture = CreateTestStorageTexture(*testHelper->_device, *threadContext);
 		auto testStorageBuffer = CreateTestStorageBuffer(*testHelper->_device);
 		
-		std::shared_ptr<RenderCore::IShaderSource> customShaderSource;
-
-		auto* vulkanDevice  = (RenderCore::IDeviceVulkan*)testHelper->_device->QueryInterface(TypeHashCode<RenderCore::IDeviceVulkan>);
-		if (vulkanDevice) {
-			RenderCore::VulkanCompilerConfiguration cfg;
-			cfg._shaderMode = RenderCore::VulkanShaderMode::GLSLToSPIRV;
-		 	auto shaderCompiler = vulkanDevice->CreateShaderCompiler(cfg);
-			customShaderSource = RenderCore::CreateMinimalShaderSource(shaderCompiler);
-		} else {
-			Throw(std::runtime_error("This test only implemented for Vulkan"));
-		}
-
 		auto pipelineLayoutInitializer = CustomPipelineLayoutInitializer();
 		auto pipelineLayout = testHelper->_device->CreatePipelineLayout(pipelineLayoutInitializer, "unittest");
 
@@ -259,7 +247,7 @@ namespace UnitTests
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		Metal::CompleteInitialization(metalContext, {testStorageTexture.get(), testStorageBuffer.get(), fbHelper.GetMainTarget().get()});
 
-		auto shaderProgram = MakeShaderProgram(customShaderSource, pipelineLayout, s_vs_descriptorSetTest, s_ps_descriptorSetTest);
+		auto shaderProgram = MakeShaderProgram(testHelper->_shaderSource, pipelineLayout, s_vs_descriptorSetTest, s_ps_descriptorSetTest);
 
 		////////////////////////////////////////////////////////////////////////////////////////
 		{

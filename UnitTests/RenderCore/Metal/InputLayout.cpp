@@ -176,6 +176,7 @@ namespace UnitTests
 		{
 			auto stagingDesc = CreateDesc(
 				BindFlag::TransferSrc,
+				AllocationRules::HostVisibleSequentialWrite,
 				TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 			std::vector<uint8_t> initBuffer(RenderCore::ByteCount(stagingDesc), 0xdd);
 			SubResourceInitData initData { MakeIteratorRange(initBuffer), MakeTexturePitches(stagingDesc._textureDesc) };
@@ -702,22 +703,23 @@ namespace UnitTests
 		std::vector<unsigned> _initData;
 		std::shared_ptr<RenderCore::IResource> _res;
 
-		TestTexture(RenderCore::IDevice& device)
+		TestTexture(RenderCore::IDevice& device, RenderCore::IThreadContext& threadContext)
 		{
 			using namespace RenderCore;
 			_resDesc = CreateDesc(
 				BindFlag::ShaderResource,
 				TextureDesc::Plain2D(16, 16, Format::R8G8B8A8_UNORM));
+			_res = device.CreateResource(_resDesc, "input-tex");
+			
 			for (unsigned y=0; y<16; ++y)
 				for (unsigned x=0; x<16; ++x)
 					_initData.push_back(((x+y)&1) ? 0xff7f7f7f : 0xffcfcfcf);
-			_res = device.CreateResource(
-				_resDesc,
-				"input-tex",
-				[this](SubResourceId subResId) {
-					assert(subResId._mip == 0 && subResId._arrayLayer == 0);
-					return SubResourceInitData { MakeIteratorRange(_initData), MakeTexturePitches(_resDesc._textureDesc) };
-				});
+			
+			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(
+				CopyPartial_Dest { *_res, SubResourceId{0,0} },
+				SubResourceInitData { MakeIteratorRange(_initData), MakeTexturePitches(_resDesc._textureDesc) },
+				Format::R8G8B8A8_UNORM, {16, 16, 1},
+				MakeTexturePitches(_resDesc._textureDesc));
 		}
 	};
 
@@ -738,7 +740,7 @@ namespace UnitTests
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
-		TestTexture testTexture(*testHelper->_device);
+		TestTexture testTexture(*testHelper->_device, *threadContext);
 
 		// -------------------------------------------------------------------------------------
 
@@ -756,74 +758,76 @@ namespace UnitTests
 		encoder.Bind(MakeIteratorRange(vbvs), {});
 		encoder.Bind(inputLayout, Topology::TriangleList);
 
-		{
-			// Shader takes a CB called "Values", but we will incorrectly attempt to bind
-			// a shader resource there (and not bind the CB)
-			encoder.Bind(shaderProgramCB);
+		REQUIRE_THROWS(
+			[&]()
+			{
+				// Shader takes a CB called "Values", but we will incorrectly attempt to bind
+				// a shader resource there (and not bind the CB)
+				encoder.Bind(shaderProgramCB);
 
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, "Values"_h);
-			usi.BindSampler(0, "Values_sampler"_h);
-			Metal::BoundUniforms uniforms { shaderProgramCB, usi };
-			
-			auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
-			auto pointSampler = testHelper->_device->CreateSampler(SamplerDesc{ FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp });
+				UniformsStreamInterface usi;
+				usi.BindResourceView(0, "Values"_h);
+				usi.BindSampler(0, "Values_sampler"_h);
+				Metal::BoundUniforms uniforms { shaderProgramCB, usi };
+				
+				auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
+				auto pointSampler = testHelper->_device->CreateSampler(SamplerDesc{ FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp });
 
-			const IResourceView* resourceViews[] = { srv.get() };
-			const ISampler* samplers[] = { pointSampler.get() };
-			UniformsStream uniformsStream;
-			uniformsStream._resourceViews = resourceViews;
-			uniformsStream._samplers = samplers;
-			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
-		}
+				const IResourceView* resourceViews[] = { srv.get() };
+				const ISampler* samplers[] = { pointSampler.get() };
+				UniformsStream uniformsStream;
+				uniformsStream._resourceViews = resourceViews;
+				uniformsStream._samplers = samplers;
+				uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+			}());
 
-		{
-			// Shader takes a SRV called "Texture", but we will incorrectly attempt to bind
-			// a constant buffer there (and not bind the SRV)
-			encoder.Bind(shaderProgramSRV);
+		REQUIRE_THROWS(
+			[&]()
+			{
+				// Shader takes a SRV called "Texture", but we will incorrectly attempt to bind
+				// a constant buffer there (and not bind the SRV)
+				encoder.Bind(shaderProgramSRV);
 
-			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, "Texture"_h);
-			Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
-			
-			Values v;
-			UniformsStream::ImmediateData cbvs[] = { MakeOpaqueIteratorRange(v) };
-			UniformsStream uniformsStream;
-			uniformsStream._immediateData = cbvs;
-			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);                
-		}
+				UniformsStreamInterface usi;
+				usi.BindImmediateData(0, "Texture"_h);
+				Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
+				
+				Values v;
+				UniformsStream::ImmediateData cbvs[] = { MakeOpaqueIteratorRange(v) };
+				UniformsStream uniformsStream;
+				uniformsStream._immediateData = cbvs;
+				uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);                
+			}());
 
-		{
-			// Shader takes a CB called "Values", we will promise to bind it, but then not
-			// actually include it into the UniformsStream
-			encoder.Bind(shaderProgramCB);
+		REQUIRE_THROWS(
+			[&]()
+			{
+				// Shader takes a CB called "Values", we will promise to bind it, but then not
+				// actually include it into the UniformsStream
+				encoder.Bind(shaderProgramCB);
 
-			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
-			Metal::BoundUniforms uniforms { shaderProgramCB, usi };
+				UniformsStreamInterface usi;
+				usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
+				Metal::BoundUniforms uniforms { shaderProgramCB, usi };
 
-			REQUIRE_THROWS(
-				[&]() {
-					uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
-					encoder.Draw(4);
-				});
-		}
+				uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
+				encoder.Draw(4);
+			}());
 
-		{
-			// Shader takes a SRV called "Texture", we will promise to bind it, but then not
-			// actually include it into the UniformsStream
-			encoder.Bind(shaderProgramSRV);
+		REQUIRE_THROWS(
+			[&]()
+			{
+				// Shader takes a SRV called "Texture", we will promise to bind it, but then not
+				// actually include it into the UniformsStream
+				encoder.Bind(shaderProgramSRV);
 
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, "Texture"_h);
-			Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
+				UniformsStreamInterface usi;
+				usi.BindResourceView(0, "Texture"_h);
+				Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
 
-			REQUIRE_THROWS(
-				[&]() {
-					uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
-					encoder.Draw(4);
-				});
-		}
+				uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
+				encoder.Draw(4);
+			}());
 
 		encoder = {};
 		rpi = {};     // end RPI
@@ -846,7 +850,7 @@ namespace UnitTests
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
-		TestTexture testTexture(*testHelper->_device);
+		TestTexture testTexture(*testHelper->_device, *threadContext);
 
 		// -------------------------------------------------------------------------------------
 
@@ -863,84 +867,86 @@ namespace UnitTests
 		VertexBufferView vbvs[] = { vertexBuffer0.get() };
 		encoder.Bind(MakeIteratorRange(vbvs), {});
 
-		{
-			// Shader takes a CB called "Values", but we will incorrectly attempt to bind
-			// a shader resource there (and not bind the CB)
-			encoder.Bind(shaderProgramCB);
+		REQUIRE_THROWS(
+			[&]()
+			{
+				// Shader takes a CB called "Values", but we will incorrectly attempt to bind
+				// a shader resource there (and not bind the CB)
+				encoder.Bind(shaderProgramCB);
 
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, "Values"_h);
-			usi.BindSampler(0, "Values_sampler"_h);
-			Metal::BoundUniforms uniforms { shaderProgramCB, usi };
-
-			auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
-			auto pointSampler = testHelper->_device->CreateSampler(SamplerDesc{ FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp });
-
-			const IResourceView* resourceViews[] = { srv.get() };
-			const ISampler* samplers[] = { pointSampler.get() };
-			UniformsStream uniformsStream;
-			uniformsStream._resourceViews = resourceViews;
-			uniformsStream._samplers = samplers;
-			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
-		}
-
-		{
-			// Shader takes a SRV called "Texture", but we will incorrectly attempt to bind
-			// a constant buffer there (and not bind the SRV)
-			encoder.Bind(shaderProgramSRV);
-
-			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, "Texture"_h);
-			Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
-
-			Values v;
-			UniformsStream::ImmediateData cbvs[] = { MakeOpaqueIteratorRange(v) };
-			UniformsStream uniformsStream;
-			uniformsStream._immediateData = cbvs;
-			uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
-		}
-
-		{
-			// Shader takes a CB called "Values", we will promise to bind it, but then not
-			// actually include it into the UniformsStream
-			encoder.Bind(shaderProgramCB);
-			encoder.Bind(inputLayout, Topology::TriangleList);
-
-			UniformsStreamInterface usi;
-			usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
-			#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
-				auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
-				Metal::BoundUniforms uniforms { *pipeline, usi };
-			#else
+				UniformsStreamInterface usi;
+				usi.BindResourceView(0, "Values"_h);
+				usi.BindSampler(0, "Values_sampler"_h);
 				Metal::BoundUniforms uniforms { shaderProgramCB, usi };
-			#endif
 
-			REQUIRE_THROWS(
-				[&]() {
-					uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
-				});
-		}
+				auto srv = testTexture._res->CreateTextureView(BindFlag::ShaderResource);
+				auto pointSampler = testHelper->_device->CreateSampler(SamplerDesc{ FilterMode::Point, AddressMode::Clamp, AddressMode::Clamp });
 
-		{
-			// Shader takes a SRV called "Texture", we will promise to bind it, but then not
-			// actually include it into the UniformsStream
-			encoder.Bind(shaderProgramSRV);
-			encoder.Bind(inputLayout, Topology::TriangleList);
+				const IResourceView* resourceViews[] = { srv.get() };
+				const ISampler* samplers[] = { pointSampler.get() };
+				UniformsStream uniformsStream;
+				uniformsStream._resourceViews = resourceViews;
+				uniformsStream._samplers = samplers;
+				uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+			}());
 
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, "Texture"_h);
-			#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
-				auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
-				Metal::BoundUniforms uniforms { *pipeline, usi };
-			#else
+		REQUIRE_THROWS(
+			[&]()
+			{
+				// Shader takes a SRV called "Texture", but we will incorrectly attempt to bind
+				// a constant buffer there (and not bind the SRV)
+				encoder.Bind(shaderProgramSRV);
+
+				UniformsStreamInterface usi;
+				usi.BindImmediateData(0, "Texture"_h);
 				Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
-			#endif
 
-			REQUIRE_THROWS(
-				[&]() {
-					uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
-				});
-		}
+				Values v;
+				UniformsStream::ImmediateData cbvs[] = { MakeOpaqueIteratorRange(v) };
+				UniformsStream uniformsStream;
+				uniformsStream._immediateData = cbvs;
+				uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
+			}());
+
+		REQUIRE_THROWS(
+			[&]()
+			{
+				// Shader takes a CB called "Values", we will promise to bind it, but then not
+				// actually include it into the UniformsStream
+				encoder.Bind(shaderProgramCB);
+				encoder.Bind(inputLayout, Topology::TriangleList);
+
+				UniformsStreamInterface usi;
+				usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
+				#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
+					auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
+					Metal::BoundUniforms uniforms { *pipeline, usi };
+				#else
+					Metal::BoundUniforms uniforms { shaderProgramCB, usi };
+				#endif
+
+				uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
+			}());
+
+		REQUIRE_THROWS(
+			[&]()
+			{
+				// Shader takes a SRV called "Texture", we will promise to bind it, but then not
+				// actually include it into the UniformsStream
+				encoder.Bind(shaderProgramSRV);
+				encoder.Bind(inputLayout, Topology::TriangleList);
+
+				UniformsStreamInterface usi;
+				usi.BindResourceView(0, "Texture"_h);
+				#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
+					auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
+					Metal::BoundUniforms uniforms { *pipeline, usi };
+				#else
+					Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
+				#endif
+
+				uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
+			}());
 
 		encoder = {};
 		rpi = {};     // end RPI
@@ -959,7 +965,7 @@ namespace UnitTests
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
-		TestTexture testTexture(*testHelper->_device);
+		TestTexture testTexture(*testHelper->_device, *threadContext);
 
 		// -------------------------------------------------------------------------------------
 
@@ -1030,7 +1036,7 @@ namespace UnitTests
 			BindFlag::RenderTarget | BindFlag::TransferSrc,
 			TextureDesc::Plain2D(1024, 1024, Format::R8G8B8A8_UNORM));
 
-		TestTexture testTexture(*testHelper->_device);
+		TestTexture testTexture(*testHelper->_device, *threadContext);
 
 		// -------------------------------------------------------------------------------------
 
@@ -1144,7 +1150,15 @@ namespace UnitTests
 			[numthreads(8, 8, 1)]
 				void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 			{
-				Output[dispatchThreadId.xy] = ArrayInput[dispatchThreadId.y%8][0].color;
+				// appears to not be valid on Radeon to use dispatchThreadId.y%8 as an uniform array idx
+				if ((dispatchThreadId.y%8) == 0) Output[dispatchThreadId.xy] = ArrayInput[0][0].color;
+				else if ((dispatchThreadId.y%8) == 1) Output[dispatchThreadId.xy] = ArrayInput[1][0].color;
+				else if ((dispatchThreadId.y%8) == 2) Output[dispatchThreadId.xy] = ArrayInput[2][0].color;
+				else if ((dispatchThreadId.y%8) == 3) Output[dispatchThreadId.xy] = ArrayInput[3][0].color;
+				else if ((dispatchThreadId.y%8) == 4) Output[dispatchThreadId.xy] = ArrayInput[4][0].color;
+				else if ((dispatchThreadId.y%8) == 5) Output[dispatchThreadId.xy] = ArrayInput[5][0].color;
+				else if ((dispatchThreadId.y%8) == 6) Output[dispatchThreadId.xy] = ArrayInput[6][0].color;
+				else Output[dispatchThreadId.xy] = ArrayInput[7][0].color;
 			}
 		)--";
 
@@ -1163,6 +1177,7 @@ namespace UnitTests
 		for (unsigned c=0; c<dimof(colors); ++c) {
 			auto desc = CreateDesc(
 				BindFlag::UnorderedAccess,
+				AllocationRules::HostVisibleSequentialWrite,
 				LinearBufferDesc::Create(sizeof(Float4)));
 			auto res = testHelper->_device->CreateResource(desc, "uav-buffer", SubResourceInitData{MakeOpaqueIteratorRange(colors[c])});
 			colorBufferViews[c] = res->CreateBufferView(BindFlag::UnorderedAccess);
@@ -1215,11 +1230,13 @@ namespace UnitTests
 		////////////////////////////////////////////////////////////////////////////////////////
 
 		auto output = targetTexture->ReadBackSynchronized(*threadContext);
+
 		std::map<unsigned, unsigned> colorBreakdown;
 		auto pixels = MakeIteratorRange((unsigned*)AsPointer(output.begin()), (unsigned*)AsPointer(output.end()));
 		for (auto p:pixels) colorBreakdown[p]++;
 		REQUIRE(colorBreakdown.size() == 8);
 		REQUIRE(colorBreakdown.find(0xff000000u) == colorBreakdown.end());
+		// color quantization isn't matching exactly here -- 
 		for (auto f:colors)
 			REQUIRE(colorBreakdown.find(AsPackedColor(f)) != colorBreakdown.end());
 		for (unsigned c=0; c<8; ++c)

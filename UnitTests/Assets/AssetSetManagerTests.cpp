@@ -190,15 +190,12 @@ namespace UnitTests
 		futureTwo->SetAsset(2);
 
 		std::atomic<bool> test = false;
-		thousandeyes::futures::then(
-			::Assets::WhenAll(futureZero, futureOne, futureTwo).AsCombinedFuture(),
-			[&test](auto futureTuple) {
+		::Assets::WhenAll(futureZero, futureOne, futureTwo).Then(
+			[&test](auto futureZero, auto futureOne, auto futureTwo) {
 
-				auto tuple = futureTuple.get();
-
-				auto resultZero = std::get<0>(tuple).get();
-				auto resultOne = std::get<1>(tuple).get();
-				auto resultTwo = std::get<2>(tuple).get();
+				auto resultZero = futureZero.get();
+				auto resultOne = futureOne.get();
+				auto resultTwo = futureTwo.get();
 
 				test = true;
 			});

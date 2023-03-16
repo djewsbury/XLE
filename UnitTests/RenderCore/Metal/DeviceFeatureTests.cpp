@@ -112,8 +112,8 @@ namespace UnitTests
 			const InputElementDesc soEles[] = { InputElementDesc("POINT", 0, Format::R32G32B32A32_FLOAT) };
 			const unsigned soStrides[] = { (unsigned)sizeof(Float4) };
 			
-			auto vs = testHelper.MakeShader(vsText_JustPosition, "vs_5_0");
-			auto gs = testHelper.MakeShader(gsText_StreamOutput, "gs_5_0", BuildSODefinesString(MakeIteratorRange(soEles)));
+			auto vs = testHelper.MakeShader(vsText_JustPosition, "vs_*");
+			auto gs = testHelper.MakeShader(gsText_StreamOutput, "gs_*", BuildSODefinesString(MakeIteratorRange(soEles)));
 			Metal::ShaderProgram shaderProgram{
 				Metal::GetObjectFactory(), testHelper._pipelineLayout,
 				vs, gs, {},

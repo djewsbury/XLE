@@ -181,6 +181,11 @@ namespace RenderCore { namespace Metal_Vulkan
         return {factory.AllocateMemoryDirectFromVulkan(memReqs.size, type), type};
     }
 
+	static unsigned CopyViaMemoryMap_UsingMapSubresources(
+        VkDevice device, ResourceMap& map,
+        const TextureDesc& descForLayout,
+        const std::function<SubResourceInitData(SubResourceId)>& initData);
+
 	static void WriteInitDataViaMap(ObjectFactory& factory, const ResourceDesc& desc, Resource& resource, const std::function<SubResourceInitData(SubResourceId)>& initData)
 	{
 		// After allocation, we must initialise the data. True linear buffers don't have subresources,
@@ -196,9 +201,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// This is the staging texture path. Rather that getting the arrangement of subresources from
 			// the VkImage, we specify it ourselves.
 			ResourceMap map{factory, resource, ResourceMap::Mode::WriteDiscardPrevious};
-			CopyViaMemoryMap(
-				factory.GetDevice().get(), map, 
-				resource.GetImage(), desc._textureDesc, initData);
+			CopyViaMemoryMap_UsingMapSubresources(factory.GetDevice().get(), map, desc._textureDesc, initData);
 		}
 	}
 
@@ -1165,6 +1168,36 @@ namespace RenderCore { namespace Metal_Vulkan
                     PtrAdd(map.GetData().begin(), layout.offset), size_t(layout.size),		// assuming the map does not have multiple subresources here
                     TexturePitches{unsigned(layout.rowPitch), unsigned(layout.depthPitch), unsigned(layout.arrayPitch)},
                     mipDesc, subResData);
+			}
+		}
+        return bytesUploaded;
+    }
+
+	static unsigned CopyViaMemoryMap_UsingMapSubresources(
+        VkDevice device, ResourceMap& map,
+        const TextureDesc& descForLayout,
+        const std::function<SubResourceInitData(SubResourceId)>& initData)
+    {
+        // Copy all of the subresources to device member, using a MemoryMap path.
+        // If "image" is not null, we will get the arrangement of subresources from
+        // the images. Otherwise, we will use a default arrangement of subresources.
+        unsigned bytesUploaded = 0;
+
+		auto mipCount = unsigned(descForLayout._mipCount);
+		auto arrayCount = ActualArrayLayerCount(descForLayout);
+		auto aspectFlags = AsImageAspectMask(descForLayout._format);
+		for (unsigned m = 0; m < mipCount; ++m) {
+            auto mipDesc = CalculateMipMapDesc(descForLayout, m);
+			for (unsigned a = 0; a < arrayCount; ++a) {
+                auto subResData = initData({m, a});
+				if (!subResData._data.size()) continue;
+
+				auto defaultPitches = MakeTexturePitches(mipDesc);
+				if (!subResData._pitches._rowPitch && !subResData._pitches._slicePitch && !subResData._pitches._arrayPitch)
+					subResData._pitches = defaultPitches;
+
+				auto dst = map.GetData(SubResourceId{m, a});
+                CopyMipLevel(dst.begin(), dst.size(), subResData._pitches, mipDesc, subResData);
 			}
 		}
         return bytesUploaded;

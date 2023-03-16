@@ -218,7 +218,7 @@ namespace UnitTests
             REQUIRE( accessors.GetAsString(ex, "VectorPtrToMember").value() == std::string("{1, 2, 3, 4}v") );
             REQUIRE( accessors.GetAsString(ex, "VectorPtrToMember", true).value() == std::string("{1f, 2f, 3f, 4f}v") );
 
-            REQUIRE( accessors.SetFromString(ex, "VectorPtrToMember", "{34, 56, 23}") == true );
+            REQUIRE( accessors.SetFromString(ex, "VectorPtrToMember", "{34, 56, 23, 1}") == true );
             REQUIRE( ex._vectorMember == Float4{34, 56, 23, 1} );
 
         }

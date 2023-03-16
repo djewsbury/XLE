@@ -277,13 +277,13 @@ StrataMaterial=~
             Texture1=Tex1
             Slopes=SlopesTex
             EndHeight = 0.4
-            Mapping = {4,3,2}
+            Mapping = {4,3,2,1}
         Two=~
             Texture0=aaTex0
             Texture1=12Tex1
             Slopes=XXXSlopesTexXXX
             EndHeight = 3
-            Mapping = {7,9,10,12,14,16,17}
+            Mapping = {7,9,10,12}
     MaterialId=2
 
 GradFlagMaterial=~

@@ -269,7 +269,7 @@ namespace UnitTests
         auto executor = std::make_shared<thousandeyes::futures::DefaultExecutor>(std::chrono::milliseconds(2));
         thousandeyes::futures::Default<thousandeyes::futures::Executor>::Setter execSetter(executor);
 
-        auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
+        auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests" / "file-change-not-test";
         std::filesystem::create_directories(tempDirPath);
 
         {
@@ -357,7 +357,7 @@ namespace UnitTests
                 auto ptr = std::make_shared<InstanceCountingObject>();
                 threadPool.Enqueue(
                     [ptr]() {
-                        REQUIRE(ptr->_openInstance);
+                        if (!ptr->_openInstance) Throw(std::runtime_error("Instance tracker expired")); // REQUIRE may have a race condition when used here
                     });
             }
 
@@ -365,7 +365,7 @@ namespace UnitTests
                 auto ptr = std::make_shared<InstanceCountingObject>();
                 threadPool.Enqueue(
                     [](auto p) { 
-                        REQUIRE(p->_openInstance);
+                        if (!p->_openInstance) Throw(std::runtime_error("Instance tracker expired")); // REQUIRE may have a race condition when used here
                     }, 
                     ptr);
             }
@@ -381,7 +381,7 @@ namespace UnitTests
                 InstanceCountingObject obj;
                 threadPool.Enqueue(
                     [obj=std::move(obj)]() {
-                        REQUIRE(obj._openInstance);
+                        if (!obj._openInstance) Throw(std::runtime_error("Instance tracker expired")); // REQUIRE may have a race condition when used here
                     });
             }
 
@@ -389,7 +389,7 @@ namespace UnitTests
                 InstanceCountingObject obj;
                 threadPool.Enqueue(
                     [](auto obj) {
-                        REQUIRE(obj._openInstance);
+                        if (!obj._openInstance) Throw(std::runtime_error("Instance tracker expired")); // REQUIRE may have a race condition when used here
                     }, 
                     obj);
             }

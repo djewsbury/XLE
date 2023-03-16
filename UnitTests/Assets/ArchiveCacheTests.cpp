@@ -90,33 +90,32 @@ namespace UnitTests
 
 	static ::Assets::DependentFileState s_depFileStatesObj1[] {
 		::Assets::DependentFileState {
-			MakeStringSection("imaginary-file-one"), 3ull
+			MakeStringSection("imaginary-file-one"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
 		},
 		::Assets::DependentFileState {
-			MakeStringSection("imaginary-file-two"), 5ull
+			MakeStringSection("imaginary-file-two"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
 		}
 	};
 
 	static ::Assets::DependentFileState s_depFileStatesObj2[] {
 		::Assets::DependentFileState {
-			MakeStringSection("imaginary-file-three"), 56ull
+			MakeStringSection("imaginary-file-three"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
 		},
 		::Assets::DependentFileState {
-			MakeStringSection("imaginary-file-four"), 72ull
+			MakeStringSection("imaginary-file-four"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
 		}
 	};
 
 	TEST_CASE( "ArchiveCacheTests-CommitAndRetrieve", "[assets]" )
 	{
-		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 
-		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
-		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
+		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests" / "ArchiveCacheTests";
 		std::filesystem::create_directories(tempDirPath);
+		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
 
 		OSServices::LibVersionDesc dummyVersionDesc { "unit-test-version-str", "unit-test-build-date-string" };
-		auto archiveFileName = (tempDirPath / "ArchiveCacheTests" / "archive").string();
+		auto archiveFileName = (tempDirPath / "archive").string();
 		{
 			::Assets::ArchiveCacheSet cacheSet(::Assets::MainFileSystem::GetDefaultFileSystem(), dummyVersionDesc);
 			auto archive = cacheSet.GetArchive(archiveFileName);
@@ -198,16 +197,6 @@ namespace UnitTests
 			REQUIRE(::Assets::AsString(resolvedRequests[1]._sharedBlob) == "item-two-replacement-artifact-two-contents");
 
 			cacheSet.FlushToDisk();
-
-			// Commit ObjectOne again, except this time with no dependency
-			// information. This sets us up to reload just below. Since our dependencies
-			// are fake files (ie, they don't actually exist anywhere), the asset gets
-			// considered invalidated when it's loaded
-			archive->Commit(
-				objectOneId, "Object",
-				MakeIteratorRange(s_artifactsObj1),
-				::Assets::AssetState::Ready,
-				{});
 		}
 
 		{

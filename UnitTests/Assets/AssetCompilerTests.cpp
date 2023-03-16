@@ -170,7 +170,6 @@ namespace UnitTests
 		// IntermediateCompilers provides a mechanism for running pre-processing operations on
 		// data files in order to prepare them for the final format 
 		// 
-		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		
 		auto compilers = ::Assets::CreateIntermediateCompilers(nullptr);
@@ -334,7 +333,6 @@ namespace UnitTests
 		// _utDataMount = _mountingTree->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData));
 		::Assets::MainFileSystem::Init(mountingTree, nullptr);*/
 
-		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		::Assets::MainFileSystem::GetMountingTree()->SetAbsolutePathMode(Assets::MountingTree::AbsolutePathMode::RawOS);
 
@@ -409,7 +407,6 @@ namespace UnitTests
 
 	TEST_CASE( "AssetCompilers-HandlingCompilationFailures", "[assets]" )
 	{
-		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		::Assets::MainFileSystem::GetMountingTree()->SetAbsolutePathMode(Assets::MountingTree::AbsolutePathMode::RawOS);
 
@@ -515,7 +512,6 @@ namespace UnitTests
 
 	TEST_CASE( "AssetCompilers-ImplicitCompilation", "[assets]" )
 	{
-		UnitTest_SetWorkingDirectory();
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
@@ -547,7 +543,6 @@ namespace UnitTests
 
 	TEST_CASE( "AssetCompilers-OperationContextTracking", "[assets]" )
 	{
-		UnitTest_SetWorkingDirectory();
 		auto cfg = GetStartupConfig();
 		cfg._inMemoryOnlyIntermediates = true;
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);

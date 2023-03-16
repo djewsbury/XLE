@@ -63,7 +63,6 @@ namespace UnitTests
 	TEST_CASE( "ShaderCompilation-Compile", "[rendercore_metal]" )
 	{
 		using namespace RenderCore;
-		UnitTest_SetWorkingDirectory();
 		auto _globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		// auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
 		auto testHelper = MakeTestHelper();
@@ -218,7 +217,7 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 
-		auto _globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 
 		// ensure that we're beginning from clean temporaries directory for this test
 		// (clean out all of the intermediates folders before we register the compilers)

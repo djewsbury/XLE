@@ -590,6 +590,24 @@ namespace UnitTests
 
             static_assert(CONCAT(KEY_11, _h32) != 0, "Should fail if constexpr is not actually evaluating at compile time");
         }
+
+        SECTION("Ensure runtime hash isn't called")
+        {
+            auto startRuntimeHashStats = GetRuntimeHashStats();
+
+            // different variations of ConstHash64 should evaluate to the same result, they should invoke runtime hashing
+            auto h0 = ConstHash64(KEY_3);
+            auto h1 = ConstHash64(std::string_view{KEY_3});
+            auto h2 = ConstHash64(KEY_3, std::strlen(KEY_3));
+            auto h3 = ConstHash64(KEY_3, XlStringSize(KEY_3));
+            REQUIRE(h0 == h1);
+            REQUIRE(h0 == h2);
+            REQUIRE(h0 == h3);
+
+            auto endRuntimeHashStats = GetRuntimeHashStats();
+            REQUIRE(startRuntimeHashStats.first == endRuntimeHashStats.first);
+            REQUIRE(startRuntimeHashStats.second == endRuntimeHashStats.second);
+        }
     }
 
     struct NamespaceScopeStruct {};

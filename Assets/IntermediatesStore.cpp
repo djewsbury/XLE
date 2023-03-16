@@ -430,7 +430,8 @@ namespace Assets
 	std::pair<::Assets::DependencyValidation, bool> ConstructDepVal(IteratorRange<const DependentFileState*> files, StringSection<> archivableName)
 	{
 		if (files.empty())
-			return {::Assets::DependencyValidation{}, false};
+			return {::Assets::DependencyValidation{}, true};		// if we have no dependencies whatsoever, we must always be considered valid
+
 		auto depVal = GetDepValSys().Make(files);
 		bool stillValid = depVal.GetValidationIndex() == 0;
 		if (!stillValid && Verbose.IsEnabled()) {

@@ -322,7 +322,9 @@ namespace RenderCore { namespace Metal_DX11
 
 			auto defines = MakeDefinesTable(definesTable, shaderPath._shaderModel, _fixedDefines);
 
-			auto fileDesc = ::Assets::MainFileSystem::TryGetDesc(shaderPath._filename);
+			::Assets::FileDesc fileDesc;
+			if (shaderPath._filename[0])
+				fileDesc = ::Assets::MainFileSystem::TryGetDesc(shaderPath._filename);
 			std::string filenameForCompiler;
 			if (!fileDesc._naturalName.empty()) {
 				filenameForCompiler = fileDesc._naturalName;

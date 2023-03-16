@@ -149,8 +149,14 @@ namespace UnitTests
 		// The orientation of window coordinate space is different in GLES vs other APIs
 		// In this test, we draw a horizontal strip between Y = 1.0 and y = 0.5 in clip space
 		// In most APIs, when we readback from the texture, this is at the start of texture
-		// memory, but in OpenGLES / OpenGL, it's at the end
-		#if GFXAPI_TARGET == GFXAPI_OPENGLES
+		// memory, but in OpenGLES / OpenGL / Vulkan, it's at the end
+		//
+		// See Vulkan spec for details
+		// 		NDC -> viewport transform -> "framebuffer coordinates"
+		//		framebuffer coordinates are 0,0 in the top left corner, and pixel centers at half integers
+		//		yf = (viewport_height / 2) * yd + viewport_center_y
+		//		(where yf is y in framebuffer coordinates, and yd is y in NDC)
+		#if GFXAPI_TARGET == GFXAPI_OPENGLES || GFXAPI_TARGET == GFXAPI_VULKAN
 			REQUIRE(firstPixel == 0xff000000);
 			REQUIRE(lastPixel == 0xffffffff);
 		#else
@@ -400,7 +406,7 @@ namespace UnitTests
 		unsigned firstPixel1 = *(unsigned*)data1.data();
 
 		// This is the same test as WindowCoordSpaceOrientation above
-		#if GFXAPI_TARGET == GFXAPI_OPENGLES
+		#if GFXAPI_TARGET == GFXAPI_OPENGLES || GFXAPI_TARGET == GFXAPI_VULKAN
 			REQUIRE(firstPixel0 == 0xff000000);
 			REQUIRE(lastPixel0 == 0xffffffff);
 		#else
@@ -410,7 +416,7 @@ namespace UnitTests
 
 		// Now, test the contents of the texture we've copied into. Note that there's no
 		// flip here, on either API
-		#if GFXAPI_TARGET == GFXAPI_OPENGLES
+		#if GFXAPI_TARGET == GFXAPI_OPENGLES || GFXAPI_TARGET == GFXAPI_VULKAN
 			REQUIRE(firstPixel1 == 0xff000000);
 			REQUIRE(lastPixel1 == 0xffffffff);
 		#else
@@ -465,7 +471,7 @@ namespace UnitTests
 		unsigned firstPixel1 = *(unsigned*)data1.data();
 
 		// This is the same test as WindowCoordSpaceOrientation above
-		#if GFXAPI_TARGET == GFXAPI_OPENGLES
+		#if GFXAPI_TARGET == GFXAPI_OPENGLES || GFXAPI_TARGET == GFXAPI_VULKAN
 			REQUIRE(firstPixel0 == 0xff000000);
 			REQUIRE(lastPixel0 == 0xffffffff);
 		#else
@@ -475,7 +481,7 @@ namespace UnitTests
 
 		// Now, test the contents of the texture we've copied into. Note that there's no
 		// flip here, on either API
-		#if GFXAPI_TARGET == GFXAPI_OPENGLES
+		#if GFXAPI_TARGET == GFXAPI_OPENGLES || GFXAPI_TARGET == GFXAPI_VULKAN
 			REQUIRE(firstPixel1 == 0xff000000);
 			REQUIRE(lastPixel1 == 0xffffffff);
 		#else
