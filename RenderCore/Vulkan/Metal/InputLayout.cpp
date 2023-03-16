@@ -603,18 +603,22 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);
 
 			std::vector<uint32_t>* binds;
+			uint32_t* uniformStreamCount;
 			DEBUG_ONLY(std::vector<std::string>* names);
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
+				uniformStreamCount = &adaptiveSet->_immediateDataUniformStreamCount;
 				DEBUG_ONLY(names = &adaptiveSet->_immediateDataNames);
 				groupRules._boundLooseImmediateDatas |= (1ull << uint64_t(inputUniformStreamIdx));
 			} else if (uniformStreamType == UniformStreamType::ResourceView) {
 				binds = &adaptiveSet->_resourceViewBinds;
+				uniformStreamCount = &adaptiveSet->_resourceViewUniformStreamCount;
 				DEBUG_ONLY(names = &adaptiveSet->_resourceViewNames);
 				groupRules._boundLooseResources |= (1ull << uint64_t(inputUniformStreamIdx));
 			} else {
 				assert(uniformStreamType == UniformStreamType::Sampler);
 				binds = &adaptiveSet->_samplerBinds;
+				uniformStreamCount = &adaptiveSet->_samplerUniformStreamCount;
 				DEBUG_ONLY(names = &adaptiveSet->_samplerNames);
 				groupRules._boundLooseSamplerStates |= (1ull << uint64_t(inputUniformStreamIdx));
 			}
@@ -628,6 +632,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				assert(!(inputUniformStreamIdx& s_arrayBindingFlag));
 				binds->push_back(outputDescriptorSetSlot);
 				binds->push_back(inputUniformStreamIdx);
+				*uniformStreamCount = std::max(*uniformStreamCount, inputUniformStreamIdx+1);
 				DEBUG_ONLY(names->push_back(variableName.AsString()));
 			}
 		}
@@ -653,21 +658,25 @@ namespace RenderCore { namespace Metal_Vulkan
 
 			assert(groupIdx < 4);
 			auto& groupRules = _group[groupIdx];
-			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);			
+			auto adaptiveSet = InitializeAdaptiveSetBindingRules(outputDescriptorSet, groupIdx, shaderStageMask);
 
 			std::vector<uint32_t>* binds;
+			uint32_t* uniformStreamCount;
 			DEBUG_ONLY(std::vector<std::string>* names);
 			if (uniformStreamType == UniformStreamType::ImmediateData) {
 				binds = &adaptiveSet->_immediateDataBinds;
+				uniformStreamCount = &adaptiveSet->_immediateDataUniformStreamCount;
 				DEBUG_ONLY(names = &adaptiveSet->_immediateDataNames);
 				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseImmediateDatas |= (1ull << uint64_t(streamIdx));
 			} else if (uniformStreamType == UniformStreamType::ResourceView) {
 				binds = &adaptiveSet->_resourceViewBinds;
+				uniformStreamCount = &adaptiveSet->_resourceViewUniformStreamCount;
 				DEBUG_ONLY(names = &adaptiveSet->_resourceViewNames);
 				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseResources |= (1ull << uint64_t(streamIdx));
 			} else {
 				assert(uniformStreamType == UniformStreamType::Sampler);
 				binds = &adaptiveSet->_samplerBinds;
+				uniformStreamCount = &adaptiveSet->_samplerUniformStreamCount;
 				DEBUG_ONLY(names = &adaptiveSet->_samplerNames);
 				for (auto streamIdx:inputUniformStreamIdx) groupRules._boundLooseSamplerStates |= (1ull << uint64_t(streamIdx));
 			}
@@ -680,6 +689,8 @@ namespace RenderCore { namespace Metal_Vulkan
 				binds->push_back(outputDescriptorSetSlot);
 				binds->push_back(uint32_t(inputUniformStreamIdx.size())|s_arrayBindingFlag);
 				binds->insert(binds->end(), inputUniformStreamIdx.begin(), inputUniformStreamIdx.end());
+				for (auto idx:inputUniformStreamIdx)
+					*uniformStreamCount = std::max(*uniformStreamCount, idx+1);
 				DEBUG_ONLY(names->push_back(variableName.AsString()));
 			}
 		}
@@ -1437,6 +1448,17 @@ namespace RenderCore { namespace Metal_Vulkan
 				encoder._pendingBoundUniformsFlushGroupMask |= 1 << groupIdx;
 				doFlushNow = (encoder._pendingBoundUniformsFlushGroupMask & sharedBuilder._groupMask) == sharedBuilder._groupMask;	// flush only when everything is in pending state
 			}
+
+			// If we haven't been given enough uniform binding objects, throw and except. No error if there are too many
+			// (particularly since this only tracks the uniforms required for this adaptive sets, and doesn't count
+			// bindings given that we're needed by the shader)
+			char buffer[128];
+			if (stream._immediateData.size() < adaptiveSet._immediateDataUniformStreamCount)
+				Throw(std::runtime_error(StringMeldInPlace(buffer) << "Too few immediate data objects provided to ApplyLooseUniforms (expected " << adaptiveSet._immediateDataUniformStreamCount << " but got " << stream._immediateData.size() <<  ")"));
+			if (stream._resourceViews.size() < adaptiveSet._resourceViewUniformStreamCount)
+				Throw(std::runtime_error(StringMeldInPlace(buffer) << "Too few resource views provided to ApplyLooseUniforms (expected " << adaptiveSet._resourceViewUniformStreamCount << " but got " << stream._resourceViews.size() <<  ")"));
+			if (stream._samplers.size() < adaptiveSet._samplerUniformStreamCount)
+				Throw(std::runtime_error(StringMeldInPlace(buffer) << "Too few samplers provided to ApplyLooseUniforms (expected " << adaptiveSet._samplerUniformStreamCount << " but got " << stream._samplers.size() <<  ")"));
 			
 			auto descSetSlots = BindingHelper::WriteImmediateDataBindings(
 				context,

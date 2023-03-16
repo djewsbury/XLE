@@ -157,6 +157,10 @@ namespace RenderCore { namespace Metal_Vulkan
 			std::vector<uint32_t> _resourceViewBinds;
 			std::vector<uint32_t> _immediateDataBinds;
 			std::vector<uint32_t> _samplerBinds;
+
+			uint32_t _resourceViewUniformStreamCount = 0;		// max+1 index referred to by _resourceViewBinds
+			uint32_t _immediateDataUniformStreamCount = 0;		// max+1 index referred to by _immediateDataBinds
+			uint32_t _samplerUniformStreamCount = 0;			// max+1 index referred to by _samplerBinds
 			
 			// these exist so we default out slots that are used by the shader, but not provided as input
 			uint64_t _dummyMask = 0ull;
