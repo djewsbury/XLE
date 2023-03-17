@@ -528,6 +528,10 @@ namespace UnitTests
 		REQUIRE(i1.GetHash() == Hash64("initializer1"));
 		REQUIRE(i2.GetHash() == Hash64("initializer2"));
 		REQUIRE(i3.GetHash() == Hash64("initializer3"));
+		REQUIRE(XlEqString(i0, "initializer0"));
+		REQUIRE(XlEqString(i1, "initializer1"));
+		REQUIRE(XlEqString(i2, "initializer2"));
+		REQUIRE(XlEqString(i3, "initializer3"));
 	}
 
 }

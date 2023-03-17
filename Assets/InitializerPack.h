@@ -47,24 +47,28 @@ namespace Assets
 		class Initializer : public StringSection<CharType>
 	{
 	public:
-		uint64_t GetHash() const { return _hash; }
+		constexpr uint64_t GetHash() const { return _hash; }
 
 		constexpr Initializer(const CharType* start, const CharType* end) : StringSection<CharType>{start, end}, _hash(ConstHash64(start, end-start)) {}
         constexpr Initializer() : _hash(0) {}
-        constexpr Initializer(const CharType* nullTerm) : StringSection<CharType>{nullTerm}, _hash(ConstHash64(StringSection<CharType>::AsStringView())) {}
+        CLANG_ONLY(constexpr) Initializer(const CharType* nullTerm) : StringSection<CharType>{nullTerm}, _hash(ConstHash64(StringSection<CharType>::AsStringView())) {}
         Initializer(std::nullptr_t) = delete;
-		constexpr Initializer(std::basic_string_view<CharType> view) : StringSection<CharType>{view}, _hash(ConstHash64(view)) {}
-		constexpr Initializer(const CharType* start, size_t len) : StringSection<CharType>{start, len}, _hash(ConstHash64(start, len)) {}
+		constexpr explicit Initializer(std::basic_string_view<CharType> view) : StringSection<CharType>{view}, _hash(ConstHash64(view)) {}
+		CLANG_ONLY(constexpr) Initializer(const CharType* start, size_t len) : StringSection<CharType>{start, len}, _hash(ConstHash64(start, len)) {}
         
 		template<typename CT, typename A>
 			Initializer(const std::basic_string<CharType, CT, A>& str) : StringSection<CharType>{str}, _hash(ConstHash64(str.data(), str.size())) {}
+
+		// the following constructor is for the _initializer literal suffix only -- it avoids an issue on MSVC in which some Initializer constructors
+		// can't be made constexpr safely
+		CLANG_ONLY(constexpr) Initializer(const CharType* start, size_t len, uint64_t hash) : StringSection<CharType>{start, len}, _hash(hash) {}
 	private:
 		uint64_t _hash;
 	};
 
 	namespace Literals
 	{
-        XLE_CONSTEVAL_OR_CONSTEXPR Initializer<char> operator"" _initializer(const char* str, const size_t len) never_throws { return Initializer{str, len}; }
+        CLANG_ONLY(XLE_CONSTEVAL_OR_CONSTEXPR) inline Initializer<char> operator"" _initializer(const char* str, const size_t len) never_throws { return Initializer{str, len, ConstHash64(str, len)}; }
 	}
 
 	template<typename CharType>
@@ -77,7 +81,7 @@ namespace Assets
 		constexpr Initializer<CharType> MakeInitializer(std::basic_string_view<CharType> view) { return Initializer<CharType>{view}; }
 
 	template<typename CharType>
-		constexpr Initializer<CharType> MakeInitializer(const CharType* nullTerm) { return Initializer<CharType>{nullTerm}; }
+		constexpr Initializer<CharType> MakeInitializer(const CharType* nullTerm) { auto len = XlStringSize(nullTerm); return Initializer<CharType>{nullTerm, len, ConstHash64(nullTerm, len)}; }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

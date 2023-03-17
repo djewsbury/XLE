@@ -22,6 +22,9 @@
 		#define thread_local    __declspec(thread)
 	#endif
 
+    #define MSVC_ONLY(...)       __VA_ARGS__
+    #define CLANG_ONLY(...)
+
 #elif (COMPILER_ACTIVE == COMPILER_TYPE_GCC) || (COMPILER_ACTIVE == COMPILER_TYPE_CLANG)
 
     #define never_throws		noexcept
@@ -41,6 +44,9 @@
     #if !defined(__cplusplus) && !defined(thread_local)
 		#define thread_local    _Thread_local
 	#endif
+
+    #define MSVC_ONLY(...)
+    #define CLANG_ONLY(...)       __VA_ARGS__
 
 #endif
 

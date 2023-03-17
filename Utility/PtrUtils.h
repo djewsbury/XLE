@@ -193,38 +193,44 @@ namespace Utility
             /////////////////////////////////////////////////////////////////////////////
 
     template <typename Type>
-        Type * PtrAdd( Type * input, ptrdiff_t offset )  { return (Type*)( size_t(input) + offset ); }
+        constexpr Type * PtrAdd( Type * input, ptrdiff_t offset )  { return (Type*)( size_t(input) + offset ); }
 
     template <typename TypeA>
-        ptrdiff_t PtrDiff(TypeA * lhs, TypeA * rhs) { return ptrdiff_t(lhs) - ptrdiff_t(rhs); }
+        constexpr ptrdiff_t PtrDiff(TypeA * lhs, TypeA * rhs) { return ptrdiff_t(lhs) - ptrdiff_t(rhs); }
 
     template <typename TypeA>
-        ptrdiff_t PtrDiff(TypeA * lhs, size_t rhs) { return ptrdiff_t(lhs) - ptrdiff_t(rhs); }
+        constexpr ptrdiff_t PtrDiff(TypeA * lhs, size_t rhs) { return ptrdiff_t(lhs) - ptrdiff_t(rhs); }
 
     template <typename Type>
-        Type * AsPointer( Type * i )                     { return i; }
+        constexpr Type * AsPointer( Type * i )                     { return i; }
 
     #if STL_ACTIVE == STL_MSVC
 
         template <typename VecType>
-			typename VecType::value_type * AsPointer(const std::_Vector_iterator<VecType> & i)
-                { return i._Ptr; }
+			constexpr typename VecType::value_type * AsPointer(const std::_Vector_iterator<VecType> & i)
+                { return i._Unwrapped(); }
 
         template <typename VecType>
-			const typename VecType::value_type * AsPointer(const std::_Vector_const_iterator<VecType> & i)
-                { return i._Ptr; }
+			constexpr const typename VecType::value_type * AsPointer(const std::_Vector_const_iterator<VecType> & i)
+                { return i._Unwrapped(); }
 
 		#if _MSC_VER >= 1700
 			template <typename StringType>
-				typename StringType::value_type * AsPointer(const std::_String_iterator<StringType>& i)
+				constexpr typename StringType::value_type * AsPointer(const std::_String_iterator<StringType>& i)
 				{
-					return (typename StringType::value_type*)i._Ptr;
+					return i._Unwrapped();
 				}
 
 			template <typename StringType>
-				const typename StringType::value_type * AsPointer(const std::_String_const_iterator<StringType>& i)
+				constexpr const typename StringType::value_type * AsPointer(const std::_String_const_iterator<StringType>& i)
 				{
-					return (typename StringType::value_type*)i._Ptr;
+					return i._Unwrapped();
+				}
+
+			template <typename Traits>
+				constexpr const typename Traits::char_type * AsPointer(const std::_String_view_iterator<Traits>& i)
+				{
+					return i._Unwrapped();
 				}
 		#else
 			template <typename Type, typename Traits, typename Alloc>
@@ -257,7 +263,7 @@ namespace Utility
     ///     assert(end1==end2);
     /// \endcode</code>
     template<typename Type, int Count>
-        Type* ArrayEnd(Type (&input)[Count]) { return &input[Count]; }
+        constexpr Type* ArrayEnd(Type (&input)[Count]) { return &input[Count]; }
 
     /// <summary>Equivalent to static_cast, but with extra debugging in Debug builds</summary>
     /// In debug builds, if rtti is enabled, performs a dynamic_cast. Otherwise, performs a

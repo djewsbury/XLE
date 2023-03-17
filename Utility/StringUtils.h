@@ -130,11 +130,11 @@ namespace Utility
     }
 
     template <typename CharType>
-        constexpr const CharType* XlStringEnd(const CharType nullTermStr[])
+        CLANG_ONLY(constexpr) inline const CharType* XlStringEnd(const CharType nullTermStr[])
             { return &nullTermStr[XlStringSize(nullTermStr)]; }
 
     template <typename CharType>
-        constexpr CharType* XlStringEnd(CharType nullTermStr[])
+        CLANG_ONLY(constexpr) inline CharType* XlStringEnd(CharType nullTermStr[])
             { return &nullTermStr[XlStringSize(nullTermStr)]; }
 
         ////////////   S T R I N G   S E C T I O N   ////////////
@@ -159,27 +159,27 @@ namespace Utility
         const CharType* _end;
         using value_type = CharType;
 
-        size_t Length() const                           { return size_t(_end - _start); }
-        bool IsEmpty() const                            { return _end <= _start; }
-        std::basic_string<CharType> AsString() const    { return std::basic_string<CharType>(_start, _end); }
-        std::basic_string_view<CharType> AsStringView() const { return std::basic_string_view<CharType>{_start, size_t(_end-_start)}; }
-        operator std::basic_string_view<CharType>() const { return AsStringView(); }
+        constexpr size_t Length() const                                 { return size_t(_end - _start); }
+        constexpr bool IsEmpty() const                                  { return _end <= _start; }
+        std::basic_string<CharType> AsString() const                    { return std::basic_string<CharType>(_start, _end); }
+        constexpr std::basic_string_view<CharType> AsStringView() const { return std::basic_string_view<CharType>{_start, size_t(_end-_start)}; }
+        constexpr operator std::basic_string_view<CharType>() const     { return AsStringView(); }
 
 		template<typename OtherCharType>
-			StringSection<OtherCharType> Cast() const { return StringSection<OtherCharType>((const OtherCharType*)_start, (const OtherCharType*)_end); }
+			constexpr StringSection<OtherCharType> Cast() const { return StringSection<OtherCharType>((const OtherCharType*)_start, (const OtherCharType*)_end); }
 
-        const CharType* begin() const   { return _start; }
-        const CharType* end() const     { return _end; }
-		size_t size() const				{ return Length(); }
+        constexpr const CharType* begin() const     { return _start; }
+        constexpr const CharType* end() const       { return _end; }
+		constexpr size_t size() const				{ return Length(); }
 
         const CharType& operator[](size_t index) const { assert(index < Length()); return _start[index]; }
 
         constexpr StringSection(const CharType* start, const CharType* end) : _start(start), _end(end) {}
         constexpr StringSection() : _start(nullptr), _end(nullptr) {}
-        constexpr StringSection(const CharType* nullTerm) : _start(nullTerm), _end(XlStringEnd(_start)) {}
+        CLANG_ONLY(constexpr) StringSection(const CharType* nullTerm) : _start(nullTerm), _end(XlStringEnd(_start)) {}
         StringSection(std::nullptr_t) = delete;      // prevent construction from nullptr constant (tends to be a common error)
-        constexpr StringSection(std::basic_string_view<CharType> view) : _start(view.begin()), _end(view.end()) {}
-        constexpr StringSection(const CharType* start, size_t len) : _start(start), _end(start+len) {}
+        constexpr explicit StringSection(std::basic_string_view<CharType> view) : _start(AsPointer(view.begin())), _end(AsPointer(view.end())) {}
+        CLANG_ONLY(constexpr) StringSection(const CharType* start, size_t len) : _start(start), _end(start+len) {}
 
         // Note -- we can't use a constructor such as the following, because we can't distinguish between a string literal, and
         // any other char buffer (which might be larger than the string it actually contains)
