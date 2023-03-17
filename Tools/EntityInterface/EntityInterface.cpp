@@ -393,8 +393,14 @@ namespace EntityInterface
 				++mnti;
 			}
 
-			if (overlappingMounts.empty())
-				return {};
+			if (overlappingMounts.empty()) {
+				std::promise<std::shared_ptr<Formatters::IDynamicInputFormatter>> promise;
+				auto future = promise.get_future();
+				promise.set_exception(std::make_exception_ptr(OSServices::Exceptions::IOException{
+					OSServices::Exceptions::IOException::Reason::FileNotFound,
+					"No configuration data found at mount point: %s", inputMountPoint.AsString().c_str()}));
+				return future;
+			}
 
 			// if just a single document; we can return a formatter directly from there
 			if (overlappingMounts.size() == 1 && overlappingMounts[0]._externalPosition.empty())

@@ -885,14 +885,18 @@ namespace RenderOverlays
                         } CATCH(...) {
                         } CATCH_END
 
-                        ::Assets::WhenAll(
-                            RenderOverlays::MakeFont(staticData._defaultFont),
-                            RenderOverlays::MakeFont(staticData._tableHeaderFont),
-                            RenderOverlays::MakeFont(staticData._tableValuesFont)).ThenConstructToPromise(
-                                std::move(promise),
-                                [depVal = std::move(depVal)](auto f0, auto f1, auto f2) mutable {
-                                    return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(depVal));
-                                });
+                        TRY {
+                            ::Assets::WhenAll(
+                                RenderOverlays::MakeFont(staticData._defaultFont),
+                                RenderOverlays::MakeFont(staticData._tableHeaderFont),
+                                RenderOverlays::MakeFont(staticData._tableValuesFont)).ThenConstructToPromise(
+                                    std::move(promise),
+                                    [depVal = std::move(depVal)](auto f0, auto f1, auto f2) mutable {
+                                        return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(depVal));
+                                    });
+                        } CATCH (...) {
+                            promise.set_exception(std::current_exception());
+                        } CATCH_END
                     });
             #endif
 		}
