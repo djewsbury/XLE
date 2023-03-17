@@ -908,6 +908,7 @@ namespace UnitTests
 				uniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
 			}());
 
+#if GFXAPI_TARGET != GFXAPI_APPLEMETAL		// missing BoundUniforms constructor on Apple Metal
 		REQUIRE_THROWS(
 			[&]()
 			{
@@ -918,12 +919,7 @@ namespace UnitTests
 
 				UniformsStreamInterface usi;
 				usi.BindImmediateData(0, "Values"_h, MakeIteratorRange(ConstantBufferElementDesc_Values));
-				#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
-					auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
-					Metal::BoundUniforms uniforms { *pipeline, usi };
-				#else
-					Metal::BoundUniforms uniforms { shaderProgramCB, usi };
-				#endif
+				Metal::BoundUniforms uniforms { shaderProgramCB, usi };
 
 				uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
 			}());
@@ -938,15 +934,11 @@ namespace UnitTests
 
 				UniformsStreamInterface usi;
 				usi.BindResourceView(0, "Texture"_h);
-				#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
-					auto pipeline = encoder.CreatePipeline(Metal::GetObjectFactory());
-					Metal::BoundUniforms uniforms { *pipeline, usi };
-				#else
-					Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
-				#endif
+				Metal::BoundUniforms uniforms { shaderProgramSRV, usi };
 
 				uniforms.ApplyLooseUniforms(metalContext, encoder, UniformsStream {});
 			}());
+#endif
 
 		encoder = {};
 		rpi = {};     // end RPI
