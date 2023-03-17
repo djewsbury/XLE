@@ -230,11 +230,11 @@ namespace Assets
 	template<typename Type>
 		AssetState		Marker<Type>::CheckStatusBkgrnd(Type& actualized, DependencyValidation& depVal, Blob& actualizationLog)
 	{
-		if (_state == AssetState::Ready) {
+		if (_state != AssetState::Pending) {
 			actualized = _actualized;
 			depVal = _actualizedDepVal;
 			actualizationLog = _actualizationLog;
-			return AssetState::Ready;
+			return _state;
 		}
 
 		{
@@ -255,10 +255,10 @@ namespace Assets
 	template<typename Type>
 		AssetState Marker<Type>::CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog)
 	{
-		if (_state == AssetState::Ready) {
+		if (_state != AssetState::Pending) {
 			depVal = _actualizedDepVal;
 			actualizationLog = _actualizationLog;
-			return AssetState::Ready;
+			return _state;
 		}
 
 		{
