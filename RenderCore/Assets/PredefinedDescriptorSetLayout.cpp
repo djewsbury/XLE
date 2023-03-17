@@ -181,29 +181,33 @@ namespace RenderCore { namespace Assets
 	// (or images), samplers, texel buffers. So we should build our naming scheme around that scheme of
 	// qualifier and root type
 	//
-	static std::pair<StringSection<>, DescriptorType> s_descriptorTypeNames[] = {
-		std::make_pair("SampledTexture", 			DescriptorType::SampledTexture),
-		std::make_pair("SampledImage", 				DescriptorType::SampledTexture),
-		std::make_pair("UniformBuffer", 			DescriptorType::UniformBuffer),
-		std::make_pair("ConstantBuffer", 			DescriptorType::UniformBuffer),
-		std::make_pair("UnorderedAccessTexture", 	DescriptorType::UnorderedAccessTexture),
-		std::make_pair("UnorderedAccessBuffer", 	DescriptorType::UnorderedAccessBuffer),
-		std::make_pair("StorageImage", 				DescriptorType::UnorderedAccessTexture),
-		std::make_pair("StorageBuffer", 			DescriptorType::UnorderedAccessBuffer),
+	static const std::pair<StringSection<>, DescriptorType> s_descriptorTypeNames[] = {
+		std::make_pair("SampledTexture", 				DescriptorType::SampledTexture),
+		std::make_pair("SampledImage", 					DescriptorType::SampledTexture),
+		std::make_pair("UniformBuffer", 				DescriptorType::UniformBuffer),
+		std::make_pair("ConstantBuffer", 				DescriptorType::UniformBuffer),
+		std::make_pair("UnorderedAccessTexture", 		DescriptorType::UnorderedAccessTexture),
+		std::make_pair("UnorderedAccessBuffer", 		DescriptorType::UnorderedAccessBuffer),
+		std::make_pair("StorageImage", 					DescriptorType::UnorderedAccessTexture),
+		std::make_pair("StorageBuffer", 				DescriptorType::UnorderedAccessBuffer),
 		std::make_pair("StorageTexelBuffer", 			DescriptorType::UnorderedAccessTexelBuffer),
 		std::make_pair("UnorderedAccessTexelBuffer", 	DescriptorType::UnorderedAccessTexelBuffer),
 		std::make_pair("UniformTexelBuffer", 			DescriptorType::UniformTexelBuffer),
 		std::make_pair("UniformBufferDynamic", 			DescriptorType::UniformBufferDynamicOffset),
-		std::make_pair("UnordererdAccessBufferDynamic", DescriptorType::UnorderedAccessBufferDynamicOffset),
+		std::make_pair("UnorderedAccessBufferDynamic", 	DescriptorType::UnorderedAccessBufferDynamicOffset),
 		std::make_pair("StorageBufferDynamic", 			DescriptorType::UnorderedAccessBufferDynamicOffset),
-		std::make_pair("Sampler", 					DescriptorType::Sampler),
-		std::make_pair("SubpassInput", 				DescriptorType::InputAttachment)
+		std::make_pair("Sampler", 						DescriptorType::Sampler),
+		std::make_pair("SubpassInput", 					DescriptorType::InputAttachment)
 	};
+
+	#if COMPILER_ACTIVE == COMPILER_TYPE_CLANG
+		static_assert(StringSection<>{"UniformBuffer"}.size() == 13);		// this can be evaluated constexpr on clang, but not MSVC
+	#endif
 
 	void PredefinedDescriptorSetLayout::Parse(ConditionalProcessingTokenizer& iterator)
 	{
 		//
-		//  Parse through thes input data line by line.
+		//  Parse through these input data line by line.
 		//  If we find lines beginning with preprocessor command, we should pass them through
 		//  the PreprocessorParseContext
 		//
@@ -222,7 +226,7 @@ namespace RenderCore { namespace Assets
 			iterator.GetNextToken();
 
 			auto i = std::find_if(s_descriptorTypeNames, &s_descriptorTypeNames[dimof(s_descriptorTypeNames)],
-				[&token](const auto& c) { return XlEqString(c.first, token._value); });
+				[&token](auto c) { return XlEqString(c.first, token._value); });
 			if (i != &s_descriptorTypeNames[dimof(s_descriptorTypeNames)]) {
 				ParseSlot(iterator, i->second);
 			} else {
