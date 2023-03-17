@@ -10,7 +10,6 @@
 #include "../../Assets/IArtifact.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"
-#include "../../Utility/Streams/SerializationUtils.h"
 
 namespace Assets { class OperationContext; }
 namespace std { template <typename T> class function; }
@@ -55,7 +54,7 @@ namespace RenderCore { namespace Assets
 		uint64_t GetHash(uint64_t seed=DefaultSeed64) const;
 	};
 
-	std::ostream& SerializationOperator(std::ostream&, const TextureCompilationRequest&);
+	std::ostream& operator<<(std::ostream&, const TextureCompilationRequest&);		// (note, on clang Initializer pack won't find this if it's called SerializationOperator)
 
 	class TextureArtifact
 	{

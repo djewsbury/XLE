@@ -199,7 +199,7 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	std::ostream& SerializationOperator(std::ostream& str, const TextureCompilationRequest& request)
+	std::ostream& operator<<(std::ostream& str, const TextureCompilationRequest& request)
 	{
 		switch (request._operation) {
 		case TextureCompilationRequest::Operation::Convert: str << request._srcFile << "-" << AsString(request._format); break;
