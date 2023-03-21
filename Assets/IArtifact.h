@@ -178,13 +178,21 @@ namespace Assets
 	//		Auto construct to:
 	//			(IteratorRange<ArtifactRequestResult*>, DependencyValidation&&)
 	//
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::HasChunkRequests)>
+	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::Constructor_ArtifactRequestResult)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		// See also AutoConstructToPromise<> variation of this function
 		const auto& container = Internal::GetChunkFileContainer(initializer);
 		TRY {
-			auto chunks = container.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+			std::vector<ArtifactRequestResult> chunks;
+			if constexpr (Internal::AssetTraits2<AssetType>::HasChunkRequests) {
+				chunks = container.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+			} else {
+				auto defaultChunkRequestCode = Internal::RemoveSmartPtrType<AssetType>::CompileProcessType;
+				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
+				chunks = container.ResolveRequests(MakeIteratorRange(&request, &request+1));
+			}
+
 			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), container.GetDependencyValidation());
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
@@ -193,11 +201,21 @@ namespace Assets
 		} CATCH_END
 	}
 
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::HasChunkRequests)>
+	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::Constructor_ArtifactRequestResult)>
 		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
-			auto chunks = ArtifactChunkContainer(blob, depVal, requestParameters).ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+			auto chunks = ArtifactChunkContainer{blob, depVal, requestParameters}.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+
+			std::vector<ArtifactRequestResult> chunks;
+			if constexpr (Internal::AssetTraits2<AssetType>::HasChunkRequests) {
+				chunks = ArtifactChunkContainer{blob, depVal, requestParameters}.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+			} else {
+				auto defaultChunkRequestCode = Internal::RemoveSmartPtrType<AssetType>::CompileProcessType;
+				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
+				chunks = ArtifactChunkContainer{blob, depVal, requestParameters}.ResolveRequests(MakeIteratorRange(&request, &request+1));
+			}
+
 			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), depVal);
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
@@ -206,11 +224,21 @@ namespace Assets
 		} CATCH_END
 	}
 
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::HasChunkRequests)>
+	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::Constructor_ArtifactRequestResult)>
 		AssetType AutoConstructAsset(const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = 0)
 	{
+		if (artifactCollection.GetAssetState() == AssetState::Invalid)
+			Throw(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)});
+
 		TRY {
-			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+			std::vector<ArtifactRequestResult> chunks;
+			if constexpr (Internal::AssetTraits2<AssetType>::HasChunkRequests) {
+				chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+			} else {
+				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
+				chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
+			}
+
 			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), artifactCollection.GetDependencyValidation());
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
@@ -223,8 +251,8 @@ namespace Assets
 	//		Auto construct to:
 	//			(::Assets::Blob&&, DependencyValidation&&, StringSection<>)
 	//
-	template<typename AssetType, typename... Params, ENABLE_IF(!Internal::AssetTraits2<AssetType>::HasChunkRequests)>
-		AssetType AutoConstructAsset(const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::RemoveSmartPtrType<AssetType>::CompileProcessType)
+	template<typename AssetType, typename... Params, ENABLE_IF(!Internal::AssetTraits2<AssetType>::Constructor_ArtifactRequestResult)>
+		AssetType AutoConstructAsset(const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = 0)
 	{
 		if (artifactCollection.GetAssetState() == AssetState::Invalid)
 			Throw(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)});
@@ -232,8 +260,6 @@ namespace Assets
 		TRY {
 			ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
 			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
-			if (chunks.empty() || !chunks[0]._sharedBlob)
-				Throw(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), AsBlob("Default compilation result chunk not found")});
 			return AutoConstructAsset<AssetType>(std::move(chunks[0]._sharedBlob), artifactCollection.GetDependencyValidation(), StringSection<>{});
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
@@ -253,17 +279,19 @@ namespace Assets
 		}
 
 		TRY {
-			ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
-			auto reqRes = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
-			if (!reqRes.empty()) {
-				AutoConstructToPromiseSynchronously(
-					promise,
-					std::move(reqRes[0]._sharedBlob),
-					artifactCollection.GetDependencyValidation(),
-					artifactCollection.GetRequestParameters());
+			std::vector<ArtifactRequestResult> chunks;
+			if constexpr (Internal::AssetTraits2<AssetType>::HasChunkRequests) {
+				chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			} else {
-				promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), AsBlob("Default compilation result chunk not found")}));
+				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
+				chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
 			}
+
+			AutoConstructToPromiseSynchronously(
+				promise,
+				std::move(reqRes[0]._sharedBlob),
+				artifactCollection.GetDependencyValidation(),
+				artifactCollection.GetRequestParameters());
 		} CATCH(...) {
 			promise.set_exception(std::current_exception());
 		} CATCH_END
