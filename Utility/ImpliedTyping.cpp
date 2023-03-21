@@ -386,7 +386,7 @@ namespace Utility { namespace ImpliedTyping
         case 4: return (Type)FlipEndian(*(const uint32_t*)input);
         case 8: return (Type)FlipEndian(*(const uint64_t*)input);
         default:
-            assert(0);
+            UNREACHABLE();
             return *(const Type*)input;
         }
     }
@@ -412,7 +412,7 @@ namespace Utility { namespace ImpliedTyping
         assert(srcType._typeHint != ImpliedTyping::TypeHint::String || destType._typeHint == ImpliedTyping::TypeHint::String);
 
         if (srcType._type <= TypeCat::UInt8) {
-            assert(0);  // no need to call this variation
+            UNREACHABLE();  // no need to call this variation
             return Cast(dest, destType, rawSrc, srcType);
         }
 
@@ -851,7 +851,7 @@ namespace Utility { namespace ImpliedTyping
                         *(uint64_t*)dest.begin() = (uint64_t)value;
                         return { parseEnd, TypeDesc{isUnsigned ? TypeCat::UInt64 : TypeCat::Int64} };
                     } else {
-                        // assert(0);  // unknown precision, even though the integer itself parsed correctly
+                        assert(0);  // unknown precision, even though the integer itself parsed correctly
                         return { expression.begin() };
                     }
                 }
@@ -1351,7 +1351,7 @@ namespace Utility { namespace ImpliedTyping
                 return ConvertFloatHelper<double>(MakeStringSection(i, expression.end()), *(double*)destinationBuffer.begin());
 
             default:
-                assert(0);
+                UNREACHABLE();
                 return { parseEnd, false };
             }
         }
@@ -1825,7 +1825,7 @@ namespace Utility { namespace ImpliedTyping
         case TypeCat::Bool:
         case TypeCat::Int8:
         case TypeCat::UInt8:
-            assert(0);
+            UNREACHABLE();
             std::memcpy(output.begin(), src, output.size());
             break;
 

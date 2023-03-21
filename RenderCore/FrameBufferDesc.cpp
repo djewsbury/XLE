@@ -94,7 +94,7 @@ namespace RenderCore
             else if (stencilAspect == LoadStore::Clear) return LoadStore::DontCare_StencilClear;
             else return LoadStore::DontCare;
         } else {
-            assert(0);
+            UNREACHABLE();
             return LoadStore::Retain;
         }
     }

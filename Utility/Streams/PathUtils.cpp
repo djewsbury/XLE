@@ -505,7 +505,7 @@ namespace Utility
 		std::basic_stringstream<CharType> meld;
 		bool pendingSlash = false;
 		if (backPaths < 0) {
-			assert(0);
+			UNREACHABLE();
 		} else if (!backPaths) {
 			// meld << "./";
 		} else {

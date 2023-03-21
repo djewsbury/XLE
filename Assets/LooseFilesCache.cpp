@@ -455,7 +455,7 @@ namespace Assets
 							break;
 						}
 				} else {
-					assert(0);
+					UNREACHABLE();
 				}
 
 				if (!foundExactMatch) {

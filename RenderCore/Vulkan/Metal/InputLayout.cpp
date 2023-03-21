@@ -124,7 +124,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		case InputDataRate::PerVertex: return VK_VERTEX_INPUT_RATE_VERTEX;
 		case InputDataRate::PerInstance: return VK_VERTEX_INPUT_RATE_INSTANCE;
 		default:
-			assert(0);
+			UNREACHABLE();
 			return VK_VERTEX_INPUT_RATE_VERTEX;
 		}
 	}
@@ -371,7 +371,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		else if (bindingType == UniformStreamType::Sampler)
 			return slotType == DescriptorType::Sampler;
 
-		assert(0);
+		UNREACHABLE();
 		return true;
 	}
 

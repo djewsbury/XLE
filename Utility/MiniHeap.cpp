@@ -12,6 +12,13 @@
 #include "Threading/Mutex.h"
 #include <assert.h>
 
+// #define THROW_ON_HEAP_CORRUPTION
+#if defined(THROW_ON_HEAP_CORRUPTION)
+    #define THROW_OR_UNREACHABLE throw Exceptions::HeapCorruption()
+#else
+    #define THROW_OR_UNREACHABLE UNREACHABLE()
+#endif
+
 namespace Utility
 {
     namespace Exceptions
@@ -355,8 +362,7 @@ namespace Utility
                 }
 
                     // it's in our memory space, but not one of our blocks? Maybe a double-delete
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
         }
 
@@ -379,12 +385,10 @@ namespace Utility
         auto m = Split(marker._marker);
         if (m._pageCat < FixedSizeHeapCount) {
             if (m._pageIndex >= _pimpl->_fixedSizePages[m._pageCat].size()) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
             if (m._blockIndex >= FixedSizePageSize / BlockSizeForHeap(m._pageCat)) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
 
             auto& page = _pimpl->_fixedSizePages[m._pageCat][m._pageIndex];
@@ -392,16 +396,14 @@ namespace Utility
             Interlocked::Increment(&page._refCounts[m._blockIndex]);
         } else {
             if (m._pageIndex > _pimpl->_freePages.size()) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
             auto& page = _pimpl->_freePages[m._pageIndex];
                 //  in the case of "free pages", we can't use the block index
                 //  we have to search for the block, based on the allocation offset
             if (    marker._allocation < AsPointer(page._pageMemory.cbegin()) 
                 ||  marker._allocation >= AsPointer(page._pageMemory.cend())) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
 
             auto offset = unsigned(ptrdiff_t(marker._allocation) - ptrdiff_t(AsPointer(page._pageMemory.cbegin())));
@@ -409,8 +411,7 @@ namespace Utility
                 page._blocks.begin(), page._blocks.end(), 
                 offset, FreePage::CompareBlockOffset());
             if (b == page._blocks.cend() || b->_offset != offset) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
 
             ++b->_refCount;
@@ -440,12 +441,10 @@ namespace Utility
         auto m = Split(marker._marker);
         if (m._pageCat < FixedSizeHeapCount) {
             if (m._pageIndex >= _pimpl->_fixedSizePages[m._pageCat].size()) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
             if (m._blockIndex >= FixedSizePageSize / BlockSizeForHeap(m._pageCat)) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
 
             auto& page = _pimpl->_fixedSizePages[m._pageCat][m._pageIndex];
@@ -458,16 +457,14 @@ namespace Utility
             }
         } else {
             if (m._pageIndex > _pimpl->_freePages.size()) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
             auto& page = _pimpl->_freePages[m._pageIndex];
                 //  in the case of "free pages", we can't use the block index
                 //  we have to search for the block, based on the allocation offset
             if (    marker._allocation < AsPointer(page._pageMemory.cbegin()) 
                 ||  marker._allocation >= AsPointer(page._pageMemory.cend())) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
 
             auto offset = unsigned(ptrdiff_t(marker._allocation) - ptrdiff_t(AsPointer(page._pageMemory.cbegin())));
@@ -475,8 +472,7 @@ namespace Utility
                 page._blocks.begin(), page._blocks.end(), 
                 offset, FreePage::CompareBlockOffset());
             if (b == page._blocks.cend() || b->_offset != offset) {
-                assert(0);
-                throw Exceptions::HeapCorruption();
+                THROW_OR_UNREACHABLE;
             }
 
             auto oldRefCount = b->_refCount--;

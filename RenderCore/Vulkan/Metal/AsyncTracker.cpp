@@ -253,7 +253,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					assert(next._fence == nullptr);
 					_trackersSubmittedToQueue.erase(_trackersSubmittedToQueue.begin());
 				} else {
-					assert(0);
+					UNREACHABLE();
 					break;
 				}
 			}

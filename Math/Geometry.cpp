@@ -413,7 +413,7 @@ namespace XLEMath
             return 1;
 
         default:
-            assert(0);
+            UNREACHABLE();
             return 0;
         }
     }

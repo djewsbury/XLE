@@ -286,7 +286,7 @@ namespace Formatters
             return _primed = Blob::Value;
 
         } else {
-            assert(0);
+            UNREACHABLE();
         }
 
         return _primed = Blob::None;

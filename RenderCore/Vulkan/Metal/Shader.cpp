@@ -187,7 +187,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		case ShaderStage::Domain: profileStr[0] = 'd'; break;
 		case ShaderStage::Hull: profileStr[0] = 'h'; break;
 		case ShaderStage::Compute: profileStr[0] = 'c'; break;
-		default: assert(0); break;
+		default: UNREACHABLE(); break;
 		}
 		if (!XlFindStringI(initializer, profileStr)) {
 			ResChar temp[MaxPath];

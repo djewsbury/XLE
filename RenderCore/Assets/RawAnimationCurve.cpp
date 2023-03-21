@@ -144,7 +144,7 @@ namespace RenderCore { namespace Assets
 			return { reconstructed, a, b, c };
 		}
 
-		assert(0);	// compiler doesn't seem to be realize it's impossible to get here
+		UNREACHABLE();	// compiler doesn't seem to be realize it's impossible to get here
 		return {0.f, 0.f, 0.f, 0.f};
 	}
 
@@ -281,14 +281,14 @@ namespace RenderCore { namespace Assets
 	template <>
 		Quaternion CurveElementDequantDecompressor<Quaternion>::operator()(unsigned idx, unsigned timeMarkerValue, unsigned componentOffset) const
 	{
-		assert(0);
+		UNREACHABLE();
 		return Quaternion();
 	}
 
 	template <>
 		Float4x4 CurveElementDequantDecompressor<Float4x4>::operator()(unsigned idx, unsigned timeMarkerValue, unsigned componentOffset) const
 	{
-		assert(0);
+		UNREACHABLE();
 		return Float4x4();
 	}
 

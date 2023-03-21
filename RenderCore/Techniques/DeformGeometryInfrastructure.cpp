@@ -751,7 +751,7 @@ namespace RenderCore { namespace Techniques
 		const IResourceView& dstVB,
 		Metrics& metrics) const
 	{
-		assert(0);
+		UNREACHABLE();
 	}
 
 	void IGeoDeformer::ExecuteCPU(
@@ -761,7 +761,7 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const void*> deformTemporariesVB,
 		IteratorRange<const void*> dstVB) const
 	{
-		assert(0);
+		UNREACHABLE();
 	}
 
 	BufferUploads::CommandListID IGeoDeformer::GetCompletionCmdList() const { return 0; }

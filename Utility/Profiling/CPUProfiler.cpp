@@ -85,7 +85,7 @@ namespace Utility
 
                 time &= ~(1ull << 63ull);
                 if (!_workingStackDepth) {
-                    assert(0);
+                    UNREACHABLE();
                 } else {
                     auto entryIndex = workingStack[_workingStackDepth-1];
                     assert(entryIndex < parentsAndChildren.size());

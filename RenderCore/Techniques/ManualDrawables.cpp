@@ -129,7 +129,7 @@ namespace RenderCore { namespace Techniques
 				assert((p._storageSrc->first + p._storageSrc->second) <= _storage.size());
 				std::memcpy(childSubRes._destination.begin(), PtrAdd(_storage.data(), p._storageSrc->first), std::min(p._storageSrc->second, childSubRes._destination.size()));
 			} else {
-				assert(0);
+				UNREACHABLE();
 			}
 		}
 

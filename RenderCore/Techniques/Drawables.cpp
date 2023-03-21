@@ -959,7 +959,7 @@ namespace RenderCore { namespace Techniques
 			} else if (_ib->AddRef(*l.GetContainingResource(), range.first, range.second-range.first)) {
 				ibRanges[ibRangeCount++] = {&geo, l.GetContainingResource().get(), (unsigned)range.first, unsigned(range.second-range.first)};
 			} else {
-				assert(0);
+				UNREACHABLE();
 			}
 		}
 

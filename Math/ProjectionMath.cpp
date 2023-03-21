@@ -411,7 +411,7 @@ namespace XLEMath
                 nearAnd     &= (projectedCorners[c][2] < -projectedCorners[c][3]);
             }
         } else {
-            assert(0);  // unsupported clip space type
+            UNREACHABLE();  // unsupported clip space type
         }
         
         if (leftAnd | rightAnd | topAnd | bottomAnd | nearAnd | farAnd) {

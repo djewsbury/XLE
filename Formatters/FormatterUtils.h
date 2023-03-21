@@ -104,7 +104,7 @@ namespace Formatters
 						Throw(FormatException(
 							"Malformed value while skipping forward", formatter.GetLocation()));
 				} else
-					assert(0);
+					UNREACHABLE();
 				break;
 
 			default:
@@ -299,7 +299,7 @@ namespace Formatters
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
 					str << "<<" << RequireCharacterData(formatter) << ">>";
 				} else
-					assert(0);
+					UNREACHABLE();
 				break;
 			case FormatterBlob::None:
 				return;
@@ -334,7 +334,7 @@ namespace Formatters
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
 					str << "CharacterData[" << RequireCharacterData(formatter) << "]";
 				} else
-					assert(0);
+					UNREACHABLE();
 				break;
 			case FormatterBlob::None:
 				return;

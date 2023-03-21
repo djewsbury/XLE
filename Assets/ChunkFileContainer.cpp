@@ -107,7 +107,7 @@ namespace Assets
                 file.Seek(initialOffset + i->_fileOffset);
                 file.Read(chunkResult._sharedBlob->data(), i->_size);
             } else {
-                assert(0);
+                UNREACHABLE();
             }
 
             result.emplace_back(std::move(chunkResult));

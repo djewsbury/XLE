@@ -107,7 +107,7 @@ namespace Utility
             
             ResizeableMemoryBuffer(CharType* buffer, size_t bufferCharCount)
             {
-                assert(0);
+                UNREACHABLE();
             }
 
 			ResizeableMemoryBuffer(ResizeableMemoryBuffer&& moveFrom) : std::basic_stringbuf<CharType>(std::move(moveFrom)) {}

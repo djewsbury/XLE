@@ -188,7 +188,7 @@ namespace RenderCore { namespace LightingEngine
 			case ShadowProjectionMode::ArbitraryCubeMap:
 				return lightSource._shape == LightSourceShape::Sphere || lightSource._shape == LightSourceShape::Tube;
 			default:
-				assert(0);
+				UNREACHABLE();
 				return false;
 			}
 		} else {
@@ -508,7 +508,7 @@ namespace RenderCore { namespace LightingEngine
 				if (q != lightResolveOperators._operatorToPipelineMap.end()) {
 					pipeline = &lightResolveOperators._pipelines[std::get<2>(*q)];
 				} else {
-					assert(0);		// couldn't find the mapping for this light operator and shadow operator pair
+					UNREACHABLE();		// couldn't find the mapping for this light operator and shadow operator pair
 					pipeline = &lightResolveOperators._pipelines[lightOperatorId];
 				}
 			} else {
@@ -576,7 +576,7 @@ namespace RenderCore { namespace LightingEngine
 						// though, but in that case we can flatten the front of the sphere to the near clip plane
 						encoder.Draw(*pipeline->_pipeline, lightResolveOperators._stencilingGeometry._sphereOffsetAndCount.second, lightResolveOperators._stencilingGeometry._sphereOffsetAndCount.first);
 					} else {
-						assert(0);
+						UNREACHABLE();
 					}
 				}
 			}

@@ -117,7 +117,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			return result;
 
 		} else {
-			assert(0);
+			UNREACHABLE();
 			return {};
 		}
 	}

@@ -209,7 +209,7 @@ namespace RenderCore { namespace Assets
 		case TextureCompilationRequest::Operation::EquirectFilterDiffuseReference: str << request._srcFile << "-refdiffuse-" << request._faceDim << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::ProjectToSphericalHarmonic: str << request._srcFile << "-sh-" << request._coefficientCount; break;
 		case TextureCompilationRequest::Operation::ComputeShader: str << request._shader << "-" << request._width << "-" << request._height << "-" << AsString(request._format); break;
-		default: assert(0);
+		default: UNREACHABLE();
 		}
 		return str;
 	}

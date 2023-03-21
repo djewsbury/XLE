@@ -529,7 +529,7 @@ namespace OSServices
 			// It is only decremented when a waiting thread is activated
 			ReleaseSemaphore(that->_platformHandle, 1, nullptr);
 		} else {
-			assert(0);
+			UNREACHABLE();
 		}
 	}
 

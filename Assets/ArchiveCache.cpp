@@ -928,7 +928,7 @@ namespace Assets
 						archiveFile->Seek(i->_start);
 						archiveFile->Read(chunkResult._sharedBlob->data(), i->_size);
 					} else {
-						assert(0);
+						UNREACHABLE();
 					}
 				}
 

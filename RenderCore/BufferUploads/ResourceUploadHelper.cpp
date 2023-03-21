@@ -854,7 +854,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                     // the queue earlier than the main frame rendering command list
                     threadContextVulkan->AddPreFrameCommandList(std::move(*metalCmdList));
                 } else {
-                    assert(0);      // missing gfx api specific implementation
+                    UNREACHABLE();      // missing gfx api specific implementation
                 }
             } else if (commandList._id != ~0u) {
                 auto& metalContext = *Metal::DeviceContext::Get(commitTo);
@@ -866,7 +866,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                     if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo))
                         threadContextVulkan->AddPreFrameCommandList(std::move(*commandList._graphicsQueueAdditionalCmdList));
                 } else {
-                    assert(0);      // missing gfx api specific implementation
+                    UNREACHABLE();      // missing gfx api specific implementation
                 }
             } else {
                 assert(!commandList._graphicsQueueAdditionalCmdList);       // this case not handled

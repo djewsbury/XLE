@@ -25,6 +25,8 @@
     #define MSVC_ONLY(...)       __VA_ARGS__
     #define CLANG_ONLY(...)
 
+    #define UNREACHABLE() { assert(0 && "Contradicting unreachable"); __assume(0); }
+
 #elif (COMPILER_ACTIVE == COMPILER_TYPE_GCC) || (COMPILER_ACTIVE == COMPILER_TYPE_CLANG)
 
     #define never_throws		noexcept
@@ -47,6 +49,8 @@
 
     #define MSVC_ONLY(...)
     #define CLANG_ONLY(...)       __VA_ARGS__
+
+    #define UNREACHABLE() { assert(0 && "Contradicting unreachable"); __builtin_unreachable(); }
 
 #endif
 

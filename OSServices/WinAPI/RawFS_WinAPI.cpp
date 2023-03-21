@@ -362,7 +362,7 @@ namespace OSServices
 		case FileSeekAnchor::Start:		underlingMoveMethod = FILE_BEGIN; break;
         case FileSeekAnchor::Current:	underlingMoveMethod = FILE_CURRENT; break;
         case FileSeekAnchor::End:		underlingMoveMethod = FILE_END; break;
-        default: assert(0);
+        default: UNREACHABLE();
         }
 		#if TARGET_64BIT
 			LONG high = (LONG)(offset>>32ull);

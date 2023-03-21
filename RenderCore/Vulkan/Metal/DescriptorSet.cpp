@@ -301,7 +301,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			break;
 
 		default:
-			assert(0);
+			UNREACHABLE();
 		}
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
@@ -441,7 +441,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			break;
 
 		default:
-			assert(0);
+			UNREACHABLE();
 		}
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
@@ -491,7 +491,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			break;
 
 		default:
-			assert(0);
+			UNREACHABLE();
 		}
 	}
 
@@ -518,7 +518,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			break;
 
 		default:
-			assert(0);
+			UNREACHABLE();
 		}
 	}
 
@@ -580,7 +580,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		case ResourceDims::DimBuffer:
 		case ResourceDims::DimInputAttachment:
-			assert(0);	// invalid cases
+			UNREACHABLE();	// invalid cases
 
 		default:
 			// fallback to 2d image (multisample types will fallback here currently, because they are used only for specific shaders)
@@ -657,7 +657,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		case ResourceDims::DimBuffer:
 		case ResourceDims::DimInputAttachment:
-			assert(0);	// invalid cases
+			UNREACHABLE();	// invalid cases
 
 		default:
 			// fallback to 2d image (multisample types will fallback here currently, because they are used only for specific shaders)
@@ -740,7 +740,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				} else if (b == DescriptorType::Empty) {
 					/* treated as empty */
 				} else {
-					assert(0);
+					UNREACHABLE();
 					continue;
 				}
 			} else {
@@ -771,7 +771,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				} else if (b == DescriptorType::Empty) {
 					/* treated as empty */
 				} else {
-					assert(0);
+					UNREACHABLE();
 					continue;
 				}
 			}
@@ -1312,7 +1312,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					linearBufferIterator += CeilToMultiple(size, offsetMultiple);
 					writtenMask |= 1ull<<uint64_t(bStart->_descriptorSetSlot);
 				} else {
-					assert(0);
+					UNREACHABLE();
 				}
 
 			} else {
@@ -1337,7 +1337,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					writtenMask |= 1ull<<uint64_t(bStart->_descriptorSetSlot);
 
 				} else {
-					assert(0);		// only arrays of resource views are supported
+					UNREACHABLE();		// only arrays of resource views are supported
 				}
 
 			}

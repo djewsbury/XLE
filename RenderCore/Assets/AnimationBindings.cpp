@@ -236,7 +236,7 @@ namespace RenderCore { namespace Assets
 					defaults.AsFloat4x4Parameter(),
 					animParameterIndex, samplerType));
 		} else {
-			assert(0);
+			UNREACHABLE();
 		}
 	}
 
@@ -255,7 +255,7 @@ namespace RenderCore { namespace Assets
 					defaults.AsTranslateParameter(),
 					animParameterIndex, samplerType));
 		} else {
-			assert(0);
+			UNREACHABLE();
 		}
 	}
 
@@ -273,7 +273,7 @@ namespace RenderCore { namespace Assets
 					Float3{0,0,0},		// normal defaults won't work here, unless we calculate the transforms up to geo space
 					animParameterIndex, samplerType));
 		} else {
-			assert(0);
+			UNREACHABLE();
 		}
 	}
 
@@ -299,7 +299,7 @@ namespace RenderCore { namespace Assets
 					defaults.AsRotateAxisAngleParameter(),
 					animParameterIndex, samplerType));
 		} else {
-			assert(0);
+			UNREACHABLE();
 		}
 	}
 
@@ -325,7 +325,7 @@ namespace RenderCore { namespace Assets
 					defaults.AsArbitraryScaleParameter(),
 					animParameterIndex, samplerType));
 		} else {
-			assert(0);
+			UNREACHABLE();
 		}
 	}
 
@@ -499,7 +499,7 @@ namespace RenderCore { namespace Assets
 								defaults,
 								noneParam.value(), animSetOutput[noneParam.value()]._samplerType);
 						} else {
-							assert(0);		// no defaults at all; we can't imply the component for this animation parameter
+							UNREACHABLE();		// no defaults at all; we can't imply the component for this animation parameter
 						}
 					} else {
 						// no matching parameters at all. We can just take the defaults as-is because they are specified

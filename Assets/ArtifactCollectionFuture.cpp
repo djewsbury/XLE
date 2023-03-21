@@ -142,7 +142,7 @@ namespace Assets
 		} else if (dataType == ArtifactRequest::DataType::SharedBlob) {
 			chunkResult._sharedBlob = blob;
 		} else {
-			assert(0);
+			UNREACHABLE();
 		}
 		return chunkResult;
 	}

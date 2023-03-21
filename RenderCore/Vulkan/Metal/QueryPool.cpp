@@ -251,7 +251,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			}
 			break;
 		default:
-			assert(0);
+			UNREACHABLE();
 		}
 		return true;
 	}

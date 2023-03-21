@@ -117,7 +117,7 @@ namespace SceneEngine
         for(;i !=_filenamesBuffer.end();) {
             auto starti = i;
             if (std::distance(i, _filenamesBuffer.end()) < sizeof(uint64_t)) {
-                assert(0);
+                UNREACHABLE();
                 break;  // not enough room for a full hash code. Seems like the string table is corrupted
             }
             i += sizeof(uint64_t);
@@ -687,7 +687,7 @@ namespace SceneEngine
                     return lhs.first < rhs.first;
                 });
         } else {
-            assert(0);      // quad tree required
+            UNREACHABLE();      // quad tree required
         }
     }
 
@@ -731,7 +731,7 @@ namespace SceneEngine
                     return lhs.first < rhs.first;
                 });
         } else {
-            assert(0);      // quad tree required
+            UNREACHABLE();      // quad tree required
         }
     }
 
@@ -2656,7 +2656,7 @@ namespace SceneEngine
                 auto idTopPart = ObjectIdTopPart(newState._model, materialFilename);
                 uint64_t id = idTopPart | uint64_t(guid.second & 0xffffffffull);
                 if (dynPlacements->HasObject(id)) {
-                    assert(0);      // got a hash collision or duplicated id
+                    UNREACHABLE();      // got a hash collision or duplicated id
                     return false;
                 }
 

@@ -90,7 +90,7 @@ namespace RenderCore { namespace Assets
             return cmd;
 
         default: 
-            assert(0);
+            UNREACHABLE();
             return cmd+1;
         }
     }
@@ -349,7 +349,7 @@ namespace RenderCore { namespace Assets
                 break;
 
             default:
-                assert(0); // push & pop shouldn't be registered as influences
+                UNREACHABLE(); // push & pop shouldn't be registered as influences
                 break;
             }
         }
@@ -425,7 +425,7 @@ namespace RenderCore { namespace Assets
             return AsFloat4x4(*(const ArbitraryScale*)(cmd+1));
 
         default:
-            assert(0);
+            UNREACHABLE();
             return Identity<Float4x4>();
         }
     }
@@ -1322,7 +1322,7 @@ namespace RenderCore { namespace Assets
             i+=3;
             break;
         default:
-            assert(0);
+            UNREACHABLE();
             break;
         }
         return i;

@@ -80,7 +80,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         case Format::R10G10B10A2_UINT:
         case Format::R11G11B10_FLOAT:       
         case Format::B5G6R5_UNORM:
-        case Format::B5G5R5A1_UNORM:        assert(0); return Float4(0,0,0,1);  // requires some custom adjustments (these are uncommon uses, anyway)
+        case Format::B5G5R5A1_UNORM:        UNREACHABLE(); return Float4(0,0,0,1);  // requires some custom adjustments (these are uncommon uses, anyway)
 
         case Format::R16G16B16A16_FLOAT:    return Float4(Float16AsFloat32(((const unsigned short*)rawData)[0]), Float16AsFloat32(((const unsigned short*)rawData)[1]), Float16AsFloat32(((const unsigned short*)rawData)[2]), Float16AsFloat32(((const unsigned short*)rawData)[3]));
         case Format::R16G16_FLOAT:          return Float4(Float16AsFloat32(((const unsigned short*)rawData)[0]), Float16AsFloat32(((const unsigned short*)rawData)[1]), 0.f, 1.f);
@@ -97,10 +97,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		case Format::R16G16B16A16_SNORM:	return Float4(SNormAsFloat32(((const int16_t*)rawData)[0]), SNormAsFloat32(((const int16_t*)rawData)[1]), SNormAsFloat32(((const int16_t*)rawData)[2]), SNormAsFloat32(((const int16_t*)rawData)[3]));
             
         default:
-                assert(0);
+            UNREACHABLE();
         }
 
-        assert(0);
+        UNREACHABLE();
         return Float4(0,0,0,1);
     }
 

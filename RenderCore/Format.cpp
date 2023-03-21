@@ -1054,7 +1054,7 @@ namespace RenderCore
             return fmt;     // either doesn't have a matching "typeless" format, or aspects are not explicit enough to distinguish this format
         
         default:
-            assert(0);
+            UNREACHABLE();
             return fmt;
         }
     }

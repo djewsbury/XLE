@@ -258,7 +258,7 @@ namespace RenderCore
 			break;
 
         default:
-            assert(0);
+            UNREACHABLE();
         }
 
         return {componentType, componentCount};
@@ -428,7 +428,7 @@ namespace RenderCore
 			}
 			break;
 		default:
-			assert(0);
+			UNREACHABLE();
 			break;
 		}
 
@@ -467,7 +467,7 @@ namespace RenderCore
 				GetVertDataSNorm8(output->data(), &(*p).As<int8_t>(), fmtBreakdown._componentCount);
 			break;
 		default:
-			assert(0);
+			UNREACHABLE();
 			break;
 		}
 
@@ -494,7 +494,7 @@ namespace RenderCore
 				GetVertDataUInt32(output->data(), &(*p).As<uint32_t>(), fmtBreakdown._componentCount);
 			break;
 		default:
-			assert(0);
+			UNREACHABLE();
 			break;
 		}
 

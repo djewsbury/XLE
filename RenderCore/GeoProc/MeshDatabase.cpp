@@ -133,7 +133,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			GetVertDataSNorm16(dst, (const int16*)src, fmt._componentCount, processingFlags);
 			break;
         default:
-            assert(0);
+            UNREACHABLE();
             break;
         }
     }

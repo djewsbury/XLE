@@ -68,7 +68,7 @@ namespace Utility
             case Formatters::FormatterBlob::Value:
             case Formatters::FormatterBlob::BeginElement:
             case Formatters::FormatterBlob::CharacterData:
-                assert(0);
+                UNREACHABLE();
                 break;
 
             case Formatters::FormatterBlob::EndElement:

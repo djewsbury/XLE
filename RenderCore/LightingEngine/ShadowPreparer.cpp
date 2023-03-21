@@ -106,7 +106,7 @@ namespace RenderCore { namespace LightingEngine
 					}
 					break;
 				default:
-					assert(0);
+					UNREACHABLE();
 					break;
 				}
 			}
@@ -124,7 +124,7 @@ namespace RenderCore { namespace LightingEngine
 						return sizeof(Float4x4)*projCount;
 					}
 				default:
-					assert(0);
+					UNREACHABLE();
 					return 0;
 				}
 			}

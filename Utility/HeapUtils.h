@@ -316,7 +316,7 @@ namespace Utility
             unsigned idx = (unsigned)std::distance(_heap->_objects.begin(), _i);
             _heap->_objects[idx] = std::move(newValue);
         } else {
-            assert(0);
+            UNREACHABLE();
         }
     }
 

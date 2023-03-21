@@ -1879,7 +1879,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			preBarrierUsage._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 			switch (prevLayout) {
 			default:
-				assert(0);
+				UNREACHABLE();
 				// intentional fall-through
 			case VK_IMAGE_LAYOUT_GENERAL:
 				preBarrierUsage._accessFlags = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
@@ -2115,7 +2115,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		case ShaderStage::Null:
 		case ShaderStage::Max:
 		default:
-			assert(0);	// bad shader stage
+			UNREACHABLE();	// bad shader stage
 			return 0;
 		}
 	}
@@ -2131,7 +2131,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto& objectFactory = GetObjectFactory();
 		switch (queue) {
 		default:
-			assert(0);		// intentional fall-through
+			UNREACHABLE();		// intentional fall-through
 		case Queue::Graphics:
 			assert(objectFactory._graphicsQueueFamily != ~0u);
 			_queueFamily = objectFactory._graphicsQueueFamily;

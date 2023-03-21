@@ -751,7 +751,7 @@ namespace RenderCore { namespace LightingEngine
 				break;
 
 			case LightingTechniqueSequence::ExecuteStep::Type::None:
-				assert(0);
+				UNREACHABLE();
 				break;
 			}
 		}
@@ -876,7 +876,7 @@ namespace RenderCore { namespace LightingEngine
 				break;
 
 			case LightingTechniqueSequence::ExecuteStep::Type::None:
-				assert(0);
+				UNREACHABLE();
 				break;
 			}
 		}

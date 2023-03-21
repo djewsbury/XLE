@@ -68,7 +68,7 @@ namespace Assets
 		case OSServices::FileSeekAnchor::Current:	newPtr = _ptr + seekOffset; break;
 		case OSServices::FileSeekAnchor::End:		newPtr = (_blob ? _blob->size() : 0) + seekOffset; break;
 		default:
-			assert(0);
+			UNREACHABLE();
 		}
 		newPtr = std::max(ptrdiff_t(0), newPtr);
 		newPtr = std::min(ptrdiff_t(_blob->size()), newPtr);
@@ -156,7 +156,7 @@ namespace Assets
 		case OSServices::FileSeekAnchor::Current:	newPtr = _ptr + seekOffset; break;
 		case OSServices::FileSeekAnchor::End:		newPtr = _data.size() + seekOffset; break;
 		default:
-			assert(0);
+			UNREACHABLE();
 		}
 		newPtr = std::max(ptrdiff_t(0), newPtr);
 		newPtr = std::min(ptrdiff_t(_data.size()), newPtr);

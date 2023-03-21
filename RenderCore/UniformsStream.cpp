@@ -249,7 +249,7 @@ namespace RenderCore
 		case LegacyRegisterBindingDesc::RegisterType::UnorderedAccess:
 			dest = (qualifier == LegacyRegisterBindingDesc::RegisterQualifier::Buffer) ? &_uavRegisters_boundToBuffer : &_uavRegisters; 
 			break;
-		default: assert(0);
+		default: UNREACHABLE();
 		}
 
 		auto di = dest->begin();
@@ -269,7 +269,7 @@ namespace RenderCore
 		case RegisterType::ConstantBuffer: return MakeIteratorRange(_constantBufferRegisters);
 		case RegisterType::UnorderedAccess: return (qualifier == RegisterQualifier::Buffer) ? MakeIteratorRange(_uavRegisters_boundToBuffer) : MakeIteratorRange(_uavRegisters);
 		default:
-			assert(0);
+			UNREACHABLE();
 			return {};
 		}
 	}
