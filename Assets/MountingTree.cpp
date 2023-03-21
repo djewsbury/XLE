@@ -462,9 +462,6 @@ namespace Assets
 
 	MountingTree::~MountingTree() {}
 
-	MountingTree::MountingTree(const MountingTree& cloneFrom) { assert(0);  }
-	MountingTree& MountingTree::operator=(const MountingTree& cloneFrom) { assert(0); return *this; }
-
 
 	MountingTree::Pimpl::Mount::Mount() 
 	{

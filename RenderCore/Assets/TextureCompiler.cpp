@@ -371,7 +371,9 @@ namespace RenderCore { namespace Assets
 			CMP_CompressOptions options = {0};
 			options.dwSize       = sizeof(options);
 			options.fquality     = 0.05f;
-			options.dwnumThreads = 1;
+			// Compressonator seems to have an issue when dwnumThreads is set to 1 (other than running slow). It appears to spin up threads it can never close down
+			// let's just set it to "auto" to allow it to adapt to the processor (even if it squeezes our thread pool)
+			options.dwnumThreads = 0;
 			auto comprDstFormat = AsCompressonatorFormat(request._format);
 			if (comprDstFormat == CMP_FORMAT_Unknown)
 				Throw(std::runtime_error("Cannot write to the request texture pixel format because it is not supported by the compression library: " + srcFN));

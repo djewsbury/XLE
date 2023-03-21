@@ -62,8 +62,8 @@ namespace Assets
 		MountingTree(Utility::FilenameRules& rules);
 		~MountingTree();
 
-		MountingTree(const MountingTree& cloneFrom);
-		MountingTree& operator=(const MountingTree& cloneFrom);
+		MountingTree(const MountingTree&) = delete;
+		MountingTree& operator=(const MountingTree&) = delete;
 	private:
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;
