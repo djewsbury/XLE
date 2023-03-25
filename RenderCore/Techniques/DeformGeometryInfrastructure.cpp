@@ -236,7 +236,7 @@ namespace RenderCore { namespace Techniques
 			::Assets::WhenAll(std::move(transactionMarker._future)).ThenConstructToPromise(
 				std::move(promise), [](const auto& locator) { return locator.GetCompletionCommandList(); });
 		} else {
-			result->_gpuStaticDataBufferView = Techniques::Services::GetCommonResources()->_blackBufferUAV;
+			result->_gpuStaticDataBufferView = Techniques::Services::GetCommonResources()->_undefinedBufferUAV;
 		}
 
 		if (bufferIterators._bufferIterators[Internal::VB_GPUDeformTemporaries]) {
@@ -251,7 +251,7 @@ namespace RenderCore { namespace Techniques
 				bufferName.AsStringSection());
 			result->_gpuTemporariesBufferView = result->_gpuTemporariesBuffer->CreateBufferView(BindFlag::UnorderedAccess);
 		} else {
-			result->_gpuTemporariesBufferView = Techniques::Services::GetCommonResources()->_blackBufferUAV;
+			result->_gpuTemporariesBufferView = Techniques::Services::GetCommonResources()->_undefinedBufferUAV;
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////

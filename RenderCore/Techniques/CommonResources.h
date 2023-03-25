@@ -29,7 +29,9 @@ namespace RenderCore { namespace Techniques
             // Theses can be used to prevent a GPU seg fault when we don't want
             // to bind a real resources (ie, for a disable feature)
             // The dummy textures will generally be small sized single channel
-            // textures 
+            // textures
+            // Be careful with the "undefined" UAVs, because other clients may
+            // write to them, causing the contents to be undefined
         std::shared_ptr<IResourceView> _black2DSRV;
         std::shared_ptr<IResourceView> _black2DArraySRV;
         std::shared_ptr<IResourceView> _black3DSRV;
@@ -41,7 +43,13 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<IResourceView> _whiteCubeSRV;
         std::shared_ptr<IResourceView> _whiteCubeArraySRV;
         std::shared_ptr<IResource> _blackCB;
-        std::shared_ptr<IResourceView> _blackBufferUAV;
+
+        std::shared_ptr<IResourceView> _undefinedBufferUAV;
+        std::shared_ptr<IResourceView> _undefined2DUAV;
+        std::shared_ptr<IResourceView> _undefined2DArrayUAV;
+        std::shared_ptr<IResourceView> _undefined3DUAV;
+        std::shared_ptr<IResourceView> _undefinedCubeUAV;
+        std::shared_ptr<IResourceView> _undefinedCubeArrayUAV;
 
 		///////////////////////////////////////
 

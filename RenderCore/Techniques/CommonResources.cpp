@@ -51,7 +51,12 @@ namespace RenderCore { namespace Techniques
         _black3DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM)), "black3d")->CreateTextureView();
         _blackCubeSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM)), "blackCube")->CreateTextureView();
         _blackCB = device.CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc{256}), "blackbuffer");
-        _blackBufferUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc{256, 16}), "blackbufferuav")->CreateBufferView(BindFlag::UnorderedAccess);
+
+        _undefined2DUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM)), "undefined2d")->CreateTextureView(BindFlag::UnorderedAccess);
+        _undefined2DArrayUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1)), "undefined2darray")->CreateTextureView(BindFlag::UnorderedAccess);
+        _undefined3DUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::Plain3D(8, 8, 8, Format::R8_UNORM)), "undefined3d")->CreateTextureView(BindFlag::UnorderedAccess);
+        _undefinedCubeUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, TextureDesc::PlainCube(32, 32, Format::R8_UNORM)), "undefinedCube")->CreateTextureView(BindFlag::UnorderedAccess);
+        _undefinedBufferUAV = device.CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc{256, 16}), "undefinedbuffer")->CreateBufferView(BindFlag::UnorderedAccess);
 
         _white2DSRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM)), "white2d")->CreateTextureView();
         _white2DArraySRV = device.CreateResource(CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(32, 32, Format::R8_UNORM, 1, 1)), "white2darray")->CreateTextureView();
@@ -77,8 +82,13 @@ namespace RenderCore { namespace Techniques
             _black2DArraySRV->GetResource().get(),
             _black3DSRV->GetResource().get(),
             _blackCubeSRV->GetResource().get(),
-            _blackCubeArraySRV->GetResource().get(),
             _blackCB.get(),
+
+            _undefined2DUAV->GetResource().get(),
+            _undefined2DArrayUAV->GetResource().get(),
+            _undefined3DUAV->GetResource().get(),
+            _undefinedCubeUAV->GetResource().get(),
+            _undefinedBufferUAV->GetResource().get()
         };
         std::vector<IResource*> whiteResources {
             _white2DSRV->GetResource().get(),
@@ -87,8 +97,8 @@ namespace RenderCore { namespace Techniques
             _whiteCubeSRV->GetResource().get()
         };
         
-        if (_blackBufferUAV)
-            blackResources.push_back(_blackBufferUAV->GetResource().get());
+        if (_blackCubeArraySRV)
+            blackResources.push_back(_blackCubeArraySRV->GetResource().get());
         if (_whiteCubeArraySRV)
             whiteResources.push_back(_whiteCubeArraySRV->GetResource().get());
 

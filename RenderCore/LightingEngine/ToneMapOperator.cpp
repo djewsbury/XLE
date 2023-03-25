@@ -98,7 +98,7 @@ namespace RenderCore { namespace LightingEngine
 
 			// Set the uniforms once, and forget
 			// We just use push constants on a per-dispatch basis
-			auto* dummyUav = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+			auto* dummyUav = Techniques::Services::GetCommonResources()->_undefined2DUAV.get();
 			const IResourceView* views[5+s_shaderMipChainUniformCount];
 			views[0] = &hdrInput;
 			views[1] = _atomicCounterBufferView.get();

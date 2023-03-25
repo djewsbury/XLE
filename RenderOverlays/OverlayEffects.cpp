@@ -252,7 +252,7 @@ namespace RenderOverlays
 		srvs[1] = _atomicCounterBufferView.get();
 		unsigned c=0;
 		for (; c<dstUAVs.size(); ++c) srvs[2+c] = dstUAVs[c].get();
-		auto* dummySRV = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+		auto* dummySRV = Techniques::Services::GetCommonResources()->_undefined2DUAV.get();
 		for (; c<13; ++c) srvs[2+c] = dummySRV;
 		UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
 		_op->Dispatch(threadContext, threadGroupX, threadGroupY, 1, UniformsStream { srvs, immDatas });

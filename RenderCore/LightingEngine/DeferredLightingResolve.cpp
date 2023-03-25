@@ -452,7 +452,7 @@ namespace RenderCore { namespace LightingEngine
 				// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
 				assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
 				srvs[SR::StaticShadowProbeDatabase] = parsingContext.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
-				srvs[SR::StaticShadowProbeProperties] = parsingContext.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
+				srvs[SR::StaticShadowProbeProperties] = parsingContext.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
 			}
 		}
 

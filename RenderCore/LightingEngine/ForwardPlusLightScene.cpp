@@ -246,7 +246,7 @@ namespace RenderCore { namespace LightingEngine
 					// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
 					assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
 					dst[4] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
-					dst[5] = context.GetTechniqueContext()._commonResources->_blackBufferUAV.get();
+					dst[5] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
 				}
 			}
 
