@@ -188,6 +188,7 @@ namespace RenderCore { namespace Assets
 		result._faceDim = operationElement.Attribute("FaceDim", result._faceDim);
 		result._width = operationElement.Attribute("Width", result._width);
 		result._height = operationElement.Attribute("Height", result._height);
+		result._arrayLayerCount = operationElement.Attribute("ArrayLayerCount", result._arrayLayerCount);
 		result._coefficientCount = operationElement.Attribute("CoefficientCount", result._coefficientCount);
 		result._sampleCount = operationElement.Attribute("SampleCount", result._sampleCount);
 
@@ -208,7 +209,7 @@ namespace RenderCore { namespace Assets
 		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference: str << request._srcFile << "-refspec-" << request._faceDim << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::EquirectFilterDiffuseReference: str << request._srcFile << "-refdiffuse-" << request._faceDim << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::ProjectToSphericalHarmonic: str << request._srcFile << "-sh-" << request._coefficientCount; break;
-		case TextureCompilationRequest::Operation::ComputeShader: str << request._shader << "-" << request._width << "-" << request._height << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::ComputeShader: str << request._shader << "-" << request._width << "x" << request._height << "x" << request._arrayLayerCount << "-" << AsString(request._format); break;
 		default: UNREACHABLE();
 		}
 		return str;
@@ -350,7 +351,8 @@ namespace RenderCore { namespace Assets
 				auto targetDesc = TextureDesc::Plain2D(
 					request._width,
 					request._height,
-					Format::R32G32B32A32_FLOAT); // use full float precision for the pre-compression format
+					Format::R32G32B32A32_FLOAT, // use full float precision for the pre-compression format
+					1, request._arrayLayerCount);
 				auto shader = request._shader;
 				if (shader.empty())
 					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));

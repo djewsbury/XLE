@@ -88,6 +88,7 @@ namespace RenderCore { namespace LightingEngine
 		bool Finished() const { return _samplesProcessed == _totalSampleCount; }
 		unsigned TotalSampleCount() const { return _totalSampleCount; }
 		unsigned SamplesProcessedCount () const { return _samplesProcessed; }
+		void ResetSamplesProcessed() { _samplesProcessed = 0; }
 
 		void CommitAndTimeCommandList(IThreadContext& threadContext, const Uniforms& uniforms, StringSection<> name)
 		{
@@ -342,10 +343,10 @@ namespace RenderCore { namespace LightingEngine
 					struct ControlUniforms
 					{
 						BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
-						unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
+						unsigned _mipIndex, _mipCount, _arrayLayerIndex, _arrayLayerCount;
 					} controlUniforms {
 						samplingShaderHelper.ConfigureNextDispatch(),
-						mip, 0, 0, 0
+						mip, targetDesc._mipCount, 0, 1
 					};
 
 					UniformsStream us;
@@ -403,10 +404,10 @@ namespace RenderCore { namespace LightingEngine
 					struct ControlUniforms
 					{
 						BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
-						unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
+						unsigned _mipIndex, _mipCount, _arrayLayerIndex, _arrayLayerCount;
 					} controlUniforms {
 						samplingShaderHelper.ConfigureNextDispatch(),
-						mip, 0, 0, 0
+						mip, targetDesc._mipCount, 0, 1
 					};
 
 					UniformsStream us;
@@ -472,46 +473,51 @@ namespace RenderCore { namespace LightingEngine
 		threadContext->GetDevice()->Stall();		// sync with GPU, because of timing work below
 
 		for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
-
 			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
 			unsigned totalPixelCount = mipDesc._width * mipDesc._height;
 
-			// We have to baby the graphics API a little bit to avoid timeouts. We don't know
-			// exactly how many pixels we can calculate in a single command list before we will
-			// start to get timeouts.
-			//
-			// It doesn't matter how we distribute threads in groups or dispatches -- what matters
-			// is the cost of the command list submit as a whole
-			//
-			// We will start with a small number of samples per pixel and slowly increase while it seems safe
-			// Let's do this with the CPU & GPU synced, because we don't want this thread to 
-			// get ahead of the GPU anyway, and we also don't want to release this thread to the 
-			// thread pool while waiting for the GPU
+				// We have to baby the graphics API a little bit to avoid timeouts. We don't know
+				// exactly how many pixels we can calculate in a single command list before we will
+				// start to get timeouts.
+				//
+				// It doesn't matter how we distribute threads in groups or dispatches -- what matters
+				// is the cost of the command list submit as a whole
+				//
+				// We will start with a small number of samples per pixel and slowly increase while it seems safe
+				// Let's do this with the CPU & GPU synced, because we don't want this thread to 
+				// get ahead of the GPU anyway, and we also don't want to release this thread to the 
+				// thread pool while waiting for the GPU
 
 			const unsigned idealCmdListCostMS = 1500;
 			BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount, idealCmdListCostMS);
-			while (true) {
+			for (unsigned a=0; a<ActualArrayLayerCount(targetDesc); ++a) {
+				samplingShaderHelper.ResetSamplesProcessed();
+
 				TextureViewDesc view;
 				view._mipRange = {mip, 1};
+				view._arrayLayerRange = {a, 1};
 				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
 				IResourceView* resViews[] = { outputView.get() };
-				struct ControlUniforms
-				{
-					BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
-					unsigned _mipIndex, _dummy0, _dummy1, _dummy2;
-				} controlUniforms {
-					samplingShaderHelper.ConfigureNextDispatch(), 
-					mip, 0, 0, 0 
-				};
-				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(controlUniforms) };
-				UniformsStream us;
-				us._resourceViews = MakeIteratorRange(resViews);
-				us._immediateData = MakeIteratorRange(immData);
-				
-				computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
 
-				if (samplingShaderHelper.Finished()) break;		// exit now to avoid a tiny cmd list after the last dispatch
-				samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, shader);
+				while (!samplingShaderHelper.Finished()) {
+					struct ControlUniforms
+					{
+						BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
+						unsigned _mipIndex, _mipCount, _arrayLayerIndex, _arrayLayerCount;
+					} controlUniforms {
+						samplingShaderHelper.ConfigureNextDispatch(),
+						mip, targetDesc._mipCount, a, ActualArrayLayerCount(targetDesc)
+					};
+					const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(controlUniforms) };
+					UniformsStream us;
+					us._resourceViews = MakeIteratorRange(resViews);
+					us._immediateData = MakeIteratorRange(immData);
+					
+					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
+
+					if (samplingShaderHelper.Finished() && (a+1) == ActualArrayLayerCount(targetDesc) && (mip+1) == targetDesc._mipCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
+					samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, shader);
+				}
 			}
 		}
 
