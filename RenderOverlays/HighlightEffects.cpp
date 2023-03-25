@@ -68,59 +68,120 @@ namespace RenderOverlays
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _validationCallback; }
         BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCmdList; }
 
-        HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow, std::shared_ptr<Techniques::DeferredShaderResource> distinctColors);
+        HighlightShaders(
+            std::shared_ptr<Metal::ShaderProgram> drawHighlight, 
+            std::shared_ptr<Metal::ShaderProgram> drawShadow,
+            std::shared_ptr<Techniques::DeferredShaderResource> distinctColors)
+        : _drawHighlight(std::move(drawHighlight))
+        , _drawShadow(std::move(drawShadow))
+        , _distinctColorsSRV(distinctColors->GetShaderResource())
+        , _completionCmdList(distinctColors->GetCompletionCommandList())
+        {
+            UniformsStreamInterface drawHighlightInterface;
+            drawHighlightInterface.BindImmediateData(0, "Settings"_h);
+            drawHighlightInterface.BindResourceView(0, "InputTexture"_h);
+            _drawHighlightUniforms = Metal::BoundUniforms(*_drawHighlight, drawHighlightInterface);
+
+                //// ////
+
+            UniformsStreamInterface drawShadowInterface;
+            drawShadowInterface.BindImmediateData(0, "ShadowHighlightSettings"_h);
+            drawShadowInterface.BindResourceView(0, "InputTexture"_h);
+            _drawShadowUniforms = Metal::BoundUniforms(*_drawShadow, drawShadowInterface);
+
+                //// ////
+
+            ::Assets::DependencyValidationMarker depVals[] {
+                _drawHighlight->GetDependencyValidation(),
+                _drawShadow->GetDependencyValidation(),
+                distinctColors->GetDependencyValidation()
+            };
+            _validationCallback = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+        }
+
         HighlightShaders() = default;
+
         static void ConstructToPromise(
-			std::promise<HighlightShaders>&&,
-			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout);
+			std::promise<HighlightShaders>&& promise,
+			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
+        {
+               //// ////
+
+            auto drawHighlightFuture = LoadShaderProgram(
+                pipelineLayout,
+                BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
+                OUTLINE_VIS_PIXEL_HLSL ":main:ps_*");
+            auto drawShadowFuture = LoadShaderProgram(
+                pipelineLayout,
+                BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
+                OUTLINE_VIS_PIXEL_HLSL ":main_shadow:ps_*");
+
+            auto tex = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(DISTINCT_COLORS_TEXTURE);
+
+            ::Assets::WhenAll(drawHighlightFuture, drawShadowFuture, tex).ThenConstructToPromise(std::move(promise));
+        }
     protected:
         ::Assets::DependencyValidation  _validationCallback;
         BufferUploads::CommandListID _completionCmdList;
     };
 
-    void HighlightShaders::ConstructToPromise(
-        std::promise<HighlightShaders>&& promise,
-        const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout)
+    class HighlightByStencilShaders
     {
-        //// ////
-        auto drawHighlightFuture = LoadShaderProgram(
-            pipelineLayout,
-            BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
-            OUTLINE_VIS_PIXEL_HLSL ":main:ps_*");
-        auto drawShadowFuture = LoadShaderProgram(
-            pipelineLayout,
-            BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
-            OUTLINE_VIS_PIXEL_HLSL ":main_shadow:ps_*");
+    public:
+        std::shared_ptr<Metal::ShaderProgram> _highlightShader;
+        Metal::BoundUniforms _highlightShaderUniforms;
 
-        auto tex = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(DISTINCT_COLORS_TEXTURE);
+        std::shared_ptr<Metal::ShaderProgram> _outlineShader;
+        Metal::BoundUniforms _outlineShaderUniforms;
 
-        ::Assets::WhenAll(drawHighlightFuture, drawShadowFuture, tex).ThenConstructToPromise(std::move(promise));
-    }
+        HighlightByStencilShaders(std::shared_ptr<Metal::ShaderProgram> highlightShader, std::shared_ptr<Metal::ShaderProgram> outlineShader = nullptr)
+        : _highlightShader(std::move(highlightShader)), _outlineShader(std::move(outlineShader))
+        {
+            UniformsStreamInterface usi;
+            usi.BindImmediateData(0, "Settings"_h);
+            usi.BindResourceView(0, "DistinctColors"_h);
+            usi.BindResourceView(1, "StencilInput"_h);
 
-    HighlightShaders::HighlightShaders(std::shared_ptr<Metal::ShaderProgram> drawHighlight, std::shared_ptr<Metal::ShaderProgram> drawShadow, std::shared_ptr<Techniques::DeferredShaderResource> distinctColors)
-    : _drawHighlight(std::move(drawHighlight))
-    , _drawShadow(std::move(drawShadow))
-    , _distinctColorsSRV(distinctColors->GetShaderResource())
-    , _completionCmdList(distinctColors->GetCompletionCommandList())
-    {
-		UniformsStreamInterface drawHighlightInterface;
-		drawHighlightInterface.BindImmediateData(0, "Settings"_h);
-        drawHighlightInterface.BindResourceView(0, "InputTexture"_h);
-		_drawHighlightUniforms = Metal::BoundUniforms(*_drawHighlight, drawHighlightInterface);
+            _highlightShaderUniforms = {*_highlightShader, usi};
+            if (_outlineShader)
+                _outlineShaderUniforms = {*_outlineShader, usi};
+        }
 
-        //// ////
-        
-		UniformsStreamInterface drawShadowInterface;
-		drawShadowInterface.BindImmediateData(0, "ShadowHighlightSettings"_h);
-        drawShadowInterface.BindResourceView(0, "InputTexture"_h);
-		_drawShadowUniforms = Metal::BoundUniforms(*_drawShadow, drawShadowInterface);
+        HighlightByStencilShaders() = default;
 
-        //// ////
-        _validationCallback = ::Assets::GetDepValSys().Make();
-        _validationCallback.RegisterDependency(_drawHighlight->GetDependencyValidation());
-        _validationCallback.RegisterDependency(_drawShadow->GetDependencyValidation());
-        _validationCallback.RegisterDependency(distinctColors->GetDependencyValidation());
-    }    
+        static void ConstructToPromise(
+			std::promise<HighlightByStencilShaders>&& promise,
+			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+            bool onlyHighlighted,
+            bool inputAttachmentMode,
+            bool stencilInput)
+        {
+            StringMeld<64, ::Assets::ResChar> params;
+            params << "ONLY_HIGHLIGHTED=" << unsigned(onlyHighlighted);
+            if (inputAttachmentMode) params << ";INPUT_MODE=" << 2;
+            else params << ";INPUT_MODE=" << (stencilInput?0:1);
+
+            auto highlightShader = LoadShaderProgram(
+                pipelineLayout,
+                BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
+                HIGHLIGHT_VIS_PIXEL_HLSL ":HighlightByStencil:ps_*",
+                params.AsStringSection());
+
+            // Note that the outline version doesn't work with inputAttachmentMode, because 
+            // we need to read from several surrounding pixels
+            if (!inputAttachmentMode) {
+                auto outlineShader = LoadShaderProgram(
+                    pipelineLayout,
+                    BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
+                    HIGHLIGHT_VIS_PIXEL_HLSL ":OutlineByStencil:ps_*",
+                    params.AsStringSection());
+
+                ::Assets::WhenAll(highlightShader, outlineShader).ThenConstructToPromise(std::move(promise));
+            } else {
+                ::Assets::WhenAll(highlightShader).ThenConstructToPromise(std::move(promise));
+            }
+        }
+    };
 
     static void ExecuteHighlightByStencil(
         Metal::DeviceContext& metalContext,
@@ -133,26 +194,6 @@ namespace RenderOverlays
         bool inputAttachmentMode)
     {
         assert(stencilSrv);
-        auto shaders = ::Assets::MakeAssetMarker<HighlightShaders>(pipelineLayout)->TryActualize();
-        if (!shaders) return;
-
-        UniformsStream::ImmediateData cbData[] = {
-            MakeOpaqueIteratorRange(settings)
-        };
-        auto numericUniforms = encoder.BeginNumericUniformsInterface();
-        numericUniforms.BindConstantBuffers(3, cbData);
-        if (inputAttachmentMode) {
-            IResourceView* srvs[] = { shaders->_distinctColorsSRV.get(), stencilSrv };
-            numericUniforms.Bind(1, MakeIteratorRange(srvs));
-        } else {
-            IResourceView* srvs[] = { stencilSrv, shaders->_distinctColorsSRV.get() };
-            numericUniforms.Bind(0, MakeIteratorRange(srvs));
-        }
-        numericUniforms.Apply(metalContext, encoder);
-        encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
-        encoder.Bind(MakeIteratorRange(&Techniques::CommonResourceBox::s_abAlphaPremultiplied, &Techniques::CommonResourceBox::s_abAlphaPremultiplied+1));
-        encoder.Bind(Metal::BoundInputLayout{}, Topology::TriangleStrip);
-
         auto desc = stencilSrv->GetResource()->GetDesc();
         if (desc._type != ResourceDesc::Type::Texture) return;
         
@@ -160,34 +201,27 @@ namespace RenderOverlays
         bool stencilInput = 
                 components == FormatComponents::DepthStencil
             ||  components == FormatComponents::Stencil;
-                
-        StringMeld<64, ::Assets::ResChar> params;
-        params << "ONLY_HIGHLIGHTED=" << unsigned(onlyHighlighted);
-        if (inputAttachmentMode) params << ";INPUT_MODE=" << 2;
-        else params << ";INPUT_MODE=" << (stencilInput?0:1);
 
-        auto highlightShader = LoadShaderProgram(
-            pipelineLayout,
-            BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
-            HIGHLIGHT_VIS_PIXEL_HLSL ":HighlightByStencil:ps_*",
-            params.AsStringSection())->TryActualize();
-        if (highlightShader) {
-            encoder.Bind(**highlightShader);
+        auto shaders = ::Assets::MakeAssetMarker<HighlightShaders>(pipelineLayout)->TryActualize();
+        auto shaders2 = ::Assets::MakeAssetMarker<HighlightByStencilShaders>(pipelineLayout, onlyHighlighted, inputAttachmentMode, stencilInput)->TryActualize();
+        if (!shaders || !shaders2) return;
+
+        IResourceView* srvs[] = { shaders->_distinctColorsSRV.get(), stencilSrv };
+        UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(settings) };
+        UniformsStream us { srvs, immDatas };
+
+        encoder.Bind(Techniques::CommonResourceBox::s_dsDisable);
+        encoder.Bind(MakeIteratorRange(&Techniques::CommonResourceBox::s_abAlphaPremultiplied, &Techniques::CommonResourceBox::s_abAlphaPremultiplied+1));
+        encoder.Bind(Metal::BoundInputLayout{}, Topology::TriangleStrip);
+
+        shaders2->_highlightShaderUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+        encoder.Bind(*shaders2->_highlightShader);
+        encoder.Draw(4);
+
+        if (shaders2->_outlineShader) {
+            shaders2->_outlineShaderUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+            encoder.Bind(*shaders2->_outlineShader);
             encoder.Draw(4);
-        }
-
-        // Note that the outline version doesn't work with inputAttachmentMode, because 
-        // we need to read from several surrounding pixels
-        if (!inputAttachmentMode) {
-            auto outlineShader = LoadShaderProgram(
-                pipelineLayout,
-                BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
-                HIGHLIGHT_VIS_PIXEL_HLSL ":OutlineByStencil:ps_*",
-                params.AsStringSection())->TryActualize();
-            if (outlineShader) {                
-                encoder.Bind(**outlineShader);
-                encoder.Draw(4);
-            }
         }
 
         parsingContext.RequireCommandList(shaders->GetCompletionCommandList());
