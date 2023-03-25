@@ -352,7 +352,7 @@ namespace RenderOverlays
 
 		Techniques::RenderPassInstance rpi { parsingContext, fbFragment };
 		rpi.AutoNonFrameBufferBarrier({
-			{inputUAV, BindFlag::ShaderResource, ShaderStage::Compute},
+			{inputUAV, BindFlag::UnorderedAccess, ShaderStage::Compute},
 			{allMipsUAV, BindFlag::UnorderedAccess, ShaderStage::Compute}
 		});
 
@@ -361,6 +361,7 @@ namespace RenderOverlays
 			TextureViewDesc justDstMip; justDstMip._mipRange = {c, 1};
 			tempUAVs.push_back(rpi.GetNonFrameBufferAttachmentView(allMipsUAV)->GetResource()->CreateTextureView(BindFlag::UnorderedAccess, justDstMip));
 		}
+		auto workingSRV = rpi.GetNonFrameBufferAttachmentView(allMipsSRV);
 
 		// first build mip pyramid
 		_downsampleOperator->Execute(
@@ -407,7 +408,11 @@ namespace RenderOverlays
 					dstMip,
 					0
 				};
-				IResourceView* srvs[] { tempUAVs[dstMip].get(), rpi.GetNonFrameBufferAttachmentView(allMipsSRV).get() };
+				// We get incorrect warnings from Vulkan here, because workingSRV views all mips of "workingAttachment"
+				// while we have an aliasing view of some mips as a UAV
+				// The shader will only read from the SRV parts and write to the UAV parts, but Vulkan validation
+				// still generates warnings
+				IResourceView* srvs[] { tempUAVs[dstMip].get(), workingSRV.get() };
 				UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
 				_upsampleOperator->Dispatch(parsingContext, threadGroupX, threadGroupY, 1, UniformsStream { srvs, immDatas });
 			}
@@ -419,7 +424,7 @@ namespace RenderOverlays
 				Metal::BarrierResourceUsage{BindFlag::ShaderResource, ShaderStage::Compute});
 		}
 
-		return rpi.GetNonFrameBufferAttachmentView(3);
+		return workingSRV;
 	}
 
 	BroadBlurOperator::BroadBlurOperator(
