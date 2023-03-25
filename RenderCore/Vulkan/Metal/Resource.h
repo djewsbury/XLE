@@ -273,9 +273,10 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	struct BarrierHelper
 	{
-		VkBufferMemoryBarrier _bufferBarriers[8];
+		static const auto s_maxBarriers = 8u;
+		VkBufferMemoryBarrier _bufferBarriers[s_maxBarriers];
 		unsigned _bufferBarrierCount = 0;
-		VkImageMemoryBarrier _imageBarriers[8];
+		VkImageMemoryBarrier _imageBarriers[s_maxBarriers];
 		unsigned _imageBarrierCount = 0;
 		VkPipelineStageFlags _srcStageMask = 0;
 		VkPipelineStageFlags _dstStageMask = 0;
@@ -296,7 +297,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		BarrierHelper& operator=(const BarrierHelper&) = delete;
 	private:
 		void Flush();
-		std::pair<uint64_t, bool> _imageBarrierGuids[8];
+		struct ImageBarrierRecord { uint64_t _guid; bool _postBarrierIsSteadyState; };
+		ImageBarrierRecord _imageBarrierGuids[s_maxBarriers];
 	};
 
 	namespace Internal

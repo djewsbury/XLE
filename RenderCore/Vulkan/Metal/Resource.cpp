@@ -1998,6 +1998,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_capturedLayout = moveFrom._capturedLayout; moveFrom._capturedLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			_capturedAccessMask = moveFrom._capturedAccessMask; moveFrom._capturedAccessMask = ~0u;
 			_capturedStageMask = moveFrom._capturedStageMask; moveFrom._capturedStageMask = ~0u;
+			_restoreLayout = moveFrom._restoreLayout; moveFrom._restoreLayout = {};
 		}
 
 		CaptureForBind& CaptureForBind::operator=(CaptureForBind&& moveFrom)
@@ -2008,6 +2009,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			_capturedLayout = moveFrom._capturedLayout; moveFrom._capturedLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			_capturedAccessMask = moveFrom._capturedAccessMask; moveFrom._capturedAccessMask = ~0u;
 			_capturedStageMask = moveFrom._capturedStageMask; moveFrom._capturedStageMask = ~0u;
+			_restoreLayout = moveFrom._restoreLayout; moveFrom._restoreLayout = {};
 			return *this;
 		}
 
@@ -2350,7 +2352,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		// Call MakeResourcesVisible & record captured layouts for images
 		if (_imageBarrierCount) {
 			uint64_t makeVisibleGuids[dimof(_imageBarrierGuids)];
-			for (unsigned c=0; c<_imageBarrierCount; ++c) makeVisibleGuids[c] = _imageBarrierGuids[c].first;
+			for (unsigned c=0; c<_imageBarrierCount; ++c) makeVisibleGuids[c] = _imageBarrierGuids[c]._guid;
 			_deviceContext->GetActiveCommandList().MakeResourcesVisible(MakeIteratorRange(makeVisibleGuids, &makeVisibleGuids[_imageBarrierCount]));
 
 			if (!_deviceContext->_captureForBindRecords)
@@ -2358,12 +2360,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto& captureRecords = _deviceContext->_captureForBindRecords->_captures;
 			for (unsigned c=0; c<_imageBarrierCount; ++c) {
 				auto& b = _imageBarriers[c];
-				auto i = LowerBound(captureRecords, _imageBarrierGuids[c].first);
-				if (i == captureRecords.end() || i->first != _imageBarrierGuids[c].first) {
-					if (!_imageBarrierGuids[c].second)
-						i = captureRecords.insert(i, {_imageBarrierGuids[c].first, {b.newLayout, b.dstAccessMask, _dstStageMask}});
+				auto i = LowerBound(captureRecords, _imageBarrierGuids[c]._guid);
+				if (i == captureRecords.end() || i->first != _imageBarrierGuids[c]._guid) {
+					if (!_imageBarrierGuids[c]._postBarrierIsSteadyState)
+						i = captureRecords.insert(i, {_imageBarrierGuids[c]._guid, {b.newLayout, b.dstAccessMask, _dstStageMask}});
 				} else {
-					if (_imageBarrierGuids[c].second) {
+					if (_imageBarrierGuids[c]._postBarrierIsSteadyState) {
 						i = captureRecords.erase(i);
 					} else {
 						i->second = {b.newLayout, b.dstAccessMask, _dstStageMask};
