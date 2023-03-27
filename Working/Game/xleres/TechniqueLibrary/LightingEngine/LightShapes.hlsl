@@ -9,7 +9,7 @@
 
 #include "LightDesc.hlsl"
 #include "DirectionalResolve.hlsl"
-#include "AreaLights.hlsl"
+#include "rectangle-light-util.hlsl"
 #include "LightingAlgorithm.hlsl"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

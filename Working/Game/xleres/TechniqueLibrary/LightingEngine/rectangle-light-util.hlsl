@@ -4,11 +4,11 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#if !defined(AREA_LIGHTS_H)
-#define AREA_LIGHTS_H
+#if !defined(RECTANGLE_LIGHT_UTIL_HLSL)
+#define RECTANGLE_LIGHT_UTIL_HLSL
 
-#include "SpecularMethods.hlsl"        // for RoughnessToDAlpha
 #include "../Math/MathConstants.hlsl"
+#include "SpecularMethods.hlsl"     // TrowReitzDInverseApprox
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   Utility functions for calculating rectangle area lights
@@ -25,7 +25,7 @@ float RectRectIntersectionArea(
     return max(0, A.x) * max(0, A.y);
 }
 
-float2 RectangleDiffuseRepPoint(float3 samplePt, float3 sampleNormal, float2 lightHalfSize)
+float2 RectangleDiffuseRepPoint(float3 samplePt, float3 sampleNormal, float2 lightHalfDims)
 {
         // This method based on Drobot's research in GPU Gems 5. It should be
         // fairly general, and it may be possible to adapt this method to
@@ -70,11 +70,11 @@ float2 RectangleDiffuseRepPoint(float3 samplePt, float3 sampleNormal, float2 lig
         // Drobot didn't actually calculate pc and pt -- he just used a half way point
         // between p0 and p1. Actually, the difference does seem to be quite minor.
         // But in light space, it's easy to clamp pc and pt.
-    float2 pc = clamp(p0.xy, -lightHalfSize.xy, lightHalfSize.xy);
-    float2 pt = clamp(p1.xy, -lightHalfSize.xy, lightHalfSize.xy);
+    float2 pc = clamp(p0.xy, -lightHalfDims.xy, lightHalfDims.xy);
+    float2 pt = clamp(p1.xy, -lightHalfDims.xy, lightHalfDims.xy);
 
     float2 r = 0.5f * (pc+pt);
-    // r = float2(clamp(r.x, -lightHalfSize.x, lightHalfSize.x), clamp(r.y, -lightHalfSize.y, lightHalfSize.y));
+    // r = float2(clamp(r.x, -lightHalfDims.x, lightHalfDims.x), clamp(r.y, -lightHalfDims.y, lightHalfDims.y));
     return r;
 }
 
@@ -156,7 +156,7 @@ void CalculateEllipseApproximation(
     squareWeighting = A / (A+B);
 }
 
-float2 RectangleSpecularRepPoint(out float intersectionArea, float3 samplePt, float3 sampleNormal, float3 viewDirection, float2 lightHalfSize, float roughness)
+float2 RectangleSpecularRepPoint(out float intersectionArea, float3 samplePt, float3 sampleNormal, float3 viewDirection, float2 lightHalfDims, float alpha)
 {
         // To calculate specular, we need a different equation. We're going to
         // create a cone centered around the reflection angle. The angle of the cone
@@ -193,7 +193,7 @@ float2 RectangleSpecularRepPoint(out float intersectionArea, float3 samplePt, fl
         // Very small cutoff angles almost seem to give the best result.
     // float cosConeAngle = TrowReitzDInverse(0.32f, RoughnessToDAlpha(roughness));
     // float cosConeAngle = TrowReitzDInverse(0.97f, RoughnessToDAlpha(roughness));
-    float cosConeAngle = TrowReitzDInverseApprox(RoughnessToDAlpha(roughness));
+    float cosConeAngle = TrowReitzDInverseApprox(alpha);
 
         // note --  we could incorporate this tanConeAngle calculation into the
         //          TrowReitzDInverseApprox function...?
@@ -221,7 +221,7 @@ float2 RectangleSpecularRepPoint(out float intersectionArea, float3 samplePt, fl
             // However, this is a double-edged sword. Because with this clamp, sometimes
             // light sources that are far away will appear too sharp. It's unfortunate,
             // because the distortion is really only a problem in some cases.
-        // const float maxProjectedCircleRadius = 0.33f * min(lightHalfSize.x, lightHalfSize.y);
+        // const float maxProjectedCircleRadius = 0.33f * min(lightHalfDims.x, lightHalfDims.y);
         // float projectedCircleRadius = clamp(distToProjectedConeCenter * tanConeAngle, 0.f, maxProjectedCircleRadius);
         float projectedCircleRadius = distToProjectedConeCenter * tanConeAngle;
         // return float4(projectedCircleRadius.xxx, 1.f);
@@ -234,7 +234,7 @@ float2 RectangleSpecularRepPoint(out float intersectionArea, float3 samplePt, fl
         float2 representativePt;
         intersectionArea = RectRectIntersectionArea(
             representativePt,
-            -lightHalfSize, lightHalfSize,
+            -lightHalfDims, lightHalfDims,
             projectedCircleCenter - float2(squareRadius, squareRadius),
             projectedCircleCenter + float2(squareRadius, squareRadius));
 
@@ -259,8 +259,8 @@ float2 RectangleSpecularRepPoint(out float intersectionArea, float3 samplePt, fl
             distToProjectedConeCenter, sinConeAngle, cosConeAngle, projectedCircleCenter);
 
         float2 representativePtA, representativePtB;
-        float intersectionAreaA = RectRectIntersectionArea(representativePtA, -lightHalfSize, lightHalfSize, S0A, S0B);
-        float intersectionAreaB = RectRectIntersectionArea(representativePtB, -lightHalfSize, lightHalfSize, S1A, S1B);
+        float intersectionAreaA = RectRectIntersectionArea(representativePtA, -lightHalfDims, lightHalfDims, S0A, S0B);
+        float intersectionAreaB = RectRectIntersectionArea(representativePtB, -lightHalfDims, lightHalfDims, S1A, S1B);
 
             // We have to be careful when the intersection area of one square is zero. In this
             // case the square is completely clipped, and the representativePt may be invalid.

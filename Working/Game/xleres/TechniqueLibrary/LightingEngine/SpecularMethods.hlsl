@@ -7,7 +7,6 @@
 #if !defined(SPECULAR_METHODS_H)
 #define SPECULAR_METHODS_H
 
-#include "optimized-ggx.hlsl"
 #include "LightingAlgorithm.hlsl"
 #include "../Math/Misc.hlsl"
 
@@ -19,17 +18,45 @@
         //   G G X                                                      //
     //////////////////////////////////////////////////////////////////////////
 
-float SmithG(float NdotV, float alpha)
+float ShadowingMaskingLambda(float cosTheta, float alpha)
+{
+    // From Walter07 & Heitz14, (capital) lambda function used with Smith-G based shadowing/masking functions
+    //  https://jcgt.org/published/0003/02/03/paper.pdf
+    // useful when considering height correlation issues.
+    // See also pbr-book, which uses this same formulation
+    //
+    // lambda theta = ( -1 + sqrt(1 + (1/a^2)) ) / 2
+    // where a = 1/(alpha*tan(theta))
+    //
+    // tan(theta) = sqrt(1 - cos^2(theta)) / cos(theta), for 0 <= theta <= pi/2
+    float tanTheta = sqrt(1 - cosTheta*cosTheta) / cosTheta;
+    float a = 1/(alpha*tanTheta);
+    float rcpa = rcp(a);
+    return (-1 + sqrt(1 + rcpa*rcpa)) / 2;
+}
+
+float SmithG(float cosTheta, float alpha)
 {
     // This is one part of the G term in Torrent-Sparrow
     // Note that 'Smith-G' equations like this are generated from a particular
     // 'D' equation, given an assumption about the arrangement of microfacets
     // So this implementation must be used with TrowReitzD
+    //
     // This implementation doesn't consider height correlation issues and so
     // over-darkens from certain angles
-    float a = alpha * alpha;
-    float b = NdotV * NdotV;
-    return (2.f * NdotV) / (NdotV + sqrt(lerp(b, 1.0f, a)));
+    //
+    // See Heitz14 (Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs)
+    //      https://jcgt.org/published/0003/02/03/paper.pdf
+    // Heitz breaksdown how the G term is derived, and why the traditional G * G approach
+    // can over-shadow when the view and normal are close (along with other properties)
+    //
+    // G = 1 / (1 + lambda(cosTheta))
+    //
+    // We can express this another way as (just a different factoring):
+    // float a = alpha * alpha;
+    // float b = cosTheta * cosTheta;
+    // return (2.f * cosTheta) / (cosTheta + sqrt(lerp(b, 1.0f, a)));
+    return 1 / (1 + ShadowingMaskingLambda(cosTheta, alpha));
 }
 
 float TrowReitzD(float NdotH, float alpha)
