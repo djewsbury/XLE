@@ -421,8 +421,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	auto SemaphoreBasedTracker::GetSpecificMarkerStatus(Marker marker) const -> MarkerStatus
 	{
-		if (marker <= _lastCompletedConsumerFrameMarker.load()) return MarkerStatus::ConsumerCompleted;
-		if (marker > _currentProducerFrameMarker.load()) return MarkerStatus::Unknown;
+		if (marker <= _lastCompletedConsumerFrameMarker.load(std::memory_order_relaxed)) return MarkerStatus::ConsumerCompleted;
+		if (marker > _currentProducerFrameMarker.load(std::memory_order_relaxed)) return MarkerStatus::Unknown;
 
 		ScopedLock(_trackersSubmittedToQueueLock);
 		if (marker <= _lastQueuedInOrder) return MarkerStatus::ConsumerPending;
@@ -449,12 +449,16 @@ namespace RenderCore { namespace Metal_Vulkan
 		// note that the first call to AllocateMarkerForNewCmdList() does not advance the producer frame marker, because we want
 		// anything that happens before the first AllocateMarkerForNewCmdList() to be considered part of the first cmd list
 		// Similarly, we can get an early advance if the submitted queue marker catches up to the producer marker
+		//
+		// the atomics can be relaxed because writes to all of these variables are protected by _trackersWritingCommandsLock
+		// (and we're also inside that mutex here)
 		if (_currentProducerFrameMarkerAdvancedBeforeAllocation) {
-			_trackersWritingCommands.push_back({(Marker)_currentProducerFrameMarker, std::chrono::steady_clock::now(), std::this_thread::get_id()});
+			auto result = (Marker)_currentProducerFrameMarker.load(std::memory_order_relaxed);
+			_trackersWritingCommands.push_back({result, std::chrono::steady_clock::now(), std::this_thread::get_id()});
 			_currentProducerFrameMarkerAdvancedBeforeAllocation = false;
-			return (Marker)_currentProducerFrameMarker;
+			return result;
 		} else {
-			auto result = (Marker)++_currentProducerFrameMarker;
+			auto result = (Marker)(1 + _currentProducerFrameMarker.fetch_add(1, std::memory_order_relaxed));
 			_trackersWritingCommands.push_back({result, std::chrono::steady_clock::now(), std::this_thread::get_id()});
 			return result;
 		}
@@ -558,7 +562,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			// Therefore, it's critical that no newly created objects use newLastQueuedInOrder as their marker. We must pre-advance _currentProducerFrameMarker
 			// if it looks like that might happen
 			if (_currentProducerFrameMarker == newTrailingAbandons) {
-				++_currentProducerFrameMarker;
+				_currentProducerFrameMarker.fetch_add(1, std::memory_order_relaxed);
 				_currentProducerFrameMarkerAdvancedBeforeAllocation = true;
 			}
 		}
@@ -571,12 +575,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		uint64_t result = 0;
 		auto hres = _extFn->_getSemaphoreCounterValue(_device, _semaphore.get(), &result);
 		assert(hres == VK_SUCCESS);
-		_lastCompletedConsumerFrameMarker = result;
+		_lastCompletedConsumerFrameMarker.store(result, std::memory_order_relaxed);
 
 		result = 0;
 		hres = _extFn->_getSemaphoreCounterValue(_device, _submitSemaphore.get(), &result);
 		assert(hres == VK_SUCCESS);
-		_lastCompletedSubmitSemaphoreValue = result;
+		_lastCompletedSubmitSemaphoreValue.store(result, std::memory_order_relaxed);
 	}
 
 	void SemaphoreBasedTracker::AttachName(Marker marker, std::string name)
@@ -592,7 +596,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	bool SemaphoreBasedTracker::WaitForSpecificMarker(Marker marker, std::optional<std::chrono::nanoseconds> timeout)
 	{
-		if (marker <= _lastCompletedConsumerFrameMarker) return true;
+		if (marker <= _lastCompletedConsumerFrameMarker.load(std::memory_order_relaxed)) return true;
 
 		// we may have to use _submitSemaphoreValuesAndMarkers and wait on the particular sub
 		std::optional<uint64_t> useSubmitSemaphore;
@@ -643,13 +647,20 @@ namespace RenderCore { namespace Metal_Vulkan
 		//  less than queueDepth is pressure 0
 		//	between 1*queueDepth to 2*queueDepth is pressure 0 to 1
 		//	more than 2*queueDepth , the pressure will increase continually
+		UpdateConsumer();
 		const auto baselineQueueDepth = 32;
-		auto allocated = _currentProducerFrameMarker - _lastCompletedConsumerFrameMarker;
-		if (allocated < baselineQueueDepth) return 0.f;
+		auto producer = _currentProducerFrameMarker.load(std::memory_order_relaxed);
+		auto consumer = _lastCompletedConsumerFrameMarker.load(std::memory_order_relaxed);		// _currentProducerFrameMarker & _lastCompletedConsumerFrameMarker are written at separate times by separate threads
+		auto allocated =  producer - consumer;
+		if (allocated < baselineQueueDepth || producer < consumer) return 0.f;
 		return std::pow((allocated-baselineQueueDepth) / float(baselineQueueDepth), 4.f);
 	}
 
 	SemaphoreBasedTracker::SemaphoreBasedTracker(ObjectFactory& factory)
+	: _currentProducerFrameMarker{1}		// We start with frame 1 -- and we want GetProducerMarker() to return 1 even before the first call to AllocateMarkerForNewCmdList()
+	, _lastCompletedConsumerFrameMarker{0}
+	, _lastCompletedSubmitSemaphoreValue{0}
+	, _nextSubmitSemaphoreValue{1}
 	{
 		_extFn = &factory.GetExtensionFunctions();
 		_semaphore = factory.CreateTimelineSemaphore();		// initial state will be 0
@@ -659,11 +670,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		_trackersSubmittedPendingOrdering.reserve(reserveDepth);
 		_trackersWritingCommands.reserve(reserveDepth);
 
-		// We start with frame 1 -- and we want GetProducerMarker() to return 1 even before the first call to AllocateMarkerForNewCmdList()
-		_currentProducerFrameMarker = 1;
-		_lastCompletedConsumerFrameMarker = 0;
-		_lastCompletedSubmitSemaphoreValue = 0;
-		_nextSubmitSemaphoreValue = 1;
 		_lastQueuedInOrder = 0;
 		_trailingAbandons = 0;
 		_currentProducerFrameMarkerAdvancedBeforeAllocation = true;

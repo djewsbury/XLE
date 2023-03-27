@@ -71,7 +71,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<std::unique_ptr<TemporaryStoragePage>> _oversizedAllocations;
 		BitHeap _pageReservations, _namedPageReservations;
 		unsigned _nextPageId = 1u;
-		std::atomic<unsigned> _cmdListAttachedStorageAlive = 0;
+		std::atomic<int> _cmdListAttachedStorageAlive { 0 };
 		std::thread::id _boundThreadId;
 
 		Pimpl(ObjectFactory& factory, std::shared_ptr<IAsyncTracker> gpuTracker);
@@ -218,7 +218,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	TemporaryStorageManager::Pimpl::~Pimpl()
 	{
-		assert(_cmdListAttachedStorageAlive.load() == 0);
+		assert(_cmdListAttachedStorageAlive.load(std::memory_order_relaxed) == 0);
 	}
 
 	CmdListAttachedStorage TemporaryStorageManager::BeginCmdListReservation()
@@ -441,7 +441,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	CmdListAttachedStorage::CmdListAttachedStorage(TemporaryStorageManager::Pimpl* manager) : _manager(manager)
 	{
 		assert(_manager);
-		++_manager->_cmdListAttachedStorageAlive;
+		_manager->_cmdListAttachedStorageAlive.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	CmdListAttachedStorage::~CmdListAttachedStorage()
@@ -449,7 +449,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		assert(_reservedPages.empty());
 		if (_manager) {
 			assert(_manager);
-			--_manager->_cmdListAttachedStorageAlive;
+			_manager->_cmdListAttachedStorageAlive.fetch_add(-1, std::memory_order_relaxed);
 		}
 	}
 
@@ -471,7 +471,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (this != &moveFrom) {
 			assert(_reservedPages.empty());
 			if (_manager)
-				_manager->_cmdListAttachedStorageAlive--;
+				_manager->_cmdListAttachedStorageAlive.fetch_add(-1, std::memory_order_relaxed);
 			_reservedPages = std::move(moveFrom._reservedPages);
 			_namedPageReservations = std::move(moveFrom._namedPageReservations);
 			_manager = moveFrom._manager;

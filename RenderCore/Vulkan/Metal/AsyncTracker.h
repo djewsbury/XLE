@@ -80,8 +80,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		bool _initialMarker = false;								// protected by _trackersWritingCommandsLock
 		Threading::Mutex _trackersWritingCommandsLock;
 
-		std::atomic<Marker> _currentProducerFrameMarker = Marker_Invalid;
-		std::atomic<Marker> _lastCompletedConsumerFrameMarker = Marker_Invalid;
+		std::atomic<Marker> _currentProducerFrameMarker { Marker_Invalid };
+		std::atomic<Marker> _lastCompletedConsumerFrameMarker { Marker_Invalid };
 		VkDevice _device;
 
 		std::thread::id _queueThreadId;
