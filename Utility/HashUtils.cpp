@@ -45,8 +45,8 @@ namespace Utility
                 //
 
         #if defined(RECORD_RUNTIME_HASH_STATS)
-            ++s_runtimeHashCount;
-            s_runtimeHashBytes += size_t(end)-size_t(begin);
+            s_runtimeHashCount.fetch_add(1, std::memory_order_relaxed);
+            s_runtimeHashBytes.fetch_add(size_t(end)-size_t(begin), std::memory_order_relaxed);
         #endif
 
         const bool crossPlatformHash = true;
@@ -93,8 +93,8 @@ namespace Utility
     uint32_t Hash32(const void* begin, const void* end, uint32_t seed)
     {
         #if defined(RECORD_RUNTIME_HASH_STATS)
-            ++s_runtimeHashCount;
-            s_runtimeHashBytes += size_t(end)-size_t(begin);
+            s_runtimeHashCount.fetch_add(1, std::memory_order_relaxed);
+            s_runtimeHashBytes.fetch_add(size_t(end)-size_t(begin), std::memory_order_relaxed);
         #endif
 
         #if ENFORCE_ALIGNED_READS
@@ -148,7 +148,7 @@ namespace Utility
     XL_UTILITY_API std::pair<size_t, size_t> GetRuntimeHashStats()
     {
         #if defined(RECORD_RUNTIME_HASH_STATS)
-            return {s_runtimeHashCount.load(), s_runtimeHashBytes.load()};
+            return {s_runtimeHashCount.load(std::memory_order_relaxed), s_runtimeHashBytes.load(std::memory_order_relaxed)};
         #else
             return {0,0};
         #endif
