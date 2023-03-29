@@ -75,3 +75,20 @@ macro(find_dxcompiler)
 	set_target_properties(dxil PROPERTIES IMPORTED_LOCATION ${INTERNAL_FOUND_DXIL_DLL} IMPORTED_IMPLIB ${INTERNAL_FOUND_DXCOMPILER_LIB})
 
 endmacro ()
+
+macro(dxcompile_copy_dlls_to_binary_dir Target)
+
+	add_custom_command(
+		TARGET ${Target} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+				${INTERNAL_FOUND_DXIL_DLL}
+				${CMAKE_CURRENT_BINARY_DIR}/dxil.dll)
+
+	add_custom_command(
+		TARGET ${Target} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy
+				${INTERNAL_FOUND_DXCOMPILER_DLL}
+				${CMAKE_CURRENT_BINARY_DIR}/dxcompiler.dll)
+
+endmacro()
+
