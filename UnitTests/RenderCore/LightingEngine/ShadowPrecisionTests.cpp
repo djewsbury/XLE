@@ -6,6 +6,7 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
+#include "../../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
 #include "../../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
@@ -108,7 +109,7 @@ namespace UnitTests
 	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
 	{
 		// stall until all resources are ready
-		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
+		auto prepareLightingIterator = RenderCore::LightingEngine::BeginPrepareResourcesInstance(*testApparatus._pipelineAccelerators, lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
 		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> preparePromise;
 		auto prepareFuture = preparePromise.get_future();
@@ -194,7 +195,7 @@ namespace UnitTests
 					auto lightId = ConfigureLightScene(lightScene, gPI/2.0f*c/float(stripes));
 
 					{
-						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
 							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}
@@ -240,7 +241,7 @@ namespace UnitTests
 				auto lightId = ConfigureLightScene(lightScene, gPI/4.0f);
 
 				{
-					RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+					auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
 						parsingContext, *lightingTechnique);
 					ParseScene(lightingIterator, *drawableWriter);
 				}
@@ -497,7 +498,7 @@ namespace UnitTests
 				// draw once from the "scene camera"
 				{
 					{
-						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
 							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}
@@ -531,7 +532,7 @@ namespace UnitTests
 				for (unsigned c=0; c<dimof(visCameras); ++c) {
 					parsingContext.GetProjectionDesc() = BuildProjectionDesc(visCameras[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
 					{
-						RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
 							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}

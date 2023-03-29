@@ -280,7 +280,7 @@ namespace UnitTests
 		auto scene = futureScene.get();
 
 		{
-			LightingEngine::LightingTechniqueInstance prepareInstance{*scene._compiledLightingTechnique};
+			auto prepareInstance = LightingEngine::BeginPrepareResourcesInstance(*testApparatus._pipelineAccelerators, *scene._compiledLightingTechnique);
 			ParseScene(prepareInstance, *scene._drawablesWriter);
 			std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
 			auto marker = preparePromise.get_future();
@@ -326,7 +326,7 @@ namespace UnitTests
 			{
 				parsingContext.GetProjectionDesc() = BuildProjectionDesc(camerasToRender[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
 				parsingContext.SetPipelineAcceleratorsVisibility(testApparatus._pipelineAccelerators->VisibilityBarrier());
-				LightingEngine::LightingTechniqueInstance drawInstance{parsingContext, *scene._compiledLightingTechnique};
+				auto drawInstance = LightingEngine::BeginLightingTechniqueInstance(parsingContext, *scene._compiledLightingTechnique);
 				ParseScene(drawInstance, *scene._drawablesWriter);
 			}
 
@@ -344,7 +344,7 @@ namespace UnitTests
 	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique, RenderCore::IThreadContext& threadContext)
 	{
 		// stall until all resources are ready
-		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
+		auto prepareLightingIterator = RenderCore::LightingEngine::BeginPrepareResourcesInstance(*testApparatus._pipelineAccelerators, lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
 		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> preparePromise;
 		auto prepareFuture = preparePromise.get_future();
@@ -444,7 +444,7 @@ namespace UnitTests
 		lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
 
 		// draw once, and then return
-		RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+		auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
 			parsingContext, *lightingTechnique);
 		ParseScene(lightingIterator, *drawableWriter);
 

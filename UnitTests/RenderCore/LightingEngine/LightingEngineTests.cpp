@@ -6,6 +6,7 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
+#include "../../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
 #include "../../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
@@ -121,7 +122,7 @@ namespace UnitTests
 	{
 		// stall until all resources are ready
 		using namespace RenderCore;
-		LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
+		auto prepareLightingIterator = LightingEngine::BeginPrepareResourcesInstance(*testApparatus._pipelineAccelerators, lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
 		std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
 		auto prepareFuture = preparePromise.get_future();
@@ -207,7 +208,7 @@ namespace UnitTests
 			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
 			{
-				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+				auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
@@ -235,7 +236,7 @@ namespace UnitTests
 			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
 			{
-				LightingEngine::LightingTechniqueInstance lightingIterator(
+				auto lightingIterator = LightingEngine::BeginLightingTechniqueInstance(
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
@@ -303,7 +304,7 @@ namespace UnitTests
 
 			// stall until all resources are ready
 			{
-				RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(*lightingTechnique);
+				auto prepareLightingIterator = RenderCore::LightingEngine::BeginPrepareResourcesInstance(*testApparatus._pipelineAccelerators, *lightingTechnique);
 				ParseScene(prepareLightingIterator, *drawableWriter);
 				std::promise<Techniques::PreparedResourcesVisibility> preparePromise;
 				auto prepareFuture = preparePromise.get_future();
@@ -314,7 +315,7 @@ namespace UnitTests
 			}
 
 			{
-				RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+				auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}

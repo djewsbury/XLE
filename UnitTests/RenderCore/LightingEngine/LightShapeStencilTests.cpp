@@ -6,6 +6,7 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
+#include "../../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
 #include "../../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
@@ -60,7 +61,7 @@ namespace UnitTests
 	static RenderCore::Techniques::PreparedResourcesVisibility PrepareResources(ToolsRig::IDrawablesWriter& drawablesWriter, LightingEngineTestApparatus& testApparatus, RenderCore::LightingEngine::CompiledLightingTechnique& lightingTechnique)
 	{
 		// stall until all resources are ready
-		RenderCore::LightingEngine::LightingTechniqueInstance prepareLightingIterator(lightingTechnique);
+		auto prepareLightingIterator = RenderCore::LightingEngine::BeginPrepareResourcesInstance(*testApparatus._pipelineAccelerators, lightingTechnique);
 		ParseScene(prepareLightingIterator, drawablesWriter);
 		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> preparePromise;
 		auto prepareFuture = preparePromise.get_future();
@@ -81,7 +82,7 @@ namespace UnitTests
 		auto query = statsQuery.Begin(metalContext);
 
 		{
-			RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator(
+			auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
 				parsingContext, lightingTechnique);
 			ParseScene(lightingIterator, drawableWriter);
 		}
