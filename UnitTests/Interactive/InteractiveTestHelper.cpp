@@ -140,7 +140,13 @@ namespace UnitTests
 		InteractiveTestHelper(EnabledComponents::BitField enabledComponents)
 		{
 			if (!_globalServices) _globalServices = std::make_shared<ConsoleRig::GlobalServices>();
-			_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
+			#if !defined(NO_EMBEDDED_RES)
+				_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
+			#else
+				_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
+			#endif
+			if (enabledComponents)
+				_rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
 
 			auto osWindow = std::make_unique<OSServices::Window>();
 			auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
@@ -171,6 +177,8 @@ namespace UnitTests
 
 		~InteractiveTestHelper()
 		{
+			if (_rawosmnt != ~0u)
+				::Assets::MainFileSystem::GetMountingTree()->Unmount(_rawosmnt);
 			if (_xleresmnt != ~0u)
 				::Assets::MainFileSystem::GetMountingTree()->Unmount(_xleresmnt);
 			_globalServices->PrepareForDestruction();
@@ -190,6 +198,7 @@ namespace UnitTests
 
 		std::shared_ptr<PlatformRig::FrameRig> _frameRig;
 		uint32_t _xleresmnt = ~0u;
+		uint32_t _rawosmnt = ~0u;
 		const RenderCore::Techniques::CameraDesc* _activeCamera = nullptr;
 	};
 

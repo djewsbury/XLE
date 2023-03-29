@@ -61,7 +61,8 @@ namespace UnitTests
 		{
 			enum Enum {
 				RenderCoreTechniques = 1<<0,
-				LightingEngine = 1<<1
+				LightingEngine = 1<<1,
+				RawOSFileSystem = 1<<2
 			};
 			using BitField = unsigned;
 		};
