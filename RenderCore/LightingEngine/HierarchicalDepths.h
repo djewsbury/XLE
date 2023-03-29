@@ -19,13 +19,13 @@ namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t;
 
 namespace RenderCore { namespace LightingEngine
 {
-	class LightingTechniqueIterator;
+	class SequenceIterator;
 	class RenderStepFragmentInterface;
 
 	class HierarchicalDepthsOperator : public std::enable_shared_from_this<HierarchicalDepthsOperator>
 	{
 	public:
-		void Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator);
+		void Execute(RenderCore::LightingEngine::SequenceIterator& iterator);
 
 		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);

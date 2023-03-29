@@ -148,7 +148,7 @@ namespace GUILayer
 	static void BuildDrawables(
 		EditorScene& scene,
         RenderCore::Techniques::ParsingContext& parserContext,
-		RenderCore::LightingEngine::LightingTechniqueInstance::Step& step)
+		RenderCore::LightingEngine::SequencePlayback::Step& step)
 	{
         SceneEngine::ExecuteSceneContext exeContext;
         exeContext._destinationPkts = MakeIteratorRange(step._pkts);
@@ -181,7 +181,7 @@ namespace GUILayer
 
         {
 			ToolsRig::ConfigureParsingContext(parserContext, *_camera.get());
-            RenderCore::LightingEngine::LightingTechniqueInstance lightingIterator { parserContext, _boundEnvSettings->GetLightingTechnique() };
+            RenderCore::LightingEngine::SequencePlayback lightingIterator { parserContext, _boundEnvSettings->GetLightingTechnique() };
             for (;;) {
                 auto next = lightingIterator.GetNextStep();
                 if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;

@@ -5,7 +5,7 @@
 #include "SSAOOperator.h"
 #include "RenderStepFragments.h"
 #include "LightingEngine.h"
-#include "LightingEngineIterator.h"
+#include "SequenceIterator.h"
 #include "StandardLightOperators.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/CommonBindings.h"
@@ -38,7 +38,7 @@ namespace RenderCore { namespace LightingEngine
     static const uint32_t s_ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 18, 6, 54, 30, 78, 7, 91, 61, 25, 55, 43, 13, 73, 31, 67, 85, 1, 79, 19, 37, 49, 80, 20, 38, 50, 32, 68, 86, 2, 56, 44, 14, 74, 8, 92, 62, 26, 9, 57, 33, 81, 93, 45, 69, 21, 63, 15, 87, 39, 27, 75, 3, 51, 52, 4, 76, 28, 40, 88, 16, 64, 22, 70, 46, 94, 82, 34, 58, 10, 29, 65, 95, 11, 77, 17, 47, 59, 5, 89, 71, 35, 53, 41, 23, 83};
 
     void SSAOOperator::Execute(
-        LightingTechniqueIterator& iterator,
+        SequenceIterator& iterator,
         IResourceView& inputDepthsSRV,
         IResourceView& inputNormalsSRV,
         IResourceView& inputVelocitiesSRV,
@@ -144,7 +144,7 @@ namespace RenderCore { namespace LightingEngine
 
         result.AddSubpass(
             std::move(spDesc),
-            [op=shared_from_this(), hd=_integrationParams._hasHierarchicalDepths, hc=_integrationParams._hasHistoryConfidence](LightingTechniqueIterator& iterator) {
+            [op=shared_from_this(), hd=_integrationParams._hasHierarchicalDepths, hc=_integrationParams._hasHistoryConfidence](SequenceIterator& iterator) {
 
                 IResourceView* hierarchicalDepthsSRV = nullptr, *depthPrevSRV = nullptr, *gbufferNormalPrevSRV = nullptr;
                 IResourceView* historyAccumulationSRV = nullptr;

@@ -7,7 +7,7 @@
 #include "StandardLightScene.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
-#include "LightingEngineInitialization.h"
+#include "Sequence.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/RenderPass.h"
@@ -262,9 +262,9 @@ namespace RenderCore { namespace LightingEngine
 		};
 	}
 
-	TechniqueSequenceParseId CreateShadowParseInSequence(
-		LightingTechniqueIterator& iterator,
-		LightingTechniqueSequence& sequence,
+	SequenceParseId CreateShadowParseInSequence(
+		SequenceIterator& iterator,
+		Sequence& sequence,
 		Internal::ILightBase& proj,
 		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester)
 	{

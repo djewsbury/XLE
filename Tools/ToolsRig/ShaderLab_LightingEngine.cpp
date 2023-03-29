@@ -5,8 +5,7 @@
 #include "ShaderLab_LightingEngine.h"
 #include "../../SceneEngine/BasicLightingStateDelegate.h"		// (for SetProperty)
 #include "../../RenderCore/LightingEngine/LightingDelegateUtil.h"
-#include "../../RenderCore/LightingEngine/LightingEngineInitialization.h"
-#include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
+#include "../../RenderCore/LightingEngine/Sequence.h"
 #include "../../RenderCore/LightingEngine/ForwardPlusLightScene.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../RenderCore/LightingEngine/SSAOOperator.h"
@@ -38,7 +37,7 @@ namespace ToolsRig
 	class PrepareForwardLightScene : public std::enable_shared_from_this<PrepareForwardLightScene>
 	{
 	public:
-		void DoShadowPrepare(LightingEngine::LightingTechniqueIterator& iterator, LightingEngine::LightingTechniqueSequence& sequence)
+		void DoShadowPrepare(LightingEngine::SequenceIterator& iterator, LightingEngine::Sequence& sequence)
 		{
 			if (_lightScene->_shadowScheduler)
 				_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
@@ -123,8 +122,8 @@ namespace ToolsRig
 	}
 
 	inline RenderCore::Techniques::FrameBufferTarget AsFrameBufferTarget(
-		RenderCore::LightingEngine::LightingTechniqueSequence& sequence,
-		RenderCore::LightingEngine::LightingTechniqueSequence::FragmentInterfaceRegistration regId)
+		RenderCore::LightingEngine::Sequence& sequence,
+		RenderCore::LightingEngine::Sequence::FragmentInterfaceRegistration regId)
 	{
 		return RenderCore::LightingEngine::Internal::AsFrameBufferTarget(sequence, regId);
 	}

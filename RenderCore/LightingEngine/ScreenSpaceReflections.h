@@ -32,7 +32,7 @@ namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	class LightingTechniqueIterator;
+	class SequenceIterator;
 	class RenderStepFragmentInterface;
 	class BlueNoiseGeneratorTables;
 
@@ -73,7 +73,7 @@ namespace RenderCore { namespace LightingEngine
 	class ScreenSpaceReflectionsOperator : public IScreenSpaceReflections, public std::enable_shared_from_this<ScreenSpaceReflectionsOperator>
 	{
 	public:
-		void Execute(LightingEngine::LightingTechniqueIterator& iterator);
+		void Execute(LightingEngine::SequenceIterator& iterator);
 
 		void SetSpecularIBL(std::shared_ptr<IResourceView>);
 

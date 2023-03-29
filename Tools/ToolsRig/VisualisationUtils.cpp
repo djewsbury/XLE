@@ -19,7 +19,6 @@
 #include "../../RenderOverlays/DrawText.h"
 #include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
-#include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/CommonResources.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
@@ -245,7 +244,7 @@ namespace ToolsRig
 			actualizedScene->_envSettings->PreRender(parserContext.GetProjectionDesc(), lightScene);
 
 			TRY {
-				auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+				auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 					parserContext, *actualizedScene->_compiledLightingTechnique );
 
 				for (;;) {

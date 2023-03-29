@@ -5,7 +5,6 @@
 #include "ExecuteScene.h"
 #include "../RenderCore/LightingEngine/LightingEngine.h"
 #include "../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/RenderPass.h"
@@ -31,14 +30,14 @@ namespace SceneEngine
 		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt);
     }
 
-    RenderCore::LightingEngine::LightingTechniqueInstance BeginLightingTechnique(
+    RenderCore::LightingEngine::SequencePlayback BeginLightingTechnique(
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique)
 	{
 		auto& lightScene = RenderCore::LightingEngine::GetLightScene(compiledTechnique);
 		lightingState.PreRender(parsingContext.GetProjectionDesc(), lightScene);
-		return RenderCore::LightingEngine::BeginLightingTechniqueInstance( parsingContext, compiledTechnique );
+		return RenderCore::LightingEngine::BeginLightingTechniquePlayback( parsingContext, compiledTechnique );
 	}
 
 	std::future<RenderCore::Techniques::PreparedResourcesVisibility> PrepareResources(

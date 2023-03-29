@@ -6,7 +6,6 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
 #include "../../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
@@ -82,7 +81,7 @@ namespace UnitTests
 		auto query = statsQuery.Begin(metalContext);
 
 		{
-			auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+			auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 				parsingContext, lightingTechnique);
 			ParseScene(lightingIterator, drawableWriter);
 		}

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "LightingEngineIterator.h"
+#include "LightingEngine.h"
 #include "../Techniques/TechniqueUtils.h"
 #include "../Format.h"
 #include "../../Math/Vector.h"
@@ -19,7 +19,7 @@ namespace RenderCore { namespace LightingEngine
 	class IProbeRenderingInstance
 	{
 	public:
-		virtual LightingTechniqueInstance::Step GetNextStep() = 0;
+		virtual SequencePlayback::Step GetNextStep() = 0;
 		virtual BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() = 0;
 		virtual ~IProbeRenderingInstance() = default;
 	};

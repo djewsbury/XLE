@@ -18,7 +18,7 @@ namespace RenderCore { namespace Techniques
 
 namespace RenderCore { namespace LightingEngine
 {
-	class LightingTechniqueIterator;
+	class SequenceIterator;
 
 	class RenderStepFragmentInterface
 	{
@@ -32,11 +32,11 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::IShaderResourceDelegate> shaderResourceDelegates = {});
 		void AddSubpass(
 			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
-			std::function<void(LightingTechniqueIterator&)>&& fn);
+			std::function<void(SequenceIterator&)>&& fn);
 		void AddSkySubpass(Techniques::FrameBufferDescFragment::SubpassDesc&& subpass);
 		void AddSubpasses(
 			IteratorRange<const Techniques::FrameBufferDescFragment::SubpassDesc*> subpasses,
-			std::function<void(LightingTechniqueIterator&)>&& fn);
+			std::function<void(SequenceIterator&)>&& fn);
 
 		RenderStepFragmentInterface(PipelineType = PipelineType::Graphics);
 		~RenderStepFragmentInterface();
@@ -52,7 +52,7 @@ namespace RenderCore { namespace LightingEngine
 			ParameterBox _sequencerSelectors;
 			Techniques::BatchFlags::BitField _batchFilter;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
-			std::function<void(LightingTechniqueIterator&)> _lightingIteratorFunction;
+			std::function<void(SequenceIterator&)> _lightingIteratorFunction;
 		};
 		IteratorRange<const SubpassExtension*> GetSubpassAddendums() const { return MakeIteratorRange(_subpassExtensions); }
 	private:

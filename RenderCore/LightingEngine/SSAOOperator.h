@@ -16,7 +16,7 @@ namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	class LightingTechniqueIterator;
+	class SequenceIterator;
 	class RenderStepFragmentInterface;
 
 	struct AmbientOcclusionOperatorDesc
@@ -44,7 +44,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		void Execute(
-			LightingTechniqueIterator& iterator,
+			SequenceIterator& iterator,
 			IResourceView& inputDepthsSRV,
 			IResourceView& inputNormalsSRV,
 			IResourceView& inputVelocitiesSRV,

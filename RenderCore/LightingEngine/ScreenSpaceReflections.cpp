@@ -4,7 +4,7 @@
 
 #include "ScreenSpaceReflections.h"
 #include "BlueNoiseGenerator.h"
-#include "LightingEngineIterator.h"
+#include "SequenceIterator.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
@@ -141,7 +141,7 @@ namespace RenderCore { namespace LightingEngine
 	constexpr unsigned s_nfb_confidenceIntUAV = 15;
 	constexpr unsigned s_nfb_confidenceIntSRV = 16;
 
-	void ScreenSpaceReflectionsOperator::Execute(LightingEngine::LightingTechniqueIterator& iterator)
+	void ScreenSpaceReflectionsOperator::Execute(LightingEngine::SequenceIterator& iterator)
 	{
 		assert(_secondStageConstructionState == 2);
 		assert(_classifyTiles && _prepareIndirectArgs && _intersect && _resolveSpatial && _resolveTemporal);
@@ -365,7 +365,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.SetName("ssr-operator");
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=shared_from_this()](LightingEngine::LightingTechniqueIterator& iterator) {
+			[op=shared_from_this()](LightingEngine::SequenceIterator& iterator) {
 				op->Execute(iterator);
 			});
 		_res = std::make_unique<ResolutionDependentResources>(*_device, fbProps);

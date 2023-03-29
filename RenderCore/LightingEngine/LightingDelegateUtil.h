@@ -8,7 +8,7 @@
 #include "StandardLightScene.h"		// for ILightSceneComponent
 #include "ShadowProbes.h"
 #include "ShadowPreparer.h"
-#include "LightingEngineInitialization.h"
+#include "Sequence.h"
 #include "../Types.h"
 #include "../ResourceUtils.h"		// for ViewPool
 #include "../Techniques/PipelineCollection.h"		// for FrameBufferTarget
@@ -27,8 +27,8 @@ namespace RenderCore { namespace LightingEngine
 {
 	class IPreparedShadowResult;
 	class ShadowProbes;
-	class LightingTechniqueIterator;
-	class LightingTechniqueSequence;
+	class SequenceIterator;
+	class Sequence;
 	class IProbeRenderingInstance;
 	class DynamicShadowPreparers;
 }}
@@ -110,8 +110,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			PipelineType pipelineType) override;
 
 		void DoShadowPrepare(
-			LightingTechniqueIterator& iterator,
-			LightingTechniqueSequence& sequence);
+			SequenceIterator& iterator,
+			Sequence& sequence);
 		void ClearPreparedShadows();
 
 		struct SceneSet;
@@ -174,8 +174,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 
 	inline Techniques::FrameBufferTarget AsFrameBufferTarget(
-		LightingTechniqueSequence& sequence,
-		LightingTechniqueSequence::FragmentInterfaceRegistration regId)
+		Sequence& sequence,
+		Sequence::FragmentInterfaceRegistration regId)
 	{
 		auto resolvedFB = sequence.GetResolvedFrameBufferDesc(regId);
 		return Techniques::FrameBufferTarget{resolvedFB.first, resolvedFB.second};

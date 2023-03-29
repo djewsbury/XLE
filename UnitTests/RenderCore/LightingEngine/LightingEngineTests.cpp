@@ -6,7 +6,6 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
 #include "../../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
@@ -208,7 +207,7 @@ namespace UnitTests
 			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
 			{
-				auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+				auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
@@ -236,7 +235,7 @@ namespace UnitTests
 			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
 			{
-				auto lightingIterator = LightingEngine::BeginLightingTechniqueInstance(
+				auto lightingIterator = LightingEngine::BeginLightingTechniquePlayback(
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}
@@ -315,7 +314,7 @@ namespace UnitTests
 			}
 
 			{
-				auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+				auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 					parsingContext, *lightingTechnique);
 				ParseScene(lightingIterator, *drawableWriter);
 			}

@@ -77,7 +77,7 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	namespace Internal { class ILightBase; }
-	class LightingTechniqueIterator;
+	class SequenceIterator;
 
 	class ICompiledShadowPreparer
 	{
@@ -127,11 +127,11 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
 
-	class LightingTechniqueSequence;
-	using TechniqueSequenceParseId = unsigned;
-	TechniqueSequenceParseId CreateShadowParseInSequence(
-		LightingTechniqueIterator& iterator,
-		LightingTechniqueSequence& sequence,
+	class Sequence;
+	using SequenceParseId = unsigned;
+	SequenceParseId CreateShadowParseInSequence(
+		SequenceIterator& iterator,
+		Sequence& sequence,
 		Internal::ILightBase& proj,
 		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester);
 

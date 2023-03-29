@@ -23,7 +23,7 @@ namespace RenderCore { namespace Techniques
 namespace RenderCore { namespace LightingEngine
 {
 	class SharedTechniqueDelegateBox;
-	class LightingTechniqueInstance;
+	class SequencePlayback;
 }}
 
 namespace Assets { class CompilerRegistration; }
@@ -53,7 +53,7 @@ namespace UnitTests
 		~LightingEngineTestApparatus();
 	};
 
-	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter);
+	void ParseScene(RenderCore::LightingEngine::SequencePlayback& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter);
 
 	RenderCore::Techniques::ParsingContext BeginParsingContext(
 		LightingEngineTestApparatus& testApparatus,

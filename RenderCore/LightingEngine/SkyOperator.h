@@ -32,7 +32,7 @@ namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	class LightingTechniqueIterator;
+	class SequenceIterator;
 	class SHCoefficients;
 
 	enum class SkyTextureType { HemiCube, Cube, Equirectangular, HemiEquirectangular };
@@ -72,7 +72,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		void Execute(Techniques::ParsingContext& parsingContext);
-		void Execute(LightingTechniqueIterator&);
+		void Execute(SequenceIterator&);
 
 		void SecondStageConstruction(
 			std::promise<std::shared_ptr<SkyOperator>>&& promise,

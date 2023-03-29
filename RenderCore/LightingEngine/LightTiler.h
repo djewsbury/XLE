@@ -25,7 +25,7 @@ namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t;
 
 namespace RenderCore { namespace LightingEngine
 {
-	class LightingTechniqueIterator;
+	class SequenceIterator;
 	class RenderStepFragmentInterface;
 
 	struct RasterizationLightTileOperatorDesc
@@ -38,7 +38,7 @@ namespace RenderCore { namespace LightingEngine
 	class RasterizationLightTileOperator : public std::enable_shared_from_this<RasterizationLightTileOperator>
 	{
 	public:
-		void Execute(LightingTechniqueIterator& iterator);
+		void Execute(SequenceIterator& iterator);
 
 		void SetLightScene(Internal::StandardLightScene& lightScene);
 		Internal::StandardLightScene& GetLightScene() { return *_lightScene; }

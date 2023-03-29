@@ -3,8 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightingDelegateUtil.h"
-#include "LightingEngineIterator.h"
-#include "LightingEngineInitialization.h"
+#include "Sequence.h"
+#include "SequenceIterator.h"
 #include "ShadowUniforms.h"
 #include "ShadowPreparer.h"
 #include "ShadowProbes.h"
@@ -38,8 +38,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	};
 
 	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
-		LightingTechniqueIterator& iterator,
-		LightingTechniqueSequence& sequence,
+		SequenceIterator& iterator,
+		Sequence& sequence,
 		ILightBase& proj,
 		const SequencerAddendums& addenums,
 		PipelineType descSetPipelineType,
@@ -72,8 +72,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	auto DynamicShadowProjectionScheduler::SceneSet::operator=(SceneSet&&) -> SceneSet& = default;
 
 	void DynamicShadowProjectionScheduler::DoShadowPrepare(
-		LightingTechniqueIterator& iterator,
-		LightingTechniqueSequence& sequence)
+		SequenceIterator& iterator,
+		Sequence& sequence)
 	{
 		sequence.Reset();
 		if (_shadowPreparers->_preparers.empty()) return;
@@ -188,9 +188,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	constexpr auto s_orthoShadowProjectionsInterface = TypeHashCode<IOrthoShadowProjections>;
 	constexpr auto s_finiteLightSourceInterface = TypeHashCode<IFiniteLightSource>;
 
-	static TechniqueSequenceParseId SetupShadowParse(
-		LightingTechniqueIterator& iterator,
-		LightingTechniqueSequence& sequence,
+	static SequenceParseId SetupShadowParse(
+		SequenceIterator& iterator,
+		Sequence& sequence,
 		Internal::ILightBase& proj,
 		const SequencerAddendums& addendums)
 	{
@@ -212,8 +212,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 
 	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
-		LightingTechniqueIterator& iterator,
-		LightingTechniqueSequence& sequence,
+		SequenceIterator& iterator,
+		Sequence& sequence,
 		ILightBase& proj,
 		const SequencerAddendums& addenums,
 		PipelineType descSetPipelineType,
@@ -226,7 +226,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto& preparer = *addenums._preparer;
 		auto res = preparer.CreatePreparedShadowResult();
 		sequence.CreateStep_CallFunction(
-			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, &shadowGenViewPool, parseId, res, descSetPipelineType](LightingTechniqueIterator& iterator) {
+			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, &shadowGenViewPool, parseId, res, descSetPipelineType](SequenceIterator& iterator) {
 				auto rpi = preparer.Begin(
 					*iterator._threadContext,
 					*iterator._parsingContext,

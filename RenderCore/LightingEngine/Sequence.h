@@ -5,7 +5,7 @@
 #pragma once
 
 #include "LightingEngine.h"
-#include "LightingEngineIterator.h"
+#include "SequenceIterator.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
 #include "../../Assets/DepVal.h"
@@ -17,18 +17,18 @@
 namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 namespace RenderCore { namespace LightingEngine
 {
-	class LightingTechniqueIterator;
+	class SequenceIterator;
     class RenderStepFragmentInterface;
-	using TechniqueSequenceParseId = unsigned;
+	using SequenceParseId = unsigned;
 
-	class LightingTechniqueSequence
+	class Sequence
 	{
 	public:
-		using StepFnSig = void(LightingTechniqueIterator&);
+		using StepFnSig = void(SequenceIterator&);
 
-		TechniqueSequenceParseId CreateParseScene(Techniques::BatchFlags::BitField);
-		TechniqueSequenceParseId CreateParseScene(Techniques::BatchFlags::BitField batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
-		TechniqueSequenceParseId CreateMultiViewParseScene(
+		SequenceParseId CreateParseScene(Techniques::BatchFlags::BitField);
+		SequenceParseId CreateParseScene(Techniques::BatchFlags::BitField batchFilter, std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
+		SequenceParseId CreateMultiViewParseScene(
 			Techniques::BatchFlags::BitField batchFilter,
 			std::vector<Techniques::ProjectionDesc>&& projDescs,
 			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> complexCullingVolume);
@@ -37,12 +37,12 @@ namespace RenderCore { namespace LightingEngine
 		void CreateStep_ExecuteDrawables(
 			std::shared_ptr<Techniques::SequencerConfig> sequencerConfig,
 			std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate,
-			TechniqueSequenceParseId parseId=0);
+			SequenceParseId parseId=0);
 		using FragmentInterfaceRegistration = unsigned;
 		FragmentInterfaceRegistration CreateStep_RunFragments(RenderStepFragmentInterface&& fragmentInterface);
 
-		TechniqueSequenceParseId CreatePrepareOnlyParseScene(Techniques::BatchFlags::BitField);
-		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, TechniqueSequenceParseId parseId=0);
+		SequenceParseId CreatePrepareOnlyParseScene(Techniques::BatchFlags::BitField);
+		void CreatePrepareOnlyStep_ExecuteDrawables(std::shared_ptr<Techniques::SequencerConfig> sequencerConfig, SequenceParseId parseId=0);
 
 		void CreateStep_BindDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate);
 		void CreateStep_InvalidateUniforms();
@@ -57,16 +57,16 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 			Techniques::FragmentStitchingContext& stitchingContext);
 		void Reset();
-		void TryDynamicInitialization(LightingTechniqueIterator&);
+		void TryDynamicInitialization(SequenceIterator&);
 		unsigned DrawablePktsToReserve() const { return _nextParseId; }
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
 
-		using DynamicSequenceFn = std::function<void(LightingTechniqueIterator&, LightingTechniqueSequence&)>;
+		using DynamicSequenceFn = std::function<void(SequenceIterator&, Sequence&)>;
 
-		LightingTechniqueSequence();
-		LightingTechniqueSequence(DynamicSequenceFn&&);
-		~LightingTechniqueSequence();
+		Sequence();
+		Sequence(DynamicSequenceFn&&);
+		~Sequence();
 
 	private:
 		struct ExecuteStep
@@ -82,7 +82,7 @@ namespace RenderCore { namespace LightingEngine
 		struct ParseStep
 		{
 			Techniques::BatchFlags::BitField _batches = 0u;
-			TechniqueSequenceParseId _parseId;
+			SequenceParseId _parseId;
 			std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> _complexCullingVolume;
 			std::vector<Techniques::ProjectionDesc> _multiViewProjections;		// subframe allocation candidate (for dynamic sequencers)
 			bool _prepareOnly = false;
@@ -118,24 +118,31 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<FragmentInterfaceMapping> _fragmentInterfaceMappings;
 		FragmentInterfaceRegistration _nextFragmentInterfaceRegistration = 0;
 
-		TechniqueSequenceParseId _nextParseId = 0;
+		SequenceParseId _nextParseId = 0;
 		bool _frozen = false;
 
 		DynamicSequenceFn _dynamicFn;
 
 		void PropagateReverseAttachmentDependencies(Techniques::FragmentStitchingContext& stitchingContext);
 
-		friend class LightingTechniqueIterator;
-		friend class LightingTechniqueInstance;
+		friend class SequenceIterator;
+		friend class SequencePlayback;
 		friend class CompiledLightingTechnique;
 		friend class LightingTechniqueStepper;
+	};
+
+	struct FrameToFrameProperties
+	{
+		unsigned _frameIdx = 0;
+		Techniques::ProjectionDesc _prevProjDesc;
+		bool _hasPrevProjDesc = false;
 	};
 
 	class CompiledLightingTechnique
 	{
 	public:
-		LightingTechniqueSequence& CreateSequence();
-		void CreateDynamicSequence(LightingTechniqueSequence::DynamicSequenceFn&& fn);
+		Sequence& CreateSequence();
+		void CreateDynamicSequence(Sequence::DynamicSequenceFn&& fn);
 		void CompleteConstruction(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
 			Techniques::FragmentStitchingContext& stitchingContext);
@@ -157,14 +164,14 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ILightScene> _lightScene;
 		bool _isConstructionCompleted = false;
 
-		std::vector<std::shared_ptr<LightingTechniqueSequence>> _sequences;
+		std::vector<std::shared_ptr<Sequence>> _sequences;
 
 		std::vector<RenderCore::Techniques::DoubleBufferAttachment> _doubleBufferAttachments;
 
 		FrameToFrameProperties _frameToFrameProperties;
 
-		friend class LightingTechniqueIterator;
-		friend class LightingTechniqueInstance;
+		friend class SequenceIterator;
+		friend class SequencePlayback;
 		friend class LightingTechniqueStepper;
 	};
 

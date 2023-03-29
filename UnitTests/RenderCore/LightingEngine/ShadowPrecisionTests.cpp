@@ -6,7 +6,6 @@
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
 #include "../../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
@@ -195,7 +194,7 @@ namespace UnitTests
 					auto lightId = ConfigureLightScene(lightScene, gPI/2.0f*c/float(stripes));
 
 					{
-						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}
@@ -241,7 +240,7 @@ namespace UnitTests
 				auto lightId = ConfigureLightScene(lightScene, gPI/4.0f);
 
 				{
-					auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+					auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 						parsingContext, *lightingTechnique);
 					ParseScene(lightingIterator, *drawableWriter);
 				}
@@ -498,7 +497,7 @@ namespace UnitTests
 				// draw once from the "scene camera"
 				{
 					{
-						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}
@@ -532,7 +531,7 @@ namespace UnitTests
 				for (unsigned c=0; c<dimof(visCameras); ++c) {
 					parsingContext.GetProjectionDesc() = BuildProjectionDesc(visCameras[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
 					{
-						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 							parsingContext, *lightingTechnique);
 						ParseScene(lightingIterator, *drawableWriter);
 					}

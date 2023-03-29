@@ -326,7 +326,7 @@ namespace UnitTests
 			{
 				parsingContext.GetProjectionDesc() = BuildProjectionDesc(camerasToRender[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
 				parsingContext.SetPipelineAcceleratorsVisibility(testApparatus._pipelineAccelerators->VisibilityBarrier());
-				auto drawInstance = LightingEngine::BeginLightingTechniqueInstance(parsingContext, *scene._compiledLightingTechnique);
+				auto drawInstance = LightingEngine::BeginLightingTechniquePlayback(parsingContext, *scene._compiledLightingTechnique);
 				ParseScene(drawInstance, *scene._drawablesWriter);
 			}
 
@@ -444,7 +444,7 @@ namespace UnitTests
 		lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
 
 		// draw once, and then return
-		auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniqueInstance(
+		auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 			parsingContext, *lightingTechnique);
 		ParseScene(lightingIterator, *drawableWriter);
 

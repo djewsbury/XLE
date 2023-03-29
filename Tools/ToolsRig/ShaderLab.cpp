@@ -7,9 +7,9 @@
 #include "../../Tools/EntityInterface/EntityInterface.h"
 #include "../../Tools/EntityInterface/FormatterAdapters.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
-#include "../../RenderCore/LightingEngine/LightingEngineInitialization.h"
-#include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../RenderCore/LightingEngine/LightingDelegateUtil.h"
+#include "../../RenderCore/LightingEngine/Sequence.h"
+#include "../../RenderCore/LightingEngine/SequenceIterator.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
@@ -102,7 +102,7 @@ namespace ToolsRig
 	static void ParseSequenceOperators(
 		Formatters::IDynamicInputFormatter& formatter,
 		ShaderLab::OperationConstructorContext& constructorContext,
-		RenderCore::LightingEngine::LightingTechniqueSequence& sequence,
+		RenderCore::LightingEngine::Sequence& sequence,
 		const std::vector<std::pair<std::string, ShaderLab::OperationConstructor>>& operationConstructors)
 	{
 		assert(constructorContext._sequenceFinalizers.empty());
@@ -181,7 +181,7 @@ namespace ToolsRig
 					auto globalStateDelegate = std::make_shared<GlobalStateDelegate>();
 
 					std::vector<std::pair<
-						RenderCore::LightingEngine::LightingTechniqueSequence*, 
+						RenderCore::LightingEngine::Sequence*, 
 						std::vector<OperationConstructorContext::SetupFunction>>> registeredSequences;
 
 					StringSection<> keyname;

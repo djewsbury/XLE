@@ -8,7 +8,7 @@
 #include <vector>
 #include <functional>
 
-namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class LightingTechniqueSequence; class LightingTechniqueIterator; class ILightScene; }}
+namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class Sequence; class SequenceIterator; class ILightScene; }}
 namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; struct DoubleBufferAttachment; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
@@ -56,7 +56,7 @@ namespace ToolsRig
 
 		struct OperationConstructorContext
 		{
-			using SetupFunction = std::function<void(OperationConstructorContext&, RenderCore::LightingEngine::LightingTechniqueSequence*)>;
+			using SetupFunction = std::function<void(OperationConstructorContext&, RenderCore::LightingEngine::Sequence*)>;
 			std::vector<SetupFunction> _sequenceFinalizers;
 			std::vector<SetupFunction> _postStitchFunctions;
 
@@ -71,7 +71,7 @@ namespace ToolsRig
 			unsigned _completionCommandList = 0;
 			::Assets::DependencyValidation _depVal;
 		};
-		using OperationConstructor = std::function<void(Formatters::IDynamicInputFormatter&, OperationConstructorContext&, RenderCore::LightingEngine::LightingTechniqueSequence*)>;
+		using OperationConstructor = std::function<void(Formatters::IDynamicInputFormatter&, OperationConstructorContext&, RenderCore::LightingEngine::Sequence*)>;
 		void RegisterOperation(
 			StringSection<> name,
 			OperationConstructor&& constructor);

@@ -21,7 +21,7 @@ namespace RenderCore { namespace Techniques
 namespace RenderCore { namespace LightingEngine 
 {
     class CompiledLightingTechnique;
-    class LightingTechniqueInstance;
+    class SequencePlayback;
 	class LightingEngineApparatus;
 	struct LightSourceOperatorDesc;
 	struct ShadowOperatorDesc;
@@ -38,7 +38,7 @@ namespace SceneEngine
 		const RenderCore::Techniques::ProjectionDesc& view, RenderCore::Techniques::Batch batch,
 		IScene& scene);
 
-    RenderCore::LightingEngine::LightingTechniqueInstance BeginLightingTechnique(
+    RenderCore::LightingEngine::SequencePlayback BeginLightingTechnique(
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique);

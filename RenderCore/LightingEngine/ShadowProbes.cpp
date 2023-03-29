@@ -4,7 +4,7 @@
 
 #include "ShadowProbes.h"
 #include "LightingEngineApparatus.h"
-#include "LightingEngineIterator.h"
+#include "SequenceIterator.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/Techniques.h"
@@ -170,7 +170,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::DrawablesPacket _drawablePkt;
 		std::vector<std::pair<unsigned, Probe>> _probesToRender;
 
-		LightingTechniqueInstance::Step GetNextStep() override
+		SequencePlayback::Step GetNextStep() override
 		{
 			if (_staticPrepareHelper) {
 				if (!_pendingViews.empty()) {
@@ -207,7 +207,7 @@ namespace RenderCore { namespace LightingEngine
 					UpdateUniforms(_staticPrepareHelper->_parsingContext->GetThreadContext());
 					return { LightingEngine::StepType::None };
 				}
-				LightingTechniqueInstance::Step result;
+				SequencePlayback::Step result;
 				result._type = LightingEngine::StepType::MultiViewParseScene;
 				VLA_UNSAFE_FORCE(Probe, probesThisStep, nextBatchCount);
 				for (unsigned p=0; p<nextBatchCount; ++p) probesThisStep[p] = _probesToRender[_probeIterator+p].second;

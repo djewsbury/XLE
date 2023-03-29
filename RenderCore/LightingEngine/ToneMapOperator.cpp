@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ToneMapOperator.h"
-#include "LightingEngineIterator.h"
+#include "SequenceIterator.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/RenderPass.h"
@@ -299,7 +299,7 @@ namespace RenderCore { namespace LightingEngine
 
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=shared_from_this(), brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx](LightingTechniqueIterator& iterator) {
+			[op=shared_from_this(), brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx](SequenceIterator& iterator) {
 				auto& ldrOutput = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				auto& hdrInput = *iterator._rpi.GetNonFrameBufferAttachmentView(1);
 				IResourceView* brightPassHighResBlurWorkingUAV = nullptr, *brightPassHighResBlurWorkingSRV = nullptr, *brightPassMipChainSRV = nullptr;
@@ -897,7 +897,7 @@ namespace RenderCore { namespace LightingEngine
 
 		fragment.AddSubpass(
 			std::move(subpass),
-			[op=this](LightingTechniqueIterator& iterator) {
+			[op=this](SequenceIterator& iterator) {
 				op->Execute(
 					*iterator._parsingContext,
 					*iterator._rpi.GetInputAttachmentView(0));

@@ -4,9 +4,9 @@
 
 #include "DeferredLightingDelegate.h"
 #include "DeferredLightingResolve.h"
-#include "LightingEngineIterator.h"
-#include "LightingEngineInitialization.h"
 #include "LightingEngineApparatus.h"
+#include "Sequence.h"
+#include "SequenceIterator.h"
 #include "LightUniforms.h"
 #include "ShadowPreparer.h"
 #include "RenderStepFragments.h"
@@ -155,9 +155,9 @@ namespace RenderCore { namespace LightingEngine
 
 		RenderStepFragmentInterface CreateLightingResolveFragment(bool precisionTargets = false);
 
-		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
-		void DoLightResolve(LightingTechniqueIterator& iterator);
-		void GenerateDebuggingOutputs(LightingTechniqueIterator& iterator);
+		void DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence);
+		void DoLightResolve(SequenceIterator& iterator);
+		void GenerateDebuggingOutputs(SequenceIterator& iterator);
 		OnSkyTextureUpdateFn MakeOnSkyTextureUpdate() { return {}; }
 		OnIBLUpdateFn MakeOnIBLUpdate() { return {}; }
 	};
@@ -272,7 +272,7 @@ namespace RenderCore { namespace LightingEngine
 		if (_skyOperator) {
 			fragment.AddSubpass(
 				std::move(subpasses[0]),
-				[this](LightingTechniqueIterator& iterator) {
+				[this](SequenceIterator& iterator) {
 					iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 					this->_skyOperator->Execute(iterator);
 				});
@@ -281,19 +281,19 @@ namespace RenderCore { namespace LightingEngine
 		}
 		fragment.AddSubpass(
 			std::move(subpasses[1]), 
-			[this](LightingTechniqueIterator& iterator) {
+			[this](SequenceIterator& iterator) {
 				this->DoLightResolve(iterator);
 			});
 		return fragment;
 	}
 	
-	void DeferredLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
+	void DeferredLightingCaptures::DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence)
 	{
 		if (_lightScene->_shadowScheduler)
 			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
 	}
 
-	void DeferredLightingCaptures::DoLightResolve(LightingTechniqueIterator& iterator)
+	void DeferredLightingCaptures::DoLightResolve(SequenceIterator& iterator)
 	{
 		// Light subpass
 		auto* shadowProbes = (_lightScene->_shadowProbesManager && _lightScene->_shadowProbesManager->DoneInitialBackgroundPrepare()) ? _lightScene->_shadowProbes.get() : nullptr;
@@ -524,7 +524,7 @@ namespace RenderCore { namespace LightingEngine
 
 					// Prepare shadows
 					lightingTechnique->CreateDynamicSequence(
-						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
+						[captures](SequenceIterator& iterator, Sequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
 							captures->_lightResolveOperators->_stencilingGeometry.CompleteInitialization(*iterator._threadContext);
 							if (captures->_skyTextureProcessor)
@@ -533,7 +533,7 @@ namespace RenderCore { namespace LightingEngine
 
 					auto& mainSequence = lightingTechnique->CreateSequence();
 					mainSequence.CreateStep_CallFunction(
-						[](LightingTechniqueIterator& iterator) {
+						[](SequenceIterator& iterator) {
 							if (iterator._parsingContext->GetTechniqueContext()._deformAccelerators)
 								iterator._parsingContext->GetTechniqueContext()._deformAccelerators->SetVertexInputBarrier(*iterator._threadContext);
 						});
@@ -549,7 +549,7 @@ namespace RenderCore { namespace LightingEngine
 					auto lightingResolveFragment = captures->CreateLightingResolveFragment();
 					auto resolveFragmentRegistration = mainSequence.CreateStep_RunFragments(std::move(lightingResolveFragment));
 
-					LightingTechniqueSequence::FragmentInterfaceRegistration toneMapReg;
+					Sequence::FragmentInterfaceRegistration toneMapReg;
 					if (captures->_acesOperator) {
 						toneMapReg = mainSequence.CreateStep_RunFragments(captures->_acesOperator->CreateFragment(stitchingContext._workingProps));
 					} else {
@@ -562,7 +562,7 @@ namespace RenderCore { namespace LightingEngine
 					// generate debugging outputs
 					if (flags & DeferredLightingTechniqueFlags::GenerateDebuggingTextures) {
 						mainSequence.CreateStep_CallFunction(
-							[captures](LightingTechniqueIterator& iterator) {
+							[captures](SequenceIterator& iterator) {
 								captures->GenerateDebuggingOutputs(iterator);
 							});
 					}
@@ -570,7 +570,7 @@ namespace RenderCore { namespace LightingEngine
 					// unbind operations
 					if (captures->_lightScene->_shadowScheduler) {
 						mainSequence.CreateStep_CallFunction(
-							[captures](LightingTechniqueIterator& iterator) {
+							[captures](SequenceIterator& iterator) {
 								captures->_lightScene->_shadowScheduler->ClearPreparedShadows();
 							});
 					}
@@ -706,7 +706,7 @@ namespace RenderCore { namespace LightingEngine
 		op->Actualize()->Draw(parsingContext, us, MakeIteratorRange(shadowDescSets));
 	}
 
-	void DeferredLightingCaptures::GenerateDebuggingOutputs(LightingTechniqueIterator& iterator)
+	void DeferredLightingCaptures::GenerateDebuggingOutputs(SequenceIterator& iterator)
 	{
 		if (!_lightScene->_shadowScheduler) return;
 		iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);

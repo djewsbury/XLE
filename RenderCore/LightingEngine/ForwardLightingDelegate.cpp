@@ -12,9 +12,9 @@
 #include "SSAOOperator.h"
 #include "ToneMapOperator.h"
 #include "LightingDelegateUtil.h"
-#include "LightingEngineInitialization.h"
-#include "LightingEngineIterator.h"
 #include "LightingEngineApparatus.h"
+#include "Sequence.h"
+#include "SequenceIterator.h"
 #include "LightUniforms.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
@@ -59,7 +59,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
 		std::shared_ptr<ISkyTextureProcessor> _skyTextureProcessor;
 
-		void DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence);
+		void DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence);
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
 		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext);
 
@@ -79,7 +79,7 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite) -> std::shared_ptr<SecondStageConstructionOperators>;
 	};
 
-	void ForwardLightingCaptures::DoShadowPrepare(LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence)
+	void ForwardLightingCaptures::DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence)
 	{
 		if (_lightScene->_shadowScheduler)
 			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
@@ -272,7 +272,7 @@ namespace RenderCore { namespace LightingEngine
 		if (captures->_skyOperator) {
 			result.AddSubpass(
 				std::move(skySubpass),
-				[weakCaptures = std::weak_ptr<ForwardLightingCaptures>{captures}](LightingTechniqueIterator& iterator) {
+				[weakCaptures = std::weak_ptr<ForwardLightingCaptures>{captures}](SequenceIterator& iterator) {
 					auto l = weakCaptures.lock();
 					if (l) l->_skyOperator->Execute(iterator);
 				});
@@ -482,7 +482,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(
-			[](LightingTechniqueIterator& iterator) {
+			[](SequenceIterator& iterator) {
 				if (iterator._parsingContext->GetTechniqueContext()._deformAccelerators)
 					iterator._parsingContext->GetTechniqueContext()._deformAccelerators->SetVertexInputBarrier(*iterator._threadContext);
 			});
@@ -506,14 +506,14 @@ namespace RenderCore { namespace LightingEngine
 		mainSequence.ResolvePendingCreateFragmentSteps();
 
 		// Calculate SSR & SSAO
-		LightingTechniqueSequence::FragmentInterfaceRegistration ssrFragmentReg, ssaoFragmentReg;
+		Sequence::FragmentInterfaceRegistration ssrFragmentReg, ssaoFragmentReg;
 		if (_ssrOperator)
 			ssrFragmentReg = mainSequence.CreateStep_RunFragments(_ssrOperator->CreateFragment(stitchingContext._workingProps));
 		if (_ssaoOperator)
 			ssaoFragmentReg = mainSequence.CreateStep_RunFragments(_ssaoOperator->CreateFragment(stitchingContext._workingProps));
 
 		mainSequence.CreateStep_CallFunction(
-			[captures=shared_from_this()](LightingTechniqueIterator& iterator) {
+			[captures=shared_from_this()](SequenceIterator& iterator) {
 				captures->ConfigureParsingContext(*iterator._parsingContext);
 				captures->_lightScene->GetLightTiler().BarrierToReadingLayout(*iterator._threadContext);
 			});
@@ -527,13 +527,13 @@ namespace RenderCore { namespace LightingEngine
 
 		// simplify uniforms before going into post processing steps
 		mainSequence.CreateStep_CallFunction(
-			[captures=shared_from_this()](LightingTechniqueIterator& iterator) {
+			[captures=shared_from_this()](SequenceIterator& iterator) {
 				captures->ReleaseParsingContext(*iterator._parsingContext);	// almost need a "finally" step for this, because it may not be called on exception
 			});
 		mainSequence.CreateStep_BringUpToDateUniforms();
 
 		// Post processing
-		LightingTechniqueSequence::FragmentInterfaceRegistration toneMapReg;
+		Sequence::FragmentInterfaceRegistration toneMapReg;
 		if (_acesOperator) {
 			toneMapReg = mainSequence.CreateStep_RunFragments(_acesOperator->CreateFragment(stitchingContext._workingProps));
 		} else {
@@ -677,7 +677,7 @@ namespace RenderCore { namespace LightingEngine
 
 					// Prepare shadows sequence
 					lightingTechnique->CreateDynamicSequence(
-						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {
+						[captures](SequenceIterator& iterator, Sequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
 							captures->_lightScene->Prerender(*iterator._threadContext);
 							if (captures->_skyTextureProcessor)

@@ -30,7 +30,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void RenderStepFragmentInterface::AddSubpass(
 		Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
-		std::function<void(LightingTechniqueIterator&)>&& fn)
+		std::function<void(SequenceIterator&)>&& fn)
 	{
 		_frameBufferDescFragment.AddSubpass(std::move(subpass));
 		SubpassExtension ext;
@@ -41,7 +41,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void RenderStepFragmentInterface::AddSubpasses(
 		IteratorRange<const Techniques::FrameBufferDescFragment::SubpassDesc*> subpasses,
-		std::function<void(LightingTechniqueIterator&)>&& fn)
+		std::function<void(SequenceIterator&)>&& fn)
 	{
 		if (subpasses.empty()) return;
 		for (const auto& s:subpasses)

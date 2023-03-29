@@ -7,7 +7,6 @@
 #include "../../EmbeddedRes.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
-#include "../../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
@@ -124,7 +123,7 @@ namespace UnitTests
 		futureShader->Actualize()->Draw(parsingContext, {});
 	}
 
-	void ParseScene(RenderCore::LightingEngine::LightingTechniqueInstance& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter)
+	void ParseScene(RenderCore::LightingEngine::SequencePlayback& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter)
 	{
 		using namespace RenderCore;
 		for (;;) {

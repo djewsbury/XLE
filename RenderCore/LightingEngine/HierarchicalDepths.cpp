@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "HierarchicalDepths.h"
-#include "LightingEngineIterator.h"
+#include "SequenceIterator.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
@@ -22,7 +22,7 @@ namespace RenderCore { namespace LightingEngine
 {
 	static const Format s_hierarchicalDepthFormat = Format::R16_FLOAT;
 
-	void HierarchicalDepthsOperator::Execute(RenderCore::LightingEngine::LightingTechniqueIterator& iterator)
+	void HierarchicalDepthsOperator::Execute(RenderCore::LightingEngine::SequenceIterator& iterator)
 	{
 		assert(_secondStageConstructionState == 2);
 		assert(_resolveOp);
@@ -96,7 +96,7 @@ namespace RenderCore { namespace LightingEngine
 
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=shared_from_this()](LightingEngine::LightingTechniqueIterator& iterator) {
+			[op=shared_from_this()](LightingEngine::SequenceIterator& iterator) {
 				op->Execute(iterator);
 			});
 

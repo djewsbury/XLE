@@ -4,7 +4,7 @@
 
 #include "LightTiler.h"
 #include "LightUniforms.h"
-#include "LightingEngineIterator.h"
+#include "SequenceIterator.h"
 #include "StandardLightScene.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/TechniqueUtils.h"
@@ -63,7 +63,7 @@ namespace RenderCore { namespace LightingEngine
 
 	struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; unsigned _srcIdx; unsigned _dummy; };
 
-	void RasterizationLightTileOperator::Execute(LightingTechniqueIterator& iterator)
+	void RasterizationLightTileOperator::Execute(SequenceIterator& iterator)
 	{
 		GPUProfilerBlock profileBlock(*iterator._threadContext, "RasterizationLightTileOperator");
 
@@ -192,7 +192,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.SetName("rasterization-light-tiler");
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=shared_from_this()](LightingEngine::LightingTechniqueIterator& iterator) {
+			[op=shared_from_this()](LightingEngine::SequenceIterator& iterator) {
 				op->Execute(iterator);
 			});
 
@@ -209,7 +209,7 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.SetName("rasterization-light-tiler-init");
 		result.AddSubpass(
 			std::move(spDesc),
-			[](LightingEngine::LightingTechniqueIterator& iterator) {
+			[](LightingEngine::SequenceIterator& iterator) {
 				auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 				auto& view = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				Metal::BarrierHelper{*iterator._threadContext}.Add(*view.GetResource(), Metal::BarrierResourceUsage::NoState(), BindFlag::TransferDst);

@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "SkyOperator.h"
-#include "LightingEngineIterator.h"
+#include "SequenceIterator.h"
 #include "SHCoefficients.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/Drawables.h"
@@ -41,7 +41,7 @@ namespace RenderCore { namespace LightingEngine
 		parsingContext.RequireCommandList(_completionCommandList);
 	}
 
-	void SkyOperator::Execute(LightingTechniqueIterator& iterator)
+	void SkyOperator::Execute(SequenceIterator& iterator)
 	{
 		Execute(*iterator._parsingContext);
 	}
