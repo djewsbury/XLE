@@ -8,7 +8,7 @@
 #define LIGHTING_ALGORITHM_H
 
 #include "../Math/MathConstants.hlsl"
-#include "../Math/Misc.hlsl"
+#include "../Math/Misc.hlsl"		// (for Sq)
 
 float RefractiveIndexToF0(float refractiveIndex)
 {

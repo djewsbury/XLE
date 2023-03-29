@@ -4,7 +4,7 @@
 
 #pragma once
 #include "OverlayPrimitives.h"
-#include "../PlatformRig/InputListener.h"		// for ProcessInputResult
+#include "../PlatformRig/InputContext.h"		// for ProcessInputResult
 #include "../Math/Matrix.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/MemoryUtils.h"

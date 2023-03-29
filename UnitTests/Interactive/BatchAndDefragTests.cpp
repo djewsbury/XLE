@@ -4,7 +4,7 @@
 
 #include "InteractiveTestHelper.h"
 #include "../../PlatformRig/OverlaySystem.h"
-#include "../../PlatformRig/InputListener.h"
+#include "../../PlatformRig/InputContext.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/RenderPassUtils.h"

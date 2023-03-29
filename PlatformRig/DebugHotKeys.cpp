@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DebugHotKeys.h"
-#include "InputListener.h"
+#include "InputContext.h"
 #include "../Assets/Assets.h"
 #include "../Assets/IFileSystem.h"
 #include "../Assets/ConfigFileContainer.h"

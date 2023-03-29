@@ -8,7 +8,6 @@
 #define SPECULAR_METHODS_H
 
 #include "LightingAlgorithm.hlsl"
-#include "../Math/Misc.hlsl"
 
 #if !defined(SPECULAR_METHOD)
     #define SPECULAR_METHOD 1

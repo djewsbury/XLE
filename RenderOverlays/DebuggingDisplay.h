@@ -8,7 +8,7 @@
 
 #include "IOverlayContext.h"
 #include "OverlayPrimitives.h"
-#include "../PlatformRig/InputListener.h"
+#include "../PlatformRig/InputContext.h"
 #include "../Math/Vector.h"
 #include "../Math/Matrix.h"
 #include "../Utility/UTFUtils.h"

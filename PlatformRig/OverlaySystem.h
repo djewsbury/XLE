@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "InputListener.h"      // for ProcessInputResult
 #include "../../RenderCore/IDevice_Forward.h"
 #include "../../RenderCore/FrameBufferDesc.h"
 #include "../../Math/Matrix.h"
@@ -21,10 +20,12 @@ namespace RenderCore { namespace Techniques
     struct PreregisteredAttachment;
 }}
 namespace RenderOverlays { class FontRenderingManager; class OverlayApparatus; class ShapesRenderingDelegate; }
+namespace OSServices { class InputSnapshot; }
 
 namespace PlatformRig
 {
     class InputContext;
+    enum class ProcessInputResult;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     class IOverlaySystem
@@ -54,6 +55,7 @@ namespace PlatformRig
         virtual ~IOverlaySystem();
     };
 
+    class IInputListener;
     std::shared_ptr<IInputListener> CreateInputListener(std::shared_ptr<IOverlaySystem>);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

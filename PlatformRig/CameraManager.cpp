@@ -6,7 +6,7 @@
 
 #include "CameraManager.h"
 #include "UnitCamera.h"
-#include "InputListener.h"
+#include "InputContext.h"
 #include "../RenderCore/RenderUtils.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../Math/Transformations.h"

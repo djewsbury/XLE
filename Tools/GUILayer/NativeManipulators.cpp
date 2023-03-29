@@ -16,7 +16,7 @@
 #include "EngineDevice.h"
 #include "NativeEngineDevice.h"
 #include "../ToolsRig/IManipulator.h"
-#include "../PlatformRig/InputListener.h"
+#include "../PlatformRig/InputContext.h"
 #include "../SceneEngine/IntersectionTest.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../SceneEngine/BasicLightingStateDelegate.h"

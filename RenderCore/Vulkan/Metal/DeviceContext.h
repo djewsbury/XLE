@@ -352,6 +352,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		static std::shared_ptr<DeviceContext> BeginPrimaryCommandList(IThreadContext& threadContext);
 		static std::shared_ptr<DeviceContext> BeginSecondaryCommandList(IThreadContext& threadContext);
 
+		void		BeginCommandList(VulkanSharedPtr<VkCommandBuffer> cmdList, std::shared_ptr<IAsyncTrackerVulkan> asyncTracker);
 		void		ExecuteCommandList(CommandList&&);
 		auto        ResolveCommandList() -> std::shared_ptr<CommandList>;
 
@@ -378,13 +379,6 @@ namespace RenderCore { namespace Metal_Vulkan
 		DeviceContext& operator=(const DeviceContext&) = delete;
 
 		std::shared_ptr<Internal::CaptureForBindRecords> _captureForBindRecords;
-
-		// --------------- used by IThreadContext --------------- 
-		void			BeginCommandList(VulkanSharedPtr<VkCommandBuffer> cmdList, std::shared_ptr<IAsyncTrackerVulkan> asyncTracker);
-
-		// --------------- Legacy interface --------------- 
-		void			InvalidateCachedState() {}
-		bool			IsImmediate() { return false; }
 
 	private:
 		std::shared_ptr<VulkanEncoderSharedState> _sharedState;
