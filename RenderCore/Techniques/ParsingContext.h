@@ -27,11 +27,12 @@ namespace RenderCore { namespace Techniques
     class AttachmentReservation;
     class RenderPassInstance;
     class IUniformDelegateManager;
+    class IPipelineAcceleratorPool;
     using VisibilityMarkerId = uint32_t;
-        
+
     /// <summary>Manages critical shader state</summary>
     /// Certain system variables are bound to the shaders, and managed by higher
-    /// level code. The simpliest example is the global transform; but there are
+    /// level code. The simplest example is the global transform; but there are
     /// other global resources required by many shaders.
     ///
     /// Technique selection also involves some state information -- called the
@@ -61,6 +62,7 @@ namespace RenderCore { namespace Techniques
         void SetUniformDelegateManager(std::shared_ptr<IUniformDelegateManager> newMan) { _uniformDelegateManager = std::move(newMan); }
 
         IThreadContext& GetThreadContext() { return *_threadContext; }
+        IPipelineAcceleratorPool& GetPipelineAccelerators() { return *_pipelineAccelerators; }
 
         RenderPassInstance* _rpi = nullptr;
 
@@ -111,6 +113,7 @@ namespace RenderCore { namespace Techniques
         TechniqueContext*       _techniqueContext;
         IThreadContext*         _threadContext;
         std::shared_ptr<IUniformDelegateManager> _uniformDelegateManager;
+        IPipelineAcceleratorPool*   _pipelineAccelerators;
 
         class Internal;
         std::unique_ptr<Internal>           _internal;

@@ -427,6 +427,9 @@ namespace RenderCore { namespace LightingEngine
 	LightingTechniqueSequence::LightingTechniqueSequence()
 	{}
 
+	LightingTechniqueSequence::LightingTechniqueSequence(DynamicSequenceFn&& dynFn)
+	: _dynamicFn(std::move(dynFn)) {}
+
 	LightingTechniqueSequence::~LightingTechniqueSequence()
 	{}
 
@@ -449,7 +452,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		auto newSequence = std::make_shared<LightingTechniqueSequence>();
 		_sequences.push_back(std::move(newSequence));
-		return *newSequence;
+		return *_sequences.back();
 	}
 
 	void CompiledLightingTechnique::CreateDynamicSequence(LightingTechniqueSequence::DynamicSequenceFn&& fn)
@@ -493,6 +496,8 @@ namespace RenderCore { namespace LightingEngine
 
 	CompiledLightingTechnique::~CompiledLightingTechnique() {}
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	class LightingTechniqueStepper
 	{
 	public:
@@ -504,19 +509,21 @@ namespace RenderCore { namespace LightingEngine
 
 		std::vector<LightingTechniqueSequence*> _remainingSequences;
 
-		const LightingTechniqueSequence::ExecuteStep* AdvanceExecuteStep();
-		const LightingTechniqueSequence::ParseStep* AdvanceParseStep();
-		unsigned _drawablePktIdxOffset = 0;
+		template<typename T>
+			const LightingTechniqueSequence::ExecuteStep* AdvanceExecuteStep(T& iterator);
+		template<typename T>
+			const LightingTechniqueSequence::ParseStep* AdvanceParseStep(T& iterator);
 
 		LightingTechniqueStepper(IteratorRange<LightingTechniqueSequence** const> sequences);
 		LightingTechniqueStepper() = default;
 	};
 
-	const LightingTechniqueSequence::ExecuteStep* LightingTechniqueStepper::AdvanceExecuteStep()
+	template<typename T>
+		const LightingTechniqueSequence::ExecuteStep* LightingTechniqueStepper::AdvanceExecuteStep(T& iterator)
 	{
 		if (_remainingSequences.empty()) return nullptr;
 		while (_stepIterator == _stepEnd) {
-			_drawablePktIdxOffset += s_drawablePktsPerParse*_remainingSequences.front()->DrawablePktsToReserve();
+			iterator._drawablePktIdxOffset += s_drawablePktsPerParse*_remainingSequences.front()->DrawablePktsToReserve();
 			_remainingSequences.erase(_remainingSequences.begin());
 			_stepIterator = _stepEnd = {};
 			if (_remainingSequences.empty()) return nullptr;
@@ -528,11 +535,12 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	const LightingTechniqueSequence::ParseStep* LightingTechniqueStepper::AdvanceParseStep()
+	template<typename T>
+		const LightingTechniqueSequence::ParseStep* LightingTechniqueStepper::AdvanceParseStep(T& iterator)
 	{
 		if (_remainingSequences.empty()) return nullptr;
 		while (_parseStepIterator == _parseStepEnd) {
-			_drawablePktIdxOffset += s_drawablePktsPerParse*_remainingSequences.front()->DrawablePktsToReserve();
+			iterator._drawablePktIdxOffset += s_drawablePktsPerParse*_remainingSequences.front()->DrawablePktsToReserve();
 			_remainingSequences.erase(_remainingSequences.begin());
 			_parseStepIterator = _parseStepEnd = {};
 			if (_remainingSequences.empty()) return nullptr;
@@ -556,7 +564,6 @@ namespace RenderCore { namespace LightingEngine
 			_stepIterator = _stepEnd = {};
 			_parseStepIterator = _parseStepEnd = {};
 		}
-		_drawablePktIdxOffset = 0;
 	}
 
 	void LightingTechniqueIterator::ExecuteDrawables(
@@ -571,7 +578,7 @@ namespace RenderCore { namespace LightingEngine
 		for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) {
 			if (!pkts[c] || pkts[c]->_drawables.empty()) continue;
 			TRY {
-				Techniques::Draw(*_parsingContext, *_pipelineAcceleratorPool, sequencerCfg, *pkts[c]);
+				Techniques::Draw(*_parsingContext, _parsingContext->GetPipelineAccelerators(), sequencerCfg, *pkts[c]);
 			} CATCH(...) {
 				if (uniformDelegate)
 					_parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDelegate);
@@ -582,17 +589,11 @@ namespace RenderCore { namespace LightingEngine
 			_parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDelegate);
 	}
 
-	void LightingTechniqueIterator::ResetIteration(Phase newPhase)
-	{
-		*_stepper = LightingTechniqueStepper{MakeIteratorRange(_sequences)};
-		_currentPhase = newPhase;
-	}
-
 	void LightingTechniqueIterator::GetPkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parseId)
 	{
 		auto realParseId = parseId & 0xffff;
 		auto batchFlags = parseId >> 16;
-		auto pktIdx = _stepper->_drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
+		auto pktIdx = _drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
 		assert(pktIdx < _drawablePkt.size());
 		assert(result.size() == s_drawablePktsPerParse);
 		for (unsigned c=0; c<s_drawablePktsPerParse; ++c) {
@@ -608,7 +609,7 @@ namespace RenderCore { namespace LightingEngine
 	void LightingTechniqueIterator::GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parseId, Techniques::BatchFlags::BitField batches)
 	{
 		auto realParseId = parseId & 0xffff;
-		auto pktIdx = _stepper->_drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
+		auto pktIdx = _drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
 		if ((pktIdx+s_drawablePktsPerParse) > _drawablePkt.size()) {
 			_drawablePkt.resize(pktIdx+s_drawablePktsPerParse);
 			_drawablePktsReserved.resize(pktIdx+s_drawablePktsPerParse, false);
@@ -632,18 +633,14 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<LightingTechniqueSequence** const> sequences)
 	: _threadContext(&parsingContext.GetThreadContext())
 	, _parsingContext(&parsingContext)
-	, _sequences{sequences.begin(), sequences.end()}
-	{
-		_stepper = std::make_unique<LightingTechniqueStepper>();
-		_currentPhase = Phase::SequenceSetup;
-	}
+	{}
 
 	auto LightingTechniqueInstance::GetNextStep() -> Step
 	{
 		if (!_iterator)
 			return GetNextPrepareResourcesStep();
 
-		if (_iterator->_currentPhase == LightingTechniqueIterator::Phase::SequenceSetup) {
+		if (_currentPhase == Phase::SequenceSetup) {
 			if (_frameToFrameProps->_hasPrevProjDesc) {
 				_iterator->_parsingContext->GetPrevProjectionDesc() = _frameToFrameProps->_prevProjDesc;
 				_iterator->_parsingContext->GetEnablePrevProjectionDesc() = true;
@@ -651,14 +648,14 @@ namespace RenderCore { namespace LightingEngine
 			_frameToFrameProps->_prevProjDesc = _iterator->_parsingContext->GetProjectionDesc();
 			_frameToFrameProps->_hasPrevProjDesc = true;
 
-			for (auto& sequence:_iterator->_sequences)
+			for (auto& sequence:_sequences)
 				sequence->TryDynamicInitialization(*_iterator);
-			_iterator->ResetIteration(LightingTechniqueIterator::Phase::SceneParse);
+			ResetIteration(Phase::SceneParse);
 		}
 
-		if (_iterator->_currentPhase == LightingTechniqueIterator::Phase::SceneParse) {
+		if (_currentPhase == Phase::SceneParse) {
 			const LightingTechniqueSequence::ParseStep* next;
-			while ((next=_iterator->_stepper->AdvanceParseStep())) {
+			while ((next=_stepper->AdvanceParseStep(*_iterator))) {
 				if (!next->_prepareOnly) {
 					std::vector<Techniques::DrawablesPacket*> pkts;
 					pkts.resize((unsigned)Techniques::Batch::Max);
@@ -671,12 +668,12 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 
-			_iterator->ResetIteration(LightingTechniqueIterator::Phase::Execute);
+			ResetIteration(Phase::Execute);
 			return { StepType::ReadyInstances };
 		}
 
 		const LightingTechniqueSequence::ExecuteStep* next;
-		while ((next=_iterator->_stepper->AdvanceExecuteStep())) {
+		while ((next=_stepper->AdvanceExecuteStep(*_iterator))) {
 			switch (next->_type) {
 			case LightingTechniqueSequence::ExecuteStep::Type::CallFunction:
 				TRY {
@@ -700,12 +697,12 @@ namespace RenderCore { namespace LightingEngine
 
 			case LightingTechniqueSequence::ExecuteStep::Type::BeginRenderPassInstance:
 				{
-					assert(next->_fbDescIdx < _iterator->_stepper->_remainingSequences.front()->_fbDescs.size());
+					assert(next->_fbDescIdx < _stepper->_remainingSequences.front()->_fbDescs.size());
 					Techniques::RenderPassBeginDesc beginDesc;
 					beginDesc._frameIdx = _frameToFrameProps->_frameIdx;
 					_iterator->_rpi = Techniques::RenderPassInstance{
 						*_iterator->_parsingContext,
-						_iterator->_stepper->_remainingSequences.front()->_fbDescs[next->_fbDescIdx],
+						_stepper->_remainingSequences.front()->_fbDescs[next->_fbDescIdx],
 						beginDesc};
 				}
 				break;
@@ -762,7 +759,11 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::ParsingContext& parsingContext,
 		IteratorRange<LightingTechniqueSequence** const> sequences,
 		FrameToFrameProperties& frameToFrameProps)
+	: _sequences{sequences.begin(), sequences.end()}
 	{
+		_stepper = std::make_unique<LightingTechniqueStepper>();
+		_currentPhase = Phase::SequenceSetup;
+
 		_iterator = std::make_unique<LightingTechniqueIterator>(parsingContext, sequences);
 		_frameToFrameProps = &frameToFrameProps;
 	}
@@ -783,24 +784,14 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<std::future<Techniques::PreparedResourcesVisibility>> _requiredResources;
 
 		Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool = nullptr;
-		
-		std::vector<LightingTechniqueSequence*> _sequences;
-
-		LightingTechniqueStepper _stepper;
-		enum class Phase { SequenceSetup, SceneParse, Execute };
-		Phase _currentPhase = Phase::SequenceSetup;
-		void ResetIteration(Phase newPhase)
-		{
-			_stepper = LightingTechniqueStepper{MakeIteratorRange(_sequences)};
-			_currentPhase = newPhase;
-		}
+		unsigned _drawablePktIdxOffset = 0;
 
 		BufferUploads::CommandListID _baseCommandList = 0;
 
 		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parseId, Techniques::BatchFlags::BitField batches)
 		{
 			auto realParseId = parseId & 0xffff;
-			auto pktIdx = _stepper._drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
+			auto pktIdx = _drawablePktIdxOffset+realParseId*s_drawablePktsPerParse;
 			if ((pktIdx+s_drawablePktsPerParse) > _drawablePkt.size())
 				_drawablePkt.resize(pktIdx+s_drawablePktsPerParse);
 
@@ -817,14 +808,14 @@ namespace RenderCore { namespace LightingEngine
 	auto LightingTechniqueInstance::GetNextPrepareResourcesStep() -> Step
 	{
 		assert(_prepareResourcesIterator);
-		if (_prepareResourcesIterator->_currentPhase == PrepareResourcesIterator::Phase::SequenceSetup) {
+		if (_currentPhase == Phase::SequenceSetup) {
 			// We can't initialize the dynamic sequences because we don't have a LightingTechniqueIterator
-			_prepareResourcesIterator->ResetIteration(PrepareResourcesIterator::Phase::SceneParse);
+			ResetIteration(Phase::SceneParse);
 		}
 
-		if (_prepareResourcesIterator->_currentPhase == PrepareResourcesIterator::Phase::SceneParse) {
+		if (_currentPhase == Phase::SceneParse) {
 			const LightingTechniqueSequence::ParseStep* next;
-			while ((next=_prepareResourcesIterator->_stepper.AdvanceParseStep())) {
+			while ((next=_stepper->AdvanceParseStep(*_prepareResourcesIterator))) {
 				assert(next->_parseId != ~0u);
 				std::vector<Techniques::DrawablesPacket*> pkts;
 				pkts.resize((unsigned)Techniques::Batch::Max);
@@ -836,11 +827,11 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 
-			_prepareResourcesIterator->ResetIteration(PrepareResourcesIterator::Phase::Execute);
+			ResetIteration(Phase::Execute);
 		}
 
 		const LightingTechniqueSequence::ExecuteStep* next;
-		while ((next=_prepareResourcesIterator->_stepper.AdvanceExecuteStep())) {
+		while ((next=_stepper->AdvanceExecuteStep(*_prepareResourcesIterator))) {
 			switch (next->_type) {
 			case LightingTechniqueSequence::ExecuteStep::Type::DrawSky:
 				return { StepType::DrawSky };
@@ -848,7 +839,7 @@ namespace RenderCore { namespace LightingEngine
 			case LightingTechniqueSequence::ExecuteStep::Type::PrepareOnly_ExecuteDrawables:
 			case LightingTechniqueSequence::ExecuteStep::Type::ExecuteDrawables:
 				{
-					auto pktIdx = _prepareResourcesIterator->_stepper._drawablePktIdxOffset+(next->_fbDescIdx&0xffff);
+					auto pktIdx = _prepareResourcesIterator->_drawablePktIdxOffset+(next->_fbDescIdx&0xffff);
 					assert(pktIdx < _prepareResourcesIterator->_drawablePkt.size());
 					std::promise<Techniques::PreparedResourcesVisibility> promise;
 					auto future = promise.get_future();
@@ -935,6 +926,14 @@ namespace RenderCore { namespace LightingEngine
 		} CATCH_END
 	}
 
+	void LightingTechniqueInstance::ResetIteration(Phase newPhase)
+	{
+		*_stepper = LightingTechniqueStepper{MakeIteratorRange(_sequences)};
+		if (_iterator) _iterator->_drawablePktIdxOffset = 0;
+		if (_prepareResourcesIterator) _prepareResourcesIterator->_drawablePktIdxOffset = 0;
+		_currentPhase = newPhase;
+	}
+
 	void LightingTechniqueInstance::AddRequiredCommandList(BufferUploads::CommandListID cmdListId)
 	{
 		_prepareResourcesIterator->_baseCommandList = std::max(_prepareResourcesIterator->_baseCommandList, cmdListId);
@@ -943,10 +942,13 @@ namespace RenderCore { namespace LightingEngine
 	LightingTechniqueInstance::LightingTechniqueInstance(
 		Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		IteratorRange<LightingTechniqueSequence** const> sequences)
+	: _sequences{sequences.begin(), sequences.end()}
 	{
+		_stepper = std::make_unique<LightingTechniqueStepper>();
+		_currentPhase = Phase::SequenceSetup;
+
 		_prepareResourcesIterator = std::make_unique<PrepareResourcesIterator>();
 		_prepareResourcesIterator->_pipelineAcceleratorPool = &pipelineAccelerators;
-		_prepareResourcesIterator->_sequences.insert(_prepareResourcesIterator->_sequences.end(), sequences.begin(), sequences.end());
 	}
 
 	LightingTechniqueInstance BeginLightingTechniqueInstance(
@@ -964,7 +966,7 @@ namespace RenderCore { namespace LightingEngine
 		return LightingTechniqueInstance { parsingContext, MakeIteratorRange(sequences, sequences+technique._sequences.size()), technique._frameToFrameProperties };
 	}
 
-	[[nodiscard]] LightingTechniqueInstance BeginPrepareResourcesInstance(CompiledLightingTechnique& technique)
+	[[nodiscard]] LightingTechniqueInstance BeginPrepareResourcesInstance(Techniques::IPipelineAcceleratorPool& pipelineAccelerators, CompiledLightingTechnique& technique)
 	{
 		// If you hit this, it probably means that there's a missing call to CompiledLightingTechnique::CompleteConstruction()
 		// (which should have happened at the end of the technique construction process)
@@ -974,7 +976,7 @@ namespace RenderCore { namespace LightingEngine
 		for (unsigned c=0; c<technique._sequences.size(); ++c)
 			sequences[c] = technique._sequences[c].get();
 
-		LightingTechniqueInstance result { MakeIteratorRange(sequences, sequences+technique._sequences.size()) };
+		LightingTechniqueInstance result { pipelineAccelerators, MakeIteratorRange(sequences, sequences+technique._sequences.size()) };
 		result.AddRequiredCommandList(technique.GetCompletionCommandList());
 		return result;
 	}

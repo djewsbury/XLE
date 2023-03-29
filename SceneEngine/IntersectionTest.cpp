@@ -121,6 +121,7 @@ namespace SceneEngine
         techniqueContext._uniformDelegateManager = drawingApparatus._mainUniformDelegateManager;
         techniqueContext._drawablesPool = drawingApparatus._drawablesPool;
         techniqueContext._pipelineAccelerators = drawingApparatus._pipelineAccelerators;
+        techniqueContext._deformAccelerators = drawingApparatus._deformAccelerators;
         techniqueContext._graphicsPipelinePool = drawingApparatus._graphicsPipelinePool;
         return techniqueContext;
     }

@@ -361,7 +361,7 @@ namespace ToolsRig
 								auto threadContext = RenderCore::Techniques::GetThreadContext();
 								auto pendingResources = SceneEngine::PrepareResources(
 									*threadContext,
-									*preparedScene->_compiledLightingTechnique, *preparedScene->_scene);
+									*preparedScene->_compiledLightingTechnique, *pipelineAccelerators, *preparedScene->_scene);
 								if (pendingResources.valid()) {
 									::Assets::WhenAll(std::move(pendingResources)).ThenConstructToPromise(
 										std::move(thatPromise),
@@ -527,6 +527,7 @@ namespace ToolsRig
 		techniqueContext._uniformDelegateManager = drawingApparatus._mainUniformDelegateManager;
 		techniqueContext._drawablesPool = drawingApparatus._drawablesPool;
 		techniqueContext._pipelineAccelerators = drawingApparatus._pipelineAccelerators;
+		techniqueContext._deformAccelerators = drawingApparatus._deformAccelerators;
 		techniqueContext._graphicsPipelinePool = drawingApparatus._graphicsPipelinePool;
         return techniqueContext;
     }

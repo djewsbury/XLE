@@ -61,7 +61,7 @@ namespace RenderCore { namespace LightingEngine
 	// LightingTechniqueInstance
 	[[nodiscard]] LightingTechniqueInstance BeginLightingTechniqueInstance(Techniques::ParsingContext&, CompiledLightingTechnique&);
 
-	[[nodiscard]] LightingTechniqueInstance BeginPrepareResourcesInstance(CompiledLightingTechnique&);
+	[[nodiscard]] LightingTechniqueInstance BeginPrepareResourcesInstance(Techniques::IPipelineAcceleratorPool&, CompiledLightingTechnique&);
 
 	class ILightScene;
 	ILightScene& GetLightScene(CompiledLightingTechnique&);

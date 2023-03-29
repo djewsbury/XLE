@@ -44,10 +44,11 @@ namespace SceneEngine
 	std::future<RenderCore::Techniques::PreparedResourcesVisibility> PrepareResources(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
+		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		IScene& scene)
 	{
 		using namespace RenderCore;
-		auto prepareLightingIterator = LightingEngine::BeginPrepareResourcesInstance(compiledTechnique);
+		auto prepareLightingIterator = LightingEngine::BeginPrepareResourcesInstance(pipelineAccelerators, compiledTechnique);
 
 		for (;;) {
 			auto next = prepareLightingIterator.GetNextStep();

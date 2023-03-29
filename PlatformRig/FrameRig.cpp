@@ -399,6 +399,7 @@ namespace PlatformRig
             techniqueContext._graphicsPipelinePool = drawingApparatus->_graphicsPipelinePool;
             techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
             techniqueContext._pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
+            techniqueContext._deformAccelerators = drawingApparatus->_deformAccelerators;
         }
         techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;

@@ -46,6 +46,7 @@ namespace SceneEngine
 	std::future<RenderCore::Techniques::PreparedResourcesVisibility> PrepareResources(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique,
+		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		IScene& scene);
 
 	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeLightingTechnique(

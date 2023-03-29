@@ -98,6 +98,7 @@ namespace RenderCore { namespace Techniques
         _internal->_attachmentReservation = AttachmentReservation{*techniqueContext._attachmentPool};
 
 		_uniformDelegateManager = _techniqueContext->_uniformDelegateManager;
+        _pipelineAccelerators = _techniqueContext->_pipelineAccelerators.get();
         _pipelineAcceleratorsVisibility = 0;
 
         _internal->_stitchingContext = FragmentStitchingContext{

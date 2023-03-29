@@ -483,8 +483,8 @@ namespace RenderCore { namespace LightingEngine
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(
 			[](LightingTechniqueIterator& iterator) {
-				if (iterator._deformAcceleratorPool)
-					iterator._deformAcceleratorPool->SetVertexInputBarrier(*iterator._threadContext);
+				if (iterator._parsingContext->GetTechniqueContext()._deformAccelerators)
+					iterator._parsingContext->GetTechniqueContext()._deformAccelerators->SetVertexInputBarrier(*iterator._threadContext);
 			});
 
 		mainSequence.CreateStep_InvalidateUniforms();

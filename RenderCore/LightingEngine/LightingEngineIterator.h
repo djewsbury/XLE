@@ -36,22 +36,19 @@ namespace RenderCore { namespace LightingEngine
 			const std::shared_ptr<Techniques::IShaderResourceDelegate>& uniformDelegate = nullptr);
 		void GetPkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parse);
 
-	private:
-		std::vector<Techniques::DrawablesPacket> _drawablePkt;
-		std::vector<bool> _drawablePktsReserved;
-		std::unique_ptr<LightingTechniqueStepper> _stepper;
-		enum class Phase { SequenceSetup, SceneParse, Execute };
-		Phase _currentPhase = Phase::SequenceSetup;
-		void ResetIteration(Phase newPhase);
-		std::vector<Techniques::IShaderResourceDelegate*> _delegatesPendingUnbind;
-		std::vector<LightingTechniqueSequence*> _sequences;
-
-		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parse, Techniques::BatchFlags::BitField batches);
-
 		LightingTechniqueIterator(
 			Techniques::ParsingContext& parsingContext,
 			IteratorRange<LightingTechniqueSequence** const> sequences);
+	private:
+		std::vector<Techniques::DrawablesPacket> _drawablePkt;
+		std::vector<bool> _drawablePktsReserved;
+		std::vector<Techniques::IShaderResourceDelegate*> _delegatesPendingUnbind;
+		unsigned _drawablePktIdxOffset = 0;
+
+		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, TechniqueSequenceParseId parse, Techniques::BatchFlags::BitField batches);
+
 		friend class LightingTechniqueInstance;
+		friend class LightingTechniqueStepper;
 	};
 
 	struct FrameToFrameProperties
@@ -96,6 +93,12 @@ namespace RenderCore { namespace LightingEngine
 	private:
 		std::unique_ptr<LightingTechniqueIterator> _iterator;
 		FrameToFrameProperties* _frameToFrameProps = nullptr;
+
+		std::unique_ptr<LightingTechniqueStepper> _stepper;
+		enum class Phase { SequenceSetup, SceneParse, Execute };
+		Phase _currentPhase = Phase::SequenceSetup;
+		std::vector<LightingTechniqueSequence*> _sequences;		// candidate for subframe heap
+		void ResetIteration(Phase newPhase);
 
 		class PrepareResourcesIterator;
 		std::unique_ptr<PrepareResourcesIterator> _prepareResourcesIterator;
