@@ -5,6 +5,7 @@
 #include "ExecuteScene.h"
 #include "../RenderCore/LightingEngine/LightingEngine.h"
 #include "../RenderCore/LightingEngine/LightingEngineApparatus.h"
+#include "../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/RenderPass.h"
@@ -37,7 +38,7 @@ namespace SceneEngine
 	{
 		auto& lightScene = RenderCore::LightingEngine::GetLightScene(compiledTechnique);
 		lightingState.PreRender(parsingContext.GetProjectionDesc(), lightScene);
-		return RenderCore::LightingEngine::LightingTechniqueInstance { parsingContext, compiledTechnique };
+		return RenderCore::LightingEngine::BeginLightingTechniqueInstance( parsingContext, compiledTechnique );
 	}
 
 	std::future<RenderCore::Techniques::PreparedResourcesVisibility> PrepareResources(
@@ -46,7 +47,7 @@ namespace SceneEngine
 		IScene& scene)
 	{
 		using namespace RenderCore;
-		LightingEngine::LightingTechniqueInstance prepareLightingIterator(compiledTechnique);
+		auto prepareLightingIterator = LightingEngine::BeginPrepareResourcesInstance(compiledTechnique);
 
 		for (;;) {
 			auto next = prepareLightingIterator.GetNextStep();

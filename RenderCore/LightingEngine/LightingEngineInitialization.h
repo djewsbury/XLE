@@ -5,15 +5,16 @@
 #pragma once
 
 #include "LightingEngine.h"
+#include "LightingEngineIterator.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
-#include "../Techniques/TechniqueUtils.h"		// (for ProjectionDesc)
 #include "../../Assets/DepVal.h"
 #include <variant>
 #include <memory>
 #include <vector>
 #include <functional>
 
+namespace RenderCore { namespace Techniques { class ProjectionDesc; }}
 namespace RenderCore { namespace LightingEngine
 {
 	class LightingTechniqueIterator;
@@ -56,11 +57,15 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 			Techniques::FragmentStitchingContext& stitchingContext);
 		void Reset();
+		void TryDynamicInitialization(LightingTechniqueIterator&);
 		unsigned DrawablePktsToReserve() const { return _nextParseId; }
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
 
+		using DynamicSequenceFn = std::function<void(LightingTechniqueIterator&, LightingTechniqueSequence&)>;
+
 		LightingTechniqueSequence();
+		LightingTechniqueSequence(DynamicSequenceFn&&);
 		~LightingTechniqueSequence();
 
 	private:
@@ -116,6 +121,8 @@ namespace RenderCore { namespace LightingEngine
 		TechniqueSequenceParseId _nextParseId = 0;
 		bool _frozen = false;
 
+		DynamicSequenceFn _dynamicFn;
+
 		void PropagateReverseAttachmentDependencies(Techniques::FragmentStitchingContext& stitchingContext);
 
 		friend class LightingTechniqueIterator;
@@ -128,16 +135,12 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		LightingTechniqueSequence& CreateSequence();
-		using DynamicSequenceFn = std::function<void(LightingTechniqueIterator&, LightingTechniqueSequence&)>;
-		void CreateDynamicSequence(DynamicSequenceFn&& fn);
+		void CreateDynamicSequence(LightingTechniqueSequence::DynamicSequenceFn&& fn);
 		void CompleteConstruction(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
 			Techniques::FragmentStitchingContext& stitchingContext);
-		void PreSequenceSetup(std::function<void(LightingTechniqueIterator&)>&&);
 
 		ILightScene& GetLightScene();
-
-		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -149,25 +152,16 @@ namespace RenderCore { namespace LightingEngine
 		CompiledLightingTechnique(const std::shared_ptr<ILightScene>& lightScene = nullptr);
 		~CompiledLightingTechnique();
 
-		mutable unsigned _frameIdx = 0;
-		mutable Techniques::ProjectionDesc _prevProjDesc;
-		mutable bool _hasPrevProjDesc = false;
-
 		std::function<void*(uint64_t)> _queryInterfaceHelper;
 
-	private:
 		std::shared_ptr<ILightScene> _lightScene;
 		bool _isConstructionCompleted = false;
 
-		struct Sequence
-		{
-			std::shared_ptr<LightingTechniqueSequence>_sequence;
-			DynamicSequenceFn _dynamicFn;
-		};
-		std::vector<Sequence> _sequences;
-		std::function<void(LightingTechniqueIterator&)> _preSequenceSetup;
+		std::vector<std::shared_ptr<LightingTechniqueSequence>> _sequences;
 
 		std::vector<RenderCore::Techniques::DoubleBufferAttachment> _doubleBufferAttachments;
+
+		FrameToFrameProperties _frameToFrameProperties;
 
 		friend class LightingTechniqueIterator;
 		friend class LightingTechniqueInstance;

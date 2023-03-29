@@ -4,6 +4,7 @@
 
 #include "ShadowProbes.h"
 #include "LightingEngineApparatus.h"
+#include "LightingEngineIterator.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/Techniques.h"

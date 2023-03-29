@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "LightingEngine.h"
+#include "LightingEngineIterator.h"
 #include "../Techniques/TechniqueUtils.h"
 #include "../Format.h"
 #include "../../Math/Vector.h"
@@ -41,6 +41,7 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	class LightingEngineApparatus;
+	class SharedTechniqueDelegateBox;
 
 	class ShadowProbes
 	{

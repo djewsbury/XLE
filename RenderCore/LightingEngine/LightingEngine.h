@@ -56,43 +56,12 @@ namespace RenderCore { namespace LightingEngine
 		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments);
 
-	enum class StepType { ParseScene, MultiViewParseScene, DrawSky, ReadyInstances, None, Abort };
+	class LightingTechniqueInstance;
+	// When calling BeginLightingTechniqueInstance, the CompiledLightingTechnique must out-live the returned
+	// LightingTechniqueInstance
+	[[nodiscard]] LightingTechniqueInstance BeginLightingTechniqueInstance(Techniques::ParsingContext&, CompiledLightingTechnique&);
 
-	class LightingTechniqueIterator;
-	class LightingTechniqueInstance
-	{
-	public:
-		struct Step
-		{
-			StepType _type = StepType::Abort;
-			Techniques::ParsingContext* _parsingContext = nullptr;
-			std::vector<Techniques::DrawablesPacket*> _pkts;			// todo -- candidate for subframe heap
-			XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume = nullptr;
-			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- candidate for subframe heap
-
-			operator bool() const { return _type != StepType::None && _type != StepType::Abort; }
-		};
-		Step GetNextStep();
-
-		void SetDeformAcceleratorPool(Techniques::IDeformAcceleratorPool&);
-
-		LightingTechniqueInstance(
-			Techniques::ParsingContext&,
-			CompiledLightingTechnique&);
-		~LightingTechniqueInstance();
-
-		// For ensuring that required resources are prepared/loaded
-		void FulfillWhenNotPending(std::promise<Techniques::PreparedResourcesVisibility>&& promise);
-		LightingTechniqueInstance(
-			CompiledLightingTechnique&);
-	private:
-		std::unique_ptr<LightingTechniqueIterator> _iterator;
-
-		class PrepareResourcesIterator;
-		std::unique_ptr<PrepareResourcesIterator> _prepareResourcesIterator;
-		Step GetNextPrepareResourcesStep();
-		void CleanupPostIteration();
-	};
+	[[nodiscard]] LightingTechniqueInstance BeginPrepareResourcesInstance(CompiledLightingTechnique&);
 
 	class ILightScene;
 	ILightScene& GetLightScene(CompiledLightingTechnique&);
@@ -104,7 +73,5 @@ namespace RenderCore { namespace LightingEngine
 		{
 			return (Type*)Internal::QueryInterface(technique, TypeHashCode<Type>);
 		}
-
-	
 
 }}

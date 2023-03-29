@@ -522,11 +522,6 @@ namespace RenderCore { namespace LightingEngine
 					if (captures->_acesOperator) captures->_acesOperator->PreregisterAttachments(stitchingContext);
 					if (captures->_copyToneMapOperator) captures->_copyToneMapOperator->PreregisterAttachments(stitchingContext);
 
-					// Reset captures
-					lightingTechnique->PreSequenceSetup(
-						[captures](LightingTechniqueIterator& iterator) {
-						});
-
 					// Prepare shadows
 					lightingTechnique->CreateDynamicSequence(
 						[captures](LightingTechniqueIterator& iterator, LightingTechniqueSequence& sequence) {

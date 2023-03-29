@@ -8,6 +8,7 @@
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../PlatformRig/InputListener.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
+#include "../../RenderCore/LightingEngine/LightingEngineIterator.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../../RenderCore/LightingEngine/ToneMapOperator.h"
@@ -132,9 +133,9 @@ namespace UnitTests
 
 			parserContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(_camera, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
 
-			LightingEngine::LightingTechniqueInstance techniqueInstance {
+			auto techniqueInstance = LightingEngine::BeginLightingTechniqueInstance(
 				parserContext,
-				*lightingTechnique };
+				*lightingTechnique);
 
 			for (;;) {
 				auto step = techniqueInstance.GetNextStep();
