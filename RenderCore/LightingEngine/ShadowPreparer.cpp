@@ -465,8 +465,8 @@ namespace RenderCore { namespace LightingEngine
 		}
 		stitchingContext.DefineAttachment(pregAttach);
 
-		stitchingContext._workingProps = FrameBufferProperties { desc._width, desc._height };
-		_fbDesc = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&fragment, &fragment+1));
+		FrameBufferProperties fbProps { desc._width, desc._height };
+		_fbDesc = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&fragment, &fragment+1), fbProps);
 
 		_sequencerConfigs = pipelineAccelerators->CreateSequencerConfig(
 			"shadow-prepare",

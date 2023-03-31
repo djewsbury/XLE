@@ -400,8 +400,8 @@ namespace UnitTests
 			TextureDesc::Plain2D(workingRes[0], workingRes[1], Format::R8G8B8A8_UNORM_SRGB /*Format::R11G11B10_FLOAT*/ /*Format::R32G32B32A32_FLOAT*/ ));
 
 		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, SetupCamera(workingRes));
-		parsingContext.GetFragmentStitchingContext()._workingProps._width = workingRes[0];
-		parsingContext.GetFragmentStitchingContext()._workingProps._height = workingRes[1];
+		parsingContext.GetFrameBufferProperties()._width = workingRes[0];
+		parsingContext.GetFrameBufferProperties()._height = workingRes[1];
 
 		testHelper->BeginFrameCapture();
 
@@ -500,8 +500,8 @@ namespace UnitTests
 			TextureDesc::Plain2D(workingRes[0], workingRes[1], Format::R8G8B8A8_UNORM_SRGB /*Format::R11G11B10_FLOAT*/ /*Format::R32G32B32A32_FLOAT*/ ));
 
 		auto parsingContext = BeginParsingContext(testApparatus, *threadContext, targetDesc, SetupCamera(workingRes));
-		parsingContext.GetFragmentStitchingContext()._workingProps._width = workingRes[0];
-		parsingContext.GetFragmentStitchingContext()._workingProps._height = workingRes[1];
+		parsingContext.GetFrameBufferProperties()._width = workingRes[0];
+		parsingContext.GetFrameBufferProperties()._height = workingRes[1];
 
 		auto& commonResources = *Techniques::Services::GetCommonResources();
 		auto predefinedPipelineLayout = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(BLOOM_PIPELINE ":ComputeMain");

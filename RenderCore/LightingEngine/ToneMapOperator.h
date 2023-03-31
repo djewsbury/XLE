@@ -93,7 +93,7 @@ namespace RenderCore { namespace LightingEngine
 			IResourceView* brightPassHighResBlurWorkingUAV, IResourceView* brightPassHighResBlurWorkingSRV);
 
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
-		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps);
 
 		::Assets::DependencyValidation GetDependencyValidation() const;
 
@@ -159,7 +159,7 @@ namespace RenderCore { namespace LightingEngine
 		void Execute(Techniques::ParsingContext& parsingContext, IResourceView& hdrInput);
 
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
-		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps);
 
 		::Assets::DependencyValidation GetDependencyValidation() const;
 

@@ -157,8 +157,8 @@ namespace RenderOverlays
 			params._srgbConversionOnOutput = true;
 			_pipelineOperator->Dispatch(
 				parsingContext,
-				(parsingContext.GetFragmentStitchingContext()._workingProps._width + blockSize - 1) / blockSize,
-				(parsingContext.GetFragmentStitchingContext()._workingProps._height + blockSize - 1) / blockSize,
+				(parsingContext.GetFrameBufferProperties()._width + blockSize - 1) / blockSize,
+				(parsingContext.GetFrameBufferProperties()._height + blockSize - 1) / blockSize,
 				1,
 				uniforms);
 		}
@@ -322,7 +322,7 @@ namespace RenderOverlays
 		using namespace RenderCore;
 
 		// Broad blur, but using mip pyramid approach
-		UInt2 srcDims { parsingContext.GetFragmentStitchingContext()._workingProps._width, parsingContext.GetFragmentStitchingContext()._workingProps._height };
+		UInt2 srcDims { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height };
 		auto srcMipCount = IntegerLog2(std::max(srcDims[0], srcDims[1])) + 1;
 		auto upsampleCount = 4u;
 		upsampleCount = std::min(srcMipCount-1u, upsampleCount);
@@ -493,8 +493,8 @@ namespace RenderOverlays
 	{
 		if (_backgroundResource)
 			return {
-				screenSpace[0] / float(_parsingContext->GetFragmentStitchingContext()._workingProps._width),
-				screenSpace[1] / float(_parsingContext->GetFragmentStitchingContext()._workingProps._height) };
+				screenSpace[0] / float(_parsingContext->GetFrameBufferProperties()._width),
+				screenSpace[1] / float(_parsingContext->GetFrameBufferProperties()._height) };
 		return {0,0};
 	}
 

@@ -303,9 +303,9 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler.get(), shadowProbes, _lightScene->_shadowProbesManager.get());
 	}
 
-	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, GBufferType gbufferType, bool precisionTargets = false)
+	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps, GBufferType gbufferType, bool precisionTargets = false)
 	{
-		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		UInt2 fbSize{fbProps._width, fbProps._height};
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::MultisampleDepth,
@@ -517,10 +517,10 @@ namespace RenderCore { namespace LightingEngine
 					// --------------------- --------------------------------------------------
 
 					FrameBufferProperties fbProps { resolution[0], resolution[1], TextureSamples::Create() };
-					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice())};
-					PreregisterAttachments(stitchingContext, GBufferType::PositionNormalParameters);
-					if (captures->_acesOperator) captures->_acesOperator->PreregisterAttachments(stitchingContext);
-					if (captures->_copyToneMapOperator) captures->_copyToneMapOperator->PreregisterAttachments(stitchingContext);
+					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice())};
+					PreregisterAttachments(stitchingContext, fbProps, GBufferType::PositionNormalParameters);
+					if (captures->_acesOperator) captures->_acesOperator->PreregisterAttachments(stitchingContext, fbProps);
+					if (captures->_copyToneMapOperator) captures->_copyToneMapOperator->PreregisterAttachments(stitchingContext, fbProps);
 
 					// Prepare shadows
 					lightingTechnique->CreateDynamicSequence(
@@ -551,10 +551,10 @@ namespace RenderCore { namespace LightingEngine
 
 					Sequence::FragmentInterfaceRegistration toneMapReg;
 					if (captures->_acesOperator) {
-						toneMapReg = mainSequence.CreateStep_RunFragments(captures->_acesOperator->CreateFragment(stitchingContext._workingProps));
+						toneMapReg = mainSequence.CreateStep_RunFragments(captures->_acesOperator->CreateFragment(fbProps));
 					} else {
 						assert(captures->_copyToneMapOperator);
-						toneMapReg = mainSequence.CreateStep_RunFragments(captures->_copyToneMapOperator->CreateFragment(stitchingContext._workingProps));
+						toneMapReg = mainSequence.CreateStep_RunFragments(captures->_copyToneMapOperator->CreateFragment(fbProps));
 					}
 
 					mainSequence.ResolvePendingCreateFragmentSteps();		// finish render pass
@@ -581,7 +581,7 @@ namespace RenderCore { namespace LightingEngine
 						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
 					}
 
-					lightingTechnique->CompleteConstruction(pipelineAccelerators, stitchingContext);
+					lightingTechnique->CompleteConstruction(pipelineAccelerators, stitchingContext, fbProps);
 
 					//
 					// Now that we've finalized the frame buffer layout, build the light resolve operators

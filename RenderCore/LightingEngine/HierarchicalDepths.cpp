@@ -103,9 +103,9 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	void HierarchicalDepthsOperator::PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext) 
+	void HierarchicalDepthsOperator::PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps) 
 	{
-		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		UInt2 fbSize{fbProps._width, fbProps._height};
 		unsigned depthsMipCount = IntegerLog2(std::max(fbSize[0], fbSize[1]));	// excluding the top full resolution texture
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {

@@ -55,7 +55,8 @@ namespace RenderCore { namespace LightingEngine
 		void ResolvePendingCreateFragmentSteps();
 		void CompleteAndSeal(
 			Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
-			Techniques::FragmentStitchingContext& stitchingContext);
+			Techniques::FragmentStitchingContext& stitchingContext,
+			const FrameBufferProperties& fbProps);
 		void Reset();
 		void TryDynamicInitialization(SequenceIterator&);
 		unsigned DrawablePktsToReserve() const { return _nextParseId; }
@@ -145,7 +146,8 @@ namespace RenderCore { namespace LightingEngine
 		void CreateDynamicSequence(Sequence::DynamicSequenceFn&& fn);
 		void CompleteConstruction(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
-			Techniques::FragmentStitchingContext& stitchingContext);
+			Techniques::FragmentStitchingContext& stitchingContext,
+			const FrameBufferProperties& fbProps);
 
 		ILightScene& GetLightScene();
 

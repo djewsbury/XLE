@@ -28,7 +28,7 @@ namespace RenderCore { namespace LightingEngine
 		void Execute(RenderCore::LightingEngine::SequenceIterator& iterator);
 
 		RenderCore::LightingEngine::RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
-		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps);
 		::Assets::DependencyValidation GetDependencyValidation() const { assert(_secondStageConstructionState==2); return _depVal; }
 
 		void SecondStageConstruction(

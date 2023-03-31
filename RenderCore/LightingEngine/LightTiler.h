@@ -57,7 +57,7 @@ namespace RenderCore { namespace LightingEngine
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		RenderStepFragmentInterface CreateInitFragment(const FrameBufferProperties& fbProps);
 
-		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(RenderCore::Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps);
 		void CompleteInitialization(IThreadContext& threadContext);
 		void BarrierToReadingLayout(IThreadContext& threadContext);
 

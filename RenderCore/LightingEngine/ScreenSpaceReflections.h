@@ -78,7 +78,7 @@ namespace RenderCore { namespace LightingEngine
 		void SetSpecularIBL(std::shared_ptr<IResourceView>);
 
 		LightingEngine::RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
-		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps);
 
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const { assert(_secondStageConstructionState == 2); return _depVal; }

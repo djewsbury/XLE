@@ -220,9 +220,9 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	void RasterizationLightTileOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext) 
+	void RasterizationLightTileOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps) 
 	{
-		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		UInt2 fbSize{fbProps._width, fbProps._height};
 		unsigned planesRequired = _config._maxLightsPerView/32;
 		_lightTileBufferSize = UInt2{(fbSize[0]+s_gridDims-1)/s_gridDims, (fbSize[1]+s_gridDims-1)/s_gridDims};
 		stitchingContext.DefineAttachment(

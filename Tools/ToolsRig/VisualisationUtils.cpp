@@ -214,7 +214,7 @@ namespace ToolsRig
         using namespace SceneEngine;
 		#if defined(_DEBUG)
 			auto& stitchingContext = parserContext.GetFragmentStitchingContext();
-			auto validationHash = RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps);
+			auto validationHash = RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), parserContext.GetFrameBufferProperties());
 			assert(_lightingTechniqueTargetsHash == validationHash);		// If you get here, it means that this render target configuration doesn't match what was last used with OnRenderTargetUpdate()
 		#endif
 
@@ -1128,7 +1128,7 @@ namespace ToolsRig
 				std::move(promisedSequencerCfgs),
 				[pipelineAccelerators=_pimpl->_pipelineAccelerators, fbProps, preregAttachments=std::move(attachments), systemAttachmentFormats=std::move(sysFormat)](auto visWireframeDelegate, auto visNormalsDelegate, auto primeStencilBufferDelegate) {
 
-					RenderCore::Techniques::FragmentStitchingContext stitching{{}, fbProps};
+					RenderCore::Techniques::FragmentStitchingContext stitching;
 
 					// We can't register the given preregistered attachments directly -- instead we have to 
 					// register what we're expecting to be given when we actually begin our render
@@ -1152,12 +1152,12 @@ namespace ToolsRig
 
 					Pimpl::SequencerCfgs cfgs;
 					auto fbFrag = CreateVisFBFrag();
-					auto stitched = stitching.TryStitchFrameBufferDesc({&fbFrag, &fbFrag+1});
+					auto stitched = stitching.TryStitchFrameBufferDesc({&fbFrag, &fbFrag+1}, fbProps);
 					cfgs._visWireframeCfg = pipelineAccelerators->CreateSequencerConfig("vis-wireframe", visWireframeDelegate, ParameterBox{}, stitched._fbDesc);
 					cfgs._visNormalsCfg = pipelineAccelerators->CreateSequencerConfig("vis-normals", visNormalsDelegate, ParameterBox{}, stitched._fbDesc);
 
 					auto justStencilFrag = CreateVisJustStencilFrag();
-					auto justStencilStitched = stitching.TryStitchFrameBufferDesc({&justStencilFrag, &justStencilFrag+1});
+					auto justStencilStitched = stitching.TryStitchFrameBufferDesc({&justStencilFrag, &justStencilFrag+1}, fbProps);
 					cfgs._primeStencilCfg = pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", primeStencilBufferDelegate, ParameterBox{}, justStencilStitched._fbDesc);
 					return cfgs;
 				});

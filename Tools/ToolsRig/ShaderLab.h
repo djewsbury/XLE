@@ -64,6 +64,7 @@ namespace ToolsRig
 
 			RenderCore::LightingEngine::CompiledLightingTechnique* _technique = nullptr;
 			RenderCore::Techniques::FragmentStitchingContext _stitchingContext;
+			RenderCore::FrameBufferProperties _fbProps;
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 			std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 			std::shared_ptr<RenderCore::LightingEngine::ILightScene> _lightScene;

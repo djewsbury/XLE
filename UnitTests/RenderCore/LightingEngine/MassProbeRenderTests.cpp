@@ -270,9 +270,9 @@ namespace UnitTests
 		FrameBufferProperties fbProps { s_testResolution[0], s_testResolution[1] };
 
 		auto parsingContext = BeginParsingContext(testApparatus, threadContext);
+		parsingContext.GetFrameBufferProperties() = fbProps;
 
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-		stitchingContext._workingProps = fbProps;
 		for (const auto&a:preregisteredAttachments)
 			stitchingContext.DefineAttachment(a._semantic, a._desc, a._name, a._state, a._layout);
 		return parsingContext;

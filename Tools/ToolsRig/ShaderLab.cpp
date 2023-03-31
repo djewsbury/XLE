@@ -167,8 +167,8 @@ namespace ToolsRig
 				
 					OperationConstructorContext constructorContext;
 					auto outputRes = RenderCore::LightingEngine::Internal::ExtractOutputResolution(preregAttachments);
-					RenderCore::FrameBufferProperties fbProps { outputRes[0], outputRes[1] };
-					constructorContext._stitchingContext = { preregAttachments, fbProps, MakeIteratorRange(systemAttachmentsFormat) };
+					constructorContext._stitchingContext = { preregAttachments, MakeIteratorRange(systemAttachmentsFormat) };
+					constructorContext._fbProps = RenderCore::FrameBufferProperties { outputRes[0], outputRes[1] };
 					constructorContext._depVal = ::Assets::GetDepValSys().Make();
 					constructorContext._drawingApparatus = l->_drawingApparatus;
 					constructorContext._bufferUploads = l->_bufferUploads;
@@ -234,7 +234,7 @@ namespace ToolsRig
 
 					technique->CompleteConstruction(
 						l->_drawingApparatus->_pipelineAccelerators,
-						constructorContext._stitchingContext);
+						constructorContext._stitchingContext, constructorContext._fbProps);
 
 					for (auto& seqAndFns:registeredSequences)
 						for (auto& fn:seqAndFns.second)

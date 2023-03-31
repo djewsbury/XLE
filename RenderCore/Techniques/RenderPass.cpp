@@ -1659,7 +1659,7 @@ namespace RenderCore { namespace Techniques
         _trueRenderPass = false;
         _attachedParsingContext = nullptr;
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
-        auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1));
+        auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1), parsingContext.GetFrameBufferProperties());
         // todo -- have to protect lifetime of stitchResult._fbDesc in this case
         // candidate for subframe heap
         // just copy stitchResult._fbDesc somewhere that will last to the end of the frame
@@ -2267,7 +2267,7 @@ namespace RenderCore { namespace Techniques
                 desc._format = prereg._desc._textureDesc._format;
                 if (prereg._desc._textureDesc._samples._sampleCount > 1u)
                     desc._flags |= AttachmentDesc::Flags::Multisampled;
-                defaultTextureViewDescs.push_back({});
+                defaultTextureViewDescs.push_back(prereg._defaultView);
             }
 
             assert(desc._format != Format::Unknown);
@@ -2294,7 +2294,7 @@ namespace RenderCore { namespace Techniques
         return FrameBufferDesc { std::move(fbAttachments), std::move(subpasses), props };
     }
 
-    auto FragmentStitchingContext::TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment) -> StitchResult
+    auto FragmentStitchingContext::TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment, const FrameBufferProperties& fbProps) -> StitchResult
     {
         // Match the attachment requests to the given fragment to our list of working attachments
         // in order to fill out a full specified attachment list. Also update the preregistered
@@ -2316,7 +2316,7 @@ namespace RenderCore { namespace Techniques
                 [semantic=a._semantic](const auto& c) { return c._semantic == semantic; });
             if (i != _workingAttachments.end()) {
                 #if defined(_DEBUG)
-                    if (!IsCompatible(a._matchingRules, *i, _workingProps)) {     // todo -- check layout flags
+                    if (!IsCompatible(a._matchingRules, *i, fbProps)) {     // todo -- check layout flags
                         Log(Warning) << "Preregistered attachment for semantic (" << AttachmentSemantic{a._semantic} << " does not match the request for this semantic. Attempting to use it anyway. Request: "
                             << a << ", Preregistered: " << *i << std::endl;
                     }
@@ -2345,7 +2345,7 @@ namespace RenderCore { namespace Techniques
                 assert(transform._finalLayout);     // we must have a defined final layout
                 result._attachmentTransforms.push_back(transform);
             } else {
-                auto newAttachment = BuildPreregisteredAttachment(a, usageFlags, _workingProps);
+                auto newAttachment = BuildPreregisteredAttachment(a, usageFlags, fbProps);
                 #if defined(_DEBUG)
                     if (newAttachment._desc._textureDesc._format == Format::Unknown)
                         Log(Warning) << "Missing format information for attachment with semantic: " << AttachmentSemantic{a._semantic} << std::endl;
@@ -2381,12 +2381,12 @@ namespace RenderCore { namespace Techniques
         result._nonFBAttachmentsMap.push_back((unsigned)result._nonFBAttachments.size());
 
         #if defined(_DEBUG)
-            if (CanBeSimplified(fragment, _workingAttachments, _workingProps))
+            if (CanBeSimplified(fragment, _workingAttachments, fbProps))
 				Log(Warning) << "Detected a frame buffer fragment which be simplified. This usually means one or more of the attachments can be reused, thereby reducing the total number of attachments required." << std::endl;
         #endif
 
         result._fbDesc = BuildFrameBufferDesc(
-            fragment, _workingProps,
+            fragment, fbProps,
             MakeIteratorRange(result._fullAttachmentDescriptions));
 
         #if defined(_DEBUG)
@@ -2431,12 +2431,12 @@ namespace RenderCore { namespace Techniques
     static void PatchInDefaultLayouts(FrameBufferDescFragment& fragment);
     static void CheckNonFrameBufferAttachmentLayouts(FrameBufferDescFragment& fragment);
 
-    auto FragmentStitchingContext::TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments) -> StitchResult
+    auto FragmentStitchingContext::TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments, const FrameBufferProperties& fbProps) -> StitchResult
     {
-        auto merged = MergeFragments(MakeIteratorRange(_workingAttachments), fragments, _workingProps, MakeIteratorRange(_systemFormats));
+        auto merged = MergeFragments(MakeIteratorRange(_workingAttachments), fragments, fbProps, MakeIteratorRange(_systemFormats));
         PatchInDefaultLayouts(merged._mergedFragment);
         CheckNonFrameBufferAttachmentLayouts(merged._mergedFragment);
-        auto stitched = TryStitchFrameBufferDescInternal(merged._mergedFragment);
+        auto stitched = TryStitchFrameBufferDescInternal(merged._mergedFragment, fbProps);
         stitched._log = merged._log;
         return stitched;
     }
@@ -2523,9 +2523,7 @@ namespace RenderCore { namespace Techniques
 
     FragmentStitchingContext::FragmentStitchingContext(
         IteratorRange<const PreregisteredAttachment*> preregAttachments,
-        const FrameBufferProperties& fbProps,
         IteratorRange<const Format*> systemFormats)
-    : _workingProps(fbProps)
     {
         for (const auto&attach:preregAttachments)
             DefineAttachment(attach);

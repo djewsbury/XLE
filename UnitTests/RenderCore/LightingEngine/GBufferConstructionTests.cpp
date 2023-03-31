@@ -179,9 +179,9 @@ namespace UnitTests
 
 		auto parsingContext = BeginParsingContext(testApparatus, threadContext);
 		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, s_testResolution);
+		parsingContext.GetFrameBufferProperties() = fbProps;
 
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
-		stitchingContext._workingProps = fbProps;
 		for (const auto&a:preregisteredAttachments)
 			stitchingContext.DefineAttachment(a._semantic, a._desc, a._name, a._state, a._layout);
 		return parsingContext;

@@ -181,9 +181,9 @@ namespace RenderCore { namespace LightingEngine
         return result;
     }
 
-    void SSAOOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
+    void SSAOOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps)
     {
-        UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+        UInt2 fbSize{fbProps._width, fbProps._height};
         Techniques::PreregisteredAttachment preGeneratedAttachments[] {
             Techniques::PreregisteredAttachment {
                 Hash_AOAccumulation,

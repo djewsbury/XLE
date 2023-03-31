@@ -23,6 +23,7 @@ namespace RenderCore { namespace Techniques
 
         FragmentStitchingContext _stitchingContext;
         AttachmentReservation _attachmentReservation;
+        FrameBufferProperties _frameBufferProperties;
     };
 
     void ParsingContext::Process(const ::Assets::Exceptions::RetrievalError& e)
@@ -103,7 +104,6 @@ namespace RenderCore { namespace Techniques
 
         _internal->_stitchingContext = FragmentStitchingContext{
             IteratorRange<const PreregisteredAttachment*>{},
-            FrameBufferProperties{},
             _techniqueContext->_systemAttachmentFormats};
     }
 
@@ -125,5 +125,6 @@ namespace RenderCore { namespace Techniques
     bool                    ParsingContext::GetEnablePrevProjectionDesc() const { return _internal->_enablePrevProjectionDesc; }
     FragmentStitchingContext& ParsingContext::GetFragmentStitchingContext()     { return _internal->_stitchingContext; }
     AttachmentReservation& ParsingContext::GetAttachmentReservation()           { return _internal->_attachmentReservation; }
+    FrameBufferProperties& ParsingContext::GetFrameBufferProperties()           { return _internal->_frameBufferProperties; }
 }}
 

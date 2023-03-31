@@ -61,8 +61,7 @@ namespace UnitTests
 		SECTION("Basic construction")
 		{
 			FragmentStitchingContext stitchingContext;
-			stitchingContext._workingProps._width = 1024;
-			stitchingContext._workingProps._height = 1024;
+			FrameBufferProperties fbProps { 1024, 1024 };
 			DefineTestAttachments(stitchingContext, 0, UInt2(1024, 1024));
 
 			FrameBufferDescFragment fragment;
@@ -85,7 +84,7 @@ namespace UnitTests
 
 			for (auto& sp:subpass) fragment.AddSubpass(std::move(sp));
 
-			auto stitched = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&fragment, &fragment+1));
+			auto stitched = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&fragment, &fragment+1), fbProps);
 			(void)stitched;
 
 			RenderPassInstance rpi{
@@ -154,11 +153,9 @@ namespace UnitTests
 			}
 
 			FragmentStitchingContext stitchingContext;
-			stitchingContext._workingProps._width = 1024;
-			stitchingContext._workingProps._height = 1024;
 			DefineTestAttachments(stitchingContext, 0, UInt2(1024, 1024));
 
-			auto stitched = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(fragments));
+			auto stitched = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(fragments), FrameBufferProperties { 1024, 1024 });
 			(void)stitched;
 
 			RenderPassInstance rpi{

@@ -195,7 +195,7 @@ namespace PlatformRig
         parserContext.GetAttachmentReservation().Absorb(std::move(_pimpl->_capturedDoubleBufferAttachments));
 
         auto& stitchingContext = parserContext.GetFragmentStitchingContext();
-        stitchingContext._workingProps = FrameBufferProperties { presentationChainDesc._width, presentationChainDesc._height };
+        parserContext.GetFrameBufferProperties() = FrameBufferProperties { presentationChainDesc._width, presentationChainDesc._height };
         parserContext.GetViewport() = ViewportDesc { 0.f, 0.f, (float)presentationChainDesc._width, (float)presentationChainDesc._height };
 
         return parserContext;

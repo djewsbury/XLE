@@ -277,7 +277,8 @@ namespace RenderCore { namespace LightingEngine
 
 	void Sequence::CompleteAndSeal(
 		Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
-		Techniques::FragmentStitchingContext& stitchingContext)
+		Techniques::FragmentStitchingContext& stitchingContext,
+		const FrameBufferProperties& fbProps)
 	{
 		if (_dynamicFn) return;
 
@@ -289,7 +290,7 @@ namespace RenderCore { namespace LightingEngine
 		assert(_fbDescs.empty());
 		_fbDescs.reserve(_fbDescsPendingStitch.size());
 		for (const auto& stitchOp:_fbDescsPendingStitch) {
-			auto mergedFB = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(stitchOp));
+			auto mergedFB = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(stitchOp), fbProps);
 
 			#if defined(_DEBUG)
 				Log(Warning) << "Merged fragment in lighting technique:" << std::endl << mergedFB._log << std::endl;
@@ -439,12 +440,13 @@ namespace RenderCore { namespace LightingEngine
 
 	void CompiledLightingTechnique::CompleteConstruction(
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
-		Techniques::FragmentStitchingContext& stitchingContext)
+		Techniques::FragmentStitchingContext& stitchingContext,
+		const FrameBufferProperties& fbProps)
 	{
 		assert(!_isConstructionCompleted);
 		_doubleBufferAttachments = { stitchingContext.GetDoubleBufferAttachments().begin(), stitchingContext.GetDoubleBufferAttachments().end() };
 		for (auto&s:_sequences)
-			s->CompleteAndSeal(*pipelineAccelerators, stitchingContext);
+			s->CompleteAndSeal(*pipelineAccelerators, stitchingContext, fbProps);
 		_isConstructionCompleted = true;
 	}
 

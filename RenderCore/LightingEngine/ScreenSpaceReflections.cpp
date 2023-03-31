@@ -372,9 +372,9 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	void ScreenSpaceReflectionsOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext) 
+	void ScreenSpaceReflectionsOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps) 
 	{
-		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		UInt2 fbSize{fbProps._width, fbProps._height};
 		const auto colorFormat = Format::R11G11B10_FLOAT;
 		if (_desc._enableFinalBlur) {	/////////////////////////////////////////////
 			Techniques::PreregisteredAttachment attachments[] {

@@ -338,15 +338,15 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	void ToneMapAcesOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
+	void ToneMapAcesOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps)
 	{
-		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		UInt2 fbSize{fbProps._width, fbProps._height};
 		stitchingContext.DefineAttachment(
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
 					BindFlag::RenderTarget | BindFlag::ShaderResource,
-					TextureDesc::Plain2D(fbSize[0], fbSize[1], _desc._lightAccumulationBufferFormat, stitchingContext._workingProps._samples)),
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], _desc._lightAccumulationBufferFormat, fbProps._samples)),
 				"color-hdr"
 			});
 
@@ -905,10 +905,10 @@ namespace RenderCore { namespace LightingEngine
 		return fragment;
 	}
 
-	void CopyToneMapOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
+	void CopyToneMapOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps)
 	{
 		const bool precisionTargets = false;
-		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
+		UInt2 fbSize{fbProps._width, fbProps._height};
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,

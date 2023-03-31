@@ -94,8 +94,8 @@ namespace UnitTests
 		frag.AddSubpass(std::move(SubpassDesc{}.AppendOutput(colorHdr).SetName("prime-color-hdr")));
 		frag.AddSubpass(std::move(SubpassDesc{}.AppendOutput(colorLdr).AppendInput(colorHdr).SetName("copy-to-color-ldr")));
 
-		Techniques::FragmentStitchingContext stitchingContext{ MakeIteratorRange(predefAttachments), FrameBufferProperties{256, 256}};
-		auto stitch = stitchingContext.TryStitchFrameBufferDesc(frag);
+		Techniques::FragmentStitchingContext stitchingContext{ MakeIteratorRange(predefAttachments)};
+		auto stitch = stitchingContext.TryStitchFrameBufferDesc(frag, FrameBufferProperties{256, 256});
 
 		// Create the pipeline operators we're going to use
 		// Both are full viewport operators, and we just need to specify the shaders & states they will use

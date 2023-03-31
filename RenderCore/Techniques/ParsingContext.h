@@ -75,6 +75,7 @@ namespace RenderCore { namespace Techniques
 			//  ----------------- Frame buffer / render pass state -----------------
         FragmentStitchingContext& GetFragmentStitchingContext();
         AttachmentReservation& GetAttachmentReservation();
+        FrameBufferProperties& GetFrameBufferProperties();
         void BindAttachment(uint64_t semantic, std::shared_ptr<IResource>, bool isInitialized, BindFlags::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});      // set initialLayout=~0u for never initialized
         void BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain>, BindFlags::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});
 

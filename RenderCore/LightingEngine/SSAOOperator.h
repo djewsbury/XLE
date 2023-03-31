@@ -58,7 +58,7 @@ namespace RenderCore { namespace LightingEngine
         	IResourceView* gbufferNormalPrevSRV);
 
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
-		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext);
+		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps);
 
 		void ResetAccumulation();
 		::Assets::DependencyValidation GetDependencyValidation() const;

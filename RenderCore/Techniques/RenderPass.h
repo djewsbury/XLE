@@ -207,8 +207,8 @@ namespace RenderCore { namespace Techniques
             PipelineType _pipelineType = PipelineType::Graphics;
         };
 
-        StitchResult TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments);
-        StitchResult TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment);
+        StitchResult TryStitchFrameBufferDesc(IteratorRange<const FrameBufferDescFragment*> fragments, const FrameBufferProperties& fbProps);
+        StitchResult TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment, const FrameBufferProperties& fbProps);
 
         void UpdateAttachments(const StitchResult& res);
         IteratorRange<const PreregisteredAttachment*> GetPreregisteredAttachments() const { return _workingAttachments; }
@@ -216,18 +216,16 @@ namespace RenderCore { namespace Techniques
 
         IteratorRange<const DoubleBufferAttachment*> GetDoubleBufferAttachments() const { return _doubleBufferAttachments; }
 
-        FrameBufferProperties _workingProps;
         Format _systemFormats[(unsigned)SystemAttachmentFormat::Max];
 
         FragmentStitchingContext(
             IteratorRange<const PreregisteredAttachment*> preregAttachments = {}, 
-            const FrameBufferProperties& fbProps = {},
             IteratorRange<const Format*> systemFormats = {});
         ~FragmentStitchingContext();
     private:
         std::vector<PreregisteredAttachment> _workingAttachments;
         std::vector<DoubleBufferAttachment> _doubleBufferAttachments;
-        StitchResult TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment);
+        StitchResult TryStitchFrameBufferDescInternal(const FrameBufferDescFragment& fragment, const FrameBufferProperties& fbProps);
     };
 
     struct MergeFragmentsResult
@@ -510,9 +508,9 @@ namespace RenderCore { namespace Techniques
 
     std::vector<Format> CalculateDefaultSystemFormats(IDevice&);
 
-    inline auto FragmentStitchingContext::TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment) -> StitchResult
+    inline auto FragmentStitchingContext::TryStitchFrameBufferDesc(const FrameBufferDescFragment& fragment, const FrameBufferProperties& fbProps) -> StitchResult
     {
-        return TryStitchFrameBufferDesc({&fragment, &fragment+1});
+        return TryStitchFrameBufferDesc({&fragment, &fragment+1}, fbProps);
     }
 
 }}

@@ -65,7 +65,7 @@ namespace UnitTests
 			Techniques::FrameBufferDescFragment fragment;
 			fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::PresentationSrc);
 			fragment.AddSubpass(std::move(SubpassDesc{}.AppendOutput(0)));
-			_stitchedFrameBufferDesc = stitchingContext.TryStitchFrameBufferDesc(fragment);
+			_stitchedFrameBufferDesc = stitchingContext.TryStitchFrameBufferDesc(fragment, {});
 
 			_pipelineLayout = testHelper._device->CreatePipelineLayout({}, "empty");
 			auto shader = MakeShaderProgram(

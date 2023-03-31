@@ -134,10 +134,10 @@ namespace RenderCore { namespace LightingEngine
 		};
 	}
 
-	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext)
+	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps)
 	{
-		UInt2 fbSize{stitchingContext._workingProps._width, stitchingContext._workingProps._height};
-		auto samples = stitchingContext._workingProps._samples;
+		UInt2 fbSize{fbProps._width, fbProps._height};
+		auto samples = fbProps._samples;
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::MultisampleDepth,
@@ -471,14 +471,14 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite)
 	{
-		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, fbProps, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice()) };
-		PreregisterAttachments(stitchingContext);
-		_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext);
-		_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext);
-		if (_acesOperator) _acesOperator->PreregisterAttachments(stitchingContext);
-		if (_copyToneMapOperator) _copyToneMapOperator->PreregisterAttachments(stitchingContext);
-		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext);
-		if (_ssaoOperator) _ssaoOperator->PreregisterAttachments(stitchingContext);
+		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice()) };
+		PreregisterAttachments(stitchingContext, fbProps);
+		_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext, fbProps);
+		_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext, fbProps);
+		if (_acesOperator) _acesOperator->PreregisterAttachments(stitchingContext, fbProps);
+		if (_copyToneMapOperator) _copyToneMapOperator->PreregisterAttachments(stitchingContext, fbProps);
+		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext, fbProps);
+		if (_ssaoOperator) _ssaoOperator->PreregisterAttachments(stitchingContext, fbProps);
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(
@@ -498,19 +498,19 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		// Build hierarchical depths
-		auto hierachicalDepthsReg = mainSequence.CreateStep_RunFragments(_hierarchicalDepthsOperator->CreateFragment(stitchingContext._workingProps));
+		auto hierachicalDepthsReg = mainSequence.CreateStep_RunFragments(_hierarchicalDepthsOperator->CreateFragment(fbProps));
 
 		// Light tiling & configure lighting descriptors
-		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateInitFragment(stitchingContext._workingProps));
-		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateFragment(stitchingContext._workingProps));
+		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateInitFragment(fbProps));
+		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateFragment(fbProps));
 		mainSequence.ResolvePendingCreateFragmentSteps();
 
 		// Calculate SSR & SSAO
 		Sequence::FragmentInterfaceRegistration ssrFragmentReg, ssaoFragmentReg;
 		if (_ssrOperator)
-			ssrFragmentReg = mainSequence.CreateStep_RunFragments(_ssrOperator->CreateFragment(stitchingContext._workingProps));
+			ssrFragmentReg = mainSequence.CreateStep_RunFragments(_ssrOperator->CreateFragment(fbProps));
 		if (_ssaoOperator)
-			ssaoFragmentReg = mainSequence.CreateStep_RunFragments(_ssaoOperator->CreateFragment(stitchingContext._workingProps));
+			ssaoFragmentReg = mainSequence.CreateStep_RunFragments(_ssaoOperator->CreateFragment(fbProps));
 
 		mainSequence.CreateStep_CallFunction(
 			[captures=shared_from_this()](SequenceIterator& iterator) {
@@ -535,13 +535,13 @@ namespace RenderCore { namespace LightingEngine
 		// Post processing
 		Sequence::FragmentInterfaceRegistration toneMapReg;
 		if (_acesOperator) {
-			toneMapReg = mainSequence.CreateStep_RunFragments(_acesOperator->CreateFragment(stitchingContext._workingProps));
+			toneMapReg = mainSequence.CreateStep_RunFragments(_acesOperator->CreateFragment(fbProps));
 		} else {
 			assert(_copyToneMapOperator);
-			toneMapReg = mainSequence.CreateStep_RunFragments(_copyToneMapOperator->CreateFragment(stitchingContext._workingProps));
+			toneMapReg = mainSequence.CreateStep_RunFragments(_copyToneMapOperator->CreateFragment(fbProps));
 		}
 
-		lightingTechnique.CompleteConstruction(std::move(pipelineAccelerators), stitchingContext);
+		lightingTechnique.CompleteConstruction(std::move(pipelineAccelerators), stitchingContext, fbProps);
 
 		// Some operators requires a second stage construction, which must be done after we've finalized the frame buffer desc(s)
 		// This is because low level graphics pipelines used the FrameBufferDesc as a construction parameter

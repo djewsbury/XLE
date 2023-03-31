@@ -136,8 +136,8 @@ namespace ToolsRig
 				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used within sequence"));
 
 				auto opStep = std::make_shared<RenderCore::LightingEngine::HierarchicalDepthsOperator>(context._drawingApparatus->_graphicsPipelinePool);
-				opStep->PreregisterAttachments(context._stitchingContext);
-				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
+				opStep->PreregisterAttachments(context._stitchingContext, context._fbProps);
+				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._fbProps));
 				context._postStitchFunctions.push_back(
 					[opStep, reg](auto& context, auto* sequence) {
 						StallForSecondStageConstruction(*opStep, AsFrameBufferTarget(*sequence, reg));
@@ -179,8 +179,8 @@ namespace ToolsRig
 				}
 
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::SSAOOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, RenderCore::LightingEngine::SSAOOperator::IntegrationParams{hasHierarchialDepths, hasHistoryConfidence});
-				opStep->PreregisterAttachments(context._stitchingContext);
-				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
+				opStep->PreregisterAttachments(context._stitchingContext, context._fbProps);
+				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._fbProps));
 				context._postStitchFunctions.push_back(
 					[opStep, reg](auto& context, auto* sequence) {
 						StallForSecondStageConstruction(*opStep, AsFrameBufferTarget(*sequence, reg));
@@ -200,8 +200,8 @@ namespace ToolsRig
 				}
 
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ToneMapAcesOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc);
-				opStep->PreregisterAttachments(context._stitchingContext);
-				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
+				opStep->PreregisterAttachments(context._stitchingContext, context._fbProps);
+				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._fbProps));
 				context._postStitchFunctions.push_back(
 					[opStep, reg](auto& context, auto* sequence) {
 						StallForSecondStageConstruction(*opStep, AsFrameBufferTarget(*sequence, reg));
@@ -230,8 +230,8 @@ namespace ToolsRig
 				RenderCore::LightingEngine::ScreenSpaceReflectionsOperator::IntegrationParams integrationParams;
 				integrationParams._specularIBLEnabled = false;
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, integrationParams);
-				opStep->PreregisterAttachments(context._stitchingContext);
-				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._stitchingContext._workingProps));
+				opStep->PreregisterAttachments(context._stitchingContext, context._fbProps);
+				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._fbProps));
 				context._postStitchFunctions.push_back(
 					[opStep, reg](auto& context, auto* sequence) {
 						StallForSecondStageConstruction(*opStep, AsFrameBufferTarget(*sequence, reg));
