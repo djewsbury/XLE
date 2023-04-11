@@ -133,8 +133,8 @@ namespace RenderCore
         unsigned _width = 0, _height = 0;
         TextureSamples _samples = TextureSamples::Create();
 
-        uint64_t CalculateHash() const;
-        uint64_t CalculateHashResolutionIndependent() const;
+        uint64_t GetHash() const;
+        uint64_t GetHashResolutionIndependent() const;
     };
 
     class FrameBufferDesc

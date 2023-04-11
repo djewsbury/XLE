@@ -30,7 +30,7 @@ namespace RenderCore
         for (const auto&sp:_subpasses)
             _hash = HashCombine(_hash, sp.CalculateHash());
         _hashExcludingDimensions = _hash;
-        _hash = HashCombine(_hash, _props.CalculateHash());
+        _hash = HashCombine(_hash, _props.GetHash());
 
         _hashExcludingDimensions =
             _hashExcludingDimensions
@@ -130,7 +130,7 @@ namespace RenderCore
         return result;
     }
 
-    uint64_t FrameBufferProperties::CalculateHash() const
+    uint64_t FrameBufferProperties::GetHash() const
     {
         assert((_width & ((1<<16)-1)) == _width);
         assert((_height & ((1<<16)-1)) == _height);
@@ -143,7 +143,7 @@ namespace RenderCore
             ^ (uint64_t(_samples._samplingQuality) << 56ull);
     }
 
-    uint64_t FrameBufferProperties::CalculateHashResolutionIndependent() const
+    uint64_t FrameBufferProperties::GetHashResolutionIndependent() const
     {
         assert((_samples._sampleCount & ((1<<8)-1)) == _samples._sampleCount);
         assert((_samples._samplingQuality & ((1<<8)-1)) == _samples._samplingQuality);

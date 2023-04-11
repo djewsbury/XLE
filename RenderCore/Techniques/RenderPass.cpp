@@ -1827,7 +1827,7 @@ namespace RenderCore { namespace Techniques
         const FrameBufferProperties& fbProps,
         uint64_t seed)
     {
-        uint64_t result = HashCombine(fbProps.CalculateHash(), seed);
+        uint64_t result = HashCombine(fbProps.GetHash(), seed);
         for (const auto& a:attachments)
             result = HashCombine(a.CalculateHash(), result);
         return result;
@@ -1838,7 +1838,7 @@ namespace RenderCore { namespace Techniques
         const FrameBufferProperties& fbProps,
         uint64_t seed)
     {
-        uint64_t result = HashCombine(fbProps.CalculateHashResolutionIndependent(), seed);
+        uint64_t result = HashCombine(fbProps.GetHashResolutionIndependent(), seed);
         for (const auto& a:attachments)
             result = HashCombine(a.CalculateHashResolutionIndependent(), result);
         return result;
