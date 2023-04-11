@@ -70,6 +70,7 @@ namespace RenderOverlays
     {
         Coord2      _topLeft, _bottomRight;
         Rect(const Coord2& topLeft, const Coord2& bottomRight) : _topLeft(topLeft), _bottomRight(bottomRight) {}
+        Rect(Coord left, Coord top, Coord right, Coord bottom) : _topLeft(left, top), _bottomRight(right, bottom) {}
         Rect() {}
 
         Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }

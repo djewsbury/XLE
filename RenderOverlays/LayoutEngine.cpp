@@ -91,6 +91,8 @@ namespace RenderOverlays
 
 	LayedOutWidgets LayoutEngine::BuildLayedOutWidgets()
 	{
+		// If you hit this, it means that a node was using PushNode, but not popped with PopNode. It probably means that
+		// there's container type node that wasn't closed
 		assert(_workingStack.empty());
 		_guidStack.pop();
 		assert(_guidStack.empty());

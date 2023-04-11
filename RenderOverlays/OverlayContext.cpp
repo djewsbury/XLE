@@ -131,7 +131,7 @@ namespace RenderOverlays
 	}
 
 	void ImmediateOverlayContext::DrawTriangle   (  ProjectionMode proj,
-													const Float3& v0,    const ColorB& colV0,    const Float3& v1,     
+													const Float3& v0,    const ColorB& colV0,    const Float3& v1,
 													const ColorB& colV1, const Float3& v2,       const ColorB& colV2)
 	{
 		using Vertex = Vertex_PC;
@@ -151,8 +151,8 @@ namespace RenderOverlays
 	}
 
 	void ImmediateOverlayContext::DrawTexturedQuad(
-		ProjectionMode proj, 
-		const Float3& mins, const Float3& maxs, 
+		ProjectionMode proj,
+		const Float3& mins, const Float3& maxs,
 		std::shared_ptr<RenderCore::IResourceView> textureResource,
 		ColorB color, const Float2& minTex0, const Float2& maxTex0)
 	{
@@ -169,8 +169,8 @@ namespace RenderOverlays
 	}
 
 	Float2 ImmediateOverlayContext::DrawText	 (  const std::tuple<Float3, Float3>& quad, 
-													const Font& font, DrawTextFlags::BitField flags, 
-													ColorB col, 
+													const Font& font, DrawTextFlags::BitField flags,
+													ColorB col,
 													TextAlignment alignment, StringSection<char> text)
 	{
 		if (!_fontRenderingManager) return Float2{0, 0};
@@ -222,7 +222,7 @@ namespace RenderOverlays
 			shadowColor);
 	}
 
-	void ImmediateOverlayContext::CaptureState() 
+	void ImmediateOverlayContext::CaptureState()
 	{
 		SetState(OverlayState());
 	}
