@@ -742,7 +742,7 @@ namespace PlatformRig
 
     auto    FrameRigDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
-        auto topMost = interfaceState.TopMostWidget();
+        auto topMost = interfaceState.TopMostHotArea();
         if (input.IsPress_LButton() || input.IsRelease_LButton()) {
             if (topMost._id == Id_FrameRigDisplayMain) {
                 if (input.IsRelease_LButton()) {

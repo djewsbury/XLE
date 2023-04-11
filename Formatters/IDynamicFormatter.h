@@ -25,7 +25,7 @@ namespace Formatters
 
         //
         // Different underlying formatters work with values in different ways. In order for each
-        // formatter type to work most efficiently with it's prefered interface style, we have to
+        // formatter type to work most efficiently with it's preferred interface style, we have to
         // introduce a few different variations of the value getter.
         // TryStringValue variations
         //      TryStringValue()        --> if the underlying type is a string, returns that directly (no copies or conversions)

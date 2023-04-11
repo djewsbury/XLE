@@ -17,7 +17,7 @@ namespace PlatformRig
     public:
         ProcessInputResult    OnInputEvent(const InputContext& context, const OSServices::InputSnapshot& evnt) override;
         void    AddListener(std::shared_ptr<IInputListener> listener);
-        void    RemoveListened(IInputListener&);
+        void    RemoveListener(IInputListener&);
 
         MainInputHandler();
         ~MainInputHandler();

@@ -68,8 +68,17 @@ namespace UnitTests
 			overlaySystem->OnRenderTargetUpdate(overlayConfig._preregAttachments, overlayConfig._fbProps, overlayConfig._systemAttachmentFormats);
 			if (_drawingApparatus)
 				_drawingApparatus->_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_windowApparatus->_immediateContext);
-			_windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(adapter));
+			auto inputListener = PlatformRig::CreateInputListener(adapter);
+			_windowApparatus->_mainInputHandler->AddListener(inputListener);
 			_windowApparatus->_osWindow->Show();
+
+			auto cleanup = MakeAutoCleanup(
+				[&]{
+					_windowApparatus->_osWindow->Show(false);
+					_windowApparatus->_mainInputHandler->RemoveListener(*inputListener);
+					_activeCamera = nullptr;
+				});
+
 			for (;;) {
 				auto msg = OSServices::Window::SingleWindowMessagePump(*_windowApparatus->_osWindow);
 				PlatformRig::CommonEventHandling(*_windowApparatus, msg);
@@ -91,6 +100,7 @@ namespace UnitTests
 					overlaySystem->OnUpdate(_windowApparatus->_frameRig->GetSmoothedDeltaTime());
 					
 					auto parsingContext = _windowApparatus->_frameRig->StartupFrame(*_windowApparatus);
+					parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(*_activeCamera, {unsigned(parsingContext.GetViewport()._width), unsigned(parsingContext.GetViewport()._height)});
 
 					TRY {
 						overlaySystem->Render(parsingContext, *this);
@@ -111,7 +121,6 @@ namespace UnitTests
 
 				}
 			}
-			_activeCamera = nullptr;
 		}
 
 		std::pair<Float3, Float3> ScreenToWorldSpaceRay(Int2 screenPt) const override
