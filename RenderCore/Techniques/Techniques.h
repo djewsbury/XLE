@@ -98,13 +98,14 @@ namespace RenderCore { namespace Techniques
     class PipelineCollection;
     class IPipelineAcceleratorPool;
     class IDeformAcceleratorPool;
+    class SemiConstantDescriptorSet;
+    class SystemUniformsDelegate;
 
     class TechniqueContext
     {
     public:
         ParameterBox _globalEnvironmentState;
 
-        std::shared_ptr<IUniformDelegateManager> _uniformDelegateManager;
         std::shared_ptr<IAttachmentPool> _attachmentPool;
 		std::shared_ptr<IFrameBufferPool> _frameBufferPool;
         std::shared_ptr<CommonResourceBox> _commonResources;
@@ -112,6 +113,11 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<IPipelineAcceleratorPool> _pipelineAccelerators;
         std::shared_ptr<IDeformAcceleratorPool> _deformAccelerators;
         std::shared_ptr<PipelineCollection> _graphicsPipelinePool;
+
+        std::shared_ptr<SemiConstantDescriptorSet> _graphicsSequencerDS;
+        std::shared_ptr<SemiConstantDescriptorSet> _computeSequencerDS;
+        std::shared_ptr<SystemUniformsDelegate> _systemUniformsDelegate;
+
         std::vector<Format> _systemAttachmentFormats;
     };
 

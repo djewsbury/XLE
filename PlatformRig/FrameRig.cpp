@@ -394,12 +394,7 @@ namespace PlatformRig
 
         auto& techniqueContext = _pimpl->_techniqueContext;
         if (drawingApparatus) {
-            techniqueContext._commonResources = drawingApparatus->_commonResources;
-            techniqueContext._drawablesPool = drawingApparatus->_drawablesPool;
-            techniqueContext._graphicsPipelinePool = drawingApparatus->_graphicsPipelinePool;
-            techniqueContext._uniformDelegateManager = drawingApparatus->_mainUniformDelegateManager;
-            techniqueContext._pipelineAccelerators = drawingApparatus->_pipelineAccelerators;
-            techniqueContext._deformAccelerators = drawingApparatus->_deformAccelerators;
+            InitializeTechniqueContext(techniqueContext, *drawingApparatus);
         }
         techniqueContext._attachmentPool = frameRenderingApparatus._attachmentPool;
         techniqueContext._frameBufferPool = frameRenderingApparatus._frameBufferPool;

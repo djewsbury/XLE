@@ -40,7 +40,7 @@ namespace RenderCore { namespace Techniques
 	class PipelineCollection;
 	class SubFrameEvents;
 	class IDrawablesPool;
-	class IUniformDelegateManager;
+	class SemiConstantDescriptorSet;
 	class SkinDeformerSystem;
 
 	/** <summary>Organizes the objects required for rendering operations, and manages their lifetimes</summary>
@@ -69,7 +69,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<IDrawablesPool> _drawablesPool;
 
-		std::shared_ptr<IUniformDelegateManager> _mainUniformDelegateManager;
+		std::shared_ptr<SemiConstantDescriptorSet> _graphicsSequencerDS;
+		std::shared_ptr<SemiConstantDescriptorSet> _computeSequencerDS;
 
 		std::shared_ptr<IDeformAcceleratorPool> _deformAccelerators;
 
@@ -132,5 +133,7 @@ namespace RenderCore { namespace Techniques
 		FrameRenderingApparatus(FrameRenderingApparatus&) = delete;
 		FrameRenderingApparatus& operator=(FrameRenderingApparatus&) = delete;
 	};
+
+	void InitializeTechniqueContext(TechniqueContext&, const DrawingApparatus&);
 
 }}

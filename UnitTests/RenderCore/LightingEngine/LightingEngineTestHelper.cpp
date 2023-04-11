@@ -79,12 +79,9 @@ namespace UnitTests
 		_techniqueContext->_pipelineAccelerators = _pipelineAccelerators;
 		_techniqueContext->_systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*_metalTestHelper->_device);
 
-		_techniqueContext->_uniformDelegateManager = RenderCore::Techniques::CreateUniformDelegateManager();
-		auto seqSemiConstantGraphics = Techniques::CreateSemiConstantDescriptorSet(*MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", PipelineType::Graphics, *_metalTestHelper->_device);
-		auto seqSemiConstantCompute = Techniques::CreateSemiConstantDescriptorSet(*MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", PipelineType::Compute, *_metalTestHelper->_device);
-		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(seqSemiConstantGraphics));
-		_techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(seqSemiConstantCompute));
-		_techniqueContext->_uniformDelegateManager->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device));
+		_techniqueContext->_graphicsSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", PipelineType::Graphics, *_metalTestHelper->_device);
+		_techniqueContext->_computeSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*MakeSequencerDescriptorSetLayout()->GetLayout(), "unittest", PipelineType::Compute, *_metalTestHelper->_device);
+		_techniqueContext->_systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*_metalTestHelper->_device);
 
 		_commonResources->CompleteInitialization(*_metalTestHelper->_device->GetImmediateContext());
 	}

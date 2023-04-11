@@ -102,20 +102,15 @@ namespace RenderCore { namespace Techniques
 
 		assert(_assetServices != nullptr);
 
-		_mainUniformDelegateManager = CreateUniformDelegateManager();
-		_mainUniformDelegateManager->BindShaderResourceDelegate(_systemUniformsDelegate);
-
-		// add default semi-constant desc set layout for the sequencer desc set
+		// setup default semi-constant desc set layout for the sequencer desc set
 		{
 			auto descSetLayoutContainer = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
 			auto i = descSetLayoutContainer->_descriptorSets.find("Sequencer");
 			if (i == descSetLayoutContainer->_descriptorSets.end())
 				Throw(std::runtime_error("Missing 'Sequencer' descriptor set entry in sequencer pipeline file"));
 			_depValPtr.RegisterDependency(descSetLayoutContainer->GetDependencyValidation());
-			auto graphicsSequencerDS = CreateSemiConstantDescriptorSet(*i->second, SEQUENCER_DS ":Sequencer", PipelineType::Graphics, *_device);
-			auto computeSequencerDS = CreateSemiConstantDescriptorSet(*i->second, SEQUENCER_DS ":Sequencer", PipelineType::Compute, *_device);
-			_mainUniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(graphicsSequencerDS));
-			_mainUniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(computeSequencerDS));
+			_graphicsSequencerDS = CreateSemiConstantDescriptorSet(*i->second, SEQUENCER_DS ":Sequencer", PipelineType::Graphics, *_device);
+			_computeSequencerDS = CreateSemiConstantDescriptorSet(*i->second, SEQUENCER_DS ":Sequencer", PipelineType::Compute, *_device);
 		}
 	}
 
@@ -139,6 +134,18 @@ namespace RenderCore { namespace Techniques
 		} else {
 			return device.CreateShaderCompiler();
 		}
+	}
+
+	void InitializeTechniqueContext(TechniqueContext& techniqueContext, const DrawingApparatus& apparatus)
+	{
+		techniqueContext._commonResources = apparatus._commonResources;
+		techniqueContext._drawablesPool = apparatus._drawablesPool;
+		techniqueContext._graphicsPipelinePool = apparatus._graphicsPipelinePool;
+		techniqueContext._pipelineAccelerators = apparatus._pipelineAccelerators;
+		techniqueContext._deformAccelerators = apparatus._deformAccelerators;
+		techniqueContext._systemUniformsDelegate = apparatus._systemUniformsDelegate;
+		techniqueContext._graphicsSequencerDS = apparatus._graphicsSequencerDS;
+		techniqueContext._computeSequencerDS = apparatus._computeSequencerDS;
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	

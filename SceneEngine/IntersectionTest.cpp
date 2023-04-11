@@ -117,12 +117,7 @@ namespace SceneEngine
     RenderCore::Techniques::TechniqueContext MakeIntersectionsTechniqueContext(RenderCore::Techniques::DrawingApparatus& drawingApparatus)
     {
         RenderCore::Techniques::TechniqueContext techniqueContext;
-        techniqueContext._commonResources = drawingApparatus._commonResources;
-        techniqueContext._uniformDelegateManager = drawingApparatus._mainUniformDelegateManager;
-        techniqueContext._drawablesPool = drawingApparatus._drawablesPool;
-        techniqueContext._pipelineAccelerators = drawingApparatus._pipelineAccelerators;
-        techniqueContext._deformAccelerators = drawingApparatus._deformAccelerators;
-        techniqueContext._graphicsPipelinePool = drawingApparatus._graphicsPipelinePool;
+        RenderCore::Techniques::InitializeTechniqueContext(techniqueContext, drawingApparatus);
         return techniqueContext;
     }
 

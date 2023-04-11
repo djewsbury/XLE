@@ -98,7 +98,11 @@ namespace RenderCore { namespace Techniques
         assert(size_t(_internal.get()) % 16 == 0);
         _internal->_attachmentReservation = AttachmentReservation{*techniqueContext._attachmentPool};
 
-		_uniformDelegateManager = _techniqueContext->_uniformDelegateManager;
+        _uniformDelegateManager = CreateUniformDelegateManager();
+        _uniformDelegateManager->BindShaderResourceDelegate(techniqueContext._systemUniformsDelegate);
+        _uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, techniqueContext._graphicsSequencerDS);
+        _uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, techniqueContext._computeSequencerDS);
+
         _pipelineAccelerators = _techniqueContext->_pipelineAccelerators.get();
         _pipelineAcceleratorsVisibility = 0;
 

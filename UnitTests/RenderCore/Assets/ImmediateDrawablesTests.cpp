@@ -112,9 +112,8 @@ namespace UnitTests
 		auto techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		techniqueContext->_commonResources = techniqueServices->GetCommonResources();
 
-		techniqueContext->_uniformDelegateManager = Techniques::CreateUniformDelegateManager();
-		techniqueContext->_uniformDelegateManager->BindSemiConstantDescriptorSet("Sequencer"_h, Techniques::CreateSemiConstantDescriptorSet(*sequencerDescriptorSetLayout, "unittest", PipelineType::Graphics, *testHelper->_device));
-		techniqueContext->_uniformDelegateManager->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
+		techniqueContext->_graphicsSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*sequencerDescriptorSetLayout, "unittest", PipelineType::Graphics, *testHelper->_device);
+		techniqueContext->_systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device);
 
 		auto threadContext = testHelper->_device->GetImmediateContext();
 		auto targetDesc = CreateDesc(
