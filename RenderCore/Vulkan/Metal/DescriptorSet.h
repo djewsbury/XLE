@@ -184,7 +184,10 @@ namespace RenderCore { namespace Metal_Vulkan
 	public:
 		VkDescriptorSet GetUnderlying() const { return _underlying.get(); }
 		VkDescriptorSetLayout GetUnderlyingLayout() const { return _layout->GetUnderlying(); }
-		void Write(const DescriptorSetInitializer& newDescriptors);
+		void Write(
+			const DescriptorSetInitializer& newDescriptors, 
+			WriteFlags::BitField flags,
+			IThreadContext* usageRestriction) override;
 
 		#if defined(VULKAN_VERBOSE_DEBUG)
 			const DescriptorSetDebugInfo& GetDescription() const { return _description; }
@@ -195,6 +198,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 
 		const CompiledDescriptorSetLayout& GetLayout() const { return *_layout; }
+		uint64_t GetCommandListRestriction() const { return _commandListRestriction; }
 
 		CompiledDescriptorSet(
 			ObjectFactory& factory,
@@ -214,6 +218,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::vector<ResourceView> _retainedViews;
 		std::vector<SamplerState> _retainedSamplers;
 		GlobalPools* _globalPools;
+		uint64_t _commandListRestriction = 0;
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			std::vector<uint64_t> _resourcesThatMustBeVisible;
@@ -224,7 +229,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		void WriteInternal(
 			ObjectFactory& factory,
 			IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> binds,
-			const UniformsStream& uniforms);
+			const UniformsStream& uniforms,
+			WriteFlags::BitField flags);
 
 		#if defined(_DEBUG)
 			std::string _name;

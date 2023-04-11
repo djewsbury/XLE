@@ -1061,6 +1061,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		ProgressiveDescriptorSetBuilder _builder;
 		unsigned _groupMask = 0;
 		std::vector<DescriptorSlot> _signature;
+		uint64_t _tiedToCommandList = 0;
 
 		SharedDescSetBuilder(IteratorRange<const DescriptorSlot*> signature)
 		: _builder(signature), _groupMask(0), _signature(signature.begin(), signature.end()) {}
@@ -1070,10 +1071,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		: _builder(MakeIteratorRange(copyFrom._signature))
 		, _groupMask(copyFrom._groupMask)
 		, _signature(copyFrom._signature)
-		{}
+		{
+			assert(!copyFrom._tiedToCommandList);
+		}
+		~SharedDescSetBuilder()
+		{
+			// if you hit this, it could mean that a descriptor set was partially built, and then not flushed
+			assert(!_tiedToCommandList);
+		}
 		SharedDescSetBuilder& operator=(const SharedDescSetBuilder& copyFrom)
 		{
 			if (&copyFrom != this) {
+				assert(!_tiedToCommandList && !copyFrom._tiedToCommandList);
 				_builder = ProgressiveDescriptorSetBuilder{MakeIteratorRange(copyFrom._signature)};
 				_groupMask = copyFrom._groupMask;
 				_signature = copyFrom._signature;
@@ -1398,7 +1407,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		// todo -- consider using VK_KHR_descriptor_update_template as an optimized way of updating many descriptors
 		// in one go
 
-		// We can hit the following exception in some cases when we have a BoundUniforms with mutliple groups, but
+		// We can hit the following exception in some cases when we have a BoundUniforms with multiple groups, but
 		// do not all ApplyLooseUniforms for every group in that bound uniforms. When multiple groups contribute to the
 		// same descriptor set, the descriptor set isn't actually applied to the device until all of the relevant groups
 		// are applied.
@@ -1415,9 +1424,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			// sure that all of the commands have already been completed).
 			//
 			// So, in effect writing a new descriptor set will always be a allocate operation. We may have a pool
-			// of prebuild sets that we can reuse; or we can just allocate and free every time.
+			// of prebuilt sets that we can reuse; or we can just allocate and free every time.
 			//
-			// Because each uniform stream can be set independantly, and at different rates, we'll use a separate
+			// Because each uniform stream can be set independently, and at different rates, we'll use a separate
 			// descriptor set for each uniform stream. 
 			//
 			// In this call, we could attempt to reuse another descriptor set that was created from exactly the same
@@ -1447,9 +1456,15 @@ namespace RenderCore { namespace Metal_Vulkan
 				encoder._pendingBoundUniformsCompletionMask |= sharedBuilder._groupMask;		// everything is complete when encoder._pendingBoundUniformsFlushGroupMask == encoder._pendingBoundUniformsCompletionMask
 				encoder._pendingBoundUniformsFlushGroupMask |= 1 << groupIdx;
 				doFlushNow = (encoder._pendingBoundUniformsFlushGroupMask & sharedBuilder._groupMask) == sharedBuilder._groupMask;	// flush only when everything is in pending state
+
+				// If you hit the following assert, it means that this shared descriptor set was partially built for another command list, but not
+				// flushed. This could be a caused by a threading issue, but more likely we just didn't get a ApplyLooseUniforms() for all of the groups
+				// for this shared builder last time.
+				assert(!sharedBuilder._tiedToCommandList || sharedBuilder._tiedToCommandList == context.GetActiveCommandList().GetGUID());
+				sharedBuilder._tiedToCommandList = context.GetActiveCommandList().GetGUID();
 			}
 
-			// If we haven't been given enough uniform binding objects, throw and except. No error if there are too many
+			// If we haven't been given enough uniform binding objects, throw an exception
 			// (particularly since this only tracks the uniforms required for this adaptive sets, and doesn't count
 			// bindings given that we're needed by the shader)
 			char buffer[128];
@@ -1534,6 +1549,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 				if (encoder._pendingBoundUniformsFlushGroupMask == encoder._pendingBoundUniformsCompletionMask)
 					encoder._pendingBoundUniforms = nullptr;
+
+				if (adaptiveSet._sharedBuilder != ~0u)
+					_sharedDescSetBuilders[adaptiveSet._sharedBuilder]._tiedToCommandList = 0;		// reset this tracking
 			}
 		}
 
@@ -1565,6 +1583,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					assert(encoder.GetEncoderType() == SharedEncoder::EncoderType::Graphics || encoder.GetEncoderType() == SharedEncoder::EncoderType::ProgressiveGraphics);
 					assert((descSet->GetLayout().GetVkShaderStageMask() & VK_SHADER_STAGE_ALL_GRAPHICS) != 0);
 				}
+				assert(!descSet->GetCommandListRestriction() || descSet->GetCommandListRestriction() == context.GetActiveCommandList().GetGUID());
 			#endif
 			assert(fixedSet._expectedDynamicOffsetCount == 0);
 			encoder.BindDescriptorSet(
@@ -1598,6 +1617,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						assert(encoder.GetEncoderType() == SharedEncoder::EncoderType::Graphics || encoder.GetEncoderType() == SharedEncoder::EncoderType::ProgressiveGraphics);
 						assert((descSet->GetLayout().GetVkShaderStageMask() & VK_SHADER_STAGE_ALL_GRAPHICS) != 0);
 					}
+					assert(!descSet->GetCommandListRestriction() || descSet->GetCommandListRestriction() == context.GetActiveCommandList().GetGUID());
 				#endif
 				// assert(fixedSet._expectedDynamicOffsetCount == dynamicOffsets.size());
 				encoder.BindDescriptorSet(

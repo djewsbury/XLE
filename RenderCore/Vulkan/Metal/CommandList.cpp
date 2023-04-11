@@ -370,6 +370,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		_signalOnCompletion.emplace_back(std::move(semaphore), value);
 	}
 
+	static std::atomic<uint64_t> s_nextCommandListGuid { 1 };
+
 	CommandList::CommandList(CommandList&&) = default;
 	
 	CommandList& CommandList::operator=(CommandList&& moveFrom)
@@ -394,6 +396,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		_asyncTrackerMarkers = std::move(moveFrom._asyncTrackerMarkers);
 		_waitBeforeBegin = std::move(moveFrom._waitBeforeBegin);
 		_signalOnCompletion = std::move(moveFrom._signalOnCompletion);
+		_guid = moveFrom._guid; moveFrom._guid = 0;
 		return *this;
 	}
 
@@ -406,6 +409,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		auto marker = _asyncTracker->AllocateMarkerForNewCmdList();
 		assert(marker != IAsyncTracker::Marker_Invalid);
 		_asyncTrackerMarkers.push_back(marker);
+		_guid = s_nextCommandListGuid.fetch_add(1, std::memory_order::memory_order_relaxed) + 1;
 	}
 
 	CommandList::~CommandList() 

@@ -125,6 +125,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		void ExecuteSecondaryCommandList(CommandList&& cmdList);
 
+		uint64_t GetGUID() const { assert(_guid); return _guid; }
+
 		CommandList();
 		CommandList(
 			VulkanSharedPtr<VkCommandBuffer> underlying,
@@ -147,6 +149,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		std::vector<std::pair<VulkanSharedPtr<VkSemaphore>, uint64_t>> _waitBeforeBegin;
 		std::vector<std::pair<VulkanSharedPtr<VkSemaphore>, uint64_t>> _signalOnCompletion;
+
+		uint64_t _guid = 0;
 
 		friend class DeviceContext;
 		friend class SharedEncoder;

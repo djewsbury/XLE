@@ -6,6 +6,7 @@
 #include "TextureView.h"
 #include "Pools.h"
 #include "PipelineLayout.h"
+#include "DeviceContext.h"
 #include "ShaderReflection.h"
 #include "ExtensionFunctions.h"
 #include "../../ShaderService.h"
@@ -1254,12 +1255,15 @@ namespace RenderCore { namespace Metal_Vulkan
 	void CompiledDescriptorSet::WriteInternal(
 		ObjectFactory& factory,
 		IteratorRange<const DescriptorSetInitializer::BindTypeAndIdx*> bindsInit,
-		const UniformsStream& uniforms)
+		const UniformsStream& uniforms,
+		WriteFlags::BitField flags)
 	{
+		constexpr bool clearUnchangedSlots = true;
 		// _retainedViews & _retainedSamplers must be per-slot, so we release the previous binding to the
 		// slot. Since we will fill in unwritten slots with dummies, we can release all previous retained views & samplers
 		// Note that due to the synchronization methods, the actual release of the previous view
 		// might happen one frame too late
+		static_assert(clearUnchangedSlots, "Partial update not supported for _retainedViews & _retainedSamplers");
 		_retainedViews.clear();
 		_retainedSamplers.clear();
 
@@ -1294,13 +1298,15 @@ namespace RenderCore { namespace Metal_Vulkan
 					auto* view = checked_cast<const ResourceView*>(uniforms._resourceViews[bStart->_uniformsStreamIdx]);
 					builder.Bind(bStart->_descriptorSetSlot, *view, {});
 					writtenMask |= 1ull<<uint64_t(bStart->_descriptorSetSlot);
-					_retainedViews.push_back(*view);
+					if (!(flags & WriteFlags::DontRetainViews))
+						_retainedViews.push_back(*view);
 				} else if (bStart->_type == DescriptorSetInitializer::BindType::Sampler) {
 					assert(uniforms._samplers[bStart->_uniformsStreamIdx]);
 					auto* sampler = checked_cast<const SamplerState*>(uniforms._samplers[bStart->_uniformsStreamIdx]);
 					builder.Bind(bStart->_descriptorSetSlot, sampler->GetUnderlying(), {}, {});
 					writtenMask |= 1ull<<uint64_t(bStart->_descriptorSetSlot);
-					_retainedSamplers.push_back(*sampler);
+					if (!(flags & WriteFlags::DontRetainViews))
+						_retainedSamplers.push_back(*sampler);
 				} else if (bStart->_type == DescriptorSetInitializer::BindType::ImmediateData) {
 					// Only constant buffers are supported for immediate data; partially for consistency
 					// across APIs.
@@ -1330,7 +1336,8 @@ namespace RenderCore { namespace Metal_Vulkan
 					assert(uniforms._resourceViews[bStart->_uniformsStreamIdx]);
 					for (auto b2=bStart; b2!=b; ++b2) {
 						arrayOfResources[b2->_descriptorSetArrayIdx] = checked_cast<const ResourceView*>(uniforms._resourceViews[b2->_uniformsStreamIdx]);
-						_retainedViews.push_back(*arrayOfResources[b2->_descriptorSetArrayIdx]);
+						if (!(flags & WriteFlags::DontRetainViews))
+							_retainedViews.push_back(*arrayOfResources[b2->_descriptorSetArrayIdx]);
 					}
 
 					builder.BindArray(bStart->_descriptorSetSlot, MakeIteratorRange(arrayOfResources, &arrayOfResources[slotArrayCount]), {});
@@ -1368,26 +1375,33 @@ namespace RenderCore { namespace Metal_Vulkan
 				}
 		}
 
-		VLA(ProgressiveDescriptorSetBuilder::ResourceDims, resourceDims, _layout->GetDescriptorSlots().size());
-		for (unsigned c=0; c<_layout->GetDescriptorSlots().size(); ++c) resourceDims[c] = ProgressiveDescriptorSetBuilder::ResourceDims::Unknown;
-		builder.BindDummyDescriptors(*_globalPools, _layout->GetDummyMask() & ~writtenMask, MakeIteratorRange(resourceDims, &resourceDims[_layout->GetDescriptorSlots().size()]));
+		if (clearUnchangedSlots) {
+			VLA(ProgressiveDescriptorSetBuilder::ResourceDims, resourceDims, _layout->GetDescriptorSlots().size());
+			for (unsigned c=0; c<_layout->GetDescriptorSlots().size(); ++c) resourceDims[c] = ProgressiveDescriptorSetBuilder::ResourceDims::Unknown;
+			builder.BindDummyDescriptors(*_globalPools, _layout->GetDummyMask() & ~writtenMask, MakeIteratorRange(resourceDims, &resourceDims[_layout->GetDescriptorSlots().size()]));
+		}
 
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
 			// update resource visibility before we call FlushChanges()
-			// Remove guids that have been overwritten by new resources first...
-			// Note that this is complicated by array bindings, which allow for multiple resources to be bound to
-			// a single descriptor set slot
-			for (const auto& newAssignment:builder._pendingResourceVisibilityChangesSlotAndCount) {
-				unsigned idx=0;
-				for (auto c=_resourcesThatMustBeVisibleSlotAndCount.begin(); c!=_resourcesThatMustBeVisibleSlotAndCount.end(); ++c) {
-					if (c->first == newAssignment.first) {
-						_resourcesThatMustBeVisible.erase(_resourcesThatMustBeVisible.begin()+idx, _resourcesThatMustBeVisible.begin()+idx+c->second);
-						_resourcesThatMustBeVisibleSlotAndCount.erase(c);
-						break;
-					} else
-						idx += c->second;
+			// default behaviour is to write to every slot (anything that is not explicitly filled is filled with
+			// filled with dummies) -- so we can just clear out any previous visibility requirements
+			if (clearUnchangedSlots) {
+				_resourcesThatMustBeVisible.clear();
+				_resourcesThatMustBeVisibleSlotAndCount.clear();
+			} else {
+				for (const auto& newAssignment:builder._pendingResourceVisibilityChangesSlotAndCount) {
+					unsigned idx=0;
+					for (auto c=_resourcesThatMustBeVisibleSlotAndCount.begin(); c!=_resourcesThatMustBeVisibleSlotAndCount.end(); ++c) {
+						if (c->first == newAssignment.first) {
+							_resourcesThatMustBeVisible.erase(_resourcesThatMustBeVisible.begin()+idx, _resourcesThatMustBeVisible.begin()+idx+c->second);
+							_resourcesThatMustBeVisibleSlotAndCount.erase(c);
+							break;
+						} else
+							idx += c->second;
+					}
 				}
 			}
+
 			// append new bindings
 			_resourcesThatMustBeVisible.insert(_resourcesThatMustBeVisible.end(), builder._pendingResourceVisibilityChanges.begin(), builder._pendingResourceVisibilityChanges.end());
 			_resourcesThatMustBeVisibleSlotAndCount.insert(_resourcesThatMustBeVisibleSlotAndCount.end(), builder._pendingResourceVisibilityChangesSlotAndCount.begin(), builder._pendingResourceVisibilityChangesSlotAndCount.end());
@@ -1408,9 +1422,15 @@ namespace RenderCore { namespace Metal_Vulkan
 			VULKAN_VERBOSE_DEBUG_ONLY(, _description));
 	}
 
-	void CompiledDescriptorSet::Write(const DescriptorSetInitializer& newDescriptors)
+	void CompiledDescriptorSet::Write(const DescriptorSetInitializer& newDescriptors, WriteFlags::BitField flags, IThreadContext* usageRestriction)
 	{
-		WriteInternal(GetObjectFactory(), newDescriptors._slotBindings, newDescriptors._bindItems);
+		WriteInternal(GetObjectFactory(), newDescriptors._slotBindings, newDescriptors._bindItems, flags);
+
+		_commandListRestriction = 0;
+		if (flags & WriteFlags::RestrictToCommandList) {
+			assert(usageRestriction);
+			_commandListRestriction = DeviceContext::Get(*usageRestriction)->GetActiveCommandList().GetGUID();
+		}
 	}
 
 	CompiledDescriptorSet::CompiledDescriptorSet(
@@ -1424,6 +1444,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	#if defined(_DEBUG)
 		, _name(name.AsString())
 	#endif
+	, _commandListRestriction{0}
 	{
 		_underlying = globalPools._longTermDescriptorPool.Allocate(*_layout);
 

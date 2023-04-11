@@ -318,7 +318,15 @@ namespace RenderCore
     class IDescriptorSet
 	{
 	public:
-        virtual void Write(const DescriptorSetInitializer& newDescriptors) = 0;
+        struct WriteFlags
+        {
+            enum Flags { DontRetainViews = 1<<0, RestrictToCommandList = 1<<1 };
+            using BitField = unsigned;
+        };
+        virtual void Write(
+            const DescriptorSetInitializer& newDescriptors,
+            WriteFlags::BitField=0,
+            IThreadContext* usageRestriction = nullptr) = 0;
 		virtual ~IDescriptorSet() = default;
 	};
 
