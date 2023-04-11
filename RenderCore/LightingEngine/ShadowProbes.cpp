@@ -101,19 +101,15 @@ namespace RenderCore { namespace LightingEngine
 			{
 				_techContext._attachmentPool = Techniques::CreateAttachmentPool(threadContext.GetDevice());
 				_techContext._frameBufferPool = Techniques::CreateFrameBufferPool();
-				auto uniformDelegateMan = Techniques::CreateUniformDelegateManager();
-				uniformDelegateMan->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice()));
-				uniformDelegateMan->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
-				auto graphicsSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Graphics, *threadContext.GetDevice());
-				auto computeSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Compute, *threadContext.GetDevice());
-				uniformDelegateMan->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(graphicsSequencerDS));
-				uniformDelegateMan->BindSemiConstantDescriptorSet("Sequencer"_h, std::move(computeSequencerDS));
-				_techContext._uniformDelegateManager = uniformDelegateMan;
+				_techContext._systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice());
+				_techContext._graphicsSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Graphics, *threadContext.GetDevice());
+				_techContext._computeSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Compute, *threadContext.GetDevice());
 				_techContext._commonResources = Techniques::Services::GetCommonResources();
 				_techContext._pipelineAccelerators = _pimpl->_pipelineAccelerators;
+
 				_parsingContext = std::make_unique<Techniques::ParsingContext>(_techContext, threadContext);
 				_parsingContext->SetPipelineAcceleratorsVisibility(_techContext._pipelineAccelerators->VisibilityBarrier());
-
+				_parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
 				_parsingContext->BindAttachment(semanticProbePrepare, _pimpl->_staticTable, false, ~0u);
 			}
 
