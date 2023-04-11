@@ -32,6 +32,11 @@ namespace EntityInterface
 			std::promise<MountedData>&& promise,
 			::Assets::Initializer<> mountLocation)
 		{
+			if (!ToolsRig::Services::HasEntityMountingTree()) {
+				promise.set_exception(std::make_exception_ptr(std::runtime_error("No entity mounting tree")));
+				return;
+			}
+
 			::Assets::WhenAll(ToolsRig::Services::GetEntityMountingTree().BeginFormatter(mountLocation)).ThenConstructToPromise(
 				std::move(promise),
 				[](auto fmttr) { return MountedData{*fmttr}; });

@@ -16,6 +16,7 @@ namespace ToolsRig
     {
     public:
         static EntityInterface::IEntityMountingTree& GetEntityMountingTree();
+        static bool HasEntityMountingTree();
         static IPreviewSceneRegistry& GetPreviewSceneRegistry();
     };
 

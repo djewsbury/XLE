@@ -17,9 +17,15 @@ namespace ToolsRig
 	{
 		return *s_previewSceneRegistry.lock();
 	}
+
 	EntityInterface::IEntityMountingTree& Services::GetEntityMountingTree()
 	{
 		return *s_entityMountingTree.lock();
+	}
+
+	bool Services::HasEntityMountingTree()
+	{
+		return !s_entityMountingTree.expired();
 	}
 
 	EntityInterface::DocumentId MountTextEntityDocument(Utility::StringSection<> mntPoint, Utility::StringSection<> srcFile)
