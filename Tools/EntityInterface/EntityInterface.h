@@ -27,7 +27,7 @@ namespace EntityInterface
     class IEntityDocument
     {
     public:
-        virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> internalPoint) = 0;
+        virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> internalPoint = {}) = 0;
         virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
         virtual const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const = 0;
 

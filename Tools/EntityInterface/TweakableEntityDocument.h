@@ -5,85 +5,131 @@
 #pragma once
 
 #include "EntityInterface.h"
+#include "TweakableEntityDocumentInternal.h"
 #include <memory>
 
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
 
 namespace EntityInterface
 {
+	template<typename UnderlyingType>
+		class MinimalBindingValue;
+	class MinimalBindingEngine;
+
+	namespace Internal
+	{
+		template <typename T> static auto UnderlyingTypeHelper(T) -> typename T::UnderlyingType;
+		template <typename T> static auto UnderlyingTypeHelper(...) -> std::decay_t<T>;
+		template <typename T> using UnderlyingType = decltype(UnderlyingTypeHelper<T>(std::declval<T>()));
+	}
+
 	class IWidgetsLayoutFormatter
 	{
 	public:
-		template<typename Type, typename std::enable_if<std::is_integral_v<Type>>::type* =nullptr>
-			void WriteHalfDouble(StringSection<> name, Type initialValue, Type minValue, Type maxValue) 
-		{
-			WriteHalfDoubleInt(name, (int64_t)initialValue, (int64_t)minValue, (int64_t)maxValue);
-		}
-		template<typename Type, typename std::enable_if<!std::is_integral_v<Type>>::type* =nullptr>
-			void WriteHalfDouble(StringSection<> name, Type initialValue, Type minValue, Type maxValue) 
-		{
-			WriteHalfDoubleFloat(name, (float)initialValue, (float)minValue, (float)maxValue);
-		}
+		template<typename T> using V = MinimalBindingValue<T>;
 
-		template<typename Type, typename std::enable_if<std::is_integral_v<Type>>::type* =nullptr>
-			void WriteDecrementIncrement(StringSection<> name, Type initialValue, Type minValue, Type maxValue) 
+		template<typename A, typename B, typename C>
+			constexpr void WriteHalfDouble(StringSection<> label, const A& initialValue, const B& minValue, const C& maxValue)
 		{
-			WriteDecrementIncrementInt(name, (int64_t)initialValue, (int64_t)minValue, (int64_t)maxValue);
-		}
-		template<typename Type, typename std::enable_if<!std::is_integral_v<Type>>::type* =nullptr>
-			void WriteDecrementIncrement(StringSection<> name, Type initialValue, Type minValue, Type maxValue) 
-		{
-			WriteDecrementIncrementFloat(name, (float)initialValue, (float)minValue, (float)maxValue);
+			constexpr auto integralA = std::is_integral_v<Internal::UnderlyingType<A>>;
+			constexpr auto integralB = std::is_integral_v<Internal::UnderlyingType<B>>;
+			constexpr auto integralC = std::is_integral_v<Internal::UnderlyingType<C>>;
+
+			if constexpr (integralA && integralB && integralC) {
+				WriteHalfDoubleInt(label, initialValue, minValue, maxValue);
+			} else {
+				WriteHalfDoubleFloat(label, initialValue, minValue, maxValue);
+			}
 		}
 
-		template<typename Type, typename std::enable_if<std::is_integral_v<Type>>::type* =nullptr>
-			void WriteBounded(StringSection<> name, Type initialValue, Type leftSideValue, Type rightSideValue)
+		template<typename A, typename B, typename C>
+			void WriteDecrementIncrement(StringSection<> label, const A& initialValue, const B& minValue, const C& maxValue)
 		{
-			WriteBoundedInt(name, (int64_t)initialValue, (int64_t)leftSideValue, (int64_t)rightSideValue);
+			constexpr auto integralA = std::is_integral_v<Internal::UnderlyingType<A>>;
+			constexpr auto integralB = std::is_integral_v<Internal::UnderlyingType<B>>;
+			constexpr auto integralC = std::is_integral_v<Internal::UnderlyingType<C>>;
+
+			if constexpr (integralA && integralB && integralC) {
+				WriteDecrementIncrementInt(label, initialValue, minValue, maxValue);
+			} else {
+				WriteDecrementIncrementFloat(label, initialValue, minValue, maxValue);
+			}
 		}
 
-		template<typename Type, typename std::enable_if<!std::is_integral_v<Type>>::type* =nullptr>
-			void WriteBounded(StringSection<> name, Type initialValue, Type leftSideValue, Type rightSideValue)
+		template<typename A, typename B, typename C>
+			void WriteBounded(StringSection<> label, const A& initialValue, const B& leftSideValue, const C& rightSideValue)
 		{
-			WriteBoundedFloat(name, (float)initialValue, (float)leftSideValue, (float)rightSideValue);
+			constexpr auto integralA = std::is_integral_v<Internal::UnderlyingType<A>>;
+			constexpr auto integralB = std::is_integral_v<Internal::UnderlyingType<B>>;
+			constexpr auto integralC = std::is_integral_v<Internal::UnderlyingType<C>>;
+
+			if constexpr (integralA && integralB && integralC) {
+				WriteBoundedInt(label, initialValue, leftSideValue, rightSideValue);
+			} else {
+				WriteBoundedFloat(label, initialValue, leftSideValue, rightSideValue);
+			}
 		}
 
-		virtual void WriteHalfDoubleInt(StringSection<> name, int64_t initialValue, int64_t min, int64_t max) = 0;
-		virtual void WriteHalfDoubleFloat(StringSection<> name, float initialValue, float min, float max) = 0;
-		virtual void WriteDecrementIncrementInt(StringSection<> name, int64_t initialValue, int64_t min, int64_t max) = 0;
-		virtual void WriteDecrementIncrementFloat(StringSection<> name, float initialValue, float min, float max) = 0;
-		virtual void WriteBoundedInt(StringSection<> name, int64_t initialValue, int64_t leftSideValue, int64_t rightSideValue) = 0;
-		virtual void WriteBoundedFloat(StringSection<> name, float initialValue, float leftSideValue, float rightSideValue) = 0;
+		virtual void WriteHalfDoubleInt(StringSection<> label, const V<int64_t>& initialValue, const V<int64_t>& min, const V<int64_t>& max) = 0;
+		virtual void WriteHalfDoubleFloat(StringSection<> label, const V<float>& initialValue, const V<float>& min, const V<float>& max) = 0;
+		virtual void WriteDecrementIncrementInt(StringSection<> label, const V<int64_t>& initialValue, const V<int64_t>& min, const V<int64_t>& max) = 0;
+		virtual void WriteDecrementIncrementFloat(StringSection<> label, const V<float>& initialValue, const V<float>& min, const V<float>& max) = 0;
+		virtual void WriteBoundedInt(StringSection<> label, const V<int64_t>& initialValue, const V<int64_t>& leftSideValue, const V<int64_t>& rightSideValue) = 0;
+		virtual void WriteBoundedFloat(StringSection<> label, const V<float>& initialValue, const V<float>& leftSideValue, const V<float>& rightSideValue) = 0;
 
-		virtual void WriteHorizontalCombo(StringSection<> name, int64_t initialValue, IteratorRange<const std::pair<int64_t, const char*>*> options) = 0;
-		virtual void WriteCheckbox(StringSection<> name, bool initialValue) = 0;
+		virtual void WriteHorizontalCombo(StringSection<> label, const V<int64_t>& initialValue, IteratorRange<const std::pair<int64_t, const char*>*> options) = 0;
+		virtual void WriteCheckbox(StringSection<> label, const V<bool>& initialValue) = 0;
 
-		virtual bool GetCheckbox(StringSection<> name, bool initialValue) = 0;
-
-		virtual bool BeginCollapsingContainer(StringSection<> name) = 0;
+		virtual bool BeginCollapsingContainer(StringSection<> label) = 0;
 		virtual void BeginContainer() = 0;
 		virtual void EndContainer() = 0;
 
+		virtual MinimalBindingEngine& GetBindingEngine() = 0;
+
+		virtual ~IWidgetsLayoutFormatter();
+	};
+
+	class IDynamicOutputFormatter		// todo -- consider moving to Formatters namespace
+	{
+	public:
 		using ElementId = unsigned;
-		virtual ElementId BeginKeyedElement(StringSection<> name) = 0;
+		virtual ElementId BeginKeyedElement(StringSection<> label) = 0;
 		virtual ElementId BeginSequencedElement() = 0;
 		virtual void EndElement(ElementId) = 0;
 
-		virtual void WriteKeyedValue(StringSection<> name, StringSection<> value) = 0;
+		virtual void WriteKeyedValue(StringSection<> label, StringSection<> value) = 0;
 		virtual void WriteSequencedValue(StringSection<> value) = 0;
+
+		virtual void WriteKeyedValue(StringSection<> label, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
+		virtual void WriteSequencedValue(IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
+
+		template<typename Type>
+			void WriteKeyedValue(StringSection<> label, Type value)
+		{
+			WriteKeyedValue(label, MakeOpaqueIteratorRange(value), ImpliedTyping::TypeOf<Type>());
+		}
+
+		template<typename Type>
+			void WriteSequencedValue(Type value)
+		{
+			WriteSequencedValue(MakeOpaqueIteratorRange(value), ImpliedTyping::TypeOf<Type>());
+		}
+
+		virtual ~IDynamicOutputFormatter();
 	};
 
-	class ArbiterState;
+	class MinimalBindingEngine;
 	class ITweakableDocumentInterface : public IEntityDocument
 	{
 	public:
-		virtual void ExecuteOnFormatter(IWidgetsLayoutFormatter& fmttr) = 0;
 		virtual void IncreaseValidationIndex() = 0;
-		virtual std::shared_ptr<ArbiterState> GetArbiterState() = 0;
+		virtual std::shared_ptr<MinimalBindingEngine> GetBindingEngine() = 0;
 	};
 
+	using WriteToModelFormatter = std::function<void(IDynamicOutputFormatter&)>;
+	std::shared_ptr<ITweakableDocumentInterface> CreateTweakableDocumentInterface(WriteToModelFormatter&& modelFn);
+
 	using WriteToLayoutFormatter = std::function<void(IWidgetsLayoutFormatter&)>;
-	std::shared_ptr<ITweakableDocumentInterface> CreateTweakableDocumentInterface(WriteToLayoutFormatter&& fn);
-	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateWidgetGroup(std::shared_ptr<ITweakableDocumentInterface> doc);
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateWidgetGroup(std::shared_ptr<ITweakableDocumentInterface> doc, WriteToLayoutFormatter&& layoutFn);
 }
 

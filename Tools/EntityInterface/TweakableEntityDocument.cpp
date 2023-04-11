@@ -9,6 +9,8 @@
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/Marker.h"
 #include "../../Formatters/TextOutputFormatter.h"
+#include "../../Formatters/IDynamicFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/ParameterBox.h"
@@ -16,6 +18,7 @@
 
 namespace EntityInterface
 {
+#if 0
 	class OutputStreamFormatterWithStubs : public IWidgetsLayoutFormatter
 	{
 	public:
@@ -23,52 +26,59 @@ namespace EntityInterface
 		{
 			uint64_t interactable = _guidStack.MakeGuid(name);
 			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				_fmttr.WriteKeyedValue(AutoFormatName(name), _arbiterState->GetWorkingValueAsString(interactable));
+				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
+					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
 		}
 
 		void WriteHalfDoubleFloat(StringSection<> name, float initialValue, float minValue, float maxValue) override
 		{
 			uint64_t interactable = _guidStack.MakeGuid(name);
 			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				_fmttr.WriteKeyedValue(AutoFormatName(name), _arbiterState->GetWorkingValueAsString(interactable));
+				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
+					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
 		}
 
 		void WriteDecrementIncrementInt(StringSection<> name, int64_t initialValue, int64_t minValue, int64_t maxValue) override
 		{
 			uint64_t interactable = _guidStack.MakeGuid(name);
 			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				_fmttr.WriteKeyedValue(AutoFormatName(name), _arbiterState->GetWorkingValueAsString(interactable));
+				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
+					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
 		}
 
 		void WriteDecrementIncrementFloat(StringSection<> name, float initialValue, float minValue, float maxValue) override
 		{
 			uint64_t interactable = _guidStack.MakeGuid(name);
 			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				_fmttr.WriteKeyedValue(AutoFormatName(name), _arbiterState->GetWorkingValueAsString(interactable));
+				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
+					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
 		}
 
 		void WriteBoundedInt(StringSection<> name, int64_t initialValue, int64_t leftSideValue, int64_t rightSideValue) override
 		{
 			uint64_t interactable = _guidStack.MakeGuid(name);
 			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				_fmttr.WriteKeyedValue(AutoFormatName(name), _arbiterState->GetWorkingValueAsString(interactable));
+				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
+					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
 		}
 
 		void WriteBoundedFloat(StringSection<> name, float initialValue, float leftSideValue, float rightSideValue) override
 		{
 			uint64_t interactable = _guidStack.MakeGuid(name);
 			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				_fmttr.WriteKeyedValue(AutoFormatName(name), _arbiterState->GetWorkingValueAsString(interactable));
+				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
+					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
 		}
 
 		void WriteHorizontalCombo(StringSection<> name, int64_t initialValue, IteratorRange<const std::pair<int64_t, const char*>*> options) override
 		{
 			uint64_t interactable = _guidStack.MakeGuid(name);
 			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable)) {
-				auto v = _arbiterState->GetWorkingValue<int64_t>(interactable);
-				auto i = std::find_if(options.begin(), options.end(), [v](const auto& c) { return c.first == v; });
-				if (i != options.end())
-					_fmttr.WriteKeyedValue(AutoFormatName(name), i->second);
+				if (auto v = _arbiterState->TryGetWorkingValue<int64_t>(interactable)) {
+					auto i = std::find_if(options.begin(), options.end(), [v=*v](const auto& c) { return c.first == v; });
+					if (i != options.end())
+						_fmttr.WriteKeyedValue(AutoFormatName(name), i->second);
+				}
 			}
 		}
 
@@ -76,7 +86,8 @@ namespace EntityInterface
 		{
 			uint64_t interactable = _guidStack.MakeGuid(name);
 			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable)) {
-				_fmttr.WriteKeyedValue(AutoFormatName(name), _arbiterState->GetWorkingValue<bool>(interactable) ? "true" : "false");
+				if (auto b = _arbiterState->TryGetWorkingValue<bool>(interactable))
+					_fmttr.WriteKeyedValue(AutoFormatName(name), *b ? "true" : "false");
 			}
 		}
 
@@ -125,10 +136,10 @@ namespace EntityInterface
 		void WriteKeyedValue(StringSection<> name, StringSection<> value) override { _fmttr.WriteKeyedValue(name, value); }
 		void WriteSequencedValue(StringSection<> value) override { _fmttr.WriteSequencedValue(value); }
 
-		OutputStreamFormatterWithStubs(OutputStream& str, ArbiterState& arbiterState) : _fmttr(str), _arbiterState(&arbiterState) {}
+		OutputStreamFormatterWithStubs(OutputStream& str, MinimalBindingEngine& bindingEngine) : _fmttr(str), _bindingEngine(&bindingEngine) {}
 	private:
 		RenderOverlays::GuidStackHelper _guidStack;
-		ArbiterState* _arbiterState;
+		MinimalBindingEngine* _bindingEngine;
 		Formatters::TextOutputFormatter _fmttr;
 		std::vector<uint64_t> _hierarchicalEnabledStates;
 
@@ -153,34 +164,325 @@ namespace EntityInterface
 			return result;
 		}
 	};
+#endif
+
+	class FormatterRecording
+	{
+	public:
+		struct Blob
+		{
+			Formatters::FormatterBlob _type;
+			size_t _valueBegin = 0, _valueEnd = 0;
+			ImpliedTyping::TypeDesc _valueType;
+		};
+		std::vector<Blob> _blobs;
+		std::vector<uint8_t> _data;
+
+		void PushBeginElement()
+		{
+			_blobs.emplace_back(Blob{Formatters::FormatterBlob::BeginElement});
+		}
+
+		void PushEndElement()
+		{
+			_blobs.emplace_back(Blob{Formatters::FormatterBlob::EndElement});
+		}
+
+		void PushKeyedItem(StringSection<> name)
+		{
+			Blob b { Formatters::FormatterBlob::KeyedItem };
+			b._valueBegin = _data.size();
+			b._valueEnd = b._valueBegin + name.size();
+			_data.insert(_data.end(), name.begin(), name.end());
+			_blobs.emplace_back(std::move(b));
+		}
+
+		void PushStringValue(StringSection<> value)
+		{
+			Blob b { Formatters::FormatterBlob::Value };
+			b._valueBegin = _data.size();
+			b._valueEnd = b._valueBegin + value.size();
+			_data.insert(_data.end(), value.begin(), value.end());
+			b._valueType = ImpliedTyping::TypeOf<char>();
+			b._valueType._arrayCount = (uint32_t)value.size();
+			b._valueType._typeHint = ImpliedTyping::TypeHint::String;
+			_blobs.emplace_back(std::move(b));
+		}
+
+		void PushRawValue(IteratorRange<const void*> value, const ImpliedTyping::TypeDesc& type)
+		{
+			Blob b { Formatters::FormatterBlob::Value };
+			b._valueBegin = _data.size();
+			b._valueEnd = b._valueBegin + value.size();
+			_data.insert(_data.end(), (const uint8_t*)value.begin(), (const uint8_t*)value.end());
+			b._valueType = type;
+			_blobs.emplace_back(std::move(b));
+		}
+	};
+
+	class PlaybackFormatter : public Formatters::IDynamicInputFormatter
+	{
+	public:
+		Formatters::FormatterBlob PeekNext() override
+		{
+			if (_iterator == _recording->_blobs.end())
+				return Formatters::FormatterBlob::None;
+			return _iterator->_type;
+		}
+
+		bool TryBeginElement() override
+		{
+			if (PeekNext() != Formatters::FormatterBlob::BeginElement)
+				return false;
+
+			++_iterator;
+			return true;
+		}
+
+		bool TryEndElement() override
+		{
+			if (PeekNext() != Formatters::FormatterBlob::EndElement)
+				return false;
+
+			++_iterator;
+			return true;
+		}
+
+		bool TryKeyedItem(StringSection<>& name) override
+		{
+			if (PeekNext() != Formatters::FormatterBlob::KeyedItem)
+				return false;
+
+			name = MakeStringSection(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd).Cast<char>();
+			++_iterator;
+			return true;
+		}
+
+		bool TryKeyedItem(uint64_t& name) override
+		{
+			StringSection<> str;
+			if (!TryKeyedItem(str))
+				return false;
+			name = Hash64(str);
+			return true;
+		}
+
+		bool TryStringValue(StringSection<>& value) override
+		{
+			if (PeekNext() != Formatters::FormatterBlob::Value)
+				return false;
+
+			if (_iterator->_valueType._typeHint != ImpliedTyping::TypeHint::String
+				|| _iterator->_valueType._type != ImpliedTyping::TypeOf<char>()._type)
+				return false;
+
+			value = MakeStringSection(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd).Cast<char>();
+			++_iterator;
+			return true;
+		}
+
+		bool TryRawValue(IteratorRange<const void*>& value, ImpliedTyping::TypeDesc& type) override
+		{
+			if (PeekNext() != Formatters::FormatterBlob::Value)
+				return false;
+
+			value = MakeIteratorRange(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd);
+			type = _iterator->_valueType;
+			++_iterator;
+			return true;
+		}
+
+		bool TryCastValue(IteratorRange<void*> destinationBuffer, const ImpliedTyping::TypeDesc& type) override
+		{
+			if (PeekNext() != Formatters::FormatterBlob::Value)
+				return false;
+
+			auto srcValue = MakeIteratorRange(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd);
+			ImpliedTyping::Cast(destinationBuffer, type, srcValue, _iterator->_valueType);
+			++_iterator;
+			return true;
+		}
+
+		void SkipValueOrElement() override
+		{
+			auto next = PeekNext();
+			if (next == Formatters::FormatterBlob::Value) {
+				++_iterator;
+			} else {
+				if (next != Formatters::FormatterBlob::BeginElement)
+					Throw(std::runtime_error("Expected begin element while skipping forward"));
+				++_iterator;
+
+				Formatters::SkipElement(*this);
+
+				if (PeekNext() != Formatters::FormatterBlob::EndElement)
+					Throw(std::runtime_error("Malformed end element while skipping forward"));
+				++_iterator;
+			}
+		}
+
+        Formatters::StreamLocation GetLocation() const override { return {}; }
+        ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
+
+		PlaybackFormatter(std::shared_ptr<FormatterRecording> recording, ::Assets::DependencyValidation depVal)
+		: _recording(std::move(recording))
+		, _depVal(std::move(depVal))
+		{
+			_iterator = _recording->_blobs.begin();
+		}
+
+		std::shared_ptr<FormatterRecording> _recording;
+		std::vector<FormatterRecording::Blob>::iterator _iterator;
+		::Assets::DependencyValidation _depVal;
+	};
+
+	class FormatToMinimalBindingEngine : public IDynamicOutputFormatter
+	{
+	public:
+		ElementId BeginKeyedElement(StringSection<> label) override
+		{
+			_recording->PushKeyedItem(label);
+			_recording->PushBeginElement();
+
+			auto eleId = _nextEleId++;
+			auto id = _stackFrames.empty() ? DefaultSeed64 : _stackFrames.back()._id;
+			id = Hash64(label, id);
+			_stackFrames.push_back(Frame{eleId, id});
+			return eleId;
+		}
+
+		ElementId BeginSequencedElement() override
+		{
+			_recording->PushBeginElement();
+
+			if (!_stackFrames.empty()) {
+				auto eleId = _nextEleId++;
+				auto sequenceElementIdx = _stackFrames.back()._sequencedElementCounter++;
+				_stackFrames.push_back(Frame{eleId, HashCombine(sequenceElementIdx, _stackFrames.back()._id)});
+				return eleId;
+			} else {
+				auto eleId = _nextEleId++;
+				auto sequenceElementIdx = _rootSequencedElementCounter++;
+				_stackFrames.push_back(Frame{eleId, sequenceElementIdx});		// eleId reused as hash id
+				return eleId;
+			}
+		}
+
+		void EndElement(ElementId ele) override
+		{
+			_recording->PushEndElement();
+
+			assert(!_stackFrames.empty());
+			assert(_stackFrames.back()._eleId == ele);
+			_stackFrames.pop_back();
+		}
+
+		void WriteKeyedValue(StringSection<> label, StringSection<> value) override
+		{
+			auto id = _stackFrames.empty() ? DefaultSeed64 : _stackFrames.back()._id;
+			id = Hash64(label, id);
+
+			_recording->PushKeyedItem(label);
+			if (auto mirrorValue = _bindingEngine->TryGetModelValue(id)) {
+				_recording->PushRawValue(mirrorValue->_data, mirrorValue->_type);
+			} else {
+				_bindingEngine->SetModelValue(id, value);
+				_recording->PushStringValue(value);
+			}
+		}
+
+		void WriteSequencedValue(StringSection<> value) override
+		{
+			uint64_t id;
+			if (!_stackFrames.empty()) {
+				auto sequenceElementIdx = _stackFrames.back()._sequencedElementCounter++;
+				id = HashCombine(sequenceElementIdx, _stackFrames.back()._id);
+			} else {
+				id = _rootSequencedElementCounter++;
+			}
+
+			if (auto mirrorValue = _bindingEngine->TryGetModelValue(id)) {
+				_recording->PushRawValue(mirrorValue->_data, mirrorValue->_type);
+			} else {
+				_bindingEngine->SetModelValue(id, value);
+				_recording->PushStringValue(value);
+			}
+		}
+
+		void WriteKeyedValue(StringSection<> label, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override
+		{
+			auto id = _stackFrames.empty() ? DefaultSeed64 : _stackFrames.back()._id;
+			id = Hash64(label, id);
+
+			_recording->PushKeyedItem(label);
+			if (auto mirrorValue = _bindingEngine->TryGetModelValue(id)) {
+				_recording->PushRawValue(mirrorValue->_data, mirrorValue->_type);
+			} else {
+				_bindingEngine->SetModelValue(id, data, type);
+				_recording->PushRawValue(data, type);
+			}
+		}
+
+		void WriteSequencedValue(IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override
+		{
+			uint64_t id;
+			if (!_stackFrames.empty()) {
+				auto sequenceElementIdx = _stackFrames.back()._sequencedElementCounter++;
+				id = HashCombine(sequenceElementIdx, _stackFrames.back()._id);
+			} else {
+				id = _rootSequencedElementCounter++;
+			}
+
+			if (auto mirrorValue = _bindingEngine->TryGetModelValue(id)) {
+				_recording->PushRawValue(mirrorValue->_data, mirrorValue->_type);
+			} else {
+				_bindingEngine->SetModelValue(id, data, type);
+				_recording->PushRawValue(data, type);
+			}
+		}
+
+		FormatToMinimalBindingEngine(MinimalBindingEngine& bindingEngine)
+		: _bindingEngine(&bindingEngine)
+		{
+			_recording = std::make_shared<FormatterRecording>();
+		}
+
+		~FormatToMinimalBindingEngine() = default;
+
+		std::shared_ptr<FormatterRecording> _recording;
+
+	private:
+		MinimalBindingEngine* _bindingEngine = nullptr;
+		struct Frame
+		{
+			ElementId _eleId;
+			uint64_t _id;
+			unsigned _sequencedElementCounter = 0;
+		};
+		std::vector<Frame> _stackFrames;
+		ElementId _nextEleId = 1u;
+		unsigned _rootSequencedElementCounter = 0;
+	};
 
 	class TweakableDocumentInterface : public ITweakableDocumentInterface
 	{
 	public:
-		std::shared_ptr<ArbiterState> _arbiterState = std::make_shared<ArbiterState>();
+		std::shared_ptr<MinimalBindingEngine> _bindingEngine = std::make_shared<MinimalBindingEngine>();
 		Threading::Mutex _readMutex;
 		std::unique_lock<Threading::Mutex> _lock;
 		::Assets::DependencyValidation _depVal;
 
-		void ExecuteOnFormatter(IWidgetsLayoutFormatter& fmttr) override
-		{
-			_writeFunction(fmttr);
-		}
-
 		void IncreaseValidationIndex() override { _depVal.IncreaseValidationIndex(); }
-		std::shared_ptr<ArbiterState> GetArbiterState() override { return _arbiterState; }
+		std::shared_ptr<MinimalBindingEngine> GetBindingEngine() override { return _bindingEngine; }
 
 		virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> internalPoint) override
 		{
-			MemoryOutputStream<> outputStream;
-			{
-				OutputStreamFormatterWithStubs fmttr{outputStream, *_arbiterState};
-				ExecuteOnFormatter(fmttr);
-			}
+			FormatToMinimalBindingEngine fmttr{*_bindingEngine};
+			_modelFunction(fmttr);
 
 			std::promise<std::shared_ptr<Formatters::IDynamicInputFormatter>> promise;
 			auto result = promise.get_future();
-			promise.set_value(CreateDynamicFormatter(std::move(outputStream), ::Assets::DependencyValidation{_depVal}));
+			promise.set_value(std::make_shared<PlaybackFormatter>(fmttr._recording, _depVal));
 			return result;
 		}
 
@@ -196,19 +498,22 @@ namespace EntityInterface
 		}
 		virtual void Unlock() override { _lock = {}; }
 
-		TweakableDocumentInterface(WriteToLayoutFormatter&& fn)
-		: _writeFunction(std::move(fn))
+		TweakableDocumentInterface(WriteToModelFormatter&& modelFn)
+		: _modelFunction(std::move(modelFn))
 		{
 			_depVal = ::Assets::GetDepValSys().Make();
 		}
 
-		WriteToLayoutFormatter _writeFunction;
+		WriteToModelFormatter _modelFunction;
 	};
 
-	std::shared_ptr<ITweakableDocumentInterface> CreateTweakableDocumentInterface(WriteToLayoutFormatter&& fn)
+	std::shared_ptr<ITweakableDocumentInterface> CreateTweakableDocumentInterface(WriteToModelFormatter&& modelFn)
 	{
-		return std::make_shared<TweakableDocumentInterface>(std::move(fn));
+		return std::make_shared<TweakableDocumentInterface>(std::move(modelFn));
 	}
+
+	IDynamicOutputFormatter::~IDynamicOutputFormatter() = default;
+	IWidgetsLayoutFormatter::~IWidgetsLayoutFormatter() = default;
 
 }
 

@@ -28,7 +28,7 @@ namespace EntityInterface
 	public:
 		LayoutEngine _layoutEngine;
 
-		ImbuedNode* BeginSharedLeftRightCtrl(StringSection<> name, uint64_t interactable)
+		ImbuedNode* BeginSharedLeftRightCtrl(StringSection<> name, const V<uint64_t>& modelValue, uint64_t interactable)
 		{
 			const auto lineHeight = baseLineHeight+4;
 			auto baseNode = _layoutEngine.NewNode();
@@ -44,33 +44,32 @@ namespace EntityInterface
 			YGNodeStyleSetFlexGrow(mainCtrl->YGNode(), 1.0f);
 			YGNodeStyleSetHeightPercent(mainCtrl->YGNode(), 100.f);
 			YGNodeStyleSetMargin(mainCtrl->YGNode(), YGEdgeAll, 2);
-			mainCtrl->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), state=_state, interactable](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-				draw.LeftRight(frame, interactable, nameStr, state->GetWorkingValueAsString(interactable));
+			mainCtrl->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), modelValue, interactable](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				if (auto str = modelValue.TryQueryNonLayoutAsString())
+					draw.LeftRight(frame, interactable, nameStr, *str);
 			};
 			_layoutEngine.InsertChildToStackTop(mainCtrl->YGNode());
 			return mainCtrl;
 		}
 
 		template<typename Type>
-			void WriteHalfDoubleTemplate(StringSection<> name, Type initialValue, Type minValue, Type maxValue)
+			void WriteHalfDoubleTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& minValue, const V<Type>& maxValue)
 		{
 			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
 			
 			auto enabledByHierarchy = EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
-				_state->InitializeValue(interactable, initialValue);
 			
-				auto mainCtrl = BeginSharedLeftRightCtrl(name, interactable);
-				mainCtrl->_nodeAttachments._ioDelegate = [interactable, state=_state, minValue, maxValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
+				auto mainCtrl = BeginSharedLeftRightCtrl(name, modelValue, interactable);
+				mainCtrl->_nodeAttachments._ioDelegate = [modelValue, minValue, maxValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
 					bool leftSide = evnt._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
 					if (evnt.IsRelease_LButton()) {
-						auto currentValue = state->GetWorkingValue<Type>(interactable);
+						auto currentValue = modelValue.QueryNonLayout().value();
 						auto newValue = currentValue;
-						if (leftSide) 	newValue = std::max(minValue, currentValue/2);
-						else 			newValue = std::min(maxValue, currentValue*2);
+						if (leftSide) 	newValue = std::max(minValue.QueryNonLayout().value(), currentValue/2);
+						else 			newValue = std::min(maxValue.QueryNonLayout().value(), currentValue*2);
 						if (newValue != currentValue) {
-							state->SetWorkingValue(interactable, newValue);
-							state->InvalidateModel();
+							modelValue.Set(newValue);
 							return PlatformRig::ProcessInputResult::Consumed;
 						}
 					}
@@ -86,29 +85,27 @@ namespace EntityInterface
 			}
 		}
 
-		void WriteHalfDoubleInt(StringSection<> name, int64_t initialValue, int64_t min, int64_t max) override { WriteHalfDoubleTemplate(name, initialValue, min, max); }
-		void WriteHalfDoubleFloat(StringSection<> name, float initialValue, float min, float max) override { WriteHalfDoubleTemplate(name, initialValue, min, max); }
+		void WriteHalfDoubleInt(StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& min, const V<int64_t>& max) override { WriteHalfDoubleTemplate(name, modelValue, min, max); }
+		void WriteHalfDoubleFloat(StringSection<> name, const V<float>& modelValue, const V<float>& min, const V<float>& max) override { WriteHalfDoubleTemplate(name, modelValue, min, max); }
 
 		template<typename Type>
-			void WriteDecrementIncrementTemplate(StringSection<> name, Type initialValue, Type minValue, Type maxValue)
+			void WriteDecrementIncrementTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& minValue, const V<Type>& maxValue)
 		{
 			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
 			
 			auto enabledByHierarchy = EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
-				_state->InitializeValue(interactable, initialValue);
 			
-				auto mainCtrl = BeginSharedLeftRightCtrl(name, interactable);
-				mainCtrl->_nodeAttachments._ioDelegate = [interactable, state=_state, minValue, maxValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
+				auto mainCtrl = BeginSharedLeftRightCtrl(name, modelValue, interactable);
+				mainCtrl->_nodeAttachments._ioDelegate = [modelValue, minValue, maxValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
 					bool leftSide = evnt._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
 					if (evnt.IsRelease_LButton()) {
-						auto currentValue = state->GetWorkingValue<Type>(interactable);
+						auto currentValue = modelValue.QueryNonLayout().value();
 						auto newValue = currentValue;
-						if (leftSide) 	newValue = std::max(minValue, currentValue-1);
-						else 			newValue = std::min(maxValue, currentValue+1);
+						if (leftSide) 	newValue = std::max(minValue.QueryNonLayout().value(), currentValue-1);
+						else 			newValue = std::min(maxValue.QueryNonLayout().value(), currentValue+1);
 						if (newValue != currentValue) {
-							state->SetWorkingValue(interactable, newValue);
-							state->InvalidateModel();
+							modelValue.Set(newValue);
 							return PlatformRig::ProcessInputResult::Consumed;
 						}
 					}
@@ -124,8 +121,8 @@ namespace EntityInterface
 			}
 		}
 
-		void WriteDecrementIncrementInt(StringSection<> name, int64_t initialValue, int64_t min, int64_t max) override { WriteDecrementIncrementTemplate(name, initialValue, min, max); }
-		void WriteDecrementIncrementFloat(StringSection<> name, float initialValue, float min, float max) override { WriteDecrementIncrementTemplate(name, initialValue, min, max); }
+		void WriteDecrementIncrementInt(StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& min, const V<int64_t>& max) override { WriteDecrementIncrementTemplate(name, modelValue, min, max); }
+		void WriteDecrementIncrementFloat(StringSection<> name, const V<float>& modelValue, const V<float>& min, const V<float>& max) override { WriteDecrementIncrementTemplate(name, modelValue, min, max); }
 
 		void HorizontalControlLabel(StringSection<> name)
 		{
@@ -138,14 +135,13 @@ namespace EntityInterface
 			};
 		}
 
-		void WriteHorizontalCombo(StringSection<> name, int64_t initialValue, IteratorRange<const std::pair<int64_t, const char*>*> options) override
+		void WriteHorizontalCombo(StringSection<> name, const V<int64_t>& modelValue, IteratorRange<const std::pair<int64_t, const char*>*> options) override
 		{
 			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
 			const auto lineHeight = baseLineHeight+4;
 
 			auto enabledByHierarchy = EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
-				_state->InitializeValue(interactable, initialValue);
 
 				auto baseNode = _layoutEngine.NewNode();
 				YGNodeStyleSetWidthPercent(baseNode, 100.0f);
@@ -166,15 +162,14 @@ namespace EntityInterface
 					Corner::BitField corners = 0;
 					if (c == 0) corners |= Corner::TopLeft|Corner::BottomLeft;
 					if ((c+1) == options.size()) corners |= Corner::TopRight|Corner::BottomRight;
-					node->_nodeAttachments._drawDelegate = [nameStr=std::string{options[c].second}, corners, state=_state, value=options[c].first, interactable](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-						bool selected = state->GetWorkingValue<int64_t>(interactable) == value;
+					node->_nodeAttachments._drawDelegate = [nameStr=std::string{options[c].second}, corners, value=options[c].first, modelValue](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+						bool selected = modelValue.QueryNonLayout().value() == value;
 						OutlineRoundedRectangle(draw.GetContext(), frame, selected ? ColorB{96, 96, 96} : ColorB{64, 64, 64}, 1.f, 0.4f, corners);
 						DrawText().Alignment(TextAlignment::Center).Draw(draw.GetContext(), content, nameStr);
 					};
-					node->_nodeAttachments._ioDelegate = [interactable, state=_state, value=options[c].first](auto&, auto& evnt, Rect, Rect) {
+					node->_nodeAttachments._ioDelegate = [modelValue, value=options[c].first](auto&, auto& evnt, Rect, Rect) {
 						if (evnt.IsRelease_LButton()) {
-							state->SetWorkingValue(interactable, value);
-							state->InvalidateModel();
+							modelValue.Set(value);
 							return PlatformRig::ProcessInputResult::Consumed;
 						}
 						return PlatformRig::ProcessInputResult::Consumed;
@@ -190,7 +185,7 @@ namespace EntityInterface
 			}
 		}
 
-		void BeginCheckboxControl_Internal(StringSection<> name, uint64_t interactable, bool invalidatesLayout)
+		void BeginCheckboxControl_Internal(StringSection<> name, const V<bool>& modelValue, uint64_t interactable)
 		{
 			const auto lineHeight = baseLineHeight+4;
 			auto baseNode = _layoutEngine.NewNode();
@@ -208,43 +203,30 @@ namespace EntityInterface
 			YGNodeStyleSetWidth(stateBox->YGNode(), 16);
 			YGNodeStyleSetHeight(stateBox->YGNode(), 16);
 			_layoutEngine.InsertChildToStackTop(stateBox->YGNode());
-			stateBox->_nodeAttachments._drawDelegate = [interactable, state=_state](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-				draw.CheckBox(content, state->GetWorkingValue<bool>(interactable));
+			stateBox->_nodeAttachments._drawDelegate = [modelValue](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				draw.CheckBox(content, modelValue.QueryNonLayout().value());
 			};
-			stateBox->_nodeAttachments._ioDelegate = [interactable, state=_state, invalidatesLayout](auto&, auto& evnt, Rect, Rect) {
+			stateBox->_nodeAttachments._ioDelegate = [modelValue](auto&, auto& evnt, Rect, Rect) {
 				if (evnt.IsRelease_LButton()) {
-					state->SetWorkingValue(interactable, !state->GetWorkingValue<bool>(interactable));
-					state->InvalidateModel();
-					if (invalidatesLayout)
-						state->InvalidateLayout();
+					modelValue.Set(!modelValue.QueryNonLayout().value());
 					return PlatformRig::ProcessInputResult::Consumed;
 				}
 				return PlatformRig::ProcessInputResult::Consumed;
 			};
 		}
 
-		void BeginCheckboxControl(StringSection<> name, uint64_t interactable)
+		void BeginCheckboxControl(StringSection<> name, const V<bool>& modelValue, uint64_t interactable)
 		{
-			BeginCheckboxControl_Internal(name, interactable, false);
+			BeginCheckboxControl_Internal(name, modelValue, interactable);
 		}
 
-		bool GetCheckbox(StringSection<> name, bool initialValue) override
-		{
-			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
-			BeginCheckboxControl_Internal(name, interactable, true);
-			_layoutEngine.PopNode();
-			_state->InitializeValue(interactable, initialValue);
-			return _state->GetWorkingValue<bool>(interactable);
-		}
-
-		void WriteCheckbox(StringSection<> name, bool initialValue) override
+		void WriteCheckbox(StringSection<> name, const V<bool>& initialValue) override
 		{
 			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
 
 			auto enabledByHierarchy = EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
-				_state->InitializeValue(interactable, initialValue);
-				BeginCheckboxControl(name, interactable);
+				BeginCheckboxControl(name, initialValue, interactable);
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
 					DeactivateButton(interactable);
 				_layoutEngine.PopNode();
@@ -310,14 +292,13 @@ namespace EntityInterface
 		}
 
 		template<typename Type>
-			void WriteBoundedTemplate(StringSection<> name, Type initialValue, Type leftSideValue, Type rightSideValue)
+			void WriteBoundedTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& leftSideValue, const V<Type>& rightSideValue)
 		{
 			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
 			const auto lineHeight = baseLineHeight+4;
 			
 			auto enabledByHierarchy = EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
-				_state->InitializeValue(interactable, initialValue);
 
 				auto baseNode = _layoutEngine.NewNode();
 				YGNodeStyleSetWidthPercent(baseNode, 100.0f);
@@ -332,27 +313,25 @@ namespace EntityInterface
 				YGNodeStyleSetFlexGrow(sliderNode->YGNode(), 1.0f);
 				YGNodeStyleSetHeightPercent(sliderNode->YGNode(), 100.f);
 				YGNodeStyleSetMargin(sliderNode->YGNode(), YGEdgeAll, 2);
-				sliderNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), state=_state, interactable, leftSideValue, rightSideValue](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-					draw.Bounded(frame, interactable, nameStr, state->GetWorkingValue<Type>(interactable), leftSideValue, rightSideValue);
+				sliderNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), interactable, leftSideValue, rightSideValue, modelValue](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+					draw.Bounded(frame, interactable, nameStr, modelValue.QueryNonLayout().value(), leftSideValue.QueryNonLayout().value(), rightSideValue.QueryNonLayout().value());
 				};
-				sliderNode->_nodeAttachments._ioDelegate = [interactable, state=_state, leftSideValue, rightSideValue](const PlatformRig::InputContext& inputContext, auto& evnt, Rect frame, Rect content) {
+				sliderNode->_nodeAttachments._ioDelegate = [interactable, leftSideValue, rightSideValue, modelValue](const PlatformRig::InputContext& inputContext, auto& evnt, Rect frame, Rect content) {
 					auto* hoverings = inputContext.GetService<RenderOverlays::CommonWidgets::HoveringLayer>();
 					auto* interfaceState = inputContext.GetService<RenderOverlays::DebuggingDisplay::InterfaceState>();
 					if (!hoverings || !interfaceState) return PlatformRig::ProcessInputResult::Passthrough;
 
 					if (hoverings->_hoveringCtrl) {
 						Int2 mp { evnt._mousePosition._x, evnt._mousePosition._y };
-						if ((evnt._mouseButtonsTransition != 0) && interfaceState->GetCapture()._widget._id == interactable && !Contains(interfaceState->GetCapture()._widget._rect, mp)) {
-							if (state->TryUpdateValueFromString<Type>(interactable, hoverings->_textEntry._currentLine))
-								state->InvalidateModel();
+						if ((evnt._mouseButtonsTransition != 0) && interfaceState->GetCapture()._hotArea._id == interactable && !Contains(interfaceState->GetCapture()._hotArea._rect, mp)) {
+							modelValue.TrySetFromString(hoverings->_textEntry._currentLine);
 							interfaceState->EndCapturing();
 							hoverings->_hoveringCtrl = 0;
 							return PlatformRig::ProcessInputResult::Consumed;
 						} 
 
 						if (evnt.IsPress(enter)) {
-							if (state->TryUpdateValueFromString<Type>(interactable, hoverings->_textEntry._currentLine))
-								state->InvalidateModel();
+							modelValue.TrySetFromString(hoverings->_textEntry._currentLine);
 							interfaceState->EndCapturing();
 							hoverings->_hoveringCtrl = 0;
 						} else if (evnt.IsPress(escape)) {
@@ -363,24 +342,23 @@ namespace EntityInterface
 						}
 					} else {
 						if (evnt.IsPress_LButton()) {
-							interfaceState->BeginCapturing(interfaceState->TopMostWidget());
-						} else if (interfaceState->GetCapture()._widget._id == interactable) {
+							interfaceState->BeginCapturing(interfaceState->TopMostHotArea());
+						} else if (interfaceState->GetCapture()._hotArea._id == interactable) {
 							const unsigned driftThreshold = 4;
 							if (interfaceState->GetCapture()._driftDuringCapture[0] < driftThreshold && interfaceState->GetCapture()._driftDuringCapture[1] < driftThreshold) {
 								// inside drift threshold
 								if (evnt.IsRelease_LButton()) {
 									hoverings->_hoveringCtrl = interactable;
-									hoverings->_textEntry.Reset(state->GetWorkingValueAsString(interactable));
+									hoverings->_textEntry.Reset(modelValue.TryQueryNonLayoutAsString().value());
 								}
 							} else {
 								// outside of drift threshold
 								if (evnt.IsHeld_LButton()) {
 									// dragging while captured
-									float alpha = (evnt._mousePosition[0] - interfaceState->TopMostWidget()._rect._topLeft[0]) / float(interfaceState->TopMostWidget()._rect._bottomRight[0] - interfaceState->TopMostWidget()._rect._topLeft[0]);
+									float alpha = (evnt._mousePosition[0] - interfaceState->TopMostHotArea()._rect._topLeft[0]) / float(interfaceState->TopMostHotArea()._rect._bottomRight[0] - interfaceState->TopMostHotArea()._rect._topLeft[0]);
 									alpha = std::max(0.f, std::min(1.f, alpha));
-									auto newValue = LinearInterpolate(leftSideValue, rightSideValue, alpha);
-									state->SetWorkingValue(interactable, newValue);
-									state->InvalidateModel();
+									auto newValue = LinearInterpolate(leftSideValue.QueryNonLayout().value(), rightSideValue.QueryNonLayout().value(), alpha);
+									modelValue.Set(newValue);
 								}
 								if (evnt.IsRelease_LButton())
 									interfaceState->EndCapturing();
@@ -402,8 +380,8 @@ namespace EntityInterface
 			}
 		}
 
-		void WriteBoundedInt(StringSection<> name, int64_t initialValue, int64_t leftSideValue, int64_t rightSideValue) override { WriteBoundedTemplate(name, initialValue, leftSideValue, rightSideValue); }
-		void WriteBoundedFloat(StringSection<> name, float initialValue, float leftSideValue, float rightSideValue) override { WriteBoundedTemplate(name, initialValue, leftSideValue, rightSideValue); }
+		void WriteBoundedInt(StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& leftSideValue, const V<int64_t>& rightSideValue) override { WriteBoundedTemplate(name, modelValue, leftSideValue, rightSideValue); }
+		void WriteBoundedFloat(StringSection<> name, const V<float>& modelValue, const V<float>& leftSideValue, const V<float>& rightSideValue) override { WriteBoundedTemplate(name, modelValue, leftSideValue, rightSideValue); }
 
 		bool BeginCollapsingContainer(StringSection<> name) override
 		{
@@ -501,22 +479,26 @@ namespace EntityInterface
 			return HierarchicalEnabledState::NoImpact;
 		}
 
+		MinimalBindingEngine& GetBindingEngine() override { return *_state; }
+
+#if 0
 		// Stubs for TextOutputFormatter
 		ElementId BeginKeyedElement(StringSection<> name) override { return 0; }
 		ElementId BeginSequencedElement() override { return 0; }
 		void EndElement(ElementId) override {}
 		void WriteKeyedValue(StringSection<> name, StringSection<> value) override {}
 		void WriteSequencedValue(StringSection<> value) override {}
+#endif
 
 		LayedOutWidgets BuildLayedOutWidgets()
 		{
 			return _layoutEngine.BuildLayedOutWidgets();
 		}
 
-		WidgetsLayoutFormatter(std::shared_ptr<ArbiterState> state) : _state(std::move(state)) {}
+		WidgetsLayoutFormatter(std::shared_ptr<MinimalBindingEngine> state) : _state(std::move(state)) {}
 
 	private:
-		std::shared_ptr<ArbiterState> _state;
+		std::shared_ptr<MinimalBindingEngine> _state;
 		std::vector<uint64_t> _hierarchicalEnabledStates;
 	};
 
@@ -527,6 +509,7 @@ namespace EntityInterface
 		LayedOutWidgets _layedOutWidgets;
 		CommonWidgets::HoveringLayer _hoverings;
 		std::shared_ptr<ITweakableDocumentInterface> _docInterface;
+		WriteToLayoutFormatter _layoutFn;
 
 		void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) override
 		{
@@ -534,11 +517,11 @@ namespace EntityInterface
 			container._topLeft += Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
 			container._bottomRight -= Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
 
-			if (_docInterface->GetArbiterState()->IsLayoutInvalidated()) {
-				_docInterface->GetArbiterState()->ResetLayout();
-				WidgetsLayoutFormatter formatter{_docInterface->GetArbiterState()};
+			if (_docInterface->GetBindingEngine()->IsLayoutInvalidated()) {
+				_docInterface->GetBindingEngine()->ResetLayout();
+				WidgetsLayoutFormatter formatter{_docInterface->GetBindingEngine()};
 				formatter.BeginRoot({container.Width(), container.Height()});
-				_docInterface->ExecuteOnFormatter(formatter);
+				_layoutFn(formatter);
 				formatter.EndRoot();
 
 				_layedOutWidgets = formatter.BuildLayedOutWidgets();
@@ -565,9 +548,9 @@ namespace EntityInterface
 					inputContext.AttachService2(interfaceState);
 					pir = _layedOutWidgets.ProcessInput(inputContext, input);
 					
-					if (_docInterface->GetArbiterState()->IsModelInvalidated()) {
+					if (_docInterface->GetBindingEngine()->IsModelInvalidated()) {
 						_docInterface->IncreaseValidationIndex();
-						_docInterface->GetArbiterState()->ResetModel();
+						_docInterface->GetBindingEngine()->ResetModel();
 					}
 				} CATCH(...) {
 					_docInterface->Unlock();
@@ -579,13 +562,13 @@ namespace EntityInterface
 			return pir;
 		}
 
-		TweakerGroup(std::shared_ptr<ITweakableDocumentInterface> doc)
-		: _docInterface(std::move(doc)) {}
+		TweakerGroup(std::shared_ptr<ITweakableDocumentInterface> doc, WriteToLayoutFormatter&& layoutFn)
+		: _docInterface(std::move(doc)), _layoutFn(layoutFn) {}
 	};
 
-	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateWidgetGroup(std::shared_ptr<ITweakableDocumentInterface> doc)
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateWidgetGroup(std::shared_ptr<ITweakableDocumentInterface> doc, WriteToLayoutFormatter&& layoutFn)
 	{
-		return std::make_shared<TweakerGroup>(doc);
+		return std::make_shared<TweakerGroup>(doc, std::move(layoutFn));
 	}
 }
 
