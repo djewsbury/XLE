@@ -17,6 +17,7 @@
 #include "ShadowProbes.h"
 #include "SkyOperator.h"
 #include "ToneMapOperator.h"
+#include "GBufferOperator.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/DeferredShaderResource.h"
@@ -184,14 +185,15 @@ namespace RenderCore { namespace LightingEngine
 
 	static std::future<std::pair<RenderStepFragmentInterface, BufferUploads::CommandListID>> CreateBuildGBufferSceneFragment(
 		SharedTechniqueDelegateBox& techDelBox,
-		GBufferType gbufferType, 
+		GBufferDelegateType gbufferType, 
 		bool precisionTargets = false)
 	{
+		assert(gbufferType == GBufferDelegateType::DepthNormal || gbufferType == GBufferDelegateType::DepthNormalParameters);
 		std::promise<std::pair<RenderStepFragmentInterface, BufferUploads::CommandListID>> promise;
 		auto result = promise.get_future();
 		auto normalsFittingTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
-		::Assets::WhenAll(normalsFittingTexture, techDelBox.GetDeferredIllumDelegate()).ThenConstructToPromise(
+		::Assets::WhenAll(normalsFittingTexture, techDelBox.GetGBufferDelegate(gbufferType)).ThenConstructToPromise(
 			std::move(promise),
 			[gbufferType, precisionTargets](auto normalsFitting, auto defIllumDel) {
 
@@ -218,7 +220,7 @@ namespace RenderCore { namespace LightingEngine
 				auto diffuseAspect = (!precisionTargets) ? TextureViewDesc::Aspect::ColorSRGB : TextureViewDesc::Aspect::ColorLinear;
 				subpass.AppendOutput(diffuse, {diffuseAspect});
 				subpass.AppendOutput(normal);
-				if (gbufferType == GBufferType::PositionNormalParameters)
+				if (gbufferType == GBufferDelegateType::DepthNormalParameters)
 					subpass.AppendOutput(parameter);
 				subpass.SetDepthStencil(msDepth);
 				subpass.SetName("write-gbuffer");
@@ -303,8 +305,9 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler.get(), shadowProbes, _lightScene->_shadowProbesManager.get());
 	}
 
-	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps, GBufferType gbufferType, bool precisionTargets = false)
+	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps, GBufferDelegateType gbufferType, bool precisionTargets = false)
 	{
+		assert(gbufferType == GBufferDelegateType::DepthNormal || gbufferType == GBufferDelegateType::DepthNormalParameters);
 		UInt2 fbSize{fbProps._width, fbProps._height};
 		Techniques::PreregisteredAttachment attachments[] {
 			Techniques::PreregisteredAttachment {
@@ -458,7 +461,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		DeferredLightingTechniqueFlags::BitField flags)
 	{
-		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferType::PositionNormalParameters);
+		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferDelegateType::DepthNormalParameters);
 
 		DeferredOperatorDigest digest { resolveOperatorsInit, shadowOperatorsInit, globalOperators };
 
@@ -518,7 +521,7 @@ namespace RenderCore { namespace LightingEngine
 
 					FrameBufferProperties fbProps { resolution[0], resolution[1], TextureSamples::Create() };
 					Techniques::FragmentStitchingContext stitchingContext{preregisteredAttachments, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice())};
-					PreregisterAttachments(stitchingContext, fbProps, GBufferType::PositionNormalParameters);
+					PreregisterAttachments(stitchingContext, fbProps, GBufferDelegateType::DepthNormalParameters);
 					if (captures->_acesOperator) captures->_acesOperator->PreregisterAttachments(stitchingContext, fbProps);
 					if (captures->_copyToneMapOperator) captures->_copyToneMapOperator->PreregisterAttachments(stitchingContext, fbProps);
 
@@ -598,11 +601,12 @@ namespace RenderCore { namespace LightingEngine
 					};
 					auto secondStageHelper = std::make_shared<SecondStageConstructionHelper>();
 
+					const unsigned gbufferTypeCode = 1;
 					secondStageHelper->_lightResolveOperators = BuildLightResolveOperators(
 						*pipelineCollection, lightingOperatorLayout,
 						digest._resolveOperators, digest._shadowOperators,
 						*resolvedFB.first, resolvedFB.second+1,
-						false, GBufferType::PositionNormalParameters);
+						false, gbufferTypeCode);
 
 					if (captures->_acesOperator)
 						secondStageHelper->_futureToneMapAces = Internal::SecondStageConstruction(*captures->_acesOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));

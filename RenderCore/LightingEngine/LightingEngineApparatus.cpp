@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightingEngineApparatus.h"
+#include "GBufferOperator.h"
 #include "../Techniques/TechniqueDelegates.h"
 #include "../Techniques/Apparatuses.h"
 #include "../Techniques/Techniques.h"
@@ -27,49 +28,58 @@ namespace RenderCore { namespace LightingEngine
 		return _forwardIllumDelegate_DisableDepthWrite.ShareFuture();
 	}
 
-	auto SharedTechniqueDelegateBox::GetDepthOnlyDelegate() -> TechniqueDelegateFuture
+	auto SharedTechniqueDelegateBox::GetGBufferDelegate(GBufferDelegateType type) -> TechniqueDelegateFuture
 	{
-		if (::Assets::IsInvalidated(_depthOnlyDelegate)) {
-			_depthOnlyDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			Techniques::CreateTechniqueDelegate_PreDepth(_depthOnlyDelegate.AdoptPromise(), GetTechniqueSetFile(), Techniques::PreDepthType::DepthOnly);
-		}
-		return _depthOnlyDelegate.ShareFuture();
+		assert(unsigned(type) < dimof(_gbufferDelegates));
+		if (::Assets::IsInvalidated(_gbufferDelegates[unsigned(type)]))
+			LoadGBufferDelegate(type);
+		return _gbufferDelegates[unsigned(type)].ShareFuture();
 	}
 
-	auto SharedTechniqueDelegateBox::GetDepthMotionDelegate() -> TechniqueDelegateFuture
+	void SharedTechniqueDelegateBox::LoadGBufferDelegate(GBufferDelegateType type)
 	{
-		if (::Assets::IsInvalidated(_depthMotionDelegate)) {
-			_depthMotionDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionDelegate.AdoptPromise(), GetTechniqueSetFile(), Techniques::PreDepthType::DepthMotion);
-		}
-		return _depthMotionDelegate.ShareFuture();
+		_gbufferDelegates[unsigned(type)] = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
+		CreateTechniqueDelegate_GBuffer(_gbufferDelegates[unsigned(type)].AdoptPromise(), GetTechniqueSetFile(), type);
 	}
 
-	auto SharedTechniqueDelegateBox::GetDepthMotionNormalDelegate() -> TechniqueDelegateFuture
+	void CreateTechniqueDelegate_GBuffer(
+		std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>>&& promise,
+		const Techniques::TechniqueSetFileFuture& techniqueSet,
+		GBufferDelegateType type)
 	{
-		if (::Assets::IsInvalidated(_depthMotionNormalDelegate)) {
-			_depthMotionNormalDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalDelegate.AdoptPromise(), GetTechniqueSetFile(), Techniques::PreDepthType::DepthMotionNormal);
-		}
-		return _depthMotionNormalDelegate.ShareFuture();
-	}
+		switch (type) {
+		case GBufferDelegateType::Depth:
+			Techniques::CreateTechniqueDelegate_PreDepth(std::move(promise), techniqueSet, Techniques::PreDepthType::DepthOnly);
+			break;
 
-	auto SharedTechniqueDelegateBox::GetDepthMotionNormalRoughnessDelegate() -> TechniqueDelegateFuture
-	{
-		if (::Assets::IsInvalidated(_depthMotionNormalRoughnessDelegate)) {
-			_depthMotionNormalRoughnessDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalRoughnessDelegate.AdoptPromise(), GetTechniqueSetFile(), Techniques::PreDepthType::DepthMotionNormalRoughness);
-		}
-		return _depthMotionNormalRoughnessDelegate.ShareFuture();
-	}
+		case GBufferDelegateType::DepthMotion:
+			Techniques::CreateTechniqueDelegate_PreDepth(std::move(promise), techniqueSet, Techniques::PreDepthType::DepthMotion);
+			break;
 
-	auto SharedTechniqueDelegateBox::GetDeferredIllumDelegate() -> TechniqueDelegateFuture
-	{
-		if (::Assets::IsInvalidated(_deferredIllumDelegate)) {
-			_deferredIllumDelegate = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
-			Techniques::CreateTechniqueDelegate_Deferred(_deferredIllumDelegate.AdoptPromise(), GetTechniqueSetFile());
+		case GBufferDelegateType::DepthMotionNormal:
+			Techniques::CreateTechniqueDelegate_PreDepth(std::move(promise), techniqueSet, Techniques::PreDepthType::DepthMotionNormal);
+			break;
+
+		case GBufferDelegateType::DepthMotionNormalRoughness:
+			Techniques::CreateTechniqueDelegate_PreDepth(std::move(promise), techniqueSet, Techniques::PreDepthType::DepthMotionNormalRoughness);
+			break;
+
+		case GBufferDelegateType::DepthMotionNormalRoughnessAccumulation:
+			Techniques::CreateTechniqueDelegate_PreDepth(std::move(promise), techniqueSet, Techniques::PreDepthType::DepthMotionNormalRoughnessAccumulation);
+			break;
+
+		case GBufferDelegateType::DepthNormal:
+			Techniques::CreateTechniqueDelegate_Deferred(std::move(promise), techniqueSet, 0);
+			break;
+
+		case GBufferDelegateType::DepthNormalParameters:
+			Techniques::CreateTechniqueDelegate_Deferred(std::move(promise), techniqueSet, 1);
+			break;
+
+		default:
+			assert(0);
+			break;
 		}
-		return _deferredIllumDelegate.ShareFuture();
 	}
 
 	auto SharedTechniqueDelegateBox::GetTechniqueSetFile() -> std::shared_future<std::shared_ptr<Techniques::TechniqueSetFile>>
@@ -86,11 +96,8 @@ namespace RenderCore { namespace LightingEngine
 		_depVal = ::Assets::GetDepValSys().Make();
 		::Assets::AutoConstructToPromise(_techniqueSetFile.AdoptPromise(), ILLUM_TECH);
 		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
-		Techniques::CreateTechniqueDelegate_PreDepth(_depthOnlyDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthOnly);
-		Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotion);
-		Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotionNormal);
-		Techniques::CreateTechniqueDelegate_PreDepth(_depthMotionNormalRoughnessDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::PreDepthType::DepthMotionNormalRoughness);
-		Techniques::CreateTechniqueDelegate_Deferred(_deferredIllumDelegate.AdoptPromise(), _techniqueSetFile.ShareFuture());
+		for (unsigned c=0; c<dimof(_gbufferDelegates); ++c)
+			LoadGBufferDelegate(GBufferDelegateType(c));
 
 		_lightingOperatorsPipelineLayoutFile = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 		_depVal.RegisterDependency(_lightingOperatorsPipelineLayoutFile->GetDependencyValidation());

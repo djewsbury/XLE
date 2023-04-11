@@ -64,7 +64,8 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_Deferred(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet);
+		const TechniqueSetFileFuture& techniqueSet,
+		unsigned gbufferTypeCode);
 
 	namespace TechniqueDelegateForwardFlags { 
 		enum { DisableDepthWrite = 1<<0 };

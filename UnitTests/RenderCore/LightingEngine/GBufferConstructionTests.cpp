@@ -381,9 +381,11 @@ namespace UnitTests
 		{
 			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
 			std::shared_future<std::shared_ptr<Techniques::ITechniqueDelegate>> futureTechDel = promisedTechDel.get_future();
+			const unsigned gbufferTypeCode = 1;
 			RenderCore::Techniques::CreateTechniqueDelegate_Deferred(
 				std::move(promisedTechDel),
-				::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH));
+				::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH),
+				gbufferTypeCode);
 
 			auto pipelinePool = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);
 

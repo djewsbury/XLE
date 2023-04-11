@@ -87,7 +87,7 @@ namespace RenderCore { namespace LightingEngine
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
-		GBufferType gbufferType)
+		unsigned gbufferTypeCode)
 	{
 		auto sampleCount = TextureSamples::Create();
 		auto mainOutputAttachment = fbDesc.GetSubpasses()[subpassIdx].GetOutputs()[0]._resourceName;
@@ -102,7 +102,7 @@ namespace RenderCore { namespace LightingEngine
 		auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 
 		ParameterBox selectors;
-		selectors.SetParameter("GBUFFER_TYPE", unsigned(gbufferType));
+		selectors.SetParameter("GBUFFER_TYPE", gbufferTypeCode);
 		selectors.SetParameter("MSAA_SAMPLES", (sampleCount._sampleCount<=1)?0:sampleCount._sampleCount);
 		selectors.SetParameter("LIGHT_SHAPE", unsigned(desc._shape));
 		selectors.SetParameter("DIFFUSE_METHOD", unsigned(desc._diffuseModel));
@@ -204,7 +204,7 @@ namespace RenderCore { namespace LightingEngine
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
-		GBufferType gbufferType)
+		unsigned gbufferTypeCode)
 	{
 		struct AttachedData
 		{
@@ -226,7 +226,7 @@ namespace RenderCore { namespace LightingEngine
 					resolveOperators[lightOperatorId], Internal::ShadowResolveParam {}, 
 					fbDesc, subpassIdx,
 					hasScreenSpaceAO, 
-					gbufferType));
+					gbufferTypeCode));
 			attachedData.push_back(AttachedData{resolveOperators[lightOperatorId]._flags, resolveOperators[lightOperatorId]._shape});
 		}
 
@@ -267,7 +267,7 @@ namespace RenderCore { namespace LightingEngine
 						resolveOperators[lightOperatorId], shadowParams[c], 
 						fbDesc, subpassIdx,
 						hasScreenSpaceAO, 
-						gbufferType));
+						gbufferTypeCode));
 				attachedData.push_back(AttachedData{resolveOperators[lightOperatorId]._flags, resolveOperators[lightOperatorId]._shape});
 			}
 		}

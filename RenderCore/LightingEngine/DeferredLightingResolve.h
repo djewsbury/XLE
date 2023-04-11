@@ -83,8 +83,6 @@ namespace RenderCore { namespace LightingEngine
 		ShadowProbes* shadowProbes,
 		Internal::SemiStaticShadowProbeScheduler* shadowProbeScheduler);
 
-	enum class GBufferType { PositionNormal, PositionNormalParameters };
-
     std::future<std::shared_ptr<LightResolveOperators>> BuildLightResolveOperators(
 		Techniques::PipelineCollection& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
@@ -93,5 +91,5 @@ namespace RenderCore { namespace LightingEngine
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
 		bool hasScreenSpaceAO,
-		GBufferType gbufferType);
+		unsigned gbufferTypeCode);
 }}

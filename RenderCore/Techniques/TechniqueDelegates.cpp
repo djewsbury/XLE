@@ -251,6 +251,7 @@ namespace RenderCore { namespace Techniques
 			if (stateSet._flag & RenderCore::Assets::RenderStateSet::Flag::DoubleSided && stateSet._doubleSided)
 				nascentDesc->_depthStencil._backFaceStencil._passOp = StencilOp::Replace;
 			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+			nascentDesc->_manualSelectorFiltering.SetSelector("GBUFFER_TYPE", _gbufferTypeCode);
 
 			auto illumType = CalculateIllumType(shaderPatches);
 			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
@@ -288,8 +289,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }
 		::Assets::DependencyValidation GetDependencyValidation() override { return _depVal; }
 
-		TechniqueDelegate_Deferred(TechniqueFileHelper&& helper, std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout)
-		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
+		TechniqueDelegate_Deferred(TechniqueFileHelper&& helper, std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout, unsigned gbufferTypeCode)
+		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout)), _gbufferTypeCode(gbufferTypeCode)
 		{
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
@@ -297,18 +298,19 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-			const TechniqueSetFileFuture& techniqueSet)
+			const TechniqueSetFileFuture& techniqueSet,
+			unsigned gbufferTypeCode)
 		{
 			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
-				[](auto&& promise, auto techniqueSetFile) {
+				[gbufferTypeCode](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile};
 						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
-							[helper=std::move(helper)](auto pipelineLayout) mutable {
-								return std::make_shared<TechniqueDelegate_Deferred>(std::move(helper), std::move(pipelineLayout));
+							[helper=std::move(helper), gbufferTypeCode](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_Deferred>(std::move(helper), std::move(pipelineLayout), gbufferTypeCode);
 							});
 					} CATCH (...) {
 						promise.set_exception(std::current_exception());
@@ -319,13 +321,15 @@ namespace RenderCore { namespace Techniques
 		TechniqueFileHelper _techniqueFileHelper;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
 		::Assets::DependencyValidation _depVal;
+		unsigned _gbufferTypeCode = 0;
 	};
 
 	void CreateTechniqueDelegate_Deferred(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet)
+		const TechniqueSetFileFuture& techniqueSet,
+		unsigned gbufferTypeCode)
 	{
-		TechniqueDelegate_Deferred::ConstructToPromise(std::move(promise), techniqueSet);
+		TechniqueDelegate_Deferred::ConstructToPromise(std::move(promise), techniqueSet, gbufferTypeCode);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -16,6 +16,7 @@
 #include "Sequence.h"
 #include "SequenceIterator.h"
 #include "LightUniforms.h"
+#include "GBufferOperator.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/CommonBindings.h"
@@ -597,8 +598,8 @@ namespace RenderCore { namespace LightingEngine
 			std::move(digest._shadowPrepreparerIdMapping), std::move(digest._lightSceneOperatorInfo),
 			digest._tilingConfig, lightSceneIntegrationParams);
 
-		helper->_depthMotionNormalRoughnessDelegate = techDelBox->GetDepthMotionNormalRoughnessDelegate();
-		helper->_depthMotionDelegate = techDelBox->GetDepthMotionDelegate();
+		helper->_depthMotionNormalRoughnessDelegate = techDelBox->GetGBufferDelegate(GBufferDelegateType::DepthMotionNormalRoughness);
+		helper->_depthMotionDelegate = techDelBox->GetGBufferDelegate(GBufferDelegateType::DepthMotion);
 		helper->_forwardIllumDelegate = techDelBox->GetForwardIllumDelegate_DisableDepthWrite();
 
 		auto resolution = Internal::ExtractOutputResolution(preregisteredAttachmentsInit);

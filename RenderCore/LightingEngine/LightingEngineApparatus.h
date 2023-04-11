@@ -30,6 +30,7 @@ namespace Assets { class InitializerPack; }
 namespace RenderCore { namespace LightingEngine
 {
 	class SharedTechniqueDelegateBox;
+	enum class GBufferDelegateType;
 
 	class LightingEngineApparatus
 	{
@@ -57,11 +58,8 @@ namespace RenderCore { namespace LightingEngine
 
 		using TechniqueDelegateFuture = std::shared_future<std::shared_ptr<Techniques::ITechniqueDelegate>>;
 		TechniqueDelegateFuture GetForwardIllumDelegate_DisableDepthWrite();
-		TechniqueDelegateFuture GetDepthOnlyDelegate();
-		TechniqueDelegateFuture GetDepthMotionDelegate();
-		TechniqueDelegateFuture GetDepthMotionNormalDelegate();
-		TechniqueDelegateFuture GetDepthMotionNormalRoughnessDelegate();
-		TechniqueDelegateFuture GetDeferredIllumDelegate();
+
+		TechniqueDelegateFuture GetGBufferDelegate(GBufferDelegateType);
 
 		std::shared_future<std::shared_ptr<Techniques::TechniqueSetFile>> GetTechniqueSetFile();
 
@@ -78,11 +76,9 @@ namespace RenderCore { namespace LightingEngine
 
 		::Assets::MarkerPtr<Techniques::TechniqueSetFile> _techniqueSetFile;
 		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
-		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _depthOnlyDelegate;
-		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _depthMotionDelegate;
-		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _depthMotionNormalDelegate;
-		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _depthMotionNormalRoughnessDelegate;
-		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _deferredIllumDelegate;
+		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _gbufferDelegates[7];		// size must agree with GBufferType
+
+		void LoadGBufferDelegate(GBufferDelegateType);
 	};
 
 	template<typename... Args>
