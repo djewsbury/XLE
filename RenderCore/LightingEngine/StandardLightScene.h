@@ -134,6 +134,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual void SetShadowOperator(LightSourceId, ShadowOperatorId) override;
 		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;
+		virtual LightSourceId CreateAmbientLightSource() override;
 		StandardLightScene();
 		~StandardLightScene();
 

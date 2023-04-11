@@ -229,6 +229,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				set._flags |= flag;
 	}
 
+	auto StandardLightScene::CreateAmbientLightSource() -> LightSourceId
+	{
+		Throw(std::runtime_error("Ambient light sources not supported by this light scene"));
+	}
+
 	StandardLightScene::StandardLightScene()
 	{}
 	StandardLightScene::~StandardLightScene()
