@@ -25,6 +25,8 @@
 #include <unordered_map>
 #include <set>
 
+#pragma GCC diagnostic ignored "-Wmicrosoft-sealed"
+
 namespace RenderCore
 {
     static std::ostream& operator<<(std::ostream& str, const AttachmentDesc& attachment)
@@ -890,6 +892,8 @@ namespace RenderCore { namespace Techniques
         ClearValue defaultContents,
         BindFlag::BitField initialLayout)
     {
+        assert(initialLayout != 0 && initialLayout != ~0u);
+
         auto existingRegistration = std::find_if(_doubleBufferAttachments.begin(), _doubleBufferAttachments.end(), [y=yesterdaySemantic, t=todaySemantic](const auto& q) { return q._yesterdaySemantic == y || q._todaySemantic == t; });
         if (existingRegistration != _doubleBufferAttachments.end())
             if (!MatchRequest(desc, existingRegistration->_desc) || initialLayout != existingRegistration->_initialLayout || yesterdaySemantic != existingRegistration->_yesterdaySemantic || todaySemantic != existingRegistration->_todaySemantic)
@@ -906,7 +910,7 @@ namespace RenderCore { namespace Techniques
                 Throw(std::runtime_error("Double buffer attachment description mismatch between an existing registered attachment and requested attachment"));
             if (existing->_pendingSwitchToLayout.value_or(existing->_currentLayout) != initialLayout)
                 Throw(std::runtime_error("Double buffer attachment layout mismatch between an existing registered attachment and requested attachment"));
-            
+
             // still need to record the request in _doubleBufferAttachments
             if (existingRegistration == _doubleBufferAttachments.end())
                 _doubleBufferAttachments.push_back({
@@ -961,6 +965,33 @@ namespace RenderCore { namespace Techniques
             result._entries.emplace_back(std::move(newEntry));
         }
         result.AddRefAll();
+        return result;
+    }
+
+    AttachmentReservation AttachmentReservation::CaptureAndRemoveDoubleBufferAttachments(IteratorRange<const uint64_t*> yesterdaySemantics)
+    {
+        AttachmentReservation result;
+        result._pool = _pool;
+        result._reservationFlags = _reservationFlags;
+        for (auto res=_doubleBufferAttachments.begin(); res!=_doubleBufferAttachments.end();) {
+            // filter in only the ones requested
+            if (std::find(yesterdaySemantics.begin(), yesterdaySemantics.end(), res->_yesterdaySemantic) == yesterdaySemantics.end()) {
+                ++res;
+                continue;
+            }
+
+            auto e = std::find_if(_entries.begin(), _entries.end(), [s=res->_yesterdaySemantic](const auto& q) { return q._semantic == s; });
+            if (e == _entries.end()) { ++res; continue; }      // didn't actually write out any information for this semantic
+            if (e->_pendingClear.has_value() || e->_currentLayout == 0) { ++res; continue; }
+
+            Entry newEntry = *e;
+            newEntry._semantic = res->_todaySemantic;        // flip the semantic
+            if (newEntry._pendingSwitchToLayout.has_value() || (newEntry._currentLayout != res->_initialLayout))
+                newEntry._pendingSwitchToLayout = res->_initialLayout;
+            result._entries.emplace_back(std::move(newEntry));
+            _entries.erase(e);
+            res = _doubleBufferAttachments.erase(res);
+        }
         return result;
     }
 
@@ -1115,11 +1146,7 @@ namespace RenderCore { namespace Techniques
     }
 
     AttachmentReservation::AttachmentReservation() = default;
-    
-    AttachmentReservation::AttachmentReservation(IAttachmentPool& pool) : _pool(&pool)
-    {
-    }
-
+    AttachmentReservation::AttachmentReservation(IAttachmentPool& pool) : _pool(&pool) {}
     AttachmentReservation::~AttachmentReservation()
     {
         ReleaseAll();
@@ -2717,9 +2744,11 @@ namespace RenderCore { namespace Techniques
                             debugInfo << att << std::endl;
                         auto debugInfoStr = debugInfo.str();
                         Log(Error) << "MergeFragments() failed. Details:" << std::endl << debugInfoStr << std::endl;
-                        Throw(::Exceptions::BasicLabel("Couldn't bind renderpass fragment input request. Details:\n%s\n", debugInfoStr.c_str()));
+                        std::stringstream str;
+                        str << "Renderpass fragment bind failed attempting to match: " << interfaceAttachment._matchingRules << ". Details follow: \n" << debugInfoStr;
+                        Throw(std::runtime_error(str.str()));
                     #else
-                        Throw(::Exceptions::BasicLabel("Couldn't bind renderpass fragment input request"));
+                        Throw(std::runtime_error("Couldn't bind renderpass fragment input request"));
                     #endif
                 }
 

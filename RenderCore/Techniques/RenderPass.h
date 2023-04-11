@@ -317,12 +317,14 @@ namespace RenderCore { namespace Techniques
             ClearValue defaultContents,
             BindFlag::BitField initialLayout);
         AttachmentReservation CaptureDoubleBufferAttachments();
+        AttachmentReservation CaptureAndRemoveDoubleBufferAttachments(IteratorRange<const uint64_t*> yesterdaySemantics);
 
         #if defined(_DEBUG)
             void ValidateVisibility(IThreadContext& threadContext);
         #endif
 
         IAttachmentPool& GetAttachmentPool() const { return *_pool; }
+        bool IsEmpty() const { return _entries.empty(); }
 
         AttachmentReservation();
         AttachmentReservation(IAttachmentPool& pool);
