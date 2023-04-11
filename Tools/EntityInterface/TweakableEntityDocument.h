@@ -5,7 +5,7 @@
 #pragma once
 
 #include "EntityInterface.h"
-#include "TweakableEntityDocumentInternal.h"
+#include "MinimalBindingEngine.h"
 #include <memory>
 
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
@@ -89,7 +89,14 @@ namespace EntityInterface
 		virtual ~IWidgetsLayoutFormatter();
 	};
 
-	class IDynamicOutputFormatter		// todo -- consider moving to Formatters namespace
+	using WriteToLayoutFormatter = std::function<void(IWidgetsLayoutFormatter&)>;
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateWidgetGroup(
+		std::shared_ptr<MinimalBindingEngine> doc,
+		WriteToLayoutFormatter&& layoutFn);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class IDynamicOutputFormatter
 	{
 	public:
 		using ElementId = unsigned;
@@ -118,18 +125,24 @@ namespace EntityInterface
 		virtual ~IDynamicOutputFormatter();
 	};
 
-	class MinimalBindingEngine;
-	class ITweakableDocumentInterface : public IEntityDocument
+	class IOutputFormatterWithDataBinding : public IDynamicOutputFormatter
 	{
 	public:
-		virtual void IncreaseValidationIndex() = 0;
-		virtual std::shared_ptr<MinimalBindingEngine> GetBindingEngine() = 0;
+		virtual void WriteKeyedModelValue(StringSection<> label) = 0;
+		virtual void WriteSequencedModelValue() = 0;
+		virtual MinimalBindingEngine& GetBindingEngine() = 0;
 	};
 
-	using WriteToModelFormatter = std::function<void(IDynamicOutputFormatter&)>;
-	std::shared_ptr<ITweakableDocumentInterface> CreateTweakableDocumentInterface(WriteToModelFormatter&& modelFn);
+	class MinimalBindingEngine;
+	class IEntityDocumentWithDataBinding : public IEntityDocument
+	{
+	public:
+		virtual void TestUpstreamValidationIndex() = 0;
+	};
 
-	using WriteToLayoutFormatter = std::function<void(IWidgetsLayoutFormatter&)>;
-	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateWidgetGroup(std::shared_ptr<ITweakableDocumentInterface> doc, WriteToLayoutFormatter&& layoutFn);
+	using WriteToDataBindingFormatter = std::function<void(IOutputFormatterWithDataBinding&)>;
+	std::shared_ptr<IEntityDocumentWithDataBinding> CreateEntityDocumentWithDataBinding(
+		std::shared_ptr<MinimalBindingEngine> bindingEngine,
+		WriteToDataBindingFormatter&& modelFn);
 }
 

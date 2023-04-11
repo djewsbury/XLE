@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "TweakableEntityDocument.h"
-#include "TweakableEntityDocumentInternal.h"
+#include "MinimalBindingEngine.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/LayoutEngine.h"
@@ -55,7 +55,7 @@ namespace EntityInterface
 		template<typename Type>
 			void WriteHalfDoubleTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& minValue, const V<Type>& maxValue)
 		{
-			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
 			
 			auto enabledByHierarchy = EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
@@ -91,7 +91,7 @@ namespace EntityInterface
 		template<typename Type>
 			void WriteDecrementIncrementTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& minValue, const V<Type>& maxValue)
 		{
-			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
 			
 			auto enabledByHierarchy = EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
@@ -137,7 +137,7 @@ namespace EntityInterface
 
 		void WriteHorizontalCombo(StringSection<> name, const V<int64_t>& modelValue, IteratorRange<const std::pair<int64_t, const char*>*> options) override
 		{
-			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
 			const auto lineHeight = baseLineHeight+4;
 
 			auto enabledByHierarchy = EnabledByHierarchy();
@@ -220,13 +220,13 @@ namespace EntityInterface
 			BeginCheckboxControl_Internal(name, modelValue, interactable);
 		}
 
-		void WriteCheckbox(StringSection<> name, const V<bool>& initialValue) override
+		void WriteCheckbox(StringSection<> name, const V<bool>& modelValue) override
 		{
-			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
 
 			auto enabledByHierarchy = EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
-				BeginCheckboxControl(name, initialValue, interactable);
+				BeginCheckboxControl(name, modelValue, interactable);
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
 					DeactivateButton(interactable);
 				_layoutEngine.PopNode();
@@ -294,7 +294,7 @@ namespace EntityInterface
 		template<typename Type>
 			void WriteBoundedTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& leftSideValue, const V<Type>& rightSideValue)
 		{
-			uint64_t interactable = _layoutEngine.GuidStack().MakeGuid(name);
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
 			const auto lineHeight = baseLineHeight+4;
 			
 			auto enabledByHierarchy = EnabledByHierarchy();
@@ -481,15 +481,6 @@ namespace EntityInterface
 
 		MinimalBindingEngine& GetBindingEngine() override { return *_state; }
 
-#if 0
-		// Stubs for TextOutputFormatter
-		ElementId BeginKeyedElement(StringSection<> name) override { return 0; }
-		ElementId BeginSequencedElement() override { return 0; }
-		void EndElement(ElementId) override {}
-		void WriteKeyedValue(StringSection<> name, StringSection<> value) override {}
-		void WriteSequencedValue(StringSection<> value) override {}
-#endif
-
 		LayedOutWidgets BuildLayedOutWidgets()
 		{
 			return _layoutEngine.BuildLayedOutWidgets();
@@ -508,8 +499,9 @@ namespace EntityInterface
 	public:
 		LayedOutWidgets _layedOutWidgets;
 		CommonWidgets::HoveringLayer _hoverings;
-		std::shared_ptr<ITweakableDocumentInterface> _docInterface;
+		std::shared_ptr<MinimalBindingEngine> _bindingEngine;
 		WriteToLayoutFormatter _layoutFn;
+		unsigned _lastBuiltLayoutValidationIndex = ~0u;
 
 		void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) override
 		{
@@ -517,14 +509,15 @@ namespace EntityInterface
 			container._topLeft += Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
 			container._bottomRight -= Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
 
-			if (_docInterface->GetBindingEngine()->IsLayoutInvalidated()) {
-				_docInterface->GetBindingEngine()->ResetLayout();
-				WidgetsLayoutFormatter formatter{_docInterface->GetBindingEngine()};
+			// rebuild the layout now if it's invalidated
+			if (_bindingEngine->GetLayoutValidationIndex() != _lastBuiltLayoutValidationIndex) {
+				WidgetsLayoutFormatter formatter { _bindingEngine };
 				formatter.BeginRoot({container.Width(), container.Height()});
 				_layoutFn(formatter);
 				formatter.EndRoot();
 
 				_layedOutWidgets = formatter.BuildLayedOutWidgets();
+				_lastBuiltLayoutValidationIndex = _bindingEngine->GetLayoutValidationIndex();
 			}
 
 			{
@@ -540,33 +533,17 @@ namespace EntityInterface
 
 		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override
 		{
-			ProcessInputResult pir = ProcessInputResult::Passthrough;
-			if (_docInterface->TryLock()) {
-				TRY {
-					PlatformRig::InputContext inputContext;
-					inputContext.AttachService2(_hoverings);
-					inputContext.AttachService2(interfaceState);
-					pir = _layedOutWidgets.ProcessInput(inputContext, input);
-					
-					if (_docInterface->GetBindingEngine()->IsModelInvalidated()) {
-						_docInterface->IncreaseValidationIndex();
-						_docInterface->GetBindingEngine()->ResetModel();
-					}
-				} CATCH(...) {
-					_docInterface->Unlock();
-					throw;
-				} CATCH_END
-				_docInterface->Unlock();
-			}
-
-			return pir;
+			PlatformRig::InputContext inputContext;
+			inputContext.AttachService2(_hoverings);
+			inputContext.AttachService2(interfaceState);
+			return _layedOutWidgets.ProcessInput(inputContext, input);
 		}
 
-		TweakerGroup(std::shared_ptr<ITweakableDocumentInterface> doc, WriteToLayoutFormatter&& layoutFn)
-		: _docInterface(std::move(doc)), _layoutFn(layoutFn) {}
+		TweakerGroup(std::shared_ptr<MinimalBindingEngine> bindingEngine, WriteToLayoutFormatter&& layoutFn)
+		: _bindingEngine(std::move(bindingEngine)), _layoutFn(layoutFn) {}
 	};
 
-	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateWidgetGroup(std::shared_ptr<ITweakableDocumentInterface> doc, WriteToLayoutFormatter&& layoutFn)
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateWidgetGroup(std::shared_ptr<MinimalBindingEngine> doc, WriteToLayoutFormatter&& layoutFn)
 	{
 		return std::make_shared<TweakerGroup>(doc, std::move(layoutFn));
 	}

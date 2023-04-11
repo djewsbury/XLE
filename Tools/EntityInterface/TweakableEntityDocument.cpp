@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "TweakableEntityDocument.h"
-#include "TweakableEntityDocumentInternal.h"
+#include "MinimalBindingEngine.h"
 #include "FormatterAdapters.h"
 #include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/AssetUtils.h"
@@ -18,154 +18,6 @@
 
 namespace EntityInterface
 {
-#if 0
-	class OutputStreamFormatterWithStubs : public IWidgetsLayoutFormatter
-	{
-	public:
-		void WriteHalfDoubleInt(StringSection<> name, int64_t initialValue, int64_t minValue, int64_t maxValue) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
-					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
-		}
-
-		void WriteHalfDoubleFloat(StringSection<> name, float initialValue, float minValue, float maxValue) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
-					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
-		}
-
-		void WriteDecrementIncrementInt(StringSection<> name, int64_t initialValue, int64_t minValue, int64_t maxValue) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
-					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
-		}
-
-		void WriteDecrementIncrementFloat(StringSection<> name, float initialValue, float minValue, float maxValue) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
-					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
-		}
-
-		void WriteBoundedInt(StringSection<> name, int64_t initialValue, int64_t leftSideValue, int64_t rightSideValue) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
-					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
-		}
-
-		void WriteBoundedFloat(StringSection<> name, float initialValue, float leftSideValue, float rightSideValue) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable))
-				if (auto str = _arbiterState->TryGetWorkingValueAsString(interactable))
-					_fmttr.WriteKeyedValue(AutoFormatName(name), *str);
-		}
-
-		void WriteHorizontalCombo(StringSection<> name, int64_t initialValue, IteratorRange<const std::pair<int64_t, const char*>*> options) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable)) {
-				if (auto v = _arbiterState->TryGetWorkingValue<int64_t>(interactable)) {
-					auto i = std::find_if(options.begin(), options.end(), [v=*v](const auto& c) { return c.first == v; });
-					if (i != options.end())
-						_fmttr.WriteKeyedValue(AutoFormatName(name), i->second);
-				}
-			}
-		}
-
-		void WriteCheckbox(StringSection<> name, bool initialValue) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			if (EnabledByHierarchy() == HierarchicalEnabledState::EnableChildren || _arbiterState->IsEnabled(interactable)) {
-				if (auto b = _arbiterState->TryGetWorkingValue<bool>(interactable))
-					_fmttr.WriteKeyedValue(AutoFormatName(name), *b ? "true" : "false");
-			}
-		}
-
-		virtual bool GetCheckbox(StringSection<> name, bool initialValue) override
-		{
-			uint64_t interactable = _guidStack.MakeGuid(name);
-			auto override = _arbiterState->TryGetWorkingValue<bool>(interactable);
-			return override ? override.value() : initialValue;
-		}
-
-		bool BeginCollapsingContainer(StringSection<> name) override
-		{
-			_guidStack.push(MakeGuid(name, "##collapsingcontainer"));
-			_hierarchicalEnabledStates.push_back(0);
-			return true;
-		}
-
-		void BeginContainer() override
-		{
-			auto containerGuid = MakeGuid("##container");
-			_guidStack.push(containerGuid);
-			_hierarchicalEnabledStates.push_back(containerGuid);
-		}
-
-		void EndContainer() override
-		{
-			_guidStack.pop();
-			_hierarchicalEnabledStates.pop_back();
-		}
-
-		HierarchicalEnabledState EnabledByHierarchy()
-		{
-			for (auto i=_hierarchicalEnabledStates.rbegin(); i!=_hierarchicalEnabledStates.rend(); ++i) {
-				if (*i != 0) {
-					auto state = _arbiterState->IsEnabled(*i);
-					return state ? HierarchicalEnabledState::EnableChildren : HierarchicalEnabledState::DisableChildren;
-				}
-			}
-			return HierarchicalEnabledState::NoImpact;
-		}
-
-		ElementId BeginKeyedElement(StringSection<> name) override { return _fmttr.BeginKeyedElement(name); }
-		ElementId BeginSequencedElement() override { return _fmttr.BeginSequencedElement(); }
-		void EndElement(ElementId id) override { _fmttr.EndElement(id); }
-
-		void WriteKeyedValue(StringSection<> name, StringSection<> value) override { _fmttr.WriteKeyedValue(name, value); }
-		void WriteSequencedValue(StringSection<> value) override { _fmttr.WriteSequencedValue(value); }
-
-		OutputStreamFormatterWithStubs(OutputStream& str, MinimalBindingEngine& bindingEngine) : _fmttr(str), _bindingEngine(&bindingEngine) {}
-	private:
-		RenderOverlays::GuidStackHelper _guidStack;
-		MinimalBindingEngine* _bindingEngine;
-		Formatters::TextOutputFormatter _fmttr;
-		std::vector<uint64_t> _hierarchicalEnabledStates;
-
-		uint64_t MakeGuid(StringSection<> name) { return Hash64(name, _guidStack.top()); }
-		uint64_t MakeGuid(StringSection<> name, StringSection<> concatenation) { return Hash64(name, Hash64(concatenation, _guidStack.top())); }
-
-		static std::string AutoFormatName(StringSection<> input)
-		{
-			// remove spaces, and ensure that the first character and each character after a space is a capital
-			if (input.IsEmpty()) return {};
-			std::string result;
-			result.reserve(input.size());
-			result.push_back(std::toupper(*input.begin()));
-			for (auto i=input.begin()+1; i!=input.end(); ++i) {
-				if (*i == ' ') {
-					while (*i == ' ' && i!=input.end()) ++i;
-					if (i==input.end()) break;
-					result.push_back(std::toupper(*i));
-				} else
-					result.push_back(*i);
-			}
-			return result;
-		}
-	};
-#endif
-
 	class FormatterRecording
 	{
 	public:
@@ -174,6 +26,8 @@ namespace EntityInterface
 			Formatters::FormatterBlob _type;
 			size_t _valueBegin = 0, _valueEnd = 0;
 			ImpliedTyping::TypeDesc _valueType;
+			uint64_t _bindingEngineId = 0ull;
+			bool _useBindingEngineId = false;
 		};
 		std::vector<Blob> _blobs;
 		std::vector<uint8_t> _data;
@@ -218,6 +72,25 @@ namespace EntityInterface
 			b._valueType = type;
 			_blobs.emplace_back(std::move(b));
 		}
+
+		void PushBindingEngineKeyedItem(uint64_t id, StringSection<> name)
+		{
+			Blob b { Formatters::FormatterBlob::KeyedItem };
+			b._valueBegin = _data.size();
+			b._valueEnd = b._valueBegin + name.size();
+			b._bindingEngineId = id;
+			b._useBindingEngineId = true;
+			_data.insert(_data.end(), name.begin(), name.end());
+			_blobs.emplace_back(std::move(b));
+		}
+
+		void PushBindingEngineValue(uint64_t id)
+		{
+			Blob b { Formatters::FormatterBlob::Value };
+			b._bindingEngineId = id;
+			b._useBindingEngineId = true;
+			_blobs.emplace_back(std::move(b));
+		}
 	};
 
 	class PlaybackFormatter : public Formatters::IDynamicInputFormatter
@@ -225,6 +98,8 @@ namespace EntityInterface
 	public:
 		Formatters::FormatterBlob PeekNext() override
 		{
+			while (_iterator != _recording->_blobs.end() && _iterator->_useBindingEngineId && !_bindingEngine->IsEnabled(_iterator->_bindingEngineId))
+				++_iterator;
 			if (_iterator == _recording->_blobs.end())
 				return Formatters::FormatterBlob::None;
 			return _iterator->_type;
@@ -267,16 +142,34 @@ namespace EntityInterface
 			return true;
 		}
 
+		void GetNextValueBlob(IteratorRange<const void*>& value, ImpliedTyping::TypeDesc& type)
+		{
+			assert(_iterator != _recording->_blobs.end() && _iterator->_type == Formatters::FormatterBlob::Value);
+			if (!_iterator->_useBindingEngineId) {
+				value = MakeIteratorRange(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd);
+				type = _iterator->_valueType;
+			} else {
+				assert(_bindingEngine->IsEnabled(_iterator->_bindingEngineId));
+				auto v = _bindingEngine->TryGetModelValue(_iterator->_bindingEngineId);
+				assert(v.has_value());
+				value = v->_data;
+				type = v->_type;
+			}
+		}
+
 		bool TryStringValue(StringSection<>& value) override
 		{
 			if (PeekNext() != Formatters::FormatterBlob::Value)
 				return false;
 
-			if (_iterator->_valueType._typeHint != ImpliedTyping::TypeHint::String
-				|| _iterator->_valueType._type != ImpliedTyping::TypeOf<char>()._type)
+			IteratorRange<const void*> rawValue; ImpliedTyping::TypeDesc rawType;
+			GetNextValueBlob(rawValue, rawType);
+
+			if (rawType._typeHint != ImpliedTyping::TypeHint::String
+				|| rawType._type != ImpliedTyping::TypeOf<char>()._type)
 				return false;
 
-			value = MakeStringSection(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd).Cast<char>();
+			value = MakeStringSection((const char*)rawValue.begin(), (const char*)rawValue.end());
 			++_iterator;
 			return true;
 		}
@@ -286,8 +179,7 @@ namespace EntityInterface
 			if (PeekNext() != Formatters::FormatterBlob::Value)
 				return false;
 
-			value = MakeIteratorRange(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd);
-			type = _iterator->_valueType;
+			GetNextValueBlob(value, type);
 			++_iterator;
 			return true;
 		}
@@ -297,8 +189,11 @@ namespace EntityInterface
 			if (PeekNext() != Formatters::FormatterBlob::Value)
 				return false;
 
-			auto srcValue = MakeIteratorRange(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd);
-			ImpliedTyping::Cast(destinationBuffer, type, srcValue, _iterator->_valueType);
+			IteratorRange<const void*> rawValue; ImpliedTyping::TypeDesc rawType;
+			GetNextValueBlob(rawValue, rawType);
+			if (!ImpliedTyping::Cast(destinationBuffer, type, rawValue, rawType))
+				return false;
+
 			++_iterator;
 			return true;
 		}
@@ -321,11 +216,15 @@ namespace EntityInterface
 			}
 		}
 
-        Formatters::StreamLocation GetLocation() const override { return {}; }
-        ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
+		Formatters::StreamLocation GetLocation() const override { return {}; }
+		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
-		PlaybackFormatter(std::shared_ptr<FormatterRecording> recording, ::Assets::DependencyValidation depVal)
+		PlaybackFormatter(
+			std::shared_ptr<FormatterRecording> recording,
+			std::shared_ptr<MinimalBindingEngine> bindingEngine,
+			::Assets::DependencyValidation depVal)
 		: _recording(std::move(recording))
+		, _bindingEngine(std::move(bindingEngine))
 		, _depVal(std::move(depVal))
 		{
 			_iterator = _recording->_blobs.begin();
@@ -333,10 +232,11 @@ namespace EntityInterface
 
 		std::shared_ptr<FormatterRecording> _recording;
 		std::vector<FormatterRecording::Blob>::iterator _iterator;
+		std::shared_ptr<MinimalBindingEngine> _bindingEngine;
 		::Assets::DependencyValidation _depVal;
 	};
 
-	class FormatToMinimalBindingEngine : public IDynamicOutputFormatter
+	class FormatToMinimalBindingEngine : public IOutputFormatterWithDataBinding
 	{
 	public:
 		ElementId BeginKeyedElement(StringSection<> label) override
@@ -379,51 +279,36 @@ namespace EntityInterface
 
 		void WriteKeyedValue(StringSection<> label, StringSection<> value) override
 		{
-			auto id = _stackFrames.empty() ? DefaultSeed64 : _stackFrames.back()._id;
-			id = Hash64(label, id);
-
 			_recording->PushKeyedItem(label);
-			if (auto mirrorValue = _bindingEngine->TryGetModelValue(id)) {
-				_recording->PushRawValue(mirrorValue->_data, mirrorValue->_type);
-			} else {
-				_bindingEngine->SetModelValue(id, value);
-				_recording->PushStringValue(value);
-			}
+			_recording->PushStringValue(value);
 		}
 
 		void WriteSequencedValue(StringSection<> value) override
 		{
-			uint64_t id;
-			if (!_stackFrames.empty()) {
-				auto sequenceElementIdx = _stackFrames.back()._sequencedElementCounter++;
-				id = HashCombine(sequenceElementIdx, _stackFrames.back()._id);
-			} else {
-				id = _rootSequencedElementCounter++;
-			}
-
-			if (auto mirrorValue = _bindingEngine->TryGetModelValue(id)) {
-				_recording->PushRawValue(mirrorValue->_data, mirrorValue->_type);
-			} else {
-				_bindingEngine->SetModelValue(id, value);
-				_recording->PushStringValue(value);
-			}
+			_recording->PushStringValue(value);
 		}
 
 		void WriteKeyedValue(StringSection<> label, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override
 		{
-			auto id = _stackFrames.empty() ? DefaultSeed64 : _stackFrames.back()._id;
-			id = Hash64(label, id);
-
 			_recording->PushKeyedItem(label);
-			if (auto mirrorValue = _bindingEngine->TryGetModelValue(id)) {
-				_recording->PushRawValue(mirrorValue->_data, mirrorValue->_type);
-			} else {
-				_bindingEngine->SetModelValue(id, data, type);
-				_recording->PushRawValue(data, type);
-			}
+			_recording->PushRawValue(data, type);
 		}
 
 		void WriteSequencedValue(IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) override
+		{
+			_recording->PushRawValue(data, type);
+		}
+
+		void WriteKeyedModelValue(StringSection<> label) override
+		{
+			auto id = _stackFrames.empty() ? DefaultSeed64 : _stackFrames.back()._id;
+			id = Hash64(label, id);
+
+			_recording->PushBindingEngineKeyedItem(id, label);
+			_recording->PushBindingEngineValue(id);
+		}
+
+		void WriteSequencedModelValue() override
 		{
 			uint64_t id;
 			if (!_stackFrames.empty()) {
@@ -433,13 +318,10 @@ namespace EntityInterface
 				id = _rootSequencedElementCounter++;
 			}
 
-			if (auto mirrorValue = _bindingEngine->TryGetModelValue(id)) {
-				_recording->PushRawValue(mirrorValue->_data, mirrorValue->_type);
-			} else {
-				_bindingEngine->SetModelValue(id, data, type);
-				_recording->PushRawValue(data, type);
-			}
+			_recording->PushBindingEngineValue(id);
 		}
+
+		MinimalBindingEngine& GetBindingEngine() override { return *_bindingEngine; }
 
 		FormatToMinimalBindingEngine(MinimalBindingEngine& bindingEngine)
 		: _bindingEngine(&bindingEngine)
@@ -464,16 +346,22 @@ namespace EntityInterface
 		unsigned _rootSequencedElementCounter = 0;
 	};
 
-	class TweakableDocumentInterface : public ITweakableDocumentInterface
+	class EntityDocumentWithDataBinding : public IEntityDocumentWithDataBinding
 	{
 	public:
-		std::shared_ptr<MinimalBindingEngine> _bindingEngine = std::make_shared<MinimalBindingEngine>();
+		std::shared_ptr<MinimalBindingEngine> _bindingEngine;
 		Threading::Mutex _readMutex;
 		std::unique_lock<Threading::Mutex> _lock;
 		::Assets::DependencyValidation _depVal;
+		unsigned _lastUpstreamModelValidationIndex = 0;
 
-		void IncreaseValidationIndex() override { _depVal.IncreaseValidationIndex(); }
-		std::shared_ptr<MinimalBindingEngine> GetBindingEngine() override { return _bindingEngine; }
+		void TestUpstreamValidationIndex() override 
+		{ 
+			if (_bindingEngine->GetModelValidationIndex() != _lastUpstreamModelValidationIndex) {
+				_lastUpstreamModelValidationIndex = _bindingEngine->GetModelValidationIndex();
+				_depVal.IncreaseValidationIndex();
+			}
+		}
 
 		virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> internalPoint) override
 		{
@@ -482,7 +370,7 @@ namespace EntityInterface
 
 			std::promise<std::shared_ptr<Formatters::IDynamicInputFormatter>> promise;
 			auto result = promise.get_future();
-			promise.set_value(std::make_shared<PlaybackFormatter>(fmttr._recording, _depVal));
+			promise.set_value(std::make_shared<PlaybackFormatter>(fmttr._recording, _bindingEngine, _depVal));
 			return result;
 		}
 
@@ -498,18 +386,21 @@ namespace EntityInterface
 		}
 		virtual void Unlock() override { _lock = {}; }
 
-		TweakableDocumentInterface(WriteToModelFormatter&& modelFn)
-		: _modelFunction(std::move(modelFn))
+		EntityDocumentWithDataBinding(std::shared_ptr<MinimalBindingEngine> bindingEngine, WriteToDataBindingFormatter&& modelFn)
+		: _bindingEngine(std::move(bindingEngine))
+		, _modelFunction(std::move(modelFn))
 		{
 			_depVal = ::Assets::GetDepValSys().Make();
 		}
 
-		WriteToModelFormatter _modelFunction;
+		WriteToDataBindingFormatter _modelFunction;
 	};
 
-	std::shared_ptr<ITweakableDocumentInterface> CreateTweakableDocumentInterface(WriteToModelFormatter&& modelFn)
+	std::shared_ptr<IEntityDocumentWithDataBinding> CreateEntityDocumentWithDataBinding(
+		std::shared_ptr<MinimalBindingEngine> bindingEngine,
+		WriteToDataBindingFormatter&& modelFn)
 	{
-		return std::make_shared<TweakableDocumentInterface>(std::move(modelFn));
+		return std::make_shared<EntityDocumentWithDataBinding>(std::move(bindingEngine), std::move(modelFn));
 	}
 
 	IDynamicOutputFormatter::~IDynamicOutputFormatter() = default;

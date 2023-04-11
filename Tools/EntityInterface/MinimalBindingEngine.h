@@ -74,12 +74,12 @@ namespace EntityInterface
 
 		void ToggleEnable(uint64_t id)
 		{
-			auto i = _enabledTweakables.find(id);
-			if (i == _enabledTweakables.end()) _enabledTweakables.insert(id);
-			else _enabledTweakables.erase(i);
+			auto i = _enabledModelValues.find(id);
+			if (i == _enabledModelValues.end()) _enabledModelValues.insert(id);
+			else _enabledModelValues.erase(i);
 		}
 
-		bool IsEnabled(uint64_t id) const { return _enabledTweakables.find(id) != _enabledTweakables.end(); }
+		bool IsEnabled(uint64_t id) const { return _enabledModelValues.find(id) != _enabledModelValues.end(); }
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -123,6 +123,14 @@ namespace EntityInterface
 			return { MinimalBindingValueType::Model, id, *this };
 		}
 
+		template<typename Type>
+			MinimalBindingValue<Type> ModelValue(uint64_t id, Type defaultValue)
+		{
+			if (!_modelMirrorValues.HasParameter(id))
+				SetModelValue(id, MakeOpaqueIteratorRange(defaultValue), ImpliedTyping::TypeOf<Type>());
+			return { MinimalBindingValueType::Model, id, *this };
+		}
+
 		void SetModelValue(uint64_t id, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
 		{
 			_modelMirrorValues.SetParameter(id, data, type);
@@ -138,6 +146,9 @@ namespace EntityInterface
 
 		std::optional<ImpliedTyping::VariantNonRetained> TryGetModelValue(uint64_t id)
 		{
+			if (_enabledModelValues.find(id) == _enabledModelValues.end())
+				return {};
+
 			auto type = _modelMirrorValues.GetParameterType(id);
 			if (type._type == ImpliedTyping::TypeCat::Void)
 				return {};
@@ -147,22 +158,20 @@ namespace EntityInterface
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
-		void InvalidateModel() { _modelInvalidated = true; }
-		void InvalidateLayout() { _layoutInvalidated = true; }
-		void ResetModel() { _modelInvalidated = false; }
-		void ResetLayout() { _layoutInvalidated = false;}
-		bool IsModelInvalidated() const { return _modelInvalidated; }
-		bool IsLayoutInvalidated() const { return _layoutInvalidated; }
+		void InvalidateModel() { ++_modelValidationIndex; }
+		void InvalidateLayout() { ++_layoutValidationIndex; }
+		unsigned GetModelValidationIndex() const { return _modelValidationIndex; }
+		unsigned GetLayoutValidationIndex() const { return _layoutValidationIndex; }
 
 	private:
-		std::set<uint64_t> _enabledTweakables;
 		ParameterBox _viewAttachedValues;
 
 		ParameterBox _modelMirrorValues;
-		std::set<uint64_t> _layoutInvalidatingValues;
+		std::set<uint64_t> _layoutInvalidatingModelValues;
+		std::set<uint64_t> _enabledModelValues;
 
-		bool _modelInvalidated = true;
-		bool _layoutInvalidated = true;
+		unsigned _modelValidationIndex = 0;
+		unsigned _layoutValidationIndex = 0;
 
 		template<typename T> friend class MinimalBindingValue;
 	};
@@ -234,9 +243,9 @@ namespace EntityInterface
 		case MinimalBindingValueType::Model:
 			assert(_container);
 			_container->_modelMirrorValues.SetParameter(_id, newValue);
-			if (_container->_layoutInvalidatingValues.find(_id) != _container->_layoutInvalidatingValues.end())
-				_container->_layoutInvalidated = true;
-			_container->_modelInvalidated = true;
+			if (_container->_layoutInvalidatingModelValues.find(_id) != _container->_layoutInvalidatingModelValues.end())
+				++_container->_layoutValidationIndex;
+			++_container->_modelValidationIndex;
 			break;
 
 		case MinimalBindingValueType::ViewAttached:
