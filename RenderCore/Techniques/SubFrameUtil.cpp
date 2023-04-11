@@ -5,13 +5,16 @@
 #include "SubFrameUtil.h"
 #include "../DeviceInitialization.h"
 #include "../Metal/DeviceContext.h"
+#include "../Vulkan/Metal/ObjectFactory.h"		// for IAsyncTracker
 #include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques
 {
+	static_assert(std::is_same_v<AsyncTrackerMarker, Metal_Vulkan::IAsyncTracker::Marker>, "AsyncTrackerMarker type out of sync with metal equivalent");
 
 	IDescriptorSet* SubFrameDescriptorSetHeap::Allocate()
 	{
+		DEBUG_ONLY(ScopedAssertExclusivity(_lock));
 		auto nextItem = _trackerHeap.GetNextFreeItem();
 		if (nextItem >= _descriptorSetPool.size()) {
 			// _trackerHeap allocated a new page -- we need to resize the pool of descriptor sets
@@ -42,8 +45,31 @@ namespace RenderCore { namespace Techniques
 
 	SubFrameDescriptorSetHeap::SubFrameDescriptorSetHeap() = default;
 	SubFrameDescriptorSetHeap::~SubFrameDescriptorSetHeap() = default;
-	SubFrameDescriptorSetHeap::SubFrameDescriptorSetHeap(SubFrameDescriptorSetHeap&&) = default;
-	SubFrameDescriptorSetHeap& SubFrameDescriptorSetHeap::operator=(SubFrameDescriptorSetHeap&&) = default;
+	SubFrameDescriptorSetHeap::SubFrameDescriptorSetHeap(SubFrameDescriptorSetHeap&& moveFrom)
+	: _trackerHeap(std::move(moveFrom._trackerHeap))
+	, _descriptorSetPool(std::move(moveFrom._descriptorSetPool))
+	, _signature(std::move(moveFrom._signature))
+	, _pipelineType(moveFrom._pipelineType)
+	, _device(moveFrom._device)
+	, _name(std::move(moveFrom._name))
+	{
+		moveFrom._device = nullptr;
+	}
+
+	SubFrameDescriptorSetHeap& SubFrameDescriptorSetHeap::operator=(SubFrameDescriptorSetHeap&& moveFrom)
+	{
+		if (&moveFrom == this)
+			return *this;
+
+		_trackerHeap = std::move(moveFrom._trackerHeap);
+		_descriptorSetPool = std::move(moveFrom._descriptorSetPool);
+		_signature = std::move(moveFrom._signature);
+		_pipelineType = moveFrom._pipelineType;
+		_device = moveFrom._device;
+		_name = std::move(moveFrom._name);
+		moveFrom._device = nullptr;
+		return *this;
+	}
 
 
 	void WriteWithSubframeImmediates(IThreadContext& threadContext, IDescriptorSet& descriptorSet, const DescriptorSetInitializer& initializer)
@@ -92,7 +118,9 @@ namespace RenderCore { namespace Techniques
 		newInitializer._bindItems._immediateData = {};
 		newInitializer._slotBindings = MakeIteratorRange(newBindings, &newBindings[initializer._slotBindings.size()]);
 
-		descriptorSet.Write(newInitializer);
+		// Don't retain views because this descriptor set is only valid to use in the command list in metalContext, so retaining the views
+		// serves no purpose
+		descriptorSet.Write(newInitializer, IDescriptorSet::WriteFlags::DontRetainViews|IDescriptorSet::WriteFlags::RestrictToCommandList, &threadContext);
 	}
 
 }}

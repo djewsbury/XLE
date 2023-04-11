@@ -4,14 +4,18 @@
 
 #include "../IDevice.h"
 #include "../Vulkan/IDeviceVulkan.h"
-#include "../Vulkan/Metal/ObjectFactory.h"		// for Metal_Vulkan::IAsyncTracker
 #include "../../Utility/HeapUtils.h"
-#include "../Utility/MemoryUtils.h"
+#include "../../Utility/MemoryUtils.h"
+#include "../../Utility/Threading/Mutex.h"
 #include <vector>
 #include <memory>
 
+namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; }}
+
 namespace RenderCore { namespace Techniques
 {
+	using AsyncTrackerMarker = unsigned;
+
 	template<unsigned PageSize>
 		class GPUTrackerHeap
 	{
@@ -66,7 +70,7 @@ namespace RenderCore { namespace Techniques
 
 		struct Page
 		{
-			CircularBuffer<std::pair<Metal_Vulkan::IAsyncTracker::Marker, unsigned>, PageSize> _allocatedItems;
+			CircularBuffer<std::pair<AsyncTrackerMarker, unsigned>, PageSize> _allocatedItems;
 			CircularBuffer<unsigned, PageSize> _freeItems;
 
 			Page()
@@ -107,6 +111,10 @@ namespace RenderCore { namespace Techniques
 		PipelineType _pipelineType;
 		IDevice* _device = nullptr;
 		std::string _name;
+
+		#if defined(_DEBUG)
+			mutable Threading::RecursiveMutex _lock;
+		#endif
 	};
 
 	// Writes new values to a descriptor set, but uses cmd list bound storage for all "immediate" initializers
