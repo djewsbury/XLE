@@ -265,13 +265,24 @@ namespace Formatters
 	template<typename EnumType, std::optional<EnumType> StringToEnum(StringSection<>), typename Formatter>
 		EnumType RequireEnum(Formatter& formatter)
 	{
-		typename Formatter::InteriorSection value;
-		if (!formatter.TryStringValue(value))
+		if (typename Formatter::InteriorSection value; formatter.TryStringValue(value)) {
+			auto result = StringToEnum(value);
+			if (!result.has_value())
+				Throw(FormatException(StringMeld<256>() << "Could not interpret (" << value << ") as (" << typeid(EnumType).name() << ")", formatter.GetLocation()));
+			return result.value();
+		} else if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasTryCastValue) {
+			std::underlying_type_t<EnumType> result = 0;
+			if (!formatter.TryCastValue(MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<decltype(result)>()))
+				Throw(FormatException(StringMeld<256>() << "Expecting value of type " << typeid(EnumType).name(), formatter.GetLocation()));
+			return (EnumType)result;
+		} else if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+			IteratorRange<const void*> value;
+			Utility::ImpliedTyping::TypeDesc typeDesc;
+			if (!formatter.TryRawValue(value, typeDesc))
+				Throw(FormatException(StringMeld<256>() << "Expecting value of type " << typeid(EnumType).name(), formatter.GetLocation()));
+			return Utility::ImpliedTyping::VariantNonRetained{typeDesc, value, ReversedEndian(formatter)}.RequireCastValue<std::underlying_type_t<EnumType>>();
+		} else
 			Throw(FormatException("Expecting value", formatter.GetLocation()));
-		auto result = StringToEnum(value);
-		if (!result.has_value())
-			Throw(FormatException(StringMeld<256>() << "Could not interpret (" << value << ") as (" << typeid(EnumType).name() << ")", formatter.GetLocation()));
-		return result.value();
 	}
 
 	template<typename Formatter>
