@@ -63,6 +63,7 @@ namespace RenderOverlays
 		Techniques::ImmediateDrawableMaterial material;
 		material._stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::WriteMask;
 		material._stateSet._writeMask = 0;		// disable depth read & write
+		material._hash = material._stateSet.GetHash();
 		auto workingVertices = overlayContext.GetImmediateDrawables().QueueDraw(
 			vertexCount, MakeIteratorRange(s_vertexInputLayout), 
 			material, Topology::TriangleList).Cast<VisVertex_PC*>();

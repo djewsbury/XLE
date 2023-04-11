@@ -952,14 +952,17 @@ namespace RenderOverlays { namespace DebuggingDisplay
             const RenderCore::Assets::ResolvedMaterial& rawMat)
         {
             RenderCore::Techniques::ImmediateDrawableMaterial result;
+            result._stateSet = rawMat._stateSet;
+            result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
+            result._hash = HashCombine(result._stateSet.GetHash(), result._patchCollection->GetHash());
+
             // somewhat awkwardly, we need to protect the lifetime of the shader selector box so it lives as long as the result
             if (rawMat._selectors.GetCount() != 0) {
                 auto newBox = std::make_unique<ParameterBox>(rawMat._selectors);
                 result._shaderSelectors = newBox.get();
+                result._hash = HashCombine(newBox->GetHash(), result._hash);
                 _retainedParameterBoxes.emplace_back(std::move(newBox));
             }
-            result._stateSet = rawMat._stateSet;
-            result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
             return result;
         }
     };

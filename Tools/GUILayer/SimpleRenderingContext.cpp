@@ -166,11 +166,13 @@ namespace GUILayer
 
         RenderCore::Techniques::ImmediateDrawableMaterial currentState;
         currentState._uniformStreamInterface = _mainUniformsInterface.get();
-        currentState._uniforms._immediateData.push_back(
-            RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld)));
+        auto localTransformPkt = RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld))
         // We're repurposing this flag for depth write disable
         currentState._stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::WriteMask;
         currentState._stateSet._writeMask = (unsigned(_depthTestEnable)<<1u) | unsigned(_depthWriteEnable);
+        currentState._hash = Hash64(localTransformPkt.begin(), localTransformPkt.end(), currentState._uniformStreamInterface->GetHash());
+        currentState._hash = HashCombine(currentState._stateSet.GetHash(), currentState._hash);
+        currentState._uniforms._immediateData.push_back(std::move(localTransformPkt));
         _immediateDrawables->QueueDraw(
             vertexCount, startVertex,
             geo,
@@ -209,11 +211,13 @@ namespace GUILayer
 
         RenderCore::Techniques::ImmediateDrawableMaterial currentState;
         currentState._uniformStreamInterface = _mainUniformsInterface.get();
-        currentState._uniforms._immediateData.push_back(
-            RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld)));
+        auto localTransformPkt = RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld))
         // We're repurposing this flag for depth write disable
         currentState._stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::WriteMask;
         currentState._stateSet._writeMask = (unsigned(_depthTestEnable)<<1u) | unsigned(_depthWriteEnable);
+        currentState._hash = Hash64(localTransformPkt.begin(), localTransformPkt.end(), currentState._uniformStreamInterface->GetHash());
+        currentState._hash = HashCombine(currentState._stateSet.GetHash(), currentState._hash);
+        currentState._uniforms._immediateData.push_back(std::move(localTransformPkt));
         _immediateDrawables->QueueDraw(
             indexCount, startIndex,
             geo,

@@ -41,6 +41,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _vertexCount = 0, _vertexStride = 0, _vertexStartLocation = 0, _bytesAllocated = 0;
 		DEBUG_ONLY(bool _userGeo = false;)
 		RetainedUniformsStream _uniforms;
+		uint64_t _matHash = ~0ull;
 
 		static void ExecuteFn(ParsingContext&, const ExecuteDrawableContext& drawContext, const Drawable& drawable)
 		{
@@ -99,14 +100,17 @@ namespace RenderCore { namespace Techniques
 				    _lastQueuedDrawable && _lastQueuedDrawable->_pipeline == pipeline && _lastQueuedDrawable->_vertexStride == vStride
 				&& topology != Topology::TriangleStrip
 				&& topology != Topology::LineStrip
+				&& material._combinable
 				;
-			auto matUSIHash = material._uniformStreamInterface ? material._uniformStreamInterface->GetHash() : 0;
-			if (compatibleWithLastDraw) {
-				if (matUSIHash) {
-					compatibleWithLastDraw &= _lastQueuedDrawable->_looseUniformsInterface && (matUSIHash == _lastQueuedDrawable->_looseUniformsInterface->GetHash());
-				} else
-					compatibleWithLastDraw &= _lastQueuedDrawable->_looseUniformsInterface == nullptr;
-			}
+			assert(material._hash != ~0ull);	// used as a sentinel for non-combinable materials
+			#if defined(_DEBUG)
+				static const auto s_emptyRenderStateHash = RenderCore::Assets::RenderStateSet{}.GetHash();
+				// material._hash should be filled in for anything with material settings (unless it's marked as non-combinable)
+				assert((!material._uniformStreamInterface && !material._shaderSelectors && material._stateSet.GetHash() == s_emptyRenderStateHash && !material._patchCollection) || !material._combinable || material._hash != 0ull);
+			#endif
+			if (compatibleWithLastDraw)
+				compatibleWithLastDraw &= _lastQueuedDrawable->_matHash == material._hash;
+
 			if (compatibleWithLastDraw) {
 				_lastQueuedDrawVertexCountOffset = _lastQueuedDrawable->_vertexCount;
 				return UpdateLastDrawCallVertexCount(vertexCount);
@@ -126,7 +130,7 @@ namespace RenderCore { namespace Techniques
 				drawable->_vertexStride = vStride;
 				drawable->_bytesAllocated = (unsigned)vertexDataSize;
 				drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
-				if (matUSIHash) {
+				if (material._uniformStreamInterface) {
 					drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 					drawable->_uniforms = material._uniforms;
 				}

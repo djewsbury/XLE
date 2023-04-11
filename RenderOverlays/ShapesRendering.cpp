@@ -17,6 +17,7 @@
 #include "../RenderCore/Assets/RawMaterial.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/UniformsStream.h"
+#include "../RenderCore/IDevice.h"
 #include "../Tools/EntityInterface/MountedData.h"
 #include "../Formatters/IDynamicFormatter.h"
 #include "../Formatters/FormatterUtils.h"
@@ -148,14 +149,17 @@ namespace RenderOverlays
             const RenderCore::Assets::ResolvedMaterial& rawMat)
         {
             RenderCore::Techniques::ImmediateDrawableMaterial result;
+            result._stateSet = rawMat._stateSet;
+            result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
+            result._hash = HashCombine(result._stateSet.GetHash(), result._patchCollection->GetHash());
+
             // somewhat awkwardly, we need to protect the lifetime of the shader selector box so it lives as long as the result
             if (rawMat._selectors.GetCount() != 0) {
                 auto newBox = std::make_unique<ParameterBox>(rawMat._selectors);
                 result._shaderSelectors = newBox.get();
+                result._hash = HashCombine(newBox->GetHash(), result._hash);
                 _retainedParameterBoxes.emplace_back(std::move(newBox));
             }
-            result._stateSet = rawMat._stateSet;
-            result._patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(rawMat._patchCollection);
             return result;
         }
     };
@@ -215,6 +219,14 @@ namespace RenderOverlays
         }
     }
 
+    static unsigned int FloatBits(float input)
+    {
+            // (or just use a reinterpret cast)
+        union Converter { float f; unsigned int i; };
+        Converter c; c.f = input; 
+        return c.i;
+    }
+
     void OutlineEllipse(IOverlayContext& context, const Rect& rect, ColorB colour, float outlineWidth)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
@@ -225,6 +237,7 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineEllipse;
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
+        mat._hash ^= FloatBits(outlineWidth);
 
         Internal::DrawPCCTTQuad(
             context,
@@ -247,6 +260,7 @@ namespace RenderOverlays
         const float borderWidthPix = 1.f;
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillEllipse;
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidthPix }));
+        mat._hash ^= FloatBits(borderWidthPix);
         
         Internal::DrawPCCTTQuad(
             context,
@@ -273,6 +287,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { width }));
+        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(width) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -299,6 +314,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
+        mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -326,6 +342,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidth }));
+        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(borderWidth) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -352,6 +369,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
+        mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -378,6 +396,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillReverseRaisedRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
+        mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -482,6 +501,8 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillColorAdjust;
+        mat._hash = Hash64(&colorAdjust, &colorAdjust+1, mat._hash);
+        mat._hash = tex ? HashCombine(tex->GetResource()->GetGUID(), mat._hash) : mat._hash;
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
         mat._uniforms._resourceViews.emplace_back(std::move(tex));
         Internal::DrawPCCTTQuad(
@@ -509,6 +530,9 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_colorAdjustAndOutlineRoundedRect;
+        mat._hash = Hash64(&colorAdjust, &colorAdjust+1, mat._hash);
+        mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags ^ FloatBits(outlineWidth);
+        mat._hash = tex ? HashCombine(tex->GetResource()->GetGUID(), mat._hash) : mat._hash;
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
@@ -746,6 +770,7 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
         mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
+        mat._hash = ~mat._hash;
 
         const unsigned joinsVertices = 9*2;
         auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
@@ -763,6 +788,7 @@ namespace RenderOverlays
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_solidNoBorder;
         mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
+        mat._hash = ~mat._hash;
 
         const unsigned joinsVertices = 9*2;
         auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();

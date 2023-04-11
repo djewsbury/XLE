@@ -164,6 +164,7 @@ namespace RenderOverlays
 		material._uniformStreamInterface = &s_fontResourceUSI;
 		material._stateSet = RenderCore::Assets::RenderStateSet{};
 		material._shaderSelectors = &s_fontRendererSelectorBoxFontResource;
+		material._hash = HashCombine(s_fontResourceUSI.GetHash(), s_fontRendererSelectorBoxFontResource.GetHash());
 		return material;
 	}
 
@@ -296,6 +297,7 @@ namespace RenderOverlays
 		material._uniformStreamInterface = &s_inputTextureUSI;
 		material._stateSet = RenderCore::Assets::RenderStateSet{};
 		material._shaderSelectors = &s_fontRendererSelectorBox;
+		material._hash = HashCombine(s_fontResourceUSI.GetHash(), s_fontRendererSelectorBoxFontResource.GetHash());
 		return material;
 	}
 

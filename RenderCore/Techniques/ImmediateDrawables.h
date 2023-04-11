@@ -46,6 +46,11 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox* _shaderSelectors = nullptr;
 		RenderCore::Assets::RenderStateSet _stateSet;
 		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _patchCollection;
+
+		// When _combinable is true, _hash must be filled in by caller
+		// it is used to compare materials to know when sequential draw calls can be combined
+		uint64_t _hash = 0ull;	
+		bool _combinable = true;
 	};
 
 	class IImmediateDrawables

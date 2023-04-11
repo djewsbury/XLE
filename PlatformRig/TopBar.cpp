@@ -10,6 +10,7 @@
 #include "../RenderOverlays/OverlayEffects.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/UniformsStream.h"
+#include "../RenderCore/IDevice.h"
 #include "../Tools/EntityInterface/MountedData.h"
 #include <vector>
 
@@ -135,6 +136,7 @@ namespace PlatformRig
 		RenderCore::Techniques::ImmediateDrawableMaterial material;
 		if ((blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()))
 			if (auto res = blurryBackground->GetResourceView()) {
+				material._hash = HashCombine(s_texturedUSI.GetHash(), res->GetResource()->GetGUID());
 				material._uniformStreamInterface = &s_texturedUSI;
 				material._uniforms._resourceViews.push_back(std::move(res));
 			}
@@ -194,6 +196,7 @@ namespace PlatformRig
 		RenderCore::Techniques::ImmediateDrawableMaterial material;
 		if ((blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()))
 			if (auto res = blurryBackground->GetResourceView()) {
+				material._hash = HashCombine(s_texturedUSI.GetHash(), res->GetResource()->GetGUID());
 				material._uniformStreamInterface = &s_texturedUSI;
 				material._uniforms._resourceViews.push_back(std::move(res));
 			}

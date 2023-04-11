@@ -254,6 +254,7 @@ namespace RenderOverlays
 		result._stateSet._forwardBlendOp = BlendOp::Add;
 		result._stateSet._flag = RenderCore::Assets::RenderStateSet::Flag::ForwardBlend | RenderCore::Assets::RenderStateSet::Flag::WriteMask;
 		result._stateSet._writeMask = 1<<1;		// repurposed -- bit 0 is depth write; bit 1 is depth read
+		result._hash = result._stateSet.GetHash();
 		return result;
 	}
 
@@ -265,6 +266,7 @@ namespace RenderOverlays
 		if (drawCall._textureResource) {
 			mat._uniformStreamInterface = _texturedUSI.get();
 			mat._uniforms._resourceViews.push_back(drawCall._textureResource);
+			mat._hash = HashCombine(_texturedUSI->GetHash() + drawCall._textureResource->GetResource()->GetGUID(), mat._hash);
 		}
 
 		return _immediateDrawables->QueueDraw(
