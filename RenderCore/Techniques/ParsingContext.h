@@ -58,6 +58,19 @@ namespace RenderCore { namespace Techniques
         TechniqueContext&		GetTechniqueContext()               { return *_techniqueContext; }
 		ParameterBox&			GetSubframeShaderSelectors()		{ return _subframeShaderSelectors; }
 
+        /// <summary>Clone a new ParsingContext that can be modified without effecting the original "this"</summary>
+        /// Returns a new ParsingContext, with cloned members.
+        ///
+        /// This is typically used when beginning a render to an offscreen target (or perhaps some compute shader
+        /// operation separate from the main rendering operation). In these cases, we need an isolated AttachmentReservation,
+        /// which can be helpful to manage attachment lifetimes separately, or to just rebind attachment semantics.
+        ///
+        /// "this" must outlive the forked ParsingContext. Any changes made to the forked parsing context will *not*
+        /// propagate back to "this".
+        ///
+        /// The members of "TechniqueContext" are global pools, and are not shared (ie, they do not get cloned).
+        ParsingContext Fork();
+
         const std::shared_ptr<IUniformDelegateManager>& GetUniformDelegateManager() { return _uniformDelegateManager; }
         void SetUniformDelegateManager(std::shared_ptr<IUniformDelegateManager> newMan) { _uniformDelegateManager = std::move(newMan); }
 
@@ -78,6 +91,7 @@ namespace RenderCore { namespace Techniques
         FrameBufferProperties& GetFrameBufferProperties();
         void BindAttachment(uint64_t semantic, std::shared_ptr<IResource>, bool isInitialized, BindFlags::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});      // set initialLayout=~0u for never initialized
         void BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain>, BindFlags::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});
+        AttachmentReservation SwapAttachmentReservation(AttachmentReservation&&);
 
 			//  ----------------- Overlays for late rendering -----------------
         typedef std::function<void(ParsingContext&)> PendingOverlay;
@@ -122,6 +136,8 @@ namespace RenderCore { namespace Techniques
 
 		ParameterBox                        _subframeShaderSelectors;
         VisibilityMarkerId                  _pipelineAcceleratorsVisibility;
+
+        ParsingContext();
     };
 
     /// <summary>Utility macros for catching asset exceptions</summary>

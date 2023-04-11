@@ -73,6 +73,9 @@ namespace RenderCore { namespace Techniques
 
         virtual const UniformsStreamInterface& GetInterfaceGraphics() = 0;
         virtual const UniformsStreamInterface& GetInterfaceCompute() = 0;
+
+        virtual std::unique_ptr<IUniformDelegateManager> Fork() = 0;
+
         virtual ~IUniformDelegateManager();
     };
 

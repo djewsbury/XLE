@@ -12,6 +12,8 @@
 #include "../../Utility/ArithmeticUtils.h"
 #include <memory>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
     class ParsingContext::Internal
@@ -24,6 +26,12 @@ namespace RenderCore { namespace Techniques
         FragmentStitchingContext _stitchingContext;
         AttachmentReservation _attachmentReservation;
         FrameBufferProperties _frameBufferProperties;
+
+        Internal() = default;
+        Internal(const Internal&) = default;
+        Internal& operator=(const Internal&) = default;
+
+        // note: members most be cloned in ParsingContext::Fork()
     };
 
     void ParsingContext::Process(const ::Assets::Exceptions::RetrievalError& e)
@@ -87,6 +95,13 @@ namespace RenderCore { namespace Techniques
         _internal->_attachmentReservation.Bind(semantic, std::move(presChain), imageDesc, currentLayout);
     }
 
+    AttachmentReservation ParsingContext::SwapAttachmentReservation(AttachmentReservation&& newReservation)
+    {
+        AttachmentReservation result = std::move(_internal->_attachmentReservation);
+        _internal->_attachmentReservation = std::move(newReservation);
+        return result;
+    }
+
     ParsingContext::ParsingContext(TechniqueContext& techniqueContext, IThreadContext& threadContext)
 	: _techniqueContext(&techniqueContext)
     , _threadContext(&threadContext)
@@ -111,7 +126,30 @@ namespace RenderCore { namespace Techniques
             _techniqueContext->_systemAttachmentFormats};
     }
 
-    ParsingContext::~ParsingContext() {}
+    ParsingContext ParsingContext::Fork()
+    {
+        ParsingContext result;
+        result._techniqueContext = _techniqueContext;
+        result._threadContext = _threadContext;
+
+        assert(_techniqueContext);
+        result._stringHelpers = std::make_unique<StringHelpers>();
+
+        result._internal = std::make_unique<Internal>(*_internal);      // member-wise clone
+        assert(size_t(result._internal.get()) % 16 == 0);
+
+        result._viewportDesc = _viewportDesc;
+        result._subframeShaderSelectors = _subframeShaderSelectors;
+
+        result._uniformDelegateManager = _uniformDelegateManager->Fork();
+
+        result._pipelineAccelerators = _pipelineAccelerators;
+        result._pipelineAcceleratorsVisibility = _pipelineAcceleratorsVisibility;
+        return result;
+    }
+
+    ParsingContext::ParsingContext() = default;
+    ParsingContext::~ParsingContext() = default;
 
     ParsingContext& ParsingContext::operator=(ParsingContext&&) = default;
     ParsingContext::ParsingContext(ParsingContext&&) = default;

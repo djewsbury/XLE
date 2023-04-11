@@ -222,6 +222,10 @@ namespace RenderCore { namespace Techniques
             IteratorRange<const PreregisteredAttachment*> preregAttachments = {}, 
             IteratorRange<const Format*> systemFormats = {});
         ~FragmentStitchingContext();
+        FragmentStitchingContext(const FragmentStitchingContext&) = default;
+        FragmentStitchingContext& operator=(const FragmentStitchingContext&) = default;
+        FragmentStitchingContext(FragmentStitchingContext&&) = default;
+        FragmentStitchingContext& operator=(FragmentStitchingContext&&) = default;
     private:
         std::vector<PreregisteredAttachment> _workingAttachments;
         std::vector<DoubleBufferAttachment> _doubleBufferAttachments;

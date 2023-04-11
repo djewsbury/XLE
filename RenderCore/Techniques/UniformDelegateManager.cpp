@@ -620,6 +620,7 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& GetInterfaceGraphics() override;
 		const UniformsStreamInterface& GetInterfaceCompute() override;
 		void InvalidateUniforms() override;
+		std::unique_ptr<IUniformDelegateManager> Fork() override;
 
 		UniformDelegateManager();
 	};
@@ -837,6 +838,26 @@ namespace RenderCore { namespace Techniques
 			_compute._fixedDescriptorSets.erase(i2);
 			_compute._pendingRebuildInterface = true;
 		}
+	}
+
+	std::unique_ptr<IUniformDelegateManager> UniformDelegateManager::Fork()
+	{
+		DEBUG_ONLY(assert(_boundThread == std::this_thread::get_id()));
+
+		auto result = std::make_unique<UniformDelegateManager>();
+		DEBUG_ONLY(result->_boundThread = std::this_thread::get_id());
+
+		result->_graphics = _graphics;
+		result->_graphics._pendingRebuildInterface = false;
+		result->_graphics._pendingRebuildDescSets = false;
+		result->_compute = _compute;
+		result->_compute._pendingRebuildInterface = false;
+		result->_compute._pendingRebuildDescSets = false;
+
+		result->_delegateGroup = std::make_shared<UniformDelegateGroup>(*_delegateGroup);
+		result->_lastPreparedChangeIndex = -1;
+
+		return result;
 	}
 
 	UniformDelegateManager::UniformDelegateManager()
