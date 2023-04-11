@@ -783,6 +783,9 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
+	SequencePlayback::SequencePlayback(SequencePlayback&&) = default;
+	SequencePlayback& SequencePlayback::operator=(SequencePlayback&&) = default;
+
 	class SequencePlayback::PrepareResourcesIterator
 	{
 	public:

@@ -95,8 +95,8 @@ namespace RenderCore { namespace LightingEngine
 		void AddRequiredCommandList(BufferUploads::CommandListID);
 		SequencePlayback(Techniques::IPipelineAcceleratorPool& pipelineAccelerators);
 
-		SequencePlayback(SequencePlayback&&) = default;
-		SequencePlayback& operator=(SequencePlayback&&) = default;
+		SequencePlayback(SequencePlayback&&);
+		SequencePlayback& operator=(SequencePlayback&&);
 	private:
 		std::unique_ptr<SequenceIterator> _iterator;
 		FrameToFrameProperties* _frameToFrameProps = nullptr;
