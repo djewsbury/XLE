@@ -355,7 +355,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 	float Nvalue = FrameWrap*2;
 	float alpha = 2.0/(Nvalue+1.0);
 	alpha = 1-alpha;
-	alpha *= HistoryAcc.Load(uint3(pixelId.xy*2, 0));		// scale alpha by our confidence in the "yesterday" data
+	alpha *= HistoryConfidence.Load(uint3(pixelId.xy*2, 0));		// scale alpha by our confidence in the "yesterday" data
 	float accumulationToday = accumulationYesterday * alpha + final * (1-alpha);
 	Working[pixelId.xy] = accumulationToday;
 #else
@@ -369,7 +369,7 @@ uint Dither3x3PatternInt(uint2 pixelCoords)
 RWTexture2D<float> OutputTexture;
 
 Texture2D<int2> GBufferMotion;
-Texture2D<float> HistoryAcc;
+Texture2D<float> HistoryConfidence;
 
 RWTexture2D<float> AccumulationAO;
 Texture2D<float> AccumulationAOLast;
@@ -397,7 +397,7 @@ float LoadDepthPrev(uint2 loadPos) { return DepthPrev.Load(uint3(loadPos, 0)); }
 FloatType LoadHistoryConfidence(uint2 coords, int2 motion)
 {
 	#if HAS_HISTORY_CONFIDENCE_TEXTURE
-		return HistoryAcc.Load(uint3(coords, 0));
+		return HistoryConfidence.Load(uint3(coords, 0));
 	#else
 		// if we don't have a precompute history confidence texture, we have to calculate it now
 		// We can't consider depth in this path, because we don't store the expected depth for yesterday's pixel

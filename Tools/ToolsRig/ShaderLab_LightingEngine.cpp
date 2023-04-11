@@ -175,7 +175,7 @@ namespace ToolsRig
 				bool hasHistoryConfidence = false;
 				for (const auto& a:context._stitchingContext.GetPreregisteredAttachments()) {
 					hasHierarchialDepths |= a._semantic == Techniques::AttachmentSemantics::HierarchicalDepths;
-					hasHistoryConfidence |= a._semantic == Techniques::AttachmentSemantics::HistoryAcc;
+					hasHistoryConfidence |= a._semantic == Techniques::AttachmentSemantics::HistoryConfidence;
 				}
 
 				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::SSAOOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, RenderCore::LightingEngine::SSAOOperator::IntegrationParams{hasHierarchialDepths, hasHistoryConfidence});

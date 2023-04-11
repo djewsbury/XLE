@@ -51,7 +51,7 @@ namespace RenderCore { namespace Techniques
         constexpr auto GBufferNormal    = ConstHash64("GBufferNormal");
         constexpr auto GBufferParameter = ConstHash64("GBufferParameter");
         constexpr auto GBufferMotion    = ConstHash64("GBufferMotion");
-        constexpr auto HistoryAcc       = ConstHash64("HistoryAcc");
+        constexpr auto HistoryConfidence= ConstHash64("HistoryConfidence");
 
         constexpr auto ColorLDR         = ConstHash64("ColorLDR");
         constexpr auto ColorHDR         = ConstHash64("ColorHDR");

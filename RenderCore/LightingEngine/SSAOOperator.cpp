@@ -135,7 +135,7 @@ namespace RenderCore { namespace LightingEngine
         if (_integrationParams._hasHierarchicalDepths)
             spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HierarchicalDepths), BindFlag::ShaderResource);
         if (_integrationParams._hasHistoryConfidence) {
-            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HistoryAcc));
+            spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::HistoryConfidence));
         } else {
             spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepthPrev).InitialState(BindFlag::ShaderResource), BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
             spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormalPrev).InitialState(BindFlag::ShaderResource), BindFlag::ShaderResource);
@@ -266,7 +266,7 @@ namespace RenderCore { namespace LightingEngine
         usi.BindResourceView(4, "AccumulationAOLast"_h);
         usi.BindResourceView(5, "InputNormals"_h);
         usi.BindResourceView(6, "GBufferMotion"_h);
-        usi.BindResourceView(7, "HistoryAcc"_h);
+        usi.BindResourceView(7, "HistoryConfidence"_h);
         usi.BindResourceView(8, "HierarchicalDepths"_h);
         usi.BindResourceView(9, "DepthPrev"_h);
         usi.BindResourceView(10, "GBufferNormalPrev"_h);
