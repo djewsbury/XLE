@@ -576,7 +576,12 @@ namespace RenderCore { namespace Techniques
     {
         DEBUG_ONLY(ScopedAssertExclusivity(_lock));
         // Reset all actualized attachments. They will get recreated on demand
-        _attachments.clear();
+        // However, we can't reset anything that is still locked
+        for (auto& a:_attachments)
+            if (!a._lockCount) {
+                a._resource = nullptr;
+                a._pendingCompleteInitialization = true;
+            }
         _srvPool.Reset();
     }
 
