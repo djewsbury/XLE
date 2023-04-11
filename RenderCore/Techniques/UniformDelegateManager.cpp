@@ -550,8 +550,11 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
+		// We must set the "DontRetainViews" flags here, because we're expecting the descriptor set to be used immediately and only once
+		// and in a command list that has already been constructed (ie, whose lifetime has already begun).
+		// Without this flag, the descriptor set in the pool will keep the resources alive until the descriptor set it reused
 		_currentDescriptorSet = _heap.Allocate();
-		_currentDescriptorSet->Write(initializer);
+		_currentDescriptorSet->Write(initializer, IDescriptorSet::WriteFlags::DontRetainViews|IDescriptorSet::WriteFlags::RestrictToCommandList, &parsingContext.GetThreadContext());
 	}
 
 	const IDescriptorSet* SemiConstantDescriptorSet::GetDescSet() const
