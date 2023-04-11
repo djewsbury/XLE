@@ -1029,17 +1029,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
     PlatformRig::ProcessInputResult DebugScreensSystem::OnInputEvent(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& evnt)
     {
         bool consumedEvent      = false;
-        _currentMouseHeld       = evnt._mouseButtonsDown;
-        if (_currentMouse[0] != evnt._mousePosition[0] || _currentMouse[1] != evnt._mousePosition[1]) {
-            auto drift = Coord2{evnt._mousePosition._x, evnt._mousePosition._y} - _currentMouse;
-            _currentMouse = {evnt._mousePosition._x, evnt._mousePosition._y};
-            auto capture = _currentInterfaceState.GetCapture();
-            capture._driftDuringCapture += Coord2{std::abs(drift[0]), std::abs(drift[1])};
-            _currentInterfaceState  = BuildInterfaceState(_currentInteractables, context, _currentMouse, _currentMouseHeld, capture);
-        }
+        _interfaceStateHelper.OnInputEvent(context, evnt);
 
         for (auto i=_systemWidgets.begin(); i!=_systemWidgets.end() && !consumedEvent; ++i) {
-            consumedEvent |= (i->_widget->ProcessInput(_currentInterfaceState, evnt) == IWidget::ProcessInputResult::Consumed);
+            consumedEvent |= (i->_widget->ProcessInput(_interfaceStateHelper._currentInterfaceState, evnt) == IWidget::ProcessInputResult::Consumed);
         }
 
         for (auto i=_panels.begin(); i!=_panels.end() && !consumedEvent; ++i) {
@@ -1051,14 +1044,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 }
                 
                 if (!alreadySeen) {
-                    consumedEvent |= (_widgets[i->_widgetIndex]._widget->ProcessInput(_currentInterfaceState, evnt) == IWidget::ProcessInputResult::Consumed);
+                    consumedEvent |= (_widgets[i->_widgetIndex]._widget->ProcessInput(_interfaceStateHelper._currentInterfaceState, evnt) == IWidget::ProcessInputResult::Consumed);
                 }
             }
         }
 
         // if (!(evnt._mouseButtonsDown & (1<<0)) && (evnt._mouseButtonsTransition & (1<<0)) && !consumedEvent) {
         if (!consumedEvent) {
-            consumedEvent |= ProcessInputPanelControls(_currentInterfaceState, context, evnt);
+            consumedEvent |= ProcessInputPanelControls(_interfaceStateHelper._currentInterfaceState, context, evnt);
         }
 
         return consumedEvent ? PlatformRig::ProcessInputResult::Consumed : PlatformRig::ProcessInputResult::Passthrough;
@@ -1232,7 +1225,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     void DebugScreensSystem::Render(IOverlayContext& overlayContext, const Rect& viewport)
     {
-        _currentInteractables = Interactables();
+        _interfaceStateHelper.PreRender();
         
         Layout completeLayout(viewport);
         
@@ -1262,14 +1255,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
                     }
                     if (IsGood(widgetRect)) {
                         Layout widgetLayout(widgetRect);
-                        _widgets[i->_widgetIndex]._widget->Render(overlayContext, widgetLayout, _currentInteractables, _currentInterfaceState);
+                        _widgets[i->_widgetIndex]._widget->Render(overlayContext, widgetLayout, _interfaceStateHelper._currentInteractables, _interfaceStateHelper._currentInterfaceState);
 
                             //  if we don't have any system widgets registered, we 
                             //  get some basic default gui elements...
                         if (_systemWidgets.empty()) {
                             RenderPanelControls(
                                 overlayContext, (unsigned)std::distance(_panels.begin(), i),
-                                _widgets[i->_widgetIndex]._name, widgetLayout, _panels.size()!=1, _currentInteractables, _currentInterfaceState);
+                                _widgets[i->_widgetIndex]._name, widgetLayout, _panels.size()!=1, _interfaceStateHelper._currentInteractables, _interfaceStateHelper._currentInterfaceState);
                         }
                     }
                     completeLayout = Layout(nextWidgetRect);
@@ -1280,7 +1273,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 // render the system widgets last (they will render over the top of anything else that is visible)
             for (auto i=_systemWidgets.cbegin(); i!=_systemWidgets.cend(); ++i) {
                 Layout systemLayout(viewport);
-                i->_widget->Render(overlayContext, systemLayout, _currentInteractables, _currentInterfaceState);
+                i->_widget->Render(overlayContext, systemLayout, _interfaceStateHelper._currentInteractables, _interfaceStateHelper._currentInterfaceState);
             }
 
         } CATCH(const std::exception&) {
@@ -1289,8 +1282,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         overlayContext.ReleaseState();
 
-        //      Redo the current interface state, in case any of the interactables have moved during the render...
-        _currentInterfaceState = BuildInterfaceState(_currentInteractables, {}, _currentMouse, _currentMouseHeld, _currentInterfaceState.GetCapture());
+        _interfaceStateHelper.PostRender();
     }
     
     bool DebugScreensSystem::IsAnythingVisible()
@@ -1438,8 +1430,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     DebugScreensSystem::DebugScreensSystem() 
     {
-        _currentMouse = {0,0};
-        _currentMouseHeld = 0;
         _nextWidgetChangeCallbackIndex = 0;
 
         Panel p;
@@ -1451,6 +1441,29 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     DebugScreensSystem::~DebugScreensSystem()
     {
+    }
+
+    void InterfaceStateHelper::PreRender()
+    {
+        _currentInteractables = {};
+    }
+
+    void InterfaceStateHelper::PostRender()
+    {
+            //      Redo the current interface state, in case any of the interactables have moved during the render...
+        _currentInterfaceState = BuildInterfaceState(_currentInteractables, {}, _currentMouse, _currentMouseHeld, _currentInterfaceState.GetCapture());
+    }
+
+    void InterfaceStateHelper::OnInputEvent(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& evnt)
+    {
+        _currentMouseHeld = evnt._mouseButtonsDown;
+        if (_currentMouse[0] != evnt._mousePosition[0] || _currentMouse[1] != evnt._mousePosition[1]) {
+            Coord2 drift = Coord2{evnt._mousePosition._x, evnt._mousePosition._y} - _currentMouse;
+            _currentMouse = {evnt._mousePosition._x, evnt._mousePosition._y};
+            auto capture = _currentInterfaceState.GetCapture();
+            capture._driftDuringCapture += Coord2{std::abs(drift[0]), std::abs(drift[1])};
+            _currentInterfaceState  = BuildInterfaceState(_currentInteractables, context, _currentMouse, _currentMouseHeld, capture);
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
