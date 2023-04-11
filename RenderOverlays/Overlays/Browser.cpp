@@ -258,7 +258,7 @@ namespace Overlays
         {
             FillRectangle(&context, toolBoxLayout.GetMaximumSize(), backgroundRectangleColour);
             OutlineRectangle(&context, Rect(toolBoxLayout.GetMaximumSize()._topLeft + Coord2(2,2), toolBoxLayout.GetMaximumSize()._bottomRight - Coord2(2,2)), 0.f, backgroundOutlineColour);
-            interactables.Register(Interactables::Widget(toolBoxLayout.GetMaximumSize(), Id_TotalRect));
+            interactables.Register(toolBoxLayout.GetMaximumSize(), Id_TotalRect);
 
             const auto headingRect = toolBoxLayout.AllocateFullWidth(25);
             context.DrawText(
@@ -321,7 +321,7 @@ namespace Overlays
         std::vector<std::pair<std::string, Rect>> labels;
 
         Layout browserLayout(toolBoxLayout.AllocateFullHeightFraction(1.f));
-        interactables.Register(Interactables::Widget(browserLayout.GetMaximumSize(), Id_MainSurface));
+        interactables.Register(browserLayout.GetMaximumSize(), Id_MainSurface);
         
         unsigned itemsPerRow = (browserLayout.GetMaximumSize().Width() - 2 * browserLayout._paddingInternalBorder + browserLayout._paddingBetweenAllocations) / (_pimpl->_itemDimensions + browserLayout._paddingBetweenAllocations);
         unsigned rowsRequired = unsigned((_pimpl->_modelFiles->_files.size() + itemsPerRow - 1) / itemsPerRow);
@@ -562,7 +562,7 @@ namespace Overlays
         }
 
         if (input.IsRelease_LButton()) {
-            auto id = interfaceState.TopMostWidget()._id;
+            auto id = interfaceState.TopMostId();
             auto model = LowerBound(_pimpl->_modelNames, id);
             if (model != _pimpl->_modelNames.end() && model->first == id) {
                 return ProcessInputResult(true, model->second);

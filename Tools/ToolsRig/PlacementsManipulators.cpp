@@ -1521,12 +1521,12 @@ namespace ToolsRig
         if (input.IsRelease_LButton()) {
             const auto Id_SelectedManipulatorLeft = InteractableId_Make("SelectedManipulatorLeft");
             const auto Id_SelectedManipulatorRight = InteractableId_Make("SelectedManipulatorRight");
-            auto topMost = interfaceState.TopMostWidget();
+            auto topMost = interfaceState.TopMostId();
             auto newManipIndex = _activeManipulatorIndex;
 
-            if (topMost._id == Id_SelectedManipulatorLeft) {            // ---- go back one manipulator ----
+            if (topMost == Id_SelectedManipulatorLeft) {            // ---- go back one manipulator ----
                 newManipIndex = unsigned((_activeManipulatorIndex + _manipulators.size() - 1) % _manipulators.size());
-            } else if (topMost._id == Id_SelectedManipulatorRight) {    // ---- go forward one manipulator ----
+            } else if (topMost == Id_SelectedManipulatorRight) {    // ---- go forward one manipulator ----
                 newManipIndex = unsigned((_activeManipulatorIndex + 1) % _manipulators.size());
             }
 
@@ -1537,7 +1537,7 @@ namespace ToolsRig
                 return ProcessInputResult::Consumed;
             }
 
-            if (topMost._id == Id_PlacementsSave) {
+            if (topMost == Id_PlacementsSave) {
                 _editor->WriteAllCells();
                 return ProcessInputResult::Consumed;
             }

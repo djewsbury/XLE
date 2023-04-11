@@ -504,11 +504,11 @@ namespace PlatformRig { namespace Overlays
 				if (!interfaceState) return PlatformRig::ProcessInputResult::Passthrough;
 
 				if (evnt.IsPress_LButton()) {
-					interfaceState->BeginCapturing(interfaceState->TopMostWidget());
+					interfaceState->BeginCapturing(interfaceState->TopMostHotArea());
 				} else if (evnt.IsRelease_LButton()) {
-					if (interfaceState->GetCapture()._widget._id == interactable) {
+					if (interfaceState->GetCapture()._hotArea._id == interactable) {
 						interfaceState->EndCapturing();
-						if (Contains(interfaceState->TopMostWidget()._rect, interfaceState->MousePosition()))
+						if (Contains(interfaceState->TopMostHotArea()._rect, interfaceState->MousePosition()))
 							event();
 					}
 				}

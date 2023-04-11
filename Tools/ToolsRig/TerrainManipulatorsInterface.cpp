@@ -347,7 +347,7 @@ namespace ToolsRig
     bool HandleManipulatorsControls(InterfaceState& interfaceState, const OSServices::InputSnapshot& input, IManipulator& manipulator)
     {
         if (input.IsHeld_LButton()) {
-            auto topMost = interfaceState.TopMostWidget();
+            auto topMost = interfaceState.TopMostHotArea();
 
                 //  increase or decrease the parameter values
                     //      stay inside the min/max bounds. How far we go depends on the scale type of the parameter
@@ -387,14 +387,14 @@ namespace ToolsRig
 
     auto    ManipulatorsDisplay::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) -> ProcessInputResult
     {
-        auto topMost = interfaceState.TopMostWidget();
+        auto topMost = interfaceState.TopMostId();
         if (input.IsRelease_LButton()) {
-            if (topMost._id == Id_SelectedManipulatorLeft) {
+            if (topMost == Id_SelectedManipulatorLeft) {
                     // go back one manipulator
                 _manipulatorsInterface->SelectManipulator(-1);
                 return ProcessInputResult::Consumed;
             }
-            else if (topMost._id == Id_SelectedManipulatorRight) {
+            else if (topMost == Id_SelectedManipulatorRight) {
                     // go forward one manipulator
                 _manipulatorsInterface->SelectManipulator(1);
                 return ProcessInputResult::Consumed;

@@ -76,8 +76,7 @@ namespace Overlays
                 ScrollBar::Coordinates::Flags::NoUpDown|ScrollBar::Coordinates::Flags::Horizontal);
             *objects[q]._member = _scrollers[q].CalculateCurrentOffset(scrollCoordinates, *objects[q]._member);
             HTweakerBar_Draw(context, scrollCoordinates, *objects[q]._member);
-            interactables.Register(
-                Interactables::Widget(scrollCoordinates.InteractableRect(), scrollBarId+q));
+            interactables.Register(scrollCoordinates.InteractableRect(), scrollBarId+q);
 
             DrawFormatText(context, scrollBar, 0.f, nullptr, ColorB(0xffffffff), TextAlignment::Right, "%.3f", *objects[q]._member);
         }

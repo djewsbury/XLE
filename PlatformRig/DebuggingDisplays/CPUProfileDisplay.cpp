@@ -315,7 +315,7 @@ namespace PlatformRig { namespace Overlays
         InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
         if (input.IsPress_LButton() || input.IsRelease_LButton()) {
-            auto topId = interfaceState.TopMostWidget()._id;
+            auto topId = interfaceState.TopMostId();
             if ((topId >> 32ull) == g_InteractableIdTopPart) {
                 if (input.IsRelease_LButton()) {
                     auto i = std::lower_bound(_toggledItems.cbegin(), _toggledItems.cend(), topId);

@@ -50,15 +50,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
     class Interactables
     {
     public:
-        struct Widget
-        {
-            Rect _rect;
-            InteractableId _id = 0;
-        };
-        std::vector<Widget> _widgets;
+        struct HotArea { Rect _rect; InteractableId _id = 0; };
+        std::vector<HotArea> _hotAreas;
 
-        void                Register(const Widget& widget);
-        std::vector<Widget> Intersect(const Coord2& position) const;
+        void                Register(const HotArea& widget);
+        void                Register(Rect rect, InteractableId id) { Register(HotArea{rect, id}); }
+        std::vector<HotArea> Intersect(const Coord2& position) const;
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -67,30 +64,30 @@ namespace RenderOverlays { namespace DebuggingDisplay
     public:
         bool                    HasMouseOver(InteractableId id);
         InteractableId          TopMostId() const;
-        Interactables::Widget   TopMostWidget() const;
+        Interactables::HotArea  TopMostHotArea() const;
         bool                    IsMouseButtonHeld(unsigned buttonIndex = 0) const   { return !!(_mouseButtonsHeld&(1<<buttonIndex)); }
         Coord2                  MousePosition() const                               { return _mousePosition; }
 
-        void BeginCapturing(const Interactables::Widget& widget);
+        void BeginCapturing(const Interactables::HotArea& widget);
         void EndCapturing();
 
         struct Capture
         {
             Coord2 _driftDuringCapture = Coord2{0,0};
-            Interactables::Widget _widget;
+            Interactables::HotArea _hotArea;
         };
         const Capture& GetCapture() const                     { return _capture;  }
 
-        const std::vector<Interactables::Widget>& GetMouseOverStack() const         { return _mouseOverStack; }
+        const std::vector<Interactables::HotArea>& GetMouseOverStack() const         { return _mouseOverStack; }
         const PlatformRig::WindowingSystemView& GetWindowingSystemView() const      { return _viewInputContext; }
 
         InterfaceState();
         InterfaceState( const PlatformRig::InputContext& viewInputContext,
                         const Coord2& mousePosition, unsigned mouseButtonsHeld,
-                        const std::vector<Interactables::Widget>& mouseStack,
+                        const std::vector<Interactables::HotArea>& mouseStack,
                         const Capture& capture);
     protected:
-        std::vector<Interactables::Widget> _mouseOverStack;
+        std::vector<Interactables::HotArea> _mouseOverStack;
         Capture     _capture;
         Coord2      _mousePosition;
         unsigned    _mouseButtonsHeld;
@@ -269,6 +266,19 @@ namespace RenderOverlays { namespace DebuggingDisplay
     bool DrawTableEntry(IOverlayContext& context, Layout& layout, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted = false);
 
     ///////////////////////////////////////////////////////////////////////////////////
+    struct InterfaceStateHelper
+    {
+        Interactables   _currentInteractables;
+        InterfaceState  _currentInterfaceState;
+
+        Coord2      _currentMouse = {0,0};
+        unsigned    _currentMouseHeld = 0;
+
+        void PreRender();
+        void PostRender();
+        void OnInputEvent(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& evnt);
+    };
+
     class DebugScreensSystem : public PlatformRig::IInputListener
     {
     public:
@@ -303,8 +313,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         ~DebugScreensSystem();
 
     private:
-        Interactables   _currentInteractables;
-        InterfaceState  _currentInterfaceState;
+        InterfaceStateHelper _interfaceStateHelper;
         
         std::vector<WidgetAndName> _widgets;
         std::vector<WidgetAndName> _systemWidgets;
@@ -322,9 +331,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
             std::string _backButton;
         };
         std::vector<Panel> _panels;
-
-        Coord2      _currentMouse;
-        unsigned    _currentMouseHeld;
 
         void    RenderPanelControls(        IOverlayContext&    context,
                                             unsigned            panelIndex, const std::string& name, Layout&layout, bool allowDestroy,

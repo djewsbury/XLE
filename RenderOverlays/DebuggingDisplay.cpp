@@ -1014,9 +1014,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     static InterfaceState BuildInterfaceState(Interactables& interactables, const PlatformRig::InputContext& viewInputContext, const Coord2& mousePosition, unsigned mouseButtonsHeld, InterfaceState::Capture capture)
     {
-        auto i = std::find_if(interactables._widgets.begin(), interactables._widgets.end(), [capturingId=capture._widget._id](const auto& c) { return c._id == capturingId; });
-        if (i != interactables._widgets.end()) {
-            capture._widget = *i;
+        auto i = std::find_if(interactables._hotAreas.begin(), interactables._hotAreas.end(), [capturingId=capture._hotArea._id](const auto& c) { return c._id == capturingId; });
+        if (i != interactables._hotAreas.end()) {
+            capture._hotArea = *i;
         } else
             capture = {};
 
@@ -1460,7 +1460,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     InterfaceState::InterfaceState(
         const PlatformRig::InputContext& viewInputContext,
         const Coord2& mousePosition, unsigned mouseButtonsHeld,
-        const std::vector<Interactables::Widget>& mouseStack,
+        const std::vector<Interactables::HotArea>& mouseStack,
         const Capture& capture)
     :   _mousePosition(mousePosition)
     ,   _mouseButtonsHeld(mouseButtonsHeld)
@@ -1482,21 +1482,21 @@ namespace RenderOverlays { namespace DebuggingDisplay
     InteractableId          InterfaceState::TopMostId() const
     { 
         // when a capture is set, it hides other widgets from being returned by this method
-        if (_capture._widget._id) return _capture._widget._id;
+        if (_capture._hotArea._id) return _capture._hotArea._id;
         return (!_mouseOverStack.empty())?_mouseOverStack[_mouseOverStack.size()-1]._id:0;
     }
 
-    Interactables::Widget   InterfaceState::TopMostWidget() const
+    Interactables::HotArea   InterfaceState::TopMostHotArea() const
     {
-        if (_capture._widget._id) return _capture._widget;  // unfortunately we only have the widget information for widgets under the cursor
+        if (_capture._hotArea._id) return _capture._hotArea;  // unfortunately we only have the widget information for widgets under the cursor
         if (!_mouseOverStack.empty())
             return _mouseOverStack[_mouseOverStack.size()-1];
         return {};
     }
 
-    void InterfaceState::BeginCapturing(const Interactables::Widget& widget)
+    void InterfaceState::BeginCapturing(const Interactables::HotArea& widget)
     {
-        _capture._widget = widget;
+        _capture._hotArea = widget;
         _capture._driftDuringCapture = {0,0};
     }
     
@@ -1506,9 +1506,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
-    void Interactables::Register(const Widget& widget)
+    void Interactables::Register(const HotArea& widget)
     {
-        _widgets.push_back( widget );
+        _hotAreas.push_back( widget );
     }
 
     static bool Intersection(const Rect& rect, const Coord2& position)
@@ -1518,10 +1518,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
             ;
     }
 
-    std::vector<Interactables::Widget> Interactables::Intersect(const Coord2& position) const
+    std::vector<Interactables::HotArea> Interactables::Intersect(const Coord2& position) const
     {
-        std::vector<Widget> result;
-        for (std::vector<Widget>::const_iterator i=_widgets.begin(); i!=_widgets.end(); ++i) {
+        std::vector<HotArea> result;
+        for (std::vector<HotArea>::const_iterator i=_hotAreas.begin(); i!=_hotAreas.end(); ++i) {
             if (Intersection(i->_rect, position)) {
                 result.push_back(*i);
             }
