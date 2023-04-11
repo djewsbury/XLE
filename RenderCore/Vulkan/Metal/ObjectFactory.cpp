@@ -537,6 +537,11 @@ namespace RenderCore { namespace Metal_Vulkan
             // last command list that is alive now is destroyed, we can then remove it from the visible list. However we don't track
             // this, and it might be overkill to implement that just for this case
             ScopedLock(_resourcesVisibleToQueueLock);
+
+            auto i = std::lower_bound(_invalidatedResources.begin(), _invalidatedResources.end(), resourceGuid);
+            if (i == _invalidatedResources.end() || *i != resourceGuid)
+                _invalidatedResources.insert(i, resourceGuid);
+
             const bool forgetImmediately = false;
             if (auto gpuTracker = _resourceVisibilityHelper->_gpuTracker.lock()) {
                 auto marker = gpuTracker->GetProducerMarker();

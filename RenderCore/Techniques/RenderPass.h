@@ -314,6 +314,10 @@ namespace RenderCore { namespace Techniques
             BindFlag::BitField initialLayout);
         AttachmentReservation CaptureDoubleBufferAttachments();
 
+        #if defined(_DEBUG)
+            void ValidateVisibility(IThreadContext& threadContext);
+        #endif
+
         IAttachmentPool& GetAttachmentPool() const { return *_pool; }
 
         AttachmentReservation();

@@ -168,6 +168,7 @@ namespace RenderCore { namespace Metal_Vulkan
             void ForgetResource(uint64_t resourceGuid) const;
             void UpdateForgottenResourcesAlreadyLocked();
             mutable std::vector<uint64_t> _resourcesVisibleToQueue;
+            mutable std::vector<uint64_t> _invalidatedResources;
             mutable Threading::Mutex _resourcesVisibleToQueueLock;
         #endif
 

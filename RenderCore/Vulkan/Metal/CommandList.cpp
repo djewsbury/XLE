@@ -212,6 +212,45 @@ namespace RenderCore { namespace Metal_Vulkan
 		cmdList._asyncTrackerMarkers.clear();
 	}
 
+	void CommandList::ValidateVisibility(ObjectFactory& factory, IteratorRange<const uint64_t*> resourceGuids)
+	{
+		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
+			ScopedLock(factory._resourcesVisibleToQueueLock);
+			factory.UpdateForgottenResourcesAlreadyLocked();
+
+			{
+				// "Invalid" resources have been deleted already (but may actually be considered "visible", but in a zombie state
+				// due to the object factory delayed delete mechanism)
+				//
+				// We can't run this test in the automatic visibility tests, because it's valid for a resource that has been
+				// used in a command list to be deleted before the command list is submitted (given that we will retain the Vulkan
+				// objects until that command list is completed on the GPU, anyway)
+				//
+				// However, since this method is manually called, we assume that the IResource objects from which resourceGuids
+				// came are still alive at the point of this call.
+				auto searchi = resourceGuids.begin();
+				auto invalidi = factory._invalidatedResources.begin();
+				while (searchi != resourceGuids.end()) {
+					invalidi = std::lower_bound(invalidi, factory._invalidatedResources.end(), *searchi);
+					assert(invalidi == factory._invalidatedResources.end() || *invalidi != *searchi);
+					++searchi;
+				}
+			}
+
+			for (auto guid:resourceGuids) {
+				auto i = std::lower_bound(factory._resourcesVisibleToQueue.begin(), factory._resourcesVisibleToQueue.end(), guid);
+				if (i != factory._resourcesVisibleToQueue.end() && *i == guid)
+					continue;
+
+				i = std::lower_bound(_resourcesBecomingVisible.begin(), _resourcesBecomingVisible.end(), guid);
+				if (i != _resourcesBecomingVisible.end() && *i == guid)
+					continue;
+
+				assert(0);		// didn't find it
+			}
+		#endif
+	}
+
 	void CommandList::ValidateCommitToQueue(ObjectFactory& factory)
 	{
 		#if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
@@ -226,8 +265,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			auto factoryi = factory._resourcesVisibleToQueue.begin();
 			auto searchi = _resourcesThatMustBeVisible.begin();
 			while (searchi != _resourcesThatMustBeVisible.end()) {
-				while (factoryi != factory._resourcesVisibleToQueue.end() && *factoryi < *searchi)
-					++factoryi;
+				factoryi = std::lower_bound(factoryi, factory._resourcesVisibleToQueue.end(), *searchi);
 
 				if (factoryi == factory._resourcesVisibleToQueue.end() || *factoryi != *searchi)
 					Throw(std::runtime_error("Attempting to use resource that hasn't been made visible. Ensure that all used resources have had Metal::CompleteInitialization() called on them"));

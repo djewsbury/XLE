@@ -105,6 +105,21 @@ namespace RenderCore { namespace Metal_Vulkan
 		void MakeResourcesVisible(IteratorRange<const uint64_t*> resourceGuids);
 		void ValidateCommitToQueue(ObjectFactory& factory);
 
+		/// <summary>Ensure that the given resources are visible to this command list in it's current state</summary>
+		///
+		/// When VULKAN_VALIDATE_RESOURCE_VISIBILITY is enabled, the system will automatically validate resource visibility
+		/// for every command list that is submitted to the queue.
+		///
+		/// However, this method can be used to run a similar test on demand. This can be useful for detecting visibility
+		/// errors closer to the usage point (since at the point of submission to the queue, most context is lost).
+		///
+		/// Still, executing this method this can produce false negatives, since it's valid for resources to become
+		/// visible through another command list submission -- and a relevant submission could occur after this method is called
+		/// but before this command list is actually submitted. In certain patterns this case can be quite common.
+		/// So be aware of that subtle case.
+		///
+		void ValidateVisibility(ObjectFactory& factory, IteratorRange<const uint64_t*> resourceGuids);
+
 		void AddWaitBeforeBegin(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value=0);
 		void AddSignalOnCompletion(VulkanSharedPtr<VkSemaphore> semaphore, uint64_t value=0);
 

@@ -977,6 +977,23 @@ namespace RenderCore { namespace Techniques
         src._entries.clear();
     }
 
+    #if defined(_DEBUG)
+        void AttachmentReservation::ValidateVisibility(IThreadContext& threadContext)
+        {
+            auto& metalContext = *Metal::DeviceContext::Get(threadContext);
+            for (auto& a:_entries) {
+                uint64_t guid;
+                if (a._presentationChain)
+                    continue;
+                else if (a._poolResource != ~0u)
+                    guid = checked_cast<AttachmentPool*>(_pool)->_attachments[a._poolResource]._resource->GetGUID();
+                else 
+                    guid = a._resource->GetGUID();
+                metalContext.GetActiveCommandList().ValidateVisibility(Metal::GetObjectFactory(), {&guid, &guid+1});
+            }
+        }
+    #endif
+
     void AttachmentReservation::CompleteInitialization(IThreadContext& threadContext)
     {
         for (unsigned c=0; c<_entries.size(); ++c)
@@ -1035,9 +1052,15 @@ namespace RenderCore { namespace Techniques
                     assert(poolResource._resource);
                     completeInitializationResources[completeInitializationCount++] = poolResource._resource.get();
                     poolResource._pendingCompleteInitialization = false;
-                } 
-                // We don't need a "make visible" in the "else" case, because for pool resources we must have had a complete initialization to at some earlier
-                // point. We would only have problems if there was an abandoned cmd list, or one submitted out of order
+                } else {
+                    // We don't need a "make visible" in the "else" case, because for pool resources we must have had a complete initialization to at some earlier
+                    // point. We would only have problems if there was an abandoned cmd list, or one submitted out of order
+                    assert(poolResource._resource);
+                    #if defined(_DEBUG)
+                        auto guid = poolResource._resource->GetGUID();
+                        Metal::DeviceContext::Get(threadContext)->GetActiveCommandList().ValidateVisibility(Metal::GetObjectFactory(), {&guid, &guid+1});
+                    #endif
+                }
             } else {
                 // We don't know the history of bound attachments submitted with no layout -- so we have to call make visible for them
                 if (a._currentLayout == ~0u)
