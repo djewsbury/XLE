@@ -56,6 +56,7 @@ namespace UnitTests
 
 		virtual std::pair<Float3, Float3> ScreenToWorldSpaceRay(Int2 screenPt) const = 0;
 		virtual void ResizeWindow(unsigned width, unsigned height) = 0;
+		virtual RenderCore::Techniques::CameraDesc GetCameraDesc() const = 0;
 
 		struct EnabledComponents
 		{

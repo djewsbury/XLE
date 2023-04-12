@@ -146,6 +146,11 @@ namespace UnitTests
 			return _windowApparatus->_osWindow->Resize(width, height);
 		}
 
+		virtual RenderCore::Techniques::CameraDesc GetCameraDesc() const override
+		{
+			return *_activeCamera;
+		}
+
 		InteractiveTestHelper(EnabledComponents::BitField enabledComponents)
 		{
 			if (!_globalServices) _globalServices = std::make_shared<ConsoleRig::GlobalServices>();

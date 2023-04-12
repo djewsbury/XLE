@@ -209,7 +209,7 @@ namespace EntityInterface
 		if (_type == MinimalBindingValueType::Model) {
 			// record this as a model value that invalidates the layout
 			assert(_container);
-			_container->_layoutInvalidatingValues.insert(_id);
+			_container->_layoutInvalidatingModelValues.insert(_id);
 		}
 		return QueryNonLayout();
 	}

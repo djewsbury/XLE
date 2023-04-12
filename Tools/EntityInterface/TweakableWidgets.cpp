@@ -502,6 +502,8 @@ namespace EntityInterface
 		std::shared_ptr<MinimalBindingEngine> _bindingEngine;
 		WriteToLayoutFormatter _layoutFn;
 		unsigned _lastBuiltLayoutValidationIndex = ~0u;
+		UInt2 _lastContainerSize { 0, 0 };
+		Float3x3 _lastTransform = Identity<Float3x3>();
 
 		void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) override
 		{
@@ -510,24 +512,26 @@ namespace EntityInterface
 			container._bottomRight -= Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
 
 			// rebuild the layout now if it's invalidated
-			if (_bindingEngine->GetLayoutValidationIndex() != _lastBuiltLayoutValidationIndex) {
+			UInt2 containerSize { container.Width(), container.Height() };
+			if (_bindingEngine->GetLayoutValidationIndex() != _lastBuiltLayoutValidationIndex || _lastContainerSize != containerSize) {
 				WidgetsLayoutFormatter formatter { _bindingEngine };
-				formatter.BeginRoot({container.Width(), container.Height()});
+				formatter.BeginRoot(containerSize);
 				_layoutFn(formatter);
 				formatter.EndRoot();
 
 				_layedOutWidgets = formatter.BuildLayedOutWidgets();
 				_lastBuiltLayoutValidationIndex = _bindingEngine->GetLayoutValidationIndex();
+				_lastContainerSize = containerSize;
 			}
 
 			{
-				Float3x3 transform {
+				_lastTransform = Float3x3 {
 					1.f, 0.f, container._topLeft[0],
 					0.f, 1.f, container._topLeft[1],
 					0.f, 0.f, 1.f
 				};
 				CommonWidgets::Draw draw{context, interactables, interfaceState, _hoverings};
-				_layedOutWidgets.Draw(draw, transform);
+				_layedOutWidgets.Draw(draw, _lastTransform);
 			}
 		}
 
@@ -536,7 +540,7 @@ namespace EntityInterface
 			PlatformRig::InputContext inputContext;
 			inputContext.AttachService2(_hoverings);
 			inputContext.AttachService2(interfaceState);
-			return _layedOutWidgets.ProcessInput(inputContext, input);
+			return _layedOutWidgets.ProcessInput(inputContext, input, _lastTransform);
 		}
 
 		TweakerGroup(std::shared_ptr<MinimalBindingEngine> bindingEngine, WriteToLayoutFormatter&& layoutFn)

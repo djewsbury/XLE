@@ -42,13 +42,13 @@ namespace EntityInterface
     {
     public:
         virtual DocumentId MountDocument(
-            StringSection<> mountPount,
+            StringSection<> mountPoint,
             std::shared_ptr<IEntityDocument>) = 0;
         virtual bool UnmountDocument(DocumentId doc) = 0;
 
         // returns a dependency validation that advances if any properties at that mount point,
         // (or underneath) change 
-        virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const = 0;
+        virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPoint) const = 0;
         virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> mountPoint) const = 0;
 
         virtual ~IEntityMountingTree() = default;
