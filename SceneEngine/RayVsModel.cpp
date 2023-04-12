@@ -456,7 +456,7 @@ namespace SceneEngine
             // The easiest way to prevent clipping would be use a projection matrix that
             // would transform all points into a single point in the center of the view
             // frustum.
-		auto projDesc = BuildProjectionDesc(camera, UInt2(256, 256));
+		auto projDesc = BuildProjectionDesc(camera, 1.f);
 		projDesc._cameraToProjection = MakeFloat4x4(
             0.f, 0.f, 0.f, 0.5f,
             0.f, 0.f, 0.f, 0.5f,

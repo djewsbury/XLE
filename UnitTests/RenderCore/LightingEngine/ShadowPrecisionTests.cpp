@@ -322,7 +322,7 @@ namespace UnitTests
 			}
 		}
 		
-		auto sceneProjDesc = RenderCore::Techniques::BuildProjectionDesc(sceneCamera, UInt2{2048, 2048});
+		auto sceneProjDesc = RenderCore::Techniques::BuildProjectionDesc(sceneCamera, 1.f);
 		RenderOverlays::DebuggingDisplay::DrawFrustum(*overlayContext, sceneProjDesc._worldToProjection, RenderOverlays::ColorB(0xff, 0xff, 0xff), 0x2);
 
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext);
@@ -492,7 +492,7 @@ namespace UnitTests
 				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
 				LightingEngine::SetupSunSourceShadows(lightScene, lightId, sunSourceFrustumSettings);
 				lightScene.TryGetLightSourceInterface<LightingEngine::ISunSourceShadows>(lightId)->FixMainSceneCamera(
-					BuildProjectionDesc(sceneCamera, UInt2{2048, 2048}));
+					BuildProjectionDesc(sceneCamera, 1.f));
 
 				// draw once from the "scene camera"
 				{
@@ -529,7 +529,7 @@ namespace UnitTests
 
 				// and from the "vis cameras"
 				for (unsigned c=0; c<dimof(visCameras); ++c) {
-					parsingContext.GetProjectionDesc() = BuildProjectionDesc(visCameras[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+					parsingContext.GetProjectionDesc() = BuildProjectionDesc(visCameras[c], targetDesc._textureDesc._width / float(targetDesc._textureDesc._height));
 					{
 						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
 							parsingContext, *lightingTechnique);
@@ -551,7 +551,7 @@ namespace UnitTests
 				}
 
 				std::vector<Float4x4> worldToProjs;
-				worldToProjs.push_back(BuildProjectionDesc(sceneCamera, UInt2{2048, 2048})._worldToProjection);
+				worldToProjs.push_back(BuildProjectionDesc(sceneCamera, 1.f)._worldToProjection);
 				auto* orthoShadowProjections = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IOrthoShadowProjections>(lightId);
 				REQUIRE(orthoShadowProjections);
 				auto subProjections = orthoShadowProjections->GetOrthoSubProjections();

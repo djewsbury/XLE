@@ -219,7 +219,8 @@ namespace SceneEngine
         auto techniqueContext = MakeIntersectionsTechniqueContext(*context._drawingApparatus);
 		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, *threadContext};
         parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
-        parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(context._cameraDesc, context._viewportMaxs - context._viewportMins);
+        auto viewportDims = context._viewportMaxs - context._viewportMins;
+        parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(context._cameraDesc, viewportDims[0] / float(viewportDims[1]));
 
         if ((filter & Type::Terrain) && _terrainManager) {
             auto intersection = FindTerrainIntersection(

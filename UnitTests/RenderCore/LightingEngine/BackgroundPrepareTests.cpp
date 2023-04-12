@@ -324,7 +324,7 @@ namespace UnitTests
 
 		for (unsigned c=0; c<dimof(camerasToRender); ++c) {
 			{
-				parsingContext.GetProjectionDesc() = BuildProjectionDesc(camerasToRender[c], UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+				parsingContext.GetProjectionDesc() = BuildProjectionDesc(camerasToRender[c], targetDesc._textureDesc._width / float(targetDesc._textureDesc._height));
 				parsingContext.SetPipelineAcceleratorsVisibility(testApparatus._pipelineAccelerators->VisibilityBarrier());
 				auto drawInstance = LightingEngine::BeginLightingTechniquePlayback(parsingContext, *scene._compiledLightingTechnique);
 				ParseScene(drawInstance, *scene._drawablesWriter);
@@ -374,7 +374,7 @@ namespace UnitTests
 
 		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, threadContext};
 		parsingContext.SetPipelineAcceleratorsVisibility(testApparatus._pipelineAccelerators->VisibilityBarrier());
-		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, targetDesc._textureDesc._width / float(targetDesc._textureDesc._height));
 		parsingContext.GetFrameBufferProperties() = fbProps;
 		
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();

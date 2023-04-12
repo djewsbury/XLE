@@ -124,7 +124,7 @@ namespace UnitTests
 		sceneCamera._nearClip = 5.0f;
 		sceneCamera._farClip = 75.f;
 
-		auto sceneProjDesc = Techniques::BuildProjectionDesc(sceneCamera, UInt2(1920, 1080));
+		auto sceneProjDesc = Techniques::BuildProjectionDesc(sceneCamera, 1920 / float(1080));
 
 		RenderCore::Techniques::CameraDesc visCamera;
 		visCamera._cameraToWorld = MakeCameraToWorld(Normalize(Float3{0.f, -1.0f, 0.0f}), Normalize(Float3{0.0f, 0.0f, -1.0f}), Float3{0.0f, 200.0f, 0.0f});
@@ -226,7 +226,7 @@ namespace UnitTests
 			{
 				auto rpi = fbHelper.BeginRenderPass(*threadContext);
 				auto parsingContext = BeginParsingContext(testApparatus, *threadContext);
-				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(visCamera, UInt2{ targetDesc._textureDesc._width, targetDesc._textureDesc._height });
+				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(visCamera, targetDesc._textureDesc._width / float(targetDesc._textureDesc._height));
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CommonResourceBox commonResBox{*testHelper->_device};
 				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));

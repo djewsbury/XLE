@@ -265,7 +265,7 @@ namespace UnitTests
 			sceneCamera._nearClip = 5.0f;
 			sceneCamera._farClip = 75.f;
 			auto tester = std::make_shared<VolumeVsFrustumTestingOverlay>();
-			tester->_worldToProjection = Techniques::BuildProjectionDesc(sceneCamera, UInt2(1920, 1080))._worldToProjection;
+			tester->_worldToProjection = Techniques::BuildProjectionDesc(sceneCamera, 1920 / float(1080))._worldToProjection;
 			testHelper->Run(visCamera, tester);
 		}
 
@@ -455,7 +455,7 @@ namespace UnitTests
 
 			Techniques::ProjectionDesc MakeProjDesc(Techniques::CameraDesc& cam, const RenderOverlays::Rect& rect)
 			{
-				return Techniques::BuildProjectionDesc(cam, {rect.Width(), rect.Height()});
+				return Techniques::BuildProjectionDesc(cam, rect.Width() / float(rect.Height()));
 			}
 
 			void SetViewport(

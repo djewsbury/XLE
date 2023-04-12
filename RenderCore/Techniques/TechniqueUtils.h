@@ -8,7 +8,6 @@
 
 #include "../RenderUtils.h"
 #include "../ShaderLangUtil.h"
-#include "../../Math/Vector.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/ProjectionMath.h"
 #include "../../Utility/IteratorUtils.h"
@@ -126,7 +125,8 @@ namespace RenderCore { namespace Techniques
     bool HasHandinessFlip(const ProjectionDesc& projDesc);
 
 	/// <summary>Build a projection desc with parameters from a standard camera</summary>
-	ProjectionDesc BuildProjectionDesc(const CameraDesc& sceneCamera, UInt2 viewportDims);
+    /// viewportAspect should be set to viewport width / viewport height
+	ProjectionDesc BuildProjectionDesc(const CameraDesc& sceneCamera, float viewportAspect);
 
 	/// <summary>Build a projection desc for an orthogonal camera</summary>
     ProjectionDesc BuildOrthogonalProjectionDesc(

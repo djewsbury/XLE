@@ -116,7 +116,7 @@ namespace UnitTests
 		cameraDesc._projection = Techniques::CameraDesc::Projection::Orthogonal;
 		cameraDesc._left = -2.0f; cameraDesc._top = -2.0f;
 		cameraDesc._right = 2.0f; cameraDesc._bottom = 2.0f;
-		auto projDesc = Techniques::BuildProjectionDesc(cameraDesc, UInt2{ targetDesc._textureDesc._width, targetDesc._textureDesc._height });
+		auto projDesc = Techniques::BuildProjectionDesc(cameraDesc, targetDesc._textureDesc._width / float(targetDesc._textureDesc._height));
 		return Techniques::BuildGlobalTransformConstants(projDesc);
 	}
 

@@ -1139,7 +1139,7 @@ namespace UnitTests
 			auto techContext = testHelper.CreateTechniqueContext();
 			RenderCore::Techniques::ParsingContext parserContext{techContext, *threadContext};
 			auto defaultViewport = fbHelper.GetDefaultViewport();
-			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(StartingCamera(cameraMins, cameraMaxs), {defaultViewport._width, defaultViewport._height});
+			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(StartingCamera(cameraMins, cameraMaxs), defaultViewport._width / float(defaultViewport._height));
 			parserContext.GetViewport() = defaultViewport;
 
 			{

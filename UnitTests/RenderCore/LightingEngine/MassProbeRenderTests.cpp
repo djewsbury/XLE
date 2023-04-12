@@ -340,7 +340,7 @@ namespace UnitTests
 			Techniques::RenderPassInstance rpi{parsingContext, _fragment};
 			for (unsigned c=0; ;) {
 				auto& projDesc = parsingContext.GetProjectionDesc();
-				projDesc = BuildProjectionDesc(cameras[c], s_testResolution);
+				projDesc = BuildProjectionDesc(cameras[c], s_testResolution[0] / float(s_testResolution[1]));
 
 				RenderCore::Techniques::DrawablesPacket pkt;
 				extWriter->WriteDrawables(pkt, projDesc._worldToProjection);
@@ -462,7 +462,7 @@ namespace UnitTests
 				_multProbeProperties._probeCount = cameras.size();
 				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiViewProperties::_worldToProjection));
 				for (unsigned c=0; c<_multProbeProperties._probeCount; ++c) {
-					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
+					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims[0] / float(viewportDims[1]));
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
 				BindImmediateData(0, "MultiViewProperties"_h);
@@ -575,7 +575,7 @@ namespace UnitTests
 				_multProbeProperties._probeCount = cameras.size();
 				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiViewProperties::_worldToProjection));
 				for (unsigned c=0; c<_multProbeProperties._probeCount; ++c) {
-					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
+					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims[0] / float(viewportDims[1]));
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
 				BindImmediateData(0, "MultiViewProperties"_h);
@@ -662,7 +662,7 @@ namespace UnitTests
 			{
 				_worldToCullingFrustums.reserve(cameras.size());
 				for (const auto& c:cameras)
-					_worldToCullingFrustums.push_back(BuildProjectionDesc(c, viewportDims)._worldToProjection);
+					_worldToCullingFrustums.push_back(BuildProjectionDesc(c, viewportDims[0] / float(viewportDims[1]))._worldToProjection);
 			}
 		};
 
@@ -773,7 +773,7 @@ namespace UnitTests
 				_multProbeProperties._probeCount = cameras.size();
 				REQUIRE(_multProbeProperties._probeCount <= dimof(MultiViewProperties::_worldToProjection));
 				for (unsigned c=0; c<_multProbeProperties._probeCount; ++c) {
-					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims);
+					auto projDesc = RenderCore::Techniques::BuildProjectionDesc(cameras[c], viewportDims[0] / float(viewportDims[1]));
 					_multProbeProperties._worldToProjection[c] = projDesc._worldToProjection;
 				}
 				BindImmediateData(0, "MultiViewProperties"_h);

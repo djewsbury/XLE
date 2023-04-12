@@ -269,14 +269,13 @@ namespace RenderCore { namespace Techniques
 	IShaderResourceDelegate::~IShaderResourceDelegate() {}
     IUniformDelegateManager::~IUniformDelegateManager() {}
 
-	ProjectionDesc BuildProjectionDesc(const CameraDesc& sceneCamera, UInt2 viewportDims)
+	ProjectionDesc BuildProjectionDesc(const CameraDesc& sceneCamera, float viewportAspect)
     {
-        const float aspectRatio = viewportDims[0] / float(viewportDims[1]);
-        auto cameraToProjection = Techniques::Projection(sceneCamera, aspectRatio);
+        auto cameraToProjection = Techniques::Projection(sceneCamera, viewportAspect);
 
         RenderCore::Techniques::ProjectionDesc projDesc;
         projDesc._verticalFov = sceneCamera._verticalFieldOfView;
-        projDesc._aspectRatio = aspectRatio;
+        projDesc._aspectRatio = viewportAspect;
         projDesc._nearClip = sceneCamera._nearClip;
         projDesc._farClip = sceneCamera._farClip;
         projDesc._worldToProjection = Combine(InvertOrthonormalTransform(sceneCamera._cameraToWorld), cameraToProjection);

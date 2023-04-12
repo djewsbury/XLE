@@ -286,7 +286,7 @@ namespace UnitTests
 		FrameBufferProperties fbProps { targetDesc._textureDesc._width, targetDesc._textureDesc._height };
 
 		auto parsingContext = BeginParsingContext(testApparatus, threadContext);
-		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, UInt2{targetDesc._textureDesc._width, targetDesc._textureDesc._height});
+		parsingContext.GetProjectionDesc() = BuildProjectionDesc(camera, targetDesc._textureDesc._width / float(targetDesc._textureDesc._height));
 		parsingContext.GetFrameBufferProperties() = fbProps;
 		
 		auto& stitchingContext = parsingContext.GetFragmentStitchingContext();

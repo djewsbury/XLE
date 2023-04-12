@@ -130,7 +130,7 @@ namespace UnitTests
 			if (auto* skyProcessor = LightingEngine::QueryInterface<LightingEngine::ISkyTextureProcessor>(*lightingTechnique))
 				skyProcessor->SetEquirectangularSource(nullptr, "xleres/DefaultResources/sky/desertsky.jpg");
 
-			parserContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(_camera, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
+			parserContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(_camera, parserContext.GetViewport()._width / float(parserContext.GetViewport()._height));
 
 			auto techniqueInstance = LightingEngine::BeginLightingTechniquePlayback(
 				parserContext,

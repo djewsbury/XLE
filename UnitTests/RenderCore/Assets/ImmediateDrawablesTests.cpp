@@ -144,7 +144,7 @@ namespace UnitTests
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
-				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, UInt2(parsingContext.GetViewport()._width, parsingContext.GetViewport()._height));
+				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, parsingContext.GetViewport()._width / float(parsingContext.GetViewport()._height));
 				immediateDrawables->ExecuteDraws(parsingContext, shapeRenderingDelegates->GetTechniqueDelegate(), fbHelper.GetDesc(), 0);
 			}
 
@@ -179,7 +179,7 @@ namespace UnitTests
 				parsingContext.GetViewport() = fbHelper.GetDefaultViewport();
 				Techniques::CameraDesc camera {};
 				SetTranslation(camera._cameraToWorld, ExtractForward_Cam(camera._cameraToWorld) * -5.0f);
-				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, UInt2(parsingContext.GetViewport()._width, parsingContext.GetViewport()._height));
+				parsingContext.GetProjectionDesc() = Techniques::BuildProjectionDesc(camera, parsingContext.GetViewport()._width / float(parsingContext.GetViewport()._height));
 				immediateDrawables->ExecuteDraws(parsingContext, shapeRenderingDelegates->GetTechniqueDelegate(), fbHelper.GetDesc(), 0);
 			}
 

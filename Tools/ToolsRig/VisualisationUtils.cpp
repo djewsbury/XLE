@@ -99,7 +99,7 @@ namespace ToolsRig
 	{
 		UInt2 viewportDims { parsingContext.GetViewport()._width, parsingContext.GetViewport()._height };
 		auto camDesc = ToolsRig::AsCameraDesc(cam);
-        parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(camDesc, viewportDims);
+        parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(camDesc, viewportDims[0] / float(viewportDims[1]));
 	}
 
     VisCameraSettings AlignCameraToBoundingBox(
@@ -237,7 +237,7 @@ namespace ToolsRig
 			}
 
 			auto cam = _camera ? AsCameraDesc(*_camera) : RenderCore::Techniques::CameraDesc{};
-			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, {parserContext.GetViewport()._width, parserContext.GetViewport()._height});
+			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, parserContext.GetViewport()._width / float(parserContext.GetViewport()._height));
 
 			auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
 			parserContext.GetAttachmentReservation().DefineDoubleBufferAttachments(RenderCore::LightingEngine::GetDoubleBufferAttachments(*actualizedScene->_compiledLightingTechnique));
@@ -892,7 +892,7 @@ namespace ToolsRig
 		UInt2 viewportDims(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
 		assert(viewportDims[0] && viewportDims[1]);
 		auto cam = AsCameraDesc(*_pimpl->_cameraSettings);
-		auto sceneView = Techniques::BuildProjectionDesc(cam, viewportDims);
+		auto sceneView = Techniques::BuildProjectionDesc(cam, viewportDims[0] / float(viewportDims[1]));
 
 		bool doColorByMaterial = 
 			(_pimpl->_settings._colourByMaterial == 1)

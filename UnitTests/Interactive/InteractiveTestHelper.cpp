@@ -100,7 +100,7 @@ namespace UnitTests
 					overlaySystem->OnUpdate(_windowApparatus->_frameRig->GetSmoothedDeltaTime());
 					
 					auto parsingContext = _windowApparatus->_frameRig->StartupFrame(*_windowApparatus);
-					parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(*_activeCamera, {unsigned(parsingContext.GetViewport()._width), unsigned(parsingContext.GetViewport()._height)});
+					parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(*_activeCamera, parsingContext.GetViewport()._width / float(parsingContext.GetViewport()._height));
 
 					TRY {
 						overlaySystem->Render(parsingContext, *this);
@@ -219,7 +219,7 @@ namespace UnitTests
 		{
 			UInt2 viewportDims { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
 			auto oldProjDesc = parserContext.GetProjectionDesc();
-			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(_camera, viewportDims);
+			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(_camera, viewportDims[0] / float(viewportDims[1]));
 			auto testHelper = _testHelper.lock();
 			REQUIRE(testHelper);
 			_overlaySystem->Render(parserContext, *testHelper);
