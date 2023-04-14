@@ -43,7 +43,8 @@ namespace PlatformRig { namespace Overlays
     {
 		using namespace RenderOverlays::DebuggingDisplay;
         InteractableId id = InteractableId_Make(name);
-		RenderOverlays::CommonWidgets::Draw{context, interactables, interfaceState}.ButtonBasic(buttonRect, id, name);
+		RenderOverlays::DrawContext drawContext{context, interactables, interfaceState};
+		RenderOverlays::CommonWidgets::Styler{}.ButtonBasic(drawContext, buttonRect, id, name);
         interactables.Register({buttonRect, id});
     }
 

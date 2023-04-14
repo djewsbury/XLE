@@ -18,7 +18,7 @@ namespace RenderOverlays
 		return { Truncate(topLeft), Truncate(bottomRight) };
 	}
 
-	void LayedOutWidgets::Draw(CommonWidgets::Draw& draw, const Float3x3& transform)
+	void LayedOutWidgets::Draw(DrawContext& draw, const Float3x3& transform)
 	{
 		auto i = _nodeAttachments.begin();
 		auto i2 = _layedOutLocations.begin();
@@ -33,9 +33,9 @@ namespace RenderOverlays
 		}
 	}
 
-	auto LayedOutWidgets::ProcessInput(const PlatformRig::InputContext& inputContext, const OSServices::InputSnapshot& evnt, const Float3x3& transform) -> PlatformRig::ProcessInputResult
+	auto LayedOutWidgets::ProcessInput(IOContext& ioContext, const Float3x3& transform) -> PlatformRig::ProcessInputResult
 	{
-		auto* interfaceState = inputContext.GetService<DebuggingDisplay::InterfaceState>();
+		auto* interfaceState = ioContext.GetInputContext().GetService<DebuggingDisplay::InterfaceState>();
 		auto topMostId = interfaceState->TopMostId();
 		auto i = _nodeAttachments.rbegin();		// doing input in reverse order to drawing
 		auto i2 = _layedOutLocations.rbegin();
@@ -43,7 +43,7 @@ namespace RenderOverlays
 			if (i->_ioDelegate && i->GetGuid() == topMostId) {
 				auto frame = TransformRect(transform, i2->first);
 				auto content = TransformRect(transform, i2->second);
-				auto result = i->_ioDelegate(inputContext, evnt, frame, content);
+				auto result = i->_ioDelegate(ioContext, frame, content);
 				if (result != PlatformRig::ProcessInputResult::Passthrough)
 					return result;
 			}
@@ -87,6 +87,36 @@ namespace RenderOverlays
 		auto res = ptr.get();
 		_imbuedNodes.push_back(std::move(ptr));
 		return res;
+	}
+
+	YGNodeRef LayoutEngine::InsertNewNode()
+	{
+		auto* result = NewNode();
+		InsertChildToStackTop(result);
+		return result;
+	}
+
+	ImbuedNode* LayoutEngine::InsertNewImbuedNode(uint64_t guid)
+	{
+		auto* result = NewImbuedNode(guid);
+		InsertChildToStackTop(*result);
+		return result;
+	}
+
+	YGNodeRef LayoutEngine::InsertAndPushNewNode()
+	{
+		auto* result = NewNode();
+		InsertChildToStackTop(result);
+		PushNode(result);
+		return result;
+	}
+
+	ImbuedNode* LayoutEngine::InsertAndPushNewImbuedNode(uint64_t guid)
+	{
+		auto* result = NewImbuedNode(guid);
+		InsertChildToStackTop(*result);
+		PushNode(*result);
+		return result;
 	}
 
 	LayedOutWidgets LayoutEngine::BuildLayedOutWidgets()

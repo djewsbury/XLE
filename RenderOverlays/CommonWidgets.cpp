@@ -101,7 +101,7 @@ namespace RenderOverlays { namespace CommonWidgets
 	: _editBoxFont(std::move(editBoxFont)), _buttonFont(std::move(buttonFont)), _headingFont(std::move(headingFont)), _depVal(std::move(depVal))
 	{}
 
-	void Draw::SectionHeader(Rect rectangle, StringSection<> name, bool expanded) const
+	void Styler::SectionHeader(DrawContext& context, Rect rectangle, StringSection<> name, bool expanded) const
 	{
 		using namespace DebuggingDisplay;
 		Layout layout { rectangle };
@@ -117,7 +117,7 @@ namespace RenderOverlays { namespace CommonWidgets
 				flipperRectCenter + Coord2(-4, +4)
 			};
 			ColorB arrowColors[] { ColorB::White, ColorB::White, ColorB::White };
-			FillTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
+			FillTriangles(context.GetContext(), arrows, arrowColors, dimof(arrows)/3);
 		} else {
 			auto flipperRectCenter = (flipperRect._topLeft+flipperRect._bottomRight)/2;
 			Float2 arrows[] = {
@@ -126,13 +126,13 @@ namespace RenderOverlays { namespace CommonWidgets
 				flipperRectCenter + Coord2(-4, -4)
 			};
 			ColorB arrowColors[] { ColorB::White, ColorB::White, ColorB::White };
-			FillTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
+			FillTriangles(context.GetContext(), arrows, arrowColors, dimof(arrows)/3);
 		}
 
-		DrawText().Alignment(TextAlignment::Left).Draw(*_context, titleRect, name);
+		DrawText().Alignment(TextAlignment::Left).Draw(context.GetContext(), titleRect, name);
 	}
 
-	void Draw::XToggleButton(const Rect& xBoxRect) const
+	void Styler::XToggleButton(DrawContext& context, const Rect& xBoxRect) const
 	{
 		using namespace DebuggingDisplay;
 		auto xBoxCenter = (xBoxRect._topLeft+xBoxRect._bottomRight) / 2;
@@ -145,38 +145,38 @@ namespace RenderOverlays { namespace CommonWidgets
 		ColorB xBoxColors[] { 
 			ColorB{0x7f, 0x7f, 0x7f}, ColorB{0x7f, 0x7f, 0x7f}, ColorB{0x7f, 0x7f, 0x7f}, ColorB{0x7f, 0x7f, 0x7f}
 		};
-		OutlineRectangle(*_context, Rect{xBoxCenter-Coord2{6, 10}, xBoxCenter+Coord2{6, 10}}, ColorB{80, 80, 80});
-		DrawLines(*_context, xBox, xBoxColors, dimof(xBox)/2);
+		OutlineRectangle(context.GetContext(), Rect{xBoxCenter-Coord2{6, 10}, xBoxCenter+Coord2{6, 10}}, ColorB{80, 80, 80});
+		DrawLines(context.GetContext(), xBox, xBoxColors, dimof(xBox)/2);
 	}
 	
-	void Draw::CheckBox(const Rect& content, bool state) const
+	void Styler::CheckBox(DrawContext& context, const Rect& content, bool state) const
 	{
 		using namespace DebuggingDisplay;
 		if (state) {
-			FillRaisedRoundedRectangle(*_context, content, ColorB{191, 123, 0}, 0.4f);
+			FillRaisedRoundedRectangle(context.GetContext(), content, ColorB{191, 123, 0}, 0.4f);
 
 			Coord2 ptB = (content._topLeft + content._bottomRight) / 2;
 			Coord2 ptA = (content._topLeft + ptB) / 2;
 			Coord2 ptC = Coord2{content._bottomRight[0], content._topLeft[1]};
 			Coord2 lines[] = {ptA, ptB, ptB, ptC};
 			ColorB lineColors[] = {ColorB{38, 38, 38}, ColorB{38, 38, 38}};
-			DrawLines(*_context, lines, lineColors, 2);
+			DrawLines(context.GetContext(), lines, lineColors, 2);
 		} else {
-			FillDepressedRoundedRectangle(*_context, content, ColorB{38, 38, 38}, 0.4f);
+			FillDepressedRoundedRectangle(context.GetContext(), content, ColorB{38, 38, 38}, 0.4f);
 		}
 	}
 
-	void Draw::DisabledStateControl(const Rect& rect, StringSection<> name) const
+	void Styler::DisabledStateControl(DrawContext& context, const Rect& rect, StringSection<> name) const
 	{
 		using namespace DebuggingDisplay;
-		OutlineRoundedRectangle(*_context, rect, ColorB{0x3f, 0x3f, 0x3f}, 1.f, 0.4f);
-		DrawText().Color({0x5f, 0x5f, 0x5f}).Alignment(TextAlignment::Center).Draw(*_context, {rect._topLeft+Coord2{16, 0}, rect._bottomRight-Coord2{16, 0}}, name);
+		OutlineRoundedRectangle(context.GetContext(), rect, ColorB{0x3f, 0x3f, 0x3f}, 1.f, 0.4f);
+		DrawText().Color({0x5f, 0x5f, 0x5f}).Alignment(TextAlignment::Center).Draw(context.GetContext(), {rect._topLeft+Coord2{16, 0}, rect._bottomRight-Coord2{16, 0}}, name);
 	}
 
-	void Draw::RectangleContainer(const Rect& rect) const
+	void Styler::RectangleContainer(DrawContext& context, const Rect& rect) const
 	{
 		using namespace DebuggingDisplay;
-		OutlineRectangle(*_context, rect, ColorB{0x3f, 0x3f, 0x3f});
+		OutlineRectangle(context.GetContext(), rect, ColorB{0x3f, 0x3f, 0x3f});
 	}
 
 	struct ButtonStyle
@@ -199,23 +199,23 @@ namespace RenderOverlays { namespace CommonWidgets
 		return normalState;
 	}
 
-	void Draw::ButtonBasic(const Rect& rect, uint64_t interactable, StringSection<> label) const
+	void Styler::ButtonBasic(DrawContext& context, const Rect& rect, uint64_t interactable, StringSection<> label) const
 	{
 		if (!_fonts) return;
 		using namespace DebuggingDisplay;
-		auto formatting = FormatButton(*_interfaceState, interactable, s_buttonNormal, s_buttonMouseOver, s_buttonPressed);
+		auto formatting = FormatButton(context.GetInterfaceState(), interactable, s_buttonNormal, s_buttonMouseOver, s_buttonPressed);
 		if (formatting._depressed)
-			FillDepressedRoundedRectangle(*_context, rect, formatting._background);
+			FillDepressedRoundedRectangle(context.GetContext(), rect, formatting._background);
 		else
-			FillRaisedRoundedRectangle(*_context, rect, formatting._background);
+			FillRaisedRoundedRectangle(context.GetContext(), rect, formatting._background);
 		DrawText()
 			.Alignment(TextAlignment::Center)
 			.Color(formatting._foreground)
 			.Font(*_fonts->_buttonFont)
-			.Draw(*_context, rect, label);
+			.Draw(context.GetContext(), rect, label);
 	}
 
-	void Draw::KeyIndicatorLabel(const Rect& frame, const Rect& labelContent, StringSection<> label)
+	void Styler::KeyIndicatorLabel(DrawContext& context, const Rect& frame, const Rect& labelContent, StringSection<> label)
 	{
 		const Coord arrowWidth = labelContent.Height()/2;
 		Coord2 A { frame._topLeft[0] + arrowWidth, frame._topLeft[1] };
@@ -229,17 +229,17 @@ namespace RenderOverlays { namespace CommonWidgets
 			A, D, B,
 			B, D, C
 		};
-		DebuggingDisplay::FillTriangles(*_context, triangles, _staticData->_keyIndicatorHighlight, dimof(triangles)/3);
+		DebuggingDisplay::FillTriangles(context.GetContext(), triangles, _staticData->_keyIndicatorHighlight, dimof(triangles)/3);
 
 		Float2 linePts[] {
 			C, D, E, A, B
 		};
-		SolidLineInset(*_context, linePts, ColorB::White, _staticData->_keyIndicatorBorderWeight);
+		SolidLineInset(context.GetContext(), linePts, ColorB::White, _staticData->_keyIndicatorBorderWeight);
 
-		DrawText().Color(ColorB::White).Draw(*_context, labelContent, label);
+		DrawText().Color(ColorB::White).Draw(context.GetContext(), labelContent, label);
 	}
 
-	void Draw::KeyIndicatorKey(const Rect& frame, const Rect& labelContent, StringSection<> label)
+	void Styler::KeyIndicatorKey(DrawContext& context, const Rect& frame, const Rect& labelContent, StringSection<> label)
 	{
 		const Coord arrowWidth = labelContent.Height()/2;
 		Coord2 A { frame._topLeft[0] + arrowWidth, frame._topLeft[1] };
@@ -255,9 +255,9 @@ namespace RenderOverlays { namespace CommonWidgets
 			F, E, C,
 			C, E, D
 		};
-		DebuggingDisplay::FillTriangles(*_context, triangles, ColorB::White, dimof(triangles)/3);
+		DebuggingDisplay::FillTriangles(context.GetContext(), triangles, ColorB::White, dimof(triangles)/3);
 
-		DrawText().Color(ColorB::Black).Draw(*_context, labelContent, label);
+		DrawText().Color(ColorB::Black).Draw(context.GetContext(), labelContent, label);
 	}
 
 	struct KeyIndicatorBreakdown
@@ -308,7 +308,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		return result;
 	}
 
-	void Draw::KeyIndicator(const Rect& frame, const void* precalculatedData)
+	void Styler::KeyIndicator(DrawContext& context, const Rect& frame, const void* precalculatedData)
 	{
 		auto& precalc = *(const KeyIndicatorPrecalculatedData*)precalculatedData;
 		auto breakdown = BuildKeyIndicatorBreakdown(frame.Width(), frame.Height(), precalc._keyWidth, *_staticData);
@@ -320,37 +320,29 @@ namespace RenderOverlays { namespace CommonWidgets
 		breakdown._keyFrame._bottomRight += frame._topLeft;
 		breakdown._keyContent._topLeft += frame._topLeft;
 		breakdown._keyContent._bottomRight += frame._topLeft;
-		KeyIndicatorLabel(breakdown._labelFrame, breakdown._labelContent, precalc._fitLabel);
-		KeyIndicatorKey(breakdown._keyFrame, breakdown._keyContent, precalc._fitKey);
+		KeyIndicatorLabel(context, breakdown._labelFrame, breakdown._labelContent, precalc._fitLabel);
+		KeyIndicatorKey(context, breakdown._keyFrame, breakdown._keyContent, precalc._fitKey);
 	}
 
-	DefaultFontsBox* Draw::TryGetDefaultFontsBox()
+	DefaultFontsBox* Styler::TryGetDefaultFontsBox()
 	{
 		return ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
 	}
 
-	void Draw::StallForDefaultFonts()
+	void Styler::StallForDefaultFonts()
 	{
 		// hack -- just wait for this to be completed
 		while (!ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>())
 			::Assets::Services::GetAssetSets().OnFrameBarrier();
 	}
 
-	Draw::Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState, HoveringLayer& hoverings)
-	: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState), _hoverings(&hoverings)
+	Styler::Styler()
 	{
 		_fonts = TryGetDefaultFontsBox();
 		_staticData = &EntityInterface::MountedData<CommonWidgetsStaticData>::LoadOrDefault("cfg/displays/commonwidgets");
 	}
 
-	Draw::Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState)
-	: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState)
-	{
-		_fonts = TryGetDefaultFontsBox();
-		_staticData = &EntityInterface::MountedData<CommonWidgetsStaticData>::LoadOrDefault("cfg/displays/commonwidgets");
-	}
-
-	Measure::MeasuredRectangle Measure::KeyIndicator(StringSection<> label, StringSection<> key)
+	Styler::MeasuredRectangle Styler::MeasureKeyIndicator(StringSection<> label, StringSection<> key)
 	{
 		auto labelWidth = StringWidth(*_fonts->_buttonFont, label);
 		auto keyWidth = StringWidth(*_fonts->_buttonFont, key);
@@ -361,14 +353,14 @@ namespace RenderOverlays { namespace CommonWidgets
 		const unsigned height = _fonts->_buttonFont->GetFontProperties()._lineHeight + 2*vpadding + 2*borderWeight;
 		const unsigned arrowWidth = height / 2;
 
-		Measure::MeasuredRectangle result;
+		MeasuredRectangle result;
 		result._minHeight = result._height = height;
 		result._minWidth = 4 * hpadding + 3 * arrowWidth + keyWidth;
 		result._width = result._minWidth + labelWidth;
 		return result;
 	}
 
-	std::shared_ptr<void> Measure::KeyIndicator_Precalculate(Coord width, Coord height, StringSection<> label, StringSection<> key)
+	std::shared_ptr<void> Styler::MeasureKeyIndicator_Precalculate(Coord width, Coord height, StringSection<> label, StringSection<> key)
 	{
 		auto result = std::make_shared<KeyIndicatorPrecalculatedData>();
 		result->_fitKey = key.AsString();
@@ -380,12 +372,6 @@ namespace RenderOverlays { namespace CommonWidgets
 		StringEllipsis(buffer, label.Length()+4, *_fonts->_buttonFont, label, breakdown._labelContent.Width());
 		result->_fitLabel = buffer;
 		return result;
-	}
-
-	Measure::Measure()
-	{
-		_fonts = Draw::TryGetDefaultFontsBox();
-		_staticData = &EntityInterface::MountedData<CommonWidgetsStaticData>::LoadOrDefault("cfg/displays/commonwidgets");
 	}
 
 	constexpr auto left       = "left"_key;

@@ -66,7 +66,7 @@ namespace PlatformRig { namespace Overlays
 				0.f, 0.f, 1.f
 			};
 
-			CommonWidgets::Draw draw{context, interactables, interfaceState};
+			DrawContext draw{context, interactables, interfaceState};
 			_layedOutWidgets.Draw(draw, transform);
 			_lastTransform = transform;
 		}
@@ -89,7 +89,8 @@ namespace PlatformRig { namespace Overlays
 				CommonWidgets::HoveringLayer hoveringLayer;
 				PlatformRig::InputContext inputContext;
 				inputContext.AttachService2(interfaceState);
-				return _layedOutWidgets.ProcessInput(inputContext, input, *_lastTransform);
+				IOContext ioContext { inputContext, input };
+				return _layedOutWidgets.ProcessInput(ioContext, *_lastTransform);
 			}
 			return ProcessInputResult::Passthrough;
 		}
@@ -115,9 +116,9 @@ namespace PlatformRig { namespace Overlays
 				YGNodeStyleSetJustifyContent(keyContainer, YGJustifyFlexStart);
 				YGNodeStyleSetAlignItems(keyContainer, YGAlignCenter);
 
-				CommonWidgets::Measure measure;
+				CommonWidgets::Styler styler;
 				for (auto& k:_keyHelps) {
-					auto measure0 = measure.KeyIndicator(k._helpText, k._key);
+					auto measure0 = styler.MeasureKeyIndicator(k._helpText, k._key);
 
 					auto widget = le.NewImbuedNode(0);
 					le.InsertChildToStackTop(*widget);
@@ -129,10 +130,10 @@ namespace PlatformRig { namespace Overlays
 					YGNodeStyleSetFlexShrink(*widget, 1.f);
 					YGNodeStyleSetMargin(*widget, YGEdgeVertical, 4);
 
-					widget->_nodeAttachments._drawDelegate = [kd=k](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-						CommonWidgets::Measure measure;
-						auto data = measure.KeyIndicator_Precalculate(frame.Width(), frame.Height(), kd._helpText, kd._key);
-						draw.KeyIndicator(frame, data.get());
+					widget->_nodeAttachments._drawDelegate = [kd=k](DrawContext& drawContext, Rect frame, Rect content) {
+						CommonWidgets::Styler styler;
+						auto data = styler.MeasureKeyIndicator_Precalculate(frame.Width(), frame.Height(), kd._helpText, kd._key);
+						styler.KeyIndicator(drawContext, frame, data.get());
 					};
 				}
 
@@ -149,7 +150,7 @@ namespace PlatformRig { namespace Overlays
 				YGNodeStyleSetAlignItems(textContainer, YGAlignFlexStart);
 				YGNodeStyleSetMargin(textContainer, YGEdgeHorizontal, 16.f);
 
-				auto fnt = CommonWidgets::Draw::TryGetDefaultFontsBox()->_buttonFont;
+				auto fnt = CommonWidgets::Styler::TryGetDefaultFontsBox()->_buttonFont;
 
 				for (auto& t:_textBlocks) {
 					auto widget = le.NewImbuedNode(0);
@@ -166,8 +167,8 @@ namespace PlatformRig { namespace Overlays
 					auto dynamicData = std::make_shared<DynamicData>();
 					dynamicData->_baseString = t._text;
 
-					widget->_nodeAttachments._drawDelegate = [fnt, dynamicData](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-						DrawText().Font(*fnt).Draw(draw.GetContext(), content, dynamicData->_wordWrappedString);
+					widget->_nodeAttachments._drawDelegate = [fnt, dynamicData](DrawContext& drawContext, Rect frame, Rect content) {
+						DrawText().Font(*fnt).Draw(drawContext.GetContext(), content, dynamicData->_wordWrappedString);
 					};
 					widget->_measureDelegate = [fnt, dynamicData](float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) {
 						// hack -- the "measure" behaviour in yoga doesn't work exactly the way we need it to. The final size of the node
@@ -195,7 +196,7 @@ namespace PlatformRig { namespace Overlays
 		HelpDisplay()
 		{
 			_headingFont = RenderOverlays::MakeFont("OrbitronBlack", 20);
-			CommonWidgets::Draw::StallForDefaultFonts();
+			CommonWidgets::Styler::StallForDefaultFonts();
 		}
 
 	private:

@@ -315,7 +315,8 @@ namespace ToolsRig
 
         Rect selectedManipulatorRect = internalLayout.AllocateFullWidth(lineHeight);
         interactables.Register({selectedManipulatorRect, Id_SelectedManipulator});
-        RenderOverlays::CommonWidgets::Draw{context, interactables, interfaceState}.ButtonBasic(selectedManipulatorRect, Id_SelectedManipulator, manipulator.GetName());
+        RenderOverlays::DrawContext drawContext{context, interactables, interfaceState};
+        RenderOverlays::CommonWidgets::Styler{}.ButtonBasic(drawContext, selectedManipulatorRect, Id_SelectedManipulator, manipulator.GetName());
 
             //  this button is a left/right selector. Create interactable rectangles for the left and right sides
         DrawAndRegisterLeftRight(

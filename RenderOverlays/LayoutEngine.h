@@ -18,15 +18,16 @@ namespace OSServices { class InputSnapshot; }
 
 namespace RenderOverlays
 {
-	namespace CommonWidgets { class Draw; class Input; }
+	class DrawContext;
+	class IOContext;
 
 	class LayedOutWidgets
 	{
 	public:
 		struct NodeDelegates
 		{
-			std::function<void(CommonWidgets::Draw&, Rect frame, Rect content)> _drawDelegate;
-			std::function<PlatformRig::ProcessInputResult(const PlatformRig::InputContext&, const OSServices::InputSnapshot&, Rect frame, Rect content)> _ioDelegate;
+			std::function<void(DrawContext&, Rect frame, Rect content)> _drawDelegate;
+			std::function<PlatformRig::ProcessInputResult(IOContext&, Rect frame, Rect content)> _ioDelegate;
 			uint64_t _guid;
 
 			uint64_t GetGuid() const { return _guid; }
@@ -40,9 +41,8 @@ namespace RenderOverlays
 		std::vector<NodeDelegates> _nodeAttachments;
 		Coord2 _dimensions;
 
-		void Draw(CommonWidgets::Draw& draw, const Float3x3& transform = Identity<Float3x3>());
-
-		PlatformRig::ProcessInputResult ProcessInput(const PlatformRig::InputContext&, const OSServices::InputSnapshot&, const Float3x3& transform = Identity<Float3x3>());
+		void Draw(DrawContext& draw, const Float3x3& transform = Identity<Float3x3>());
+		PlatformRig::ProcessInputResult ProcessInput(IOContext&, const Float3x3& transform = Identity<Float3x3>());
 
 		LayedOutWidgets() = default;
 		LayedOutWidgets(LayedOutWidgets&&) = default;
@@ -87,6 +87,13 @@ namespace RenderOverlays
 	public:
 		YGNodeRef NewNode();
 		ImbuedNode* NewImbuedNode(uint64_t guid);
+
+		YGNodeRef InsertNewNode();
+		ImbuedNode* InsertNewImbuedNode(uint64_t guid);
+
+		YGNodeRef InsertAndPushNewNode();
+		ImbuedNode* InsertAndPushNewImbuedNode(uint64_t guid);
+
 		LayedOutWidgets BuildLayedOutWidgets();
 
 		void InsertChildToStackTop(YGNodeRef);

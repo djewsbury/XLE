@@ -80,8 +80,8 @@ namespace PlatformRig { namespace Overlays
 
 	void ToolTipHover::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform)
 	{
-		CommonWidgets::Draw draw{context, interactables, interfaceState};
-		_layedOutWidgets.Draw(draw, transform);
+		DrawContext drawContext{context, interactables, interfaceState};
+		_layedOutWidgets.Draw(drawContext, transform);
 	}
 
 	ProcessInputResult ToolTipHover::ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& snapshot)
@@ -89,7 +89,8 @@ namespace PlatformRig { namespace Overlays
 		CommonWidgets::HoveringLayer hoveringLayer;
 		PlatformRig::InputContext inputContext;
 		inputContext.AttachService2(interfaceState);
-		return _layedOutWidgets.ProcessInput(inputContext, snapshot);
+		IOContext ioContext { inputContext, snapshot };
+		return _layedOutWidgets.ProcessInput(ioContext);
 	}
 
 	Coord2 ToolTipHover::GetDimensions() const
@@ -106,16 +107,18 @@ namespace PlatformRig { namespace Overlays
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
 
-		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+		auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
 		assert(defaultFonts);
 		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_headingFont, MakeStringSection(label)));
-		YGNodeStyleSetHeight(*labelNode, CommonWidgets::Draw::baseLineHeight);
+		YGNodeStyleSetHeight(*labelNode, CommonWidgets::Styler::baseLineHeight);
 		YGNodeStyleSetFlexGrow(*labelNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
 		YGNodeStyleSetMargin(*labelNode, YGEdgeAll, 2);
 		YGNodeStyleSetAlignSelf(*labelNode, YGAlignCenter);
 		
-		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			DrawText().Font(*draw.GetDefaultFontsBox()._headingFont).Draw(draw.GetContext(), content, label);
+		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](DrawContext& draw, Rect frame, Rect content) {
+			auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
+			if (defaultFonts)
+				DrawText().Font(*defaultFonts->_headingFont).Draw(draw.GetContext(), content, label);
 		};
 		return labelNode;
 	}
@@ -136,15 +139,17 @@ namespace PlatformRig { namespace Overlays
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
 
-		auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+		auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
 		assert(defaultFonts);
 		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(str)));
 		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
 		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
 		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
 
-		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](CommonWidgets::Draw& draw, Rect frame, Rect content) {
-			DrawText().Font(*draw.GetDefaultFontsBox()._buttonFont).Draw(draw.GetContext(), content, str);
+		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](DrawContext& draw, Rect frame, Rect content) {
+			auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
+			if (defaultFonts)
+				DrawText().Font(*defaultFonts->_buttonFont).Draw(draw.GetContext(), content, str);
 		};
 		return labelNode;
 	}
@@ -182,7 +187,7 @@ namespace PlatformRig { namespace Overlays
 
 				const ColorB headingBkColor = 0xff8ea3d2;
 
-				labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), headingBkColor, angleWidth, extraPadding, font=_headingFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+				labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), headingBkColor, angleWidth, extraPadding, font=_headingFont](DrawContext& draw, Rect frame, Rect content) {
 					Coord2 pts[] {
 						{ frame._topLeft[0] + angleWidth, frame._topLeft[1] },
 						{ frame._topLeft[0], (frame._topLeft[1]+frame._bottomRight[1])/2 },
@@ -222,7 +227,7 @@ namespace PlatformRig { namespace Overlays
 			const auto headerHeight = _headingFont->GetFontProperties()._lineHeight + 2*_staticData->_sectionHeaderVertPadding;
 			const auto headerLineOffset = _staticData->_sectionHeaderVertMargins + headerHeight/2;
 			
-			outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](DrawContext& draw, Rect frame, Rect content) {
 				Float2 linePts[] {
 					Float2 { frame._topLeft[0], frame._topLeft[1]+headerLineOffset },
 					Float2 { frame._bottomRight[0], frame._topLeft[1]+headerLineOffset }
@@ -280,7 +285,7 @@ namespace PlatformRig { namespace Overlays
 			const ColorB headingBkColor = _staticData->_sectionHeaderBkColor;
 			const auto headerHeight = _headingFont->GetFontProperties()._lineHeight + 2*_staticData->_sectionHeaderVertPadding;
 			const auto headerLineOffset = _staticData->_sectionHeaderVertMargins + headerHeight/2;
-			outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			outerContainer->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](DrawContext& draw, Rect frame, Rect content) {
 				Float2 linePts[] {
 					Float2 { frame._topLeft[0], frame._topLeft[1]+headerLineOffset },
 					Float2 { frame._bottomRight[0], frame._topLeft[1]+headerLineOffset }
@@ -288,7 +293,7 @@ namespace PlatformRig { namespace Overlays
 				RenderOverlays::DashLine(draw.GetContext(), linePts, headingBkColor, 1.f);
 			};
 
-			midSeparator->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			midSeparator->_nodeAttachments._drawDelegate = [headingBkColor, headerLineOffset](DrawContext& draw, Rect frame, Rect content) {
 				Float2 linePts[] {
 					Float2 { (frame._topLeft[0] + frame._bottomRight[0])/2, frame._topLeft[1] + headerLineOffset },
 					Float2 { (frame._topLeft[0] + frame._bottomRight[0])/2, frame._bottomRight[1] }
@@ -340,7 +345,7 @@ namespace PlatformRig { namespace Overlays
 			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
 			YGNodeStyleSetFlexShrink(*labelNode, 0.f);
 
-			labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), font=_valueFont](DrawContext& draw, Rect frame, Rect content) {
 				DrawText().Font(*font).Draw(draw.GetContext(), content, label);
 			};
 			return labelNode;
@@ -386,7 +391,7 @@ namespace PlatformRig { namespace Overlays
 			attachedData->_fitLabel = attachedData->_originalLabel;
 			attachedData->_cachedWidth = (unsigned)maxWidth;
 
-			labelNode->_nodeAttachments._drawDelegate = [attachedData, font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			labelNode->_nodeAttachments._drawDelegate = [attachedData, font=_valueFont](DrawContext& draw, Rect frame, Rect content) {
 				// We don't get a notification after layout is finished -- so typically on the first render we may have to adjust
 				// our string to fit
 				if (content.Width() != attachedData->_cachedWidth) {
@@ -401,7 +406,7 @@ namespace PlatformRig { namespace Overlays
 			#if 0
 				labelNode->_measureDelegate = [attachedData](float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) {
 					if (widthMode != YGMeasureMode::YGMeasureModeExactly) {
-						auto* defaultFonts = CommonWidgets::Draw::TryGetDefaultFontsBox();
+						auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
 						assert(defaultFonts);
 						char buffer[MaxPath];
 						auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *defaultFonts->_buttonFont, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), width);
@@ -429,7 +434,7 @@ namespace PlatformRig { namespace Overlays
 			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
 			YGNodeStyleSetFlexShrink(*labelNode, 0.f);
 
-			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](DrawContext& draw, Rect frame, Rect content) {
 				DrawText().Font(*font).Draw(draw.GetContext(), content, str);
 			};
 			return labelNode;
@@ -450,7 +455,7 @@ namespace PlatformRig { namespace Overlays
 			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
 			YGNodeStyleSetFlexShrink(*labelNode, 0.f);
 
-			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](DrawContext& draw, Rect frame, Rect content) {
 				DrawText().Font(*font).Draw(draw.GetContext(), content, str);
 			};
 			return labelNode;
@@ -466,7 +471,7 @@ namespace PlatformRig { namespace Overlays
 			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
 			YGNodeStyleSetFlexShrink(*labelNode, 0.f);
 
-			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			labelNode->_nodeAttachments._drawDelegate = [str=std::move(str), font=_valueFont](DrawContext& draw, Rect frame, Rect content) {
 				DrawText().Font(*font).Draw(draw.GetContext(), content, str);
 			};
 			return labelNode;
@@ -482,7 +487,7 @@ namespace PlatformRig { namespace Overlays
 			YGNodeStyleSetFlexGrow(*connectorNode, 1.0f);
 
 			ColorB color = _staticData->_expandingConnectorColor;
-			connectorNode->_nodeAttachments._drawDelegate = [font=_valueFont, dotWidth=_dotWidth, color](CommonWidgets::Draw& draw, Rect frame, Rect content) {
+			connectorNode->_nodeAttachments._drawDelegate = [font=_valueFont, dotWidth=_dotWidth, color](DrawContext& draw, Rect frame, Rect content) {
 				// Rendering these could actually end up a little expensive, because the majority of glyphs could end up being these
 				char buffer[256];
 				auto count = std::min(unsigned(dimof(buffer)-1), content.Width() / dotWidth);
@@ -499,13 +504,13 @@ namespace PlatformRig { namespace Overlays
 			auto buttonNode = KeyValue(layoutEngine, std::move(label));
 
 			buttonNode->_nodeAttachments._guid = interactable;
-			buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](const InputContext& input, auto& evnt, Rect, Rect) {
-				auto* interfaceState = input.GetService<DebuggingDisplay::InterfaceState>();
+			buttonNode->_nodeAttachments._ioDelegate = [event=std::move(event), interactable](IOContext& ioContext, Rect, Rect) {
+				auto* interfaceState = ioContext.GetInputContext().GetService<DebuggingDisplay::InterfaceState>();
 				if (!interfaceState) return PlatformRig::ProcessInputResult::Passthrough;
 
-				if (evnt.IsPress_LButton()) {
+				if (ioContext.GetEvent().IsPress_LButton()) {
 					interfaceState->BeginCapturing(interfaceState->TopMostHotArea());
-				} else if (evnt.IsRelease_LButton()) {
+				} else if (ioContext.GetEvent().IsRelease_LButton()) {
 					if (interfaceState->GetCapture()._hotArea._id == interactable) {
 						interfaceState->EndCapturing();
 						if (Contains(interfaceState->TopMostHotArea()._rect, interfaceState->MousePosition()))
@@ -919,7 +924,7 @@ namespace PlatformRig { namespace Overlays
 		, _placementsEditor(std::move(placements))
 		{
 			_headingFont = RenderOverlays::MakeFont("OrbitronBlack", 20);
-			CommonWidgets::Draw::StallForDefaultFonts();
+			CommonWidgets::Styler::StallForDefaultFonts();
 		}
 
 	private:

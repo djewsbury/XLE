@@ -6,6 +6,41 @@
 #include "DebuggingDisplay.h"
 #include "../Utility/StringFormat.h"
 
+namespace RenderOverlays
+{
+	namespace CommonWidgets { class HoveringLayer; }
+
+	struct DrawContext
+	{
+		IOverlayContext& GetContext() { return *_context; }
+		DebuggingDisplay::Interactables& GetInteractables() { return *_interactables; }
+		DebuggingDisplay::InterfaceState& GetInterfaceState() { return *_interfaceState; }
+
+		IOverlayContext* _context = nullptr;
+		DebuggingDisplay::Interactables* _interactables = nullptr;
+		DebuggingDisplay::InterfaceState* _interfaceState = nullptr;
+		CommonWidgets::HoveringLayer* _hoverings = nullptr;
+
+		DrawContext(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState)
+		: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState) {}
+
+		DrawContext(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState, CommonWidgets::HoveringLayer& hoverings)
+		: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState), _hoverings(&hoverings) {}
+	};
+
+	struct IOContext
+	{
+		PlatformRig::InputContext& GetInputContext() { return *_inputContext; }
+		const OSServices::InputSnapshot& GetEvent() { return *_event; }
+
+		PlatformRig::InputContext* _inputContext = nullptr;
+		const OSServices::InputSnapshot* _event = nullptr;
+
+		IOContext(PlatformRig::InputContext& inputContext, const OSServices::InputSnapshot& evnt)
+		: _inputContext(&inputContext), _event(&evnt) {}
+	};
+}
+
 namespace RenderOverlays { namespace CommonWidgets
 {
 	template<typename CharType=char>
@@ -53,73 +88,56 @@ namespace RenderOverlays { namespace CommonWidgets
 	};
 
 	struct CommonWidgetsStaticData;
-	class Draw
+	class Styler
 	{
 	public:
 		static constexpr unsigned baseLineHeight = 20;
 		
-		void SectionHeader(Rect rectangle, StringSection<> name, bool expanded) const;
+		void SectionHeader(DrawContext&, Rect rectangle, StringSection<> name, bool expanded) const;
 		template<typename Type>
-			void LeftRight(Rect valueBox, uint64_t interactable, StringSection<> name, Type value) const;
+			void LeftRight(DrawContext&, Rect valueBox, uint64_t interactable, StringSection<> name, Type value) const;
 		template<typename Type>
-			void Bounded(Rect valueBox, uint64_t interactable, StringSection<> name, Type value, Type leftSideValue, Type rightSideValue) const;
-		void XToggleButton(const Rect& xBoxRect) const;
-		void CheckBox(const Rect& content, bool state) const;
-		void DisabledStateControl(const Rect& rect, StringSection<> name) const;
-		void RectangleContainer(const Rect& rect) const;
-		void ButtonBasic(const Rect& rect, uint64_t interactable, StringSection<> label) const;
+			void Bounded(DrawContext&, Rect valueBox, uint64_t interactable, StringSection<> name, Type value, Type leftSideValue, Type rightSideValue) const;
+		void XToggleButton(DrawContext&, const Rect& xBoxRect) const;
+		void CheckBox(DrawContext&, const Rect& content, bool state) const;
+		void DisabledStateControl(DrawContext&, const Rect& rect, StringSection<> name) const;
+		void RectangleContainer(DrawContext&, const Rect& rect) const;
+		void ButtonBasic(DrawContext&, const Rect& rect, uint64_t interactable, StringSection<> label) const;
 
-		void KeyIndicator(const Rect& frame, const void* precalculatedData);
-		void KeyIndicatorLabel(const Rect& frame, const Rect& labelContent, StringSection<> label);
-		void KeyIndicatorKey(const Rect& frame, const Rect& labelContent, StringSection<> label);
+		void KeyIndicator(DrawContext&, const Rect& frame, const void* precalculatedData);
+		void KeyIndicatorLabel(DrawContext&, const Rect& frame, const Rect& labelContent, StringSection<> label);
+		void KeyIndicatorKey(DrawContext&, const Rect& frame, const Rect& labelContent, StringSection<> label);
 
-		IOverlayContext& GetContext() { return *_context; }
-		DebuggingDisplay::Interactables& GetInteractables() { return *_interactables; }
-		DebuggingDisplay::InterfaceState& GetInterfaceState() { return *_interfaceState; }
+		struct MeasuredRectangle { Coord _minWidth, _width, _minHeight, _height; };
+		MeasuredRectangle MeasureKeyIndicator(StringSection<> label, StringSection<> key);
+		std::shared_ptr<void> MeasureKeyIndicator_Precalculate(Coord width, Coord height, StringSection<> label, StringSection<> key);
+
 		DefaultFontsBox& GetDefaultFontsBox() { return *_fonts; }
 		static DefaultFontsBox* TryGetDefaultFontsBox();
 		static void StallForDefaultFonts();
 
-		Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState, HoveringLayer& hoverings);
-		Draw(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState);
-	private:
-		IOverlayContext* _context;
-		DebuggingDisplay::Interactables* _interactables;
-		DebuggingDisplay::InterfaceState* _interfaceState;
-		HoveringLayer* _hoverings;
-		DefaultFontsBox* _fonts;
-		const CommonWidgetsStaticData* _staticData;
-	};
-
-	class Measure
-	{
-	public:
-		struct MeasuredRectangle { Coord _minWidth, _width, _minHeight, _height; };
-		MeasuredRectangle KeyIndicator(StringSection<> label, StringSection<> key);
-		std::shared_ptr<void> KeyIndicator_Precalculate(Coord width, Coord height, StringSection<> label, StringSection<> key);
-
-		Measure();
+		Styler();
 	private:
 		DefaultFontsBox* _fonts;
 		const CommonWidgetsStaticData* _staticData;
 	};
 
 	template<typename Type>
-		void Draw::LeftRight(Rect valueBox, uint64_t interactable, StringSection<> name, Type value) const
+		void Styler::LeftRight(DrawContext& drawContext, Rect valueBox, uint64_t interactable, StringSection<> name, Type value) const
 	{
 		using namespace DebuggingDisplay;
 		Rect leftRect { valueBox._topLeft, Coord2{(valueBox._topLeft[0]+valueBox._bottomRight[0])/2, valueBox._bottomRight[1]} };
 		Rect rightRect { Coord2{(valueBox._topLeft[0]+valueBox._bottomRight[0])/2, valueBox._topLeft[1]}, valueBox._bottomRight };
 
-		bool leftHighlighted = _interfaceState->HasMouseOver(interactable) && Contains(leftRect, _interfaceState->MousePosition());
-		bool rightHighlighted = _interfaceState->HasMouseOver(interactable) && Contains(rightRect, _interfaceState->MousePosition());
+		bool leftHighlighted = drawContext.GetInterfaceState().HasMouseOver(interactable) && Contains(leftRect, drawContext.GetInterfaceState().MousePosition());
+		bool rightHighlighted = drawContext.GetInterfaceState().HasMouseOver(interactable) && Contains(rightRect, drawContext.GetInterfaceState().MousePosition());
 		if (leftHighlighted)
-			FillRoundedRectangle(*_context, leftRect, ColorB{58, 58, 58}, 0.4f, Corner::TopLeft|Corner::BottomLeft);
+			FillRoundedRectangle(drawContext.GetContext(), leftRect, ColorB{58, 58, 58}, 0.4f, Corner::TopLeft|Corner::BottomLeft);
 		if (rightHighlighted)
-			FillRoundedRectangle(*_context, rightRect, ColorB{58, 58, 58}, 0.4f, Corner::TopRight|Corner::BottomRight);
+			FillRoundedRectangle(drawContext.GetContext(), rightRect, ColorB{58, 58, 58}, 0.4f, Corner::TopRight|Corner::BottomRight);
 
-		// FillDepressedRoundedRectangle(context, valueBox, ColorB{38, 38, 38}, 0.4f);
-		OutlineRoundedRectangle(*_context, valueBox, ColorB{0x7f, 0x7f, 0x7f}, 1.f, 0.4f);
+		// FillDepressedRoundedRectangle(drawContext.GetContext(), valueBox, ColorB{38, 38, 38}, 0.4f);
+		OutlineRoundedRectangle(drawContext.GetContext(), valueBox, ColorB{0x7f, 0x7f, 0x7f}, 1.f, 0.4f);
 
 		Float2 arrows[] = {
 			Coord2(valueBox._topLeft[0] + 8, (valueBox._topLeft[1]+valueBox._bottomRight[1])/2),
@@ -136,38 +154,39 @@ namespace RenderOverlays { namespace CommonWidgets
 			leftColor, leftColor, leftColor,
 			rightColor, rightColor, rightColor
 		};
-		FillTriangles(*_context, arrows, arrowColors, dimof(arrows)/3);
+		FillTriangles(drawContext.GetContext(), arrows, arrowColors, dimof(arrows)/3);
 
-		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(*_context, {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, name);
+		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, name);
 		StringMeld<256> valueStr;
 		valueStr << value;
-		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Right).Draw(*_context, {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, valueStr.AsStringSection());
+		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Right).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, valueStr.AsStringSection());
 	}
 
 	template<typename Type>
-		void Draw::Bounded(Rect valueBox, uint64_t interactable, StringSection<> name, Type value, Type leftSideValue, Type rightSideValue) const
+		void Styler::Bounded(DrawContext& drawContext, Rect valueBox, uint64_t interactable, StringSection<> name, Type value, Type leftSideValue, Type rightSideValue) const
 	{
 		using namespace DebuggingDisplay;
+		assert(drawContext._hoverings);
 		float alpha = (value - leftSideValue) / float(rightSideValue - leftSideValue);
 		alpha = std::max(0.f, std::min(1.0f, alpha));
-		ColorB filledAreaColor = (_interfaceState->HasMouseOver(interactable) && !_interfaceState->IsMouseButtonHeld() && _hoverings->_hoveringCtrl != interactable) ? ColorB{58, 58, 58} : ColorB{51, 51, 51};
-		ColorB outlineColor = (_interfaceState->HasMouseOver(interactable) && !_interfaceState->IsMouseButtonHeld() && _hoverings->_hoveringCtrl != interactable) ? ColorB{0x9f, 0x9f, 0x9f} : ColorB{0x7f, 0x7f, 0x7f};
-		FillRoundedRectangle(*_context, Rect{{LinearInterpolate(valueBox._topLeft[0], valueBox._bottomRight[0], alpha), valueBox._topLeft[1]}, valueBox._bottomRight}, filledAreaColor, 0.4f, Corner::TopRight|Corner::BottomRight);
-		OutlineRoundedRectangle(*_context, valueBox, outlineColor, 1.f, 0.4f);
+		ColorB filledAreaColor = (drawContext.GetInterfaceState().HasMouseOver(interactable) && !drawContext.GetInterfaceState().IsMouseButtonHeld() && drawContext._hoverings->_hoveringCtrl != interactable) ? ColorB{58, 58, 58} : ColorB{51, 51, 51};
+		ColorB outlineColor = (drawContext.GetInterfaceState().HasMouseOver(interactable) && !drawContext.GetInterfaceState().IsMouseButtonHeld() && drawContext._hoverings->_hoveringCtrl != interactable) ? ColorB{0x9f, 0x9f, 0x9f} : ColorB{0x7f, 0x7f, 0x7f};
+		FillRoundedRectangle(drawContext.GetContext(), Rect{{LinearInterpolate(valueBox._topLeft[0], valueBox._bottomRight[0], alpha), valueBox._topLeft[1]}, valueBox._bottomRight}, filledAreaColor, 0.4f, Corner::TopRight|Corner::BottomRight);
+		OutlineRoundedRectangle(drawContext.GetContext(), valueBox, outlineColor, 1.f, 0.4f);
 
-		if (_hoverings->_hoveringCtrl == interactable) {
+		if (drawContext._hoverings->_hoveringCtrl == interactable) {
 			auto textBoxRect = valueBox;
 			textBoxRect._topLeft += Coord2(8, 2);
 			textBoxRect._bottomRight -= Coord2(8, 2);
-			FillAndOutlineRectangle(*_context, textBoxRect, ColorB{38, 38, 38}, ColorB{192, 192, 192});
+			FillAndOutlineRectangle(drawContext.GetContext(), textBoxRect, ColorB{38, 38, 38}, ColorB{192, 192, 192});
 			if (_fonts)
-				Render(*_context, textBoxRect, _fonts->_editBoxFont, _hoverings->_textEntry);
+				Render(drawContext.GetContext(), textBoxRect, _fonts->_editBoxFont, drawContext._hoverings->_textEntry);
 		} else {
-			DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(*_context, {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, name);
+			DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, name);
 			if (_fonts) {
 				StringMeld<256> valueStr;
 				valueStr << value;
-				DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Right).Font(*_fonts->_editBoxFont).Draw(*_context, {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, valueStr.AsStringSection());
+				DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Right).Font(*_fonts->_editBoxFont).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, valueStr.AsStringSection());
 			}
 		}
 	}
