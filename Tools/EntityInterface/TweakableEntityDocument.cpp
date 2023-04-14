@@ -404,7 +404,6 @@ namespace EntityInterface
 	}
 
 	IDynamicOutputFormatter::~IDynamicOutputFormatter() = default;
-	IWidgetsLayoutFormatter::~IWidgetsLayoutFormatter() = default;
 
 }
 

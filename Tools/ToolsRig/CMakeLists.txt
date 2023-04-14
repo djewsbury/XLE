@@ -30,7 +30,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		../EntityInterface/FormatterAdapters.cpp
 		../EntityInterface/RetainedEntities.cpp
 		../EntityInterface/TweakableEntityDocument.cpp
-		../EntityInterface/TweakableWidgets.cpp
+		../EntityInterface/WidgetsLayoutFormatter.cpp
 		#../EntityInterface/GameObjects.cpp
 		../EntityInterface/PlacementEntities.cpp
 		#../EntityInterface/EnvironmentSettings.cpp

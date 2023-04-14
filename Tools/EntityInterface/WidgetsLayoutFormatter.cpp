@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "TweakableEntityDocument.h"
+#include "WidgetsLayoutFormatter.h"
 #include "MinimalBindingEngine.h"
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
@@ -493,6 +493,12 @@ namespace EntityInterface
 		std::vector<uint64_t> _hierarchicalEnabledStates;
 	};
 
+	std::shared_ptr<IWidgetsLayoutFormatter> CreateWidgetsLayoutFormatter(
+		std::shared_ptr<MinimalBindingEngine> bindingEngine)
+	{
+		return std::make_shared<WidgetsLayoutFormatter>(std::move(bindingEngine));
+	}
+
 
 	class TweakerGroup : public IWidget
 	{
@@ -551,5 +557,7 @@ namespace EntityInterface
 	{
 		return std::make_shared<TweakerGroup>(doc, std::move(layoutFn));
 	}
+
+	IWidgetsLayoutFormatter::~IWidgetsLayoutFormatter() = default;
 }
 
