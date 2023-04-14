@@ -23,24 +23,57 @@ namespace EntityInterface
 	constexpr auto enter      = "enter"_key;
 	constexpr auto escape     = "escape"_key;
 
-	class WidgetsLayoutFormatter : public EntityInterface::IWidgetsLayoutFormatter
+	class WidgetsLayoutContext : public EntityInterface::IWidgetsLayoutContext
 	{
 	public:
 		LayoutEngine _layoutEngine;
 
-		ImbuedNode* BeginSharedLeftRightCtrl(StringSection<> name, const V<uint64_t>& modelValue, uint64_t interactable)
+		MinimalBindingEngine& GetBindingEngine() override { return *_state; }
+		std::shared_ptr<MinimalBindingEngine> GetBindingEnginePtr() override { return _state; }
+		LayoutEngine& GetLayoutEngine() override { return _layoutEngine; }
+		RenderOverlays::GuidStackHelper& GetGuidStack() override { return _layoutEngine.GuidStack(); }
+
+		void PushHierarchicalEnabledState(uint64_t guid) override { _hierarchicalEnabledStates.push_back(guid); }
+		void PopHierarchicalEnabledState() override { _hierarchicalEnabledStates.pop_back(); }
+		HierarchicalEnabledState EnabledByHierarchy() const override
+		{
+			for (auto i=_hierarchicalEnabledStates.rbegin(); i!=_hierarchicalEnabledStates.rend(); ++i) {
+				if (*i != 0) {
+					auto state = _state->IsEnabled(*i);
+					return state ? HierarchicalEnabledState::EnableChildren : HierarchicalEnabledState::DisableChildren;
+				}
+			}
+			return HierarchicalEnabledState::NoImpact;
+		}
+
+		LayedOutWidgets BuildLayedOutWidgets()
+		{
+			return _layoutEngine.BuildLayedOutWidgets();
+		}
+
+		WidgetsLayoutContext(std::shared_ptr<MinimalBindingEngine> state) : _state(std::move(state)) {}
+
+	private:
+		std::shared_ptr<MinimalBindingEngine> _state;
+		std::vector<uint64_t> _hierarchicalEnabledStates;
+	};
+
+	class CommonWidgetsStyler : public ICommonWidgetsStyler
+	{
+	public:
+		ImbuedNode* BeginSharedLeftRightCtrl(IWidgetsLayoutContext& context, StringSection<> name, const V<uint64_t>& modelValue, uint64_t interactable)
 		{
 			const auto lineHeight = baseLineHeight+4;
-			auto baseNode = _layoutEngine.NewNode();
+			auto baseNode = context.GetLayoutEngine().NewNode();
 			YGNodeStyleSetWidthPercent(baseNode, 100.0f);
 			YGNodeStyleSetHeight(baseNode, lineHeight+4);
 			YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
 			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
 			YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-			_layoutEngine.InsertChildToStackTop(baseNode);
-			_layoutEngine.PushNode(baseNode);
+			context.GetLayoutEngine().InsertChildToStackTop(baseNode);
+			context.GetLayoutEngine().PushNode(baseNode);
 
-			auto mainCtrl = _layoutEngine.NewImbuedNode(interactable);
+			auto mainCtrl = context.GetLayoutEngine().NewImbuedNode(interactable);
 			YGNodeStyleSetFlexGrow(mainCtrl->YGNode(), 1.0f);
 			YGNodeStyleSetHeightPercent(mainCtrl->YGNode(), 100.f);
 			YGNodeStyleSetMargin(mainCtrl->YGNode(), YGEdgeAll, 2);
@@ -48,19 +81,19 @@ namespace EntityInterface
 				if (auto str = modelValue.TryQueryNonLayoutAsString())
 					draw.LeftRight(frame, interactable, nameStr, *str);
 			};
-			_layoutEngine.InsertChildToStackTop(mainCtrl->YGNode());
+			context.GetLayoutEngine().InsertChildToStackTop(mainCtrl->YGNode());
 			return mainCtrl;
 		}
 
 		template<typename Type>
-			void WriteHalfDoubleTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& minValue, const V<Type>& maxValue)
+			void WriteHalfDoubleTemplate(IWidgetsLayoutContext& context, StringSection<> name, const V<Type>& modelValue, const V<Type>& minValue, const V<Type>& maxValue)
 		{
-			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
 			
-			auto enabledByHierarchy = EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
+			auto enabledByHierarchy = context.EnabledByHierarchy();
+			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
 			
-				auto mainCtrl = BeginSharedLeftRightCtrl(name, modelValue, interactable);
+				auto mainCtrl = BeginSharedLeftRightCtrl(context, name, modelValue, interactable);
 				mainCtrl->_nodeAttachments._ioDelegate = [modelValue, minValue, maxValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
 					bool leftSide = evnt._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
 					if (evnt.IsRelease_LButton()) {
@@ -77,26 +110,26 @@ namespace EntityInterface
 				};
 
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(interactable);
-				_layoutEngine.PopNode();
+					DeactivateButton(context, interactable);
+				context.GetLayoutEngine().PopNode();
 
 			} else {
-				DisabledStateButton(interactable, name, enabledByHierarchy);
+				DisabledStateButton(context, interactable, name, enabledByHierarchy);
 			}
 		}
 
-		void WriteHalfDoubleInt(StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& min, const V<int64_t>& max) override { WriteHalfDoubleTemplate(name, modelValue, min, max); }
-		void WriteHalfDoubleFloat(StringSection<> name, const V<float>& modelValue, const V<float>& min, const V<float>& max) override { WriteHalfDoubleTemplate(name, modelValue, min, max); }
+		void WriteHalfDoubleInt(IWidgetsLayoutContext& context, StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& min, const V<int64_t>& max) override { WriteHalfDoubleTemplate(context, name, modelValue, min, max); }
+		void WriteHalfDoubleFloat(IWidgetsLayoutContext& context, StringSection<> name, const V<float>& modelValue, const V<float>& min, const V<float>& max) override { WriteHalfDoubleTemplate(context, name, modelValue, min, max); }
 
 		template<typename Type>
-			void WriteDecrementIncrementTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& minValue, const V<Type>& maxValue)
+			void WriteDecrementIncrementTemplate(IWidgetsLayoutContext& context, StringSection<> name, const V<Type>& modelValue, const V<Type>& minValue, const V<Type>& maxValue)
 		{
-			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
 			
-			auto enabledByHierarchy = EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
+			auto enabledByHierarchy = context.EnabledByHierarchy();
+			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
 			
-				auto mainCtrl = BeginSharedLeftRightCtrl(name, modelValue, interactable);
+				auto mainCtrl = BeginSharedLeftRightCtrl(context, name, modelValue, interactable);
 				mainCtrl->_nodeAttachments._ioDelegate = [modelValue, minValue, maxValue](auto& inputContext, auto& evnt, Rect frame, Rect content) {
 					bool leftSide = evnt._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
 					if (evnt.IsRelease_LButton()) {
@@ -113,52 +146,52 @@ namespace EntityInterface
 				};
 
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(interactable);
-				_layoutEngine.PopNode();
+					DeactivateButton(context, interactable);
+				context.GetLayoutEngine().PopNode();
 
 			} else {
-				DisabledStateButton(interactable, name, enabledByHierarchy);
+				DisabledStateButton(context, interactable, name, enabledByHierarchy);
 			}
 		}
 
-		void WriteDecrementIncrementInt(StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& min, const V<int64_t>& max) override { WriteDecrementIncrementTemplate(name, modelValue, min, max); }
-		void WriteDecrementIncrementFloat(StringSection<> name, const V<float>& modelValue, const V<float>& min, const V<float>& max) override { WriteDecrementIncrementTemplate(name, modelValue, min, max); }
+		void WriteDecrementIncrementInt(IWidgetsLayoutContext& context, StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& min, const V<int64_t>& max) override { WriteDecrementIncrementTemplate(context, name, modelValue, min, max); }
+		void WriteDecrementIncrementFloat(IWidgetsLayoutContext& context, StringSection<> name, const V<float>& modelValue, const V<float>& min, const V<float>& max) override { WriteDecrementIncrementTemplate(context, name, modelValue, min, max); }
 
-		void HorizontalControlLabel(StringSection<> name)
+		void HorizontalControlLabel(IWidgetsLayoutContext& context, StringSection<> name)
 		{
-			auto label = _layoutEngine.NewImbuedNode(0);
+			auto label = context.GetLayoutEngine().NewImbuedNode(0);
 			YGNodeStyleSetWidth(label->YGNode(), 200);
 			YGNodeStyleSetHeightPercent(label->YGNode(), 100.f);
-			_layoutEngine.InsertChildToStackTop(label->YGNode());
+			context.GetLayoutEngine().InsertChildToStackTop(label->YGNode());
 			label->_nodeAttachments._drawDelegate = [nameStr=name.AsString()](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 				DrawText().Draw(draw.GetContext(), content, nameStr);
 			};
 		}
 
-		void WriteHorizontalCombo(StringSection<> name, const V<int64_t>& modelValue, IteratorRange<const std::pair<int64_t, const char*>*> options) override
+		void WriteHorizontalCombo(IWidgetsLayoutContext& context, StringSection<> name, const V<int64_t>& modelValue, IteratorRange<const std::pair<int64_t, const char*>*> options) override
 		{
-			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
 			const auto lineHeight = baseLineHeight+4;
 
-			auto enabledByHierarchy = EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
+			auto enabledByHierarchy = context.EnabledByHierarchy();
+			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
 
-				auto baseNode = _layoutEngine.NewNode();
+				auto baseNode = context.GetLayoutEngine().NewNode();
 				YGNodeStyleSetWidthPercent(baseNode, 100.0f);
 				YGNodeStyleSetHeight(baseNode, lineHeight+4);
 				YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
 				YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
 				YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-				_layoutEngine.InsertChildToStackTop(baseNode);
-				_layoutEngine.PushNode(baseNode);
+				context.GetLayoutEngine().InsertChildToStackTop(baseNode);
+				context.GetLayoutEngine().PushNode(baseNode);
 
-				HorizontalControlLabel(name);
+				HorizontalControlLabel(context, name);
 
 				for (unsigned c=0; c<options.size(); ++c) {
-					auto node = _layoutEngine.NewImbuedNode(interactable+1+c);
+					auto node = context.GetLayoutEngine().NewImbuedNode(interactable+1+c);
 					YGNodeStyleSetFlexGrow(node->YGNode(), 1.0f);
 					YGNodeStyleSetHeightPercent(node->YGNode(), 100.f);
-					_layoutEngine.InsertChildToStackTop(node->YGNode());
+					context.GetLayoutEngine().InsertChildToStackTop(node->YGNode());
 					Corner::BitField corners = 0;
 					if (c == 0) corners |= Corner::TopLeft|Corner::BottomLeft;
 					if ((c+1) == options.size()) corners |= Corner::TopRight|Corner::BottomRight;
@@ -177,32 +210,32 @@ namespace EntityInterface
 				}
 
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(interactable);
-				_layoutEngine.PopNode();
+					DeactivateButton(context, interactable);
+				context.GetLayoutEngine().PopNode();
 
 			} else {
-				DisabledStateButton(interactable, name, enabledByHierarchy);
+				DisabledStateButton(context, interactable, name, enabledByHierarchy);
 			}
 		}
 
-		void BeginCheckboxControl_Internal(StringSection<> name, const V<bool>& modelValue, uint64_t interactable)
+		void BeginCheckboxControl_Internal(IWidgetsLayoutContext& context, StringSection<> name, const V<bool>& modelValue, uint64_t interactable)
 		{
 			const auto lineHeight = baseLineHeight+4;
-			auto baseNode = _layoutEngine.NewNode();
+			auto baseNode = context.GetLayoutEngine().NewNode();
 			YGNodeStyleSetWidthPercent(baseNode, 100.0f);
 			YGNodeStyleSetHeight(baseNode, lineHeight+4);
 			YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
 			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
 			YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-			_layoutEngine.InsertChildToStackTop(baseNode);
-			_layoutEngine.PushNode(baseNode);
+			context.GetLayoutEngine().InsertChildToStackTop(baseNode);
+			context.GetLayoutEngine().PushNode(baseNode);
 
-			HorizontalControlLabel(name);
+			HorizontalControlLabel(context, name);
 
-			auto stateBox = _layoutEngine.NewImbuedNode(interactable);
+			auto stateBox = context.GetLayoutEngine().NewImbuedNode(interactable);
 			YGNodeStyleSetWidth(stateBox->YGNode(), 16);
 			YGNodeStyleSetHeight(stateBox->YGNode(), 16);
-			_layoutEngine.InsertChildToStackTop(stateBox->YGNode());
+			context.GetLayoutEngine().InsertChildToStackTop(stateBox->YGNode());
 			stateBox->_nodeAttachments._drawDelegate = [modelValue](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 				draw.CheckBox(content, modelValue.QueryNonLayout().value());
 			};
@@ -215,42 +248,42 @@ namespace EntityInterface
 			};
 		}
 
-		void BeginCheckboxControl(StringSection<> name, const V<bool>& modelValue, uint64_t interactable)
+		void BeginCheckboxControl(IWidgetsLayoutContext& context, StringSection<> name, const V<bool>& modelValue, uint64_t interactable)
 		{
-			BeginCheckboxControl_Internal(name, modelValue, interactable);
+			BeginCheckboxControl_Internal(context, name, modelValue, interactable);
 		}
 
-		void WriteCheckbox(StringSection<> name, const V<bool>& modelValue) override
+		void WriteCheckbox(IWidgetsLayoutContext& context, StringSection<> name, const V<bool>& modelValue) override
 		{
-			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
 
-			auto enabledByHierarchy = EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
-				BeginCheckboxControl(name, modelValue, interactable);
+			auto enabledByHierarchy = context.EnabledByHierarchy();
+			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
+				BeginCheckboxControl(context, name, modelValue, interactable);
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(interactable);
-				_layoutEngine.PopNode();
+					DeactivateButton(context, interactable);
+				context.GetLayoutEngine().PopNode();
 			} else {
-				DisabledStateButton(interactable, name, enabledByHierarchy);
+				DisabledStateButton(context, interactable, name, enabledByHierarchy);
 			}
 		}
 
 		static constexpr unsigned baseLineHeight = 20;
 
-		void DeactivateButton(uint64_t ctrlGuid)
+		void DeactivateButton(IWidgetsLayoutContext& context, uint64_t ctrlGuid)
 		{
-			auto newNode = _layoutEngine.NewImbuedNode(ctrlGuid+32);
+			auto newNode = context.GetLayoutEngine().NewImbuedNode(ctrlGuid+32);
 			YGNodeStyleSetWidth(newNode->YGNode(), 12);
 			YGNodeStyleSetHeight(newNode->YGNode(), 12);
 			YGNodeStyleSetMargin(newNode->YGNode(), YGEdgeAll, 2);
 			YGNodeStyleSetMarginAuto(newNode->YGNode(), YGEdgeLeft);
-			_layoutEngine.InsertChildToStackTop(newNode->YGNode());
+			context.GetLayoutEngine().InsertChildToStackTop(newNode->YGNode());
 
 			newNode->_nodeAttachments._drawDelegate = [](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 				draw.XToggleButton(frame);
 			};
 
-			newNode->_nodeAttachments._ioDelegate = [ctrlGuid, state=_state](auto&, auto& evnt, Rect, Rect) {
+			newNode->_nodeAttachments._ioDelegate = [ctrlGuid, state=context.GetBindingEnginePtr()](auto&, auto& evnt, Rect, Rect) {
 				if (evnt.IsRelease_LButton()) {
 					state->ToggleEnable(ctrlGuid);
 					state->InvalidateModel();
@@ -261,21 +294,21 @@ namespace EntityInterface
 			};
 		}
 
-		void DisabledStateButton(uint64_t interactable, StringSection<> name, HierarchicalEnabledState hierarchyState)
+		void DisabledStateButton(IWidgetsLayoutContext& context, uint64_t interactable, StringSection<> name, HierarchicalEnabledState hierarchyState)
 		{
 			const auto lineHeight = baseLineHeight+4;
-			auto baseNode = _layoutEngine.NewImbuedNode(interactable);
+			auto baseNode = context.GetLayoutEngine().NewImbuedNode(interactable);
 			YGNodeStyleSetMargin(baseNode->YGNode(), YGEdgeAll, 2);
 			YGNodeStyleSetFlexGrow(baseNode->YGNode(), 1.0f);
 			YGNodeStyleSetHeight(baseNode->YGNode(), lineHeight+4);
-			_layoutEngine.InsertChildToStackTop(baseNode->YGNode());
+			context.GetLayoutEngine().InsertChildToStackTop(baseNode->YGNode());
 
 			if (hierarchyState == HierarchicalEnabledState::NoImpact) {
 				baseNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString()](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 					draw.DisabledStateControl(frame, nameStr);
 				};
 
-				baseNode->_nodeAttachments._ioDelegate = [interactable, state=_state](auto&, auto& evnt, Rect, Rect) {
+				baseNode->_nodeAttachments._ioDelegate = [interactable, state=context.GetBindingEnginePtr()](auto&, auto& evnt, Rect, Rect) {
 					if (evnt.IsRelease_LButton()) {
 						state->ToggleEnable(interactable);
 						state->InvalidateModel();
@@ -292,24 +325,24 @@ namespace EntityInterface
 		}
 
 		template<typename Type>
-			void WriteBoundedTemplate(StringSection<> name, const V<Type>& modelValue, const V<Type>& leftSideValue, const V<Type>& rightSideValue)
+			void WriteBoundedTemplate(IWidgetsLayoutContext& context, StringSection<> name, const V<Type>& modelValue, const V<Type>& leftSideValue, const V<Type>& rightSideValue)
 		{
-			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? _layoutEngine.GuidStack().MakeGuid(name) : modelValue._id;
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
 			const auto lineHeight = baseLineHeight+4;
 			
-			auto enabledByHierarchy = EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || _state->IsEnabled(interactable)) {
+			auto enabledByHierarchy = context.EnabledByHierarchy();
+			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
 
-				auto baseNode = _layoutEngine.NewNode();
+				auto baseNode = context.GetLayoutEngine().NewNode();
 				YGNodeStyleSetWidthPercent(baseNode, 100.0f);
 				YGNodeStyleSetHeight(baseNode, lineHeight+4);
 				YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
 				YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
 				YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-				_layoutEngine.InsertChildToStackTop(baseNode);
-				_layoutEngine.PushNode(baseNode);
+				context.GetLayoutEngine().InsertChildToStackTop(baseNode);
+				context.GetLayoutEngine().PushNode(baseNode);
 
-				auto sliderNode = _layoutEngine.NewImbuedNode(interactable);
+				auto sliderNode = context.GetLayoutEngine().NewImbuedNode(interactable);
 				YGNodeStyleSetFlexGrow(sliderNode->YGNode(), 1.0f);
 				YGNodeStyleSetHeightPercent(sliderNode->YGNode(), 100.f);
 				YGNodeStyleSetMargin(sliderNode->YGNode(), YGEdgeAll, 2);
@@ -367,37 +400,37 @@ namespace EntityInterface
 					}
 					return PlatformRig::ProcessInputResult::Consumed;
 				};
-				_layoutEngine.InsertChildToStackTop(sliderNode->YGNode());
+				context.GetLayoutEngine().InsertChildToStackTop(sliderNode->YGNode());
 
 				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(interactable);
-				_layoutEngine.PopNode();
+					DeactivateButton(context, interactable);
+				context.GetLayoutEngine().PopNode();
 
 			} else {
 
-				DisabledStateButton(interactable, name, enabledByHierarchy);
+				DisabledStateButton(context, interactable, name, enabledByHierarchy);
 			
 			}
 		}
 
-		void WriteBoundedInt(StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& leftSideValue, const V<int64_t>& rightSideValue) override { WriteBoundedTemplate(name, modelValue, leftSideValue, rightSideValue); }
-		void WriteBoundedFloat(StringSection<> name, const V<float>& modelValue, const V<float>& leftSideValue, const V<float>& rightSideValue) override { WriteBoundedTemplate(name, modelValue, leftSideValue, rightSideValue); }
+		void WriteBoundedInt(IWidgetsLayoutContext& context, StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& leftSideValue, const V<int64_t>& rightSideValue) override { WriteBoundedTemplate(context, name, modelValue, leftSideValue, rightSideValue); }
+		void WriteBoundedFloat(IWidgetsLayoutContext& context, StringSection<> name, const V<float>& modelValue, const V<float>& leftSideValue, const V<float>& rightSideValue) override { WriteBoundedTemplate(context, name, modelValue, leftSideValue, rightSideValue); }
 
-		bool BeginCollapsingContainer(StringSection<> name) override
+		bool BeginCollapsingContainer(IWidgetsLayoutContext& context, StringSection<> name) override
 		{
-			uint64_t containerGuid = _layoutEngine.GuidStack().MakeGuid(name, "##collapsingcontainer");
-			_layoutEngine.GuidStack().push(containerGuid);
-			_hierarchicalEnabledStates.push_back(0);
-			bool isOpen = _state->IsEnabled(containerGuid);
+			uint64_t containerGuid = context.GetGuidStack().MakeGuid(name, "##collapsingcontainer");
+			context.GetGuidStack().push(containerGuid);
+			context.PushHierarchicalEnabledState(0);
+			bool isOpen = context.GetBindingEngine().IsEnabled(containerGuid);
 
-			auto outerNode = _layoutEngine.NewNode();
+			auto outerNode = context.GetLayoutEngine().NewNode();
 			YGNodeStyleSetPadding(outerNode, YGEdgeAll, 0);       // zero padding because the headerContainer and contentContainers have their own padding
 			YGNodeStyleSetMargin(outerNode, YGEdgeAll, 0);
-			_layoutEngine.InsertChildToStackTop(outerNode);
+			context.GetLayoutEngine().InsertChildToStackTop(outerNode);
 
 			{
 				const auto headerHeight = 24u;
-				auto headerContainer = _layoutEngine.NewImbuedNode(containerGuid);
+				auto headerContainer = context.GetLayoutEngine().NewImbuedNode(containerGuid);
 				YGNodeStyleSetMargin(headerContainer->YGNode(), YGEdgeAll, 0);
 				YGNodeStyleSetWidthPercent(headerContainer->YGNode(), 100.0f);
 				YGNodeStyleSetHeight(headerContainer->YGNode(), headerHeight);
@@ -409,7 +442,7 @@ namespace EntityInterface
 					draw.SectionHeader(content, nameStr, isOpen);
 				};
 
-				headerContainer->_nodeAttachments._ioDelegate = [containerGuid, state=_state](auto&, auto& evnt, Rect, Rect) {
+				headerContainer->_nodeAttachments._ioDelegate = [containerGuid, state=context.GetBindingEnginePtr()](auto&, auto& evnt, Rect, Rect) {
 					if (evnt.IsRelease_LButton()) {
 						state->ToggleEnable(containerGuid);
 						state->InvalidateModel();
@@ -420,85 +453,61 @@ namespace EntityInterface
 				};
 			}
 
-			auto contentContainer = _layoutEngine.NewNode();
+			auto contentContainer = context.GetLayoutEngine().NewNode();
 			if (isOpen)
 				YGNodeStyleSetMargin(contentContainer, YGEdgeAll, 2);
 			YGNodeInsertChild(outerNode, contentContainer, YGNodeGetChildCount(outerNode));
 
-			_layoutEngine.PushNode(contentContainer);       // upcoming nodes will go into the content container
+			context.GetLayoutEngine().PushNode(contentContainer);       // upcoming nodes will go into the content container
 			return isOpen;
 		}
 
-		void BeginContainer() override
+		void BeginContainer(IWidgetsLayoutContext& context) override
 		{
-			uint64_t containerGuid = _layoutEngine.GuidStack().MakeGuid("##container");
-			_layoutEngine.GuidStack().push(containerGuid);
+			uint64_t containerGuid = context.GetGuidStack().MakeGuid("##container");
+			context.GetGuidStack().push(containerGuid);
 
-			auto contentContainer = _layoutEngine.NewImbuedNode(containerGuid);
+			auto contentContainer = context.GetLayoutEngine().NewImbuedNode(containerGuid);
 			YGNodeStyleSetMargin(contentContainer->YGNode(), YGEdgeAll, 8);
 			YGNodeStyleSetPadding(contentContainer->YGNode(), YGEdgeAll, 2);
-			_layoutEngine.InsertChildToStackTop(contentContainer->YGNode());
-			_layoutEngine.PushNode(contentContainer->YGNode());
+			context.GetLayoutEngine().InsertChildToStackTop(contentContainer->YGNode());
+			context.GetLayoutEngine().PushNode(contentContainer->YGNode());
 
 			contentContainer->_nodeAttachments._drawDelegate = [](CommonWidgets::Draw& draw, Rect frame, Rect content) {
 				draw.RectangleContainer(frame);
 			};
 
-			DisabledStateButton(containerGuid, "Enable", EnabledByHierarchy());
-			_hierarchicalEnabledStates.push_back(containerGuid);
+			DisabledStateButton(context, containerGuid, "Enable", context.EnabledByHierarchy());
+			context.PushHierarchicalEnabledState(containerGuid);
 		}
 
-		void EndContainer() override
+		void EndContainer(IWidgetsLayoutContext& context) override
 		{
-			assert(!_layoutEngine.GuidStack().empty());
-			_layoutEngine.GuidStack().pop();
-			_layoutEngine.PopNode();
-			_hierarchicalEnabledStates.pop_back();
+			assert(!context.GetLayoutEngine().GuidStack().empty());
+			context.GetLayoutEngine().GuidStack().pop();
+			context.GetLayoutEngine().PopNode();
+			context.PopHierarchicalEnabledState();
 		}
-
-		YGNodeRef BeginRoot(Coord2 containerSize)
-		{
-			auto windowNode = _layoutEngine.NewNode();
-			_layoutEngine.PushRoot(windowNode, containerSize);
-			return windowNode;
-		}
-
-		void EndRoot()
-		{
-			_layoutEngine.PopNode();
-		}
-
-		HierarchicalEnabledState EnabledByHierarchy()
-		{
-			for (auto i=_hierarchicalEnabledStates.rbegin(); i!=_hierarchicalEnabledStates.rend(); ++i) {
-				if (*i != 0) {
-					auto state = _state->IsEnabled(*i);
-					return state ? HierarchicalEnabledState::EnableChildren : HierarchicalEnabledState::DisableChildren;
-				}
-			}
-			return HierarchicalEnabledState::NoImpact;
-		}
-
-		MinimalBindingEngine& GetBindingEngine() override { return *_state; }
-
-		LayedOutWidgets BuildLayedOutWidgets()
-		{
-			return _layoutEngine.BuildLayedOutWidgets();
-		}
-
-		WidgetsLayoutFormatter(std::shared_ptr<MinimalBindingEngine> state) : _state(std::move(state)) {}
-
-	private:
-		std::shared_ptr<MinimalBindingEngine> _state;
-		std::vector<uint64_t> _hierarchicalEnabledStates;
 	};
 
-	std::shared_ptr<IWidgetsLayoutFormatter> CreateWidgetsLayoutFormatter(
-		std::shared_ptr<MinimalBindingEngine> bindingEngine)
+	
+
+	static YGNodeRef BeginRoot(IWidgetsLayoutContext& context, Coord2 containerSize)
 	{
-		return std::make_shared<WidgetsLayoutFormatter>(std::move(bindingEngine));
+		auto windowNode = context.GetLayoutEngine().NewNode();
+		context.GetLayoutEngine().PushRoot(windowNode, containerSize);
+		return windowNode;
 	}
 
+	static void EndRoot(IWidgetsLayoutContext& context)
+	{
+		context.GetLayoutEngine().PopNode();
+	}
+
+	std::shared_ptr<ICommonWidgetsStyler> CreateCommonWidgetsStyler()
+	{
+		return std::make_shared<CommonWidgetsStyler>();
+	}
 
 	class TweakerGroup : public IWidget
 	{
@@ -520,10 +529,10 @@ namespace EntityInterface
 			// rebuild the layout now if it's invalidated
 			UInt2 containerSize { container.Width(), container.Height() };
 			if (_bindingEngine->GetLayoutValidationIndex() != _lastBuiltLayoutValidationIndex || _lastContainerSize != containerSize) {
-				WidgetsLayoutFormatter formatter { _bindingEngine };
-				formatter.BeginRoot(containerSize);
+				WidgetsLayoutContext formatter { _bindingEngine };
+				BeginRoot(formatter, containerSize);
 				_layoutFn(formatter);
-				formatter.EndRoot();
+				EndRoot(formatter);
 
 				_layedOutWidgets = formatter.BuildLayedOutWidgets();
 				_lastBuiltLayoutValidationIndex = _bindingEngine->GetLayoutValidationIndex();
@@ -558,6 +567,6 @@ namespace EntityInterface
 		return std::make_shared<TweakerGroup>(doc, std::move(layoutFn));
 	}
 
-	IWidgetsLayoutFormatter::~IWidgetsLayoutFormatter() = default;
+	IWidgetsLayoutContext::~IWidgetsLayoutContext() = default;
 }
 
