@@ -47,6 +47,16 @@ namespace RenderOverlays { namespace CommonWidgets
 		unsigned _keyIndicatorBorderWeight = 4;
 		ColorB _keyIndicatorHighlight = ColorB{0xff35376e};
 
+		ColorB _checkboxCheckedColor = ColorB{191, 123, 0};
+		ColorB _checkboxUncheckedColor = ColorB{38, 38, 38};
+		float _checkboxRounding = 0.33f;
+		float _checkboxCheckWeight = 4.f;
+
+		float _xButtonWeight = 1.5f;
+		float _xButtonSize = 3.f;
+
+		unsigned _leftRightLabelsHorizontalMargin = 20;
+
 		CommonWidgetsStaticData() = default;
 
 		template<typename Formatter>
@@ -61,6 +71,16 @@ namespace RenderOverlays { namespace CommonWidgets
 
 				case "KeyIndicatorBorderWeight"_h: _keyIndicatorBorderWeight = Formatters::RequireCastValue<decltype(_keyIndicatorBorderWeight)>(fmttr); break;
 				case "KeyIndicatorHighlight"_h: _keyIndicatorHighlight = DeserializeColor(fmttr); break;
+
+				case "CheckboxCheckedColor"_h: _checkboxCheckedColor = DeserializeColor(fmttr); break;
+				case "CheckboxUncheckedColor"_h: _checkboxUncheckedColor = DeserializeColor(fmttr); break;
+				case "CheckboxRounding"_h: _checkboxRounding = Formatters::RequireCastValue<decltype(_checkboxRounding)>(fmttr); break;
+				case "CheckboxCheckWeight"_h: _checkboxCheckWeight = Formatters::RequireCastValue<decltype(_checkboxCheckWeight)>(fmttr); break;
+
+				case "XButtonWeight"_h: _xButtonWeight = Formatters::RequireCastValue<decltype(_xButtonWeight)>(fmttr); break;
+				case "XButtonSize"_h: _xButtonSize = Formatters::RequireCastValue<decltype(_xButtonSize)>(fmttr); break;
+
+				case "LeftRightHorizontalMargin"_h: _leftRightLabelsHorizontalMargin = Formatters::RequireCastValue<decltype(_leftRightLabelsHorizontalMargin)>(fmttr); break;
 
 				default: SkipValueOrElement(fmttr); break;
 				}
@@ -135,34 +155,29 @@ namespace RenderOverlays { namespace CommonWidgets
 	void Styler::XToggleButton(DrawContext& context, const Rect& xBoxRect) const
 	{
 		using namespace DebuggingDisplay;
-		auto xBoxCenter = (xBoxRect._topLeft+xBoxRect._bottomRight) / 2;
-		Coord2 xBox[] = {
-			xBoxCenter + Coord2{ -3, -3, },
-			xBoxCenter + Coord2{  3,  3, },
-			xBoxCenter + Coord2{  3, -3, },
-			xBoxCenter + Coord2{ -3,  3, }
-		};
-		ColorB xBoxColors[] { 
-			ColorB{0x7f, 0x7f, 0x7f}, ColorB{0x7f, 0x7f, 0x7f}, ColorB{0x7f, 0x7f, 0x7f}, ColorB{0x7f, 0x7f, 0x7f}
-		};
+		auto xBoxCenter = Float2(xBoxRect._topLeft+xBoxRect._bottomRight) / 2;
 		OutlineRectangle(context.GetContext(), Rect{xBoxCenter-Coord2{6, 10}, xBoxCenter+Coord2{6, 10}}, ColorB{80, 80, 80});
-		DrawLines(context.GetContext(), xBox, xBoxColors, dimof(xBox)/2);
+		// maybe faster way to do this, since we just want a couple of lines
+		auto size = _staticData->_xButtonSize;
+		Float2 xBox0[] = { xBoxCenter + Float2{ -size, -size, }, xBoxCenter + Float2{  size,  size, } };
+		Float2 xBox1[] = { xBoxCenter + Float2{  size, -size, }, xBoxCenter + Float2{ -size,  size, } };
+		SolidLine(context.GetContext(), MakeIteratorRange(xBox0), ColorB{0x7f, 0x7f, 0x7f}, _staticData->_xButtonWeight);
+		SolidLine(context.GetContext(), MakeIteratorRange(xBox1), ColorB{0x7f, 0x7f, 0x7f}, _staticData->_xButtonWeight);
 	}
 	
 	void Styler::CheckBox(DrawContext& context, const Rect& content, bool state) const
 	{
 		using namespace DebuggingDisplay;
 		if (state) {
-			FillRaisedRoundedRectangle(context.GetContext(), content, ColorB{191, 123, 0}, 0.4f);
+			FillRaisedRoundedRectangle(context.GetContext(), content, _staticData->_checkboxCheckedColor, _staticData->_checkboxRounding);
 
-			Coord2 ptB = (content._topLeft + content._bottomRight) / 2;
-			Coord2 ptA = (content._topLeft + ptB) / 2;
-			Coord2 ptC = Coord2{content._bottomRight[0], content._topLeft[1]};
-			Coord2 lines[] = {ptA, ptB, ptB, ptC};
-			ColorB lineColors[] = {ColorB{38, 38, 38}, ColorB{38, 38, 38}};
-			DrawLines(context.GetContext(), lines, lineColors, 2);
+			Float2 ptB = Float2{ (content._topLeft[0] + content._bottomRight[0]) / 2, LinearInterpolate(content._topLeft[1], content._bottomRight[1], 0.75f) };
+			Float2 ptA = (content._topLeft + ptB) / 2;
+			Float2 ptC = Float2{ content._bottomRight[0], content._topLeft[1] };
+			Float2 lines[] = { ptA, ptB, ptC };
+			SolidLine(context.GetContext(), MakeIteratorRange(lines), ColorB{38, 38, 38}, _staticData->_checkboxCheckWeight);
 		} else {
-			FillDepressedRoundedRectangle(context.GetContext(), content, ColorB{38, 38, 38}, 0.4f);
+			FillDepressedRoundedRectangle(context.GetContext(), content, _staticData->_checkboxUncheckedColor, _staticData->_checkboxRounding);
 		}
 	}
 
@@ -335,6 +350,8 @@ namespace RenderOverlays { namespace CommonWidgets
 		while (!ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>())
 			::Assets::Services::GetAssetSets().OnFrameBarrier();
 	}
+
+	unsigned Styler::GetLeftRightLabelsHorizontalMargin() const { return _staticData->_leftRightLabelsHorizontalMargin; }
 
 	Styler::Styler()
 	{

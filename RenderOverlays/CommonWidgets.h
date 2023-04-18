@@ -120,6 +120,8 @@ namespace RenderOverlays { namespace CommonWidgets
 	private:
 		DefaultFontsBox* _fonts;
 		const CommonWidgetsStaticData* _staticData;
+
+		unsigned GetLeftRightLabelsHorizontalMargin() const;
 	};
 
 	template<typename Type>
@@ -156,10 +158,11 @@ namespace RenderOverlays { namespace CommonWidgets
 		};
 		FillTriangles(drawContext.GetContext(), arrows, arrowColors, dimof(arrows)/3);
 
-		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, name);
+		auto margin = GetLeftRightLabelsHorizontalMargin();
+		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{margin, 0}, valueBox._bottomRight-Coord2{margin, 0}}, name);
 		StringMeld<256> valueStr;
 		valueStr << value;
-		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Right).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, valueStr.AsStringSection());
+		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Right).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{margin, 0}, valueBox._bottomRight-Coord2{margin, 0}}, valueStr.AsStringSection());
 	}
 
 	template<typename Type>
@@ -174,6 +177,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		FillRoundedRectangle(drawContext.GetContext(), Rect{{LinearInterpolate(valueBox._topLeft[0], valueBox._bottomRight[0], alpha), valueBox._topLeft[1]}, valueBox._bottomRight}, filledAreaColor, 0.4f, Corner::TopRight|Corner::BottomRight);
 		OutlineRoundedRectangle(drawContext.GetContext(), valueBox, outlineColor, 1.f, 0.4f);
 
+		auto margin = GetLeftRightLabelsHorizontalMargin();
 		if (drawContext._hoverings->_hoveringCtrl == interactable) {
 			auto textBoxRect = valueBox;
 			textBoxRect._topLeft += Coord2(8, 2);
@@ -182,11 +186,11 @@ namespace RenderOverlays { namespace CommonWidgets
 			if (_fonts)
 				Render(drawContext.GetContext(), textBoxRect, _fonts->_editBoxFont, drawContext._hoverings->_textEntry);
 		} else {
-			DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, name);
+			DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{margin, 0}, valueBox._bottomRight-Coord2{margin, 0}}, name);
 			if (_fonts) {
 				StringMeld<256> valueStr;
 				valueStr << value;
-				DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Right).Font(*_fonts->_editBoxFont).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{16, 0}, valueBox._bottomRight-Coord2{16, 0}}, valueStr.AsStringSection());
+				DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Right).Font(*_fonts->_editBoxFont).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{margin, 0}, valueBox._bottomRight-Coord2{margin, 0}}, valueStr.AsStringSection());
 			}
 		}
 	}

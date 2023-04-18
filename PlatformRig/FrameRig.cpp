@@ -708,8 +708,8 @@ namespace PlatformRig
             Layout outerKeyHelpRect = outerRect;
             outerKeyHelpRect._maximumSize._topLeft[1] += staticData->_verticalOffset;
 
-            CommonWidgets::Measure measure;
-            CommonWidgets::Draw draw{context, interactables, interfaceState};
+            CommonWidgets::Styler styler;
+            DrawContext drawContext{context, interactables, interfaceState};
 
             std::vector<const char*> keys, keyLabels;
             keys.push_back("H"); keyLabels.push_back("Help");
@@ -720,14 +720,14 @@ namespace PlatformRig
             }
 
             for (unsigned c=0; c<keys.size(); ++c) {
-                auto measure0 = measure.KeyIndicator(keyLabels[c], keys[c]);
+                auto measure0 = styler.MeasureKeyIndicator(keyLabels[c], keys[c]);
 
                 auto frame = outerKeyHelpRect.AllocateFullWidth(measure0._height);
                 if (frame.Width() < measure0._minWidth) continue;
                 frame._topLeft[0] = frame._bottomRight[0] - std::min(frame.Width(), measure0._width);
 
-                auto d = measure.KeyIndicator_Precalculate(frame.Width(), frame.Height(), keyLabels[c], keys[c]);
-                draw.KeyIndicator(frame, d.get());
+                auto d = styler.MeasureKeyIndicator_Precalculate(frame.Width(), frame.Height(), keyLabels[c], keys[c]);
+                styler.KeyIndicator(drawContext, frame, d.get());
             }
         }
 
@@ -795,7 +795,7 @@ namespace PlatformRig
         _loadingContext = std::move(loadingContext);
         _subMenuOpen = 0;
 
-        RenderOverlays::CommonWidgets::Draw::StallForDefaultFonts();
+        RenderOverlays::CommonWidgets::Styler::StallForDefaultFonts();
     }
 
     FrameRigDisplay::~FrameRigDisplay()

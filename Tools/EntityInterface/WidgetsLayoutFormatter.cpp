@@ -172,9 +172,9 @@ namespace EntityInterface
 
 			auto* defaultFonts = RenderOverlays::CommonWidgets::Styler::TryGetDefaultFontsBox();
 			assert(defaultFonts);
-			auto maxWidth = RenderOverlays::StringWidth(*defaultFonts->_buttonFont, name);
+			auto maxWidth = RenderOverlays::StringWidth(*_font, name);
 			YGNodeStyleSetWidth(*labelNode, maxWidth);
-			YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
+			YGNodeStyleSetHeight(*labelNode, _font->GetFontProperties()._lineHeight);
 			
 			// We can't grow, but we can shrink -- our "width" property is the length of the entire string, and if it's shrunk,
 			// we'll adjust the string with a ellipsis
@@ -183,7 +183,7 @@ namespace EntityInterface
 			YGNodeStyleSetMargin(*labelNode, YGEdgeRight, 8);
 
 			auto attachedData = std::make_shared<Internal::LabelFittingHelper>(name.AsString());
-			labelNode->_nodeAttachments._drawDelegate = [attachedData, font=defaultFonts->_buttonFont](DrawContext& draw, Rect frame, Rect content) {
+			labelNode->_nodeAttachments._drawDelegate = [attachedData, font=_font](DrawContext& draw, Rect frame, Rect content) {
 				// We don't get a notification after layout is finished -- so typically on the first render we may have to adjust
 				// our string to fit
 				attachedData->Fit(content.Width(), *font);
@@ -221,7 +221,7 @@ namespace EntityInterface
 					auto* defaultFonts = RenderOverlays::CommonWidgets::Styler::TryGetDefaultFontsBox();
 					assert(defaultFonts);
 					auto labelFittingHelper = std::make_shared<Internal::LabelFittingHelper>(options[c].second);
-					node->_nodeAttachments._drawDelegate = [labelFittingHelper, corners, value=options[c].first, modelValue, font=defaultFonts->_buttonFont](DrawContext& draw, Rect frame, Rect content) {
+					node->_nodeAttachments._drawDelegate = [labelFittingHelper, corners, value=options[c].first, modelValue, font=_font](DrawContext& draw, Rect frame, Rect content) {
 						bool selected = modelValue.QueryNonLayout().value() == value;
 						OutlineRoundedRectangle(draw.GetContext(), frame, selected ? ColorB{96, 96, 96} : ColorB{64, 64, 64}, 1.f, 0.4f, corners);
 						labelFittingHelper->Fit(content.Width(), *font);
@@ -247,6 +247,7 @@ namespace EntityInterface
 			YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
 			YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
 			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
+			YGNodeStyleSetHeight(baseNode, baseLineHeight+2*_staticData->_verticalPadding);
 			ElementMargins(baseNode);
 			YGNodeStyleSetFlexGrow(baseNode, 1.f);
 
@@ -255,6 +256,7 @@ namespace EntityInterface
 			auto stateBox = context.GetLayoutEngine().InsertNewImbuedNode(interactable);
 			YGNodeStyleSetWidth(stateBox->YGNode(), 16);
 			YGNodeStyleSetHeight(stateBox->YGNode(), 16);
+			YGNodeStyleSetMargin(stateBox->YGNode(), YGEdgeHorizontal, _staticData->_checkboxHorizontalMargin);
 			stateBox->_nodeAttachments._drawDelegate = [modelValue](DrawContext& draw, Rect frame, Rect content) {
 				CommonWidgets::Styler{}.CheckBox(draw, content, modelValue.QueryNonLayout().value());
 			};
@@ -512,10 +514,12 @@ namespace EntityInterface
 		struct StaticData
 		{
 			std::string _font;
-			unsigned _elementVerticalMargin = 2;
+			unsigned _elementVerticalMargin = 4;
 			unsigned _elementHorizontalMargin = 2;
 			unsigned _deactivateButtonSize = 12;
 			unsigned _verticalPadding = 4;
+
+			unsigned _checkboxHorizontalMargin = 8;
 
 			StaticData() = default;
 			template<typename Formatter>
@@ -526,12 +530,14 @@ namespace EntityInterface
 					switch (keyname) {
 					case "Font"_h: _font = RequireStringValue(fmttr).AsString(); break;
 
-					case "ElementVerticalMargin"_h: _elementVerticalMargin = Formatters::RequireCastValue<unsigned>(fmttr); break;
-					case "ElementHorizontalMargin"_h: _elementHorizontalMargin = Formatters::RequireCastValue<unsigned>(fmttr); break;
+					case "ElementVerticalMargin"_h: _elementVerticalMargin = Formatters::RequireCastValue<decltype(_elementVerticalMargin)>(fmttr); break;
+					case "ElementHorizontalMargin"_h: _elementHorizontalMargin = Formatters::RequireCastValue<decltype(_elementHorizontalMargin)>(fmttr); break;
 
-					case "VerticalPadding"_h: _verticalPadding = Formatters::RequireCastValue<unsigned>(fmttr); break;
+					case "VerticalPadding"_h: _verticalPadding = Formatters::RequireCastValue<decltype(_verticalPadding)>(fmttr); break;
 
-					case "DeactivateButtonSize"_h: _deactivateButtonSize = Formatters::RequireCastValue<unsigned>(fmttr); break;
+					case "DeactivateButtonSize"_h: _deactivateButtonSize = Formatters::RequireCastValue<decltype(_deactivateButtonSize)>(fmttr); break;
+
+					case "CheckboxHorizontalPadding"_h: _checkboxHorizontalMargin = Formatters::RequireCastValue<decltype(_checkboxHorizontalMargin)>(fmttr); break;
 
 					default: SkipValueOrElement(fmttr);
 					}
