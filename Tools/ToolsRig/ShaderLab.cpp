@@ -455,6 +455,10 @@ namespace ToolsRig
 					Techniques::RenderPassInstance rpi{parsingContext, fragment};
 					auto attachmentSRV = rpi.GetNonFrameBufferAttachmentView(0);
 
+					rpi.AutoNonFrameBufferBarrier({
+						{0, BindFlag::ShaderResource}		// attachmentSRV to shader resource
+					});
+
 					UniformsStreamInterface usi;
 					usi.BindResourceView(0, "VisualizeInput"_h);
 					usi.BindImmediateData(0, "DebuggingGlobals"_h);
