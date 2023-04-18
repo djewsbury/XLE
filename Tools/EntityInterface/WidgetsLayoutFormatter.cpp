@@ -63,31 +63,50 @@ namespace EntityInterface
 		std::vector<uint64_t> _hierarchicalEnabledStates;
 	};
 
+	namespace Internal
+	{
+		struct LabelFittingHelper
+		{
+			std::string _originalLabel;
+			unsigned _cachedWidth = ~0u;
+			std::string _fitLabel;
+			float _fitWidth = 0.f;
+
+			void Fit(int width, Font& fnt)
+			{
+				assert(width > 0);
+				if (width != _cachedWidth) {
+					_cachedWidth = width;
+					VLA(char, buffer, _originalLabel.size()+1);
+					_fitWidth = StringEllipsisDoubleEnded(buffer, _originalLabel.size()+1, fnt, MakeStringSection(_originalLabel), MakeStringSection("/\\"), (float)width);
+					_fitLabel = buffer;
+				}
+			}
+
+			LabelFittingHelper(std::string&& originalLabel) : _originalLabel(std::move(originalLabel)) {}
+		};
+	}
+
 	class CommonWidgetsStyler : public ICommonWidgetsStyler
 	{
 	public:
 		ImbuedNode* BeginSharedLeftRightCtrl(IWidgetsLayoutContext& context, StringSection<> name, const V<uint64_t>& modelValue, uint64_t interactable)
 		{
-			const auto lineHeight = baseLineHeight+4;
-			auto baseNode = context.GetLayoutEngine().NewNode();
-			YGNodeStyleSetWidthPercent(baseNode, 100.0f);
-			YGNodeStyleSetHeight(baseNode, lineHeight+4);
-			YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
-			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
-			YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-			context.GetLayoutEngine().InsertChildToStackTop(baseNode);
-			context.GetLayoutEngine().PushNode(baseNode);
-
-			auto mainCtrl = context.GetLayoutEngine().NewImbuedNode(interactable);
-			YGNodeStyleSetFlexGrow(mainCtrl->YGNode(), 1.0f);
-			YGNodeStyleSetHeightPercent(mainCtrl->YGNode(), 100.f);
-			YGNodeStyleSetMargin(mainCtrl->YGNode(), YGEdgeAll, 2);
+			auto mainCtrl = context.GetLayoutEngine().InsertNewImbuedNode(interactable);
+			YGNodeStyleSetFlexGrow(*mainCtrl, 1.0f);		// fill all available space
+			YGNodeStyleSetHeight(*mainCtrl, baseLineHeight+2*_staticData->_verticalPadding);
+			ElementMargins(*mainCtrl);
 			mainCtrl->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), modelValue, interactable](DrawContext& draw, Rect frame, Rect content) {
 				if (auto str = modelValue.TryQueryNonLayoutAsString())
 					CommonWidgets::Styler{}.LeftRight(draw, frame, interactable, nameStr, *str);
 			};
-			context.GetLayoutEngine().InsertChildToStackTop(mainCtrl->YGNode());
 			return mainCtrl;
+		}
+
+		void ElementMargins(YGNode* node)
+		{
+			YGNodeStyleSetMargin(node, YGEdgeHorizontal, _staticData->_elementHorizontalMargin);
+			YGNodeStyleSetMargin(node, YGEdgeVertical, _staticData->_elementVerticalMargin);
 		}
 
 		template<typename Type>
@@ -95,9 +114,7 @@ namespace EntityInterface
 		{
 			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
 			
-			auto enabledByHierarchy = context.EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
-			
+			if (BeginDisableableWidget(context, interactable)) {
 				auto mainCtrl = BeginSharedLeftRightCtrl(context, name, modelValue, interactable);
 				mainCtrl->_nodeAttachments._ioDelegate = [modelValue, minValue, maxValue](auto& ioContext, Rect frame, Rect content) {
 					bool leftSide = ioContext.GetEvent()._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
@@ -113,14 +130,8 @@ namespace EntityInterface
 					}
 					return PlatformRig::ProcessInputResult::Passthrough;
 				};
-
-				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(context, interactable);
-				context.GetLayoutEngine().PopNode();
-
-			} else {
-				DisabledStateButton(context, interactable, name, enabledByHierarchy);
 			}
+			EndDisableableWidget(context, name, interactable);
 		}
 
 		void WriteHalfDoubleInt(IWidgetsLayoutContext& context, StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& min, const V<int64_t>& max) override { WriteHalfDoubleTemplate(context, name, modelValue, min, max); }
@@ -131,9 +142,7 @@ namespace EntityInterface
 		{
 			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
 			
-			auto enabledByHierarchy = context.EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
-			
+			if (BeginDisableableWidget(context, interactable)) {
 				auto mainCtrl = BeginSharedLeftRightCtrl(context, name, modelValue, interactable);
 				mainCtrl->_nodeAttachments._ioDelegate = [modelValue, minValue, maxValue](auto& ioContext, Rect frame, Rect content) {
 					bool leftSide = ioContext.GetEvent()._mousePosition[0] < (frame._topLeft[0]+frame._bottomRight[0])/2;
@@ -149,14 +158,8 @@ namespace EntityInterface
 					}
 					return PlatformRig::ProcessInputResult::Passthrough;
 				};
-
-				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(context, interactable);
-				context.GetLayoutEngine().PopNode();
-
-			} else {
-				DisabledStateButton(context, interactable, name, enabledByHierarchy);
 			}
+			EndDisableableWidget(context, name, interactable);
 		}
 
 		void WriteDecrementIncrementInt(IWidgetsLayoutContext& context, StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& min, const V<int64_t>& max) override { WriteDecrementIncrementTemplate(context, name, modelValue, min, max); }
@@ -177,27 +180,13 @@ namespace EntityInterface
 			// we'll adjust the string with a ellipsis
 			YGNodeStyleSetFlexGrow(*labelNode, 0.f);
 			YGNodeStyleSetFlexShrink(*labelNode, 1.f);
+			YGNodeStyleSetMargin(*labelNode, YGEdgeRight, 8);
 
-			struct AttachedData
-			{
-				std::string _originalLabel;
-				unsigned _cachedWidth = ~0u;
-				std::string _fitLabel;
-			};
-			auto attachedData = std::make_shared<AttachedData>();
-			attachedData->_originalLabel = name.AsString();
-			attachedData->_fitLabel = attachedData->_originalLabel;
-			attachedData->_cachedWidth = (unsigned)maxWidth;
-
+			auto attachedData = std::make_shared<Internal::LabelFittingHelper>(name.AsString());
 			labelNode->_nodeAttachments._drawDelegate = [attachedData, font=defaultFonts->_buttonFont](DrawContext& draw, Rect frame, Rect content) {
 				// We don't get a notification after layout is finished -- so typically on the first render we may have to adjust
 				// our string to fit
-				if (content.Width() != attachedData->_cachedWidth) {
-					attachedData->_cachedWidth = content.Width();
-					char buffer[MaxPath];
-					auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), (float)content.Width());
-					attachedData->_fitLabel = buffer;
-				}
+				attachedData->Fit(content.Width(), *font);
 				DrawText().Font(*font).Alignment(TextAlignment::Right).Draw(draw.GetContext(), content, attachedData->_fitLabel);
 			};
 
@@ -207,19 +196,15 @@ namespace EntityInterface
 		void WriteHorizontalCombo(IWidgetsLayoutContext& context, StringSection<> name, const V<int64_t>& modelValue, IteratorRange<const std::pair<int64_t, const char*>*> options) override
 		{
 			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
-			const auto lineHeight = baseLineHeight+4;
 
-			auto enabledByHierarchy = context.EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
+			if (BeginDisableableWidget(context, interactable)) {
 
-				auto baseNode = context.GetLayoutEngine().NewNode();
-				YGNodeStyleSetWidthPercent(baseNode, 100.0f);
-				YGNodeStyleSetHeight(baseNode, lineHeight+4);
+				auto baseNode = context.GetLayoutEngine().InsertAndPushNewNode();
+				YGNodeStyleSetHeight(baseNode, baseLineHeight+2*_staticData->_verticalPadding);
 				YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
 				YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
-				YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-				context.GetLayoutEngine().InsertChildToStackTop(baseNode);
-				context.GetLayoutEngine().PushNode(baseNode);
+				ElementMargins(baseNode);
+				YGNodeStyleSetFlexGrow(baseNode, 1.f);
 
 				HorizontalControlLabel(context, name);
 
@@ -227,14 +212,20 @@ namespace EntityInterface
 					auto node = context.GetLayoutEngine().NewImbuedNode(interactable+1+c);
 					YGNodeStyleSetFlexGrow(node->YGNode(), 1.0f);
 					YGNodeStyleSetHeightPercent(node->YGNode(), 100.f);
+					YGNodeStyleSetPadding(node->YGNode(), YGEdgeHorizontal, 4);
 					context.GetLayoutEngine().InsertChildToStackTop(node->YGNode());
 					Corner::BitField corners = 0;
 					if (c == 0) corners |= Corner::TopLeft|Corner::BottomLeft;
 					if ((c+1) == options.size()) corners |= Corner::TopRight|Corner::BottomRight;
-					node->_nodeAttachments._drawDelegate = [nameStr=std::string{options[c].second}, corners, value=options[c].first, modelValue](DrawContext& draw, Rect frame, Rect content) {
+
+					auto* defaultFonts = RenderOverlays::CommonWidgets::Styler::TryGetDefaultFontsBox();
+					assert(defaultFonts);
+					auto labelFittingHelper = std::make_shared<Internal::LabelFittingHelper>(options[c].second);
+					node->_nodeAttachments._drawDelegate = [labelFittingHelper, corners, value=options[c].first, modelValue, font=defaultFonts->_buttonFont](DrawContext& draw, Rect frame, Rect content) {
 						bool selected = modelValue.QueryNonLayout().value() == value;
 						OutlineRoundedRectangle(draw.GetContext(), frame, selected ? ColorB{96, 96, 96} : ColorB{64, 64, 64}, 1.f, 0.4f, corners);
-						DrawText().Alignment(TextAlignment::Center).Draw(draw.GetContext(), content, nameStr);
+						labelFittingHelper->Fit(content.Width(), *font);
+						DrawText().Alignment(TextAlignment::Center).Font(*font).Draw(draw.GetContext(), content, labelFittingHelper->_fitLabel);
 					};
 					node->_nodeAttachments._ioDelegate = [modelValue, value=options[c].first](auto& ioContext, Rect, Rect) {
 						if (ioContext.GetEvent().IsRelease_LButton()) {
@@ -245,13 +236,9 @@ namespace EntityInterface
 					};
 				}
 
-				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(context, interactable);
 				context.GetLayoutEngine().PopNode();
-
-			} else {
-				DisabledStateButton(context, interactable, name, enabledByHierarchy);
 			}
+			EndDisableableWidget(context, name, interactable);
 		}
 
 		void BeginCheckboxControl_Internal(IWidgetsLayoutContext& context, StringSection<> name, const V<bool>& modelValue, uint64_t interactable)
@@ -260,11 +247,10 @@ namespace EntityInterface
 			YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
 			YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
 			YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
-			YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
+			ElementMargins(baseNode);
 			YGNodeStyleSetFlexGrow(baseNode, 1.f);
 
-			auto* label = HorizontalControlLabel(context, name);
-			YGNodeStyleSetMargin(*label, YGEdgeRight, 8);
+			HorizontalControlLabel(context, name);
 
 			auto stateBox = context.GetLayoutEngine().InsertNewImbuedNode(interactable);
 			YGNodeStyleSetWidth(stateBox->YGNode(), 16);
@@ -282,10 +268,8 @@ namespace EntityInterface
 			context.GetLayoutEngine().PopNode();
 		}
 
-		void WriteCheckbox(IWidgetsLayoutContext& context, StringSection<> name, const V<bool>& modelValue) override
+		bool BeginDisableableWidget(IWidgetsLayoutContext& context, uint64_t interactable)
 		{
-			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
-
 			auto enabledByHierarchy = context.EnabledByHierarchy();
 			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
 				bool hasDisableButton = enabledByHierarchy == HierarchicalEnabledState::NoImpact;
@@ -296,8 +280,18 @@ namespace EntityInterface
 					YGNodeStyleSetFlexDirection(disablerWrapping, YGFlexDirectionRow);
 				}
 
-				BeginCheckboxControl_Internal(context, name, modelValue, interactable);
+				return true;
+			} else {
+				return false;
+			}
+		}
 
+		void EndDisableableWidget(IWidgetsLayoutContext& context, StringSection<> name, uint64_t interactable)
+		{
+			auto enabledByHierarchy = context.EnabledByHierarchy();
+
+			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
+				bool hasDisableButton = enabledByHierarchy == HierarchicalEnabledState::NoImpact;
 				if (hasDisableButton) {
 					DeactivateButton(context, interactable);
 					context.GetLayoutEngine().PopNode();
@@ -307,13 +301,21 @@ namespace EntityInterface
 			}
 		}
 
+		void WriteCheckbox(IWidgetsLayoutContext& context, StringSection<> name, const V<bool>& modelValue) override
+		{
+			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
+			if (BeginDisableableWidget(context, interactable))
+				BeginCheckboxControl_Internal(context, name, modelValue, interactable);
+			EndDisableableWidget(context, name, interactable);
+		}
+
 		static constexpr unsigned baseLineHeight = 20;
 
 		void DeactivateButton(IWidgetsLayoutContext& context, uint64_t ctrlGuid)
 		{
 			auto newNode = context.GetLayoutEngine().InsertNewImbuedNode(ctrlGuid+32);
-			YGNodeStyleSetWidth(newNode->YGNode(), 12);
-			YGNodeStyleSetHeight(newNode->YGNode(), 12);
+			YGNodeStyleSetWidth(newNode->YGNode(), _staticData->_deactivateButtonSize);
+			YGNodeStyleSetHeight(newNode->YGNode(), _staticData->_deactivateButtonSize);
 			YGNodeStyleSetMargin(newNode->YGNode(), YGEdgeAll, 2);
 			YGNodeStyleSetFlexGrow(newNode->YGNode(), 0.f);
 			YGNodeStyleSetFlexShrink(newNode->YGNode(), 0.f);
@@ -335,11 +337,10 @@ namespace EntityInterface
 
 		void DisabledStateButton(IWidgetsLayoutContext& context, uint64_t interactable, StringSection<> name, HierarchicalEnabledState hierarchyState)
 		{
-			const auto lineHeight = baseLineHeight+4;
 			auto baseNode = context.GetLayoutEngine().InsertNewImbuedNode(interactable);
-			YGNodeStyleSetMargin(baseNode->YGNode(), YGEdgeAll, 2);
+			ElementMargins(*baseNode);
 			YGNodeStyleSetFlexGrow(baseNode->YGNode(), 1.0f);
-			YGNodeStyleSetHeight(baseNode->YGNode(), lineHeight+4);
+			YGNodeStyleSetHeight(baseNode->YGNode(), baseLineHeight+2*_staticData->_verticalPadding);
 
 			if (hierarchyState == HierarchicalEnabledState::NoImpact) {
 				baseNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString()](DrawContext& draw, Rect frame, Rect content) {
@@ -366,24 +367,13 @@ namespace EntityInterface
 			void WriteBoundedTemplate(IWidgetsLayoutContext& context, StringSection<> name, const V<Type>& modelValue, const V<Type>& leftSideValue, const V<Type>& rightSideValue)
 		{
 			uint64_t interactable = (modelValue._type == MinimalBindingValueType::Constant) ? context.GetGuidStack().MakeGuid(name) : modelValue._id;
-			const auto lineHeight = baseLineHeight+4;
 			
-			auto enabledByHierarchy = context.EnabledByHierarchy();
-			if (enabledByHierarchy == HierarchicalEnabledState::EnableChildren || context.GetBindingEngine().IsEnabled(interactable)) {
+			if (BeginDisableableWidget(context, interactable)) {
 
-				auto baseNode = context.GetLayoutEngine().NewNode();
-				YGNodeStyleSetWidthPercent(baseNode, 100.0f);
-				YGNodeStyleSetHeight(baseNode, lineHeight+4);
-				YGNodeStyleSetAlignItems(baseNode, YGAlignCenter);
-				YGNodeStyleSetFlexDirection(baseNode, YGFlexDirectionRow);
-				YGNodeStyleSetMargin(baseNode, YGEdgeAll, 2);
-				context.GetLayoutEngine().InsertChildToStackTop(baseNode);
-				context.GetLayoutEngine().PushNode(baseNode);
-
-				auto sliderNode = context.GetLayoutEngine().NewImbuedNode(interactable);
+				auto sliderNode = context.GetLayoutEngine().InsertNewImbuedNode(interactable);
 				YGNodeStyleSetFlexGrow(sliderNode->YGNode(), 1.0f);
-				YGNodeStyleSetHeightPercent(sliderNode->YGNode(), 100.f);
-				YGNodeStyleSetMargin(sliderNode->YGNode(), YGEdgeAll, 2);
+				YGNodeStyleSetHeight(sliderNode->YGNode(), baseLineHeight+2*_staticData->_verticalPadding);
+				ElementMargins(*sliderNode);
 				sliderNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), interactable, leftSideValue, rightSideValue, modelValue](DrawContext& draw, Rect frame, Rect content) {
 					CommonWidgets::Styler{}.Bounded(draw, frame, interactable, nameStr, modelValue.QueryNonLayout().value(), leftSideValue.QueryNonLayout().value(), rightSideValue.QueryNonLayout().value());
 				};
@@ -439,17 +429,8 @@ namespace EntityInterface
 					}
 					return PlatformRig::ProcessInputResult::Consumed;
 				};
-				context.GetLayoutEngine().InsertChildToStackTop(sliderNode->YGNode());
-
-				if (enabledByHierarchy == HierarchicalEnabledState::NoImpact)
-					DeactivateButton(context, interactable);
-				context.GetLayoutEngine().PopNode();
-
-			} else {
-
-				DisabledStateButton(context, interactable, name, enabledByHierarchy);
-			
 			}
+			EndDisableableWidget(context, name, interactable);
 		}
 
 		void WriteBoundedInt(IWidgetsLayoutContext& context, StringSection<> name, const V<int64_t>& modelValue, const V<int64_t>& leftSideValue, const V<int64_t>& rightSideValue) override { WriteBoundedTemplate(context, name, modelValue, leftSideValue, rightSideValue); }
@@ -531,6 +512,10 @@ namespace EntityInterface
 		struct StaticData
 		{
 			std::string _font;
+			unsigned _elementVerticalMargin = 2;
+			unsigned _elementHorizontalMargin = 2;
+			unsigned _deactivateButtonSize = 12;
+			unsigned _verticalPadding = 4;
 
 			StaticData() = default;
 			template<typename Formatter>
@@ -540,6 +525,14 @@ namespace EntityInterface
 				while (fmttr.TryKeyedItem(keyname)) {
 					switch (keyname) {
 					case "Font"_h: _font = RequireStringValue(fmttr).AsString(); break;
+
+					case "ElementVerticalMargin"_h: _elementVerticalMargin = Formatters::RequireCastValue<unsigned>(fmttr); break;
+					case "ElementHorizontalMargin"_h: _elementHorizontalMargin = Formatters::RequireCastValue<unsigned>(fmttr); break;
+
+					case "VerticalPadding"_h: _verticalPadding = Formatters::RequireCastValue<unsigned>(fmttr); break;
+
+					case "DeactivateButtonSize"_h: _deactivateButtonSize = Formatters::RequireCastValue<unsigned>(fmttr); break;
+
 					default: SkipValueOrElement(fmttr);
 					}
 				}
