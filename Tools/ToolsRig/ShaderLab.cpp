@@ -133,10 +133,11 @@ namespace ToolsRig
 			(*fn)(constructorContext, &sequence);
 		constructorContext._sequenceFinalizers.clear();
 	}
-	
+
 	::Assets::PtrToMarkerPtr<ShaderLab::ICompiledOperation> ShaderLab::BuildCompiledTechnique(
 		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter,
 		::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
+		::Assets::PtrToMarkerPtr<ResourceSet> futureResourceSet,
 		::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> futureLightScene,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormatsInit)
@@ -148,7 +149,7 @@ namespace ToolsRig
 		auto weakThis = weak_from_this();
 		AsyncConstructToPromise(
 			result->AdoptPromise(),
-			[preregAttachments=std::move(preregAttachments), futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), weakThis]() mutable {
+			[preregAttachments=std::move(preregAttachments), futureFormatter=std::move(futureFormatter), futureLightScene=std::move(futureLightScene), visualizeStep=std::move(visualizeStep), systemAttachmentsFormat=std::move(systemAttachmentsFormat), noiseDelegateFuture=std::move(noiseDelegateFuture), futureResourceSet=std::move(futureResourceSet), weakThis]() mutable {
 				std::shared_ptr<Formatters::IDynamicInputFormatter> formatter;
 				TRY {
 					auto l = weakThis.lock();
@@ -163,6 +164,12 @@ namespace ToolsRig
 						lightScene = futureLightScene->Actualize();
 					}
 
+					std::shared_ptr<ResourceSet> resourceSet;
+					if (futureResourceSet) {
+						futureResourceSet->StallWhilePending();
+						resourceSet = futureResourceSet->Actualize();
+					}
+
 					auto noiseDelegate = noiseDelegateFuture.get();	// stall 
 				
 					OperationConstructorContext constructorContext;
@@ -174,6 +181,7 @@ namespace ToolsRig
 					constructorContext._bufferUploads = l->_bufferUploads;
 					constructorContext._loadingContext = l->_loadingContext;
 					constructorContext._lightScene = lightScene;
+					constructorContext._resourceSet = resourceSet.get();
 
 					auto technique = std::make_shared<RenderCore::LightingEngine::CompiledLightingTechnique>();
 					constructorContext._technique = technique.get();
@@ -310,6 +318,50 @@ namespace ToolsRig
 		return result;
 	}
 
+	::Assets::PtrToMarkerPtr<ShaderLab::ResourceSet> ShaderLab::BuildResourceSet(
+		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter)
+	{
+		auto result = std::make_shared<::Assets::MarkerPtr<ShaderLab::ResourceSet>>();
+		auto weakThis = weak_from_this();
+		AsyncConstructToPromise(
+			result->AdoptPromise(),
+			[futureFormatter=std::move(futureFormatter), weakThis]() mutable {
+				auto l = weakThis.lock();
+				if (!l) Throw(std::runtime_error("ShaderLab shutdown before construction finished"));
+
+				YieldToPool(futureFormatter);
+				auto formatter = futureFormatter.get();
+
+				ResourceConstructorContext constructorContext;
+				constructorContext._drawingApparatus = l->_drawingApparatus;
+				constructorContext._bufferUploads = l->_bufferUploads;
+				constructorContext._loadingContext = l->_loadingContext;
+
+				auto resourceSet = std::make_shared<ShaderLab::ResourceSet>();
+				StringSection<> keyName;
+				while (formatter->TryKeyedItem(keyName)) {
+					auto i = std::find_if(l->_resourceConstructors.begin(), l->_resourceConstructors.end(), [keyName](const auto& q) { return XlEqString(keyName, q.first); });
+					if (i == l->_resourceConstructors.end()) {
+						formatter->SkipValueOrElement();
+						continue;
+					}
+
+					auto q = LowerBound(resourceSet->_constructedResources, i->second._typeCode);
+					if (q != resourceSet->_constructedResources.end() && q->first == i->second._typeCode)
+						Throw(std::runtime_error("Multiple ShaderLab resources with the same type code"));
+
+					Formatters::RequireBeginElement(*formatter);
+					auto resource = i->second._constructor(*formatter, constructorContext);
+					Formatters::RequireEndElement(*formatter);
+
+					resourceSet->_constructedResources.insert(q, std::make_pair(i->second._typeCode, std::move(resource)));
+				}
+
+				return resourceSet;
+			});
+		return result;
+	}
+
 	void ShaderLab::RegisterOperation(
 		StringSection<> name,
 		OperationConstructor&& constructor)
@@ -330,6 +382,16 @@ namespace ToolsRig
 		_visualizeStepConstructors.emplace_back(name.AsString(), std::move(constructor));
 	}
 
+	void ShaderLab::RegisterResource(
+		StringSection<> name, uint64_t resourceTypeCode,
+		ResourceConstructor&& constructor)
+	{
+		auto existing = std::find_if(_resourceConstructors.begin(), _resourceConstructors.end(),
+			[name](const auto& p) { return XlEqString(name, p.first); });
+		assert(existing == _resourceConstructors.end());
+		_resourceConstructors.emplace_back(name.AsString(), RC{ std::move(constructor), resourceTypeCode });
+	}
+
 	ShaderLab::ShaderLab(std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus, std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads, std::shared_ptr<::Assets::OperationContext> loadingContext)
 	: _drawingApparatus(std::move(drawingApparatus))
 	, _bufferUploads(std::move(bufferUploads))
@@ -337,6 +399,14 @@ namespace ToolsRig
 	{}
 
 	ShaderLab::~ShaderLab(){}
+
+	std::shared_ptr<ShaderLab::IResource> ShaderLab::ResourceSet::TryGetResource(uint64_t typeCode) const
+	{
+		auto i = LowerBound(_constructedResources, typeCode);
+		if (i != _constructedResources.end() && i->first == typeCode)
+			return i->second;
+		return nullptr;
+	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

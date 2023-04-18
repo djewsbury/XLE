@@ -44,14 +44,34 @@ namespace ToolsRig
 			virtual ~ICompiledOperation() = default;
 		};
 
+		class IResource
+		{
+		public:
+			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
+			virtual ~IResource() = default;
+		};
+
+		class ResourceSet
+		{
+		public:
+			std::shared_ptr<IResource> TryGetResource(uint64_t) const;
+		private:
+			std::vector<std::pair<uint64_t, std::shared_ptr<IResource>>> _constructedResources;
+			friend class ShaderLab;
+		};
+
 		::Assets::PtrToMarkerPtr<ICompiledOperation> BuildCompiledTechnique(
 			std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter,
 			::Assets::PtrToMarkerPtr<IVisualizeStep> visualizeStep,
+			::Assets::PtrToMarkerPtr<ResourceSet> resourceSet,
 			::Assets::PtrToMarkerPtr<RenderCore::LightingEngine::ILightScene> lightScene,
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachmentsInit,
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
 
 		::Assets::PtrToMarkerPtr<IVisualizeStep> BuildVisualizeStep(
+			std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter);
+
+		::Assets::PtrToMarkerPtr<ResourceSet> BuildResourceSet(
 			std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> futureFormatter);
 
 		struct OperationConstructorContext
@@ -63,6 +83,7 @@ namespace ToolsRig
 			std::vector<SetupFunction> _techniqueFinalizers;
 
 			RenderCore::LightingEngine::CompiledLightingTechnique* _technique = nullptr;
+			ResourceSet* _resourceSet = nullptr;
 			RenderCore::Techniques::FragmentStitchingContext _stitchingContext;
 			RenderCore::FrameBufferProperties _fbProps;
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
@@ -82,6 +103,17 @@ namespace ToolsRig
 			StringSection<> name,
 			VisualizeStepConstructor&& constructor);
 
+		struct ResourceConstructorContext
+		{
+			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
+			std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
+			std::shared_ptr<::Assets::OperationContext> _loadingContext;
+		};
+		using ResourceConstructor = std::function<std::shared_ptr<IResource>(Formatters::IDynamicInputFormatter&, ResourceConstructorContext&)>;
+		void RegisterResource(
+			StringSection<> name, uint64_t resourceTypeCode,
+			ResourceConstructor&& constructor);
+
 		ShaderLab(
 			std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
 			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
@@ -90,6 +122,8 @@ namespace ToolsRig
 	private:
 		std::vector<std::pair<std::string, OperationConstructor>> _operationConstructors;
 		std::vector<std::pair<std::string, VisualizeStepConstructor>> _visualizeStepConstructors;
+		struct RC { ResourceConstructor _constructor; uint64_t _typeCode; };
+		std::vector<std::pair<std::string, RC>> _resourceConstructors;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
 		std::shared_ptr<RenderCore::BufferUploads::IManager> _bufferUploads;
 		std::shared_ptr<::Assets::OperationContext> _loadingContext;
