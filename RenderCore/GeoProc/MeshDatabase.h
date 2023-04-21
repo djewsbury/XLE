@@ -179,6 +179,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             IteratorRange<const unsigned*> originalMapping,
             float threshold);
 
+    std::vector<unsigned> FindDuplicateChains(
+        std::vector<unsigned>& oldOrderingToNewOrdering,
+        const IVertexSourceData& sourceStream,
+        float threshold);
+
     std::shared_ptr<IVertexSourceData>
         RemoveBitwiseIdenticals(
             std::vector<unsigned>& outputMapping,
@@ -187,14 +192,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     // Similar to RemoveBitwiseIdenticals, however this time don't modify
     // the underlying vertex buffer. We will just produce a mapping with duplicate
-    // entries for every case where there are bitwise indentical entries
+    // entries for every case where there are bitwise identical entries
     // Some vertex layouts use the w component in position for some purpose 
     // other than position -- to avoid problems in these cases, consider setting
     // the "ignoreWComponent" flag
     std::vector<unsigned> MapToBitwiseIdenticals(
         const IVertexSourceData& sourceStream,
-            IteratorRange<const unsigned*> originalMapping = {},
-            bool ignoreWComponent = false);
+        IteratorRange<const unsigned*> originalMapping = {},
+        bool ignoreWComponent = false);
 
 	MeshDatabase RemoveDuplicates(
 		std::vector<unsigned>& outputMapping,

@@ -57,57 +57,6 @@ namespace XLEMath
             return str << vert[0] << ", " << vert[1] << ", " << vert[2];
         }
 
-	bool AdaptiveEquivalent(float A, float B, float epsilon)
-	{
-		// from https://floating-point-gui.de/errors/comparison/
-		// More robust way of doing these comparisons; with better support through the whole number line
-		// We can also consider just looking at the bit pattern and checking the difference in integer form
-		auto absA = std::abs(A);
-		auto absB = std::abs(B);
-		auto diff = std::abs(A - B);
-
-		if (A == B) {
-			return true;
-		} else if (A == 0 || B == 0 || (absA + absB < std::numeric_limits<decltype(A)>::min())) {
-			return diff < (epsilon * std::numeric_limits<decltype(A)>::min());
-		} else { // use relative error
-			return diff / (absA + absB) < epsilon;
-		}	
-	}
-
-	bool AdaptiveEquivalent(double A, double B, double epsilon)
-	{
-		auto absA = std::abs(A);
-		auto absB = std::abs(B);
-		auto diff = std::abs(A - B);
-
-		if (A == B) {
-			return true;
-		} else if (A == 0 || B == 0 || (absA + absB < std::numeric_limits<decltype(A)>::min())) {
-			return diff < (epsilon * std::numeric_limits<decltype(A)>::min());
-		} else { // use relative error
-			return diff / (absA + absB) < epsilon;
-		}	
-	}
-
-	template<typename Primitive>
-		bool AdaptiveEquivalent(Vector2T<Primitive> A, Vector2T<Primitive> B, Primitive epsilon)
-	{
-		return AdaptiveEquivalent(A[0], B[0], epsilon) && AdaptiveEquivalent(A[1], B[1], epsilon);
-	}
-
-	template<typename Primitive>
-		bool AdaptiveEquivalent(Vector3T<Primitive> A, Vector3T<Primitive> B, Primitive epsilon)
-	{
-		return AdaptiveEquivalent(A[0], B[0], epsilon) && AdaptiveEquivalent(A[1], B[1], epsilon) && AdaptiveEquivalent(A[2], B[2], epsilon);
-	}
-
-	template<typename Primitive>
-		bool AdaptiveEquivalent(Vector4T<Primitive> A, Vector4T<Primitive> B, Primitive epsilon)
-	{
-		return AdaptiveEquivalent(A[0], B[0], epsilon) && AdaptiveEquivalent(A[1], B[1], epsilon) && AdaptiveEquivalent(A[2], B[2], epsilon) && AdaptiveEquivalent(A[3], B[3], epsilon);
-	}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	T1(Primitive) using PointAndTime = Vector3T<Primitive>;

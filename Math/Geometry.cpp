@@ -418,6 +418,194 @@ namespace XLEMath
         }
     }
 
+	template<typename FloatType>
+		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
+			unsigned insideIndicesDst[],
+			unsigned outsideIndicesDst[],
+			std::vector<GeneratedPoint<FloatType>>& generatedPts,
+			IteratorRange<const Vector3T<FloatType>*> staticPtPositions,
+			unsigned sourceIndices[], FloatType clippingParam[])
+	{
+		// Clip the triangle against a single plane, at the point where clippingParam[] is
+		// linearly interpolated as zero. We will keep both the sides of the clipping plane
+		// Generates 0, 1 or 2 output triangles in both output arrays
+		// Retains the vertex indices where possible, so we know how a vertex was generated
+		bool c[] { clippingParam[0] < 0.0f, clippingParam[1] < 0.0f, clippingParam[2] < 0.0f };
+		unsigned mode = unsigned(c[0]) | (unsigned(c[1]) << 1) | (unsigned(c[2]) << 2);
+		if (mode == 0) {
+			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
+			return {1, 0};
+		}
+
+		if (mode == 7) {
+			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = sourceIndices[1]; outsideIndicesDst[2] = sourceIndices[2];
+			return {0, 1};
+		}
+
+		auto GetVertexPosition = [&](unsigned idx) -> Float3 {
+			const auto highBit = 1u<<31u;
+			if (idx & highBit) return generatedPts[idx & ~highBit]._position;
+			return staticPtPositions[idx];
+		};
+
+		Vector3T<FloatType> sourcePositions[3] {
+			GetVertexPosition(sourceIndices[0]),
+			GetVertexPosition(sourceIndices[1]),
+			GetVertexPosition(sourceIndices[2])
+		};
+
+		auto GeneratePoint = [&](unsigned a, unsigned b, FloatType alpha) -> unsigned {
+			GeneratedPoint<FloatType> genPt;
+			genPt._position = LinearInterpolate(sourcePositions[a], sourcePositions[b], alpha);
+			genPt._lhsIdx = sourceIndices[a];
+			genPt._rhsIdx = sourceIndices[b];
+			genPt._alpha = alpha;
+			generatedPts.push_back(genPt);
+			const auto highBit = 1u<<31u;
+			return unsigned(generatedPts.size()-1) | highBit;
+		};
+
+		unsigned A, B;
+		switch (mode)
+		{
+		case 1: // just [0] clipped
+			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
+			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
+			insideIndicesDst[0] = A; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
+			insideIndicesDst[3] = A; insideIndicesDst[4] = sourceIndices[2]; insideIndicesDst[5] = B;
+			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = A; outsideIndicesDst[2] = B;
+			return {2, 1};
+
+		case 2: // just [1] clipped
+			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
+			B = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
+			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = A; insideIndicesDst[2] = sourceIndices[2];
+			insideIndicesDst[3] = sourceIndices[2]; insideIndicesDst[4] = A; insideIndicesDst[5] = B;
+			outsideIndicesDst[0] = sourceIndices[1]; outsideIndicesDst[1] = B; outsideIndicesDst[2] = A;
+			return {2, 1};
+
+		case 4: // just [2] clipped
+			A = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
+			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
+			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = B;
+			insideIndicesDst[3] = B; insideIndicesDst[4] = sourceIndices[1]; insideIndicesDst[5] = A;
+			outsideIndicesDst[0] = sourceIndices[2]; outsideIndicesDst[1] = B; outsideIndicesDst[2] = A;
+			return {2, 1};
+
+		case 3: // [0] & [1] clipped
+			A = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
+			B = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
+			insideIndicesDst[0] = A; insideIndicesDst[1] = B; insideIndicesDst[2] = sourceIndices[2];
+			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = sourceIndices[1]; outsideIndicesDst[2] = A;
+			outsideIndicesDst[3] = A; outsideIndicesDst[4] = sourceIndices[1]; outsideIndicesDst[5] = B;
+			return {1, 2};
+
+		case 5: // [0] & [2] clipped
+			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
+			B = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
+			insideIndicesDst[0] = A; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = B;
+			outsideIndicesDst[0] = sourceIndices[2]; outsideIndicesDst[1] = sourceIndices[0]; outsideIndicesDst[2] = B;
+			outsideIndicesDst[3] = B; outsideIndicesDst[4] = sourceIndices[0]; outsideIndicesDst[5] = A;
+			return {1, 2};
+
+		case 6: // [1] & [2] clipped
+			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
+			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
+			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = A; insideIndicesDst[2] = B;
+			outsideIndicesDst[0] = sourceIndices[1]; outsideIndicesDst[1] = sourceIndices[2]; outsideIndicesDst[2] = A;
+			outsideIndicesDst[3] = A; outsideIndicesDst[4] = sourceIndices[2]; outsideIndicesDst[5] = B;
+			return {1, 2};
+
+		default:
+			UNREACHABLE();
+			return {0, 0};
+		}
+	}
+
+    unsigned PlaneAABBIntersection(Float3 dst[], Float4 planeEquation, Float3 aabbMins, Float3 aabbMaxs)
+    {
+        // Following the idea here: https://www.asawicki.info/news_1428_finding_polygon_of_plane-aabb_intersection
+        // we're going to do this is a pretty simple way: we just find the intersection with each edge of the AABB
+        // and then (since the resulting polygon is always convex), we can just sort to put it in winding order
+        unsigned vertexCount = 0;
+
+        auto testEdge = [&](Float3 start, Float3 end, float startDistance, float endDistance) {
+            if ((startDistance < 0) != (endDistance < 0)) {
+                assert(vertexCount < 6);
+                dst[vertexCount++] = LinearInterpolate(start, end, startDistance / (startDistance - endDistance));
+            }
+        };
+
+        // 3 edges starting from aabbMins
+
+        Float3 start = aabbMins;
+        float startDistance = SignedDistance(start, planeEquation);
+        Float3 end = aabbMins;
+
+        end[0] = aabbMaxs[0];
+        testEdge(start, end, startDistance, SignedDistance(end, planeEquation));
+
+        end[0] = aabbMins[0]; end[1] = aabbMaxs[1];
+        testEdge(start, end, startDistance, SignedDistance(end, planeEquation));
+
+        end[1] = aabbMins[1]; end[2] = aabbMaxs[2];
+        testEdge(start, end, startDistance, SignedDistance(end, planeEquation));
+
+        // 3 edges starting from aabbMaxs
+
+        start = aabbMaxs;
+        startDistance = SignedDistance(start, planeEquation);
+        end = aabbMaxs;
+
+        end[0] = aabbMins[0];
+        testEdge(start, end, startDistance, SignedDistance(end, planeEquation));
+
+        end[0] = aabbMaxs[0]; end[1] = aabbMins[1];
+        testEdge(start, end, startDistance, SignedDistance(end, planeEquation));
+
+        end[1] = aabbMaxs[1]; end[2] = aabbMins[2];
+        float endDistance = SignedDistance(end, planeEquation);
+        testEdge(start, end, startDistance, endDistance);
+
+        // remaining 6 edges walking around a circumference
+        // we only need to set 1 vertex every time, because we always reuse a vertex from the previous test
+
+        start = Float3 { aabbMins[0], aabbMaxs[1], aabbMins[2] };       // 0
+        startDistance = SignedDistance(start, planeEquation);
+        testEdge(start, end, startDistance, endDistance);
+
+        start = Float3 { aabbMaxs[0], aabbMins[1], aabbMins[2] };       // 2
+        startDistance = SignedDistance(start, planeEquation);
+        testEdge(end, start, endDistance, startDistance);
+
+        end = Float3 { aabbMaxs[0], aabbMins[1], aabbMaxs[2] };         // 3
+        endDistance = SignedDistance(end, planeEquation);
+        testEdge(start, end, startDistance, endDistance);
+
+        start = Float3 { aabbMins[0], aabbMins[1], aabbMaxs[2] };       // 4
+        startDistance = SignedDistance(start, planeEquation);
+        testEdge(end, start, endDistance, startDistance);
+
+        end = Float3 { aabbMins[0], aabbMaxs[1], aabbMaxs[2] };         // 5
+        endDistance = SignedDistance(end, planeEquation);
+        testEdge(start, end, startDistance, endDistance);
+
+        start = Float3 { aabbMins[0], aabbMaxs[1], aabbMins[2] };       // 0
+        startDistance = SignedDistance(start, planeEquation);
+        testEdge(end, start, endDistance, startDistance);
+
+        if (!vertexCount) return 0;
+
+        Float3 anchor = dst[0];
+        std::sort(
+            dst, &dst[vertexCount],
+            [planeEquation, anchor](const auto& lhs, const auto& rhs) {
+                auto c = Cross(lhs - anchor, rhs - anchor);
+                return Dot(c, Truncate(planeEquation)) < 0.f;
+            });
+        return vertexCount;
+    }
+
     int TriangleSign(Float2 p1, Float2 p2, Float2 p3) {
         float w = (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1]);
         const static float EPSILON = 0.00001f;
@@ -436,4 +624,18 @@ namespace XLEMath
         
         return ((b1 == b2) && (b2 == b3));
     }
+
+    template
+        std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
+			unsigned[], unsigned[],
+			std::vector<GeneratedPoint<float>>&,
+			IteratorRange<const Vector3T<float>*>,
+			unsigned[], float[]);
+
+    template
+        std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
+			unsigned[], unsigned[],
+			std::vector<GeneratedPoint<double>>&,
+			IteratorRange<const Vector3T<double>*>,
+			unsigned[], double[]);
 }

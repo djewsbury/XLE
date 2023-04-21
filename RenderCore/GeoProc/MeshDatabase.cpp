@@ -1030,6 +1030,87 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             sourceStream.GetFormat());
     }
 
+    std::vector<unsigned> FindDuplicateChains(
+        std::vector<unsigned>& oldOrderingToNewOrdering,
+        const IVertexSourceData& sourceStream,
+        float threshold)
+    {
+        // Using the same method as RemoveDuplicates, find chains of vertices that equivalent within the
+        // given threshold
+        // The result will have vertex indices, with the first index for each chain marked with bit 31 set
+        std::vector<unsigned> result;
+        result.reserve(sourceStream.GetCount());
+
+            // We need to find vertices that are close together...
+            // The easiest way to do this is to quantize space into grids of size 2 * threshold.
+            // 2 vertices that have the same quantized position may be "close".
+            // We do this twice -- once with a offset of half the grid size.
+            // We will keep a record of all vertices that are found to be "close". Afterwards,
+            // we should combine these pairs into chains of vertices. These chains get combined
+            // into a single vertex, which is the one that is closest to the averaged vertex.
+        auto quant = Float4(2.f*threshold, 2.f*threshold, 2.f*threshold, 2.f*threshold);
+        auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>());
+        auto quantizedSet1 = BuildQuantizedCoords(sourceStream, quant, Float4(threshold, threshold, threshold, threshold));
+
+            // sort our quantized vertices to make it easier to find duplicates
+            // note that duplicates will be sorted with the lowest vertex index first,
+            // which is important when building the pairs.
+        std::sort(quantizedSet0.begin(), quantizedSet0.end(), SortQuantizedSet);
+        std::sort(quantizedSet1.begin(), quantizedSet1.end(), SortQuantizedSet);
+        
+            // Find the pairs of close vertices
+            // Note that in these pairs, the first index will always be smaller 
+            // than the second index.
+        std::vector<std::pair<unsigned, unsigned>> closeVertices;
+        FindVertexPairs(closeVertices, quantizedSet0, sourceStream, threshold);
+        FindVertexPairs(closeVertices, quantizedSet1, sourceStream, threshold);
+
+        oldOrderingToNewOrdering.clear();
+        oldOrderingToNewOrdering.insert(oldOrderingToNewOrdering.end(), sourceStream.GetCount(), ~0u);
+        size_t finalVBCount = 0;
+
+        std::vector<unsigned> chainBuffer;
+        chainBuffer.reserve(32);
+        const unsigned highBit = 1u<<31u;
+
+        for (unsigned c=0; c<sourceStream.GetCount(); c++) {
+            if (oldOrderingToNewOrdering[c] != ~0u) continue;
+
+            chainBuffer.clear();    // clear without deallocate
+			std::queue<unsigned> pendingChainEnds;
+			
+			pendingChainEnds.push(c);
+            while (!pendingChainEnds.empty()) {
+				auto chainEnd = pendingChainEnds.front();
+				pendingChainEnds.pop();
+
+				if (std::find(chainBuffer.begin(), chainBuffer.end(), chainEnd) != chainBuffer.end())
+					continue;
+				chainBuffer.push_back(chainEnd);
+
+				// note --	there's an optimization we can perform here, because we know
+				//			that as c increases, we will no longer find matches in the 
+				//			first part of "closeVertices" (because closeVertices ends up in
+				//			sorted order, and 'c' is always the vertex with the smallest index
+				//			in the chain)
+                auto linkRange = EqualRange(closeVertices, chainEnd);
+				for (auto i2 = linkRange.first; i2 != linkRange.second; ++i2)
+					pendingChainEnds.push(i2->second);
+            }
+
+            assert(!chainBuffer.empty());
+            result.push_back(chainBuffer.front() | highBit);
+            result.insert(result.end(), chainBuffer.begin()+1, chainBuffer.end());
+
+            // figure out the reordering now; we do this because we need to track which vertices have been processed, anyway
+            for (auto q=chainBuffer.cbegin(); q!=chainBuffer.cend(); ++q)
+                oldOrderingToNewOrdering[*q] = (unsigned)finalVBCount;
+            ++finalVBCount;
+        }
+
+        return result;
+    }
+
     std::shared_ptr<IVertexSourceData>
         RemoveBitwiseIdenticals(
             std::vector<unsigned>& outputMapping,

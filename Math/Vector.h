@@ -125,6 +125,24 @@ namespace XLEMath
 				return true;
 			}
 
+        template<typename Primitive>
+		    bool AdaptiveEquivalent(Vector2T<Primitive> A, Vector2T<Primitive> B, Primitive epsilon)
+        {
+            return AdaptiveEquivalent(A[0], B[0], epsilon) && AdaptiveEquivalent(A[1], B[1], epsilon);
+        }
+
+        template<typename Primitive>
+            bool AdaptiveEquivalent(Vector3T<Primitive> A, Vector3T<Primitive> B, Primitive epsilon)
+        {
+            return AdaptiveEquivalent(A[0], B[0], epsilon) && AdaptiveEquivalent(A[1], B[1], epsilon) && AdaptiveEquivalent(A[2], B[2], epsilon);
+        }
+
+        template<typename Primitive>
+            bool AdaptiveEquivalent(Vector4T<Primitive> A, Vector4T<Primitive> B, Primitive epsilon)
+        {
+            return AdaptiveEquivalent(A[0], B[0], epsilon) && AdaptiveEquivalent(A[1], B[1], epsilon) && AdaptiveEquivalent(A[2], B[2], epsilon) && AdaptiveEquivalent(A[3], B[3], epsilon);
+        }
+
         template<typename BasicType, int Count>
 			inline cml::vector<BasicType, cml::fixed<Count>> MultiplyAcross(
 				const cml::vector<BasicType, cml::fixed<Count>>& lhs, 

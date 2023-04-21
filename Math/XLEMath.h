@@ -108,6 +108,39 @@ namespace XLEMath
         return d < tolerance && d > -tolerance;
     }
 
+    inline bool AdaptiveEquivalent(float A, float B, float epsilon)
+	{
+		// from https://floating-point-gui.de/errors/comparison/
+		// More robust way of doing these comparisons; with better support through the whole number line
+		// We can also consider just looking at the bit pattern and checking the difference in integer form
+		auto absA = std::abs(A);
+		auto absB = std::abs(B);
+		auto diff = std::abs(A - B);
+
+		if (A == B) {
+			return true;
+		} else if (A == 0 || B == 0 || (absA + absB < std::numeric_limits<decltype(A)>::min())) {
+			return diff < (epsilon * std::numeric_limits<decltype(A)>::min());
+		} else { // use relative error
+			return diff / (absA + absB) < epsilon;
+		}	
+	}
+
+	inline bool AdaptiveEquivalent(double A, double B, double epsilon)
+	{
+		auto absA = std::abs(A);
+		auto absB = std::abs(B);
+		auto diff = std::abs(A - B);
+
+		if (A == B) {
+			return true;
+		} else if (A == 0 || B == 0 || (absA + absB < std::numeric_limits<decltype(A)>::min())) {
+			return diff < (epsilon * std::numeric_limits<decltype(A)>::min());
+		} else { // use relative error
+			return diff / (absA + absB) < epsilon;
+		}	
+	}
+
     template < typename T >
     T Clamp(T value, T minval, T maxval) {
         return std::max(std::min(value, maxval), minval);

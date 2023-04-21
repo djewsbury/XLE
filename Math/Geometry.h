@@ -8,13 +8,16 @@
 
 #include "Vector.h"
 #include "Matrix.h"
+#include "../Utility/IteratorUtils.h"       // for IteratorRange
 #include "../Core/Prefix.h"
 #include <utility>
 
 namespace XLEMath
 {
-    float   SignedDistance(const Float3& pt, const Float4& plane);
-    float   RayVsPlane(const Float3& rayStart, const Float3& rayEnd, const Float4& plane);
+    template<typename FloatType>
+        FloatType SignedDistance(const Vector3T<FloatType>& pt, const Vector4T<FloatType>& plane);
+    template<typename FloatType>
+        FloatType RayVsPlane(const Vector3T<FloatType>& rayStart, const Vector3T<FloatType>& rayEnd, const Vector4T<FloatType>& plane);
 
         /// <summary>Tests a ray against an AABB</summary>
         /// <param name="worldSpaceRay">The ray in world space. Start and end position</param>
@@ -66,8 +69,28 @@ namespace XLEMath
     bool RayVsSphere(Float3 rayStart, Float3 rayEnd, float sphereRadiusSq);
 
     unsigned ClipTriangle(Float3 dst[], const Float3 source[], float clippingParam[]);
-    
-    
+
+	template<typename FloatType>
+		struct GeneratedPoint
+	{
+		Vector3T<FloatType> _position;
+		unsigned _lhsIdx, _rhsIdx;
+		float _alpha;
+	};
+
+    template<typename FloatType>
+		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
+			unsigned insideIndicesDst[],
+			unsigned outsideIndicesDst[],
+			std::vector<GeneratedPoint<FloatType>>& generatedPts,
+			IteratorRange<const Vector3T<FloatType>*> staticPtPositions,
+			unsigned sourceIndices[], FloatType clippingParam[]);
+
+    /// <summary>Finds the intersection between a plane and a given plane</summary>
+    /// Returns the number of vertices in the resultant intersection polygon, and the points of that polygon in 'dst'
+    /// 'dst' should point to an array at least 6 vectors long
+    unsigned PlaneAABBIntersection(Float3 dst[], Float4 planeEquation, Float3 aabbMins, Float3 aabbMaxs);
+
     int TriangleSign(Float2 p1, Float2 p2, Float2 p3);
     bool PointInTriangle(Float2 pt, Float2 v0, Float2 v1, Float2 v2);
 
@@ -75,12 +98,14 @@ namespace XLEMath
             //      I N L I N E   I M P L E M E N T A T I O N S
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    inline float SignedDistance(const Float3& pt, const Float4& plane)
+    template<typename FloatType>
+        inline FloatType SignedDistance(const Vector3T<FloatType>& pt, const Vector4T<FloatType>& plane)
     {
         return Dot(pt, Truncate(plane)) + plane[3];
     }
 
-    inline float RayVsPlane(const Float3& rayStart, const Float3& rayEnd, const Float4& plane)
+    template<typename FloatType>
+        inline FloatType RayVsPlane(const Vector3T<FloatType>& rayStart, const Vector3T<FloatType>& rayEnd, const Vector4T<FloatType>& plane)
     {
         float a = SignedDistance(rayStart, plane);
         float b = SignedDistance(rayEnd, plane);
