@@ -14,10 +14,10 @@
 
 namespace XLEMath
 {
-    template<typename FloatType>
-        FloatType SignedDistance(const Vector3T<FloatType>& pt, const Vector4T<FloatType>& plane);
-    template<typename FloatType>
-        FloatType RayVsPlane(const Vector3T<FloatType>& rayStart, const Vector3T<FloatType>& rayEnd, const Vector4T<FloatType>& plane);
+    template<typename Primitive>
+        Primitive SignedDistance(const Vector3T<Primitive>& pt, const Vector4T<Primitive>& plane);
+    template<typename Primitive>
+        Primitive RayVsPlane(const Vector3T<Primitive>& rayStart, const Vector3T<Primitive>& rayEnd, const Vector4T<Primitive>& plane);
 
         /// <summary>Tests a ray against an AABB</summary>
         /// <param name="worldSpaceRay">The ray in world space. Start and end position</param>
@@ -70,53 +70,279 @@ namespace XLEMath
 
     unsigned ClipTriangle(Float3 dst[], const Float3 source[], float clippingParam[]);
 
-	template<typename FloatType>
+	template<typename Primitive>
 		struct GeneratedPoint
 	{
-		Vector3T<FloatType> _position;
+		Vector3T<Primitive> _position;
 		unsigned _lhsIdx, _rhsIdx;
 		float _alpha;
 	};
 
-    template<typename FloatType>
+    template<typename Primitive>
 		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
 			unsigned insideIndicesDst[],
 			unsigned outsideIndicesDst[],
-			std::vector<GeneratedPoint<FloatType>>& generatedPts,
-			IteratorRange<const Vector3T<FloatType>*> staticPtPositions,
-			unsigned sourceIndices[], FloatType clippingParam[]);
+			std::vector<GeneratedPoint<Primitive>>& generatedPts,
+			IteratorRange<const Vector3T<Primitive>*> staticPtPositions,
+			unsigned sourceIndices[], Primitive clippingParam[],
+			const Primitive coplanarThreshold);
 
     /// <summary>Finds the intersection between a plane and a given plane</summary>
     /// Returns the number of vertices in the resultant intersection polygon, and the points of that polygon in 'dst'
     /// 'dst' should point to an array at least 6 vectors long
-    unsigned PlaneAABBIntersection(Float3 dst[], Float4 planeEquation, Float3 aabbMins, Float3 aabbMaxs);
+    template<typename Primitive>
+        unsigned PlaneAABBIntersection(Vector3T<Primitive> dst[], Vector4T<Primitive> planeEquation, Vector3T<Primitive> aabbMins, Vector3T<Primitive> aabbMaxs);
 
     int TriangleSign(Float2 p1, Float2 p2, Float2 p3);
     bool PointInTriangle(Float2 pt, Float2 v0, Float2 v1, Float2 v2);
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////
-            //      I N L I N E   I M P L E M E N T A T I O N S
-        ////////////////////////////////////////////////////////////////////////////////////////////////
-
-    template<typename FloatType>
-        inline FloatType SignedDistance(const Vector3T<FloatType>& pt, const Vector4T<FloatType>& plane)
+    template<typename Primitive>
+        inline Primitive SignedDistance(const Vector3T<Primitive>& pt, const Vector4T<Primitive>& plane)
     {
         return Dot(pt, Truncate(plane)) + plane[3];
     }
 
-    template<typename FloatType>
-        inline FloatType RayVsPlane(const Vector3T<FloatType>& rayStart, const Vector3T<FloatType>& rayEnd, const Vector4T<FloatType>& plane)
+    template<typename Primitive>
+        inline Primitive RayVsPlane(const Vector3T<Primitive>& rayStart, const Vector3T<Primitive>& rayEnd, const Vector4T<Primitive>& plane)
     {
-        float a = SignedDistance(rayStart, plane);
-        float b = SignedDistance(rayEnd, plane);
+        auto a = SignedDistance(rayStart, plane);
+        auto b = SignedDistance(rayEnd, plane);
         return a / (a - b);
     }
 
-    inline int XlSign(int input)
-    {
-        // std::signbit would be useful here!
-        return (input<0)?-1:1;
-    }
+        ////////////////////////////////////////////////////////////////////////////////////////////////
+            //      I N C R E A S E D   P R E C I S I O N   C A L C U L A T I O N S			//
+        ////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<typename Primitive>
+		static std::pair<Primitive, Primitive> TwoProductFMA(Primitive a, Primitive b)
+	{
+		// Note that we have to be a little careful of compiler optimization here, since we're
+		// generating equations that should result in 0 (assuming infinite precision)
+		Primitive x = a * b;
+		Primitive y = __builtin_fma(a, b, -x);
+		return { x, y };
+	}
+
+	template<typename Primitive>
+		static std::pair<Primitive, Primitive> TwoSum(Primitive a, Primitive b)
+	{
+		// Note that we have to be a little careful of compiler optimization here, since we're
+		// generating equations that should result in 0 (assuming infinite precision)
+		Primitive x = a + b;
+		Primitive z = x - a;
+		Primitive y = (a - (x - z)) + (b - z);		// note order of operations is significant
+		return { x, y };
+	}
+
+	template<typename Primitive>
+		static std::pair<Primitive, Primitive> Dot_Accurate(const Vector3T<Primitive>& lhs, const Vector3T<Primitive>& rhs)
+	{
+		// Using Ogita, Rump & Osihi's method for higher precision dot product calculation
+		// 	https://www.researchgate.net/publication/220411325_Accurate_Sum_and_Dot_Product
+		// See algorithm 5.3
+		//
+		// Note that we have to be a little careful of compiler optimization here, since we're
+		// generating equations that should result in 0 (assuming infinite precision)
+
+		Primitive p, s;
+		std::tie(p, s) = TwoProductFMA(lhs[0], rhs[0]);
+
+		Primitive h, r, q;
+		std::tie(h, r) = TwoProductFMA(lhs[1], rhs[1]);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;		// addition order is important, we want to add q+r first
+
+		std::tie(h, r) = TwoProductFMA(lhs[2], rhs[2]);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;		// addition order is important, we want to add q+r first
+
+		// 's' is the extra precision we get through this method
+		return { p,  s };
+	}
+
+	template<typename Primitive>
+		static Vector3T<Primitive> Cross_Accurate(const Vector3T<Primitive>& lhs, const Vector3T<Primitive>& rhs)
+	{
+		// Let's follow the logic in Dot_Accurate and create an equivalent algorithm
+		// assuming the subtraction is well behaved, we get a little more accuracy using TwoProductFMA
+		Primitive a, b, c, d;
+		Vector3T<Primitive> result;
+		std::tie(a, b) = TwoProductFMA(lhs[1], rhs[2]);
+		std::tie(c, d) = TwoProductFMA(lhs[2], rhs[1]);
+		result[0] = (a - c) + (b - d);
+
+		std::tie(a, b) = TwoProductFMA(lhs[2], rhs[0]);
+		std::tie(c, d) = TwoProductFMA(lhs[0], rhs[2]);
+		result[1] = (a - c) + (b - d);
+
+		std::tie(a, b) = TwoProductFMA(lhs[0], rhs[1]);
+		std::tie(c, d) = TwoProductFMA(lhs[1], rhs[0]);
+		result[2] = (a - c) + (b - d);
+		return result;
+	}
+
+	template<typename Primitive>
+		static Vector4T<Primitive> PlaneFit_Accurate(const Vector3T<Primitive>& pt0, const Vector3T<Primitive>& pt1, const Vector3T<Primitive>& pt2)
+	{
+		// Let's follow the logic in Dot_Accurate and create an equivalent algorithm
+		// though I haven't proven this is more accurate
+		Vector3T<Primitive> normal;
+		Primitive l0 = MagnitudeSquared(pt1 - pt0), l1 = MagnitudeSquared(pt2 - pt1), l2 = MagnitudeSquared(pt0 - pt2);
+		if (l0 < l1) {
+			if (l0 < l2) {
+				normal = Cross_Accurate<Primitive>( pt0 - pt2, pt1 - pt2 );	// shortest segment is 0
+			} else 
+				normal = Cross_Accurate<Primitive>( pt2 - pt1, pt0 - pt1 );	// shortest segment is 2
+		} else if (l1 < l2) {
+			normal = Cross_Accurate<Primitive>( pt1 - pt0, pt2 - pt0 );	// shortest segment is 1
+		} else
+			normal = Cross_Accurate<Primitive>( pt2 - pt1, pt0 - pt1 );	// shortest segment is 2
+
+		normal = Normalize(normal);
+
+		Primitive p, h, r, s, q;
+		std::tie(p, s) = Dot_Accurate(pt0, normal);
+
+		std::tie(h, r) = Dot_Accurate(pt1, normal);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;
+
+		std::tie(h, r) = Dot_Accurate(pt2, normal);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;
+
+		Primitive w = (p+s) / Primitive(-3);
+		return Expand( normal, w );
+	}
+
+	template<typename Primitive>
+		static Vector4T<Primitive> PlaneFit_AccurateNoNormalize(const Vector3T<Primitive>& pt0, const Vector3T<Primitive>& pt1, const Vector3T<Primitive>& pt2)
+	{
+		// Let's follow the logic in Dot_Accurate and create an equivalent algorithm
+		// though I haven't proven this is more accurate
+		Vector3T<Primitive> normal;
+		Primitive l0 = MagnitudeSquared(pt1 - pt0), l1 = MagnitudeSquared(pt2 - pt1), l2 = MagnitudeSquared(pt0 - pt2);
+		if (l0 < l1) {
+			if (l0 < l2) {
+				normal = Cross_Accurate<Primitive>( pt0 - pt2, pt1 - pt2 );	// shortest segment is 0
+			} else 
+				normal = Cross_Accurate<Primitive>( pt2 - pt1, pt0 - pt1 );	// shortest segment is 2
+		} else if (l1 < l2) {
+			normal = Cross_Accurate<Primitive>( pt1 - pt0, pt2 - pt0 );	// shortest segment is 1
+		} else
+			normal = Cross_Accurate<Primitive>( pt2 - pt1, pt0 - pt1 );	// shortest segment is 2
+		
+		Primitive p, h, r, s, q;
+		std::tie(p, s) = Dot_Accurate(pt0, normal);
+
+		std::tie(h, r) = Dot_Accurate(pt1, normal);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;
+
+		std::tie(h, r) = Dot_Accurate(pt2, normal);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;
+
+		Primitive w = (p+s) / Primitive(-3);
+		return Expand( normal, w );
+	}
+
+	template<typename Primitive>
+		static Primitive SignedDistance_Accurate(const Vector3T<Primitive>& pt, const Vector4T<Primitive>& plane)
+	{
+		// See Dot_Accurate for more details
+		Primitive p, s, q;
+		std::tie(p, s) = Dot_Accurate(pt, Truncate(plane));
+		std::tie(p, q) = TwoSum(p, plane[3]);
+		return p + (s + q);
+	}
+
+	static Float3 Normalize_Accurate(Float3 input)
+	{
+		auto magSq = Dot_Accurate(input, input);
+		#if defined(HAS_SSE_INSTRUCTIONS)
+			// making use of SSE rsqrt (which is SIMD, but we'll only use one out of 4 results of the calculation)
+			magSq.first += magSq.second;
+			__m128 mm128 = _mm_load1_ps(&magSq.first);
+			mm128 = _mm_rsqrt_ss(mm128);
+			_mm_store_ss(&magSq.first, mm128);
+			return input * magSq.first;
+		#else
+			return input / std::sqrt(magSq.first + magSq.second);
+		#endif
+	}
+
+	static Vector3T<double> Normalize_Accurate(Vector3T<double> input)
+	{
+		auto magSq = Dot_Accurate(input, input);
+		return input / std::sqrt(magSq.first + magSq.second);
+	}
+
+	template<typename Primitive>
+		static Primitive Magnitude_Accurate(Vector3T<Primitive> input)
+	{
+		auto magSq = Dot_Accurate(input, input);
+		return std::sqrt(magSq.first + magSq.second);
+	}
+
+	template<typename Primitive>
+		static Primitive MagnitudeSquared_Accurate(Vector3T<Primitive> input)
+	{
+		auto magSq = Dot_Accurate(input, input);
+		return magSq.first + magSq.second;
+	}
+
+	template<typename Primitive>
+		static Vector3T<Primitive> LinearInterpolate_Accurate(const Vector3T<Primitive>& lhs, const Vector3T<Primitive>& rhs, Primitive alpha)
+	{
+		// using the same principle as Dot_Accurate, let's improve this interpolate function
+		// this is a good candidate for SIMD instructions
+		// return lhs * (1-alpha) + rhs * a;
+
+		Vector3T<Primitive> result;
+
+		Primitive p, s;
+		Primitive h, r, q;
+		std::tie(p, s) = TwoProductFMA(lhs[0], 1-alpha);
+		std::tie(h, r) = TwoProductFMA(rhs[0], alpha);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;
+		result[0] = p + s;
+
+		std::tie(p, s) = TwoProductFMA(lhs[1], 1-alpha);
+		std::tie(h, r) = TwoProductFMA(rhs[1], alpha);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;
+		result[1] = p + s;
+
+		std::tie(p, s) = TwoProductFMA(lhs[2], 1-alpha);
+		std::tie(h, r) = TwoProductFMA(rhs[2], alpha);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;
+		result[2] = p + s;
+
+		return result;
+	}
+
+	template<typename Primitive>
+		static Primitive TriangleArea_Accurate(const Vector3T<Primitive>& pt0, const Vector3T<Primitive>& pt1, const Vector3T<Primitive>& pt2)
+	{
+		Primitive l0 = MagnitudeSquared(pt1 - pt0), l1 = MagnitudeSquared(pt2 - pt1), l2 = MagnitudeSquared(pt0 - pt2);
+		Vector3T<Primitive> cross;
+		if (l0 < l1) {
+			if (l0 < l2) {
+				cross = Cross_Accurate<Primitive>( pt0 - pt2, pt1 - pt2 );	// shortest segment is 0
+			} else 
+				cross = Cross_Accurate<Primitive>( pt2 - pt1, pt0 - pt1 );	// shortest segment is 2
+		} else if (l1 < l2) {
+			cross = Cross_Accurate<Primitive>( pt1 - pt0, pt2 - pt0 );	// shortest segment is 1
+		} else
+			cross = Cross_Accurate<Primitive>( pt2 - pt1, pt0 - pt1 );	// shortest segment is 2
+		return Magnitude_Accurate(cross) / Primitive(2);
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /// <summary>Iterator through a grid, finding that edges that intersect with a line segment</summary>
         /// The callback "opr" will be called for each grid edge that intersects with given line segment.
@@ -132,9 +358,9 @@ namespace XLEMath
 		    int w = e[0] - s[0];
 		    int h = e[1] - s[1];
 
-            int ystep = XlSign(h); 
+            int ystep = (h<0)?-1:1;
             h = XlAbs(h); 
-            int xstep = XlSign(w); 
+            int xstep = (w<0)?-1:1;
             w = XlAbs(w); 
             int ddy = 2 * h;  // We may not need to double this (because we're starting from the corner of the pixel)
             int ddx = 2 * w; 

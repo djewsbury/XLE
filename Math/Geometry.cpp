@@ -322,6 +322,8 @@ namespace XLEMath
     
     template auto PlaneFit(const Vector3T<float> pts[], size_t ptCount ) -> Vector4T<float>;
     template auto PlaneFit(const Vector3T<float> & pt0, const Vector3T<float> & pt1, const Vector3T<float> & pt2 ) -> Vector4T<float>;
+    template auto PlaneFit(const Vector3T<double> pts[], size_t ptCount ) -> Vector4T<double>;
+    template auto PlaneFit(const Vector3T<double> & pt0, const Vector3T<double> & pt1, const Vector3T<double> & pt2 ) -> Vector4T<double>;
 #endif
 
 	T1(Primitive) Vector4T<Primitive> PlaneFit(
@@ -338,7 +340,8 @@ namespace XLEMath
                 perspective, then we should get a vector pointing towards us (ie, inline with CCW being front facing)
 			*/
 		auto normal = Normalize( Cross( pt2 - pt1, pt0 - pt1 ) );
-		Primitive w = (-Dot( pt0, normal ) - Dot( pt1, normal ) - Dot( pt2, normal )) * Primitive(1./3.);
+        // Vector3T<Primitive> normal = Cross( pt2 - pt1, pt0 - pt1 );
+		Primitive w = -(Dot( pt0, normal ) + Dot( pt1, normal ) + Dot( pt2, normal )) / Primitive(3.);
 		return Expand( normal, w );
 	}
 
@@ -353,7 +356,7 @@ namespace XLEMath
         if (!Normalize_Checked(&normal, Vector3T<Primitive>(Cross(pt2 - pt1, pt0 - pt1))))
             return false;
 
-        auto w = (-Dot( pt0, normal ) - Dot( pt1, normal ) - Dot( pt2, normal )) * Primitive(1./3.);
+        auto w = -(Dot( pt0, normal ) + Dot( pt1, normal ) + Dot( pt2, normal )) / Primitive(3.);
 		*result = Expand( normal, w );
         return true;
 	}
@@ -418,44 +421,47 @@ namespace XLEMath
         }
     }
 
-	template<typename FloatType>
+	template<typename Primitive>
 		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
 			unsigned insideIndicesDst[],
 			unsigned outsideIndicesDst[],
-			std::vector<GeneratedPoint<FloatType>>& generatedPts,
-			IteratorRange<const Vector3T<FloatType>*> staticPtPositions,
-			unsigned sourceIndices[], FloatType clippingParam[])
+			std::vector<GeneratedPoint<Primitive>>& generatedPts,
+			IteratorRange<const Vector3T<Primitive>*> staticPtPositions,
+			unsigned sourceIndices[], Primitive clippingParam[],
+			const Primitive coplanarThreshold)
 	{
 		// Clip the triangle against a single plane, at the point where clippingParam[] is
 		// linearly interpolated as zero. We will keep both the sides of the clipping plane
 		// Generates 0, 1 or 2 output triangles in both output arrays
 		// Retains the vertex indices where possible, so we know how a vertex was generated
-		bool c[] { clippingParam[0] < 0.0f, clippingParam[1] < 0.0f, clippingParam[2] < 0.0f };
-		unsigned mode = unsigned(c[0]) | (unsigned(c[1]) << 1) | (unsigned(c[2]) << 2);
-		if (mode == 0) {
+		unsigned clearlyOutside = unsigned(clippingParam[0] < -coplanarThreshold) | (unsigned(clippingParam[1] < -coplanarThreshold) << 1) | (unsigned(clippingParam[2] < -coplanarThreshold) << 2);
+		unsigned coplanar = unsigned(clippingParam[0] < coplanarThreshold) | (unsigned(clippingParam[1] < coplanarThreshold) << 1) | (unsigned(clippingParam[2] < coplanarThreshold) << 2);
+		coplanar &= ~clearlyOutside;
+
+		if (clearlyOutside == 0) {
 			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
 			return {1, 0};
 		}
 
-		if (mode == 7) {
+		if ((clearlyOutside|coplanar) == 7) {
 			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = sourceIndices[1]; outsideIndicesDst[2] = sourceIndices[2];
 			return {0, 1};
 		}
 
-		auto GetVertexPosition = [&](unsigned idx) -> Float3 {
+		auto GetVertexPosition = [&](unsigned idx) -> Vector3T<Primitive> {
 			const auto highBit = 1u<<31u;
 			if (idx & highBit) return generatedPts[idx & ~highBit]._position;
 			return staticPtPositions[idx];
 		};
 
-		Vector3T<FloatType> sourcePositions[3] {
+		Vector3T<Primitive> sourcePositions[3] {
 			GetVertexPosition(sourceIndices[0]),
 			GetVertexPosition(sourceIndices[1]),
 			GetVertexPosition(sourceIndices[2])
 		};
 
-		auto GeneratePoint = [&](unsigned a, unsigned b, FloatType alpha) -> unsigned {
-			GeneratedPoint<FloatType> genPt;
+		auto GeneratePoint = [&](unsigned a, unsigned b, Primitive alpha) -> unsigned {
+			GeneratedPoint<Primitive> genPt;
 			genPt._position = LinearInterpolate(sourcePositions[a], sourcePositions[b], alpha);
 			genPt._lhsIdx = sourceIndices[a];
 			genPt._rhsIdx = sourceIndices[b];
@@ -466,7 +472,7 @@ namespace XLEMath
 		};
 
 		unsigned A, B;
-		switch (mode)
+		switch (clearlyOutside | (coplanar<<3u))
 		{
 		case 1: // just [0] clipped
 			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
@@ -516,20 +522,59 @@ namespace XLEMath
 			outsideIndicesDst[3] = A; outsideIndicesDst[4] = sourceIndices[2]; outsideIndicesDst[5] = B;
 			return {1, 2};
 
+		// cases with some coplanar vertices...
+
+		case 1u | (2u<<3u): // just [0] clipped, [1] coplanar
+			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
+			insideIndicesDst[0] = B; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
+			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = sourceIndices[1]; outsideIndicesDst[2] = B;
+			return {1, 1};
+
+		case 1u | (4u<<3u): // just [0] clipped, [2] coplanar
+			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
+			insideIndicesDst[0] = A; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
+			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = A; outsideIndicesDst[2] = sourceIndices[2];
+			return {1, 1};
+
+		case 2u | (1u<<3u): // just [1] clipped, [0] coplanar
+			B = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
+			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = B; insideIndicesDst[2] = sourceIndices[2];
+			outsideIndicesDst[0] = sourceIndices[1]; outsideIndicesDst[1] = B; outsideIndicesDst[2] = sourceIndices[0];
+			return {1, 1};
+
+		case 2u | (4u<<3u): // just [1] clipped, [2] coplanar
+			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
+			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = A; insideIndicesDst[2] = sourceIndices[2];
+			outsideIndicesDst[0] = sourceIndices[1]; outsideIndicesDst[1] = sourceIndices[2]; outsideIndicesDst[2] = A;
+			return {1, 1};
+
+		case 4u | (1u<<3u): // just [2] clipped, [0] coplanar
+			A = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
+			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = A;
+			outsideIndicesDst[0] = sourceIndices[2]; outsideIndicesDst[1] = sourceIndices[0]; outsideIndicesDst[2] = A;
+			return {1, 1};
+
+		case 4u | (2u<<3u): // just [2] clipped, [1] coplanar
+			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
+			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = B;
+			outsideIndicesDst[0] = sourceIndices[2]; outsideIndicesDst[1] = B; outsideIndicesDst[2] = sourceIndices[1];
+			return {1, 1};
+
 		default:
 			UNREACHABLE();
 			return {0, 0};
 		}
 	}
 
-    unsigned PlaneAABBIntersection(Float3 dst[], Float4 planeEquation, Float3 aabbMins, Float3 aabbMaxs)
+    template<typename Primitive>
+        unsigned PlaneAABBIntersection(Vector3T<Primitive> dst[], Vector4T<Primitive> planeEquation, Vector3T<Primitive> aabbMins, Vector3T<Primitive> aabbMaxs)
     {
         // Following the idea here: https://www.asawicki.info/news_1428_finding_polygon_of_plane-aabb_intersection
         // we're going to do this is a pretty simple way: we just find the intersection with each edge of the AABB
         // and then (since the resulting polygon is always convex), we can just sort to put it in winding order
         unsigned vertexCount = 0;
 
-        auto testEdge = [&](Float3 start, Float3 end, float startDistance, float endDistance) {
+        auto testEdge = [&](Vector3T<Primitive> start, Vector3T<Primitive> end, Primitive startDistance, Primitive endDistance) {
             if ((startDistance < 0) != (endDistance < 0)) {
                 assert(vertexCount < 6);
                 dst[vertexCount++] = LinearInterpolate(start, end, startDistance / (startDistance - endDistance));
@@ -538,9 +583,9 @@ namespace XLEMath
 
         // 3 edges starting from aabbMins
 
-        Float3 start = aabbMins;
-        float startDistance = SignedDistance(start, planeEquation);
-        Float3 end = aabbMins;
+        Vector3T<Primitive> start = aabbMins;
+        auto startDistance = SignedDistance(start, planeEquation);
+        Vector3T<Primitive> end = aabbMins;
 
         end[0] = aabbMaxs[0];
         testEdge(start, end, startDistance, SignedDistance(end, planeEquation));
@@ -564,44 +609,44 @@ namespace XLEMath
         testEdge(start, end, startDistance, SignedDistance(end, planeEquation));
 
         end[1] = aabbMaxs[1]; end[2] = aabbMins[2];
-        float endDistance = SignedDistance(end, planeEquation);
+        auto endDistance = SignedDistance(end, planeEquation);
         testEdge(start, end, startDistance, endDistance);
 
         // remaining 6 edges walking around a circumference
         // we only need to set 1 vertex every time, because we always reuse a vertex from the previous test
 
-        start = Float3 { aabbMins[0], aabbMaxs[1], aabbMins[2] };       // 0
+        start = Vector3T<Primitive> { aabbMins[0], aabbMaxs[1], aabbMins[2] };       // 0
         startDistance = SignedDistance(start, planeEquation);
         testEdge(start, end, startDistance, endDistance);
 
-        start = Float3 { aabbMaxs[0], aabbMins[1], aabbMins[2] };       // 2
-        startDistance = SignedDistance(start, planeEquation);
-        testEdge(end, start, endDistance, startDistance);
-
-        end = Float3 { aabbMaxs[0], aabbMins[1], aabbMaxs[2] };         // 3
-        endDistance = SignedDistance(end, planeEquation);
-        testEdge(start, end, startDistance, endDistance);
-
-        start = Float3 { aabbMins[0], aabbMins[1], aabbMaxs[2] };       // 4
+        start = Vector3T<Primitive> { aabbMaxs[0], aabbMins[1], aabbMins[2] };       // 2
         startDistance = SignedDistance(start, planeEquation);
         testEdge(end, start, endDistance, startDistance);
 
-        end = Float3 { aabbMins[0], aabbMaxs[1], aabbMaxs[2] };         // 5
+        end = Vector3T<Primitive> { aabbMaxs[0], aabbMins[1], aabbMaxs[2] };         // 3
         endDistance = SignedDistance(end, planeEquation);
         testEdge(start, end, startDistance, endDistance);
 
-        start = Float3 { aabbMins[0], aabbMaxs[1], aabbMins[2] };       // 0
+        start = Vector3T<Primitive> { aabbMins[0], aabbMins[1], aabbMaxs[2] };       // 4
+        startDistance = SignedDistance(start, planeEquation);
+        testEdge(end, start, endDistance, startDistance);
+
+        end = Vector3T<Primitive> { aabbMins[0], aabbMaxs[1], aabbMaxs[2] };         // 5
+        endDistance = SignedDistance(end, planeEquation);
+        testEdge(start, end, startDistance, endDistance);
+
+        start = Vector3T<Primitive> { aabbMins[0], aabbMaxs[1], aabbMins[2] };       // 0
         startDistance = SignedDistance(start, planeEquation);
         testEdge(end, start, endDistance, startDistance);
 
         if (!vertexCount) return 0;
 
-        Float3 anchor = dst[0];
+        auto anchor = dst[0];
         std::sort(
             dst, &dst[vertexCount],
             [planeEquation, anchor](const auto& lhs, const auto& rhs) {
                 auto c = Cross(lhs - anchor, rhs - anchor);
-                return Dot(c, Truncate(planeEquation)) < 0.f;
+                return Dot(c, Truncate(planeEquation)) < 0;
             });
         return vertexCount;
     }
@@ -630,12 +675,15 @@ namespace XLEMath
 			unsigned[], unsigned[],
 			std::vector<GeneratedPoint<float>>&,
 			IteratorRange<const Vector3T<float>*>,
-			unsigned[], float[]);
+			unsigned[], float[], float);
 
     template
         std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
 			unsigned[], unsigned[],
 			std::vector<GeneratedPoint<double>>&,
 			IteratorRange<const Vector3T<double>*>,
-			unsigned[], double[]);
+			unsigned[], double[], double);
+
+    template unsigned PlaneAABBIntersection(Vector3T<float>[], Vector4T<float>, Vector3T<float>, Vector3T<float>);
+    template unsigned PlaneAABBIntersection(Vector3T<double>[], Vector4T<double>, Vector3T<double>, Vector3T<double>);
 }
