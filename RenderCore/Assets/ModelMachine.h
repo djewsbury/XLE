@@ -27,7 +27,7 @@ namespace RenderCore { namespace Assets
 		BeginSubModel = s_scaffoldCmdBegin_ModelMachine,
 		EndSubModel,
 		SetLevelOfDetail,
-		InputInterface,			// ModelInputInterfaceDesc
+		InputInterface,			// raw array of uint64_t
 
 		// ModelCommandStream style callouts
 		SetTransformMarker,
@@ -38,11 +38,6 @@ namespace RenderCore { namespace Assets
 	struct SubModelDesc
 	{
 		unsigned _levelOfDetail = 0;
-	};
-
-	struct ModelInputInterfaceDesc
-	{
-		SerializableVector<uint64_t> _jointNames;
 	};
 
 	struct GeoCallDesc
