@@ -132,7 +132,7 @@ namespace RenderCore { namespace Techniques
 					if (weightsPerVertex == 0) {
 						// in this case, we just copy
 						for (auto p=outputPosElement.begin() + drawCall._firstVertex; p < (outputPosElement.begin() + drawCall._firstVertex + drawCall._indexCount); ++p, ++srcPosition)
-							*p = (*srcPosition).As<Float3>();
+							*p = (*srcPosition).ReinterpretCast<Float3>();
 						continue;
 					}
 
@@ -146,7 +146,7 @@ namespace RenderCore { namespace Techniques
 						Float3 deformedPosition { 0.f, 0.f, 0.f };
 						for (unsigned b=0; b<weightsPerVertex; ++b) {
 							assert(srcJointIndex[b] < jointTransform.size());
-							deformedPosition += srcJointWeight[b] * TransformPoint(jointTransform[srcJointIndex[b]], (*srcPosition).As<Float3>());
+							deformedPosition += srcJointWeight[b] * TransformPoint(jointTransform[srcJointIndex[b]], (*srcPosition).ReinterpretCast<Float3>());
 						}
 
 						*p = deformedPosition;
@@ -198,8 +198,8 @@ namespace RenderCore { namespace Techniques
 				auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
 				if (!weightsElement || !jointIndicesElement)
 					break;
-				assert(GetComponentCount(GetComponents(weightsElement->_nativeFormat)) == GetComponentCount(GetComponents(jointIndicesElement->_nativeFormat)));
-				constructedGeo._influencesPerVertex += GetComponentCount(GetComponents(weightsElement->_nativeFormat));
+				assert(GetComponentCount(GetComponents(weightsElement->_format)) == GetComponentCount(GetComponents(jointIndicesElement->_format)));
+				constructedGeo._influencesPerVertex += GetComponentCount(GetComponents(weightsElement->_format));
 				++elements;
 			}
 
@@ -219,7 +219,7 @@ namespace RenderCore { namespace Techniques
 
 					auto subWeights = AsFloat4s(Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *weightsElement, skelVb._ia._vertexStride));
 					auto subJoints = AsUInt4s(Internal::AsVertexElementIteratorRange(MakeIteratorRange(skelVbData.get(), PtrAdd(skelVbData.get(), skelVb._size)), *jointIndicesElement, skelVb._ia._vertexStride));
-					auto subComponentCount = GetComponentCount(GetComponents(weightsElement->_nativeFormat));
+					auto subComponentCount = GetComponentCount(GetComponents(weightsElement->_format));
 
 					for (unsigned q=0; q<vertexCount; ++q) {
 						std::memcpy(&constructedGeo._jointWeights[q*constructedGeo._influencesPerVertex+componentIterator], &subWeights[q][0], subComponentCount * sizeof(float));
@@ -572,20 +572,20 @@ namespace RenderCore { namespace Techniques
 				if (!parrallelElementsCount) {
 					weightsOffset = weightsElement->_alignedByteOffset;
 					indicesOffset = jointIndicesElement->_alignedByteOffset;
-					weightsFormat = weightsElement->_nativeFormat;
-					indicesFormat = jointIndicesElement->_nativeFormat;
+					weightsFormat = weightsElement->_format;
+					indicesFormat = jointIndicesElement->_format;
 				} else {
 					// we must use the same type format for each attribute (though the quantity can differ)
-					assert(GetComponentType(weightsFormat) == GetComponentType(weightsElement->_nativeFormat));
-					assert(GetComponentType(indicesFormat) == GetComponentType(jointIndicesElement->_nativeFormat));
+					assert(GetComponentType(weightsFormat) == GetComponentType(weightsElement->_format));
+					assert(GetComponentType(indicesFormat) == GetComponentType(jointIndicesElement->_format));
 					auto weightsBitsPerComponent = BitsPerPixel(weightsFormat) / GetComponentCount(GetComponents(weightsFormat));
 					auto indicesBitsPerComponent = BitsPerPixel(indicesFormat) / GetComponentCount(GetComponents(indicesFormat));
 					// Ensure that the attributes are sequential
 					assert(weightsElement->_alignedByteOffset == weightsOffset + influencesPerVertex*weightsBitsPerComponent/8);
 					assert(jointIndicesElement->_alignedByteOffset == indicesOffset + influencesPerVertex*indicesBitsPerComponent/8);
 				}
-				assert(GetComponentCount(GetComponents(weightsElement->_nativeFormat)) == GetComponentCount(GetComponents(jointIndicesElement->_nativeFormat)));
-				influencesPerVertex += GetComponentCount(GetComponents(weightsElement->_nativeFormat));
+				assert(GetComponentCount(GetComponents(weightsElement->_format)) == GetComponentCount(GetComponents(jointIndicesElement->_format)));
+				influencesPerVertex += GetComponentCount(GetComponents(weightsElement->_format));
 				++parrallelElementsCount;
 			}
 
@@ -792,14 +792,14 @@ namespace RenderCore { namespace Techniques
 
 					DeformOperationInstantiation deformOp;
 					deformOp._upstreamSourceElements.push_back({s_positionEleName, 0});
-					deformOp._generatedElements.push_back({s_positionEleName, 0, PostSkinningPositionFormat(positionElement->_nativeFormat)});
+					deformOp._generatedElements.push_back({s_positionEleName, 0, PostSkinningPositionFormat(positionElement->_format)});
 					if (normalsElement) {
 						deformOp._upstreamSourceElements.push_back({s_normalEleName, 0});
-						deformOp._generatedElements.push_back({s_normalEleName, 0, normalsElement->_nativeFormat});
+						deformOp._generatedElements.push_back({s_normalEleName, 0, normalsElement->_format});
 					}
 					if (tangentsElement) {
 						deformOp._upstreamSourceElements.push_back({s_tangentEleName, 0});
-						deformOp._generatedElements.push_back({s_tangentEleName, 0, tangentsElement->_nativeFormat});
+						deformOp._generatedElements.push_back({s_tangentEleName, 0, tangentsElement->_format});
 					}
 					deformOp._suppressElements = {s_weightsEle, s_jointIndicesEle};
 					instantiations.emplace_back(c, std::move(deformOp));

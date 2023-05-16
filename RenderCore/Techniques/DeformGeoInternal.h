@@ -119,10 +119,10 @@ namespace RenderCore { namespace Techniques
 			auto endPtr = PtrAdd(vbData.begin(), ele._alignedByteOffset + vertexStride*vCount);
 			VertexElementIterator begin {
 				MakeIteratorRange(beginPtr, endPtr),
-				vertexStride, ele._nativeFormat };
+				vertexStride, ele._format };
 			VertexElementIterator end {
 				MakeIteratorRange(endPtr, endPtr),
-				vertexStride, ele._nativeFormat };
+				vertexStride, ele._format };
 			return { begin, end };
 		}
 

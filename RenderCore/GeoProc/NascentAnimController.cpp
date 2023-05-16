@@ -630,12 +630,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             unsigned elementOffset = 0;     // reset the _alignedByteOffset members in the vertex layout
             for (auto i=unanimatedVertexLayout.begin(); i!=unanimatedVertexLayout.end();++i) {
                 i->_alignedByteOffset = elementOffset;
-                elementOffset += BitsPerPixel(i->_nativeFormat)/8;
+                elementOffset += BitsPerPixel(i->_format)/8;
             }
             elementOffset = 0;
             for (auto i=animatedVertexLayout.begin(); i!=animatedVertexLayout.end();++i) {
                 i->_alignedByteOffset = elementOffset;
-                elementOffset += BitsPerPixel(i->_nativeFormat)/8;
+                elementOffset += BitsPerPixel(i->_format)/8;
             }
         }
 
@@ -861,13 +861,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             //      Calculate the local space bounding box for the input vertex buffer
             //      (assuming the position will appear in the animated vertex buffer)
         auto boundingBox = InvalidBoundingBox();
-        auto positionDesc = FindPositionElement(AsPointer(animatedVertexLayout.begin()), animatedVertexLayout.size());
-        if (positionDesc._nativeFormat != Format::Unknown) {
-            AddToBoundingBox(
-                boundingBox,
-                animatedVertexBuffer.data(), animatedVertexStride, unifiedVertexCount,
-                positionDesc, Identity<Float4x4>());
-        }
+        auto positionDesc = FindPositionElement(animatedVertexLayout);
+        if (positionDesc._format != Format::Unknown)
+            for (auto i:MakeVertexIteratorRange(MakeIteratorRange(animatedVertexBuffer), positionDesc._alignedByteOffset, animatedVertexStride, positionDesc._format))
+				AddToBoundingBox(boundingBox, Truncate(i.AsFloat4()), Identity<Float4x4>());
 
             //      Build the final "BoundSkinnedGeometry" object
         NascentBoundSkinnedGeometry result;

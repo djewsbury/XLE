@@ -16,7 +16,7 @@ namespace RenderCore { namespace Assets
 		for (size_t c=0; c<ia._elements.size(); c++) {
 			if (c != 0) stream << ", ";
 			const auto& e = ia._elements[c];
-			stream << e._semanticName << "[" << e._semanticIndex << "] " << AsString(e._nativeFormat);
+			stream << e._semanticName << "[" << e._semanticIndex << "] " << AsString(e._format);
 		}
 		return stream;
 	}
@@ -39,12 +39,12 @@ namespace RenderCore { namespace Assets
 		result._vertexStride = vertexStride;
 		result._elements.reserve(vertexInputLayout.size());
 		for (auto i=vertexInputLayout.begin(); i!=vertexInputLayout.end(); ++i) {
-			RenderCore::Assets::VertexElement ele;
+			VertexElement ele;
 			XlZeroMemory(ele);     // make sure unused space is 0
 			XlCopyNString(ele._semanticName, AsPointer(i->_semanticName.begin()), i->_semanticName.size());
 			ele._semanticName[dimof(ele._semanticName)-1] = '\0';
 			ele._semanticIndex = i->_semanticIndex;
-			ele._nativeFormat = i->_nativeFormat;
+			ele._format = i->_nativeFormat;
 			ele._alignedByteOffset = i->_alignedByteOffset;
 			result._elements.push_back(ele);
 		}
@@ -53,7 +53,7 @@ namespace RenderCore { namespace Assets
 
 	unsigned BuildLowLevelInputAssembly(
 		IteratorRange<InputElementDesc*> dst,
-		IteratorRange<const RenderCore::Assets::VertexElement*> source,
+		IteratorRange<const VertexElement*> source,
 		unsigned lowLevelSlot)
 	{
 		unsigned vertexElementCount = 0;
@@ -65,13 +65,13 @@ namespace RenderCore { namespace Assets
 					//  should be one after another in the vb (that is, not interleaved)
 				dst[vertexElementCount++] = InputElementDesc(
 					sourceElement._semanticName, sourceElement._semanticIndex,
-					sourceElement._nativeFormat, lowLevelSlot, sourceElement._alignedByteOffset);
+					sourceElement._format, lowLevelSlot, sourceElement._alignedByteOffset);
 			}
 		}
 		return vertexElementCount;
 	}
 
-	std::vector<MiniInputElementDesc> BuildLowLevelInputAssembly(IteratorRange<const RenderCore::Assets::VertexElement*> source)
+	std::vector<MiniInputElementDesc> BuildLowLevelInputAssembly(IteratorRange<const VertexElement*> source)
 	{
 		std::vector<MiniInputElementDesc> result;
 		result.reserve(source.size());
@@ -82,9 +82,17 @@ namespace RenderCore { namespace Assets
 				assert(expectedOffset == sourceElement._alignedByteOffset);
 			#endif
 			result.push_back(
-				MiniInputElementDesc{Hash64(sourceElement._semanticName) + sourceElement._semanticIndex, sourceElement._nativeFormat});
+				MiniInputElementDesc{Hash64(sourceElement._semanticName) + sourceElement._semanticIndex, sourceElement._format});
 		}
 		return result;
+	}
+
+	static Assets::VertexElement FindPositionElement(IteratorRange<const VertexElement*> elements)
+	{
+		for (unsigned c=0; c<elements.size(); ++c)
+			if (elements[c]._semanticIndex == 0 && !XlCompareStringI(elements[c]._semanticName, "POSITION"))
+				return elements[c];
+		return Assets::VertexElement();
 	}
 
 	uint64_t GeoInputAssembly::BuildHash() const

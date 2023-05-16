@@ -622,7 +622,7 @@ namespace RenderCore { namespace Techniques
 			assert(destinationVB.size() >= transform._targetStride * transform._vertexCount);
 			assert(sourceVB.size() >= srcStride * transform._vertexCount);
 			auto dstRange = AsVertexElementIteratorRange(destinationVB, transform._targetFormat, transform._targetOffset, transform._targetStride);
-			auto srcRange = AsVertexElementIteratorRange(sourceVB, srcElement._nativeFormat, srcElement._alignedByteOffset, srcStride);
+			auto srcRange = AsVertexElementIteratorRange(sourceVB, srcElement._format, srcElement._alignedByteOffset, srcStride);
 			auto dstCount = dstRange.size();
 			auto srcCount = srcRange.size();
 			(void)dstCount; (void)srcCount;

@@ -512,7 +512,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             for (auto destination=destinationLayout.begin(); destination!=destinationLayout.end(); ++destination) {
                 if (    !XlCompareString(destination->_semanticName, source->_semanticName)
                     &&  destination->_semanticIndex  == source->_semanticIndex
-                    &&  destination->_nativeFormat   == source->_nativeFormat) {
+                    &&  destination->_format   == source->_format) {
 
                     elementReordering[source-sourceLayout.begin()] = uint32(destination-destinationLayout.begin());
                     maxSourceLayout = std::max(maxSourceLayout, signed(source-sourceLayout.begin()));
@@ -539,8 +539,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 if (elementReordering[c] != ~uint32(0x0)) {
                     const auto& destinationElement = destinationLayout[elementReordering[c]]; assert(&destinationElement < destinationLayout.end());
                     const auto& sourceElement = sourceLayout[c]; assert(&sourceElement < sourceLayout.end());
-                    size_t elementSize = BitsPerPixel(destinationElement._nativeFormat)/8;
-                    assert(elementSize == BitsPerPixel(sourceElement._nativeFormat)/8);
+                    size_t elementSize = BitsPerPixel(destinationElement._format)/8;
+                    assert(elementSize == BitsPerPixel(sourceElement._format)/8);
                     assert(destinationElement._alignedByteOffset + elementSize <= destinationVertexStride);
                     assert(sourceElement._alignedByteOffset + elementSize <= sourceVertexStride);
                     assert(PtrAdd(destinationVertexStart, destinationElement._alignedByteOffset+elementSize) <= PtrAdd(destinationVertexStart, vertexCount*destinationVertexStride));
@@ -561,7 +561,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     {
         unsigned result = 0;
         for (auto l=layout.begin(); l!=layout.end(); ++l)
-            result += BitsPerPixel(l->_nativeFormat);
+            result += BitsPerPixel(l->_format);
         return result/8;
     }
 

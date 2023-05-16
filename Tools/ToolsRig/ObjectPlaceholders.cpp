@@ -215,7 +215,7 @@ namespace ToolsRig
 		// also construct a technique material for the geometry format
 		std::vector<InputElementDesc> inputElements;
 		for (const auto&i:geo._vb._ia._elements)
-			inputElements.push_back(InputElementDesc(i._semanticName, i._semanticIndex, i._nativeFormat, 0, i._alignedByteOffset));
+			inputElements.push_back(InputElementDesc(i._semanticName, i._semanticIndex, i._format, 0, i._alignedByteOffset));
 
 		_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {}, "simple-model");
 

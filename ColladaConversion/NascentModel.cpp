@@ -1116,7 +1116,7 @@ namespace RenderCore { namespace ColladaConversion
                 AsPointer(geo->_mainDrawInputAssembly._vertexInputLayout.begin()),
                 geo->_mainDrawInputAssembly._vertexInputLayout.size());
 
-            if (positionDesc._nativeFormat != Metal::NativeFormat::Unknown && vertexStride) {
+            if (positionDesc._format != Metal::NativeFormat::Unknown && vertexStride) {
                 AddToBoundingBox(
                     result, vertexBuffer, vertexStride, 
                     geo->_vertices.size() / vertexStride, positionDesc, localToWorld);

@@ -44,7 +44,7 @@ namespace RenderCore { namespace Techniques
 				result.push_back(
 					InputElementDesc {
 						e._semanticName, e._semanticIndex,
-						e._nativeFormat, streamIdx,
+						e._format, streamIdx,
 						e._alignedByteOffset
 					});
 			}

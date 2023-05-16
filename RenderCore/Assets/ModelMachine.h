@@ -66,7 +66,7 @@ namespace RenderCore { namespace Assets
 	{
 		char			_semanticName[16];  // limited max size for semantic name (only alternative is to use a hash value)
 		unsigned		_semanticIndex;
-		Format			_nativeFormat;
+		Format			_format;
 		unsigned		_alignedByteOffset;
 
 		VertexElement();
@@ -151,11 +151,14 @@ namespace RenderCore { namespace Assets
 	std::vector<MiniInputElementDesc> BuildLowLevelInputAssembly(
 		IteratorRange<const VertexElement*> source);
 
+	VertexElement FindPositionElement(
+		IteratorRange<const VertexElement*> elements);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	inline VertexElement::VertexElement()
 	{
-		_nativeFormat = Format(0); _alignedByteOffset = 0; _semanticIndex = 0;
+		_format = Format(0); _alignedByteOffset = 0; _semanticIndex = 0;
 		XlZeroMemory(_semanticName);
 	}
 
@@ -164,19 +167,19 @@ namespace RenderCore { namespace Assets
 		XlZeroMemory(_semanticName);
 		XlCopyString(_semanticName, name);
 		_semanticIndex = semanticIndex;
-		_nativeFormat = nativeFormat;
+		_format = nativeFormat;
 		_alignedByteOffset = offset;
 	}
 
 	inline VertexElement::VertexElement(const VertexElement& ele) never_throws
 	{
-		_nativeFormat = ele._nativeFormat; _alignedByteOffset = ele._alignedByteOffset; _semanticIndex = ele._semanticIndex;
+		_format = ele._format; _alignedByteOffset = ele._alignedByteOffset; _semanticIndex = ele._semanticIndex;
 		XlCopyMemory(_semanticName, ele._semanticName, sizeof(_semanticName));
 	}
 
 	inline VertexElement& VertexElement::operator=(const VertexElement& ele) never_throws
 	{
-		_nativeFormat = ele._nativeFormat; _alignedByteOffset = ele._alignedByteOffset; _semanticIndex = ele._semanticIndex;
+		_format = ele._format; _alignedByteOffset = ele._alignedByteOffset; _semanticIndex = ele._semanticIndex;
 		XlCopyMemory(_semanticName, ele._semanticName, sizeof(_semanticName));
 		return *this;
 	}

@@ -568,17 +568,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 					localToWorld = Combine(i->_geo._geoSpaceToNodeSpace, localToWorld);
 
-					const void*         vertexBuffer = i->_geo._vertices.data();
-					const unsigned      vertexStride = i->_geo._mainDrawInputAssembly._vertexStride;
-
-					auto positionDesc = FindPositionElement(
-						AsPointer(i->_geo._mainDrawInputAssembly._elements.begin()),
-						i->_geo._mainDrawInputAssembly._elements.size());
-
-					if (positionDesc._nativeFormat != Format::Unknown && vertexStride) {
-						AddToBoundingBox(
-							boundingBox, vertexBuffer, vertexStride, 
-							i->_geo._vertices.size() / vertexStride, positionDesc, localToWorld);
+					auto positionDesc = FindPositionElement(i->_geo._mainDrawInputAssembly._elements);
+					const auto vertexStride = i->_geo._mainDrawInputAssembly._vertexStride;
+					if (positionDesc._format != Format::Unknown && vertexStride) {
+						auto positions = MakeVertexIteratorRangeConst(i->_geo._vertices, positionDesc._alignedByteOffset, vertexStride, positionDesc._format);
+						assert(positions.size() == MakeVertexIteratorRangeConst(i->_geo._vertices, vertexStride, Format::R8_UNORM).size());
+						for (auto v:positions)
+							AddToBoundingBox(boundingBox, Truncate(v.AsFloat4()), localToWorld);
 					}
 				} else {
 					auto hashedId = HashOfGeoAndSkinControllerIds(cmd.second);

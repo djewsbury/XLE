@@ -28,7 +28,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         const float* src, unsigned srcComponentCount,
         ProcessingFlags::BitField processingFlags)
     {
-		RenderCore::GetVertDataF32(dst, src, srcComponentCount);
+		RenderCore::Internal::GetVertDataF32(dst, src, srcComponentCount);
 
         if (processingFlags & ProcessingFlags::TexCoordFlip) {
             dst[1] = 1.0f - dst[1];
@@ -46,7 +46,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         const uint16* src, unsigned srcComponentCount,
         ProcessingFlags::BitField processingFlags)
     {
-		RenderCore::GetVertDataF16(dst, src, srcComponentCount);
+		RenderCore::Internal::GetVertDataF16(dst, src, srcComponentCount);
 		if (processingFlags & ProcessingFlags::Renormalize) {
 			float scale = 1.0f;
 			if (XlRSqrt_Checked(&scale, dst[0] * dst[0] + dst[1] * dst[1] + dst[2] * dst[2]))
@@ -69,7 +69,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		const uint16* src, unsigned srcComponentCount,
 		ProcessingFlags::BitField processingFlags)
 	{
-		RenderCore::GetVertDataUNorm16(dst, src, srcComponentCount);
+		RenderCore::Internal::GetVertDataUNorm16(dst, src, srcComponentCount);
 		if (processingFlags & ProcessingFlags::Renormalize) {
 			float scale = 1.0f;
 			if (XlRSqrt_Checked(&scale, dst[0] * dst[0] + dst[1] * dst[1] + dst[2] * dst[2]))
@@ -94,7 +94,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		const int16* src, unsigned srcComponentCount,
 		ProcessingFlags::BitField processingFlags)
 	{
-		RenderCore::GetVertDataSNorm16(dst, src, srcComponentCount);
+		RenderCore::Internal::GetVertDataSNorm16(dst, src, srcComponentCount);
 		if (processingFlags & ProcessingFlags::Renormalize) {
 			float scale = 1.0f;
 			if (XlRSqrt_Checked(&scale, dst[0] * dst[0] + dst[1] * dst[1] + dst[2] * dst[2]))
