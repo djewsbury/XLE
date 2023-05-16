@@ -924,29 +924,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             IteratorRange<const unsigned*> originalMapping,
             float threshold)
     {
-            // We need to find vertices that are close together...
-            // The easiest way to do this is to quantize space into grids of size 2 * threshold.
-            // 2 vertices that have the same quantized position may be "close".
-            // We do this twice -- once with a offset of half the grid size.
-            // We will keep a record of all vertices that are found to be "close". Afterwards,
-            // we should combine these pairs into chains of vertices. These chains get combined
-            // into a single vertex, which is the one that is closest to the averaged vertex.
-        auto quant = Float4(2.f*threshold, 2.f*threshold, 2.f*threshold, 2.f*threshold);
-        auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>());
-        auto quantizedSet1 = BuildQuantizedCoords(sourceStream, quant, Float4(threshold, threshold, threshold, threshold));
-
-            // sort our quantized vertices to make it easier to find duplicates
-            // note that duplicates will be sorted with the lowest vertex index first,
-            // which is important when building the pairs.
-        std::sort(quantizedSet0.begin(), quantizedSet0.end(), SortQuantizedSet);
-        std::sort(quantizedSet1.begin(), quantizedSet1.end(), SortQuantizedSet);
-        
-            // Find the pairs of close vertices
-            // Note that in these pairs, the first index will always be smaller 
-            // than the second index.
-        std::vector<std::pair<unsigned, unsigned>> closeVertices;
-        FindVertexPairs(closeVertices, quantizedSet0, sourceStream, threshold);
-        FindVertexPairs(closeVertices, quantizedSet1, sourceStream, threshold);
+        std::vector<unsigned> oldOrderingToNewOrdering;
+        auto duplicateChains = FindDuplicateChains(
+            oldOrderingToNewOrdering, sourceStream, threshold);
 
             // We want to convert our pairs into chains of interacting vertices
             // Each chain will get merged into a single vertex.
@@ -958,54 +938,25 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         finalVB.reserve(vertexSize * sourceStream.GetCount());
         size_t finalVBCount = 0;
 
-        std::vector<unsigned> oldOrderingToNewOrdering(sourceStream.GetCount(), ~0u);
+        const unsigned highBit = 1u<<31u;
+		auto i = duplicateChains.begin();
+        while (i != duplicateChains.end()) {
+			auto start = i;
+			++i;
+			while (i != duplicateChains.end() && ((*i) & highBit) == 0) ++i;
 
-        std::vector<unsigned> chainBuffer;
-        chainBuffer.reserve(32);
-
-        for (unsigned c=0; c<sourceStream.GetCount(); c++) {
-            if (oldOrderingToNewOrdering[c] != ~0u) continue;
-
-            chainBuffer.clear();    // clear without deallocate
-			std::queue<unsigned> pendingChainEnds;
-			
-			pendingChainEnds.push(c);
-            while (!pendingChainEnds.empty()) {
-				auto chainEnd = pendingChainEnds.front();
-				pendingChainEnds.pop();
-
-				if (std::find(chainBuffer.begin(), chainBuffer.end(), chainEnd) != chainBuffer.end())
-					continue;
-				chainBuffer.push_back(chainEnd);
-
-				// note --	there's an optimization we can perform here, because we know
-				//			that as c increases, we will no longer find matches in the 
-				//			first part of "closeVertices" (because closeVertices ends up in
-				//			sorted order, and 'c' is always the vertex with the smallest index
-				//			in the chain)
-                auto linkRange = EqualRange(closeVertices, chainEnd);
-				for (auto i2 = linkRange.first; i2 != linkRange.second; ++i2) {
-					pendingChainEnds.push(i2->second);
-				}
-            }
-
-			if (chainBuffer.size() > 1) {
-                auto m = FindClosestToAverage(sourceStream, AsPointer(chainBuffer.cbegin()), AsPointer(chainBuffer.cend()));
-
+			*start &= ~highBit;
+            if ((i - start) > 1) {
+                    // all vertices in this chain will be replaced with the vertex that is the closest to the
+                    // average of them all
+                auto m = FindClosestToAverage(sourceStream, AsPointer(start), AsPointer(i));
                 const auto* sourceVertex = PtrAdd(sourceStream.GetData().begin(), m * sourceStream.GetStride());
                 finalVB.insert(finalVB.end(), (const uint8*)sourceVertex, (const uint8*)PtrAdd(sourceVertex, vertexSize));
-
-                    // the new median vertex will replace the first vertex in the chain
-                for (auto q=chainBuffer.cbegin(); q!=chainBuffer.cend(); ++q)
-                    oldOrderingToNewOrdering[*q] = (unsigned)finalVBCount;
-                ++finalVBCount;
             } else {
                     // This vertex is not part of a chain.
                     // Just append to the finalVB
-                const auto* sourceVertex = PtrAdd(sourceStream.GetData().begin(), c * sourceStream.GetStride());
+                const auto* sourceVertex = PtrAdd(sourceStream.GetData().begin(), (*start) * sourceStream.GetStride());
                 finalVB.insert(finalVB.end(), (const uint8*)sourceVertex, (const uint8*)PtrAdd(sourceVertex, vertexSize));
-                oldOrderingToNewOrdering[c] = (unsigned)finalVBCount;
-                ++finalVBCount;
             }
         }
 
@@ -1065,11 +1016,17 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         FindVertexPairs(closeVertices, quantizedSet0, sourceStream, threshold);
         FindVertexPairs(closeVertices, quantizedSet1, sourceStream, threshold);
 
+        std::vector<std::pair<unsigned, unsigned>> reversedCloseVertices;
+        reversedCloseVertices.reserve(closeVertices.size());
+        for (auto c:closeVertices) reversedCloseVertices.emplace_back(c.second, c.first);
+        std::sort(reversedCloseVertices.begin(), reversedCloseVertices.end(), CompareFirst2{});
+
         oldOrderingToNewOrdering.clear();
         oldOrderingToNewOrdering.insert(oldOrderingToNewOrdering.end(), sourceStream.GetCount(), ~0u);
         size_t finalVBCount = 0;
 
         std::vector<unsigned> chainBuffer;
+        std::vector<unsigned> pendingChainEnds;
         chainBuffer.reserve(32);
         const unsigned highBit = 1u<<31u;
 
@@ -1077,25 +1034,26 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             if (oldOrderingToNewOrdering[c] != ~0u) continue;
 
             chainBuffer.clear();    // clear without deallocate
-			std::queue<unsigned> pendingChainEnds;
+            pendingChainEnds.clear();
 			
-			pendingChainEnds.push(c);
+			pendingChainEnds.push_back(c);
             while (!pendingChainEnds.empty()) {
-				auto chainEnd = pendingChainEnds.front();
-				pendingChainEnds.pop();
+				auto chainEnd = pendingChainEnds.back();
+				pendingChainEnds.pop_back();
 
 				if (std::find(chainBuffer.begin(), chainBuffer.end(), chainEnd) != chainBuffer.end())
 					continue;
+				assert(oldOrderingToNewOrdering[chainEnd] == ~0u);
 				chainBuffer.push_back(chainEnd);
 
-				// note --	there's an optimization we can perform here, because we know
-				//			that as c increases, we will no longer find matches in the 
-				//			first part of "closeVertices" (because closeVertices ends up in
-				//			sorted order, and 'c' is always the vertex with the smallest index
-				//			in the chain)
+                // lookup links (both going from small index to large index, and large index to small index)
                 auto linkRange = EqualRange(closeVertices, chainEnd);
 				for (auto i2 = linkRange.first; i2 != linkRange.second; ++i2)
-					pendingChainEnds.push(i2->second);
+					pendingChainEnds.push_back(i2->second);
+
+                linkRange = EqualRange(reversedCloseVertices, chainEnd);
+				for (auto i2 = linkRange.first; i2 != linkRange.second; ++i2)
+					pendingChainEnds.push_back(i2->second);
             }
 
             assert(!chainBuffer.empty());
@@ -1108,6 +1066,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             ++finalVBCount;
         }
 
+        assert(result.size() == sourceStream.GetCount());
         return result;
     }
 
