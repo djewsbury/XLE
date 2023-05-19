@@ -23,7 +23,6 @@ add_library(
     ModelRendererConstruction.cpp
     CompoundObject.cpp
     ../GeoProc/GeometryAlgorithm.cpp
-    ../GeoProc/GeoProcUtil.cpp
     ../GeoProc/MeshDatabase.cpp
     ../GeoProc/NascentAnimController.cpp
     ../GeoProc/NascentCommandStream.cpp

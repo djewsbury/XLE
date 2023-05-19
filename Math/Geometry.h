@@ -110,6 +110,27 @@ namespace XLEMath
         return a / (a - b);
     }
 
+	inline void AddToBoundingBox(std::pair<Float3, Float3>& boundingBox, const Float3& position)
+    {
+        boundingBox.first[0]    = std::min(position[0], boundingBox.first[0]);
+        boundingBox.first[1]    = std::min(position[1], boundingBox.first[1]);
+        boundingBox.first[2]    = std::min(position[2], boundingBox.first[2]);
+        boundingBox.second[0]   = std::max(position[0], boundingBox.second[0]);
+        boundingBox.second[1]   = std::max(position[1], boundingBox.second[1]);
+        boundingBox.second[2]   = std::max(position[2], boundingBox.second[2]);
+    }
+
+    inline std::pair<Float3, Float3>       InvalidBoundingBox()
+    {
+        const Float3 mins(      std::numeric_limits<Float3::value_type>::max(),
+                                std::numeric_limits<Float3::value_type>::max(),
+                                std::numeric_limits<Float3::value_type>::max());
+        const Float3 maxs(      -std::numeric_limits<Float3::value_type>::max(),
+                                -std::numeric_limits<Float3::value_type>::max(),
+                                -std::numeric_limits<Float3::value_type>::max());
+        return std::make_pair(mins, maxs);
+    }
+
         ////////////////////////////////////////////////////////////////////////////////////////////////
             //      I N C R E A S E D   P R E C I S I O N   C A L C U L A T I O N S			//
         ////////////////////////////////////////////////////////////////////////////////////////////////

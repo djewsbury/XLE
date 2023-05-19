@@ -14,7 +14,6 @@
 #include "../RenderCore/GeoProc/NascentRawGeometry.h"
 #include "../RenderCore/GeoProc/NascentAnimController.h"
 #include "../RenderCore/GeoProc/GeometryAlgorithm.h"
-#include "../RenderCore/GeoProc/GeoProcUtil.h"
 #include "../RenderCore/GeoProc/MeshDatabase.h"
 #include "../RenderCore/Assets/AssetUtils.h"
 #include "../RenderCore/StateDesc.h"      // for Topology...!

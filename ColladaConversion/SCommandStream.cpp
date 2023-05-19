@@ -14,7 +14,6 @@
 #include "../RenderCore/GeoProc/NascentCommandStream.h"
 #include "../RenderCore/GeoProc/NascentRawGeometry.h"
 #include "../RenderCore/GeoProc/NascentAnimController.h"
-#include "../RenderCore/GeoProc/GeoProcUtil.h"
 
 #include "../RenderCore/Assets/MaterialScaffold.h"  // for MakeMaterialGuid
 #include "../RenderCore/Format.h"

@@ -1152,7 +1152,7 @@ namespace RenderCore { namespace ColladaConversion
             const Float3* A = (const Float3*)&controller->_localBoundingBox.first;
             for (unsigned c=0; c<dimof(indices); ++c) {
                 Float3 position(A[indices[c][0]][0], A[indices[c][1]][1], A[indices[c][2]][2]);
-                AddToBoundingBox(result, position, localToWorld);
+                AddToBoundingBox(result, TransformPoint(localToWorld, position));
             }
         }
 

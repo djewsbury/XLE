@@ -7,12 +7,12 @@
 #include "GeometryAlgorithm.h"
 #include "NascentObjectsSerialize.h"
 #include "NascentCommandStream.h"
-#include "GeoProcUtil.h"
 #include "MeshDatabase.h"
 #include "../Assets/AssetUtils.h"
 #include "../Assets/AnimationBindings.h"
 #include "../Assets/ModelMachine.h"
 #include "../../Math/MathSerialization.h"
+#include "../../Math/Geometry.h"
 #include "../../Assets/NascentChunk.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/FastParseValue.h"
@@ -574,7 +574,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						auto positions = MakeVertexIteratorRangeConst(i->_geo._vertices, positionDesc._alignedByteOffset, vertexStride, positionDesc._format);
 						assert(positions.size() == MakeVertexIteratorRangeConst(i->_geo._vertices, vertexStride, Format::R8_UNORM).size());
 						for (auto v:positions)
-							AddToBoundingBox(boundingBox, Truncate(v.AsFloat4()), localToWorld);
+							AddToBoundingBox(boundingBox, TransformPoint(localToWorld, Truncate(v.AsFloat4())));
 					}
 				} else {
 					auto hashedId = HashOfGeoAndSkinControllerIds(cmd.second);
@@ -596,7 +596,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 					const Float3* A = (const Float3*)&i->_geo._localBoundingBox.first;
 					for (unsigned c=0; c<dimof(indices); ++c) {
 						Float3 position(A[indices[c][0]][0], A[indices[c][1]][1], A[indices[c][2]][2]);
-						AddToBoundingBox(boundingBox, position, localToWorld);
+						AddToBoundingBox(boundingBox, TransformPoint(localToWorld, position));
 					}
 				}
 			}

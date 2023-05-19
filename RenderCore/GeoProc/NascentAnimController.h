@@ -12,14 +12,13 @@
 #include "../Types.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/Vector.h"
+#include "../../Math/Geometry.h"        // for InvalidBoundingBox
 #include "../../Utility/UTFUtils.h"
 #include "../../Utility/PtrUtils.h"
 #include <vector>
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
-	std::pair<Float3, Float3>   InvalidBoundingBox();
-
         ////////////////////////////////////////////////////////
 
     class NascentBoundSkinnedGeometry

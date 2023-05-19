@@ -9,7 +9,6 @@
 #include "NascentAnimController.h"
 #include "NascentRawGeometry.h"
 #include "GeometryAlgorithm.h"
-#include "GeoProcUtil.h"
 #include "../Assets/AssetUtils.h"
 #include "../Assets/ModelMachine.h"
 #include "../Format.h"
@@ -21,6 +20,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/MathSerialization.h"
+#include "../../Math/Geometry.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StreamUtils.h"
@@ -864,7 +864,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         auto positionDesc = FindPositionElement(animatedVertexLayout);
         if (positionDesc._format != Format::Unknown)
             for (auto i:MakeVertexIteratorRange(MakeIteratorRange(animatedVertexBuffer), positionDesc._alignedByteOffset, animatedVertexStride, positionDesc._format))
-				AddToBoundingBox(boundingBox, Truncate(i.AsFloat4()), Identity<Float4x4>());
+				AddToBoundingBox(boundingBox, Truncate(i.AsFloat4()));
 
             //      Build the final "BoundSkinnedGeometry" object
         NascentBoundSkinnedGeometry result;
