@@ -29,7 +29,10 @@ namespace RenderCore { namespace LightingEngine
 		{
 			std::promise<ResourceDesc> promise;
 			auto result = promise.get_future(); 
-			promise.set_value(_resource->GetDesc());
+			auto desc = _resource->GetDesc();
+			desc._bindFlags = 0;
+			desc._allocationRules = 0;		// don't pass the bind flags & allocation rules onto whoever uses this
+			promise.set_value(desc);
 			return result;
 		}
 
