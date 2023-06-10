@@ -121,6 +121,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _paramsBufferCounter = 0;
 		unsigned _paramsBufferCopyCountdown = 0;
 		std::vector<uint8_t> _paramsData;
+		unsigned _alignedParamsSize = 0, _alignedBrightPassParamsSize = 0;
 		unsigned _secondStageConstructionState = 0;		// debug usage only
 		ToneMapAcesOperatorDesc _desc;
 		std::shared_ptr<Techniques::PipelineCollection> _pool;

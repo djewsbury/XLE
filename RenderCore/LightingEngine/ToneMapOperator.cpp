@@ -45,12 +45,6 @@ namespace RenderCore { namespace LightingEngine
 		void CalculateSmallBlurWeights(float radius);
 	};
 
-	struct AllParams
-	{
-		CB_Params _tonemapParams;
-		CB_BrightPassParams _brightPassParams;
-	};
-
 	static const unsigned s_shaderMipChainUniformCount = 8;		// there's a limit to how many mip levels are actually useful
 
 	static Float4x4 BuildPreToneScaleTransform();
@@ -398,28 +392,36 @@ namespace RenderCore { namespace LightingEngine
 		if (_desc._broadBloomMaxRadius > 0.f) _desc._broadBloomMaxRadius = std::max(_desc._broadBloomMaxRadius, 4.f);
 		_brightPassLargeRadius = std::min(1.f, _desc._broadBloomMaxRadius);
 		_brightPassSmallRadius = _desc._enablePreciseBloom ? 3.5f : 0.f;
-		_paramsData.resize(sizeof(AllParams));
-		auto& params = *(AllParams*)_paramsData.data();
-		params._tonemapParams._preToneScale = Truncate(BuildPreToneScaleTransform());
-		params._tonemapParams._postToneScale = Truncate(BuildPostToneScaleTransform_SRGB());
-		params._tonemapParams._exposureControl = 1;
-		for (auto& c:params._tonemapParams._dummy) c = 0;
-		params._brightPassParams._bloomDesaturationFactor = .5f;
-		params._brightPassParams._bloomThreshold = _bloomThreshold = 2.0f;
-		params._brightPassParams.CalculateSmallBlurWeights(_brightPassSmallRadius);
-		params._brightPassParams._largeRadiusBrightness = Float4(1,1,1,1);
-		params._brightPassParams._smallRadiusBrightness = Float4(1,1,1,1);
+
+		const auto cbAlignmentRules = _pool->GetDevice()->GetDeviceLimits()._constantBufferOffsetAlignment;
+		_alignedParamsSize = CeilToMultiple(sizeof(CB_Params), cbAlignmentRules);
+		_alignedBrightPassParamsSize = CeilToMultiple(sizeof(CB_BrightPassParams), cbAlignmentRules);
+
+		_paramsData.resize(_alignedParamsSize + _alignedBrightPassParamsSize);
+
+		auto& params = *(CB_Params*)_paramsData.data();
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		params._preToneScale = Truncate(BuildPreToneScaleTransform());
+		params._postToneScale = Truncate(BuildPostToneScaleTransform_SRGB());
+		params._exposureControl = 1;
+		for (auto& c:params._dummy) c = 0;
+		brightPassParams._bloomDesaturationFactor = .5f;
+		brightPassParams._bloomThreshold = _bloomThreshold = 2.0f;
+		brightPassParams.CalculateSmallBlurWeights(_brightPassSmallRadius);
+		brightPassParams._largeRadiusBrightness = Float4(1,1,1,1);
+		brightPassParams._smallRadiusBrightness = Float4(1,1,1,1);
 
 		// we need to multi-buffer the params buffer in order to update it safely
+		auto combinedSize = _alignedParamsSize + _alignedBrightPassParamsSize;
 		auto paramsBuffer = _pool->GetDevice()->CreateResource(
-			CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(unsigned(3*sizeof(AllParams)))),
+			CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(3*combinedSize)),
 			"aces-tonemap-params");
-		_params[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*sizeof(AllParams)), (unsigned)sizeof(CB_Params));
-		_brightPassParams[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*sizeof(AllParams)+sizeof(CB_Params)), (unsigned)sizeof(CB_BrightPassParams));
-		_params[1] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(1*sizeof(AllParams)), (unsigned)sizeof(CB_Params));
-		_brightPassParams[1] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(1*sizeof(AllParams)+sizeof(CB_Params)), (unsigned)sizeof(CB_BrightPassParams));
-		_params[2] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(2*sizeof(AllParams)), (unsigned)sizeof(CB_Params));
-		_brightPassParams[2] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(2*sizeof(AllParams)+sizeof(CB_Params)), (unsigned)sizeof(CB_BrightPassParams));
+		_params[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*combinedSize), (unsigned)sizeof(CB_Params));
+		_brightPassParams[0] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(0*combinedSize+_alignedParamsSize), (unsigned)sizeof(CB_BrightPassParams));
+		_params[1] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(1*combinedSize), (unsigned)sizeof(CB_Params));
+		_brightPassParams[1] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(1*combinedSize+_alignedParamsSize), (unsigned)sizeof(CB_BrightPassParams));
+		_params[2] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(2*combinedSize), (unsigned)sizeof(CB_Params));
+		_brightPassParams[2] = paramsBuffer->CreateBufferView(BindFlag::ConstantBuffer, unsigned(2*combinedSize+_alignedParamsSize), (unsigned)sizeof(CB_BrightPassParams));
 		_paramsBufferCopyCountdown = 3;
 
 		auto atomicBuffer = _pool->GetDevice()->CreateResource(
@@ -581,8 +583,8 @@ namespace RenderCore { namespace LightingEngine
 		if (_desc._broadBloomMaxRadius <= 0.f)
 			Throw(std::runtime_error("Cannot set small bloom radius because this feature was disabled in the operator desc"));
 		_brightPassSmallRadius = radius;
-		auto& params = *(AllParams*)_paramsData.data();
-		params._brightPassParams.CalculateSmallBlurWeights(_brightPassSmallRadius);
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		brightPassParams.CalculateSmallBlurWeights(_brightPassSmallRadius);
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
@@ -595,9 +597,10 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (_desc._broadBloomMaxRadius <= 0.f && !_desc._enablePreciseBloom)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
-		auto& params = *(AllParams*)_paramsData.data();
+		auto& toneMapParams = *(CB_Params*)_paramsData.data();
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
 		_bloomThreshold = bloomThreshold;
-		params._brightPassParams._bloomThreshold = bloomThreshold / params._tonemapParams._exposureControl;
+		brightPassParams._bloomThreshold = bloomThreshold / toneMapParams._exposureControl;
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
@@ -610,59 +613,60 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (_desc._broadBloomMaxRadius <= 0.f && !_desc._enablePreciseBloom)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
-		auto& params = *(AllParams*)_paramsData.data();
-		params._brightPassParams._bloomDesaturationFactor = desatFactor;
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		brightPassParams._bloomDesaturationFactor = desatFactor;
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
 	float ToneMapAcesOperator::GetDesaturationFactor() const
 	{
-		auto& params = *(AllParams*)_paramsData.data();
-		return params._brightPassParams._bloomDesaturationFactor;
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		return brightPassParams._bloomDesaturationFactor;
 	}
 
 	void ToneMapAcesOperator::SetBroadBrightness(Float3 brightness)
 	{
 		if (_desc._broadBloomMaxRadius <= 0.f)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
-		auto& params = *(AllParams*)_paramsData.data();
-		params._brightPassParams._largeRadiusBrightness = Expand(brightness, 1.f);
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		brightPassParams._largeRadiusBrightness = Expand(brightness, 1.f);
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
 	Float3 ToneMapAcesOperator::GetBroadBrightness() const
 	{
-		auto& params = *(AllParams*)_paramsData.data();
-		return Truncate(params._brightPassParams._largeRadiusBrightness);
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		return Truncate(brightPassParams._largeRadiusBrightness);
 	}
 
 	void ToneMapAcesOperator::SetPreciseBrightness(Float3 brightness)
 	{
 		if (!_desc._enablePreciseBloom)
 			Throw(std::runtime_error("Cannot set bloom property because this feature was disabled in the operator desc"));
-		auto& params = *(AllParams*)_paramsData.data();
-		params._brightPassParams._smallRadiusBrightness = Expand(brightness, 1.f);
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		brightPassParams._smallRadiusBrightness = Expand(brightness, 1.f);
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
 	Float3 ToneMapAcesOperator::GetPreciseBrightness() const
 	{
-		auto& params = *(AllParams*)_paramsData.data();
-		return Truncate(params._brightPassParams._smallRadiusBrightness);
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		return Truncate(brightPassParams._smallRadiusBrightness);
 	}
 
 	void ToneMapAcesOperator::SetExposure(float exposureControl)
 	{
-		auto& params = *(AllParams*)_paramsData.data();
-		params._tonemapParams._exposureControl = exposureControl;
-		params._brightPassParams._bloomThreshold = _bloomThreshold / exposureControl;
+		auto& toneMapParams = *(CB_Params*)_paramsData.data();
+		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
+		toneMapParams._exposureControl = exposureControl;
+		brightPassParams._bloomThreshold = _bloomThreshold / exposureControl;
 		_paramsBufferCopyCountdown = dimof(_params);
 	}
 
 	float ToneMapAcesOperator::GetExposure() const
 	{
-		auto& params = *(AllParams*)_paramsData.data();
-		return params._tonemapParams._exposureControl;
+		auto& toneMapParams = *(CB_Params*)_paramsData.data();
+		return toneMapParams._exposureControl;
 	}
 
 	uint64_t ToneMapAcesOperatorDesc::GetHash(uint64_t seed) const

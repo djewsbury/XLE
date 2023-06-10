@@ -500,6 +500,13 @@ namespace RenderCore { namespace LightingEngine
 		ParameterBox pBox;
 		ConfigureParameterBox(pBox, _qualityParameters);
 		_paramsBufferData = _paramsCBLayout.BuildCBDataAsVector(pBox, Techniques::GetDefaultShaderLanguage());
+
+		// have to respect alignment rules for offsets
+		const auto cbAlignmentRules = _device->GetDeviceLimits()._constantBufferOffsetAlignment;
+		auto alignedParamsBufferSize = CeilToMultiple(_paramsBufferData.size(), cbAlignmentRules);
+		if (alignedParamsBufferSize > _paramsBufferData.size())
+			_paramsBufferData.resize(alignedParamsBufferSize, 0);
+
 		_paramsBufferCopyCountdown = 3;
 	}
 
@@ -668,6 +675,11 @@ namespace RenderCore { namespace LightingEngine
 					ConfigureParameterBox(pBox, strongThis->_qualityParameters);
 					strongThis->_paramsBufferData = strongThis->_paramsCBLayout.BuildCBDataAsVector(pBox, Techniques::GetDefaultShaderLanguage());
 				}
+
+				const auto cbAlignmentRules = strongThis->_device->GetDeviceLimits()._constantBufferOffsetAlignment;
+				auto alignedParamsBufferSize = CeilToMultiple(strongThis->_paramsBufferData.size(), cbAlignmentRules);
+				if (alignedParamsBufferSize > strongThis->_paramsBufferData.size())
+					strongThis->_paramsBufferData.resize(alignedParamsBufferSize, 0);
 
 				auto paramsBufferSize = strongThis->_paramsBufferData.size();
 				auto paramsBuffer = strongThis->_device->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create((unsigned)paramsBufferSize*3)), "ssr-config");
