@@ -451,6 +451,21 @@ namespace RenderCore { namespace Metal_Vulkan
     				vkGetBufferMemoryRequirements(factory.GetDevice().get(), _underlyingBuffer.get(), &mem_reqs);
 				}
             } else {
+				/*
+					We can query further restrictions using vkGetPhysicalDeviceImageFormatProperties2
+					Nvidia is more picky about using linear tiling incorrectly, for example
+				VkPhysicalDeviceImageFormatInfo2 formatInfo;
+				VkImageFormatProperties2 formatProps {  VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, nullptr };
+				formatInfo.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+				formatInfo.pNext = nullptr;
+				formatInfo.format = image_create_info.format;
+				formatInfo.type = image_create_info.imageType;
+				formatInfo.tiling = image_create_info.tiling;
+				formatInfo.usage = image_create_info.usage;
+				formatInfo.flags = image_create_info.flags;
+				vkGetPhysicalDeviceImageFormatProperties2(factory.GetPhysicalDevice(), &formatInfo, &formatProps);
+				*/
+
 				if (!allocateDirectFromVulkan) {
 					_underlyingImage = factory.CreateImageWithAutoMemory(_vmaMem, allocationInfo, image_create_info, desc._allocationRules, _guid);
 				} else {
