@@ -21,6 +21,7 @@ namespace XLEMath
 	{
 		PointAndTime<Primitive>	_anchor0;
 		PointAndTime<Primitive>	_anchor1;
+		PointAndTime<Primitive>	_lastValidAnchor1;
 		FaceId _insideFace = ~FaceId(0), _outsideFace = ~FaceId(0);
 
 		Primitive InitialTime() const { return _anchor0[2]; }
@@ -33,11 +34,26 @@ namespace XLEMath
 			return w0 * Truncate(_anchor0) + w1 * Truncate(_anchor1);
 		}
 
+		Vector2T<Primitive> PositionAtTimeUsingLastValid(Primitive time) const
+		{
+			if (_lastValidAnchor1[2] == _anchor0[2]) return Truncate(_anchor0);		// bitwise comparison intended
+			Primitive w1 = (time - _anchor0[2]) / (_lastValidAnchor1[2] - _anchor0[2]);
+			Primitive w0 = Primitive(1) - w1;
+			return w0 * Truncate(_anchor0) + w1 * Truncate(_lastValidAnchor1);
+		}
+
 		Vector2T<Primitive> Velocity() const
 		{
 			if (_anchor1[2] == _anchor0[2]) return Zero<Vector2T<Primitive>>();		// bitwise comparison intended
 			return (Truncate(_anchor1) - Truncate(_anchor0)) / (_anchor1[2] - _anchor0[2]);
 		}
+
+		Vertex(
+			PointAndTime<Primitive>	anchor0,
+			PointAndTime<Primitive>	anchor1,
+			FaceId insideFace = ~FaceId(0), FaceId outsideFace = ~FaceId(0))
+		: _anchor0(anchor0), _anchor1(anchor1), _lastValidAnchor1(anchor1), _insideFace(insideFace), _outsideFace(outsideFace)
+		{}
 	};
 
 	T1(Primitive) using VertexSet = IteratorRange<const Vertex<Primitive>*>;
@@ -583,6 +599,7 @@ namespace XLEMath
 				// We already know the velocity of the head of the motorcycle; and it has a fixed tail that
 				// stays at the original position
 				if (v0._anchor0 != v0._anchor1) {
+					v0._lastValidAnchor1 = v0._anchor1;
 					bool hasMotorCycle = std::find_if(loop._motorcycleSegments.begin(), loop._motorcycleSegments.end(),
 						[v=edge->_tail](const auto&c) { return c._motor == v; }) != loop._motorcycleSegments.end();
 					assert(!hasMotorCycle);
@@ -1942,20 +1959,27 @@ namespace XLEMath
 	T1(Primitive) void StraightSkeletonGraph<Primitive>::WriteFinalEdges(StraightSkeleton<Primitive>& result, const WavefrontLoop<Primitive>& loop, Primitive time)
 	{
 		for (auto i=loop._edges.begin(); i!=loop._edges.end(); ++i) {
-			auto A = PointAndTime<Primitive>{_vertices[i->_head].PositionAtTime(time), time};
-			auto B = PointAndTime<Primitive>{_vertices[i->_tail].PositionAtTime(time), time};
+			// Use the "LastValid" movement for each vertex here. This is required to distinguish between a true part of
+			// the wavefront, and a vertex path that collapsed into a 2-vertex loop. Once the loop is reduced to 2-vertices,
+			// movement can no longer be calculated, so the vertex is updated to appear stationary. However, that makes it
+			// difficult to tell which case this loop originates from
+			// It's also awkward to attempt to prevent any vertex path type loops from getting here -- because that might
+			// damage event handling for other vertices.
+			auto A = PointAndTime<Primitive>{_vertices[i->_head].PositionAtTimeUsingLastValid(time), time};
+			auto B = PointAndTime<Primitive>{_vertices[i->_tail].PositionAtTimeUsingLastValid(time), time};
 			auto v0 = AddSteinerVertex(result, A);
 			auto v1 = AddSteinerVertex(result, B);
 			if (v0 != v1) {
 				AddEdge(
-					result, 
-					v0, v1, 
-					~0u, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace, 
+					result,
+					v0, v1,
+					~0u, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
 					StraightSkeleton<Primitive>::EdgeType::Wavefront);
 			}
+			// note that AddEdge() will reject the VertexPath for the stationary vertex (if this is actually a vertex path)
 			AddEdge(
-				result, 
-				(i->_tail < _boundaryPointCount) ? i->_tail : AddSteinerVertex(result, _vertices[i->_tail]._anchor0), 
+				result,
+				(i->_tail < _boundaryPointCount) ? i->_tail : AddSteinerVertex(result, _vertices[i->_tail]._anchor0),
 				v1,
 				GetVertex<Primitive>(_vertices, i->_tail)._insideFace, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
