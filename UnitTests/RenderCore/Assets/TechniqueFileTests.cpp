@@ -6,6 +6,7 @@
 #include "../ReusableDataFiles.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/ShaderVariationSet.h"
+#include "../../../RenderCore/GeoProc/ModelScaffoldConfiguration.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../../ShaderParser/ShaderAnalysis.h"
 #include "../../../Assets/AssetServices.h"
@@ -128,4 +129,59 @@ namespace UnitTests
 			REQUIRE(std::string{"SELECTOR_1=3"} == test1);
 		}
 	}
+
+	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
+		std::make_pair(
+			"one.model",
+			::Assets::AsBlob(R"--(
+				RawGeoRules=~
+					*=~
+						16Bit=true
+						ExcludeAttributes=~
+							COLOR
+
+				CommandStreams=~
+					0
+
+				SkeletonRules=~
+					*=~
+						AnimatableBones=~
+							Bone0; Bone1; Bone2
+						OutputBones=~
+							Bone3; Bone4; Bone5
+
+				Material=~
+					AutoProcessTextures=true
+
+				Inherit=~
+					two.model:Default
+			)--")),
+
+		std::make_pair(
+			"two.model",
+			::Assets::AsBlob(R"--(
+				Default=~
+					CommandStreams=~
+						adjacency
+
+					SkeletonRules=~
+						*=~
+							AnimatableBones=~
+								ABone0; ABone1; ABone2
+			)--")),
+	};
+
+	TEST_CASE( "ModelScaffoldConfigurationFiles", "[rendercore_assets]" )
+	{
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::EnableChangeMonitoring));
+
+		using namespace RenderCore::Assets::GeoProc;
+
+		auto marker = ::Assets::ActualizeAssetPtr<ResolvedAssetMixin<ModelScaffoldConfiguration>>("ut-data/one.model");
+		(void)marker;
+		
+		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);
+	}
+
 }

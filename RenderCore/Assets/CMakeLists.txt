@@ -30,7 +30,8 @@ add_library(
     ../GeoProc/NascentObjectsSerialize.cpp
     ../GeoProc/NascentRawGeometry.cpp
     ../GeoProc/NascentSkeletonHelper.cpp
-	../GeoProc/DequantAnalysisTools.cpp)
+	../GeoProc/DequantAnalysisTools.cpp
+    ../GeoProc/ModelScaffoldConfiguration.cpp)
 
 xle_configure_library(RenderCoreAssets)
 target_link_libraries(RenderCoreAssets PUBLIC BufferUploads-Shared ShaderParser RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)
