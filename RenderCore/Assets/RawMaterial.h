@@ -166,9 +166,9 @@ namespace RenderCore { namespace Assets
         template<typename Value>
             void SetUniform(StringSection<>, const Value&);
         void BindSampler(const std::string&, const SamplerDesc&);
-        void AddInheritted(const std::string&);
+        void AddInherited(const std::string&);
 
-		void					    MergeIn(const RawMaterial& src);
+		void						MergeIn(const RawMaterial& src);
 		std::vector<std::string>	ResolveInherited(const ::Assets::DirectorySearchRules& searchRules) const;
 
 		const ::Assets::DependencyValidation&	GetDependencyValidation() const { return _depVal; }

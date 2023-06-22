@@ -350,7 +350,7 @@ namespace GUILayer
 		std::shared_ptr<RenderCore::Assets::RawMaterial> GetUnderlyingPtr();
 
         System::String^ BuildInheritanceList();
-        void AddInheritted(System::String^);
+        void AddInherited(System::String^);
         void RemoveInheritted(System::String^);
 
 		void MergeIn(RawMaterial^ src);

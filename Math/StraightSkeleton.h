@@ -24,7 +24,8 @@ namespace XLEMath
 		EdgeSet _edges;
 		std::vector<EdgeSet> _edgesByFace;
 
-		std::vector<std::vector<unsigned>> WavefrontAsVertexLoops();
+		std::vector<std::vector<unsigned>> WavefrontAsVertexLoops() const;
+		Primitive LastEventTime() const;
 	};
 
 	T1(Primitive) class StraightSkeletonGraph;

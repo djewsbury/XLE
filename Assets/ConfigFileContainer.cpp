@@ -130,7 +130,7 @@ namespace Assets
         return result;
     }
 
-    static bool IsWhitespace(char chr) { return chr == ' ' || chr == '\t'; }
+    static bool IsWhitespace_(char chr) { return chr == ' ' || chr == '\t'; }
 
     static std::unique_ptr<std::regex> s_chunkHeader;
     
@@ -168,7 +168,7 @@ namespace Assets
         ++i;
         if (i == doc.end() || *i != '/') return std::move(result);
         ++i;
-        while (i != doc.end() && IsWhitespace(*i)) ++i;     // (whitespace but not newline)
+        while (i != doc.end() && IsWhitespace_(*i)) ++i;     // (whitespace but not newline)
 
         char markerAscii[] = "CompoundDocument:";
         auto* m = markerAscii;

@@ -512,7 +512,7 @@ namespace GUILayer
         return nullptr;
     }
 
-    void RawMaterial::AddInheritted(String^ item)
+    void RawMaterial::AddInherited(String^ item)
     {
             // we could consider converting the filename "item"
             // into a path relative to the main material file here..?

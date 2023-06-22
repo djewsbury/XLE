@@ -676,6 +676,30 @@ namespace Utility
     std::string Concatenate(StringSection<> zero, StringSection<> one, StringSection<> two, StringSection<> three, StringSection<> four, StringSection<> five);
     std::string Concatenate(StringSection<> zero, StringSection<> one, StringSection<> two, StringSection<> three, StringSection<> four, StringSection<> five, StringSection<> six);
 
+	template<typename CharType>
+		bool IsWhitespace(CharType chr)
+	{
+		return chr == 0x20 || chr == 0x9 || chr == 0xD || chr == 0xA;
+	}
+
+	template<typename CharType>
+		static std::vector<StringSection<CharType>> SplitSeparated(StringSection<CharType> input, CharType terminator=CharType(','))
+	{
+		std::vector<StringSection<>> result;
+		auto i = input.begin();
+		while (i!=input.end()) {
+			while (i!=input.end() && IsWhitespace(*i)) ++i;
+			auto start = i;
+			while (i!=input.end() && *i!=terminator) ++i;
+			result.emplace_back(start, i);
+			if (i!=input.end()) {
+				++i;
+				while (i!=input.end() && IsWhitespace(*i)) ++i;
+			}
+		}
+		return result;
+	}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     #if REDIRECT_CLIB_WITH_PREPROCESSOR

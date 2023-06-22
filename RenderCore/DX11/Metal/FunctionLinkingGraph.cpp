@@ -38,7 +38,7 @@ namespace RenderCore { namespace Metal_DX11
         const char* _lineStart;
     };
 
-    static bool IsWhitespace(char chr)          { return chr == ' ' || chr == '\t'; }
+    static bool IsNonNewLineWhitespace(char chr){ return chr == ' ' || chr == '\t'; }
     static bool IsNewlineWhitespace(char chr)   { return chr == '\r' || chr == '\n'; }
     static bool IsIgnoreable(char chr)          { return chr == ')'; }
 
@@ -47,7 +47,7 @@ namespace RenderCore { namespace Metal_DX11
     restartParse:
 
         while (_iterator < _script.end()) {
-            if (IsWhitespace(*_iterator) || IsIgnoreable(*_iterator)) {
+            if (IsNonNewLineWhitespace(*_iterator) || IsIgnoreable(*_iterator)) {
                 ++_iterator;
             } else if (*_iterator == '\n' || *_iterator == '\r') {
                 if (*_iterator == '\r' && (_iterator+1) < _script.end() && *(_iterator+1) == '\n')
@@ -101,7 +101,7 @@ namespace RenderCore { namespace Metal_DX11
             };
             // read forward to any token terminator
             const char* i = _iterator;
-            while (i < _script.end() && !IsWhitespace(*i) && *i != '\r' && *i != '\n' && *i != '(' && *i != ')')
+            while (i < _script.end() && !IsNonNewLineWhitespace(*i) && *i != '\r' && *i != '\n' && *i != '(' && *i != ')')
                 ++i;
 
             auto token = MakeStringSection(_iterator, i);
@@ -496,7 +496,7 @@ namespace RenderCore { namespace Metal_DX11
         std::vector<ShaderParameter> result;
         const auto* i = input.begin();
         for (;;) {
-            while (i < input.end() && (IsWhitespace(*i) || IsNewlineWhitespace(*i))) ++i;
+            while (i < input.end() && (IsNonNewLineWhitespace(*i) || IsNewlineWhitespace(*i))) ++i;
             if (i == input.end()) break;
 
             const auto* start = i;

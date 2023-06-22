@@ -12,6 +12,11 @@
 #include "../Core/Prefix.h"
 #include <utility>
 
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__) 
+    #include <immintrin.h>			// MSVC & clang intrinsic
+    #define HAS_SSE_INSTRUCTIONS
+#endif
+
 namespace XLEMath
 {
     template<typename Primitive>
@@ -141,7 +146,11 @@ namespace XLEMath
 		// Note that we have to be a little careful of compiler optimization here, since we're
 		// generating equations that should result in 0 (assuming infinite precision)
 		Primitive x = a * b;
-		Primitive y = __builtin_fma(a, b, -x);
+		#if (COMPILER_ACTIVE == COMPILER_TYPE_GCC) || (COMPILER_ACTIVE == COMPILER_TYPE_CLANG)
+			Primitive y = __builtin_fma(a, b, -x);
+		#else
+			Primitive y = std::fma(a, b, -x);
+		#endif
 		return { x, y };
 	}
 

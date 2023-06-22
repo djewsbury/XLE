@@ -128,7 +128,7 @@ namespace ControlsLibrary.MaterialEditor
             if (result.Length > 0)
             {
                 using (var mat = GUILayer.RawMaterial.Get(selectedMaterial))
-                    mat.AddInheritted(result);
+                    mat.AddInherited(result);
                 // now we need to refresh this control with the new changes...
                 Object = _activeObject;
             }

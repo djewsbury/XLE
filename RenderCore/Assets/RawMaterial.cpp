@@ -495,7 +495,7 @@ namespace RenderCore { namespace Assets
             _samplers.emplace_back(name, sampler);
     }
 
-    void RawMaterial::AddInheritted(const std::string& value)
+    void RawMaterial::AddInherited(const std::string& value)
     {
         if (std::find(_inherit.begin(), _inherit.end(), value) == _inherit.end())
             _inherit.emplace_back(value);
@@ -637,20 +637,32 @@ namespace RenderCore { namespace Assets
         {
         public:
             unsigned _nextId = 1;
-            std::vector<std::pair<unsigned, ::Assets::PtrToMarkerPtr<RawMaterial>>> _subFutures;
-            std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> _loadedSubMaterials;
+            struct SubFutureIndexer
+            {
+                unsigned _parentId;
+                unsigned _siblingIdx;
+            };
+            struct LoadedSubMaterialsIndexer
+            {
+                unsigned _itemId;
+                unsigned _parentId;
+                unsigned _siblingIdx;
+            };
+            std::vector<std::pair<SubFutureIndexer, ::Assets::PtrToMarkerPtr<RawMaterial>>> _subFutures;
+            std::vector<std::pair<LoadedSubMaterialsIndexer, std::shared_ptr<RawMaterial>>> _loadedSubMaterials;
             std::vector<::Assets::DependencyValidation> _depVals;
         };
         auto pendingTree = std::make_shared<PendingRawMaterialTree>();
 
         auto i = initializer.begin();
+        unsigned siblingIdx = 0;
         while (i != initializer.end()) {
             while (i != initializer.end() && *i == ';') ++i;
             auto i2 = i;
             while (i2 != initializer.end() && *i2 != ';') ++i2;
             if (i2==i) break;
 
-            pendingTree->_subFutures.push_back(std::make_pair(0, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(MakeStringSection(i, i2))));
+            pendingTree->_subFutures.emplace_back(PendingRawMaterialTree::SubFutureIndexer{0,siblingIdx++}, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(MakeStringSection(i, i2)));
             i = i2;
         }
         assert(!pendingTree->_subFutures.empty());
@@ -659,7 +671,7 @@ namespace RenderCore { namespace Assets
             std::move(promisedMaterial),
             [pendingTree]() {
                 for (;;) {
-                    std::vector<std::pair<unsigned, std::shared_ptr<RawMaterial>>> subMaterials;
+                    std::vector<std::pair<PendingRawMaterialTree::SubFutureIndexer, std::shared_ptr<RawMaterial>>> subMaterials;
                     std::vector<::Assets::DependencyValidation> subDepVals;
                     for (const auto& f:pendingTree->_subFutures) {
                         ::Assets::Blob queriedLog;
@@ -674,7 +686,7 @@ namespace RenderCore { namespace Assets
 
                         subDepVals.push_back(queriedDepVal);
                         if (state == ::Assets::AssetState::Ready)
-                            subMaterials.push_back(std::make_pair(f.first, std::move(subMat)));
+                            subMaterials.emplace_back(f.first, std::move(subMat));
                     }
                     pendingTree->_subFutures.clear();
                     pendingTree->_depVals.insert(pendingTree->_depVals.end(), subDepVals.begin(), subDepVals.end());
@@ -685,23 +697,26 @@ namespace RenderCore { namespace Assets
                     // in subMaterials, but immediately before their parent
                     for (const auto&m:subMaterials) {
                         unsigned newParentId = pendingTree->_nextId++;
-                        if (m.first == 0) {
-                            pendingTree->_loadedSubMaterials.push_back({newParentId, m.second});
+                        if (m.first._parentId == 0) {
+                            // ie, this is a root
+                            pendingTree->_loadedSubMaterials.emplace_back(PendingRawMaterialTree::LoadedSubMaterialsIndexer{newParentId, m.first._parentId, m.first._siblingIdx}, m.second);
                         } else {
-                            auto i = std::find_if(pendingTree->_loadedSubMaterials.begin(), pendingTree->_loadedSubMaterials.end(),
-                                [s=m.first](const auto& c) { return c.first == s;});
-                            assert(i!=pendingTree->_loadedSubMaterials.end());
-                            // insert just before the parent, after any siblings added this turn 
-                            pendingTree->_loadedSubMaterials.insert(i, {newParentId, m.second});
+                            // Insert just before the parent, after any siblings added this turn
+                            // This will give us the right ordering because we ensure that we complete all items in pendingTree->_subFutures (and therefor all siblings)
+                            // before we process any here
+                            auto parentI = std::find_if(
+                                pendingTree->_loadedSubMaterials.begin(), pendingTree->_loadedSubMaterials.end(),
+                                [s=m.first._parentId](const auto& c) { return c.first._itemId == s;});
+                            assert(parentI!=pendingTree->_loadedSubMaterials.end());
+                            pendingTree->_loadedSubMaterials.insert(parentI, {PendingRawMaterialTree::LoadedSubMaterialsIndexer{newParentId, m.first._parentId, m.first._siblingIdx}, m.second});
                         }
 
-                        auto inheritted = m.second->ResolveInherited(m.second->GetDirectorySearchRules());
-                        for (const auto&i:inheritted) {
-                            pendingTree->_subFutures.push_back(std::make_pair(newParentId, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(i)));
-                        }
+                        unsigned siblingIdx = 0;
+                        for (const auto&i:m.second->ResolveInherited(m.second->GetDirectorySearchRules()))
+                            pendingTree->_subFutures.emplace_back(PendingRawMaterialTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(i));
                     }
 
-                    // if we still have subfutures, need to roll around again
+                    // if we still have sub-futures, need to roll around again
                     // we'll do this immediately, just incase everything is already loaded
                     if (pendingTree->_subFutures.empty()) break;
                 }
@@ -711,6 +726,11 @@ namespace RenderCore { namespace Assets
             [pendingTree]() {
                 // All of the RawMaterials in the tree are loaded; and we can just merge them together
                 // into a final resolved material
+                #if defined(_DEBUG)
+                    if (!pendingTree->_loadedSubMaterials.empty())
+                        for (auto i=pendingTree->_loadedSubMaterials.begin(); (i+1)!=pendingTree->_loadedSubMaterials.end(); ++i)
+                            assert(i->first._parentId != (i+1)->first._parentId || i->first._siblingIdx < (i+1)->first._siblingIdx);        // double check ordering is as expected
+                #endif
                 ResolvedMaterial finalMaterial;
                 for (const auto& m:pendingTree->_loadedSubMaterials)
                     MergeIn(finalMaterial, *m.second);

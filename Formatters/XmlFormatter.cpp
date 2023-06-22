@@ -10,12 +10,6 @@ namespace Formatters
 {
 
     template<typename CharType>
-        bool IsWhitespace(CharType chr)
-    {
-        return chr == 0x20 || chr == 0x9 || chr == 0xD || chr == 0xA;
-    }
-
-    template<typename CharType>
         bool IsNameStartChar(CharType chr)
     {
         //      Formal XML standard requires the following characters for "NameStartChar"

@@ -16,12 +16,6 @@ namespace Utility
         }
 
     template<typename CharType>
-        bool IsWhitespace(CharType chr)
-    {
-        return chr == 0x20 || chr == 0x9 || chr == 0xD || chr == 0xA;
-    }
-
-    template<typename CharType>
         static const CharType* ExperimentalFloatParser(float& dst, const CharType* start, const CharType* end)
     {
             // This is an alternative to std::strtof designed to solve these problems:

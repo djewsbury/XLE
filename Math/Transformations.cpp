@@ -195,6 +195,23 @@ namespace XLEMath
         return result;
     }
 
+    Float2x3    Combine(const Float2x3& firstTransform, const Float2x3& secondTransform)
+    {
+        const Float2x3& lhs = secondTransform;
+        const Float2x3& rhs = firstTransform;
+
+        Float2x3 result;
+        result(0,0) = lhs(0,0) * rhs(0,0) + lhs(0,1) * rhs(1,0);
+        result(0,1) = lhs(0,0) * rhs(0,1) + lhs(0,1) * rhs(1,1);
+        result(0,2) = lhs(0,0) * rhs(0,2) + lhs(0,1) * rhs(1,2) + lhs(0,2);
+        
+        result(1,0) = lhs(1,0) * rhs(0,0) + lhs(1,1) * rhs(1,0);
+        result(1,1) = lhs(1,0) * rhs(0,1) + lhs(1,1) * rhs(1,1);
+        result(1,2) = lhs(1,0) * rhs(0,2) + lhs(1,1) * rhs(1,2) + lhs(1,2);
+
+        return result;
+    }
+
     void Combine_IntoRHS(const Float3& translate, Float4x4& transform)
     {
         Float4x4& lhs = transform;
@@ -980,8 +997,8 @@ namespace XLEMath
     Float2x3 InvertOrthonormalTransform(const Float2x3& input)
     {
         float t[2];
-        t[0] = input(0,0) * -input(0,3) + input(1,0) * -input(1,3);
-        t[1] = input(0,1) * -input(0,3) + input(1,1) * -input(1,3);
+        t[0] = input(0,0) * -input(0,2) + input(1,0) * -input(1,2);
+        t[1] = input(0,1) * -input(0,2) + input(1,1) * -input(1,2);
         Float2x3 result;
         result(0,0) = input(0,0);   result(0,1) = input(1,0);   result(0,2) = t[0];
         result(1,0) = input(0,1);   result(1,1) = input(1,1);   result(1,2) = t[1];

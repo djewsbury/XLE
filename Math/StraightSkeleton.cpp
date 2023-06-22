@@ -2063,7 +2063,7 @@ namespace XLEMath
 		return result;
 	}
 
-	T1(Primitive) std::vector<std::vector<unsigned>> StraightSkeleton<Primitive>::WavefrontAsVertexLoops()
+	T1(Primitive) std::vector<std::vector<unsigned>> StraightSkeleton<Primitive>::WavefrontAsVertexLoops() const
 	{
 		std::vector<std::pair<unsigned, unsigned>> segmentSoup;
 		for (auto&e:_edges)
@@ -2072,6 +2072,14 @@ namespace XLEMath
 		// We shouldn't need the edges in _unplacedEdges, so long as each edge has been correctly
 		// assigned to it's source face
 		return AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
+	}
+
+	T1(Primitive) Primitive StraightSkeleton<Primitive>::LastEventTime() const
+	{
+		Primitive result = 0.f;
+		for (auto&v:_steinerVertices)
+			result = std::max(result, v[2]);
+		return result;
 	}
 
 	T1(Primitive) static bool NonColinearLineLineIntersection(

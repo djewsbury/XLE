@@ -196,6 +196,7 @@ namespace XLEMath
     Float3x4        Combine(const Float3x3& rotation, const Float3x4& transform);
 	Float3x4        Combine(const Float3x4& transform, const Float3x3& rotation);
     Float3x4        Combine(const Float3x4& firstTransform, const Float3x4& secondTransform);
+    Float2x3        Combine(const Float2x3& firstTransform, const Float2x3& secondTransform);
 
         //
         //      Basic transformations

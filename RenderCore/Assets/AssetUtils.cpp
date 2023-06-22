@@ -87,7 +87,7 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	static Assets::VertexElement FindPositionElement(IteratorRange<const VertexElement*> elements)
+	Assets::VertexElement FindPositionElement(IteratorRange<const VertexElement*> elements)
 	{
 		for (unsigned c=0; c<elements.size(); ++c)
 			if (elements[c]._semanticIndex == 0 && !XlCompareStringI(elements[c]._semanticName, "POSITION"))
