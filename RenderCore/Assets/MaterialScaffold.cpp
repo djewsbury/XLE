@@ -103,7 +103,7 @@ namespace RenderCore { namespace Assets
 					if (i == _patchCollections.end() || (*i)->GetHash() != ref._hashId) {
 						// we have to deserialize via text format
 						Formatters::TextInputFormatter<> inputFormatter{MakeIteratorRange(ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize))};
-						auto patchCollection = std::make_shared<Assets::ShaderPatchCollection>(inputFormatter, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
+						auto patchCollection = std::make_shared<Assets::ShaderPatchCollection>(inputFormatter);
 						_patchCollections.insert(i, std::move(patchCollection));
 					}
 				}

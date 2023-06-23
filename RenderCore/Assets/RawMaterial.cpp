@@ -12,6 +12,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/IArtifact.h"
+#include "../../Assets/AssetMixins.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
 #include "../../Formatters/StreamDOM.h"
@@ -341,11 +342,7 @@ namespace RenderCore { namespace Assets
         return result;
     }
 
-    RawMaterial::RawMaterial(
-		Formatters::TextInputFormatter<utf8>& formatter, 
-		const ::Assets::DirectorySearchRules& searchRules, 
-		const ::Assets::DependencyValidation& depVal)
-	: _depVal(depVal), _searchRules(searchRules)
+    RawMaterial::RawMaterial(Formatters::TextInputFormatter<utf8>& formatter)
     {
         while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
             auto eleName = RequireKeyedItem(formatter);
@@ -373,7 +370,7 @@ namespace RenderCore { namespace Assets
                 RequireEndElement(formatter);
             } else if (XlEqString(eleName, "Patches")) {
                 RequireBeginElement(formatter);
-                _patchCollection = ShaderPatchCollection(formatter, searchRules, depVal);
+                _patchCollection = ShaderPatchCollection(formatter);
                 RequireEndElement(formatter);
             } else if (XlEqString(eleName, "Samplers")) {
                 RequireBeginElement(formatter);
@@ -436,12 +433,24 @@ namespace RenderCore { namespace Assets
         }
     }
 
-	void RawMaterial::MergeIn(const RawMaterial& src)
+    void RawMaterial::MergeInWithFilenameResolve(const RawMaterial& src, const ::Assets::DirectorySearchRules& searchRules)
 	{
 		_selectors.MergeIn(src._selectors);
         _stateSet = Merge(_stateSet, src._stateSet);
         _uniforms.MergeIn(src._uniforms);
-        _resources.MergeIn(src._resources);
+
+        // Resolve all of the directory names here, as we write into the Techniques::Material
+		for (const auto&b:src._resources) {
+			auto unresolvedName = b.ValueAsString();
+			if (!unresolvedName.empty()) {
+				char resolvedName[MaxPath];
+				searchRules.ResolveFile(resolvedName, unresolvedName);
+				_resources.SetParameter(b.Name(), MakeStringSection(resolvedName));
+			} else {
+				_resources.SetParameter(b.Name(), MakeStringSection(unresolvedName));
+			}
+		}
+
         for (const auto& s:src._samplers) {
             auto i = std::find_if(_samplers.begin(), _samplers.end(), [n=s.first](const auto& q) { return q.first == n; });
             if (i != _samplers.end()) {
@@ -449,9 +458,10 @@ namespace RenderCore { namespace Assets
             } else
                 _samplers.emplace_back(s);
         }
-		_patchCollection.MergeIn(src._patchCollection);
+		_patchCollection.MergeInWithFilenameResolve(src._patchCollection, searchRules);
 	}
 
+#if 0
 	void ResolveMaterialFilename(
         ::Assets::ResChar resolvedFile[], unsigned resolvedFileCount,
         const ::Assets::DirectorySearchRules& searchRules, StringSection<char> baseMatName)
@@ -485,6 +495,7 @@ namespace RenderCore { namespace Assets
 
         return result;
     }
+#endif
 
     void RawMaterial::BindSampler(const std::string& name, const SamplerDesc& sampler)
     {
@@ -570,20 +581,21 @@ namespace RenderCore { namespace Assets
         _validationCallback = depVal;
     }
 
-	static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "material") || XlEqStringI(extension, "hlsl"); }
+    static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "material"); }
 
-	void RawMaterial::ConstructToPromise(
-		std::promise<std::shared_ptr<RawMaterial>>&& promise,
-		StringSection<> initializer)
-	{
-		// If we're loading from a .material file, then just go head and use the
+    template<typename ObjectType>
+        void CompilableMaterialAssetMixin<ObjectType>::ConstructToPromise(
+            std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
+            StringSection<::Assets::ResChar> initializer)
+    {
+        // If we're loading from a .material file, then just go head and use the
 		// default asset construction
 		// Otherwise, we need to invoke a compile and load of a ConfigFileContainer
 		if (IsMaterialFile(MakeFileNameSplitter(initializer).Extension())) {
             ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
 			    [init=initializer.AsString(), promise=std::move(promise)]() mutable {
                     TRY {
-                        promise.set_value(::Assets::AutoConstructAsset<std::shared_ptr<RawMaterial>>(init));
+                        promise.set_value(::Assets::AutoConstructAsset<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>(init));
                     } CATCH (...) {
                         promise.set_exception(std::current_exception());
                     } CATCH_END
@@ -599,7 +611,7 @@ namespace RenderCore { namespace Assets
                     std::string containerInitializerString = containerInitializer.AsString();
                     auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
                     ::Assets::DefaultCompilerConstructionSynchronously(
-                        containerFuture->AdoptPromise(), 
+                        containerFuture->AdoptPromise(),
                         s_MaterialCompileProcessType,
                         containerInitializer);
 
@@ -608,7 +620,7 @@ namespace RenderCore { namespace Assets
                         std::move(promise),
                         [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
                             auto fmttr = containerActual->GetFormatter(MakeStringSection(section));
-                            return std::make_shared<RawMaterial>(
+                            return std::make_shared<CompilableMaterialAssetMixin<RawMaterial>>(
                                 fmttr, 
                                 ::Assets::DefaultDirectorySearchRules(containerInitializerString),
                                 containerActual->GetDependencyValidation());
@@ -619,157 +631,54 @@ namespace RenderCore { namespace Assets
             });
 	}
 
-    ResolvedMaterial::ResolvedMaterial() {}
-    ResolvedMaterial::~ResolvedMaterial() {}
-    
-    static void MergeIn(ResolvedMaterial& dest, const RawMaterial& source);
-
-    void ResolvedMaterial::ConstructToPromise(
-        std::promise<ResolvedMaterial>&& promisedMaterial,
-        StringSection<> initializer)
+    template<typename ObjectType>
+        void CompilableMaterialAssetMixin<ObjectType>::ConstructToPromise(
+            std::promise<CompilableMaterialAssetMixin<ObjectType>>&& promise,
+            StringSection<::Assets::ResChar> initializer)
     {
-        // We have to load an entire tree of RawMaterials and their inherited items.
-        // We'll do this all with one future in such a way that we create a linear
-        // list of all of the RawMaterials in the order that they need to be merged in
-        // We do this in a kind of breadth first way, were we queue up all of the futures
-        // for a given level together
-        class PendingRawMaterialTree
-        {
-        public:
-            unsigned _nextId = 1;
-            struct SubFutureIndexer
-            {
-                unsigned _parentId;
-                unsigned _siblingIdx;
-            };
-            struct LoadedSubMaterialsIndexer
-            {
-                unsigned _itemId;
-                unsigned _parentId;
-                unsigned _siblingIdx;
-            };
-            std::vector<std::pair<SubFutureIndexer, ::Assets::PtrToMarkerPtr<RawMaterial>>> _subFutures;
-            std::vector<std::pair<LoadedSubMaterialsIndexer, std::shared_ptr<RawMaterial>>> _loadedSubMaterials;
-            std::vector<::Assets::DependencyValidation> _depVals;
-        };
-        auto pendingTree = std::make_shared<PendingRawMaterialTree>();
-
-        auto i = initializer.begin();
-        unsigned siblingIdx = 0;
-        while (i != initializer.end()) {
-            while (i != initializer.end() && *i == ';') ++i;
-            auto i2 = i;
-            while (i2 != initializer.end() && *i2 != ';') ++i2;
-            if (i2==i) break;
-
-            pendingTree->_subFutures.emplace_back(PendingRawMaterialTree::SubFutureIndexer{0,siblingIdx++}, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(MakeStringSection(i, i2)));
-            i = i2;
-        }
-        assert(!pendingTree->_subFutures.empty());
-
-        ::Assets::PollToPromise(
-            std::move(promisedMaterial),
-            [pendingTree]() {
-                for (;;) {
-                    std::vector<std::pair<PendingRawMaterialTree::SubFutureIndexer, std::shared_ptr<RawMaterial>>> subMaterials;
-                    std::vector<::Assets::DependencyValidation> subDepVals;
-                    for (const auto& f:pendingTree->_subFutures) {
-                        ::Assets::Blob queriedLog;
-                        ::Assets::DependencyValidation queriedDepVal;
-                        std::shared_ptr<RawMaterial> subMat;
-                        auto state = f.second->CheckStatusBkgrnd(subMat, queriedDepVal, queriedLog);
-                        if (state == ::Assets::AssetState::Pending)
-                            return ::Assets::PollStatus::Continue;
-
-                        // "invalid" is actually ok here. we include the dep val as normal, but ignore
-                        // the RawMaterial
-
-                        subDepVals.push_back(queriedDepVal);
-                        if (state == ::Assets::AssetState::Ready)
-                            subMaterials.emplace_back(f.first, std::move(subMat));
-                    }
-                    pendingTree->_subFutures.clear();
-                    pendingTree->_depVals.insert(pendingTree->_depVals.end(), subDepVals.begin(), subDepVals.end());
-
-                    // merge these RawMats into _loadedSubMaterials in the right places
-                    // also queue the next level of loads as we go
-                    // We want each subMaterial to go into _loadedSubMaterials in the same order as 
-                    // in subMaterials, but immediately before their parent
-                    for (const auto&m:subMaterials) {
-                        unsigned newParentId = pendingTree->_nextId++;
-                        if (m.first._parentId == 0) {
-                            // ie, this is a root
-                            pendingTree->_loadedSubMaterials.emplace_back(PendingRawMaterialTree::LoadedSubMaterialsIndexer{newParentId, m.first._parentId, m.first._siblingIdx}, m.second);
-                        } else {
-                            // Insert just before the parent, after any siblings added this turn
-                            // This will give us the right ordering because we ensure that we complete all items in pendingTree->_subFutures (and therefor all siblings)
-                            // before we process any here
-                            auto parentI = std::find_if(
-                                pendingTree->_loadedSubMaterials.begin(), pendingTree->_loadedSubMaterials.end(),
-                                [s=m.first._parentId](const auto& c) { return c.first._itemId == s;});
-                            assert(parentI!=pendingTree->_loadedSubMaterials.end());
-                            pendingTree->_loadedSubMaterials.insert(parentI, {PendingRawMaterialTree::LoadedSubMaterialsIndexer{newParentId, m.first._parentId, m.first._siblingIdx}, m.second});
-                        }
-
-                        unsigned siblingIdx = 0;
-                        for (const auto&i:m.second->ResolveInherited(m.second->GetDirectorySearchRules()))
-                            pendingTree->_subFutures.emplace_back(PendingRawMaterialTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::MakeAssetMarker<std::shared_ptr<RawMaterial>>(i));
-                    }
-
-                    // if we still have sub-futures, need to roll around again
-                    // we'll do this immediately, just incase everything is already loaded
-                    if (pendingTree->_subFutures.empty()) break;
-                }
-                // survived the gauntlet -- everything is ready to dispatch now
-                return ::Assets::PollStatus::Finish;
-            },
-            [pendingTree]() {
-                // All of the RawMaterials in the tree are loaded; and we can just merge them together
-                // into a final resolved material
-                #if defined(_DEBUG)
-                    if (!pendingTree->_loadedSubMaterials.empty())
-                        for (auto i=pendingTree->_loadedSubMaterials.begin(); (i+1)!=pendingTree->_loadedSubMaterials.end(); ++i)
-                            assert(i->first._parentId != (i+1)->first._parentId || i->first._siblingIdx < (i+1)->first._siblingIdx);        // double check ordering is as expected
-                #endif
-                ResolvedMaterial finalMaterial;
-                for (const auto& m:pendingTree->_loadedSubMaterials)
-                    MergeIn(finalMaterial, *m.second);
-
-                VLA(::Assets::DependencyValidationMarker, depVals, pendingTree->_depVals.size());
-                for (unsigned c=0; c<pendingTree->_depVals.size(); c++) depVals[c] = pendingTree->_depVals[c];
-                finalMaterial._depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals, &depVals[pendingTree->_depVals.size()]));
-                return finalMaterial;
-            });
-    }
-
-    void MergeIn(ResolvedMaterial& dest, const RawMaterial& source)
-    {
-        dest._selectors.MergeIn(source._selectors);
-        dest._stateSet = Merge(dest._stateSet, source._stateSet);
-        dest._uniforms.MergeIn(source._uniforms);
-
-		// Resolve all of the directory names here, as we write into the Techniques::Material
-		for (const auto&b:source._resources) {
-			auto unresolvedName = b.ValueAsString();
-			if (!unresolvedName.empty()) {
-				char resolvedName[MaxPath];
-				source.GetDirectorySearchRules().ResolveFile(resolvedName, unresolvedName);
-				dest._resources.SetParameter(b.Name(), MakeStringSection(resolvedName));
-			} else {
-				dest._resources.SetParameter(b.Name(), MakeStringSection(unresolvedName));
-			}
+        // If we're loading from a .material file, then just go head and use the
+		// default asset construction
+		// Otherwise, we need to invoke a compile and load of a ConfigFileContainer
+		if (IsMaterialFile(MakeFileNameSplitter(initializer).Extension())) {
+            ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+			    [init=initializer.AsString(), promise=std::move(promise)]() mutable {
+                    TRY {
+                        promise.set_value(::Assets::AutoConstructAsset<CompilableMaterialAssetMixin<ObjectType>>(init));
+                    } CATCH (...) {
+                        promise.set_exception(std::current_exception());
+                    } CATCH_END
+                });
+			return;
 		}
 
-        for (const auto& s:source._samplers) {
-            auto i = std::find_if(dest._samplers.begin(), dest._samplers.end(), [n=s.first](const auto& q) { return q.first == n; });
-            if (i != dest._samplers.end()) {
-                i->second = s.second;
-            } else
-                dest._samplers.emplace_back(s);
-        }
+        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), init=initializer.AsString()]() mutable {
+                TRY {
+                    auto splitName = MakeFileNameSplitter(init);
+                    auto containerInitializer = splitName.AllExceptParameters();
+                    std::string containerInitializerString = containerInitializer.AsString();
+                    auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
+                    ::Assets::DefaultCompilerConstructionSynchronously(
+                        containerFuture->AdoptPromise(),
+                        s_MaterialCompileProcessType,
+                        containerInitializer);
 
-		dest._patchCollection.MergeIn(source._patchCollection);
-    }
+                    std::string section = splitName.Parameters().AsString();
+                    ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
+                        std::move(promise),
+                        [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
+                            auto fmttr = containerActual->GetFormatter(MakeStringSection(section));
+                            return CompilableMaterialAssetMixin<RawMaterial>(
+                                fmttr, 
+                                ::Assets::DefaultDirectorySearchRules(containerInitializerString),
+                                containerActual->GetDependencyValidation());
+                        });
+                } CATCH (...) {
+                    promise.set_exception(std::current_exception());
+                } CATCH_END
+            });
+	}
 
+    template class CompilableMaterialAssetMixin<RawMaterial>;
 }}
 

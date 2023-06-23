@@ -463,7 +463,7 @@ namespace UnitTests
 				ut-data/minimal_perpixel.graph::Minimal_PerPixel
 			)--";
 			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
-			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
+			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 			auto patchCollectionMarker = testApparatus._pipelineLayoutDelegate->CompileShaderPatchCollection(&patchCollection);
 			patchCollectionMarker->StallWhilePending();
 			auto compiledPatchCollection = patchCollectionMarker->Actualize();
@@ -519,7 +519,7 @@ namespace UnitTests
 							ut-data/spherical_generators.hlsl::MainSphericalToNormal
 					)--";
 					Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragmentsNoDeform) };
-					patchCollectionNoDeform = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
+					patchCollectionNoDeform = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
 				}
 
 				{
@@ -534,7 +534,7 @@ namespace UnitTests
 						ut-data/spherical.graph::DeformPositionImplementation
 					)--";
 					Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragmentsWithDeform) };
-					patchCollectionWithDeform = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
+					patchCollectionWithDeform = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
 				}
 
 				// The final pipeline we want will be determined by two main things:
@@ -617,7 +617,7 @@ namespace UnitTests
 						ut-data/spherical_generators.hlsl::MainSphericalToNormal
 				)--";
 				Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragments) };
-				auto patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
+				auto patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
 				
 				auto techniqueDelegate = std::make_shared<UnitTestTechniqueDelegate>();
 				auto cfg = pipelinePool->CreateSequencerConfig("cfg", techniqueDelegate, ParameterBox{}, fbHelper.GetDesc(), 0);

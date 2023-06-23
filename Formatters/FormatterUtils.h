@@ -7,6 +7,7 @@
 #include "TextFormatter.h"
 #include "../Utility/ImpliedTyping.h"
 #include "../Utility/StreamUtils.h"		// for StreamIndent
+#include "../Utility/StringFormat.h"
 
 namespace Utility { namespace ImpliedTyping { class TypeDesc; } }
 

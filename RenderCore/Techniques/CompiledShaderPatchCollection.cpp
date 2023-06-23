@@ -36,8 +36,6 @@ namespace RenderCore { namespace Techniques
 	{
 		_guid = src.GetHash();
 		_depVal = ::Assets::GetDepValSys().Make();		// _depVal must be unique, because we call RegistryDependency on it in BuildFromInstantiatedShader
-		if (src.GetDependencyValidation())
-			_depVal.RegisterDependency(src.GetDependencyValidation());
 		if (materialDescSetLayout.GetDependencyValidation())
 			_depVal.RegisterDependency(materialDescSetLayout.GetDependencyValidation());
 
@@ -62,19 +60,15 @@ namespace RenderCore { namespace Techniques
 				_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*i->second, *_interface._descriptorSet);
 				_depVal.RegisterDependency(actualLayoutFile->GetDependencyValidation());
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
-				::Assets::DependencyValidationMarker depVals[] { additionalDepVal, src.GetDependencyValidation() };
-				auto newDepVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
-				Throw(::Assets::Exceptions::ConstructionError(e, newDepVal));
+				Throw(::Assets::Exceptions::ConstructionError(e, additionalDepVal));
 			} CATCH(const std::exception& e) {
-				::Assets::DependencyValidationMarker depVals[] { additionalDepVal, src.GetDependencyValidation() };
-				auto newDepVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
-				Throw(::Assets::Exceptions::ConstructionError(e, newDepVal));
+				Throw(::Assets::Exceptions::ConstructionError(e, additionalDepVal));
 			} CATCH_END
 		}
 
 		// With the given shader patch collection, build the source code and the 
 		// patching functions associated
-		TRY {
+		// TRY {
 			if (!src.GetPatches().empty()) {
 				for (const auto&i:src.GetPatches()) {
 					ShaderSourceParser::InstantiationRequest finalInstRequest[] = { i.second };
@@ -86,11 +80,11 @@ namespace RenderCore { namespace Techniques
 					BuildFromInstantiatedShader(inst);
 				}
 			}
-		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
-			Throw(::Assets::Exceptions::ConstructionError(e, src.GetDependencyValidation()));
-		} CATCH(const std::exception& e) {
-			Throw(::Assets::Exceptions::ConstructionError(e, src.GetDependencyValidation()));
-		} CATCH_END
+		// } CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+		// 	Throw(::Assets::Exceptions::ConstructionError(e, patchCollectionDepVal));
+		// } CATCH(const std::exception& e) {
+		// 	Throw(::Assets::Exceptions::ConstructionError(e, patchCollectionDepVal));
+		// } CATCH_END
 	}
 
 	CompiledShaderPatchCollection::CompiledShaderPatchCollection(

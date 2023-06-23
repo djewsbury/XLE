@@ -7,6 +7,7 @@
 #include "DivergentAsset.h"
 
 #include "../../Assets/AssetServices.h"
+#include "../../Assets/AssetMixins.h"
 #include "../../Utility/Threading/Mutex.h"
 
 namespace ToolsRig
@@ -142,6 +143,7 @@ namespace ToolsRig
 #include "../../Assets/AssetSetManager.h"
 #include "../../Assets/AssetHeap.h"
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/AssetMixins.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/StringFormat.h"
 
@@ -182,8 +184,8 @@ namespace ToolsRig
 		return std::make_shared<DivergentAsset<AssetType>>(originalAsset);
 	}
 
-	template std::shared_ptr<DivergentAsset<RenderCore::Assets::RawMaterial>> CreateDivergentAsset(StringSection<char>);
-	template std::shared_ptr<DivergentAsset<RenderCore::Assets::RawMaterial>> DefaultConstructNewDivergentAsset();
+	template std::shared_ptr<DivergentAsset<::Assets::FormatterAssetMixin<RenderCore::Assets::RawMaterial>>> CreateDivergentAsset(StringSection<char>);
+	template std::shared_ptr<DivergentAsset<::Assets::FormatterAssetMixin<RenderCore::Assets::RawMaterial>>> DefaultConstructNewDivergentAsset();
 
 }
 

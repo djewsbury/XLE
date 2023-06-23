@@ -30,6 +30,7 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/IArtifact.h"
+#include "../../Assets/AssetMixins.h"
 #include "../../ConsoleRig/Console.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Math/Transformations.h"

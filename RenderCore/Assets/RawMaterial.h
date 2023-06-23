@@ -6,8 +6,7 @@
 
 #include "ShaderPatchCollection.h"
 #include "../StateDesc.h"
-#include "../../Assets/AssetsCore.h"
-#include "../../Assets/AssetUtils.h"
+#include "../../Assets/AssetMixins.h"
 #include "../../Utility/ParameterBox.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
@@ -137,7 +136,7 @@ namespace RenderCore { namespace Assets
 	RenderStateSet Merge(RenderStateSet underride, RenderStateSet override);
 
     /// <summary>Pre-resolved material settings</summary>
-    /// Materials are a hierachical set of properties. Each RawMaterial
+    /// Materials are a hierarchical set of properties. Each RawMaterial
     /// object can inherit from sub RawMaterials -- and it can either
     /// inherit or override the properties in those sub RawMaterials.
     ///
@@ -168,39 +167,42 @@ namespace RenderCore { namespace Assets
         void BindSampler(const std::string&, const SamplerDesc&);
         void AddInherited(const std::string&);
 
-		void						MergeIn(const RawMaterial& src);
-		std::vector<std::string>	ResolveInherited(const ::Assets::DirectorySearchRules& searchRules) const;
-
-		const ::Assets::DependencyValidation&	GetDependencyValidation() const { return _depVal; }
-		const ::Assets::DirectorySearchRules&	GetDirectorySearchRules() const { return _searchRules; }
+		void MergeInWithFilenameResolve(const RawMaterial&, const ::Assets::DirectorySearchRules&);
+		IteratorRange<const std::string*> GetInherited() const { return _inherit; }
 
         void SerializeMethod(Formatters::TextOutputFormatter& formatter) const;
         
         RawMaterial();
-        RawMaterial(
-            Formatters::TextInputFormatter<utf8>& formatter, 
-            const ::Assets::DirectorySearchRules&,
-			const ::Assets::DependencyValidation& depVal);
+        RawMaterial(Formatters::TextInputFormatter<utf8>& formatter);
         ~RawMaterial();
-
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<RawMaterial>>&&,
-			StringSection<::Assets::ResChar> initializer);
-
-    private:
-        ::Assets::DependencyValidation _depVal;
-		::Assets::DirectorySearchRules _searchRules;
     };
+
+    template<typename ObjectType>
+		class CompilableMaterialAssetMixin : public ::Assets::FormatterAssetMixin<ObjectType>
+	{
+	public:
+        using ::Assets::FormatterAssetMixin<ObjectType>::FormatterAssetMixin;
+
+        static void ConstructToPromise(
+            std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
+            StringSection<::Assets::ResChar> initializer);
+
+        static void ConstructToPromise(
+            std::promise<CompilableMaterialAssetMixin<ObjectType>>&& promise,
+            StringSection<::Assets::ResChar> initializer);
+    };
+
+    using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial, CompilableMaterialAssetMixin<RawMaterial>>;
 
 	class RawMatConfigurations
     {
     public:
-        std::vector<std::basic_string<utf8>> _configurations;
+        std::vector<std::string> _configurations;
 
 		RawMatConfigurations(
 			const ::Assets::Blob& locator,
 			const ::Assets::DependencyValidation& depVal,
-			StringSection<::Assets::ResChar> requestParameters);
+			StringSection<> requestParameters);
         RawMatConfigurations() = default;
 
         static const auto CompileProcessType = ConstHash64Legacy<'RawM', 'at'>::Value;
@@ -209,33 +211,6 @@ namespace RenderCore { namespace Assets
     protected:
         ::Assets::DependencyValidation _validationCallback;
     };
-
-    class ResolvedMaterial
-    {
-    public:
-        ParameterBox	_resources;
-        ParameterBox	_selectors;
-        ParameterBox	_uniforms;
-        RenderStateSet	_stateSet;
-        std::vector<std::pair<std::string, SamplerDesc>> _samplers;
-        
-		ShaderPatchCollection _patchCollection;
-
-		const ::Assets::DependencyValidation&	GetDependencyValidation() const { return _depVal; }
-
-        ResolvedMaterial();
-        ~ResolvedMaterial();
-
-        static void ConstructToPromise(
-			std::promise<ResolvedMaterial>&&,
-			StringSection<> initializer);
-    private:
-        ::Assets::DependencyValidation _depVal;
-    };
-
-    void ResolveMaterialFilename(
-        ::Assets::ResChar resolvedFile[], unsigned resolvedFileCount,
-        const ::Assets::DirectorySearchRules& searchRules, StringSection<char> baseMatName);
 
     template<typename Value> void RawMaterial::BindResource(StringSection<> name, const Value& value) { _resources.SetParameter(name, value); }
     template<typename Value> void RawMaterial::SetSelector(StringSection<> name, const Value& value) { _selectors.SetParameter(name, value); }

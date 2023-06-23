@@ -17,6 +17,7 @@
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/ICompileOperation.h"
+#include "../../Assets/AssetMixins.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/TextFormatter.h"

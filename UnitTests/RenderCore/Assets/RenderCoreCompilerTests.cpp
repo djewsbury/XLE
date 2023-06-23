@@ -214,11 +214,11 @@ namespace UnitTests
 			REQUIRE(cfgs._configurations[0] == "Material0");
 			REQUIRE(cfgs._configurations[1] == "Material1");
 
-			auto material0 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::RawMaterial>("fake-model:Material0");
+			auto material0 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::ResolvedMaterial>("fake-model:Material0");
 			REQUIRE(material0->_uniforms.GetParameter<float>("Brightness") == 50_a);
 			REQUIRE(Equivalent(material0->_uniforms.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
 
-			auto material1 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::RawMaterial>("fake-model:Material1");
+			auto material1 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::ResolvedMaterial>("fake-model:Material1");
 			REQUIRE(material1->_uniforms.GetParameter<float>("Brightness") == 33_a);
 			REQUIRE(Equivalent(material1->_uniforms.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
 		}

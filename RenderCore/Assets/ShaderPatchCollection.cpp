@@ -17,19 +17,47 @@ namespace RenderCore { namespace Assets
 {
 	static const uint64_t s_rebuildHash = ~0ull;
 
-	void ShaderPatchCollection::MergeIn(const ShaderPatchCollection& src)
+	static std::string ResolveArchiveName(StringSection<> src, const ::Assets::DirectorySearchRules& searchRules)
 	{
-		for (const auto&p:src._patches) {
-			if (p.first.empty()) {
-				_patches.push_back(p);	// empty name -- can't override
+		auto splitName = MakeFileNameSplitter(src);
+		if (splitName.DriveAndPath().IsEmpty()) {
+			char resolvedFile[MaxPath];
+			searchRules.ResolveFile(resolvedFile, splitName.FileAndExtension());
+			if (resolvedFile[0]) {
+				std::string result = resolvedFile;
+				result.insert(result.end(), splitName.ParametersWithDivider().begin(), splitName.ParametersWithDivider().end());
+				return result;
+			} else {
+				return src.AsString();
+			}
+		} else {
+			return src.AsString();
+		}
+	}
+
+	static void ResolveFilenames(ShaderSourceParser::InstantiationRequest& inst, const ::Assets::DirectorySearchRules& searchRules)
+	{
+		inst._archiveName = ResolveArchiveName(inst._archiveName, searchRules);
+		inst._implementsArchiveName = ResolveArchiveName(inst._implementsArchiveName, searchRules);
+		for (auto& i:inst._parameterBindings)
+			ResolveFilenames(*i.second, searchRules);
+	}
+
+	void ShaderPatchCollection::MergeInWithFilenameResolve(const ShaderPatchCollection& src, const ::Assets::DirectorySearchRules& searchRules)
+	{
+		for (const auto&preresolve:src._patches) {
+			auto p = preresolve.second;
+			ResolveFilenames(p, searchRules);
+			if (preresolve.first.empty()) {
+				_patches.emplace_back(preresolve.first, std::move(p));	// empty name -- can't override
 			} else {
 				auto i = std::find_if(
 					_patches.begin(), _patches.end(),
-					[&p](const std::pair<std::string, ShaderSourceParser::InstantiationRequest>& q) { return q.first == p.first; });
+					[&preresolve](const std::pair<std::string, ShaderSourceParser::InstantiationRequest>& q) { return q.first == preresolve.first; });
 				if (i == _patches.end()) {
-					_patches.push_back(p);
+					_patches.emplace_back(preresolve.first, std::move(p));
 				} else {
-					i->second = p.second;
+					i->second = std::move(p);
 				}
 			}
 		}
@@ -39,8 +67,6 @@ namespace RenderCore { namespace Assets
 			_preconfiguration = src._preconfiguration;
 
 		SortAndCalculateHash();
-		::Assets::DependencyValidationMarker depVals[] { _depVal, src._depVal };
-		_depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
 	}
 
 	void ShaderPatchCollection::AddPatch(const std::string& name, const ShaderSourceParser::InstantiationRequest& instRequest)
@@ -156,30 +182,11 @@ namespace RenderCore { namespace Assets
 		return str;
 	}
 
-	static std::string ResolveArchiveName(StringSection<> src, const ::Assets::DirectorySearchRules& searchRules)
-	{
-		auto splitName = MakeFileNameSplitter(src);
-		if (splitName.DriveAndPath().IsEmpty()) {
-			char resolvedFile[MaxPath];
-			searchRules.ResolveFile(resolvedFile, splitName.FileAndExtension());
-			if (resolvedFile[0]) {
-				std::string result = resolvedFile;
-				result.insert(result.end(), splitName.ParametersWithDivider().begin(), splitName.ParametersWithDivider().end());
-				return result;
-			} else {
-				return src.AsString();
-			}
-		} else {
-			return src.AsString();
-		}
-	}
-
-	static ShaderSourceParser::InstantiationRequest DeserializeInstantiationRequest(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
+	static ShaderSourceParser::InstantiationRequest DeserializeInstantiationRequest(Formatters::TextInputFormatter<utf8>& formatter)
 	{
 		ShaderSourceParser::InstantiationRequest result;
 
-		auto archiveNameInput = RequireStringValue(formatter);		// Expecting only a single sequenced value in each fragment, which is the entry point name
-		result._archiveName = ResolveArchiveName(archiveNameInput, searchRules);
+		result._archiveName = RequireStringValue(formatter);		// Expecting only a single sequenced value in each fragment, which is the entry point name
 		assert(!result._archiveName.empty());
 
 		StringSection<> bindingName;
@@ -187,13 +194,13 @@ namespace RenderCore { namespace Assets
 			if (XlEqString(bindingName, "Implements")) {
 				if (!result._implementsArchiveName.empty())
 					Throw(Formatters::FormatException("Multiple \"Implements\" specifications found", formatter.GetLocation()));
-				result._implementsArchiveName = ResolveArchiveName(RequireStringValue(formatter), searchRules);
+				result._implementsArchiveName = RequireStringValue(formatter);
 			} else {
 				RequireBeginElement(formatter);
 				result._parameterBindings.emplace(
 					std::make_pair(
 						bindingName.AsString(),
-						std::make_unique<ShaderSourceParser::InstantiationRequest>(DeserializeInstantiationRequest(formatter, searchRules))));
+						std::make_unique<ShaderSourceParser::InstantiationRequest>(DeserializeInstantiationRequest(formatter))));
 				RequireEndElement(formatter);
 			}
 		}
@@ -204,8 +211,7 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	ShaderPatchCollection::ShaderPatchCollection(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
-	: _depVal(depVal)
+	ShaderPatchCollection::ShaderPatchCollection(Formatters::TextInputFormatter<utf8>& formatter)
 	{
 		for (;;) {
 			auto next = formatter.PeekNext();
@@ -224,11 +230,11 @@ namespace RenderCore { namespace Assets
 					Throw(Formatters::FormatException(StringMeld<256>() << "Unexpected attribute (" << name << ") in ShaderPatchCollection", formatter.GetLocation()));
 
 				RequireBeginElement(formatter);
-				_patches.emplace_back(std::make_pair(name.AsString(), DeserializeInstantiationRequest(formatter, searchRules)));
+				_patches.emplace_back(std::make_pair(name.AsString(), DeserializeInstantiationRequest(formatter)));
 				RequireEndElement(formatter);
 			} else if (next == Formatters::FormatterBlob::BeginElement) {
 				RequireBeginElement(formatter);
-				_patches.emplace_back(std::make_pair(std::string{}, DeserializeInstantiationRequest(formatter, searchRules)));
+				_patches.emplace_back(std::make_pair(std::string{}, DeserializeInstantiationRequest(formatter)));
 				RequireEndElement(formatter);
 			} else
 				break;
@@ -240,11 +246,11 @@ namespace RenderCore { namespace Assets
 		SortAndCalculateHash();
 	}
 
-	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(Formatters::TextInputFormatter<utf8>& formatter)
 	{
 		std::vector<ShaderPatchCollection> result;
 		while (formatter.TryBeginElement()) {
-			result.emplace_back(ShaderPatchCollection(formatter, searchRules, depVal));
+			result.emplace_back(ShaderPatchCollection(formatter));
 			RequireEndElement(formatter);
 		}
 		if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)

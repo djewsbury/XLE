@@ -5,8 +5,6 @@
 #pragma once
 
 #include "../../ShaderParser/ShaderInstantiation.h"
-#include "../../Assets/AssetsCore.h"
-#include "../../Assets/AssetUtils.h"
 #include "../../Utility/IteratorUtils.h"
 #include <utility>
 #include <iosfwd>
@@ -29,9 +27,8 @@ namespace RenderCore { namespace Assets
 		void SetDescriptorSetFileName(const std::string&);
 		void SetPreconfigurationFileName(const std::string&);
 
-		void MergeIn(const ShaderPatchCollection& dest);
+		void MergeInWithFilenameResolve(const ShaderPatchCollection& dest, const ::Assets::DirectorySearchRules&);
 
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const;
 
 		friend bool operator<(const ShaderPatchCollection& lhs, const ShaderPatchCollection& rhs);
@@ -42,7 +39,7 @@ namespace RenderCore { namespace Assets
 		friend void SerializationOperator(Formatters::TextOutputFormatter& formatter, const ShaderPatchCollection& patchCollection);
 
 		ShaderPatchCollection();
-		ShaderPatchCollection(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal);
+		ShaderPatchCollection(Formatters::TextInputFormatter<utf8>& formatter);
 		ShaderPatchCollection(IteratorRange<const std::pair<std::string, ShaderSourceParser::InstantiationRequest>*> patches);
 		ShaderPatchCollection(std::vector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>>&& patches);
 		~ShaderPatchCollection();
@@ -51,12 +48,11 @@ namespace RenderCore { namespace Assets
 		std::vector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>> _patches;
 		std::string _descriptorSet, _preconfiguration;
 		uint64_t _hash = ~0ull;
-		::Assets::DependencyValidation _depVal;
 
 		void SortAndCalculateHash();
 	};
 	
-	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal);
+	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(Formatters::TextInputFormatter<utf8>& formatter);
 	void SerializeShaderPatchCollectionSet(Formatters::TextOutputFormatter& formatter, IteratorRange<const ShaderPatchCollection*> patchCollections);
 }}
 

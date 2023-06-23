@@ -18,6 +18,8 @@
 #include "../../../Assets/AssetTraits.h"
 #include "../../../Assets/AssetSetManager.h"
 #include "../../../Assets/Assets.h"
+#include "../../../Assets/AssetMixins.h"
+#include "../../../Assets/ConfigFileContainer.h"
 #include "../../../ConsoleRig/Console.h"
 #include "../../../OSServices/Log.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
@@ -178,7 +180,7 @@ namespace UnitTests
 
 		using namespace RenderCore::Assets::GeoProc;
 
-		auto marker = ::Assets::ActualizeAssetPtr<ResolvedAssetMixin<ModelScaffoldConfiguration>>("ut-data/one.model");
+		auto marker = ::Assets::ActualizeAssetPtr<::Assets::ResolvedAssetMixin<ModelScaffoldConfiguration>>("ut-data/one.model");
 		(void)marker;
 		
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);

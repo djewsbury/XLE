@@ -24,6 +24,8 @@
 #include "../ConsoleRig/ResourceBox.h"       // for FindCachedBox
 #include "../Assets/Marker.h"
 #include "../Assets/Assets.h"
+#include "../Assets/AssetMixins.h"
+#include "../Assets/ConfigFileContainer.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
@@ -925,18 +927,15 @@ namespace RenderOverlays { namespace DebuggingDisplay
         ::Assets::DependencyValidation _depVal;
 
         DebugDisplayResources(
-            const RenderCore::Assets::ResolvedMaterial& horizTweakerBarMaterial,
-            const RenderCore::Assets::ResolvedMaterial& tagShaderMaterial,
-            const RenderCore::Assets::ResolvedMaterial& gridBackgroundMaterial)
+            const RenderCore::Assets::RawMaterial& horizTweakerBarMaterial,
+            const RenderCore::Assets::RawMaterial& tagShaderMaterial,
+            const RenderCore::Assets::RawMaterial& gridBackgroundMaterial,
+            ::Assets::DependencyValidation&& depVal)
+        : _depVal(std::move(depVal))
         {
             _horizTweakerBarMaterial = BuildImmediateDrawableMaterial(horizTweakerBarMaterial);
             _tagShaderMaterial = BuildImmediateDrawableMaterial(tagShaderMaterial);
             _gridBackgroundMaterial = BuildImmediateDrawableMaterial(gridBackgroundMaterial);
-
-            _depVal = ::Assets::GetDepValSys().Make();
-            _depVal.RegisterDependency(horizTweakerBarMaterial.GetDependencyValidation());
-            _depVal.RegisterDependency(tagShaderMaterial.GetDependencyValidation());
-            _depVal.RegisterDependency(gridBackgroundMaterial.GetDependencyValidation());
         }
 
         static void ConstructToPromise(std::promise<std::shared_ptr<DebugDisplayResources>>&& promise)
@@ -944,12 +943,21 @@ namespace RenderOverlays { namespace DebuggingDisplay
             auto horizTweakerBarMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
             auto tagShaderMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
             auto gridBackgroundMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
-            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial).ThenConstructToPromise(std::move(promise));
+            ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial).ThenConstructToPromise(
+                std::move(promise),
+                [](const auto& horizTweakerBarMaterial, const auto& tagShaderMaterial, const auto& gridBackgroundMaterial) {
+                    ::Assets::DependencyValidationMarker depVals[] {
+                        horizTweakerBarMaterial.GetDependencyValidation(),
+                        tagShaderMaterial.GetDependencyValidation(),
+                        gridBackgroundMaterial.GetDependencyValidation(),
+                    };
+                    return std::make_shared<DebugDisplayResources>(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, ::Assets::GetDepValSys().MakeOrReuse(depVals));
+                });
         }
 
         std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
         RenderCore::Techniques::ImmediateDrawableMaterial BuildImmediateDrawableMaterial(
-            const RenderCore::Assets::ResolvedMaterial& rawMat)
+            const RenderCore::Assets::RawMaterial& rawMat)
         {
             RenderCore::Techniques::ImmediateDrawableMaterial result;
             result._stateSet = rawMat._stateSet;
