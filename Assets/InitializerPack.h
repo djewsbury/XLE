@@ -6,26 +6,45 @@
 
 #include "../Core/Prefix.h"
 #include "../Utility/MemoryUtils.h"
-#include "../Utility/UTFUtils.h"
 #include "../Utility/StringFormat.h"
 #include <string>
 #include <sstream>
 #include <any>
 #include <type_traits>
 
-inline auto MakeStoreableInAny(const char* type) { return std::string(type); }
-inline auto MakeStoreableInAny(const utf16* type) { return std::u16string(type); }
-inline auto MakeStoreableInAny(const utf32* type) { return std::u32string(type); }
-
-template<int Count> inline auto MakeStoreableInAny(char (&type)[Count]) { return std::string(type); }
-template<int Count> inline auto MakeStoreableInAny(utf16 (&type)[Count]) { return std::u16string(type); }
-template<int Count> inline auto MakeStoreableInAny(utf32 (&type)[Count]) { return std::u32string(type); }
-
 // don't allow raw pointers to be stored in an std::any InitializerPack directly, since there's
 // no explicit lifetime management... It also resolves ambiguity with the char pointer overrides
 // above
-template<typename Type, typename std::enable_if_t<!std::is_pointer_v<Type>>* =nullptr>
-	inline auto MakeStoreableInAny(const Type& type) { return type; }
+template<typename Type>
+	inline auto MakeStoreableInAny(const Type& type)
+{
+	static_assert(!std::is_pointer_v<std::decay_t<Type>>, "Avoid using raw pointer types with MakeStoreableInAny, since there is no lifetime management");
+	return type;
+}
+
+inline auto MakeStoreableInAny(const char* type) { return std::string(type); }
+inline auto MakeStoreableInAny(const char16_t* type) { return std::u16string(type); }
+inline auto MakeStoreableInAny(const char32_t* type) { return std::u32string(type); }
+#if __cplusplus >= 202002L
+	inline auto MakeStoreableInAny(const char8_t* type) { return std::basic_string<char8_t>(type); }
+#endif
+inline auto MakeStoreableInAny(const wchar_t* type) { return std::wstring(type); }
+
+inline auto MakeStoreableInAny(char* type) { return std::string(type); }
+inline auto MakeStoreableInAny(char16_t* type) { return std::u16string(type); }
+inline auto MakeStoreableInAny(char32_t* type) { return std::u32string(type); }
+#if __cplusplus >= 202002L
+	inline auto MakeStoreableInAny(char8_t* type) { return std::basic_string<char8_t>(type); }
+#endif
+inline auto MakeStoreableInAny(wchar_t* type) { return std::wstring(type); }
+
+template<int Count> inline auto MakeStoreableInAny(char (&type)[Count]) { return std::string(type); }
+template<int Count> inline auto MakeStoreableInAny(char16_t (&type)[Count]) { return std::u16string(type); }
+template<int Count> inline auto MakeStoreableInAny(char32_t (&type)[Count]) { return std::u32string(type); }
+#if __cplusplus >= 202002L
+	template<int Count>  inline auto MakeStoreableInAny(char8_t (&type)[Count]) { return std::basic_string<char8_t>(type); }
+#endif
+template<int Count> inline auto MakeStoreableInAny(wchar_t (&type)[Count]) { return std::wstring(type); }
 
 template<typename CharType>
 	inline auto MakeStoreableInAny(StringSection<CharType> type) { return type.AsString(); }
@@ -103,10 +122,12 @@ namespace Assets
 			DOES_SUBST_MEMBER(HasGetGUID, std::declval<const T&>().GetGUID());
 			DOES_SUBST_MEMBER(HasCalculateHash, std::declval<const T&>().CalculateHash(uint64_t(0)));
 
-			DOES_SUBST_MEMBER(Dereferenceable, *std::declval<const T&>());
+			DOES_SUBST_MEMBER(IsDereferenceable, *std::declval<const T&>());
 			DOES_SUBST_MEMBER(HasBeginAndEnd, std::declval<const T&>().begin() != std::declval<const T&>().end());
+			DOES_SUBST_MEMBER(IsStreamable, std::declval<std::ostream&>() << std::declval<const T&>());
 
-			static constexpr bool HasSimpleHashing = HasGetHash || HasGetGUID || HasCalculateHash || std::is_integral_v<Type> || std::is_enum_v<Type> || std::is_same_v<Type, nullptr_t>;
+			static constexpr bool IsNonIntegralHashable = HasHash64Override || HasGetHash || HasGetGUID || HasCalculateHash || IsDereferenceable || HasBeginAndEnd;
+			static constexpr bool IsHashable = IsNonIntegralHashable || std::is_integral_v<Type> || std::is_enum_v<Type> || std::is_same_v<nullptr_t, Type>;
 		};
 
 		#undef DOES_SUBST_PATTERN
@@ -115,13 +136,11 @@ namespace Assets
 			uint64_t HashParam_Chain(const T& p, uint64_t seed)
 		{
 			using Traits = AssetHashTraits<std::decay_t<T>>;
-			static_assert(
-				Traits::HasHash64Override || Traits::HasGetHash || Traits::HasGetGUID || Traits::HasCalculateHash || Traits::Dereferenceable || Traits::HasBeginAndEnd || std::is_integral_v<T> || std::is_enum_v<T>,
-				"Parameter used in asset constructor does not have a valid method to extract a hash");
+			static_assert(Traits::IsHashable, "Parameter used in InitializerPack does not have a valid method to extract a hash");
 
 			if constexpr (std::is_same_v<nullptr_t, std::decay_t<T>>) {		return seed+1;
 			} else if constexpr (Traits::HasHash64Override) {				return Hash64(p, seed);
-			} else if constexpr (Traits::Dereferenceable) {					return p ? HashParam_Chain(*p, seed) : (seed+1);
+			} else if constexpr (Traits::IsDereferenceable) {				return p ? HashParam_Chain(*p, seed) : (seed+1);
 			} else if constexpr (Traits::HasGetHash) {						return HashCombine(p.GetHash(), seed);
 			} else if constexpr (Traits::HasGetGUID) {						return HashCombine(p.GetGUID(), seed);
 			} else if constexpr (Traits::HasCalculateHash) {				return p.CalculateHash(seed);
@@ -145,13 +164,11 @@ namespace Assets
 			uint64_t HashParam_Single(const T& p)
 		{
 			using Traits = AssetHashTraits<std::decay_t<T>>;
-			static_assert(
-				Traits::HasHash64Override || Traits::HasGetHash || Traits::HasGetGUID || Traits::HasCalculateHash || Traits::Dereferenceable || Traits::HasBeginAndEnd || std::is_integral_v<T> || std::is_enum_v<T>,
-				"Parameter used in asset constructor does not have a valid method to extract a hash");
+			static_assert(Traits::IsHashable, "Parameter used in InitializerPack does not have a valid method to extract a hash");
 
 			if constexpr (std::is_same_v<nullptr_t, std::decay_t<T>>) {		return DefaultSeed64;
 			} else if constexpr (Traits::HasHash64Override) {				return Hash64(p);
-			} else if constexpr (Traits::Dereferenceable) {					return p ? HashParam_Single(*p) : DefaultSeed64;
+			} else if constexpr (Traits::IsDereferenceable) {				return p ? HashParam_Single(*p) : DefaultSeed64;
 			} else if constexpr (Traits::HasGetHash) {						return p.GetHash();
 			} else if constexpr (Traits::HasGetGUID) {						return p.GetGUID();
 			} else if constexpr (Traits::HasCalculateHash) {				return p.CalculateHash(DefaultSeed64);
@@ -184,41 +201,77 @@ namespace Assets
 
 		inline uint64_t BuildParamHash() { return 0; }
 
-		T1(Type) static auto IsStreamable(int) -> decltype(std::declval<std::ostream&>() << std::declval<const Type&>(), std::true_type{});
-		T1(Type) static auto IsStreamable(...) -> std::false_type;
-
-		T1(Type) static auto IsHashable(int) -> decltype(HashParam_Single(std::declval<const Type&>()), std::true_type{});
-		T1(Type) static auto IsHashable(...) -> std::false_type;
-
 		template<typename Type>
-			static decltype(std::declval<std::ostream&>() << std::declval<const Type&>())
-				StreamWithHashFallback(std::ostream& str, const Type& value, bool allowFilesystemCharacters)
+			constexpr bool IsStringPointerType()
 		{
-			if (allowFilesystemCharacters) {
-				return str << value; 
+			using Traits = AssetHashTraits<std::decay_t<Type>>;
+			if constexpr (Traits::IsDereferenceable) {
+				return std::is_same_v<char, decltype(*std::declval<Type>())> || std::is_same_v<char16_t, decltype(*std::declval<Type>())> || std::is_same_v<char32_t, decltype(*std::declval<Type>())>
+					#if __cplusplus >= 202002L
+						|| std::is_same_v<char8_t, decltype(*std::declval<Type>())> 
+					#endif
+					|| std::is_same_v<uint32_t, decltype(*std::declval<Type>())> || std::is_same_v<wchar_t, decltype(*std::declval<Type>())>;
 			} else {
-				// Unfortunately we can't filter the text passed through a stream
-				// easily without using some temporary buffer. Boost seems to have some
-				// classes to do this, but that seems like it's unlikely to reach the 
-				// standard library
-				StringMeld<256> temp;
-				temp.AsOStream() << value;
-				for (auto& chr:temp.AsIteratorRange())
-					if (chr == '/' || chr == '\\') chr = '-';
-				return str << temp.AsStringSection();
+				return false;
 			}
-			}
-
-		template<typename Type>
-			std::enable_if_t<!decltype(IsStreamable<Type>(0))::value && decltype(IsHashable<Type>(0))::value, std::ostream>& StreamWithHashFallback(std::ostream& str, const Type& value, bool allowFilesystemCharacters)
-		{
-			return str << HashParam_Single(value);
 		}
 
 		template<typename Type>
-			std::enable_if_t<!decltype(IsStreamable<Type>(0))::value && !decltype(IsHashable<Type>(0))::value, std::ostream>&  StreamWithHashFallback(std::ostream& str, const std::shared_ptr<Type>& value, bool allowFilesystemCharacters)
+			constexpr bool IsHashablePointerType()
 		{
-			return str;
+			using Traits = AssetHashTraits<std::decay_t<Type>>;
+			if constexpr (Traits::IsDereferenceable) {
+				return AssetHashTraits<std::decay_t<decltype(*std::declval<Type>())>>::IsNonIntegralHashable;
+			} else {
+				return false;
+			}
+		}
+
+		template<typename Type>
+			constexpr bool IsStreamablePointerType()
+		{
+			using Traits = AssetHashTraits<std::decay_t<Type>>;
+			if constexpr (Traits::IsDereferenceable) {
+				return AssetHashTraits<std::decay_t<decltype(*std::declval<Type>())>>::IsStreamable;
+			} else {
+				return false;
+			}
+		}
+
+		template<typename Type>
+			std::ostream& StreamWithHashFallback(std::ostream& str, const Type& value, bool allowFilesystemCharacters)
+		{
+			// We need some special handling for string pointer types here.
+			// 	For an input that is dereferenceable, we can either stream the value directly, or dereference first and then stream it
+			// 	"const char*" style strings must be streamed directly
+			// 	but most other pointers (and smart pointers) should be dereferenced first, and then streamed (in order to catch specializations for the object that is being pointed to)
+			// We can't handle this with just plain overriding, we have to explicitly check for cases where dereferencing and taking the hash is preferable
+			using Traits = AssetHashTraits<std::decay_t<Type>>;
+			constexpr auto hashablePointerType = IsHashablePointerType<Type>();
+			static_assert(hashablePointerType || Traits::IsStreamable || Traits::IsHashable, "Parameter used in InitializerPack does not have a valid method to convert to a string");
+			static_assert(!Traits::IsDereferenceable || hashablePointerType || IsStringPointerType<Type>() || IsStreamablePointerType<Type>(), "Parameter used in InitializerPack looks like a pointer to a type that is not hashable and not streamable");
+
+			if constexpr (hashablePointerType) {
+				return StreamWithHashFallback(str, *value, allowFilesystemCharacters);
+			} else if constexpr (Traits::IsStreamable) {
+				if (allowFilesystemCharacters) {
+					return str << value;
+				} else {
+					// Unfortunately we can't filter the text passed through a stream
+					// easily without using some temporary buffer. Boost seems to have some
+					// classes to do this, but that seems like it's unlikely to reach the 
+					// standard library
+					StringMeld<256> temp;
+					temp.AsOStream() << value;
+					for (auto& chr:temp.AsIteratorRange())
+						if (chr == '/' || chr == '\\') chr = '-';
+					return str << temp.AsStringSection();
+				}
+			} else if constexpr (Traits::IsHashable) {
+				return str << std::hex << HashParam_Single(value) << std::dec;
+			} else {
+				UNREACHABLE();
+			}
 		}
 
 		template <typename Object>
@@ -289,6 +342,11 @@ namespace Assets
 			{
 				return std::any_cast<const Type&>(_variantPack[idx]);
 			}
+
+		const std::type_info& GetInitializerType(unsigned idx) const
+		{
+			return _variantPack[idx].type();
+		}
 
 		std::size_t GetCount() const { return _variantPack.size(); }
 		bool IsEmpty() const { return _variantPack.empty(); }
