@@ -453,31 +453,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return (((bucketIdx >> 16) + controllerIdx*bucketsPerController)<<16) | (bucketIdx & 0xffff);
 	}
 
-    static void RemapIndexBuffer(
-        IteratorRange<const void*> outputIndices, IteratorRange<const void*> inputIndices,
-        IteratorRange<const uint32_t*> reordering, Format indexFormat,
-        const char nodeName[])
-    {
-        if (indexFormat == Format::R32_UINT) {
-            std::transform(
-                (const uint32_t*)inputIndices.begin(), (const uint32_t*)inputIndices.end(),
-                (uint32_t*)outputIndices.begin(),
-                [reordering](uint32_t inputIndex) { return reordering[inputIndex]; });
-        } else if (indexFormat == Format::R16_UINT) {
-            std::transform(
-                (const uint16_t*)inputIndices.begin(), (const uint16_t*)inputIndices.end(),
-                (uint16_t*)outputIndices.begin(),
-                [reordering](uint16_t inputIndex) -> uint16_t { auto result = reordering[inputIndex]; assert(result <= 0xffff); return (uint16_t)result; });
-        } else if (indexFormat == Format::R8_UINT) {
-            std::transform(
-                (const uint8_t*)inputIndices.begin(), (const uint8_t*)inputIndices.end(),
-                (uint8_t*)outputIndices.begin(),
-                [reordering](uint8_t inputIndex) -> uint8_t { auto result = reordering[inputIndex]; assert(result <= 0xff); return (uint8_t)result; });
-        } else {
-            Throw(::Exceptions::BasicLabel("Unrecognised index format when instantiating skin controller in node (%s).", nodeName));
-        }
-    }
-
     NascentBoundSkinnedGeometry BindController(
         NascentRawGeometry&& sourceGeo,
         IteratorRange<const UnboundSkinControllerAndJointMatrices*> controllers,
@@ -673,8 +648,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				MakeIteratorRange(vertexOrdering));
 
 				//      We have to remap the index buffer, also.
-            RemapIndexBuffer(newIndexBuffer, sourceGeo._indices, vertexOrdering, sourceGeo._indexFormat, nodeName);
-            RemapIndexBuffer(newAdjacencyIndexBuffer, sourceGeo._adjacencyIndices, vertexOrdering, sourceGeo._indexFormat, nodeName);
+            RemapIndexBuffer(newIndexBuffer, sourceGeo._indices, vertexOrdering, sourceGeo._indexFormat);
+            RemapIndexBuffer(newAdjacencyIndexBuffer, sourceGeo._adjacencyIndices, vertexOrdering, sourceGeo._indexFormat);
 		}
 
             //      Build the final vertex weights buffer (our weights are currently stored

@@ -75,7 +75,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         class Stream
         {
         public:
-            const std::vector<unsigned>& GetVertexMap() const   { return _vertexMap; }
+            IteratorRange<const unsigned*> GetVertexMap() const { return _vertexMap; }
             const std::string& GetSemanticName() const          { return _semanticName; }
             const unsigned GetSemanticIndex() const             { return _semanticIndex; }
 			const std::shared_ptr<IVertexSourceData>& GetSourceData() const { return _sourceData; }
@@ -176,7 +176,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         RemoveDuplicates(
             std::vector<unsigned>& outputMapping,
             const IVertexSourceData& sourceStream,
-            IteratorRange<const unsigned*> originalMapping,
             float threshold);
 
     std::vector<unsigned> FindDuplicateChains(
@@ -187,8 +186,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     std::shared_ptr<IVertexSourceData>
         RemoveBitwiseIdenticals(
             std::vector<unsigned>& outputMapping,
-            const IVertexSourceData& sourceStream,
-            IteratorRange<const unsigned*> originalMapping = {});
+            const IVertexSourceData& sourceStream);
 
     // Similar to RemoveBitwiseIdenticals, however this time don't modify
     // the underlying vertex buffer. We will just produce a mapping with duplicate

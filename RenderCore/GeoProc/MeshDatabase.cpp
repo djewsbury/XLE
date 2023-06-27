@@ -459,7 +459,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             dst, dstFormat, dstStride, dstSize,
             sourceData.GetData().begin(), sourceData.GetFormat(), stride, sourceData.GetData().size(),
             (unsigned)_unifiedVertexCount, 
-            MakeIteratorRange(stream.GetVertexMap()), sourceData.GetProcessingFlags());
+            stream.GetVertexMap(), sourceData.GetProcessingFlags());
     }
 
     std::vector<uint8_t>  MeshDatabase::BuildNativeVertexBuffer(const NativeVBLayout& outputLayout) const
@@ -829,6 +829,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         auto stride = sourceStream.GetStride();
         auto fmtBrkdn = BreakdownFormat(sourceStream.GetFormat());
 
+        std::vector<bool> alreadyProcessedIdentical;
         const float tsq = threshold*threshold;
         for (auto c=quantizedSet.cbegin(); c!=quantizedSet.cend(); ) {
             auto c2 = c+1;
@@ -836,7 +837,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
             // Every vertex in the range [c..c2) has equal quantized coordinates
             // We can now use a brute-force test to find if they are truly "close"
-			std::vector<bool> alreadyProcessedIdentical(c2-c, false);
+            alreadyProcessedIdentical.clear();
+			alreadyProcessedIdentical.resize(c2-c, false);
             float vert0[4], vert1[4];
             for (auto ct0=c; ct0<c2; ++ct0) {
 				if (alreadyProcessedIdentical[ct0-c]) continue;
@@ -921,12 +923,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         RemoveDuplicates(
             std::vector<unsigned>& outputMapping,
             const IVertexSourceData& sourceStream,
-            IteratorRange<const unsigned*> originalMapping,
             float threshold)
     {
-        std::vector<unsigned> oldOrderingToNewOrdering;
         auto duplicateChains = FindDuplicateChains(
-            oldOrderingToNewOrdering, sourceStream, threshold);
+            outputMapping, sourceStream, threshold);
 
             // We want to convert our pairs into chains of interacting vertices
             // Each chain will get merged into a single vertex.
@@ -958,21 +958,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 const auto* sourceVertex = PtrAdd(sourceStream.GetData().begin(), (*start) * sourceStream.GetStride());
                 finalVB.insert(finalVB.end(), (const uint8*)sourceVertex, (const uint8*)PtrAdd(sourceVertex, vertexSize));
             }
-        }
-
-            // Build the new mapping -- we need to use oldOrderingToNewOrdering,
-            // which represents how the vertex ordering has changed.
-        outputMapping.clear();
-        if (!originalMapping.empty()) {
-            outputMapping.reserve(originalMapping.size());
-            std::transform(
-                originalMapping.begin(), originalMapping.end(),
-                std::back_inserter(outputMapping),
-                [&oldOrderingToNewOrdering](const unsigned i) { return oldOrderingToNewOrdering[i]; });
-        } else {
-            outputMapping.insert(
-                outputMapping.end(),
-                oldOrderingToNewOrdering.cbegin(), oldOrderingToNewOrdering.cend());
         }
 
             // finally, return the source data adapter
@@ -1022,7 +1007,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::sort(reversedCloseVertices.begin(), reversedCloseVertices.end(), CompareFirst2{});
 
         oldOrderingToNewOrdering.clear();
-        oldOrderingToNewOrdering.insert(oldOrderingToNewOrdering.end(), sourceStream.GetCount(), ~0u);
+        oldOrderingToNewOrdering.resize(sourceStream.GetCount(), ~0u);
         size_t finalVBCount = 0;
 
         std::vector<unsigned> chainBuffer;
@@ -1073,10 +1058,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     std::shared_ptr<IVertexSourceData>
         RemoveBitwiseIdenticals(
             std::vector<unsigned>& outputMapping,
-            const IVertexSourceData& sourceStream,
-            IteratorRange<const unsigned*> originalMapping)
+            const IVertexSourceData& sourceStream)
     {
-        std::vector<unsigned> oldOrderingToNewOrdering(sourceStream.GetCount(), ~0u);
+        outputMapping.clear();
+        outputMapping.resize(sourceStream.GetCount(), ~0u);
 
         const auto vertexSize = BitsPerPixel(sourceStream.GetFormat()) / 8;
         std::vector<uint8> finalVB;
@@ -1097,32 +1082,19 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             while (q2 != quantizedSet0.end() && q2->first == q->first) ++q2;
 
             for (auto c=q; c!=q2; ++c) {
-                if (oldOrderingToNewOrdering[c->second] != ~0u) continue;
+                if (outputMapping[c->second] != ~0u) continue;
 
                 auto vFirst = PtrAdd(srcStreamStart, c->second*vertexSize);
                 for (auto c2=c+1; c2!=q2; c2++)
                     if (std::memcmp(vFirst, PtrAdd(srcStreamStart, c2->second*vertexSize), vertexSize) == 0)
-                        oldOrderingToNewOrdering[c2->second] = finalVBCount;
+                        outputMapping[c2->second] = finalVBCount;
 
                 finalVB.insert(finalVB.end(), (const uint8*)vFirst, (const uint8*)PtrAdd(vFirst, vertexSize));
-                oldOrderingToNewOrdering[c->second] = finalVBCount;
+                outputMapping[c->second] = finalVBCount;
                 ++finalVBCount;
             }
             
             q = q2;
-        }
-
-        outputMapping.clear();
-        if (!originalMapping.empty()) {
-            outputMapping.reserve(originalMapping.size());
-            std::transform(
-                originalMapping.begin(), originalMapping.end(),
-                std::back_inserter(outputMapping),
-                [&oldOrderingToNewOrdering](const unsigned i) { return oldOrderingToNewOrdering[i]; });
-        } else {
-            outputMapping.insert(
-                outputMapping.end(),
-                oldOrderingToNewOrdering.cbegin(), oldOrderingToNewOrdering.cend());
         }
 
         finalVB.shrink_to_fit();

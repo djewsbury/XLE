@@ -21,7 +21,7 @@ namespace RenderCore { namespace Assets
 
 		struct RawGeoRules
 		{
-			std::optional<bool> _16BitNativeTypes, _rebuildTangents, _rebuildNormals;
+			std::optional<bool> _16BitNativeTypes, _mergeDuplicateVertices, _rebuildTangents, _rebuildNormals;
 			std::vector<uint64_t> _includeAttributes, _excludeAttributes;
 
 			void MergeIn(const RawGeoRules&);

@@ -36,6 +36,7 @@ namespace RenderCore { namespace Assets
 	void ModelCompilationConfiguration::RawGeoRules::MergeIn(const ModelCompilationConfiguration::RawGeoRules& src)
 	{
 		if (src._16BitNativeTypes) _16BitNativeTypes = src._16BitNativeTypes;
+		if (src._mergeDuplicateVertices) _mergeDuplicateVertices = src._mergeDuplicateVertices;
 		if (src._rebuildTangents) _rebuildTangents = src._rebuildTangents;
 		if (src._rebuildNormals) _rebuildNormals = src._rebuildNormals;
 		DifferenceSortedSet(_includeAttributes, src._excludeAttributes);
@@ -100,6 +101,9 @@ namespace RenderCore { namespace Assets
 				switch (keyName) {
 				case "16Bit"_h:
 					rules._16BitNativeTypes = Formatters::RequireCastValue<bool>(fmttr);
+					break;
+				case "MergeDuplicateVertices"_h:
+					rules._mergeDuplicateVertices = Formatters::RequireCastValue<bool>(fmttr);
 					break;
 				case "RebuildTangents"_h:
 					rules._rebuildTangents = Formatters::RequireCastValue<bool>(fmttr);
@@ -214,9 +218,13 @@ namespace RenderCore { namespace Assets
 
 	uint64_t ModelCompilationConfiguration::RawGeoRules::CalculateHash(uint64_t hash) const
 	{
-		if (_16BitNativeTypes) hash = HashCombine(_16BitNativeTypes.value(), hash);
-		if (_rebuildTangents) hash = HashCombine(_rebuildTangents.value(), hash);
-		if (_rebuildNormals) hash = HashCombine(_rebuildNormals.value(), hash);
+		uint64_t flags =
+				(_16BitNativeTypes ? uint64_t(*_16BitNativeTypes) : 2ull) << 0ull
+			| 	(_mergeDuplicateVertices ? uint64_t(*_mergeDuplicateVertices) : 2ull) << 2ull
+			| 	(_rebuildTangents ? uint64_t(*_rebuildTangents) : 2ull) << 4ull
+			| 	(_rebuildNormals ? uint64_t(*_rebuildNormals) : 2ull) << 6ull
+			;
+		hash = HashCombine(flags, hash);
 		hash = Hash64(AsPointer(_includeAttributes.begin()), AsPointer(_includeAttributes.end()), hash);
 		hash = Hash64(AsPointer(_excludeAttributes.begin()), AsPointer(_excludeAttributes.end()), hash);
 		return hash;

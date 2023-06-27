@@ -77,4 +77,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<unsigned>&& src,
         Format ibFormat);
 
+    void RemapIndexBuffer(
+        IteratorRange<const void*> outputIndices, IteratorRange<const void*> inputIndices,
+        IteratorRange<const uint32_t*> reordering, Format indexFormat);
+
 }}}

@@ -132,7 +132,23 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return drawCalls;
 	}
 
-	static void ConfigureAttributes(const NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules)
+	static void RemoveExcludedAttributes(const NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules)
+	{
+		// remove attributes that have been excluded
+		char buffer[32];
+		for (auto a:rules._excludeAttributes) {
+			for (unsigned str=0; str<geoBlock._mesh->GetStreams().size();) {
+				StringMeldInPlace(buffer) << geoBlock._mesh->GetStreams()[str].GetSemanticName() << geoBlock._mesh->GetStreams()[str].GetSemanticIndex();
+				if (Hash64(geoBlock._mesh->GetStreams()[str].GetSemanticName()) == a || Hash64(buffer) == a) {
+					geoBlock._mesh->RemoveStream(str);
+				} else {
+					++str;
+				}
+			}
+		}
+	}
+
+	static void BuildIncludedAttributes(const NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules)
 	{
 		// Generate any attributes that we're required to add
 		unsigned maxSemanticIndex = 0;
@@ -192,23 +208,94 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 					equivalenceThreshold);
 			}
 		}
+	}
 
-		// remove attributes that have been excluded
-		for (auto a:rules._excludeAttributes) {
-			for (unsigned str=0; str<geoBlock._mesh->GetStreams().size();) {
-				StringMeldInPlace(buffer) << geoBlock._mesh->GetStreams()[str].GetSemanticName() << geoBlock._mesh->GetStreams()[str].GetSemanticIndex();
-				if (Hash64(geoBlock._mesh->GetStreams()[str].GetSemanticName()) == a || Hash64(buffer) == a) {
-					geoBlock._mesh->RemoveStream(str);
+	static std::vector<uint32_t> MergeDuplicateVertices(MeshDatabase& mesh)
+	{
+		// Some data paths (particularly getting Collada data from Blender, for example) result in excessive vertex duplication
+		// We must counter this by merging vertices and vertex attributes that are identical (or near identical)
+		// This can also trigger after excluding attributes
+		// Also, we may want to consider converting into the native format before this, because some attributes may be identical
+		// in the native format, even if they aren't in the original format...?
+
+		std::vector<unsigned> newMapping;
+		std::vector<uint32_t> convertedMapping;
+		const float threshold = 1e-5f;
+		
+		for (unsigned streamIndex=0; streamIndex<mesh.GetStreams().size(); ++streamIndex) {
+			auto& stream = mesh.GetStreams()[streamIndex];
+
+			newMapping.clear();
+			newMapping.reserve(stream.GetSourceData()->GetCount());
+			convertedMapping.clear();
+
+			auto srcData = stream.GetSourceData();
+
+			// Remove bitwise identicals, because RemoveDuplicates() scales very poorly when there are a lot of nearby
+			// vertices, so best to filter out large amounts of exactly identical input data
+			auto newData = RemoveBitwiseIdenticals(newMapping, *srcData);
+			if (newData->GetCount() < stream.GetSourceData()->GetCount()) {
+				if (!stream.GetVertexMap().empty()) {
+					convertedMapping.insert(convertedMapping.end(), stream.GetVertexMap().begin(), stream.GetVertexMap().end());
+					for (auto& a:convertedMapping)
+						a = newMapping[a];
 				} else {
-					++str;
+					convertedMapping.insert(convertedMapping.end(), newMapping.begin(), newMapping.end());
+				}
+				srcData = std::move(newData);
+			}
+
+			newMapping.clear();
+			newData = RemoveDuplicates(newMapping, *srcData, threshold);
+			if (newData->GetCount() >= stream.GetSourceData()->GetCount())
+				continue;
+
+			if (convertedMapping.empty())
+				convertedMapping.insert(convertedMapping.end(), stream.GetVertexMap().begin(), stream.GetVertexMap().end());
+			if (!convertedMapping.empty()) {
+				for (auto& a:convertedMapping)
+					a = newMapping[a];
+			} else {
+				convertedMapping.insert(convertedMapping.end(), newMapping.begin(), newMapping.end());
+			}
+			
+			mesh.InsertStream(streamIndex, std::move(newData), std::move(convertedMapping), stream.GetSemanticName().c_str(), stream.GetSemanticIndex());
+			mesh.RemoveStream(streamIndex+1);
+		}
+
+		newMapping.clear();
+		auto simplifiedMesh = RemoveDuplicates(newMapping, mesh);
+		if (simplifiedMesh.GetUnifiedVertexCount() < mesh.GetUnifiedVertexCount()) {
+			mesh = std::move(simplifiedMesh);
+			return newMapping;
+		}
+		return {};
+	}
+
+	static NascentRawGeometry CompleteInstantiation(NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules)
+	{
+		RemoveExcludedAttributes(geoBlock, rules);
+
+		std::vector<uint32_t> mergeMapping;
+		if (rules._mergeDuplicateVertices.value_or(false)) {
+			mergeMapping = MergeDuplicateVertices(*geoBlock._mesh);
+
+			if (!mergeMapping.empty()) {
+				// have to assume a densely packed index buffer here, because otherwise we'd have to deal with draw call overlaps
+				std::vector<uint8_t> finalIndices = geoBlock._indices;
+				RemapIndexBuffer(finalIndices, geoBlock._indices, mergeMapping, geoBlock._indexFormat);
+				geoBlock._indices = std::move(finalIndices);
+
+				if (!geoBlock._meshVertexIndexToSrcIndex.empty()) {
+					for (auto&a:geoBlock._meshVertexIndexToSrcIndex)
+						a = mergeMapping[a];
+				} else {
+					geoBlock._meshVertexIndexToSrcIndex = std::move(mergeMapping);
 				}
 			}
 		}
-	}
 
-	static NascentRawGeometry CompleteInstantiation(const NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules)
-	{
-		ConfigureAttributes(geoBlock, rules);
+		BuildIncludedAttributes(geoBlock, rules);
 
             // If we have normals, tangents & bitangents... then we can remove one of them
             // (it will be implied by the remaining two). We can choose to remove the 
@@ -451,7 +538,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						[&cmd, mode](const auto& p) { return p._srcGuid == cmd.second._geometryBlock && p._cmdStreamMode == mode; });
 					if (i == geoObjects._rawGeos.end()) {
 						auto rules = BuildNativeVBSettings(modelCompilationConfiguration, geoBlock->_rulesLabel);
-						auto rawGeo = CompleteInstantiation(*geoBlock, rules);
+						auto rawGeo = CompleteInstantiation(*const_cast<GeometryBlock*>(geoBlock), rules);
 						geoObjects._rawGeos.push_back({cmd.second._geometryBlock, mode, std::move(rawGeo), geoObjects._nextId++});
 						i = geoObjects._rawGeos.end()-1;
 					}
@@ -463,7 +550,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						[hashedId, mode](const auto& p) { return p._srcGuid == hashedId && p._cmdStreamMode == mode; });
 					if (i == geoObjects._skinnedGeos.end()) {
 						auto rules = BuildNativeVBSettings(modelCompilationConfiguration, geoBlock->_rulesLabel);
-						auto rawGeo = CompleteInstantiation(*geoBlock, rules);
+						auto rawGeo = CompleteInstantiation(*const_cast<GeometryBlock*>(geoBlock), rules);
 
 						std::vector<UnboundSkinControllerAndJointMatrices> controllers;
 						controllers.reserve(cmd.second._skinControllerBlocks.size());

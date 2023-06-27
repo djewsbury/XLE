@@ -419,7 +419,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             // swap the old stream with the new one.
         auto semanticName = stream.GetSemanticName();
         auto semanticIndex = stream.GetSemanticIndex();
-        auto vertexMap = stream.GetVertexMap();
+        auto vertexMap = std::vector<uint32_t>{stream.GetVertexMap().begin(), stream.GetVertexMap().end()};
         mesh.RemoveStream(streamIndex);
         mesh.InsertStream(
             streamIndex, std::move(newStream),
@@ -850,6 +850,30 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			return {};
 		}
 	}
+
+    void RemapIndexBuffer(
+        IteratorRange<const void*> outputIndices, IteratorRange<const void*> inputIndices,
+        IteratorRange<const uint32_t*> reordering, Format indexFormat)
+    {
+        if (indexFormat == Format::R32_UINT) {
+            std::transform(
+                (const uint32_t*)inputIndices.begin(), (const uint32_t*)inputIndices.end(),
+                (uint32_t*)outputIndices.begin(),
+                [reordering](uint32_t inputIndex) { return reordering[inputIndex]; });
+        } else if (indexFormat == Format::R16_UINT) {
+            std::transform(
+                (const uint16_t*)inputIndices.begin(), (const uint16_t*)inputIndices.end(),
+                (uint16_t*)outputIndices.begin(),
+                [reordering](uint16_t inputIndex) -> uint16_t { auto result = reordering[inputIndex]; assert(result <= 0xffff); return (uint16_t)result; });
+        } else if (indexFormat == Format::R8_UINT) {
+            std::transform(
+                (const uint8_t*)inputIndices.begin(), (const uint8_t*)inputIndices.end(),
+                (uint8_t*)outputIndices.begin(),
+                [reordering](uint8_t inputIndex) -> uint8_t { auto result = reordering[inputIndex]; assert(result <= 0xff); return (uint8_t)result; });
+        } else {
+            Throw(std::runtime_error("Unrecognised index format when remapping index buffer"));
+        }
+    }
 
 }}}
 
