@@ -17,11 +17,18 @@ namespace RenderCore { class InputElementDesc; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
-    void GenerateNormalsAndTangents( 
-        RenderCore::Assets::GeoProc::MeshDatabase& mesh, 
-        unsigned normalMapTextureCoordinateSemanticIndex,
-		float equivalenceThreshold,
-        const void* rawIb = nullptr, size_t indexCount = 0, Format ibFormat = Format::Unknown);
+    namespace GenerateTangentFrameFlags
+    {
+        enum { Normals=1<<0, Tangents=1<<1, Bitangents=1<<2 };
+        using BitField = unsigned;
+    }
+
+    void GenerateTangentFrame(
+        MeshDatabase& mesh,
+        unsigned semanticIndex,
+        GenerateTangentFrameFlags::BitField creationFlags,
+        IteratorRange<const unsigned*> flatTriList,            // unified vertex index
+        float equivalenceThreshold);
 
     void Transform(
         RenderCore::Assets::GeoProc::MeshDatabase& mesh, 
@@ -49,9 +56,25 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         IteratorRange<unsigned*> outputTriListWithAdjacency,
         IteratorRange<const unsigned*> inputTriListIndexBuffer);
 
-    std::vector<uint8_t> BuildAdjacencyIndexBuffer(
-        RenderCore::Assets::GeoProc::MeshDatabase& mesh, 
-        const void* rawIb = nullptr, size_t indexCount = 0, Format ibFormat = Format::Unknown,
-        Topology topology = Topology::TriangleList);
+    struct DrawCallForGeoAlgorithm
+    {
+        IteratorRange<const void*> _indices;
+        Format _ibFormat;
+        Topology _topology = Topology::TriangleList;
+    };
+
+    std::vector<unsigned> BuildAdjacencyIndexBufferForUniquePositions(
+        RenderCore::Assets::GeoProc::MeshDatabase& mesh,
+        IteratorRange<const DrawCallForGeoAlgorithm*> drawCalls);
+
+    std::vector<unsigned> BuildAdjacencyIndexBufferForUnifiedIndices(
+        IteratorRange<const DrawCallForGeoAlgorithm*> drawCalls);
+
+    std::vector<unsigned> BuildFlatTriList(
+        IteratorRange<const DrawCallForGeoAlgorithm*> drawCalls);
+
+    std::vector<uint8_t> ConvertIndexBufferFormat(
+        std::vector<unsigned>&& src,
+        Format ibFormat);
 
 }}}

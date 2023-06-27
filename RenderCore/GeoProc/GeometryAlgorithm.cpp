@@ -60,34 +60,30 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return r;
     }
 
-    void GenerateNormalsAndTangents( 
-        MeshDatabase& mesh, 
-        unsigned normalMapTextureCoordinateSemanticIndex,
-		float equivalenceThreshold,
-        const void* rawIb, size_t indexCount, Format ibFormat)
+    static Float2 FirstRepeatCoords(Float2 tc)
+    {
+        tc[0] = std::fmod(tc[0], 1.f);
+        if (tc[0] < 0) tc[0] += 1.0f;
+        tc[1] = std::fmod(tc[1], 1.f);
+        if (tc[1] < 0) tc[1] += 1.0f;
+        return tc;
+    }
+
+    void GenerateTangentFrame(
+        MeshDatabase& mesh,
+        unsigned semanticIndex,
+        GenerateTangentFrameFlags::BitField creationFlags,
+        IteratorRange<const unsigned*> flatTriList,            // unified vertex index
+        float equivalenceThreshold)
 	{
-            // testing -- remove existing tangents & normals
-        // mesh.RemoveStream(mesh.FindElement("NORMAL"));
-        // mesh.RemoveStream(mesh.FindElement("TEXTANGENT"));
-        // mesh.RemoveStream(mesh.FindElement("TEXBITANGENT"));
+        assert(creationFlags);
+        auto tcElement = mesh.FindElement("TEXCOORD", semanticIndex);
+        if (tcElement == ~0u && (creationFlags & (GenerateTangentFrameFlags::Tangents|GenerateTangentFrameFlags::Bitangents)))
+            Throw(std::runtime_error("Cannot generate tangents and/or bitangents because the texture coord element is missing"));
 
-        auto tcElement = mesh.FindElement("TEXCOORD", normalMapTextureCoordinateSemanticIndex);
-
-        bool hasNormals = !!(mesh.HasElement("NORMAL") & 0x1);
-        bool hasTangents = !!(mesh.HasElement("TEXTANGENT") & 0x1);
-        bool hasBitangents = !!(mesh.HasElement("TEXBITANGENT") & 0x1);
-        if ((hasNormals && hasTangents) || (hasTangents && hasBitangents)) return;
-        if (hasNormals && tcElement == ~0u) return;
-
+        auto originalNormalElement = mesh.FindElement("NORMAL");
         auto posElement = mesh.FindElement("POSITION");
 
-		struct Triangle
-		{
-			Float3 normal;
-			Float3 tangent;
-			Float3 bitangent;
-		};
-		
             //
             //      Note that when building normals and tangents, there are some
             //      cases were we might want to split a vertex into two...
@@ -106,28 +102,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<Float4> tangents(mesh.GetUnifiedVertexCount(), Zero<Float4>());
 		std::vector<Float3> bitangents(mesh.GetUnifiedVertexCount(), Zero<Float3>());
 
-        unsigned indexStride = 2;
-        unsigned indexMask = 0xffff;
-        if (ibFormat == Format::R32_UINT) { indexStride = 4; indexMask = 0xffffffff; }
-        auto* ib = (const uint32*)rawIb;
-
-		if (ibFormat == Format::Unknown) {
-			indexCount = mesh.GetUnifiedVertexCount();
-			ib = nullptr;
-		}
-
-		auto triangleCount = indexCount / 3;   // assuming index buffer is triangle-list format
+		auto triangleCount = flatTriList.size() / 3;   // assuming index buffer is triangle-list format
 		for (size_t c=0; c<triangleCount; c++) {
-			unsigned v0, v1, v2;
-			if (ibFormat != Format::Unknown) {
-				v0 = (*ib) & indexMask; ib = PtrAdd(ib, indexStride);
-				v1 = (*ib) & indexMask; ib = PtrAdd(ib, indexStride);
-				v2 = (*ib) & indexMask; ib = PtrAdd(ib, indexStride);
-			} else {
-				v0 = unsigned(c*3+0);
-				v1 = unsigned(c*3+1);
-				v2 = unsigned(c*3+2);
-			}
+			auto v0 = flatTriList[c*3+0], v1 = flatTriList[c*3+1], v2 = flatTriList[c*3+2];
 
 			if (expect_evaluation(v0 != v1 && v1 != v2 && v0 != v2, true)) {
 				auto p0 = mesh.GetUnifiedElement<Float3>(v0, posElement);
@@ -136,8 +113,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 				Float4 plane;
 				if (expect_evaluation(PlaneFit_Checked(&plane, p0, p1, p2), true)) {
-					Triangle tri;
-					tri.normal = Truncate(plane);
+					auto normal = Truncate(plane);
+                    Float3 tangent, bitangent;
 
 					if (tcElement != ~0u) {
 							/*	There is one natural tangent and one natural bitangent for each triangle, on the v=0 and u=0 axes 
@@ -159,11 +136,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						auto st2 = UV2 - UV0;
 						float rr = (st1[0] * st2[1] + st2[0] * st1[1]);
 						if (Equivalent(rr, 0.f, 1e-10f)) { 
-                            tri.tangent = tri.bitangent = Zero<Float3>();
+                            tangent = bitangent = Zero<Float3>();
                         } else {
 							float r = 1.f / rr;
-							Float3 sAxis( (st2[1] * Q1 - st1[1] * Q2) * r );
-							Float3 tAxis( (st1[0] * Q2 - st2[0] * Q1) * r );
+							Float3 sAxis = (st2[1] * Q1 - st1[1] * Q2) * r;
+							Float3 tAxis = (st1[0] * Q2 - st2[0] * Q1) * r;
 
 								// We may need to flip the direction of the s or t axis
 								// check the texture coordinates to find the correct direction
@@ -176,31 +153,31 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						
 							float recipSMag, recipTMag;
 							if (XlRSqrt_Checked(&recipSMag, sMagSq) && XlRSqrt_Checked(&recipTMag, tMagSq)) {
-								tri.tangent = sAxis * recipSMag;
-								tri.bitangent = tAxis * recipTMag;
+								tangent = sAxis * recipSMag;
+								bitangent = tAxis * recipTMag;
 							} else {
-								tri.tangent = tri.bitangent = Zero<Float3>();
+								tangent = bitangent = Zero<Float3>();
 							}
 
-							tri.tangent = sAxis;
-							tri.bitangent = tAxis;
+							tangent = sAxis;
+							bitangent = tAxis;
 						}
 
-						assert( tri.tangent[0] == tri.tangent[0] );
+						assert( tangent[0] == tangent[0] );
 					} else {
-						tri.tangent = Zero<Float3>();
-						tri.bitangent = Zero<Float3>();
+						tangent = Zero<Float3>();
+						bitangent = Zero<Float3>();
 					}
 
 						// We add the influence of this triangle to all vertices
 						// each vertex should get an even balance of influences from
 						// all triangles it is part of.
-					assert(std::isfinite(tri.normal[0]) && !std::isnan(tri.normal[0]) && tri.normal[0] == tri.normal[0]);
-					assert(std::isfinite(tri.normal[1]) && !std::isnan(tri.normal[1]) && tri.normal[1] == tri.normal[1]);
-					assert(std::isfinite(tri.normal[2]) && !std::isnan(tri.normal[2]) && tri.normal[2] == tri.normal[2]);
-					normals[v0] += tri.normal; normals[v1] += tri.normal; normals[v2] += tri.normal;
-					tangents[v0] += Expand(tri.tangent, 0.f); tangents[v1] += Expand(tri.tangent, 0.f); tangents[v2] += Expand(tri.tangent, 0.f);
-					bitangents[v0] += tri.bitangent; bitangents[v1] += tri.bitangent; bitangents[v2] += tri.bitangent;
+					assert(std::isfinite(normal[0]) && !std::isnan(normal[0]) && normal[0] == normal[0]);
+					assert(std::isfinite(normal[1]) && !std::isnan(normal[1]) && normal[1] == normal[1]);
+					assert(std::isfinite(normal[2]) && !std::isnan(normal[2]) && normal[2] == normal[2]);
+					normals[v0] += normal; normals[v1] += normal; normals[v2] += normal;
+					tangents[v0] += Expand(tangent, 0.f); tangents[v1] += Expand(tangent, 0.f); tangents[v2] += Expand(tangent, 0.f);
+					bitangents[v0] += bitangent; bitangents[v1] += bitangent; bitangents[v2] += bitangent;
 				} else {
 						/* this triangle is so small we can't derive any useful information from it */
 					Log(Warning) << "GenerateNormalsAndTangents: Near-degenerate triangle found on vertices (" << v0 << ", " << v1 << ", " << v2 << ")" << std::endl;
@@ -213,7 +190,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             //  Create new streams for the normal & tangent, and write the results to the mesh database
             //  If we already have tangents or normals, don't write the new ones
 
-        if (!hasNormals) {
+        if (creationFlags & GenerateTangentFrameFlags::Normals) {
             for (size_t c=0; c<mesh.GetUnifiedVertexCount(); c++)
                 Normalize_Checked(&normals[c], normals[c]);		// (note -- it's possible for the normal to to Zero<Float3>() if this vertex wasn't used by the index buffer)
         
@@ -234,9 +211,84 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// if there are no texture coordinates, we can only generate normals, not tangents
         // also, we should only generate tangents if we're missing both tangent and bitangents
         // (ie, normal + bitangent + handiness flag is still a valid tangent frame)
-        if (tcElement != ~0u && !hasTangents && !hasBitangents) {
+        if (tcElement != ~0u && (creationFlags & (GenerateTangentFrameFlags::Tangents|GenerateTangentFrameFlags::Bitangents))) {
 
-            unsigned normalsElement = mesh.FindElement("NORMAL");
+            // Find "wrapping point" vertices
+            //      When the texture coordinates wrap around the mesh (for example in cylindrical or spherical mapping), we must consider
+            //      the tangent frame to actually be continuous across the wrapping point.
+            //      We determine these cases by looking for vertices:
+            //          * that have the same position and texcoord mod 1.0 (and normal, if the normal was already present in the input)
+            //          * where both the tangent and the bitangent are pointing in the same rough direction
+            //      The easiest way to find this is just to find chains of vertices with the same position, and just verify the 
+            //      other properties
+
+            const bool handleWrappingPointVertices = true;
+            if (handleWrappingPointVertices) {
+                auto& posStream = mesh.GetStreams()[posElement];
+                if (posStream.GetVertexMap().empty())
+                    Throw(std::runtime_error("Wrapping point tangent frame correction can't be applied because unique vertex positions not calculated"));
+
+                std::vector<std::pair<unsigned, unsigned>> posStreamToUnifiedIndexMap;          // first is the stream index, second is the unified index
+                posStreamToUnifiedIndexMap.reserve(posStream.GetVertexMap().size());
+                unsigned q=0;
+                for (auto i:posStream.GetVertexMap()) posStreamToUnifiedIndexMap.emplace_back(i, q++);
+
+                std::sort(
+                    posStreamToUnifiedIndexMap.begin(), posStreamToUnifiedIndexMap.end(),
+                    [](auto lhs, auto rhs) {
+                        if (lhs.first < rhs.first) return true;
+                        if (lhs.first > rhs.first) return false;
+                        return lhs.second < rhs.second;
+                    });
+
+                std::vector<unsigned> buffer;
+                std::vector<unsigned> buffer2;
+                auto i = posStreamToUnifiedIndexMap.begin();
+                while (i!=posStreamToUnifiedIndexMap.end()) {
+                    auto start = i;
+                    ++i;
+                    while (i!=posStreamToUnifiedIndexMap.end() && i->first == start->first) ++i;
+
+                    if ((i - start) == 1) continue;
+                    buffer.clear();
+                    for (auto q:MakeIteratorRange(start, i))
+                        buffer.push_back(q.second);
+
+                    if (originalNormalElement != ~0u) {
+                        while (!buffer.empty()) {
+                            ////////////////////////////////////////////////////////////
+                            buffer2.clear();
+                            auto root = buffer.back();
+                            buffer2.push_back(root);
+                            buffer.pop_back();
+
+                            auto tc0 = mesh.GetUnifiedElement<Float2>(root, tcElement);
+                            auto n0 = mesh.GetUnifiedElement<Float3>(root, originalNormalElement);
+                            tc0 = FirstRepeatCoords(tc0);
+                            for (auto i=buffer.begin(); i!=buffer.end();) {
+                                auto tc1 = mesh.GetUnifiedElement<Float2>(*i, tcElement);
+                                tc1 = FirstRepeatCoords(tc1);
+                                auto n1 = mesh.GetUnifiedElement<Float3>(*i, originalNormalElement);
+
+                                if (Equivalent(tc0, tc1, equivalenceThreshold) && Equivalent(n0, n1, equivalenceThreshold)
+                                    && Dot(Truncate(tangents[root]), Truncate(tangents[*i])) > 0.5f
+                                    && Dot(Truncate(bitangents[root]), Truncate(bitangents[*i])) > 0.5f) {
+                                    buffer2.push_back(*i);
+                                    i = buffer.erase(i);
+                                } else
+                                    ++i;
+                            }
+
+                            ////////////////////////////////////////////////////////////
+                            // the group of vertices in buffer2 are wrapping vertices, we must combine the influence of all of the tangents & bitangents
+                            Float4 tangent = Zero<Float4>(); Float3 bitangent = Zero<Float3>();
+                            for (auto i:buffer2) { tangent += tangents[i]; bitangent += bitangents[i]; }
+                            for (auto i:buffer2) { tangents[i] = tangent; bitangents[i] = bitangent; }
+                        }
+                    }
+                }
+            }
+
             bool atLeastOneGoodTangent = false;
 
                 //  normals and tangents will have fallen out of orthogonality by the blending above.
@@ -249,10 +301,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 auto t3 = Truncate(tangents[c]);
                 auto handinessValue = 0.f;
 
-                    // if we already had normals in the mesh, we should prefex
+                    // if we already had normals in the mesh, we should prefer
                     // those normals (over the ones we generated here)
                 auto n = normals[c];
-                if (hasNormals) n = mesh.GetUnifiedElement<Float3>(c, normalsElement);
+                if (originalNormalElement != ~0u && (creationFlags & GenerateTangentFrameFlags::Normals) == 0)
+                    n = mesh.GetUnifiedElement<Float3>(c, originalNormalElement);
 
                 if (Normalize_Checked(&t3, t3)) {
                     handinessValue = Dot(Cross(bitangents[c], t3), n) < 0.f ? -1.f : 1.f;
@@ -263,7 +316,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 tangents[c] = Expand(t3, handinessValue);
             }
 
-            if (atLeastOneGoodTangent) {
+            if (atLeastOneGoodTangent && (creationFlags & GenerateTangentFrameFlags::Tangents)) {
                 auto tangentsData = CreateRawDataSource(AsPointer(tangents.begin()), AsPointer(tangents.cend()), Format::R32G32B32A32_FLOAT);
                 if (equivalenceThreshold != 0.0f) {
                     Float4* begin = (Float4*)tangentsData->GetData().begin(), *end = (Float4*)tangentsData->GetData().end();
@@ -278,34 +331,22 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 }
             }
 
-        }
+            if (atLeastOneGoodTangent && (creationFlags & GenerateTangentFrameFlags::Bitangents)) {
+                auto bitangentsData = CreateRawDataSource(AsPointer(bitangents.begin()), AsPointer(bitangents.cend()), Format::R32G32B32A32_FLOAT);
+                if (equivalenceThreshold != 0.0f) {
+                    Float4* begin = (Float4*)bitangentsData->GetData().begin(), *end = (Float4*)bitangentsData->GetData().end();
+                    float quantValue = 1.f/equivalenceThreshold;
+                    for (auto& f:MakeIteratorRange(begin, end))
+                        f = QuantizeUnitVector(f, quantValue);
+                    std::vector<unsigned> unifiedMapping;
+                    bitangentsData = RenderCore::Assets::GeoProc::RemoveBitwiseIdenticals(unifiedMapping, *bitangentsData);
+                    mesh.AddStream(bitangentsData, std::move(unifiedMapping), "TEXBITANGENT", 0);
+                } else {
+                    mesh.AddStream(bitangentsData, std::vector<unsigned>(), "TEXBITANGENT", 0);
+                }
+            }
 
-        // if (!hasBitangents) {
-        // 
-        //     unsigned normalsElement = mesh.FindElement("NORMAL");
-        // 
-        //     for (size_t c=0; c<mesh._unifiedVertexCount; c++) {
-        //         auto t3 = bitangents[c];
-        // 
-        //             // if we already had normals in the mesh, we should prefex
-        //             // those normals (over the ones we generated here)
-        //         auto n = normals[c];
-        //         if (hasNormals) n = mesh.GetUnifiedElement<Float3>(c, normalsElement);
-        // 
-        //         if (Normalize_Checked(&t3, Float3(t3 - n * Dot(n, t3)))) {
-        //         } else {
-        //             t3 = Zero<Float3>();
-        //         }
-        // 
-        //         bitangents[c] = t3;
-        //     }
-        // 
-        //     mesh.AddStream(
-        //         AsPointer(bitangents.begin()), AsPointer(bitangents.cend()), Format::R32G32B32_FLOAT,
-        //         Use16BitFloats ? Format::R16G16B16A16_FLOAT : Format::R32G32B32_FLOAT,
-        //         "TEXBITANGENT", 0);
-        // 
-        // }
+        }
 	}
 
     template<typename Type>
@@ -497,7 +538,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void CopyVertexElements(     
+    void CopyVertexElements(
         IteratorRange<void*> destinationBuffer,            size_t destinationVertexStride,
         IteratorRange<const void*> sourceBuffer,           size_t sourceVertexStride,
         IteratorRange<const Assets::VertexElement*> destinationLayout,
@@ -674,10 +715,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
-	std::vector<uint8_t> BuildAdjacencyIndexBuffer(
+	std::vector<unsigned> BuildAdjacencyIndexBufferForUniquePositions(
 		RenderCore::Assets::GeoProc::MeshDatabase& mesh, 
-		const void* rawIb, size_t indexCount, Format ibFormat,
-		Topology topology)
+		IteratorRange<const DrawCallForGeoAlgorithm*> drawCalls)
 	{
 		// Generate an adjacency index buffer for the given input mesh.
 		// We need to find unique vertex positions; rather than relying on the unified vertices in the mesh database
@@ -694,24 +734,34 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         auto mappingToUniquePositions = MapToBitwiseIdenticals(*stream.GetSourceData(), stream.GetVertexMap(), true);
 
 		std::vector<unsigned> remappedIndexBuffer;
-		remappedIndexBuffer.reserve(indexCount);
-		if (ibFormat == Format::R32_UINT) {
-			for (const auto i:MakeIteratorRange((const unsigned*)rawIb, (const unsigned*)rawIb+indexCount))
-				remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
-		} else if (ibFormat == Format::R16_UINT) {
-			for (const auto i:MakeIteratorRange((const uint16_t*)rawIb, (const uint16_t*)rawIb+indexCount))
-				remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
-		} else if (ibFormat == Format::R8_UINT) {
-			for (const auto i:MakeIteratorRange((const uint8_t*)rawIb, (const uint8_t*)rawIb+indexCount))
-				remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
-		} else
-			Throw(std::runtime_error("Unsupported index format in BuildAdjacencyIndexBuffer"));
+        for (auto d:drawCalls) {
+            if (d._topology != Topology::TriangleList)
+                Throw(std::runtime_error("Geometry processing operations not supported for non-triangle-list geometry"));
+
+            if (d._ibFormat == Format::R32_UINT) {
+                auto indexCount = d._indices.size() / sizeof(unsigned);
+                remappedIndexBuffer.reserve(remappedIndexBuffer.size() + indexCount);
+                for (const auto i:d._indices.Cast<const unsigned*>())
+                    remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
+            } else if (d._ibFormat == Format::R16_UINT) {
+                auto indexCount = d._indices.size() / sizeof(uint16_t);
+                remappedIndexBuffer.reserve(remappedIndexBuffer.size() + indexCount);
+                for (const auto i:d._indices.Cast<const uint16_t*>())
+                    remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
+            } else if (d._ibFormat == Format::R8_UINT) {
+                auto indexCount = d._indices.size() / sizeof(uint8_t);
+                remappedIndexBuffer.reserve(remappedIndexBuffer.size() + indexCount);
+                for (const auto i:d._indices.Cast<const uint8_t*>())
+                    remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
+            } else
+                Throw(std::runtime_error("Unsupported index format in geometry processing operation"));
+        }
 
 		// Now we have an buffer with indices of unique positions, we can build a topological buffer
-		std::vector<uint8_t> adjacencyIndexBuffer;
+		std::vector<unsigned> adjacencyIndexBuffer;
 		adjacencyIndexBuffer.resize(remappedIndexBuffer.size()*2*sizeof(unsigned));
 		TriListToTriListWithAdjacency(
-			MakeIteratorRange((unsigned*)AsPointer(adjacencyIndexBuffer.begin()), (unsigned*)AsPointer(adjacencyIndexBuffer.end())),
+			MakeIteratorRange(adjacencyIndexBuffer),
 			MakeIteratorRange(remappedIndexBuffer));
 
 		// The new index buffer still has indicies to unique positions. We need to convert this to the unified vertex indices, so that
@@ -719,7 +769,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// on... Let's just assume we're only interested in the vertex position and choose randomly
 
 		std::vector<unsigned> demapBuffer;
-		demapBuffer.resize(indexCount, ~0u);		// overestimate
+		demapBuffer.resize(remappedIndexBuffer.size(), ~0u);		// overestimate
 		for (unsigned c=0; c<mappingToUniquePositions.size(); ++c) {
 			auto m = mappingToUniquePositions[c];
 			if (demapBuffer[m] == ~0u) demapBuffer[m] = c;
@@ -730,21 +780,69 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			i = demapBuffer[i];
 		}
 
+        return adjacencyIndexBuffer;
+    }
+
+    std::vector<unsigned> BuildAdjacencyIndexBufferForUnifiedIndices(
+        IteratorRange<const DrawCallForGeoAlgorithm*> drawCalls)
+    {
+		auto flattenedIndexBuffer = BuildFlatTriList(drawCalls);
+
+		// Now we have an buffer with indices of unique positions, we can build a topological buffer
+		std::vector<unsigned> adjacencyIndexBuffer;
+		adjacencyIndexBuffer.resize(flattenedIndexBuffer.size()*2*sizeof(unsigned));
+		TriListToTriListWithAdjacency(
+			MakeIteratorRange(adjacencyIndexBuffer),
+			MakeIteratorRange(flattenedIndexBuffer));
+
+        return adjacencyIndexBuffer;
+    }
+
+    std::vector<unsigned> BuildFlatTriList(IteratorRange<const DrawCallForGeoAlgorithm*> drawCalls)
+    {
+        std::vector<unsigned> flattenedIndexBuffer;
+        for (auto d:drawCalls) {
+            if (d._topology != Topology::TriangleList)
+                Throw(std::runtime_error("Geometry processing operations not supported for non-triangle-list geometry"));
+
+            if (d._ibFormat == Format::R32_UINT) {
+                auto indexCount = d._indices.size() / sizeof(unsigned);
+                flattenedIndexBuffer.reserve(flattenedIndexBuffer.size() + indexCount);
+                for (const auto i:d._indices.Cast<const unsigned*>())
+                    flattenedIndexBuffer.push_back(i);
+            } else if (d._ibFormat == Format::R16_UINT) {
+                auto indexCount = d._indices.size() / sizeof(uint16_t);
+                flattenedIndexBuffer.reserve(flattenedIndexBuffer.size() + indexCount);
+                for (const auto i:d._indices.Cast<const uint16_t*>())
+                    flattenedIndexBuffer.push_back(i);
+            } else if (d._ibFormat == Format::R8_UINT) {
+                auto indexCount = d._indices.size() / sizeof(uint8_t);
+                flattenedIndexBuffer.reserve(flattenedIndexBuffer.size() + indexCount);
+                for (const auto i:d._indices.Cast<const uint8_t*>())
+                    flattenedIndexBuffer.push_back(i);
+            } else
+                Throw(std::runtime_error("Unsupported index format in geometry processing operation"));
+        }
+        return flattenedIndexBuffer;
+    }
+
+    std::vector<uint8_t> ConvertIndexBufferFormat(std::vector<unsigned>&& src, Format ibFormat)
+    {
 		// go back to the original index format; there's no reason to make it wider
 		if (ibFormat == Format::R32_UINT) {
-			return adjacencyIndexBuffer;
+			return {(const uint8_t*)AsPointer(src.begin()), (const uint8_t*)AsPointer(src.end())};
 		} else if (ibFormat == Format::R16_UINT) {
 			std::vector<uint8_t> convertedResult;
-			convertedResult.resize(adjacencyIndexBuffer.size()/2);
+			convertedResult.resize(src.size()*sizeof(uint16_t));
 			std::copy(
-				(const unsigned*)adjacencyIndexBuffer.data(), (const unsigned*)AsPointer(adjacencyIndexBuffer.end()),
+				src.begin(), src.end(),
 				(uint16_t*)convertedResult.data());
 			return convertedResult;
 		} else if (ibFormat == Format::R8_UINT) {
 			std::vector<uint8_t> convertedResult;
-			convertedResult.resize(adjacencyIndexBuffer.size()/4);
+			convertedResult.resize(src.size()*sizeof(uint8_t));
 			std::copy(
-				(const unsigned*)adjacencyIndexBuffer.data(), (const unsigned*)AsPointer(adjacencyIndexBuffer.end()),
+				src.begin(), src.end(),
 				(uint8_t*)convertedResult.data());
 			return convertedResult;
 		} else {
