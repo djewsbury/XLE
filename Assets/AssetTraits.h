@@ -59,13 +59,21 @@ namespace Assets
 		template <typename Type, typename... Params, ENABLE_IF(IsSharedPtr<std::decay_t<Type>>::value)>
 			Type InvokeAssetConstructor(Params&&... params)
 		{
-			return std::make_shared<typename Type::element_type>(std::forward<Params>(params)...);
+			using T = std::tuple<Params...>;
+			if constexpr (std::is_constructible_v<Type, Params...> && std::tuple_size_v<T> == 1 && !std::is_integral_v<std::tuple_element_t<0, T>>) {
+				return Type { std::forward<Params>(params)... };		// constructing a smart ptr from another smart ptr
+			} else
+				return std::make_shared<typename Type::element_type>(std::forward<Params>(params)...);
 		}
 
 		template <typename Type, typename... Params, ENABLE_IF(IsUniquePtr<std::decay_t<Type>>::value)>
 			Type InvokeAssetConstructor(Params&&... params)
 		{
-			return std::make_unique<typename Type::element_type>(std::forward<Params>(params)...);
+			using T = std::tuple<Params...>;
+			if constexpr (std::is_constructible_v<Type, Params...> && std::tuple_size_v<T> == 1 && !std::is_integral_v<std::tuple_element_t<0, T>>) {
+				return Type { std::forward<Params>(params)... };		// constructing a smart ptr from another smart ptr
+			} else
+				return std::make_unique<typename Type::element_type>(std::forward<Params>(params)...);
 		}
 
 		template <typename Type, typename... Params, ENABLE_IF(!IsSharedPtr<std::decay_t<Type>>::value && !IsUniquePtr<std::decay_t<Type>>::value)>
