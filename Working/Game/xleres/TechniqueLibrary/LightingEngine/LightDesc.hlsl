@@ -36,7 +36,7 @@ struct LightDesc
     float3	Position; 		float	CutoffRange;
 	float3	Brightness; 	float	SourceRadiusX;
 	float3	OrientationX; 	float	SourceRadiusY;
-	float3	OrientationY; 	uint 	Shape;
+	float3	OrientationY; 	uint	Shape;
 	float3	OrientationZ; 	uint	StaticDatabaseLightId;
 };
 

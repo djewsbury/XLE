@@ -15,12 +15,6 @@
 namespace Assets
 {
 
-	namespace Internal
-	{
-		void MarkInvalid(StringSection<ResChar> initializer, const char reason[]);
-		void MarkValid(StringSection<ResChar> initializer);
-	}
-
 	template<typename Formatter>
 		Formatter ConfigFileContainer<Formatter>::GetRootFormatter() const
 	{

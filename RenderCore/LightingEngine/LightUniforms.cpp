@@ -38,7 +38,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
                 (shapeCode == 0) ? light._unitLengthPosition : light._position, light._cutoffRange,
                 light._brightness, light._radii[0],
                 ExtractRight(light._orientation), light._radii[1],
-                ExtractForward(light._orientation), shapeCode, 
+                ExtractForward(light._orientation), shapeCode,
                 ExtractUp(light._orientation), 0
             };
     }

@@ -129,8 +129,9 @@ float3 CalculateIllumination(
 		#if !defined(PROBE_PREPARE)
 
 			uint encodedDepthTable = LightDepthTable[linear0To1Depth*TiledLights_DepthGradiations];
-			uint minIdx = encodedDepthTable & 0xff;
-			uint maxIdx = encodedDepthTable >> 16;
+			uint minIdx = encodedDepthTable & 0xffffu;
+			uint maxIdx = encodedDepthTable >> 16u;
+
 
 			uint3 tileCoord = uint3(screenDest.pixelCoords.xy/TiledLights_GridDims, 0);
 
@@ -140,7 +141,7 @@ float3 CalculateIllumination(
 				uint firstPlane=minIdx/32, lastPlane=maxIdx/32; 
 				for (uint planeIdx=firstPlane; planeIdx<=lastPlane; ++planeIdx) {
 					uint bitField = TiledLightBitField.Load(uint4(tileCoord.xy, planeIdx, 0));
-					if (planeIdx == firstPlane )
+					if (planeIdx == firstPlane)
 						bitField &= ~MaskBitsUntil(minIdx%32u);
 					if (planeIdx == lastPlane)
 						bitField &= MaskBitsUntil(maxIdx%32u) | (1u<<(maxIdx%32u));
