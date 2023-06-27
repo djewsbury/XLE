@@ -21,6 +21,7 @@ namespace Assets
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const { return _searchRules; }
+
 	private:
 		::Assets::DirectorySearchRules _searchRules;
 		::Assets::DependencyValidation _depVal;
@@ -41,6 +42,14 @@ namespace Assets
 		static void ConstructToPromise(
 			std::promise<ResolvedAssetMixin<ObjectType, BaseAssetType>>&&,
 			StringSection<> initializer);
+
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ResolvedAssetMixin<ObjectType, BaseAssetType>>>&&,
+			IteratorRange<const ::Assets::PtrToMarkerPtr<BaseAssetType>*> initialBaseAssets);
+
+		static void ConstructToPromise(
+			std::promise<ResolvedAssetMixin<ObjectType, BaseAssetType>>&&,
+			IteratorRange<const ::Assets::PtrToMarkerPtr<BaseAssetType>*> initialBaseAssets);
 	private:
 		::Assets::DependencyValidation _depVal;
 	};
@@ -58,6 +67,46 @@ namespace Assets
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(
 			std::promise<std::shared_ptr<ResolvedAssetMixin<ObjectType, BaseAssetType>>>&& promise,
 			StringSection<> initializer)
+	{
+		std::vector<::Assets::PtrToMarkerPtr<BaseAssetType>> initialFutures;
+		auto i = initializer.begin();
+		while (i != initializer.end()) {
+			while (i != initializer.end() && *i == ';') ++i;
+			auto i2 = i;
+			while (i2 != initializer.end() && *i2 != ';') ++i2;
+			if (i2==i) break;
+
+			initialFutures.emplace_back(::Assets::MakeAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
+			i = i2;
+		}
+		assert(!initialFutures.empty());
+		ConstructToPromise(std::move(promise), initialFutures);
+	}
+
+	template <typename ObjectType, typename BaseAssetType>
+		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(
+			std::promise<ResolvedAssetMixin<ObjectType, BaseAssetType>>&& promise,
+			StringSection<> initializer)
+	{
+		std::vector<::Assets::PtrToMarkerPtr<BaseAssetType>> initialFutures;
+		auto i = initializer.begin();
+		while (i != initializer.end()) {
+			while (i != initializer.end() && *i == ';') ++i;
+			auto i2 = i;
+			while (i2 != initializer.end() && *i2 != ';') ++i2;
+			if (i2==i) break;
+
+			initialFutures.emplace_back(::Assets::MakeAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
+			i = i2;
+		}
+		assert(!initialFutures.empty());
+		ConstructToPromise(std::move(promise), initialFutures);
+	}
+
+	template <typename ObjectType, typename BaseAssetType>
+		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(
+			std::promise<std::shared_ptr<ResolvedAssetMixin<ObjectType, BaseAssetType>>>&& promise,
+			IteratorRange<const ::Assets::PtrToMarkerPtr<BaseAssetType>*> initialBaseAssets)
 	{
 		// We have to load an entire tree of AssetTypes and their inherited items.
 		// We'll do this all with one future in such a way that we create a linear
@@ -85,20 +134,10 @@ namespace Assets
 		};
 		auto pendingTree = std::make_shared<PendingAssetTree>();
 
-		auto i = initializer.begin();
+		pendingTree->_subFutures.reserve(initialBaseAssets.size());
 		unsigned siblingIdx = 0;
-		while (i != initializer.end()) {
-			while (i != initializer.end() && *i == ';') ++i;
-			auto i2 = i;
-			while (i2 != initializer.end() && *i2 != ';') ++i2;
-			if (i2==i) break;
-
-			pendingTree->_subFutures.emplace_back(
-				typename PendingAssetTree::SubFutureIndexer{0, siblingIdx++},
-				::Assets::MakeAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
-			i = i2;
-		}
-		assert(!pendingTree->_subFutures.empty());
+		for (auto initialBaseAsset:initialBaseAssets)
+			pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{0, siblingIdx++}, std::move(initialBaseAsset));
 
 		::Assets::PollToPromise(
 			std::move(promise),
@@ -186,11 +225,11 @@ namespace Assets
 				return finalAsset;
 			});
 	}
-	
+
 	template <typename ObjectType, typename BaseAssetType>
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(
 			std::promise<ResolvedAssetMixin<ObjectType, BaseAssetType>>&& promise,
-			StringSection<> initializer)
+			IteratorRange<const ::Assets::PtrToMarkerPtr<BaseAssetType>*> initialBaseAssets)
 	{
 		// We have to load an entire tree of AssetTypes and their inherited items.
 		// We'll do this all with one future in such a way that we create a linear
@@ -218,20 +257,10 @@ namespace Assets
 		};
 		auto pendingTree = std::make_shared<PendingAssetTree>();
 
-		auto i = initializer.begin();
+		pendingTree->_subFutures.reserve(initialBaseAssets.size());
 		unsigned siblingIdx = 0;
-		while (i != initializer.end()) {
-			while (i != initializer.end() && *i == ';') ++i;
-			auto i2 = i;
-			while (i2 != initializer.end() && *i2 != ';') ++i2;
-			if (i2==i) break;
-
-			pendingTree->_subFutures.emplace_back(
-				typename PendingAssetTree::SubFutureIndexer{0, siblingIdx++},
-				::Assets::MakeAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
-			i = i2;
-		}
-		assert(!pendingTree->_subFutures.empty());
+		for (auto initialBaseAsset:initialBaseAssets)
+			pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{0, siblingIdx++}, std::move(initialBaseAsset));
 
 		::Assets::PollToPromise(
 			std::move(promise),
