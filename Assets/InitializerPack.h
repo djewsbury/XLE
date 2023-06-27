@@ -88,130 +88,88 @@ namespace Assets
 	namespace Internal
 	{
 
-		template<typename T> static auto HasHash64Override_(int) -> decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()), std::true_type{});
-		template<typename...> static auto HasHash64Override_(...) -> std::false_type;
-		template<typename T> constexpr bool HasHash64Override = decltype(HasHash64Override_<T>(0))::value;
+		#define DOES_SUBST_MEMBER(Name, ...)																		\
+			template<typename T> static constexpr auto Name##_(int) -> decltype(__VA_ARGS__, std::true_type{});		\
+			template<typename...> static constexpr auto Name##_(...) -> std::false_type;							\
+			static constexpr bool Name = decltype(Name##_<Type>(0))::value;											\
+			/**/
 
-		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().GetHash(), std::true_type{});
-		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().GetGUID(), std::true_type{});
-		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().CalculateHash(uint64_t(0)), std::true_type{});
-		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().GetHash(), std::true_type{});
-		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().GetGUID(), std::true_type{});
-		template<typename T> static auto HasSimpleHashing_(int) -> decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)), std::true_type{});
-		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_integral<T>::value, std::true_type>::type;
-		template<typename T>  static auto HasSimpleHashing_(int) -> typename std::enable_if<std::is_enum<T>::value && !std::is_integral<T>::value, std::true_type>::type;
-		static inline auto HasSimpleHashing_(nullptr_t) -> std::true_type;
-		template<typename...> static auto HasSimpleHashing_(...) -> std::false_type;
-		template<typename T> constexpr bool HasSimpleHashing = decltype(HasSimpleHashing_<T>(0))::value;
-
-
-		template<typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashCombine(p, seed); }
-
-		template<typename T, typename std::enable_if<std::is_enum<T>::value && !std::is_integral<T>::value>::type* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashCombine((uint32_t)p, seed); }
-
-		template<typename T, decltype(std::declval<const T&>().GetHash())* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashCombine(p.GetHash(), seed); }
-
-		template<typename T, decltype(std::declval<const T&>().GetGUID())* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashCombine(p.GetGUID(), seed); }
-
-		template<typename T, decltype(std::declval<const T&>().CalculateHash(uint64_t(0)))* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p.CalculateHash(seed); }
-
-		template<typename T, decltype(Hash64(std::declval<const T&>(), std::declval<uint64_t>()))* = nullptr, typename std::enable_if_t<!HasSimpleHashing<T>>* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return Hash64(p, seed); }
-
-		template<typename T, decltype(std::declval<const T&>().get().GetHash())* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashCombine(p.get().GetHash(), seed); }
-
-		template<typename T, decltype(std::declval<const T&>().get().GetGUID())* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return HashCombine(p.get().GetGUID(), seed); }
-
-		template<typename T, decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)))* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p.get().CalculateHash(seed); }
-
-		template<typename T, decltype(Hash64(std::declval<const T&>().get(), std::declval<uint64_t>()))* = nullptr, typename std::enable_if_t<!HasSimpleHashing<T>>* = nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return Hash64(p.get(), seed); }
-
-		inline uint64_t HashParam_Chain(nullptr_t, uint64_t seed) { return seed+1; }
-
-		template<
-			typename T, 
-			decltype(std::declval<const T&>().begin() != std::declval<const T&>().end())* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T> && !HasHash64Override<T>>* =nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) 
+		template<typename Type>
+			struct AssetHashTraits
 		{
-			auto i = p.begin(), end=p.end();
-			if (i == end) return seed;
-			auto res = seed;
-			for (;i!=end; ++i)
-				res = HashParam_Chain(*i, res);
-			return res;
+			DOES_SUBST_MEMBER(HasHash64Override, Hash64(std::declval<const T&>(), std::declval<uint64_t>()));
+
+			DOES_SUBST_MEMBER(HasGetHash, std::declval<const T&>().GetHash());
+			DOES_SUBST_MEMBER(HasGetGUID, std::declval<const T&>().GetGUID());
+			DOES_SUBST_MEMBER(HasCalculateHash, std::declval<const T&>().CalculateHash(uint64_t(0)));
+
+			DOES_SUBST_MEMBER(Dereferenceable, *std::declval<const T&>());
+			DOES_SUBST_MEMBER(HasBeginAndEnd, std::declval<const T&>().begin() != std::declval<const T&>().end());
+
+			static constexpr bool HasSimpleHashing = HasGetHash || HasGetGUID || HasCalculateHash || std::is_integral_v<Type> || std::is_enum_v<Type> || std::is_same_v<Type, nullptr_t>;
+		};
+
+		#undef DOES_SUBST_PATTERN
+
+		template<typename T>
+			uint64_t HashParam_Chain(const T& p, uint64_t seed)
+		{
+			using Traits = AssetHashTraits<std::decay_t<T>>;
+			static_assert(
+				Traits::HasHash64Override || Traits::HasGetHash || Traits::HasGetGUID || Traits::HasCalculateHash || Traits::Dereferenceable || Traits::HasBeginAndEnd || std::is_integral_v<T> || std::is_enum_v<T>,
+				"Parameter used in asset constructor does not have a valid method to extract a hash");
+
+			if constexpr (std::is_same_v<nullptr_t, std::decay_t<T>>) {		return seed+1;
+			} else if constexpr (Traits::HasHash64Override) {				return Hash64(p, seed);
+			} else if constexpr (Traits::Dereferenceable) {					return p ? HashParam_Chain(*p, seed) : (seed+1);
+			} else if constexpr (Traits::HasGetHash) {						return HashCombine(p.GetHash(), seed);
+			} else if constexpr (Traits::HasGetGUID) {						return HashCombine(p.GetGUID(), seed);
+			} else if constexpr (Traits::HasCalculateHash) {				return p.CalculateHash(seed);
+			} else if constexpr (Traits::HasBeginAndEnd) {
+				auto i = p.begin(), end=p.end();
+				if (i == end) return seed;
+				auto res = seed;
+				for (;i!=end; ++i)
+					res = HashParam_Chain(*i, res);
+				return res;
+			} else if constexpr (std::is_integral_v<T>) {
+				return HashCombine(p, seed);
+			} else if constexpr (std::is_enum_v<T>) {
+				return HashCombine((uint64_t)p, seed);
+			} else {
+				UNREACHABLE();
+			}
 		}
 
-		template<
-			typename T, 
-			decltype(HashParam_Chain(*std::declval<const T&>(), std::declval<uint64_t>()))* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T> && !HasHash64Override<T>>* =nullptr>
-			uint64_t HashParam_Chain(const T& p, uint64_t seed) { return p ? HashParam_Chain(*p, seed) : seed; }
-
-
-
-		template<typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return IntegerHash64(p); }
-
-		template<typename T, typename std::enable_if<std::is_enum<T>::value && !std::is_integral<T>::value>::type* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return IntegerHash64((uint32_t)p); }
-
-		template<typename T, decltype(std::declval<const T&>().GetHash())* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return p.GetHash(); }
-
-		template<typename T, decltype(std::declval<const T&>().GetGUID())* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return p.GetGUID(); }
-
-		template<typename T, decltype(std::declval<const T&>().CalculateHash(uint64_t(0)))* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return p.CalculateHash(DefaultSeed64); }
-
-		template<typename T, decltype(Hash64(std::declval<const T&>()))* = nullptr, typename std::enable_if_t<!HasSimpleHashing<T>>* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return Hash64(p); }
-
-		template<typename T, decltype(std::declval<const T&>().get().GetHash())* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return p.get().GetHash(); }
-
-		template<typename T, decltype(std::declval<const T&>().get().GetGUID())* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return p.get().GetGUID(); }
-
-		template<typename T, decltype(std::declval<const T&>().get().CalculateHash(uint64_t(0)))* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return p.get().CalculateHash(DefaultSeed64); }
-
-		template<typename T, decltype(Hash64(std::declval<const T&>().get()))* = nullptr, typename std::enable_if_t<!HasSimpleHashing<T>>* = nullptr>
-			uint64_t HashParam_Single(const T& p) { return Hash64(p.get()); }
-
-		inline uint64_t HashParam_Single(nullptr_t) { return 0; }
-		
-		template<
-			typename T, 
-			decltype(std::declval<const T&>().begin() != std::declval<const T&>().end())* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T> && !HasHash64Override<T>>* =nullptr>
+		template<typename T>
 			uint64_t HashParam_Single(const T& p)
 		{
-			auto i = p.begin(), end=p.end();
-			if (i == end) return 0;
-			auto res = HashParam_Single(*i++);
-			for (;i!=end; ++i)
-				res = HashParam_Chain(*i, res);
-			return res;
+			using Traits = AssetHashTraits<std::decay_t<T>>;
+			static_assert(
+				Traits::HasHash64Override || Traits::HasGetHash || Traits::HasGetGUID || Traits::HasCalculateHash || Traits::Dereferenceable || Traits::HasBeginAndEnd || std::is_integral_v<T> || std::is_enum_v<T>,
+				"Parameter used in asset constructor does not have a valid method to extract a hash");
+
+			if constexpr (std::is_same_v<nullptr_t, std::decay_t<T>>) {		return DefaultSeed64;
+			} else if constexpr (Traits::HasHash64Override) {				return Hash64(p);
+			} else if constexpr (Traits::Dereferenceable) {					return p ? HashParam_Single(*p) : DefaultSeed64;
+			} else if constexpr (Traits::HasGetHash) {						return p.GetHash();
+			} else if constexpr (Traits::HasGetGUID) {						return p.GetGUID();
+			} else if constexpr (Traits::HasCalculateHash) {				return p.CalculateHash(DefaultSeed64);
+			} else if constexpr (Traits::HasBeginAndEnd) {
+				auto i = p.begin(), end=p.end();
+				if (i == end) return 0;
+				auto res = HashParam_Single(*i++);
+				for (;i!=end; ++i)
+					res = HashParam_Chain(*i, res);
+				return res;
+			} else if constexpr (std::is_integral_v<T>) {
+				return IntegerHash64(p);
+			} else if constexpr (std::is_enum_v<T>) {
+				return IntegerHash64((uint64_t)p);
+			} else {
+				UNREACHABLE();
+			}
 		}
-
-		template<
-			typename T, 
-			decltype(HashParam_Single(*std::declval<const T&>()))* = nullptr, 
-			std::enable_if_t<!HasSimpleHashing<T> && !HasHash64Override<T>>* =nullptr>
-			uint64_t HashParam_Single(const T& p) { return p ? HashParam_Single(*p) : DefaultSeed64; }
-
-
 
 		template <typename FirstParam, typename... Params>
 			uint64_t BuildParamHash(const FirstParam& firstInitializer, const Params&... initialisers)
