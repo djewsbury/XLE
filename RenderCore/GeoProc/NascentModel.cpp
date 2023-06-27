@@ -8,6 +8,7 @@
 #include "NascentObjectsSerialize.h"
 #include "NascentCommandStream.h"
 #include "MeshDatabase.h"
+#include "../Assets/ModelCompilationConfiguration.h"
 #include "../Assets/AssetUtils.h"
 #include "../Assets/AnimationBindings.h"
 #include "../Assets/ModelMachine.h"
@@ -16,7 +17,9 @@
 #include "../../Assets/NascentChunk.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/FastParseValue.h"
+#include "../../Utility/StringFormat.h"
 #include "../../Core/Exceptions.h"
+#include "wildcards.hpp"
 #include <sstream>
 
 using namespace Utility::Literals;
@@ -112,16 +115,100 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return result;
 	}
 
-	static NascentRawGeometry CompleteInstantiation(const NascentModel::GeometryBlock& geoBlock, const NativeVBSettings& nativeVBSettings)
+	static std::vector<DrawCallForGeoAlgorithm> BuildDrawCallsForGeoAlgorithm(const NascentModel::GeometryBlock& geoBlock)
 	{
-		const bool generateMissingTangentsAndNormals = true;
-        if constexpr (generateMissingTangentsAndNormals) {
-			auto indexCount = geoBlock._indices.size() * 8 / BitsPerPixel(geoBlock._indexFormat);
-            GenerateNormalsAndTangents(
-                *geoBlock._mesh, 0,
-				1e-3f,
-                geoBlock._indices.data(), indexCount, geoBlock._indexFormat);
-        }
+		std::vector<DrawCallForGeoAlgorithm> drawCalls;
+		drawCalls.reserve(geoBlock._drawCalls.size());
+		for (const auto& d:geoBlock._drawCalls) {
+			DrawCallForGeoAlgorithm dc;
+			dc._ibFormat = geoBlock._indexFormat;
+			dc._topology = d._topology;
+			auto bytesPerIndex = BitsPerPixel(geoBlock._indexFormat) / 8;
+			dc._indices = MakeIteratorRange(
+				PtrAdd(geoBlock._indices.data(), d._firstIndex * bytesPerIndex),
+				PtrAdd(geoBlock._indices.data(), (d._firstIndex + d._indexCount) * bytesPerIndex));
+			drawCalls.push_back(dc);
+		}
+		return drawCalls;
+	}
+
+	static void ConfigureAttributes(const NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules)
+	{
+		// Generate any attributes that we're required to add
+		unsigned maxSemanticIndex = 0;
+		for (const auto& str:geoBlock._mesh->GetStreams())
+			maxSemanticIndex = std::max(maxSemanticIndex, str.GetSemanticIndex());
+
+		if (rules._rebuildTangents.value_or(false))
+			for (unsigned c=0; c<=maxSemanticIndex; ++c) {
+				if (auto s = geoBlock._mesh->FindElement("TEXTANGENT", c); s != ~0u) geoBlock._mesh->RemoveStream(s);
+				if (auto s = geoBlock._mesh->FindElement("TEXBITANGENT", c); s != ~0u) geoBlock._mesh->RemoveStream(s);
+			}
+		if (rules._rebuildNormals.value_or(false))
+			for (unsigned c=0; c<=maxSemanticIndex; ++c)
+				if (auto s = geoBlock._mesh->FindElement("NORMAL", c); s != ~0u) geoBlock._mesh->RemoveStream(s);
+		
+		char buffer[32];
+		for (unsigned semanticIndex=0; semanticIndex<(maxSemanticIndex+1); ++semanticIndex) {
+			std::vector<uint64_t> attributesToAddThisIndex;
+			for (auto a:rules._includeAttributes) {
+				bool foundAttribute = false;
+				for (const auto& str:geoBlock._mesh->GetStreams()) {
+					if (str.GetSemanticIndex() != semanticIndex) continue;
+					StringMeldInPlace(buffer) << str.GetSemanticName() << str.GetSemanticIndex();
+					foundAttribute |= Hash64(str.GetSemanticName()) == a || Hash64(buffer) == a;
+					if (foundAttribute) break;
+				}
+
+				// foundAttribute is true if we found an existing attribute of the correct type for this semantic index
+				if (!foundAttribute)
+					attributesToAddThisIndex.push_back(a);
+			}
+
+			GenerateTangentFrameFlags::BitField genTangentFrameFlags = 0;
+			for (auto a:rules._includeAttributes) {
+				if (a == "NORMAL"_h || a == Hash64((StringMeldInPlace(buffer) << "NORMAL" << semanticIndex).AsStringSection()))
+					if (geoBlock._mesh->FindElement("NORMAL", semanticIndex) == ~0u)
+						genTangentFrameFlags |= GenerateTangentFrameFlags::Normals;
+			}
+
+			if (geoBlock._mesh->FindElement("TEXCOORD", semanticIndex) != ~0u) {
+				for (auto a:rules._includeAttributes) {
+					if (a == "TEXTANGENT"_h || a == Hash64((StringMeldInPlace(buffer) << "TEXTANGENT" << semanticIndex).AsStringSection()))
+						if (geoBlock._mesh->FindElement("TEXTANGENT", semanticIndex) == ~0u)
+							genTangentFrameFlags |= GenerateTangentFrameFlags::Tangents;
+					if (a == "TEXBITANGENT"_h || a == Hash64((StringMeldInPlace(buffer) << "TEXBITANGENT" << semanticIndex).AsStringSection()))
+						if (geoBlock._mesh->FindElement("TEXBITANGENT", semanticIndex) == ~0u)
+							genTangentFrameFlags |= GenerateTangentFrameFlags::Bitangents;
+				}
+			}
+
+			if (genTangentFrameFlags) {
+				auto flatTriList = BuildFlatTriList(BuildDrawCallsForGeoAlgorithm(geoBlock));
+				const float equivalenceThreshold = 1e-5f;
+				GenerateTangentFrame(
+					*geoBlock._mesh, semanticIndex, genTangentFrameFlags,
+					flatTriList,
+					equivalenceThreshold);
+			}
+		}
+
+		// remove attributes that have been excluded
+		for (auto a:rules._excludeAttributes) {
+			for (unsigned str=0; str<geoBlock._mesh->GetStreams().size();) {
+				StringMeldInPlace(buffer) << geoBlock._mesh->GetStreams()[str].GetSemanticName() << geoBlock._mesh->GetStreams()[str].GetSemanticIndex();
+				if (Hash64(geoBlock._mesh->GetStreams()[str].GetSemanticName()) == a || Hash64(buffer) == a) {
+					geoBlock._mesh->RemoveStream(str);
+				} else {
+					++str;
+				}
+			}
+		}
+	}
+
+	static NascentRawGeometry CompleteInstantiation(const NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules)
+	{
+		ConfigureAttributes(geoBlock, rules);
 
             // If we have normals, tangents & bitangents... then we can remove one of them
             // (it will be implied by the remaining two). We can choose to remove the 
@@ -138,20 +225,17 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			const bool buildTopologicalIndexBuffer = false;
 		#endif
 		if constexpr (buildTopologicalIndexBuffer) {
-			// note -- assuming Topology::TriangleList here (also that all indices are going to be read in order)
-			auto indexCount = geoBlock._indices.size() * 8 / BitsPerPixel(geoBlock._indexFormat);
-			adjacencyIndexBuffer = BuildAdjacencyIndexBuffer(
-				*geoBlock._mesh,
-				geoBlock._indices.data(), indexCount, geoBlock._indexFormat);
+			auto drawCalls = BuildDrawCallsForGeoAlgorithm(geoBlock);
+			auto tempBuffer = BuildAdjacencyIndexBufferForUniquePositions(*geoBlock._mesh, MakeIteratorRange(drawCalls));
+			adjacencyIndexBuffer = ConvertIndexBufferFormat(std::move(tempBuffer), geoBlock._indexFormat);
 		}
 
-        NativeVBLayout vbLayout = BuildDefaultLayout(*geoBlock._mesh, nativeVBSettings);
+        NativeVBLayout vbLayout = BuildDefaultLayout(*geoBlock._mesh, NativeVBSettings { rules._16BitNativeTypes.value_or(false) });
         auto nativeVB = geoBlock._mesh->BuildNativeVertexBuffer(vbLayout);
 
 		std::vector<DrawCallDesc> drawCalls;
-		for (const auto&d:geoBlock._drawCalls) {
+		for (const auto&d:geoBlock._drawCalls)
 			drawCalls.push_back(DrawCallDesc{d._firstIndex, d._indexCount, 0, d._topology});
-		}
 
         return NascentRawGeometry {
             nativeVB, geoBlock._indices,
@@ -297,7 +381,19 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return result;
 	}
 
-	std::vector<::Assets::SerializedArtifact> NascentModel::SerializeToChunks(const std::string& name, const NascentSkeleton& embeddedSkeleton, const NativeVBSettings& nativeSettings) const
+	static ModelCompilationConfiguration::RawGeoRules BuildNativeVBSettings(const ModelCompilationConfiguration& modelCompilationConfiguration, StringSection<> name)
+	{
+		ModelCompilationConfiguration::RawGeoRules rules;
+		for (auto& c:modelCompilationConfiguration._rawGeoRules)
+			if (wildcards::match(name.AsStringView(), c.first))
+				rules.MergeIn(c.second);
+		return rules;
+	}
+
+	std::vector<::Assets::SerializedArtifact> NascentModel::SerializeToChunks(
+		const std::string& name,
+		const NascentSkeleton& embeddedSkeleton,
+		const ModelCompilationConfiguration& modelCompilationConfiguration) const
 	{
 		::Assets::BlockSerializer serializer;
 		auto recall = serializer.CreateRecall(sizeof(unsigned));
@@ -354,7 +450,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 					auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(),
 						[&cmd, mode](const auto& p) { return p._srcGuid == cmd.second._geometryBlock && p._cmdStreamMode == mode; });
 					if (i == geoObjects._rawGeos.end()) {
-						auto rawGeo = CompleteInstantiation(*geoBlock, nativeSettings);
+						auto rules = BuildNativeVBSettings(modelCompilationConfiguration, geoBlock->_rulesLabel);
+						auto rawGeo = CompleteInstantiation(*geoBlock, rules);
 						geoObjects._rawGeos.push_back({cmd.second._geometryBlock, mode, std::move(rawGeo), geoObjects._nextId++});
 						i = geoObjects._rawGeos.end()-1;
 					}
@@ -365,7 +462,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 					auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(),
 						[hashedId, mode](const auto& p) { return p._srcGuid == hashedId && p._cmdStreamMode == mode; });
 					if (i == geoObjects._skinnedGeos.end()) {
-						auto rawGeo = CompleteInstantiation(*geoBlock, nativeSettings);
+						auto rules = BuildNativeVBSettings(modelCompilationConfiguration, geoBlock->_rulesLabel);
+						auto rawGeo = CompleteInstantiation(*geoBlock, rules);
 
 						std::vector<UnboundSkinControllerAndJointMatrices> controllers;
 						controllers.reserve(cmd.second._skinControllerBlocks.size());

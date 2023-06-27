@@ -6,7 +6,7 @@
 #include "../ReusableDataFiles.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/ShaderVariationSet.h"
-#include "../../../RenderCore/GeoProc/ModelScaffoldConfiguration.h"
+#include "../../../RenderCore/Assets/ModelCompilationConfiguration.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../../ShaderParser/ShaderAnalysis.h"
 #include "../../../Assets/AssetServices.h"
@@ -178,9 +178,9 @@ namespace UnitTests
 		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
 		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::EnableChangeMonitoring));
 
-		using namespace RenderCore::Assets::GeoProc;
+		using namespace RenderCore::Assets;
 
-		auto marker = ::Assets::ActualizeAssetPtr<::Assets::ResolvedAssetMixin<ModelScaffoldConfiguration>>("ut-data/one.model");
+		auto marker = ::Assets::ActualizeAssetPtr<::Assets::ResolvedAssetMixin<ModelCompilationConfiguration>>("ut-data/one.model");
 		(void)marker;
 		
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);

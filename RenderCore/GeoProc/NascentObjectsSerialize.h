@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../Assets/ICompileOperation.h"
+#include "../Assets/ModelCompilationConfiguration.h"
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
@@ -17,7 +18,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		const std::string& name,
 		const NascentModel& model,
 		const NascentSkeleton& embeddedSkeleton,
-		const NativeVBSettings& nativeSettings);
+		const ModelCompilationConfiguration&);
 
 	std::vector<::Assets::SerializedArtifact> SerializeSkeletonToChunks(
 		const std::string& name,

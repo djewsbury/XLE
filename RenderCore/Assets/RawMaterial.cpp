@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "RawMaterial.h"
+#include "ModelCompilationConfiguration.h"
 #include "../StateDesc.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/AssetTraits.h"
@@ -678,6 +679,72 @@ namespace RenderCore { namespace Assets
                 } CATCH_END
             });
 	}
+
+    template<typename ObjectType>
+        void CompilableMaterialAssetMixin<ObjectType>::ConstructToPromise(
+            std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
+            StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg)
+    {
+        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), init=initializer.AsString(), cfg=std::move(cfg)]() mutable {
+                TRY {
+                    auto splitName = MakeFileNameSplitter(init);
+                    auto containerInitializer = splitName.AllExceptParameters();
+                    std::string containerInitializerString = containerInitializer.AsString();
+                    auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
+                    ::Assets::DefaultCompilerConstructionSynchronously(
+                        containerFuture->AdoptPromise(),
+                        s_MaterialCompileProcessType,
+                        ::Assets::InitializerPack{containerInitializer, std::move(cfg)});
+
+                    std::string section = splitName.Parameters().AsString();
+                    ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
+                        std::move(promise),
+                        [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
+                            auto fmttr = containerActual->GetFormatter(MakeStringSection(section));
+                            return std::make_shared<CompilableMaterialAssetMixin<RawMaterial>>(
+                                fmttr, 
+                                ::Assets::DefaultDirectorySearchRules(containerInitializerString),
+                                containerActual->GetDependencyValidation());
+                        });
+                } CATCH (...) {
+                    promise.set_exception(std::current_exception());
+                } CATCH_END
+            });
+    }
+
+    template<typename ObjectType>
+        void CompilableMaterialAssetMixin<ObjectType>::ConstructToPromise(
+            std::promise<CompilableMaterialAssetMixin<ObjectType>>&& promise,
+            StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg)
+    {
+        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), init=initializer.AsString(), cfg=std::move(cfg)]() mutable {
+                TRY {
+                    auto splitName = MakeFileNameSplitter(init);
+                    auto containerInitializer = splitName.AllExceptParameters();
+                    std::string containerInitializerString = containerInitializer.AsString();
+                    auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
+                    ::Assets::DefaultCompilerConstructionSynchronously(
+                        containerFuture->AdoptPromise(),
+                        s_MaterialCompileProcessType,
+                        ::Assets::InitializerPack{containerInitializer, std::move(cfg)});
+
+                    std::string section = splitName.Parameters().AsString();
+                    ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
+                        std::move(promise),
+                        [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
+                            auto fmttr = containerActual->GetFormatter(MakeStringSection(section));
+                            return CompilableMaterialAssetMixin<RawMaterial>(
+                                fmttr, 
+                                ::Assets::DefaultDirectorySearchRules(containerInitializerString),
+                                containerActual->GetDependencyValidation());
+                        });
+                } CATCH (...) {
+                    promise.set_exception(std::current_exception());
+                } CATCH_END
+            });
+    }
 
     template class CompilableMaterialAssetMixin<RawMaterial>;
 }}

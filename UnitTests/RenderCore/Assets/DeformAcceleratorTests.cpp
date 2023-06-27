@@ -154,7 +154,8 @@ namespace UnitTests
 			skeleton.WritePopLocalToWorld();
 		}
 
-		auto serializedChunk = GeoProc::SerializeSkinToChunks("skin", model, skeleton, GeoProc::NativeVBSettings{});
+		RenderCore::Assets::ModelCompilationConfiguration cfg;
+		auto serializedChunk = GeoProc::SerializeSkinToChunks("skin", model, skeleton, cfg);
 		auto artifactCollection = std::make_shared<::Assets::BlobArtifactCollection>(
 			MakeIteratorRange(serializedChunk),
 			::Assets::AssetState::Ready, ::Assets::DependencyValidation{});

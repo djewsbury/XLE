@@ -119,7 +119,10 @@ namespace ToolsRig
 			const ModelVisSettings& settings)
 		{
 			auto construction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
-			construction->AddElement().SetModelAndMaterialScaffolds(loadingContext, settings._modelName, settings._materialName);
+			auto ele = construction->AddElement();
+			if (!settings._compilationConfigurationName.empty())
+				ele.SetCompilationConfiguration(settings._compilationConfigurationName);
+			ele.SetModelAndMaterialScaffolds(loadingContext, settings._modelName, settings._materialName);
 			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators);
 
 			std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promisedConstruction;
@@ -398,6 +401,7 @@ namespace ToolsRig
 	{
 		auto hash = Hash64(_modelName);
 		hash = Hash64(_materialName, hash);
+		hash = Hash64(_compilationConfigurationName, hash);
 		hash = Hash64(_supplements, hash);
 		hash = HashCombine(_levelOfDetail, hash);
 		hash = Hash64(_animationFileName, hash);
@@ -410,6 +414,7 @@ namespace ToolsRig
     {
         _modelName = "rawos/game/model/galleon/galleon.dae";
         _materialName = "rawos/game/model/galleon/galleon.material";
+		_compilationConfigurationName = "rawos/game/model/galleon/galleon.model";
 		_levelOfDetail = 0;
 		_materialBindingFilter = 0;
 

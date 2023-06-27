@@ -53,13 +53,15 @@ namespace ColladaConversion
     {
     public:
         std::string _name;
-		::Assets::rstring _rootNode;
 		ImportConfiguration _cfg;
         OSServices::MemoryMappedFile _fileData;
         std::shared_ptr<DocumentScaffold> _doc;
         ::ColladaConversion::URIResolveContext _resolveContext;
 		std::vector<TargetDesc> _targets;
 		::Assets::DependencyValidation _depVal;
+
+		::Assets::rstring _rootNode;
+		std::shared_ptr<RenderCore::Assets::ModelCompilationConfiguration> _modelCompilationConfiguration;
 
 		std::vector<TargetDesc> GetTargets() const override;
 		std::vector<::Assets::SerializedArtifact> SerializeTarget(unsigned idx) override;
@@ -312,7 +314,7 @@ namespace ColladaConversion
 		return roots;
 	}
 
-    std::vector<::Assets::SerializedArtifact> SerializeSkin(const ColladaCompileOp& input, StringSection<utf8> rootNodeName)
+    std::vector<::Assets::SerializedArtifact> SerializeSkin(const ColladaCompileOp& input, StringSection<utf8> rootNodeName, const RenderCore::Assets::ModelCompilationConfiguration& configuration)
     {
         const auto* scene = input._doc->FindVisualScene(
             GuidReference(input._doc->_visualScene)._id);
@@ -326,7 +328,8 @@ namespace ColladaConversion
 		auto model = ConvertModel(input, *scene, MakeIteratorRange(roots));
 		auto embeddedSkeleton = ConvertSkeleton(input, *scene, GetSkeletons(model), MakeIteratorRange(roots));
 		OptimizeSkeleton(embeddedSkeleton, model);
-		return model.SerializeToChunks("skin", embeddedSkeleton, NativeVBSettings { true });
+
+		return model.SerializeToChunks("skin", embeddedSkeleton, configuration);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -541,10 +544,10 @@ namespace ColladaConversion
 		TRY
 		{
 			switch (_targets[idx]._targetCode) {
-			case Type_Model:			return SerializeSkin(*this, MakeStringSection(_rootNode).Cast<utf8>());
-			case Type_Skeleton:			return SerializeSkeleton(*this, MakeStringSection(_rootNode).Cast<utf8>());
-			case Type_RawMat:			return SerializeMaterials(*this, MakeStringSection(_rootNode).Cast<utf8>());
-			case Type_AnimationSet:		return SerializeAnimations(*this, MakeStringSection(_rootNode).Cast<utf8>());
+			case Type_Model:			return SerializeSkin(*this, _rootNode, *_modelCompilationConfiguration);
+			case Type_Skeleton:			return SerializeSkeleton(*this, _rootNode);
+			case Type_RawMat:			return SerializeMaterials(*this, _rootNode);
+			case Type_AnimationSet:		return SerializeAnimations(*this, _rootNode);
 			default:
 				Throw(::Exceptions::BasicLabel("Cannot serialize target (%s)", _targets[idx]._name));
 			}
@@ -563,7 +566,9 @@ namespace ColladaConversion
 	ColladaCompileOp::ColladaCompileOp() {}
 	ColladaCompileOp::~ColladaCompileOp() {}
 
-	static std::shared_ptr<::Assets::ICompileOperation> CreateNormalCompileOperation(StringSection<::Assets::ResChar> identifier)
+	static std::shared_ptr<::Assets::ICompileOperation> CreateNormalCompileOperation(
+		StringSection<::Assets::ResChar> identifier,
+		std::shared_ptr<RenderCore::Assets::ModelCompilationConfiguration> configuration)
 	{
 		std::shared_ptr<ColladaCompileOp> result = std::make_shared<ColladaCompileOp>();
 
@@ -586,6 +591,9 @@ namespace ColladaConversion
 
 		result->_name = identifier.AsString();
 		result->_rootNode = split.Parameters().AsString();
+		result->_modelCompilationConfiguration = std::move(configuration);
+		if (!result->_modelCompilationConfiguration)
+			result->_modelCompilationConfiguration = std::make_shared<RenderCore::Assets::ModelCompilationConfiguration>();
 		result->_doc = std::make_shared<ColladaConversion::DocumentScaffold>();
 		result->_doc->Parse(formatter);
 
@@ -612,7 +620,10 @@ namespace ColladaConversion
 	{
 #endif
 		auto identifier = initPack.GetInitializer<std::string>(0);
-		return CreateNormalCompileOperation(identifier);
+		std::shared_ptr<RenderCore::Assets::ModelCompilationConfiguration> configuration;
+		if (initPack.GetCount() >= 2 && initPack.GetInitializerType(1).hash_code() == typeid(decltype(configuration)).hash_code())
+			configuration = initPack.GetInitializer<decltype(configuration)>(1);
+		return CreateNormalCompileOperation(identifier, std::move(configuration));
 	}
 }
 

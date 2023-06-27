@@ -1,0 +1,6 @@
+Default=~
+	RawGeoRules=~
+		*=~
+			16Bit=true
+			ExcludeAttributes=~
+				TEXBINORMAL

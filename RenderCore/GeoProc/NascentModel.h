@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace RenderCore { namespace Assets { struct ModelDefaultPoseData; }}
+namespace RenderCore { namespace Assets { struct ModelDefaultPoseData; class ModelCompilationConfiguration; }}
 namespace Assets { struct SerializedArtifact; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc
@@ -24,7 +24,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	class MeshDatabase;
 	class UnboundSkinController;
 	class NascentSkeleton;
-	struct NativeVBSettings;
 	struct NascentGeometryObjects;
 	struct CmdStreamSerializationHelper;
 
@@ -49,6 +48,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 			std::vector<uint8_t>			_indices;
 			Format							_indexFormat = Format(0);
+
+			std::string						_rulesLabel;
 		};
 
 		class SkinControllerBlock
@@ -100,7 +101,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<::Assets::SerializedArtifact> SerializeToChunks(
 			const std::string& name,
 			const NascentSkeleton& embeddedSkeleton,
-			const NativeVBSettings& nativeSettings) const;
+			const ModelCompilationConfiguration& modelCompilationConfiguration) const;
 
 	private:
 		std::vector<std::pair<Indexor,GeometryBlock>>		_geoBlocks;
@@ -133,7 +134,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     };
 
 	void OptimizeSkeleton(NascentSkeleton& embeddedSkeleton, NascentModel& model);
-	
 
 	inline NascentObjectGuid NascentModel::Add(GeometryBlock&& object) { auto id = NextAvailableNamespace0Id(); Add(id, std::move(object)); return id; }
 	inline NascentObjectGuid NascentModel::Add(SkinControllerBlock&& object) { auto id = NextAvailableNamespace0Id(); Add(id, std::move(object)); return id; }

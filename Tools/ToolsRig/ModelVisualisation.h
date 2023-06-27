@@ -29,6 +29,7 @@ namespace ToolsRig
     public:
         std::string		_modelName;
         std::string		_materialName;
+        std::string     _compilationConfigurationName;
         std::string		_supplements;
         unsigned		_levelOfDetail;
 		std::string		_animationFileName;

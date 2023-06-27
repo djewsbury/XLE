@@ -1,0 +1,7 @@
+RawGeoRules=~
+	*=~
+		ExcludeAttributes=~
+			COLOR
+
+Inherit=~
+	../common.model:Default

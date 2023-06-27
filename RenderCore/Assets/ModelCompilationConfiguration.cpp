@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ModelScaffoldConfiguration.h"
+#include "ModelCompilationConfiguration.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/MemoryUtils.h"
@@ -11,7 +11,7 @@
 
 using namespace Utility::Literals;
 
-namespace RenderCore { namespace Assets { namespace GeoProc
+namespace RenderCore { namespace Assets
 {
 	static void DifferenceSortedSet(std::vector<uint64_t>& a, IteratorRange<const uint64_t*> b)
 	{
@@ -33,17 +33,30 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::partial_sort(a.begin(), a.begin()+aSize, a.end());
 	}
 
-	void ModelScaffoldConfiguration::MergeInWithFilenameResolve(const ModelScaffoldConfiguration& src, const ::Assets::DirectorySearchRules&)
+	void ModelCompilationConfiguration::RawGeoRules::MergeIn(const ModelCompilationConfiguration::RawGeoRules& src)
+	{
+		if (src._16BitNativeTypes) _16BitNativeTypes = src._16BitNativeTypes;
+		if (src._rebuildTangents) _rebuildTangents = src._rebuildTangents;
+		if (src._rebuildNormals) _rebuildNormals = src._rebuildNormals;
+		DifferenceSortedSet(_includeAttributes, src._excludeAttributes);
+		DifferenceSortedSet(_excludeAttributes, src._includeAttributes);
+		UnionSortedSet(_includeAttributes, src._includeAttributes);
+		UnionSortedSet(_excludeAttributes, src._excludeAttributes);
+	}
+
+	void ModelCompilationConfiguration::SkeletonRules::MergeIn(const ModelCompilationConfiguration::SkeletonRules& src)
+	{
+		UnionSortedSet(_animatableBones, src._animatableBones);
+		UnionSortedSet(_outputBones, src._outputBones);
+	}
+
+	void ModelCompilationConfiguration::MergeInWithFilenameResolve(const ModelCompilationConfiguration& src, const ::Assets::DirectorySearchRules&)
 	{
 		// Merge in, overwriting existing settings
 		for (const auto& rawGeoRule:src._rawGeoRules) {
 			auto i = std::find_if(_rawGeoRules.begin(), _rawGeoRules.end(), [n=rawGeoRule.first](const auto&q) { return q.first == n; });
 			if (i != _rawGeoRules.end()) {
-				if (rawGeoRule.second._16BitNativeTypes) i->second._16BitNativeTypes = rawGeoRule.second._16BitNativeTypes;
-				DifferenceSortedSet(i->second._includeAttributes, rawGeoRule.second._excludeAttributes);
-				DifferenceSortedSet(i->second._excludeAttributes, rawGeoRule.second._includeAttributes);
-				UnionSortedSet(i->second._includeAttributes, rawGeoRule.second._includeAttributes);
-				UnionSortedSet(i->second._excludeAttributes, rawGeoRule.second._excludeAttributes);
+				i->second.MergeIn(rawGeoRule.second);
 			} else {
 				_rawGeoRules.emplace_back(rawGeoRule);
 			}
@@ -60,8 +73,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		for (const auto& skeletonRule:src._skeletonRules) {
 			auto i = std::find_if(_skeletonRules.begin(), _skeletonRules.end(), [n=skeletonRule.first](const auto&q) { return q.first == n; });
 			if (i != _skeletonRules.end()) {
-				UnionSortedSet(i->second._animatableBones, skeletonRule.second._animatableBones);
-				UnionSortedSet(i->second._outputBones, skeletonRule.second._outputBones);
+				i->second.MergeIn(skeletonRule.second);
 			} else {
 				_skeletonRules.emplace_back(skeletonRule);
 			}
@@ -73,7 +85,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		_inheritConfigurations.insert(_inheritConfigurations.end(), src._inheritConfigurations.begin(), src._inheritConfigurations.end());
 	}
 
-	void ModelScaffoldConfiguration::DeserializeRawGeoRules(Formatters::TextInputFormatter<>& fmttr)
+	void ModelCompilationConfiguration::DeserializeRawGeoRules(Formatters::TextInputFormatter<>& fmttr)
 	{
 		StringSection<> ruleFilteringPattern;
 		while (TryKeyedItem(fmttr, ruleFilteringPattern)) {
@@ -88,6 +100,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				switch (keyName) {
 				case "16Bit"_h:
 					rules._16BitNativeTypes = Formatters::RequireCastValue<bool>(fmttr);
+					break;
+				case "RebuildTangents"_h:
+					rules._rebuildTangents = Formatters::RequireCastValue<bool>(fmttr);
+					break;
+				case "RebuildNormals"_h:
+					rules._rebuildNormals = Formatters::RequireCastValue<bool>(fmttr);
 					break;
 				case "ExcludeAttributes"_h:
 					RequireBeginElement(fmttr);
@@ -130,7 +148,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
-	void ModelScaffoldConfiguration::DeserializeCommandStreams(Formatters::TextInputFormatter<>& fmttr)
+	void ModelCompilationConfiguration::DeserializeCommandStreams(Formatters::TextInputFormatter<>& fmttr)
 	{
 		for (;;) {
 			auto next = fmttr.PeekNext();
@@ -150,7 +168,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
-	void ModelScaffoldConfiguration::DeserializeSkeletonRules(Formatters::TextInputFormatter<>& fmttr)
+	void ModelCompilationConfiguration::DeserializeSkeletonRules(Formatters::TextInputFormatter<>& fmttr)
 	{
 		StringSection<> ruleFilteringPattern;
 		while (TryKeyedItem(fmttr, ruleFilteringPattern)) {
@@ -194,7 +212,40 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
-	ModelScaffoldConfiguration::ModelScaffoldConfiguration(Formatters::TextInputFormatter<>& fmttr)
+	uint64_t ModelCompilationConfiguration::RawGeoRules::CalculateHash(uint64_t hash) const
+	{
+		if (_16BitNativeTypes) hash = HashCombine(_16BitNativeTypes.value(), hash);
+		if (_rebuildTangents) hash = HashCombine(_rebuildTangents.value(), hash);
+		if (_rebuildNormals) hash = HashCombine(_rebuildNormals.value(), hash);
+		hash = Hash64(AsPointer(_includeAttributes.begin()), AsPointer(_includeAttributes.end()), hash);
+		hash = Hash64(AsPointer(_excludeAttributes.begin()), AsPointer(_excludeAttributes.end()), hash);
+		return hash;
+	}
+
+	uint64_t ModelCompilationConfiguration::SkeletonRules::CalculateHash(uint64_t hash) const
+	{
+		hash = Hash64(AsPointer(_animatableBones.begin()), AsPointer(_animatableBones.end()), hash);
+		hash = Hash64(AsPointer(_outputBones.begin()), AsPointer(_outputBones.end()), hash);
+		return hash;
+	}
+
+	uint64_t ModelCompilationConfiguration::CalculateHash(uint64_t seed) const
+	{
+		uint64_t result = seed;
+		for (const auto& q:_rawGeoRules)
+			result = q.second.CalculateHash(Hash64(q.first, result));
+		for (const auto& q:_commandStreams)
+			result = HashCombine(q.first, result);
+		for (const auto& q:_skeletonRules)
+			result = q.second.CalculateHash(Hash64(q.first, result));
+		if (_autoProcessTextures)
+			result = HashCombine(_autoProcessTextures.value(), result);
+		for (const auto& q:_inheritConfigurations)
+			result = Hash64(q, result);
+		return result;
+	}
+
+	ModelCompilationConfiguration::ModelCompilationConfiguration(Formatters::TextInputFormatter<>& fmttr)
 	{
 		uint64_t keyName;
 		while (TryKeyedItem(fmttr, keyName)) {
@@ -239,9 +290,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
-	ModelScaffoldConfiguration::ModelScaffoldConfiguration() {}
+	ModelCompilationConfiguration::ModelCompilationConfiguration() {}
 
-	ModelScaffoldConfiguration::~ModelScaffoldConfiguration() {}
+	ModelCompilationConfiguration::~ModelCompilationConfiguration() {}
 
-}}}
+}}
 

@@ -9,6 +9,7 @@
 #include "MaterialScaffold.h"
 #include "MaterialMachine.h"
 #include "AssetUtils.h"
+#include "ModelCompilationConfiguration.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Assets/ChunkFileWriter.h"
 #include "../../Assets/Assets.h"
@@ -44,6 +45,8 @@ namespace RenderCore
 
 namespace RenderCore { namespace Assets
 {
+	class ModelCompilationConfiguration;
+
 	MaterialGuid MakeMaterialGuid(StringSection<> name)
 	{
 		//  If the material name is just a number, then we will use that
@@ -70,15 +73,20 @@ namespace RenderCore { namespace Assets
 	static ::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
 	{
 		std::string sourceMaterial, sourceModel;
+		std::shared_ptr<ModelCompilationConfiguration> sourceModelConfiguration;
 		sourceMaterial = initializers.GetInitializer<std::string>(0);
 		if (initializers.GetCount() >= 2)
 			sourceModel = initializers.GetInitializer<std::string>(1);
+		if (initializers.GetCount() >= 3 && initializers.GetInitializerType(2).hash_code() == typeid(decltype(sourceModelConfiguration)).hash_code())
+			sourceModelConfiguration = initializers.GetInitializer<decltype(sourceModelConfiguration)>(2);
 
 		if (sourceModel.empty())
 			Throw(::Exceptions::BasicLabel{"Empty source model in MaterialCompileOperation"});
 
 		if (sourceMaterial == sourceModel)
 			sourceMaterial = {};
+
+		char buffer[3*MaxPath];
 
 			// Ensure we strip off parameters from the source model filename before we get here.
 			// the parameters are irrelevant to the compiler -- so if they stay on the request
@@ -89,14 +97,13 @@ namespace RenderCore { namespace Assets
 				sourceModel = splitter.AllExceptParameters().AsString();
 		}
 
-		auto modelMatFuture = ::Assets::MakeAssetMarker<RawMatConfigurations>(sourceModel);
+		auto modelMatFuture = ::Assets::MakeAssetMarker<RawMatConfigurations>(sourceModel, sourceModelConfiguration);
 		auto modelMatState = modelMatFuture->StallWhilePending();
-		if (modelMatState == ::Assets::AssetState::Invalid) {
+		if (modelMatState == ::Assets::AssetState::Invalid)
 			Throw(::Assets::Exceptions::ConstructionError(
 				::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
 				modelMatFuture->GetDependencyValidation(),
-				StringMeld<256>() << "Failed while loading material information from source model (" << sourceModel << ") with msg (" << ::Assets::AsString(modelMatFuture->GetActualizationLog()) << ")"));
-		}
+				StringMeldInPlace(buffer) << "Failed while loading material information from source model (" << sourceModel << ") with msg (" << ::Assets::AsString(modelMatFuture->GetActualizationLog()) << ")"));
 
 		const auto& modelMat = modelMatFuture->Actualize();
 
@@ -104,12 +111,14 @@ namespace RenderCore { namespace Assets
 		depVals.emplace_back(modelMat.GetDependencyValidation());
 
 			//  for each configuration, we want to build a resolved material
-			//  Note that this is a bit crazy, because we're going to be loading
-			//  and re-parsing the same files over and over again!
-		SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>> resolvedNames;
-		std::vector<std::pair<MaterialGuid, std::shared_ptr<::Assets::Marker<ResolvedMaterial>>>> materialFutures;
-		resolvedNames.reserve(modelMat._configurations.size());
-		materialFutures.reserve(modelMat._configurations.size());
+		struct PendingAssets
+		{
+			SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>> _resolvedNames;
+			using MaterialMarker = std::shared_ptr<::Assets::Marker<ResolvedMaterial>>;
+			std::vector<std::pair<MaterialGuid, MaterialMarker>> _materials;
+		} pendingAssets;
+		pendingAssets._resolvedNames.reserve(modelMat._configurations.size());
+		pendingAssets._materials.reserve(modelMat._configurations.size());
 
 		for (const auto& cfg:modelMat._configurations) {
 			ShaderPatchCollection patchCollection;
@@ -135,23 +144,43 @@ namespace RenderCore { namespace Assets
 				// etc). This provides a path for reusing the same model with
 				// different material settings (eg, when we want one thing to have
 				// a red version and a blue version)
+
+			std::vector<::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>> partialMaterials;
 		
 				// resolve in model:configuration
-			StringMeld<3*MaxPath, ::Assets::ResChar> meld; 
-			meld << sourceModel << ":" << Conversion::Convert<::Assets::rstring>(cfg);
+				// This is a little different, because we have to pass the "sourceModelConfiguration" down the chain
+			{
+				auto meld = StringMeldInPlace(buffer);
+				meld << sourceModel << ":" << cfg;
+				auto partialMaterial = ::Assets::MakeAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection(), sourceModelConfiguration);
+				partialMaterials.emplace_back(std::move(partialMaterial));
+			}
 
 			if (!sourceMaterial.empty()) {
 					// resolve in material:*
-				meld << ";" << sourceMaterial << ":*";
-				meld << ";" << sourceMaterial << ":" << Conversion::Convert<::Assets::rstring>(cfg);
+				{
+					auto meld = StringMeldInPlace(buffer);
+					meld << sourceMaterial << ":*";
+					auto partialMaterial = ::Assets::MakeAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection());
+					partialMaterials.emplace_back(std::move(partialMaterial));
+				}
+
+					// resolve in the main material:cfg
+				{
+					auto meld = StringMeldInPlace(buffer);
+					meld << sourceMaterial << ":" << cfg;
+					auto partialMaterial = ::Assets::MakeAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection());
+					partialMaterials.emplace_back(std::move(partialMaterial));
+				}
 			}
 
-			auto futureMaterial = ::Assets::MakeAssetMarker<ResolvedMaterial>(meld.AsStringSection());
-			materialFutures.push_back(std::make_pair(guid, std::move(futureMaterial)));
+			auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
+			ResolvedMaterial::ConstructToPromise(marker->AdoptPromise(), partialMaterials);
 
-			auto resNameStr = meld.AsString();
-			SerializableVector<char> resNameVec(resNameStr.begin(), resNameStr.end());
-			resolvedNames.push_back(std::make_pair(guid, std::move(resNameVec)));
+			pendingAssets._materials.push_back(std::make_pair(guid, std::move(marker)));
+
+			SerializableVector<char> resNameVec(cfg.begin(), cfg.end());
+			pendingAssets._resolvedNames.push_back(std::make_pair(guid, std::move(resNameVec)));
 		}
 
 		struct SerializedBlock1
@@ -167,10 +196,10 @@ namespace RenderCore { namespace Assets
 		};
 		std::vector<SerializedBlock2> resolved;
 		std::vector<SerializedBlock1> patchCollections;
-		resolved.reserve(materialFutures.size());
-		patchCollections.reserve(materialFutures.size());
+		resolved.reserve(pendingAssets._materials.size());
+		patchCollections.reserve(pendingAssets._materials.size());
 
-		for (const auto&m:materialFutures) {
+		for (const auto&m:pendingAssets._materials) {
 			auto state = m.second->StallWhilePending();
 			assert(state.value() == ::Assets::AssetState::Ready);
 			auto& resolvedMat = m.second->Actualize();
@@ -214,7 +243,7 @@ namespace RenderCore { namespace Assets
 
 		std::sort(resolved.begin(), resolved.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
 		std::sort(patchCollections.begin(), patchCollections.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
-		std::sort(resolvedNames.begin(), resolvedNames.end(), CompareFirst<MaterialGuid, SerializableVector<char>>());
+		std::sort(pendingAssets._resolvedNames.begin(), pendingAssets._resolvedNames.end(), CompareFirst<MaterialGuid, SerializableVector<char>>());
 
 			// "resolved" is now actually the data we want to write out
 		::Assets::BlockSerializer blockSerializer;
@@ -233,7 +262,7 @@ namespace RenderCore { namespace Assets
 			blockSerializer << pc._dataSize;
 			blockSerializer.SerializeSubBlock(MakeIteratorRange(pc._data.get(), PtrAdd(pc._data.get(), pc._dataSize)));
 		}
-		blockSerializer << MakeCmdAndSerializable(ScaffoldCommand::MaterialNameDehash, resolvedNames);
+		blockSerializer << MakeCmdAndSerializable(ScaffoldCommand::MaterialNameDehash, pendingAssets._resolvedNames);
 		blockSerializer.PushSizeValueAtRecall(outerRecall);
 
 		return {

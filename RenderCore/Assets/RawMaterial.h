@@ -177,6 +177,8 @@ namespace RenderCore { namespace Assets
         ~RawMaterial();
     };
 
+    class ModelCompilationConfiguration;
+
     template<typename ObjectType>
 		class CompilableMaterialAssetMixin : public ::Assets::FormatterAssetMixin<ObjectType>
 	{
@@ -185,11 +187,19 @@ namespace RenderCore { namespace Assets
 
         static void ConstructToPromise(
             std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
-            StringSection<::Assets::ResChar> initializer);
+            StringSection<> initializer);
 
         static void ConstructToPromise(
             std::promise<CompilableMaterialAssetMixin<ObjectType>>&& promise,
-            StringSection<::Assets::ResChar> initializer);
+            StringSection<> initializer);
+
+        static void ConstructToPromise(
+            std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
+            StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
+            
+        static void ConstructToPromise(
+            std::promise<CompilableMaterialAssetMixin<ObjectType>>&& promise,
+            StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
     };
 
     using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial, CompilableMaterialAssetMixin<RawMaterial>>;

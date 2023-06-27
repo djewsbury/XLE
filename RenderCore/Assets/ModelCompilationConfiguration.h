@@ -11,18 +11,21 @@
 
 namespace Formatters { template<typename CharType> class TextInputFormatter; }
 
-namespace RenderCore { namespace Assets { namespace GeoProc
+namespace RenderCore { namespace Assets
 {
 
-	class ModelScaffoldConfiguration
+	class ModelCompilationConfiguration
 	{
 	public:
 		using StringWildcardMatcher = std::string;
 
 		struct RawGeoRules
 		{
-			std::optional<bool> _16BitNativeTypes;
+			std::optional<bool> _16BitNativeTypes, _rebuildTangents, _rebuildNormals;
 			std::vector<uint64_t> _includeAttributes, _excludeAttributes;
+
+			void MergeIn(const RawGeoRules&);
+			uint64_t CalculateHash(uint64_t) const;
 		};
 		std::vector<std::pair<StringWildcardMatcher, RawGeoRules>> _rawGeoRules;
 
@@ -34,6 +37,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		{
 			std::vector<uint64_t> _animatableBones;
 			std::vector<uint64_t> _outputBones;
+
+			void MergeIn(const SkeletonRules&);
+			uint64_t CalculateHash(uint64_t) const;
 		};
 		std::vector<std::pair<StringWildcardMatcher, SkeletonRules>> _skeletonRules;
 
@@ -42,11 +48,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<std::string> _inheritConfigurations;
 
 		IteratorRange<const std::string*> GetInherited() const { return _inheritConfigurations; }
-		void MergeInWithFilenameResolve(const ModelScaffoldConfiguration&, const ::Assets::DirectorySearchRules&);
+		void MergeInWithFilenameResolve(const ModelCompilationConfiguration&, const ::Assets::DirectorySearchRules&);
 
-		ModelScaffoldConfiguration(Formatters::TextInputFormatter<char>& fmttr);
-		ModelScaffoldConfiguration();
-		~ModelScaffoldConfiguration();
+		uint64_t CalculateHash(uint64_t) const;
+
+		ModelCompilationConfiguration(Formatters::TextInputFormatter<char>& fmttr);
+		ModelCompilationConfiguration();
+		~ModelCompilationConfiguration();
 
 	private:
 		void DeserializeRawGeoRules(Formatters::TextInputFormatter<char>& fmttr);
@@ -54,4 +62,4 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		void DeserializeSkeletonRules(Formatters::TextInputFormatter<char>& fmttr);
 	};
 
-}}}
+}}

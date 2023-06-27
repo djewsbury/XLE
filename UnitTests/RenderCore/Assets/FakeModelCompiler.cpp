@@ -5,6 +5,7 @@
 #include "FakeModelCompiler.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
+#include "../../../RenderCore/Assets/ModelCompilationConfiguration.h"
 #include "../../../RenderCore/GeoProc/NascentCommandStream.h"
 #include "../../../RenderCore/GeoProc/NascentAnimController.h"
 #include "../../../RenderCore/GeoProc/NascentObjectsSerialize.h"
@@ -230,8 +231,8 @@ namespace UnitTests
 		auto model = GenerateModel();
 		auto embeddedSkeleton = GenerateNascentSkeleton();
 		RenderCore::Assets::GeoProc::OptimizeSkeleton(embeddedSkeleton, model);
-		RenderCore::Assets::GeoProc::NativeVBSettings nativeVBSettings { true };
-		return model.SerializeToChunks("skin", embeddedSkeleton, nativeVBSettings);
+		RenderCore::Assets::ModelCompilationConfiguration cfg;
+		return model.SerializeToChunks("skin", embeddedSkeleton, cfg);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////

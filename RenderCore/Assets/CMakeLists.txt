@@ -22,6 +22,7 @@ add_library(
     SkeletonMachine.cpp
     ModelRendererConstruction.cpp
     CompoundObject.cpp
+    ModelCompilationConfiguration.cpp
     ../GeoProc/GeometryAlgorithm.cpp
     ../GeoProc/MeshDatabase.cpp
     ../GeoProc/NascentAnimController.cpp
@@ -30,8 +31,7 @@ add_library(
     ../GeoProc/NascentObjectsSerialize.cpp
     ../GeoProc/NascentRawGeometry.cpp
     ../GeoProc/NascentSkeletonHelper.cpp
-	../GeoProc/DequantAnalysisTools.cpp
-    ../GeoProc/ModelScaffoldConfiguration.cpp)
+    ../GeoProc/DequantAnalysisTools.cpp)
 
 xle_configure_library(RenderCoreAssets)
 target_link_libraries(RenderCoreAssets PUBLIC BufferUploads-Shared ShaderParser RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)

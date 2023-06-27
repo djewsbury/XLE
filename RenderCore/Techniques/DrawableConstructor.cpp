@@ -875,6 +875,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{
 		assert(construction.GetAssetState() == ::Assets::AssetState::Ready);
+		_pimpl->_pendingDepVals.emplace_back(construction.MakeScaffoldsDependencyValidation());			// required in order to catch invalidations on the compilation configuration files
 		unsigned elementIdx = 0;
 		for (auto e:construction) {
 			auto modelScaffold = e.GetModelScaffold();
