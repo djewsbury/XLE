@@ -234,7 +234,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			// Remove bitwise identicals, because RemoveDuplicates() scales very poorly when there are a lot of nearby
 			// vertices, so best to filter out large amounts of exactly identical input data
 			auto newData = RemoveBitwiseIdenticals(newMapping, *srcData);
-			if (newData->GetCount() < stream.GetSourceData()->GetCount()) {
+			if (newData && newData->GetCount() < stream.GetSourceData()->GetCount()) {
 				if (!stream.GetVertexMap().empty()) {
 					convertedMapping.insert(convertedMapping.end(), stream.GetVertexMap().begin(), stream.GetVertexMap().end());
 					for (auto& a:convertedMapping)
@@ -247,7 +247,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 			newMapping.clear();
 			newData = RemoveDuplicates(newMapping, *srcData, threshold);
-			if (newData->GetCount() >= stream.GetSourceData()->GetCount())
+			if (!newData || newData->GetCount() >= stream.GetSourceData()->GetCount())
 				continue;
 
 			if (convertedMapping.empty())
@@ -258,7 +258,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			} else {
 				convertedMapping.insert(convertedMapping.end(), newMapping.begin(), newMapping.end());
 			}
-			
+
 			mesh.InsertStream(streamIndex, std::move(newData), std::move(convertedMapping), stream.GetSemanticName().c_str(), stream.GetSemanticIndex());
 			mesh.RemoveStream(streamIndex+1);
 		}
