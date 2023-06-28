@@ -1,8 +1,11 @@
 
-RWTexture3D<uint> TiledLightBitField : register(u1, space0);
+RWTexture2DArray<uint> TiledLightBitField : register(u1, space0);
 Texture2D<float> DownsampleDepths : register(t2, space0);
 
-static const uint GridDims = 16;
+cbuffer ControlParams : register(b4, space0)
+{
+	uint2 GridDims;
+}
 
 // #define MINIMIZE_ATOMIC_OPS 1
 
@@ -35,7 +38,7 @@ uint LaneIndexWithKey(uint key)
 	uint3 outputCoord = uint3(position.xy, planeIdx);
 	bool write = position.z >= DownsampleDepths[outputCoord.xy];
 	[branch] if (write) {
-		uint outputKey = outputCoord.z+32*(outputCoord.x+(1920/GridDims)*outputCoord.y);
+		uint outputKey = outputCoord.z+32*(outputCoord.x+GridDims.x*outputCoord.y);
 		#if defined(MINIMIZE_ATOMIC_OPS)
 			uint laneIdx = LaneIndexWithKey(outputKey);
 			[branch] if (laneIdx == 0) {

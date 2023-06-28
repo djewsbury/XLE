@@ -150,8 +150,13 @@ namespace RenderCore { namespace LightingEngine
 			const IResourceView* resView[] { iterator._rpi.GetNonFrameBufferAttachmentView(0).get(), _tileableLightBufferUAV[_pingPongCounter].get(), iterator._rpi.GetNonFrameBufferAttachmentView(1).get() };
 			us._resourceViews = MakeIteratorRange(resView);
 
+			struct Params
+			{
+				UInt2 _gridDims;
+			} params { _lightTileBufferSize };
+
 			auto globalUniforms = Techniques::BuildGlobalTransformConstants(iterator._parsingContext->GetProjectionDesc());
-			UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(globalUniforms) };
+			UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(globalUniforms), MakeOpaqueIteratorRange(params) };
 			us._immediateData = MakeIteratorRange(immData);
 
 			_prepareBitFieldBoundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
@@ -175,7 +180,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		auto* tiledLightsOutput = _outputs._tiledLightBitFieldSRV->GetResource().get();
 		assert(tiledLightsOutput);
-		Metal::BarrierHelper{threadContext}.Add(*tiledLightsOutput, {BindFlag::UnorderedAccess, ShaderStage::Compute}, {BindFlag::ShaderResource, ShaderStage::Pixel});
+		Metal::BarrierHelper{threadContext}.Add(*tiledLightsOutput, {BindFlag::UnorderedAccess, ShaderStage::Pixel}, {BindFlag::ShaderResource, ShaderStage::Pixel});
 	}
 
 	LightingEngine::RenderStepFragmentInterface RasterizationLightTileOperator::CreateFragment(const FrameBufferProperties& fbProps)
@@ -225,12 +230,14 @@ namespace RenderCore { namespace LightingEngine
 		UInt2 fbSize{fbProps._width, fbProps._height};
 		unsigned planesRequired = _config._maxLightsPerView/32;
 		_lightTileBufferSize = UInt2{(fbSize[0]+s_gridDims-1)/s_gridDims, (fbSize[1]+s_gridDims-1)/s_gridDims};
+		auto desc = TextureDesc::Plain2D(_lightTileBufferSize[0], _lightTileBufferSize[1], Format::R32_UINT);
+		desc._arrayCount = planesRequired;
 		stitchingContext.DefineAttachment(
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::TiledLightBitField,
 				CreateDesc(
 					BindFlag::UnorderedAccess|BindFlag::ShaderResource|BindFlag::TransferDst,
-					TextureDesc::Plain3D(_lightTileBufferSize[0], _lightTileBufferSize[1], planesRequired, Format::R32_UINT)),
+					desc),
 				"tiled-light-bit-field"
 			});
 	}
@@ -264,6 +271,7 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(1, "CombinedLightBuffer"_h);
 		usi.BindResourceView(2, "DownsampleDepths"_h);
 		usi.BindImmediateData(0, "GlobalTransform"_h);
+		usi.BindImmediateData(1, "ControlParams"_h);
 		_prepareBitFieldBoundUniforms = Metal::BoundUniforms(*_prepareBitFieldPipeline, usi);
 
 		auto tileableLightBufferDesc = CreateDesc(

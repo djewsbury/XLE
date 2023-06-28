@@ -6,6 +6,7 @@ DescriptorSet PrepareTilesDS
 	UnorderedAccessTexture TiledLightBitField;		// 1
 	SampledTexture DownsampleDepths;				// 2
 	UnorderedAccessBuffer LightDepthTable;			// 3
+	UniformBuffer ControlParams;					// 4
 };
 
 PipelineLayout GraphicsMain

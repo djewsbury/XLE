@@ -28,7 +28,7 @@ cbuffer EnvironmentProps : register (b0, space2)
 
 StructuredBuffer<LightDesc> LightList : register (t1, space2);
 StructuredBuffer<uint> LightDepthTable : register(t2, space2);
-Texture3D<uint> TiledLightBitField : register(t3, space2);
+Texture2DArray<uint> TiledLightBitField : register(t3, space2);
 
 Texture2D<float3> SSRTexture : register(t4, space2);
 Texture2D<float> SSRConfidence : register(t5, space2);
@@ -132,7 +132,6 @@ float3 CalculateIllumination(
 			uint minIdx = encodedDepthTable & 0xffffu;
 			uint maxIdx = encodedDepthTable >> 16u;
 
-
 			uint3 tileCoord = uint3(screenDest.pixelCoords.xy/TiledLights_GridDims, 0);
 
 			[branch] if (minIdx != maxIdx) {
@@ -164,6 +163,9 @@ float3 CalculateIllumination(
 						} else if (l.Shape == 1) {
 							result += shadowing * SphereLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
 						}
+						#if defined(_DEBUG)
+							else result += float3(1,0,0);
+						#endif
 					}
 				}
 			}
