@@ -68,8 +68,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		IteratorRange<Stream*> GetStreams()					{ return MakeIteratorRange(_streams); }
 
         MeshDatabase();
-        MeshDatabase(MeshDatabase&& moveFrom) never_throws;
-        MeshDatabase& operator=(MeshDatabase&& moveFrom) never_throws;
+        MeshDatabase(MeshDatabase&&) never_throws;
+        MeshDatabase& operator=(MeshDatabase&&) never_throws;
+        MeshDatabase(const MeshDatabase&);
+        MeshDatabase& operator=(const MeshDatabase&);
         ~MeshDatabase();
 
         class Stream
@@ -92,8 +94,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             Stream(
                 std::shared_ptr<IVertexSourceData> sourceData, std::vector<unsigned> vertexMap, 
                 const std::string& semanticName, unsigned semanticIndex);
-            Stream(Stream&& moveFrom) never_throws;
-            Stream& operator=(Stream&& moveFrom) never_throws;
+            Stream(Stream&&) never_throws;
+            Stream& operator=(Stream&&) never_throws;
+            Stream(const Stream&);
+            Stream& operator=(const Stream&);
             ~Stream();
         private:
             std::shared_ptr<IVertexSourceData>  _sourceData;

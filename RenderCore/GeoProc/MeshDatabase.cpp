@@ -519,18 +519,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         _unifiedVertexCount = 0;
     }
 
-    MeshDatabase::MeshDatabase(MeshDatabase&& moveFrom) never_throws
-    : _streams(std::move(moveFrom._streams))
-    , _unifiedVertexCount(moveFrom._unifiedVertexCount)
-    {}
-
-    MeshDatabase& MeshDatabase::operator=(MeshDatabase&& moveFrom) never_throws
-    {
-        _streams = std::move(moveFrom._streams);
-        _unifiedVertexCount = moveFrom._unifiedVertexCount;
-        return *this;
-    }
-
+    MeshDatabase::MeshDatabase(MeshDatabase&& moveFrom) never_throws = default;
+    MeshDatabase& MeshDatabase::operator=(MeshDatabase&& moveFrom) never_throws = default;
+	MeshDatabase::MeshDatabase(const MeshDatabase&) = default;
+    MeshDatabase& MeshDatabase::operator=(const MeshDatabase&) = default;
     MeshDatabase::~MeshDatabase() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -543,22 +535,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     , _semanticName(semanticName), _semanticIndex(semanticIndex)
     {}
 
-    MeshDatabase::Stream::Stream(Stream&& moveFrom) never_throws
-    : _sourceData(std::move(moveFrom._sourceData))
-    , _vertexMap(std::move(moveFrom._vertexMap))
-    , _semanticName(std::move(moveFrom._semanticName))
-    , _semanticIndex(moveFrom._semanticIndex)
-    {
-    }
-
-    auto MeshDatabase::Stream::operator=(Stream&& moveFrom) never_throws -> Stream&
-    {
-        _sourceData = std::move(moveFrom._sourceData);
-        _vertexMap = std::move(moveFrom._vertexMap);
-        _semanticName = std::move(moveFrom._semanticName);
-        _semanticIndex = moveFrom._semanticIndex;
-        return *this;
-    }
+    MeshDatabase::Stream::Stream(Stream&&) never_throws = default;
+    auto MeshDatabase::Stream::operator=(Stream&&) never_throws -> Stream& = default;
+	MeshDatabase::Stream::Stream(const Stream&) = default;
+    auto MeshDatabase::Stream::operator=(const Stream&) -> Stream& = default;
 
     MeshDatabase::Stream::~Stream() {}
 
@@ -1180,6 +1160,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// values are identical in the vertex stream mapping
 
 		outputMapping.clear();
+		if (!input.GetStreams().size())
+			return input;
+
+		for (const auto& stream:input.GetStreams())
+			if (stream.GetVertexMap().empty())
+				return input;		// if any streams do not have a vertex map, we can automatically say we can't merge any vertices
+
 		class RemappedStream
 		{
 		public:
@@ -1188,36 +1175,111 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<RemappedStream> workingMapping;
 		auto inputStreams = input.GetStreams();
 		workingMapping.resize(inputStreams.size());
+		for (auto&m:workingMapping)
+			m._unifiedToStreamElement.reserve(input.GetUnifiedVertexCount());
 
-		unsigned finalUnifiedVertexCount = 0u;
-		for (unsigned v = 0; v < input.GetUnifiedVertexCount(); ++v) {
-			// look for an existing vertex that is identical
-			unsigned existingVertex = ~0u;
-			for (unsigned c = 0; c < finalUnifiedVertexCount; ++c) {
-				bool isIdentical = true;
-				for (unsigned s = 0; s < inputStreams.size(); ++s) {
-					auto mappedIndex = !inputStreams[s].GetVertexMap().empty() ? inputStreams[s].GetVertexMap()[v] : v;
-					if (workingMapping[s]._unifiedToStreamElement[c] != mappedIndex) {
-						isIdentical = false;
+		#if 1
+
+			// Create a hash value for each vertex, based on the it's component makeup
+			std::vector<std::pair<uint64_t, unsigned>> unifiedVertexHashes;
+			unifiedVertexHashes.reserve(input.GetUnifiedVertexCount());
+			for (unsigned c=0; c<input.GetUnifiedVertexCount(); ++c) unifiedVertexHashes.emplace_back(0, c);
+
+			for (unsigned streamIndex=0; streamIndex<inputStreams.size(); ++streamIndex) {
+				const auto& stream = inputStreams[streamIndex];
+				for (unsigned v=0; v<input.GetUnifiedVertexCount(); ++v) {
+					uint64_t unshifted = stream.GetVertexMap()[v];
+					uint64_t shifted = 0;
+					for (unsigned s=0; s<10; ++s) {		// this can probably be reduced with some bithacks, since we're essentially just doing some bit interleaving
+						shifted |= (unshifted & 1ull) << (uint64_t(inputStreams.size()) * uint64_t(s));
+						unshifted >>= 1ull;
+					}
+					assert(!(unifiedVertexHashes[v].first & (shifted << uint64_t(streamIndex))));
+					unifiedVertexHashes[v].first |= shifted << uint64_t(streamIndex);
+				}
+			}
+
+			std::sort(unifiedVertexHashes.begin(), unifiedVertexHashes.end(), CompareFirst2{});
+
+			// Use another lookup table to try to reduce the amount of reordering we do as much as possible
+			// There may be a better way to do this, but it may not be trivial, without a priority queue, or something,
+			// because each span only includes possibly identical vertices -- they aren't verified yet
+			struct SpanHelper { std::vector<std::pair<uint64_t, unsigned>>::iterator _start, _end; };
+			std::vector<SpanHelper> spans;
+			spans.resize(input.GetUnifiedVertexCount());
+
+			for (auto i = unifiedVertexHashes.begin();i!=unifiedVertexHashes.end();) {
+				auto start = i;
+				i++;
+				while (i!=unifiedVertexHashes.end() && i->first == start->first) ++i;
+				
+				for (auto i2=start; i2!=i; ++i2) {
+					assert(spans[i2->second]._start == spans[i2->second]._end);
+					spans[i2->second] = SpanHelper { start, i };
+				}
+			}
+
+			unsigned finalUnifiedVertexCount = 0;
+
+			outputMapping.resize(input.GetUnifiedVertexCount(), ~0u);
+			for (unsigned v=0; v<input.GetUnifiedVertexCount(); ++v) {
+				if (outputMapping[v] != ~0u) continue;
+
+				outputMapping[v] = finalUnifiedVertexCount;
+
+				assert(spans[v]._start != spans[v]._end);
+				for (auto i=spans[v]._start; i!=spans[v]._end; ++i) {
+					if (i->second <= v) continue;
+					bool identical = true;
+					for (const auto& stream:inputStreams)
+						identical &= stream.GetVertexMap()[v] == stream.GetVertexMap()[i->second];
+					if (identical)
+						outputMapping[i->second] = finalUnifiedVertexCount;
+				}
+
+				for (unsigned s=0; s<inputStreams.size(); ++s)
+					workingMapping[s]._unifiedToStreamElement.push_back(inputStreams[s].GetVertexMap()[v]);
+
+				++finalUnifiedVertexCount;
+			}
+
+		#else
+			
+
+			unsigned finalUnifiedVertexCount = 0u;
+			for (unsigned v = 0; v < input.GetUnifiedVertexCount(); ++v) {
+				// look for an existing vertex that is identical
+				unsigned existingVertex = ~0u;
+				for (unsigned c = 0; c < finalUnifiedVertexCount; ++c) {
+					bool isIdentical = true;
+					for (unsigned s = 0; s < inputStreams.size(); ++s) {
+						auto mappedIndex = !inputStreams[s].GetVertexMap().empty() ? inputStreams[s].GetVertexMap()[v] : v;
+						if (workingMapping[s]._unifiedToStreamElement[c] != mappedIndex) {
+							isIdentical = false;
+							break;
+						}
+					}
+					if (isIdentical) {
+						existingVertex = c;
 						break;
 					}
 				}
-				if (isIdentical) {
-					existingVertex = c;
-					break;
+
+				if (existingVertex != ~0u) {
+					outputMapping.push_back(existingVertex);
+				} else {
+					// if we got this far, there's no existing identical vertex
+					for (unsigned s = 0; s < inputStreams.size(); ++s)
+						workingMapping[s]._unifiedToStreamElement.push_back(!inputStreams[s].GetVertexMap().empty() ? inputStreams[s].GetVertexMap()[v] : v);
+					outputMapping.push_back(finalUnifiedVertexCount);
+					++finalUnifiedVertexCount;
 				}
 			}
 
-			if (existingVertex != ~0u) {
-				outputMapping.push_back(existingVertex);
-			} else {
-				// if we got this far, there's no existing identical vertex
-				for (unsigned s = 0; s < inputStreams.size(); ++s)
-					workingMapping[s]._unifiedToStreamElement.push_back(!inputStreams[s].GetVertexMap().empty() ? inputStreams[s].GetVertexMap()[v] : v);
-				outputMapping.push_back(finalUnifiedVertexCount);
-				++finalUnifiedVertexCount;
-			}
-		}
+		#endif
+
+		for (auto&m:workingMapping)
+			m._unifiedToStreamElement.shrink_to_fit();
 
 		MeshDatabase result;
 		for (unsigned s = 0; s < inputStreams.size(); ++s) {

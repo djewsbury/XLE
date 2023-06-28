@@ -276,9 +276,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	{
 		RemoveExcludedAttributes(geoBlock, rules);
 
-		std::vector<uint32_t> mergeMapping;
 		if (rules._mergeDuplicateVertices.value_or(false)) {
-			mergeMapping = MergeDuplicateVertices(*geoBlock._mesh);
+			auto mergeMapping = MergeDuplicateVertices(*geoBlock._mesh);
 
 			if (!mergeMapping.empty()) {
 				// have to assume a densely packed index buffer here, because otherwise we'd have to deal with draw call overlaps
