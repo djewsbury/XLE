@@ -35,8 +35,9 @@ namespace RenderCore { namespace Assets
 
 		struct SkeletonRules
 		{
-			std::vector<uint64_t> _animatableBones;
-			std::vector<uint64_t> _outputBones;
+			std::optional<bool> _preserveAllParameters, _preserveAllOutputs, _bakeStaticTransforms, _optimize;
+			std::vector<uint64_t> _preserveParameters;
+			std::vector<uint64_t> _preserveOutputs;
 
 			void MergeIn(const SkeletonRules&);
 			uint64_t CalculateHash(uint64_t) const;
@@ -46,6 +47,9 @@ namespace RenderCore { namespace Assets
 		std::optional<bool> _autoProcessTextures;
 
 		std::vector<std::string> _inheritConfigurations;
+
+		RawGeoRules MatchRawGeoRules(StringSection<> name) const;
+		SkeletonRules MatchSkeletonRules(StringSection<> name) const;
 
 		IteratorRange<const std::string*> GetInherited() const { return _inheritConfigurations; }
 		void MergeInWithFilenameResolve(const ModelCompilationConfiguration&, const ::Assets::DirectorySearchRules&);

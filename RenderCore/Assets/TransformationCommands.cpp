@@ -338,13 +338,13 @@ namespace RenderCore { namespace Assets
             case MergeType::StaticTransform:
                     // This other transform might be merged away, also -- if it can be merged further.
                     // so let's consider it another dropped command
-                --commandAdjustment;    
+                --commandAdjustment;
                 break;
             case MergeType::Blocker:
                 ++commandAdjustment;
                 break;
             case MergeType::OutputMatrix:
-                if (!optimizer.CanMergeIntoOutputMatrix(cmdStream[c+1]))
+                if (!optimizer.CanBakeIntoOutputMatrix(cmdStream[c+1]))
                     ++commandAdjustment;
                 break;
 
@@ -622,7 +622,7 @@ namespace RenderCore { namespace Assets
                             // We must either record this transform to be merged into
                             // this output transform, or we have to insert a push into here
                             auto outputMatrixIndex = *(i2+1);
-                            bool canMerge = optimizer.CanMergeIntoOutputMatrix(outputMatrixIndex);
+                            bool canMerge = optimizer.CanBakeIntoOutputMatrix(outputMatrixIndex);
                             if (canMerge) {
                                     // If the same output matrix appears multiple times in our influences
                                     // list, then it will cause problems... We don't want to merge the same
@@ -635,7 +635,7 @@ namespace RenderCore { namespace Assets
                                         Throw(::Exceptions::BasicLabel("Writing to the same output matrix multiple times in transformation machine. Output matrix index: %u", outputMatrixIndex));
 
                                 auto transform = PromoteToFloat4x4(AsPointer(i));
-                                optimizer.MergeIntoOutputMatrix(outputMatrixIndex, transform);
+                                optimizer.BakeIntoOutputMatrix(outputMatrixIndex, transform);
                             } else {
                                 auto insertSize = next-i; auto outputMatSize = NextTransformationCommand_(i2) - i2;
                                 i2 = cmdStream.insert(i2, i, next);
@@ -1221,8 +1221,6 @@ namespace RenderCore { namespace Assets
 		std::vector<uint32_t> result;
 		result.reserve(input.size());
 
-            // First, we just want to convert series of pop operations into
-            // a single pop.
         for (auto i=input.begin(); i!=input.end();) {
 			auto nexti = NextTransformationCommand_(i);
             if (IsOutputCommand((TransformCommand)*i)) {
@@ -1238,6 +1236,35 @@ namespace RenderCore { namespace Assets
 					result.push_back(newOutputMatrix);
 					result.insert(result.end(), i+2, nexti);
 				}
+                
+            } else {
+				result.insert(result.end(), i, nexti);
+            }
+			i = nexti;
+        }
+
+		return result;
+    }
+
+    std::vector<uint32_t> FilterBindingPoints(
+		IteratorRange<const uint32_t*> input,
+		IteratorRange<const uint64_t*> filterIn)
+    {
+        std::vector<uint32_t> result;
+		result.reserve(input.size());
+
+        for (auto i=input.begin(); i!=input.end();) {
+			auto nexti = NextTransformationCommand_(i);
+            if (IsBindingPointCommand((TransformCommand)*i)) {
+				auto parameter = (*(i+1)) | (uint64_t(*(i+12) << 32ull));       // endian
+                
+                bool in = std::find(filterIn.begin(), filterIn.end(), parameter) != filterIn.end();
+                if (in) {
+                    result.insert(result.end(), i, nexti);
+                } else {
+                    // we take the commands after the BindingPoint_*, because these will become static transforms
+                    result.insert(result.end(), i+3, nexti);
+                }
                 
             } else {
 				result.insert(result.end(), i, nexti);
@@ -1428,7 +1455,7 @@ namespace RenderCore { namespace Assets
             case TransformCommand::BindingPoint_2:
             case TransformCommand::BindingPoint_3:
                 {
-                    uint64_t param = (*i) | (uint64_t(*(i+1)) << 32ull);
+                    uint64_t param = (*i) | (uint64_t(*(i+1)) << 32ull);        // endian
                     stream << indentBuffer << "Binding point for parameter ";
                     if (parameterToName) 
                         stream << "(" << parameterToName(param) << ")";

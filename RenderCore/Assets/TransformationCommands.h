@@ -39,7 +39,7 @@ namespace RenderCore { namespace Assets
 
             //
             //      Param'd transformation ops
-            //      Simplpe simular to the static ops, but in this
+            //      Similar to the static ops, but in this
             //      case reading the value from the parameter set
             //
         TransformFloat4x4_Parameter,
@@ -107,16 +107,16 @@ namespace RenderCore { namespace Assets
     class ITransformationMachineOptimizer
     {
     public:
-        virtual bool CanMergeIntoOutputMatrix(unsigned outputMatrixIndex) const = 0;
-        virtual void MergeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform) = 0;
+        virtual bool CanBakeIntoOutputMatrix(unsigned outputMatrixIndex) const = 0;
+        virtual void BakeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform) = 0;
         virtual ~ITransformationMachineOptimizer();
     };
 
 	class TransformationMachineOptimizer_Null : public ITransformationMachineOptimizer
 	{
 	public:
-		bool CanMergeIntoOutputMatrix(unsigned outputMatrixIndex) const { return false; } 
-		void MergeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform) {};
+		bool CanBakeIntoOutputMatrix(unsigned outputMatrixIndex) const { return false; } 
+		void BakeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform) {};
 	};
 
     std::vector<uint32_t> OptimizeTransformationMachine(
@@ -126,6 +126,10 @@ namespace RenderCore { namespace Assets
 	std::vector<uint32_t> RemapOutputMatrices(
 		IteratorRange<const uint32_t*> input,
 		IteratorRange<const unsigned*> outputMatrixMapping);
+
+    std::vector<uint32_t> FilterBindingPoints(
+		IteratorRange<const uint32_t*> input,
+		IteratorRange<const uint64_t*> filterIn);
 
 }}
 

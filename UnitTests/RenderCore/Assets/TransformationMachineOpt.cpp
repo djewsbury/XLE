@@ -131,8 +131,8 @@ namespace UnitTests
     class Optimizer : public RenderCore::Assets::ITransformationMachineOptimizer
     {
     public:
-        bool CanMergeIntoOutputMatrix(unsigned outputMatrixIndex) const { return false; }
-        void MergeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform) {}
+        bool CanBakeIntoOutputMatrix(unsigned outputMatrixIndex) const { return false; }
+        void BakeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform) {}
         ~Optimizer() {}
     };
 

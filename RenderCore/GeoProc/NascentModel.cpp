@@ -19,7 +19,6 @@
 #include "../../Utility/FastParseValue.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Core/Exceptions.h"
-#include "wildcards.hpp"
 #include <sstream>
 
 using namespace Utility::Literals;
@@ -469,11 +468,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	static ModelCompilationConfiguration::RawGeoRules BuildNativeVBSettings(const ModelCompilationConfiguration& modelCompilationConfiguration, StringSection<> name)
 	{
-		ModelCompilationConfiguration::RawGeoRules rules;
-		for (auto& c:modelCompilationConfiguration._rawGeoRules)
-			if (wildcards::match(name.AsStringView(), c.first))
-				rules.MergeIn(c.second);
-		return rules;
+		return modelCompilationConfiguration.MatchRawGeoRules(name);
 	}
 
 	std::vector<::Assets::SerializedArtifact> NascentModel::SerializeToChunks(
@@ -795,51 +790,54 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	bool ModelTransMachineOptimizer::CanMergeIntoOutputMatrix(unsigned outputMatrixIndex) const
+	bool ModelTransMachineOptimizer::CanBakeIntoOutputMatrix(unsigned outputMatrixIndex) const
     {
         if (outputMatrixIndex < unsigned(_canMergeIntoTransform.size()))
             return _canMergeIntoTransform[outputMatrixIndex];
         return false;
     }
 
-    void ModelTransMachineOptimizer::MergeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform)
+    void ModelTransMachineOptimizer::BakeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform)
     {
-        assert(CanMergeIntoOutputMatrix(outputMatrixIndex));
+        assert(CanBakeIntoOutputMatrix(outputMatrixIndex));
         _mergedTransforms[outputMatrixIndex] = Combine(
             _mergedTransforms[outputMatrixIndex], transform);
     }
 
     ModelTransMachineOptimizer::ModelTransMachineOptimizer(
 		const NascentModel& model,
-		IteratorRange<const std::pair<std::string, std::string>*> bindingNameInterface)
+		IteratorRange<const std::pair<std::string, std::string>*> bindingNameInterface,
+		bool allowTransformBake)
 	: _bindingNameInterface(bindingNameInterface.begin(), bindingNameInterface.end())
     {
 		auto outputMatrixCount = bindingNameInterface.size();
         _canMergeIntoTransform.resize(outputMatrixCount, false);
         _mergedTransforms.resize(outputMatrixCount, Identity<Float4x4>());
 
-        for (unsigned c=0; c<outputMatrixCount; ++c) {
+		if (allowTransformBake) {
+			for (unsigned c=0; c<outputMatrixCount; ++c) {
 
-			if (!bindingNameInterface[c].first.empty()) continue;
+				if (!bindingNameInterface[c].first.empty()) continue;
 
-			bool skinAttached = false;
-			bool doublyAttachedObject = false;
-			bool atLeastOneAttached = false;
-			for (const auto&cmd:model.GetCommands())
-				if (cmd.second._localToModel == bindingNameInterface[c].second) {
-					atLeastOneAttached = true;
+				bool skinAttached = false;
+				bool doublyAttachedObject = false;
+				bool atLeastOneAttached = false;
+				for (const auto&cmd:model.GetCommands())
+					if (cmd.second._localToModel == bindingNameInterface[c].second) {
+						atLeastOneAttached = true;
 
-					// if we've got a skin controller attached, we can't do any merging
-					skinAttached |= !cmd.second._skinControllerBlocks.empty();
+						// if we've got a skin controller attached, we can't do any merging
+						skinAttached |= !cmd.second._skinControllerBlocks.empty();
 
-					// find all of the meshes attached, and check if any are attached in
-					// multiple places
-					for (const auto&cmd2:model.GetCommands())
-						doublyAttachedObject |= cmd2.second._geometryBlock == cmd.second._geometryBlock && cmd2.second._localToModel != cmd.second._localToModel;
-				}
+						// find all of the meshes attached, and check if any are attached in
+						// multiple places
+						for (const auto&cmd2:model.GetCommands())
+							doublyAttachedObject |= cmd2.second._geometryBlock == cmd.second._geometryBlock && cmd2.second._localToModel != cmd.second._localToModel;
+					}
 
-            _canMergeIntoTransform[c] = atLeastOneAttached && !skinAttached && !doublyAttachedObject;
-        }
+				_canMergeIntoTransform[c] = atLeastOneAttached && !skinAttached && !doublyAttachedObject;
+			}
+		}
     }
 
     ModelTransMachineOptimizer::ModelTransMachineOptimizer() {}
@@ -847,17 +845,26 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     ModelTransMachineOptimizer::~ModelTransMachineOptimizer()
     {}
 
-	void OptimizeSkeleton(NascentSkeleton& embeddedSkeleton, NascentModel& model)
+	void OptimizeSkeleton(NascentSkeleton& embeddedSkeleton, NascentModel& model, const RenderCore::Assets::ModelCompilationConfiguration::SkeletonRules& skeletonRules)
 	{
-		{
-			auto filteringSkeleInterface = model.BuildSkeletonInterface();
-			filteringSkeleInterface.insert(filteringSkeleInterface.begin(), std::make_pair(std::string{}, "identity"));
+		if (!skeletonRules._preserveAllOutputs.value_or(false)) {
+			std::vector<std::pair<std::string, uint64_t>> filteringSkeleInterface;
+			for (auto q:model.BuildSkeletonInterface())
+				filteringSkeleInterface.emplace_back(q.first, Hash64(q.second));
+			filteringSkeleInterface.insert(filteringSkeleInterface.begin(), std::make_pair(std::string{}, Hash64("identity")));
+			for (auto s:skeletonRules._preserveOutputs)
+				filteringSkeleInterface.emplace_back(std::string{}, s);
 			embeddedSkeleton.GetSkeletonMachine().FilterOutputInterface(MakeIteratorRange(filteringSkeleInterface));
 		}
 
-		{
+		if (!skeletonRules._preserveAllParameters.value_or(false)) {
+			// parameters will only survive if they are specified in the preserveParameters list
+			embeddedSkeleton.GetSkeletonMachine().FilterParameterInterface(skeletonRules._preserveParameters);
+		}
+
+		if (skeletonRules._optimize.value_or(true)) {
 			auto finalSkeleInterface = embeddedSkeleton.GetSkeletonMachine().GetOutputInterface();
-			ModelTransMachineOptimizer optimizer(model, finalSkeleInterface);
+			ModelTransMachineOptimizer optimizer(model, finalSkeleInterface, skeletonRules._bakeStaticTransforms.value_or(true));
 			embeddedSkeleton.GetSkeletonMachine().Optimize(optimizer);
 			assert(embeddedSkeleton.GetSkeletonMachine().GetOutputMatrixCount() == finalSkeleInterface.size());
 

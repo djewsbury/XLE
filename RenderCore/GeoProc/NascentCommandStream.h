@@ -8,6 +8,7 @@
 
 #include "NascentSkeletonHelper.h"
 #include "../Assets/AnimationScaffoldInternal.h"
+#include "../Assets/ModelCompilationConfiguration.h"        // for ModelCompilationConfiguration::SkeletonRules
 #include "../../Math/Transformations.h"
 #include <vector>
 #include <string>
@@ -142,6 +143,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         std::vector<uint32_t> TransformToCmds(const Transform& transform, unsigned& cmdCount);
     };
+
+    void OptimizeSkeleton(NascentSkeleton& embeddedSkeleton, const RenderCore::Assets::ModelCompilationConfiguration::SkeletonRules&);
 
 }}}
 

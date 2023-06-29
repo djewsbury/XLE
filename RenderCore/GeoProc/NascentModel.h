@@ -5,6 +5,7 @@
 #pragma once
 
 #include "NascentObjectGuid.h"
+#include "../Assets/ModelCompilationConfiguration.h"		// for ModelCompilationConfiguration::SkeletonRules
 #include "../Format.h"
 #include "../Types.h"
 #include "../StateDesc.h"
@@ -118,13 +119,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	class ModelTransMachineOptimizer : public ITransformationMachineOptimizer
     {
     public:
-        bool CanMergeIntoOutputMatrix(unsigned outputMatrixIndex) const;
-        void MergeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform);
+        bool CanBakeIntoOutputMatrix(unsigned outputMatrixIndex) const;
+        void BakeIntoOutputMatrix(unsigned outputMatrixIndex, const Float4x4& transform);
 		IteratorRange<const Float4x4*> GetMergedOutputMatrices() const { return MakeIteratorRange(_mergedTransforms); }
 
         ModelTransMachineOptimizer(
 			const NascentModel& model,
-			IteratorRange<const std::pair<std::string, std::string>*> bindingNameInterface);
+			IteratorRange<const std::pair<std::string, std::string>*> bindingNameInterface,
+			bool allowTransformBake);
         ModelTransMachineOptimizer();
         ~ModelTransMachineOptimizer();
     protected:
@@ -133,7 +135,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<std::pair<std::string, std::string>>	_bindingNameInterface;
     };
 
-	void OptimizeSkeleton(NascentSkeleton& embeddedSkeleton, NascentModel& model);
+	void OptimizeSkeleton(NascentSkeleton& embeddedSkeleton, NascentModel& model, const RenderCore::Assets::ModelCompilationConfiguration::SkeletonRules&);
 
 	inline NascentObjectGuid NascentModel::Add(GeometryBlock&& object) { auto id = NextAvailableNamespace0Id(); Add(id, std::move(object)); return id; }
 	inline NascentObjectGuid NascentModel::Add(SkinControllerBlock&& object) { auto id = NextAvailableNamespace0Id(); Add(id, std::move(object)); return id; }

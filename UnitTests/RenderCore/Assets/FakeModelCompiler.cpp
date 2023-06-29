@@ -230,7 +230,8 @@ namespace UnitTests
 	{
 		auto model = GenerateModel();
 		auto embeddedSkeleton = GenerateNascentSkeleton();
-		RenderCore::Assets::GeoProc::OptimizeSkeleton(embeddedSkeleton, model);
+		RenderCore::Assets::ModelCompilationConfiguration::SkeletonRules defaultRules;
+		RenderCore::Assets::GeoProc::OptimizeSkeleton(embeddedSkeleton, model, defaultRules);
 		RenderCore::Assets::ModelCompilationConfiguration cfg;
 		return model.SerializeToChunks("skin", embeddedSkeleton, cfg);
 	}

@@ -89,10 +89,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 		_outputMatrixCount = newOutputMatrixCount;
 	}
 
-	void NascentSkeletonHelper::FilterOutputInterface(IteratorRange<const std::pair<std::string, std::string>*> filterIn)
+	void NascentSkeletonHelper::FilterOutputInterface(IteratorRange<const std::pair<std::string, uint64_t>*> filterIn)
 	{
 		auto oldOutputInterface = GetOutputInterface();
-		std::vector<std::pair<std::string, std::string>> newOutputInterface;
+		std::vector<JointTag> newOutputInterface;
 
 		std::vector<unsigned> oldIndexToNew(oldOutputInterface.size(), ~0u);
 		for (unsigned c=0; c<oldOutputInterface.size(); c++) {
@@ -100,7 +100,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 			if (i!=newOutputInterface.end()) {
 				oldIndexToNew[c] = (unsigned)std::distance(newOutputInterface.begin(), i);
 			} else {
-				auto f = std::find(filterIn.begin(), filterIn.end(), oldOutputInterface[c]);
+				auto f = std::find(filterIn.begin(), filterIn.end(), std::make_pair(oldOutputInterface[c].first, Hash64(oldOutputInterface[c].second)));
 				if (f!=filterIn.end()) {
 					oldIndexToNew[c] = (unsigned)(newOutputInterface.size());
 					newOutputInterface.push_back(oldOutputInterface[c]);
@@ -110,6 +110,22 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 
 		RemapOutputMatrices(MakeIteratorRange(oldIndexToNew));
 		SetOutputInterface(MakeIteratorRange(newOutputInterface));
+	}
+
+	void NascentSkeletonHelper::FilterParameterInterface(IteratorRange<const uint64_t*> filterIn)
+	{
+		ResolvePendingPops();
+
+		// Remove all parameters, except those that are in the filtered list
+		_parameterDehashTable.erase(
+			std::remove_if(
+				_parameterDehashTable.begin(),_parameterDehashTable.end(),
+				[filterIn](const auto& q) {
+					return std::find(filterIn.begin(), filterIn.end(), q.first) == filterIn.end();
+				}),
+			_parameterDehashTable.end());
+
+		_commandStream = FilterBindingPoints(_commandStream, filterIn);
 	}
 
     NascentSkeletonHelper::NascentSkeletonHelper() : _pendingPops(0), _outputMatrixCount(0) {}

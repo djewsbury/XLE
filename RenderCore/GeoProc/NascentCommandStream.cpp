@@ -435,4 +435,25 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	: _translation(translation), _rotationAsQuaternion(rotation), _uniformScale(scale)
 	{}
 
+	void OptimizeSkeleton(NascentSkeleton& skeleton, const RenderCore::Assets::ModelCompilationConfiguration::SkeletonRules& skeletonRules)
+	{
+		if (!skeletonRules._preserveAllOutputs.value_or(false)) {
+			std::vector<std::pair<std::string, uint64_t>> filteringSkeleInterface;
+			filteringSkeleInterface.insert(filteringSkeleInterface.begin(), std::make_pair(std::string{}, Hash64("identity")));
+			for (auto s:skeletonRules._preserveOutputs)
+				filteringSkeleInterface.emplace_back(std::string{}, s);
+			skeleton.GetSkeletonMachine().FilterOutputInterface(MakeIteratorRange(filteringSkeleInterface));
+		}
+
+		if (!skeletonRules._preserveAllParameters.value_or(false)) {
+			// parameters will only survive if they are specified in the preserveParameters list
+			skeleton.GetSkeletonMachine().FilterParameterInterface(skeletonRules._preserveParameters);
+		}
+
+		if (skeletonRules._optimize.value_or(true)) {
+			RenderCore::Assets::TransformationMachineOptimizer_Null optimizer;
+        	skeleton.GetSkeletonMachine().Optimize(optimizer);
+		}
+	}
+
 }}}

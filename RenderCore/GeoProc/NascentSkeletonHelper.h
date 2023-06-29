@@ -31,13 +31,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 
         std::unique_ptr<Float4x4[]>		GenerateOutputTransforms() const;
 
-		using JointTag = std::pair<std::string, std::string>;
+		using JointTag = std::pair<std::string, std::string>;       // skeleton name and joint name
 
 		IteratorRange<const JointTag*>	GetOutputInterface() const { return MakeIteratorRange(_jointTags); }
 		void							SetOutputInterface(IteratorRange<const JointTag*> jointNames);
 		std::vector<uint64_t>			BuildHashedOutputInterface() const;
 
-		void			FilterOutputInterface(IteratorRange<const std::pair<std::string, std::string>*> filterIn);
+		void			FilterOutputInterface(IteratorRange<const std::pair<std::string, uint64_t>*> filterIn);
+        void            FilterParameterInterface(IteratorRange<const uint64_t*> filterIn);
 
         const std::vector<uint32_t>&		GetCommandStream() const { return _commandStream; }
 

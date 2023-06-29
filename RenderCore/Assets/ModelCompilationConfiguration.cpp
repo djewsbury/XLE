@@ -8,6 +8,7 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/FastParseValue.h"
+#include "wildcards.hpp"
 
 using namespace Utility::Literals;
 
@@ -47,8 +48,12 @@ namespace RenderCore { namespace Assets
 
 	void ModelCompilationConfiguration::SkeletonRules::MergeIn(const ModelCompilationConfiguration::SkeletonRules& src)
 	{
-		UnionSortedSet(_animatableBones, src._animatableBones);
-		UnionSortedSet(_outputBones, src._outputBones);
+		if (src._preserveAllParameters) _preserveAllParameters = src._preserveAllParameters;
+		if (src._preserveAllOutputs) _preserveAllOutputs = src._preserveAllOutputs;
+		if (src._bakeStaticTransforms) _bakeStaticTransforms = src._bakeStaticTransforms;
+		if (src._optimize) _optimize = src._optimize;
+		UnionSortedSet(_preserveParameters, src._preserveParameters);
+		UnionSortedSet(_preserveOutputs, src._preserveOutputs);
 	}
 
 	void ModelCompilationConfiguration::MergeInWithFilenameResolve(const ModelCompilationConfiguration& src, const ::Assets::DirectorySearchRules&)
@@ -185,16 +190,28 @@ namespace RenderCore { namespace Assets
 			uint64_t keyName; StringSection<> str;
 			while (TryKeyedItem(fmttr, keyName)) {
 				switch (keyName) {
-				case "AnimatableBones"_h:
+				case "PreserveAllParameters"_h:
+					rules._preserveAllParameters = Formatters::RequireCastValue<bool>(fmttr);
+					break;
+				case "PreserveAllOutputs"_h:
+					rules._preserveAllOutputs = Formatters::RequireCastValue<bool>(fmttr);
+					break;
+				case "BakeStaticTransforms"_h:
+					rules._bakeStaticTransforms = Formatters::RequireCastValue<bool>(fmttr);
+					break;
+				case "Optimize"_h:
+					rules._optimize = Formatters::RequireCastValue<bool>(fmttr);
+					break;
+				case "PreserveParameters"_h:
 					RequireBeginElement(fmttr);
 					while (fmttr.TryStringValue(str))
-						rules._animatableBones.insert(rules._animatableBones.end(), Hash64(str));
+						rules._preserveParameters.insert(rules._preserveParameters.end(), Hash64(str));
 					RequireEndElement(fmttr);
 					break;
-				case "OutputBones"_h:
+				case "PreserveOutputs"_h:
 					RequireBeginElement(fmttr);
 					while (fmttr.TryStringValue(str))
-						rules._outputBones.insert(rules._outputBones.end(), Hash64(str));
+						rules._preserveOutputs.insert(rules._preserveOutputs.end(), Hash64(str));
 					RequireEndElement(fmttr);
 					break;
 				}
@@ -202,15 +219,15 @@ namespace RenderCore { namespace Assets
 
 			RequireEndElement(fmttr);
 
-			std::sort(rules._animatableBones.begin(), rules._animatableBones.end());
-			rules._animatableBones.erase(
-				std::unique(rules._animatableBones.begin(), rules._animatableBones.end()),
-				rules._animatableBones.end());
+			std::sort(rules._preserveParameters.begin(), rules._preserveParameters.end());
+			rules._preserveParameters.erase(
+				std::unique(rules._preserveParameters.begin(), rules._preserveParameters.end()),
+				rules._preserveParameters.end());
 
-			std::sort(rules._outputBones.begin(), rules._outputBones.end());
-			rules._outputBones.erase(
-				std::unique(rules._outputBones.begin(), rules._outputBones.end()),
-				rules._outputBones.end());
+			std::sort(rules._preserveOutputs.begin(), rules._preserveOutputs.end());
+			rules._preserveOutputs.erase(
+				std::unique(rules._preserveOutputs.begin(), rules._preserveOutputs.end()),
+				rules._preserveOutputs.end());
 
 			_skeletonRules.emplace_back(std::move(filteringPattern), std::move(rules));
 		}
@@ -232,8 +249,15 @@ namespace RenderCore { namespace Assets
 
 	uint64_t ModelCompilationConfiguration::SkeletonRules::CalculateHash(uint64_t hash) const
 	{
-		hash = Hash64(AsPointer(_animatableBones.begin()), AsPointer(_animatableBones.end()), hash);
-		hash = Hash64(AsPointer(_outputBones.begin()), AsPointer(_outputBones.end()), hash);
+		uint64_t flags =
+				(_preserveAllParameters ? uint64_t(*_preserveAllParameters) : 2ull) << 0ull
+			| 	(_preserveAllOutputs ? uint64_t(*_preserveAllOutputs) : 2ull) << 2ull
+			| 	(_bakeStaticTransforms ? uint64_t(*_bakeStaticTransforms) : 2ull) << 4ull
+			| 	(_optimize ? uint64_t(*_optimize) : 2ull) << 6ull
+			;
+		hash = HashCombine(flags, hash);
+		hash = Hash64(AsPointer(_preserveParameters.begin()), AsPointer(_preserveParameters.end()), hash);
+		hash = Hash64(AsPointer(_preserveOutputs.begin()), AsPointer(_preserveOutputs.end()), hash);
 		return hash;
 	}
 
@@ -251,6 +275,24 @@ namespace RenderCore { namespace Assets
 		for (const auto& q:_inheritConfigurations)
 			result = Hash64(q, result);
 		return result;
+	}
+
+	auto ModelCompilationConfiguration::MatchRawGeoRules(StringSection<> name) const -> RawGeoRules
+	{
+		RawGeoRules rules;
+		for (auto& c:_rawGeoRules)
+			if (wildcards::match(name.AsStringView(), c.first))
+				rules.MergeIn(c.second);
+		return rules;
+	}
+
+	auto ModelCompilationConfiguration::MatchSkeletonRules(StringSection<> name) const -> SkeletonRules
+	{
+		SkeletonRules rules;
+		for (auto& c:_skeletonRules)
+			if (wildcards::match(name.AsStringView(), c.first))
+				rules.MergeIn(c.second);
+		return rules;
 	}
 
 	ModelCompilationConfiguration::ModelCompilationConfiguration(Formatters::TextInputFormatter<>& fmttr)

@@ -58,14 +58,6 @@ namespace ColladaConversion
         Converter c; c.f = float(input); 
         return c.i;
     }
-    //
-    //static unsigned int FloatBits(double input)
-    //{
-    //        // (or just use a reinterpret cast)
-    //    union Converter { float f; unsigned int i; };
-    //    Converter c; c.f = float(input); 
-    //    return c.i;
-    //}
 
     unsigned PushTransformations(
         RenderCore::Assets::GeoProc::NascentSkeleton& dst,
