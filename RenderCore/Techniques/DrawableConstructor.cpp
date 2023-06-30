@@ -249,6 +249,18 @@ namespace RenderCore { namespace Techniques
 						return lhs._srcOffset < rhs._srcOffset;
 					});
 
+				#if defined(_DEBUG)
+					// look for overlapping request that aren't exactly the same
+					for (auto i=_staticLoadRequests.begin(); i!=_staticLoadRequests.end(); ++i)
+						for (auto i2=i+1; i2!=_staticLoadRequests.end(); ++i2) {
+							if (i2 == i || i2->_loadBuffer != i->_loadBuffer || i2->_scaffoldIdx != i->_scaffoldIdx) continue;
+							if (i2->_srcOffset == i->_srcOffset && i2->_srcSize == i->_srcSize) continue;
+							if ((i2->_srcOffset+i2->_srcSize) <= i->_srcOffset) continue;
+							if (i2->_srcOffset >= (i->_srcOffset+i->_srcSize)) continue;
+							assert(false);		// overlapping, but not identical
+						}
+				#endif
+
 				struct PendingTransactions
 				{
 					std::vector<std::future<BufferUploads::ResourceLocator>> _markers;

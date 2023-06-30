@@ -731,35 +731,38 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// be specifically authored in a content tool
         // Either way, we'll combine bitwise identical positions, because that should not have any negative effects
 		auto& stream = mesh.GetStreams()[posElement];
-        auto mappingToUniquePositions = MapToBitwiseIdenticals(*stream.GetSourceData(), stream.GetVertexMap(), true);
+        std::vector<uint32_t> mappingToUniquePositions;
 
-		std::vector<unsigned> remappedIndexBuffer;
-        for (auto d:drawCalls) {
-            if (d._topology != Topology::TriangleList)
-                Throw(std::runtime_error("Geometry processing operations not supported for non-triangle-list geometry"));
-
-            if (d._ibFormat == Format::R32_UINT) {
-                auto indexCount = d._indices.size() / sizeof(unsigned);
-                remappedIndexBuffer.reserve(remappedIndexBuffer.size() + indexCount);
-                for (const auto i:d._indices.Cast<const unsigned*>())
-                    remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
-            } else if (d._ibFormat == Format::R16_UINT) {
-                auto indexCount = d._indices.size() / sizeof(uint16_t);
-                remappedIndexBuffer.reserve(remappedIndexBuffer.size() + indexCount);
-                for (const auto i:d._indices.Cast<const uint16_t*>())
-                    remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
-            } else if (d._ibFormat == Format::R8_UINT) {
-                auto indexCount = d._indices.size() / sizeof(uint8_t);
-                remappedIndexBuffer.reserve(remappedIndexBuffer.size() + indexCount);
-                for (const auto i:d._indices.Cast<const uint8_t*>())
-                    remappedIndexBuffer.push_back(mappingToUniquePositions[i]);
-            } else
-                Throw(std::runtime_error("Unsupported index format in geometry processing operation"));
+        {
+            auto mapToBitwiseResult = MapToBitwiseIdenticals(*stream.GetSourceData(), true);
+            mappingToUniquePositions.reserve(mesh.GetUnifiedVertexCount());
+            if (!mapToBitwiseResult.empty()) {
+                if (!stream.GetVertexMap().empty()) {
+                    std::transform(
+                        stream.GetVertexMap().begin(), stream.GetVertexMap().end(),
+                        std::back_inserter(mappingToUniquePositions),
+                        [&mapToBitwiseResult](const unsigned i) { return mapToBitwiseResult[i]; });
+                } else {
+                    assert(mapToBitwiseResult.size() == mesh.GetUnifiedVertexCount());
+                    mappingToUniquePositions = std::move(mapToBitwiseResult);
+                }
+            } else {
+                if (!stream.GetVertexMap().empty()) {
+                    mappingToUniquePositions.insert(mappingToUniquePositions.end(), stream.GetVertexMap().begin(), stream.GetVertexMap().end());
+                } else {
+                    for (unsigned c=0; c<mesh.GetUnifiedVertexCount(); ++c) mappingToUniquePositions.push_back(c);      // unlikely -- no mapping at all
+                }
+            }
         }
+
+		std::vector<unsigned> flatIndexBuffer = BuildFlatTriList(drawCalls);
+        std::vector<unsigned> remappedIndexBuffer;
+        remappedIndexBuffer.resize(flatIndexBuffer.size());
+        RemapIndexBuffer(remappedIndexBuffer, flatIndexBuffer, mappingToUniquePositions, Format::R32_UINT);
 
 		// Now we have an buffer with indices of unique positions, we can build a topological buffer
 		std::vector<unsigned> adjacencyIndexBuffer;
-		adjacencyIndexBuffer.resize(remappedIndexBuffer.size()*2*sizeof(unsigned));
+		adjacencyIndexBuffer.resize(remappedIndexBuffer.size()*2);
 		TriListToTriListWithAdjacency(
 			MakeIteratorRange(adjacencyIndexBuffer),
 			MakeIteratorRange(remappedIndexBuffer));

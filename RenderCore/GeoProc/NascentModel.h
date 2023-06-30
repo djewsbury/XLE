@@ -25,7 +25,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	class MeshDatabase;
 	class UnboundSkinController;
 	class NascentSkeleton;
-	struct NascentGeometryObjects;
+	struct GeometrySerializationHelper;
 	struct CmdStreamSerializationHelper;
 
 	class NascentModel
@@ -112,7 +112,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		ModelDefaultPoseData CalculateDefaultPoseData(
 			const NascentSkeleton& skeleton,
-			const NascentGeometryObjects& geoObjects,
+			const GeometrySerializationHelper& geoObjects,
 			const CmdStreamSerializationHelper& helper) const;
 	};
 

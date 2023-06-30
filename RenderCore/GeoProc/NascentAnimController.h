@@ -31,7 +31,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<uint8_t>		_animatedVertexElements;
         std::vector<uint8_t>		_skeletonBinding;
         unsigned                    _skeletonBindingVertexStride = 0;
-        unsigned                    _animatedVertexBufferSize = 0;
 
 		struct Section
 		{
@@ -47,13 +46,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         std::pair<Float3, Float3>	_localBoundingBox = InvalidBoundingBox();
 
+        struct LargeResourceBlocks : public NascentRawGeometry::LargeResourceBlocks
+		{
+			LargeResourceBlockConstructor::BlockAddress _animatedVertexElements, _skeletonBinding;
+		};
+
         void    SerializeWithResourceBlock(
             ::Assets::BlockSerializer& outputSerializer,
-            LargeResourceBlockConstructor& largeResourcesBlock) const;
+            const LargeResourceBlocks& blocks) const;
 
         void    SerializeTopologicalWithResourceBlock(
             ::Assets::BlockSerializer& outputSerializer,
-            LargeResourceBlockConstructor& largeResourcesBlock) const;
+            const LargeResourceBlocks& blocks) const;
         friend std::ostream& SerializationOperator(std::ostream&, const NascentBoundSkinnedGeometry&);
     };
 

@@ -20,8 +20,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	public:
 		using Element = IteratorRange<const void*>;
 		std::vector<Element> _elements;
-		size_t AddBlock(IteratorRange<const void*>);		// given block must outlive this instance
-		size_t AddBlock(std::vector<uint8_t>&&);
+		struct BlockAddress { size_t _offset = 0, _size = 0; };
+		BlockAddress AddBlock(IteratorRange<const void*>);		// given block must outlive this instance
+		BlockAddress AddBlock(std::vector<uint8_t>&&);
 		size_t CalculateSize() const; 
 	protected:
 		std::vector<std::vector<uint8_t>> _retainedBlocks;
@@ -45,13 +46,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		std::vector<uint8_t>		_adjacencyIndices;
 
+		struct LargeResourceBlocks
+		{
+			LargeResourceBlockConstructor::BlockAddress _vb, _ib, _topologicalIb;
+		};
+
 		void SerializeWithResourceBlock(
 			::Assets::BlockSerializer& outputSerializer, 
-			LargeResourceBlockConstructor& largeResourcesBlock) const;
+			const LargeResourceBlocks& blocks) const;
 
 		void SerializeTopologicalWithResourceBlock(
 			::Assets::BlockSerializer& outputSerializer, 
-			LargeResourceBlockConstructor& largeResourcesBlock) const;
+			const LargeResourceBlocks& blocks) const;
 
 		friend std::ostream& SerializationOperator(std::ostream&, const NascentRawGeometry&);
 	};

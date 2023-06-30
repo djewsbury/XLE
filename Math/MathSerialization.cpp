@@ -49,6 +49,10 @@ namespace XLEMath
                 str << "translate {" << decomposed._translation[0] << ", " << decomposed._translation[1] << ", " << decomposed._translation[2] << "}";
                 first = false;
             }
+
+            if (first)      // nothing written
+                str << "identity";
+
         } else {
             str << "skewed matrix ";
             for (unsigned i=0; i<4; ++i) {

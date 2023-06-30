@@ -86,7 +86,7 @@ namespace RenderCore { namespace Assets
 
 	struct IndexData
 	{
-		Format		 _format;
+		Format		_format;
 		unsigned    _offset, _size;
 	};
 

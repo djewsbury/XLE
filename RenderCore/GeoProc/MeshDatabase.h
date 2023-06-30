@@ -200,7 +200,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     // the "ignoreWComponent" flag
     std::vector<unsigned> MapToBitwiseIdenticals(
         const IVertexSourceData& sourceStream,
-        IteratorRange<const unsigned*> originalMapping = {},
         bool ignoreWComponent = false);
 
 	MeshDatabase RemoveDuplicates(

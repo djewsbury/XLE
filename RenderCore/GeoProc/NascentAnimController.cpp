@@ -846,7 +846,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		result._animatedVertexElements = std::move(animatedVertexBuffer);
 		result._skeletonBinding = std::move(skeletonBindingVertices);
         result._skeletonBindingVertexStride = (unsigned)destinationWeightVertexStride;
-        result._animatedVertexBufferSize = (unsigned)(animatedVertexStride*unifiedVertexCount);
 
         result._mainDrawAnimatedIA._vertexStride = animatedVertexStride;
         result._mainDrawAnimatedIA._elements = std::move(animatedVertexLayout);
@@ -965,16 +964,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     void NascentBoundSkinnedGeometry::SerializeWithResourceBlock(
         ::Assets::BlockSerializer& outputSerializer, 
-        LargeResourceBlockConstructor& largeResourcesBlock) const
+        const LargeResourceBlocks& blocks) const
     {
-        _unanimatedBase.SerializeWithResourceBlock(outputSerializer, largeResourcesBlock);
+        _unanimatedBase.SerializeWithResourceBlock(outputSerializer, blocks);
 
-        // Note that this will end up interleaving the index buffer between the vertex buffers
-        auto vbOffset1 = largeResourcesBlock.AddBlock(_animatedVertexElements);
-        auto vbSize1 = _animatedVertexElements.size();
-
-        auto vbOffset2 = largeResourcesBlock.AddBlock(_skeletonBinding);
-        auto vbSize2 = _skeletonBinding.size();
+        assert(blocks._animatedVertexElements._size == _animatedVertexElements.size());
+		assert(blocks._skeletonBinding._size == _skeletonBinding.size());
 
             // append skinning related information
         outputSerializer << (uint32_t)Assets::GeoCommand::AttachSkinningData;
@@ -983,11 +978,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         SerializationOperator(
             outputSerializer, 
             RenderCore::Assets::VertexData 
-                { _mainDrawAnimatedIA, unsigned(vbOffset1), unsigned(vbSize1) });
+                { _mainDrawAnimatedIA, unsigned(blocks._animatedVertexElements._offset), unsigned(blocks._animatedVertexElements._size) });
         SerializationOperator(
             outputSerializer, 
             RenderCore::Assets::VertexData 
-                { _preskinningIA, unsigned(vbOffset2), unsigned(vbSize2) });
+                { _preskinningIA, unsigned(blocks._skeletonBinding._offset), unsigned(blocks._skeletonBinding._size) });
         
 		SerializationOperator(outputSerializer, _preskinningSections);
 
@@ -998,17 +993,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     }
 
     void    NascentBoundSkinnedGeometry::SerializeTopologicalWithResourceBlock(
-            ::Assets::BlockSerializer& outputSerializer,
-            LargeResourceBlockConstructor& largeResourcesBlock) const
+        ::Assets::BlockSerializer& outputSerializer,
+        const LargeResourceBlocks& blocks) const
     {
-        _unanimatedBase.SerializeTopologicalWithResourceBlock(outputSerializer, largeResourcesBlock);
+        _unanimatedBase.SerializeTopologicalWithResourceBlock(outputSerializer, blocks);
 
-        // Note that this will end up interleaving the index buffer between the vertex buffers
-        auto vbOffset1 = largeResourcesBlock.AddBlock(_animatedVertexElements);
-        auto vbSize1 = _animatedVertexElements.size();
-
-        auto vbOffset2 = largeResourcesBlock.AddBlock(_skeletonBinding);
-        auto vbSize2 = _skeletonBinding.size();
+        assert(blocks._animatedVertexElements._size == _animatedVertexElements.size());
+		assert(blocks._skeletonBinding._size == _skeletonBinding.size());
 
             // append skinning related information
         outputSerializer << (uint32_t)Assets::GeoCommand::AttachSkinningData;
@@ -1017,11 +1008,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         SerializationOperator(
             outputSerializer, 
             RenderCore::Assets::VertexData 
-                { _mainDrawAnimatedIA, unsigned(vbOffset1), unsigned(vbSize1) });
+                { _mainDrawAnimatedIA, unsigned(blocks._animatedVertexElements._offset), unsigned(blocks._animatedVertexElements._size) });
         SerializationOperator(
             outputSerializer, 
             RenderCore::Assets::VertexData 
-                { _preskinningIA, unsigned(vbOffset2), unsigned(vbSize2) });
+                { _preskinningIA, unsigned(blocks._skeletonBinding._offset), unsigned(blocks._skeletonBinding._size) });
         
 		SerializationOperator(outputSerializer, _preskinningSections);
 
@@ -1143,8 +1134,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         stream << "   Unanimated VB bytes: " << ByteCount(geo._unanimatedBase._vertices.size()) << " (" << geo._unanimatedBase._vertices.size() / std::max(1u, geo._unanimatedBase._mainDrawInputAssembly._vertexStride) << "*" << geo._unanimatedBase._mainDrawInputAssembly._vertexStride << ")" << std::endl;
         stream << "     Animated VB bytes: " << ByteCount(geo._animatedVertexElements.size()) << " (" << geo._animatedVertexElements.size() / std::max(1u, geo._mainDrawAnimatedIA._vertexStride) << "*" << geo._mainDrawAnimatedIA._vertexStride << ")" << std::endl;
         stream << "Skele binding VB bytes: " << ByteCount(geo._skeletonBinding.size()) << " (" << geo._skeletonBinding.size() / std::max(1u, geo._skeletonBindingVertexStride) << "*" << geo._skeletonBindingVertexStride << ")" << std::endl;
-        stream << "     Animated VB bytes: " << ByteCount(geo._animatedVertexBufferSize) << " (" << geo._animatedVertexBufferSize / std::max(1u, geo._mainDrawAnimatedIA._vertexStride) << "*" << geo._mainDrawAnimatedIA._vertexStride << ")" << std::endl;
+        stream << "     Animated VB bytes: " << ByteCount(geo._animatedVertexElements.size()) << " (" << geo._animatedVertexElements.size() / std::max(1u, geo._mainDrawAnimatedIA._vertexStride) << "*" << geo._mainDrawAnimatedIA._vertexStride << ")" << std::endl;
         stream << "              IB bytes: " << ByteCount(geo._unanimatedBase._indices.size()) << " (" << (geo._unanimatedBase._indices.size()*8/BitsPerPixel(geo._unanimatedBase._indexFormat)) << "*" << BitsPerPixel(geo._unanimatedBase._indexFormat)/8 << ")" << std::endl;
+        stream << "  Topological IB bytes: " << ByteCount(geo._unanimatedBase._adjacencyIndices.size()) << " (" << (geo._unanimatedBase._adjacencyIndices.size()*8/BitsPerPixel(geo._unanimatedBase._indexFormat)) << "*" << BitsPerPixel(geo._unanimatedBase._indexFormat)/8 << ")" << std::endl;
         stream << " Unanimated IA: " << geo._unanimatedBase._mainDrawInputAssembly << std::endl;
         stream << "   Animated IA: " << geo._mainDrawAnimatedIA << std::endl;
         stream << "Preskinning IA: " << geo._preskinningIA << std::endl;
@@ -1165,7 +1157,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			}
 			stream << std::endl;
 		}
-		stream << "Geo Space To Node Space: " << geo._unanimatedBase._geoSpaceToNodeSpace << std::endl;
+		stream << "Geo Space To Node Space: "; CompactTransformDescription(stream, geo._unanimatedBase._geoSpaceToNodeSpace); stream << std::endl;
         
         stream << std::endl;
         return stream;

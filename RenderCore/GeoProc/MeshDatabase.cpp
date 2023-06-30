@@ -1091,7 +1091,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     std::vector<unsigned> MapToBitwiseIdenticals(
         const IVertexSourceData& sourceStream,
-        IteratorRange<const unsigned*> originalMapping,
         bool ignoreWComponent)
     {
         std::vector<unsigned> oldOrderingToNewOrdering(sourceStream.GetCount(), ~0u);
@@ -1135,17 +1134,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             q = q2;
         }
 
-        if (originalMapping.empty())
-            return oldOrderingToNewOrdering;
-
-        // have to transform "originalMapping" via this new mapping
-        std::vector<unsigned> outputMapping;
-        outputMapping.reserve(originalMapping.size());
-        std::transform(
-            originalMapping.begin(), originalMapping.end(),
-            std::back_inserter(outputMapping),
-            [&oldOrderingToNewOrdering](const unsigned i) { return oldOrderingToNewOrdering[i]; });
-        return outputMapping;
+        return oldOrderingToNewOrdering;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

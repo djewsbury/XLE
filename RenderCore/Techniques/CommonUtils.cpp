@@ -156,6 +156,21 @@ namespace RenderCore { namespace Techniques
 			std::string _name;
 		};
 
+		static void MergeSequentialRequests(std::vector<ModelScaffoldDataSource::LoadRequests>& requests)
+		{
+			if (requests.empty()) return;
+			for (auto i=requests.begin()+1; i!=requests.end();) {
+				auto prev = i-1;
+				if (prev->_modelScaffold != i->_modelScaffold) { ++i; continue; }
+				if ((prev->_srcOffset+prev->_size) == i->_srcOffset && (prev->_dstOffset+prev->_size) == i->_dstOffset) {
+					prev->_size += i->_size;
+					i = requests.erase(i);
+				} else {
+					++i;
+				}
+			}
+		}
+
 		static std::vector<ModelScaffoldDataSource::LoadRequests> AsLoadRequests(IteratorRange<const ModelScaffoldLoadRequest*> loadRequests)
 		{
 			std::vector<ModelScaffoldDataSource::LoadRequests> result;
@@ -173,6 +188,7 @@ namespace RenderCore { namespace Techniques
 					return lhs._srcOffset < rhs._srcOffset;		// sorting by _srcOffset required by PrepareData
 				});
 
+			MergeSequentialRequests(result);
 			return result;
 		}
 
@@ -189,6 +205,7 @@ namespace RenderCore { namespace Techniques
 			}
 			// sorting by _srcOffset required by PrepareData
 			std::sort(result.begin(), result.end(), [](const auto& lhs, const auto& rhs) { return lhs._srcOffset < rhs._srcOffset; });
+			MergeSequentialRequests(result);
 			return result;
 		}
 	}

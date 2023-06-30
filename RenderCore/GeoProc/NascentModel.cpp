@@ -23,8 +23,6 @@
 
 using namespace Utility::Literals;
 
-// #define WRITE_TOPOLOGICAL_CMDSTREAM 1
-
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	static const unsigned ModelScaffoldVersion = 1;
@@ -271,7 +269,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return {};
 	}
 
-	static NascentRawGeometry CompleteInstantiation(NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules)
+	static NascentRawGeometry CompleteInstantiation(NascentModel::GeometryBlock& geoBlock, const ModelCompilationConfiguration::RawGeoRules& rules, bool buildTopologicalIndexBuffer)
 	{
 		RemoveExcludedAttributes(geoBlock, rules);
 
@@ -304,12 +302,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             RemoveRedundantBitangents(*geoBlock._mesh);
 
 		std::vector<uint8_t> adjacencyIndexBuffer;
-		#if WRITE_TOPOLOGICAL_CMDSTREAM
-			const bool buildTopologicalIndexBuffer = true;
-		#else
-			const bool buildTopologicalIndexBuffer = false;
-		#endif
-		if constexpr (buildTopologicalIndexBuffer) {
+		if (buildTopologicalIndexBuffer) {
 			auto drawCalls = BuildDrawCallsForGeoAlgorithm(geoBlock);
 			auto tempBuffer = BuildAdjacencyIndexBufferForUniquePositions(*geoBlock._mesh, MakeIteratorRange(drawCalls));
 			adjacencyIndexBuffer = ConvertIndexBufferFormat(std::move(tempBuffer), geoBlock._indexFormat);
@@ -334,10 +327,22 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	}
 
 	enum class CmdStreamMode { Normal, Topological };
-	struct NascentGeometryObjects
+	struct GeometrySerializationHelper
 	{
-		struct RawGeoEntry { NascentObjectGuid _srcGuid; CmdStreamMode _cmdStreamMode; NascentRawGeometry _geo; unsigned _id = ~0u; };
-		struct SkinnedGeoEntry { uint64_t _srcGuid; CmdStreamMode _cmdStreamMode; NascentBoundSkinnedGeometry _geo; unsigned _id = ~0u; };
+		struct RawGeoEntry
+		{
+			NascentObjectGuid _srcGuid;
+			NascentRawGeometry _geo;
+			unsigned _id = ~0u, _topologicalId = ~0u;
+			NascentRawGeometry::LargeResourceBlocks _blocks;
+		};
+		struct SkinnedGeoEntry
+		{
+			uint64_t _srcGuid;
+			NascentBoundSkinnedGeometry _geo;
+			unsigned _id = ~0u, _topologicalId = ~0u;
+			NascentBoundSkinnedGeometry::LargeResourceBlocks _blocks;
+		};
 		std::vector<RawGeoEntry> _rawGeos;
 		std::vector<SkinnedGeoEntry> _skinnedGeos;
 		unsigned _nextId = 0;
@@ -369,15 +374,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		std::vector<std::pair<std::string, std::string>>	_inputInterfaceNames;
 	};
 
-    static std::ostream& SerializationOperator(std::ostream& stream, const NascentGeometryObjects& geos)
+    static std::ostream& SerializationOperator(std::ostream& stream, const GeometrySerializationHelper& geos)
     {
         stream << " --- Geos:" << std::endl;
         for (const auto& g:geos._rawGeos)
-            stream << "[" << g._id << "] (0x" << std::hex << g._srcGuid._objectId << std::dec << ") Geo" << (g._cmdStreamMode == CmdStreamMode::Topological ? "[Topological]" : "") << " --- " << std::endl << g._geo << std::endl;
+            stream << "[" << g._id << "] (0x" << std::hex << g._srcGuid._objectId << std::dec << ") Geo --- " << std::endl << g._geo << std::endl;
 
         stream << " --- Skinned Geos:" << std::endl;
         for (const auto& g:geos._skinnedGeos)
-            stream << "[" << g._id << "] (0x" << std::hex << g._srcGuid << std::dec << ") Skinned geo" << (g._cmdStreamMode == CmdStreamMode::Topological ? "[Topological]" : "") << " --- " << std::endl << g._geo << std::endl;
+            stream << "[" << g._id << "] (0x" << std::hex << g._srcGuid << std::dec << ") Skinned geo --- " << std::endl << g._geo << std::endl;
         return stream;
     }
 
@@ -433,7 +438,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
-	static void TraceMetrics(std::ostream& stream, const NascentGeometryObjects& geoObjects, IteratorRange<const ::Assets::BlockSerializer*> cmdStreams, const NascentSkeleton& skeleton, IteratorRange<const CmdStreamSerializationHelper*> dehashHelpers)
+	static void TraceMetrics(std::ostream& stream, const GeometrySerializationHelper& geoObjects, IteratorRange<const ::Assets::BlockSerializer*> cmdStreams, const NascentSkeleton& skeleton, IteratorRange<const CmdStreamSerializationHelper*> dehashHelpers)
 	{
 		stream << "============== Geometry Objects ==============" << std::endl;
 		stream << geoObjects;
@@ -480,17 +485,26 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		auto recall = serializer.CreateRecall(sizeof(unsigned));
 		
 		CmdStreamSerializationHelper mainStreamHelper;
+		bool assignedMainStream = false;
 		std::vector<::Assets::BlockSerializer> generatedCmdStreams;
 		std::vector<CmdStreamSerializationHelper> cmdStreamDehashHelpers;
-		NascentGeometryObjects geoObjects;
-		#if WRITE_TOPOLOGICAL_CMDSTREAM
-			CmdStreamMode cmdStreamModes[] {CmdStreamMode::Normal, CmdStreamMode::Topological};
-		#else
-			CmdStreamMode cmdStreamModes[] {CmdStreamMode::Normal};
-		#endif
-		for (auto mode:cmdStreamModes) {
+		GeometrySerializationHelper geoObjects;
+		std::vector<std::pair<uint64_t, CmdStreamMode>> cmdStreams;
+		cmdStreams.reserve(modelCompilationConfiguration._commandStreams.size());
+		for (const auto& s:modelCompilationConfiguration._commandStreams) {
+			auto i = std::find_if(cmdStreams.begin(), cmdStreams.end(), [q=s.first](const auto& c) { return c.first == q; });
+			if (i != cmdStreams.end()) continue;		// dupe
+			CmdStreamMode mode = (s.first == "adjacency"_h) ? CmdStreamMode::Topological : CmdStreamMode::Normal;
+			cmdStreams.emplace_back(s.first, mode);
+		}
+		if (cmdStreams.empty())
+			cmdStreams.emplace_back(0, CmdStreamMode::Normal);
+
+		bool buildTopologicalIndexBuffers = std::find_if(cmdStreams.begin(), cmdStreams.end(), [](const auto& q) { return q.second == CmdStreamMode::Topological; }) != cmdStreams.end();
+		for (auto cmdStream:cmdStreams) {
 			::Assets::BlockSerializer cmdStreamSerializer;
 			CmdStreamSerializationHelper helper;
+			bool isTopologicalStream = cmdStream.second == CmdStreamMode::Topological;
 
 			std::optional<unsigned> currentTransformMarker;
 			using MaterialGuid = uint64_t;
@@ -501,8 +515,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				if (!geoBlock)
 					Throw(std::runtime_error("Missing geometry block referenced by command list in NascentModel::SerializeToChunks"));
 
-				// the number of material assigments in the cmd must match the number of draw calls in
-				// the geometry block (ie the material binding symbols is parrallel to the draw calls array)
+				// the number of material assignments in the cmd must match the number of draw calls in
+				// the geometry block (ie the material binding symbols is parallel to the draw calls array)
 				assert(geoBlock->_drawCalls.size() == cmd.second._materialBindingSymbols.size());
 
 				std::vector<MaterialGuid> materials;
@@ -529,22 +543,30 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 				if (cmd.second._skinControllerBlocks.empty()) {
 					auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(),
-						[&cmd, mode](const auto& p) { return p._srcGuid == cmd.second._geometryBlock && p._cmdStreamMode == mode; });
+						[&cmd](const auto& p) { return p._srcGuid == cmd.second._geometryBlock; });
 					if (i == geoObjects._rawGeos.end()) {
+						// Convert GeometryBlock format into NascentRawGeometry, which is an intermediate format very similar to what
+						// we're about to serialize out
 						auto rules = BuildNativeVBSettings(modelCompilationConfiguration, geoBlock->_rulesLabel);
-						auto rawGeo = CompleteInstantiation(*const_cast<GeometryBlock*>(geoBlock), rules);
-						geoObjects._rawGeos.push_back({cmd.second._geometryBlock, mode, std::move(rawGeo), geoObjects._nextId++});
+						auto rawGeo = CompleteInstantiation(*const_cast<GeometryBlock*>(geoBlock), rules, buildTopologicalIndexBuffers);
+						geoObjects._rawGeos.push_back({cmd.second._geometryBlock, std::move(rawGeo)});
 						i = geoObjects._rawGeos.end()-1;
 					}
 
-					cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
+					if (!isTopologicalStream) {
+						if (i->_id == ~0u) i->_id = geoObjects._nextId++;
+						cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
+					} else {
+						if (i->_topologicalId == ~0u) i->_topologicalId = geoObjects._nextId++;
+						cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_topologicalId);
+					}
 				} else {
 					auto hashedId = HashOfGeoAndSkinControllerIds(cmd.second);
 					auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(),
-						[hashedId, mode](const auto& p) { return p._srcGuid == hashedId && p._cmdStreamMode == mode; });
+						[hashedId](const auto& p) { return p._srcGuid == hashedId; });
 					if (i == geoObjects._skinnedGeos.end()) {
 						auto rules = BuildNativeVBSettings(modelCompilationConfiguration, geoBlock->_rulesLabel);
-						auto rawGeo = CompleteInstantiation(*const_cast<GeometryBlock*>(geoBlock), rules);
+						auto rawGeo = CompleteInstantiation(*const_cast<GeometryBlock*>(geoBlock), rules, buildTopologicalIndexBuffers);
 
 						std::vector<UnboundSkinControllerAndJointMatrices> controllers;
 						controllers.reserve(cmd.second._skinControllerBlocks.size());
@@ -561,12 +583,19 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						}
 
 						auto boundController = BindController(std::move(rawGeo), MakeIteratorRange(controllers), "");
-						geoObjects._skinnedGeos.push_back({hashedId, mode, std::move(boundController), geoObjects._nextId++});
+						geoObjects._skinnedGeos.push_back({hashedId, std::move(boundController)});
 						i = geoObjects._skinnedGeos.end()-1;
 					}
 
 					assert(currentMaterialAssignment.value().size() == i->_geo._unanimatedBase._mainDrawCalls.size());
-					cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
+
+					if (!isTopologicalStream) {
+						if (i->_id == ~0u) i->_id = geoObjects._nextId++;
+						cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
+					} else {
+						if (i->_topologicalId == ~0u) i->_topologicalId = geoObjects._nextId++;
+						cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_topologicalId);
+					}
 				}
 			}
 
@@ -575,12 +604,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 			serializer << (uint32_t)Assets::ScaffoldCommand::ModelCommandStream;
 			serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
-			if (mode == CmdStreamMode::Normal) {
-				serializer << 0ull;	// default cmd stream id (s_CmdStreamGuid_Default)
-			} else {
-				assert(mode == CmdStreamMode::Topological);
-				serializer << "adjacency"_h;
-			}
+			serializer << cmdStream.first;
 			serializer << cmdStreamSerializer.SizePrimaryBlock();
 			serializer.SerializeSubBlock(cmdStreamSerializer);
 
@@ -588,41 +612,91 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			#if defined(_DEBUG)
 				cmdStreamDehashHelpers.emplace_back(CmdStreamSerializationHelper{helper});
 			#endif
-			if (mode == CmdStreamMode::Normal)
-				mainStreamHelper = std::move(helper);
+
+			if (!assignedMainStream) {
+				mainStreamHelper = std::move(helper);		// always assigned to the first cmdStream
+				assignedMainStream = true;
+			}
 		}
 
 		// "large resources" --> created from the objects in geoObjects
 		auto largeResourcesBlock = std::make_shared<std::vector<uint8_t>>();
 		{
 			LargeResourceBlockConstructor largeResourcesConstructor;
-			for (unsigned c=0; c<geoObjects._nextId; ++c) {
-				auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(), [c](const auto&q) { return q._id == c; });
-				if (i != geoObjects._rawGeos.end()) {
-					::Assets::BlockSerializer tempBlock;
-					if (i->_cmdStreamMode == CmdStreamMode::Normal) {
-						i->_geo.SerializeWithResourceBlock(tempBlock, largeResourcesConstructor);
-					} else {
-						assert(i->_cmdStreamMode == CmdStreamMode::Topological);
-						i->_geo.SerializeTopologicalWithResourceBlock(tempBlock, largeResourcesConstructor);
-					}
 
+			// Write all of the vertex buffers, then all of the index buffers, then all of the topological index buffers (since this will promote more efficient loading)
+			std::sort(
+				geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(),
+				[](const auto& lhs, const auto& rhs) {
+					if (lhs._id < rhs._id) return true;
+					if (lhs._id > rhs._id) return false;
+					return lhs._topologicalId < rhs._topologicalId;
+				});
+			std::sort(
+				geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(),
+				[](const auto& lhs, const auto& rhs) {
+					if (lhs._id < rhs._id) return true;
+					if (lhs._id > rhs._id) return false;
+					return lhs._topologicalId < rhs._topologicalId;
+				});
+
+			// VBs
+			for (auto& geo:geoObjects._rawGeos)
+				geo._blocks._vb = largeResourcesConstructor.AddBlock(geo._geo._vertices);
+			for (auto& geo:geoObjects._skinnedGeos)
+				geo._blocks._vb = largeResourcesConstructor.AddBlock(geo._geo._unanimatedBase._vertices);
+			for (auto& geo:geoObjects._skinnedGeos)
+				geo._blocks._animatedVertexElements = largeResourcesConstructor.AddBlock(geo._geo._animatedVertexElements);
+
+			// IBs
+			for (auto& geo:geoObjects._rawGeos)
+				geo._blocks._ib = largeResourcesConstructor.AddBlock(geo._geo._indices);
+			for (auto& geo:geoObjects._skinnedGeos)
+				geo._blocks._ib = largeResourcesConstructor.AddBlock(geo._geo._unanimatedBase._indices);
+
+			// Topological IBs
+			for (auto& geo:geoObjects._rawGeos)
+				geo._blocks._topologicalIb = largeResourcesConstructor.AddBlock(geo._geo._adjacencyIndices);
+			for (auto& geo:geoObjects._skinnedGeos)
+				geo._blocks._topologicalIb = largeResourcesConstructor.AddBlock(geo._geo._unanimatedBase._adjacencyIndices);
+
+			// Skeleton binding
+			for (auto& geo:geoObjects._skinnedGeos)
+				geo._blocks._skeletonBinding = largeResourcesConstructor.AddBlock(geo._geo._skeletonBinding);
+
+			for (unsigned c=0; c<geoObjects._nextId; ++c) {
+				::Assets::BlockSerializer tempBlock;
+
+				if (auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(), [c](const auto&q) { return q._id == c; }); i != geoObjects._rawGeos.end()) {
+					i->_geo.SerializeWithResourceBlock(tempBlock, i->_blocks);
 					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
 					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
 					serializer << tempBlock.SizePrimaryBlock();
 					serializer.SerializeSubBlock(tempBlock);
-				} else {
-					auto i2 = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [c](const auto&q) { return q._id == c; });
-					assert(i2 != geoObjects._skinnedGeos.end());
+					continue;
+				}
 
+				if (auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [c](const auto&q) { return q._id == c; }); i != geoObjects._skinnedGeos.end()) {
 					::Assets::BlockSerializer tempBlock;
-					if (i2->_cmdStreamMode == CmdStreamMode::Normal) {
-						i2->_geo.SerializeWithResourceBlock(tempBlock, largeResourcesConstructor);
-					} else {
-						assert(i2->_cmdStreamMode == CmdStreamMode::Topological);
-						i2->_geo.SerializeTopologicalWithResourceBlock(tempBlock, largeResourcesConstructor);
-					}
+					i->_geo.SerializeWithResourceBlock(tempBlock, i->_blocks);
+					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
+					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+					serializer << tempBlock.SizePrimaryBlock();
+					serializer.SerializeSubBlock(tempBlock);
+				}
 
+				if (auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(), [c](const auto&q) { return q._topologicalId == c; }); i != geoObjects._rawGeos.end()) {
+					i->_geo.SerializeTopologicalWithResourceBlock(tempBlock, i->_blocks);
+					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
+					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
+					serializer << tempBlock.SizePrimaryBlock();
+					serializer.SerializeSubBlock(tempBlock);
+					continue;
+				}
+
+				if (auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [c](const auto&q) { return q._topologicalId == c; }); i != geoObjects._skinnedGeos.end()) {
+					::Assets::BlockSerializer tempBlock;
+					i->_geo.SerializeTopologicalWithResourceBlock(tempBlock, i->_blocks);
 					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
 					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
 					serializer << tempBlock.SizePrimaryBlock();
@@ -685,7 +759,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	ModelDefaultPoseData NascentModel::CalculateDefaultPoseData(
         const NascentSkeleton& skeleton,
-        const NascentGeometryObjects& geoObjects,
+        const GeometrySerializationHelper& geoObjects,
 		const CmdStreamSerializationHelper& helper) const
     {
         ModelDefaultPoseData result;
@@ -742,7 +816,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 					localToWorld = result._defaultTransforms[localToWorldId];
 
 				if (cmd.second._skinControllerBlocks.empty()) {
-					auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(), [id=cmd.second._geometryBlock](const auto& q) { return q._srcGuid == id && q._cmdStreamMode == CmdStreamMode::Normal; });
+					auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(), [id=cmd.second._geometryBlock](const auto& q) { return q._srcGuid == id; });
 					if (i == geoObjects._rawGeos.end()) continue;
 
 					localToWorld = Combine(i->_geo._geoSpaceToNodeSpace, localToWorld);
@@ -757,7 +831,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 					}
 				} else {
 					auto hashedId = HashOfGeoAndSkinControllerIds(cmd.second);
-					auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [hashedId](const auto& q) { return q._srcGuid == hashedId && q._cmdStreamMode == CmdStreamMode::Normal; });
+					auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [hashedId](const auto& q) { return q._srcGuid == hashedId; });
 					if (i == geoObjects._skinnedGeos.end()) continue;
 
 					localToWorld = Combine(i->_geo._unanimatedBase._geoSpaceToNodeSpace, localToWorld);
