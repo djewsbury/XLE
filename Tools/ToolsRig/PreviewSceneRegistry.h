@@ -15,6 +15,7 @@
 namespace SceneEngine { class IScene; }
 namespace RenderCore { namespace Techniques { class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; }}
 namespace Assets { class OperationContext; }
+namespace std { template<typename T> class future; }
 
 namespace ToolsRig
 {
@@ -51,6 +52,9 @@ namespace ToolsRig
 
 		virtual std::shared_ptr<IConfigurablePlugin> GetConfigurablePlugin(
 			StringSection<>) = 0;
+
+		virtual std::shared_ptr<EntityInterface::IMutableEntityDocument> GetConfigurablePluginDocument() = 0;
+		virtual std::vector<std::future<void>> ApplyConfigurablePlugins(std::shared_ptr<::Assets::OperationContext> =nullptr) = 0;
 
 		using RegistrySetId = uint64_t;
 		virtual RegistrySetId Register(std::shared_ptr<IPreviewSceneRegistrySet>) = 0;

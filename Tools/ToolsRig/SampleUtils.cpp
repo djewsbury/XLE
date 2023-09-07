@@ -64,36 +64,29 @@ namespace ToolsRig
 	{
 		ConfiguredPlugins configuredPlugins;
 		TRY {
-			std::set<std::shared_ptr<ToolsRig::IConfigurablePlugin>> pluginsPendingApply;
-
 			StringSection<> keyname;
 			// apply the configuration to the preview scene registry immediately, as we're loading it
 			auto& previewSceneRegistry = ToolsRig::Services::GetPreviewSceneRegistry();
+			auto configurablePluginDoc = previewSceneRegistry.GetConfigurablePluginDocument();
 			while (formatter.TryKeyedItem(keyname)) {
-				auto cfg = previewSceneRegistry.GetConfigurablePlugin(keyname);
-				if (!cfg) {
-					SkipValueOrElement(formatter);
-					continue;
-				}
-				auto pluginName = keyname.AsString();
-				auto entity = cfg->AssignEntityId();
-				if (cfg->CreateEntity(EntityInterface::MakeStringAndHash("game"), entity, {})) {
+				auto entity = configurablePluginDoc->AssignEntityId();
+				if (configurablePluginDoc->CreateEntity(EntityInterface::MakeStringAndHash(keyname), entity, {})) {
 					RequireBeginElement(formatter);
 					while (formatter.TryKeyedItem(keyname)) {
 						EntityInterface::PropertyInitializer propInit;
 						propInit._prop = EntityInterface::MakeStringAndHash(keyname);
 						propInit._data = RequireRawValue(formatter, propInit._type);
-						cfg->SetProperty(entity, MakeIteratorRange(&propInit, &propInit+1));
+						configurablePluginDoc->SetProperty(entity, MakeIteratorRange(&propInit, &propInit+1));
 					}
 					RequireEndElement(formatter);
+					configuredPlugins.emplace_back(keyname.AsString(), entity);
 				} else {
 					SkipValueOrElement(formatter);
 					entity = ~0ull;
 				}
-				configuredPlugins.emplace_back(std::move(pluginName), entity);
-				pluginsPendingApply.insert(cfg);
 			}
 
+			auto pluginsPendingApply = previewSceneRegistry.ApplyConfigurablePlugins(opContext);
 			if (pluginsPendingApply.empty()) {
 				promise.set_value(std::make_shared<PluginConfiguration>(std::move(configuredPlugins), formatter.GetDependencyValidation()));
 				return;
@@ -110,19 +103,7 @@ namespace ToolsRig
 			auto helper = std::make_shared<Helper>();
 			helper->_configuredPlugins = std::move(configuredPlugins);
 			helper->_depVal = formatter.GetDependencyValidation();
-			for (auto& p:pluginsPendingApply) {
-				std::promise<void> promise;
-				helper->_pendingApplies.emplace_back(promise.get_future());
-				ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-					[opContext, p, promise=std::move(promise)]() mutable {
-						TRY {
-							p->ApplyConfiguration(std::move(opContext));
-							promise.set_value();
-						} CATCH (...) {
-							promise.set_exception(std::current_exception());
-						} CATCH_END
-					});
-			}
+			helper->_pendingApplies = std::move(pluginsPendingApply);
 
 			::Assets::PollToPromise(
 				std::move(promise),
