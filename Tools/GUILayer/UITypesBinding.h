@@ -411,5 +411,6 @@ namespace GUILayer
         clix::shared_ptr<PlatformRig::Overlays::ITrackedAssetList> _trackedAssetList;
         unsigned _onChangeSignalId = ~0u;
         System::Threading::SynchronizationContext^ _onChangeContext;
+        int _mainThreadId = -1;
     };
 }

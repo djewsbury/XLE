@@ -59,7 +59,7 @@ namespace GUILayer
 		{
 			auto frag = dynamic_cast<ShaderFragment^>(_shaderFragment->Target);
 			if (frag)
-				_mainThread->Post(gcnew System::Threading::SendOrPostCallback(frag, &ShaderFragment::OnChange), nullptr);
+				_mainThread->Send(gcnew System::Threading::SendOrPostCallback(frag, &ShaderFragment::OnChange), nullptr);
 		}
 
 		ShaderFragmentChangeCallback::ShaderFragmentChangeCallback(ShaderFragment^ shaderFragment, System::Threading::SynchronizationContext^ mainThread)

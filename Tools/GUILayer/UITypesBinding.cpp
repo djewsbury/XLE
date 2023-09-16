@@ -908,6 +908,7 @@ namespace GUILayer
         auto tracking = ::Assets::Services::GetAssetSetsPtr();
         _trackedAssetList = PlatformRig::Overlays::CreateTrackedAssetList(tracking, ::Assets::AssetState::Invalid);
         _onChangeContext = System::Threading::SynchronizationContext::Current;
+        _mainThreadId = System::Threading::Thread::CurrentThread->ManagedThreadId;
         _onChangeSignalId = BindHelper(*_trackedAssetList.get(), this);
     }
 
@@ -919,7 +920,9 @@ namespace GUILayer
 
     void InvalidAssetList::InvokeOnChange(System::Object^)
     {
-        if (System::Threading::SynchronizationContext::Current != _onChangeContext) {
+        // note that it doesn't appear to be reliable to compare System::Threading::SynchronizationContext::Current to the previously retrieved value
+        // (at least not in framework 4.8)
+        if (System::Threading::Thread::CurrentThread->ManagedThreadId != _mainThreadId) {
             // shift callback into the original thread, to avoid calling out to C# from native threads too much
             _onChangeContext->Send(
                 gcnew System::Threading::SendOrPostCallback(this, &InvalidAssetList::InvokeOnChange), nullptr);
