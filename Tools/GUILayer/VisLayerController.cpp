@@ -6,7 +6,6 @@
 
 #include "VisLayerController.h"
 #include "LayerControl.h"
-#include "IWindowRig.h"
 #include "GUILayerUtil.h"
 #include "NativeEngineDevice.h"
 #include "../ToolsRig/VisualisationUtils.h"

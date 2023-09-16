@@ -1,4 +1,4 @@
-// Distributed under the MIT License (See
+﻿// Distributed under the MIT License (See
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
@@ -42,10 +42,8 @@ namespace Previewer
 
             // early engine initialization
             var engineDevice = new GUILayer.EngineDevice();
-            GC.KeepAlive(engineDevice);
-
             var logRedirect = new XLEBridgeUtils.LoggingRedirect();
-            GC.KeepAlive(logRedirect);
+
             using (var dlg = new GameConfigurationDialog())
             {
                 dlg.ShowDialog();
@@ -132,55 +130,60 @@ namespace Previewer
             StandardEditCommands.UseSystemClipboard = true;
 
             // Set up the MEF container with these components
-            var container = new CompositionContainer(catalog);
+            using (var container = new CompositionContainer(catalog)) {
 
-            // This is bit wierd, but we're going to add the container to itself.
-            // This will create a tight circular dependency, of course
-            // It's also not ideal by the core DI pattern. 
-            // But it's useful for us, because we want to use the same container to construct
-            // objects (and also to retrieve global instances).
-            container.ComposeExportedValue<ExportProvider>(container);
-            container.ComposeExportedValue<CompositionContainer>(container);
+                // This is bit wierd, but we're going to add the container to itself.
+                // This will create a tight circular dependency, of course
+                // It's also not ideal by the core DI pattern. 
+                // But it's useful for us, because we want to use the same container to construct
+                // objects (and also to retrieve global instances).
+                container.ComposeExportedValue<ExportProvider>(container);
+                container.ComposeExportedValue<CompositionContainer>(container);
 
-            // Configure the main Form
-            var batch = new CompositionBatch();
-            var mainForm = new MainForm(new ToolStripContainer())
-            {
-                Text = Application.ProductName //,
-                                               // Icon = GdiUtil.CreateIcon(ResourceUtil.GetImage(Sce.Atf.Resources.AtfIconImage))
-            };
-            // Sce.Atf.Direct2D.D2dFactory.EnableResourceSharing(mainForm.Handle);
+                // Configure the main Form
+                var batch = new CompositionBatch();
+                var mainForm = new MainForm(new ToolStripContainer())
+                {
+                    Text = Application.ProductName //,
+                                                   // Icon = GdiUtil.CreateIcon(ResourceUtil.GetImage(Sce.Atf.Resources.AtfIconImage))
+                };
+                // Sce.Atf.Direct2D.D2dFactory.EnableResourceSharing(mainForm.Handle);
 
-            // Add the main Form instance, etc., to the container
-            batch.AddPart(mainForm);
-            container.Compose(batch);
+                // Add the main Form instance, etc., to the container
+                batch.AddPart(mainForm);
+                container.Compose(batch);
 
-            container.InitializeAll();
+                container.InitializeAll();
 
-            // if there is a model filename on the command line, we will load it into our viewer
-            var initialPreviewer = container.GetExport<ControlsLibraryExt.ModelView.Previewer>().Value.OpenPreviewWindow();
-            if (args != null && args.Length > 0)
-            {
-                initialPreviewer.ModelSettings = GUILayer.ModelVisSettings.FromCommandLine(args);
+                // if there is a model filename on the command line, we will load it into our viewer
+                var initialPreviewer = container.GetExport<ControlsLibraryExt.ModelView.Previewer>().Value.OpenPreviewWindow();
+                if (args != null && args.Length > 0)
+                {
+                    initialPreviewer.ModelSettings = GUILayer.ModelVisSettings.FromCommandLine(args);
+                }
+                else
+                {
+                    var visSettings = GUILayer.ModelVisSettings.CreateDefault();
+                    initialPreviewer.ModelSettings = visSettings;
+                }
+
+                Application.Run(mainForm);
+
+                foreach (var initializable in container.GetExportedValues<XLEBridgeUtils.IShutdownWithEngine>())
+                    initializable.Shutdown();
+                mainForm.Dispose(); 
+                container.Dispose();
             }
-            else
-            {
-                var visSettings = GUILayer.ModelVisSettings.CreateDefault();
-                initialPreviewer.ModelSettings = visSettings;
-            }
-
-            Application.Run(mainForm);
-
-            foreach (var initializable in container.GetExportedValues<XLEBridgeUtils.IShutdownWithEngine>())
-                initializable.Shutdown();
-            container.Dispose();
-            mainForm.Dispose();
+            GC.KeepAlive(engineDevice);
+            GC.KeepAlive(logRedirect);
             logRedirect.Dispose();
             engineDevice.PrepareForShutdown();
             XLEBridgeUtils.Utils.DetachLibrary(engineDevice);
             engineDevice.Dispose();
 
             GC.Collect();
+            GC.WaitForPendingFinalizers(); 
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
             GC.WaitForPendingFinalizers();
         }
     }

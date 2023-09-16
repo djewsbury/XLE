@@ -131,7 +131,6 @@ namespace GUILayer
         _entityMountingTree = EntityInterface::CreateMountingTree();
 
         _services->LoadDefaultPlugins();
-        ToolsRig::HACKStartupStarfield();
 
         _divAssets = std::make_unique<ToolsRig::DivergentAssetManager>();
         _creationThreadId = System::Threading::Thread::CurrentThread->ManagedThreadId;
