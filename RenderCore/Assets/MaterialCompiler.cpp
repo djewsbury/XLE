@@ -97,7 +97,9 @@ namespace RenderCore { namespace Assets
 				sourceModel = splitter.AllExceptParameters().AsString();
 		}
 
-		auto modelMatFuture = ::Assets::MakeAssetMarker<RawMatConfigurations>(sourceModel, sourceModelConfiguration);
+		std::shared_ptr<::Assets::Marker<RawMatConfigurations>> modelMatFuture;
+		if (sourceModelConfiguration) modelMatFuture = ::Assets::MakeAssetMarker<RawMatConfigurations>(sourceModel, sourceModelConfiguration);
+		else modelMatFuture = ::Assets::MakeAssetMarker<RawMatConfigurations>(sourceModel);
 		auto modelMatState = modelMatFuture->StallWhilePending();
 		if (modelMatState == ::Assets::AssetState::Invalid)
 			Throw(::Assets::Exceptions::ConstructionError(
@@ -152,7 +154,9 @@ namespace RenderCore { namespace Assets
 			{
 				auto meld = StringMeldInPlace(buffer);
 				meld << sourceModel << ":" << cfg;
-				auto partialMaterial = ::Assets::MakeAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection(), sourceModelConfiguration);
+				std::shared_ptr<::Assets::Marker<std::shared_ptr<CompilableMaterialAssetMixin<RawMaterial>>>> partialMaterial;
+				if (sourceModelConfiguration) partialMaterial = ::Assets::MakeAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection(), sourceModelConfiguration);
+				else partialMaterial = ::Assets::MakeAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection());
 				partialMaterials.emplace_back(std::move(partialMaterial));
 			}
 

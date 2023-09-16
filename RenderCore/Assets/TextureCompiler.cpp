@@ -232,10 +232,10 @@ namespace RenderCore { namespace Assets
 				TargetDesc { TextureCompilerProcessType, _serializedArtifacts[0]._name.c_str() }
 			};
 		}
-		std::vector<::Assets::SerializedArtifact>	SerializeTarget(unsigned idx)
+		::Assets::SerializedTarget	SerializeTarget(unsigned idx)
 		{
 			assert(idx == 0);
-			return _serializedArtifacts;
+			return { _serializedArtifacts };
 		}
 		::Assets::DependencyValidation GetDependencyValidation() const
 		{
@@ -244,7 +244,7 @@ namespace RenderCore { namespace Assets
 			return ::Assets::GetDepValSys().MakeOrReuse(markers);
 		}
 
-		void Initialize(TextureCompilationRequest request, std::string srcFN, ::Assets::OperationContext::OperationHelper&& opHelper, const VariantFunctions& conduit)
+		void Initialize(TextureCompilationRequest request, std::string srcFN, ::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
 		{
 			std::shared_ptr<BufferUploads::IAsyncDataSource> srcPkt;
 			if (request._operation != TextureCompilationRequest::Operation::ComputeShader) {
@@ -420,7 +420,7 @@ namespace RenderCore { namespace Assets
 			};
 		}
 
-		TextureCompileOperation(std::string srcFN, ::Assets::OperationContext::OperationHelper&& opHelper, const VariantFunctions& conduit)
+		TextureCompileOperation(std::string srcFN, ::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
 		{
 			// load the given file and perform texture processing operations
 			size_t inputBlockSize = 0;
@@ -442,7 +442,7 @@ namespace RenderCore { namespace Assets
 			Initialize(request, srcFN, std::move(opHelper), conduit);
 		}
 
-		TextureCompileOperation(TextureCompilationRequest request, ::Assets::OperationContext::OperationHelper&& opHelper, const VariantFunctions& conduit)
+		TextureCompileOperation(TextureCompilationRequest request, ::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
 		{
 			std::stringstream str;
 			str << request;

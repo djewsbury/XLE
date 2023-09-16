@@ -6,7 +6,9 @@
 
 #include "ShaderPatchCollection.h"
 #include "../StateDesc.h"
-#include "../../Assets/AssetMixins.h"
+#if !defined(__CLR_VER)
+    #include "../../Assets/AssetMixins.h"
+#endif
 #include "../../Utility/ParameterBox.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
@@ -179,6 +181,7 @@ namespace RenderCore { namespace Assets
 
     class ModelCompilationConfiguration;
 
+#if !defined(__CLR_VER)
     template<typename ObjectType>
 		class CompilableMaterialAssetMixin : public ::Assets::FormatterAssetMixin<ObjectType>
 	{
@@ -221,6 +224,7 @@ namespace RenderCore { namespace Assets
     protected:
         ::Assets::DependencyValidation _validationCallback;
     };
+#endif
 
     template<typename Value> void RawMaterial::BindResource(StringSection<> name, const Value& value) { _resources.SetParameter(name, value); }
     template<typename Value> void RawMaterial::SetSelector(StringSection<> name, const Value& value) { _selectors.SetParameter(name, value); }

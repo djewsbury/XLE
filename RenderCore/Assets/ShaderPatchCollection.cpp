@@ -19,6 +19,7 @@ namespace RenderCore { namespace Assets
 
 	static std::string ResolveArchiveName(StringSection<> src, const ::Assets::DirectorySearchRules& searchRules)
 	{
+		if (src.IsEmpty()) return {};
 		auto splitName = MakeFileNameSplitter(src);
 		if (splitName.DriveAndPath().IsEmpty()) {
 			char resolvedFile[MaxPath];
