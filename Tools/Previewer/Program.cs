@@ -1,4 +1,4 @@
-﻿// Distributed under the MIT License (See
+// Distributed under the MIT License (See
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
@@ -46,6 +46,10 @@ namespace Previewer
 
             var logRedirect = new XLEBridgeUtils.LoggingRedirect();
             GC.KeepAlive(logRedirect);
+            using (var dlg = new GameConfigurationDialog())
+            {
+                dlg.ShowDialog();
+            }
 
             // Enable metadata driven property editing for the DOM
             DomNodeType.BaseOfAllTypes.AddAdapterCreator(new AdapterCreator<CustomTypeDescriptorNodeAdapter>());

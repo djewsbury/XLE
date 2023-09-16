@@ -80,8 +80,17 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ActiveMaterialContext.cs" />
+    <Compile Include="GameConfigurationDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="GameConfigurationDialog.Designer.cs">
+      <DependentUpon>GameConfigurationDialog.cs</DependentUpon>
+    </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="GameConfigurationDialog.resx">
+      <DependentUpon>GameConfigurationDialog.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
