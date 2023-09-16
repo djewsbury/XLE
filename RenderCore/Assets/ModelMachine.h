@@ -26,7 +26,7 @@ namespace RenderCore { namespace Assets
 	{
 		BeginSubModel = s_scaffoldCmdBegin_ModelMachine,
 		EndSubModel,
-		SetLevelOfDetail,
+		SetGroups,				// raw array of uint64_t
 		InputInterface,			// raw array of uint64_t
 
 		// ModelCommandStream style callouts

@@ -20,6 +20,7 @@
 #include "../../Utility/StringFormat.h"
 #include "../../Core/Exceptions.h"
 #include <sstream>
+#include <map>
 
 using namespace Utility::Literals;
 
@@ -371,7 +372,21 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			return hashedInterface;
 		}
 
+		void RegisterHashPair(uint64_t hash, StringSection<> str)
+		{
+			_dehashTable.insert(std::make_pair(hash, str.AsString()));
+		}
+
+		std::string TryDehash(uint64_t hashValue) const
+		{
+			auto i = _dehashTable.find(hashValue);
+			if (i != _dehashTable.end())
+				return i->second;
+			return {};
+		}
+
 		std::vector<std::pair<std::string, std::string>>	_inputInterfaceNames;
+		std::map<uint64_t, std::string> _dehashTable;
 	};
 
     static std::ostream& SerializationOperator(std::ostream& stream, const GeometrySerializationHelper& geos)
@@ -405,6 +420,23 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						if (pendingComma) stream << ", ";
 						pendingComma = true;
 						stream << std::hex << "0x" << m;
+						if (std::string dehashed; dehashHelper && !(dehashed = dehashHelper->TryDehash(m)).empty())
+							stream << " [" << dehashed << "]";
+					}
+					stream << ")" << std::dec << std::endl;
+				}
+				break;
+
+			case (uint32_t)Assets::ModelCommand::SetGroups:
+				{
+					stream << "Groups (";
+					bool pendingComma = false;
+					for (auto m:cmd.RawData().Cast<const uint64_t*>()) {
+						if (pendingComma) stream << ", ";
+						pendingComma = true;
+						stream << std::hex << "0x" << m;
+						if (std::string dehashed; dehashHelper && !(dehashed = dehashHelper->TryDehash(m)).empty())
+							stream << " [" << dehashed << "]";
 					}
 					stream << ")" << std::dec << std::endl;
 				}
@@ -476,6 +508,19 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return modelCompilationConfiguration.MatchRawGeoRules(name);
 	}
 
+	static uint64_t HashOrNumber(StringSection<> str, CmdStreamSerializationHelper& helper)
+	{
+		uint64_t guid;
+		const char* parseEnd = FastParseValue(str, guid);
+		if (parseEnd == str.end()) {
+			return guid;
+		} else {
+			auto h = Hash64(str);
+			helper.RegisterHashPair(h, str);
+			return h;
+		}
+	}
+
 	std::vector<::Assets::SerializedArtifact> NascentModel::SerializeToChunks(
 		const std::string& name,
 		const NascentSkeleton& embeddedSkeleton,
@@ -509,6 +554,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			std::optional<unsigned> currentTransformMarker;
 			using MaterialGuid = uint64_t;
 			std::optional<std::vector<MaterialGuid>> currentMaterialAssignment;
+			std::optional<std::vector<MaterialGuid>> currentGroups;
 
 			for (const auto&cmd:_commands) {
 				auto* geoBlock = FindGeometryBlock(cmd.second._geometryBlock);
@@ -521,14 +567,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 				std::vector<MaterialGuid> materials;
 				materials.reserve(cmd.second._materialBindingSymbols.size());
-				for (const auto&mat:cmd.second._materialBindingSymbols) {
-					MaterialGuid guid = 0;
-					const char* parseEnd = FastParseValue(MakeStringSection(mat), guid);
-					if (parseEnd == AsPointer(mat.end())) {
-						materials.push_back(guid);
-					} else
-						materials.push_back(Hash64(mat));
-				}
+				for (const auto&mat:cmd.second._materialBindingSymbols)
+					materials.push_back(HashOrNumber(mat, helper));
+				std::vector<uint64_t> groupGuids;
+				groupGuids.reserve(cmd.second._groups.size());
+				for (const auto&grp:cmd.second._groups)
+					groupGuids.push_back(HashOrNumber(grp, helper));
+				std::sort(groupGuids.begin(), groupGuids.end());
+				groupGuids.erase(std::unique(groupGuids.begin(), groupGuids.end()), groupGuids.end());
 
 				auto localToWorld = helper.RegisterInputInterfaceMarker({}, cmd.second._localToModel);
 
@@ -539,6 +585,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				if (!currentMaterialAssignment || *currentMaterialAssignment != materials) {
 					cmdStreamSerializer << MakeCmdAndRanged(ModelCommand::SetMaterialAssignments, materials);
 					currentMaterialAssignment = std::move(materials);
+				}
+				if (!currentGroups || *currentGroups != groupGuids) {
+					cmdStreamSerializer << MakeCmdAndRanged(ModelCommand::SetGroups, groupGuids);
+					currentGroups = std::move(groupGuids);
 				}
 
 				if (cmd.second._skinControllerBlocks.empty()) {

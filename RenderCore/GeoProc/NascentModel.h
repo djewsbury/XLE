@@ -67,7 +67,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			std::vector<NascentObjectGuid>	_skinControllerBlocks;
 			std::string						_localToModel;
 			std::vector<std::string>		_materialBindingSymbols;
-			unsigned						_levelOfDetail = ~0u;
+			std::vector<std::string>		_groups;
 		};
 
 		const GeometryBlock* FindGeometryBlock(NascentObjectGuid id) const;
