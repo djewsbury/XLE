@@ -13,7 +13,6 @@
 
 static const float MinSamplingAlpha = 0.001f;
 static const float MinSamplingRoughness = 0.03f;
-static const float SpecularIBLMipMapCount = 9.f;
 
 float VanderCorputRadicalInverse(uint bits)
 {
@@ -269,23 +268,45 @@ float SamplerCosineHemisphere_PDF(float cosTheta)     // cosTheta is NdotL in ty
     return cosTheta * reciprocalPi; // pdf w.r.t solid angle
 }
 
+static const float MaxSharpness = 0.05f;
+static const float MinSharpness = 0.65f;
+static const float SpecularIBLMipMapCount = 9.f;
+static const float RoughnessToMipMapFactor = 1.0f/(MinSharpness-MaxSharpness);
+static const float BendingFactor = .85f;
+
+static const float minRadialMetric = 0.0f;
+static const float maxRadialMetric = 1.f;
+
 float MipmapToRoughness(uint mipIndex)
 {
-    // We can adjust the mapping between roughness and the mipmaps as needed...
-    // Each successive mipmap is smaller, so we loose resolution linearly against
-    // roughness (even though the blurring amount is not actually linear against roughness)
-    // We could use the inverse of the GGX function to calculate something that is
-    // more linear against the sample cone size, perhaps...?
-    // Does it make sense to offset by .5 to get a value in the middle of the range? We
-    // will be using trilinear filtering to get a value between 2 mipmaps.
-    // Arguably a roughness of "0.0" is not very interesting -- but we commit our
-    // highest resolution mipmap to that.
-    return 0.08f + 0.33f * saturate(float(mipIndex) / float(SpecularIBLMipMapCount));
+    // empirically works pretty well, but unoptimized:
+    // return pow(float(mipIndex) / float(SpecularIBLMipMapCount), 1.0/BendingFactor) * (1.0f/RoughnessToMipMapFactor) + MaxSharpness;
+    // linear on roughness actually seems fine here -- though maybe there's too big a difference between the 0th and 1st mip map? 
+    return float(mipIndex) / float(SpecularIBLMipMapCount) * (1.0f/RoughnessToMipMapFactor) + MaxSharpness;
+
+    // radial metric based approach not really working well -- maybe we need a logarithm ease-in/ease-out curve?
+    // float rm = pow(2, mipIndex) - 1.0;
+    // rm /= 512;
+    // rm = lerp(minRadialMetric, maxRadialMetric, rm);
+    float rm = mipIndex / float(SpecularIBLMipMapCount);
+    float alpha = RadialMetricToAlpha(rm);
+    return sqrt(alpha);
 }
 
 float RoughnessToMipmap(float roughness)
 {
-    return saturate(3.0f * roughness - 0.08f) * SpecularIBLMipMapCount;
+    // empirically works pretty well, but unoptimized:
+    // return pow(saturate((roughness - MaxSharpness) * RoughnessToMipMapFactor), BendingFactor) * SpecularIBLMipMapCount;
+    // linear on roughness actually seems fine here -- though maybe there's too big a difference between the 0th and 1st mip map? 
+    return saturate((roughness - MaxSharpness) * RoughnessToMipMapFactor) * SpecularIBLMipMapCount;
+
+    // radial metric based approach not really working well -- maybe we need a logarithm ease-in/ease-out curve?
+    float alpha = roughness*roughness;
+    float rm = AlphaToRadialMetric(alpha);
+    return rm * SpecularIBLMipMapCount;
+    rm = saturate((rm-minRadialMetric) / (maxRadialMetric-minRadialMetric));
+    rm *= 512;
+    return log2(rm + 1);
 }
 
 #endif

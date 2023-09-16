@@ -125,6 +125,18 @@ float TrowReitzDInverseApprox(float alpha)
     return .913173f - 0.378603f * b + .239374f * b * b;
 }
 
+float AlphaToRadialMetric(float alpha)
+{
+	const float constant = 0.0312909;
+	return alpha / (alpha + constant);
+}
+
+float RadialMetricToAlpha(float radialMetric)
+{
+	const float constant = 0.0312909;
+	return -constant * radialMetric / (radialMetric - 1);
+}
+
 float RoughnessToGAlpha(float roughness)
 {
     // This is the remapping to convert from a roughness
