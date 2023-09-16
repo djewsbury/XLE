@@ -10,6 +10,7 @@
 #define R8G8B8A8_SNORM 31
 #define R8G8B8_UNORM 1001
 #define R8G8B8_SNORM 1004
+#define R10G10B10A2_UNORM 24
 #define R16G16B16A16_SNORM 13
 
 #if !IN_POSITION_FORMAT
@@ -183,12 +184,15 @@ uint FloatToUNorm8(float x) { return (uint)clamp((x + 1.0) * float(0xff) / 2.0, 
 float SNorm8ToFloat(uint x) { return clamp(SignExtend8(x) / float(0x7f), -1.0, 1.0); }
 uint FloatToSNorm8(float x) { return int(clamp(x, -1.0, 1.0) * float(0x7f)) & 0xff; }
 
+float UNorm10ToFloat(uint x) { return x * (2.0 / float(0x3ff)) - 1.0; }
+uint FloatToUNorm10(float x) { return (uint)clamp((x + 1.0) * float(0x3ff) / 2.0, 0.0, float(0x3ff)); }
+
 float SNorm16ToFloat(uint x) { return clamp(SignExtend16(x) / float(0x7fff), -1.0, 1.0); }
 uint FloatToSNorm16(float x) { return int(clamp(x, -1.0, 1.0) * float(0x7fff)) & 0xffff; }
 
 float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 {
-	// requires that byteOffset be mutliple of 4
+	// requires that byteOffset be multiple of 4
 	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
 		return asfloat(buffer.Load3(byteOffset));
 	} else if (format == R16G16B16A16_FLOAT) {
@@ -203,6 +207,9 @@ float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R8G8B8A8_SNORM || format == R8G8B8_SNORM) {
 		uint A = buffer.Load(byteOffset);
 		return float3(SNorm8ToFloat(A & 0xff), SNorm8ToFloat((A>>8) & 0xff), SNorm8ToFloat((A>>16) & 0xff));
+	} else if (format == R10G10B10A2_UNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float3(UNorm10ToFloat(A & 0x3ff), UNorm10ToFloat((A>>10) & 0x3ff), UNorm10ToFloat((A>>20) & 0x3ff));
 	} else {
 		return 0;	// trouble
 	}
@@ -210,7 +217,7 @@ float3 LoadAsFloat3(ByteAddressBuffer buffer, uint format, uint byteOffset)
 
 float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
 {
-	// requires that byteOffset be mutliple of 4
+	// requires that byteOffset be multiple of 4
 	if (format == R32G32B32_FLOAT) {
 		return float4(asfloat(buffer.Load3(byteOffset)), 1);
 	} else if (format == R32G32B32A32_FLOAT) {
@@ -227,6 +234,9 @@ float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R8G8B8A8_SNORM || format == R8G8B8_SNORM) {
 		uint A = buffer.Load(byteOffset);
 		return float4(SNorm8ToFloat(A & 0xff), SNorm8ToFloat((A>>8) & 0xff), SNorm8ToFloat((A>>16) & 0xff), SNorm8ToFloat((A>>24) & 0xff));
+	} else if (format == R10G10B10A2_UNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float4(UNorm10ToFloat(A & 0x3ff), UNorm10ToFloat((A>>10) & 0x3ff), UNorm10ToFloat((A>>20) & 0x3ff), A>>30);
 	} else {
 		return 0;	// trouble
 	}
@@ -234,7 +244,7 @@ float4 LoadAsFloat4(ByteAddressBuffer buffer, uint format, uint byteOffset)
 
 float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 {
-	// requires that byteOffset be mutliple of 4
+	// requires that byteOffset be multiple of 4
 	if (format == R32G32B32_FLOAT || format == R32G32B32A32_FLOAT) {
 		return asfloat(buffer.Load3(byteOffset));
 	} else if (format == R16G16B16A16_FLOAT) {
@@ -249,6 +259,9 @@ float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R8G8B8A8_SNORM || format == R8G8B8_SNORM) {
 		uint A = buffer.Load(byteOffset);
 		return float3(SNorm8ToFloat(A & 0xff), SNorm8ToFloat((A>>8) & 0xff), SNorm8ToFloat((A>>16) & 0xff));
+	} else if (format == R10G10B10A2_UNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float3(UNorm10ToFloat(A & 0x3ff), UNorm10ToFloat((A>>10) & 0x3ff), UNorm10ToFloat((A>>20) & 0x3ff));
 	} else {
 		return 0;	// trouble
 	}
@@ -256,7 +269,7 @@ float3 LoadAsFloat3(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 
 float4 LoadAsFloat4(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 {
-	// requires that byteOffset be mutliple of 4
+	// requires that byteOffset be multiple of 4
 	if (format == R32G32B32_FLOAT) {
 		return float4(asfloat(buffer.Load3(byteOffset)), 1);
 	} else if (format == R32G32B32A32_FLOAT) {
@@ -273,6 +286,9 @@ float4 LoadAsFloat4(RWByteAddressBuffer buffer, uint format, uint byteOffset)
 	} else if (format == R8G8B8A8_SNORM || format == R8G8B8_SNORM) {
 		uint A = buffer.Load(byteOffset);
 		return float4(SNorm8ToFloat(A & 0xff), SNorm8ToFloat((A>>8) & 0xff), SNorm8ToFloat((A>>16) & 0xff), SNorm8ToFloat((A>>24) & 0xff));
+	} else if (format == R10G10B10A2_UNORM) {
+		uint A = buffer.Load(byteOffset);
+		return float4(UNorm10ToFloat(A & 0x3ff), UNorm10ToFloat((A>>10) & 0x3ff), UNorm10ToFloat((A>>20) & 0x3ff), A>>30);
 	} else {
 		return 0;	// trouble
 	}
@@ -319,6 +335,8 @@ void StoreFloat3(float3 value, RWByteAddressBuffer buffer, uint format, uint byt
 		buffer.Store(byteOffset, FloatToUNorm8(value.x)|(FloatToUNorm8(value.y) << 8u)|(FloatToUNorm8(value.z) << 16u));
 	} else if (format == R8G8B8A8_SNORM) {
 		buffer.Store(byteOffset, FloatToSNorm8(value.x)|(FloatToSNorm8(value.y) << 8u)|(FloatToSNorm8(value.z) << 16u));
+	} else if (format == R10G10B10A2_UNORM) {
+		buffer.Store(byteOffset, FloatToUNorm10(value.x)|(FloatToUNorm10(value.y) << 10u)|(FloatToUNorm10(value.z) << 20u));
 	} else {
 		// trouble
 	}
@@ -339,6 +357,8 @@ void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byt
 		buffer.Store(byteOffset, FloatToUNorm8(value.x)|(FloatToUNorm8(value.y) << 8u)|(FloatToUNorm8(value.z) << 16u)|(FloatToUNorm8(value.w) << 24u));
 	} else if (format == R8G8B8A8_SNORM) {
 		buffer.Store(byteOffset, FloatToSNorm8(value.x)|(FloatToSNorm8(value.y) << 8u)|(FloatToSNorm8(value.z) << 16u)|(FloatToSNorm8(value.w) << 24u));
+	} else if (format == R10G10B10A2_UNORM) {
+		buffer.Store(byteOffset, FloatToUNorm10(value.x)|(FloatToUNorm10(value.y) << 10u)|(FloatToUNorm10(value.z) << 20u)|(uint(value.w) << 30u));
 	} else {
 		// trouble
 	}
