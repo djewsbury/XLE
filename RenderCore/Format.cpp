@@ -55,6 +55,7 @@ namespace RenderCore
         #define _EXP(X, Y, Z, U)    case Format::X##_##Y: return FormatPrefix::X;
             #include "Metal/Detail/DXGICompatibleFormats.h"
         #undef _EXP
+        case Format::R10G10B10A2_SNORM: return FormatPrefix::R10G10B10A2;
         default: return FormatPrefix::Unknown;
         }
     }
@@ -150,7 +151,8 @@ namespace RenderCore
             case Format::Matrix4x4: input = FLOAT; break;
             case Format::Matrix3x4: input = FLOAT; break;
 			case Format::R12G12B12A4_SNORM:
-			case Format::R10G10B10A10_SNORM: return FormatComponentType::SNorm;
+			case Format::R10G10B10A10_SNORM: 
+            case Format::R10G10B10A2_SNORM: return FormatComponentType::SNorm;
             default: input = TYPELESS; break;
         }
         switch (input) {
@@ -184,6 +186,7 @@ namespace RenderCore
         case Format::Matrix3x4: return 12 * sizeof(float) * 8;
 		case Format::R12G12B12A4_SNORM:
 		case Format::R10G10B10A10_SNORM: return 40;
+        case Format::R10G10B10A2_SNORM: return 32;
         default: return 0;
         }
     }
@@ -193,6 +196,7 @@ namespace RenderCore
         switch (format) {
         case Format::R10G10B10A2_TYPELESS:
         case Format::R10G10B10A2_UNORM:
+        case Format::R10G10B10A2_SNORM:
         case Format::R10G10B10A2_UINT:
         case Format::R11G11B10_FLOAT:
             return 10;
@@ -472,6 +476,7 @@ namespace RenderCore
         case Format::R32G32_SINT: return Format::R16G16B16A16_TYPELESS;
 
         case Format::R10G10B10A2_UNORM:
+        case Format::R10G10B10A2_SNORM:
         case Format::R10G10B10A2_UINT:
         case Format::R11G11B10_FLOAT: return Format::R10G10B10A2_TYPELESS;
 
@@ -834,6 +839,7 @@ namespace RenderCore
         case Format::Matrix3x4: return "Matrix3x4";
 		case Format::R10G10B10A10_SNORM: return "R10G10B10A10_SNORM";
 		case Format::R12G12B12A4_SNORM: return "R12G12B12A4_SNORM";
+        case Format::R10G10B10A2_SNORM: return "R10G10B10A2_SNORM";
         default: return "Unknown";
         }
     }
@@ -853,6 +859,7 @@ namespace RenderCore
         if (!XlEqStringI(name, "Matrix3x4")) return Format::Matrix3x4;
 		if (!XlEqStringI(name, "R10G10B10A10_SNORM")) return Format::R10G10B10A10_SNORM;
 		if (!XlEqStringI(name, "R12G12B12A4_SNORM")) return Format::R12G12B12A4_SNORM;
+        if (!XlEqStringI(name, "R10G10B10A2_SNORM")) return Format::R10G10B10A2_SNORM;
         return {};
     }
 
@@ -1051,6 +1058,8 @@ namespace RenderCore
 
         case Format::RGB_ATITC_UNORM:
         case Format::RGBA_ATITC_UNORM:
+
+        case Format::R10G10B10A2_SNORM:
             return fmt;     // either doesn't have a matching "typeless" format, or aspects are not explicit enough to distinguish this format
         
         default:

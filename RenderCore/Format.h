@@ -35,6 +35,8 @@ namespace RenderCore
 		R10G10B10A10_SNORM = 152,		// (5 byte, 4 component 10 bit signed normalized value; often used for quaternions)
 		R12G12B12A4_SNORM = 153,		// (5 byte, 3 component signed values with implied forth; another format for quaternions)
 
+        R10G10B10A2_SNORM = 154,        // not in DXGI, but can be supported in Vulkan (and probably some other case)
+
         Max
     };
 

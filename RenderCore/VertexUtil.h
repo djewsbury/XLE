@@ -221,7 +221,7 @@ namespace RenderCore
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	enum class VertexUtilComponentType { Float32, Float16, UNorm8, UNorm16, SNorm8, SNorm16, UInt8, UInt16, UInt32, SInt8, SInt16, SInt32 };
+	enum class VertexUtilComponentType { Float32, Float16, UNorm8, UNorm10, UNorm16, SNorm8, SNorm10, SNorm16, UInt8, UInt10, UInt16, UInt32, SInt8, SInt16, SInt32 };
     struct BrokenDownFormat { VertexUtilComponentType _type; unsigned _componentCount; };
 	BrokenDownFormat BreakdownFormat(Format fmt);
     
@@ -277,20 +277,32 @@ namespace RenderCore
             break;
 
 		case FormatComponentType::SNorm:
-			componentType = (prec == 16) ? VertexUtilComponentType::SNorm16 : VertexUtilComponentType::SNorm8;
+			switch (prec) {
+			case 8: componentType = VertexUtilComponentType::SNorm8; break;
+			case 10: componentType = VertexUtilComponentType::SNorm10; break;
+			case 16: componentType = VertexUtilComponentType::SNorm16; break;
+			default: assert(0); break;
+			}
 			break;
 
 		case FormatComponentType::UNorm: 
         case FormatComponentType::UNorm_SRGB:
-            assert(prec==8 || prec==16);
-            componentType = (prec == 16) ? VertexUtilComponentType::UNorm16 : VertexUtilComponentType::UNorm8;
+            switch (prec) {
+			case 8: componentType = VertexUtilComponentType::UNorm8; break;
+			case 10: componentType = VertexUtilComponentType::UNorm10; break;
+			case 16: componentType = VertexUtilComponentType::UNorm16; break;
+			default: assert(0); break;
+			}
             break;
 
 		case FormatComponentType::UInt:
-			assert(prec==8 || prec==16 || prec==32);
-			if (prec == 8) componentType = VertexUtilComponentType::UInt8;
-			else if (prec == 16) componentType = VertexUtilComponentType::UInt16;
-			else componentType = VertexUtilComponentType::UInt32;
+			switch (prec) {
+			case 8: componentType = VertexUtilComponentType::UInt8; break;
+			case 10: componentType = VertexUtilComponentType::UInt10; break;
+			case 16: componentType = VertexUtilComponentType::UInt16; break;
+			case 32: componentType = VertexUtilComponentType::UInt32; break;
+			default: assert(0); break;
+			}
 			break;
 
 		case FormatComponentType::SInt:
@@ -549,6 +561,7 @@ namespace RenderCore
         case RenderCore::Format::R32_FLOAT:             return Float4(((const float*)_data.begin())[0], 0.f, 0.f, 1.f);
 
         case RenderCore::Format::R10G10B10A2_UNORM:
+		case RenderCore::Format::R10G10B10A2_SNORM:
         case RenderCore::Format::R10G10B10A2_UINT:
         case RenderCore::Format::R11G11B10_FLOAT:
         case RenderCore::Format::B5G6R5_UNORM:
@@ -565,8 +578,8 @@ namespace RenderCore
         
         case RenderCore::Format::B8G8R8X8_UNORM:        return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[2]), 1.f);
 
-		case RenderCore::Format::R16G16B16A16_UNORM:	return Float4(UNorm8AsFloat32(((const uint16_t*)_data.begin())[0]), UNorm8AsFloat32(((const uint16_t*)_data.begin())[1]), UNorm8AsFloat32(((const uint16_t*)_data.begin())[2]), UNorm8AsFloat32(((const uint16_t*)_data.begin())[3]));
-		case RenderCore::Format::R16G16B16A16_SNORM:	return Float4(SNorm8AsFloat32(((const int16_t*)_data.begin())[0]), SNorm8AsFloat32(((const int16_t*)_data.begin())[1]), SNorm8AsFloat32(((const int16_t*)_data.begin())[2]), SNorm8AsFloat32(((const int16_t*)_data.begin())[3]));
+		case RenderCore::Format::R16G16B16A16_UNORM:	return Float4(UNorm16AsFloat32(((const uint16_t*)_data.begin())[0]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[1]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[2]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[3]));
+		case RenderCore::Format::R16G16B16A16_SNORM:	return Float4(SNorm16AsFloat32(((const int16_t*)_data.begin())[0]), SNorm16AsFloat32(((const int16_t*)_data.begin())[1]), SNorm16AsFloat32(((const int16_t*)_data.begin())[2]), SNorm16AsFloat32(((const int16_t*)_data.begin())[3]));
             
         default:
             UNREACHABLE();

@@ -983,7 +983,8 @@ namespace RenderCore
         //      for other formats, the alignment is the size of the component type
         auto componentPrecision = GetComponentPrecision(fmt);
         componentPrecision = std::max(componentPrecision, 8u);
-        assert(componentPrecision != 10 && componentPrecision != 11);       // these are the 10/10/10/2, 11/11/10 type formats
+        if (componentPrecision == 10 || componentPrecision == 11)       // these are the 10/10/10/2, 11/11/10 type formats
+            return 32/8;
         return componentPrecision/8;
     }
 
