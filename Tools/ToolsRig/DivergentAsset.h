@@ -116,15 +116,9 @@ namespace ToolsRig
 		TransactionId    DivergentTransaction<Asset>::Commit()
 	{
 		if (_transactionCopy) {
-			auto triggerDepVal = _destinationCopy->GetDependencyValidation();
-
             *_destinationCopy = std::move(*_transactionCopy);
 			_state = State::Committed;
-
-			if (triggerDepVal) {
-				assert(0);
-				// const_cast<::Assets::DependencyValidation*>(triggerDepVal.get())->OnChange();
-			}
+			assert(0);		// depval updates broken after many changes
 			return 0u; // newId
 		}
 		return ~0u;
@@ -192,14 +186,7 @@ namespace ToolsRig
 		TransactionId DivergentAsset<Asset>::AbandonChanges()
 	{
 		_lastTransaction.reset();
-		
-		auto triggerDepVal = _workingCopy->GetDependencyValidation();
-		*_workingCopy = std::move(*_pristineCopy);
-
-		if (triggerDepVal) {
-			assert(0);	// broken with dep val refactor
-			//const_cast<::Assets::DependencyValidation*>(triggerDepVal.get())->OnChange();
-		}
+		assert(0); // broken after many changs
 		return 0u; // newId;
 	}
 

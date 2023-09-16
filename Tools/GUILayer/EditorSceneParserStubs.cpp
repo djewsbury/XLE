@@ -173,7 +173,7 @@ namespace GUILayer
         _scene->_rigidModelScene->OnFrameBarrier();     // todo -- move somewhere better
 
         auto& stitchingContext = parserContext.GetFragmentStitchingContext();
-        assert(RenderCore::Techniques::HashPreregisteredAttachmentsResolutionIndependent(stitchingContext.GetPreregisteredAttachments(), stitchingContext._workingProps) == _preregAttachmentsHelper->_targetsHashResolutionIndependent);
+        assert(RenderCore::Techniques::HashPreregisteredAttachmentsResolutionIndependent(stitchingContext.GetPreregisteredAttachments(), parserContext.GetFrameBufferProperties()) == _preregAttachmentsHelper->_targetsHashResolutionIndependent);
         (void)stitchingContext;
 
         // todo -- do we really need a separate technique & lighting scene per window?
@@ -181,7 +181,7 @@ namespace GUILayer
 
         {
 			ToolsRig::ConfigureParsingContext(parserContext, *_camera.get());
-            RenderCore::LightingEngine::SequencePlayback lightingIterator { parserContext, _boundEnvSettings->GetLightingTechnique() };
+            auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback( parserContext, _boundEnvSettings->GetLightingTechnique() );
             for (;;) {
                 auto next = lightingIterator.GetNextStep();
                 if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;

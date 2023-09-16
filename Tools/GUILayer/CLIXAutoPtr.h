@@ -30,6 +30,9 @@
 #include <msclr\safebool.h>
 #include <assert.h>
 #include <memory>
+
+#pragma push_macro("Log")
+#undef Log
  
 namespace clix
 {
@@ -47,15 +50,17 @@ namespace clix
             auto_ptr(auto_ptr<T2> %rhs) /*throw()*/
                 : p_(rhs.release()) {}
  
-        ~auto_ptr() /*throw()*/ { delete p_; }
+        ~auto_ptr() /*throw()*/ { delete p_; p_ = nullptr; }
    
         !auto_ptr() /*throw()*/
         {
-			#if defined(_DEBUG)
-				System::Diagnostics::Debugger::Log(0, "clix::auto_ptr<>", "Finalizer used! The variable deleted in non-deterministic way.");
-			#endif
-            // delete p_;
-            GUILayer::DelayedDeleteQueue::Add(System::IntPtr(p_), gcnew GUILayer::DeletionCallback(DeleteFn));
+            if (p_) {
+			    #if defined(_DEBUG)
+				    System::Diagnostics::Debugger::Log(0, "clix::auto_ptr<>", "Finalizer used! The variable deleted in non-deterministic way.");
+			    #endif
+                // delete p_;
+                GUILayer::DelayedDeleteQueue::Add(System::IntPtr(p_), gcnew GUILayer::DeletionCallback(DeleteFn));
+            }
         }
  
         template<class T2>
@@ -169,16 +174,19 @@ namespace clix
 
         !shared_ptr() 
         {
-			#if defined(_DEBUG)
-				System::Diagnostics::Debugger::Log(0, "clix::shared_ptr<>", "Finalizer used! The variable deleted in non-deterministic way.");
-			#endif
-            // delete pPtr;
-            GUILayer::DelayedDeleteQueue::Add(System::IntPtr(pPtr), gcnew GUILayer::DeletionCallback(DeleteFn));
+            if (pPtr) {
+			    #if defined(_DEBUG)
+				    System::Diagnostics::Debugger::Log(0, "clix::shared_ptr<>", "Finalizer used! The variable deleted in non-deterministic way.");
+			    #endif
+                // delete pPtr;
+                GUILayer::DelayedDeleteQueue::Add(System::IntPtr(pPtr), gcnew GUILayer::DeletionCallback(DeleteFn));
+            }
         }
 
         ~shared_ptr() 
         {
             delete pPtr;
+            pPtr = nullptr;
         }
 
         operator std::shared_ptr<T>() 
@@ -255,3 +263,4 @@ namespace clix
 
 }
 
+#pragma pop_macro("Log")

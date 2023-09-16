@@ -98,7 +98,7 @@ namespace clix {
         //  3) for StringSection types
       template<Encoding encoding, typename SourceType, typename SourceType::value_type* = nullptr>
       static System::String ^marshal(const SourceType &string) {
-        return marshalCxxString<encoding, SourceType::value_type>(AsPointer(string.begin()), AsPointer(string.end()));
+        return marshalCxxString<encoding, typename SourceType::value_type>(AsPointer(string.begin()), AsPointer(string.end()));
       }
 
       template<Encoding encoding, typename SourceType, typename std::enable_if<std::is_integral<typename std::remove_pointer<SourceType>::type>::value>::type* = nullptr>
@@ -144,13 +144,13 @@ namespace clix {
       private:
         // Converts a byte array based on the selected encoding
         template<Encoding encoding> static System::String ^decode(array<unsigned char> ^bytes);
-        template<> static System::String ^decode<E_ANSI>(array<unsigned char> ^bytes) {
+        template<> System::String ^decode<E_ANSI>(array<unsigned char> ^bytes) {
           return System::Text::Encoding::Default->GetString(bytes);
         }
-        template<> static System::String ^decode<E_UTF8>(array<unsigned char> ^bytes) {
+        template<> System::String ^decode<E_UTF8>(array<unsigned char> ^bytes) {
           return System::Text::Encoding::UTF8->GetString(bytes);
         }
-        template<> static System::String ^decode<E_UTF16>(array<unsigned char> ^bytes) {
+        template<> System::String ^decode<E_UTF16>(array<unsigned char> ^bytes) {
           return System::Text::Encoding::Unicode->GetString(bytes);
         }
     };
@@ -175,12 +175,12 @@ namespace clix {
         // Then we construct our native string from that byte array
         pin_ptr<unsigned char> pinnedBytes(&bytes[0]);
         return StringType(
-          reinterpret_cast<StringType::value_type *>(static_cast<unsigned char *>(pinnedBytes)),
-          bytes->Length / sizeof(StringType::value_type)
+          reinterpret_cast<typename StringType::value_type *>(static_cast<unsigned char *>(pinnedBytes)),
+          bytes->Length / sizeof(typename StringType::value_type)
         );
       }
 
-      template<> static std::wstring marshal<E_UTF16, System::String ^>(
+      template<> std::wstring marshal<E_UTF16, System::String ^>(
         System::String ^string
       ) {
         // We can directly accesss the characters in the managed string
@@ -191,13 +191,13 @@ namespace clix {
       private:
         // Converts a string based on the selected encoding
         template<Encoding encoding> static array<unsigned char> ^encode(System::String ^string);
-        template<> static array<unsigned char> ^encode<E_ANSI>(System::String ^string) {
+        template<> array<unsigned char> ^encode<E_ANSI>(System::String ^string) {
           return System::Text::Encoding::Default->GetBytes(string);
         }
-        template<> static array<unsigned char> ^encode<E_UTF8>(System::String ^string) {
+        template<> array<unsigned char> ^encode<E_UTF8>(System::String ^string) {
           return System::Text::Encoding::UTF8->GetBytes(string);
         }
-        template<> static array<unsigned char> ^encode<E_UTF16>(System::String ^string) {
+        template<> array<unsigned char> ^encode<E_UTF16>(System::String ^string) {
           return System::Text::Encoding::Unicode->GetBytes(string);
         }
 

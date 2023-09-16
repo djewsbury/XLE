@@ -166,7 +166,7 @@ namespace GUILayer
 
         RenderCore::Techniques::ImmediateDrawableMaterial currentState;
         currentState._uniformStreamInterface = _mainUniformsInterface.get();
-        auto localTransformPkt = RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld))
+        auto localTransformPkt = RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld));
         // We're repurposing this flag for depth write disable
         currentState._stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::WriteMask;
         currentState._stateSet._writeMask = (unsigned(_depthTestEnable)<<1u) | unsigned(_depthWriteEnable);
@@ -211,7 +211,7 @@ namespace GUILayer
 
         RenderCore::Techniques::ImmediateDrawableMaterial currentState;
         currentState._uniformStreamInterface = _mainUniformsInterface.get();
-        auto localTransformPkt = RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld))
+        auto localTransformPkt = RenderCore::Techniques::MakeLocalTransformPacket(Transpose(Float4x4(xform)), ExtractTranslation(_parsingContext->GetProjectionDesc()._cameraToWorld));
         // We're repurposing this flag for depth write disable
         currentState._stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::WriteMask;
         currentState._stateSet._writeMask = (unsigned(_depthTestEnable)<<1u) | unsigned(_depthWriteEnable);
@@ -399,7 +399,7 @@ namespace GUILayer
 
 				{
 					auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
-					RenderOverlays::ExecuteDraws(parsingContext, rpi, immediateDrawables, *EngineDevice::GetInstance()->GetNative().GetOverlayApparatus()->_shapeRenderingDelegate);
+					RenderOverlays::ExecuteDraws(parserContext, rpi, immediateDrawables, *EngineDevice::GetInstance()->GetNative().GetOverlayApparatus()->_shapeRenderingDelegate);
 				}
 				OnRenderPostProcess(context);
 			}

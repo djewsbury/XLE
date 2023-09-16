@@ -13,7 +13,7 @@
 
 namespace RenderCore { namespace Techniques { class DrawingApparatus; class FrameRenderingApparatus; } }
 namespace OSServices { class InputSnapshot; }
-namespace PlatformRig { class InputContext; class MainInputHandler; }
+namespace PlatformRig { struct WindowingSystemView; class MainInputHandler; }
 
 namespace GUILayer
 {
@@ -21,11 +21,9 @@ namespace GUILayer
     {
     public:
         PlatformRig::FrameRig& GetFrameRig() { return *_frameRig; }
-        PlatformRig::OverlaySystemSet& GetMainOverlaySystemSet();
         std::shared_ptr<RenderCore::IPresentationChain>& GetPresentationChain() { return _presentationChain; }
 
         void OnResize(unsigned newWidth, unsigned newHeight);
-        void OnInputEvent(const OSServices::InputSnapshot&);
 
         WindowRig(
             std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
@@ -35,11 +33,8 @@ namespace GUILayer
     protected:
         std::shared_ptr<PlatformRig::FrameRig> _frameRig;
         std::shared_ptr<RenderCore::IPresentationChain> _presentationChain;
-        std::shared_ptr<PlatformRig::OverlaySystemSet> _mainOverlaySystemSet;
         std::shared_ptr<RenderCore::IDevice> _device;
         std::unique_ptr<PlatformRig::MainInputHandler> _mainInputHandler;
-
-        PlatformRig::InputContext MakeInputContext();
         const void* _platformWindowHandle;
     };
 }

@@ -9,7 +9,6 @@
 #include "EngineDevice.h"
 #include "ExportedNativeTypes.h"
 #include "../ToolsRig/DivergentAsset.h"
-#include "../../Assets/CompileAndAsyncManager.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/AssetServices.h"
@@ -27,7 +26,6 @@
 #include "MarshalString.h"
 #include "CLIXAutoPtr.h"
 
-#include "../../RenderCore/Assets/RawMaterial.h"
 #include <sstream>
 
 using namespace System;
@@ -35,6 +33,7 @@ using namespace System::Collections::Generic;
 
 namespace GUILayer
 {
+#if false
 	static String^ GetAssetTypeName(uint64_t typeCode)
 	{
 		using MatType = RenderCore::Assets::RawMaterial;
@@ -62,6 +61,17 @@ namespace GUILayer
 		}
 		return nullptr;
 	}
+#else
+	static String^ GetAssetTypeName(uint64_t typeCode)
+	{
+		return String::Empty;
+	}
+
+	static System::Drawing::Image^ GetAssetTypeImage(uint64_t typeCode)
+	{
+		return nullptr;
+	}
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -328,6 +338,7 @@ namespace GUILayer
 		return AsByteArray((const uint8*)AsPointer(blob->begin()), (const uint8*)AsPointer(blob->end()));
 	}
 
+#if false
     static auto DeserializeAllMaterials(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules)
         -> std::vector<std::pair<::Assets::rstring, RenderCore::Assets::RawMaterial>>
     {
@@ -403,6 +414,7 @@ namespace GUILayer
 
         SerializeAllMaterials(output, preMats);
     }
+#endif
 
 	struct AssetSaveEntry
 	{
@@ -419,6 +431,7 @@ namespace GUILayer
 
 	static AssetSaveEntry BuildAssetSaveEntry(uint64_t typeCode, const StringSection<::Assets::ResChar> identifier, const ToolsRig::IDivergentAsset& divAsset)
 	{
+#if false
 		// HACK -- special case for RawMaterial objects!
 		if (typeCode == TypeHashCode<RenderCore::Assets::RawMaterial>) {
 			auto splitName = MakeFileNameSplitter(identifier);
@@ -433,6 +446,7 @@ namespace GUILayer
 
 			return AssetSaveEntry { std::move(originalFile), std::move(newFile), splitName.AllExceptParameters().AsString() };
 		}
+#endif
 
 		return AssetSaveEntry {};
 	}
@@ -471,6 +485,7 @@ namespace GUILayer
     auto PendingSaveList::Commit() -> CommitResult^
     {
 		std::stringstream errorMessages;
+#if false
         constexpr auto materialCode = TypeHashCode<RenderCore::Assets::RawMaterial>;
 
 		using namespace RenderCore::Assets;
@@ -520,6 +535,7 @@ namespace GUILayer
 				errorMessages << "Error while opening input file " << filename.AsString() << ". Unknown exception type." << std::endl;
             } CATCH_END
         }
+#endif
 
 		auto result = gcnew CommitResult;
 		result->ErrorMessages = clix::marshalString<clix::E_UTF8>(errorMessages.str());

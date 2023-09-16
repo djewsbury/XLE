@@ -7,7 +7,6 @@
 using namespace System;
 using namespace System::Collections::Generic;
 using namespace System::Drawing;
-using namespace System::Runtime::Serialization;
 using System::Runtime::InteropServices::OutAttribute;
 
 namespace GUILayer 
@@ -29,7 +28,7 @@ namespace GUILayer
 	ref class RawMaterial;
 
 		///////////////////////////////////////////////////////////////
-	[DataContract] public ref class NodeGraphMetaData
+	[System::Runtime::Serialization::DataContract] public ref class NodeGraphMetaData
     {
     public:
         property String^ DefaultsMaterial;
@@ -37,11 +36,11 @@ namespace GUILayer
 		property RawMaterial^ Material;
 
         // Restrictions placed on the input variables
-        [DataMember] property Dictionary<String^, String^>^ Variables { Dictionary<String^, String^>^ get() { if (!_variables) _variables = gcnew Dictionary<String^, String^>(); return _variables; } }
+        [System::Runtime::Serialization::DataMember] property Dictionary<String^, String^>^ Variables { Dictionary<String^, String^>^ get() { if (!_variables) _variables = gcnew Dictionary<String^, String^>(); return _variables; } }
 
         // Configuration settings for the output file
-        [DataMember] bool HasTechniqueConfig;
-        [DataMember] property Dictionary<String^, String^>^ ShaderParameters { Dictionary<String^, String^>^ get() { if (!_shaderParameters) _shaderParameters = gcnew Dictionary<String^, String^>(); return _shaderParameters; } }
+        [System::Runtime::Serialization::DataMember] bool HasTechniqueConfig;
+        [System::Runtime::Serialization::DataMember] property Dictionary<String^, String^>^ ShaderParameters { Dictionary<String^, String^>^ get() { if (!_shaderParameters) _shaderParameters = gcnew Dictionary<String^, String^>(); return _shaderParameters; } }
 
 		NodeGraphMetaData() { HasTechniqueConfig = false; }
 

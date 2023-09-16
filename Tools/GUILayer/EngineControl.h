@@ -11,7 +11,8 @@
 #include <memory>
 
 namespace RenderCore { class IThreadContext; }
-namespace PlatformRig { class InputTranslator; class InputContext; }
+namespace OSServices { class InputTranslator; class InputSnapshot; }
+namespace PlatformRig { class InputContext; }
 
 using namespace System::Drawing;
 
@@ -50,7 +51,10 @@ namespace GUILayer
         void Evnt_Resize(Object^, System::EventArgs^ e);
 
         virtual bool Render(const std::shared_ptr<RenderCore::IThreadContext>&, IWindowRig&) = 0;
-		virtual void OnResize();
+		virtual void OnResize(IWindowRig&) = 0;
+        virtual void ProcessInput(const PlatformRig::InputContext&, const OSServices::InputSnapshot&) = 0;
+
+        void OnInputEvent(System::Windows::Forms::Control^ ctrl, const OSServices::InputSnapshot&);
 
     private:
         clix::auto_ptr<EngineControlPimpl> _pimpl;
@@ -62,7 +66,7 @@ namespace GUILayer
     {
     public:
         std::unique_ptr<WindowRig> _windowRig;
-        std::unique_ptr<PlatformRig::InputTranslator> _inputTranslator;
+        std::unique_ptr<OSServices::InputTranslator> _inputTranslator;
 
         ~EngineControlPimpl();
     };

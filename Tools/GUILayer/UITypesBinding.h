@@ -319,7 +319,7 @@ namespace GUILayer
 
         virtual event PropertyChangedEventHandler^ PropertyChanged;
 
-        using NativeConfig = ToolsRig::DivergentAsset<RenderCore::Assets::RawMaterial>;
+        using NativeConfig = RenderCore::Assets::RawMaterial;
         RenderStateSet(std::shared_ptr<NativeConfig> underlying);
         ~RenderStateSet();
     protected:
@@ -349,12 +349,6 @@ namespace GUILayer
         const RenderCore::Assets::RawMaterial* GetUnderlying();
 		std::shared_ptr<RenderCore::Assets::RawMaterial> GetUnderlyingPtr();
 
-        System::String^ BuildInheritanceList();
-        void AddInherited(System::String^);
-        void RemoveInheritted(System::String^);
-
-		void MergeIn(RawMaterial^ src);
-
 		bool TryGetConstantInt(System::String^ label, [Out] int% value);
 		bool TryGetConstantFloat(System::String^ label, [Out] float% value);
 		bool TryGetConstantBool(System::String^ label, [Out] bool% value);
@@ -374,7 +368,7 @@ namespace GUILayer
 
         ~RawMaterial();
     private:
-        using NativeConfig = ToolsRig::DivergentAsset<RenderCore::Assets::RawMaterial>;
+        using NativeConfig = RenderCore::Assets::RawMaterial;
         clix::shared_ptr<NativeConfig> _underlying;
 
         RenderStateSet^ _renderStateSet;
@@ -387,8 +381,6 @@ namespace GUILayer
         void ResourceBinding_Changed(System::Object^, ListChangedEventArgs^);
 
         RawMaterial(System::String^ initialiser);
-
-		uint32 _transId;
 
         static RawMaterial();
         static Dictionary<System::String^, System::WeakReference^>^ s_table;

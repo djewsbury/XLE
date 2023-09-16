@@ -8,7 +8,6 @@
 #include "../../../RenderCore/Assets/RawMaterial.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/AssetServices.h"
-#include "../../../Assets/CompileAndAsyncManager.h"
 #include "../../../Assets/IntermediateCompilers.h"
 #include "../../../OSServices/Log.h"
 #include "../../../Utility/Streams/PathUtils.h"

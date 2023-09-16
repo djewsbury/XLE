@@ -10,7 +10,7 @@
 #include <memory>
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; class IPipelineAcceleratorPool; } }
 
 namespace GUILayer
 {

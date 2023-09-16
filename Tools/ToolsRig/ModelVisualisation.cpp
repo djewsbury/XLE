@@ -414,7 +414,6 @@ namespace ToolsRig
     {
         _modelName = "rawos/game/model/galleon/galleon.dae";
         _materialName = "rawos/game/model/galleon/galleon.material";
-		_compilationConfigurationName = "rawos/game/model/galleon/galleon.model";
 		_levelOfDetail = 0;
 		_materialBindingFilter = 0;
 

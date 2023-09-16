@@ -15,11 +15,11 @@
 #include "GUILayerUtil.h"
 #include "ExportedNativeTypes.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
+#include "../../RenderCore/Techniques/RenderPass.h"
 #include "../ToolsRig/ModelVisualisation.h"
 #include "../ToolsRig/IManipulator.h"
 #include "../ToolsRig/BasicManipulators.h"
 #include "../ToolsRig/VisualisationUtils.h"
-#include "../../PlatformRig/WinAPI/InputTranslator.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
 
@@ -44,17 +44,34 @@ namespace GUILayer
 
         _activePaint = true;
         activePaintCheck2 = true;
+
+        if (_pendingUpdateRenderTargets) {
+            // ensure overlays have render targets configured
+            if (_mainOverlaySystemSet.get()) {
+                auto rtu = windowRig.GetFrameRig().GetOverlayConfiguration(*windowRig.GetPresentationChain());
+                _mainOverlaySystemSet->OnRenderTargetUpdate(rtu._preregAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
+            }
+
+            _pendingUpdateRenderTargets = false;
+        }
         
         bool result = true;
         TRY
         {
             auto& frameRig = windowRig.GetFrameRig();
-            auto frResult = frameRig.ExecuteFrame(threadContext, windowRig.GetPresentationChain());
+            auto parserContext = frameRig.StartupFrame(threadContext, windowRig.GetPresentationChain());
+            TRY {
+                _mainOverlaySystemSet->Render(parserContext);
+            } CATCH(const std::exception& e) {
+                PlatformRig::ReportError(parserContext, e.what());
+            } CATCH_END
+
+            frameRig.ShutdownFrame(parserContext);
 
             // return false if when we have pending resources (encourage another redraw)
-            result = !frResult._hasPendingResources;
+            result = !parserContext.HasPendingAssets();
 
-			if (frameRig.GetMainOverlaySystem()->GetOverlayState()._refreshMode == PlatformRig::IOverlaySystem::RefreshMode::RegularAnimation)
+			if (_mainOverlaySystemSet->GetOverlayState()._refreshMode == PlatformRig::IOverlaySystem::RefreshMode::RegularAnimation)
 				result = false;
 
         } CATCH (...) {
@@ -65,11 +82,27 @@ namespace GUILayer
         return result;
     }
 
-	void LayerControl::OnResize()
+	void LayerControl::OnResize(IWindowRig& windowRig)
     {
 		// We must reset the framebuffer in order to dump references to the presentation chain on DX (because it's going to be resized along with the window)
 		EngineDevice::GetInstance()->GetNative().ResetFrameBufferPool();
+
+        if (_mainOverlaySystemSet.get()) {
+            auto rtu = windowRig.GetFrameRig().GetOverlayConfiguration(*windowRig.GetPresentationChain());
+            _mainOverlaySystemSet->OnRenderTargetUpdate(rtu._preregAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
+        }
 	}
+
+    void LayerControl::ProcessInput(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& snapshot)
+    {
+        if (_mainOverlaySystemSet.get())
+            _mainOverlaySystemSet->ProcessInput(context, snapshot);
+    }
+
+    void LayerControl::UpdateRenderTargets()
+    {
+        _pendingUpdateRenderTargets = true;
+    }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     
@@ -78,10 +111,11 @@ namespace GUILayer
         class OverlaySystemAdapter : public PlatformRig::IOverlaySystem
         {
         public:
-            std::shared_ptr<PlatformRig::IInputListener> GetInputListener() override
+            virtual PlatformRig::ProcessInputResult ProcessInput(
+			    const PlatformRig::InputContext& context,
+			    const OSServices::InputSnapshot& evnt)
             {
-                // return _managedOverlay->GetInputListener();
-                return nullptr;
+                return PlatformRig::IOverlaySystem::ProcessInput(context, evnt);
             }
 
             void Render(
@@ -113,9 +147,13 @@ namespace GUILayer
 
     void LayerControl::AddSystem(IOverlaySystem^ overlay)
     {
-        auto& overlaySet = GetWindowRig().GetMainOverlaySystemSet();
-        overlaySet.AddSystem(std::shared_ptr<Internal::OverlaySystemAdapter>(
+        _mainOverlaySystemSet->AddSystem(std::shared_ptr<Internal::OverlaySystemAdapter>(
             new Internal::OverlaySystemAdapter(overlay)));
+    }
+
+    PlatformRig::OverlaySystemSet& LayerControl::GetMainOverlaySystemSet()
+    {
+        return *_mainOverlaySystemSet.get();
     }
 
     void LayerControl::AddDefaultCameraHandler(VisCameraSettings^ settings)
@@ -127,7 +165,7 @@ namespace GUILayer
             ToolsRig::ManipulatorStack::CameraManipulator,
             ToolsRig::CreateCameraManipulator(settings->GetUnderlying()));
 
-        auto& overlaySet = GetWindowRig().GetMainOverlaySystemSet();
+        auto& overlaySet = *_mainOverlaySystemSet.get();
         overlaySet.AddSystem(ToolsRig::MakeLayerForInput(manipulators));
     }
 
@@ -135,10 +173,13 @@ namespace GUILayer
         : EngineControl(control)
     {
         _activePaint = false;
+        _pendingUpdateRenderTargets = true;
+        _mainOverlaySystemSet.reset(new PlatformRig::OverlaySystemSet());
     }
 
     LayerControl::~LayerControl() 
     {
+        _mainOverlaySystemSet.reset();
     }
 }
 

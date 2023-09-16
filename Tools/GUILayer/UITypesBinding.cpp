@@ -29,6 +29,7 @@
 #pragma warning(disable:4512)
 
 using namespace System;
+using namespace Utility::Literals;
 
 namespace GUILayer
 {
@@ -130,13 +131,21 @@ namespace GUILayer
         return "<<no material>>";
     }
 
+    template<typename T>
+		T TryAnyCast(std::any&& any, T defaultValue)
+	{
+		if (any.has_value() && any.type() == typeid(T))
+			return std::any_cast<T>(std::move(any));
+		return defaultValue;
+	}
+
     System::String^ VisMouseOver::ModelName::get() 
     {
-		if (_scene.get()) {
-			auto* visContent = dynamic_cast<ToolsRig::IVisContent*>(_scene.get());
-			if (visContent)
-				return clix::marshalString<clix::E_UTF8>(visContent->GetDrawCallDetails(_object->_drawCallIndex, _object->_materialGuid)._modelName);
-		}
+        if (_object->_metadataQuery) {
+            std::string matName;
+            matName = TryAnyCast(_object->_metadataQuery("ModelScaffold"_h), matName);
+            return clix::marshalString<clix::E_UTF8>(matName);
+        }
 		return nullptr;
     }
 
@@ -147,11 +156,11 @@ namespace GUILayer
 
     System::String^ VisMouseOver::FullMaterialName::get()
     {
-		if (_scene.get()) {
-			auto* visContent = dynamic_cast<ToolsRig::IVisContent*>(_scene.get());
-			if (visContent)
-				return clix::marshalString<clix::E_UTF8>(visContent->GetDrawCallDetails(_object->_drawCallIndex, _object->_materialGuid)._materialName);
-		}
+		if (_object->_metadataQuery) {
+            std::string matName;
+            matName = TryAnyCast(_object->_metadataQuery("MaterialName"_h), matName);
+            return clix::marshalString<clix::E_UTF8>(matName);
+        }
 		return nullptr;
     }
 
@@ -383,7 +392,7 @@ namespace GUILayer
     {
         if (!_underlying) { return nullptr; }
         if (!_materialParameterBox) {
-            _materialParameterBox = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_selectors);
+            _materialParameterBox = BindingConv::AsBindingList(_underlying->_selectors);
             _materialParameterBox->ListChanged += 
                 gcnew ListChangedEventHandler(
                     this, &RawMaterial::ParameterBox_Changed);
@@ -398,7 +407,7 @@ namespace GUILayer
     {
         if (!_underlying) { return nullptr; }
         if (!_shaderConstants) {
-            _shaderConstants = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_uniforms);
+            _shaderConstants = BindingConv::AsBindingList(_underlying->_uniforms);
             _shaderConstants->ListChanged += 
                 gcnew ListChangedEventHandler(
                     this, &RawMaterial::ParameterBox_Changed);
@@ -413,7 +422,7 @@ namespace GUILayer
     {
         if (!_underlying) { return nullptr; }
         if (!_resourceBindings) {
-            _resourceBindings = BindingConv::AsBindingList(_underlying->GetWorkingAsset()->_resources);
+            _resourceBindings = BindingConv::AsBindingList(_underlying->_resources);
             _resourceBindings->ListChanged += 
                 gcnew ListChangedEventHandler(
                     this, &RawMaterial::ResourceBinding_Changed);
@@ -453,17 +462,19 @@ namespace GUILayer
 			bool isMatParams = obj == _materialParameterBox;
 			bool isMatConstants = obj == _shaderConstants;
             if (isMatParams) {
-                auto transaction = _underlying->Transaction_Begin("Material parameter");
-                if (transaction) {
-                    transaction->GetAsset()._selectors = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
-                    _transId = transaction->Commit();
-                }
+                // auto transaction = _underlying->Transaction_Begin("Material parameter");
+                // if (transaction) {
+                //     transaction->GetAsset()._selectors = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
+                //     _transId = transaction->Commit();
+                // }
+                _underlying->_selectors = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
             } else if (isMatConstants) {
-                auto transaction = _underlying->Transaction_Begin("Material constant");
-                if (transaction) {
-                    transaction->GetAsset()._uniforms = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
-					_transId = transaction->Commit();
-                }
+                // auto transaction = _underlying->Transaction_Begin("Material constant");
+                // if (transaction) {
+                //     transaction->GetAsset()._uniforms = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
+				// 	_transId = transaction->Commit();
+                // }
+                _underlying->_uniforms = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
             }
         }
     }
@@ -485,59 +496,19 @@ namespace GUILayer
 
         if (!!_underlying) {
             if (obj == _resourceBindings) {
-				auto transaction = _underlying->Transaction_Begin("Resource Binding");
-				if (transaction) {
-					transaction->GetAsset()._resources = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
-					_transId = transaction->Commit();
-				}
+				// auto transaction = _underlying->Transaction_Begin("Resource Binding");
+				// if (transaction) {
+				// 	transaction->GetAsset()._resources = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
+				// 	_transId = transaction->Commit();
+				// }
+                _underlying->_resources = BindingConv::AsParameterBox((BindingList<StringStringPair^>^)obj);
 			}
         }
     }
 
-    System::String^ RawMaterial::BuildInheritanceList()
-    {
-        if (!!_underlying) {
-            auto& asset = *_underlying->GetWorkingAsset();
-            auto searchRules = ::Assets::DefaultDirectorySearchRules(
-                MakeStringSection(clix::marshalString<clix::E_UTF8>(Filename)));
-            
-            System::String^ result = "";
-            auto inheritted = asset.ResolveInherited(searchRules);
-            for (auto i = inheritted.cbegin(); i != inheritted.cend(); ++i) {
-                if (!String::IsNullOrEmpty(result)) result += ";";
-                result += clix::marshalString<clix::E_UTF8>(*i);
-            }
-            return result;
-        }
-        return nullptr;
-    }
-
-    void RawMaterial::AddInherited(String^ item)
-    {
-            // we could consider converting the filename "item"
-            // into a path relative to the main material file here..?
-        auto transaction = _underlying->Transaction_Begin("Add inheritted");
-        if (transaction)
-            transaction->GetAsset()._inherit.push_back(clix::marshalString<clix::E_UTF8>(item));
-    }
-
-    void RawMaterial::RemoveInheritted(String^ item)
-    {
-        assert(0); // not implemented!
-    }
-
-	void RawMaterial::MergeIn(RawMaterial^ src)
-	{
-		auto transaction = _underlying->Transaction_Begin("Merge In");
-		if (transaction) {
-			transaction->GetAsset().MergeIn(*_underlying->GetWorkingAsset());
-			_transId = transaction->Commit();
-		}
-	}
-
 	bool RawMaterial::TryGetConstantInt(String^ label, [Out] int% value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<int>(
+		auto param = _underlying->_uniforms.GetParameter<int>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -548,7 +519,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantFloat(String^ label, [Out] float% value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<float>(
+		auto param = _underlying->_uniforms.GetParameter<float>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -559,7 +530,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantBool(String^ label, [Out] bool% value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<bool>(
+		auto param = _underlying->_uniforms.GetParameter<bool>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -570,7 +541,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantFloat2(String^ label, array<float>^ value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<Float2>(
+		auto param = _underlying->_uniforms.GetParameter<Float2>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -583,7 +554,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantFloat3(String^ label, array<float>^ value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<Float3>(
+		auto param = _underlying->_uniforms.GetParameter<Float3>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -597,7 +568,7 @@ namespace GUILayer
 
 	bool RawMaterial::TryGetConstantFloat4(String^ label, array<float>^ value)
 	{
-		auto param = _underlying->GetWorkingAsset()->_uniforms.GetParameter<Float4>(
+		auto param = _underlying->_uniforms.GetParameter<Float4>(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 		if (!param.has_value())
 			return false;
@@ -612,7 +583,7 @@ namespace GUILayer
 
 	bool RawMaterial::HasConstant(System::String^ label)
 	{
-		return _underlying->GetWorkingAsset()->_uniforms.HasParameter(
+		return _underlying->_uniforms.HasParameter(
 			MakeStringSection(clix::marshalString<clix::E_UTF8>(label)));
 	}
 
@@ -636,12 +607,12 @@ namespace GUILayer
 
     const RenderCore::Assets::RawMaterial* RawMaterial::GetUnderlying() 
     { 
-        return (!!_underlying) ? _underlying->GetWorkingAsset().get() : nullptr; 
+        return _underlying.get();
     }
 
 	std::shared_ptr<RenderCore::Assets::RawMaterial> RawMaterial::GetUnderlyingPtr()
 	{
-		return (!!_underlying) ? _underlying->GetWorkingAsset() : nullptr;
+		return _underlying;
 	}
 
     /*String^ RawMaterial::TechniqueConfig::get() { return clix::marshalString<clix::E_UTF8>(_underlying->GetWorkingAsset()->_techniqueConfig); }
@@ -697,15 +668,10 @@ namespace GUILayer
 
     RawMaterial::RawMaterial(System::String^ initialiser)
     {
-		_transId = 0;
-        if (initialiser) {
+        if (initialiser)
             _initializer = initialiser;
-            auto nativeInit = clix::marshalString<clix::E_UTF8>(initialiser);
-            _underlying = ToolsRig::CreateDivergentAsset<RenderCore::Assets::RawMaterial>(MakeStringSection(nativeInit));
-        } else {
-            _underlying = ToolsRig::DefaultConstructNewDivergentAsset<RenderCore::Assets::RawMaterial>();
-        }
-        _renderStateSet = gcnew RenderStateSet(_underlying.GetNativePtr());
+        _underlying = std::make_shared<RenderCore::Assets::RawMaterial>();
+        _renderStateSet = gcnew RenderStateSet(_underlying);
     }
 
     RawMaterial::~RawMaterial()
@@ -718,7 +684,7 @@ namespace GUILayer
 
     auto RenderStateSet::DoubleSided::get() -> CheckState
     {
-        auto& stateSet = _underlying->GetWorkingAsset()->_stateSet;
+        auto& stateSet = _underlying->_stateSet;
         if (stateSet._flag & RenderCore::Assets::RenderStateSet::Flag::DoubleSided) {
             if (stateSet._doubleSided) return CheckState::Checked;
             else return CheckState::Unchecked;
@@ -728,21 +694,21 @@ namespace GUILayer
     
     void RenderStateSet::DoubleSided::set(CheckState checkState)
     {
-        auto transaction = _underlying->Transaction_Begin("RenderState");
-        auto& stateSet = transaction->GetAsset()._stateSet;
+        // auto transaction = _underlying->Transaction_Begin("RenderState");
+        auto& stateSet = _underlying->_stateSet;
         if (checkState == CheckState::Indeterminate) {
             stateSet._flag &= ~RenderCore::Assets::RenderStateSet::Flag::DoubleSided;
         } else {
             stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::DoubleSided;
             stateSet._doubleSided = (checkState == CheckState::Checked);
         }
-        transaction->Commit();
+        // transaction->Commit();
         NotifyPropertyChanged("DoubleSided");
     }
 
     System::Windows::Forms::CheckState RenderStateSet::Wireframe::get()
     {
-        auto& stateSet = _underlying->GetWorkingAsset()->_stateSet;
+        auto& stateSet = _underlying->_stateSet;
         if (stateSet._flag & RenderCore::Assets::RenderStateSet::Flag::Wireframe) {
             if (stateSet._wireframe) return CheckState::Checked;
             else return CheckState::Unchecked;
@@ -752,15 +718,15 @@ namespace GUILayer
 
     void RenderStateSet::Wireframe::set(CheckState checkState)
     {
-        auto transaction = _underlying->Transaction_Begin("RenderState");
-        auto& stateSet = transaction->GetAsset()._stateSet;
+        // auto transaction = _underlying->Transaction_Begin("RenderState");
+        auto& stateSet = _underlying->_stateSet;
         if (checkState == CheckState::Indeterminate) {
             stateSet._flag &= ~RenderCore::Assets::RenderStateSet::Flag::Wireframe;
         } else {
             stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::Wireframe;
             stateSet._wireframe = (checkState == CheckState::Checked);
         }
-        transaction->Commit();
+        // transaction->Commit();
         NotifyPropertyChanged("Wireframe");
     }
 
@@ -838,8 +804,7 @@ namespace GUILayer
 
     auto RenderStateSet::StandardBlendMode::get() -> StandardBlendModes
     {
-        const auto& underlying = *_underlying->GetWorkingAsset();
-        return AsStandardBlendMode(underlying._stateSet);
+        return AsStandardBlendMode(_underlying->_stateSet);
     }
     
     void RenderStateSet::StandardBlendMode::set(StandardBlendModes newMode)
@@ -848,8 +813,8 @@ namespace GUILayer
         if (newMode == StandardBlendMode) return;
 
         if (newMode == StandardBlendModes::Inherit) {
-            auto transaction = _underlying->Transaction_Begin("RenderState");
-            auto& stateSet = transaction->GetAsset()._stateSet;
+            // auto transaction = _underlying->Transaction_Begin("RenderState");
+            auto& stateSet = _underlying->_stateSet;
             stateSet._forwardBlendOp = BlendOp::NoBlending;
             stateSet._forwardBlendSrc = Blend::One;
             stateSet._forwardBlendDst = Blend::Zero;
@@ -857,14 +822,14 @@ namespace GUILayer
             stateSet._flag &= ~RenderCore::Assets::RenderStateSet::Flag::ForwardBlend;
             stateSet._flag &= ~RenderCore::Assets::RenderStateSet::Flag::BlendType;
             NotifyPropertyChanged("StandardBlendMode");
-            transaction->Commit();
+            // transaction->Commit();
             return;
         }
 
         for (unsigned c=0; c<dimof(s_standardBlendDefs); ++c)
             if (s_standardBlendDefs[c]._standardMode == newMode) {
-                auto transaction = _underlying->Transaction_Begin("RenderState");
-                auto& stateSet = transaction->GetAsset()._stateSet;
+                // auto transaction = _underlying->Transaction_Begin("RenderState");
+                auto& stateSet = _underlying->_stateSet;
 
                 stateSet._forwardBlendOp = s_standardBlendDefs[c]._op;
                 stateSet._forwardBlendSrc = s_standardBlendDefs[c]._src;
@@ -874,7 +839,7 @@ namespace GUILayer
                 stateSet._blendType = s_standardBlendDefs[c]._blendType;
                 stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::BlendType;
 
-                transaction->Commit();
+                // transaction->Commit();
                 NotifyPropertyChanged("StandardBlendMode");
                 return;
             }

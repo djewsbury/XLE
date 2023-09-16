@@ -31,6 +31,7 @@
 using namespace System;
 using namespace System::Collections::Generic;
 using namespace System::Runtime::InteropServices;
+using namespace Utility::Literals;
 
 namespace GUILayer
 {
@@ -73,6 +74,41 @@ namespace GUILayer
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    template<typename T>
+		T TryAnyCast(std::any&& any, T defaultValue)
+	{
+		if (any.has_value() && any.type() == typeid(T))
+			return std::any_cast<T>(std::move(any));
+		return defaultValue;
+	}
+
+    static HitRecord^ GetHitRecordFromMetadataProvider(const SceneEngine::MetadataProvider& metadata)
+    {
+        auto record = gcnew HitRecord;
+        record->_document = ~0ull;
+        record->_object = ~0ull;
+        record->_worldSpaceCollision = Vector3(0,0,0);
+        record->_distance = -1;
+        record->_materialGuid = ~0ull;
+        record->_drawCallIndex = ~0u;
+
+        record->_object = TryAnyCast(metadata("PlacementGUID"_h), record->_object);
+        record->_document = TryAnyCast(metadata("DocumentId"_h), record->_document);
+
+        record->_materialGuid = TryAnyCast(metadata("MaterialGuid"_h), record->_materialGuid);
+        record->_drawCallIndex = TryAnyCast(metadata("DrawCallIndex"_h), record->_drawCallIndex);
+
+        std::string materialName, modelName;
+        materialName = TryAnyCast(metadata("MaterialName"_h), materialName);
+        modelName = TryAnyCast(metadata("ModelScaffold"_h), modelName);
+        
+        record->_materialName = clix::marshalString<clix::E_UTF8>(materialName);
+        record->_modelName = clix::marshalString<clix::E_UTF8>(modelName);
+        return record;
+    }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
     public ref class EditorInterfaceUtils
     {
     public:
@@ -100,15 +136,9 @@ namespace GUILayer
                     testContext, std::make_pair(AsFloat3(start), AsFloat3(end)), filter);
 
                 if (firstResult._type != 0) {
-                    auto record = gcnew HitRecord;
-                    record->_document = firstResult._objectGuid.first;
-                    record->_object = firstResult._objectGuid.second;
-                    record->_worldSpaceCollision = AsVector3(firstResult._worldSpaceCollision);
+                    HitRecord^ record = GetHitRecordFromMetadataProvider(firstResult._metadataQuery);
+                    record->_worldSpaceCollision = AsVector3(firstResult._worldSpaceIntersectionPt);
                     record->_distance = firstResult._distance;
-                    record->_materialGuid = firstResult._materialGuid;
-                    record->_materialName = clix::marshalString<clix::E_UTF8>(firstResult._materialName);
-                    record->_modelName = clix::marshalString<clix::E_UTF8>(firstResult._modelName);
-                    record->_drawCallIndex = firstResult._drawCallIndex;
 
                         // hack -- for placement objects, we must strip off the top 32 bits
                         //          from the object id.
@@ -150,11 +180,9 @@ namespace GUILayer
 
                     auto result = gcnew System::Collections::Generic::List<HitRecord>();
                     for (const auto& i: nativeResults) {
-                        auto record = gcnew HitRecord;
-                        record->_document = i._objectGuid.first;
-                        record->_object = i._objectGuid.second;
+                        HitRecord^ record = GetHitRecordFromMetadataProvider(i._metadataQuery);
                         record->_distance = i._distance;
-                        record->_worldSpaceCollision = AsVector3(i._worldSpaceCollision);
+                        record->_worldSpaceCollision = AsVector3(i._worldSpaceIntersectionPt);
                         record->_drawCallIndex = (unsigned)-1;
 
                             // hack -- for placement objects, we must strip off the top 32 bits

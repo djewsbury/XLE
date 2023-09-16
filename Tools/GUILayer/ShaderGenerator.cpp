@@ -25,8 +25,6 @@
 
 #pragma warning (disable:4505) // 'ShaderPatcherLayer::StateTypeToString': unreferenced local function has been removed
 
-using namespace System::Runtime::Serialization;
-
 namespace GUILayer 
 {
 	String^ PreviewSettings::PreviewGeometryToString(PreviewGeometry geo)
@@ -236,13 +234,13 @@ namespace GUILayer
 	template <typename Type>
 		static void SaveToXML(System::IO::Stream^ stream, Type^ obj)
 	{
-		DataContractSerializer^ serializer = nullptr;
+		System::Runtime::Serialization::DataContractSerializer^ serializer = nullptr;
         System::Xml::XmlWriterSettings^ settings = nullptr;
         System::Xml::XmlWriter^ writer = nullptr;
 
         try
         {
-            serializer = gcnew DataContractSerializer(Type::typeid);
+            serializer = gcnew System::Runtime::Serialization::DataContractSerializer(Type::typeid);
             settings = gcnew System::Xml::XmlWriterSettings();
             settings->Indent = true;
             settings->IndentChars = "\t";
@@ -282,7 +280,7 @@ namespace GUILayer
 
     static NodeGraphMetaData^ LoadMetaData(System::IO::Stream^ stream)
     {
-        auto serializer = gcnew DataContractSerializer(NodeGraphMetaData::typeid);
+        auto serializer = gcnew System::Runtime::Serialization::DataContractSerializer(NodeGraphMetaData::typeid);
         try
         {
             auto o = serializer->ReadObject(stream);

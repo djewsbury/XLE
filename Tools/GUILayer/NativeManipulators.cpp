@@ -18,6 +18,7 @@
 #include "../ToolsRig/IManipulator.h"
 #include "../PlatformRig/InputContext.h"
 #include "../SceneEngine/IntersectionTest.h"
+#include "../../OSServices/InputSnapshot.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../SceneEngine/BasicLightingStateDelegate.h"
 #include <msclr/auto_handle.h>
@@ -45,7 +46,7 @@ namespace GUILayer
     bool NativeManipulatorLayer::MouseMove(IViewContext^ vc, Point scrPt)
     {
         using namespace PlatformRig;
-		InputSnapshot evnt(0, 0, 0, Coord2(scrPt.X, scrPt.Y), Coord2(0, 0));
+		OSServices::InputSnapshot evnt(0, 0, 0, OSServices::Coord2(scrPt.X, scrPt.Y), OSServices::Coord2(0, 0));
 			// "return true" has two effects --
 			//		1. sets the cursor to a moving cursor
 			//		2. turns mouse down into "drag-begin" event
@@ -63,9 +64,9 @@ namespace GUILayer
     { 
         using namespace PlatformRig;
         auto btnState = 1<<0;
-		InputSnapshot evnt(
+		OSServices::InputSnapshot evnt(
 			btnState, btnState, 0,
-			Coord2(scrPt.X, scrPt.Y), Coord2(0, 0));
+			OSServices::Coord2(scrPt.X, scrPt.Y), OSServices::Coord2(0, 0));
         SetupModifierKeys(evnt);
 		return SendInputEvent(vc, evnt);
     }
@@ -79,9 +80,9 @@ namespace GUILayer
             //  emulate a mouse down event.
 		using namespace PlatformRig;
         auto btnState = 1<<0;
-		InputSnapshot evnt(
+		OSServices::InputSnapshot evnt(
 			btnState, 0, 0,
-			Coord2(scrPt.X, scrPt.Y), Coord2(0, 0));
+			OSServices::Coord2(scrPt.X, scrPt.Y), OSServices::Coord2(0, 0));
         SetupModifierKeys(evnt);
         return SendInputEvent(vc, evnt);
 	}
@@ -91,9 +92,9 @@ namespace GUILayer
             // Emulate a "mouse up" operation 
         using namespace PlatformRig;
         auto btnState = 1<<0;
-		InputSnapshot evnt(
+		OSServices::InputSnapshot evnt(
 			0, btnState, 0,
-			Coord2(scrPt.X, scrPt.Y), Coord2(0, 0));
+			OSServices::Coord2(scrPt.X, scrPt.Y), OSServices::Coord2(0, 0));
         SetupModifierKeys(evnt);
         return SendInputEvent(vc, evnt);
 	}
@@ -101,7 +102,7 @@ namespace GUILayer
     bool NativeManipulatorLayer::OnHover(IViewContext^ vc, Point scrPt)
     {
         using namespace PlatformRig;
-		InputSnapshot evnt(0, 0, 0, Coord2(scrPt.X, scrPt.Y), Coord2(0, 0));
+		OSServices::InputSnapshot evnt(0, 0, 0, OSServices::Coord2(scrPt.X, scrPt.Y), OSServices::Coord2(0, 0));
         SetupModifierKeys(evnt);
         return SendInputEvent(vc, evnt);
     }
@@ -109,9 +110,9 @@ namespace GUILayer
     void NativeManipulatorLayer::OnMouseWheel(IViewContext^ vc, Point scrPt, int delta)
     {
         using namespace PlatformRig;
-		InputSnapshot evnt(
+		OSServices::InputSnapshot evnt(
 			0, 0, delta,
-			Coord2(scrPt.X, scrPt.Y), Coord2(0, 0));
+			OSServices::Coord2(scrPt.X, scrPt.Y), OSServices::Coord2(0, 0));
         SetupModifierKeys(evnt);
         SendInputEvent(vc, evnt);
     }

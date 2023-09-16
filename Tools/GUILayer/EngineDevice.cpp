@@ -13,7 +13,7 @@
 #include "../ToolsRig/PreviewSceneRegistry.h"
 #include "../ToolsRig/ToolsRigServices.h"
 #include "../ToolsRig/MiscUtils.h"
-#include "../../PlatformRig/WinAPI/RunLoop_WinAPI.h"
+#include "../../OSServices/WinAPI/RunLoop_WinAPI.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/Services.h"
@@ -21,6 +21,7 @@
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/DeviceInitialization.h"
+#include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/MountingTree.h"
 #include "../../Assets/OSFileSystem.h"
@@ -46,7 +47,7 @@ namespace GUILayer
 			return false;
 		}
 
-		clix::shared_ptr<PlatformRig::OSRunLoop_BasicTimer> _osRunLoop;
+		clix::shared_ptr<OSServices::OSRunLoop_BasicTimer> _osRunLoop;
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,8 +140,8 @@ namespace GUILayer
         // setup mounting for default environment settings
         _defaultEnvMount = ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
 
-		auto osRunLoop = std::make_shared<PlatformRig::OSRunLoop_BasicTimer>((HWND)0);
-		PlatformRig::SetOSRunLoop(osRunLoop);
+		auto osRunLoop = std::make_shared<OSServices::OSRunLoop_BasicTimer>((HWND)0);
+		OSServices::SetOSRunLoop(osRunLoop);
 
         auto messageFilter = gcnew TimerMessageFilter();
         messageFilter->_osRunLoop = osRunLoop;
@@ -153,7 +154,7 @@ namespace GUILayer
         RenderCore::Techniques::SetThreadContext(nullptr);
 		if (_messageFilter.get())
 			System::Windows::Forms::Application::RemoveMessageFilter(_messageFilter.get());
-		PlatformRig::SetOSRunLoop(nullptr);
+		OSServices::SetOSRunLoop(nullptr);
         _services->PrepareForDestruction();
         ToolsRig::UnmountEntityDocument(_defaultEnvMount);
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId2);

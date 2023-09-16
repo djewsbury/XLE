@@ -365,7 +365,7 @@ namespace GUILayer
         OutputStream& stream, uint64_t docId, 
         EntityInterface::RetainedEntities* flexObjects) -> StreamWriterResult
     {
-        TextOutputFormatter formatter(stream);
+        Formatters::TextOutputFormatter formatter(stream);
 #if defined(GUILAYER_SCENEENGINE)
         EntityInterface::ExportGameObjects(formatter, *flexObjects);
 #endif
@@ -383,7 +383,7 @@ namespace GUILayer
     static auto WriteEnvSettings(OutputStream& stream, uint64_t docId, EntityInterface::RetainedEntities* flexObjects) 
         -> StreamWriterResult
     {
-        TextOutputFormatter formatter(stream);
+        Formatters::TextOutputFormatter formatter(stream);
 #if defined(GUILAYER_SCENEENGINE)
         EntityInterface::ExportEnvSettings(formatter, *flexObjects, docId);
 #endif
@@ -401,7 +401,7 @@ namespace GUILayer
         OutputStream& stream, 
         IEnumerable<EditorSceneManager::PlacementCellRef>^ cells) -> StreamWriterResult
     {
-        TextOutputFormatter formatter(stream);
+        Formatters::TextOutputFormatter formatter(stream);
         for each(auto c in cells) {
             auto ele = formatter.BeginKeyedElement("CellRef");
             formatter.WriteKeyedValue("Offset", ImpliedTyping::AsString(AsFloat3(c.Offset)));

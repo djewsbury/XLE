@@ -75,7 +75,7 @@ namespace ControlsLibrary.MaterialEditor
             string topItem = names[names.Count - 1];
             var parentNode = _hierachyTree.Nodes.Add(topItem);
             parentNode.Tag = topItem; // string.Join(";", names);
-            AddComboBoxChildren(parentNode, GUILayer.RawMaterial.Get(topItem).BuildInheritanceList());
+            // AddComboBoxChildren(parentNode, GUILayer.RawMaterial.Get(topItem).BuildInheritanceList());  (broken when inheritance mechanics moved to ResolvedAssetMixin)
             return parentNode;
         }
 
@@ -86,7 +86,7 @@ namespace ControlsLibrary.MaterialEditor
             {
                 var newNode = parentNode.Nodes.Add(mat);
                 newNode.Tag = new List<string>() { mat };
-                AddComboBoxChildren(newNode, GUILayer.RawMaterial.Get(mat).BuildInheritanceList());
+                // AddComboBoxChildren(newNode, GUILayer.RawMaterial.Get(mat).BuildInheritanceList());  (broken when inheritance mechanics moved to ResolvedAssetMixin)
             }
         }
 
@@ -127,8 +127,9 @@ namespace ControlsLibrary.MaterialEditor
                 "Add Inheritted Material Settings");
             if (result.Length > 0)
             {
-                using (var mat = GUILayer.RawMaterial.Get(selectedMaterial))
-                    mat.AddInherited(result);
+                //   (broken when inheritance mechanics moved to ResolvedAssetMixin)
+                // using (var mat = GUILayer.RawMaterial.Get(selectedMaterial))
+                //     mat.AddInherited(result);
                 // now we need to refresh this control with the new changes...
                 Object = _activeObject;
             }

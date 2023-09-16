@@ -13,9 +13,8 @@
 #include "DelayedDeleteQueue.h"
 #include "ExportedNativeTypes.h"
 #include "../../PlatformRig/FrameRig.h"
-#include "../../PlatformRig/OverlappedWindow.h"
 #include "../../PlatformRig/OverlaySystem.h"
-#include "../../PlatformRig/WinAPI/InputTranslator.h"
+#include "../../OSServices/WinAPI/InputTranslator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/IDevice.h"
@@ -110,16 +109,12 @@ namespace GUILayer
         return result;
     }
 
-	void EngineControl::OnResize()
-    {        
-	}
-
     void EngineControl::Evnt_Resize(Object^ sender, System::EventArgs^ e)
     {
         auto ctrl = dynamic_cast<Control^>(sender);
         if (!ctrl) return;
-		OnResize();
-        _pimpl->_windowRig->OnResize(ctrl->Size.Width, ctrl->Size.Height);
+		_pimpl->_windowRig->OnResize(ctrl->Size.Width, ctrl->Size.Height);
+        OnResize(*_pimpl->_windowRig.get());
     }
 
     void EngineControl::Evnt_KeyDown(Object^ sender, KeyEventArgs^ e)
@@ -129,7 +124,7 @@ namespace GUILayer
             if (!ctrl) return;
 
             auto generatedSnapshot = _pimpl->_inputTranslator->OnKeyChange(e->KeyValue, true);
-            _pimpl->_windowRig->OnInputEvent(generatedSnapshot);
+            OnInputEvent(ctrl, generatedSnapshot);
             e->Handled = true;
             ctrl->Invalidate();
         }
@@ -142,7 +137,7 @@ namespace GUILayer
             if (!ctrl) return;
 
             auto generatedSnapshot = _pimpl->_inputTranslator->OnKeyChange(e->KeyValue, false); 
-            _pimpl->_windowRig->OnInputEvent(generatedSnapshot);
+            OnInputEvent(ctrl, generatedSnapshot);
             e->Handled = true;
             ctrl->Invalidate();
         }
@@ -155,7 +150,7 @@ namespace GUILayer
             if (!ctrl) return;
             
             auto generatedSnapshot = _pimpl->_inputTranslator->OnChar(e->KeyChar);
-            _pimpl->_windowRig->OnInputEvent(generatedSnapshot);
+            OnInputEvent(ctrl, generatedSnapshot);
             e->Handled = true;
             ctrl->Invalidate();
         }
@@ -169,7 +164,7 @@ namespace GUILayer
             if (!ctrl) return;
             
             auto generatedSnapshot = _pimpl->_inputTranslator->OnMouseMove(e->Location.X, e->Location.Y);
-            _pimpl->_windowRig->OnInputEvent(generatedSnapshot);
+            OnInputEvent(ctrl, generatedSnapshot);
             ctrl->Invalidate();
         }
     }
@@ -191,7 +186,7 @@ namespace GUILayer
             if (!ctrl) return;
 
             auto generatedSnapshot = _pimpl->_inputTranslator->OnMouseButtonChange(e->Location.X, e->Location.Y, AsIndex(e->Button), true);
-            _pimpl->_windowRig->OnInputEvent(generatedSnapshot);
+            OnInputEvent(ctrl, generatedSnapshot);
             ctrl->Invalidate();
         }
     }
@@ -203,7 +198,7 @@ namespace GUILayer
             if (!ctrl) return;
             
             auto generatedSnapshot = _pimpl->_inputTranslator->OnMouseButtonChange(e->Location.X, e->Location.Y, AsIndex(e->Button), false);
-            _pimpl->_windowRig->OnInputEvent(generatedSnapshot);
+            OnInputEvent(ctrl, generatedSnapshot);
             ctrl->Invalidate();
         }
     }
@@ -215,7 +210,7 @@ namespace GUILayer
             if (!ctrl) return;
             
             auto generatedSnapshot = _pimpl->_inputTranslator->OnMouseWheel(e->Delta);
-            _pimpl->_windowRig->OnInputEvent(generatedSnapshot);
+            OnInputEvent(ctrl, generatedSnapshot);
             ctrl->Invalidate();
         }
     }
@@ -227,7 +222,7 @@ namespace GUILayer
             if (!ctrl) return;
             
             auto generatedSnapshot = _pimpl->_inputTranslator->OnMouseButtonDblClk(e->Location.X, e->Location.Y, AsIndex(e->Button));
-            _pimpl->_windowRig->OnInputEvent(generatedSnapshot);
+            OnInputEvent(ctrl, generatedSnapshot);
             ctrl->Invalidate();
         }
     }
@@ -241,6 +236,14 @@ namespace GUILayer
         }
     }
 
+    void EngineControl::OnInputEvent(Control^ ctrl, const OSServices::InputSnapshot& snapshot)
+    {
+        Rectangle^ clientRect = ctrl->ClientRectangle;
+        PlatformRig::WindowingSystemView view { PlatformRig::Coord2{clientRect->Left, clientRect->Top}, PlatformRig::Coord2{clientRect->Right, clientRect->Bottom} };
+        PlatformRig::InputContext context;
+        context.AttachService2(view);
+        ProcessInput(context, snapshot);
+    }
 
     IWindowRig& EngineControl::GetWindowRig()
     {
@@ -293,7 +296,7 @@ namespace GUILayer
         _pimpl.reset(new EngineControlPimpl);
         auto engineDevice = EngineDevice::GetInstance();
         _pimpl->_windowRig = CreateWindowRig(engineDevice, control->Handle.ToPointer());
-        _pimpl->_inputTranslator = std::make_unique<PlatformRig::InputTranslator>(control->Handle.ToPointer());
+        _pimpl->_inputTranslator = std::make_unique<OSServices::InputTranslator>(control->Handle.ToPointer());
 
         control->KeyDown    += gcnew System::Windows::Forms::KeyEventHandler(this, &EngineControl::Evnt_KeyDown);
         control->KeyUp      += gcnew System::Windows::Forms::KeyEventHandler(this, &EngineControl::Evnt_KeyUp);
@@ -318,6 +321,7 @@ namespace GUILayer
     EngineControl::~EngineControl()
     {
         _pimpl.reset();
+        _attachedControl = nullptr;
     }
 
     EngineControl::!EngineControl()

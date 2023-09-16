@@ -17,7 +17,7 @@
 #include "../ToolsRig/PreviewSceneRegistry.h"
 #include "../ToolsRig/ToolsRigServices.h"
 #include "../ToolsRig/MiscUtils.h"
-#include "../../PlatformRig/WinAPI/InputTranslator.h"
+#include "../../OSServices/WinAPI/InputTranslator.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
@@ -117,18 +117,20 @@ namespace GUILayer
 
 	void VisLayerController::AttachToView(LayerControl^ view)
 	{
-		auto& overlaySet = view->GetWindowRig().GetMainOverlaySystemSet();
+		auto& overlaySet = view->GetMainOverlaySystemSet();
         overlaySet.AddSystem(_pimpl->_modelLayer);
 		overlaySet.AddSystem(_pimpl->_visOverlay);
 		overlaySet.AddSystem(_pimpl->_manipulatorLayer);
+		view->UpdateRenderTargets();
 	}
 
 	void VisLayerController::DetachFromView(LayerControl^ view)
 	{
-		auto& overlaySet = view->GetWindowRig().GetMainOverlaySystemSet();
+		auto& overlaySet = view->GetMainOverlaySystemSet();
 		overlaySet.RemoveSystem(*_pimpl->_manipulatorLayer);
 		overlaySet.RemoveSystem(*_pimpl->_visOverlay);
 		overlaySet.RemoveSystem(*_pimpl->_modelLayer);
+		view->UpdateRenderTargets();
 	}
 
 	void VisLayerController::OnEngineShutdown()
@@ -186,8 +188,7 @@ namespace GUILayer
 
 	VisLayerController::!VisLayerController()
 	{
-		if (_pimpl.get())
-			System::Diagnostics::Debug::Assert(false, "Non deterministic delete of LayerControl");
+		System::Diagnostics::Debug::Assert(!_pimpl.get(), "Non deterministic delete of LayerControl");
 	}
 }
 
