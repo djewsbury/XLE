@@ -139,10 +139,10 @@ namespace Assets
 			const ExtensionAndDelegate& delegate,
 			const InitializerPack& initializers,
 			const VariantFunctions& conduit,
-			OperationContext::OperationHelper&& contextHelper,
+			OperationContextHelper&& contextHelper,
 			std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& compileMarker,
 			IntermediatesStore* destinationStore);
-		std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> InvokeCompileInternal(OperationContext::OperationHelper&&);
+		std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> InvokeCompileInternal(OperationContextHelper&&);
     };
 
     std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> IntermediateCompilers::Marker::GetArtifact(CompileRequestCode targetCode, OperationContext* opContext)
@@ -175,7 +175,7 @@ namespace Assets
 				return {std::move(existingCollection), ArtifactCollectionFuture{}};
 		}
 
-		OperationContext::OperationHelper contextHelper;
+		OperationContextHelper contextHelper;
 		if (opContext)
 			contextHelper = opContext->Begin(Concatenate("Compiling (", _initializers.ArchivableName(), ") with compiler (", GetCompilerDescription(), ")"));
 
@@ -194,7 +194,7 @@ namespace Assets
 		if (auto f = _activeFuture.lock())
 			return ArtifactCollectionFuture{std::move(f), targetCode};
 
-		OperationContext::OperationHelper contextHelper;
+		OperationContextHelper contextHelper;
 		if (opContext)
 			contextHelper = opContext->Begin(Concatenate("Compiling (", _initializers.ArchivableName(), ") with compiler (", GetCompilerDescription(), ")"));
 
@@ -217,7 +217,7 @@ namespace Assets
 		const ExtensionAndDelegate& delegate,
 		const InitializerPack& initializers,
 		const VariantFunctions& conduit,
-		OperationContext::OperationHelper&& opHelper,
+		OperationContextHelper&& opHelper,
 		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& promise,
 		IntermediatesStore* destinationStore)
     {
@@ -349,7 +349,7 @@ namespace Assets
 		return {};
 	}
 
-    std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> IntermediateCompilers::Marker::InvokeCompileInternal(OperationContext::OperationHelper&& opContextHelper)
+    std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> IntermediateCompilers::Marker::InvokeCompileInternal(OperationContextHelper&& opContextHelper)
     {
 		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet> promise;
 		std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> result = promise.get_future();

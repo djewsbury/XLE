@@ -6,14 +6,19 @@
 
 #include "IFileSystem.h"
 #include "InitializerPack.h"
-#include "Marker.h"		// used by ConstructToMarker
 #include "../OSServices/Log.h"
-#include "../Utility/Threading/CompletionThreadPool.h"
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
 #include <assert.h>
 #include <memory>
 #include <future>
+
+#if !defined(__CLR_VER)
+	#include "../Utility/Threading/CompletionThreadPool.h"		// used by AutoConstructToPromise
+	#include "Marker.h"		// used by ConstructToMarker
+#endif
+
+namespace Utility { class ThreadPool; }
 
 namespace Assets
 {
@@ -242,6 +247,7 @@ namespace Assets
 		}
 	}
 
+#if !defined(__CLR_VER)
 	template<typename Promise, typename... Params>
 		void AutoConstructToPromise(Promise&& promise, Params&&... initialisers)
 	{
@@ -309,6 +315,7 @@ namespace Assets
 		AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
 		return future;
 	}
+#endif
 
 	#undef ENABLE_IF
 }

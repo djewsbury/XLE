@@ -32,7 +32,7 @@ namespace Assets
 		assert(0);
 	}
 
-	auto OperationContext::Begin(std::string desc) -> OperationHelper
+	auto OperationContext::Begin(std::string desc) -> OperationContextHelper
 	{
 		ScopedLock(_mutex);
 		auto id = _pimpl->_nextOperationId++;
@@ -131,30 +131,30 @@ namespace Assets
 	OperationContext::~OperationContext()
 	{}
 
-	void OperationContext::OperationHelper::SetMessage(std::string str)
+	void OperationContextHelper::SetMessage(std::string str)
 	{
 		assert(_context);
 		_context->SetMessage(_opId, std::move(str));
 	}
 
-	void OperationContext::OperationHelper::SetDescription(std::string str)
+	void OperationContextHelper::SetDescription(std::string str)
 	{
 		assert(_context);
 		_context->SetDescription(_opId, std::move(str));
 	}
 
-	void OperationContext::OperationHelper::SetProgress(unsigned completed, unsigned total)
+	void OperationContextHelper::SetProgress(unsigned completed, unsigned total)
 	{
 		assert(_context);
 		_context->SetProgress(_opId, completed, total);
 	}
 
-	OperationContext::OperationHelper::OperationHelper() = default;
-	OperationContext::OperationHelper::~OperationHelper()
+	OperationContextHelper::OperationContextHelper() = default;
+	OperationContextHelper::~OperationContextHelper()
 	{
 		if (_context && !_endFunctionInvoked) _context->End(_opId);
 	}
-	OperationContext::OperationHelper::OperationHelper(OperationHelper&& moveFrom)
+	OperationContextHelper::OperationContextHelper(OperationContextHelper&& moveFrom)
 	{
 		_context = moveFrom._context;
 		_opId = moveFrom._opId;
@@ -163,7 +163,7 @@ namespace Assets
 		moveFrom._opId = ~0u;
 		moveFrom._endFunctionInvoked = false;
 	}
-	OperationContext::OperationHelper& OperationContext::OperationHelper::operator=(OperationHelper&& moveFrom)
+	OperationContextHelper& OperationContextHelper::operator=(OperationContextHelper&& moveFrom)
 	{
 		if (_context && !_endFunctionInvoked) _context->End(_opId);
 		_context = moveFrom._context;
@@ -174,7 +174,7 @@ namespace Assets
 		moveFrom._endFunctionInvoked = false;
 		return *this;
 	}
-	OperationContext::OperationHelper::OperationHelper(OperationId id, std::shared_ptr<OperationContext> context)
+	OperationContextHelper::OperationContextHelper(OperationContext::OperationId id, std::shared_ptr<OperationContext> context)
 	: _context(std::move(context)), _opId(id), _endFunctionInvoked(false) {}
 
 

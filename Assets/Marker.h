@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(__CLR_VER)
+    #error This file cannot be included in C++/CLR projects
+#endif
+
 #include "AssetsCore.h"
 #include "DepVal.h"
 #include "IAsyncMarker.h"
