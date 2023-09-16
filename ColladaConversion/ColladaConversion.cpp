@@ -35,6 +35,10 @@
 #include "../Utility/PtrUtils.h"
 #include "../Core/SelectConfiguration.h"
 
+#include "../RenderCore/Assets/ModelRendererConstruction.h"
+#include "../Assets/Assets.h"
+#include "../Assets/AssetMixins.h"
+
 #include <memory>
 #include <map>
 #include <set>
@@ -597,6 +601,22 @@ namespace ColladaConversion
 			result->_cfg = ::Assets::AutoConstructAsset<ImportConfiguration>(cfgBlob, std::move(cfgDepVal));
 		}
 
+		// Always load a .model file next to the input file -- this might contain addition configuration options
+		::Assets::DependencyValidation modelCfgFileDepVal;
+		{
+			auto cfgFileName = split.DrivePathAndFilename().AsString() + ".model";
+			auto cfgFile = ::Assets::MakeAssetMarker<std::shared_ptr<::Assets::ResolvedAssetMixin<ModelCompilationConfiguration>>>(cfgFileName);
+			cfgFile->StallWhilePending();
+			if (cfgFile->GetAssetState() == ::Assets::AssetState::Ready) {
+				auto newCfg = std::make_shared<ModelCompilationConfiguration>();
+				newCfg->MergeInWithFilenameResolve(*cfgFile->Actualize(), {});
+				if (configuration)
+					newCfg->MergeInWithFilenameResolve(*configuration, {});
+				configuration = std::move(newCfg);
+			}
+			modelCfgFileDepVal = cfgFile->GetDependencyValidation();		// ensure we get a "does not exist" dep val if the file isn't there
+		}
+
 		auto mainFileDepVal = ::Assets::GetDepValSys().Make(filePath);
 		result->_fileData = ::Assets::MainFileSystem::OpenMemoryMappedFile(filePath, 0, "r", OSServices::FileShareMode::Read);
 		Formatters::XmlInputFormatter<utf8> formatter { result->_fileData.GetData(), mainFileDepVal };
@@ -617,7 +637,7 @@ namespace ColladaConversion
 		result->_targets.push_back(ColladaCompileOp::TargetDesc{Type_Skeleton, "Skeleton"});
 		result->_targets.push_back(ColladaCompileOp::TargetDesc{Type_AnimationSet, "Animations"});
 
-		::Assets::DependencyValidationMarker depVals[] { mainFileDepVal, result->_cfg.GetDependencyValidation() };
+		::Assets::DependencyValidationMarker depVals[] { mainFileDepVal, result->_cfg.GetDependencyValidation(), modelCfgFileDepVal };
 		result->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 
 		return std::move(result);
