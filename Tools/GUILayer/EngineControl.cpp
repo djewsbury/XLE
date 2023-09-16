@@ -128,8 +128,10 @@ namespace GUILayer
         // destroy the window rig, because the Win32 window handle has just been destroyed
         // We will get Windows Forms events even after this (eg, Evnt_Resize)... We don't want them to
         // go through, because everything will fail
-        _pimpl->_windowRig.reset();
-        _pimpl->_inputTranslator.reset();
+        if (_pimpl.get()) {
+            _pimpl->_windowRig.reset();
+            _pimpl->_inputTranslator.reset();
+        }
     }
 
     void EngineControl::Evnt_KeyDown(Object^ sender, KeyEventArgs^ e)
