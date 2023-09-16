@@ -62,6 +62,15 @@ namespace Assets
         }
         return AssetState::Ready;
     }
+
+    Blob AsyncMarkerGroup::GetActualizationLog() const
+    {
+        for (const auto&e:_entries)
+            if (auto b=e._marker->GetActualizationLog())
+                if (!b->empty())
+                    return b;
+        return nullptr;
+    }
     
     AsyncMarkerGroup::AsyncMarkerGroup()
     {

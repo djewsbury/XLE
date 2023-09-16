@@ -26,6 +26,7 @@ namespace Assets
         
         AssetState        GetAssetState() const override;
         std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const override;
+        Blob            GetActualizationLog() const override;
 
         AsyncMarkerGroup();
         ~AsyncMarkerGroup();

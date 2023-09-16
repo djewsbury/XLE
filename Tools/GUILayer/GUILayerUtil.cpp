@@ -11,10 +11,14 @@
 #include "../ToolsRig/ToolsRigServices.h"
 #include "../ToolsRig/MiscUtils.h"
 #include "../ToolsRig/MaterialVisualisation.h"
+#include "../ToolsRig/SampleUtils.h"
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
+#include "../../Assets/IAsyncMarker.h"
+#include "../../Assets/OperationContext.h"
 #include "../../ConsoleRig/IProgress.h"
 #include "../../Utility/MemoryUtils.h"
 #include <msclr/auto_gcroot.h>
+#include <chrono>
 
 namespace GUILayer
 {
@@ -222,6 +226,75 @@ namespace GUILayer
 	SceneEngine::PlacementsRenderer& PlacementsRendererWrapper::GetNative()
 	{
 		return *_renderer.get();
+	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	bool IAsyncMarkerWrapper::Poll(unsigned millisecondWait)
+	{
+		return _underlying->StallWhilePending(std::chrono::milliseconds(millisecondWait)).value_or(::Assets::AssetState::Pending) != ::Assets::AssetState::Pending;
+	}
+	System::String^ IAsyncMarkerWrapper::GetActualizationLog()
+	{
+		auto log = _underlying->GetActualizationLog();
+		if (!log)
+			return nullptr;
+		return clix::marshalString<clix::E_UTF8>(::Assets::AsString(log));
+	}
+
+	IAsyncMarkerWrapper::IAsyncMarkerWrapper(std::shared_ptr<::Assets::IAsyncMarker> underlying)
+	{
+		_underlying = std::move(underlying);
+	}
+	IAsyncMarkerWrapper::~IAsyncMarkerWrapper()
+	{
+		_underlying.reset();
+	}
+	IAsyncMarkerWrapper::!IAsyncMarkerWrapper()
+	{
+		System::Diagnostics::Debug::Assert(false, "IAsyncMarkerWrapper finalizer used");
+	}
+
+	System::Collections::Generic::IEnumerable<OperationContextWrapper::OperationDesc^>^ OperationContextWrapper::GetActiveOperations()
+	{
+		if (!_underlying)
+			return nullptr;
+
+		auto result = gcnew System::Collections::Generic::List<OperationContextWrapper::OperationDesc^>();
+		for (auto o:_underlying->GetActiveOperations()) {
+			auto entry = gcnew OperationContextWrapper::OperationDesc();
+			entry->_description = clix::marshalString<clix::E_UTF8>(o._description);
+			entry->_msg = clix::marshalString<clix::E_UTF8>(o._msg);
+			if (o._progress) {
+				entry->_progress = o._progress->first;
+				entry->_progressMax = o._progress->second;
+			} else {
+				entry->_progress = entry->_progressMax = 0;
+			}
+			result->Add(entry);
+		}
+
+		return result;
+	}
+
+	OperationContextWrapper::OperationContextWrapper()
+	{
+		_underlying = ::Assets::CreateOperationContext();
+	}
+
+	OperationContextWrapper::OperationContextWrapper(std::shared_ptr<::Assets::OperationContext> underlying)
+	{
+		_underlying = std::move(underlying);
+	}
+
+	OperationContextWrapper::~OperationContextWrapper()
+	{
+		_underlying.reset();
+	}
+
+	OperationContextWrapper::!OperationContextWrapper()
+	{
+		System::Diagnostics::Debug::Assert(false, "OperationContextWrapper finalizer used");
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

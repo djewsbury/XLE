@@ -575,6 +575,11 @@ namespace Assets
         return (AssetState)*state;
     }
 
+    Blob GenericFuture::GetActualizationLog() const
+    {
+        return nullptr;
+    }
+
 	IAsyncMarker::~IAsyncMarker() {}
 
 

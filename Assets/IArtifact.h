@@ -75,6 +75,7 @@ namespace Assets
 
 		virtual AssetState		            GetAssetState() const override;
 		virtual std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const override;
+		virtual Blob				    	GetActualizationLog() const override;
 
 	private:
 		// awkwardly we use shared ptrs to a shared future, because we need to track the reference counts

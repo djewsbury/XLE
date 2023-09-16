@@ -131,22 +131,27 @@ namespace Assets
 	OperationContext::~OperationContext()
 	{}
 
+	std::shared_ptr<OperationContext> CreateOperationContext()
+	{
+		return std::make_shared<OperationContext>();
+	}
+
 	void OperationContextHelper::SetMessage(std::string str)
 	{
-		assert(_context);
-		_context->SetMessage(_opId, std::move(str));
+		if (_context)
+			_context->SetMessage(_opId, std::move(str));
 	}
 
 	void OperationContextHelper::SetDescription(std::string str)
 	{
-		assert(_context);
-		_context->SetDescription(_opId, std::move(str));
+		if (_context)
+			_context->SetDescription(_opId, std::move(str));
 	}
 
 	void OperationContextHelper::SetProgress(unsigned completed, unsigned total)
 	{
-		assert(_context);
-		_context->SetProgress(_opId, completed, total);
+		if (_context)
+			_context->SetProgress(_opId, completed, total);
 	}
 
 	OperationContextHelper::OperationContextHelper() = default;

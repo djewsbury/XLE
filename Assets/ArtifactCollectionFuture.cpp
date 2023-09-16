@@ -85,6 +85,11 @@ namespace Assets
 		}
 	}
 
+	Blob ArtifactCollectionFuture::GetActualizationLog() const
+	{
+		return GetErrorMessage(GetArtifactCollection());
+	}
+
     const char* ArtifactCollectionFuture::GetDebugLabel() const
     {
         #if defined(_DEBUG)

@@ -18,6 +18,7 @@ namespace Assets
 	public:
 		virtual AssetState		            GetAssetState() const = 0;
 		virtual std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const = 0;
+		virtual Blob				    	GetActualizationLog() const = 0;
 		virtual ~IAsyncMarker();
 	};
 
@@ -27,6 +28,7 @@ namespace Assets
         AssetState		GetAssetState() const { return _state; }
         std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const;
         const char*     GetDebugLabel() const;  // GetDebugLabel only provided in debug builds, and only intended for debugging
+		Blob			GetActualizationLog() const;
 
         GenericFuture(AssetState state = AssetState::Pending);
         ~GenericFuture();

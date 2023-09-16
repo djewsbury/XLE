@@ -5,14 +5,18 @@
 #pragma once
 
 #include "../Utility/StringUtils.h"
-#include "../Utility/Threading/Mutex.h"
 #include <cstdint>
-#include <future>
 #include <chrono>
+
+#if !defined(__CLR_VER)
+	#include "../Utility/Threading/Mutex.h"
+	#include <future>
+#endif
 
 namespace Assets
 {
 
+	#if !defined(__CLR_VER)
 	namespace Internal
 	{
 		class VariantFutureSet
@@ -52,6 +56,7 @@ namespace Assets
 			Id _nextId = 1;
 		};
 	}
+	#endif
 
 	struct OperationContextHelper;
 
@@ -91,11 +96,15 @@ namespace Assets
 	private:
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;
-		Internal::VariantFutureSet _futures;
-		Threading::Mutex _mutex;
+		#if !defined(__CLR_VER)
+			Internal::VariantFutureSet _futures;
+			Threading::Mutex _mutex;
+			void EndWithFutureAlreadyLocked(OperationId opId, Internal::VariantFutureSet::Id futureId);
+		#endif
 		uint64_t _guid = 0;
-		void EndWithFutureAlreadyLocked(OperationId opId, Internal::VariantFutureSet::Id futureId);
 	};
+	
+	std::shared_ptr<OperationContext> CreateOperationContext();
 
 	struct OperationContextHelper
 	{
@@ -127,45 +136,47 @@ namespace Assets
 		_endFunctionInvoked = true;
 	}
 
-	template<typename FutureObj>
-		void OperationContext::EndWithFuture(OperationId opId, std::shared_future<FutureObj> future)
-	{
-		ScopedLock(_mutex);
-		return EndWithFutureAlreadyLocked(opId, _futures.Add(future));
-	}
-
-	namespace Internal
-	{
+	#if !defined(__CLR_VER)
 		template<typename FutureObj>
-			auto VariantFutureSet::Add(std::shared_future<FutureObj> future) -> Id
+			void OperationContext::EndWithFuture(OperationId opId, std::shared_future<FutureObj> future)
 		{
-			using StoredType = std::shared_future<FutureObj>;
-			auto offset = _storage.size();
-			_storage.resize(_storage.size() + sizeof(StoredType));
-			Entry e;
-			e._id = _nextId++;
-			e._begin = offset;
-			e._end = _storage.size();
-			e._waitForFn = [](void* future, Duration d) -> std::future_status {
-				return ((StoredType*)future)->wait_for(d);
-			};
-			e._waitUntilFn = [](void* future, TimePoint tp) -> std::future_status {
-				return ((StoredType*)future)->wait_until(tp);
-			};
-			e._moveFn = [](void* dst, void* src) {
-				*((StoredType*)dst) = std::move(*((StoredType*)src));
-			};
-			e._destructionFn = [](void* future) {
-				((StoredType*)future)->~StoredType();
-			};
-			_entries.push_back(e);
-			#pragma push_macro("new")
-			#undef new
-				new (PtrAdd(_storage.data(), offset)) StoredType{std::move(future)};
-			#pragma pop_macro("new")
-			return e._id;
+			ScopedLock(_mutex);
+			return EndWithFutureAlreadyLocked(opId, _futures.Add(future));
 		}
-	}
+
+		namespace Internal
+		{
+			template<typename FutureObj>
+				auto VariantFutureSet::Add(std::shared_future<FutureObj> future) -> Id
+			{
+				using StoredType = std::shared_future<FutureObj>;
+				auto offset = _storage.size();
+				_storage.resize(_storage.size() + sizeof(StoredType));
+				Entry e;
+				e._id = _nextId++;
+				e._begin = offset;
+				e._end = _storage.size();
+				e._waitForFn = [](void* future, Duration d) -> std::future_status {
+					return ((StoredType*)future)->wait_for(d);
+				};
+				e._waitUntilFn = [](void* future, TimePoint tp) -> std::future_status {
+					return ((StoredType*)future)->wait_until(tp);
+				};
+				e._moveFn = [](void* dst, void* src) {
+					*((StoredType*)dst) = std::move(*((StoredType*)src));
+				};
+				e._destructionFn = [](void* future) {
+					((StoredType*)future)->~StoredType();
+				};
+				_entries.push_back(e);
+				#pragma push_macro("new")
+				#undef new
+					new (PtrAdd(_storage.data(), offset)) StoredType{std::move(future)};
+				#pragma pop_macro("new")
+				return e._id;
+			}
+		}
+	#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

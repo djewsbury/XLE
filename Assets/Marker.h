@@ -69,7 +69,7 @@ namespace Assets
 
 		AssetState		            GetAssetState() const override { return _state; }
 		const DependencyValidation&	GetDependencyValidation() const { return _actualizedDepVal; }
-		const Blob&				    GetActualizationLog() const { return _actualizationLog; }
+		Blob					    GetActualizationLog() const override { return _actualizationLog; }
 
 		AssetState		CheckStatusBkgrnd(Type& actualized, DependencyValidation& depVal, Blob& actualizationLog);
 		AssetState		CheckStatusBkgrnd(DependencyValidation& depVal, Blob& actualizationLog);

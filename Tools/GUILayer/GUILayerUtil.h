@@ -21,12 +21,16 @@ namespace SceneEngine
 
 namespace ConsoleRig { class IProgress; }
 namespace ToolsRig { class MessageRelay; class DeferredCompiledShaderPatchCollection; }
+namespace Assets { class IAsyncMarker; class OperationContext; }
 
 namespace std { template <typename R> class future; }
 
 namespace GUILayer
 {
 	public enum class CompilationTargetFlag { Model = 1<<0, Animation = 1<<1, Skeleton = 1<<2, Material = 1<<3 };
+
+	ref class OperationContextWrapper;
+	ref class IAsyncMarkerWrapper;
 
 	public ref class Utils
 	{
@@ -125,6 +129,38 @@ namespace GUILayer
 		PlacementsRendererWrapper(std::shared_ptr<SceneEngine::PlacementsRenderer> scene);
         ~PlacementsRendererWrapper();
         !PlacementsRendererWrapper();
+	};
+
+	public ref class OperationContextWrapper
+	{
+	public:
+		clix::shared_ptr<::Assets::OperationContext> _underlying;
+
+		ref struct OperationDesc
+		{
+			System::String^ _description;
+			System::String^ _msg;
+			unsigned _progress, _progressMax;
+		};
+		System::Collections::Generic::IEnumerable<OperationDesc^>^ GetActiveOperations();
+
+		OperationContextWrapper();
+		OperationContextWrapper(std::shared_ptr<::Assets::OperationContext> underlying);
+		~OperationContextWrapper();
+		!OperationContextWrapper();
+	};
+
+	public ref class IAsyncMarkerWrapper
+	{
+	public:
+		clix::shared_ptr<::Assets::IAsyncMarker> _underlying;
+
+		bool Poll(unsigned millisecondWait);		// returns true if ready
+		System::String^ GetActualizationLog();
+
+		IAsyncMarkerWrapper(std::shared_ptr<::Assets::IAsyncMarker> underlying);
+		~IAsyncMarkerWrapper();
+		!IAsyncMarkerWrapper();
 	};
 
     public interface class IStep
