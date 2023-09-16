@@ -95,6 +95,7 @@ float2 GenerateSplitTerm(
 
         precise float F = SchlickFresnelCore(VdotH);
         // adding small numbers to large numbers -- probably not ideal for precision
+        // todo -- consider kahan sum here -- https://en.wikipedia.org/wiki/Kahan_summation_algorithm 
         A += ((1.f - F) * specular) / pdf;
         B += (F * specular) / pdf;
     }

@@ -16,8 +16,9 @@ WorkingVertex VertexPatch_Standard(VSIN input)
 
 	#if GEO_HAS_BONEWEIGHTS
 		result.position = TransformPositionThroughSkinning(input, result.position);
-		result.tangentFrame.basisVector0 = TransformDirectionVectorThroughSkinning(input, result.tangentFrame.basisVector0);
-		result.tangentFrame.basisVector1 = TransformDirectionVectorThroughSkinning(input, result.tangentFrame.basisVector1);
+		result.tangentFrame.tangent = TransformDirectionVectorThroughSkinning(input, result.tangentFrame.tangent);
+		result.tangentFrame.bitangent = TransformDirectionVectorThroughSkinning(input, result.tangentFrame.bitangent);
+		result.tangentFrame.normal = TransformDirectionVectorThroughSkinning(input, result.tangentFrame.normal);
 	#endif
 
 	return result;

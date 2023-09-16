@@ -392,6 +392,7 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
 
             float msWeight = sampleBrdf ? PowerHeuristic2(1, light_pdf, 1, filtering_pdf) : 1;        // (assuming equal count of samples)
 
+            // todo -- consider kahan sum here -- https://en.wikipedia.org/wiki/Kahan_summation_algorithm 
             value += IBLPrecalc_SampleInputTextureUV(inputTextureUV) * brdf_costheta * msWeight / light_pdf;
         }
     }
@@ -420,6 +421,7 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
 
             float msWeight = sampleLight ? PowerHeuristic2(1, filtering_pdf, 1, light_pdf) : 1;
 
+            // todo -- consider kahan sum here -- https://en.wikipedia.org/wiki/Kahan_summation_algorithm 
             value += IBLPrecalc_SampleInputTextureUV(inputTextureUV) * brdf_costheta * msWeight / filtering_pdf;
         }
     }
