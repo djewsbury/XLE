@@ -21,17 +21,18 @@ namespace Formatters
 	public:
 		enum class Blob { KeyedItem, ValueMember, BeginBlock, EndBlock, BeginArray, EndArray, None };
 		using InteriorSection = StringSection<>;
+		using EvaluatedTypeId = unsigned;
 		
 		Blob PeekNext();
 		bool TryKeyedItem(StringSection<>& name);
 		bool TryPeekKeyedItem(StringSection<>& name);
 		bool TryKeyedItem(uint64_t& name);
 		bool TryPeekKeyedItem(uint64_t& name);
-		bool TryBeginBlock(unsigned& evaluatedTypeId);
+		bool TryBeginBlock(EvaluatedTypeId& evaluatedTypeId);
 		bool TryEndBlock();
-		bool TryBeginArray(unsigned& count, unsigned& evaluatedTypeId);
+		bool TryBeginArray(unsigned& count, EvaluatedTypeId& evaluatedTypeId);
 		bool TryEndArray();
-		bool TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc, unsigned& evaluatedTypeId);
+		bool TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc, EvaluatedTypeId& evaluatedTypeId);
 		bool TryRawValue(IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc);
 
 		IteratorRange<const void*> SkipArrayElements(unsigned count);
@@ -78,6 +79,8 @@ namespace Formatters
 		Blob _queuedNext = Blob::None;
 		std::optional<size_t> TryCalculateFixedSize(unsigned evalTypeId);
 		int64_t EvaluateExpression(IteratorRange<const Utility::Internal::Token*>, const Utility::Internal::TokenDictionary&);
+
+		std::string GetBlockContextString() const;
 	};
 
 	void SkipUntilEndBlock(BinaryInputFormatter&);

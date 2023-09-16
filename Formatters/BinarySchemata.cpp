@@ -192,6 +192,12 @@ namespace Formatters
 		if (next != "{")
 			Throw(FormatException("Expecting '{'", next._start));
 
+		// Note that we can't have duplicate block definitions even if they are bracketed in non-overlapping #if's
+		// (because we can't distinguish between adding members that are controlled by completely-non overlapping symbols, or where we might actually be appending members)
+		for (const auto& b:_blockDefinitions)
+			if (XlEqString(blockName._value, b._name))
+				Throw(FormatException("Duplicate block definition (" + blockName._value.AsString() + ")", tokenizer.GetLocation()));
+
 		auto reservedBlockId = (unsigned)_blockDefinitions.size();
 		_blockDefinitions.push_back({});
 
