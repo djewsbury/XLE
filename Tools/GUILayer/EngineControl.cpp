@@ -102,7 +102,9 @@ namespace GUILayer
         auto engineDevice = EngineDevice::GetInstance();
         auto* renderDevice = engineDevice->GetNative().GetRenderDevice().get();
         auto immediateContext = renderDevice->GetImmediateContext();
-        bool result = Render(immediateContext, *_pimpl->_windowRig.get());
+        bool result = true;
+        if (_pimpl->_windowRig)
+            result = Render(immediateContext, *_pimpl->_windowRig.get());
 
             // perform our delayed deletes now (in the main thread)
         DelayedDeleteQueue::FlushQueue();
@@ -113,8 +115,21 @@ namespace GUILayer
     {
         auto ctrl = dynamic_cast<Control^>(sender);
         if (!ctrl) return;
-		_pimpl->_windowRig->OnResize(ctrl->Size.Width, ctrl->Size.Height);
-        OnResize(*_pimpl->_windowRig.get());
+        if (_pimpl->_windowRig) {
+		    _pimpl->_windowRig->OnResize(ctrl->Size.Width, ctrl->Size.Height);
+            OnResize(*_pimpl->_windowRig.get());
+        }
+    }
+
+    void EngineControl::OnHandleDestroyed(System::Object^ sender, System::EventArgs^ e)
+    {
+        auto ctrl = dynamic_cast<Control^>(sender);
+        if (!ctrl) return;
+        // destroy the window rig, because the Win32 window handle has just been destroyed
+        // We will get Windows Forms events even after this (eg, Evnt_Resize)... We don't want them to
+        // go through, because everything will fail
+        _pimpl->_windowRig.reset();
+        _pimpl->_inputTranslator.reset();
     }
 
     void EngineControl::Evnt_KeyDown(Object^ sender, KeyEventArgs^ e)
@@ -309,6 +324,7 @@ namespace GUILayer
         control->GotFocus   += gcnew System::EventHandler(this, &GUILayer::EngineControl::Evnt_FocusChange);
         control->LostFocus  += gcnew System::EventHandler(this, &GUILayer::EngineControl::Evnt_FocusChange);
         control->Resize     += gcnew System::EventHandler(this, &GUILayer::EngineControl::Evnt_Resize);
+        control->HandleDestroyed += gcnew System::EventHandler(this, &GUILayer::EngineControl::OnHandleDestroyed);
 
 		_attachedControl = gcnew System::WeakReference(control);
 
@@ -336,4 +352,5 @@ namespace GUILayer
     EngineControlPimpl::~EngineControlPimpl() {}
 
 }
+
 

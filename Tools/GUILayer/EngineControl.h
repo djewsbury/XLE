@@ -59,6 +59,7 @@ namespace GUILayer
     private:
         clix::auto_ptr<EngineControlPimpl> _pimpl;
 		System::WeakReference^ _attachedControl;
+        void OnHandleDestroyed(System::Object^ sender, System::EventArgs^ e);
     };
 
 	class WindowRig;
