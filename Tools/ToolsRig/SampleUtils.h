@@ -10,7 +10,7 @@
 #include <string>
 
 namespace Formatter { class IDynamicInputFormatter; }
-namespace Assets { class OperationContext; }
+namespace Assets { class OperationContext; class IAsyncMarker; }
 namespace EntityInterface { using EntityId = uint64_t; }
 namespace Formatters { class IDynamicInputFormatter; }
 namespace std { template<typename T> class future; }
@@ -45,5 +45,9 @@ namespace ToolsRig
 		ConfiguredPlugins _configuredPlugins;
 	};
 
-	void HACKStartupStarfield();
+	// Utility for exporting across to the CLR side (where futures don't work)
+	std::shared_ptr<::Assets::IAsyncMarker> BeginPluginConfiguration(
+		std::shared_ptr<::Assets::OperationContext>,
+		std::string plugin,
+		const std::vector<std::pair<std::string, std::string>>& settings);
 }

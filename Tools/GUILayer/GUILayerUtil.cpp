@@ -82,6 +82,22 @@ namespace GUILayer
 		return result;
 	}
 
+	IAsyncMarkerWrapper^ Utils::BeginPluginConfigure(
+		OperationContextWrapper^ opContext,
+		System::String^ plugin,
+		System::Collections::Generic::Dictionary<System::String^, System::String^>^ settings)
+	{
+		auto nativePlugin = clix::marshalString<clix::E_UTF8>(plugin);
+		std::vector<std::pair<std::string, std::string>> nativeSettings;
+		for each (System::Collections::Generic::KeyValuePair<System::String^, System::String^>^ s in settings)
+			nativeSettings.emplace_back(
+				clix::marshalString<clix::E_UTF8>(s->Key),
+				clix::marshalString<clix::E_UTF8>(s->Value));
+
+		auto cfgHelper = ToolsRig::BeginPluginConfiguration(opContext->_underlying, nativePlugin, nativeSettings);
+		return gcnew IAsyncMarkerWrapper(cfgHelper);
+	}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class MessageRelayWrapper_Helper : public ToolsRig::OnChangeCallback

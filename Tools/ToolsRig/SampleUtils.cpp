@@ -11,6 +11,8 @@
 #include "../../Assets/ContinuationUtil.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../Formatters/FormatterUtils.h"
+#include "../../Formatters/TextOutputFormatter.h"
+#include "../EntityInterface/FormatterAdapters.h"
 #include <set>
 
 namespace ToolsRig
@@ -133,28 +135,59 @@ namespace ToolsRig
 		} CATCH_END
 	}
 
-
-	void HACKStartupStarfield()
+	class ConfigurationHelper : public ::Assets::IAsyncMarker
 	{
-		 // HACK -- hardcoded starfield startup
-		auto& previewSceneRegistry = ToolsRig::Services::GetPreviewSceneRegistry();
-		auto cfg = previewSceneRegistry.GetConfigurablePluginDocument();
+	public:
+		mutable std::future<std::shared_ptr<PluginConfiguration>> _futurePluginConfiguration;
 
-		auto entityTypeId = EntityInterface::MakeStringAndHash("Starfield");
-		auto entity = cfg->AssignEntityId();
-		cfg->CreateEntity(entityTypeId, entity, {});
+		::Assets::Blob GetActualizationLog() const override
 		{
-				EntityInterface::PropertyInitializer propInit;
-				propInit._prop = EntityInterface::MakeStringAndHash("SrcFolder");
-				const char* srcFolder = R"(C:\Program Files (x86)\Steam\steamapps\common\Starfield)";
-				propInit._data = MakeIteratorRange(srcFolder, XlStringEnd(srcFolder));
-				propInit._type = ImpliedTyping::TypeOf<char>();
-				propInit._type._typeHint = ImpliedTyping::TypeHint::String;
-				propInit._type._arrayCount = std::strlen(srcFolder);
-				cfg->SetProperty(entity, MakeIteratorRange(&propInit, &propInit+1));
+			TRY {
+				_futurePluginConfiguration.get();
+				return nullptr;
+			} CATCH(const std::exception& e) {
+				return ::Assets::AsBlob(e.what());
+			} CATCH_END
 		}
-		auto futures = previewSceneRegistry.ApplyConfigurablePlugins();
-		for (auto& f:futures)
-			f.get();
+
+		::Assets::AssetState GetAssetState() const override
+		{
+			return (_futurePluginConfiguration.wait_for(std::chrono::seconds(0)) == std::future_status::ready) 
+				? ::Assets::AssetState::Ready		// don't actually know if it's valid or invalid at this stage
+				: ::Assets::AssetState::Pending;
+		}
+
+		std::optional<::Assets::AssetState>   StallWhilePending(std::chrono::microseconds timeout) const override
+		{
+			if (_futurePluginConfiguration.wait_for(timeout) == std::future_status::ready)
+				return ::Assets::AssetState::Ready;
+			return {};
+		}
+
+		ConfigurationHelper(
+			std::future<std::shared_ptr<PluginConfiguration>> futurePluginConfiguration)
+		: _futurePluginConfiguration(std::move(futurePluginConfiguration)) {}
+	};
+
+	std::shared_ptr<::Assets::IAsyncMarker> BeginPluginConfiguration(
+		std::shared_ptr<::Assets::OperationContext> opContext,
+		std::string plugin,
+		const std::vector<std::pair<std::string, std::string>>& settings)
+	{
+		MemoryOutputStream<> strm;
+		{
+			Formatters::TextOutputFormatter fmttr(strm);
+			auto ele = fmttr.BeginKeyedElement(plugin);
+			for (const auto&s:settings)
+				fmttr.WriteKeyedValue(s.first, s.second);
+			fmttr.EndElement(ele);
+		}
+		
+		std::promise<std::shared_ptr<PluginConfiguration>> promise;
+		auto future = promise.get_future();
+		auto dynFmttr = EntityInterface::CreateDynamicFormatter(std::move(strm), {});
+		PluginConfiguration::ConstructToPromise(std::move(promise), opContext, *dynFmttr);
+
+		return std::make_shared<ConfigurationHelper>(std::move(future));
 	}
 }

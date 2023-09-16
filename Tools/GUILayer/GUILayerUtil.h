@@ -49,6 +49,11 @@ namespace GUILayer
 		static System::Collections::Generic::IEnumerable<System::String^>^ EnumeratePreviewScenes();
 
 		static uint32_t FindCompilationTargets(System::String^ Extension);
+
+		static IAsyncMarkerWrapper^ BeginPluginConfigure(
+			OperationContextWrapper^ opContext,
+			System::String^ plugin,
+			System::Collections::Generic::Dictionary<System::String^, System::String^>^ settings);
 	};
 
     public ref class TechniqueContextWrapper
