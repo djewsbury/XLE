@@ -18,8 +18,8 @@ namespace OSServices { class InputSnapshot; }
 
 namespace RenderOverlays
 {
-	class DrawContext;
-	class IOContext;
+	struct DrawContext;
+	struct IOContext;
 
 	class LayedOutWidgets
 	{

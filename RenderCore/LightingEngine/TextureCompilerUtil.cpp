@@ -128,7 +128,7 @@ namespace RenderCore { namespace LightingEngine
 		BufferUploads::IAsyncDataSource& dataSrc, const TextureDesc& targetDesc,
 		EquirectFilterMode filter,
 		const EquirectFilterParams& params,
-		::Assets::OperationContext::OperationHelper& opHelper,
+		::Assets::OperationContextHelper& opHelper,
 		const ProgressiveTextureFn& progressiveResults)
 	{
 		// We need to create a texture from the data source and run a shader process on it to generate

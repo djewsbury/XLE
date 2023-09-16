@@ -30,7 +30,7 @@ namespace RenderCore { namespace LightingEngine
 		const TextureDesc& targetDesc,
 		EquirectFilterMode filter,
 		const EquirectFilterParams& params,
-		::Assets::OperationContext::OperationHelper& opHelper,
+		::Assets::OperationContextHelper& opHelper,
 		const ProgressiveTextureFn& progressiveResults = {});
 
 	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(

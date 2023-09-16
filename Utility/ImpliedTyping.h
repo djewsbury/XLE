@@ -7,6 +7,7 @@
 #include "IteratorUtils.h"
 #include "StringUtils.h"            // for StringSection
 #include "Optional.h"
+#include "../Core/Exceptions.h"
 
 namespace Utility
 {

@@ -28,6 +28,8 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/MountingTree.h"
 
+#include "../../Formatters/TextFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 
 using namespace Catch::literals;
 namespace UnitTests
@@ -51,7 +53,7 @@ namespace UnitTests
 
 		static std::mutex s_pauseCompilationLock;
 
-		virtual std::vector<::Assets::SerializedArtifact>	SerializeTarget(unsigned idx) override
+		virtual ::Assets::SerializedTarget SerializeTarget(unsigned idx) override
 		{
 			ScopedLock(s_pauseCompilationLock);
 
@@ -91,7 +93,7 @@ namespace UnitTests
 				opRes._data = ::Assets::AsBlob("This is file data from TestCompileOperation for " + _initializer);
 				result.emplace_back(std::move(opRes));
 			}
-			return result;
+			return { result };
 		}
 
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
@@ -606,6 +608,10 @@ namespace UnitTests
 
 	TEST_CASE( "AssetCompilers-InitializerPack", "[assets]" )
 	{
+		static_assert(::Assets::Internal::AssetHashTraits<std::string>::HasHash64Override);
+		static_assert(::Assets::Internal::AssetHashTraits<StringSection<>>::HasHash64Override);
+		static_assert(::Assets::Internal::AssetHashTraits<const char*>::HasHash64Override);
+		static_assert(::Assets::Internal::AssetHashTraits<TypeWithComplexMembers>::HasGetHash);
 		TypeWithComplexMembers complexInitializer;
 		complexInitializer._integers = { 45, 75, 23 };
 		complexInitializer._stringMap = { std::make_pair("key", "value") };
@@ -615,6 +621,27 @@ namespace UnitTests
 			MakeStringSection("String1"),
 			34,
 			complexInitializer};
+
+		// struct Unhashable {};
+		// auto P = std::make_shared<Unhashable>();
+		// auto initializerPack2 = ::Assets::InitializerPack{P};
+
+		Formatters::TextInputFormatter<> fmttr {
+			MakeStringSection(R"(
+			Something=~
+				A=~
+					C;D;B
+			)")
+		};
+		RequireKeyedItem(fmttr);
+		RequireBeginElement(fmttr);
+			RequireKeyedItem(fmttr);
+			RequireBeginElement(fmttr);
+				REQUIRE(XlEqString(RequireStringValue(fmttr), "C"));
+				REQUIRE(XlEqString(RequireStringValue(fmttr), "D"));
+				REQUIRE(XlEqString(RequireStringValue(fmttr), "B"));
+			RequireEndElement(fmttr);
+		RequireEndElement(fmttr);
 
 		REQUIRE(initializerPack.GetInitializer<std::string>(0) == "SomeName");
 		REQUIRE(initializerPack.GetInitializer<std::string>(1) == "String0");

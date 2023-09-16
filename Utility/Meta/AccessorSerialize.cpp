@@ -68,6 +68,10 @@ namespace Utility
             case Formatters::FormatterBlob::Value:
             case Formatters::FormatterBlob::BeginElement:
             case Formatters::FormatterBlob::CharacterData:
+            case Formatters::FormatterBlob::BeginArray:
+            case Formatters::FormatterBlob::EndArray:
+            case Formatters::FormatterBlob::BeginDictionary:
+            case Formatters::FormatterBlob::EndDictionary:
                 UNREACHABLE();
                 break;
 

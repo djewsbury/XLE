@@ -65,13 +65,13 @@ namespace UnitTests
 		}
 		auto result = std::make_shared<GeoProc::MeshDatabase>();
 		result->AddStream(
-			GeoProc::CreateRawDataSource(s_cubeCorners, ArrayEnd(s_cubeCorners), Format::R32G32B32_FLOAT),
+			GeoProc::CreateRawDataSource(s_cubeCorners, Format::R32G32B32_FLOAT),
 			{}, "POSITION", 0);
 		result->AddStream(
-			GeoProc::CreateRawDataSource(normals, ArrayEnd(normals), Format::R32G32B32_FLOAT),
+			GeoProc::CreateRawDataSource(normals, Format::R32G32B32_FLOAT),
 			{}, "NORMAL", 0);
 		result->AddStream(
-			GeoProc::CreateRawDataSource(tangents, ArrayEnd(tangents), Format::R32G32B32A32_FLOAT),
+			GeoProc::CreateRawDataSource(tangents, Format::R32G32B32A32_FLOAT),
 			{}, "TEXTANGENT", 0);
 		return result;
 	}

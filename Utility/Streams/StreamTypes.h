@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../../Core/Types.h"
+#include "../IteratorUtils.h"
 #include "Stream.h"
 #include <streambuf>
 #include <sstream>
@@ -55,6 +56,7 @@ namespace Utility
         }
 
         const BufferType& GetBuffer() const { return _buffer; }
+        IteratorRange<const typename BufferType::char_type*> GetData() const { return MakeIteratorRange(_buffer.Begin(), _buffer.End()); }
 
         using CharType = typename BufferType::char_type;
 
@@ -81,6 +83,9 @@ namespace Utility
 
             bool IsFull() const { return this->pptr() >= this->epptr(); }
             unsigned Length() const { return unsigned(this->pptr() - this->pbase()); }
+
+            CharType* Begin() const { return this->pbase(); }
+            CharType* End() const   { return this->pptr(); }
 
             FixedMemoryBuffer2(CharType* buffer, size_t bufferCharCount)
             {

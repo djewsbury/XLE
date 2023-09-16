@@ -78,6 +78,7 @@ namespace Utility
 
         bool IsGood() const { return !_workerThreads.empty(); }
         bool StallAndDrainQueue(std::optional<std::chrono::steady_clock::duration> stallDuration = {});
+        unsigned GetThreadContext() const { return _requestedWorkerCount; }
 
         ThreadPool(unsigned threadCount);
         ~ThreadPool();

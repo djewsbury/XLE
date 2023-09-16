@@ -31,7 +31,7 @@ namespace UnitTests
 	public:
 		::Assets::DependencyValidation GetDependencyValidation() const override { return ::Assets::GetDepValSys().Make(_dependencies); }
 		std::vector<TargetDesc> GetTargets() const override { return _targets; }
-		std::vector<::Assets::SerializedArtifact> SerializeTarget(unsigned idx) override
+		::Assets::SerializedTarget SerializeTarget(unsigned idx) override
 		{
 			if (idx >= _targets.size())
 				return {};
@@ -75,16 +75,16 @@ namespace UnitTests
 		std::vector<TargetDesc> _targets;
 		std::string _modelName;
 
-		std::vector<::Assets::SerializedArtifact> SerializeModel();
-		std::vector<::Assets::SerializedArtifact> SerializeRawMat();
-		std::vector<::Assets::SerializedArtifact> SerializeSkeleton();
+		::Assets::SerializedTarget SerializeModel();
+		::Assets::SerializedTarget SerializeRawMat();
+		::Assets::SerializedTarget SerializeSkeleton();
 	};
 
 	///////////////////////////////////////////////////////////////////////////////////////////////
 		//   M A T E R I A L   T A B L E   //
 	///////////////////////////////////////////////////////////////////////////////////////////////
 
-	auto FakeModelCompileOperation::SerializeRawMat() -> std::vector<::Assets::SerializedArtifact>
+	auto FakeModelCompileOperation::SerializeRawMat() -> ::Assets::SerializedTarget
 	{
 		MemoryOutputStream<char> strm;
 
@@ -111,10 +111,12 @@ namespace UnitTests
 			formatter.EndElement(matContainer);
 		}
 
-		return {
-			::Assets::SerializedArtifact{
-				Type_RawMat, 0, _modelName,
-				::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))}
+		return ::Assets::SerializedTarget {
+			{
+				::Assets::SerializedArtifact{
+					Type_RawMat, 0, _modelName,
+					::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))}
+			}
 		};
 	}
 
@@ -152,14 +154,14 @@ namespace UnitTests
 		return result;
 	}
 
-	auto FakeModelCompileOperation::SerializeSkeleton() -> std::vector<::Assets::SerializedArtifact>
+	auto FakeModelCompileOperation::SerializeSkeleton() -> ::Assets::SerializedTarget
 	{
 		auto nascentSkeleton = GenerateNascentSkeleton();
 
 		RenderCore::Assets::TransformationMachineOptimizer_Null optimizer;
 		nascentSkeleton.GetSkeletonMachine().Optimize(optimizer);
 
-		return RenderCore::Assets::GeoProc::SerializeSkeletonToChunks("skeleton", nascentSkeleton);
+		return { RenderCore::Assets::GeoProc::SerializeSkeletonToChunks("skeleton", nascentSkeleton) };
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////
@@ -205,7 +207,7 @@ namespace UnitTests
 		geoBlock._mesh = std::make_shared<GeoProc::MeshDatabase>();
 		geoBlock._mesh->AddStream(
 			GeoProc::CreateRawDataSource(
-				vertexPositions, PtrAdd(vertexPositions, sizeof(vertexPositions)), 
+				vertexPositions,
 				RenderCore::Format::R32G32B32_FLOAT),
 			{},
 			"POSITION", 0);
@@ -226,14 +228,14 @@ namespace UnitTests
 		return result;
 	}
 	
-	auto FakeModelCompileOperation::SerializeModel() -> std::vector<::Assets::SerializedArtifact>
+	auto FakeModelCompileOperation::SerializeModel() -> ::Assets::SerializedTarget
 	{
 		auto model = GenerateModel();
 		auto embeddedSkeleton = GenerateNascentSkeleton();
 		RenderCore::Assets::ModelCompilationConfiguration::SkeletonRules defaultRules;
 		RenderCore::Assets::GeoProc::OptimizeSkeleton(embeddedSkeleton, model, defaultRules);
 		RenderCore::Assets::ModelCompilationConfiguration cfg;
-		return model.SerializeToChunks("skin", embeddedSkeleton, cfg);
+		return { model.SerializeToChunks("skin", embeddedSkeleton, cfg) };
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////
