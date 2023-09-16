@@ -307,15 +307,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         } else if (srcFormat._type == dstFormat._type &&  srcFormat._componentCount == dstFormat._componentCount) {
 
-                // simple copy of uint8 data
+                // simple copy of uint8_t data
             for (unsigned v = 0; v<count; ++v, dst = PtrAdd(dst, dstStride)) {
                 auto srcIndex = (v < mapping.size()) ? mapping[v] : v;
                 assert(srcIndex * srcStride + srcFormatSize <= srcDataSize);
 
-                auto* srcV = (uint8*)PtrAdd(src, srcIndex * srcStride);
+                auto* srcV = (uint8_t*)PtrAdd(src, srcIndex * srcStride);
                 for (unsigned c=0; c<dstFormatSize; ++c) {
-                    assert(&((uint8*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
-                    ((uint8*)dst)[c] = srcV[c];
+                    assert(&((uint8_t*)dst)[c+1] <= PtrAdd(dst, dstDataSize));
+                    ((uint8_t*)dst)[c] = srcV[c];
                 }
             }
 
@@ -665,16 +665,16 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             const void* start, const void* end, 
             size_t count, size_t stride,
             Format fmt, ProcessingFlags::BitField processingFlags, FormatHint::BitField formatHint)
-        : _fmt(fmt), _rawData((const uint8*)start, (const uint8*)end), _count(count), _stride(stride), _processingFlags(processingFlags), _formatHint(formatHint) {}
+        : _fmt(fmt), _rawData((const uint8_t*)start, (const uint8_t*)end), _count(count), _stride(stride), _processingFlags(processingFlags), _formatHint(formatHint) {}
 
         RawVertexSourceDataAdapter(
-            std::vector<uint8>&& rawData, 
+            std::vector<uint8_t>&& rawData, 
             size_t count, size_t stride,
             Format fmt, ProcessingFlags::BitField processingFlags, FormatHint::BitField formatHint)
         : _rawData(std::move(rawData)), _fmt(fmt), _count(count), _stride(stride), _processingFlags(processingFlags), _formatHint(formatHint) {}
 
     protected:
-        std::vector<uint8>  _rawData;
+        std::vector<uint8_t>  _rawData;
         Format				_fmt;
         size_t              _count, _stride;
         ProcessingFlags::BitField _processingFlags;
@@ -685,26 +685,38 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     std::shared_ptr<IVertexSourceData>
         CreateRawDataSource(
-            const void* dataBegin, const void* dataEnd, 
+            IteratorRange<const void*> data,
             size_t count, size_t stride,
             Format srcFormat)
     {
-        return std::make_shared<RawVertexSourceDataAdapter>(dataBegin, dataEnd, count, stride, srcFormat, 0, 0);
+        auto packedStride = RenderCore::BitsPerPixel(srcFormat) / 8;
+        if (packedStride == stride) {
+            return std::make_shared<RawVertexSourceDataAdapter>(data.begin(), data.end(), count, stride, srcFormat, 0, 0);
+        } else {
+            // copy out only the attribute that we're actually interested in
+            std::vector<uint8_t> rawData;
+            rawData.resize(count*packedStride);
+            CopyVertexData(
+                rawData.data(), srcFormat, packedStride, rawData.size(),
+                data.begin(), srcFormat, stride, data.size(),
+                count);
+            return std::make_shared<RawVertexSourceDataAdapter>(std::move(rawData), count, packedStride, srcFormat, 0, 0);
+        }
     }
 
     std::shared_ptr<IVertexSourceData>
         CreateRawDataSource(
-            const void* dataBegin, const void* dataEnd, 
+            IteratorRange<const void*> data,
             Format srcFormat)
     {
         auto stride = RenderCore::BitsPerPixel(srcFormat) / 8;
-        auto count = (size_t(dataEnd) - size_t(dataBegin)) / stride;
-        return CreateRawDataSource(dataBegin, dataEnd, count, stride, srcFormat);
+        auto count = data.size() / stride;
+        return CreateRawDataSource(data, count, stride, srcFormat);
     }
 
     std::shared_ptr<IVertexSourceData>
         CreateRawDataSource(
-            std::vector<uint8>&& data, 
+            std::vector<uint8_t>&& data, 
             size_t count, size_t stride,
             Format srcFormat)
     {
@@ -916,7 +928,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             // We want to try to keep the ordering in this new source data to be
             // similar to the old ordering.
         const auto vertexSize = BitsPerPixel(sourceStream.GetFormat()) / 8;
-        std::vector<uint8> finalVB;
+        std::vector<uint8_t> finalVB;
         finalVB.reserve(vertexSize * sourceStream.GetCount());
         size_t finalVBCount = 0;
         auto srcStreamStride = sourceStream.GetStride();
@@ -934,12 +946,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     // average of them all
                 auto m = FindClosestToAverage(sourceStream, AsPointer(start), AsPointer(i));
                 const auto* sourceVertex = PtrAdd(sourceStream.GetData().begin(), m * srcStreamStride);
-                finalVB.insert(finalVB.end(), (const uint8*)sourceVertex, (const uint8*)PtrAdd(sourceVertex, vertexSize));
+                finalVB.insert(finalVB.end(), (const uint8_t*)sourceVertex, (const uint8_t*)PtrAdd(sourceVertex, vertexSize));
             } else {
                     // This vertex is not part of a chain.
                     // Just append to the finalVB
                 const auto* sourceVertex = PtrAdd(sourceStream.GetData().begin(), (*start) * srcStreamStride);
-                finalVB.insert(finalVB.end(), (const uint8*)sourceVertex, (const uint8*)PtrAdd(sourceVertex, vertexSize));
+                finalVB.insert(finalVB.end(), (const uint8_t*)sourceVertex, (const uint8_t*)PtrAdd(sourceVertex, vertexSize));
             }
         }
 

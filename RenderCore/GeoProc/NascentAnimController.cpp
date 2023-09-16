@@ -248,6 +248,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 // through from smallest weight to largest weight, that's most likely to happen
                 // for the largest weight
                 auto newNormalizedTotal = CompressWeightToUNorm<uint8_t>(totalWeightValue);
+                assert(newNormalizedTotal >= accumulatingNormalizedTotal);
                 normalizedWeights[revIdx] = newNormalizedTotal - accumulatingNormalizedTotal;
                 accumulatingNormalizedTotal = newNormalizedTotal;
             }
@@ -257,7 +258,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             // clip off any zero weight influences
             for (size_t c=0; c<influenceCount; ++c)
                 if (normalizedWeights[c] == 0) {
-                    for (unsigned c2=c+1; c2<influenceCount; ++c2) assert(normalizedWeights[c2] == 0);
+                    for (unsigned c2=c+1; c2<influenceCount; ++c2) assert(normalizedWeights[c2] <= 1);      // 1 can happen here because of rounding, if we have a few weights around a half unit or less
                     influenceCount = c; 
                     break;
                 }

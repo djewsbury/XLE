@@ -194,7 +194,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             for (size_t c=0; c<mesh.GetUnifiedVertexCount(); c++)
                 Normalize_Checked(&normals[c], normals[c]);		// (note -- it's possible for the normal to to Zero<Float3>() if this vertex wasn't used by the index buffer)
         
-			auto normalsData = CreateRawDataSource(AsPointer(normals.cbegin()), AsPointer(normals.cend()), Format::R32G32B32_FLOAT);
+			auto normalsData = CreateRawDataSource(normals, Format::R32G32B32_FLOAT);
 			if (equivalenceThreshold != 0.0f) {
 				std::vector<unsigned> unifiedMapping;
                 Float3* begin = (Float3*)normalsData->GetData().begin(), *end = (Float3*)normalsData->GetData().end();
@@ -317,7 +317,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             }
 
             if (atLeastOneGoodTangent && (creationFlags & GenerateTangentFrameFlags::Tangents)) {
-                auto tangentsData = CreateRawDataSource(AsPointer(tangents.begin()), AsPointer(tangents.cend()), Format::R32G32B32A32_FLOAT);
+                auto tangentsData = CreateRawDataSource(tangents, Format::R32G32B32A32_FLOAT);
                 if (equivalenceThreshold != 0.0f) {
                     Float4* begin = (Float4*)tangentsData->GetData().begin(), *end = (Float4*)tangentsData->GetData().end();
                     float quantValue = 1.f/equivalenceThreshold;
@@ -332,7 +332,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             }
 
             if (atLeastOneGoodTangent && (creationFlags & GenerateTangentFrameFlags::Bitangents)) {
-                auto bitangentsData = CreateRawDataSource(AsPointer(bitangents.begin()), AsPointer(bitangents.cend()), Format::R32G32B32A32_FLOAT);
+                auto bitangentsData = CreateRawDataSource(bitangents, Format::R32G32B32A32_FLOAT);
                 if (equivalenceThreshold != 0.0f) {
                     Float4* begin = (Float4*)bitangentsData->GetData().begin(), *end = (Float4*)bitangentsData->GetData().end();
                     float quantValue = 1.f/equivalenceThreshold;

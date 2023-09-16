@@ -145,18 +145,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
     std::shared_ptr<IVertexSourceData>
         CreateRawDataSource(
-            const void* dataBegin, const void* dataEnd,
+            IteratorRange<const void*> data,
             size_t count, size_t stride,
 			Format srcFormat);
 
     std::shared_ptr<IVertexSourceData>
         CreateRawDataSource(
-            const void* dataBegin, const void* dataEnd,
+            IteratorRange<const void*> data,
 			Format srcFormat);
 
     std::shared_ptr<IVertexSourceData>
         CreateRawDataSource(
-            std::vector<uint8>&& data,
+            std::vector<uint8_t>&& data,
             size_t count, size_t stride,
 			Format srcFormat);
 
