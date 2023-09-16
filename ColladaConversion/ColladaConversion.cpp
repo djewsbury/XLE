@@ -69,7 +69,7 @@ namespace ColladaConversion
 		std::shared_ptr<ModelCompilationConfiguration> _modelCompilationConfiguration;
 
 		std::vector<TargetDesc> GetTargets() const override;
-		std::vector<::Assets::SerializedArtifact> SerializeTarget(unsigned idx) override;
+		::Assets::SerializedTarget SerializeTarget(unsigned idx) override;
 		::Assets::DependencyValidation GetDependencyValidation() const override;
 
 		ColladaCompileOp();
@@ -154,8 +154,7 @@ namespace ColladaConversion
 			NascentModel::Command {
 				geoId, std::move(skinControllers),
 				localToModelBinding,
-				materials, 
-				0
+				materials
 			});
 		model.AttachNameToCommand({ attachedNode.GetId().GetHash() }, attachedNode.GetName().AsString());
 	}
@@ -331,7 +330,7 @@ namespace ColladaConversion
 		return skinningSkeletons;
 	}
 
-    std::vector<::Assets::SerializedArtifact> SerializeSkin(const ColladaCompileOp& input, StringSection<utf8> rootNodeName, const ModelCompilationConfiguration& configuration)
+    ::Assets::SerializedTarget SerializeSkin(const ColladaCompileOp& input, StringSection<utf8> rootNodeName, const ModelCompilationConfiguration& configuration)
     {
         const auto* scene = input._doc->FindVisualScene(
             GuidReference(input._doc->_visualScene)._id);
@@ -351,7 +350,7 @@ namespace ColladaConversion
 			Throw(std::runtime_error("Optimization for multiple skeletons not supported"));
 		OptimizeSkeleton(embeddedSkeleton, model, skinningSkeletons.front().second);
 
-		return model.SerializeToChunks("skin", embeddedSkeleton, configuration);
+		return { model.SerializeToChunks("skin", embeddedSkeleton, configuration), input.GetDependencyValidation() };
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -453,14 +452,14 @@ namespace ColladaConversion
 		return result;
     }
 
-    std::vector<::Assets::SerializedArtifact> SerializeSkeleton(const ColladaCompileOp& input, StringSection<utf8> rootNodeName, const ModelCompilationConfiguration& cfg)
+    ::Assets::SerializedTarget SerializeSkeleton(const ColladaCompileOp& input, StringSection<utf8> rootNodeName, const ModelCompilationConfiguration& cfg)
     {
 		const auto* scene = input._doc->FindVisualScene(
             GuidReference(input._doc->_visualScene)._id);
         if (!scene)
             Throw(::Exceptions::BasicLabel("No visual scene found"));
 
-        return SerializeSkeletonToChunks("skeleton", ConvertSkeleton(input, *scene, rootNodeName, cfg));
+        return { SerializeSkeletonToChunks("skeleton", ConvertSkeleton(input, *scene, rootNodeName, cfg)), input.GetDependencyValidation() };
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -496,14 +495,17 @@ namespace ColladaConversion
         }
     }
 
-    std::vector<::Assets::SerializedArtifact> SerializeMaterials(const ColladaCompileOp& model, StringSection<utf8> rootNodeName)
+    ::Assets::SerializedTarget SerializeMaterials(const ColladaCompileOp& model, StringSection<utf8> rootNodeName)
     { 
         MemoryOutputStream<char> strm;
         SerializeMatTable(strm, model);
-        return {
-			::Assets::SerializedArtifact{
-				Type_RawMat, 0, model._name,
-				::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))}
+        return ::Assets::SerializedTarget {
+			{
+				::Assets::SerializedArtifact{
+					Type_RawMat, 0, model._name,
+					::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))}
+			},
+			model.GetDependencyValidation()
 		};
     }
 
@@ -542,9 +544,9 @@ namespace ColladaConversion
 		return result;
     }
 
-	std::vector<::Assets::SerializedArtifact> SerializeAnimations(const ColladaCompileOp& model, StringSection<utf8> rootNodeName)
+	::Assets::SerializedTarget SerializeAnimations(const ColladaCompileOp& model, StringSection<utf8> rootNodeName)
 	{
-		return SerializeAnimationsToChunks(model._name, ConvertAnimationSet(model));
+		return { SerializeAnimationsToChunks(model._name, ConvertAnimationSet(model)), model.GetDependencyValidation() };
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -554,25 +556,18 @@ namespace ColladaConversion
 		return _targets;
 	}
 
-	auto	ColladaCompileOp::SerializeTarget(unsigned idx) -> std::vector<::Assets::SerializedArtifact>
+	auto	ColladaCompileOp::SerializeTarget(unsigned idx) -> ::Assets::SerializedTarget
 	{
 		if (idx >= _targets.size()) return {};
 
-		TRY
-		{
-			switch (_targets[idx]._targetCode) {
-			case Type_Model:			return SerializeSkin(*this, _rootNode, *_modelCompilationConfiguration);
-			case Type_Skeleton:			return SerializeSkeleton(*this, _rootNode, *_modelCompilationConfiguration);
-			case Type_RawMat:			return SerializeMaterials(*this, _rootNode);
-			case Type_AnimationSet:		return SerializeAnimations(*this, _rootNode);
-			default:
-				Throw(::Exceptions::BasicLabel("Cannot serialize target (%s)", _targets[idx]._name));
-			}
-		} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
-			Throw(::Assets::Exceptions::ConstructionError(e, GetDependencyValidation()));
-		} CATCH(const std::exception& e) {
-			Throw(::Assets::Exceptions::ConstructionError(e, GetDependencyValidation()));
-		} CATCH_END
+		switch (_targets[idx]._targetCode) {
+		case Type_Model:			return SerializeSkin(*this, _rootNode, *_modelCompilationConfiguration);
+		case Type_Skeleton:			return SerializeSkeleton(*this, _rootNode, *_modelCompilationConfiguration);
+		case Type_RawMat:			return SerializeMaterials(*this, _rootNode);
+		case Type_AnimationSet:		return SerializeAnimations(*this, _rootNode);
+		default:
+			Throw(::Exceptions::BasicLabel("Cannot serialize target (%s)", _targets[idx]._name));
+		}
 	}
 
 	::Assets::DependencyValidation ColladaCompileOp::GetDependencyValidation() const

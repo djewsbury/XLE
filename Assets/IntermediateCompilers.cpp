@@ -255,30 +255,34 @@ namespace Assets
 			for (unsigned t=0; t<targets.size(); ++t) {
 				const auto& target = targets[t];
 
-				std::vector<SerializedArtifact> serializedArtifacts;
+				SerializedTarget serializedTarget;
 				AssetState state = AssetState::Pending;
 				std::vector<DependencyValidation> targetDependencies = compilerDepVals;
 				targetDependencies.push_back(compileOperation->GetDependencyValidation());
 
 				TRY {
-					serializedArtifacts = compileOperation->SerializeTarget(t);
+					serializedTarget = compileOperation->SerializeTarget(t);
 					state = AssetState::Ready;
 
 					// If we produced no artifacts, or if we produced only one and it's a "log" -- then we consider
 					// this target to be invalid
-					if (serializedArtifacts.empty() || (serializedArtifacts.size() == 1 && serializedArtifacts[0]._chunkTypeCode == ChunkType_Log))
+					if (serializedTarget._artifacts.empty() || (serializedTarget._artifacts.size() == 1 && serializedTarget._artifacts[0]._chunkTypeCode == ChunkType_Log))
 						state = AssetState::Invalid;
 				} CATCH(const Exceptions::ExceptionWithDepVal& e) {
-					serializedArtifacts.push_back({ChunkType_Log, 0, "compiler-exception", AsBlob(e)});
-					targetDependencies.push_back(e.GetDependencyValidation());
+					serializedTarget._artifacts.push_back({ChunkType_Log, 0, "compiler-exception", AsBlob(e)});
+					serializedTarget._depVal = e.GetDependencyValidation();
 					state = AssetState::Invalid;
 				} CATCH(const std::exception& e) {
-					serializedArtifacts.push_back({ChunkType_Log, 0, "compiler-exception", AsBlob(e)});
+					serializedTarget._artifacts.push_back({ChunkType_Log, 0, "compiler-exception", AsBlob(e)});
 					state = AssetState::Invalid;
 				} CATCH(...) {
-					serializedArtifacts.push_back({ChunkType_Log, 0, "compiler-exception", AsBlob("Unknown exception thrown from compiler")});
+					serializedTarget._artifacts.push_back({ChunkType_Log, 0, "compiler-exception", AsBlob("Unknown exception thrown from compiler")});
 					state = AssetState::Invalid;
 				} CATCH_END
+
+				// additional files may have been accessed during the SerializeTarget() method -- we can incorporate their dep vals here
+				if (serializedTarget._depVal)
+					targetDependencies.push_back(serializedTarget._depVal);
 
 				std::shared_ptr<IArtifactCollection> artifactCollection;
 
@@ -293,7 +297,7 @@ namespace Assets
 								archiveEntry._entryId,
 								archiveEntry._descriptiveName,
 								delegate._storeGroupId,
-								MakeIteratorRange(serializedArtifacts),
+								MakeIteratorRange(serializedTarget._artifacts),
 								state,
 								MakeIteratorRange(targetDependencies));
 							storedInArchive = true;
@@ -311,14 +315,14 @@ namespace Assets
 						#if defined(_DEBUG)
 							auto str = nameWithTargetCode.AsString();
 							// If you hit the following assert, it means that multiple targets from this compile operation would be written
-							// to the same output file. That probably means that there are mulitple targets with the name target code and name
+							// to the same output file. That probably means that there are multiple targets with the name target code and name
 							assert(compileProductNamesWritten.find(str) == compileProductNamesWritten.end());
 							compileProductNamesWritten.insert(str);
 						#endif
 						artifactCollection = destinationStore->StoreCompileProducts(
 							nameWithTargetCode.AsStringSection(),
 							delegate._storeGroupId,
-							MakeIteratorRange(serializedArtifacts),
+							MakeIteratorRange(serializedTarget._artifacts),
 							state,
 							MakeIteratorRange(targetDependencies));
 					}
@@ -326,7 +330,7 @@ namespace Assets
 
 				if (!artifactCollection)
 					artifactCollection = std::make_shared<BlobArtifactCollection>(
-						MakeIteratorRange(serializedArtifacts), state,
+						MakeIteratorRange(serializedTarget._artifacts), state,
 						AsSingleDepVal(targetDependencies));
 
 				finalCollections.push_back(std::make_pair(target._targetCode, artifactCollection));
@@ -812,10 +816,10 @@ namespace Assets
 				TargetDesc { _targetCode, _serializedArtifacts[0]._name.c_str() }
 			};
 		}
-		std::vector<SerializedArtifact>	SerializeTarget(unsigned idx) override
+		::Assets::SerializedTarget	SerializeTarget(unsigned idx) override
 		{
 			assert(idx == 0);
-			return _serializedArtifacts;
+			return { _serializedArtifacts, _depVal };
 		}
 		DependencyValidation GetDependencyValidation() const override { return _depVal; }
 

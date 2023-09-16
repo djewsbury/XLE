@@ -115,8 +115,8 @@ namespace RenderCore { namespace Assets
 
 		return {
 			std::move(serializedArtifacts),
-			Type_AnimationSet,
-			::Assets::GetDepValSys().MakeOrReuse(depVals)
+			::Assets::GetDepValSys().MakeOrReuse(depVals),
+			Type_AnimationSet
 		};
 	}
 

@@ -381,7 +381,7 @@ namespace RenderCore { namespace Techniques
 			};
 		}
 		
-		virtual std::vector<::Assets::SerializedArtifact> SerializeTarget(unsigned idx) override
+		virtual ::Assets::SerializedTarget SerializeTarget(unsigned idx) override
 		{
 			std::vector<::Assets::SerializedArtifact> result;
 			if (_byteCode._payload)
@@ -392,7 +392,7 @@ namespace RenderCore { namespace Techniques
 				result.push_back({
 					ChunkType_Log, 0, "log",
 					_byteCode._errors});
-			return result;
+			return { std::move(result), _depVal };
 		}
 
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override

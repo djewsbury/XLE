@@ -22,6 +22,17 @@ namespace Assets
 		unsigned		_version;
 		std::string		_name;
 		::Assets::Blob	_data;
+
+		SerializedArtifact() = default;
+		SerializedArtifact(
+			uint64_t chunkTypeCode, unsigned version,
+			std::string name, ::Assets::Blob data) 
+		: _chunkTypeCode(chunkTypeCode), _version(version), _name(std::move(name)), _data(std::move(data)) {}
+	};
+
+	struct SerializedTarget
+	{
+		std::vector<SerializedArtifact> _artifacts;
 		::Assets::DependencyValidation _depVal;
 	};
 
@@ -33,21 +44,18 @@ namespace Assets
 			ArtifactTargetCode	_targetCode;
 			const char*			_name;
 		};
-		using SerializedArtifact = ::Assets::SerializedArtifact;
 		virtual std::vector<TargetDesc> GetTargets() const = 0;
-		virtual std::vector<SerializedArtifact> SerializeTarget(unsigned idx) = 0;
-		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
+		virtual SerializedTarget SerializeTarget(unsigned idx) = 0;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;	// note that serialize targets can return additional dep vals
 
 		virtual ~ICompileOperation();
 	};
 
 	using CreateCompileOperationFn = std::shared_ptr<ICompileOperation>(const InitializerPack&);
 
-	struct SimpleCompilerResult
+	struct SimpleCompilerResult : public SerializedTarget
 	{
-		std::vector<SerializedArtifact> _artifacts;
 		uint64_t _targetCode;
-		::Assets::DependencyValidation _depVal;
 	};
 	using SimpleCompilerSig = ::Assets::SimpleCompilerResult(const ::Assets::InitializerPack&);
 

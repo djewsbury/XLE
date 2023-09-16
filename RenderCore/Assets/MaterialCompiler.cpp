@@ -273,8 +273,8 @@ namespace RenderCore { namespace Assets
 					::Assets::AsBlob(blockSerializer)
 				}
 			},
-			MaterialScaffold::CompileProcessType,
-			::Assets::GetDepValSys().MakeOrReuse(depVals)
+			::Assets::GetDepValSys().MakeOrReuse(depVals),
+			MaterialScaffold::CompileProcessType
 		};
 	}
 

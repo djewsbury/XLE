@@ -336,8 +336,8 @@ namespace ShaderSourceParser
 
 			return {
 				std::move(artifacts),
-				SelectorFilteringRules::CompileProcessType,
-				::Assets::GetDepValSys().Make(depFileStates)
+				::Assets::GetDepValSys().Make(depFileStates),
+				SelectorFilteringRules::CompileProcessType
 			};
 		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 			Throw(::Assets::Exceptions::ConstructionError(e, handler.MakeDependencyValidation()));
