@@ -25,7 +25,7 @@ template<typename Type>
 inline auto MakeStoreableInAny(const char* type) { return std::string(type); }
 inline auto MakeStoreableInAny(const char16_t* type) { return std::u16string(type); }
 inline auto MakeStoreableInAny(const char32_t* type) { return std::u32string(type); }
-#if __cplusplus >= 202002L
+#if __cpp_char8_t >= 201811L
 	inline auto MakeStoreableInAny(const char8_t* type) { return std::basic_string<char8_t>(type); }
 #endif
 inline auto MakeStoreableInAny(const wchar_t* type) { return std::wstring(type); }
@@ -33,7 +33,7 @@ inline auto MakeStoreableInAny(const wchar_t* type) { return std::wstring(type);
 inline auto MakeStoreableInAny(char* type) { return std::string(type); }
 inline auto MakeStoreableInAny(char16_t* type) { return std::u16string(type); }
 inline auto MakeStoreableInAny(char32_t* type) { return std::u32string(type); }
-#if __cplusplus >= 202002L
+#if __cpp_char8_t >= 201811L
 	inline auto MakeStoreableInAny(char8_t* type) { return std::basic_string<char8_t>(type); }
 #endif
 inline auto MakeStoreableInAny(wchar_t* type) { return std::wstring(type); }
@@ -41,7 +41,7 @@ inline auto MakeStoreableInAny(wchar_t* type) { return std::wstring(type); }
 template<int Count> inline auto MakeStoreableInAny(char (&type)[Count]) { return std::string(type); }
 template<int Count> inline auto MakeStoreableInAny(char16_t (&type)[Count]) { return std::u16string(type); }
 template<int Count> inline auto MakeStoreableInAny(char32_t (&type)[Count]) { return std::u32string(type); }
-#if __cplusplus >= 202002L
+#if __cpp_char8_t >= 201811L
 	template<int Count>  inline auto MakeStoreableInAny(char8_t (&type)[Count]) { return std::basic_string<char8_t>(type); }
 #endif
 template<int Count> inline auto MakeStoreableInAny(wchar_t (&type)[Count]) { return std::wstring(type); }
@@ -80,14 +80,22 @@ namespace Assets
 
 		// the following constructor is for the _initializer literal suffix only -- it avoids an issue on MSVC in which some Initializer constructors
 		// can't be made constexpr safely
-		CLANG_ONLY(constexpr) Initializer(const CharType* start, size_t len, uint64_t hash) : StringSection<CharType>{start, len}, _hash(hash) {}
+		#if __cplusplus >= 202002L
+			consteval Initializer(const CharType* start, size_t len, uint64_t hash) : StringSection<CharType>{start, len}, _hash(hash) {}
+		#else
+			CLANG_ONLY(constexpr) Initializer(const CharType* start, size_t len, uint64_t hash) : StringSection<CharType>{start, len}, _hash(hash) {}
+		#endif
 	private:
 		uint64_t _hash;
 	};
 
 	namespace Literals
 	{
-        CLANG_ONLY(XLE_CONSTEVAL_OR_CONSTEXPR) inline Initializer<char> operator"" _initializer(const char* str, const size_t len) never_throws { return Initializer{str, len, ConstHash64(str, len)}; }
+		#if __cplusplus >= 202002L		// if ConstHash64 is consteval, then this must be also
+			consteval inline Initializer<char> operator"" _initializer(const char* str, const size_t len) never_throws { return Initializer{str, len, ConstHash64(str, len)}; }
+		#else
+			CLANG_ONLY(constexpr) inline Initializer<char> operator"" _initializer(const char* str, const size_t len) never_throws { return Initializer{str, len, ConstHash64(str, len)}; }
+		#endif
 	}
 
 	template<typename CharType>
@@ -207,7 +215,7 @@ namespace Assets
 			using Traits = AssetHashTraits<std::decay_t<Type>>;
 			if constexpr (Traits::IsDereferenceable) {
 				return std::is_same_v<char, decltype(*std::declval<Type>())> || std::is_same_v<char16_t, decltype(*std::declval<Type>())> || std::is_same_v<char32_t, decltype(*std::declval<Type>())>
-					#if __cplusplus >= 202002L
+					#if __cpp_char8_t >= 201811L
 						|| std::is_same_v<char8_t, decltype(*std::declval<Type>())> 
 					#endif
 					|| std::is_same_v<uint32_t, decltype(*std::declval<Type>())> || std::is_same_v<wchar_t, decltype(*std::declval<Type>())>;
@@ -252,7 +260,10 @@ namespace Assets
 			static_assert(!Traits::IsDereferenceable || hashablePointerType || IsStringPointerType<Type>() || IsStreamablePointerType<Type>(), "Parameter used in InitializerPack looks like a pointer to a type that is not hashable and not streamable");
 
 			if constexpr (hashablePointerType) {
-				return StreamWithHashFallback(str, *value, allowFilesystemCharacters);
+				if (value)
+					return StreamWithHashFallback(str, *value, allowFilesystemCharacters);
+				else
+					return str << "null";
 			} else if constexpr (Traits::IsStreamable) {
 				if (allowFilesystemCharacters) {
 					return str << value;
