@@ -29,6 +29,7 @@ namespace OSServices
 
         template<typename FnSignature>
             FnSignature GetFunction(const char name[]);
+        void* GetFunctionAddress(const char name[]);
 
         typedef char CharType;
 
@@ -40,8 +41,6 @@ namespace OSServices
     protected:
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
-
-        void* GetFunctionAddress(const char name[]);
     };
 
     template<typename FnSignature>

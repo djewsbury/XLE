@@ -107,6 +107,15 @@ namespace ConsoleRig
 		}
 	}
 
+	void* PluginSet::FindPluginFunction(const char* name)
+	{
+		// scan all plugin libraries for something that will match this function name
+		for (auto& p:_pimpl->_pluginLibraries)
+			if (auto* res = p.second->GetFunctionAddress(name))
+				return res;
+		return nullptr;
+	}
+
 	PluginSet::PluginSet()
 	{
 		_pimpl = std::make_unique<Pimpl>();
