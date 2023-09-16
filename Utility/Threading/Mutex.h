@@ -78,7 +78,7 @@
     #define _ScopedLockInternal(x, c) std::unique_lock<std::decay_t<decltype(x)>> _StringConcat(_autoLockA, c)(x)
 
     #define ScopedLock(x)            _ScopedLockInternal(x, __COUNTER__)
-    #define ScopedReadLock(x)        std::unique_lock<std::decay_t<decltype(x)>> _autoLockB(x)
+    #define ScopedReadLock(x)        std::shared_lock<std::decay_t<decltype(x)>> _autoLockB(x)
     #define ScopedModifyLock(x)      std::unique_lock<std::decay_t<decltype(x)>> _autoLockC(x)
 
     #define _ScopedAssertExclusivityInternal(x, c)                                                              \
