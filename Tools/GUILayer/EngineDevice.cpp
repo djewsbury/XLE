@@ -13,6 +13,7 @@
 #include "../ToolsRig/PreviewSceneRegistry.h"
 #include "../ToolsRig/ToolsRigServices.h"
 #include "../ToolsRig/MiscUtils.h"
+#include "../ToolsRig/SampleUtils.h"
 #include "../../OSServices/WinAPI/RunLoop_WinAPI.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
@@ -130,6 +131,7 @@ namespace GUILayer
         _entityMountingTree = EntityInterface::CreateMountingTree();
 
         _services->LoadDefaultPlugins();
+        ToolsRig::HACKStartupStarfield();
 
         _divAssets = std::make_unique<ToolsRig::DivergentAssetManager>();
         _creationThreadId = System::Threading::Thread::CurrentThread->ManagedThreadId;

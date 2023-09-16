@@ -44,4 +44,6 @@ namespace ToolsRig
 		::Assets::DependencyValidation _depVal;
 		ConfiguredPlugins _configuredPlugins;
 	};
+
+	void HACKStartupStarfield();
 }

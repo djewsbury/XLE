@@ -18,7 +18,7 @@ namespace ControlsLibraryExt.ModelView
 {
     [Export(typeof(PreviewerContext))]
     [PartCreationPolicy(CreationPolicy.NonShared)]
-    public class PreviewerContext
+    public class PreviewerContext : XLEBridgeUtils.IShutdownWithEngine
     {
         public GUILayer.ModelVisSettings ModelSettings
         {
@@ -86,23 +86,11 @@ namespace ControlsLibraryExt.ModelView
         }
         private GUILayer.VisLayerController _layerController = null;
 
-        /*public GUILayer.TechniqueDelegateWrapper TechniqueOverrides
+        void XLEBridgeUtils.IShutdownWithEngine.Shutdown()
         {
-            set
-            {
-                LayerController.SetTechniqueOverrides(value);
-                OnMiscChange?.Invoke(this, null);
-            }
+            _layerController.Dispose();
+            _layerController = null;
         }
-
-        public GUILayer.MaterialDelegateWrapper MaterialOverrides
-        {
-            set
-            {
-                LayerController.SetMaterialDelegate(value);
-                OnMiscChange?.Invoke(this, null);
-            }
-        }*/
 
         public event EventHandler OnModelSettingsChange;
         public event EventHandler OnOverlaySettingsChange;
@@ -208,6 +196,7 @@ namespace ControlsLibraryExt.ModelView
             if (context != null)
             {
                 _ctrls.ModelSettings = context.ModelSettings;
+                Invalidate3DView();
             }
         }
 
@@ -217,6 +206,7 @@ namespace ControlsLibraryExt.ModelView
             if (context != null)
             {
                 _ctrls.OverlaySettings = context.OverlaySettings;
+                Invalidate3DView();
             }
         }
 

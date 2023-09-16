@@ -43,6 +43,7 @@ namespace XLEBridgeUtils
 		}
 
 		static ResourceFolderBridge^ BeginFromRoot();
+		static ResourceFolderBridge^ BeginFrom(String^);
 
 		ResourceFolderBridge();
 		ResourceFolderBridge(::Assets::FileSystemWalker&& walker, String^ name);
@@ -90,6 +91,12 @@ namespace XLEBridgeUtils
 	ResourceFolderBridge^ ResourceFolderBridge::BeginFromRoot()
 	{
 		return gcnew ResourceFolderBridge(::Assets::MainFileSystem::BeginWalk(), "<root>");
+	}
+
+	ResourceFolderBridge^ ResourceFolderBridge::BeginFrom(String^ base)
+	{
+		auto nativeBase = clix::marshalString<clix::E_UTF8>(base);
+		return gcnew ResourceFolderBridge(::Assets::MainFileSystem::BeginWalk(nativeBase), base);
 	}
 
 	ResourceFolderBridge::ResourceFolderBridge()

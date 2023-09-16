@@ -45,6 +45,7 @@ namespace Previewer
             GC.KeepAlive(engineDevice);
 
             var logRedirect = new XLEBridgeUtils.LoggingRedirect();
+            GC.KeepAlive(logRedirect);
 
             // Enable metadata driven property editing for the DOM
             DomNodeType.BaseOfAllTypes.AddAdapterCreator(new AdapterCreator<CustomTypeDescriptorNodeAdapter>());
@@ -107,8 +108,9 @@ namespace Previewer
 
                 typeof(SkinService),
 
+                typeof(XLEBridgeUtils.ResourceQueryService),
+                
                 typeof(ControlsLibraryExt.Commands.CommonCommands),
-                typeof(ControlsLibraryExt.Material.MaterialInspector),
                 typeof(ControlsLibraryExt.Material.MaterialSchemaLoader),
                 typeof(ControlsLibraryExt.ModelView.PreviewerControl),
                 typeof(ControlsLibraryExt.ModelView.PreviewerContext),
@@ -117,6 +119,7 @@ namespace Previewer
                 typeof(ControlsLibraryExt.ModelView.Previewer),
                 typeof(ControlsLibraryExt.GameLoopService),
                 typeof(ControlsLibraryExt.AssetTrackingService),
+                typeof(ControlsLibraryExt.ModelView.SimpleFileListerController),
 
                 typeof(ActiveMaterialContext)
             );
@@ -172,6 +175,9 @@ namespace Previewer
             engineDevice.PrepareForShutdown();
             XLEBridgeUtils.Utils.DetachLibrary(engineDevice);
             engineDevice.Dispose();
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
         }
     }
 }

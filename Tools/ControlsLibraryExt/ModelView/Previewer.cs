@@ -70,12 +70,6 @@ namespace ControlsLibraryExt.ModelView
                 // attach tweakable bridge for accessing console variables
                 m_scriptingService.SetVariable("cv", new GUILayer.TweakableBridge());
             }
-
-            // We need to make sure there is a material set to the active
-            // material context... If there is none, we must create a new
-            // untitled material, and set that...
-            if (_activeMaterialContext.MaterialName == null)
-                _activeMaterialContext.MaterialName = GUILayer.RawMaterial.CreateUntitled().Initializer;
         }
 
         #endregion

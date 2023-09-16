@@ -132,4 +132,29 @@ namespace ToolsRig
 			promise.set_exception(std::current_exception());
 		} CATCH_END
 	}
+
+
+	void HACKStartupStarfield()
+	{
+		 // HACK -- hardcoded starfield startup
+		auto& previewSceneRegistry = ToolsRig::Services::GetPreviewSceneRegistry();
+		auto cfg = previewSceneRegistry.GetConfigurablePluginDocument();
+
+		auto entityTypeId = EntityInterface::MakeStringAndHash("Starfield");
+		auto entity = cfg->AssignEntityId();
+		cfg->CreateEntity(entityTypeId, entity, {});
+		{
+				EntityInterface::PropertyInitializer propInit;
+				propInit._prop = EntityInterface::MakeStringAndHash("SrcFolder");
+				const char* srcFolder = R"(C:\Program Files (x86)\Steam\steamapps\common\Starfield)";
+				propInit._data = MakeIteratorRange(srcFolder, XlStringEnd(srcFolder));
+				propInit._type = ImpliedTyping::TypeOf<char>();
+				propInit._type._typeHint = ImpliedTyping::TypeHint::String;
+				propInit._type._arrayCount = std::strlen(srcFolder);
+				cfg->SetProperty(entity, MakeIteratorRange(&propInit, &propInit+1));
+		}
+		auto futures = previewSceneRegistry.ApplyConfigurablePlugins();
+		for (auto& f:futures)
+			f.get();
+	}
 }
