@@ -25,6 +25,10 @@ namespace Formatters
 		BeginElement,
 		EndElement,
 		CharacterData,
+		BeginArray,
+		EndArray,
+		BeginDictionary,
+		EndDictionary,
 		None 
 	};
 
