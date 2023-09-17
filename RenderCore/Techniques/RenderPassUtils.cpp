@@ -37,6 +37,22 @@ namespace RenderCore { namespace Techniques
         return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clear, &clear+1)}};
 	}
 
+	RenderPassInstance RenderPassToPresentationTargetWithOptionalInitialize(ParsingContext& parserContext)
+	{
+		// use either LoadStore::Clear or LoadStore::Retain depending on whether the target attachment has data already
+		auto preRegs = parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
+		auto q = std::find_if(
+			preRegs.begin(), preRegs.end(),
+			[](const auto&a) { return a._semantic == Techniques::AttachmentSemantics::ColorLDR; });
+		if (q == preRegs.end())
+			return {};
+
+		if (q->_state == PreregisteredAttachment::State::Uninitialized)
+			return RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
+		
+		return RenderPassToPresentationTarget(parserContext, LoadStore::Retain);
+	}
+
 	RenderPassInstance RenderPassToPresentationTarget(
 		const RenderCore::IResourcePtr& presentationTarget,
         ParsingContext& parserContext,

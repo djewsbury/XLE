@@ -17,6 +17,8 @@ namespace RenderOverlays
 	struct Rect;
 	class IOverlayContext;
 	class OverlayApparatus;
+	class FontRenderingManager;
+	class ShapesRenderingDelegate;
 
 	void DrawBasisAxes(
 		RenderCore::Techniques::IImmediateDrawables&, RenderCore::Techniques::ParsingContext& parserContext, 
@@ -27,6 +29,18 @@ namespace RenderOverlays
 		float gridScale = 1.0f, Float3 origin = Float3(0,0,0));
 
 	void FillScreenWithMsg(
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		OverlayApparatus& immediateDrawingApparatus,
+		StringSection<> msg);
+
+	void DrawBottomOfScreenErrorMsg(
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		FontRenderingManager& fontRenderingManager,
+		ShapesRenderingDelegate& shapesRenderingDelegate,
+		StringSection<> msg);
+
+	void DrawBottomOfScreenErrorMsg(
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		OverlayApparatus& immediateDrawingApparatus,
 		StringSection<> msg);

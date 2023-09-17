@@ -146,9 +146,86 @@ namespace RenderOverlays
 				**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Center, msg);
 		}
 
-		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parsingContext, RenderCore::LoadStore::Clear);
+		auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithOptionalInitialize(parsingContext);
 		parsingContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
 		ExecuteDraws(parsingContext, rpi, immediateDrawingApparatus);
+	}
+
+	void DrawBottomOfScreenErrorMsg(
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		RenderOverlays::FontRenderingManager& fontRenderingManager,
+		ShapesRenderingDelegate& shapesRenderingDelegate,
+		StringSection<> msg)
+	{
+		auto font = RenderOverlays::MakeFont("Petra", 18)->TryActualize();
+		if (!font)
+			return;
+
+		Int2 viewportDims { parsingContext.GetViewport()._width, parsingContext.GetViewport()._height };
+		const unsigned horzPadding = 8;
+		const unsigned vertPadding = 8;
+		const unsigned horzRectArea = 16;
+
+		if (viewportDims[0] < (2 * horzPadding - horzRectArea + 32))
+			return;		// no horz space
+
+		auto split = StringSplitByWidth<char>(**font, msg, float(viewportDims[0] - 2 * horzPadding - horzRectArea), " \t", "");
+		auto lineHeight = (unsigned)(*font)->GetFontProperties()._lineHeight;
+
+		auto overlayContext = MakeImmediateOverlayContext(parsingContext.GetThreadContext(), immediateDrawables, &fontRenderingManager);
+
+		parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker += vertPadding;
+		auto bottom = viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker;
+		auto top = viewportDims[1] - (parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker + split._sections.size() * lineHeight);
+
+		// draw a background quad
+		{
+			const unsigned bleedOut = 8;
+			Float3 bkgrndQuad[] {
+				Float3{0, top - bleedOut, 0.f},
+				Float3{0, bottom + bleedOut, 0.f},
+				Float3{viewportDims[0], top - bleedOut, 0.f},
+				Float3{viewportDims[0], top - bleedOut, 0.f},
+				Float3{0, bottom + bleedOut, 0.f},
+				Float3{viewportDims[0], bottom + bleedOut, 0.f}
+			};
+			overlayContext->DrawTriangles(ProjectionMode::P2D, bkgrndQuad, dimof(bkgrndQuad), ColorB{0x0f, 0x0f, 0x0f});
+		}
+
+		for (auto s:split._sections) {
+			overlayContext->DrawText(
+				{ 	Float3{horzPadding + horzRectArea, viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker - lineHeight, 0.f}, 
+					Float3{viewportDims[0] - horzPadding, viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker, 0.f} },
+				**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Left, s);
+
+			parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker += lineHeight;
+		}
+
+		// draw a little quad to the left, just for completeness
+		{
+			Float3 littleQuad[] {
+				Float3{horzPadding, top, 0.f},
+				Float3{horzPadding, bottom, 0.f},
+				Float3{horzRectArea, top, 0.f},
+				Float3{horzRectArea, top, 0.f},
+				Float3{horzPadding, bottom, 0.f},
+				Float3{horzRectArea, bottom, 0.f}
+			};
+			overlayContext->DrawTriangles(ProjectionMode::P2D, littleQuad, dimof(littleQuad), ColorB{0xaf, 0x4f, 0x3f});
+		}
+
+		auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithOptionalInitialize(parsingContext);
+		parsingContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
+		ExecuteDraws(parsingContext, rpi, immediateDrawables, shapesRenderingDelegate);
+	}
+
+	void DrawBottomOfScreenErrorMsg(
+		RenderCore::Techniques::ParsingContext& parsingContext,
+		OverlayApparatus& immediateDrawingApparatus,
+		StringSection<> msg)
+	{
+		DrawBottomOfScreenErrorMsg(parsingContext, *immediateDrawingApparatus._immediateDrawables, *immediateDrawingApparatus._fontRenderingManager, *immediateDrawingApparatus._shapeRenderingDelegate, msg);
 	}
 
 	static void DrawDiamond(RenderOverlays::IOverlayContext& context, const RenderOverlays::Rect& rect, RenderOverlays::ColorB colour)

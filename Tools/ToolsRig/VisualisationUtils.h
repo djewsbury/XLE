@@ -147,6 +147,8 @@ namespace ToolsRig
         virtual void Set(std::shared_ptr<VisCameraSettings> camera) = 0;
 		virtual void ResetCamera() = 0;
 
+        virtual void ReportError(StringSection<> msg) = 0;
+
         virtual ~ISimpleSceneOverlay() = default;
     };
 
@@ -162,6 +164,7 @@ namespace ToolsRig
 		void Set(const std::shared_ptr<VisCameraSettings>&);
 		void Set(const VisOverlaySettings& overlaySettings);
 		void Set(const std::shared_ptr<VisAnimationState>&);
+        void ReportError(StringSection<>);
 
 		const VisOverlaySettings& GetOverlaySettings() const;
         std::shared_ptr<VisMouseOver> GetMouseOver() const;

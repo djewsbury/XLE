@@ -142,17 +142,17 @@ namespace ToolsRig
 	class SimpleSceneOverlay : public ISimpleSceneOverlay
     {
     public:
-        virtual void Render(
-            RenderCore::Techniques::ParsingContext& parserContext) override;
+        void Render(RenderCore::Techniques::ParsingContext& parserContext) override;
 
 		void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) override;
 		void Set(std::shared_ptr<SceneEngine::IScene> scene, std::shared_ptr<::Assets::OperationContext> loadingContext) override;
 
 		void Set(std::shared_ptr<VisCameraSettings>) override;
 		void ResetCamera() override;
-		virtual OverlayState GetOverlayState() const override;
+		OverlayState GetOverlayState() const override;
+		void ReportError(StringSection<> msg) override;
 
-		virtual void OnRenderTargetUpdate(
+		void OnRenderTargetUpdate(
             IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
             const RenderCore::FrameBufferProperties& fbProps,
 			IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
@@ -195,6 +195,7 @@ namespace ToolsRig
 		
 		unsigned _loadingIndicatorCounter = 0;
 		bool _pendingCameraReset = true;
+		std::string _errorMsg;
 
 		uint64_t _lightingTechniqueTargetsHash = 0ull;
 		std::vector<RenderCore::Techniques::PreregisteredAttachment> _lightingTechniqueTargets;
@@ -271,31 +272,39 @@ namespace ToolsRig
 			} CATCH_END
 
 			actualizedScene->_envSettings->PostRender(lightScene);
+
 		} else {
-			// Draw a loading indicator, 
-			using namespace RenderOverlays::DebuggingDisplay;
-			using namespace RenderOverlays;
-			RenderOverlays::ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderingManager.get());
-			overlays.CaptureState();
-			auto viewportDims = Coord2(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
-			Rect rect { Coord2{0, 0}, viewportDims };
-			RenderLoadingIndicator(overlays, rect, _loadingIndicatorCounter++);
 
-			if (_preparedSceneFuture && _preparedSceneFuture->GetAssetState() == ::Assets::AssetState::Invalid) {
-				auto log = ::Assets::AsString(_preparedSceneFuture->GetActualizationLog());
-				auto font = RenderOverlays::MakeFont("DosisBook", 26)->TryActualize();
-				if (font) {
-					overlays.DrawText(
-						std::make_tuple(Float3{0.f, 0.f, 0.f}, Float3{viewportDims[0], viewportDims[1], 0.f}),
-						**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Center, log);
+			if (_errorMsg.empty()) {
+
+				if (_preparedSceneFuture && _preparedSceneFuture->GetAssetState() == ::Assets::AssetState::Invalid) {
+					auto log = ::Assets::AsString(_preparedSceneFuture->GetActualizationLog());
+					assert(_fontRenderingManager);
+					RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *_immediateDrawables, *_fontRenderingManager, *_debugShapesDelegate, "SimpleSceneOverlay failed with: " + log);
+				} else {
+					// Draw a loading indicator,
+					using namespace RenderOverlays::DebuggingDisplay;
+					using namespace RenderOverlays;
+					RenderOverlays::ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderingManager.get());
+					overlays.CaptureState();
+					auto viewportDims = Coord2(parserContext.GetViewport()._width, parserContext.GetViewport()._height);
+					Rect rect { Coord2{0, 0}, viewportDims };
+					RenderLoadingIndicator(overlays, rect, _loadingIndicatorCounter++);
+					overlays.ReleaseState();
+
+					auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
+					RenderOverlays::ExecuteDraws(parserContext, rpi, *_immediateDrawables, *_debugShapesDelegate);
+
+					StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
 				}
+
+			} else {
+
+				assert(_fontRenderingManager);
+				RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *_immediateDrawables, *_fontRenderingManager, *_debugShapesDelegate, _errorMsg);
+
 			}
-			overlays.ReleaseState();
 
-			auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
-			RenderOverlays::ExecuteDraws(parserContext, rpi, *_immediateDrawables, *_debugShapesDelegate);
-
-			StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
 		}
     }
 
@@ -429,6 +438,11 @@ namespace ToolsRig
 		}
 		
 		return { refreshMode };
+	}
+
+	void SimpleSceneOverlay::ReportError(StringSection<> msg)
+	{
+		_errorMsg = msg.AsString();
 	}
 	
     SimpleSceneOverlay::SimpleSceneOverlay(
@@ -802,6 +816,8 @@ namespace ToolsRig
 		};
 		std::shared_future<SequencerCfgs> _futureSequencerCfgs;
 
+		std::string _errorMsg;
+
 		Pimpl()
 		{
 			_stencilPrimeDelegate = std::make_shared<StencilRefDelegate>();
@@ -859,21 +875,28 @@ namespace ToolsRig
 		return fbDesc;
 	}
 
+	static bool HasDepthAttachment(RenderCore::Techniques::ParsingContext& parserContext)
+	{
+		using namespace RenderCore;
+		if (!parserContext.GetAttachmentReservation().MapSemanticToResource(Techniques::AttachmentSemantics::MultisampleDepth))
+			return false;
+
+		auto preRegs = parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
+		auto q = std::find_if(
+			preRegs.begin(), preRegs.end(),
+			[](const auto&a) { return a._semantic == Techniques::AttachmentSemantics::MultisampleDepth; });
+		if (q == preRegs.end())
+			return false;
+		return true;
+	}
+
     void VisualisationOverlay::Render(
         RenderCore::Techniques::ParsingContext& parserContext)
     {
         using namespace RenderCore;
-		{
-			if (!parserContext.GetAttachmentReservation().MapSemanticToResource(Techniques::AttachmentSemantics::MultisampleDepth))		// we need this attachment to continue
-				return;
 
-			auto preRegs = parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
-			auto q = std::find_if(
-				preRegs.begin(), preRegs.end(),
-				[](const auto&a) { return a._semantic == Techniques::AttachmentSemantics::MultisampleDepth; });
-			if (q == preRegs.end())
-				return;
-		}
+		if (!HasDepthAttachment(parserContext))
+			return;		// we need this attachment to continue
 
 		if (!_pimpl->_scene || !_pimpl->_cameraSettings) return;
 
@@ -1004,6 +1027,9 @@ namespace ToolsRig
 			CATCH_ASSETS_END(parserContext)
 		}
 
+		if (!_pimpl->_errorMsg.empty())
+			RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *_pimpl->_immediateDrawables, *_pimpl->_fontRenderingManager, *_pimpl->_debugShapesDelegate, _pimpl->_errorMsg);
+
 		const bool dummyCalculation = false;
 		if constexpr (dummyCalculation) {
 			PlatformRig::InputContext inputContext;
@@ -1033,6 +1059,11 @@ namespace ToolsRig
 	void VisualisationOverlay::Set(const VisOverlaySettings& overlaySettings)
 	{
 		_pimpl->_settings = overlaySettings;
+	}
+
+	void VisualisationOverlay::ReportError(StringSection<> msg)
+	{
+		_pimpl->_errorMsg = msg.AsString();
 	}
 
 	const VisOverlaySettings& VisualisationOverlay::GetOverlaySettings() const
@@ -1240,11 +1271,13 @@ namespace ToolsRig
 
 		bool _pendingSceneActualize = false;
 		bool _pendingLightingStateActualize = false;
+		std::string _sceneReportedError, _lightingStateReportedError;
 		unsigned _lastGlobalDepValChangeIndex = 0;
 
 		unsigned _mainThreadTickFn = ~0u;
 
 		void MainThreadTick();
+		void UpdateVisualizationError();
 	};
 
 	void VisOverlayController::Pimpl::MainThreadTick()
@@ -1254,11 +1287,19 @@ namespace ToolsRig
 				if (_sceneOverlay) _sceneOverlay->Set(*actualized, _loadingContext);
 				if (_visualisationOverlay) _visualisationOverlay->Set(*actualized);
 				_pendingSceneActualize = false;
+			} else if (_sceneMarker->GetAssetState() == ::Assets::AssetState::Invalid) {
+				_sceneReportedError = "Scene load failed with error: " + ::Assets::AsString(_sceneMarker->GetActualizationLog());
+				UpdateVisualizationError();
+				_pendingSceneActualize = false;
 			}
 		}
 		if (_pendingLightingStateActualize && _lightingStateMarker) {
 			if (auto* actualized = _lightingStateMarker->TryActualize()) {
 				if (_sceneOverlay) _sceneOverlay->Set(*actualized);
+				_pendingLightingStateActualize = false;
+			} else if (_lightingStateMarker->GetAssetState() == ::Assets::AssetState::Invalid) {
+				_lightingStateReportedError = "Lighting state load failed with error: " + ::Assets::AsString(_lightingStateMarker->GetActualizationLog());
+				UpdateVisualizationError();
 				_pendingLightingStateActualize = false;
 			}
 		}
@@ -1275,6 +1316,8 @@ namespace ToolsRig
 					_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext,
 					_modelVisSettings);
 				_pendingSceneActualize = true;
+				_sceneReportedError = {};
+				UpdateVisualizationError();
 			}
 
 			if (_lightingStateBindType == LightingStateBindType::Filename && _lightingStateMarker && ::Assets::IsInvalidated(*_lightingStateMarker)) {
@@ -1283,8 +1326,21 @@ namespace ToolsRig
 
 				_lightingStateMarker = SceneEngine::CreateBasicLightingStateDelegate(_lightingStateFilename);
 				_pendingLightingStateActualize = true;
+				_lightingStateReportedError = {};
+				UpdateVisualizationError();
 			}
 		}
+	}
+
+	void VisOverlayController::Pimpl::UpdateVisualizationError()
+	{
+		if (_sceneOverlay)
+			if (!_sceneReportedError.empty() && !_lightingStateReportedError.empty())
+				_sceneOverlay->ReportError(_lightingStateReportedError + "\n" + _sceneReportedError);
+			else if (!_sceneReportedError.empty())
+				_sceneOverlay->ReportError(_sceneReportedError);
+			else
+				_sceneOverlay->ReportError(_lightingStateReportedError);	// might be empty
 	}
 
 	void VisOverlayController::SetScene(const ModelVisSettings& visSettings)
@@ -1300,6 +1356,8 @@ namespace ToolsRig
 			_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool, _pimpl->_loadingContext,
 			visSettings);
 		_pimpl->_pendingSceneActualize = true;
+		_pimpl->_sceneReportedError = {};
+		_pimpl->UpdateVisualizationError();
 	}
 
 	void VisOverlayController::SetScene(const MaterialVisSettings& visSettings, std::shared_ptr<RenderCore::Assets::RawMaterial> material)
@@ -1312,6 +1370,8 @@ namespace ToolsRig
 			_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool,
 			visSettings, material);
 		_pimpl->_pendingSceneActualize = false;
+		_pimpl->_sceneReportedError = {};
+		_pimpl->UpdateVisualizationError();
 
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene);
 		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
@@ -1323,6 +1383,8 @@ namespace ToolsRig
 		_pimpl->_sceneMarker = nullptr;
 		_pimpl->_sceneBindType = Pimpl::SceneBindType::Ptr;
 		_pimpl->_pendingSceneActualize = false;
+		_pimpl->_sceneReportedError = {};
+		_pimpl->UpdateVisualizationError();
 
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene, _pimpl->_loadingContext);
 		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
@@ -1345,6 +1407,8 @@ namespace ToolsRig
 			if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 			_pimpl->_pendingSceneActualize = true;
 		}
+		_pimpl->_sceneReportedError = {};
+		_pimpl->UpdateVisualizationError();
 	}
 
 	void VisOverlayController::SetEnvSettings(StringSection<> envSettings)
@@ -1357,6 +1421,8 @@ namespace ToolsRig
 		_pimpl->_lightingStateFilename = envSettings.AsString();
 		_pimpl->_lightingStateMarker = SceneEngine::CreateBasicLightingStateDelegate(envSettings);
 		_pimpl->_pendingLightingStateActualize = true;
+		_pimpl->_lightingStateReportedError = {};
+		_pimpl->UpdateVisualizationError();
 	}
 
 	void VisOverlayController::SetEnvSettings(::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate> marker)
@@ -1374,6 +1440,8 @@ namespace ToolsRig
 			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::ILightingStateDelegate>{});
 			_pimpl->_pendingLightingStateActualize = true;
 		}
+		_pimpl->_lightingStateReportedError = {};
+		_pimpl->UpdateVisualizationError();
 	}
 
 	void VisOverlayController::SetEnvSettings(std::shared_ptr<SceneEngine::ILightingStateDelegate> lightingState)
@@ -1382,6 +1450,8 @@ namespace ToolsRig
 		_pimpl->_lightingStateMarker = nullptr;
 		_pimpl->_lightingStateBindType = Pimpl::LightingStateBindType::Ptr;
 		_pimpl->_pendingLightingStateActualize = false;
+		_pimpl->_lightingStateReportedError = {};
+		_pimpl->UpdateVisualizationError();
 
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_lightingState);
 	}
@@ -1436,6 +1506,8 @@ namespace ToolsRig
 				_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 		} else
 			_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+
+		_pimpl->UpdateVisualizationError();
 	}
 
 	SceneEngine::IScene* VisOverlayController::TryGetScene()

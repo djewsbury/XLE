@@ -21,6 +21,8 @@ namespace RenderCore { namespace Techniques
 		LoadStore loadOperation = LoadStore::Retain,
 		unsigned clearColor = 0xff000000);
 
+	RenderPassInstance RenderPassToPresentationTargetWithOptionalInitialize(ParsingContext& parserContext);
+
 	RenderPassInstance RenderPassToPresentationTarget(
 		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
         ParsingContext& parserContext,

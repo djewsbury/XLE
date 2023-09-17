@@ -105,6 +105,7 @@ namespace RenderCore { namespace Techniques
             char _pendingAssets[1024];
             char _invalidAssets[1024];
             char _quickMetrics[4096];
+            unsigned _bottomOfScreenErrorMsgTracker = 0;
 
             StringHelpers();
         };
