@@ -25,14 +25,11 @@ namespace ControlsLibraryExt.ModelView
             Utility,
         };
 
-        [DefaultValue(LightingDelegateType.Utility)]
-        public LightingDelegateType OverallType { get; set; }
+        public LightingDelegateType OverallType { get; set; } = LightingDelegateType.Utility;
 
-        [DefaultValue("cfg/lighting")] 
-        public string MountedEnvSettings { get; set;  }
+        public string MountedEnvSettings { get; set; } = "cfg/lighting";
 
-        [DefaultValue(GUILayer.UtilityRenderingType.CopyDiffuseAlbedo)]
-        public GUILayer.UtilityRenderingType UtilityType { get; set; }
+        public GUILayer.UtilityRenderingType UtilityType { get; set; } = GUILayer.UtilityRenderingType.CopyDiffuseAlbedo;
     };
 
     [Export(typeof(PreviewerContext))]
@@ -90,7 +87,9 @@ namespace ControlsLibraryExt.ModelView
                 if (_layerController == null)
                 {
                     // (Create on demand because MEF tends to create and destroy dummy versions of this object during initialization)
+                    // also setup defaults to what we expect on initial startup
                     _layerController = new GUILayer.VisLayerController();
+                    _layerController.SetUtilityRenderingType(GUILayer.UtilityRenderingType.CopyDiffuseAlbedo);
                 }
                 return _layerController;
             }
