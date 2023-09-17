@@ -23,7 +23,9 @@ set(Src
     LooseFilesCache.cpp
     PreprocessorIncludeHandler.cpp
     OperationContext.cpp
-    Legacy/AssetsLegacy.cpp)
+    XPak.cpp
+    Legacy/AssetsLegacy.cpp
+    ../Foreign/FastLZ/fastlz.c)
 
 add_library(Assets STATIC ${Src})
 xle_configure_library(Assets)
