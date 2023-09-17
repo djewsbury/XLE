@@ -50,11 +50,11 @@ using namespace Utility::Literals;
 namespace UnitTests
 {
 	static const char* s_basicTexturingGraph = R"--(
-		import templates = "xleres/Nodes/Templates.pixel.sh"
+		import templates = "xleres/Objects/Templates.pixel.hlsl"
 		import output = "xleres/Nodes/Output.sh"
 		import texture = "xleres/Nodes/Texture.sh"
 		import basic = "xleres/Nodes/Basic.sh"
-		import materialParam = "xleres/Nodes/MaterialParam.sh"
+		import materialParam = "xleres/Objects/MaterialParam.hlsl"
 
 		GBufferValues Bind_PerPixel(VSOUT geo) implements templates::PerPixel
 		{

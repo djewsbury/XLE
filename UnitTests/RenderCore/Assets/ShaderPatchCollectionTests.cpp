@@ -63,7 +63,7 @@ namespace UnitTests
 	static const char s_fragmentsWithRename[] = R"--(
 		=~
 			ut-data/shader_with_selectors.pixel.hlsl::PerPixelWithSelectors
-			Implements=xleres/Nodes/Templates.pixel.sh::PerPixel
+			Implements=xleres/Objects/Templates.pixel.hlsl::PerPixel
 		)--";
 
 	// The following data is mounted as virtual files in the folder "ut-data"
@@ -80,7 +80,7 @@ namespace UnitTests
 		std::make_pair(
 			"outergraph.graph",
 			::Assets::AsBlob(R"--(
-				import templates = "xleres/Nodes/Templates.pixel.sh"
+				import templates = "xleres/Objects/Templates.pixel.hlsl"
 				import texture = "xleres/Nodes/Texture.sh"
 				import gbuffer = "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
 
@@ -108,9 +108,9 @@ namespace UnitTests
 		std::make_pair(
 			"perpixel.graph",
 			::Assets::AsBlob(R"--(
-				import templates = "xleres/Nodes/Templates.pixel.sh"
+				import templates = "xleres/Objects/Templates.pixel.hlsl"
 				import output = "xleres/Nodes/Output.sh"
-				import materialParam = "xleres/Nodes/MaterialParam.sh"
+				import materialParam = "xleres/Objects/MaterialParam.hlsl"
 
 				auto Default_PerPixel(VSOUT geo) implements templates::PerPixel
 				{
@@ -172,9 +172,9 @@ namespace UnitTests
 		std::make_pair(
 			"shader_with_selectors_adapter.graph",
 			::Assets::AsBlob(R"--(
-				import templates = "xleres/Nodes/Templates.pixel.sh"
+				import templates = "xleres/Objects/Templates.pixel.hlsl"
 				import output = "xleres/Nodes/Output.sh"
-				import materialParam = "xleres/Nodes/MaterialParam.sh"
+				import materialParam = "xleres/Objects/MaterialParam.hlsl"
 				import shader = "ut-data/shader_with_selectors.pixel.hlsl"
 
 				GBufferValues Default_PerPixel(VSOUT geo) implements templates::PerPixel
@@ -367,7 +367,7 @@ namespace UnitTests
 			{
 				const char* dependenciesToCheck[] = {
 					"ut-data/shader_with_selectors_adapter.graph",		// root graph
-					"xleres/Nodes/Templates.pixel.sh",					// import into root graph, used only by "implements" part of signature
+					"xleres/Objects/Templates.pixel.hlsl",					// import into root graph, used only by "implements" part of signature
 					"ut-data/shader_with_selectors.pixel.hlsl",			// shader directly imported by root graph
 					"xleres/TechniqueLibrary/Framework/gbuffer.hlsl",	// 1st level include from shader
 					"xleres/TechniqueLibrary/Framework/Binding.hlsl"	// 2nd level include from shader

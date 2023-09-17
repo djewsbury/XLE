@@ -155,7 +155,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IDevice> device,
 		const DescriptorSetSignature& descSetLayout)
 	{
-		auto balancedNoiseFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>("xleres/DefaultResources/balanced_noise.dds:LT");
+		auto balancedNoiseFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
 
 		std::promise<DescSetAndCmdListId> promise;
 		auto future = promise.get_future();

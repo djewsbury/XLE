@@ -37,7 +37,7 @@ static const char* s_examplePerPixelShaderFile = R"--(
 
 static const char* s_exampleGraphFile = R"--(
 	import example_perpixel = "example-perpixel.pixel.hlsl";
-	import templates = "xleres/Nodes/Templates.pixel.sh"
+	import templates = "xleres/Objects/Templates.pixel.hlsl"
 
 	GBufferValues Bind_PerPixel(VSOUT geo) implements templates::PerPixel
 	{
@@ -49,7 +49,7 @@ static const char* s_complicatedGraphFile = R"--(
 	import simple_example = "example.graph";
 	import simple_example_dupe = "ut-data/example.graph";
 	import example_perpixel = "example-perpixel.pixel.hlsl";
-	import templates = "xleres/Nodes/Templates.pixel.sh";
+	import templates = "xleres/Objects/Templates.pixel.hlsl";
 	import conditions = "xleres/Nodes/Conditions.sh";
 	import internalComplicatedGraph = "internalComplicatedGraph.graph";
 
@@ -102,8 +102,8 @@ static const char* s_basicTechniqueFile = R"--(
 		Selectors=~
 			CLASSIFY_NORMAL_MAP
 			SKIP_MATERIAL_DIFFUSE=0
-		Preconfiguration=xleres/TechniqueLibrary/Config/Preconfiguration.hlsl
-		PipelineLayout=xleres/TechniqueLibrary/Config/main.pipeline:GraphicsMain
+		Preconfiguration=xleres/Config/Preconfiguration.hlsl
+		PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
 
 	CopyDiffuseAlbedo_NoPatches=~
 		Inherit=~; Shared
@@ -143,7 +143,7 @@ static const char* s_basicTechniqueFile = R"--(
 
 static const char* s_basicFrameworkEntryPixel = R"--(
 	#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
-	#include "xleres/Nodes/Templates.pixel.sh"
+	#include "xleres/Objects/Templates.pixel.hlsl"
 
 	float4 frameworkEntry(VSOUT geo) : SV_Target0
 	{

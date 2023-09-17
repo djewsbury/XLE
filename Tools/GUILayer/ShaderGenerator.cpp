@@ -404,7 +404,7 @@ namespace GUILayer
 
 				sw->WriteLine();
 				sw->Write("/* <<Chunk:TechniqueConfig:main>>--("); sw->WriteLine();
-				sw->Write("~Inherit; xleres/TechniqueLibrary/Config/Legacy/IllumLegacy.tech"); sw->WriteLine();
+				sw->Write("~Inherit; xleres/Config/Legacy/IllumLegacy.tech"); sw->WriteLine();
 
 				WriteTechniqueConfigSection(sw, "Forward", "forward_main", context->ShaderParameters);
 				WriteTechniqueConfigSection(sw, "Deferred", "deferred_main", context->ShaderParameters);

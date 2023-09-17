@@ -61,7 +61,7 @@ static const char s_exampleTechniqueFragments[] = R"--(
 static const char* s_colorFromSelectorShaderFile = R"--(
 	#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 	#include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
-	#include "xleres/Nodes/Templates.pixel.sh"
+	#include "xleres/Objects/Templates.pixel.hlsl"
 
 	GBufferValues PerPixel(VSOUT geo)
 	{
@@ -86,11 +86,11 @@ static const char s_techniqueForColorFromSelector[] = R"--(
 )--";
 
 static const char* s_basicTexturingGraph = R"--(
-	import templates = "xleres/Nodes/Templates.pixel.sh"
+	import templates = "xleres/Objects/Templates.pixel.hlsl"
 	import output = "xleres/Nodes/Output.sh"
 	import texture = "xleres/Nodes/Texture.sh"
 	import basic = "xleres/Nodes/Basic.sh"
-	import materialParam = "xleres/Nodes/MaterialParam.sh"
+	import materialParam = "xleres/Objects/MaterialParam.hlsl"
 
 	GBufferValues Bind_PerPixel(VSOUT geo) implements templates::PerPixel
 	{
@@ -635,7 +635,7 @@ namespace UnitTests
 			{
 				// we'll try the load the following text file as a texture; it should just give us an invalid descriptor set
 				ParameterBox resourceBindings;
-				resourceBindings.SetParameter("BoundTexture", "xleres/TechniqueLibrary/Config/Illum.tech");
+				resourceBindings.SetParameter("BoundTexture", "xleres/Config/Illum.tech");
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(ParameterBox{}, resourceBindings);
 				auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 					nullptr, patches,

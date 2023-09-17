@@ -42,7 +42,7 @@ namespace UnitTests
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
-			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/BuildVSOUT.vertex.hlsl"
 
 			VSOUT vs_main(VSIN input)
 			{
@@ -60,7 +60,7 @@ namespace UnitTests
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
-			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/BuildVSOUT.vertex.hlsl"
 
 			VSOUT vs_main(VSIN input)
 			{
@@ -112,7 +112,7 @@ namespace UnitTests
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
-			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/BuildVSOUT.vertex.hlsl"
 
 			cbuffer MultiViewProperties BIND_SEQ_B1
 			{
@@ -191,7 +191,7 @@ namespace UnitTests
 			#include "xleres/TechniqueLibrary/Framework/VSIN.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 			#include "xleres/TechniqueLibrary/Framework/WorkingVertex.hlsl"
-			#include "xleres/TechniqueLibrary/Core/BuildVSOUT.vertex.hlsl"
+			#include "xleres/TechniqueLibrary/Framework/BuildVSOUT.vertex.hlsl"
 
 			cbuffer MultiViewProperties BIND_SEQ_B1
 			{
@@ -317,7 +317,7 @@ namespace UnitTests
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/simple.hlsl:vs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/simple.hlsl:ps_main";
-				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
+				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				return nascentDesc;
 			}
@@ -422,7 +422,7 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/amplifying_geo_shader.hlsl:vs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = "ut-data/amplifying_geo_shader.hlsl:gs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/amplifying_geo_shader.hlsl:ps_main";
-				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
+				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
 				return nascentDesc;
@@ -535,7 +535,7 @@ namespace UnitTests
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/instancing_multiprobe_shader.hlsl:vs_main";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/instancing_multiprobe_shader.hlsl:ps_main";
-				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
+				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
 				return nascentDesc;
@@ -734,7 +734,7 @@ namespace UnitTests
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/multiview_shader.hlsl:vs_main:vs_6_1";
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/multiview_shader.hlsl:ps_main:ps_6_1";
-				nascentDesc->_techniquePreconfigurationFile = "xleres/TechniqueLibrary/Config/Preconfiguration.hlsl";
+				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				return nascentDesc;
 			}

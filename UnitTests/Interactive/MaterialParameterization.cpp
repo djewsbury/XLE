@@ -156,9 +156,9 @@ namespace UnitTests
 					auto futureOp = Techniques::CreateFullViewportOperator(
 						_apparatus->_lightingOperatorCollection,
 						Techniques::FullViewportOperatorSubType::DisableDepth,
-						"xleres/TechniqueLibrary/basic/basic.pixel.hlsl:blackOpaque",
+						BASIC_PIXEL_HLSL ":blackOpaque",
 						ParameterBox{},
-						"xleres/TechniqueLibrary/LightingEngine/general-operator.pipeline:GraphicsMain",
+						GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
 						outputStates,
 						{});
 					if (auto* op = futureOp->TryActualize())

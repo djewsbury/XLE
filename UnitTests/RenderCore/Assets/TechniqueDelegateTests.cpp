@@ -72,9 +72,9 @@ namespace UnitTests
 		std::make_pair(
 			"minimal_perpixel.graph",
 			::Assets::AsBlob(R"--(
-				import templates = "xleres/Nodes/Templates.pixel.sh"
+				import templates = "xleres/Objects/Templates.pixel.hlsl"
 				import output = "xleres/Nodes/Output.sh"
-				import materialParam = "xleres/Nodes/MaterialParam.sh"
+				import materialParam = "xleres/Objects/MaterialParam.hlsl"
 
 				auto Minimal_PerPixel(VSOUT geo) implements templates::PerPixel
 				{
@@ -135,10 +135,10 @@ namespace UnitTests
 		std::make_pair(
 			"spherical.graph",
 			::Assets::AsBlob(R"--(
-				import templates = "xleres/Nodes/Templates.pixel.sh"
+				import templates = "xleres/Objects/Templates.pixel.hlsl"
 				import output = "xleres/Nodes/Output.sh"
 				import basic = "xleres/Nodes/Basic.sh"
-				import materialParam = "xleres/Nodes/MaterialParam.sh"
+				import materialParam = "xleres/Objects/MaterialParam.hlsl"
 				import spherical_prefix = "spherical_prefix.hlsl"
 
 				GBufferValues PerPixelImplementation(
@@ -275,7 +275,7 @@ namespace UnitTests
 			"framework-entry.pixel.hlsl",
 			::Assets::AsBlob(R"--(
 				#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
-				#include "xleres/Nodes/Templates.pixel.sh"
+				#include "xleres/Objects/Templates.pixel.hlsl"
 				#include "spherical_prefix.hlsl"
 
 				#if (VULKAN!=1)

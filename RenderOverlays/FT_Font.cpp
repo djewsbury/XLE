@@ -18,6 +18,7 @@
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/FastParseValue.h"
+#include "../xleres/FileList.h"
 #include <set>
 #include <algorithm>
 #include <assert.h>
@@ -284,9 +285,8 @@ namespace RenderOverlays
 		if (error)
 			Throw(::Exceptions::BasicLabel("Freetype font library failed to initialize (error code: %i)", error));
 
-		const char* fontCfg = "xleres/DefaultResources/fonts/fonts.dat";
-		_nameMap = LoadFontConfigFile(fontCfg);
-		_nameMapDepVal = ::Assets::GetDepValSys().Make(fontCfg);
+		_nameMapDepVal = ::Assets::GetDepValSys().Make(FONTS_DAT);
+		_nameMap = LoadFontConfigFile(FONTS_DAT);
 	}
 
 	FTFontResources::~FTFontResources()

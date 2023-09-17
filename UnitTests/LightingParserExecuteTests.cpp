@@ -38,7 +38,7 @@
 static const char* s_colorFromSelectorShaderFile = R"--(
 	#include "xleres/TechniqueLibrary/Framework/VSOUT.hlsl"
 	#include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
-	#include "xleres/Nodes/Templates.pixel.sh"
+	#include "xleres/Objects/Templates.pixel.hlsl"
 
 	GBufferValues PerPixel(VSOUT geo)
 	{

@@ -450,7 +450,7 @@ namespace RenderOverlays
 		usi1.BindImmediateData(0, "ControlUniforms"_h);
 		auto futureUpsampleOperator = RenderCore::Techniques::CreateComputeOperator(
 			pool,
-			"xleres/TechniqueLibrary/RenderOverlays/dd/hierarchical-blur.compute.hlsl" ":main",
+			RENDEROVERLAYS_HIERARCHICAL_BLUR_HLSL ":main",
 			ParameterBox{},
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 			usi1);
