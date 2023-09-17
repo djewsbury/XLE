@@ -6,25 +6,15 @@
 
 #include "VisLayerController.h"
 #include "LayerControl.h"
-#include "GUILayerUtil.h"
+#include "EngineDevice.h"
 #include "NativeEngineDevice.h"
+#include "../../SceneEngine/BasicLightingStateDelegate.h"
 #include "../ToolsRig/VisualisationUtils.h"
-#include "../ToolsRig/ModelVisualisation.h"
-#include "../ToolsRig/MaterialVisualisation.h"
-#include "../ToolsRig/IManipulator.h"
 #include "../ToolsRig/BasicManipulators.h"
 #include "../ToolsRig/PreviewSceneRegistry.h"
 #include "../ToolsRig/ToolsRigServices.h"
 #include "../ToolsRig/MiscUtils.h"
-#include "../../OSServices/WinAPI/InputTranslator.h"
-#include "../../PlatformRig/FrameRig.h"
-#include "../../PlatformRig/OverlaySystem.h"
-#include "../../RenderOverlays/DebuggingDisplay.h"
-#include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
-#include "../../RenderCore/Assets/MaterialScaffold.h"
-#include "../../SceneEngine/IScene.h"
-#include "../../Utility/StringFormat.h"
 #include <iomanip>
 
 using namespace System;
@@ -41,18 +31,6 @@ namespace GUILayer
 		std::shared_ptr<ToolsRig::VisAnimationState> _animState;
 		std::shared_ptr<ToolsRig::VisOverlayController> _overlayBinder;
 		std::shared_ptr<::Assets::OperationContext> _loadingContext;
-
-		std::shared_ptr<ToolsRig::DeferredCompiledShaderPatchCollection> _patchCollection;
-
-		void ApplyPatchCollection()
-		{
-			auto* scene = _overlayBinder->TryGetScene();
-			if (!scene) return;		// note that this will fail if the scene hasn't completed loading yet
-
-			auto* patchCollectionScene = dynamic_cast<ToolsRig::IPatchCollectionVisualizationScene*>(scene);
-			if (patchCollectionScene)
-				patchCollectionScene->SetPatchCollection(_patchCollection->GetFuture());
-		}
     };
 
 	VisMouseOver^ VisLayerController::MouseOver::get()
@@ -68,13 +46,11 @@ namespace GUILayer
 	void VisLayerController::SetScene(ModelVisSettings^ settings)
 	{
 		_pimpl->_overlayBinder->SetScene(*settings->ConvertToNative());
-		// _pimpl->ApplyPatchCollection();
 	}
 
 	void VisLayerController::SetScene(MaterialVisSettings^ settings)
 	{
 		_pimpl->_overlayBinder->SetScene(*settings->ConvertToNative());
-		// _pimpl->ApplyPatchCollection();
 	}
 
 	void VisLayerController::SetPreviewRegistryScene(System::String^ name)
@@ -85,7 +61,32 @@ namespace GUILayer
 		auto nativeName = clix::marshalString<clix::E_UTF8>(name);
 		auto scene = ToolsRig::Services::GetPreviewSceneRegistry().CreateScene(MakeStringSection(nativeName), drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, _pimpl->_loadingContext);
 		_pimpl->_overlayBinder->SetScene(std::move(scene));
-		// _pimpl->ApplyPatchCollection();
+	}
+
+	void VisLayerController::SetEnvSettings(System::String^ mountedEnvSettings)
+	{
+		_pimpl->_overlayBinder->SetEnvSettings(clix::marshalString<clix::E_UTF8>(mountedEnvSettings));
+	}
+
+	static RenderCore::Techniques::UtilityDelegateType AsUtilityDelegateType(UtilityRenderingType renderingType)
+	{
+		switch (renderingType) {
+		default:
+		case UtilityRenderingType::FlatColor: return RenderCore::Techniques::UtilityDelegateType::FlatColor;
+		case UtilityRenderingType::CopyDiffuseAlbedo: return RenderCore::Techniques::UtilityDelegateType::CopyDiffuseAlbedo;
+		case UtilityRenderingType::CopyWorldSpacePosition: return RenderCore::Techniques::UtilityDelegateType::CopyWorldSpacePosition;
+		case UtilityRenderingType::CopyWorldSpaceNormal: return RenderCore::Techniques::UtilityDelegateType::CopyWorldSpaceNormal;
+		case UtilityRenderingType::CopyRoughness: return RenderCore::Techniques::UtilityDelegateType::CopyRoughness;
+		case UtilityRenderingType::CopyMetal: return RenderCore::Techniques::UtilityDelegateType::CopyMetal;
+		case UtilityRenderingType::CopySpecular: return RenderCore::Techniques::UtilityDelegateType::CopySpecular;
+		case UtilityRenderingType::CopyCookedAO: return RenderCore::Techniques::UtilityDelegateType::CopyCookedAO;
+		case UtilityRenderingType::SolidWireframe: return RenderCore::Techniques::UtilityDelegateType::SolidWireframe;
+		}
+	}
+
+	void VisLayerController::SetUtilityRenderingType(UtilityRenderingType renderingType)
+	{
+		_pimpl->_overlayBinder->SetEnvSettings(SceneEngine::CreateUtilityLightingStateDelegate(AsUtilityDelegateType(renderingType)));
 	}
 
 	void VisLayerController::SetOverlaySettings(VisOverlaySettings^ settings)
@@ -96,17 +97,6 @@ namespace GUILayer
 	VisOverlaySettings^ VisLayerController::GetOverlaySettings()
 	{
 		return VisOverlaySettings::ConvertFromNative(_pimpl->_visOverlay->GetOverlaySettings());
-	}
-
-	void VisLayerController::SetPatchCollectionOverrides(CompiledShaderPatchCollectionWrapper^ patchCollection)
-	{
-		if (patchCollection) {
-			_pimpl->_patchCollection = patchCollection->_patchCollection.GetNativePtr();
-		} else {
-			_pimpl->_patchCollection = nullptr;
-		}
-
-		_pimpl->ApplyPatchCollection();
 	}
 
 	void VisLayerController::ResetCamera()
@@ -151,7 +141,6 @@ namespace GUILayer
 		_pimpl->_loadingContext = ToolsRig::CreateLoadingContext();
 
 		_pimpl->_modelLayer = ToolsRig::CreateSimpleSceneOverlay(immediateDrawableApparatus, lightingEngineApparatus, drawingApparatus->_deformAccelerators);
-		// _pimpl->_modelLayer->Set(ToolsRig::VisEnvSettings{});
 		_pimpl->_modelLayer->Set(_pimpl->_camera);
 
 		_pimpl->_visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(

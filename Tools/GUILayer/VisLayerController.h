@@ -20,6 +20,22 @@ namespace GUILayer
 	ref class TechniqueDelegateWrapper;
 	ref class CompiledShaderPatchCollectionWrapper;
 
+	public ref class VisLayerControllerCamera
+	{
+		enum class Type { Default, Character };
+
+		[DefaultValue(Type::Default)]
+        property Type OverallType;
+	};
+
+	public enum class UtilityRenderingType
+	{
+		FlatColor,
+		CopyDiffuseAlbedo, CopyWorldSpacePosition, CopyWorldSpaceNormal,
+		CopyRoughness, CopyMetal, CopySpecular, CopyCookedAO,
+		SolidWireframe
+	};
+
 	public ref class VisLayerController : public IOnEngineShutdown
     {
 	public:
@@ -30,10 +46,11 @@ namespace GUILayer
 		void SetScene(MaterialVisSettings^ settings);
 		void SetPreviewRegistryScene(System::String^ name);
 
+		void SetEnvSettings(System::String^ mountedEnvSettings);
+		void SetUtilityRenderingType(UtilityRenderingType);
+
 		void SetOverlaySettings(VisOverlaySettings^ settings);
 		VisOverlaySettings^ GetOverlaySettings();
-
-		void SetPatchCollectionOverrides(CompiledShaderPatchCollectionWrapper^ patchCollection);
 
 		void ResetCamera();
 

@@ -11,6 +11,7 @@
 #include "../Assets/AssetsCore.h"
 
 namespace RenderCore { namespace LightingEngine { struct SunSourceFrustumSettings; struct ScreenSpaceReflectionsOperatorDesc; }}
+namespace RenderCore { namespace Techniques { enum class UtilityDelegateType; }}
 namespace Utility { class ParameterBox; }
 namespace Utility { namespace ImpliedTyping { class TypeDesc; }}
 
@@ -21,6 +22,8 @@ namespace SceneEngine
     /// ISceneParser that will hook into an EnvironmentSettings object.
     /// Derived classes should implement the accessor GetEnvSettings().
     ::Assets::PtrToMarkerPtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings);
+
+    std::shared_ptr<ILightingStateDelegate> CreateUtilityLightingStateDelegate(RenderCore::Techniques::UtilityDelegateType);
 
     RenderCore::LightingEngine::SunSourceFrustumSettings    DefaultSunSourceFrustumSettings();
 

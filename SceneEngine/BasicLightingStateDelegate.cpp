@@ -478,6 +478,48 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    class UtilityLightingStateDelegate : public ILightingStateDelegate
+    {
+    public:
+        void        PreRender(
+            const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, 
+            RenderCore::LightingEngine::ILightScene& lightScene)
+        {}
+        void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene)
+        {}
+
+        void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>)
+        {}
+        void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+        {}
+
+        void        BindCfg(MergedLightingEngineCfg& cfg)
+        {
+            cfg.SetOperator(_techDesc);
+        }
+
+        std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
+            RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext)
+        {
+            return nullptr;
+        }
+
+        UtilityLightingStateDelegate(RenderCore::Techniques::UtilityDelegateType utilType)
+        {
+            _techDesc._type = utilType;
+        }
+
+    private:
+        RenderCore::LightingEngine::UtilityLightingTechniqueDesc _techDesc;
+    };
+
+    std::shared_ptr<ILightingStateDelegate> CreateUtilityLightingStateDelegate(RenderCore::Techniques::UtilityDelegateType utilType)
+    {
+        return std::make_shared<UtilityLightingStateDelegate>(utilType);
+    }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
     RenderCore::LightingEngine::SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
     {
         RenderCore::LightingEngine::SunSourceFrustumSettings result;
