@@ -64,3 +64,6 @@
 [submodule "Foreign/ctti"]
 	path = Foreign/ctti
 	url = git@github.com:djewsbury/ctti.git
+[submodule "Foreign/FastLZ"]
+	path = Foreign/FastLZ
+	url = git@github.com:ariya/FastLZ.git
