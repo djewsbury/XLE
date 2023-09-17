@@ -65,7 +65,9 @@ namespace Assets
 			Type InvokeAssetConstructor(Params&&... params)
 		{
 			using T = std::tuple<Params...>;
-			if constexpr (std::is_constructible_v<Type, Params...> && std::tuple_size_v<T> == 1 && !std::is_integral_v<std::tuple_element_t<0, T>>) {
+			if constexpr (std::is_same_v<T, std::tuple<>>) {
+				return std::make_shared<typename Type::element_type>();
+			} else if constexpr (std::is_constructible_v<Type, Params...> && std::tuple_size_v<T> == 1 && !std::is_integral_v<std::tuple_element_t<0, T>>) {
 				return Type { std::forward<Params>(params)... };		// constructing a smart ptr from another smart ptr
 			} else
 				return std::make_shared<typename Type::element_type>(std::forward<Params>(params)...);
@@ -75,7 +77,9 @@ namespace Assets
 			Type InvokeAssetConstructor(Params&&... params)
 		{
 			using T = std::tuple<Params...>;
-			if constexpr (std::is_constructible_v<Type, Params...> && std::tuple_size_v<T> == 1 && !std::is_integral_v<std::tuple_element_t<0, T>>) {
+			if constexpr (std::is_same_v<T, std::tuple<>>) {
+				return std::make_unique<typename Type::element_type>();
+			} else if constexpr (std::is_constructible_v<Type, Params...> && std::tuple_size_v<T> == 1 && !std::is_integral_v<std::tuple_element_t<0, T>>) {
 				return Type { std::forward<Params>(params)... };		// constructing a smart ptr from another smart ptr
 			} else
 				return std::make_unique<typename Type::element_type>(std::forward<Params>(params)...);
