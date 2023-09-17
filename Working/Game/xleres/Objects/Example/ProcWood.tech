@@ -2,7 +2,7 @@
 import wood_04_g = "xleres/objects/example/procwood/wood_04_g.sh"
 import surface = "xleres/surface.h"
 import output = "xleres/Nodes/Output.sh"
-import materialparam = "xleres/Nodes/MaterialParam.sh"
+import materialparam = "xleres/Objects/MaterialParam.hlsl"
 
 void main()
 {
@@ -208,7 +208,7 @@ float4 stochastic_main(VSOUT geo,
 
 
 /* <<Chunk:TechniqueConfig:main>>--(
-~Inherit; xleres/TechniqueLibrary/Config/Legacy/IllumLegacy.tech
+~Inherit; xleres/Config/Legacy/IllumLegacy.tech
 ~Forward
     ~Parameters
         ~Material

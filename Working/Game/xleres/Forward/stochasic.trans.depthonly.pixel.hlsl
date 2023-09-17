@@ -5,7 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../TechniqueLibrary/Framework/MainGeometry.hlsl"
-#include "../Objects/IllumShader/PerPixel.h"
+#include "../Objects/default.pixel.hlsl"
 #include "../TechniqueLibrary/Framework/Surface.hlsl"
 #include "Transparency/depthonlyutil.hlsl"
 

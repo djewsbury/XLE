@@ -21,7 +21,7 @@
 #include "OceanLighting.hlsl"
 #include "OceanRenderingConstants.hlsl"
 
-#include "../Effects/Sky.pixel.hlsl"
+#include "../Effects/sky.pixel.hlsl"
 #include "../../Framework/MainGeometry.hlsl"
 #include "../../Framework/CommonResources.hlsl"
 #include "../../Framework/Surface.hlsl"

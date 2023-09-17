@@ -1,0 +1,102 @@
+#include "../../Config/shadow-template.pipeline"
+
+DescriptorSet PerLightDescriptors
+{
+	UniformBuffer GlobalTransform				// 0
+	{
+		float4x4 WorldToClip;
+		float4 FrustumCorners[4];
+		float3 WorldSpaceView;
+		float FarClip;
+		float4 MinimalProjection;
+		float4x4 CameraBasis;
+	};
+
+	UniformBuffer LightBuffer;					// 1	
+	UniformBuffer Debugging;					// 2
+
+	UniformBuffer d0;	// 3
+	UniformBuffer d1;	// 4
+	UniformBuffer d2;	// 5
+
+	SubpassInput GBuffer_Diffuse;				// 6
+	SubpassInput GBuffer_Normals;				// 7
+	SubpassInput GBuffer_Parameters;			// 8
+	SubpassInput DepthTexture;					// 9
+
+	SampledTexture StaticShadowProbeDatabase;	// 10
+	StorageBuffer StaticShadowProbeProperties;	// 11
+	SampledTexture d5;	// 12
+
+	Sampler DefaultSampler;						// 13
+	Sampler ClampingSampler;					// 14
+	Sampler AnisotropicSampler;					// 15
+	Sampler PointClampSampler;					// 16
+};
+
+DescriptorSet SharedDescriptors
+{
+	UniformBuffer cb0;						// 0
+	SampledTexture NoiseTexture;			// 1
+	Sampler ShadowSampler					// 2
+	{
+		Filter = ComparisonBilinear,
+		AddressU = Border,
+		AddressV = Border,
+		Comparison = GreaterEqual
+	};
+	Sampler ShadowDepthSampler				// 3
+	{
+		Filter = Bilinear,
+		AddressU = Clamp,
+		AddressV = Clamp
+	};
+};
+
+DescriptorSet DMShadow
+{
+	UniformBuffer ShadowProjection;				// 0 (either ArbitraryShadowProjection or OrthogonalShadowProjection)
+	UniformBuffer ShadowResolveParameters;		// 1
+	UniformBuffer ScreenToShadowProjection;		// 2
+	SampledTexture DMShadow;					// 3
+	SampledTexture d0;
+	SampledTexture d1;
+};
+
+DescriptorSet RTShadow
+{
+	UniformBuffer ScreenToRTShadow;				// 0
+	UniformBuffer spacer0;						// 1
+	UniformBuffer spacer1;						// 2
+	SampledTexture RTShadow_ListHead;			// 3
+	SampledTexture RTShadow_LinkedLists;		// 4
+	SampledTexture RTShadow_Triangles;			// 5
+};
+
+DescriptorSet Numeric {};
+
+PipelineLayout LightingOperator
+{
+	DescriptorSet Numeric;					// 0
+	DescriptorSet PerLightDescriptors;			// 1
+	DescriptorSet SharedDescriptors;			// 2
+	DescriptorSet ShadowTemplate;				// 3
+};
+
+DescriptorSet General
+{
+	Sampler FixedSampler
+	{
+		Filter = Bilinear,
+		AddressU = Wrap,
+		AddressV = Wrap
+	};
+};
+
+PipelineLayout LightingOperatorWithAuto
+{
+	AutoDescriptorSet General;
+	DescriptorSet PerLightDescriptors;
+	DescriptorSet SharedDescriptors;
+	DescriptorSet ShadowTemplate;
+};

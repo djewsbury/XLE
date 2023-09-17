@@ -11,7 +11,7 @@
 #include "../../TechniqueLibrary/Framework/VSOUT.hlsl"
 #include "../../TechniqueLibrary/Framework/LegacySurface.hlsl"
 #include "../../TechniqueLibrary/Framework/gbuffer.hlsl"
-#include "../../BasicMaterial.hlsl"
+#include "../../Objects/BasicMaterial.hlsl"
 #include "../../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 // #include "../../TechniqueLibrary/Math/perlinnoise.hlsl"
 #include "../../TechniqueLibrary/Utility/Colour.hlsl"

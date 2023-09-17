@@ -1,6 +1,6 @@
 // CompoundDocument:1
 import color = "xleres/Nodes/Color.sh"
-import templates = "xleres/Nodes/Templates.pixel.sh"
+import templates = "xleres/Objects/Templates.pixel.hlsl"
 import woodrings002 = "xleres/objects/example/procwood/woodrings002.graph"
 import woodgnarlgrainstain = "xleres/objects/example/procwood/woodgnarlgrainstain.graph"
 import woodplanks = "xleres/objects/example/procwood/woodplanks.graph"

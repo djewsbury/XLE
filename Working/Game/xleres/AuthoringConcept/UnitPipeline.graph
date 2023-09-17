@@ -1,5 +1,5 @@
 // CompoundDocument:1
-import templates = "xleres/Nodes/Templates.pixel.sh"
+import templates = "xleres/Objects/Templates.pixel.hlsl"
 import unit = "game/xleres/authoringconcept/unit.graph"
 
 float4 main(VSOUT geo, float4 inputColor) implements templates::AmendColor

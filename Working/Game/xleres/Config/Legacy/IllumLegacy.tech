@@ -1,0 +1,130 @@
+
+Forward=~
+	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches-forward.pixel.hlsl:forward
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+Deferred=~
+	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Deferred
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:deferred
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+OrderIndependentTransparency=~
+	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	PixelShader=xleres/Forward/Transparency/illum.pixel.hlsl:main_oi
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+StochasticTransparency=~
+	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
+	Selectors=~
+		STOCHASTIC_SAMPLE_COUNT=8
+		STOCHASTIC_TRANS_PRIMITIVEID
+		STOCHASTIC_TRANS_OPACITY
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	PixelShader=xleres/Forward/Transparency/illum.pixel.hlsl:main_stochastic
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+DepthWeightedTransparency=~
+	Inherit=~; ../Illum.tech:IllumShared; ../Shared.tech:Forward
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	PixelShader=xleres/Forward/Transparency/depthweighted.hlsl:main_depth_weighted_oi
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	~~ "Silhouette" related rendering
+	~~      for example, for rendering to the shadow depths texture, or doing a pre-depth pass.
+
+DepthOnly=~
+	Inherit=~; ../Illum.tech:Silhouette
+	Selectors=~
+		MAT_ALPHA_TEST_PREDEPTH
+		STOCHASTIC_TRANS
+		STOCHASTIC_TRANS_PRIMITIVEID
+		STOCHASTIC_TRANS_OPACITY
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthonly
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+ShadowGen=~
+	Inherit=~; ../Illum.tech:Silhouette
+	Selectors=~
+		MAT_ALPHA_DITHER_SHADOWS
+		FRUSTUM_FILTER=63
+		SHADOW_CASCADE_MODE
+		VSOUT_HAS_SHADOW_PROJECTION_COUNT=6
+		SHADOW_ENABLE_NEAR_CASCADE
+	VertexShader=xleres/shadowgen/depthonly.vertex.hlsl:main
+	GeometryShader=xleres/shadowgen/depthonly.geo.hlsl:main
+	PixelShader=xleres/shadowgen/depthonly.pixel.hlsl:main
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+RayTest=~
+	Inherit=~; ../Illum.tech:Silhouette
+	Selectors=~
+		VSOUT_HAS_WORLD_POSITION=1
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	GeometryShader=xleres/TechniqueLibrary/Standard/raytest.geo.hlsl:triangles
+	PixelShader=null
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+WriteTriangleIndex=~
+	Inherit=~; ../Illum.tech:Silhouette
+	Selectors=~
+		VSOUT_HAS_WORLD_POSITION=0
+		SHADOW_CASCADE_MODE
+	VertexShader=xleres/shadowgen/rtwritetiles.hlsl:vs_writetris
+	GeometryShader=xleres/shadowgen/rtwritetiles.hlsl:gs_writetris
+	PixelShader=null
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+VisNormals=~
+	Selectors=~
+		VSOUT_HAS_WORLD_POSITION=1
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	GeometryShader=xleres/ToolsRig/Vis/geowires.geo.hlsl:NormalsAndTangents
+	PixelShader=xleres/TechniqueLibrary/Basic/basic.pixel.hlsl:PC
+	Preconfiguration=xleres/Config/Preconfiguration.hlsl
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+VisWireframe=~
+	Selectors=~
+		VSOUT_HAS_WORLD_POSITION=1
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+	GeometryShader=xleres/ToolsRig/Vis/solidwireframe.geo.hlsl:main
+	PixelShader=xleres/ToolsRig/Vis/solidwireframe.pixel.hlsl:main
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Technique=~
+    Forward = Forward
+    Deferred = Deferred
+    OrderIndependentTransparency = OrderIndependentTransparency
+    StochasticTransparency = StochasticTransparency
+    DepthWeightedTransparency = DepthWeightedTransparency
+    DepthOnly = DepthOnly
+    ShadowGen = ShadowGen
+    RayTest = RayTest
+    WriteTriangleIndex = WriteTriangleIndex
+    VisNormals = VisNormals
+    VisWireframe = VisWireframe
+
+    CBLayout = <:(
+        float3  MaterialDiffuse = {1.f,1.f,1.f}c;
+        float   Opacity = 1;
+        float3  MaterialSpecular = {1.f,1.f,1.f}c;
+        float   AlphaThreshold = .33f;
+        float   RoughnessMin = 0.5f;
+        float   RoughnessMax = 1.f;
+        float   SpecularMin = 0.1f;
+        float   SpecularMax = 1.f;
+        float   MetalMin = 0.f;
+        float   MetalMax = 1.f;
+    ):>
+

@@ -1,5 +1,5 @@
 // CompoundDocument:1
-import templates = "xleres/Nodes/Templates.pixel.sh"
+import templates = "xleres/Objects/Templates.pixel.hlsl"
 import basic = "game/xleres/Nodes/Basic.sh"
 import utils = "game/xleres/authoringconcept/utils.sh"
 import surface = "game/xleres/surface.h"

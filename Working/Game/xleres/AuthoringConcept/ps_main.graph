@@ -1,11 +1,11 @@
 // CompoundDocument:1
-import templates = "xleres/Nodes/Templates.pixel.sh"
+import templates = "xleres/Objects/Templates.pixel.hlsl"
 import texture = "xleres/Nodes/Texture.sh"
 import output = "xleres/Nodes/Output.sh"
 import surface = "xleres/surface.h"
 import world = "game/xleres/authoringconcept/world.graph"
 import basic = "game/xleres/Nodes/Basic.sh"
-import materialparam = "xleres/Nodes/Materialparam.sh"
+import materialparam = "xleres/Objects/MaterialParam.hlsl"
 import unitpipeline = "game/xleres/authoringconcept/unitpipeline.graph"
 
 GBufferValues ps_main(VSOUT geo) implements templates::PerPixel

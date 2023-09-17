@@ -1,5 +1,5 @@
 // CompoundDocument:1
-#include "xleres/TechniqueLibrary/System/Prefix.hlsl"
+#include "xleres/TechniqueLibrary/Framework/Prefix.hlsl"
 
 #include "xleres/Nodes/Basic.sh"
 #include "xleres/TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"

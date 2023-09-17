@@ -1,0 +1,200 @@
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	~~ "Silhouette" configuration just has the minimum support to get the correct geometry
+	~~ silhouette (plus alpha testing)
+
+Silhouette=~
+	Inherit=~; Shared.tech:Skinnable
+	Preconfiguration=xleres/Config/Preconfiguration.hlsl
+
+SilhouetteDepthOnly=~
+	Inherit=~; Shared.tech:Skinnable
+	Preconfiguration=xleres/Config/PreconfigurationDepthOnly.hlsl
+
+VertexIdViewInstancing=~
+	Selectors=~
+		VERTEX_ID_VIEW_INSTANCING=1
+		GEO_HAS_INSTANCE_ID=1
+		VSOUT_HAS_RENDER_TARGET_INDEX=1
+
+VS_NoPatches=~
+	Inherit=~; Silhouette
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+
+VS_DeformVertex=~
+	Inherit=~; Silhouette
+	VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithVertexPatch
+
+VSDepthOnly_NoPatches=~
+	Inherit=~; SilhouetteDepthOnly
+	VertexShader=xleres/TechniqueLibrary/Standard/nopatches.vertex.hlsl:main
+
+VSDepthOnly_DeformVertex=~
+	Inherit=~; SilhouetteDepthOnly
+	VertexShader=xleres/TechniqueLibrary/Standard/main.vertex.hlsl:frameworkEntryWithVertexPatch
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ShadowGen_GSAmplify_Shared=~
+	Selectors=~
+		MAT_ALPHA_DITHER_SHADOWS
+		FRUSTUM_FILTER=63
+		SHADOW_CASCADE_MODE
+		VSOUT_HAS_SHADOW_PROJECTION_COUNT=6
+		SHADOW_ENABLE_NEAR_CASCADE
+	GeometryShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.geo.hlsl:main
+	Preconfiguration=xleres/TechniqueLibrary/Standard/ShadowGen/PreconfigurationShadowGen.hlsl
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+VSShadowGen_GSAmplify_NoPatches=~
+	Inherit=~; SilhouetteDepthOnly; ShadowGen_GSAmplify_Shared
+	VertexShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.vertex.hlsl:nopatches
+
+VSShadowGen_GSAmplify_DeformVertex=~
+	Inherit=~; SilhouetteDepthOnly; ShadowGen_GSAmplify_Shared
+	VertexShader=xleres/TechniqueLibrary/Standard/ShadowGen/shadowgen.vertex.hlsl:frameworkEntryWithVertexPatch
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+VSShadowProbe_NoPatches=~
+	Inherit=~; VS_NoPatches; VertexIdViewInstancing
+
+VSShadowProbe_DeformVertex=~
+	Inherit=~; VS_DeformVertex; VertexIdViewInstancing
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	~~ "Illum" style techniques
+	~~      -- these are techniques that are used when drawing the object into the main scene and we're drawing
+	~~      the object in it's "main" visual look -- with all of the assigned material, texture & lighting properties
+
+IllumShared=~
+	Inherit=~; Shared.tech:LegacyCommonMaterial; Shared.tech:System
+	Selectors=~
+		CLASSIFY_NORMAL_MAP
+		SKIP_MATERIAL_DIFFUSE=~; relevance=<:(value!=0):>
+
+Forward=~
+	Inherit=~; IllumShared; Shared.tech:Forward
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsForwardPlus
+
+Deferred=~
+	Inherit=~; IllumShared; Shared.tech:Deferred
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+DepthOnly=~
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+RayTest=~
+	Selectors=~
+		VSOUT_HAS_WORLD_POSITION=1
+		DEPTH_PLUS_NORMAL=1
+	GeometryShader=xleres/TechniqueLibrary/Standard/raytest.geo.hlsl:triangles
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Deferred_NoPatches=~
+	Inherit=~; Deferred
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:deferred
+
+Deferred_PerPixel=~
+	Inherit=~; Deferred
+	PixelShader=xleres/TechniqueLibrary/Standard/deferred.pixel.hlsl:frameworkEntry
+
+Deferred_PerPixelAndEarlyRejection=~
+	Inherit=~; Deferred
+	PixelShader=xleres/TechniqueLibrary/Standard/deferred.pixel.hlsl:frameworkEntryWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Forward_NoPatches=~
+	Inherit=~; Forward
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches-forward.pixel.hlsl:forward
+
+Forward_PerPixel=~
+	Inherit=~; Forward
+	PixelShader=xleres/TechniqueLibrary/Standard/forward.pixel.hlsl:frameworkEntry
+
+Forward_PerPixelAndEarlyRejection=~
+	Inherit=~; Forward
+	PixelShader=xleres/TechniqueLibrary/Standard/forward.pixel.hlsl:frameworkEntryWithEarlyRejection
+
+Forward_PerPixelCustomLighting=~
+	Inherit=~; Forward
+	PixelShader=xleres/TechniqueLibrary/Standard/forward.pixel.hlsl:frameworkEntryCustomLighting
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+DepthOnly_NoPatches=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthonly
+
+DepthOnly_EarlyRejection=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnlyWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+DepthPlus_NoPatches=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:depthPlus
+
+DepthPlus_PerPixel=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlus
+
+DepthPlus_PerPixelAndEarlyRejection=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:depthPlusWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+RayTest_NoPatches=~
+	Inherit=~; RayTest
+
+RayTest_EarlyRejection=~
+	Inherit=~; RayTest
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:frameworkEntryDepthOnlyWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Utility_NoPatches=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:utility
+
+Utility_PerPixel=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:utility
+
+Utility_PerPixelAndEarlyRejection=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:utilityWithEarlyRejection
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+SolidWireframe=~
+	Inherit=~; DepthOnly
+	GeometryShader=xleres/ToolsRig/Vis/solidwireframe.geo.hlsl:main
+	PixelShader=xleres/ToolsRig/Vis/solidwireframe.pixel.hlsl:main
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ProbePrepare_NoPatches=~
+	Inherit=~; Forward_NoPatches
+	Selectors=~
+		PROBE_PREPARE=1
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsProbePrepare
+
+ProbePrepare_PerPixel=~
+	Inherit=~; Forward_PerPixel
+	Selectors=~
+		PROBE_PREPARE=1
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsProbePrepare
+
+ProbePrepare_PerPixelAndEarlyRejection=~
+	Inherit=~; Forward_PerPixelAndEarlyRejection
+	Selectors=~
+		PROBE_PREPARE=1
+	PipelineLayout=xleres/Config/main.pipeline:GraphicsProbePrepare

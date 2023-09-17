@@ -1,10 +1,10 @@
 // CompoundDocument:1
-#include "xleres/TechniqueLibrary/System/Prefix.hlsl"
+#include "xleres/TechniqueLibrary/Framework/Prefix.hlsl"
 
 #include "xleres/Nodes/Texture.sh"
 #include "xleres/ToolsHelper/DecodeParametersTexture_ColoredSpecular.sh"
 #include "xleres/Nodes/Basic.sh"
-#include "xleres/Nodes/MaterialParam.sh"
+#include "xleres/Objects/MaterialParam.hlsl"
 #include "xleres/Nodes/Output.sh"
 
 
@@ -646,13 +646,13 @@ void SpecularWithMask(uint2 pixelCoords, float2 texCoord : TEXCOORD0, out float4
 			<VisualNodeId>11</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:Scale</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:Scale</FragmentArchiveName>
 			<NodeId>7</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>12</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:Add</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:Add</FragmentArchiveName>
 			<NodeId>8</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>13</VisualNodeId>
@@ -688,31 +688,31 @@ void SpecularWithMask(uint2 pixelCoords, float2 texCoord : TEXCOORD0, out float4
 			<VisualNodeId>18</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:Add</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:Add</FragmentArchiveName>
 			<NodeId>14</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>19</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:Scale</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:Scale</FragmentArchiveName>
 			<NodeId>15</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>20</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:Add</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:Add</FragmentArchiveName>
 			<NodeId>16</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>21</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:Scale</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:Scale</FragmentArchiveName>
 			<NodeId>17</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>22</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:Scale</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:Scale</FragmentArchiveName>
 			<NodeId>18</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>23</VisualNodeId>

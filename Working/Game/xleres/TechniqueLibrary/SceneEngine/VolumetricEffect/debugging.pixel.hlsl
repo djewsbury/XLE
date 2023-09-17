@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../TechniqueLibrary/RenderOverlays/dd/DebuggingPanels.hlsl"
+#include "../RenderOverlays/DebuggingPanels.hlsl"
 #include "../TechniqueLibrary/Framework/CommonResources.hlsl"
 
 Texture2DArray<float>		ShadowTextures	 	: register(t0);

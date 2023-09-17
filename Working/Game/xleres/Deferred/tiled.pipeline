@@ -1,5 +1,5 @@
 
-#include "../TechniqueLibrary/Config/sequencer.pipeline"
+#include "../Config/sequencer.pipeline"
 
 DescriptorSet TiledDS
 {

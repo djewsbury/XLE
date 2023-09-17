@@ -7,7 +7,7 @@
 #if !defined(NODES_OUTPUT_H)
 #define NODES_OUTPUT_H
 
-#include "MaterialParam.sh"
+#include "../Objects/MaterialParam.hlsl"
 #include "../TechniqueLibrary/Framework/gbuffer.hlsl"
 
 GBufferValues Output_PerPixel(

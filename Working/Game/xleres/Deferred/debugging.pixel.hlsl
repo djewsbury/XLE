@@ -7,8 +7,8 @@
 #include "../TechniqueLibrary/Math/ProjectionMath.hlsl"
 #include "../TechniqueLibrary/Framework/CommonResources.hlsl"
 #include "../TechniqueLibrary/Math/TextureAlgorithm.hlsl"
-#include "../TechniqueLibrary/RenderOverlays/dd/DebuggingShapes.hlsl"
-#include "../TechniqueLibrary/RenderOverlays/dd/DebuggingPanels.hlsl"
+#include "../RenderOverlays/DebuggingShapes.hlsl"
+#include "../RenderOverlays/DebuggingPanels.hlsl"
 #include "../TechniqueLibrary/Framework/gbuffer.hlsl"
 
 Texture2D<float4>		LightOutput : register(t0);

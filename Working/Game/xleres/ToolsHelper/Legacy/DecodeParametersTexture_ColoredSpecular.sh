@@ -1,8 +1,8 @@
 // CompoundDocument:1
-#include "xleres/TechniqueLibrary/System/Prefix.hlsl"
+#include "xleres/TechniqueLibrary/Framework/Prefix.hlsl"
 
 #include "xleres/Nodes/Basic.sh"
-#include "xleres/Nodes/MaterialParam.sh"
+#include "xleres/Objects/MaterialParam.hlsl"
 #include "xleres/Nodes/Color.sh"
 
 
@@ -303,13 +303,13 @@ void DecodeParametersTexture_ColoredSpecular(float2 metalRange, float2 roughness
 			<VisualNodeId>3</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:CommonMaterialParam_Make</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:CommonMaterialParam_Make</FragmentArchiveName>
 			<NodeId>3</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>4</VisualNodeId>
 		</Node>
 		<Node>
-			<FragmentArchiveName>xleres/Nodes\MaterialParam.sh:ScaleByRange</FragmentArchiveName>
+			<FragmentArchiveName>xleres/Objects\MaterialParam.hlsl:ScaleByRange</FragmentArchiveName>
 			<NodeId>4</NodeId>
 			<NodeType>Procedure</NodeType>
 			<VisualNodeId>5</VisualNodeId>

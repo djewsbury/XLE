@@ -22,5 +22,5 @@
             VSOUT_HAS_TEXCOORD=1
         ~GlobalEnvironment
     VertexShader=xleres/ocean/shallowsurface.hlsl:vs_main
-    GeometryShader=xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.geo.hlsl:main
-    PixelShader=xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.pixel.hlsl:main
+    GeometryShader=xleres/ToolsRig/Vis/solidwireframe.geo.hlsl:main
+    PixelShader=xleres/ToolsRig/Vis/solidwireframe.pixel.hlsl:main
