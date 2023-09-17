@@ -811,16 +811,14 @@ namespace RenderCore { namespace Techniques
 				entriesToCheck.reserve(5);
 				entriesToCheck.emplace_back("VS_NoPatches", &_vsNoPatchesSrc);
 				entriesToCheck.emplace_back("VS_DeformVertex", &_vsDeformVertexSrc);
-				if (utilityType == UtilityDelegateType::FlatColor) {
-					entriesToCheck.emplace_back("FlatColor_NoPatches", &_psNoPatchesSrc);
-					entriesToCheck.emplace_back("FlatColor_NoPatches", &_psPerPixelSrc);
-					entriesToCheck.emplace_back("FlatColor_PerPixelAndEarlyRejection", &_psPerPixelAndEarlyRejection);
-				} else if (utilityType == UtilityDelegateType::CopyDiffuseAlbedo) {
-					entriesToCheck.emplace_back("CopyDiffuseAlbedo_NoPatches", &_psNoPatchesSrc);
-					entriesToCheck.emplace_back("CopyDiffuseAlbedo_PerPixel", &_psPerPixelSrc);
-					entriesToCheck.emplace_back("CopyDiffuseAlbedo_PerPixelAndEarlyRejection", &_psPerPixelAndEarlyRejection);
+				if (utilityType == UtilityDelegateType::SolidWireframe) {
+					entriesToCheck.emplace_back("SolidWireframe", &_psNoPatchesSrc);
+					entriesToCheck.emplace_back("SolidWireframe", &_psPerPixelSrc);
+					entriesToCheck.emplace_back("SolidWireframe", &_psPerPixelAndEarlyRejection);
 				} else {
-					assert(0);
+					entriesToCheck.emplace_back("Utility_NoPatches", &_psNoPatchesSrc);
+					entriesToCheck.emplace_back("Utility_PerPixel", &_psPerPixelSrc);
+					entriesToCheck.emplace_back("Utility_PerPixelAndEarlyRejection", &_psPerPixelAndEarlyRejection);
 				}
 				_pipelineLayout = SetupTechniqueFileHelper(*_techniqueSet, entriesToCheck);
 			}
@@ -868,6 +866,7 @@ namespace RenderCore { namespace Techniques
 
 			TechniqueEntry mergedTechEntry = *vsTechEntry;
 			mergedTechEntry.MergeIn(*psTechEntry);
+			mergedTechEntry._selectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
 
 			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
 			return nascentDesc;
@@ -926,6 +925,20 @@ namespace RenderCore { namespace Techniques
 		UtilityDelegateType type)
 	{
 		TechniqueDelegate_Utility::ConstructToPromise(std::move(promise), techniqueSet, type);
+	}
+
+	std::optional<UtilityDelegateType> AsUtilityDelegateType(StringSection<> input)
+	{
+		if (XlEqString(input, "FlatColor")) return UtilityDelegateType::FlatColor;
+        if (XlEqString(input, "CopyDiffuseAlbedo")) return UtilityDelegateType::CopyDiffuseAlbedo;
+        if (XlEqString(input, "CopyWorldSpacePosition")) return UtilityDelegateType::CopyWorldSpacePosition;
+		if (XlEqString(input, "CopyWorldSpaceNormal")) return UtilityDelegateType::CopyWorldSpaceNormal;
+		if (XlEqString(input, "CopyRoughness")) return UtilityDelegateType::CopyRoughness;
+		if (XlEqString(input, "CopyMetal")) return UtilityDelegateType::CopyMetal;
+		if (XlEqString(input, "CopySpecular")) return UtilityDelegateType::CopySpecular;
+		if (XlEqString(input, "CopyCookedAO")) return UtilityDelegateType::CopyCookedAO;
+		if (XlEqString(input, "SolidWireframe")) return UtilityDelegateType::SolidWireframe;
+        return {};
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

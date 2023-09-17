@@ -133,6 +133,15 @@ float4 fill_gradient(float4 position : SV_Position, float2 texCoord : TEXCOORD0)
 	return float4(texCoord, 0, 1);
 }
 
+float4 fill_background(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
+{
+	uint2 xy = position.xy / 16;
+	if ((xy.x+xy.y) & 1) {
+		return float4(.025, .025, .025, 1);
+	} else
+		return float4(.0125, .0125, .0125, 1);
+}
+
 float4 PCT_Text( float4 input : SV_Position, float4 color : COLOR0, float2 texCoord : TEXCOORD0 ) : SV_Target0
 {
 	return float4(	color.rgb,

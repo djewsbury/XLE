@@ -9,6 +9,7 @@
 #include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../RenderCore/LightingEngine/SkyOperator.h"
+#include "../RenderCore/Techniques/TechniqueDelegates.h"        // for Techniques::UtilityDelegateType
 #include "../Formatters/IDynamicFormatter.h"
 #include "../Tools/EntityInterface/EntityInterface.h"
 #include "../Tools/ToolsRig/ToolsRigServices.h"
@@ -280,17 +281,24 @@ namespace SceneEngine
         }
 
         if (!_operatorResolveContext._forwardLightingOperators._objects.empty()) {
-            if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1 || !_operatorResolveContext._deferredLightingOperators._objects.empty())
+            if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1 || !_operatorResolveContext._deferredLightingOperators._objects.empty() || !_operatorResolveContext._utilityLightingOperator._objects.empty())
                 Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
 
             cfg.SetOperator(_operatorResolveContext._forwardLightingOperators._objects[0].second);
         }
 
         if (!_operatorResolveContext._deferredLightingOperators._objects.empty()) {
-            if (_operatorResolveContext._deferredLightingOperators._objects.size() != 1 || !_operatorResolveContext._forwardLightingOperators._objects.empty())
+            if (_operatorResolveContext._deferredLightingOperators._objects.size() != 1 || !_operatorResolveContext._forwardLightingOperators._objects.empty() || !_operatorResolveContext._utilityLightingOperator._objects.empty())
                 Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
 
             cfg.SetOperator(_operatorResolveContext._deferredLightingOperators._objects[0].second);
+        }
+
+        if (!_operatorResolveContext._utilityLightingOperator._objects.empty()) {
+            if (_operatorResolveContext._utilityLightingOperator._objects.size() != 1 || !_operatorResolveContext._forwardLightingOperators._objects.empty() || !_operatorResolveContext._deferredLightingOperators._objects.empty())
+                Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._utilityLightingOperator._objects[0].second);
         }
 
         if (!_operatorResolveContext._multiSampleOperators._objects.empty()) {
@@ -532,6 +540,12 @@ namespace SceneEngine
     {
         _deferredLightingOperator._desc = operatorDesc;
         AddToOperatorList(_deferredLightingOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::UtilityLightingTechniqueDesc& operatorDesc)
+    {
+        _utilityLightingOperator._desc = operatorDesc;
+        AddToOperatorList(_utilityLightingOperator);
     }
 
     void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ToneMapAcesOperatorDesc& operatorDesc)
@@ -1036,6 +1050,18 @@ namespace SceneEngine
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         // no properties yet
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::UtilityLightingTechniqueDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "Type"_h:
+            SetViaEnumFn<RenderCore::Techniques::UtilityDelegateType, RenderCore::Techniques::AsUtilityDelegateType>(desc, &RenderCore::LightingEngine::UtilityLightingTechniqueDesc::_type, data, type);
+            return true;
+        }
         return false;
     }
 

@@ -9,6 +9,7 @@
 #include "LightingEngineApparatus.h"
 #include "ForwardLightingDelegate.h"		// for construction
 #include "DeferredLightingDelegate.h"		// for construction
+#include "UtilityLightingDelegate.h"		// for construction
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/Techniques.h"
@@ -1001,7 +1002,7 @@ namespace RenderCore { namespace LightingEngine
 		// Convenience function to select from one of the built-in lighting techniques
 		// We'll scan the list of operator descs and decide on a technique type from what we
 		// find there
-		bool foundForwardTechnique = false, foundDeferredTechnique = false;
+		bool foundForwardTechnique = false, foundDeferredTechnique = false, foundUtility = false;
 		auto* op = globalOperators;
 		while (op) {
 			switch (op->_structureType) {
@@ -1011,21 +1012,30 @@ namespace RenderCore { namespace LightingEngine
 			case TypeHashCode<DeferredLightingTechniqueDesc>:
 				foundDeferredTechnique = true;
 				break;
+			case TypeHashCode<UtilityLightingTechniqueDesc>:
+				foundUtility = true;
+				break;
 			}
 			op = op->_next;
 		}
-		if (foundForwardTechnique && foundDeferredTechnique)
+		if ((unsigned(foundForwardTechnique) + unsigned(foundDeferredTechnique) + unsigned(foundUtility)) > 1)
 			Throw(std::runtime_error("Multiple top level lighting technique types found. There can only be one"));
 
-		if (!foundDeferredTechnique) {
-			CreateForwardLightingTechnique(
+		if (foundDeferredTechnique) {
+			CreateDeferredLightingTechnique(
 				std::move(promise),
 				pipelineAccelerators, pipelinePool, techDelBox,
 				resolveOperators, shadowOperators,
 				globalOperators,
 				preregisteredAttachments);
+		} else if (foundUtility) {
+			CreateUtilityLightingTechnique(
+				std::move(promise),
+				pipelineAccelerators, pipelinePool, techDelBox,
+				globalOperators,
+				preregisteredAttachments);
 		} else {
-			CreateDeferredLightingTechnique(
+			CreateForwardLightingTechnique(
 				std::move(promise),
 				pipelineAccelerators, pipelinePool, techDelBox,
 				resolveOperators, shadowOperators,

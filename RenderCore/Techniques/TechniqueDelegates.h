@@ -106,11 +106,13 @@ namespace RenderCore { namespace Techniques
 		const TechniqueSetFileFuture& techniqueSet,
 		PreDepthType preDepthType);
 
-	enum class UtilityDelegateType { FlatColor, CopyDiffuseAlbedo };
+	enum class UtilityDelegateType { FlatColor, CopyDiffuseAlbedo, CopyWorldSpacePosition, CopyWorldSpaceNormal, CopyRoughness, CopyMetal, CopySpecular, CopyCookedAO, SolidWireframe };
 	void CreateTechniqueDelegate_Utility(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		const TechniqueSetFileFuture& techniqueSet,
 		UtilityDelegateType utilityType);
+
+	std::optional<UtilityDelegateType> AsUtilityDelegateType(StringSection<>);
 
 	void CreateTechniqueDelegate_ProbePrepare(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,

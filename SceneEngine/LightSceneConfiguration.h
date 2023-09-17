@@ -36,6 +36,7 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::AmbientLightOperatorDesc> _ambientOperators;
 		ObjectTable<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperators;
 		ObjectTable<RenderCore::LightingEngine::DeferredLightingTechniqueDesc> _deferredLightingOperators;
+		ObjectTable<RenderCore::LightingEngine::UtilityLightingTechniqueDesc> _utilityLightingOperator;
 		ObjectTable<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> _toneMapAcesOperators;
 		ObjectTable<RenderCore::LightingEngine::MultiSampleOperatorDesc> _multiSampleOperators;
 		ObjectTable<RenderCore::LightingEngine::SkyOperatorDesc> _skyOperators;
@@ -72,6 +73,11 @@ namespace SceneEngine
 				case "DeferredLighting"_h:
 					RequireBeginElement(fmttr);
 					_deferredLightingOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+					break;
+				case "UtilityLighting"_h:
+					RequireBeginElement(fmttr);
+					_utilityLightingOperator.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
 				case "ToneMapAces"_h:

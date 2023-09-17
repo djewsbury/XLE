@@ -9,6 +9,7 @@
 #include "../RenderCore/LightingEngine/StandardLightScene.h"
 #include "../RenderCore/LightingEngine/ForwardLightingDelegate.h"
 #include "../RenderCore/LightingEngine/DeferredLightingDelegate.h"
+#include "../RenderCore/LightingEngine/UtilityLightingDelegate.h"
 #include "../RenderCore/LightingEngine/ToneMapOperator.h"
 #include "../RenderCore/LightingEngine/SkyOperator.h"
 #include "../RenderCore/LightingEngine/ScreenSpaceReflections.h"
@@ -82,6 +83,7 @@ namespace SceneEngine
 
         void SetOperator(const RenderCore::LightingEngine::ForwardLightingTechniqueDesc&);
         void SetOperator(const RenderCore::LightingEngine::DeferredLightingTechniqueDesc&);
+        void SetOperator(const RenderCore::LightingEngine::UtilityLightingTechniqueDesc&);
         void SetOperator(const RenderCore::LightingEngine::ToneMapAcesOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::MultiSampleOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::SkyOperatorDesc&);
@@ -105,6 +107,7 @@ namespace SceneEngine
         template<typename T> using ChainingTemplate = RenderCore::LightingEngine::ChainedOperatorTemplate<T>;
         ChainingTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperator;
         ChainingTemplate<RenderCore::LightingEngine::DeferredLightingTechniqueDesc> _deferredLightingOperator;
+        ChainingTemplate<RenderCore::LightingEngine::UtilityLightingTechniqueDesc> _utilityLightingOperator;
         ChainingTemplate<RenderCore::LightingEngine::ToneMapAcesOperatorDesc> _toneMapAcesOperator;
         ChainingTemplate<RenderCore::LightingEngine::MultiSampleOperatorDesc> _msaaOperator;
         ChainingTemplate<RenderCore::LightingEngine::SkyOperatorDesc> _skyOperator;

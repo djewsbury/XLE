@@ -42,6 +42,20 @@ namespace RenderCore { namespace LightingEngine
 		CreateTechniqueDelegate_GBuffer(_gbufferDelegates[unsigned(type)].AdoptPromise(), GetTechniqueSetFile(), type);
 	}
 
+	auto SharedTechniqueDelegateBox::GetUtilityDelegate(Techniques::UtilityDelegateType type) -> TechniqueDelegateFuture
+	{
+		assert(unsigned(type) < dimof(_utilityDelegates));
+		if (::Assets::IsInvalidated(_utilityDelegates[unsigned(type)]))
+			LoadUtilityDelegate(type);
+		return _utilityDelegates[unsigned(type)].ShareFuture();
+	}
+
+	void SharedTechniqueDelegateBox::LoadUtilityDelegate(Techniques::UtilityDelegateType type)
+	{
+		_utilityDelegates[unsigned(type)] = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
+		Techniques::CreateTechniqueDelegate_Utility(_utilityDelegates[unsigned(type)].AdoptPromise(), GetTechniqueSetFile(), type);
+	}
+
 	void CreateTechniqueDelegate_GBuffer(
 		std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>>&& promise,
 		const Techniques::TechniqueSetFileFuture& techniqueSet,
@@ -98,6 +112,8 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
 		for (unsigned c=0; c<dimof(_gbufferDelegates); ++c)
 			LoadGBufferDelegate(GBufferDelegateType(c));
+		for (unsigned c=0; c<dimof(_utilityDelegates); ++c)
+			LoadUtilityDelegate(Techniques::UtilityDelegateType(c));
 
 		_lightingOperatorsPipelineLayoutFile = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayoutFile>(LIGHTING_OPERATOR_PIPELINE);
 		_depVal.RegisterDependency(_lightingOperatorsPipelineLayoutFile->GetDependencyValidation());

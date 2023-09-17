@@ -108,5 +108,23 @@ namespace RenderCore { namespace LightingEngine
 
 	void SkyTextureProcessorPrerender(ISkyTextureProcessor&);
 
+	class FillBackgroundOperator : public std::enable_shared_from_this<FillBackgroundOperator>
+	{
+	public:
+		void Execute(Techniques::ParsingContext& parsingContext);
+		::Assets::DependencyValidation GetDependencyValidation() const;
+
+		void SecondStageConstruction(
+			std::promise<std::shared_ptr<FillBackgroundOperator>>&& promise,
+			const Techniques::FrameBufferTarget& fbTarget);
+
+		FillBackgroundOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool);
+		~FillBackgroundOperator();
+	private:
+		std::shared_ptr<Techniques::IShaderOperator> _shader;
+		std::shared_ptr<Techniques::PipelineCollection> _pool;
+		unsigned _secondStageConstructionState = 0;		// debug usage only
+	};
+
 }}
 

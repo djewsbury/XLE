@@ -1,5 +1,6 @@
 #include "../Framework/VSOUT.hlsl"
 #include "depth-plus-util.hlsl"
+#include "utility-shader.hlsl"
 #include "../../Nodes/Templates.pixel.sh"
 
 [earlydepthstencil]
@@ -29,25 +30,18 @@ DepthPlusEncoded depthPlusWithEarlyRejection(VSOUT geo)
 	return ResolveDepthPlus(geo, sample);
 }
 
-float4 flatColorWithEarlyRejection(VSOUT geo) : SV_Target0
-{
-    if (EarlyRejectionTest(geo))
-        discard;
-	return VSOUT_GetColor0(geo);
-}
-
 [earlydepthstencil]
-float4 copyDiffuseAlbedo(VSOUT geo) : SV_Target0
+float4 utility(VSOUT geo) : SV_Target0
 {
 	GBufferValues sample = PerPixel(geo);
-	return float4(sample.diffuseAlbedo, sample.blendingAlpha);
+	return UtilityShaderValue(geo, sample);
 }
 
-float4 copyDiffuseAlbedoWithEarlyRejection(VSOUT geo) : SV_Target0
+float4 utilityWithEarlyRejection(VSOUT geo) : SV_Target0
 {
     if (EarlyRejectionTest(geo))
         discard;
 	GBufferValues sample = PerPixel(geo);
-	return float4(sample.diffuseAlbedo, sample.blendingAlpha);
+	return UtilityShaderValue(geo, sample);
 }
 

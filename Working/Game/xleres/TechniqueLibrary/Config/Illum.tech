@@ -160,27 +160,24 @@ RayTest_EarlyRejection=~
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-FlatColor_NoPatches=~
+Utility_NoPatches=~
 	Inherit=~; DepthOnly
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:flatColor
+	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:utility
 
-FlatColor_PerPixelAndEarlyRejection=~
+Utility_PerPixel=~
 	Inherit=~; DepthOnly
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:flatColorWithEarlyRejection
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:utility
+
+Utility_PerPixelAndEarlyRejection=~
+	Inherit=~; DepthOnly
+	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:utilityWithEarlyRejection
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-CopyDiffuseAlbedo_NoPatches=~
+SolidWireframe=~
 	Inherit=~; DepthOnly
-	PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:copyDiffuseAlbedo
-
-CopyDiffuseAlbedo_PerPixel=~
-	Inherit=~; DepthOnly
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:copyDiffuseAlbedo
-
-CopyDiffuseAlbedo_PerPixelAndEarlyRejection=~
-	Inherit=~; DepthOnly
-	PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:copyDiffuseAlbedoWithEarlyRejection
+	GeometryShader=xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.geo.hlsl:main
+	PixelShader=xleres/TechniqueLibrary/ToolsRig/Vis/solidwireframe.pixel.hlsl:main
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

@@ -396,5 +396,52 @@ namespace RenderCore { namespace LightingEngine
 
 	ISkyTextureProcessor::~ISkyTextureProcessor() {}
 
+
+	void FillBackgroundOperator::Execute(Techniques::ParsingContext& parsingContext)
+	{
+		assert(_secondStageConstructionState == 2);
+		assert(_shader);
+		_shader->Draw(parsingContext, {});
+	}
+
+	::Assets::DependencyValidation FillBackgroundOperator::GetDependencyValidation() const
+	{
+		assert(_secondStageConstructionState == 2);
+		return _shader->GetDependencyValidation();
+	}
+
+	void FillBackgroundOperator::SecondStageConstruction(
+		std::promise<std::shared_ptr<FillBackgroundOperator>>&& promise,
+		const Techniques::FrameBufferTarget& fbTarget)
+	{
+		assert(_secondStageConstructionState == 0);
+		_secondStageConstructionState = 1;
+
+		Techniques::PixelOutputStates outputStates;
+		outputStates.Bind(*fbTarget._fbDesc, fbTarget._subpassIdx);
+		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
+		outputStates.Bind(MakeIteratorRange(blendStates));
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, "SubpassInputAttachment"_h);
+		auto shaderFuture = Techniques::CreateFullViewportOperator(
+			_pool, Techniques::FullViewportOperatorSubType::DisableDepth,
+			BASIC_PIXEL_HLSL ":fill_background",
+			{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
+			outputStates, usi);
+		::Assets::WhenAll(std::move(shaderFuture)).ThenConstructToPromise(
+			std::move(promise),
+			[strongThis=shared_from_this()](auto shader) {
+				assert(strongThis->_secondStageConstructionState == 1);
+				strongThis->_shader = std::move(shader);
+				strongThis->_secondStageConstructionState = 2;
+				return strongThis;
+			});
+	}
+
+	FillBackgroundOperator::FillBackgroundOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
+	: _pool(std::move(pipelinePool)) {}
+	FillBackgroundOperator::~FillBackgroundOperator() {}
+
 }}
 
