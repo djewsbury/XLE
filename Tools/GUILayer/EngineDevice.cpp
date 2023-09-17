@@ -52,15 +52,6 @@ namespace GUILayer
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-    void EngineDevice::SetDefaultWorkingDirectory()
-    {
-        utf8 appPath[MaxPath];
-        OSServices::GetProcessPath(appPath, dimof(appPath));
-		auto splitter = MakeFileNameSplitter(appPath);
-		OSServices::ChDir((splitter.DriveAndPath().AsString() + "/../Working").c_str());
-    }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
     RenderCore::IThreadContext*		NativeEngineDevice::GetImmediateContext()	{ return _renderDevice->GetImmediateContext().get(); }
 
     const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& NativeEngineDevice::GetMainPipelineAcceleratorPool()
@@ -103,16 +94,20 @@ namespace GUILayer
         _frameRenderingApparatus->_frameBufferPool->Reset();
     }
 
+    void NativeEngineDevice::MountTextEntityDocument(StringSection<> mountingPt, StringSection<> documentFileName)
+    {
+        _entityDocumentMounts.push_back(ToolsRig::MountTextEntityDocument(mountingPt, documentFileName));
+    }
+
     NativeEngineDevice::NativeEngineDevice()
     {
         ConsoleRig::StartupConfig cfg;
         cfg._applicationName = clix::marshalString<clix::E_UTF8>(System::Windows::Forms::Application::ProductName);
         _services = std::make_shared<ConsoleRig::GlobalServices>(cfg);
-        EngineDevice::SetDefaultWorkingDirectory();
 
 		_assetServices = std::make_shared<::Assets::Services>();
-        _mountId0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", _services->GetPollingThread()));
-        _mountId2 = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::MainFileSystem::GetDefaultFileSystem());
+        _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", _services->GetPollingThread())));
+        _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::MainFileSystem::GetDefaultFileSystem()));
 
         auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
         const unsigned deviceConfigurationIdx = 0;
@@ -132,14 +127,10 @@ namespace GUILayer
 
         _services->LoadDefaultPlugins();
 
-        _divAssets = std::make_unique<ToolsRig::DivergentAssetManager>();
         _creationThreadId = System::Threading::Thread::CurrentThread->ManagedThreadId;
         RenderCore::Techniques::SetThreadContext(_immediateContext);
 
         ToolsRig::InvokeCheckCompleteInitialization(_techniquesServices->GetSubFrameEvents(), *_immediateContext);
-
-        // setup mounting for default environment settings
-        _defaultEnvMount = ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
 
 		auto osRunLoop = std::make_shared<OSServices::OSRunLoop_BasicTimer>((HWND)0);
 		OSServices::SetOSRunLoop(osRunLoop);
@@ -156,11 +147,11 @@ namespace GUILayer
 		if (_messageFilter.get())
 			System::Windows::Forms::Application::RemoveMessageFilter(_messageFilter.get());
 		OSServices::SetOSRunLoop(nullptr);
+        for (auto r=_entityDocumentMounts.rbegin(); r!=_entityDocumentMounts.rend(); ++r)
+            ToolsRig::UnmountEntityDocument(*r);
         _services->PrepareForDestruction();
-        ToolsRig::UnmountEntityDocument(_defaultEnvMount);
-        ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId2);
-        ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId1);
-        ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId0);
+        for (auto r=_fsMounts.rbegin(); r!=_fsMounts.rend(); ++r)
+            ::Assets::MainFileSystem::GetMountingTree()->Unmount(*r);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,6 +175,13 @@ namespace GUILayer
         System::GC::Collect();
         System::GC::WaitForPendingFinalizers();
         DelayedDeleteQueue::FlushQueue();
+    }
+
+    void EngineDevice::MountTextEntityDocument(System::String^ mountingPt, System::String^ documentFileName)
+    {
+        auto nativeMountingPt = clix::marshalString<clix::E_UTF8>(mountingPt);
+        auto nativeDocumentFileName = clix::marshalString<clix::E_UTF8>(documentFileName);
+        _pimpl->MountTextEntityDocument(nativeMountingPt, nativeDocumentFileName);
     }
 
     void EngineDevice::AddOnShutdown(IOnEngineShutdown^ callback)

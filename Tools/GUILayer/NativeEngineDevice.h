@@ -48,6 +48,8 @@ namespace GUILayer
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& GetMainPipelineAcceleratorPool();
         const std::shared_ptr<RenderCore::Techniques::IImmediateDrawables>& GetImmediateDrawables();
 
+        void MountTextEntityDocument(StringSection<> mountingPt, StringSection<> documentFileName);
+
         void ResetFrameBufferPool();
 
         NativeEngineDevice();
@@ -66,14 +68,12 @@ namespace GUILayer
         std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> _frameRenderingApparatus;
         std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingEngineApparatus;
 
-        uint32_t _mountId0 = ~0u;
-        uint32_t _mountId1 = ~0u;
-        uint32_t _mountId2 = ~0u;
-        uint64_t _defaultEnvMount = ~0ull;
+        std::vector<uint32_t> _fsMounts;
+        std::vector<uint64_t> _entityDocumentMounts;
         
         ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> _previewSceneRegistry;
         ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> _entityMountingTree;
-        std::unique_ptr<ToolsRig::DivergentAssetManager> _divAssets;
+        // std::unique_ptr<ToolsRig::DivergentAssetManager> _divAssets;
 
         int _creationThreadId;
 		msclr::auto_gcroot<System::Windows::Forms::IMessageFilter^> _messageFilter;

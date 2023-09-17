@@ -49,6 +49,8 @@ namespace Previewer
                 dlg.ShowDialog();
             }
 
+            engineDevice.MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
+
             // Enable metadata driven property editing for the DOM
             DomNodeType.BaseOfAllTypes.AddAdapterCreator(new AdapterCreator<CustomTypeDescriptorNodeAdapter>());
 

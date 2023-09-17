@@ -34,13 +34,12 @@ namespace GUILayer
     {
     public:
         static EngineDevice^ GetInstance() { return s_instance; }
-
-        static void SetDefaultWorkingDirectory();
         NativeEngineDevice& GetNative() { return *_pimpl; }
-
         RenderCore::IThreadContext* GetNativeImmediateContext();
 
         void PrepareForShutdown();
+
+        void MountTextEntityDocument(System::String^ mountingPt, System::String^ documentFileName);
 
         void AddOnShutdown(IOnEngineShutdown^ callback);
 

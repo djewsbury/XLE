@@ -544,9 +544,11 @@ namespace GUILayer
 
 	bool PendingSaveList::HasModifiedAssets()
     {
+#if false
 		auto& divAssetMan = ToolsRig::DivergentAssetManager::GetInstance();
 		for (const auto&d : divAssetMan.GetAssets())
 			if (d._hasChanges) return true;
+#endif
 		return false;
     }
 }
