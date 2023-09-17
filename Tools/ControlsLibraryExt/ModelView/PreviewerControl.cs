@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 using System;
+using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Windows.Forms;
 
@@ -16,6 +17,24 @@ using Sce.Atf.Controls.Adaptable;
 
 namespace ControlsLibraryExt.ModelView
 {
+    public class PreviewerLightingSettings
+    {
+        public enum LightingDelegateType
+        {
+            Forward, 
+            Utility,
+        };
+
+        [DefaultValue(LightingDelegateType.Utility)]
+        public LightingDelegateType OverallType { get; set; }
+
+        [DefaultValue("cfg/lighting")] 
+        public string MountedEnvSettings { get; set;  }
+
+        [DefaultValue(GUILayer.UtilityRenderingType.CopyDiffuseAlbedo)]
+        public GUILayer.UtilityRenderingType UtilityType { get; set; }
+    };
+
     [Export(typeof(PreviewerContext))]
     [PartCreationPolicy(CreationPolicy.NonShared)]
     public class PreviewerContext : XLEBridgeUtils.IShutdownWithEngine
@@ -72,19 +91,33 @@ namespace ControlsLibraryExt.ModelView
                 {
                     // (Create on demand because MEF tends to create and destroy dummy versions of this object during initialization)
                     _layerController = new GUILayer.VisLayerController();
-                    if (this.ModelSettings != null)
-                    {
-                        _layerController.SetScene(this.ModelSettings);
-                    }
-                    else
-                    {
-                        _layerController.SetPreviewRegistryScene(this.PreviewRegistryScene);
-                    }
                 }
                 return _layerController;
             }
         }
         private GUILayer.VisLayerController _layerController = null;
+
+        public PreviewerLightingSettings PreviewerLightingSettings
+        {
+            set
+            {
+                _previewerLightingSettings = value;
+                if (_previewerLightingSettings.OverallType == PreviewerLightingSettings.LightingDelegateType.Utility)
+                {
+                    LayerController.SetUtilityRenderingType(_previewerLightingSettings.UtilityType);
+                }
+                else if (_previewerLightingSettings.OverallType == PreviewerLightingSettings.LightingDelegateType.Forward)
+                {
+                    LayerController.SetEnvSettings("cfg/lighting");
+                }
+                OnPreviewerLightingSettingsChange?.Invoke(this, null);
+            }
+            get
+            {
+                return _previewerLightingSettings;
+            }
+        }
+        private PreviewerLightingSettings _previewerLightingSettings = new PreviewerLightingSettings();
 
         void XLEBridgeUtils.IShutdownWithEngine.Shutdown()
         {
@@ -95,6 +128,7 @@ namespace ControlsLibraryExt.ModelView
         public event EventHandler OnModelSettingsChange;
         public event EventHandler OnOverlaySettingsChange;
         public event EventHandler OnMiscChange;
+        public event EventHandler OnPreviewerLightingSettingsChange;
     }
 
     [Export(typeof(PreviewerControl))]
@@ -119,6 +153,14 @@ namespace ControlsLibraryExt.ModelView
                 if (previewContext != null)
                 {
                     previewContext.ModelSettings = ((CtrlStrip)sender).ModelSettings;
+                }
+                _view.Invalidate();
+            };
+            _ctrls.PreviewerLightingSettings_OnChange += (object sender, EventArgs args) => {
+                var previewContext = ContextAs<PreviewerContext>();
+                if (previewContext != null)
+                {
+                    previewContext.PreviewerLightingSettings = ((CtrlStrip)sender).PreviewerLightingSettings;
                 }
                 _view.Invalidate();
             };
@@ -156,6 +198,7 @@ namespace ControlsLibraryExt.ModelView
                 existingContext.OnModelSettingsChange -= OnModelSettingsChange;
                 existingContext.OnOverlaySettingsChange -= OnOverlaySettingsChange;
                 existingContext.OnMiscChange -= OnMiscChange;
+                existingContext.OnPreviewerLightingSettingsChange -= OnPreviewerLightingSettingsChange;
             }
             Context = context;
             if (context != null)
@@ -163,10 +206,12 @@ namespace ControlsLibraryExt.ModelView
                 context.LayerController.AttachToView(_view.Underlying);
                 _ctrls.OverlaySettings = context.OverlaySettings;
                 _ctrls.ModelSettings = context.ModelSettings;
+                _ctrls.PreviewerLightingSettings = context.PreviewerLightingSettings;
                 _animationCtrls.AnimationState = context.LayerController.AnimationState;
                 context.OnModelSettingsChange += OnModelSettingsChange;
                 context.OnOverlaySettingsChange += OnOverlaySettingsChange;
                 context.OnMiscChange += OnMiscChange;
+                context.OnPreviewerLightingSettingsChange += OnPreviewerLightingSettingsChange;
             }
             _view.Invalidate();
         }
@@ -213,6 +258,16 @@ namespace ControlsLibraryExt.ModelView
         private void OnMiscChange(object sender, EventArgs args)
         {
             _view.Invalidate();
+        }
+
+        private void OnPreviewerLightingSettingsChange(object sender, EventArgs e)
+        {
+            var context = ContextAs<PreviewerContext>();
+            if (context != null)
+            {
+                _ctrls.PreviewerLightingSettings = context.PreviewerLightingSettings;
+                Invalidate3DView();
+            }
         }
 
         #region ContextMenu

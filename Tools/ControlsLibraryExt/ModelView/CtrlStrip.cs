@@ -4,6 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+using GUILayer;
 using System;
 using System.Drawing;
 using System.Windows.Forms;
@@ -16,17 +17,17 @@ namespace ControlsLibraryExt.ModelView
         {
             InitializeComponent();
             _colByMaterial.DataSource = Enum.GetValues(typeof(GUILayer.VisOverlaySettings.ColourByMaterialType));
-            _displayMode.DataSource = Enum.GetValues(typeof(DisplayMode));
             _skeletonMode.DataSource = Enum.GetValues(typeof(SkeletonMode));
+            _visualizationType.DataSource = new string[]
+            {
+                "Diffuse Albedo",
+                "Solid Wireframe",
+                "World Space Normals",
+                "Roughness", "Metal", "Specular", "Cooked AO",
+                "World Space Position",
+                "Flat Color"
+            };
         }
-
-        private enum DisplayMode
-        {
-            Default,
-            Wireframe,
-            Normals,
-            WireframeWithNormals
-        };
 
         private enum SkeletonMode
         {
@@ -37,9 +38,11 @@ namespace ControlsLibraryExt.ModelView
 
         public GUILayer.VisOverlaySettings OverlaySettings;
         public GUILayer.ModelVisSettings ModelSettings;
+        public PreviewerLightingSettings PreviewerLightingSettings;
 
         public event EventHandler OverlaySettings_OnChange;
         public event EventHandler ModelSettings_OnChange;
+        public event EventHandler PreviewerLightingSettings_OnChange;
         public event EventHandler OnResetCamera;
 
         private void OverlaySettings_InvokeOnChange()
@@ -52,6 +55,12 @@ namespace ControlsLibraryExt.ModelView
         {
             if (ModelSettings_OnChange != null && ModelSettings != null)
                 ModelSettings_OnChange.Invoke(this, EventArgs.Empty);
+        }
+
+        private void PreviewerLightingSettings_InvokeOnChange()
+        {
+            if (PreviewerLightingSettings_OnChange != null && PreviewerLightingSettings != null)
+                PreviewerLightingSettings_OnChange.Invoke(this, EventArgs.Empty);
         }
 
         private void SelectModel(object sender, EventArgs e)
@@ -97,25 +106,6 @@ namespace ControlsLibraryExt.ModelView
             }
         }
 
-        private void SelectDisplayMode(object sender, EventArgs e)
-        {
-            if (OverlaySettings == null) return;
-
-            DisplayMode v;
-            if (Enum.TryParse(((ComboBox)sender).SelectedValue.ToString(), out v))
-            {
-                switch (v)
-                {
-                default:
-                case DisplayMode.Default: OverlaySettings.DrawNormals = OverlaySettings.DrawWireframe = false; break;
-                case DisplayMode.Wireframe: OverlaySettings.DrawNormals = false; OverlaySettings.DrawWireframe = true; break;
-                case DisplayMode.Normals: OverlaySettings.DrawNormals = true; OverlaySettings.DrawWireframe = false; break;
-                case DisplayMode.WireframeWithNormals: OverlaySettings.DrawNormals = true; OverlaySettings.DrawWireframe = true; break;
-                }
-                OverlaySettings_InvokeOnChange();
-            }
-        }
-
         private void SelectSkeletonMode(object sender, EventArgs e)
         {
             if (OverlaySettings == null) return;
@@ -134,10 +124,43 @@ namespace ControlsLibraryExt.ModelView
             }
         }
 
+        private void _visualizationType_SelectedIndexChanged(object sender, System.EventArgs e)
+        {
+            if (PreviewerLightingSettings == null) return;
+
+            var str = ((ComboBox)sender).SelectedValue.ToString();
+            if (str == "Diffuse Albedo") PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.CopyDiffuseAlbedo;
+            else if (str == "Solid Wireframe") PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.SolidWireframe;
+            else if (str == "World Space Normals") PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.CopyWorldSpaceNormal;
+            else if (str == "Roughness") PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.CopyRoughness;
+            else if (str == "Metal") PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.CopyMetal;
+            else if (str == "Specular") PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.CopySpecular;
+            else if (str == "Cooked AO") PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.CopyCookedAO;
+            else if (str == "World Space Position") PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.CopyWorldSpacePosition;
+            else PreviewerLightingSettings.UtilityType = GUILayer.UtilityRenderingType.FlatColor;
+            PreviewerLightingSettings_InvokeOnChange();
+        }
+
         private void ResetCamClick(object sender, EventArgs e)
         {
             if (OnResetCamera != null)
                 OnResetCamera.Invoke(this, null);
+        }
+
+        private void visualizationRenderingButton_Click(object sender, EventArgs e)
+        {
+            if (PreviewerLightingSettings == null) return;
+            _visualizationType.Enabled = true;
+            PreviewerLightingSettings.OverallType = PreviewerLightingSettings.LightingDelegateType.Utility;
+            PreviewerLightingSettings_InvokeOnChange();
+        }
+
+        private void lightingRenderingButton_Click(object sender, EventArgs e)
+        {
+            if (PreviewerLightingSettings == null) return;
+            _visualizationType.Enabled = false;
+            PreviewerLightingSettings.OverallType = PreviewerLightingSettings.LightingDelegateType.Forward;
+            PreviewerLightingSettings_InvokeOnChange();
         }
     }
 }
