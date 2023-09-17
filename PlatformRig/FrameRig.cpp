@@ -808,41 +808,5 @@ namespace PlatformRig
         return _pimpl->_frameRigDisplay;
     }
 
-    void ReportError(RenderCore::Techniques::ParsingContext& parserContext, StringSection<> error)
-    {
-        using namespace RenderCore;
-
-        // Clear the presentation target, because it may not be getting any content otherwise
-        auto presentationTarget = Techniques::GetAttachmentResourceAndBarrierToLayout(parserContext, Techniques::AttachmentSemantics::ColorLDR, BindFlag::TransferDst);
-        Metal::DeviceContext::Get(parserContext.GetThreadContext())->Clear(*presentationTarget->CreateTextureView(BindFlag::TransferDst), Float4(0,0,0,1));
-
-        StringMeldAppend(parserContext._stringHelpers->_errorString) << error << "\n";
-    }
-
-    void ReportErrorToColorLDR(RenderCore::Techniques::ParsingContext& parserContext, RenderOverlays::OverlayApparatus& immediateDrawing, StringSection<> errorMsg)
-    {
-        using namespace RenderCore;
-
-        auto* res = ConsoleRig::TryActualizeCachedBox<FrameRigResources>();
-        if (res) {
-            auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), immediateDrawing);
-
-            RenderOverlays::Rect outerRect {
-                {0,0}, {parserContext.GetViewport()._width, parserContext.GetViewport()._height}
-            };
-
-            DrawText{}
-                .Alignment(RenderOverlays::TextAlignment::Center)
-                .Color(0xffffbfbf)
-                .Font(*res->_errorReportingFont)
-                .Draw(*overlayContext, {outerRect._topLeft, outerRect._bottomRight}, errorMsg);
-        }
-
-        auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
-		immediateDrawing._immediateDrawables->ExecuteDraws(
-            parserContext,
-            immediateDrawing._shapeRenderingDelegate->GetTechniqueDelegate(), rpi);
-    }
-
 }
 

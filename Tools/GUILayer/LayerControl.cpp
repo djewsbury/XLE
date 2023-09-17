@@ -22,6 +22,7 @@
 #include "../ToolsRig/VisualisationUtils.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
+#include "../../RenderOverlays/SimpleVisualization.h"
 
 using namespace System;
 
@@ -63,7 +64,7 @@ namespace GUILayer
             TRY {
                 _mainOverlaySystemSet->Render(parserContext);
             } CATCH(const std::exception& e) {
-                PlatformRig::ReportError(parserContext, e.what());
+                RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *EngineDevice::GetInstance()->GetNative().GetOverlayApparatus(), e.what());
             } CATCH_END
 
             frameRig.ShutdownFrame(parserContext);

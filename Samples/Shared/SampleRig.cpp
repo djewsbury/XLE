@@ -10,6 +10,7 @@
 #include "../../PlatformRig/DebugScreenRegistry.h"
 
 #include "../../RenderOverlays/OverlayApparatus.h"
+#include "../../RenderOverlays/SimpleVisualization.h"       // for DrawBottomOfScreenErrorMsg
 
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/Techniques.h"
@@ -303,7 +304,7 @@ namespace Sample
                 sampleOverlay->Render(parserContext);
                 sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->Render(parserContext);
             } CATCH(const std::exception& e) {
-                PlatformRig::ReportError(parserContext, e.what());
+                RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *sampleGlobals._overlayApparatus, e.what());
             } CATCH_END
             frameRig.ShutdownFrame(parserContext);
         }
@@ -327,7 +328,7 @@ namespace Sample
                     sampleOverlay->Render(parserContext);
                     sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->Render(parserContext);
                 } CATCH(const std::exception& e) {
-                    PlatformRig::ReportError(parserContext, e.what());
+                    RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *sampleGlobals._overlayApparatus, e.what());
                 } CATCH_END
             }
 

@@ -20,8 +20,6 @@ namespace PlatformRig
     class IOverlaySystem;
     class WindowApparatus;
 
-    void ReportError(RenderCore::Techniques::ParsingContext&, StringSection<>);
-    void ReportErrorToColorLDR(RenderCore::Techniques::ParsingContext&, RenderOverlays::OverlayApparatus&, StringSection<>);
     std::vector<RenderCore::Techniques::PreregisteredAttachment> InitializeColorLDR(
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*>);
 

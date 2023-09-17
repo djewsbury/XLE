@@ -11,6 +11,7 @@
 #include "../../PlatformRig/OverlaySystem.h"
 
 #include "../../RenderOverlays/OverlayApparatus.h"
+#include "../../RenderOverlays/SimpleVisualization.h"		// for DrawBottomOfScreenErrorMsg
 
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
@@ -105,7 +106,7 @@ namespace UnitTests
 					TRY {
 						overlaySystem->Render(parsingContext, *this);
 					} CATCH(const std::exception& e) {
-						PlatformRig::ReportErrorToColorLDR(parsingContext, *_immediateDrawingApparatus, e.what());
+						RenderOverlays::DrawBottomOfScreenErrorMsg(parsingContext, *_immediateDrawingApparatus, e.what());
 					} CATCH_END
 
 					auto frameResult = _windowApparatus->_frameRig->ShutdownFrame(parsingContext);
