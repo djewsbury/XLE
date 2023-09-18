@@ -45,13 +45,14 @@ namespace ControlsLibraryExt.ModelView
             this.label3 = new System.Windows.Forms.Label();
             this.label4 = new System.Windows.Forms.Label();
             this.cameraMode = new System.Windows.Forms.ComboBox();
+            this._drawGrid = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // _resetCam
             // 
             this._resetCam.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this._resetCam.Location = new System.Drawing.Point(1, 307);
+            this._resetCam.Location = new System.Drawing.Point(3, 344);
             this._resetCam.Name = "_resetCam";
             this._resetCam.Size = new System.Drawing.Size(128, 23);
             this._resetCam.TabIndex = 1;
@@ -65,7 +66,7 @@ namespace ControlsLibraryExt.ModelView
             | System.Windows.Forms.AnchorStyles.Right)));
             this._colByMaterial.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this._colByMaterial.FormattingEnabled = true;
-            this._colByMaterial.Location = new System.Drawing.Point(2, 154);
+            this._colByMaterial.Location = new System.Drawing.Point(3, 191);
             this._colByMaterial.Name = "_colByMaterial";
             this._colByMaterial.Size = new System.Drawing.Size(128, 21);
             this._colByMaterial.TabIndex = 2;
@@ -77,7 +78,7 @@ namespace ControlsLibraryExt.ModelView
             | System.Windows.Forms.AnchorStyles.Right)));
             this._skeletonMode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this._skeletonMode.FormattingEnabled = true;
-            this._skeletonMode.Location = new System.Drawing.Point(1, 232);
+            this._skeletonMode.Location = new System.Drawing.Point(3, 269);
             this._skeletonMode.Name = "_skeletonMode";
             this._skeletonMode.Size = new System.Drawing.Size(128, 21);
             this._skeletonMode.TabIndex = 4;
@@ -134,7 +135,7 @@ namespace ControlsLibraryExt.ModelView
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(3, 138);
+            this.label2.Location = new System.Drawing.Point(3, 175);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(100, 13);
             this.label2.TabIndex = 9;
@@ -143,7 +144,7 @@ namespace ControlsLibraryExt.ModelView
             // label3
             // 
             this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(2, 216);
+            this.label3.Location = new System.Drawing.Point(3, 253);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(75, 13);
             this.label3.TabIndex = 10;
@@ -152,7 +153,7 @@ namespace ControlsLibraryExt.ModelView
             // label4
             // 
             this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(2, 291);
+            this.label4.Location = new System.Drawing.Point(3, 328);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(43, 13);
             this.label4.TabIndex = 11;
@@ -164,15 +165,27 @@ namespace ControlsLibraryExt.ModelView
             | System.Windows.Forms.AnchorStyles.Right)));
             this.cameraMode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cameraMode.FormattingEnabled = true;
-            this.cameraMode.Location = new System.Drawing.Point(3, 336);
+            this.cameraMode.Location = new System.Drawing.Point(3, 373);
             this.cameraMode.Name = "cameraMode";
             this.cameraMode.Size = new System.Drawing.Size(127, 21);
             this.cameraMode.TabIndex = 12;
+            // 
+            // _drawGrid
+            // 
+            this._drawGrid.AutoSize = true;
+            this._drawGrid.Location = new System.Drawing.Point(3, 113);
+            this._drawGrid.Name = "_drawGrid";
+            this._drawGrid.Size = new System.Drawing.Size(73, 17);
+            this._drawGrid.TabIndex = 13;
+            this._drawGrid.Text = "Draw Grid";
+            this._drawGrid.UseVisualStyleBackColor = true;
+            this._drawGrid.CheckedChanged += new System.EventHandler(this._drawGrid_CheckedChanged);
             // 
             // CtrlStrip
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this._drawGrid);
             this.Controls.Add(this.cameraMode);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.label3);
@@ -185,7 +198,7 @@ namespace ControlsLibraryExt.ModelView
             this.Controls.Add(this._colByMaterial);
             this.Controls.Add(this._resetCam);
             this.Name = "CtrlStrip";
-            this.Size = new System.Drawing.Size(134, 408);
+            this.Size = new System.Drawing.Size(134, 454);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -203,5 +216,6 @@ namespace ControlsLibraryExt.ModelView
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.ComboBox cameraMode;
+        private System.Windows.Forms.CheckBox _drawGrid;
     }
 }

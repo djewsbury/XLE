@@ -27,6 +27,7 @@ namespace ControlsLibraryExt.ModelView
                 "World Space Position",
                 "Flat Color"
             };
+            _drawGrid.Checked = true;
         }
 
         private enum SkeletonMode
@@ -159,8 +160,16 @@ namespace ControlsLibraryExt.ModelView
         {
             if (PreviewerLightingSettings == null) return;
             _visualizationType.Enabled = false;
+            PreviewerLightingSettings.MountedEnvSettings = "cfg/lighting_preview";
             PreviewerLightingSettings.OverallType = PreviewerLightingSettings.LightingDelegateType.Forward;
             PreviewerLightingSettings_InvokeOnChange();
+        }
+
+        private void _drawGrid_CheckedChanged(object sender, EventArgs e)
+        {
+            if (OverlaySettings == null) return;
+            OverlaySettings.DrawGrid = OverlaySettings.DrawBasisAxis = _drawGrid.Checked;
+            OverlaySettings_InvokeOnChange();
         }
     }
 }

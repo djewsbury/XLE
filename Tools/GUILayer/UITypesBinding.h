@@ -184,6 +184,14 @@ namespace GUILayer
         [Description("Draw wireframe")]
         property bool DrawWireframe;
 
+        [Category("Visualisation")]
+        [Description("Draw grid")]
+        property bool DrawGrid;
+
+        [Category("Visualisation")]
+        [Description("Draw basis axis")]
+        property bool DrawBasisAxis;
+
 		std::shared_ptr<ToolsRig::VisOverlaySettings> ConvertToNative();
 		static VisOverlaySettings^ ConvertFromNative(const ToolsRig::VisOverlaySettings& input);
     };

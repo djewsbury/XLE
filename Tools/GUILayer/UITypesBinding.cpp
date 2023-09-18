@@ -73,6 +73,8 @@ namespace GUILayer
 		result->_skeletonMode = (unsigned)SkeletonMode;
 		result->_drawWireframe = DrawWireframe;
 		result->_drawNormals = DrawNormals;
+        result->_drawGrid = DrawGrid;
+        result->_drawBasisAxis = DrawBasisAxis;
 		return result;
 	}
 
@@ -83,6 +85,8 @@ namespace GUILayer
 		result->SkeletonMode = (SkeletonModes)input._skeletonMode;
 		result->DrawWireframe = input._drawWireframe;
 		result->DrawNormals = input._drawNormals;
+        result->DrawGrid = input._drawGrid;
+        result->DrawBasisAxis = input._drawBasisAxis;
 		return result;
 	}
 

@@ -7,10 +7,41 @@ using Sce.Atf.Controls;
 using System;
 using System.ComponentModel.Composition;
 using System.ComponentModel.Composition.Hosting;
+using System.Drawing;
+using System.Security.Cryptography.X509Certificates;
 using System.Windows.Forms;
 
 namespace ControlsLibraryExt.ModelView
 {
+    public class CustomTreeItemRenderer : Sce.Atf.Controls.TreeItemRenderer
+    {
+        public override Size MeasureLabel(TreeControl.Node node, Graphics g)
+        {
+            Font defaultFont = GetDefaultFont(node, g);
+            Size result = Size.Ceiling(g.MeasureString(node.Label, defaultFont));
+            result.Height += 4;
+            return result;
+        }
+
+        public override void DrawLabel(TreeControl.Node node, Graphics g, int x, int y)
+        {
+            Rectangle rectangle = new Rectangle(x, y+2, node.LabelWidth, node.LabelHeight-2);
+            Brush brush = SystemBrushes.WindowText;
+            Font defaultFont = GetDefaultFont(node, g);
+
+            if (node.Selected)
+            {
+                Brush brush2 = (Owner.ContainsFocus ? HighlightBrush : DeactiveHighlightBrush);
+                Brush brush3 = (Owner.ContainsFocus ? HighlightTextBrush : DeactiveHighlightTextBrush);
+                Rectangle wideRectangle = new Rectangle(0, y, (int)g.ClipBounds.Right, node.LabelHeight);
+                g.FillRectangle(brush2, wideRectangle);
+                brush = brush3;
+            }
+
+            g.DrawString(node.Label, defaultFont, brush, rectangle);
+        }
+    }
+
     [PartCreationPolicy(CreationPolicy.Shared)]
     [Export(typeof(IInitializable))]
     public class SimpleFileListerController : IControlHostClient, IInitializable
@@ -100,7 +131,7 @@ namespace ControlsLibraryExt.ModelView
 
         private TreeControlAdapter CreateTreeControlAdapter()
         {
-            TreeControl treeControl = new TreeControl();
+            TreeControl treeControl = new TreeControl(TreeControl.Style.Tree, new CustomTreeItemRenderer());
             treeControl.SelectionMode = SelectionMode.One;
             treeControl.ImageList = ResourceUtil.GetImageList16();
             treeControl.StateImageList = ResourceUtil.GetImageList16();

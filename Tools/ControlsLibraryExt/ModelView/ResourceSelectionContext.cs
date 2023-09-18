@@ -135,10 +135,10 @@ namespace ControlsLibraryExt.ModelView
                         if ((desc.Value.Types & (uint)LevelEditorCore.ResourceTypeFlags.Model) != 0)
                         {
                             info.Properties = new object[] { "Model Type", desc?.Filesystem, desc?.NaturalName };
-                            info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.DocumentImage);
+                            info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.PackageImage);
                         }
                         else
-                            info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.DataImage);
+                            info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.DocumentUnknownImage);
                         return;
                     }
                 }

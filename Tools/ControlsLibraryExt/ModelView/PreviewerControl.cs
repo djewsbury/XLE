@@ -107,7 +107,7 @@ namespace ControlsLibraryExt.ModelView
                 }
                 else if (_previewerLightingSettings.OverallType == PreviewerLightingSettings.LightingDelegateType.Forward)
                 {
-                    LayerController.SetEnvSettings("cfg/lighting");
+                    LayerController.SetEnvSettings(_previewerLightingSettings.MountedEnvSettings);
                 }
                 OnPreviewerLightingSettingsChange?.Invoke(this, null);
             }
