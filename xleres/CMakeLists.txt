@@ -10,7 +10,4 @@ add_custom_command(
 
 add_custom_target(
 	xleres
-	ALL
-	DEPENDS ${XLE_BINARY_OUTPUT_DIR_${CMAKE_BUILD_TYPE}}/xleres.pak
-	)
-xle_configure_binary_output(xleres)
+	DEPENDS ${XLE_BINARY_OUTPUT_DIR_${CMAKE_BUILD_TYPE}}/xleres.pak)

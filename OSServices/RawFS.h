@@ -157,6 +157,7 @@ namespace OSServices
     void ChDir(const utf8 path[]);
 
     void GetProcessPath(utf8 dst[], size_t bufferCount);
+    void GetModulePath(utf8 dst[], size_t bufferCount, const utf8 moduleFilename[]);
 	const char* GetCommandLine();
     using ModuleId = size_t;
     ModuleId GetCurrentModuleId();

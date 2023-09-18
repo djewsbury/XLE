@@ -28,6 +28,7 @@
 #include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/MathSerialization.h"
+#include "../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 

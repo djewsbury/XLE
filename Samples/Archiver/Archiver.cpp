@@ -19,6 +19,8 @@ struct CmdLine
 {
 	std::string _input = "./";
 	std::string _output = "out.pak";
+	std::string _pre;
+	bool _verbose = false;
 
 	CmdLine(int argc, char const*const* argv)
 	{
@@ -26,10 +28,14 @@ struct CmdLine
 		StringSection<> keyname;
 		for (;;) {
 			if (fmttr.TryKeyedItem(keyname)) {
-				if (XlEqStringI(keyname, "i")) {
+				if (XlEqStringI(keyname, "i"))
 					_input = Formatters::RequireStringValue(fmttr);
-				} else if (XlEqStringI(keyname, "o"))
+				else if (XlEqStringI(keyname, "o"))
 					_output = Formatters::RequireStringValue(fmttr);
+				else if (XlEqStringI(keyname, "pre"))
+					_pre = Formatters::RequireStringValue(fmttr);
+				else if (XlEqStringI(keyname, "v"))
+					_verbose = true;
 			} else if (fmttr.PeekNext() == Formatters::FormatterBlob::None) {
 				break;
 			} else
@@ -73,11 +79,16 @@ int main(int argc, char** argv)
 
 			auto normalizedEntry = MakeSplitPath(fn).Rebuild(s_filenameRules);
 			auto normalizedEntryRelative = MakeRelativePath(baseInSrcSplit, MakeSplitPath(normalizedEntry), s_filenameRules);
+			if (!cmdLine._pre.empty())
+				normalizedEntryRelative = cmdLine._pre + "/" + normalizedEntryRelative;
 
 			auto hash = HashFilenameAndPath(MakeStringSection(normalizedEntryRelative), s_filenameRules);
 			pendingFiles.push_back(PendingFile { (uint64_t)entry.file_size(), entry, (unsigned)pendingFiles.size(), hash, normalizedEntryRelative });
 			stringTableIterator += unsigned(normalizedEntryRelative.size()) + 1;
 		}
+
+		if (cmdLine._verbose)
+			std::cout << "File iteration completed" << std::endl;
 
 		// sort the file entries to put the largest first (though this is the largest decompressed size, not compressed size)
 		std::sort(pendingFiles.begin(), pendingFiles.end(), [](const auto& lhs, const auto& rhs) { return lhs._size > rhs._size; });
@@ -90,8 +101,14 @@ int main(int argc, char** argv)
 		while ((headers.size() % 8) != 0)
 			headers.push_back(0);
 
+		if (cmdLine._verbose)
+			std::cout << "Opening output file" << std::endl;
+
 		OSServices::BasicFile out { cmdLine._output.c_str(), "wb", 0 };
 		out.Write(headers.data(), headers.size(), 1);
+
+		if (cmdLine._verbose)
+			std::cout << "Beginning compression" << std::endl;
 
 		std::vector<uint8_t> compressionBuffer;
 		uint64_t outIterator = headers.size();
@@ -109,6 +126,9 @@ int main(int argc, char** argv)
 
 		// For each file, do the compression and append to the file
 		for (const auto& entry:pendingFiles) {
+
+			if (cmdLine._verbose)
+				std::cout << "Opening: " << entry._path.string() << std::endl;
 
 			OSServices::MemoryMappedFile input { entry._path.string().c_str(), 0, "rb", 0 };
 			auto data = input.GetData();
@@ -151,6 +171,9 @@ int main(int argc, char** argv)
 
 		}
 
+		if (cmdLine._verbose)
+			std::cout << "All content compressed and written" << std::endl;
+
 		auto& hdr = *(Assets::Internal::XPakStructures::Header*)headers.data();
 		hdr._majik = 'KAPX';
 		hdr._version = 0;
@@ -158,14 +181,21 @@ int main(int argc, char** argv)
 		hdr._fileEntriesOffset = (unsigned)sizeof(Assets::Internal::XPakStructures::Header);
 		hdr._hashTableOffset = sizeof(Assets::Internal::XPakStructures::Header) + sizeof(Assets::Internal::XPakStructures::FileEntry) * pendingFiles.size();
 		hdr._stringTableOffset = sizeof(Assets::Internal::XPakStructures::Header) + sizeof(Assets::Internal::XPakStructures::FileEntry) * pendingFiles.size() + sizeof(uint64_t) * pendingFiles.size();
+		for (auto& r:hdr._reserved) r = 0ull;
 
 		out.Seek(0);
 		out.Write(headers.data(), 1, headers.size());
+		std::cout << "Archive generation succeeded" << std::endl;
 		return 0;
 
 	} CATCH(const std::exception& e) {
 
 		std::cout << "Archive generation failed with error: " << e.what() << std::endl;
+		return 1;
+
+	} CATCH(...) {
+
+		std::cout << "Archive generation failed with unknown error" << std::endl;
 		return 1;
 
 	} CATCH_END

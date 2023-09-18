@@ -260,6 +260,18 @@ void GetProcessPath(utf8 dst[], size_t bufferCount)    { GetModuleFileNameA(NULL
 void ChDir(const utf8 path[])                          { SetCurrentDirectoryA((const char*)path); }
 void DeleteFile(const utf8 path[]) { auto result = ::DeleteFileA((char*)path); (void)result; }
 
+void GetModulePath(utf8 dst[], size_t bufferCount, const utf8 moduleFilename[])
+{
+    if (!bufferCount) return;
+    auto moduleHandle = GetModuleHandleA(moduleFilename);       // GetModuleHandleA does not increase ref count
+    if (moduleHandle == INVALID_HANDLE_VALUE) {
+        dst[0] = '\0';
+        return;
+    }
+
+    GetModuleFileNameA(moduleHandle, (char*)dst, (DWORD)bufferCount);
+}
+
 FileTime GetModuleFileTime()
 {
     char path[MaxPath];

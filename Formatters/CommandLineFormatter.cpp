@@ -193,9 +193,9 @@ namespace Formatters
 		return CommandLineFormatter<CharType> { argc, argv };
 	}
 
-	template CommandLineFormatter<char>;
-	template CommandLineFormatter<utf16>;
-	template CommandLineFormatter<wchar_t>;
+	template class CommandLineFormatter<char>;
+	template class CommandLineFormatter<utf16>;
+	template class CommandLineFormatter<wchar_t>;
 
 	template CommandLineFormatter<char> MakeCommandLineFormatterFromWin32String(StringSection<char>, std::shared_ptr<void>&);
 	template CommandLineFormatter<char> MakeCommandLineFormatter(StringSection<char>);

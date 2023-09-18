@@ -174,10 +174,12 @@ static const int NonPreprocessorLine0 = 0;
 
 			// Search for all of the shader sources in the embedded xleres directory
 		#define X(file, id) std::string { #file },
+		#define X2(file, id) std::string { #file },
 		std::vector<std::string> inputFiles = {
 			#include "../../EmbeddedResFileList.h"
 		};
 		#undef X
+		#undef X2
 		
 		for (auto& i:inputFiles) {
 			auto splitter = MakeFileNameSplitter(i);

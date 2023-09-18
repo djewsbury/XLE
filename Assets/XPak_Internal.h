@@ -20,6 +20,7 @@ namespace Assets { namespace Internal { namespace XPakStructures
 		uint64_t _fileEntriesOffset;
 		uint64_t _hashTableOffset;;
 		uint64_t _stringTableOffset;
+		uint64_t _reserved[8];
 	};
 
 	struct FileEntry

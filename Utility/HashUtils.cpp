@@ -20,7 +20,7 @@
 
 // Some platforms don't support unaligned reads of integer types. Let's take a cautious
 // route and just enforce the buffer to always be aligned to the integer size
-#define ENFORCE_ALIGNED_READS (COMPILER_ACTIVE != COMPILER_TYPE_MSVC)
+#define ENFORCE_ALIGNED_READS 0
 
 namespace Utility
 {

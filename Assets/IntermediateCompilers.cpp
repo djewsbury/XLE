@@ -715,12 +715,13 @@ namespace Assets
 				if (!library._library->TryGetVersion(srcVersion))
 					Throw(std::runtime_error("Querying version returned an error"));
 
+				auto compilerFn = MakeStringSection(c);
+				auto compilerDepVal = GetDepValSys().Make(compilerFn);
+
 				std::vector<CompilerRegistration> opsFromThisLibrary;
 				auto lib = library._library;
 				auto fn = library._createCompileOpFunction;
 				for (const auto&kind:library._kinds) {
-					auto compilerFn = MakeStringSection(c);
-					auto compilerDepVal = GetDepValSys().Make(compilerFn);
 					CompilerRegistration registration(
 						compilerManager,
 						kind._name + " (" + MakeSplitPath(c).Simplify().Rebuild() + ")",
