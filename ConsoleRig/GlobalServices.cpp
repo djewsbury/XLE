@@ -194,7 +194,7 @@ namespace ConsoleRig
         }
 		IBoxTable::~IBoxTable() {}
 
-        static std::shared_ptr<::Assets::IntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem);
+        static std::shared_ptr<::Assets::IntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem, std::string applicationName);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -244,7 +244,7 @@ namespace ConsoleRig
         _pimpl->_mountingTree = std::make_shared<::Assets::MountingTree>(s_defaultFilenameRules);
 
         if (!_pimpl->_intermediatesStore) {
-            auto store = Internal::CreateIntermediatesStore(cfg._inMemoryOnlyIntermediates ? nullptr : _pimpl->_defaultFilesystem);
+            auto store = Internal::CreateIntermediatesStore(cfg._inMemoryOnlyIntermediates ? nullptr : _pimpl->_defaultFilesystem, cfg._applicationName);
             _pimpl->_intermediatesStore = store;
             _pimpl->_intermediatesCompilers = ::Assets::CreateIntermediateCompilers(store);
         }
@@ -469,7 +469,7 @@ namespace ConsoleRig
 
     namespace Internal
     {
-        std::shared_ptr<::Assets::IntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem)
+        std::shared_ptr<::Assets::IntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem, std::string applicationName)
         {
             const char storeVersionString[] = "0.0.0";
             #if defined(_DEBUG)
@@ -486,7 +486,7 @@ namespace ConsoleRig
                 #endif
             #endif
 
-            auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
+            auto tempDirPath = std::filesystem::temp_directory_path() / applicationName;
             if (intermediatesFilesystem) {
                 return std::make_shared<::Assets::IntermediatesStore>(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString);
             } else {

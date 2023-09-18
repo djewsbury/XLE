@@ -41,7 +41,7 @@ namespace Previewer
             Localizer.SetStringLocalizer(new EmbeddedResourceStringLocalizer());
 
             // early engine initialization
-            var engineDevice = new GUILayer.EngineDevice();
+            var engineDevice = new GUILayer.EngineDevice(null);
             var logRedirect = new XLEBridgeUtils.LoggingRedirect();
 
             using (var dlg = new GameConfigurationDialog())
@@ -50,6 +50,7 @@ namespace Previewer
             }
 
             engineDevice.MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
+            engineDevice.MountTextEntityDocument("cfg/lighting_preview", "rawos/lighting_preview.dat");
 
             // Enable metadata driven property editing for the DOM
             DomNodeType.BaseOfAllTypes.AddAdapterCreator(new AdapterCreator<CustomTypeDescriptorNodeAdapter>());

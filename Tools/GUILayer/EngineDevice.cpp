@@ -140,11 +140,9 @@ namespace GUILayer
         }
     };
 
-    NativeEngineDevice::NativeEngineDevice()
+    NativeEngineDevice::NativeEngineDevice(const ConsoleRig::StartupConfig& startupCfg)
     {
-        ConsoleRig::StartupConfig cfg;
-        cfg._applicationName = clix::marshalString<clix::E_UTF8>(System::Windows::Forms::Application::ProductName);
-        _services = std::make_shared<ConsoleRig::GlobalServices>(cfg);
+        _services = std::make_shared<ConsoleRig::GlobalServices>(startupCfg);
 
 		_assetServices = std::make_shared<::Assets::Services>();
         _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::MainFileSystem::GetDefaultFileSystem()));
@@ -210,6 +208,16 @@ namespace GUILayer
             ::Assets::MainFileSystem::GetMountingTree()->Unmount(*r);
     }
 
+    static ConsoleRig::StartupConfig AsNativeStartupConfig(StartupConfig^ cfg)
+    {
+        ConsoleRig::StartupConfig result;
+        if (cfg && cfg->_applicationName) {
+            result._applicationName = clix::marshalString<clix::E_UTF8>(cfg->_applicationName);
+        } else
+            result._applicationName = clix::marshalString<clix::E_UTF8>(System::Windows::Forms::Application::ProductName);
+        return result;
+    }
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     RenderCore::IThreadContext* EngineDevice::GetNativeImmediateContext()
     {
@@ -247,12 +255,12 @@ namespace GUILayer
         _shutdownCallbacks->Add(gcnew System::WeakReference(callback));
     }
     
-    EngineDevice::EngineDevice()
+    EngineDevice::EngineDevice(StartupConfig^ startupConfig)
     {
         assert(s_instance == nullptr);
         _shutdownCallbacks = gcnew System::Collections::Generic::List<System::WeakReference^>();
 
-        _pimpl = new NativeEngineDevice();
+        _pimpl = new NativeEngineDevice(AsNativeStartupConfig(startupConfig));
         s_instance = this;
     }
 

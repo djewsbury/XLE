@@ -12,7 +12,7 @@
 namespace RenderCore { namespace Assets { class Services; } }
 namespace ToolsRig { class DivergentAssetManager; class IPreviewSceneRegistry; }
 namespace EntityInterface { class IEntityMountingTree; }
-namespace ConsoleRig { class GlobalServices; class CrossModule; }
+namespace ConsoleRig { class GlobalServices; class CrossModule; class StartupConfig; }
 namespace RenderCore { namespace Techniques 
 { 
     class IPipelineAcceleratorPool;
@@ -52,7 +52,7 @@ namespace GUILayer
 
         void ResetFrameBufferPool();
 
-        NativeEngineDevice();
+        NativeEngineDevice(const ConsoleRig::StartupConfig& startupCfg);
         ~NativeEngineDevice();
 
     protected:
