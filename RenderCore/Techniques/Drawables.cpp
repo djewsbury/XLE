@@ -112,6 +112,7 @@ namespace RenderCore { namespace Techniques
 		unsigned fullDescSetCount = 0;
 		unsigned justMatDescSetCount = 0;
 		unsigned executeCount = 0;
+		bool somethingPending = false;
 
 		TRY {
 			for (auto d=drawablePkt._drawables.begin(); d!=drawablePkt._drawables.end(); ++d, ++idx) {
@@ -119,7 +120,7 @@ namespace RenderCore { namespace Techniques
 				assert(drawable._pipeline);
 				if (drawable._pipeline != currentPipelineAccelerator) {
 					auto* pipeline = TryGetPipeline(*drawable._pipeline, sequencerConfig, acceleratorVisibilityId);
-					if (!pipeline) continue;
+					if (!pipeline) { somethingPending = true; continue; }
 
 					assert(pipeline->_metalPipeline);
 					currentPipeline = pipeline;
@@ -152,7 +153,7 @@ namespace RenderCore { namespace Techniques
 				const ActualizedDescriptorSet* matDescSet = nullptr;
 				if (drawable._descriptorSet) {
 					matDescSet = TryGetDescriptorSet(*drawable._descriptorSet, acceleratorVisibilityId);
-					if (!matDescSet) continue;
+					if (!matDescSet) { somethingPending = true; continue; }
 					assert(parserContext._requiredBufferUploadsCommandList >= matDescSet->GetCompletionCommandList());	// parser context must be configured for this completion cmd list before getting here
 					parserContext.RequireCommandList(matDescSet->GetCompletionCommandList());
 				}
@@ -224,6 +225,8 @@ namespace RenderCore { namespace Techniques
 			throw;
 		} CATCH_END
 
+		if (somethingPending)		// Ensure we mark the parser content to indicate that something is pending (this can cause GUI windows to refresh, etc)
+			StringMeldAppend(parserContext._stringHelpers->_pendingAssets) << "Drawables pipeline or material\n";
 		encoder.SetStencilRef(0,0);	// reset to avoid state leakage type issues
 		encoder.EndStateCapture();
 	}
