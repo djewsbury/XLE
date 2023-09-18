@@ -412,16 +412,8 @@ namespace ToolsRig
 
 	ModelVisSettings::ModelVisSettings()
     {
-        _modelName = "rawos/game/model/galleon/galleon.dae";
-        _materialName = "rawos/game/model/galleon/galleon.material";
 		_levelOfDetail = 0;
 		_materialBindingFilter = 0;
-
-		// _modelName = "data/meshes/actors/dragon/character assets/alduin.nif";
-		// _materialName = "data/meshes/actors/dragon/character assets/alduin.nif";
-		// _animationFileName = "data/meshes/actors/dragon/animations/special_alduindeathagony.hkx";
-
-        // _envSettingsFile = "defaultenv.dat:environment";
     }
 
 #if 0

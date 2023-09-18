@@ -143,6 +143,7 @@ namespace ToolsRig
     public:
         virtual void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
 		virtual void Set(std::shared_ptr<SceneEngine::IScene> scene, std::shared_ptr<::Assets::OperationContext> loadingContext = nullptr) = 0;
+        virtual void SetEmptyScene() = 0;
 
         virtual void Set(std::shared_ptr<VisCameraSettings> camera) = 0;
 		virtual void ResetCamera() = 0;

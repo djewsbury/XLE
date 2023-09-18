@@ -61,6 +61,8 @@ namespace Sample
 		_overlayBinder->AttachVisualisationOverlay(visOverlay);
 
 		ToolsRig::ModelVisSettings visSettings {};
+		visSettings._modelName = "rawos/game/model/galleon/galleon.dae";
+        visSettings._materialName = "rawos/game/model/galleon/galleon.material";
 		_overlayBinder->SetScene(visSettings);
 		_overlayBinder->SetEnvSettings("cfg/lighting");
 

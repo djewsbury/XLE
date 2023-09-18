@@ -146,6 +146,7 @@ namespace ToolsRig
 
 		void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) override;
 		void Set(std::shared_ptr<SceneEngine::IScene> scene, std::shared_ptr<::Assets::OperationContext> loadingContext) override;
+		void SetEmptyScene() override;
 
 		void Set(std::shared_ptr<VisCameraSettings>) override;
 		void ResetCamera() override;
@@ -195,7 +196,9 @@ namespace ToolsRig
 		
 		unsigned _loadingIndicatorCounter = 0;
 		bool _pendingCameraReset = true;
+		bool _useNullScene = false;
 		std::string _errorMsg;
+		bool _showingLoadingIndicator = false;
 
 		uint64_t _lightingTechniqueTargetsHash = 0ull;
 		std::vector<RenderCore::Techniques::PreregisteredAttachment> _lightingTechniqueTargets;
@@ -218,6 +221,7 @@ namespace ToolsRig
 			auto validationHash = RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), parserContext.GetFrameBufferProperties());
 			assert(_lightingTechniqueTargetsHash == validationHash);		// If you get here, it means that this render target configuration doesn't match what was last used with OnRenderTargetUpdate()
 		#endif
+		_showingLoadingIndicator = false;
 
 		PreparedScene* actualizedScene = nullptr;
 		if (_preparedSceneFuture) {
@@ -253,15 +257,19 @@ namespace ToolsRig
 					if (next._type == RenderCore::LightingEngine::StepType::None || next._type == RenderCore::LightingEngine::StepType::Abort) break;
 					if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
 						assert(!next._pkts.empty());
-						SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), MakeIteratorRange(&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1), next._complexCullingVolume};
-						actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
-						parserContext.RequireCommandList(executeContext._completionCmdList);
+						if (actualizedScene->_scene) {
+							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), MakeIteratorRange(&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1), next._complexCullingVolume};
+							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
+							parserContext.RequireCommandList(executeContext._completionCmdList);
+						}
 					} else if (next._type == RenderCore::LightingEngine::StepType::MultiViewParseScene) {
 						assert(!next._pkts.empty());
 						assert(!next._multiViewDesc.empty());
-						SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
-						actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
-						parserContext.RequireCommandList(executeContext._completionCmdList);
+						if (actualizedScene->_scene) {
+							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
+							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
+							parserContext.RequireCommandList(executeContext._completionCmdList);
+						}
 					} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
 						_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
 					}
@@ -296,6 +304,8 @@ namespace ToolsRig
 					RenderOverlays::ExecuteDraws(parserContext, rpi, *_immediateDrawables, *_debugShapesDelegate);
 
 					StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
+
+					_showingLoadingIndicator = true;
 				}
 
 			} else {
@@ -322,7 +332,7 @@ namespace ToolsRig
 
 	void SimpleSceneOverlay::RebuildPreparedScene()
 	{
-		if (!_envSettings || _lightingTechniqueTargets.empty() || !_scene) {
+		if (!_envSettings || _lightingTechniqueTargets.empty() || (!_scene && !_useNullScene)) {
 			_preparedSceneFuture = nullptr;
 			return;
 		}
@@ -367,9 +377,11 @@ namespace ToolsRig
 								preparedScene->_envSettings->BindScene(lightScene, loadingContext);
 
 								auto threadContext = RenderCore::Techniques::GetThreadContext();
-								auto pendingResources = SceneEngine::PrepareResources(
-									*threadContext,
-									*preparedScene->_compiledLightingTechnique, *pipelineAccelerators, *preparedScene->_scene);
+								std::future<RenderCore::Techniques::PreparedResourcesVisibility> pendingResources;
+								if (preparedScene->_scene)
+									pendingResources = SceneEngine::PrepareResources(
+										*threadContext,
+										*preparedScene->_compiledLightingTechnique, *pipelineAccelerators, *preparedScene->_scene);
 								if (pendingResources.valid()) {
 									::Assets::WhenAll(std::move(pendingResources)).ThenConstructToPromise(
 										std::move(thatPromise),
@@ -400,6 +412,15 @@ namespace ToolsRig
 	{
 		_loadingContext = std::move(loadingContext);
 		_scene = std::move(scene);
+		_useNullScene = false;
+		RebuildPreparedScene();
+	}
+
+	void SimpleSceneOverlay::SetEmptyScene()
+	{
+		_loadingContext = nullptr;
+		_scene = nullptr;
+		_useNullScene = true;
 		RebuildPreparedScene();
 	}
 
@@ -422,11 +443,17 @@ namespace ToolsRig
 
 	auto SimpleSceneOverlay::GetOverlayState() const -> OverlayState
 	{
-		RefreshMode refreshMode = RefreshMode::EventBased;
-
 		if (_preparedSceneFuture && _preparedSceneFuture->GetAssetState() == ::Assets::AssetState::Pending)
 			return { RefreshMode::RegularAnimation };
 
+		if (_showingLoadingIndicator) {
+			// Loading indicator is showing -- we're expecting regular animation
+			// Note that we can check the completion state there, but this works better -- because it ensures we
+			// stay in the state until the first frame out of loading has been rendered
+			return { RefreshMode::RegularAnimation };
+		}
+
+		RefreshMode refreshMode = RefreshMode::EventBased;
 		auto* t = _preparedSceneFuture ? _preparedSceneFuture->TryActualize() : nullptr;
 
 		// Need regular updates if the scene future hasn't been fully loaded yet
@@ -898,9 +925,9 @@ namespace ToolsRig
 		if (!HasDepthAttachment(parserContext))
 			return;		// we need this attachment to continue
 
-		if (!_pimpl->_scene || !_pimpl->_cameraSettings) return;
+		if (!_pimpl->_cameraSettings) return;
 
-		if (_pimpl->_pendingAnimStateBind) {
+		if (_pimpl->_pendingAnimStateBind && _pimpl->_scene) {
 			auto* visContext = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
 			if (visContext && _pimpl->_animState)
 				visContext->BindAnimationState(_pimpl->_animState);
@@ -920,11 +947,12 @@ namespace ToolsRig
 		bool doColorByMaterial = 
 			(_pimpl->_settings._colourByMaterial == 1)
 			|| (_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_hasMouseOver);
+		doColorByMaterial &= _pimpl->_scene != nullptr;
 
 		if (_pimpl->_settings._drawWireframe || _pimpl->_settings._drawNormals || _pimpl->_settings._skeletonMode || doColorByMaterial) {
 
 			bool drawImmediateDrawables = false;
-			if (_pimpl->_settings._skeletonMode) {
+			if (_pimpl->_settings._skeletonMode && _pimpl->_scene) {
 				CATCH_ASSETS_BEGIN
 					auto* visContent = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
 					if (visContent) {
@@ -942,7 +970,7 @@ namespace ToolsRig
 				auto fbFrag = CreateVisFBFrag();
 				Techniques::RenderPassInstance rpi { parserContext, fbFrag };
 
-				if (_pimpl->_settings._drawWireframe) {
+				if (_pimpl->_settings._drawWireframe && _pimpl->_scene) {
 					SceneEngine::ExecuteSceneRaw(
 						parserContext, *_pimpl->_pipelineAccelerators,
 						*cfgs._visWireframeCfg,
@@ -950,7 +978,7 @@ namespace ToolsRig
 						*_pimpl->_scene);
 				}
 
-				if (_pimpl->_settings._drawNormals) {
+				if (_pimpl->_settings._drawNormals && _pimpl->_scene) {
 					SceneEngine::ExecuteSceneRaw(
 						parserContext, *_pimpl->_pipelineAccelerators,
 						*cfgs._visNormalsCfg,
@@ -1002,7 +1030,7 @@ namespace ToolsRig
         }
 
 		bool writeMaterialName = 
-			(_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_hasMouseOver);
+			(_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_hasMouseOver && _pimpl->_scene);
 
 		if (writeMaterialName || _pimpl->_settings._drawBasisAxis || _pimpl->_settings._drawGrid) {
 
@@ -1018,7 +1046,7 @@ namespace ToolsRig
 				if (_pimpl->_settings._drawBasisAxis)
 					RenderOverlays::DrawBasisAxes(overlays.GetImmediateDrawables(), parserContext);
 				if (_pimpl->_settings._drawGrid)
-					RenderOverlays::DrawGrid(overlays.GetImmediateDrawables(), parserContext, 100.f);
+					RenderOverlays::DrawGrid(overlays.GetImmediateDrawables(), parserContext, std::abs(Magnitude(ExtractTranslation(cam._cameraToWorld))));
 				overlays.ReleaseState();
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
@@ -1092,8 +1120,6 @@ namespace ToolsRig
 			auto* visContext = dynamic_cast<IVisContent*>(_pimpl->_scene.get());
 			if (visContext && visContext->HasActiveAnimation())
 				refreshMode = RefreshMode::RegularAnimation;
-		} else {
-			refreshMode = RefreshMode::RegularAnimation;
 		}
 		
 		return { refreshMode };
@@ -1312,10 +1338,17 @@ namespace ToolsRig
 				if (_sceneOverlay) _sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 				if (_visualisationOverlay) _visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 
-				_sceneMarker = MakeScene(
-					_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext,
-					_modelVisSettings);
-				_pendingSceneActualize = true;
+				if (!_modelVisSettings._modelName.empty()) {
+					_sceneMarker = MakeScene(
+						_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext,
+						_modelVisSettings);
+					_pendingSceneActualize = true;
+				} else {
+					if (_sceneOverlay) _sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{}, _loadingContext);
+					if (_visualisationOverlay) _visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+					_pendingSceneActualize = false;
+				}
+				
 				_sceneReportedError = {};
 				UpdateVisualizationError();
 			}
@@ -1334,13 +1367,14 @@ namespace ToolsRig
 
 	void VisOverlayController::Pimpl::UpdateVisualizationError()
 	{
-		if (_sceneOverlay)
-			if (!_sceneReportedError.empty() && !_lightingStateReportedError.empty())
+		if (_sceneOverlay) {
+			if (!_sceneReportedError.empty() && !_lightingStateReportedError.empty()) {
 				_sceneOverlay->ReportError(_lightingStateReportedError + "\n" + _sceneReportedError);
-			else if (!_sceneReportedError.empty())
+			} else if (!_sceneReportedError.empty()) {
 				_sceneOverlay->ReportError(_sceneReportedError);
-			else
+			} else
 				_sceneOverlay->ReportError(_lightingStateReportedError);	// might be empty
+		}
 	}
 
 	void VisOverlayController::SetScene(const ModelVisSettings& visSettings)
@@ -1352,10 +1386,15 @@ namespace ToolsRig
 		_pimpl->_sceneMarker = nullptr;
 		_pimpl->_sceneBindType = Pimpl::SceneBindType::ModelVisSettings;
 		_pimpl->_modelVisSettings = visSettings;
-		_pimpl->_sceneMarker = MakeScene(
-			_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool, _pimpl->_loadingContext,
-			visSettings);
-		_pimpl->_pendingSceneActualize = true;
+		if (!visSettings._modelName.empty()) {
+			_pimpl->_sceneMarker = MakeScene(
+				_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool, _pimpl->_loadingContext,
+				visSettings);
+			_pimpl->_pendingSceneActualize = true;
+		} else {
+			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->SetEmptyScene();
+			_pimpl->_pendingSceneActualize = false;
+		}
 		_pimpl->_sceneReportedError = {};
 		_pimpl->UpdateVisualizationError();
 	}
