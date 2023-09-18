@@ -22,6 +22,7 @@
 #include "../ToolsRig/VisualisationUtils.h"
 #include "../../PlatformRig/FrameRig.h"
 #include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
 
 using namespace System;
@@ -48,11 +49,12 @@ namespace GUILayer
 
         if (_pendingUpdateRenderTargets) {
             // ensure overlays have render targets configured
-            if (_mainOverlaySystemSet.get()) {
-                auto rtu = windowRig.GetFrameRig().GetOverlayConfiguration(*windowRig.GetPresentationChain());
-                _mainOverlaySystemSet->OnRenderTargetUpdate(rtu._preregAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
+            auto rtu = windowRig.GetFrameRig().GetOverlayConfiguration(*windowRig.GetPresentationChain());
+            _mainOverlaySystemSet->OnRenderTargetUpdate(rtu._preregAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
+            if (_debugOverlaysApparatus.get()) {
+                auto updatedAttachments = PlatformRig::InitializeColorLDR(rtu._preregAttachments);
+                _debugOverlaysApparatus->_debugScreensOverlaySystem->OnRenderTargetUpdate(updatedAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
             }
-
             _pendingUpdateRenderTargets = false;
         }
         
@@ -63,6 +65,8 @@ namespace GUILayer
             auto parserContext = frameRig.StartupFrame(threadContext, windowRig.GetPresentationChain());
             TRY {
                 _mainOverlaySystemSet->Render(parserContext);
+                if (_debugOverlaysApparatus.get())
+                    _debugOverlaysApparatus->_debugScreensOverlaySystem->Render(parserContext);
             } CATCH(const std::exception& e) {
                 RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *EngineDevice::GetInstance()->GetNative().GetOverlayApparatus(), e.what());
             } CATCH_END
@@ -102,6 +106,25 @@ namespace GUILayer
 
     void LayerControl::UpdateRenderTargets()
     {
+        _pendingUpdateRenderTargets = true;
+    }
+
+    void LayerControl::EnableFrameRigOverlay(bool newState)
+    {
+        if (!newState) {
+            if (_debugOverlaysApparatus.get()) {
+                _debugOverlaysApparatus.reset();
+                _pendingUpdateRenderTargets = true;
+            }
+            return;
+        }
+
+        if (_debugOverlaysApparatus.get())
+            return;
+
+        _debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(EngineDevice::GetInstance()->GetNative().GetOverlayApparatus());
+        auto display = GetWindowRig().GetFrameRig().CreateDisplay(_debugOverlaysApparatus->_debugSystem, nullptr);
+        PlatformRig::SetSystemDisplay(*_debugOverlaysApparatus->_debugSystem.get(), display);
         _pendingUpdateRenderTargets = true;
     }
 
@@ -160,7 +183,6 @@ namespace GUILayer
     void LayerControl::AddDefaultCameraHandler(VisCameraSettings^ settings)
     {
             // create an input listener that feeds into a stack of manipulators
-		auto pipelineAcceleratorPool = EngineDevice::GetInstance()->GetNative().GetMainPipelineAcceleratorPool();
         auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(settings->GetUnderlying(), EngineDevice::GetInstance()->GetNative().GetDrawingApparatus());
         manipulators->Register(
             ToolsRig::ManipulatorStack::CameraManipulator,

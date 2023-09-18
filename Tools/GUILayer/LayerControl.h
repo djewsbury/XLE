@@ -10,6 +10,7 @@
 #include <memory>
 
 namespace PlatformRig { class OverlaySystemSet; }
+namespace PlatformRig { class DebugOverlaysApparatus; }
 
 namespace GUILayer 
 {
@@ -23,6 +24,7 @@ namespace GUILayer
         void AddSystem(IOverlaySystem^ overlay);
         PlatformRig::OverlaySystemSet& GetMainOverlaySystemSet();
         void UpdateRenderTargets();
+        void EnableFrameRigOverlay(bool);
 
         LayerControl(System::Windows::Forms::Control^ control);
         ~LayerControl();
@@ -31,6 +33,7 @@ namespace GUILayer
         bool _activePaint;
         bool _pendingUpdateRenderTargets;
         clix::auto_ptr<PlatformRig::OverlaySystemSet> _mainOverlaySystemSet;
+        clix::shared_ptr<PlatformRig::DebugOverlaysApparatus> _debugOverlaysApparatus;
 
         virtual bool Render(const std::shared_ptr<RenderCore::IThreadContext>&, IWindowRig&) override;
 		virtual void OnResize(IWindowRig&) override;
