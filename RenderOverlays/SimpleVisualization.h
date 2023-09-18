@@ -22,11 +22,11 @@ namespace RenderOverlays
 
 	void DrawBasisAxes(
 		RenderCore::Techniques::IImmediateDrawables&, RenderCore::Techniques::ParsingContext& parserContext, 
-		Float2 ssMins = Float2(8,8), Float2 ssMaxs = Float2(64+8,64+8));
+		Float2 ssMins = Float2(24,24), Float2 ssMaxs = Float2(64+24,64+24));
 
 	void DrawGrid(
 		RenderCore::Techniques::IImmediateDrawables&, RenderCore::Techniques::ParsingContext& parserContext, 
-		float gridScale = 1.0f, Float3 origin = Float3(0,0,0));
+		float gridScaleFactor = 1.0f, Float3 origin = Float3(0,0,0));
 
 	void FillScreenWithMsg(
 		RenderCore::Techniques::ParsingContext& parsingContext,

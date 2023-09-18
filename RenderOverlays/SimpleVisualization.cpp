@@ -42,22 +42,15 @@ namespace RenderOverlays
 			//
 
 
-		const float     size = 1.f;
-		const InternalVertex    vertices[] = 
-		{
-			{ Float3(0.f,     0.f,     0.f),  0xff0000ff },
-			{ Float3(size,    0.f,     0.f),  0xff0000ff },
-			{ Float3(0.f,     0.f,     0.f),  0xff00ff00 },
-			{ Float3(0.f,    size,     0.f),  0xff00ff00 },
-			{ Float3(0.f,     0.f,     0.f),  0xffff0000 },
-			{ Float3(0.f,     0.f,    size),  0xffff0000 }
-		};
+		const float pointerLength = 1.f;
+		const float pointerRadialWidth = 0.025f;
+		const unsigned pointerRadialVerts = 8;
 
 		using namespace RenderCore;
 		Techniques::ImmediateDrawableMaterial material;
 		auto workingVertices = immDrawables.QueueDraw(
-			dimof(vertices), MakeIteratorRange(s_vertexInputLayout), 
-			material, Topology::LineList).Cast<InternalVertex*>();
+			pointerRadialVerts*6*3, MakeIteratorRange(s_vertexInputLayout), 
+			material, Topology::TriangleList).Cast<InternalVertex*>();
 
 		// use a custom projection matrix to put the geometry where we want on screen
 		// -1 -> 1 becomes A -> B
@@ -79,21 +72,80 @@ namespace RenderOverlays
 		Float4x4 transform = Inverse(parserContext.GetProjectionDesc()._worldToProjection) * customProjMatrix * InvertOrthonormalTransform(customCameraToWorld);
 		
 		auto i = workingVertices.begin();
-		for (const auto&v:vertices) {
-			*i = v;
-			Float4 t = transform * Float4{i->_position, 1.f};
+		auto utilityTransform = [](const Float3& p, const Float4x4& transform) {
+			Float4 t = transform * Float4{p, 1.f};
 			t /= t[3];		// fortunately homogeneous divide magic works here, so we can use 3d vectors as input
-			i->_position = Truncate(t);
-			++i;
+			return Truncate(t);
+		};
+		struct Pointer
+		{
+			Float3 _axis; unsigned _color;
+			Float3 _tangent, _bitangent;
+		};
+		Float3 X { 1.f, 0.f, 0.f }, Y { 0.f, 1.f, 0.f}, Z { 0.f, 0.f, 1.f };
+		Pointer pointers[] = {
+			Pointer { pointerLength*X, 0xff4f4f9f, pointerRadialWidth*Z, pointerRadialWidth*Y },
+			Pointer { pointerLength*Y, 0xff4f9f4f, pointerRadialWidth*X, pointerRadialWidth*Z },
+			Pointer { pointerLength*Z, 0xff9f4f4f, pointerRadialWidth*Y, pointerRadialWidth*X }
+		};
+		for (auto&p:pointers) {
+			float prevSinTheta = 0.f, prevCosTheta = 1.f;
+
+			for (unsigned c=0; c<pointerRadialVerts; ++c) {
+				float theta = (c+1)/float(pointerRadialVerts)*2.0f*float(M_PI);
+				float sinTheta, cosTheta;
+				std::tie(sinTheta, cosTheta) = XlSinCos(theta);
+
+				i->_position = utilityTransform(p._tangent * prevCosTheta + p._bitangent * prevSinTheta, transform);
+				i->_color = p._color;
+				++i;
+
+				i->_position = utilityTransform(p._tangent * prevCosTheta + p._bitangent * prevSinTheta + p._axis, transform);
+				i->_color = p._color;
+				++i;
+
+				i->_position = utilityTransform(p._tangent * cosTheta + p._bitangent * sinTheta, transform);
+				i->_color = p._color;
+				++i;
+
+				i->_position = utilityTransform(p._tangent * cosTheta + p._bitangent * sinTheta, transform);
+				i->_color = p._color;
+				++i;
+
+				i->_position = utilityTransform(p._tangent * prevCosTheta + p._bitangent * prevSinTheta + p._axis, transform);
+				i->_color = p._color;
+				++i;
+
+				i->_position = utilityTransform(p._tangent * cosTheta + p._bitangent * sinTheta + p._axis, transform);
+				i->_color = p._color;
+				++i;
+
+				prevSinTheta = sinTheta; prevCosTheta = cosTheta;
+			}
 		}
+		assert((i-workingVertices.begin()) == pointerRadialVerts*6*3);
+	}
+
+	static unsigned MakeGridColor(float scaleAlpha)
+	{
+		auto i = (unsigned)LinearInterpolate(0x8f, 0, scaleAlpha);
+		return (i<<24u) | 0x003f3f3f;
 	}
 
 	void DrawGrid(
-		RenderCore::Techniques::IImmediateDrawables& immDrawables, RenderCore::Techniques::ParsingContext& parserContext, 
-		float gridScale, Float3 origin)
+		RenderCore::Techniques::IImmediateDrawables& immDrawables, RenderCore::Techniques::ParsingContext& parserContext,
+		float gridScaleFactor, Float3 origin)
 	{
 		// draw a grid to give some sense of scale
-		// todo -- we could do this in a better way, and only draw lines that actually intersect the camera frustum
+		// gridScaleFactor is a typically just the vertical between the camera at the grid origin. We'll use it to determine the spacing
+		// of the grid lines (within some clamped range)
+		gridScaleFactor /= 4.0f;
+		gridScaleFactor = Clamp(gridScaleFactor, .1f, 1000.f);
+		auto logScale = std::log10(gridScaleFactor);
+		float gridScale = std::pow(10.0f, std::floor(logScale));
+		auto scaleAlpha = logScale - std::floor(logScale);
+		scaleAlpha *= scaleAlpha;
+
 		const int radiusInLines = 50;
 		auto lineCount = (radiusInLines*2+1) + (radiusInLines*2+1);
 
@@ -103,32 +155,88 @@ namespace RenderOverlays
 			lineCount*2, MakeIteratorRange(s_vertexInputLayout), 
 			material, Topology::LineList).Cast<InternalVertex*>();
 
-		auto i = workingVertices.begin();
-		for (int x=-radiusInLines; x<=radiusInLines; ++x) {
-			i->_position = Float3{x*gridScale, -radiusInLines*gridScale, 0.f};
-			if (x == 0) i->_color = 0xff00ff00;
-			else i->_color = ((x%10) == 0) ? 0xff6f6f6f : 0xff3f3f3f;
-			++i;
+		{
+			auto i = workingVertices.begin();
+			for (int x=-radiusInLines; x<=radiusInLines; ++x) {
+				i->_position = Float3{x*gridScale, -radiusInLines*gridScale, 0.f};
+				i->_color = ((x%10) == 0) ? 0x8f6f6f6f : MakeGridColor(scaleAlpha);
+				++i;
 
-			i->_position = Float3{x*gridScale, radiusInLines*gridScale, 0.f};
-			if (x == 0) i->_color = 0xff00ff00;
-			else i->_color = ((x%10) == 0) ? 0xff6f6f6f : 0xff3f3f3f;
-			++i;
+				i->_position = Float3{x*gridScale, radiusInLines*gridScale, 0.f};
+				i->_color = ((x%10) == 0) ? 0x8f6f6f6f : MakeGridColor(scaleAlpha);
+				++i;
+			}
+
+			for (int y=-radiusInLines; y<=radiusInLines; ++y) {
+				i->_position = Float3{-radiusInLines*gridScale, y*gridScale, 0.f};
+				i->_color = ((y%10) == 0) ? 0x8f6f6f6f : MakeGridColor(scaleAlpha);
+				++i;
+
+				i->_position = Float3{radiusInLines*gridScale, y*gridScale, 0.f};
+				i->_color = ((y%10) == 0) ? 0x8f6f6f6f : MakeGridColor(scaleAlpha);
+				++i;
+			}
+
+			assert(i == workingVertices.end());
 		}
 
-		for (int y=-radiusInLines; y<=radiusInLines; ++y) {
-			i->_position = Float3{-radiusInLines*gridScale, y*gridScale, 0.f};
-			if (y == 0) i->_color = 0xff0000ff;
-			else i->_color = ((y%10) == 0) ? 0xff6f6f6f : 0xff3f3f3f;
-			++i;
+		// draw lines in the cardinal directions, a little thicker to stand out
+		{
+			const float pointerRadialWidth = 0.0025f;
+			const unsigned pointerRadialVerts = 8;
 
-			i->_position = Float3{radiusInLines*gridScale, y*gridScale, 0.f};
-			if (y == 0) i->_color = 0xff0000ff;
-			else i->_color = ((y%10) == 0) ? 0xff6f6f6f : 0xff3f3f3f;
-			++i;
+			auto workingVertices = immDrawables.QueueDraw(
+				pointerRadialVerts*6*2, MakeIteratorRange(s_vertexInputLayout), 
+				material, Topology::TriangleList).Cast<InternalVertex*>();
+			
+			struct Pointer
+			{
+				Float3 _start, _end; unsigned _color;
+				Float3 _tangent, _bitangent;
+			};
+			Float3 X { 1.f, 0.f, 0.f }, Y { 0.f, 1.f, 0.f}, Z { 0.f, 0.f, 1.f };
+			Pointer pointers[] = {
+				Pointer { X*-radiusInLines*gridScale, X*radiusInLines*gridScale, 0xff4f4f9f, pointerRadialWidth*Z, pointerRadialWidth*Y },
+				Pointer { Y*-radiusInLines*gridScale, Y*radiusInLines*gridScale, 0xff4f9f4f, pointerRadialWidth*X, pointerRadialWidth*Z },
+			};
+			auto i = workingVertices.begin();
+			for (auto&p:pointers) {
+				float prevSinTheta = 0.f, prevCosTheta = 1.f;
+
+				for (unsigned c=0; c<pointerRadialVerts; ++c) {
+					float theta = (c+1)/float(pointerRadialVerts)*2.0f*float(M_PI);
+					float sinTheta, cosTheta;
+					std::tie(sinTheta, cosTheta) = XlSinCos(theta);
+
+					i->_position = p._tangent * prevCosTheta + p._bitangent * prevSinTheta + p._start;
+					i->_color = p._color;
+					++i;
+
+					i->_position = p._tangent * prevCosTheta + p._bitangent * prevSinTheta + p._end;
+					i->_color = p._color;
+					++i;
+
+					i->_position = p._tangent * cosTheta + p._bitangent * sinTheta + p._start;
+					i->_color = p._color;
+					++i;
+
+					i->_position = p._tangent * cosTheta + p._bitangent * sinTheta + p._start;
+					i->_color = p._color;
+					++i;
+
+					i->_position = p._tangent * prevCosTheta + p._bitangent * prevSinTheta + p._end;
+					i->_color = p._color;
+					++i;
+
+					i->_position = p._tangent * cosTheta + p._bitangent * sinTheta + p._end;
+					i->_color = p._color;
+					++i;
+
+					prevSinTheta = sinTheta; prevCosTheta = cosTheta;
+				}
+			}
+			assert((i-workingVertices.begin()) == pointerRadialVerts*6*2);
 		}
-
-		assert(i == workingVertices.end());
 	}
 
 	void FillScreenWithMsg(
