@@ -17,7 +17,6 @@ namespace Assets { namespace Internal { namespace XPakStructures
 		uint32_t _majik;
 		uint32_t _version;
 		uint32_t _fileCount;
-		uint64_t _wholeArchiveHashValue;
 		uint64_t _fileEntriesOffset;
 		uint64_t _hashTableOffset;;
 		uint64_t _stringTableOffset;
@@ -28,6 +27,7 @@ namespace Assets { namespace Internal { namespace XPakStructures
 		uint64_t _offset;
 		uint64_t _compressedSize;
 		uint64_t _decompressedSize;
+		uint64_t _contentsHash;
 		uint32_t _stringTableOffset;
 		uint32_t _flags;
 	};

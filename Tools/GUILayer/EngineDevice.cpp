@@ -28,6 +28,9 @@
 #include "../../Assets/OSFileSystem.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetSetManager.h"
+#include "../../Assets/XPak.h"
+#include "../../Formatters/CommandLineFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../Utility/Streams/PathUtils.h"
@@ -99,6 +102,44 @@ namespace GUILayer
         _entityDocumentMounts.push_back(ToolsRig::MountTextEntityDocument(mountingPt, documentFileName));
     }
 
+    struct CommandLineArgsDigest
+    {
+        StringSection<> _xleres = "xleres.pak";
+        CommandLineArgsDigest(Formatters::CommandLineFormatter<char>&& fmttr)
+        {
+            StringSection<> keyname;
+            for (;;) {
+                if (fmttr.TryKeyedItem(keyname)) {
+                    if (XlEqStringI(keyname, "xleres"))
+                        _xleres = Formatters::RequireStringValue(fmttr);
+                } else if (fmttr.PeekNext() == Formatters::FormatterBlob::None) {
+                    break;
+                } else
+                    Formatters::SkipValueOrElement(fmttr);
+            }
+        }
+    };
+
+    struct CmdLineHelper
+    {
+        int _argc = 0;
+        std::vector<const char*> _argv;
+        std::vector<std::string> _buffers;
+
+        CmdLineHelper()
+        {
+            auto args = System::Environment::GetCommandLineArgs();
+            _argc = args->Length;
+            _buffers.reserve(_argc);
+            _argv.reserve(_argc);
+            for (int c=0; c<_argc; ++c) {
+                _buffers.push_back(clix::marshalString<clix::E_UTF8>(args[c]));
+                _argv.push_back(_buffers.back().c_str());
+            }
+            delete args;
+        }
+    };
+
     NativeEngineDevice::NativeEngineDevice()
     {
         ConsoleRig::StartupConfig cfg;
@@ -106,8 +147,23 @@ namespace GUILayer
         _services = std::make_shared<ConsoleRig::GlobalServices>(cfg);
 
 		_assetServices = std::make_shared<::Assets::Services>();
-        _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", _services->GetPollingThread())));
         _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::MainFileSystem::GetDefaultFileSystem()));
+
+        CmdLineHelper cmdLineHelper;
+        CommandLineArgsDigest cmdLineDigest { Formatters::MakeCommandLineFormatter(cmdLineHelper._argc, cmdLineHelper._argv.data()) };
+        std::shared_ptr<::Assets::ArchiveUtility::FileCache> fileCache;
+        if (XlEqStringI(MakeFileNameSplitter(cmdLineDigest._xleres).Extension(), "pak")) {
+            fileCache = ::Assets::CreateFileCache(4 * 1024 * 1024);
+            std::string finalXleRes = cmdLineDigest._xleres.AsString();
+            // by default, search next to the executable if we don't have a fully qualified name
+            if (::Assets::MainFileSystem::TryGetDesc(finalXleRes)._snapshot._state == ::Assets::FileSnapshot::State::DoesNotExist) {
+                char buffer[MaxPath];
+                OSServices::GetProcessPath(buffer, dimof(buffer));
+                finalXleRes = Concatenate(MakeFileNameSplitter(buffer).DriveAndPath(), "/", finalXleRes);
+            }
+            _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateXPakFileSystem(finalXleRes, fileCache)));
+        } else
+            _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS(cmdLineDigest._xleres, _services->GetPollingThread())));
 
         auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
         const unsigned deviceConfigurationIdx = 0;
@@ -195,6 +251,7 @@ namespace GUILayer
     {
         assert(s_instance == nullptr);
         _shutdownCallbacks = gcnew System::Collections::Generic::List<System::WeakReference^>();
+
         _pimpl = new NativeEngineDevice();
         s_instance = this;
     }

@@ -373,7 +373,6 @@ namespace Assets
 		IteratorRange<const Internal::XPakStructures::FileEntry*> _fileEntries;
 		IteratorRange<const uint64_t*> _hashTable;
 		const char* _stringTable;
-		uint64_t _wholeArchiveHash;
 
 		struct MarkerContents
 		{
@@ -435,7 +434,7 @@ namespace Assets
 
 		if (entry._compressedSize < entry._decompressedSize) {
 
-			auto resourceGuid = HashCombine(_hashTable[m._fileIndex], _wholeArchiveHash);
+			auto resourceGuid = HashCombine(_hashTable[m._fileIndex], entry._contentsHash);
 			auto file = _fileCache->Reserve(resourceGuid, entry._decompressedSize, &XPakDecompressBlob, srcData);
 			result = std::make_unique<ArchiveUtility::ArchiveFileBufferedDecompress>(std::move(file), _danglingFileMonitor, _archiveDesc._snapshot._modificationTime);
 			
@@ -466,7 +465,7 @@ namespace Assets
 
 		if (entry._compressedSize < entry._decompressedSize) {
 
-			auto resourceGuid = HashCombine(_hashTable[m._fileIndex], _wholeArchiveHash);
+			auto resourceGuid = HashCombine(_hashTable[m._fileIndex], entry._contentsHash);
 			auto file = _fileCache->Reserve(resourceGuid, entry._decompressedSize, &XPakDecompressBlob, srcData);
 			result = ArchiveUtility::CreateTrackedMemoryMappedFile(_danglingFileMonitor, std::move(file));
 
@@ -551,7 +550,7 @@ namespace Assets
 			Throw(std::runtime_error("Archive incorrect version (only version 0 supported)"));
 
 		if ((hdr._fileEntriesOffset + hdr._fileCount) > _archive.GetData().size())
-			Throw(std::runtime_error("Bad file list in LSPK file (header appears to be corrupted)"));
+			Throw(std::runtime_error("Bad file list in XPAK file (header appears to be corrupted)"));
 
 		_fileEntries = MakeIteratorRange(
 			(const Internal::XPakStructures::FileEntry*)PtrAdd(_archive.GetData().begin(), hdr._fileEntriesOffset),
@@ -562,8 +561,6 @@ namespace Assets
 			(const uint64_t*)PtrAdd(_archive.GetData().begin(), hdr._hashTableOffset + sizeof(uint64_t)*hdr._fileCount));
 
 		_stringTable = (const char*)PtrAdd(_archive.GetData().begin(), hdr._stringTableOffset);
-
-		_wholeArchiveHash = hdr._wholeArchiveHashValue;
 	}
 
 	XPakFileSystem::XPakFileSystem(StringSection<> archive, std::shared_ptr<ArchiveUtility::FileCache> fileCache)

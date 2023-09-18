@@ -166,18 +166,21 @@ namespace RenderOverlays
 		const unsigned horzPadding = 8;
 		const unsigned vertPadding = 8;
 		const unsigned horzRectArea = 16;
+		const unsigned paddingBetweenLines = 6;
 
 		if (viewportDims[0] < (2 * horzPadding - horzRectArea + 32))
 			return;		// no horz space
 
 		auto split = StringSplitByWidth<char>(**font, msg, float(viewportDims[0] - 2 * horzPadding - horzRectArea), " \t", "");
+		if (split._sections.empty()) return;
+
 		auto lineHeight = (unsigned)(*font)->GetFontProperties()._lineHeight;
 
 		auto overlayContext = MakeImmediateOverlayContext(parsingContext.GetThreadContext(), immediateDrawables, &fontRenderingManager);
 
 		parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker += vertPadding;
 		auto bottom = viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker;
-		auto top = viewportDims[1] - (parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker + split._sections.size() * lineHeight);
+		auto top = viewportDims[1] - (parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker + split._sections.size() * lineHeight + (split._sections.size()-1) * paddingBetweenLines);
 
 		// draw a background quad
 		{
@@ -193,13 +196,15 @@ namespace RenderOverlays
 			overlayContext->DrawTriangles(ProjectionMode::P2D, bkgrndQuad, dimof(bkgrndQuad), ColorB{0x0f, 0x0f, 0x0f});
 		}
 
+		parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker += unsigned(split._sections.size()) * lineHeight + unsigned(split._sections.size()-1) * paddingBetweenLines;
+		auto yIterator = viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker;
+
 		for (auto s:split._sections) {
 			overlayContext->DrawText(
-				{ 	Float3{horzPadding + horzRectArea, viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker - lineHeight, 0.f}, 
-					Float3{viewportDims[0] - horzPadding, viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker, 0.f} },
+				{ 	Float3{horzPadding + horzRectArea, yIterator, 0.f}, 
+					Float3{viewportDims[0] - horzPadding, yIterator + lineHeight, 0.f} },
 				**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Left, s);
-
-			parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker += lineHeight;
+			yIterator += lineHeight + paddingBetweenLines;
 		}
 
 		// draw a little quad to the left, just for completeness

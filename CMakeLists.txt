@@ -5,6 +5,4 @@ include(Solutions/CMake/modules.cmake)
 
 add_subdirectory(UnitTests UnitTests)
 add_subdirectory(Samples/NativeModelViewer NativeModelViewer)
-add_subdirectory(Samples/Archiver Archiver)
-add_subdirectory(xleres xleres)
 

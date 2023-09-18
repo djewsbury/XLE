@@ -5,8 +5,8 @@
 #include "../../Assets/XPak_Internal.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/StringUtils.h"
-#include "../../Formatters/TextFormatter.h"
-#include "../../Formatters/StreamDOM.h"
+#include "../../Formatters/CommandLineFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../OSServices/RawFS.h"
 #include "../../OSServices/WinAPI/IncludeWindows.h"
 #include "../../Foreign/FastLZ/fastlz.h"
@@ -20,16 +20,20 @@ struct CmdLine
 	std::string _input = "./";
 	std::string _output = "out.pak";
 
-	CmdLine(int argc, char** argv)
+	CmdLine(int argc, char const*const* argv)
 	{
-		if (argc > 1) {
-			StringSection<> cmdLine = argv[1];
-			Formatters::TextInputFormatter<char> formatter(cmdLine);
-			auto doc = Formatters::MakeStreamDOM(formatter);
-			if (auto i = doc.RootElement().Attribute("in"))
-				_input = i.Value().AsString();
-			if (auto i = doc.RootElement().Attribute("out"))
-				_output = i.Value().AsString();
+		auto fmttr = Formatters::MakeCommandLineFormatter(argc, argv);
+		StringSection<> keyname;
+		for (;;) {
+			if (fmttr.TryKeyedItem(keyname)) {
+				if (XlEqStringI(keyname, "i")) {
+					_input = Formatters::RequireStringValue(fmttr);
+				} else if (XlEqStringI(keyname, "o"))
+					_output = Formatters::RequireStringValue(fmttr);
+			} else if (fmttr.PeekNext() == Formatters::FormatterBlob::None) {
+				break;
+			} else
+				Formatters::SkipValueOrElement(fmttr);
 		}
 	}
 };
@@ -52,16 +56,20 @@ int main(int argc, char** argv)
 		};
 		std::vector<PendingFile> pendingFiles;
 		unsigned stringTableIterator = 0;
-		
+
 		// Collect up the list of input files and start generating the string and hash tables
 		auto root = std::filesystem::path(cmdLine._input);
 		auto baseInSrc = MakeSplitPath(root.lexically_normal().string()).Rebuild(s_filenameRules);
 		auto baseInSrcSplit = MakeSplitPath(baseInSrc);
 
-		for (const auto& entry:std::filesystem::recursive_directory_iterator(root)) {
+		for (const auto& entry:std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::follow_directory_symlink)) {
 			if (!entry.is_regular_file()) continue;
 			auto fn = entry.path().lexically_normal().string();
 			if (XlEqStringI(MakeStringSection(fn), MakeStringSection(cmdLine._output))) continue;
+
+			// skip files that begin with '.'
+			auto justfn = entry.path().filename();
+			if (justfn.empty() || *justfn.string().begin() == '.') continue;
 
 			auto normalizedEntry = MakeSplitPath(fn).Rebuild(s_filenameRules);
 			auto normalizedEntryRelative = MakeRelativePath(baseInSrcSplit, MakeSplitPath(normalizedEntry), s_filenameRules);
@@ -93,7 +101,6 @@ int main(int argc, char** argv)
 		auto* outStringTable = (char*)PtrAdd(headers.data(), sizeof(Assets::Internal::XPakStructures::Header) + sizeof(Assets::Internal::XPakStructures::FileEntry) * pendingFiles.size() + sizeof(uint64_t) * pendingFiles.size());
 		
 		stringTableIterator = 0;
-		uint64_t wholeArchiveHashValue = DefaultSeed64;
 
 		std::vector<uint64_t> sortedHashes;
 		sortedHashes.reserve(pendingFiles.size());
@@ -105,7 +112,7 @@ int main(int argc, char** argv)
 
 			OSServices::MemoryMappedFile input { entry._path.string().c_str(), 0, "rb", 0 };
 			auto data = input.GetData();
-			wholeArchiveHashValue = Hash64(data, wholeArchiveHashValue);
+			auto contentsHash = Hash64(data);
 
 			size_t requiredBufferSize = std::max(66ull, input.GetData().size() + input.GetData().size()/8ull);
 			if (compressionBuffer.size() < requiredBufferSize)
@@ -131,6 +138,7 @@ int main(int argc, char** argv)
 			outFileEntry[idxSortedOrder]._offset = outIterator;
 			outFileEntry[idxSortedOrder]._decompressedSize = data.size();
 			outFileEntry[idxSortedOrder]._compressedSize = compressedSize;
+			outFileEntry[idxSortedOrder]._contentsHash = contentsHash;
 			outFileEntry[idxSortedOrder]._stringTableOffset = stringTableIterator; 
 			outFileEntry[idxSortedOrder]._flags = 0;
 			outIterator += compressedSize;
@@ -147,19 +155,18 @@ int main(int argc, char** argv)
 		hdr._majik = 'KAPX';
 		hdr._version = 0;
 		hdr._fileCount = (uint32_t)pendingFiles.size();
-		hdr._wholeArchiveHashValue = wholeArchiveHashValue;
 		hdr._fileEntriesOffset = (unsigned)sizeof(Assets::Internal::XPakStructures::Header);
 		hdr._hashTableOffset = sizeof(Assets::Internal::XPakStructures::Header) + sizeof(Assets::Internal::XPakStructures::FileEntry) * pendingFiles.size();
 		hdr._stringTableOffset = sizeof(Assets::Internal::XPakStructures::Header) + sizeof(Assets::Internal::XPakStructures::FileEntry) * pendingFiles.size() + sizeof(uint64_t) * pendingFiles.size();
 
 		out.Seek(0);
 		out.Write(headers.data(), 1, headers.size());
+		return 0;
 
 	} CATCH(const std::exception& e) {
 
-		std::cout << "Failed with error: " << e.what() << std::endl;
+		std::cout << "Archive generation failed with error: " << e.what() << std::endl;
+		return 1;
 
 	} CATCH_END
-
-	return 0;
 }

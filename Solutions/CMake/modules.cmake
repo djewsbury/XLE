@@ -26,3 +26,5 @@ add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Tools/ToolsRig ToolsRig)
 add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../ColladaConversion ColladaConversion)
 
 add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Foreign ForeignMisc)
+add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../Samples/Archiver Archiver)
+add_subdirectory(${XLE_MAIN_CMAKE_DIR}/../../xleres xleres)
