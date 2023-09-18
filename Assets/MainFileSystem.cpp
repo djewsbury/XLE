@@ -391,7 +391,7 @@ namespace Assets
 		IFileSystem::Marker marker;
 		auto transResult = fs.TryTranslate(marker, fn);
 		if (transResult == IFileSystem::TranslateResult::Success)
-			return fs.TryOpen(result, marker, openMode);
+			return fs.TryOpen(result, marker, openMode, shareMode);
 
 		return AsIOReason(transResult);
 	}
@@ -403,7 +403,7 @@ namespace Assets
 		IFileSystem::Marker marker;
 		auto transResult = fs.TryTranslate(marker, fn);
 		if (transResult == IFileSystem::TranslateResult::Success)
-			return fs.TryOpen(result, marker, size, openMode);
+			return fs.TryOpen(result, marker, size, openMode, shareMode);
 
 		return AsIOReason(transResult);
 	}
