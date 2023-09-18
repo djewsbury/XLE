@@ -561,10 +561,9 @@ namespace Assets
 		struct SubDirectory
 		{
 			std::basic_string<utf8> _name;
-			uint64_t _nameHash;
 			std::vector<unsigned> _filesystemIndices;
 		};
-		std::vector<SubDirectory> _directories;
+		std::vector<std::pair<uint64_t, SubDirectory>> _directories;
 
 		bool _foundFiles = false;
 		bool _foundDirectories = false;
@@ -631,27 +630,64 @@ namespace Assets
                     if (splitPath.GetSectionCount() != 0) {
                         auto dir = splitPath.GetSections()[0];
                         auto hash = HashFilenameAndPath(dir);
-                        auto existing = std::find_if(
-                            _directories.begin(), _directories.end(),
-                            [hash](const SubDirectory& file) { return file._nameHash == hash; });
-                        if (existing == _directories.end())
-                            existing = _directories.emplace(existing, SubDirectory{dir.AsString(), hash});
-                        existing->_filesystemIndices.push_back(fsIdx);
+                        auto existing = LowerBound(_directories, hash);
+                        if (existing == _directories.end() || existing->first != hash)
+                            existing = _directories.insert(existing, std::make_pair(hash, SubDirectory{dir.AsString()}));
+                        existing->second._filesystemIndices.push_back(fsIdx);
                         continue;
                     }
 				}
 
 				CheckPointers(fs);
 				auto foundSubDirs = fs._fs->FindSubDirectories(MakeStringSection(fs._internalPoint));
-				for (auto&m:foundSubDirs) {
-					auto hash = HashFilenameAndPath(MakeStringSection(m));
-					auto existing = std::find_if(
-						_directories.begin(), _directories.end(),
-						[hash](const SubDirectory& file) { return file._nameHash == hash; });
-					if (existing == _directories.end())
-						existing = _directories.emplace(existing, SubDirectory{m, hash});
-					existing->_filesystemIndices.push_back(fsIdx);
-					continue;
+				if (foundSubDirs.size() < 8 && _directories.size() < 8) {
+					for (auto&m:foundSubDirs) {
+						auto hash = HashFilenameAndPath(MakeStringSection(m));
+						auto existing = LowerBound(_directories, hash);
+						if (existing == _directories.end() || existing->first != hash)
+							existing = _directories.insert(existing, std::make_pair(hash, SubDirectory{m}));
+						existing->second._filesystemIndices.push_back(fsIdx);
+						continue;
+					}
+				} else {
+					// Large number of subdirectories, we should do a sort & merge
+					// This would be even more efficient if the filesystem could give us the strings and hashes in a more
+					// efficient form to begin with
+					std::vector<std::pair<uint64_t, std::string>> sortedFoundSubdirs;
+					sortedFoundSubdirs.reserve(foundSubDirs.size());
+					for (const auto& f:foundSubDirs)
+						sortedFoundSubdirs.emplace_back(HashFilenameAndPath(MakeStringSection(f)), f);
+					std::sort(sortedFoundSubdirs.begin(), sortedFoundSubdirs.end(), CompareFirst2{});
+
+					// we can't use std::inplace_merge(), because we want to do a slightly custom merge
+					std::vector<std::pair<uint64_t, SubDirectory>> newDirectories;
+					newDirectories.reserve(_directories.size()+sortedFoundSubdirs.size());
+					auto m0 = _directories.begin();
+					auto m1 = sortedFoundSubdirs.begin();
+					while (m0 != _directories.end() && m1 != sortedFoundSubdirs.end()) {
+						if (m0->first == m1->first) {
+							newDirectories.emplace_back(std::move(*m0));
+							newDirectories.back().second._filesystemIndices.push_back(fsIdx);
+							++m0; ++m1;
+						} else if (m0->first < m1->first) {
+							newDirectories.emplace_back(std::move(*m0));
+							++m0;
+						} else {
+							assert(m1->first < m0->first);
+							newDirectories.emplace_back(m1->first, SubDirectory{m1->second});
+							newDirectories.back().second._filesystemIndices.push_back(fsIdx);
+							++m1;
+						}
+					}
+					while (m0 != _directories.end()) {
+						newDirectories.emplace_back(std::move(*m0));
+						++m0;
+					}
+					while (m1 != sortedFoundSubdirs.end()) {
+						newDirectories.emplace_back(m1->first, SubDirectory{m1->second, {fsIdx}});
+						++m1;
+					}
+					_directories = std::move(newDirectories);
 				}
 			}
 
@@ -697,13 +733,11 @@ namespace Assets
 		auto hash = HashFilenameAndPath(MakeStringSection(subDirectory));
 
 		_pimpl->FindDirectories();
-		auto i = std::find_if(
-			_pimpl->_directories.begin(), _pimpl->_directories.end(),
-			[hash](const Pimpl::SubDirectory& file) { return file._nameHash == hash; });
-		if (i == _pimpl->_directories.end())
+		auto i = LowerBound(_pimpl->_directories, hash);
+		if (i == _pimpl->_directories.end() || i->first != hash)
 			return {};
 
-		for (auto fsIdx:i->_filesystemIndices) {
+		for (auto fsIdx:i->second._filesystemIndices) {
 			auto& fs = _pimpl->_fileSystems[fsIdx];
 			auto splitPath = MakeSplitPath(fs._pendingDirectories);
             if (splitPath.GetSectionCount() != 0) {
@@ -759,12 +793,12 @@ namespace Assets
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	FileSystemWalker FileSystemWalker::DirectoryIterator::get() const
 	{
-		return _helper->RecurseTo(_helper->_pimpl->_directories[_idx]._name);
+		return _helper->RecurseTo(_helper->_pimpl->_directories[_idx].second._name);
 	}
 
 	std::basic_string<utf8> FileSystemWalker::DirectoryIterator::Name() const
 	{
-		return _helper->_pimpl->_directories[_idx]._name;
+		return _helper->_pimpl->_directories[_idx].second._name;
 	}
 
 	FileSystemWalker::DirectoryIterator::DirectoryIterator(const FileSystemWalker* helper, unsigned idx)
