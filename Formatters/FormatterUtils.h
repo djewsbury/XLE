@@ -51,6 +51,10 @@ namespace Formatters
 		template<typename...> static auto HasBeginBlock_Helper(...) -> std::false_type;
 		template<typename Type> struct HasBeginBlock : decltype(HasBeginBlock_Helper<Type>(0)) {};
 
+		template<typename Type> static auto HasBeginElement_Helper(int) -> decltype(std::declval<Type>().TryBeginElement(), std::true_type{});
+		template<typename...> static auto HasBeginElement_Helper(...) -> std::false_type;
+		template<typename Type> struct HasBeginElement : decltype(HasBeginElement_Helper<Type>(0)) {};
+
 		template<typename Type> static auto HasBeginArray_Helper(int) -> decltype(std::declval<Type>().TryBeginArray(std::declval<unsigned&>(), std::declval<typename Type::EvaluatedTypeId&>()), std::true_type{});
 		template<typename...> static auto HasBeginArray_Helper(...) -> std::false_type;
 		template<typename Type> struct HasBeginArray : decltype(HasBeginArray_Helper<Type>(0)) {};
@@ -71,6 +75,7 @@ namespace Formatters
 			static constexpr auto HasReversedEndian = Internal::HasReversedEndian<Formatter>::value;
 			static constexpr auto HasGetLocation = Internal::HasGetLocation<Formatter>::value;
 			static constexpr auto HasBeginBlock = Internal::HasBeginBlock<Formatter>::value;
+			static constexpr auto HasBeginElement = Internal::HasBeginElement<Formatter>::value;
 			static constexpr auto HasBeginArray = Internal::HasBeginArray<Formatter>::value;
 			static constexpr auto HasBeginDictionary = Internal::HasBeginDictionary<Formatter>::value;
 		};
@@ -158,11 +163,13 @@ namespace Formatters
 					ThrowFormatException(formatter, "Malformed value while skipping forward");
 			}
 		} else {
-			if (!formatter.TryBeginElement())
-				ThrowFormatException(formatter, "Expected begin element while skipping forward");
-			SkipElement(formatter);
-			if (!formatter.TryEndElement())
-				ThrowFormatException(formatter, "Malformed end element while skipping forward");
+			if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasBeginElement) {
+				if (!formatter.TryBeginElement())
+					ThrowFormatException(formatter, "Expected begin element while skipping forward");
+				SkipElement(formatter);
+				if (!formatter.TryEndElement())
+					ThrowFormatException(formatter, "Malformed end element while skipping forward");
+			}
 		}
 	}
 
