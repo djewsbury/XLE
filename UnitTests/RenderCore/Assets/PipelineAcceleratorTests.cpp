@@ -47,6 +47,7 @@
 #include "../../../ConsoleRig/Console.h"
 #include "../../../OSServices/Log.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
+#include "../../../xleres/FileList.h"
 #include "thousandeyes/futures/then.h"
 #include "thousandeyes/futures/DefaultExecutor.h"
 #include <map>
@@ -701,6 +702,159 @@ namespace UnitTests
 		////////////////////////////////////////
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(utdatamnt);
+		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
+	}
+
+	// We'll use the "GEO_HAS_" and "RES_HAS_" selectors to create a large number of unique configurations
+	static std::string s_toggleablePipelineSelectors[] {
+		"RES_HAS_DiffuseTexture",
+		"RES_HAS_OpacityTexture",
+		"RES_HAS_NormalsTexture",
+		"RES_HAS_ParametersTexture"
+	};
+
+	static RenderCore::MiniInputElementDesc s_toggleableInputElements[] {
+		{ "POSITION"_h, RenderCore::Format::R32G32B32_FLOAT },
+		{ "PIXELPOSITION"_h, RenderCore::Format::R32G32_FLOAT },
+		{ "COLOR"_h, RenderCore::Format::R8G8B8A8_UNORM },
+		{ "COLOR"_h+1, RenderCore::Format::R8G8B8A8_UNORM },
+		{ "TEXCOORD"_h, RenderCore::Format::R16G16_FLOAT },
+		{ "TEXCOORD"_h+1, RenderCore::Format::R16G16_FLOAT },
+		{ "TEXTANGENT"_h, RenderCore::Format::R10G10B10A2_UNORM },
+		{ "TEXBITANGENT"_h, RenderCore::Format::R10G10B10A2_UNORM },
+		{ "NORMAL"_h, RenderCore::Format::R10G10B10A2_UNORM },
+		{ "BONEWEIGHTS"_h, RenderCore::Format::R8G8B8A8_UNORM },
+		{ "PER_VERTEX_AO"_h, RenderCore::Format::R8_UNORM }
+	};
+
+	TEST_CASE( "PipelineAcceleratorTests-ThrashLoading", "[rendercore_techniques]" )
+	{
+		using namespace RenderCore;
+		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
+		auto testHelper = MakeTestHelper();
+		TechniqueTestApparatus techniqueTestHelper(*testHelper);
+
+		struct PAThrashHelper
+		{
+			Threading::Mutex _lock;
+			std::vector<std::shared_ptr<Techniques::PipelineAccelerator>> _activePipelineAccelerators;
+			std::vector<std::shared_ptr<Techniques::SequencerConfig>> _activeSequencerConfigs;
+			std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pool;
+			std::chrono::steady_clock::time_point _endTime;
+			std::vector<std::shared_ptr<Techniques::ITechniqueDelegate>> _techniqueDelegates;
+		};
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		auto helper = std::make_shared<PAThrashHelper>();
+		helper->_pool = techniqueTestHelper._pipelineAccelerators;
+		helper->_endTime = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+
+		// setup technique delegates
+		{
+			auto techniqueSetFile = ::Assets::MakeAssetMarkerPtr<Techniques::TechniqueSetFile>(ILLUM_TECH);
+			{
+				std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promise;
+				auto future = promise.get_future();
+				Techniques::CreateTechniqueDelegate_Forward(std::move(promise), techniqueSetFile->ShareFuture());
+				helper->_techniqueDelegates.emplace_back(future.get());
+			}
+			{
+				std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promise;
+				auto future = promise.get_future();
+				Techniques::CreateTechniqueDelegate_RayTest(std::move(promise), techniqueSetFile->ShareFuture(), 0, {});
+				helper->_techniqueDelegates.emplace_back(future.get());
+			}
+			for (auto t:{ Techniques::PreDepthType::DepthOnly, Techniques::PreDepthType::DepthMotion, Techniques::PreDepthType::DepthMotionNormal, Techniques::PreDepthType::DepthMotionNormalRoughness }) {
+				std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promise;
+				auto future = promise.get_future();
+				Techniques::CreateTechniqueDelegate_PreDepth(std::move(promise), techniqueSetFile->ShareFuture(), t);
+				helper->_techniqueDelegates.emplace_back(future.get());
+			}
+			for (auto t:{ Techniques::UtilityDelegateType::FlatColor, Techniques::UtilityDelegateType::CopyDiffuseAlbedo, Techniques::UtilityDelegateType::CopyWorldSpacePosition, Techniques::UtilityDelegateType::CopyWorldSpaceNormal }) {
+				std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promise;
+				auto future = promise.get_future();
+				Techniques::CreateTechniqueDelegate_Utility(std::move(promise), techniqueSetFile->ShareFuture(), t);
+				helper->_techniqueDelegates.emplace_back(future.get());
+			}
+		}
+
+		// spawn some threads and do a lot of creation and destruction
+		std::vector<std::thread> threads;
+		const auto parallelThreads = globalServices->GetLongTaskThreadPool().GetThreadContext();
+		for (unsigned c=0; c<parallelThreads; ++c) {
+			threads.emplace_back(
+				[helper]() {
+					std::mt19937_64 rng { std::random_device().operator()() };
+					for (;;) {
+						if (std::chrono::steady_clock::now() >= helper->_endTime)
+							break;
+
+						auto type = std::uniform_int_distribution<int>(0, 3)(rng);
+						if (type == 0) {
+
+							ParameterBox materialSelectors;
+							std::vector<MiniInputElementDesc> elements;
+							for (auto e:s_toggleableInputElements)
+								if (std::uniform_int_distribution<int>(0, 1)(rng))
+									elements.push_back(e);
+							for (auto e:s_toggleablePipelineSelectors)
+								if (std::uniform_int_distribution<int>(0, 1)(rng))
+									materialSelectors.SetParameter(e, 1);
+
+							auto pa = helper->_pool->CreatePipelineAccelerator(nullptr, std::move(materialSelectors), elements, Topology::TriangleList, {});
+							ScopedLock(helper->_lock);
+							helper->_activePipelineAccelerators.push_back(pa);
+
+						} else if (type == 1) {
+
+							auto techDel = helper->_techniqueDelegates[std::uniform_int_distribution<int>(0, helper->_techniqueDelegates.size()-1)(rng)];
+
+							std::vector<AttachmentDesc> attachments {
+								AttachmentDesc { Format::R32G32B32A32_FLOAT },
+								AttachmentDesc { Format::D32_SFLOAT_S8_UINT }
+							};
+							std::vector<SubpassDesc> subpasses {
+								SubpassDesc().AppendOutput(0).SetDepthStencil(1)
+							};
+							FrameBufferDesc fbDesc { std::move(attachments), std::move(subpasses) };
+
+							ParameterBox seqSelectors;
+							auto cfg = helper->_pool->CreateSequencerConfig({}, techDel, std::move(seqSelectors), fbDesc, 0);
+							ScopedLock(helper->_lock);
+							helper->_activeSequencerConfigs.push_back(cfg);
+
+						} else if (type == 2) {
+
+							ScopedLock(helper->_lock);
+							if (helper->_activePipelineAccelerators.size() > 8)
+								helper->_activePipelineAccelerators.erase(helper->_activePipelineAccelerators.begin()+std::uniform_int_distribution<int>(0, int(helper->_activePipelineAccelerators.size()-1))(rng));
+
+						} else if (type == 3) {
+
+							ScopedLock(helper->_lock);
+							if (helper->_activeSequencerConfigs.size() > 4)
+								helper->_activeSequencerConfigs.erase(helper->_activeSequencerConfigs.begin()+std::uniform_int_distribution<int>(0, int(helper->_activeSequencerConfigs.size()-1))(rng));
+
+						}
+					}
+				});
+		}
+
+		while (std::chrono::steady_clock::now() < helper->_endTime) {
+			helper->_pool->VisibilityBarrier();
+			::Assets::Services::GetAssetSetsPtr()->OnFrameBarrier();
+			std::this_thread::sleep_for(std::chrono::milliseconds(16));
+		}
+
+		while (!threads.empty()) {
+			threads.back().join();
+			threads.pop_back();
+		}
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////
+
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
 	}
 
