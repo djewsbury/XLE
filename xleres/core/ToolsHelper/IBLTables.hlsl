@@ -96,8 +96,11 @@ float2 GenerateSplitTerm(
         precise float F = SchlickFresnelCore(VdotH);
         // adding small numbers to large numbers -- probably not ideal for precision
         // todo -- consider kahan sum here -- https://en.wikipedia.org/wiki/Kahan_summation_algorithm 
-        A += ((1.f - F) * specular) / pdf;
-        B += (F * specular) / pdf;
+        // we have to do some protection against infinites for nvidia hardware
+        float a = ((1.f - F) * specular) / pdf;
+        float b = (F * specular) / pdf;
+        if (a == a) A += a;
+        if (b == b) B += b;
     }
 
     precise float reciprocalN = 1.0 / (totalSampleCount);
