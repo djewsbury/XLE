@@ -88,6 +88,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Link>
+      <AdditionalDependencies>imagehlp.lib;avrt.lib;winmm.lib;
+        $(SolutionDir)\..\build\msvc-release\ConsoleRig\ConsoleRig.lib;
+        $(SolutionDir)\..\build\msvc-release\Assets\Assets.lib;
+        $(SolutionDir)\..\build\msvc-release\Formatters\Formatters.lib;
+        $(SolutionDir)\..\build\msvc-release\Math\Math.lib;
+        $(SolutionDir)\..\build\msvc-release\OSServices\OSServices.lib;
+        $(SolutionDir)\..\build\msvc-release\Utility\Utility.lib;
+        $(SolutionDir)\..\build\msvc-release\ForeignMisc\ForeignMisc.lib;
+        %(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
     <ClCompile>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
     </ClCompile>

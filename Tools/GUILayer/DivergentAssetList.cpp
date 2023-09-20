@@ -10,7 +10,6 @@
 #include "ExportedNativeTypes.h"
 #include "../ToolsRig/DivergentAsset.h"
 #include "../../Assets/AssetUtils.h"
-#include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetSetManager.h"
 #include "../../Assets/IFileSystem.h"

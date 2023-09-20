@@ -285,7 +285,7 @@ namespace GUILayer
         virtual event PropertyChangedEventHandler^ PropertyChanged;
 
     protected:
-        void NotifyPropertyChanged(/*[CallerMemberName]*/ System::String^ propertyName);
+        void NotifyPropertyChanged(System::String^ propertyName);
         System::Threading::SynchronizationContext^ _propertyChangedContext;
 
         NameType _name;

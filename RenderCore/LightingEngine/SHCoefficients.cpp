@@ -5,6 +5,7 @@
 #include "SHCoefficients.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Assets/AssetTraits.h"
+#include "../../Assets/IArtifact.h"
 #include "../../Assets/Continuation.h"
 
 namespace RenderCore { namespace LightingEngine 

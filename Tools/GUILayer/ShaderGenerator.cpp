@@ -238,7 +238,6 @@ namespace GUILayer
         System::Xml::XmlWriterSettings^ settings = nullptr;
         System::Xml::XmlWriter^ writer = nullptr;
 
-        try
         {
             serializer = gcnew System::Runtime::Serialization::DataContractSerializer(Type::typeid);
             settings = gcnew System::Xml::XmlWriterSettings();
@@ -249,12 +248,11 @@ namespace GUILayer
             writer = System::Xml::XmlWriter::Create(stream, settings);
             serializer->WriteObject(writer, obj);
         }
-        finally
-        {
-            delete writer;
-            delete serializer;
-            delete settings;
-        }
+
+		// used to have a try-finally here... but maybe it's been removed from the language?
+        delete writer;
+        delete serializer;
+        delete settings;
 	}
 
     static bool IsNodeGraphChunk(const ::Assets::TextChunk<char>& chunk)        { return XlEqString(chunk._type, "NodeGraph"); }

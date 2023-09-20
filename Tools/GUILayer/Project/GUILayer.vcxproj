@@ -94,7 +94,31 @@
       <PreprocessorDefinitions>COMPILING_GUILAYER;XLE_REGISTER_METAL_VARIANTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>dxguid.lib;cfgmgr32.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dxguid.lib;cfgmgr32.lib;shlwapi.lib;imagehlp.lib;avrt.lib;winmm.lib;
+		  $(SolutionDir)\..\build\msvc-release\ToolsRig\ToolsRig-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-release\PlatformRig\PlatformRig-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-release\RenderOverlays\RenderOverlays-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-release\RenderCoreLightingEngine\RenderCoreLightingEngine-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-release\RenderCoreTechniques\RenderCoreTechniques-$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-release\RenderCoreMetal\RenderCoreMetalVulkan\RenderCore_$(GfxConfiguration).lib;
+		  $(SolutionDir)\..\build\msvc-release\BufferUploads\BufferUploads-$(GfxConfiguration).lib;
+      $(SolutionDir)\..\build\msvc-release\BufferUploads\BufferUploads-Shared.lib;
+		  $(SolutionDir)\..\build\msvc-release\RenderCoreAssets\RenderCoreAssets.lib;
+		  $(SolutionDir)\..\build\msvc-release\RenderCore\RenderCore.lib;
+		  $(SolutionDir)\..\build\msvc-release\ShaderParser\ShaderParser.lib;
+      $(SolutionDir)\..\build\msvc-release\Formatters\Formatters.lib;
+		  $(SolutionDir)\..\build\msvc-release\ConsoleRig\ConsoleRig.lib;
+		  $(SolutionDir)\..\build\msvc-release\Assets\Assets.lib;
+		  $(SolutionDir)\..\build\msvc-release\Math\Math.lib;
+		  $(SolutionDir)\..\build\msvc-release\OSServices\OSServices.lib;
+		  $(SolutionDir)\..\build\msvc-release\Utility\Utility.lib;
+		  $(SolutionDir)\..\build\msvc-release\ForeignMisc\ForeignMisc.lib;
+      $(SolutionDir)\..\build\msvc-release\ForeignMisc\yogacore.lib;
+		  $(SolutionDir)\..\build\msvc-release\bin\CMake\DirectXTex.lib;
+		  $(SolutionDir)\..\build\msvc-release\ForeignMisc\freetype\freetype.lib;
+      $(XLECompressonatorDir)\lib\VS2017\x64\Compressonator_MD.lib;
+		  $(VULKAN_SDK)\Lib\vulkan-1.lib;
+		  %(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-DX11|x64'">
@@ -171,6 +195,7 @@
     <ClCompile Include="..\EditorInterfaceUtils.cpp" />
     <ClCompile Include="..\EditorSceneParser.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\EditorSceneParserStubs.cpp" />
     <ClCompile Include="..\EngineDevice.cpp" />
@@ -180,6 +205,7 @@
     <ClCompile Include="..\GUILayerUtil.cpp" />
     <ClCompile Include="..\IterativeSystemDebugger.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\LayerControl.cpp" />
     <ClCompile Include="..\LevelEditorScene.cpp" />
@@ -194,6 +220,7 @@
     <ClCompile Include="..\ManipulatorsLayer.cpp" />
     <ClCompile Include="..\TerrainLayer.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\TweakableBridge.cpp" />
     <ClCompile Include="..\TypeRules.cpp" />
@@ -216,6 +243,7 @@
     <ClInclude Include="..\IOverlaySystem.h" />
     <ClInclude Include="..\IterativeSystemDebugger.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|x64'">true</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="..\IWindowRig.h" />
     <ClInclude Include="..\LayerControl.h" />
@@ -229,6 +257,7 @@
     <ClInclude Include="..\ShaderGenerator.h" />
     <ClInclude Include="..\TerrainLayer.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|x64'">true</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="..\TypeRules.h" />
     <ClInclude Include="..\UITypesBinding.h" />

@@ -7,11 +7,10 @@
 #include "TextureLoaders.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediateCompilers.h"
-#include "../../Assets/IArtifact.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"
 
-namespace Assets { class OperationContext; }
+namespace Assets { class OperationContext; class DependencyValidation; class ArtifactRequestResult; class ArtifactRequest; }
 namespace std { template <typename T> class function; }
 
 namespace RenderCore { namespace Assets

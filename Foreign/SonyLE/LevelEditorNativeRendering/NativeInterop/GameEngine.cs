@@ -93,8 +93,7 @@ namespace RenderingInterop
             s_invalidateCallback = new InvalidateViewsDlg(InvalidateViews);
             try
             {
-                GUILayer.EngineDevice.SetDefaultWorkingDirectory();
-                s_engineDevice = new GUILayer.EngineDevice();
+                s_engineDevice = new GUILayer.EngineDevice(new GUILayer.StartupConfig());
                 s_retainedRenderResources = new GUILayer.RetainedRenderResources(s_engineDevice);
                 s_underlyingScene = new GUILayer.EditorSceneManager();
                 Util3D.Init();

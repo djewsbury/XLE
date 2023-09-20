@@ -91,6 +91,8 @@ namespace Assets
     class DirectorySearchRules;
 	DirectorySearchRules DefaultDirectorySearchRules(StringSection<ResChar>);
 
+#if !defined(__CLR_VER)
+
     namespace Internal
     {
 		const ConfigFileContainer<Formatters::TextInputFormatter<>>& GetConfigFileContainer(StringSection<> identifier);
@@ -212,14 +214,9 @@ namespace Assets
 		} CATCH_END
 	}
 
-}
+	#undef ENABLE_IF
 
-#if 0
-namespace std
-{
-	template<typename AssetType, ENABLE_IF(::Assets::Internal::HasConstructor_Formatter<AssetType>)>
-		AssetType AutoConstructAsset(string&& initializer) { return ::Assets::AutoConstructAsset<AssetType>(initializer); }
-}
 #endif
 
-#undef ENABLE_IF
+}
+

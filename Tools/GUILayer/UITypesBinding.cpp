@@ -332,7 +332,9 @@ namespace GUILayer
     template<typename NameType, typename ValueType>
         void PropertyPair<NameType, ValueType>::NotifyPropertyChanged(System::String^ propertyName)
     {
-        PropertyChanged(this, gcnew PropertyChangedEventArgs(propertyName));
+        // HACK -- this is failing to compile in release; hitting an internal compile error
+        // is it a bug in a recent version of the compiler?
+        // PropertyChanged(this, gcnew PropertyChangedEventArgs(propertyName));
     }
 
     public ref class BindingConv

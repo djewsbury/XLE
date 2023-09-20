@@ -532,7 +532,7 @@ namespace PlatformRig { namespace Overlays
 			YGNodeStyleSetJustifyContent(baseNode, YGJustifySpaceBetween);
 			YGNodeStyleSetAlignItems(baseNode, YGAlignStretch);
 			
-			YGNodeStyleSetMargin(baseNode, YGEdgeAll, _staticData->_popupMargin);
+			YGNodeStyleSetMargin(baseNode, YGEdgeAll, (float)_staticData->_popupMargin);
 			return baseNode;
 		}
 
@@ -587,7 +587,7 @@ namespace PlatformRig { namespace Overlays
 			_headingFont = ActualizeFont(_staticData->_headingFont);
 			_valueFont = ActualizeFont(_staticData->_valueFont);
 
-			_dotWidth = StringWidth(*_valueFont, MakeStringSection("..")) - StringWidth(*_valueFont, MakeStringSection("."));
+			_dotWidth = unsigned(StringWidth(*_valueFont, MakeStringSection("..")) - StringWidth(*_valueFont, MakeStringSection(".")));
 		}
 
 	private:
@@ -635,7 +635,7 @@ namespace PlatformRig { namespace Overlays
 		styler.PopupBorder(le);
 
 		styler.SectionContainer(le, "Placement Details");
-		LeftRightMargins(le, styler._staticData->_valueAreaHorzMargins);
+		LeftRightMargins(le, (float)styler._staticData->_valueAreaHorzMargins);
 
 		if (!selectedMaterialName.empty() || !selectedModelName.empty()) {
 			styler.KeyValueGroup(le); styler.KeyName(le, "Model Scaffold"); styler.ExpandingConnectorLine(le); styler.KeyValue(le, ColouriseFilename(selectedModelName)); le.PopNode();

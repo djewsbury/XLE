@@ -26,6 +26,7 @@
 #include "../Metal/Resource.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../xleres/FileList.h"
 
 using namespace Utility::Literals;

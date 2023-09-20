@@ -18,6 +18,8 @@
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/ContinuationUtil.h"
+#include "../../Assets/IArtifact.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include "../../Utility/FunctionUtils.h"
 #include "../../xleres/FileList.h"

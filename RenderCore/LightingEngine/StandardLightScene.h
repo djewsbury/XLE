@@ -251,7 +251,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	template<typename T>
 		template<typename... Params>
-			auto PageHeap<T>::AllocateAtIndex(Indexor index, Params&&...) -> Iterator
+			auto PageHeap<T>::AllocateAtIndex(Indexor index, Params&&... p) -> Iterator
 	{
 		assert(!_allocationFlags.IsAllocated(index));
 		_allocationFlags.Allocate(index);
