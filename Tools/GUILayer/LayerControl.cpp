@@ -109,22 +109,27 @@ namespace GUILayer
         _pendingUpdateRenderTargets = true;
     }
 
-    void LayerControl::EnableFrameRigOverlay(bool newState)
+    void LayerControl::EnableFrameRigOverlay(bool newState, std::shared_ptr<::Assets::OperationContext> opContext)
     {
         if (!newState) {
-            if (_debugOverlaysApparatus.get()) {
+            if (_frameRigDisplay.get()) {
                 _debugOverlaysApparatus.reset();
+                _frameRigDisplay.reset();
                 _pendingUpdateRenderTargets = true;
             }
             return;
         }
 
-        if (_debugOverlaysApparatus.get())
+        if (_frameRigDisplay.get()) {
+            _frameRigDisplay->SetLoadingContext(opContext);
             return;
+        }
 
         _debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(EngineDevice::GetInstance()->GetNative().GetOverlayApparatus());
-        auto display = GetWindowRig().GetFrameRig().CreateDisplay(_debugOverlaysApparatus->_debugSystem, nullptr);
-        PlatformRig::SetSystemDisplay(*_debugOverlaysApparatus->_debugSystem.get(), display);
+        _frameRigDisplay = GetWindowRig().GetFrameRig().CreateDisplay(_debugOverlaysApparatus->_debugSystem, opContext);
+        _frameRigDisplay->SetStyle(PlatformRig::IFrameRigDisplay::Style::NonInteractive);
+        _frameRigDisplay->EnableMainStates(true);
+        PlatformRig::SetSystemDisplay(*_debugOverlaysApparatus->_debugSystem.get(), _frameRigDisplay.GetNativePtr());
         _pendingUpdateRenderTargets = true;
     }
 

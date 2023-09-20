@@ -67,18 +67,23 @@ namespace PlatformRig
 				l->Unregister(widget);
 			});
 
-		ConsoleRig::CrossModule::GetInstance()._services.Add(
-			Fn_ShowScreen,
-			[weakDebugScreens = std::weak_ptr<DebugScreensSystem>{_debugSystem}](StringSection<> screenName) {
-				auto l = weakDebugScreens.lock();
-				if (l)
-					l->SwitchToScreen(screenName);
-			});
+		using UtilityFnSig = void(StringSection<>);
+		if (!ConsoleRig::CrossModule::GetInstance()._services.Has<UtilityFnSig>(Fn_ShowScreen)) {
+			ConsoleRig::CrossModule::GetInstance()._services.Add(
+				Fn_ShowScreen,
+				[weakDebugScreens = std::weak_ptr<DebugScreensSystem>{_debugSystem}](StringSection<> screenName) {
+					auto l = weakDebugScreens.lock();
+					if (l)
+						l->SwitchToScreen(screenName);
+				});
+			_popUtilityFn = true;
+		}
 	}
 
 	DebugOverlaysApparatus::~DebugOverlaysApparatus()
 	{
-		ConsoleRig::CrossModule::GetInstance()._services.Remove(Fn_ShowScreen);
+		if (_popUtilityFn)
+			ConsoleRig::CrossModule::GetInstance()._services.Remove(Fn_ShowScreen);
 	}
 
 	void SetSystemDisplay(RenderOverlays::DebuggingDisplay::DebugScreensSystem& debugScreens, std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> systemDisplay)

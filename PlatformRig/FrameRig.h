@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../RenderCore/FrameBufferDesc.h"      // for FrameBufferProperties
+#include "../RenderOverlays/DebuggingDisplay.h"
 #include <memory>
 #include <vector>
 
@@ -19,6 +20,7 @@ namespace PlatformRig
 {
     class IOverlaySystem;
     class WindowApparatus;
+    class IFrameRigDisplay;
 
     std::vector<RenderCore::Techniques::PreregisteredAttachment> InitializeColorLDR(
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*>);
@@ -67,7 +69,8 @@ namespace PlatformRig
 
         RenderCore::Techniques::TechniqueContext& GetTechniqueContext();
 
-        auto CreateDisplay(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem>, std::shared_ptr<Assets::OperationContext>) -> std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>;
+        auto CreateDisplay(std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem>, std::shared_ptr<Assets::OperationContext>)
+            -> std::shared_ptr<IFrameRigDisplay>;
 
         FrameRig(
             RenderCore::Techniques::FrameRenderingApparatus& frameRenderingApparatus,
@@ -82,5 +85,14 @@ namespace PlatformRig
 
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
+    };
+
+    class IFrameRigDisplay : public RenderOverlays::DebuggingDisplay::IWidget
+    {
+    public:
+        enum class Style { Normal, NonInteractive };
+        virtual void SetStyle(Style) = 0;
+        virtual void EnableMainStates(bool) = 0;
+        virtual void SetLoadingContext(std::shared_ptr<Assets::OperationContext>) = 0;
     };
 }

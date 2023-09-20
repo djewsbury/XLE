@@ -110,7 +110,7 @@ namespace GUILayer
         overlaySet.AddSystem(_pimpl->_modelLayer);
 		overlaySet.AddSystem(_pimpl->_visOverlay);
 		overlaySet.AddSystem(_pimpl->_manipulatorLayer);
-		view->EnableFrameRigOverlay(true);
+		view->EnableFrameRigOverlay(true, _pimpl->_loadingContext);
 		view->UpdateRenderTargets();
 	}
 
@@ -120,6 +120,7 @@ namespace GUILayer
 		overlaySet.RemoveSystem(*_pimpl->_manipulatorLayer);
 		overlaySet.RemoveSystem(*_pimpl->_visOverlay);
 		overlaySet.RemoveSystem(*_pimpl->_modelLayer);
+		view->EnableFrameRigOverlay(false, nullptr);
 		view->UpdateRenderTargets();
 	}
 

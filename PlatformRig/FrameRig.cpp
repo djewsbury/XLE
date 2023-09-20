@@ -56,6 +56,7 @@
 #include "../Assets/OperationContext.h"
 #include "../Formatters/FormatterUtils.h"
 #include "../Tools/EntityInterface/MountedData.h"
+#include "DebuggingDisplays/InvalidAssetDisplay.h"
 
 using namespace Assets::Literals;
 using namespace PlatformRig::Literals;
@@ -110,13 +111,16 @@ namespace PlatformRig
         }
     };
 
-    class FrameRigDisplay : public RenderOverlays::DebuggingDisplay::IWidget
+    class FrameRigDisplay : public IFrameRigDisplay
     {
     public:
         void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
         void SetErrorMsg(std::string msg) { _errorMsg = std::move(msg); }
+        void SetStyle(Style style) override { _style = style; }
+        void EnableMainStates(bool fpsDisplay) override { _showMainStats = fpsDisplay; }
+        void SetLoadingContext(std::shared_ptr<Assets::OperationContext> opContext) override { _loadingContext = opContext; }
 
         FrameRigDisplay(
             std::shared_ptr<DebugScreensSystem> debugSystem,
@@ -128,6 +132,8 @@ namespace PlatformRig
         const FrameRateRecorder* _frameRate;
         unsigned _subMenuOpen;
         std::string _errorMsg;
+        Style _style = Style::Normal;
+        bool _showMainStats = true;
 
         std::weak_ptr<DebugScreensSystem> _debugSystem;
         std::shared_ptr<Assets::OperationContext> _loadingContext;
@@ -676,9 +682,8 @@ namespace PlatformRig
 
         using namespace RenderOverlays;
         auto outerRect = layout.GetMaximumSize();
-        auto* staticData = &EntityInterface::MountedData<FrameRigDisplayStaticData>::LoadOrDefault("cfg/displays/framerig"_initializer);
 
-        {
+        if (_showMainStats) {
             const Coord rectWidth = 200;
             const Coord padding = 12;
             const Coord margin = 8;
@@ -703,31 +708,44 @@ namespace PlatformRig
             interactables.Register({displayRect, Id_FrameRigDisplayMain});
         }
 
-        auto ds = _debugSystem.lock();
-        if (ds && !ds->CurrentScreen(0)) {
-            Layout outerKeyHelpRect = outerRect;
-            outerKeyHelpRect._maximumSize._topLeft[1] += staticData->_verticalOffset;
+        if (_style == Style::Normal) {
+            auto ds = _debugSystem.lock();
+            if (ds && !ds->CurrentScreen(0)) {
+                auto* staticData = &EntityInterface::MountedData<FrameRigDisplayStaticData>::LoadOrDefault("cfg/displays/framerig"_initializer);
 
-            CommonWidgets::Styler styler;
-            DrawContext drawContext{context, interactables, interfaceState};
+                Layout outerKeyHelpRect = outerRect;
+                outerKeyHelpRect._maximumSize._topLeft[1] += staticData->_verticalOffset;
 
-            std::vector<const char*> keys, keyLabels;
-            keys.push_back("H"); keyLabels.push_back("Help");
+                CommonWidgets::Styler styler;
+                DrawContext drawContext{context, interactables, interfaceState};
 
-            if (_loadingContext && !_loadingContext->IsIdle()) {
-                keys.push_back("C");
-                keyLabels.push_back("Compile Progress");
+                std::vector<const char*> keys, keyLabels;
+                keys.push_back("H"); keyLabels.push_back("Help");
+
+                if (_loadingContext && !_loadingContext->IsIdle()) {
+                    keys.push_back("C");
+                    keyLabels.push_back("Compile Progress");
+                }
+
+                for (unsigned c=0; c<keys.size(); ++c) {
+                    auto measure0 = styler.MeasureKeyIndicator(keyLabels[c], keys[c]);
+
+                    auto frame = outerKeyHelpRect.AllocateFullWidth(measure0._height);
+                    if (frame.Width() < measure0._minWidth) continue;
+                    frame._topLeft[0] = frame._bottomRight[0] - std::min(frame.Width(), measure0._width);
+
+                    auto d = styler.MeasureKeyIndicator_Precalculate(frame.Width(), frame.Height(), keyLabels[c], keys[c]);
+                    styler.KeyIndicator(drawContext, frame, d.get());
+                }
             }
+        } else {
+            assert(_style == Style::NonInteractive);
 
-            for (unsigned c=0; c<keys.size(); ++c) {
-                auto measure0 = styler.MeasureKeyIndicator(keyLabels[c], keys[c]);
-
-                auto frame = outerKeyHelpRect.AllocateFullWidth(measure0._height);
-                if (frame.Width() < measure0._minWidth) continue;
-                frame._topLeft[0] = frame._bottomRight[0] - std::min(frame.Width(), measure0._width);
-
-                auto d = styler.MeasureKeyIndicator_Precalculate(frame.Width(), frame.Height(), keyLabels[c], keys[c]);
-                styler.KeyIndicator(drawContext, frame, d.get());
+            // We should always display active compiles. Since we're in non-interactive mode, we have to show the screen directly, rather than 
+            // just showing a key icon
+            if (_loadingContext && !_loadingContext->IsIdle()) {
+                Overlays::OperationContextDisplay op { _loadingContext };
+                op.Render(context, layout, interactables, interfaceState);
             }
         }
 
@@ -742,6 +760,9 @@ namespace PlatformRig
 
     auto    FrameRigDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
     {
+        if (_style == Style::NonInteractive)
+            return ProcessInputResult::Passthrough;
+
         auto topMost = interfaceState.TopMostHotArea();
         if (input.IsPress_LButton() || input.IsRelease_LButton()) {
             if (topMost._id == Id_FrameRigDisplayMain) {
@@ -801,7 +822,7 @@ namespace PlatformRig
     FrameRigDisplay::~FrameRigDisplay()
     {}
 
-    std::shared_ptr<IWidget> FrameRig::CreateDisplay(std::shared_ptr<DebugScreensSystem> debugSystem, std::shared_ptr<Assets::OperationContext> loadingContext)
+    std::shared_ptr<IFrameRigDisplay> FrameRig::CreateDisplay(std::shared_ptr<DebugScreensSystem> debugSystem, std::shared_ptr<Assets::OperationContext> loadingContext)
     {
         if (!_pimpl->_frameRigDisplay)
             _pimpl->_frameRigDisplay = std::make_shared<FrameRigDisplay>(std::move(debugSystem), std::move(loadingContext), _pimpl->_prevFrameAllocationCount, _pimpl->_frameRate);

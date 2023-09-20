@@ -9,8 +9,8 @@
 #include "EngineControl.h"
 #include <memory>
 
-namespace PlatformRig { class OverlaySystemSet; }
-namespace PlatformRig { class DebugOverlaysApparatus; }
+namespace PlatformRig { class OverlaySystemSet; class DebugOverlaysApparatus; class IFrameRigDisplay; }
+namespace Assets { class OperationContext; }
 
 namespace GUILayer 
 {
@@ -24,7 +24,7 @@ namespace GUILayer
         void AddSystem(IOverlaySystem^ overlay);
         PlatformRig::OverlaySystemSet& GetMainOverlaySystemSet();
         void UpdateRenderTargets();
-        void EnableFrameRigOverlay(bool);
+        void EnableFrameRigOverlay(bool, std::shared_ptr<::Assets::OperationContext>);
 
         LayerControl(System::Windows::Forms::Control^ control);
         ~LayerControl();
@@ -34,6 +34,7 @@ namespace GUILayer
         bool _pendingUpdateRenderTargets;
         clix::auto_ptr<PlatformRig::OverlaySystemSet> _mainOverlaySystemSet;
         clix::shared_ptr<PlatformRig::DebugOverlaysApparatus> _debugOverlaysApparatus;
+        clix::shared_ptr<PlatformRig::IFrameRigDisplay> _frameRigDisplay;
 
         virtual bool Render(const std::shared_ptr<RenderCore::IThreadContext>&, IWindowRig&) override;
 		virtual void OnResize(IWindowRig&) override;

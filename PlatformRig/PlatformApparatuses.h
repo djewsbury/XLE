@@ -41,6 +41,9 @@ namespace PlatformRig
 		DebugOverlaysApparatus(
 			const std::shared_ptr<RenderOverlays::OverlayApparatus>& immediateDrawingApparatus);
 		~DebugOverlaysApparatus();
+
+	private:
+		bool _popUtilityFn = false;
 	};
 
 	void SetSystemDisplay(
