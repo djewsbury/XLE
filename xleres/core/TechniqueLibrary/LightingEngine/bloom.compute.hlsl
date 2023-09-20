@@ -7,7 +7,11 @@
 #include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 #include "../Math/MathConstants.hlsl"
 
-Texture2D<float3>		HDRInput : register(t0, space0);
+#if HDR_INPUT_SAMPLE_COUNT > 1
+	Texture2DMS<float3>		HDRInput : register(t0, space0);
+#else
+	Texture2D<float3>		HDRInput : register(t0, space0);
+#endif
 RWTexture2D<float4>		HighResBlurTemp : register(u1, space0);
 RWTexture2D<float4>		MipChainUAV[8] : register(u2, space0);
 Texture2D<float3>		MipChainSRV : register(t3, space0);
@@ -87,10 +91,17 @@ float FastLuminance(float3 c) { return (c.x+c.y+c.z)*0.333333; }
 	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
 
 	uint2 twiddler = uint2(1,0);
-	float3 A = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yy, 0)).rgb;
-	float3 B = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xy, 0)).rgb;
-	float3 C = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yx, 0)).rgb;
-	float3 D = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xx, 0)).rgb;
+	#if HDR_INPUT_SAMPLE_COUNT > 1
+		float3 A = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yy, 0), 0).rgb;
+		float3 B = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xy, 0), 0).rgb;
+		float3 C = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yx, 0), 0).rgb;
+		float3 D = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xx, 0), 0).rgb;
+	#else
+		float3 A = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yy, 0)).rgb;
+		float3 B = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xy, 0)).rgb;
+		float3 C = HDRInput.Load(uint3(pixelId.xy*2+twiddler.yx, 0)).rgb;
+		float3 D = HDRInput.Load(uint3(pixelId.xy*2+twiddler.xx, 0)).rgb;
+	#endif
 
 	float3 bA = BrightPassScale(A);
 	float3 bB = BrightPassScale(B);

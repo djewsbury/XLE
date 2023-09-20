@@ -488,13 +488,17 @@ namespace RenderCore { namespace LightingEngine
 					// Since this is a little different, we'll forgo the IComputeShaderOperator object and
 					// just use the lower level PipelineCollection object
 
+					ParameterBox brightPassParameters;
+					if (strongThis->_samples._sampleCount)
+						brightPassParameters.SetParameter("HDR_INPUT_SAMPLE_COUNT", strongThis->_samples._sampleCount);
 					std::promise<Techniques::ComputePipelineAndLayout> promisedBrightPass;
 					auto futureBrightPass = promisedBrightPass.get_future();
+					const ParameterBox* selectorsList2[] { &brightPassParameters };
 					strongThis->_pool->CreateComputePipeline(
 						std::move(promisedBrightPass),
 						compiledPipelineLayout,
 						BLOOM_COMPUTE_HLSL ":BrightPassFilter",
-						{});
+						selectorsList2);
 
 					std::promise<Techniques::ComputePipelineAndLayout> promisedDownsample;
 					auto futureDownsample = promisedDownsample.get_future();
