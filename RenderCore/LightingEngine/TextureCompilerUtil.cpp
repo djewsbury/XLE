@@ -107,21 +107,24 @@ namespace RenderCore { namespace LightingEngine
 				if (xl_clz4(_samplesPerCmdList) >= increaser) {
 					assert(_samplesPerCmdList << increaser);
 					_samplesPerCmdList <<= increaser;
+					_samplesPerCmdList = std::min(_samplesPerCmdList, _maxSamplesPerCmdList);
 				}
 			}
 		}
 
-		BalancedSamplingShaderHelper(unsigned totalSampleCount, unsigned idealCmdListCostMS)
-		: _totalSampleCount(totalSampleCount), _idealCmdListCostMS(idealCmdListCostMS)
+		BalancedSamplingShaderHelper(unsigned totalSampleCount, unsigned idealCmdListCostMS, unsigned maxSamplesPerCmdList)
+		: _totalSampleCount(totalSampleCount), _idealCmdListCostMS(idealCmdListCostMS), _maxSamplesPerCmdList(maxSamplesPerCmdList)
 		{
 			assert(_totalSampleCount);
 			assert(_idealCmdListCostMS);
+			_samplesPerCmdList = std::min(_samplesPerCmdList, _maxSamplesPerCmdList);
 		}
 	private:
 		unsigned _samplesProcessed = 0;
 		unsigned _samplesPerCmdList = 256;
 		unsigned _totalSampleCount = 0;
 		unsigned _idealCmdListCostMS = 1500;
+		unsigned _maxSamplesPerCmdList = ~0u;
 	};
 
 	std::shared_ptr<BufferUploads::IAsyncDataSource> EquirectFilter(
@@ -150,6 +153,14 @@ namespace RenderCore { namespace LightingEngine
  			computeOpFuture = Techniques::CreateComputeOperator(
 				pipelineCollection,
 				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquirectToCube",
+				{},
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
+				usi);
+		} else if (filter == EquirectFilterMode::ToCubeMapBokeh) {
+			usi.BindResourceView(1, "OutputArray"_h);
+ 			computeOpFuture = Techniques::CreateComputeOperator(
+				pipelineCollection,
+				EQUIRECTANGULAR_TO_CUBE_BOKEH_HLSL ":EquirectToCubeBokeh",
 				{},
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
@@ -210,7 +221,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
 
-		if (filter == EquirectFilterMode::ToCubeMap || filter == EquirectFilterMode::ProjectToSphericalHarmonic) {
+		if (filter == EquirectFilterMode::ToCubeMap || filter == EquirectFilterMode::ToCubeMapBokeh || filter == EquirectFilterMode::ProjectToSphericalHarmonic) {
 			unsigned totalDispatchCount = 0, completedDispatchCount = 0;
 			for (unsigned mip=0; mip<targetDesc._mipCount; ++mip)
 				if (filter == EquirectFilterMode::ToCubeMap) {
@@ -238,6 +249,29 @@ namespace RenderCore { namespace LightingEngine
 						dispatchGroup.Dispatch(1, 1, 1, MakeOpaqueIteratorRange(filterPassParams));
 						++completedDispatchCount; if (opHelper) opHelper.SetProgress(completedDispatchCount, totalDispatchCount);
 					}
+				} else if (filter == EquirectFilterMode::ToCubeMapBokeh) {
+
+					BalancedSamplingShaderHelper samplingShaderHelper(params._sampleCount, params._idealCmdListCostMS, params._maxSamplesPerCmdList);
+					while (!samplingShaderHelper.Finished()) {
+						struct ControlUniforms
+						{
+							BalancedSamplingShaderHelper::Uniforms _samplingShaderUniforms;
+						} controlUniforms {
+							samplingShaderHelper.ConfigureNextDispatch(),
+						};
+
+						dispatchGroup.Dispatch((mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, MakeOpaqueIteratorRange(controlUniforms));
+
+						if ((mip+1) == targetDesc._mipCount && samplingShaderHelper.Finished()) break;		// exit now to avoid a tiny cmd list after the last dispatch
+
+						dispatchGroup = {};
+						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
+						samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, "ToCubeMapBokeh");
+						dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);		// hack -- because we're ending the display list we have to begin and end the dispatch group
+					}
+
+					++completedDispatchCount; if (opHelper) opHelper.SetProgress(completedDispatchCount, totalDispatchCount);
+
 				} else {
 					assert(filter == EquirectFilterMode::ProjectToSphericalHarmonic);
 					dispatchGroup.Dispatch(targetDesc._width, 1, 1);
@@ -314,7 +348,7 @@ namespace RenderCore { namespace LightingEngine
 				auto totalSampleCount = passesPerPixel * samplesPerPass;
 				// If you hit the following, the quantity of samples is going to exceed precision available with 32 bit ints
 				assert((uint64_t(totalSampleCount)*uint64_t(samplerHelpers[mip]._repeatingStride)) < (1ull<<30ull));
-				samplingShaderHelpers.push_back(BalancedSamplingShaderHelper{totalSampleCount, params._idealCmdListCostMS});
+				samplingShaderHelpers.push_back(BalancedSamplingShaderHelper{totalSampleCount, params._idealCmdListCostMS, params._maxSamplesPerCmdList});
 			}
 
 			uint64_t totalSampleCount = 0, samplesCompleted = 0;
@@ -402,7 +436,7 @@ namespace RenderCore { namespace LightingEngine
 				UniformsStream us;
 				us._resourceViews = MakeIteratorRange(resViews);
 
-				BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount, params._idealCmdListCostMS);
+				BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount, params._idealCmdListCostMS, params._maxSamplesPerCmdList);
 				while (!samplingShaderHelper.Finished()) {
 					struct ControlUniforms
 					{
@@ -449,10 +483,13 @@ namespace RenderCore { namespace LightingEngine
 		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 			threadContextVulkan->ReleaseCommandBufferPool();
 
+		if (progressiveResults)
+			progressiveResults(result);
+
 		return result;
 	}
 
-	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(StringSection<> shader, const TextureDesc& targetDesc, unsigned totalSampleCount)
+	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(StringSection<> shader, const TextureDesc& targetDesc, unsigned totalSampleCount, unsigned idealCmdListCostMS, unsigned maxSamplesPerCmdList)
 	{
 		auto threadContext = Techniques::GetThreadContext();
 		
@@ -491,8 +528,7 @@ namespace RenderCore { namespace LightingEngine
 				// get ahead of the GPU anyway, and we also don't want to release this thread to the 
 				// thread pool while waiting for the GPU
 
-			const unsigned idealCmdListCostMS = 1500;
-			BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount, idealCmdListCostMS);
+			BalancedSamplingShaderHelper samplingShaderHelper(totalSampleCount, idealCmdListCostMS, maxSamplesPerCmdList);
 			for (unsigned a=0; a<ActualArrayLayerCount(targetDesc); ++a) {
 				samplingShaderHelper.ResetSamplesProcessed();
 

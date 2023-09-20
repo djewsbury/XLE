@@ -170,6 +170,7 @@ namespace RenderCore { namespace Assets
 		auto type = operationElement.Name();
 		if (XlEqStringI(type, "Convert")) result._operation = TextureCompilationRequest::Operation::Convert; 
 		else if (XlEqStringI(type, "EquirectToCubeMap")) result._operation = TextureCompilationRequest::Operation::EquirectToCubeMap;
+		else if (XlEqStringI(type, "EquirectToCubeMapBokeh")) result._operation = TextureCompilationRequest::Operation::EquirectToCubeMapBokeh;
 		else if (XlEqStringI(type, "EquirectFilterGlossySpecular")) result._operation = TextureCompilationRequest::Operation::EquirectFilterGlossySpecular;
 		else if (XlEqStringI(type, "EquirectFilterGlossySpecularReference")) result._operation = TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference;
 		else if (XlEqStringI(type, "ProjectToSphericalHarmonic")) result._operation = TextureCompilationRequest::Operation::ProjectToSphericalHarmonic;
@@ -197,6 +198,9 @@ namespace RenderCore { namespace Assets
 
 		result._shader = operationElement.Attribute("Shader").Value().AsString();
 		result._srcFile = operationElement.Attribute("SourceFile").Value().AsString();
+
+		result._commandListIntervalMS = operationElement.Attribute("CommandListInterval", result._commandListIntervalMS);
+		result._maxSamplesPerCmdList = operationElement.Attribute("MaxSamplesPerCmdList", result._maxSamplesPerCmdList);
 		return result;
 	}
 
@@ -205,6 +209,7 @@ namespace RenderCore { namespace Assets
 		switch (request._operation) {
 		case TextureCompilationRequest::Operation::Convert: str << request._srcFile << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::EquirectToCubeMap: str << request._srcFile << "-EquirectToCubeMap-" << request._faceDim << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::EquirectToCubeMapBokeh: str << request._srcFile << "-EquirectToCubeMapBokeh-" << request._faceDim << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecular: str << request._srcFile << "-spec-" << request._faceDim << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference: str << request._srcFile << "-refspec-" << request._faceDim << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::EquirectFilterDiffuseReference: str << request._srcFile << "-refdiffuse-" << request._faceDim << "-" << AsString(request._format); break;
@@ -220,6 +225,15 @@ namespace RenderCore { namespace Assets
 		std::stringstream str;
 		str << *this;
 		return Hash64(str.str(), seed);
+	}
+
+	static LightingEngine::EquirectFilterParams AsEquirectFilterParams(const TextureCompilationRequest& request)
+	{
+		LightingEngine::EquirectFilterParams params;
+		params._sampleCount = request._sampleCount;
+		params._idealCmdListCostMS = request._commandListIntervalMS;
+		params._maxSamplesPerCmdList = request._maxSamplesPerCmdList;
+		return params;
 	}
 
 	class TextureCompileOperation : public ::Assets::ICompileOperation
@@ -274,7 +288,24 @@ namespace RenderCore { namespace Assets
 				targetDesc._arrayCount = 0u;
 				targetDesc._mipCount = (request._mipMapFilter == TextureCompilationRequest::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToCubeMap, {}, opHelper, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToCubeMap, AsEquirectFilterParams(request), opHelper, *intermediateFunction);
+				_dependencies.push_back(srcPkt->GetDependencyValidation());
+			} else if (request._operation == TextureCompilationRequest::Operation::EquirectToCubeMapBokeh) {
+				if (opHelper) {
+					opHelper.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-cubemap-bokeh{color:} compilation: ", ColouriseFilename(request._srcFile)));
+					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
+				}
+
+				auto srcDst = srcPkt->GetDesc();
+				srcDst.wait();
+				auto targetDesc = srcDst.get()._textureDesc;
+				targetDesc._width = request._faceDim;
+				targetDesc._height = request._faceDim;
+				targetDesc._depth = 1;
+				targetDesc._arrayCount = 0u;
+				targetDesc._mipCount = (request._mipMapFilter == TextureCompilationRequest::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
+				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToCubeMapBokeh, AsEquirectFilterParams(request), opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterGlossySpecular) {
 				if (opHelper) {
@@ -292,10 +323,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				LightingEngine::EquirectFilterParams params;
-				params._sampleCount = request._sampleCount;
-				params._idealCmdListCostMS = request._commandListIntervalMS;
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecular, params, opHelper, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecular, AsEquirectFilterParams(request), opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference) {
 				if (opHelper) {
@@ -356,7 +384,7 @@ namespace RenderCore { namespace Assets
 				auto shader = request._shader;
 				if (shader.empty())
 					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
-				srcPkt = LightingEngine::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount);
+				srcPkt = LightingEngine::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount, request._commandListIntervalMS, request._maxSamplesPerCmdList);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			}
 

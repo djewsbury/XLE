@@ -25,6 +25,7 @@ namespace RenderCore { namespace Assets
 		{
 			Convert,
 			EquirectToCubeMap,
+			EquirectToCubeMapBokeh,
 			EquirectFilterGlossySpecular,
 			EquirectFilterGlossySpecularReference,
 			EquirectFilterDiffuseReference,
@@ -48,6 +49,11 @@ namespace RenderCore { namespace Assets
 		// This can be useful for avoiding driver timeouts; and also so that operations
 		// that given progressive results don't hog the GPU to heavily
 		unsigned _commandListIntervalMS = 1500;
+
+		// For compilations that use BalancedSamplingShaderHelper, this can limit the maximum
+		// number of samples that are calculated for a given cmd list. This can sometimes
+		// reduce the occurrence of infinities (depending on the algorithm)
+		unsigned _maxSamplesPerCmdList = ~0u;
 
 		std::string _shader;
 		std::string _srcFile;

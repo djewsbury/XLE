@@ -1199,6 +1199,20 @@ namespace SceneEngine
                 return true;
             }
             break;
+
+        case "UseProgressiveSpecularAsBackground"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._useProgressiveSpecularAsBackground = *value;
+                return true;
+            }
+            break;
+
+        case "BlurBackground"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._blurBackground = *value;
+                return true;
+            }
+            break;
         }
         return false;
     }

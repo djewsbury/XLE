@@ -239,7 +239,38 @@ namespace RenderCore { namespace LightingEngine
 			request2._format = _desc._cubemapFormat;
 			request2._faceDim = _desc._cubemapFaceDimension;
 			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-			_skyCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request2);
+
+			if (_desc._blurBackground) {
+				// Use the "Bokeh" mode to blur out the background image, almost as if it's a depth of field effect
+				request2._operation = Assets::TextureCompilationRequest::Operation::EquirectToCubeMapBokeh;
+				request2._sampleCount = 2048u;
+			}
+
+			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
+			if (_desc._progressiveCompilation && !_desc._useProgressiveSpecularAsBackground) {
+				progressiveResultsFn =
+					[weakbu=std::weak_ptr<BufferUploads::IManager>{_bufferUploads}, weakThis](auto dataSource) {
+						auto bu = weakbu.lock();
+						auto strongThis = weakThis.lock();
+						if (!bu || !strongThis) return;
+
+						auto transaction = bu->Begin(dataSource);
+						auto locator = transaction._future.get();		// note -- stall here, maybe some alignment with frame beat
+						
+						ScopedLock(strongThis->_pendingUpdatesLock);
+						strongThis->_pendingUpdate = true;
+						TRY {
+							strongThis->_pendingAmbientRawCubemap = locator.CreateTextureView();
+							strongThis->_pendingAmbientRawCubemapCompletion = locator.GetCompletionCommandList();
+						} CATCH(...) {
+							// suppress bad texture errors
+							strongThis->_pendingAmbientRawCubemap = nullptr;
+							strongThis->_pendingAmbientRawCubemapCompletion = 0;
+						} CATCH_END
+					};
+			}
+
+			_skyCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request2, std::move(progressiveResultsFn));
 		}
 
 		if (_onChangeIBL.AtLeastOneBind()) {
@@ -253,13 +284,13 @@ namespace RenderCore { namespace LightingEngine
 			request._format = _desc._specularCubemapFormat;
 			request._faceDim = _desc._specularCubemapFaceDimension;
 			request._sampleCount = 32u*1024u;
-			if (_desc._progressiveCompilation)
-				request._commandListIntervalMS = 250;	// some overhead created by splitting cmd lists when we want progressive results
-			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
 
+			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
 			if (_desc._progressiveCompilation) {
+				request._commandListIntervalMS = 250;	// some overhead created by splitting cmd lists when we want progressive results
+
 				progressiveResultsFn =
-					[weakbu=std::weak_ptr<BufferUploads::IManager>{_bufferUploads}, weakThis](auto dataSource) {
+					[weakbu=std::weak_ptr<BufferUploads::IManager>{_bufferUploads}, weakThis, setBkgrnd=_desc._useProgressiveSpecularAsBackground](auto dataSource) {
 						auto bu = weakbu.lock();
 						auto strongThis = weakThis.lock();
 						if (!bu || !strongThis) return;
@@ -272,8 +303,7 @@ namespace RenderCore { namespace LightingEngine
 						TRY {
 							strongThis->_pendingSpecularIBL = locator.CreateTextureView();
 							strongThis->_pendingSpecularIBLCompletion = locator.GetCompletionCommandList();
-							const bool useProgressiveResourceAsBackground = false;
-							if (useProgressiveResourceAsBackground) {
+							if (setBkgrnd) {
 								strongThis->_pendingAmbientRawCubemap = locator.CreateTextureView();
 								strongThis->_pendingAmbientRawCubemapCompletion = locator.GetCompletionCommandList();
 							}
@@ -284,7 +314,7 @@ namespace RenderCore { namespace LightingEngine
 						} CATCH_END
 					};
 			}
-				
+
 			_specularIBL = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request, std::move(progressiveResultsFn));
 		}
 

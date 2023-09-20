@@ -83,6 +83,7 @@ using namespace Assets::Literals;
 
 #define IBL_PREFILTER_HLSL "xleres/ToolsHelper/IBLPrefilter.hlsl"
 #define EQUIRECTANGULAR_TO_CUBE_HLSL "xleres/ToolsHelper/EquirectangularToCube.hlsl"
+#define EQUIRECTANGULAR_TO_CUBE_BOKEH_HLSL "xleres/ToolsHelper/EquirectangularToCubeBokeh.hlsl"
 #define TOOLSHELPER_OPERATORS_PIPELINE "xleres/ToolsHelper/operators.pipeline"_initializer
 
 #define SKIN_COMPUTE_HLSL "xleres/Deform/skin.compute.hlsl"

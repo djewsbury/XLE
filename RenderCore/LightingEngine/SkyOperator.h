@@ -52,8 +52,8 @@ namespace RenderCore { namespace LightingEngine
 		Format _specularCubemapFormat = Format::BC6H_UF16;
 
 		bool _progressiveCompilation = false;
-
-		uint64_t GetHash(uint64_t seed=DefaultSeed64) const;
+		bool _useProgressiveSpecularAsBackground = false;
+		bool _blurBackground = false;
 	};
 
 	/// <summary>Utility for transforming from asset name to sky texture resources, and assign to necessary operators</summary>

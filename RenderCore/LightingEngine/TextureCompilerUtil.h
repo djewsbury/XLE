@@ -17,11 +17,12 @@ namespace RenderCore { class TextureDesc; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	enum class EquirectFilterMode { ToCubeMap, ToGlossySpecular, ProjectToSphericalHarmonic, ToGlossySpecularReference, ToDiffuseReference };
+	enum class EquirectFilterMode { ToCubeMap, ToCubeMapBokeh, ToGlossySpecular, ProjectToSphericalHarmonic, ToGlossySpecularReference, ToDiffuseReference };
 	struct EquirectFilterParams
 	{
 		unsigned _sampleCount = 1;
 		unsigned _idealCmdListCostMS = 1500;
+		unsigned _maxSamplesPerCmdList = ~0u;
 	};
 
 	using ProgressiveTextureFn = std::function<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>;
@@ -36,5 +37,7 @@ namespace RenderCore { namespace LightingEngine
 	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromSamplingComputeShader(
 		StringSection<> shader,
 		const TextureDesc& targetDesc,
-		unsigned totalSampleCount);
+		unsigned totalSampleCount,
+		unsigned idealCmdListCostMS = 1500,
+		unsigned maxSamplesPerCmdList = ~0u);
 }}

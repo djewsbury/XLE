@@ -8,7 +8,11 @@
 #define IBL_ALGORITHM_H
 
 #if !defined(LIGHTING_ALGORITHM_H)
-    #error Include LightingAlgorithm.hlsl before inlcuding this file
+    #error Include LightingAlgorithm.hlsl before including this file
+#endif
+
+#if !defined(SPECULAR_METHODS_H)
+    #error Include SpecularMethods.hlsl before including this file
 #endif
 
 static const float MinSamplingAlpha = 0.001f;

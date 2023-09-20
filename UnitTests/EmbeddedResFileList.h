@@ -260,6 +260,7 @@ X2(Objects/Terrain/TerrainIntersection.sh, __LINE__)
 
 X(ToolsHelper/Cubemap.hlsl, __LINE__)
 X(ToolsHelper/EquirectangularToCube.hlsl, __LINE__)
+X(ToolsHelper/EquirectangularToCubeBokeh.hlsl, __LINE__)
 X(ToolsHelper/IBLPrefilter.hlsl, __LINE__)
 X(ToolsHelper/IBLTables.hlsl, __LINE__)
 X(ToolsHelper/operators.pipeline, __LINE__)

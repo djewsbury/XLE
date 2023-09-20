@@ -34,10 +34,8 @@ void swap(inout float lhs, inout float rhs)
 float minX(float x, float y, float z, float w) { return min(min(min(x, y), z), w); }
 float maxX(float x, float y, float z, float w) { return max(max(max(x, y), z), w); }
 
-float4 LoadInput(float2 xy, int2 dims)
-{
-	return Input.Load(uint3((int(xy.x)+dims.x)%dims.x, (int(xy.y)+dims.y)%dims.y, 0));
-}
+float4 LoadInput(Texture2D inputTex, float2 xy, int2 dims) { return inputTex.Load(uint3((int(xy.x)+dims.x)%dims.x, (int(xy.y)+dims.y)%dims.y, 0)); }
+float4 LoadInput(float2 xy, int2 dims) { return LoadInput(Input, xy, dims); }
 
 void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 panel[3], bool hemi)
 {
@@ -208,6 +206,8 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 float EACWeight2(precise float minTheta, precise float maxTheta, precise float inc, uint minSamples)
 {
 	// integrate atan(tan(inc)/cos(theta)) dtheta
@@ -336,6 +336,8 @@ void PanelEAC(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, floa
 #endif
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 float4 VerticalCubeMapCross(float2 texCoord, bool hemi)
 {
