@@ -57,7 +57,8 @@ float3 CalculateSkyReflectionFresnel(GBufferValues sample, float3 viewDirection)
 float3 CalculateDistantReflections(GBufferValues sample, float3 directionToEye, LightScreenDest lsd)
 {
 	#if SPECULAR_IBL
-		SpecularParameters specParam = SpecularParameters_RoughF0(sample.material.roughness, SpecularParameterToF0(sample.material.specular));
+		float3 F0 = lerp(SpecularParameterToF0(sample.material.specular).xxx, NormalizeMetalColor(sample.diffuseAlbedo), sample.material.metal);
+		SpecularParameters specParam = SpecularParameters_RoughF0(sample.material.roughness, F0);
 		return SpecularIBLLookup(sample.worldSpaceNormal, directionToEye, specParam, lsd);
 	#else
 		return 0;

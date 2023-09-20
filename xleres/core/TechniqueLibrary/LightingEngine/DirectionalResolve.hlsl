@@ -18,6 +18,20 @@ float GetRoughness(GBufferValues sample) { return sample.material.roughness; }
 float GetMetallicness(GBufferValues sample) { return sample.material.metal; }
 float GetF0_0(GBufferValues sample) { return SpecularParameterToF0(sample.material.specular); }
 
+float3 NormalizeMetalColor(float3 metalColor)
+{
+	// In the original Disney implementation, the metal color was renormalized per-pixel during the lighting calculation
+	// This presumably was to make the reflections colors blend more nicely when the metal amount was increased and decreased
+	// however, it creates extra per-pixel overhead, and actually decreases overall control of the system
+	// So, some assets assume this renormalize, others do not
+	const bool doMetalRenormalize = false;
+	if (doMetalRenormalize) {
+		float lum = .3*metalColor.r + .6*metalColor.g + .1*metalColor.g;
+		return metalColor / lum;
+	} else 
+		return metalColor;
+}
+
 float3 DirectionalLightResolve_Diffuse_NdotL(
 	GBufferValues sample,
 	float3 directionToEye,
@@ -71,7 +85,7 @@ float3 DirectionalLightResolve_Specular(
 		// In our "metal" lighting model, sample.diffuseAlbedo actually contains
 		// per-wavelength F0 values.
 	float3 metalF0 = sample.diffuseAlbedo;
-	float3 F0_0 = lerp(GetF0_0(sample).xxx, metalF0, GetMetallicness(sample));
+	float3 F0_0 = lerp(GetF0_0(sample).xxx, NormalizeMetalColor(metalF0), GetMetallicness(sample));
 
 	SpecularParameters param0 = SpecularParameters_RoughF0Transmission(
 		roughnessValue, F0_0, sample.transmission);
