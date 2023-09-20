@@ -10,6 +10,9 @@
 #include "../Math/MathConstants.hlsl"
 #include "../Math/Misc.hlsl"		// (for Sq)
 
+#define UPDIRECTION_Y 1
+#define UPDIRECTION_Z 2
+
 float RefractiveIndexToF0(float refractiveIndex)
 {
         // (note -- the 1.f here assumes one side of the interface is air)
@@ -195,6 +198,46 @@ float3 CartesianToSpherical_YUp(float3 direction)
     return result;
 }
 
+float3 SphericalToCartesian_ZUp(float inc, float theta)
+{
+    float s0, c0, s1, c1;
+    sincos(inc, s0, c0);
+    sincos(theta, s1, c1);
+    return float3(c0 * -c1, c0 * s1, s0);
+}
+
+float3 CartesianToSpherical_ZUp(float3 direction)
+{
+    // This method is arranged to match the projection in Belnder
+    // Here, theta starts at -X, and then wraps around towards +Y
+    // X,Y = (-1,  0); theta=0
+    // X,Y = ( 0,  1); theta=PI/2
+    // X,Y = ( 1,  0); theta=PI
+    // X,Y = ( 0, -1); theta=-PI/2
+    //
+    // inc is the angle of inclination, and starts at 0 on the XZ plane,
+    // and is a positive number looking up
+    float3 result;
+	result[0] = atan2(direction.z, sqrt(direction.x*direction.x+direction.y*direction.y));	// inc
+    result[1] = atan2(direction.y, -direction.x);	// theta
+    result[2] = length(direction);
+    return result;
+}
+
+float3 SphericalToCartesian(float inc, float theta, uint upDirection)
+{
+	if (upDirection == UPDIRECTION_Y)
+		return SphericalToCartesian_YUp(inc, theta);
+	return SphericalToCartesian_ZUp(inc, theta);
+}
+
+float3 CartesianToSpherical(float3 direction, uint upDirection)
+{
+	if (upDirection == UPDIRECTION_Y)
+		return CartesianToSpherical_YUp(direction);
+	return CartesianToSpherical_ZUp(direction);
+}
+
 float3 EquirectangularCoordToDirection_YUp(float2 inCoord)
 {
     // Given the x, y pixel coord within an equirectangular texture, what
@@ -221,6 +264,57 @@ float2 DirectionToHemiEquirectangularCoord_YUp(float3 direction)
 	float x = spherical.y * 0.5f * reciprocalPi;
 	float y = 1.f-(spherical.x * 2.0f * reciprocalPi);
 	return float2(x, y);
+}
+
+float3 EquirectangularCoordToDirection_ZUp(float2 inCoord)
+{
+    // Given the x, y pixel coord within an equirectangular texture, what
+    // is the corresponding direction vector?
+    float theta = 2.f * pi * inCoord.x;
+    float inc = pi * (.5f - inCoord.y);
+    return SphericalToCartesian_ZUp(inc, theta);
+}
+
+float2 DirectionToEquirectangularCoord_ZUp(float3 direction)
+{
+		// note -- 	the trigonometry here is a little inaccurate. It causes shaking
+		//			when the camera moves. We might need to replace it with more
+		//			accurate math.
+	float3 spherical = CartesianToSpherical_ZUp(direction);
+	float x = spherical.y * 0.5f * reciprocalPi;
+	float y = .5f-(spherical.x * reciprocalPi);
+	return float2(x, y);
+}
+
+float2 DirectionToHemiEquirectangularCoord_ZUp(float3 direction)
+{
+	float3 spherical = CartesianToSpherical_ZUp(direction);
+	float x = spherical.y * 0.5f * reciprocalPi;
+	float y = 1.f-(spherical.x * 2.0f * reciprocalPi);
+	return float2(x, y);
+}
+
+float3 EquirectangularCoordToDirection(float2 inCoord, uint upDirection)
+{
+    // Given the x, y pixel coord within an equirectangular texture, what
+    // is the corresponding direction vector?
+	if (upDirection == UPDIRECTION_Y)
+		return EquirectangularCoordToDirection_YUp(inCoord);
+	return EquirectangularCoordToDirection_ZUp(inCoord);
+}
+
+float2 DirectionToEquirectangularCoord(float3 direction, uint upDirection)
+{
+	if (upDirection == UPDIRECTION_Y)
+		return DirectionToEquirectangularCoord_YUp(direction);
+	return DirectionToEquirectangularCoord_ZUp(direction);
+}
+
+float2 DirectionToHemiEquirectangularCoord(float3 direction, uint upDirection)
+{
+	if (upDirection == UPDIRECTION_Y)
+		return DirectionToHemiEquirectangularCoord_YUp(direction);
+	return DirectionToHemiEquirectangularCoord_ZUp(direction);
 }
 
 float SimplifiedOrenNayer(float3 normal, float3 viewDirection, float3 lightDirection, float rho, float shininess)

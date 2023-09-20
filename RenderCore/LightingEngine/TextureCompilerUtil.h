@@ -23,6 +23,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _sampleCount = 1;
 		unsigned _idealCmdListCostMS = 1500;
 		unsigned _maxSamplesPerCmdList = ~0u;
+		unsigned _upDirection = 2;			// 1 = Y, 2 = Z
 	};
 
 	using ProgressiveTextureFn = std::function<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>;

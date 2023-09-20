@@ -22,13 +22,15 @@ namespace RenderCore { namespace LightingEngine
 	void SHCoefficientsAsset::ConstructToPromise(
 		std::promise<SHCoefficientsAsset>&& promise,
 		std::shared_ptr<::Assets::OperationContext> loadingContext,
-		StringSection<> srcTexture)
+		StringSection<> srcTexture,
+		RenderCore::Assets::TextureCompilationRequest::CoordinateSystem coordinateSystem)
 	{
 		Assets::TextureCompilationRequest request;
 		request._operation = Assets::TextureCompilationRequest::Operation::ProjectToSphericalHarmonic; 
 		request._srcFile = srcTexture.AsString();
 		request._format = Format::R32G32B32A32_FLOAT;
 		request._coefficientCount = 25;
+		request._coordinateSystem = coordinateSystem;
 		auto srcFuture = ::Assets::ConstructToMarkerPtr<RenderCore::Assets::TextureArtifact>(std::move(loadingContext), request);
 		::Assets::WhenAll(srcFuture).ThenConstructToPromise(
 			std::move(promise),

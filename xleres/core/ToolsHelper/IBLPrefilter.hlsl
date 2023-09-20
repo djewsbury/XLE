@@ -9,6 +9,10 @@
 #include "../TechniqueLibrary/LightingEngine/IBL/IBLAlgorithm.hlsl"
 #include "../TechniqueLibrary/Utility/Colour.hlsl"
 
+#if !defined(UPDIRECTION)
+    #define UPDIRECTION UPDIRECTION_Z
+#endif
+
 Texture2D Input;
 RWTexture2DArray<float4> OutputArray;
 RWTexture2D<float4> Output;
@@ -375,7 +379,7 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
             float light_pdf=1;
             float2 inputTextureUV = SampleUV(light_pdf, xi, marginalCDFDims);
 
-            float3 L = EquirectangularCoordToDirection_YUp(inputTextureUV);
+            float3 L = EquirectangularCoordToDirection(inputTextureUV, UPDIRECTION);
             float NdotL = dot(cubeMapDirection, L);
             if (NdotL < 0) continue;   // sampling only one hemisphere (pdf adjusted below)
 
@@ -412,7 +416,7 @@ float PowerHeuristic2(float nf, float fpdf, float ng, float gpdf)
                 xi, cubeMapDirection, roughness, brdfSamplingMethod);
             if (brdf_costheta <= 0) continue;       // sometimes getting bad samples
             
-            float2 inputTextureUV = DirectionToEquirectangularCoord_YUp(L);
+            float2 inputTextureUV = DirectionToEquirectangularCoord(L, UPDIRECTION);
             inputTextureUV.x += (inputTextureUV.x < 0)?1:0;      // try to get in (0,1) range
             float light_pdf = LookupPDF(inputTextureUV, marginalCDFDims);
             // change-of-variables for light_pdf...
@@ -543,7 +547,7 @@ float Brightness(float3 rgb) { return SRGBLuminance(rgb); }
         uint2 inputXY = uint2(globalTap%inputTextureDims.x, globalTap/inputTextureDims.x);
         float2 inputTextureUV = inputXY * reciprocalInputTextureDims;
 
-        float3 L = EquirectangularCoordToDirection_YUp(inputTextureUV);
+        float3 L = EquirectangularCoordToDirection(inputTextureUV, UPDIRECTION);
         float NdotL = dot(cubeMapDirection, L);
         if (NdotL <= 0) continue;   // sampling only one hemisphere (pdf adjusted below)
 
@@ -730,7 +734,7 @@ float FilterDiffuse_BRDF_costheta(
         uint2 inputXY = uint2(globalTap%inputTextureDims.x, globalTap/inputTextureDims.x);
         float2 inputTextureUV = inputXY * reciprocalInputTextureDims;
 
-        float3 L = EquirectangularCoordToDirection_YUp(inputTextureUV);
+        float3 L = EquirectangularCoordToDirection(inputTextureUV, UPDIRECTION);
 
         // 2 different mathematical approaches to arrive at the same result
         #if 1
@@ -795,7 +799,7 @@ groupshared float4 ProjectToSphericalHarmonic_SharedWorking[64];
         float texelAreaWeight = texelAreaWeightBase * verticalDistortion;
 
         for (uint x=0; x<inputDims.x; ++x) {
-            float3 sampleDirection = EquirectangularCoordToDirection_YUp(float2(x, y) / float2(inputDims));
+            float3 sampleDirection = EquirectangularCoordToDirection(float2(x, y) / float2(inputDims), UPDIRECTION);
 
             float value = EvalSHBasis(index, sampleDirection);
             result += texelAreaWeight * value * Input.Load(uint3(x, y, 0)).rgb;
@@ -872,7 +876,7 @@ float3 ResolveSH(float3 direction)
 float4 ResolveSphericalHarmonic(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
     uint2 dims = uint2(position.xy / texCoord);
-    float3 D = EquirectangularCoordToDirection_YUp(float2(position.xy) / float2(dims));
+    float3 D = EquirectangularCoordToDirection(float2(position.xy) / float2(dims), UPDIRECTION);
 	return float4(ResolveSH(D), 1.0f);
 }
 

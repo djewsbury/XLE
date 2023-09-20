@@ -8,6 +8,10 @@
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
 #include "../TechniqueLibrary/LightingEngine/LightingAlgorithm.hlsl"
 
+#if !defined(UPDIRECTION)
+    #define UPDIRECTION UPDIRECTION_Z
+#endif
+
 Texture2D Input;
 RWTexture2DArray<float4> OutputArray;
 
@@ -20,8 +24,8 @@ struct FilterPassParamsStruct
 
 float2 DirectionToEquirectangularCoord(float3 direction, bool hemi)
 {
-	if (hemi) return DirectionToHemiEquirectangularCoord_YUp(direction);
-	return DirectionToEquirectangularCoord_YUp(direction);
+	if (hemi) return DirectionToHemiEquirectangularCoord(direction, UPDIRECTION);
+	return DirectionToEquirectangularCoord(direction, UPDIRECTION);
 }
 
 void swap(inout float lhs, inout float rhs)
@@ -83,10 +87,13 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 			center + plusX * faceMin.x + plusY * faceMax.y,
 			center + plusX * faceMax.x + plusY * faceMax.y
 		};
-		float maxTheta = CartesianToSpherical_YUp(corners[0]).y;
+		float maxTheta = CartesianToSpherical(corners[0], UPDIRECTION).y;
+		maxTheta = fmod(maxTheta + 2 * pi, 2 * pi);
 		float minTheta = maxTheta;
+
 		[unroll] for (uint c=1; c<4; ++c) {
-			float t = CartesianToSpherical_YUp(corners[c]).y;
+			float t = CartesianToSpherical(corners[c], UPDIRECTION).y;
+			t = fmod(t + 2 * pi, 2 * pi);
 			maxTheta = max(maxTheta, t);
 			minTheta = min(minTheta, t);
 		}
@@ -96,7 +103,13 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 			swap(minTheta, maxTheta);
 		}
 
-		if (center.y == -1 || center.y == 1) {
+		#if UPDIRECTION == UPDIRECTION_Y
+			float centerUp = center.y;
+		#else
+			float centerUp = center.z;
+		#endif
+
+		if (centerUp == -1 || centerUp == 1) {
 
 			float minEquirectX = 0.5f*minTheta*reciprocalPi, maxEquirectX = 0.5f*maxTheta*reciprocalPi;
 			for (float x=floor(inputDims.x * minEquirectX); x<ceil(inputDims.x * maxEquirectX); x+=1) {
@@ -115,16 +128,27 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 				// not entirely correct. The projected shape will bow out a little bit. It's pretty slight, though; this
 				// might only cause us to miss a few pixels. We could just add a few pixels on the top & bottom to
 				// compensate for this, since looping through additional pixels doesn't actually harm anything
-				float2 axis = float2(-sin(theta), cos(theta));	// must match definition of theta in SphericalToCartesian_YUp
-				float maxProjDist = dot(corners[0].xz - center.xz, axis);
-				float minProjDist = maxProjDist;
-				[unroll] for (uint c=1; c<4; ++c) {
-					float len = dot(corners[c].xz - center.xz, axis);
-					minProjDist = min(minProjDist, len);
-					maxProjDist = max(maxProjDist, len);
-				}
+				#if UPDIRECTION == UPDIRECTION_Y
+					float2 axis = float2(-sin(theta), cos(theta));	// must match definition of theta in SphericalToCartesian_YUp
+					float maxProjDist = dot(corners[0].xz - center.xz, axis);
+					float minProjDist = maxProjDist;
+					[unroll] for (uint c=1; c<4; ++c) {
+						float len = dot(corners[c].xz - center.xz, axis);
+						minProjDist = min(minProjDist, len);
+						maxProjDist = max(maxProjDist, len);
+					}
+				#else
+					float2 axis = float2(-cos(theta), sin(theta));	// must match definition of theta in SphericalToCartesian_ZUp
+					float maxProjDist = dot(corners[0].xy - center.xy, axis);
+					float minProjDist = maxProjDist;
+					[unroll] for (uint c=1; c<4; ++c) {
+						float len = dot(corners[c].xy - center.xy, axis);
+						minProjDist = min(minProjDist, len);
+						maxProjDist = max(maxProjDist, len);
+					}
+				#endif
 				float minInc, maxInc;
-				if (center.y < 0) {
+				if (centerUp < 0) {
 					minInc = -atan2(cos(faceTheta), maxProjDist);
 					maxInc = -atan2(cos(faceTheta), minProjDist);
 				} else {
@@ -134,10 +158,10 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 
 				float minEquirectY = 0.5f-(minInc * reciprocalPi), maxEquirectY = 0.5f-(maxInc*reciprocalPi);
 				for (float y=floor(inputDims.y * minEquirectY); y<ceil(inputDims.y * maxEquirectY); y+=1) {
-					float3 pixelDirection0 = EquirectangularCoordToDirection_YUp(float2((x)/float(inputDims.x),(y)/float(inputDims.y)));
-					float3 pixelDirection1 = EquirectangularCoordToDirection_YUp(float2((x+1)/float(inputDims.x),(y)/float(inputDims.y)));
-					float3 pixelDirection2 = EquirectangularCoordToDirection_YUp(float2((x)/float(inputDims.x),(y+1)/float(inputDims.y)));
-					float3 pixelDirection3 = EquirectangularCoordToDirection_YUp(float2((x+1)/float(inputDims.x),(y+1)/float(inputDims.y)));
+					float3 pixelDirection0 = EquirectangularCoordToDirection(float2((x)/float(inputDims.x),(y)/float(inputDims.y)), UPDIRECTION);
+					float3 pixelDirection1 = EquirectangularCoordToDirection(float2((x+1)/float(inputDims.x),(y)/float(inputDims.y)), UPDIRECTION);
+					float3 pixelDirection2 = EquirectangularCoordToDirection(float2((x)/float(inputDims.x),(y+1)/float(inputDims.y)), UPDIRECTION);
+					float3 pixelDirection3 = EquirectangularCoordToDirection(float2((x+1)/float(inputDims.x),(y+1)/float(inputDims.y)), UPDIRECTION);
 					pixelDirection0 /= dot(pixelDirection0, center);
 					pixelDirection1 /= dot(pixelDirection1, center);
 					pixelDirection2 /= dot(pixelDirection2, center);
@@ -167,20 +191,18 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 
 			float minEquirectX = 0.5f*minTheta*reciprocalPi, maxEquirectX = 0.5f*maxTheta*reciprocalPi;
 			for (float x=floor(inputDims.x * minEquirectX); x<ceil(inputDims.x * maxEquirectX); x+=1) {
-			// for (float x=0; x<inputDims.x; x+=4) {
 				float faceTheta = x/float(inputDims.x)*2.0f;
 				faceTheta = fmod(faceTheta + 2.25, 0.5) - 0.25;
 				faceTheta *= pi;										// we need faceTheta in the (-.25*pi, .25*pi) for the following calculations
-				float minInc = atan(lowDirection.y*cos(faceTheta));		// cos(faceTheta) here takes care of warping of the shape that occurs in X,-X,Z,-Z panels
-				float maxInc = atan(highDirection.y*cos(faceTheta));
-				float minEquirectY = 0.5f-(minInc * reciprocalPi), maxEquirectY = 0.5f-(maxInc*reciprocalPi);
+				float inc0 = CartesianToSpherical(lowDirection, UPDIRECTION).x;		// cos(faceTheta) here takes care of warping of the shape that occurs in X,-X,Y,-Y panels
+				float inc1 = CartesianToSpherical(highDirection, UPDIRECTION).x;
+				float minEquirectY = 0.5f-(max(inc0, inc1) * reciprocalPi), maxEquirectY = 0.5f-(min(inc0, inc1)*reciprocalPi);
 				for (float y=floor(inputDims.y * minEquirectY); y<ceil(inputDims.y * maxEquirectY); y+=1) {
-				// for (float y=0; y<inputDims.y; y+=4) {
 					// We can project equirectangular point back onto the cubemap plane and see how much it overlaps with the 
 					// cubemap pixel. The pixel has a distorted shape post projection; but if we assume that equirectangular input
 					// pixels are small relative to the cubemap pixels, we may be able to ignore this
-					float3 pixelDirection0 = EquirectangularCoordToDirection_YUp(float2((x)/float(inputDims.x),(y)/float(inputDims.y)));
-					float3 pixelDirection1 = EquirectangularCoordToDirection_YUp(float2((x+1)/float(inputDims.x),(y+1)/float(inputDims.y)));
+					float3 pixelDirection0 = EquirectangularCoordToDirection(float2((x)/float(inputDims.x),(y)/float(inputDims.y)), UPDIRECTION);
+					float3 pixelDirection1 = EquirectangularCoordToDirection(float2((x+1)/float(inputDims.x),(y+1)/float(inputDims.y)), UPDIRECTION);
 					// if (dot(pixelDirection0, center) < 0) continue;
 					pixelDirection0 /= dot(pixelDirection0, center);
 					pixelDirection1 /= dot(pixelDirection1, center);
@@ -194,7 +216,6 @@ void Panel(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, float3 
 						float weight = CubeMapTexelSolidAngle(float2(minX, minY), float2(maxX, maxY));
 						result += float4(weight*LoadInput(float2(x,y), inputDims).rgb, weight);
 					}
-					// result += float4(Input.SampleLevel(EquirectangularPointSampler, float2(x/inputDims.x, y/inputDims.y), 0).rgb, 1);
 				}
 			}
 
@@ -298,7 +319,7 @@ void PanelEAC(inout float4 result, float2 tc, float2 tcMins, float2 tcMaxs, floa
 
 		} else {
 
-			float centerTheta = CartesianToSpherical_YUp(center).y;
+			float centerTheta = CartesianToSpherical(center, UPDIRECTION).y;
 			float centerX = floor(centerTheta*inputDims.x/(2.0*pi));
 			for (float faceThetaI=floor(faceMin.x*0.125*inputDims.x); faceThetaI<ceil(faceMax.x*0.125*inputDims.x); faceThetaI+=1) {
 				float x = -faceThetaI+centerX;

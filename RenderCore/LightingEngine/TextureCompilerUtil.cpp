@@ -147,13 +147,16 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(0, "Input"_h);
 		constexpr auto pushConstantsBinding = "FilterPassParams"_h;
 
+		ParameterBox sharedParameterBox;
+		sharedParameterBox.SetParameter("UPDIRECTION", params._upDirection);
+
 		::Assets::PtrToMarkerPtr<Techniques::IComputeShaderOperator> computeOpFuture;
 		if (filter == EquirectFilterMode::ToCubeMap) {
 			usi.BindResourceView(1, "OutputArray"_h);
  			computeOpFuture = Techniques::CreateComputeOperator(
 				pipelineCollection,
 				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquirectToCube",
-				{},
+				std::move(sharedParameterBox),
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		} else if (filter == EquirectFilterMode::ToCubeMapBokeh) {
@@ -161,7 +164,7 @@ namespace RenderCore { namespace LightingEngine
  			computeOpFuture = Techniques::CreateComputeOperator(
 				pipelineCollection,
 				EQUIRECTANGULAR_TO_CUBE_BOKEH_HLSL ":EquirectToCubeBokeh",
-				{},
+				std::move(sharedParameterBox),
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		} else if (filter == EquirectFilterMode::ToGlossySpecular) {
@@ -174,7 +177,7 @@ namespace RenderCore { namespace LightingEngine
 			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":EquirectFilterGlossySpecular",
-				{},
+				std::move(sharedParameterBox),
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		} else if (filter == EquirectFilterMode::ToGlossySpecularReference) {
@@ -183,7 +186,7 @@ namespace RenderCore { namespace LightingEngine
  			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":EquirectFilterGlossySpecular_Reference",
-				{},
+				std::move(sharedParameterBox),
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		} else if (filter == EquirectFilterMode::ToDiffuseReference) {
@@ -192,7 +195,7 @@ namespace RenderCore { namespace LightingEngine
 			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":EquirectFilterDiffuse_Reference",
-				{},
+				std::move(sharedParameterBox),
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		} else {
@@ -201,7 +204,7 @@ namespace RenderCore { namespace LightingEngine
 			computeOpFuture = CreateComputeOperator(
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":ProjectToSphericalHarmonic",
-				{},
+				std::move(sharedParameterBox),
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
 				usi);
 		}

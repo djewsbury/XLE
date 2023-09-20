@@ -1213,6 +1213,10 @@ namespace SceneEngine
                 return true;
             }
             break;
+
+        case "CoordinateSystem"_h:
+            SetViaEnumFn<RenderCore::Assets::TextureCompilationRequest::CoordinateSystem, RenderCore::Assets::AsCoordinateSystem>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_coordinateSystem, data, type);
+            break;
         }
         return false;
     }

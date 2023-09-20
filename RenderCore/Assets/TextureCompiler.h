@@ -55,6 +55,16 @@ namespace RenderCore { namespace Assets
 		// reduce the occurrence of infinities (depending on the algorithm)
 		unsigned _maxSamplesPerCmdList = ~0u;
 
+		enum class CoordinateSystem
+		{
+			// A Y-up coordinate system compatible with (for example) Substance Painter
+			YUp,
+
+			// A Z-up coordinate system compatible with (for example) Blender
+			ZUp
+		};
+		CoordinateSystem _coordinateSystem = CoordinateSystem::ZUp;
+
 		std::string _shader;
 		std::string _srcFile;
 
@@ -62,6 +72,8 @@ namespace RenderCore { namespace Assets
 	};
 
 	std::ostream& operator<<(std::ostream&, const TextureCompilationRequest&);		// (note, on clang Initializer pack won't find this if it's called SerializationOperator)
+	const char* AsString(TextureCompilationRequest::CoordinateSystem);
+	std::optional<TextureCompilationRequest::CoordinateSystem> AsCoordinateSystem(StringSection<> name);
 
 	class TextureArtifact
 	{

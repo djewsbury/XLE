@@ -9,13 +9,17 @@
 #include "../TechniqueLibrary/LightingEngine/SpecularMethods.hlsl"
 #include "../TechniqueLibrary/LightingEngine/IBL/IBLAlgorithm.hlsl"		// for HammersleyPt
 
+#if !defined(UPDIRECTION)
+    #define UPDIRECTION UPDIRECTION_Z
+#endif
+
 Texture2D Input;
 RWTexture2DArray<float4> OutputArray;
 
 float2 DirectionToEquirectangularCoord(float3 direction, bool hemi)
 {
-	if (hemi) return DirectionToHemiEquirectangularCoord_YUp(direction);
-	return DirectionToEquirectangularCoord_YUp(direction);
+	if (hemi) return DirectionToHemiEquirectangularCoord(direction, UPDIRECTION);
+	return DirectionToEquirectangularCoord(direction, UPDIRECTION);
 }
 
 float4 LoadInput(Texture2D inputTex, float2 xy, int2 dims) { return inputTex.Load(uint3((int(xy.x)+dims.x)%dims.x, (int(xy.y)+dims.y)%dims.y, 0)); }

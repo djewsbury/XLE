@@ -67,7 +67,7 @@ float3 CalculateBaseSkyColor(float2 texCoord, float3 viewFrustumVector)
 
 	#elif SKY_PROJECTION==5
 
-		return ReflectionCube.Sample(DefaultSampler, AdjSkyCubeMapCoords(viewFrustumVector));
+		return ReflectionCube.Sample(DefaultSampler, AdjSkyCubeMapCoords(viewFrustumVector)).rgb;
 
 	#else
 

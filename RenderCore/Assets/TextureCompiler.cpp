@@ -208,16 +208,32 @@ namespace RenderCore { namespace Assets
 	{
 		switch (request._operation) {
 		case TextureCompilationRequest::Operation::Convert: str << request._srcFile << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::EquirectToCubeMap: str << request._srcFile << "-EquirectToCubeMap-" << request._faceDim << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::EquirectToCubeMapBokeh: str << request._srcFile << "-EquirectToCubeMapBokeh-" << request._faceDim << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecular: str << request._srcFile << "-spec-" << request._faceDim << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference: str << request._srcFile << "-refspec-" << request._faceDim << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::EquirectFilterDiffuseReference: str << request._srcFile << "-refdiffuse-" << request._faceDim << "-" << AsString(request._format); break;
-		case TextureCompilationRequest::Operation::ProjectToSphericalHarmonic: str << request._srcFile << "-sh-" << request._coefficientCount; break;
+		case TextureCompilationRequest::Operation::EquirectToCubeMap: str << request._srcFile << "-EquirectToCubeMap-" << request._faceDim << "-" << AsString(request._format) << "-" << AsString(request._coordinateSystem); break;
+		case TextureCompilationRequest::Operation::EquirectToCubeMapBokeh: str << request._srcFile << "-EquirectToCubeMapBokeh-" << request._faceDim << "-" << AsString(request._format) << "-" << AsString(request._coordinateSystem); break;
+		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecular: str << request._srcFile << "-spec-" << request._faceDim << "-" << AsString(request._format) << "-" << AsString(request._coordinateSystem); break;
+		case TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference: str << request._srcFile << "-refspec-" << request._faceDim << "-" << AsString(request._format) << "-" << AsString(request._coordinateSystem); break;
+		case TextureCompilationRequest::Operation::EquirectFilterDiffuseReference: str << request._srcFile << "-refdiffuse-" << request._faceDim << "-" << AsString(request._format) << "-" << AsString(request._coordinateSystem); break;
+		case TextureCompilationRequest::Operation::ProjectToSphericalHarmonic: str << request._srcFile << "-sh-" << request._coefficientCount << "-" << AsString(request._coordinateSystem); break;
 		case TextureCompilationRequest::Operation::ComputeShader: str << request._shader << "-" << request._width << "x" << request._height << "x" << request._arrayLayerCount << "-" << AsString(request._format); break;
 		default: UNREACHABLE();
 		}
 		return str;
+	}
+
+	const char* AsString(TextureCompilationRequest::CoordinateSystem coordSys)
+	{
+		switch (coordSys) {
+		case TextureCompilationRequest::CoordinateSystem::YUp: return "YUp";
+		case TextureCompilationRequest::CoordinateSystem::ZUp: return "ZUp";
+		default: return "<<unknown>>";
+		}
+	}
+
+	std::optional<TextureCompilationRequest::CoordinateSystem> AsCoordinateSystem(StringSection<> name)
+	{
+		if (XlEqString(name, "YUp")) return TextureCompilationRequest::CoordinateSystem::YUp;
+		if (XlEqString(name, "ZUp")) return TextureCompilationRequest::CoordinateSystem::ZUp;
+		return {};
 	}
 
 	uint64_t TextureCompilationRequest::GetHash(uint64_t seed) const
@@ -233,6 +249,10 @@ namespace RenderCore { namespace Assets
 		params._sampleCount = request._sampleCount;
 		params._idealCmdListCostMS = request._commandListIntervalMS;
 		params._maxSamplesPerCmdList = request._maxSamplesPerCmdList;
+		if (request._coordinateSystem == TextureCompilationRequest::CoordinateSystem::YUp)
+			params._upDirection = 1;
+		else
+			params._upDirection = 2;
 		return params;
 	}
 
@@ -341,7 +361,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecularReference, {}, opHelper, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToGlossySpecularReference, AsEquirectFilterParams(request), opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::EquirectFilterDiffuseReference) {
 				if (opHelper) {
@@ -359,7 +379,7 @@ namespace RenderCore { namespace Assets
 				targetDesc._mipCount = 1;
 				targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
 				targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToDiffuseReference, {}, opHelper, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ToDiffuseReference, AsEquirectFilterParams(request), opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ProjectToSphericalHarmonic) {
 				if (opHelper) {
@@ -368,7 +388,7 @@ namespace RenderCore { namespace Assets
 				}
 
 				auto targetDesc = TextureDesc::Plain2D(request._coefficientCount, 1, Format::R32G32B32A32_FLOAT);
-				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ProjectToSphericalHarmonic, {}, opHelper, *intermediateFunction);
+				srcPkt = LightingEngine::EquirectFilter(*srcPkt, targetDesc, LightingEngine::EquirectFilterMode::ProjectToSphericalHarmonic, AsEquirectFilterParams(request), opHelper, *intermediateFunction);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::ComputeShader) {
 				if (opHelper) {

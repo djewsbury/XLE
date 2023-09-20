@@ -239,6 +239,7 @@ namespace RenderCore { namespace LightingEngine
 			request2._format = _desc._cubemapFormat;
 			request2._faceDim = _desc._cubemapFaceDimension;
 			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
+			request2._coordinateSystem = _desc._coordinateSystem;
 
 			if (_desc._blurBackground) {
 				// Use the "Bokeh" mode to blur out the background image, almost as if it's a depth of field effect
@@ -274,7 +275,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		if (_onChangeIBL.AtLeastOneBind()) {
-			_diffuseIBL = ::Assets::MakeAsset<SHCoefficientsAsset>(loadingContext, input);
+			_diffuseIBL = ::Assets::MakeAsset<SHCoefficientsAsset>(loadingContext, input, _desc._coordinateSystem);
 
 			Assets::TextureCompilationRequest request;
 			request._operation = Assets::TextureCompilationRequest::Operation::EquirectFilterGlossySpecular;
@@ -284,6 +285,7 @@ namespace RenderCore { namespace LightingEngine
 			request._format = _desc._specularCubemapFormat;
 			request._faceDim = _desc._specularCubemapFaceDimension;
 			request._sampleCount = 32u*1024u;
+			request._coordinateSystem = _desc._coordinateSystem;
 
 			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
 			if (_desc._progressiveCompilation) {

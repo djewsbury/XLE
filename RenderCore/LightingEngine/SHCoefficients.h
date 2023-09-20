@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../Assets/TextureCompiler.h"
 #include "../../Math/Vector.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/Marker.h"
@@ -33,7 +34,8 @@ namespace RenderCore { namespace LightingEngine
 		static void ConstructToPromise(
 			std::promise<SHCoefficientsAsset>&&,
 			std::shared_ptr<::Assets::OperationContext>,
-			StringSection<> initializer);
+			StringSection<> initializer,
+			RenderCore::Assets::TextureCompilationRequest::CoordinateSystem coordinateSystem = RenderCore::Assets::TextureCompilationRequest::CoordinateSystem::ZUp);
 		SHCoefficientsAsset() = default;
 	protected:
 		::Assets::DependencyValidation _depVal;
