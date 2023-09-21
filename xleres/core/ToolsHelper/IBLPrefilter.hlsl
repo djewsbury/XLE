@@ -36,7 +36,7 @@ struct ControlUniformsStruct
 
 float3 IBLPrecalc_SampleInputTextureUV(float2 uv)
 {
-    return Input.SampleLevel(EquirectangularBilinearSampler, uv, 0).rgb;
+    return min(Input.SampleLevel(EquirectangularBilinearSampler, uv, 0).rgb, 256.0.xxx);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -33,7 +33,7 @@ namespace ControlsLibraryExt.ModelView
             {
                 Brush brush2 = (Owner.ContainsFocus ? HighlightBrush : DeactiveHighlightBrush);
                 Brush brush3 = (Owner.ContainsFocus ? HighlightTextBrush : DeactiveHighlightTextBrush);
-                Rectangle wideRectangle = new Rectangle(0, y, (int)g.ClipBounds.Right, node.LabelHeight);
+                Rectangle wideRectangle = new Rectangle(x-2, y, (int)g.ClipBounds.Right, node.LabelHeight);
                 g.FillRectangle(brush2, wideRectangle);
                 brush = brush3;
             }

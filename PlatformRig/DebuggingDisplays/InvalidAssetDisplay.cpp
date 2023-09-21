@@ -248,6 +248,11 @@ namespace PlatformRig { namespace Overlays
 		if (!fnt) return;
 		const auto lineHeight = (*fnt)->GetFontProperties()._lineHeight;
 
+		if (!activeOperations.empty())
+			RenderOverlays::DrawText()
+				.Font(**fnt)
+				.Draw(context, layout.AllocateFullWidth(lineHeight), "Compilation operations may result in very high GPU usage");
+
 		if (_offset) {
 			const auto* text = "^ ^ ^";
 			RenderOverlays::DrawText()

@@ -66,6 +66,7 @@ namespace ControlsLibraryExt.Commands
 
         public virtual void Initialize()
         {
+            /*      disabled for xenoviewer, which can't actually modify anything
             m_commandService.RegisterCommand(
                 Command.SaveModifiedAssets,
                 StandardMenu.File,
@@ -76,6 +77,7 @@ namespace ControlsLibraryExt.Commands
                 null,
                 CommandVisibility.Menu,
                 this);
+            */
 
             m_commandService.RegisterCommand(
                 Command.ViewInvalidAssets,

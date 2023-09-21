@@ -291,7 +291,7 @@ namespace RenderCore { namespace LightingEngine
 
 			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
 			if (_desc._progressiveCompilation) {
-				request._commandListIntervalMS = 250;	// some overhead created by splitting cmd lists when we want progressive results
+				request._commandListIntervalMS = 1000;	// some overhead created by splitting cmd lists when we want progressive results
 
 				progressiveResultsFn =
 					[weakbu=std::weak_ptr<BufferUploads::IManager>{_bufferUploads}, weakThis, setBkgrnd=_desc._useProgressiveSpecularAsBackground](auto dataSource) {

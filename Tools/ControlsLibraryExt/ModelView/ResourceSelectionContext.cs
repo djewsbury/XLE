@@ -3,6 +3,8 @@ using Sce.Atf;
 using System;
 using System.Collections.Generic;
 using Sce.Atf.Adaptation;
+using System.CodeDom;
+using System.Linq;
 
 namespace ControlsLibraryExt.ModelView
 {
@@ -95,11 +97,31 @@ namespace ControlsLibraryExt.ModelView
             LevelEditorCore.IOpaqueResourceFolder resourceFolder = parent.As<LevelEditorCore.IOpaqueResourceFolder>();
             if (resourceFolder != null)
             {
-                foreach (LevelEditorCore.IOpaqueResourceFolder childFolder in resourceFolder.Subfolders)
-                    yield return childFolder;
+                // Sorting here is a little awkward.. it might be more efficient to to do it on the native siz
+                // in particular, we can't really sort the resources efficiently from here
+                bool doSorting = true;
+                if (doSorting)
+                {
+                    var subfolders = resourceFolder.Subfolders.ToList();
+                    subfolders.Sort(delegate (LevelEditorCore.IOpaqueResourceFolder lhs, LevelEditorCore.IOpaqueResourceFolder rhs)
+                    {
+                        return lhs.Name.CompareTo(rhs.Name);
+                    });
 
-                foreach (object resource in resourceFolder.Resources)
-                    yield return resource;
+                    foreach (LevelEditorCore.IOpaqueResourceFolder childFolder in subfolders)
+                        yield return childFolder;
+
+                    foreach (object resource in resourceFolder.Resources)
+                        yield return resource;
+                }
+                else
+                {
+                    foreach (LevelEditorCore.IOpaqueResourceFolder childFolder in resourceFolder.Subfolders)
+                        yield return childFolder;
+
+                    foreach (object resource in resourceFolder.Resources)
+                        yield return resource;
+                }
             }
         }
 

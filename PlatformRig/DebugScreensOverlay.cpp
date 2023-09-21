@@ -69,7 +69,8 @@ namespace PlatformRig
                 overlayContext->AttachService2(*topBarManager);
             
                 _debugScreensSystem->Render(*overlayContext, RenderOverlays::Rect{ {0,0}, viewportDims });
-                topBarManager->RenderFrame(*overlayContext);
+                if (_debugScreensSystem->IsAnyPanelActive())        // Since we sometimes use this in GUI tools, don't force rendering of this if there are no debugging screens open currently
+                    topBarManager->RenderFrame(*overlayContext);
 
                 RenderCore::Techniques::RenderPassInstance rpi;
                 auto i = std::find_if(

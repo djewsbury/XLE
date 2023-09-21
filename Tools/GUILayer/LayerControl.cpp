@@ -24,6 +24,7 @@
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
+#include "../../Assets/OperationContext.h"
 
 using namespace System;
 
@@ -75,6 +76,9 @@ namespace GUILayer
 
             // return false if when we have pending resources (encourage another redraw)
             result = !parserContext.HasPendingAssets();
+
+            if (_loadingContext.get() && !_loadingContext->IsIdle())
+                result = false;     // encourage refresh while there are active compiles
 
 			if (_mainOverlaySystemSet->GetOverlayState()._refreshMode == PlatformRig::IOverlaySystem::RefreshMode::RegularAnimation)
 				result = false;
@@ -128,9 +132,10 @@ namespace GUILayer
         _debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(EngineDevice::GetInstance()->GetNative().GetOverlayApparatus());
         _frameRigDisplay = GetWindowRig().GetFrameRig().CreateDisplay(_debugOverlaysApparatus->_debugSystem, opContext);
         _frameRigDisplay->SetStyle(PlatformRig::IFrameRigDisplay::Style::NonInteractive);
-        _frameRigDisplay->EnableMainStates(true);
+        _frameRigDisplay->EnableMainStates(false);
         PlatformRig::SetSystemDisplay(*_debugOverlaysApparatus->_debugSystem.get(), _frameRigDisplay.GetNativePtr());
         _pendingUpdateRenderTargets = true;
+        _loadingContext = opContext;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

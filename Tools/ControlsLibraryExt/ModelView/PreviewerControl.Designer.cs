@@ -28,7 +28,7 @@ namespace ControlsLibraryExt.ModelView
             // 
             // _ctrls
             // 
-            this._ctrls.Anchor = (System.Windows.Forms.AnchorStyles)(System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right);
+            this._ctrls.Anchor = (System.Windows.Forms.AnchorStyles)(System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right);
             this._ctrls.Location = new System.Drawing.Point(543, 0);
             this._ctrls.Size = new System.Drawing.Size(134, 408);
             this._ctrls.TabIndex = 1;

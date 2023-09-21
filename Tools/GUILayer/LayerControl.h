@@ -35,6 +35,7 @@ namespace GUILayer
         clix::auto_ptr<PlatformRig::OverlaySystemSet> _mainOverlaySystemSet;
         clix::shared_ptr<PlatformRig::DebugOverlaysApparatus> _debugOverlaysApparatus;
         clix::shared_ptr<PlatformRig::IFrameRigDisplay> _frameRigDisplay;
+        clix::shared_ptr<::Assets::OperationContext> _loadingContext;
 
         virtual bool Render(const std::shared_ptr<RenderCore::IThreadContext>&, IWindowRig&) override;
 		virtual void OnResize(IWindowRig&) override;

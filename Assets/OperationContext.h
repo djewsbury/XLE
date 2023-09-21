@@ -81,8 +81,10 @@ namespace Assets
 		bool IsIdle();
 
 		void End(OperationId);
-		template<typename FutureObj>
-			void EndWithFuture(OperationId, std::shared_future<FutureObj>);
+		#if !defined(__CLR_VER)
+			template<typename FutureObj>
+				void EndWithFuture(OperationId, std::shared_future<FutureObj>);
+		#endif
 		void SetDescription(OperationId, std::string);
 		void SetMessage(OperationId, std::string);
 		void SetProgress(OperationId, unsigned completed, unsigned total);
@@ -106,37 +108,37 @@ namespace Assets
 	
 	std::shared_ptr<OperationContext> CreateOperationContext();
 
-	struct OperationContextHelper
-	{
-		template<typename FutureObj>
-			void EndWithFuture(std::shared_future<FutureObj>);
-		operator bool() const { return _context != nullptr; }
-		void SetMessage(std::string);
-		void SetDescription(std::string);
-		void SetProgress(unsigned completed, unsigned total);
-
-		OperationContextHelper();
-		~OperationContextHelper();
-		OperationContextHelper(OperationContextHelper&&);
-		OperationContextHelper& operator=(OperationContextHelper&&);
-	private:
-		OperationContextHelper(OperationContext::OperationId, std::shared_ptr<OperationContext>);
-		std::shared_ptr<OperationContext> _context = nullptr;
-		OperationContext::OperationId _opId = ~0u;
-		bool _endFunctionInvoked = false;
-		friend class OperationContext;
-	};
-
-	template<typename FutureObj>
-		void OperationContextHelper::EndWithFuture(std::shared_future<FutureObj> future)
-	{
-		assert(_context);
-		assert(!_endFunctionInvoked);
-		_context->EndWithFuture(_opId, std::move(future));
-		_endFunctionInvoked = true;
-	}
-
 	#if !defined(__CLR_VER)
+		struct OperationContextHelper
+		{
+			template<typename FutureObj>
+				void EndWithFuture(std::shared_future<FutureObj>);
+			operator bool() const { return _context != nullptr; }
+			void SetMessage(std::string);
+			void SetDescription(std::string);
+			void SetProgress(unsigned completed, unsigned total);
+
+			OperationContextHelper();
+			~OperationContextHelper();
+			OperationContextHelper(OperationContextHelper&&);
+			OperationContextHelper& operator=(OperationContextHelper&&);
+		private:
+			OperationContextHelper(OperationContext::OperationId, std::shared_ptr<OperationContext>);
+			std::shared_ptr<OperationContext> _context = nullptr;
+			OperationContext::OperationId _opId = ~0u;
+			bool _endFunctionInvoked = false;
+			friend class OperationContext;
+		};
+
+		template<typename FutureObj>
+			void OperationContextHelper::EndWithFuture(std::shared_future<FutureObj> future)
+		{
+			assert(_context);
+			assert(!_endFunctionInvoked);
+			_context->EndWithFuture(_opId, std::move(future));
+			_endFunctionInvoked = true;
+		}
+
 		template<typename FutureObj>
 			void OperationContext::EndWithFuture(OperationId opId, std::shared_future<FutureObj> future)
 		{
