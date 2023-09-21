@@ -75,7 +75,6 @@ namespace Previewer
                 // typeof(StandardFileCommands),           // standard File menu commands for New, Open, Save, SaveAs, Close
                 typeof(MainWindowTitleService),         // tracks document changes and updates main form title
                 typeof(TabbedControlSelector),          // enable ctrl-tab selection of documents and controls within the app
-                typeof(HelpAboutCommand),               // Help -> About command
 
                 typeof(ContextRegistry),                // central context registry with change notification
                 typeof(StandardFileExitCommand),        // standard File exit menu command
@@ -89,7 +88,7 @@ namespace Previewer
 
                 // typeof(PropertyEditor),                 // property grid for editing selected objects
                 // typeof(GridPropertyEditor),             // grid control for editing selected objects
-                typeof(PropertyEditingCommands),        // commands for PropertyEditor and GridPropertyEditor, like Reset,
+                // typeof(PropertyEditingCommands),        // commands for PropertyEditor and GridPropertyEditor, like Reset,
                                                         // Reset All, Copy Value, Paste Value, Copy All, Paste All
 
                 // typeof(HistoryLister),                  // visual list of undo/redo stack
@@ -106,12 +105,12 @@ namespace Previewer
 
                 typeof(AnnotatingCommands),             // annotating commands
 
-                typeof(PythonService),                  // scripting service for automated tests
+                // typeof(PythonService),                  // scripting service for automated tests
                 typeof(ScriptConsole),                  // provides a dockable command console for entering Python commands
-                typeof(AtfScriptVariables),             // exposes common ATF services as script variables
+                // typeof(AtfScriptVariables),             // exposes common ATF services as script variables
                 typeof(AutomationService),              // provides facilities to run an automated script using the .NET remoting service
 
-                typeof(SkinService),
+                // typeof(SkinService),
 
                 typeof(XLEBridgeUtils.ResourceQueryService),
                 
@@ -119,13 +118,14 @@ namespace Previewer
                 typeof(ControlsLibraryExt.Material.MaterialSchemaLoader),
                 typeof(ControlsLibraryExt.ModelView.PreviewerControl),
                 typeof(ControlsLibraryExt.ModelView.PreviewerContext),
-                typeof(ControlsLibraryExt.ModelView.PreviewerCommands),
-                typeof(ControlsLibraryExt.ModelView.GlobalPreviewerCommands), 
+                // typeof(ControlsLibraryExt.ModelView.PreviewerCommands),      // (select scene, select animation) disabled for xenoviewer, until we get a good use for this
+                typeof(ControlsLibraryExt.ModelView.GlobalPreviewerCommands),
                 typeof(ControlsLibraryExt.ModelView.Previewer),
                 typeof(ControlsLibraryExt.GameLoopService),
                 typeof(ControlsLibraryExt.AssetTrackingService),
                 typeof(ControlsLibraryExt.ModelView.SimpleFileListerController),
 
+                typeof(HelpAboutCommand),
                 typeof(ActiveMaterialContext)
             );
 
@@ -147,10 +147,9 @@ namespace Previewer
                 var batch = new CompositionBatch();
                 var mainForm = new MainForm(new ToolStripContainer())
                 {
-                    Text = Application.ProductName //,
-                                                   // Icon = GdiUtil.CreateIcon(ResourceUtil.GetImage(Sce.Atf.Resources.AtfIconImage))
+                    Text = Application.ProductName,
+                    Icon = Previewer.Properties.Resources.xenoviewer
                 };
-                // Sce.Atf.Direct2D.D2dFactory.EnableResourceSharing(mainForm.Handle);
 
                 // Add the main Form instance, etc., to the container
                 batch.AddPart(mainForm);
