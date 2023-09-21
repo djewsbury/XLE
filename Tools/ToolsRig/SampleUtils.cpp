@@ -18,19 +18,38 @@
 namespace ToolsRig
 {
 
-	std::vector<std::string> PluginConfiguration::GetConfiguredPluginNames() const
+	std::vector<std::string> PluginConfiguration::GetConfigurationNames() const
 	{
 		std::vector<std::string> result;
-		result.reserve(_configuredPlugins.size());
-		for (const auto& p:_configuredPlugins) result.push_back(p.first);
+		result.reserve(_configurations.size());
+		for (const auto& p:_configurations) result.push_back(p.first);
 		return result;
 	}
 
-	PluginConfiguration::PluginConfiguration(
-		ConfiguredPlugins&& configuredPlugins, ::Assets::DependencyValidation depVal)
-	: _configuredPlugins(std::move(configuredPlugins)), _depVal(std::move(depVal)) {}
+	std::string PluginConfiguration::CreateDigest() const
+	{
+		std::stringstream log;
+		for (auto p:_configurations)
+			log << "Configuration (" << p.first << ") was configured." << std::endl;
+		log << std::endl;
+		for (auto i:_applyLogs) {
+			if (i._initializationLog.empty()) {
+				log << "Plugin (" << i._pluginName << ") applied with no messages." << std::endl;
+			} else {
+				log << "Plugin (" << i._pluginName << ") applied with the following messages." << std::endl;
+				log << i._initializationLog << std::endl;
+			}
+		}
+		return log.str();
+	}
 
-	static void CleanupConfiguredPlugins(const PluginConfiguration::ConfiguredPlugins& plugins)
+	PluginConfiguration::PluginConfiguration(
+		Configurations&& configurations,
+		std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog>&& applyLogs,
+		::Assets::DependencyValidation depVal)
+	: _configurations(std::move(configurations)), _applyLogs(std::move(applyLogs)), _depVal(std::move(depVal)) {}
+
+	static void CleanupConfiguredPlugins(const PluginConfiguration::Configurations& plugins)
 	{
 		if (!plugins.empty()) {
 			auto& previewSceneRegistry = ToolsRig::Services::GetPreviewSceneRegistry();
@@ -43,7 +62,7 @@ namespace ToolsRig
 
 	PluginConfiguration::~PluginConfiguration()
 	{
-		CleanupConfiguredPlugins(_configuredPlugins);
+		CleanupConfiguredPlugins(_configurations);
 	}
 
 	void PluginConfiguration::ConstructToPromise(
@@ -64,13 +83,14 @@ namespace ToolsRig
 		std::shared_ptr<::Assets::OperationContext> opContext,
 		Formatters::IDynamicInputFormatter& formatter)
 	{
-		ConfiguredPlugins configuredPlugins;
+		Configurations configurations;
 		TRY {
 			StringSection<> keyname;
 			// apply the configuration to the preview scene registry immediately, as we're loading it
 			auto& previewSceneRegistry = ToolsRig::Services::GetPreviewSceneRegistry();
 			auto configurablePluginDoc = previewSceneRegistry.GetConfigurablePluginDocument();
 			while (formatter.TryKeyedItem(keyname)) {
+				auto rootEntityName = keyname.AsString();
 				auto entity = configurablePluginDoc->AssignEntityId();
 				if (configurablePluginDoc->CreateEntity(EntityInterface::MakeStringAndHash(keyname), entity, {})) {
 					RequireBeginElement(formatter);
@@ -81,29 +101,29 @@ namespace ToolsRig
 						configurablePluginDoc->SetProperty(entity, MakeIteratorRange(&propInit, &propInit+1));
 					}
 					RequireEndElement(formatter);
-					configuredPlugins.emplace_back(keyname.AsString(), entity);
+					configurations.emplace_back(rootEntityName, entity);
 				} else {
-					SkipValueOrElement(formatter);
-					entity = ~0ull;
+					promise.set_exception(std::make_exception_ptr(std::runtime_error("No plugin could handle configuration for (" + keyname.AsString() + "). This could mean that the associated plugin dll failed to load.")));
+					return;
 				}
 			}
 
 			auto pluginsPendingApply = previewSceneRegistry.ApplyConfigurablePlugins(opContext);
 			if (pluginsPendingApply.empty()) {
-				promise.set_value(std::make_shared<PluginConfiguration>(std::move(configuredPlugins), formatter.GetDependencyValidation()));
+				promise.set_value(std::make_shared<PluginConfiguration>(std::move(configurations), std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog>{}, formatter.GetDependencyValidation()));
 				return;
 			}
 
 			// let's parallelize the plugin apply; because these can actually be expensive operations
 			struct Helper
 			{
-				std::vector<std::future<void>> _pendingApplies;
+				std::vector<std::future<IPreviewSceneRegistry::ApplyConfigurablePluginLog>> _pendingApplies;
 				unsigned _completedIdx = 0;
-				ConfiguredPlugins _configuredPlugins;
+				Configurations _configurations;
 				::Assets::DependencyValidation _depVal;
 			};
 			auto helper = std::make_shared<Helper>();
-			helper->_configuredPlugins = std::move(configuredPlugins);
+			helper->_configurations = std::move(configurations);
 			helper->_depVal = formatter.GetDependencyValidation();
 			helper->_pendingApplies = std::move(pluginsPendingApply);
 
@@ -118,19 +138,22 @@ namespace ToolsRig
 					}
 					return ::Assets::PollStatus::Finish;
 				},
-				[helper, configuredPlugins=std::move(configuredPlugins)]() {
+				[helper]() {
 					TRY {
 						// propagate exceptions
-						for (auto& f:helper->_pendingApplies) f.get();
+						std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog> logs;
+						logs.reserve(helper->_pendingApplies.size());
+						for (auto& f:helper->_pendingApplies)
+							logs.push_back(f.get());
 
-						return std::make_shared<PluginConfiguration>(std::move(helper->_configuredPlugins), std::move(helper->_depVal));
+						return std::make_shared<PluginConfiguration>(std::move(helper->_configurations), std::move(logs), std::move(helper->_depVal));
 					} CATCH (...) {
-						CleanupConfiguredPlugins(helper->_configuredPlugins);
+						CleanupConfiguredPlugins(helper->_configurations);
 						throw;
 					} CATCH_END				
 				});
 		} CATCH (...) {
-			CleanupConfiguredPlugins(configuredPlugins);
+			CleanupConfiguredPlugins(configurations);
 			promise.set_exception(std::current_exception());
 		} CATCH_END
 	}
@@ -143,7 +166,9 @@ namespace ToolsRig
 		::Assets::Blob GetActualizationLog() const override
 		{
 			TRY {
-				_futurePluginConfiguration.get();
+				auto cfg = _futurePluginConfiguration.get();
+				if (cfg)
+					return ::Assets::AsBlob(cfg->CreateDigest());
 				return nullptr;
 			} CATCH(const std::exception& e) {
 				return ::Assets::AsBlob(e.what());

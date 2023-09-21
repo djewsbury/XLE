@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "PreviewSceneRegistry.h"
 #include "../../Assets/AssetsCore.h"
 #include <memory>
 #include <vector>
@@ -20,11 +21,15 @@ namespace ToolsRig
 	class PluginConfiguration
 	{
 	public:
-		std::vector<std::string> GetConfiguredPluginNames() const;
+		std::vector<std::string> GetConfigurationNames() const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		std::string CreateDigest() const;
 		
-		using ConfiguredPlugins = std::vector<std::pair<std::string, EntityInterface::EntityId>>;
-		PluginConfiguration(ConfiguredPlugins&& configuredPlugins, ::Assets::DependencyValidation depVal);
+		using Configurations = std::vector<std::pair<std::string, EntityInterface::EntityId>>;		// name of the actual game configuration, rather than the plugin name
+		PluginConfiguration(
+			Configurations&& configurations,
+			std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog>&& applyLogs,
+			::Assets::DependencyValidation depVal);
 		~PluginConfiguration();
 
 		static void ConstructToPromise(
@@ -42,7 +47,8 @@ namespace ToolsRig
 
 	private:
 		::Assets::DependencyValidation _depVal;
-		ConfiguredPlugins _configuredPlugins;
+		Configurations _configurations;
+		std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog> _applyLogs;
 	};
 
 	// Utility for exporting across to the CLR side (where futures don't work)

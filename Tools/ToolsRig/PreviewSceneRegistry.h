@@ -35,7 +35,7 @@ namespace ToolsRig
 	class IConfigurablePlugin : public EntityInterface::IMutableEntityDocument
 	{
 	public:
-		virtual void ApplyConfiguration(std::shared_ptr<::Assets::OperationContext> =nullptr) = 0;
+		virtual std::string ApplyConfiguration(std::shared_ptr<::Assets::OperationContext> =nullptr) = 0;
 		virtual ~IConfigurablePlugin() = default;
 	};
 
@@ -54,7 +54,12 @@ namespace ToolsRig
 			StringSection<>) = 0;
 
 		virtual std::shared_ptr<EntityInterface::IMutableEntityDocument> GetConfigurablePluginDocument() = 0;
-		virtual std::vector<std::future<void>> ApplyConfigurablePlugins(std::shared_ptr<::Assets::OperationContext> =nullptr) = 0;
+		struct ApplyConfigurablePluginLog
+		{
+			std::string _pluginName;
+			std::string _initializationLog;
+		};
+		virtual std::vector<std::future<ApplyConfigurablePluginLog>> ApplyConfigurablePlugins(std::shared_ptr<::Assets::OperationContext> =nullptr) = 0;
 
 		using RegistrySetId = uint64_t;
 		virtual RegistrySetId Register(std::shared_ptr<IPreviewSceneRegistrySet>) = 0;

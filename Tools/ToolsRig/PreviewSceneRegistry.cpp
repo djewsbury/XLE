@@ -69,7 +69,7 @@ namespace ToolsRig
 			return shared_from_this();
 		}
 
-		std::vector<std::future<void>> ApplyConfigurablePlugins(std::shared_ptr<::Assets::OperationContext> opContext) override
+		std::vector<std::future<ApplyConfigurablePluginLog>> ApplyConfigurablePlugins(std::shared_ptr<::Assets::OperationContext> opContext) override
 		{
 			ScopedLock(_lock);
 
@@ -81,19 +81,21 @@ namespace ToolsRig
 			_configurablePluginEntities.clear();
 
 			// let's parallelize the plugin apply; because these can actually be expensive operations
-			std::vector<std::future<void>> result;
+			std::vector<std::future<ApplyConfigurablePluginLog>> result;
 			for (auto c:pluginsPendingApply) {
 				auto i2 = std::find_if(_configurablePlugins.begin(), _configurablePlugins.end(), [c](const auto& q) { return std::get<0>(q) == c; });
 				if (i2 == _configurablePlugins.end())
 					continue;
 
-				std::promise<void> promise;
+				std::promise<ApplyConfigurablePluginLog> promise;
 				result.emplace_back(promise.get_future());
 				ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-					[opContext, p=std::get<2>(*i2), promise=std::move(promise)]() mutable {
+					[opContext, p=std::get<2>(*i2), promise=std::move(promise), pluginName = std::get<1>(*i2)]() mutable {
 						TRY {
-							p->ApplyConfiguration(std::move(opContext));
-							promise.set_value();
+							ApplyConfigurablePluginLog log;
+							log._initializationLog = p->ApplyConfiguration(std::move(opContext));
+							log._pluginName = pluginName;
+							promise.set_value(std::move(log));
 						} CATCH (...) {
 							promise.set_exception(std::current_exception());
 						} CATCH_END
