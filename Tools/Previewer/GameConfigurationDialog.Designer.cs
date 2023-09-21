@@ -30,12 +30,14 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(GameConfigurationDialog));
             this.starfieldBox1 = new System.Windows.Forms.GroupBox();
-            this.label1 = new System.Windows.Forms.Label();
-            this.starfieldFolder = new System.Windows.Forms.TextBox();
-            this.starfieldSelectFolder = new System.Windows.Forms.Button();
             this.label2 = new System.Windows.Forms.Label();
+            this.starfieldSelectFolder = new System.Windows.Forms.Button();
+            this.starfieldFolder = new System.Windows.Forms.TextBox();
+            this.label1 = new System.Windows.Forms.Label();
             this.progressListBox = new System.Windows.Forms.ListBox();
             this.okButton = new System.Windows.Forms.Button();
+            this.fakeOkButton = new System.Windows.Forms.Button();
+            this.applyResults = new System.Windows.Forms.TextBox();
             this.starfieldBox1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -49,15 +51,10 @@
             this.starfieldBox1.Name = "starfieldBox1";
             this.starfieldBox1.TabStop = false;
             // 
-            // label1
+            // label2
             // 
-            resources.ApplyResources(this.label1, "label1");
-            this.label1.Name = "label1";
-            // 
-            // starfieldFolder
-            // 
-            resources.ApplyResources(this.starfieldFolder, "starfieldFolder");
-            this.starfieldFolder.Name = "starfieldFolder";
+            resources.ApplyResources(this.label2, "label2");
+            this.label2.Name = "label2";
             // 
             // starfieldSelectFolder
             // 
@@ -66,10 +63,15 @@
             this.starfieldSelectFolder.UseVisualStyleBackColor = true;
             this.starfieldSelectFolder.Click += new System.EventHandler(this.starfieldSelectFolder_Click);
             // 
-            // label2
+            // starfieldFolder
             // 
-            resources.ApplyResources(this.label2, "label2");
-            this.label2.Name = "label2";
+            resources.ApplyResources(this.starfieldFolder, "starfieldFolder");
+            this.starfieldFolder.Name = "starfieldFolder";
+            // 
+            // label1
+            // 
+            resources.ApplyResources(this.label1, "label1");
+            this.label1.Name = "label1";
             // 
             // progressListBox
             // 
@@ -83,7 +85,19 @@
             resources.ApplyResources(this.okButton, "okButton");
             this.okButton.Name = "okButton";
             this.okButton.UseVisualStyleBackColor = true;
-            this.okButton.Click += new System.EventHandler(this.okButton_Click);
+            // 
+            // fakeOkButton
+            // 
+            resources.ApplyResources(this.fakeOkButton, "fakeOkButton");
+            this.fakeOkButton.Name = "fakeOkButton";
+            this.fakeOkButton.UseVisualStyleBackColor = true;
+            this.fakeOkButton.Click += new System.EventHandler(this.fakeOkButton_Click);
+            // 
+            // applyResults
+            // 
+            this.applyResults.AcceptsReturn = true;
+            resources.ApplyResources(this.applyResults, "applyResults");
+            this.applyResults.Name = "applyResults";
             // 
             // GameConfigurationDialog
             // 
@@ -91,6 +105,8 @@
             resources.ApplyResources(this, "$this");
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ControlBox = false;
+            this.Controls.Add(this.applyResults);
+            this.Controls.Add(this.fakeOkButton);
             this.Controls.Add(this.okButton);
             this.Controls.Add(this.progressListBox);
             this.Controls.Add(this.starfieldBox1);
@@ -99,6 +115,7 @@
             this.starfieldBox1.ResumeLayout(false);
             this.starfieldBox1.PerformLayout();
             this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
 
@@ -111,5 +128,7 @@
         private System.Windows.Forms.TextBox starfieldFolder;
         private System.Windows.Forms.ListBox progressListBox;
         private System.Windows.Forms.Button okButton;
+        private System.Windows.Forms.Button fakeOkButton;
+        private System.Windows.Forms.TextBox applyResults;
     }
 }

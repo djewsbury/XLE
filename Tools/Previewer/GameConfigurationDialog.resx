@@ -186,6 +186,80 @@
     <value>$this</value>
   </data>
   <data name="&gt;&gt;starfieldBox1.ZOrder" xml:space="preserve">
+    <value>4</value>
+  </data>
+  <data name="label2.AutoSize" type="System.Boolean, mscorlib">
+    <value>True</value>
+  </data>
+  <data name="label2.Location" type="System.Drawing.Point, System.Drawing">
+    <value>107, 56</value>
+  </data>
+  <data name="label2.Size" type="System.Drawing.Size, System.Drawing">
+    <value>370, 39</value>
+  </data>
+  <data name="label2.TabIndex" type="System.Int32, mscorlib">
+    <value>3</value>
+  </data>
+  <data name="label2.Text" xml:space="preserve">
+    <value>Select the root starfield folder (the one with starfield.exe)
+Support: .nif model files and core materials settings. No animation support yet.
+Suggest starting with .nif files in meshes/setdressing on main screen</value>
+  </data>
+  <data name="&gt;&gt;label2.Name" xml:space="preserve">
+    <value>label2</value>
+  </data>
+  <data name="&gt;&gt;label2.Type" xml:space="preserve">
+    <value>System.Windows.Forms.Label, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="&gt;&gt;label2.Parent" xml:space="preserve">
+    <value>starfieldBox1</value>
+  </data>
+  <data name="&gt;&gt;label2.ZOrder" xml:space="preserve">
+    <value>0</value>
+  </data>
+  <data name="starfieldSelectFolder.Location" type="System.Drawing.Point, System.Drawing">
+    <value>722, 20</value>
+  </data>
+  <data name="starfieldSelectFolder.Size" type="System.Drawing.Size, System.Drawing">
+    <value>48, 23</value>
+  </data>
+  <data name="starfieldSelectFolder.TabIndex" type="System.Int32, mscorlib">
+    <value>2</value>
+  </data>
+  <data name="starfieldSelectFolder.Text" xml:space="preserve">
+    <value>...</value>
+  </data>
+  <data name="&gt;&gt;starfieldSelectFolder.Name" xml:space="preserve">
+    <value>starfieldSelectFolder</value>
+  </data>
+  <data name="&gt;&gt;starfieldSelectFolder.Type" xml:space="preserve">
+    <value>System.Windows.Forms.Button, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="&gt;&gt;starfieldSelectFolder.Parent" xml:space="preserve">
+    <value>starfieldBox1</value>
+  </data>
+  <data name="&gt;&gt;starfieldSelectFolder.ZOrder" xml:space="preserve">
+    <value>1</value>
+  </data>
+  <data name="starfieldFolder.Location" type="System.Drawing.Point, System.Drawing">
+    <value>110, 20</value>
+  </data>
+  <data name="starfieldFolder.Size" type="System.Drawing.Size, System.Drawing">
+    <value>606, 20</value>
+  </data>
+  <data name="starfieldFolder.TabIndex" type="System.Int32, mscorlib">
+    <value>1</value>
+  </data>
+  <data name="&gt;&gt;starfieldFolder.Name" xml:space="preserve">
+    <value>starfieldFolder</value>
+  </data>
+  <data name="&gt;&gt;starfieldFolder.Type" xml:space="preserve">
+    <value>System.Windows.Forms.TextBox, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="&gt;&gt;starfieldFolder.Parent" xml:space="preserve">
+    <value>starfieldBox1</value>
+  </data>
+  <data name="&gt;&gt;starfieldFolder.ZOrder" xml:space="preserve">
     <value>2</value>
   </data>
   <data name="label1.AutoSize" type="System.Boolean, mscorlib">
@@ -218,80 +292,6 @@
   <data name="&gt;&gt;label1.ZOrder" xml:space="preserve">
     <value>3</value>
   </data>
-  <data name="starfieldFolder.Location" type="System.Drawing.Point, System.Drawing">
-    <value>110, 20</value>
-  </data>
-  <data name="starfieldFolder.Size" type="System.Drawing.Size, System.Drawing">
-    <value>606, 20</value>
-  </data>
-  <data name="starfieldFolder.TabIndex" type="System.Int32, mscorlib">
-    <value>1</value>
-  </data>
-  <data name="&gt;&gt;starfieldFolder.Name" xml:space="preserve">
-    <value>starfieldFolder</value>
-  </data>
-  <data name="&gt;&gt;starfieldFolder.Type" xml:space="preserve">
-    <value>System.Windows.Forms.TextBox, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="&gt;&gt;starfieldFolder.Parent" xml:space="preserve">
-    <value>starfieldBox1</value>
-  </data>
-  <data name="&gt;&gt;starfieldFolder.ZOrder" xml:space="preserve">
-    <value>2</value>
-  </data>
-  <data name="starfieldSelectFolder.Location" type="System.Drawing.Point, System.Drawing">
-    <value>722, 20</value>
-  </data>
-  <data name="starfieldSelectFolder.Size" type="System.Drawing.Size, System.Drawing">
-    <value>48, 23</value>
-  </data>
-  <data name="starfieldSelectFolder.TabIndex" type="System.Int32, mscorlib">
-    <value>2</value>
-  </data>
-  <data name="starfieldSelectFolder.Text" xml:space="preserve">
-    <value>...</value>
-  </data>
-  <data name="&gt;&gt;starfieldSelectFolder.Name" xml:space="preserve">
-    <value>starfieldSelectFolder</value>
-  </data>
-  <data name="&gt;&gt;starfieldSelectFolder.Type" xml:space="preserve">
-    <value>System.Windows.Forms.Button, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="&gt;&gt;starfieldSelectFolder.Parent" xml:space="preserve">
-    <value>starfieldBox1</value>
-  </data>
-  <data name="&gt;&gt;starfieldSelectFolder.ZOrder" xml:space="preserve">
-    <value>1</value>
-  </data>
-  <data name="label2.AutoSize" type="System.Boolean, mscorlib">
-    <value>True</value>
-  </data>
-  <data name="label2.Location" type="System.Drawing.Point, System.Drawing">
-    <value>107, 56</value>
-  </data>
-  <data name="label2.Size" type="System.Drawing.Size, System.Drawing">
-    <value>370, 39</value>
-  </data>
-  <data name="label2.TabIndex" type="System.Int32, mscorlib">
-    <value>3</value>
-  </data>
-  <data name="label2.Text" xml:space="preserve">
-    <value>Select the root starfield folder (the one with starfield.exe)
-Support: .nif model files and core materials settings. No animation support yet.
-Suggest starting with .nif files in meshes/setdressing on main screen</value>
-  </data>
-  <data name="&gt;&gt;label2.Name" xml:space="preserve">
-    <value>label2</value>
-  </data>
-  <data name="&gt;&gt;label2.Type" xml:space="preserve">
-    <value>System.Windows.Forms.Label, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
-  <data name="&gt;&gt;label2.Parent" xml:space="preserve">
-    <value>starfieldBox1</value>
-  </data>
-  <data name="&gt;&gt;label2.ZOrder" xml:space="preserve">
-    <value>0</value>
-  </data>
   <data name="progressListBox.Enabled" type="System.Boolean, mscorlib">
     <value>False</value>
   </data>
@@ -317,7 +317,10 @@ Suggest starting with .nif files in meshes/setdressing on main screen</value>
     <value>$this</value>
   </data>
   <data name="&gt;&gt;progressListBox.ZOrder" xml:space="preserve">
-    <value>1</value>
+    <value>3</value>
+  </data>
+  <data name="okButton.Enabled" type="System.Boolean, mscorlib">
+    <value>False</value>
   </data>
   <data name="okButton.Location" type="System.Drawing.Point, System.Drawing">
     <value>327, 220</value>
@@ -331,6 +334,9 @@ Suggest starting with .nif files in meshes/setdressing on main screen</value>
   <data name="okButton.Text" xml:space="preserve">
     <value>OK</value>
   </data>
+  <data name="okButton.Visible" type="System.Boolean, mscorlib">
+    <value>False</value>
+  </data>
   <data name="&gt;&gt;okButton.Name" xml:space="preserve">
     <value>okButton</value>
   </data>
@@ -341,6 +347,67 @@ Suggest starting with .nif files in meshes/setdressing on main screen</value>
     <value>$this</value>
   </data>
   <data name="&gt;&gt;okButton.ZOrder" xml:space="preserve">
+    <value>2</value>
+  </data>
+  <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
+  <data name="fakeOkButton.ImeMode" type="System.Windows.Forms.ImeMode, System.Windows.Forms">
+    <value>NoControl</value>
+  </data>
+  <data name="fakeOkButton.Location" type="System.Drawing.Point, System.Drawing">
+    <value>327, 220</value>
+  </data>
+  <data name="fakeOkButton.Size" type="System.Drawing.Size, System.Drawing">
+    <value>146, 23</value>
+  </data>
+  <data name="fakeOkButton.TabIndex" type="System.Int32, mscorlib">
+    <value>3</value>
+  </data>
+  <data name="fakeOkButton.Text" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="&gt;&gt;fakeOkButton.Name" xml:space="preserve">
+    <value>fakeOkButton</value>
+  </data>
+  <data name="&gt;&gt;fakeOkButton.Type" xml:space="preserve">
+    <value>System.Windows.Forms.Button, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="&gt;&gt;fakeOkButton.Parent" xml:space="preserve">
+    <value>$this</value>
+  </data>
+  <data name="&gt;&gt;fakeOkButton.ZOrder" xml:space="preserve">
+    <value>1</value>
+  </data>
+  <data name="applyResults.Enabled" type="System.Boolean, mscorlib">
+    <value>False</value>
+  </data>
+  <data name="applyResults.Location" type="System.Drawing.Point, System.Drawing">
+    <value>12, 12</value>
+  </data>
+  <data name="applyResults.Multiline" type="System.Boolean, mscorlib">
+    <value>True</value>
+  </data>
+  <data name="applyResults.ScrollBars" type="System.Windows.Forms.ScrollBars, System.Windows.Forms">
+    <value>Vertical</value>
+  </data>
+  <data name="applyResults.Size" type="System.Drawing.Size, System.Drawing">
+    <value>776, 202</value>
+  </data>
+  <data name="applyResults.TabIndex" type="System.Int32, mscorlib">
+    <value>4</value>
+  </data>
+  <data name="applyResults.Visible" type="System.Boolean, mscorlib">
+    <value>False</value>
+  </data>
+  <data name="&gt;&gt;applyResults.Name" xml:space="preserve">
+    <value>applyResults</value>
+  </data>
+  <data name="&gt;&gt;applyResults.Type" xml:space="preserve">
+    <value>System.Windows.Forms.TextBox, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
+  <data name="&gt;&gt;applyResults.Parent" xml:space="preserve">
+    <value>$this</value>
+  </data>
+  <data name="&gt;&gt;applyResults.ZOrder" xml:space="preserve">
     <value>0</value>
   </data>
   <metadata name="$this.Localizable" type="System.Boolean, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">

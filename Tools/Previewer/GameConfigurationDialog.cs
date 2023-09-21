@@ -35,14 +35,14 @@ namespace Previewer
             }
         }
 
-        private void okButton_Click(object sender, EventArgs e)
+        private void fakeOkButton_Click(object sender, EventArgs e)
         {
             var starfieldFolderValue = starfieldFolder.Text.Trim();
             starfieldFolder.Enabled = false;
 
             // Use XLE bridge utils to configure 
-            okButton.Enabled = false;
-            okButton.Visible = false;
+            fakeOkButton.Enabled = false;
+            fakeOkButton.Visible = false;
             progressListBox.Enabled = true;
             progressListBox.Visible = true;
             progressListBox.Items.Add("Please wait while loading game plugins...");
@@ -72,6 +72,23 @@ namespace Previewer
                     progressListBox.EndUpdate();
                     Refresh();
                 }
+
+                // change mode once again, to show final results
+                progressListBox.Enabled = false;
+                progressListBox.Visible = false;
+                string log = marker.GetActualizationLog();
+                if (!string.IsNullOrEmpty(log))
+                {
+                    applyResults.Text = log.Replace("\n", Environment.NewLine);
+                }
+                else
+                    applyResults.Text = "No logging information (probably because no plugins were applied).";
+                applyResults.Visible = true;
+                applyResults.Enabled = true;
+                fakeOkButton.Enabled = false;
+                fakeOkButton.Visible = false;
+                okButton.Enabled = true;
+                okButton.Visible = true;
 
                 marker.Dispose();
             }
