@@ -12,6 +12,8 @@
 #include <typeinfo>
 #include <typeindex>
 
+// #define ALLOW_IMPLICIT_CROSSMODULE 1
+
 namespace ConsoleRig
 {
 
@@ -184,6 +186,12 @@ namespace ConsoleRig
 		void EnsureReady();
 		void Shutdown();
 		static CrossModule& GetInstance();
+
+		void RegisterCurrentModule();
+		static void DeregisterCurrentModule();
+
+		CrossModule();
+		~CrossModule();
 	private:
 		friend class Internal::InfraModuleManager;
 		using RegisteredInfraModuleManagerId = unsigned;
@@ -194,8 +202,6 @@ namespace ConsoleRig
 		void Reset(Internal::TypeKey id, const std::shared_ptr<void>& obj, RegisteredInfraModuleManagerId owner);
 		void CheckExtinction(Internal::TypeKey id);
 
-		CrossModule();
-		~CrossModule();
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;
 	};

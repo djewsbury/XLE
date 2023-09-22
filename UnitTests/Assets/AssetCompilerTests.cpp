@@ -172,7 +172,7 @@ namespace UnitTests
 		// IntermediateCompilers provides a mechanism for running pre-processing operations on
 		// data files in order to prepare them for the final format 
 		// 
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		
 		auto compilers = ::Assets::CreateIntermediateCompilers(nullptr);
 
@@ -335,7 +335,7 @@ namespace UnitTests
 		// _utDataMount = _mountingTree->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData));
 		::Assets::MainFileSystem::Init(mountingTree, nullptr);*/
 
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		::Assets::MainFileSystem::GetMountingTree()->SetAbsolutePathMode(Assets::MountingTree::AbsolutePathMode::RawOS);
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
@@ -409,7 +409,7 @@ namespace UnitTests
 
 	TEST_CASE( "AssetCompilers-HandlingCompilationFailures", "[assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		::Assets::MainFileSystem::GetMountingTree()->SetAbsolutePathMode(Assets::MountingTree::AbsolutePathMode::RawOS);
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
@@ -514,7 +514,7 @@ namespace UnitTests
 
 	TEST_CASE( "AssetCompilers-ImplicitCompilation", "[assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		uint64_t outputTypes[] = { Type_UnitTestArtifact };
@@ -547,7 +547,7 @@ namespace UnitTests
 	{
 		auto cfg = GetStartupConfig();
 		cfg._inMemoryOnlyIntermediates = true;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
+		auto globalServices = ConsoleRig::MakeGlobalServices(cfg);
 
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		uint64_t outputTypes[] = { Type_UnitTestArtifact };

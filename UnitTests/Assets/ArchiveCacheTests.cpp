@@ -108,7 +108,7 @@ namespace UnitTests
 
 	TEST_CASE( "ArchiveCacheTests-CommitAndRetrieve", "[assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests" / "ArchiveCacheTests";
 		std::filesystem::create_directories(tempDirPath);

@@ -66,7 +66,7 @@ namespace UnitTests
 	{
 		auto cfg = GetStartupConfig();
 		cfg._inMemoryOnlyIntermediates = true;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
+		auto globalServices = ConsoleRig::MakeGlobalServices(cfg);
 		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
@@ -171,7 +171,7 @@ namespace UnitTests
 	{
 		auto cfg = GetStartupConfig();
 		cfg._inMemoryOnlyIntermediates = true;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
+		auto globalServices = ConsoleRig::MakeGlobalServices(cfg);
 
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 
@@ -227,7 +227,7 @@ namespace UnitTests
 
 	TEST_CASE( "RenderCoreCompilation-CompileFromDLL", "[rendercore_assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);

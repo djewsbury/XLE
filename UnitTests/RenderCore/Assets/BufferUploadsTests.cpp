@@ -77,7 +77,7 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-TextureInitialization", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 
@@ -156,7 +156,7 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-TextureFileLoading", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
 		auto metalHelper = MakeTestHelper();
@@ -322,7 +322,7 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-TextureConstructionThrash", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 		auto& immediateContext = *metalHelper->_device->GetImmediateContext();
@@ -476,7 +476,7 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-ImmediateTransaction", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 		auto threadContext = metalHelper->_device->GetImmediateContext();
@@ -491,7 +491,7 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-LargeObjects", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 		auto threadContext = metalHelper->_device->GetImmediateContext();
@@ -561,7 +561,7 @@ namespace UnitTests
 	TEST_CASE( "BufferUploads-LinearBufferAllocation", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		auto bu = BufferUploads::CreateManager(*metalHelper->_device);
 		auto& immediateContext = *metalHelper->_device->GetImmediateContext();
@@ -615,7 +615,7 @@ namespace UnitTests
 		// simple and controlled way. This can help us isolate issues between the metal
 		// layer and with buffer uploads
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
 		std::shared_ptr<IThreadContext> backgroundContext = metalHelper->_device->CreateDeferredContext();
 

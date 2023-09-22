@@ -237,10 +237,12 @@ namespace XLEBridgeUtils
 
     void Utils::AttachLibrary(GUILayer::EngineDevice^ device)
     {
+        device->GetNative().GetGlobalServices()->GetCrossModule().RegisterCurrentModule();
     }
 
     void Utils::DetachLibrary(GUILayer::EngineDevice^ device)
     {
+        ConsoleRig::CrossModule::DeregisterCurrentModule();
     }
 
 }

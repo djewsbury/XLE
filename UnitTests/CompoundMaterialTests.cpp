@@ -113,7 +113,7 @@ namespace UnitTests
 
 		CompoundMaterialTests()
 		{
-			_globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+			_globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 			::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres"));
 			::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData));
 			_assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);

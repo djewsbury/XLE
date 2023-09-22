@@ -61,7 +61,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         //  startup allocation counts.
     PlatformRig::AccumulatedAllocations accumulatedAllocations;
 
-    auto services = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>();
+    auto services = ConsoleRig::MakeGlobalServices();
     Log(Verbose) << "------------------------------------------------------------------------------------------" << std::endl;
 
     TRY {

@@ -284,7 +284,7 @@ namespace UnitTests
 	TEST_CASE( "FrameScheduling-BasicTiming", "[rendercore_metal]" )
 	{
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto testHelper = MakeTestHelper();
 		ConsoleRig::AttachablePtr<::Assets::Services> assetServices;
 		if (!assetServices) assetServices = std::make_shared<::Assets::Services>();

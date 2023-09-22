@@ -90,7 +90,7 @@ namespace UnitTests
 	{
 		// Let's create a scenario with a large network of continuation futures, with most futures waiting on 
 		// other futures
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>();
+		auto globalServices = ConsoleRig::MakeGlobalServices();
 		std::mt19937_64 rng{785129462};
 		FirstOrderPromises firstOrderPromises;
 		const unsigned targetFutureCount = 3000;

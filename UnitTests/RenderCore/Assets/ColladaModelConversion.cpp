@@ -56,7 +56,7 @@ namespace UnitTests
 #if !defined(_DEBUG)
     TEST_CASE("RenderCoreCompilation-ColladaParsePerformance", "[rendercore_assets]")
     {
-        auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+        auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
         {
@@ -89,7 +89,7 @@ namespace UnitTests
 
     TEST_CASE("RenderCoreCompilation-StreamDOMParsePerformance", "[rendercore_assets]")
     {
-        auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+        auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
         {

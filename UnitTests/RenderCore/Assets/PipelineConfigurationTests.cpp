@@ -119,7 +119,7 @@ namespace UnitTests
 
 	TEST_CASE( "PipelineConfiguration", "[rendercore_assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto mnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
 		auto layoutFile = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayoutFile>>("ut-data/graphics-main.pipeline");
@@ -142,7 +142,7 @@ namespace UnitTests
 
 	TEST_CASE( "PipelineConfiguration-BadSyntax", "[rendercore_assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		using PredefinedPipelineLayoutFile = RenderCore::Assets::PredefinedPipelineLayoutFile;
 

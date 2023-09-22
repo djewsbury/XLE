@@ -134,7 +134,7 @@ namespace UnitTests
 	TEST_CASE( "StringEllipsis", "[renderoverlays]" )
 	{
 		// Test restricting string size by replacing parts with ellipses
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
 		auto futureFont = RenderOverlays::MakeFont("Petra", 16);
@@ -263,7 +263,7 @@ namespace UnitTests
 
 	TEST_CASE( "StringWordBreak", "[renderoverlays]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
 		auto futureFont = RenderOverlays::MakeFont("Petra", 16);

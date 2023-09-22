@@ -121,7 +121,7 @@ namespace UnitTests
 	
 	TEST_CASE( "EntityInterface-Mount", "[formatters]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
 		auto mountingTree = EntityInterface::CreateMountingTree(EntityInterface::MountingTreeFlags::LogMountPoints);

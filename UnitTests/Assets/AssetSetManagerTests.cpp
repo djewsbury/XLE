@@ -45,7 +45,7 @@ namespace UnitTests
 
 	TEST_CASE( "AssetSetManager-ThrashFutures", "[assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		const int targetAssetsInFlight = 32;
 		int assetsCompleted = 0;
@@ -179,7 +179,7 @@ namespace UnitTests
 
 	TEST_CASE( "AssetFuture-Continuation", "[assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		auto futureZero = std::make_shared<::Assets::Marker<unsigned>>();
 		auto futureOne = std::make_shared<::Assets::Marker<unsigned>>();
@@ -258,7 +258,7 @@ namespace UnitTests
 
 	TEST_CASE( "AssetFuture-ContinuationException", "[assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		struct AssetTypeOne
 		{
@@ -390,7 +390,7 @@ namespace UnitTests
 
 	TEST_CASE( "Assets-ConstructToPromise", "[assets]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		std::string fileContents = "This is the contents of the file";
 		static std::unordered_map<std::string, ::Assets::Blob> s_utData {

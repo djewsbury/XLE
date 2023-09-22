@@ -143,7 +143,6 @@ namespace GUILayer
     NativeEngineDevice::NativeEngineDevice(const ConsoleRig::StartupConfig& startupCfg)
     {
         _services = std::make_shared<ConsoleRig::GlobalServices>(startupCfg);
-
 		_assetServices = std::make_shared<::Assets::Services>();
         _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::MainFileSystem::GetDefaultFileSystem()));
 

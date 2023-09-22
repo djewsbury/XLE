@@ -313,7 +313,7 @@ static const int NonPreprocessorLine0 = 0;
 
 	TEST_CASE( "ShaderParser-BindShaderToTechnique", "[shader_parser]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto utDataMount = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
@@ -362,7 +362,7 @@ static const int NonPreprocessorLine0 = 0;
 
 	TEST_CASE( "ShaderParser-SelectorPreconfiguration", "[shader_parser]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto utDataMount = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 
 		ShaderSourceParser::SelectorPreconfiguration preconfig{"ut-data/selector-preconfiguration.hlsl"};

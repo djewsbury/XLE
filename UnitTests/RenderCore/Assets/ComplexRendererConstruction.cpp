@@ -30,7 +30,7 @@ namespace UnitTests
 	{
 		using namespace RenderCore;
 
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		auto matRegistration = RenderCore::Assets::RegisterMaterialCompiler(compilers);
 		auto modelRegistration = UnitTests::RegisterFakeModelCompiler(compilers);

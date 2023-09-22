@@ -202,6 +202,9 @@ namespace ConsoleRig
 	class GlobalServices::Pimpl
 	{
 	public:
+        #if !ALLOW_IMPLICIT_CROSSMODULE
+            CrossModule _crossModule;
+        #endif
 		AttachablePtr<LogCentralConfiguration> _logCfg;
         std::unique_ptr<ThreadPool> _shortTaskPool;
         std::unique_ptr<ThreadPool> _longTaskPool;
@@ -223,9 +226,11 @@ namespace ConsoleRig
 
     GlobalServices::GlobalServices(const StartupConfig& cfg)
     {
-        CrossModule::GetInstance().EnsureReady();   // if we called CrossModule::GetInstance().Shutdown() previously, we can balance it with this
+        #if ALLOW_IMPLICIT_CROSSMODULE
+            CrossModule::GetInstance().EnsureReady();   // if we called CrossModule::GetInstance().Shutdown() previously, we can balance it with this
+        #endif
 		_pimpl = std::make_unique<Pimpl>();
-        _pimpl->_shortTaskPool = std::make_unique<ThreadPool>(cfg._shortTaskThreadPoolCount);
+    _pimpl->_shortTaskPool = std::make_unique<ThreadPool>(cfg._shortTaskThreadPoolCount);
         _pimpl->_longTaskPool = std::make_unique<ThreadPool>(cfg._longTaskThreadPoolCount);
         _pimpl->_pollingThread = std::make_shared<OSServices::PollingThread>();
 		_pimpl->_cfg = cfg;
@@ -341,6 +346,15 @@ namespace ConsoleRig
         s_instance = nullptr;
     }
 
+    CrossModule& GlobalServices::GetCrossModule()
+    {
+        #if !ALLOW_IMPLICIT_CROSSMODULE
+            return _pimpl->_crossModule;
+        #else
+            return CrossModule::GetInstance();
+        #endif
+    }
+
 	ThreadPool& GlobalServices::GetShortTaskThreadPool() { return *_pimpl->_shortTaskPool; }
     ThreadPool& GlobalServices::GetLongTaskThreadPool() { return *_pimpl->_longTaskPool; }
     const std::shared_ptr<OSServices::PollingThread>& GlobalServices::GetPollingThread() { return _pimpl->_pollingThread; }
@@ -378,6 +392,13 @@ namespace ConsoleRig
 	{
 		return OSServices::LibVersionDesc { ConsoleRig_VersionString, ConsoleRig_BuildDateString };
 	}
+
+    AttachablePtr<GlobalServices> MakeGlobalServices(const StartupConfig& cfg)
+    {
+        // we must construct GlobalServices into a normal shared_ptr before we return it as an AttachablePtr
+        auto res = std::make_shared<GlobalServices>(cfg);
+        return res;
+    }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

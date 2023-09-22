@@ -33,6 +33,7 @@ namespace ConsoleRig
     };
 
     class PluginSet;
+    class CrossModule;
 
     class GlobalServices
     {
@@ -42,6 +43,7 @@ namespace ConsoleRig
         const std::shared_ptr<OSServices::PollingThread>& GetPollingThread();
         PluginSet& GetPluginSet();
         const std::shared_ptr<thousandeyes::futures::Executor>& GetContinuationExecutor();
+        CrossModule& GetCrossModule();
 
         static GlobalServices& GetInstance() { assert(s_instance); return *s_instance; }
 
@@ -66,4 +68,8 @@ namespace ConsoleRig
     };
 
 	OSServices::LibVersionDesc GetLibVersionDesc();
+
+    template<typename Obj> class AttachablePtr;
+    AttachablePtr<GlobalServices> MakeGlobalServices(const StartupConfig& cfg = StartupConfig());
+
 }

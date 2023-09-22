@@ -32,7 +32,7 @@ namespace UnitTests
 
 	TEST_CASE("DynLibraryBinding-StartupShutdown", "[consoleRig]")
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{"<<configured-template>>"});
 
 		OSServices::AttachableLibrary testLibrary(GetUnitTestLibraryName());
@@ -54,7 +54,7 @@ namespace UnitTests
 	{
 		// (we don't use globalServices here, but the attachable library checks to ensure it's initialized
 		// with something -- so just ensure we have some value for it)
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		// We can use attachable ptrs to share references to singleton objects
 		// between modules (ie, shared libraries).
@@ -133,7 +133,7 @@ namespace UnitTests
 	        _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_CHECK_CRT_DF | _CRTDBG_CHECK_EVERY_16_DF | _CRTDBG_LEAK_CHECK_DF | _CRTDBG_CHECK_ALWAYS_DF);
     	#endif
 
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 
 		// OSServices::AttachableLibrary testLibrary("c://code//XLE//Finals_Debug64//GUILayerVulkan.dll");
 		OSServices::AttachableLibrary testLibrary("ToolsRigProtoDLL-Vulkan.dll");

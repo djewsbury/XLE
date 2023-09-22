@@ -161,7 +161,7 @@ namespace UnitTests
 	TEST_CASE( "Drawables-RenderImages", "[rendercore_techniques]" )
 	{
 		using namespace RenderCore;
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto xlresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto utdatamnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		auto testHelper = MakeTestHelper();
@@ -445,7 +445,7 @@ namespace UnitTests
 
 	TEST_CASE( "Drawables-SequencerDescriptorSet", "[rendercore_techniques]" )
 	{
-		auto globalServices = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(GetStartupConfig());
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto testHelper = MakeTestHelper();
 		TechniqueTestApparatus testApparatus(*testHelper);
 

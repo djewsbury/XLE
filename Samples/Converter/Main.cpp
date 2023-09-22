@@ -111,7 +111,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine,
 {
     ConsoleRig::StartupConfig cfg("converter");
     cfg._setWorkingDir = false;
-	auto services = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
+	auto services = ConsoleRig::MakeGlobalServices(cfg);
 
     TRY {
         return Converter::Execute(lpCmdLine);
@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
 {
     ConsoleRig::StartupConfig cfg("converter");
     cfg._setWorkingDir = false;
-	auto services = ConsoleRig::MakeAttachablePtr<ConsoleRig::GlobalServices>(cfg);
+	auto services = ConsoleRig::MakeGlobalServices(cfg);
 
 	std::string cmdLine;
 	for (int c=1; c<argc; ++c) {
