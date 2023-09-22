@@ -1,5 +1,4 @@
 ﻿using ControlsLibrary.MaterialEditor;
-using LevelEditorCore;
 using Sce.Atf;
 using Sce.Atf.Adaptation;
 using Sce.Atf.Applications;
@@ -84,7 +83,7 @@ namespace ControlsLibraryExt.ModelView
                 var resourceDesc = _resourceQueryService.GetDesc(sel);
                 if (resourceDesc == null) return;
 
-                if ((resourceDesc.Value.Types & (uint)ResourceTypeFlags.Model) != 0)
+                if ((resourceDesc.Value.Types & (uint)XLEBridgeUtils.ResourceTypeFlags.Model) != 0)
                 {
                     // It's a model extension. Pass it through to the current settings object
                     var modelSettings = previewerContext.ModelSettings;
@@ -95,7 +94,7 @@ namespace ControlsLibraryExt.ModelView
                     // _settings.ResetCamera = true;
                 }
 
-                if ((resourceDesc.Value.Types & (uint)ResourceTypeFlags.Animation) != 0)
+                if ((resourceDesc.Value.Types & (uint)XLEBridgeUtils.ResourceTypeFlags.Animation) != 0)
                 {
                     var modelSettings = previewerContext.ModelSettings;
                     modelSettings.AnimationFileName = resourceDesc?.MountedName;
@@ -124,7 +123,7 @@ namespace ControlsLibraryExt.ModelView
         private ResourceSelectionTreeViewContext _resourceSelectionContext = null;
 
         [Import(AllowDefault = true)]
-        private LevelEditorCore.IResourceQueryService _resourceQueryService;
+        private XLEBridgeUtils.IResourceQueryService _resourceQueryService;
 
         [Import(AllowDefault = false)]
         private ControlHostService _controlHostService = null;

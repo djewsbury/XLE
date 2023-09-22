@@ -2,6 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "IResourceQueryService.h"
 #include "../../../Tools/GUILayer/MarshalString.h"
 #include "../../../Tools/GUILayer/CLIXAutoPtr.h"
 #include "../../../Tools/ToolsRig/MiscUtils.h"
@@ -23,23 +24,23 @@ using namespace System::ComponentModel::Composition;
 
 namespace XLEBridgeUtils
 {
-	public ref class ResourceFolderBridge : public LevelEditorCore::IOpaqueResourceFolder
+	public ref class ResourceFolderBridge : public IOpaqueResourceFolder
 	{
 	public:
-		property IEnumerable<LevelEditorCore::IOpaqueResourceFolder^>^ Subfolders { 
-			virtual IEnumerable<LevelEditorCore::IOpaqueResourceFolder^>^ get();
+		property IEnumerable<IOpaqueResourceFolder^>^ Subfolders { 
+			virtual IEnumerable<IOpaqueResourceFolder^>^ get() override;
 		}
 		property bool IsLeaf { 
-			virtual bool get();
+			virtual bool get() override;
 		}
         property IEnumerable<Object^>^ Resources { 
-			virtual IEnumerable<Object^>^ get();
+			virtual IEnumerable<Object^>^ get() override;
 		}
-        property LevelEditorCore::IOpaqueResourceFolder^ Parent { 
-			virtual LevelEditorCore::IOpaqueResourceFolder^ get() { return nullptr; }
+        property IOpaqueResourceFolder^ Parent { 
+			virtual IOpaqueResourceFolder^ get() { return nullptr; }
 		}
         property String^ Name {
-			virtual String^ get() { return _name; }
+			virtual String^ get() override { return _name; }
 		}
 
 		static ResourceFolderBridge^ BeginFromRoot();
@@ -58,9 +59,9 @@ namespace XLEBridgeUtils
 		return clix::detail::StringMarshaler<clix::detail::NetFromCxx>::marshalCxxString<clix::E_UTF8>(str.begin(), str.end());
 	}
 
-	IEnumerable<LevelEditorCore::IOpaqueResourceFolder^>^ ResourceFolderBridge::Subfolders::get()
+	IEnumerable<IOpaqueResourceFolder^>^ ResourceFolderBridge::Subfolders::get()
 	{
-		auto result = gcnew List<LevelEditorCore::IOpaqueResourceFolder^>();
+		auto result = gcnew List<IOpaqueResourceFolder^>();
 		for (auto i=_walker->begin_directories(); i!=_walker->end_directories(); ++i)
 			result->Add(gcnew ResourceFolderBridge(*i, clix::marshalString<clix::E_UTF8>(i.Name())));
 		return result;
@@ -115,16 +116,16 @@ namespace XLEBridgeUtils
 		delete _walker;
 	}
 
-	[Export(LevelEditorCore::IResourceQueryService::typeid)]
+	[Export(IResourceQueryService::typeid)]
     [PartCreationPolicy(CreationPolicy::Shared)]
-	public ref class ResourceQueryService : public LevelEditorCore::ResourceQueryService
+	public ref class ResourceQueryService : public IResourceQueryService
 	{
 	public:
-		virtual Nullable<LevelEditorCore::ResourceDesc> GetDesc(System::Object^ input) override
+		virtual Nullable<ResourceDesc> GetDesc(System::Object^ input) override
 		{
 			array<byte>^ markerAndFS = dynamic_cast<array<byte>^>(input);
 			if (!markerAndFS) 
-				return LevelEditorCore::ResourceQueryService::GetDesc(input);
+				return Base_GetDesc(input);
 
 			::Assets::IFileSystem::Marker marker;
 			::Assets::IFileSystem* fs = nullptr;
@@ -134,7 +135,7 @@ namespace XLEBridgeUtils
 				auto fsId = *(const ::Assets::FileSystemId*)pinnedBytes;
 				fs = ::Assets::MainFileSystem::GetFileSystem(fsId);
 				if (!fs)
-					return LevelEditorCore::ResourceQueryService::GetDesc(input);
+					return Base_GetDesc(input);
 
 				auto markerSize = markerAndFS->Length - sizeof(::Assets::FileSystemId);
 				marker.resize(markerSize);
@@ -144,9 +145,9 @@ namespace XLEBridgeUtils
 
 			auto desc = fs->TryGetDesc(marker);
 			if (desc._snapshot._state != ::Assets::FileSnapshot::State::Normal)
-				return LevelEditorCore::ResourceQueryService::GetDesc(input);
+				return Base_GetDesc(input);
 
-			LevelEditorCore::ResourceDesc result;
+			ResourceDesc result;
 			result.MountedName = clix::marshalString<clix::E_UTF8>(mountBase) + clix::marshalString<clix::E_UTF8>(desc._mountedName);
 			result.NaturalName = clix::marshalString<clix::E_UTF8>(desc._naturalName);
 			auto naturalNameSplitter = MakeFileNameSplitter(desc._naturalName);
@@ -160,15 +161,44 @@ namespace XLEBridgeUtils
 			auto targets = GUILayer::Utils::FindCompilationTargets(clix::marshalString<clix::E_UTF8>(temp));
 			result.Types = 0u;
 			if (targets & (uint32_t)GUILayer::CompilationTargetFlag::Model)
-				result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Model;
+				result.Types |= (uint)ResourceTypeFlags::Model;
 			if (targets & (uint32_t)GUILayer::CompilationTargetFlag::Animation)
-				result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Animation;
+				result.Types |= (uint)ResourceTypeFlags::Animation;
 			if (targets & (uint32_t)GUILayer::CompilationTargetFlag::Skeleton)
-				result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Skeleton;
+				result.Types |= (uint)ResourceTypeFlags::Skeleton;
 			if (targets & (uint32_t)GUILayer::CompilationTargetFlag::Material)
-				result.Types |= (uint)LevelEditorCore::ResourceTypeFlags::Material;
+				result.Types |= (uint)ResourceTypeFlags::Material;
 			return result;
 		}
+
+		Nullable<ResourceDesc> Base_GetDesc(Object^ identifier)
+        {
+            Uri^ resourceUri = dynamic_cast<Uri^>(identifier);
+            if (resourceUri != nullptr && resourceUri->IsAbsoluteUri)
+            {
+                // note that we can't call LocalPath on a relative uri -- and therefore this is only valid for absolute uris
+
+                ResourceDesc result;
+                result.NaturalName = resourceUri->LocalPath;
+                result.MountedName = resourceUri->LocalPath;
+                result.ShortName = System::IO::Path::GetFileName(resourceUri->LocalPath);
+                result.Filesystem = "RawFS";
+                result.Types = 0;
+                try
+                {
+					System::IO::FileInfo^ fileInfo = gcnew System::IO::FileInfo(resourceUri->LocalPath);
+                    result.SizeInBytes = (UInt64)fileInfo->Length;
+                    result.ModificationTime = fileInfo->LastWriteTime;
+                }
+                catch (System::IO::IOException^)
+                {
+                    result.SizeInBytes = 0;
+                    result.ModificationTime = gcnew DateTime();
+                }
+                return result;
+            }
+			return {};
+        }
 	};
 
 

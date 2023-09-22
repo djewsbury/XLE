@@ -10,5 +10,6 @@
   <ItemGroup>
     <ClInclude Include="..\XLELayerUtils.h" />
     <ClInclude Include="..\PropertyDescriptorUtils.h" />
+    <ClInclude Include="..\IResourceQueryService.h" />
   </ItemGroup>
 </Project>

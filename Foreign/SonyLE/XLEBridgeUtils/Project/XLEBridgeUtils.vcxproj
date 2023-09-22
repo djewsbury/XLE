@@ -111,6 +111,7 @@
     <ClCompile Include="..\XLELayerUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\IResourceQueryService.h" />
     <ClInclude Include="..\PropertyDescriptorUtils.h" />
     <ClInclude Include="..\XLELayerUtils.h" />
   </ItemGroup>
@@ -132,9 +133,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Tools\GUILayer\Project\GUILayer.vcxproj">
       <Project>{e1e9a4c1-97a8-44b7-8279-d287313c5b6b}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\..\LevelEditorCore\LevelEditorCore.vs2010.csproj">
-      <Project>{8eaaa859-349e-4605-a0af-118017881212}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

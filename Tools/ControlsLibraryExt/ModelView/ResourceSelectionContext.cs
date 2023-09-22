@@ -10,7 +10,7 @@ namespace ControlsLibraryExt.ModelView
 {
     public class ResourceSelectionTreeViewContext : ITreeView, ITreeListView, IItemView, IObservableContext, ISelectionContext, IDisposable
     {
-        public ResourceSelectionTreeViewContext(LevelEditorCore.IOpaqueResourceFolder rootFolder, LevelEditorCore.IResourceQueryService resourceQuery)
+        public ResourceSelectionTreeViewContext(XLEBridgeUtils.IOpaqueResourceFolder rootFolder, XLEBridgeUtils.IResourceQueryService resourceQuery)
         {
             m_rootFolder = rootFolder;
             _resourceQuery = resourceQuery;
@@ -94,7 +94,7 @@ namespace ControlsLibraryExt.ModelView
 
         public IEnumerable<object> GetChildren(object parent)
         {
-            LevelEditorCore.IOpaqueResourceFolder resourceFolder = parent.As<LevelEditorCore.IOpaqueResourceFolder>();
+            XLEBridgeUtils.IOpaqueResourceFolder resourceFolder = parent.As<XLEBridgeUtils.IOpaqueResourceFolder>();
             if (resourceFolder != null)
             {
                 // Sorting here is a little awkward.. it might be more efficient to to do it on the native siz
@@ -103,12 +103,12 @@ namespace ControlsLibraryExt.ModelView
                 if (doSorting)
                 {
                     var subfolders = resourceFolder.Subfolders.ToList();
-                    subfolders.Sort(delegate (LevelEditorCore.IOpaqueResourceFolder lhs, LevelEditorCore.IOpaqueResourceFolder rhs)
+                    subfolders.Sort(delegate (XLEBridgeUtils.IOpaqueResourceFolder lhs, XLEBridgeUtils.IOpaqueResourceFolder rhs)
                     {
                         return lhs.Name.CompareTo(rhs.Name);
                     });
 
-                    foreach (LevelEditorCore.IOpaqueResourceFolder childFolder in subfolders)
+                    foreach (XLEBridgeUtils.IOpaqueResourceFolder childFolder in subfolders)
                         yield return childFolder;
 
                     foreach (object resource in resourceFolder.Resources)
@@ -116,7 +116,7 @@ namespace ControlsLibraryExt.ModelView
                 }
                 else
                 {
-                    foreach (LevelEditorCore.IOpaqueResourceFolder childFolder in resourceFolder.Subfolders)
+                    foreach (XLEBridgeUtils.IOpaqueResourceFolder childFolder in resourceFolder.Subfolders)
                         yield return childFolder;
 
                     foreach (object resource in resourceFolder.Resources)
@@ -135,7 +135,7 @@ namespace ControlsLibraryExt.ModelView
         /// <param name="info">Item info, to fill out</param>
         public virtual void GetInfo(object item, ItemInfo info)
         {
-            LevelEditorCore.IOpaqueResourceFolder resourceFolder = item.As<LevelEditorCore.IOpaqueResourceFolder>();
+            XLEBridgeUtils.IOpaqueResourceFolder resourceFolder = item.As< XLEBridgeUtils.IOpaqueResourceFolder >();
             if (resourceFolder != null)
             {
                 info.Label = resourceFolder.Name;
@@ -154,7 +154,7 @@ namespace ControlsLibraryExt.ModelView
                     if (desc.HasValue)
                     {
                         info.Label = desc?.ShortName;
-                        if ((desc.Value.Types & (uint)LevelEditorCore.ResourceTypeFlags.Model) != 0)
+                        if ((desc.Value.Types & (uint)XLEBridgeUtils.ResourceTypeFlags.Model) != 0)
                         {
                             info.Properties = new object[] { "Model Type", desc?.Filesystem, desc?.NaturalName };
                             info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.PackageImage);
@@ -217,7 +217,7 @@ namespace ControlsLibraryExt.ModelView
 
         #endregion
 
-        public LevelEditorCore.IOpaqueResourceFolder RootFolder
+        public XLEBridgeUtils.IOpaqueResourceFolder RootFolder
         {
             get { return m_rootFolder; }
         }
@@ -247,7 +247,7 @@ namespace ControlsLibraryExt.ModelView
         }
 
         private AdaptableSelection<object> m_selection = new AdaptableSelection<object>();
-        private LevelEditorCore.IOpaqueResourceFolder m_rootFolder;
-        private LevelEditorCore.IResourceQueryService _resourceQuery;
+        private XLEBridgeUtils.IOpaqueResourceFolder m_rootFolder;
+        private XLEBridgeUtils.IResourceQueryService _resourceQuery;
     }
 }
