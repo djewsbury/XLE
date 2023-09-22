@@ -47,19 +47,19 @@
   <ItemGroup>
     <Reference Include="Atf.Core, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ATF\lib\Debug\Atf.Core.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Core.dll</HintPath>
     </Reference>
     <Reference Include="Atf.Gui, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ATF\lib\Debug\Atf.Gui.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Gui.dll</HintPath>
     </Reference>
     <Reference Include="Atf.Gui.WinForms, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ATF\lib\Debug\Atf.Gui.WinForms.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Gui.WinForms.dll</HintPath>
     </Reference>
     <Reference Include="Atf.IronPython, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ATF\lib\Debug\Atf.IronPython.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.IronPython.dll</HintPath>
     </Reference>
     <Reference Include="IronPython">
       <HintPath>..\ATF\ThirdParty\IronPython\IronPython.dll</HintPath>

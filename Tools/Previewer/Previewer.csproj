@@ -58,13 +58,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Atf.Core">
-      <HintPath>..\..\Foreign\SonyLE\ATF\lib\Debug\Atf.Core.dll</HintPath>
+      <HintPath>..\..\Foreign\SonyLE\ATF\lib\Release\Atf.Core.dll</HintPath>
     </Reference>
     <Reference Include="Atf.Gui">
-      <HintPath>..\..\Foreign\SonyLE\ATF\lib\Debug\Atf.Gui.dll</HintPath>
+      <HintPath>..\..\Foreign\SonyLE\ATF\lib\Release\Atf.Gui.dll</HintPath>
     </Reference>
     <Reference Include="Atf.Gui.WinForms">
-      <HintPath>..\..\Foreign\SonyLE\ATF\lib\Debug\Atf.Gui.WinForms.dll</HintPath>
+      <HintPath>..\..\Foreign\SonyLE\ATF\lib\Release\Atf.Gui.WinForms.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />

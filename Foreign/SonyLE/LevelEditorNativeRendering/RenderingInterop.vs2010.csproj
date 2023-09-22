@@ -42,16 +42,16 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Atf.Core">
-      <HintPath>..\ATF\lib\Debug\Atf.Core.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Core.dll</HintPath>
     </Reference>
     <Reference Include="Atf.Gui">
-      <HintPath>..\ATF\lib\Debug\Atf.Gui.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Gui.dll</HintPath>
     </Reference>
     <Reference Include="Atf.Gui.WinForms">
-      <HintPath>..\ATF\lib\Debug\Atf.Gui.WinForms.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Gui.WinForms.dll</HintPath>
     </Reference>
     <Reference Include="Atf.IronPython">
-      <HintPath>..\ATF\lib\Debug\Atf.IronPython.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.IronPython.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />

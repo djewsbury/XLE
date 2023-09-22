@@ -42,13 +42,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Atf.Core">
-      <HintPath>..\ATF\lib\Debug\Atf.Core.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Core.dll</HintPath>
     </Reference>
     <Reference Include="Atf.Gui">
-      <HintPath>..\ATF\lib\Debug\Atf.Gui.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Gui.dll</HintPath>
     </Reference>
     <Reference Include="Atf.Gui.WinForms">
-      <HintPath>..\ATF\lib\Debug\Atf.Gui.WinForms.dll</HintPath>
+      <HintPath>..\ATF\lib\Release\Atf.Gui.WinForms.dll</HintPath>
     </Reference>
     <Reference Include="System">
       <Name>System</Name>
