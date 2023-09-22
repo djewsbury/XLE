@@ -527,6 +527,7 @@ namespace PlatformRig
             .Alignment(TextAlignment::Left)
             .Draw(context, layout.AllocateFullHeight(fpsAreaWidth), StringMeldInPlace(buffer) << std::setprecision(1) << std::fixed << 1.f / std::get<0>(fpsStats));
 
+        /*
         auto remaining = layout.AllocateFullHeightFraction(1.f);
         auto middle = (remaining._topLeft[1] + remaining._bottomRight[1])/2;
 
@@ -539,6 +540,7 @@ namespace PlatformRig
             .Font(*res._smallFrameRateFont)
             .Alignment(TextAlignment::TopLeft)
             .Draw(context, {{remaining._topLeft[0], middle+2}, remaining._bottomRight}, StringMeldInPlace(buffer) << std::setprecision(2) << std::fixed << heapMetrics._usage / (1024.f*1024.f) << "M (" << frameAllocationCount << ")");
+        */
     }
 
     void FrameRigDisplay::RenderScreenSelector(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState, const Rect& displayRect)

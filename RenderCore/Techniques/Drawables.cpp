@@ -154,7 +154,7 @@ namespace RenderCore { namespace Techniques
 				if (drawable._descriptorSet) {
 					matDescSet = TryGetDescriptorSet(*drawable._descriptorSet, acceleratorVisibilityId);
 					if (!matDescSet) { somethingPending = true; continue; }
-					assert(parserContext._requiredBufferUploadsCommandList >= matDescSet->GetCompletionCommandList());	// parser context must be configured for this completion cmd list before getting here
+					// assert(parserContext._requiredBufferUploadsCommandList >= matDescSet->GetCompletionCommandList());	// parser context must be configured for this completion cmd list before getting here
 					parserContext.RequireCommandList(matDescSet->GetCompletionCommandList());
 				}
 

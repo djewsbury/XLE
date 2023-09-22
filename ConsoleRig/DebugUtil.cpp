@@ -130,9 +130,10 @@ namespace ConsoleRig
             //  create a new one and set it up...
             //
 		#if FEATURE_EXCEPTIONS
-			auto& onThrow = GlobalOnThrowCallback();
-			if (!onThrow)
-				onThrow = &SendExceptionToLogger;
+            // note -- still seeming unreliable
+			// auto& onThrow = GlobalOnThrowCallback();
+			// if (!onThrow)
+			// 	onThrow = &SendExceptionToLogger;
 		#endif
     }
 

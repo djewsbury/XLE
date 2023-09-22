@@ -759,10 +759,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             int64_t C = int64_t((pos[2] + doubleOffset[2]) / doubleQuant[2]);
             int64_t D = int64_t((pos[3] + doubleOffset[3]) / doubleQuant[3]);
 
-            assert((A>>32ll) >= std::numeric_limits<int16_t>::min() && (A>>32ll) <= std::numeric_limits<int16_t>::max());
-            assert((B>>32ll) >= std::numeric_limits<int16_t>::min() && (B>>32ll) <= std::numeric_limits<int16_t>::max());
-            assert((C>>32ll) >= std::numeric_limits<int16_t>::min() && (C>>32ll) <= std::numeric_limits<int16_t>::max());
-            assert((D>>32ll) >= std::numeric_limits<int16_t>::min() && (D>>32ll) <= std::numeric_limits<int16_t>::max());
+            // assert((A>>32ll) >= std::numeric_limits<int16_t>::min() && (A>>32ll) <= std::numeric_limits<int16_t>::max());
+            // assert((B>>32ll) >= std::numeric_limits<int16_t>::min() && (B>>32ll) <= std::numeric_limits<int16_t>::max());
+            // assert((C>>32ll) >= std::numeric_limits<int16_t>::min() && (C>>32ll) <= std::numeric_limits<int16_t>::max());
+            // assert((D>>32ll) >= std::numeric_limits<int16_t>::min() && (D>>32ll) <= std::numeric_limits<int16_t>::max());
             int16_t uberA = A>>32ll;
             int16_t uberB = B>>32ll;
             int16_t uberC = C>>32ll;

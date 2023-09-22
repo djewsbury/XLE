@@ -1501,8 +1501,8 @@ namespace RenderCore { namespace ImplVulkan
 		// (see Q&A in https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_swapchain.html)
 
 		if (vsync) {
-			if (std::find(availableModes.begin(), availableModes.end(), VK_PRESENT_MODE_MAILBOX_KHR) != availableModes.end())
-				return VK_PRESENT_MODE_MAILBOX_KHR;
+			// if (std::find(availableModes.begin(), availableModes.end(), VK_PRESENT_MODE_MAILBOX_KHR) != availableModes.end())
+			// 	return VK_PRESENT_MODE_MAILBOX_KHR;
 
 			if (std::find(availableModes.begin(), availableModes.end(), VK_PRESENT_MODE_FIFO_RELAXED_KHR) != availableModes.end())
 				return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
