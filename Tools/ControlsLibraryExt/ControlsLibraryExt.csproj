@@ -141,10 +141,6 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\Foreign\SonyLE\XLEBridgeUtils\Project\XLEBridgeUtils.vcxproj">
-      <Project>{7626c65e-8df3-42e0-b9cb-414561c50bc5}</Project>
-      <Name>XLEBridgeUtils</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\Foreign\TreeViewAdv-1.7.0.0\Aga.Controls\Aga.Controls.csproj">
       <Project>{e73bb233-d88b-44a7-a98f-d71ee158381d}</Project>
       <Name>Aga.Controls</Name>

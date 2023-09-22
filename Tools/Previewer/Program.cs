@@ -1,4 +1,4 @@
-// Distributed under the MIT License (See
+﻿// Distributed under the MIT License (See
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
@@ -42,8 +42,6 @@ namespace Previewer
 
             // early engine initialization
             var engineDevice = new GUILayer.EngineDevice(null);
-            XLEBridgeUtils.Utils.AttachLibrary(engineDevice);
-            var logRedirect = new XLEBridgeUtils.LoggingRedirect();
 
             using (var dlg = new GameConfigurationDialog())
             {
@@ -116,7 +114,6 @@ namespace Previewer
                 typeof(GUILayer.ResourceQueryService),
                 
                 typeof(ControlsLibraryExt.Commands.CommonCommands),
-                typeof(ControlsLibraryExt.Material.MaterialSchemaLoader),
                 typeof(ControlsLibraryExt.ModelView.PreviewerControl),
                 typeof(ControlsLibraryExt.ModelView.PreviewerContext),
                 // typeof(ControlsLibraryExt.ModelView.PreviewerCommands),      // (select scene, select animation) disabled for xenoviewer, until we get a good use for this
@@ -178,10 +175,7 @@ namespace Previewer
                 container.Dispose();
             }
             GC.KeepAlive(engineDevice);
-            GC.KeepAlive(logRedirect);
-            logRedirect.Dispose();
             engineDevice.PrepareForShutdown();
-            XLEBridgeUtils.Utils.DetachLibrary(engineDevice);
             engineDevice.Dispose();
 
             GC.Collect();

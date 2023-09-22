@@ -6,6 +6,10 @@
 
 #pragma once
 
+/*
+These are needed for linking against XLEBridgeUtils & RenderingInterop (though I think we can trim down the list a lot)
+However, when we're not using XLEBridgeUtils or RenderingInterop, we can actually omit them all
+
 namespace GUILayer { class NativeEngineDevice; class RenderTargetWrapper; }
 namespace ToolsRig { class IManipulator; class VisCameraSettings; }
 namespace SceneEngine { class LightingParserContext; class IIntersectionScene; class PlacementsEditor; }
@@ -31,3 +35,4 @@ namespace ConsoleRig { class IProgress; class GlobalServices; }
 #pragma make_public(Assets::DirectorySearchRules)
 #pragma make_public(ConsoleRig::IProgress)
 #pragma make_public(ConsoleRig::GlobalServices)
+*/

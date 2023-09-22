@@ -4,6 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#if false       // disabled when removing dependency on XLEBridgeUtils
+
 using System.ComponentModel.Composition;
 using System.Windows.Forms;
 using System.ComponentModel.Composition.Hosting;
@@ -128,3 +130,5 @@ namespace ControlsLibraryExt.Material
         }
     };
 }
+
+#endif
