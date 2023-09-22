@@ -42,6 +42,7 @@ namespace Previewer
 
             // early engine initialization
             var engineDevice = new GUILayer.EngineDevice(null);
+            XLEBridgeUtils.Utils.AttachLibrary(engineDevice);
             var logRedirect = new XLEBridgeUtils.LoggingRedirect();
 
             using (var dlg = new GameConfigurationDialog())
