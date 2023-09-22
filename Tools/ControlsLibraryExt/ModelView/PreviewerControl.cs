@@ -34,7 +34,7 @@ namespace ControlsLibraryExt.ModelView
 
     [Export(typeof(PreviewerContext))]
     [PartCreationPolicy(CreationPolicy.NonShared)]
-    public class PreviewerContext : XLEBridgeUtils.IShutdownWithEngine
+    public class PreviewerContext : GUILayer.IShutdownWithEngine
     {
         public GUILayer.ModelVisSettings ModelSettings
         {
@@ -118,7 +118,7 @@ namespace ControlsLibraryExt.ModelView
         }
         private PreviewerLightingSettings _previewerLightingSettings = new PreviewerLightingSettings();
 
-        void XLEBridgeUtils.IShutdownWithEngine.Shutdown()
+        void GUILayer.IShutdownWithEngine.Shutdown()
         {
             _layerController.Dispose();
             _layerController = null;

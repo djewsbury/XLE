@@ -5,9 +5,9 @@
 using namespace System;
 using namespace System::Collections::Generic;
 
-namespace XLEBridgeUtils
+namespace GUILayer
 {
-    public ref class IOpaqueResourceFolder
+    public interface class IOpaqueResourceFolder
     {
     public:
         property IEnumerable<IOpaqueResourceFolder^>^ Subfolders { 
@@ -44,7 +44,7 @@ namespace XLEBridgeUtils
         property DateTime^ ModificationTime;
     };
 
-    public ref class IResourceQueryService
+    public interface class IResourceQueryService
     {
     public:
         virtual Nullable<ResourceDesc> GetDesc(Object^ identifier) = 0;

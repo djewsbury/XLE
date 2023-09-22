@@ -58,5 +58,11 @@ namespace GUILayer
 
         static EngineDevice^ s_instance;
     };
+
+    public interface class IShutdownWithEngine
+    {
+    public:
+        void Shutdown();
+    };
 }
 

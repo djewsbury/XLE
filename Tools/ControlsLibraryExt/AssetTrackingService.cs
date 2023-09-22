@@ -9,9 +9,9 @@ namespace ControlsLibraryExt
 {
     [Export(typeof(IInitializable))]
     [Export(typeof(AssetTrackingService))]
-    [Export(typeof(XLEBridgeUtils.IShutdownWithEngine))]
+    [Export(typeof(GUILayer.IShutdownWithEngine))]
     [PartCreationPolicy(CreationPolicy.Shared)]
-    public class AssetTrackingService : IInitializable, XLEBridgeUtils.IShutdownWithEngine
+    public class AssetTrackingService : IInitializable, GUILayer.IShutdownWithEngine
     {
         public GUILayer.InvalidAssetList InvalidAssetList { get { return _invalidAssetList; } }
 
@@ -20,7 +20,7 @@ namespace ControlsLibraryExt
             _invalidAssetList = new GUILayer.InvalidAssetList();
         }
 
-        void XLEBridgeUtils.IShutdownWithEngine.Shutdown()
+        void GUILayer.IShutdownWithEngine.Shutdown()
         {
             _invalidAssetList.Dispose();
             _invalidAssetList = null;

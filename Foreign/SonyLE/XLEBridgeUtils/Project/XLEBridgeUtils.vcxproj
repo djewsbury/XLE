@@ -107,11 +107,9 @@
     <ClCompile Include="..\MaterialLayer.cpp" />
     <ClCompile Include="..\DesignControlAdapter.cpp" />
     <ClCompile Include="..\PropertyDescriptorUtils.cpp" />
-    <ClCompile Include="..\ResourceFolderBridge.cpp" />
     <ClCompile Include="..\XLELayerUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\IResourceQueryService.h" />
     <ClInclude Include="..\PropertyDescriptorUtils.h" />
     <ClInclude Include="..\XLELayerUtils.h" />
   </ItemGroup>

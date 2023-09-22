@@ -5,11 +5,9 @@
     <ClCompile Include="..\PropertyDescriptorUtils.cpp" />
     <ClCompile Include="..\XLELayerUtils.cpp" />
     <ClCompile Include="..\DesignControlAdapter.cpp" />
-    <ClCompile Include="..\ResourceFolderBridge.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\XLELayerUtils.h" />
     <ClInclude Include="..\PropertyDescriptorUtils.h" />
-    <ClInclude Include="..\IResourceQueryService.h" />
   </ItemGroup>
 </Project>

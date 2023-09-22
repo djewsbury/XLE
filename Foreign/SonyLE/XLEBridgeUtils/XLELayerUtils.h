@@ -20,12 +20,6 @@ namespace XLEBridgeUtils
     inline GUILayer::Vector3 AsVector3(Sce::Atf::VectorMath::Vec3F input) { return GUILayer::Vector3(input.X, input.Y, input.Z); }
     inline Sce::Atf::VectorMath::Vec3F AsVec3F(GUILayer::Vector3 input) { return Sce::Atf::VectorMath::Vec3F(input.X, input.Y, input.Z); }
 
-    public interface class IShutdownWithEngine
-    {
-    public:
-        void Shutdown();
-    };
-
     public ref class Utils
     {
     public:

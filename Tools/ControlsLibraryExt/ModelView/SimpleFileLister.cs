@@ -51,7 +51,7 @@ namespace ControlsLibraryExt.ModelView
             //      TreeViewControl -- supports lazy loading, but no columns, also easier to navigate and expand
             //      TreeListViewControl -- supports columns, but no lazy loading (everything initialized at startup) and more difficult to expand folders
             var adapter = CreateTreeControlAdapter();
-            var context = new ResourceSelectionTreeViewContext(XLEBridgeUtils.ResourceFolderBridge.BeginFrom("starfield/data"), _resourceQueryService);
+            var context = new ResourceSelectionTreeViewContext(GUILayer.ResourceFolderBridge.BeginFrom("starfield/data"), _resourceQueryService);
             adapter.TreeView = context;
             context.SelectionChanged += UpdatePreviewerContextAfterSelectionChange;
 
@@ -83,7 +83,7 @@ namespace ControlsLibraryExt.ModelView
                 var resourceDesc = _resourceQueryService.GetDesc(sel);
                 if (resourceDesc == null) return;
 
-                if ((resourceDesc.Value.Types & (uint)XLEBridgeUtils.ResourceTypeFlags.Model) != 0)
+                if ((resourceDesc.Value.Types & (uint)GUILayer.ResourceTypeFlags.Model) != 0)
                 {
                     // It's a model extension. Pass it through to the current settings object
                     var modelSettings = previewerContext.ModelSettings;
@@ -94,7 +94,7 @@ namespace ControlsLibraryExt.ModelView
                     // _settings.ResetCamera = true;
                 }
 
-                if ((resourceDesc.Value.Types & (uint)XLEBridgeUtils.ResourceTypeFlags.Animation) != 0)
+                if ((resourceDesc.Value.Types & (uint)GUILayer.ResourceTypeFlags.Animation) != 0)
                 {
                     var modelSettings = previewerContext.ModelSettings;
                     modelSettings.AnimationFileName = resourceDesc?.MountedName;
@@ -114,7 +114,7 @@ namespace ControlsLibraryExt.ModelView
             {
                 if (_resourceSelectionContext == null)
                 {
-                    var root = XLEBridgeUtils.ResourceFolderBridge.BeginFromRoot();
+                    var root = GUILayer.ResourceFolderBridge.BeginFromRoot();
                     _resourceSelectionContext = new ResourceSelectionTreeViewContext(root, _resourceQueryService);
                 }
                 return _resourceSelectionContext;
@@ -123,7 +123,7 @@ namespace ControlsLibraryExt.ModelView
         private ResourceSelectionTreeViewContext _resourceSelectionContext = null;
 
         [Import(AllowDefault = true)]
-        private XLEBridgeUtils.IResourceQueryService _resourceQueryService;
+        private GUILayer.IResourceQueryService _resourceQueryService;
 
         [Import(AllowDefault = false)]
         private ControlHostService _controlHostService = null;

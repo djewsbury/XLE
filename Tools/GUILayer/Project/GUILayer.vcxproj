@@ -210,6 +210,7 @@
     <ClCompile Include="..\LayerControl.cpp" />
     <ClCompile Include="..\LevelEditorScene.cpp" />
     <ClCompile Include="..\ManipulatorUtils.cpp" />
+    <ClCompile Include="..\ResourceFolderBridge.cpp" />
     <ClCompile Include="..\VisSettingsLayer.cpp" />
     <ClCompile Include="..\NativeManipulators.cpp" />
     <ClCompile Include="..\NodeGraph.cpp" />
@@ -241,6 +242,7 @@
     <ClInclude Include="..\ExportedNativeTypes.h" />
     <ClInclude Include="..\GUILayerUtil.h" />
     <ClInclude Include="..\IOverlaySystem.h" />
+    <ClInclude Include="..\IResourceQueryService.h" />
     <ClInclude Include="..\IterativeSystemDebugger.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-Vulkan|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release-Vulkan|x64'">true</ExcludedFromBuild>

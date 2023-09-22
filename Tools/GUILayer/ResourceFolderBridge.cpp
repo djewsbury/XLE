@@ -3,16 +3,17 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "IResourceQueryService.h"
-#include "../../../Tools/GUILayer/MarshalString.h"
-#include "../../../Tools/GUILayer/CLIXAutoPtr.h"
-#include "../../../Tools/ToolsRig/MiscUtils.h"
-#include "../../../RenderCore/Assets/RawMaterial.h"
-#include "../../../Assets/IFileSystem.h"
-#include "../../../Assets/AssetServices.h"
-#include "../../../Assets/IntermediateCompilers.h"
-#include "../../../OSServices/Log.h"
-#include "../../../Utility/Streams/PathUtils.h"
-#include "../../../Utility/Conversion.h"
+#include "MarshalString.h"
+#include "CLIXAutoPtr.h"
+#include "GUILayerUtil.h"
+#include "../ToolsRig/MiscUtils.h"
+#include "../../RenderCore/Assets/RawMaterial.h"
+#include "../../Assets/IFileSystem.h"
+#include "../../Assets/AssetServices.h"
+#include "../../Assets/IntermediateCompilers.h"
+#include "../../OSServices/Log.h"
+#include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/Conversion.h"
 
 using namespace System;
 using namespace System::Collections::Generic;
@@ -22,7 +23,7 @@ using namespace System::ComponentModel::Composition;
 
 #undef new
 
-namespace XLEBridgeUtils
+namespace GUILayer
 {
 	public ref class ResourceFolderBridge : public IOpaqueResourceFolder
 	{

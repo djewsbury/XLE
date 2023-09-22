@@ -1,4 +1,4 @@
-﻿// Distributed under the MIT License (See
+// Distributed under the MIT License (See
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
@@ -113,7 +113,7 @@ namespace Previewer
 
                 // typeof(SkinService),
 
-                typeof(XLEBridgeUtils.ResourceQueryService),
+                typeof(GUILayer.ResourceQueryService),
                 
                 typeof(ControlsLibraryExt.Commands.CommonCommands),
                 typeof(ControlsLibraryExt.Material.MaterialSchemaLoader),
@@ -172,7 +172,7 @@ namespace Previewer
 
                 Application.Run(mainForm);
 
-                foreach (var initializable in container.GetExportedValues<XLEBridgeUtils.IShutdownWithEngine>())
+                foreach (var initializable in container.GetExportedValues<GUILayer.IShutdownWithEngine>())
                     initializable.Shutdown();
                 mainForm.Dispose(); 
                 container.Dispose();
