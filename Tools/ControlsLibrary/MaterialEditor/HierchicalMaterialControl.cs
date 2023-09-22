@@ -4,6 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#if false   // Disabled to separate dependency on DropDownControls.dll
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -141,3 +143,5 @@ namespace ControlsLibrary.MaterialEditor
         private string _activeObject;
     }
 }
+
+#endif

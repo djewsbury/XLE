@@ -4,6 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#if false   // Disabled to separate dependency on DropDownControls.dll
+
 namespace ControlsLibrary.MaterialEditor
 {
     partial class HierchicalMaterialControl
@@ -144,3 +146,5 @@ namespace ControlsLibrary.MaterialEditor
         private System.Windows.Forms.Button _addInherit;
     }
 }
+
+#endif

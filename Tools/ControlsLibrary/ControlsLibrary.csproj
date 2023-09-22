@@ -59,9 +59,6 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="DropDownControls">
-      <HintPath>..\..\Foreign\ForeignControls\Release\DropDownControls.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Core" />
@@ -108,9 +105,7 @@
     <Compile Include="InvalidAssetDialog.Designer.cs">
       <DependentUpon>InvalidAssetDialog.cs</DependentUpon>
     </Compile>
-    <Compile Include="MaterialEditor\HierchicalMaterialControl.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
+    <Compile Include="MaterialEditor\HierchicalMaterialControl.cs" />
     <Compile Include="MaterialEditor\HierchicalMaterialControl.Designer.cs">
       <DependentUpon>HierchicalMaterialControl.cs</DependentUpon>
     </Compile>
