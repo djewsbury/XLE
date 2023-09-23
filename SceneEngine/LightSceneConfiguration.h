@@ -43,6 +43,7 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::SkyTextureProcessorDesc> _skyTextureProcessors;
 		ObjectTable<RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc> _ssr;
 		ObjectTable<RenderCore::LightingEngine::AmbientOcclusionOperatorDesc> _ssao;
+		ObjectTable<RenderCore::LightingEngine::TAAOperatorDesc> _taaOperator;
 
 		template<typename Formatter>
 			void Deserialize(Formatter& fmttr) 
@@ -88,6 +89,11 @@ namespace SceneEngine
 				case "MultiSample"_h:
 					RequireBeginElement(fmttr);
 					_multiSampleOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+					break;
+				case "TAA"_h:
+					RequireBeginElement(fmttr);
+					_taaOperator.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
 				case "Sky"_h:

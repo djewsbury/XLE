@@ -17,6 +17,13 @@ DescriptorSet General
 		AddressU = Clamp,
 		AddressV = Clamp
 	};
+
+	Sampler PointClamp
+	{
+		Filter = Point,
+		AddressU = Clamp,
+		AddressV = Clamp
+	};
 };
 
 PipelineLayout ComputeMain

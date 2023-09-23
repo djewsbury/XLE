@@ -632,9 +632,11 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	SequenceIterator::SequenceIterator(
-		Techniques::ParsingContext& parsingContext)
+		Techniques::ParsingContext& parsingContext,
+		FrameToFrameProperties& frameToFrameProps)
 	: _threadContext(&parsingContext.GetThreadContext())
 	, _parsingContext(&parsingContext)
+	, _frameToFrameProps(&frameToFrameProps)
 	{}
 
 	auto SequencePlayback::GetNextStep() -> Step
@@ -771,7 +773,7 @@ namespace RenderCore { namespace LightingEngine
 		_stepper = std::make_unique<LightingTechniqueStepper>();
 		_currentPhase = Phase::SequenceSetup;
 
-		_iterator = std::make_unique<SequenceIterator>(parsingContext);
+		_iterator = std::make_unique<SequenceIterator>(parsingContext, frameToFrameProps);
 		_frameToFrameProps = &frameToFrameProps;
 	}
 

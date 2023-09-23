@@ -21,6 +21,7 @@ namespace RenderCore { namespace LightingEngine
 	class CompiledLightingTechnique;
 	class LightingTechniqueStepper;
 	class Sequence;
+	struct FrameToFrameProperties;
 
 	class SequenceIterator
 	{
@@ -34,14 +35,17 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::SequencerConfig& sequencerCfg,
 			const std::shared_ptr<Techniques::IShaderResourceDelegate>& uniformDelegate = nullptr);
 		void GetPkts(IteratorRange<Techniques::DrawablesPacket**> result, SequenceParseId parse);
+		const FrameToFrameProperties& GetFrameToFrameProperties() const { return *_frameToFrameProps; }
 
 		SequenceIterator(
-			Techniques::ParsingContext& parsingContext);
+			Techniques::ParsingContext& parsingContext,
+			FrameToFrameProperties& frameToFrameProps);
 	private:
 		std::vector<Techniques::DrawablesPacket> _drawablePkt;
 		std::vector<bool> _drawablePktsReserved;
 		std::vector<Techniques::IShaderResourceDelegate*> _delegatesPendingUnbind;
 		unsigned _drawablePktIdxOffset = 0;
+		FrameToFrameProperties* _frameToFrameProps = nullptr;
 
 		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, SequenceParseId parse, Techniques::BatchFlags::BitField batches);
 

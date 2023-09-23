@@ -76,6 +76,7 @@ using namespace Assets::Literals;
 #define BLOOM_PIPELINE "xleres/TechniqueLibrary/LightingEngine/bloom.pipeline"_initializer
 #define BLOOM_FILTER_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/bloom-filter.compute.hlsl"
 #define FAST_MIP_CHAIN_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/fast-mip-chain.compute.hlsl"
+#define TAA_COMPUTE_HLSL "xleres/TechniqueLibrary/LightingEngine/taa.compute.hlsl"
 
 #define SKY_PIXEL_HLSL "xleres/TechniqueLibrary/LightingEngine/sky.pixel.hlsl"
 

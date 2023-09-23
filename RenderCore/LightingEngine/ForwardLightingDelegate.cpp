@@ -10,6 +10,7 @@
 #include "HierarchicalDepths.h"
 #include "ScreenSpaceReflections.h"
 #include "SSAOOperator.h"
+#include "AAOperators.h"
 #include "ToneMapOperator.h"
 #include "LightingDelegateUtil.h"
 #include "LightingEngineApparatus.h"
@@ -55,12 +56,14 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<HierarchicalDepthsOperator> _hierarchicalDepthsOperator;
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 		std::shared_ptr<SSAOOperator> _ssaoOperator;
+		std::shared_ptr<TAAOperator> _taaOperator;
 		std::shared_ptr<ToneMapAcesOperator> _acesOperator;
 		std::shared_ptr<CopyToneMapOperator> _copyToneMapOperator;
 		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
 		std::shared_ptr<ISkyTextureProcessor> _skyTextureProcessor;
 
 		void DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence);
+		void SetupCameraJitter(Techniques::ParsingContext& parsingContext, const FrameToFrameProperties& f2fp);
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext);
 		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext);
 
@@ -86,6 +89,39 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
 	}
 
+	inline float CalculateHaltonNumber(unsigned index, unsigned base)
+	{
+		// See https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler
+		// This implementation from AMD's capsaicin (MIT license). Note not bothering with the reverse bit trick for base 2
+		float f = 1.0f, result = 0.0f;
+		for (unsigned i = index; i > 0;)
+		{
+			f /= base;
+			result = result + f * (i % base);
+			i = (unsigned)(i / (float)base);
+		}
+		return result;
+	}
+
+	void ForwardLightingCaptures::SetupCameraJitter(Techniques::ParsingContext& parsingContext, const FrameToFrameProperties& f2fp)
+	{
+		// Apply camera jitter for temporal anti-aliasing
+		// following common implementation of TAA, we'll jitter using a Halton sequence.
+		auto viewport = UInt2 { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height };
+		unsigned jitteringIndex = f2fp._frameIdx;
+		float jitterX = (2.0f * CalculateHaltonNumber(jitteringIndex + 1, 2) - 1.0f) / float(viewport[0]);
+		float jitterY = (2.0f * CalculateHaltonNumber(jitteringIndex + 1, 3) - 1.0f) / float(viewport[1]);
+		auto& projDesc = parsingContext.GetProjectionDesc();
+		projDesc._cameraToProjection(0, 3) = jitterX;
+		projDesc._cameraToProjection(1, 3) = jitterY;
+		projDesc._worldToProjection = Combine(InvertOrthonormalTransform(projDesc._cameraToWorld), projDesc._cameraToProjection);
+
+		auto& prevProjDesc = parsingContext.GetPrevProjectionDesc();
+		prevProjDesc._cameraToProjection(0, 3) = jitterX;
+		prevProjDesc._cameraToProjection(1, 3) = jitterX;
+		prevProjDesc._worldToProjection = Combine(InvertOrthonormalTransform(prevProjDesc._cameraToWorld), prevProjDesc._cameraToProjection);
+	}
+
 	void ForwardLightingCaptures::ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
 	{
 		_lightScene->ConfigureParsingContext(parsingContext, _ssrOperator != nullptr);
@@ -103,6 +139,17 @@ namespace RenderCore { namespace LightingEngine
 		parsingContext.GetUniformDelegateManager()->UnbindSemiConstantDescriptorSet(*_forwardLightingSemiConstant);
 		if (_lightScene->_shadowScheduler)
 			_lightScene->_shadowScheduler->ClearPreparedShadows();
+
+		// Remove TAA jitter again, because we've applied it
+		auto& projDesc = parsingContext.GetProjectionDesc();
+		projDesc._cameraToProjection(0, 3) = 0;
+		projDesc._cameraToProjection(1, 3) = 0;
+		projDesc._worldToProjection = Combine(InvertOrthonormalTransform(projDesc._cameraToWorld), projDesc._cameraToProjection);
+
+		auto& prevProjDesc = parsingContext.GetPrevProjectionDesc();
+		prevProjDesc._cameraToProjection(0, 3) = 0;
+		prevProjDesc._cameraToProjection(1, 3) = 0;
+		prevProjDesc._worldToProjection = Combine(InvertOrthonormalTransform(prevProjDesc._cameraToWorld), prevProjDesc._cameraToProjection);
 	}
 
 	OnSkyTextureUpdateFn ForwardLightingCaptures::MakeOnSkyTextureUpdate()
@@ -338,6 +385,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		std::optional<ScreenSpaceReflectionsOperatorDesc> _ssr;
 		std::optional<AmbientOcclusionOperatorDesc> _ssao;
+		std::optional<TAAOperatorDesc> _taa;
 		std::optional<ToneMapAcesOperatorDesc> _tonemapAces;
 		std::optional<MultiSampleOperatorDesc> _msaa;
 		std::optional<SkyTextureProcessorDesc> _skyTextureProcessor;
@@ -419,6 +467,12 @@ namespace RenderCore { namespace LightingEngine
 					_tonemapAces = Internal::ChainedOperatorCast<ToneMapAcesOperatorDesc>(*chain);
 					break;
 
+				case TypeHashCode<TAAOperatorDesc>:
+					if (_taa)
+						Throw(std::runtime_error("Multiple TAA operators found, where only one expected"));
+					_taa = Internal::ChainedOperatorCast<TAAOperatorDesc>(*chain);
+					break;
+
 				case TypeHashCode<MultiSampleOperatorDesc>:
 					if (_msaa)
 						Throw(std::runtime_error("Multiple antialiasing operators found, where only one expected"));
@@ -456,6 +510,7 @@ namespace RenderCore { namespace LightingEngine
 		std::future<std::shared_ptr<HierarchicalDepthsOperator>> _futureHierarchicalDepths;
 		std::future<std::shared_ptr<ScreenSpaceReflectionsOperator>> _futureSSR;
 		std::future<std::shared_ptr<SSAOOperator>> _futureSSAO;
+		std::future<std::shared_ptr<TAAOperator>> _futureTAA;
 		std::future<std::shared_ptr<ToneMapAcesOperator>> _futureAces;
 		std::future<std::shared_ptr<CopyToneMapOperator>> _futureCopyToneMap;
 		std::future<std::shared_ptr<SkyOperator>> _futureSky;
@@ -480,12 +535,18 @@ namespace RenderCore { namespace LightingEngine
 		if (_copyToneMapOperator) _copyToneMapOperator->PreregisterAttachments(stitchingContext, fbProps);
 		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext, fbProps);
 		if (_ssaoOperator) _ssaoOperator->PreregisterAttachments(stitchingContext, fbProps);
+		if (_taaOperator) _taaOperator->PreregisterAttachments(stitchingContext, fbProps);
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(
 			[](SequenceIterator& iterator) {
 				if (iterator._parsingContext->GetTechniqueContext()._deformAccelerators)
 					iterator._parsingContext->GetTechniqueContext()._deformAccelerators->SetVertexInputBarrier(*iterator._threadContext);
+			});
+
+		mainSequence.CreateStep_CallFunction(
+			[captures=shared_from_this()](SequenceIterator& iterator) {
+				captures->SetupCameraJitter(*iterator._parsingContext, iterator.GetFrameToFrameProperties());
 			});
 
 		mainSequence.CreateStep_InvalidateUniforms();
@@ -534,7 +595,9 @@ namespace RenderCore { namespace LightingEngine
 		mainSequence.CreateStep_BringUpToDateUniforms();
 
 		// Post processing
-		Sequence::FragmentInterfaceRegistration toneMapReg;
+		Sequence::FragmentInterfaceRegistration toneMapReg, taaFragmentReg;
+		if (_taaOperator)
+			taaFragmentReg = mainSequence.CreateStep_RunFragments(_taaOperator->CreateFragment(fbProps));
 		if (_acesOperator) {
 			toneMapReg = mainSequence.CreateStep_RunFragments(_acesOperator->CreateFragment(fbProps));
 		} else {
@@ -555,6 +618,8 @@ namespace RenderCore { namespace LightingEngine
 		if (_ssaoOperator)
 			ops->_futureSSAO = Internal::SecondStageConstruction(*_ssaoOperator, Internal::AsFrameBufferTarget(mainSequence, ssaoFragmentReg));
 		ops->_futureHierarchicalDepths = Internal::SecondStageConstruction(*_hierarchicalDepthsOperator, Internal::AsFrameBufferTarget(mainSequence, hierachicalDepthsReg));
+		if (_taaOperator)
+			ops->_futureTAA = Internal::SecondStageConstruction(*_taaOperator, Internal::AsFrameBufferTarget(mainSequence, taaFragmentReg));
 		if (_acesOperator)
 			ops->_futureAces = Internal::SecondStageConstruction(*_acesOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));
 		if (_copyToneMapOperator)
@@ -636,6 +701,8 @@ namespace RenderCore { namespace LightingEngine
 						captures->_ssrOperator = std::make_shared<ScreenSpaceReflectionsOperator>(pipelinePool, *digest._ssr, ScreenSpaceReflectionsOperator::IntegrationParams{digest._skyTextureProcessor.has_value()});
 					if (digest._ssao)
 						captures->_ssaoOperator = std::make_shared<SSAOOperator>(pipelinePool, *digest._ssao, SSAOOperator::IntegrationParams{true});
+					if (digest._taa)
+						captures->_taaOperator = std::make_shared<TAAOperator>(pipelinePool, *digest._taa);
 					if (digest._tonemapAces) {
 						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces);
 					} else {
@@ -700,6 +767,7 @@ namespace RenderCore { namespace LightingEngine
 							if (secondStageHelper->_futureHierarchicalDepths.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureHierarchicalDepths, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureSSR.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSSR, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureSSAO.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSSAO, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureTAA.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureTAA, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureAces.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureAces, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureCopyToneMap.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureCopyToneMap, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureSky.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSky, timeoutTime)) return ::Assets::PollStatus::Continue;
@@ -710,6 +778,7 @@ namespace RenderCore { namespace LightingEngine
 							secondStageHelper->_futureHierarchicalDepths.get();
 							if (secondStageHelper->_futureSSR.valid()) secondStageHelper->_futureSSR.get();
 							if (secondStageHelper->_futureSSAO.valid()) secondStageHelper->_futureSSAO.get();
+							if (secondStageHelper->_futureTAA.valid()) secondStageHelper->_futureTAA.get();
 							if (secondStageHelper->_futureAces.valid()) secondStageHelper->_futureAces.get();
 							if (secondStageHelper->_futureCopyToneMap.valid()) secondStageHelper->_futureCopyToneMap.get();
 							if (secondStageHelper->_futureSky.valid()) secondStageHelper->_futureSky.get();
@@ -720,6 +789,8 @@ namespace RenderCore { namespace LightingEngine
 								lightingTechnique->_depVal.RegisterDependency(captures->_ssrOperator->GetDependencyValidation());
 							if (captures->_ssaoOperator)
 								lightingTechnique->_depVal.RegisterDependency(captures->_ssaoOperator->GetDependencyValidation());
+							if (captures->_taaOperator)
+								lightingTechnique->_depVal.RegisterDependency(captures->_taaOperator->GetDependencyValidation());
 							if (captures->_acesOperator)
 								lightingTechnique->_depVal.RegisterDependency(captures->_acesOperator->GetDependencyValidation());
 							if (captures->_copyToneMapOperator)
