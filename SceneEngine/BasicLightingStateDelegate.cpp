@@ -1175,7 +1175,28 @@ namespace SceneEngine
         RenderCore::LightingEngine::TAAOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
-        // no useful properties yet
+        switch (propertyNameHash) {
+        case "TimeConstant"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._timeConstant = *value;
+                return true;
+            }
+            break;
+
+        case "FindOptimalMotionVector"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._findOptimalMotionVector = *value;
+                return true;
+            }
+            break;
+
+        case "CatmullRomSampling"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._catmullRomSampling = *value;
+                return true;
+            }
+            break;
+        }
         return false;
     }
 

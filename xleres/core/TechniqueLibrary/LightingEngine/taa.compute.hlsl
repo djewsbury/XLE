@@ -9,34 +9,32 @@
 // Modified for XLE shader interface & 
 //
 
+#include "../Math/TextureAlgorithm.hlsl"
+
 #define RADIUS      1
 #define GROUP_SIZE  16
 #define TILE_DIM    (2 * RADIUS + GROUP_SIZE)
 
+#if !defined(PLAYDEAD_NEIGHBOURHOOD_SEARCH)
+    #define PLAYDEAD_NEIGHBOURHOOD_SEARCH 1
+#endif
+
+#if !defined(CATMULL_ROM_SAMPLING)
+    #define CATMULL_ROM_SAMPLING 1
+#endif
+
 Texture2D<int2> GBufferMotion;
 Texture2D<float> Depth;
-Texture2D<float3> ColorHDRPrev;
-RWTexture2D<float4> ColorHDR;
+RWTexture2D<float3> Output;
+Texture2D<float3> OutputPrev;
+Texture2D<float3> ColorHDR;
 
 cbuffer ControlUniforms
 {
+    uint2 BufferDimensions;
     bool HistoryValid;
+    float BlendingAlpha;
 }
-
-/*bool g_HaveHistory;
-uint2 g_BufferDimensions;
-
-Texture2D g_DepthBuffer;
-Texture2D g_HistoryBuffer;
-Texture2D g_VelocityBuffer;
-
-RWTexture2D<float4> g_ColorBuffer;
-RWTexture2D<float4> g_OutputBuffer;
-Texture2D           g_DirectLightingBuffer;
-Texture2D           g_GlobalIlluminationBuffer;
-
-SamplerState g_LinearSampler;
-SamplerState g_NearestSampler;*/
 
 SamplerState BilinearClamp;
 SamplerState PointClamp;
@@ -44,81 +42,45 @@ SamplerState PointClamp;
 groupshared float3 Tile[TILE_DIM * TILE_DIM];
 
 // https://www.gdcvault.com/play/1022970/Temporal-Reprojection-Anti-Aliasing-in
-int2 GetClosestMotion(in float2 uv, in float2 texelSize, out bool is_sky_pixel)
+int2 GetClosestMotion(in int2 baseCoord, out bool is_sky_pixel)
 {
-    int2 motion;
+    int2 motion = 0;
     float closestDepth = 0.0f;
 
     // Explore the local 3x3 neighbourhood for the pixel closes to the camera, and use the
-    // motion vector from that
-    int2 baseCoord = uv / texelSize;
+    // motion vector from that, and use that instead of our center motion vector
     for (int y = -1; y <= 1; ++y) {
         for (int x = -1; x <= 1; ++x) {
             int2 coord = baseCoord + int2(x, y);
-            float depth = Depth.Load(uint3(coord, 0)).x;
-            if (depth > closestDepth) {
+            float depth = Depth.Load(uint3(coord, 0));
+            if (depth > closestDepth) {     // assuming inverted depth buffer
                 motion = GBufferMotion.Load(uint3(coord, 0)).xy;
                 closestDepth = depth;
             }
         }
     }
 
-    is_sky_pixel = (closestDepth < 0.0f);
-
+    is_sky_pixel = (closestDepth == 0.0f);
     return motion;
 }
 
-// Source: https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1
-// License: https://gist.github.com/TheRealMJP/bc503b0b87b643d3505d41eab8b332ae
-float3 SampleHistoryCatmullRom(Texture2D<float3> tex, in float2 uv, in float2 texelSize)
+int2 SampleMotion(in int2 baseCoord, out bool is_sky_pixel)
 {
-    // We're going to sample a a 4x4 grid of texels surrounding the target UV coordinate. We'll do this by rounding
-    // down the sample location to get the exact center of our "starting" texel. The starting texel will be at
-    // location [1, 1] in the grid, where [0, 0] is the top left corner.
-    float2 samplePos = uv / texelSize;
-    float2 texPos1   = floor(samplePos - 0.5f) + 0.5f;
+    #if PLAYDEAD_NEIGHBOURHOOD_SEARCH
+        return GetClosestMotion(baseCoord, is_sky_pixel);
+    #else
+        return GBufferMotion.Load(uint3(baseCoord, 0)).xy;
+        is_sky_pixel = Depth.Load(uint3(baseCoord, 0)) > 0;
+    #endif
+}
 
-    // Compute the fractional offset from our starting texel to our original sample location, which we'll
-    // feed into the Catmull-Rom spline function to get our filter weights.
-    float2 f = samplePos - texPos1;
-
-    // Compute the Catmull-Rom weights using the fractional offset that we calculated earlier.
-    // These equations are pre-expanded based on our knowledge of where the texels will be located,
-    // which lets us avoid having to evaluate a piece-wise function.
-    float2 w0 = f * (-0.5f + f * (1.0f - 0.5f * f));
-    float2 w1 = 1.0f + f * f * (-2.5f + 1.5f * f);
-    float2 w2 = f * (0.5f + f * (2.0f - 1.5f * f));
-    float2 w3 = f * f * (-0.5f + 0.5f * f);
-
-    // Work out weighting factors and sampling offsets that will let us use bilinear filtering to
-    // simultaneously evaluate the middle 2 samples from the 4x4 grid.
-    float2 w12      = w1 + w2;
-    float2 offset12 = w2 / (w1 + w2);
-
-    // Compute the final UV coordinates we'll use for sampling the texture
-    float2 texPos0  = texPos1 - 1.0f;
-    float2 texPos3  = texPos1 + 2.0f;
-    float2 texPos12 = texPos1 + offset12;
-
-    texPos0  *= texelSize;
-    texPos3  *= texelSize;
-    texPos12 *= texelSize;
-
-    float3 result = float3(0.0f, 0.0f, 0.0f);
-
-    result += tex.SampleLevel(BilinearClamp, float2(texPos0.x,  texPos0.y),  0.0f).xyz * w0.x  * w0.y;
-    result += tex.SampleLevel(BilinearClamp, float2(texPos12.x, texPos0.y),  0.0f).xyz * w12.x * w0.y;
-    result += tex.SampleLevel(BilinearClamp, float2(texPos3.x,  texPos0.y),  0.0f).xyz * w3.x  * w0.y;
-
-    result += tex.SampleLevel(BilinearClamp, float2(texPos0.x,  texPos12.y), 0.0f).xyz * w0.x  * w12.y;
-    result += tex.SampleLevel(BilinearClamp, float2(texPos12.x, texPos12.y), 0.0f).xyz * w12.x * w12.y;
-    result += tex.SampleLevel(BilinearClamp, float2(texPos3.x,  texPos12.y), 0.0f).xyz * w3.x  * w12.y;
-
-    result += tex.SampleLevel(BilinearClamp, float2(texPos0.x,  texPos3.y),  0.0f).xyz * w0.x  * w3.y;
-    result += tex.SampleLevel(BilinearClamp, float2(texPos12.x, texPos3.y),  0.0f).xyz * w12.x * w3.y;
-    result += tex.SampleLevel(BilinearClamp, float2(texPos3.x,  texPos3.y),  0.0f).xyz * w3.x  * w3.y;
-
-    return max(result, 0.0f);
+float3 SampleHistory(Texture2D<float3> tex, SamplerState bilinearSampler, in float2 uv, in float2 texelSize)
+{
+    #if CATMULL_ROM_SAMPLING
+        return SampleCatmullRomFloat3(tex, bilinearSampler, uv, texelSize);
+    #else
+        return tex.SampleLevel(bilinearSampler, uv, 0);
+    #endif
 }
 
 float3 Tap(in float2 pos)
@@ -129,8 +91,7 @@ float3 Tap(in float2 pos)
 [numthreads(GROUP_SIZE, GROUP_SIZE, 1)]
 void ResolveTemporal(in uint2 globalID : SV_DispatchThreadID, in uint2 localID : SV_GroupThreadID, in uint localIndex : SV_GroupIndex, in uint2 groupID : SV_GroupID)
 {
-    uint2 bufferDimensions;
-    ColorHDRPrev.GetDimensions(bufferDimensions.x, bufferDimensions.y);
+    uint2 bufferDimensions = BufferDimensions;
 
     float2 texelSize = 1.0f / float2(bufferDimensions);
     float2 uv         = (globalID + 0.5f) * texelSize;
@@ -145,15 +106,16 @@ void ResolveTemporal(in uint2 globalID : SV_DispatchThreadID, in uint2 localID :
         int2 coord3 = anchor + int2((localIndex + TILE_DIM * TILE_DIM / 2) % TILE_DIM, (localIndex + TILE_DIM * TILE_DIM / 2) / TILE_DIM);
         int2 coord4 = anchor + int2((localIndex + TILE_DIM * TILE_DIM * 3 / 4) % TILE_DIM, (localIndex + TILE_DIM * TILE_DIM * 3 / 4) / TILE_DIM);
 
-        float2 uv1 = (coord1 + 0.5f) * texelSize;
-        float2 uv2 = (coord2 + 0.5f) * texelSize;
-        float2 uv3 = (coord3 + 0.5f) * texelSize;
-        float2 uv4 = (coord4 + 0.5f) * texelSize;
+        // AMD uses uvs and SampleLevel() with a point sampler instead of Load() a lot here... is there really some benefit?
+        // float2 uv1 = (coord1 + 0.5f) * texelSize;
+        // float2 uv2 = (coord2 + 0.5f) * texelSize;
+        // float2 uv3 = (coord3 + 0.5f) * texelSize;
+        // float2 uv4 = (coord4 + 0.5f) * texelSize;
 
-        float3 color0 = ColorHDR.Load(uv1 / texelSize).rgb;
-        float3 color1 = ColorHDR.Load(uv2 / texelSize).rgb;
-        float3 color2 = ColorHDR.Load(uv3 / texelSize).rgb;
-        float3 color3 = ColorHDR.Load(uv4 / texelSize).rgb;
+        float3 color0 = ColorHDR.Load(uint3(coord1, 0)).rgb;
+        float3 color1 = ColorHDR.Load(uint3(coord2, 0)).rgb;
+        float3 color2 = ColorHDR.Load(uint3(coord3, 0)).rgb;
+        float3 color3 = ColorHDR.Load(uint3(coord4, 0)).rgb;
 
         Tile[localIndex]                               = color0;
         Tile[localIndex + TILE_DIM * TILE_DIM / 4]     = color1;
@@ -186,23 +148,23 @@ void ResolveTemporal(in uint2 globalID : SV_DispatchThreadID, in uint2 localID :
     float3 ex2 = vsum2 / wsum;
     float3 dev = sqrt(max(ex2 - ex * ex, 0.0f));
 
-    // todo -- incorporate our already calculated history confidence value
+    // todo -- incorporate our already calculated history confidence value?
     bool is_sky_pixel;
-    float2 motion = GetClosestMotion(uv, texelSize, is_sky_pixel);
-    float  box_size = lerp(0.5f, 2.5f, is_sky_pixel ? 0.0f : smoothstep(0.02f, 0.0f, length(motion)));
+    int2 motion = SampleMotion(globalID, is_sky_pixel);
+    float2 motion_uv = float2(motion) * texelSize;
+    float box_size = lerp(0.5f, 2.5f, is_sky_pixel ? 0.0f : smoothstep(0.02f, 0.0f, length(motion_uv)));
 
     // Reproject and clamp to bounding box
     float3 nmin = ex - dev * box_size;
     float3 nmax = ex + dev * box_size;
 
     float3 today             = Tap(tile_pos);
-    float3 yesterday         = HistoryValid ? SampleHistoryCatmullRom(ColorHDRPrev, uv - float2(motion) / texelSize, texelSize) : today;
+    float3 yesterday         = HistoryValid ? SampleHistory(OutputPrev, BilinearClamp, uv + motion_uv, texelSize) : today;
     float3 clamped_yesterday = clamp(yesterday, nmin, nmax);
 
-    float3 result          = lerp(clamped_yesterday, today, 1.0f / 16.0f);      // equivalent of a "N" value of 31
+    float3 result            = lerp(clamped_yesterday, today, BlendingAlpha);      // (AMD use 1.0f / 16.0f, an equivalent of a "N" value of 31)
 
-    // Write back to ColorHDR
-    ColorHDR[globalID] = float4(result, 1.0f);
+    Output[globalID] = result;
 }
 
 #if 0 ////////////////////////////////////////////////////////////////////////////////////////////////////

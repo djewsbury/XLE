@@ -487,7 +487,7 @@ namespace RenderCore { namespace LightingEngine
 					captures->_pipelineCollection = pipelineCollection;
 
 					if (digest._tonemapAces) {
-						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelineCollection, *digest._tonemapAces);
+						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelineCollection, *digest._tonemapAces, ToneMapAcesOperator::IntegrationParams{});
 					} else {
 						captures->_copyToneMapOperator = std::make_shared<CopyToneMapOperator>(pipelineCollection);
 					}

@@ -199,7 +199,8 @@ namespace ToolsRig
 					formatter.SkipValueOrElement();
 				}
 
-				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ToneMapAcesOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc);
+				RenderCore::LightingEngine::ToneMapAcesOperator::IntegrationParams integrationParams;
+				auto opStep = MakeFutureAndActualize<std::shared_ptr<RenderCore::LightingEngine::ToneMapAcesOperator>>(context._drawingApparatus->_graphicsPipelinePool, desc, integrationParams);
 				opStep->PreregisterAttachments(context._stitchingContext, context._fbProps);
 				auto reg = sequence->CreateStep_RunFragments(opStep->CreateFragment(context._fbProps));
 				context._postStitchFunctions.push_back(

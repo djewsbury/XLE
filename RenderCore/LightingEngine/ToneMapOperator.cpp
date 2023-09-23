@@ -267,7 +267,10 @@ namespace RenderCore { namespace LightingEngine
 		// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
 		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard());
+		if (_integrationParams._readFromAAOutput) {
+			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("AAOutput"_h).Discard());
+		} else
+			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard());
 		unsigned brightPassMipChainSRVIdx = ~0u, brightPassMipChainUAVIdx = ~0u, brightPassHighResBlurWorkingUAVIdx = ~0u, brightPassHighResBlurWorkingSRVIdx = ~0u;
 		if (_desc._broadBloomMaxRadius > 0.f || _desc._enablePreciseBloom) {
 			auto brightPassMipChain = result.DefineAttachment("brightpass-working"_h).NoInitialState().Discard();
@@ -383,9 +386,10 @@ namespace RenderCore { namespace LightingEngine
 
 	ToneMapAcesOperator::ToneMapAcesOperator(
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-		const ToneMapAcesOperatorDesc& desc)
+		const ToneMapAcesOperatorDesc& desc,
+		const IntegrationParams& integrationParams)
 	: _secondStageConstructionState(0)
-	, _desc(desc)
+	, _desc(desc), _integrationParams(integrationParams)
 	{
 		_pool = std::move(pipelinePool);
 

@@ -204,6 +204,9 @@ namespace RenderCore { namespace Techniques
     {
         auto result = BuildGlobalTransformConstants(projDesc);
         result._prevWorldToClip = prevProjDesc._worldToProjection;
+        // Expecting "jitter" placed on the projection for TAA to be replicated to the prev proj desc
+        assert(projDesc._cameraToProjection(0, 2) == prevProjDesc._cameraToProjection(0, 2));
+        assert(projDesc._cameraToProjection(1, 2) == prevProjDesc._cameraToProjection(1, 2));
         return result;
     }
 

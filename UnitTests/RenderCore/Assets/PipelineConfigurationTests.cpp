@@ -35,6 +35,7 @@ namespace UnitTests
 						float FarClip;
 						float4 MinimalProjection;
 						float4x4 CameraBasis;
+						float4x4 PrevWorldToClip;
 					};
 
 					UniformBuffer LocalTransform;

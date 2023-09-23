@@ -102,9 +102,15 @@ namespace RenderCore { namespace LightingEngine
 			const Techniques::FrameBufferTarget& fbTarget);
 		void CompleteInitialization(IThreadContext& threadContext);
 
+		struct IntegrationParams
+		{
+			bool _readFromAAOutput = false;
+		};
+
 		ToneMapAcesOperator(
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
-			const ToneMapAcesOperatorDesc& desc);
+			const ToneMapAcesOperatorDesc& desc,
+			const IntegrationParams& integrationParams);
 		~ToneMapAcesOperator();
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _toneMap;
@@ -124,6 +130,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _alignedParamsSize = 0, _alignedBrightPassParamsSize = 0;
 		unsigned _secondStageConstructionState = 0;		// debug usage only
 		ToneMapAcesOperatorDesc _desc;
+		IntegrationParams _integrationParams;
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		::Assets::DependencyValidation _depVal;
 		unsigned _brightPassMipCountCount = 0;

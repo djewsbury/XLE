@@ -15,7 +15,20 @@ namespace RenderCore { namespace LightingEngine
 
 	struct TAAOperatorDesc
 	{
+		// The time constant is approximately the number of frames for a brightness of 1.0 to decay to .63, assuming the 
+		// new signal is black (in practice our clamping and other tricks cause faster adaption in this particular case, though)
+		// Basically, large numbers result in more smoothing
+		// See https://en.wikipedia.org/wiki/Exponential_smoothing
+		// The default, 15.5, is quite a lot of smoothing
+		float _timeConstant = 15.5f;
 
+		// Search for the pixel closet to the camera in a 3x3 and use that motion vector
+		// May help on boundaries (particularly against the sky)
+		bool _findOptimalMotionVector = true;
+
+		// Sample the historical buffer using Ccatmull-Rom curves for blending
+		// Effectively weights in the nearby 4x4 pixels
+		bool _catmullRomSampling = true;
 	};
 
 	class TAAOperator : public std::enable_shared_from_this<TAAOperator>
@@ -23,8 +36,9 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void Execute(
 			Techniques::ParsingContext& parsingContext,
-			IResourceView& hdrInputAndOutput,
-			IResourceView& hdrColorPrev,
+			IResourceView& hdrColor,
+			IResourceView& output,
+			IResourceView& outputPrev,
 			IResourceView& motion,
 			IResourceView& depth);
 
@@ -45,6 +59,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		unsigned _secondStageConstructionState = 0;		// debug usage only
 		TAAOperatorDesc _desc;
+		bool _firstFrame = true;
 	};
 
 }}

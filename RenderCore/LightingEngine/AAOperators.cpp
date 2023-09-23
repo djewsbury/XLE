@@ -21,22 +21,29 @@ namespace RenderCore { namespace LightingEngine
 
 	void TAAOperator::Execute(
 		Techniques::ParsingContext& parsingContext,
-		IResourceView& hdrInputAndOutput,
-		IResourceView& hdrColorPrev,
+		IResourceView& hdrColor,
+		IResourceView& output,
+		IResourceView& outputPrev,
 		IResourceView& motion,
 		IResourceView& depth)
 	{
 		assert(_secondStageConstructionState == 2);
 
 		IResourceView* srvs[] {
-			&hdrInputAndOutput, &hdrColorPrev, &motion, &depth
+			&hdrColor, &output, &outputPrev, &motion, &depth
 		};
 
+		assert(_desc._timeConstant > 0.f);
 		struct ControlUniforms
 		{
-			unsigned _hasHistory = true;
-			unsigned _u[3];
-		} controlUniforms;
+			UInt2 _bufferDims;
+			unsigned _hasHistory;
+			float _blendingAlpha;
+		} controlUniforms {
+			UInt2 { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height },
+			!_firstFrame,
+			1.f - exp(-1.0f / _desc._timeConstant)
+		};
 		UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
 		UniformsStream uniforms;
 		uniforms._resourceViews = srvs;
@@ -48,6 +55,7 @@ namespace RenderCore { namespace LightingEngine
 			parsingContext,
 			(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
 			uniforms);
+		_firstFrame = false;
 	}
 
 	RenderStepFragmentInterface TAAOperator::CreateFragment(const FrameBufferProperties& fbProps)
@@ -55,31 +63,38 @@ namespace RenderCore { namespace LightingEngine
 		assert(_secondStageConstructionState == 0);
 		RenderStepFragmentInterface result{PipelineType::Compute};
 
-		auto colorHDR = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).InitialState(BindFlag::RenderTarget).FinalState(BindFlag::UnorderedAccess);
-		auto colorHDRPrev = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDRPrev).InitialState(BindFlag::UnorderedAccess).Discard();
+		auto colorHDR = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).InitialState(BindFlag::RenderTarget).FinalState(BindFlag::ShaderResource);
+		auto output = result.DefineAttachment("AAOutput"_h).NoInitialState().FinalState(BindFlag::UnorderedAccess);
+		auto outputPrev = result.DefineAttachment("AAOutput"_h+1).InitialState(BindFlag::UnorderedAccess).Discard();
 		auto gbufferMotion = result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion).InitialState(BindFlag::ShaderResource).Discard();
 		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::DepthStencil).FinalState(BindFlag::ShaderResource);
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		spDesc.AppendNonFrameBufferAttachmentView(colorHDR, BindFlag::UnorderedAccess);
-		spDesc.AppendNonFrameBufferAttachmentView(colorHDRPrev, BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(colorHDR, BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(output, BindFlag::UnorderedAccess);
+		spDesc.AppendNonFrameBufferAttachmentView(outputPrev, BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(gbufferMotion, BindFlag::ShaderResource);
-		spDesc.AppendNonFrameBufferAttachmentView(depth, BindFlag::ShaderResource);
+		spDesc.AppendNonFrameBufferAttachmentView(depth, BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
 		spDesc.SetName("taa-operator");
 
 		result.AddSubpass(
 			std::move(spDesc),
 			[op=shared_from_this()](SequenceIterator& iterator) {
-
 				{
 					Metal::BarrierHelper barrierHelper{iterator._parsingContext->GetThreadContext()};
-					// ColorHDRPrev UnorderedAccess -> ShaderResource
+					// TAAOutput initialize
 					barrierHelper.Add(
 						*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(), 
-						{BindFlag::UnorderedAccess},
-						{BindFlag::ShaderResource, ShaderStage::Compute});
+						Metal::BarrierResourceUsage::NoState(),
+						{BindFlag::UnorderedAccess, ShaderStage::Compute});
+					// TAAOutputPrev UnorderedAccess -> ShaderResource
 					barrierHelper.Add(
-						*iterator._rpi.GetNonFrameBufferAttachmentView(3)->GetResource(), 
+						*iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource(), 
+						{BindFlag::UnorderedAccess, ShaderStage::Compute},
+						{BindFlag::ShaderResource, ShaderStage::Compute});
+					// depth DepthStencil -> ShaderResource
+					barrierHelper.Add(
+						*iterator._rpi.GetNonFrameBufferAttachmentView(4)->GetResource(), 
 						{BindFlag::DepthStencil, ShaderStage::Pixel},
 						{BindFlag::ShaderResource, ShaderStage::Compute});
 				}
@@ -89,9 +104,8 @@ namespace RenderCore { namespace LightingEngine
 					*iterator._rpi.GetNonFrameBufferAttachmentView(0),
 					*iterator._rpi.GetNonFrameBufferAttachmentView(1),
 					*iterator._rpi.GetNonFrameBufferAttachmentView(2),
-					*iterator._rpi.GetNonFrameBufferAttachmentView(3));
-
-				// Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
+					*iterator._rpi.GetNonFrameBufferAttachmentView(3),
+					*iterator._rpi.GetNonFrameBufferAttachmentView(4));
 			});
 
 		return result;
@@ -99,7 +113,29 @@ namespace RenderCore { namespace LightingEngine
 
 	void TAAOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps)
 	{
-		stitchingContext.DefineDoubleBufferAttachment(Techniques::AttachmentSemantics::ColorHDR, MakeClearValue(0.f, 0.f, 0.f, 0.f), BindFlag::UnorderedAccess);
+		auto outputFmt = Format::R11G11B10_FLOAT;
+
+		// copy the format from ColorHDR, if we can find it
+		auto i = std::find_if(
+			stitchingContext.GetPreregisteredAttachments().begin(),
+			stitchingContext.GetPreregisteredAttachments().end(),
+			[](const auto& q) { return q._semantic == Techniques::AttachmentSemantics::ColorHDR; });
+		if (i != stitchingContext.GetPreregisteredAttachments().end())
+			outputFmt = i->_desc._textureDesc._format;
+
+		UInt2 fbSize{fbProps._width, fbProps._height};
+		Techniques::PreregisteredAttachment attachments[] {
+			Techniques::PreregisteredAttachment {
+				"AAOutput"_h,
+				CreateDesc(
+					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+					TextureDesc::Plain2D(fbSize[0], fbSize[1], outputFmt)),
+				"taa-output"
+			}
+		};
+		for (const auto& a:attachments)
+			stitchingContext.DefineAttachment(a);
+		stitchingContext.DefineDoubleBufferAttachment("AAOutput"_h, MakeClearValue(0.f, 0.f, 0.f, 0.f), BindFlag::UnorderedAccess);
 	}
 
 	void TAAOperator::SecondStageConstruction(
@@ -111,15 +147,20 @@ namespace RenderCore { namespace LightingEngine
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "ColorHDR"_h);
-		usi.BindResourceView(1, "ColorHDRPrev"_h);
-		usi.BindResourceView(2, "GBufferMotion"_h);
-		usi.BindResourceView(3, "Depth"_h);
+		usi.BindResourceView(1, "Output"_h);
+		usi.BindResourceView(2, "OutputPrev"_h);
+		usi.BindResourceView(3, "GBufferMotion"_h);
+		usi.BindResourceView(4, "Depth"_h);
 		usi.BindImmediateData(0, "ControlUniforms"_h);
+
+		ParameterBox selectors;
+		selectors.SetParameter("PLAYDEAD_NEIGHBOURHOOD_SEARCH", _desc._findOptimalMotionVector);
+		selectors.SetParameter("CATMULL_ROM_SAMPLING", _desc._catmullRomSampling);
 
 		auto futureAAResolve = Techniques::CreateComputeOperator(
 			_pool,
 			TAA_COMPUTE_HLSL ":ResolveTemporal",
-			{},
+			std::move(selectors),
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 			usi);
 
