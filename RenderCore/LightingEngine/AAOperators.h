@@ -26,9 +26,13 @@ namespace RenderCore { namespace LightingEngine
 		// May help on boundaries (particularly against the sky)
 		bool _findOptimalMotionVector = true;
 
-		// Sample the historical buffer using Ccatmull-Rom curves for blending
+		// Sample the historical buffer using Catmull-Rom curves for blending
 		// Effectively weights in the nearby 4x4 pixels
 		bool _catmullRomSampling = true;
+
+		// Apply simple sharpening filter to the "yesterday" buffer. This can offset the softening that the anti-aliasing
+		// otherwise gives
+		bool _sharpenHistory = true;
 	};
 
 	class TAAOperator : public std::enable_shared_from_this<TAAOperator>
@@ -40,7 +44,9 @@ namespace RenderCore { namespace LightingEngine
 			IResourceView& output,
 			IResourceView& outputPrev,
 			IResourceView& motion,
-			IResourceView& depth);
+			IResourceView& depth,
+			IResourceView* outputShaderResource = nullptr,
+			IResourceView* outputPrevUnorderedAccess = nullptr);
 
 		void SecondStageConstruction(
 			std::promise<std::shared_ptr<TAAOperator>>&& promise,
@@ -56,6 +62,7 @@ namespace RenderCore { namespace LightingEngine
 		~TAAOperator();
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _aaResolve;
+		std::shared_ptr<Techniques::IComputeShaderOperator> _sharpenFutureYesterday;
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		unsigned _secondStageConstructionState = 0;		// debug usage only
 		TAAOperatorDesc _desc;

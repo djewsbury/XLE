@@ -1196,6 +1196,13 @@ namespace SceneEngine
                 return true;
             }
             break;
+
+        case "SharpenHistory"_h:
+            if (auto value = ConvertOrCast<bool>(data, type)) {
+                desc._sharpenHistory = *value;
+                return true;
+            }
+            break;
         }
         return false;
     }

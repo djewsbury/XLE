@@ -6,10 +6,11 @@
 // https://github.com/GPUOpen-LibrariesAndSDKs/Capsaicin
 // licensed under MIT license https://github.com/GPUOpen-LibrariesAndSDKs/Capsaicin/blob/master/LICENSE.txt
 //
-// Modified for XLE shader interface & 
+// Modified for XLE shader interfaces & just to fit in a little better
 //
 
 #include "../Math/TextureAlgorithm.hlsl"
+#include "../Utility/Colour.hlsl"
 
 #define RADIUS      1
 #define GROUP_SIZE  16
@@ -112,10 +113,10 @@ void ResolveTemporal(in uint2 globalID : SV_DispatchThreadID, in uint2 localID :
         // float2 uv3 = (coord3 + 0.5f) * texelSize;
         // float2 uv4 = (coord4 + 0.5f) * texelSize;
 
-        float3 color0 = ColorHDR.Load(uint3(coord1, 0)).rgb;
-        float3 color1 = ColorHDR.Load(uint3(coord2, 0)).rgb;
-        float3 color2 = ColorHDR.Load(uint3(coord3, 0)).rgb;
-        float3 color3 = ColorHDR.Load(uint3(coord4, 0)).rgb;
+        float3 color0 = ColorHDR.Load(uint3(min(coord1, bufferDimensions-1), 0)).rgb;
+        float3 color1 = ColorHDR.Load(uint3(min(coord2, bufferDimensions-1), 0)).rgb;
+        float3 color2 = ColorHDR.Load(uint3(min(coord3, bufferDimensions-1), 0)).rgb;
+        float3 color3 = ColorHDR.Load(uint3(min(coord4, bufferDimensions-1), 0)).rgb;
 
         Tile[localIndex]                               = color0;
         Tile[localIndex + TILE_DIM * TILE_DIM / 4]     = color1;
@@ -167,16 +168,7 @@ void ResolveTemporal(in uint2 globalID : SV_DispatchThreadID, in uint2 localID :
     Output[globalID] = result;
 }
 
-#if 0 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-[numthreads(8, 8, 1)]
-void ResolvePassthru(in uint2 did : SV_DispatchThreadID)
-{
-    float3 color = g_DirectLightingBuffer.Load(int3(did, 0)).xyz;
-    color += g_GlobalIlluminationBuffer.Load(int3(did, 0)).xyz;
-
-    g_ColorBuffer[did] = float4(color, 1.0f);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 float3 ApplySharpening(in float3 center, in float3 top, in float3 left, in float3 right, in float3 bottom)
 {
@@ -184,13 +176,13 @@ float3 ApplySharpening(in float3 center, in float3 top, in float3 left, in float
 
     float accum  = 0.0f;
     float weight = 0.0f;
-    float result = sqrt(luminance(center));
+    float result = sqrt(SRGBLuminance(center));
 
     {
-        float n0 = sqrt(luminance(top));
-        float n1 = sqrt(luminance(bottom));
-        float n2 = sqrt(luminance(left));
-        float n3 = sqrt(luminance(right));
+        float n0 = sqrt(SRGBLuminance(top));
+        float n1 = sqrt(SRGBLuminance(bottom));
+        float n2 = sqrt(SRGBLuminance(left));
+        float n3 = sqrt(SRGBLuminance(right));
 
         float w0 = max(1.0f - 6.0f * (abs(result - n0) + abs(result - n1)), 0.0f);
         float w1 = max(1.0f - 6.0f * (abs(result - n2) + abs(result - n3)), 0.0f);
@@ -208,32 +200,24 @@ float3 ApplySharpening(in float3 center, in float3 top, in float3 left, in float
     }
 
     result = max(result * (weight + 1.0f) - accum, 0.0f);
-    result = squared(result);
+    result *= result;
 
-    return min(center * result / max(luminance(center), 1e-5f), 1.0f);
+    return min(center * result / max(SRGBLuminance(center), 1e-5f), 1.0f);
 }
 
 [numthreads(8, 8, 1)]
-void UpdateHistory(in uint2 did : SV_DispatchThreadID)
+    void UpdateHistory(in uint2 pixelId : SV_DispatchThreadID)
 {
-    if (any(did >= g_BufferDimensions))
-    {
-        return; // out of bounds
-    }
+    if (any(pixelId >= BufferDimensions))
+        return;
 
-    float2 texelSize = 1.0f / g_BufferDimensions;
-    float2 uv         = (did + 0.5f) * texelSize;
+    float3 top        = ColorHDR.Load(int3(clamp(pixelId + int2( 0,  1), 0, BufferDimensions-1), 0)).xyz;
+    float3 left       = ColorHDR.Load(int3(clamp(pixelId + int2(-1,  0), 0, BufferDimensions-1), 0)).xyz;
+    float3 right      = ColorHDR.Load(int3(clamp(pixelId + int2( 1,  0), 0, BufferDimensions-1), 0)).xyz;
+    float3 bottom     = ColorHDR.Load(int3(clamp(pixelId + int2( 0, -1), 0, BufferDimensions-1), 0)).xyz;
+    float3 center     = ColorHDR.Load(int3(pixelId, 0)).xyz;
 
-    float3 top        = g_HistoryBuffer.SampleLevel(g_NearestSampler, uv + float2( 0.0f,          texelSize.y), 0.0f).xyz;
-    float3 left       = g_HistoryBuffer.SampleLevel(g_NearestSampler, uv + float2(-texelSize.x,  0.0f        ), 0.0f).xyz;
-    float3 right      = g_HistoryBuffer.SampleLevel(g_NearestSampler, uv + float2( texelSize.x,  0.0f        ), 0.0f).xyz;
-    float3 bottom     = g_HistoryBuffer.SampleLevel(g_NearestSampler, uv + float2( 0.0f,         -texelSize.y), 0.0f).xyz;
-
-    float3 center = g_HistoryBuffer.Load(int3(did, 0)).xyz;
-    float3 color  = ApplySharpening(center, top, left, right, bottom);
-
-    g_ColorBuffer[did] = float4(color, 1.0f);
-    g_OutputBuffer[did] = float4(center, 1.0f);
+    float3 color = ApplySharpening(center, top, left, right, bottom);
+    Output[pixelId] = float4(color, 1.0f);
 }
 
-#endif ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -174,6 +174,8 @@ namespace RenderCore { namespace Techniques
             case "SSRConfidenceInt"_h: return "SSRConfidenceInt";
             case "SSRInt"_h: return "SSRInt";
             case "SSRDebug"_h: return "SSRDebug";
+            case "AAOutput"_h: return "AAOutput";
+            case "AAOutput"_h+1: return "AAOutputPrev";
             default: return nullptr;
             }
         }

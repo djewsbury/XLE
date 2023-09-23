@@ -25,7 +25,9 @@ namespace RenderCore { namespace LightingEngine
 		IResourceView& output,
 		IResourceView& outputPrev,
 		IResourceView& motion,
-		IResourceView& depth)
+		IResourceView& depth,
+		IResourceView* outputShaderResource,
+		IResourceView* outputPrevUnorderedAccess)
 	{
 		assert(_secondStageConstructionState == 2);
 
@@ -55,6 +57,36 @@ namespace RenderCore { namespace LightingEngine
 			parsingContext,
 			(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
 			uniforms);
+
+		{
+			Metal::BarrierHelper barrierHelper{parsingContext.GetThreadContext()};
+			// AAOutput UnorderedAccess -> ShaderResource
+			barrierHelper.Add(
+				*output.GetResource(), 
+				{BindFlag::UnorderedAccess, ShaderStage::Compute},
+				{BindFlag::ShaderResource, ShaderStage::Compute});
+			// AAOutputPrev NoState -> UnorderedAccess
+			if (_desc._sharpenHistory)
+				barrierHelper.Add(
+					*outputPrev.GetResource(),
+					{BindFlag::ShaderResource, ShaderStage::Compute},
+					{BindFlag::UnorderedAccess, ShaderStage::Compute});
+		}
+
+		if (_desc._sharpenHistory) {
+			assert(outputPrevUnorderedAccess);
+			IResourceView* srvs[] {
+				outputPrevUnorderedAccess, outputShaderResource
+			};
+			uniforms._resourceViews = srvs;
+
+			const unsigned groupSize = 8;
+			_sharpenFutureYesterday->Dispatch(
+				parsingContext,
+				(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
+				uniforms);
+		}
+
 		_firstFrame = false;
 	}
 
@@ -64,8 +96,10 @@ namespace RenderCore { namespace LightingEngine
 		RenderStepFragmentInterface result{PipelineType::Compute};
 
 		auto colorHDR = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).InitialState(BindFlag::RenderTarget).FinalState(BindFlag::ShaderResource);
-		auto output = result.DefineAttachment("AAOutput"_h).NoInitialState().FinalState(BindFlag::UnorderedAccess);
-		auto outputPrev = result.DefineAttachment("AAOutput"_h+1).InitialState(BindFlag::UnorderedAccess).Discard();
+		auto output = result.DefineAttachment("AAOutput"_h).NoInitialState().FinalState(BindFlag::ShaderResource);
+		auto outputPrev = result.DefineAttachment("AAOutput"_h+1).InitialState(BindFlag::ShaderResource).Discard();
+		if (_desc._sharpenHistory)
+			outputPrev.NoInitialState().FinalState(BindFlag::UnorderedAccess);
 		auto gbufferMotion = result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion).InitialState(BindFlag::ShaderResource).Discard();
 		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::DepthStencil).FinalState(BindFlag::ShaderResource);
 
@@ -75,6 +109,10 @@ namespace RenderCore { namespace LightingEngine
 		spDesc.AppendNonFrameBufferAttachmentView(outputPrev, BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(gbufferMotion, BindFlag::ShaderResource);
 		spDesc.AppendNonFrameBufferAttachmentView(depth, BindFlag::ShaderResource, TextureViewDesc { TextureViewDesc::Aspect::Depth });
+		if (_desc._sharpenHistory) {
+			spDesc.AppendNonFrameBufferAttachmentView(output, BindFlag::ShaderResource);
+			spDesc.AppendNonFrameBufferAttachmentView(outputPrev, BindFlag::UnorderedAccess);
+		}
 		spDesc.SetName("taa-operator");
 
 		result.AddSubpass(
@@ -82,21 +120,34 @@ namespace RenderCore { namespace LightingEngine
 			[op=shared_from_this()](SequenceIterator& iterator) {
 				{
 					Metal::BarrierHelper barrierHelper{iterator._parsingContext->GetThreadContext()};
-					// TAAOutput initialize
+					// AAOutput initialize
 					barrierHelper.Add(
 						*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(), 
 						Metal::BarrierResourceUsage::NoState(),
 						{BindFlag::UnorderedAccess, ShaderStage::Compute});
-					// TAAOutputPrev UnorderedAccess -> ShaderResource
-					barrierHelper.Add(
-						*iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource(), 
-						{BindFlag::UnorderedAccess, ShaderStage::Compute},
-						{BindFlag::ShaderResource, ShaderStage::Compute});
 					// depth DepthStencil -> ShaderResource
 					barrierHelper.Add(
 						*iterator._rpi.GetNonFrameBufferAttachmentView(4)->GetResource(), 
 						{BindFlag::DepthStencil, ShaderStage::Pixel},
 						{BindFlag::ShaderResource, ShaderStage::Compute});
+					// AAOutputPrev UnorderedAccess -> ShaderResource
+					if (op->_desc._sharpenHistory)
+						if (op->_firstFrame)
+							barrierHelper.Add(
+								*iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource(), 
+								Metal::BarrierResourceUsage::NoState(),
+								{BindFlag::ShaderResource, ShaderStage::Compute});
+						else
+							barrierHelper.Add(
+								*iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource(), 
+								{BindFlag::UnorderedAccess, ShaderStage::Compute},
+								{BindFlag::ShaderResource, ShaderStage::Compute});
+				}
+
+				IResourceView* outputShaderResource = nullptr, *outputPrevUnorderedAccess = nullptr;
+				if (op->_desc._sharpenHistory) {
+					outputShaderResource = iterator._rpi.GetNonFrameBufferAttachmentView(5).get();
+					outputPrevUnorderedAccess = iterator._rpi.GetNonFrameBufferAttachmentView(6).get();
 				}
 
 				op->Execute(
@@ -105,7 +156,8 @@ namespace RenderCore { namespace LightingEngine
 					*iterator._rpi.GetNonFrameBufferAttachmentView(1),
 					*iterator._rpi.GetNonFrameBufferAttachmentView(2),
 					*iterator._rpi.GetNonFrameBufferAttachmentView(3),
-					*iterator._rpi.GetNonFrameBufferAttachmentView(4));
+					*iterator._rpi.GetNonFrameBufferAttachmentView(4),
+					outputShaderResource, outputPrevUnorderedAccess);
 			});
 
 		return result;
@@ -124,18 +176,27 @@ namespace RenderCore { namespace LightingEngine
 			outputFmt = i->_desc._textureDesc._format;
 
 		UInt2 fbSize{fbProps._width, fbProps._height};
-		Techniques::PreregisteredAttachment attachments[] {
+		stitchingContext.DefineAttachment(
 			Techniques::PreregisteredAttachment {
 				"AAOutput"_h,
 				CreateDesc(
 					BindFlag::UnorderedAccess | BindFlag::ShaderResource,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], outputFmt)),
 				"taa-output"
-			}
-		};
-		for (const auto& a:attachments)
-			stitchingContext.DefineAttachment(a);
-		stitchingContext.DefineDoubleBufferAttachment("AAOutput"_h, MakeClearValue(0.f, 0.f, 0.f, 0.f), BindFlag::UnorderedAccess);
+			});
+
+		if (_desc._sharpenHistory) {
+			// When we have this flag, ww will copy to a "prev" buffer manually (applying the sharpening as we do)
+			stitchingContext.DefineAttachment(
+				Techniques::PreregisteredAttachment {
+					"AAOutput"_h+1,
+					CreateDesc(
+						BindFlag::UnorderedAccess | BindFlag::ShaderResource,
+						TextureDesc::Plain2D(fbSize[0], fbSize[1], outputFmt)),
+					"taa-output-prev"
+				});
+		} else
+			stitchingContext.DefineDoubleBufferAttachment("AAOutput"_h, MakeClearValue(0.f, 0.f, 0.f, 0.f), BindFlag::ShaderResource);
 	}
 
 	void TAAOperator::SecondStageConstruction(
@@ -164,14 +225,38 @@ namespace RenderCore { namespace LightingEngine
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 			usi);
 
-		::Assets::WhenAll(futureAAResolve).ThenConstructToPromise(
-			std::move(promise),
-			[strongThis = shared_from_this()](auto aaResolve) {
-				assert(strongThis->_secondStageConstructionState == 1);
-				strongThis->_aaResolve = std::move(aaResolve);
-				strongThis->_secondStageConstructionState = 2;
-				return strongThis;
-			});
+		if (_desc._sharpenHistory) {
+			UniformsStreamInterface usi2;
+			usi2.BindResourceView(0, "Output"_h);
+			usi2.BindResourceView(1, "ColorHDR"_h);
+			usi2.BindImmediateData(0, "ControlUniforms"_h);
+
+			auto sharpenFutureYesterday = Techniques::CreateComputeOperator(
+				_pool,
+				TAA_COMPUTE_HLSL ":UpdateHistory",
+				{},
+				GENERAL_OPERATOR_PIPELINE ":ComputeMain",
+				usi2);
+
+			::Assets::WhenAll(futureAAResolve, sharpenFutureYesterday).ThenConstructToPromise(
+				std::move(promise),
+				[strongThis = shared_from_this()](auto aaResolve, auto sharpenFutureYesterday) {
+					assert(strongThis->_secondStageConstructionState == 1);
+					strongThis->_aaResolve = std::move(aaResolve);
+					strongThis->_sharpenFutureYesterday = std::move(sharpenFutureYesterday);
+					strongThis->_secondStageConstructionState = 2;
+					return strongThis;
+				});
+		} else {
+			::Assets::WhenAll(futureAAResolve).ThenConstructToPromise(
+				std::move(promise),
+				[strongThis = shared_from_this()](auto aaResolve) {
+					assert(strongThis->_secondStageConstructionState == 1);
+					strongThis->_aaResolve = std::move(aaResolve);
+					strongThis->_secondStageConstructionState = 2;
+					return strongThis;
+				});
+		}
 	}
 
 	::Assets::DependencyValidation TAAOperator::GetDependencyValidation() const
