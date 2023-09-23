@@ -936,6 +936,14 @@ namespace RenderOverlays
 
 	    ///////////////////////////////////////////////////////////////////////////////////
 
+	static void SetupLineStates(RenderCore::Techniques::GraphicsPipelineDesc& pipelineDesc, const RenderCore::Assets::RenderStateSet& renderStates)
+	{
+		if ((renderStates._flag & RenderCore::Assets::RenderStateSet::Flag::SmoothLines) && renderStates._smoothLines)
+			pipelineDesc._rasterization._flags |= RenderCore::RasterizationDescFlags::SmoothLines;
+		if (renderStates._flag & RenderCore::Assets::RenderStateSet::Flag::LineWeight)
+			pipelineDesc._rasterization._lineWeight = renderStates._lineWeight;
+	}
+
 	class ShapesRenderingTechniqueDelegate : public RenderCore::Techniques::ITechniqueDelegate
 	{
 	public:
@@ -968,6 +976,7 @@ namespace RenderOverlays
 			if (shaderPatches.HasPatchType(s_patchShape)) {
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDesc[pipelineBase];
+				SetupLineStates(*nascentDesc, renderStates);
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntry:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchShape, ShaderStage::Pixel);
@@ -979,6 +988,7 @@ namespace RenderOverlays
 			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDesc[pipelineBase];
+				SetupLineStates(*nascentDesc, renderStates);
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
@@ -988,6 +998,7 @@ namespace RenderOverlays
 			} else if (shaderPatches.HasPatchType(s_patchFill)) {
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDesc[pipelineBase];
+				SetupLineStates(*nascentDesc, renderStates);
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryJustFill:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
@@ -997,7 +1008,14 @@ namespace RenderOverlays
 
 				return nascentDesc;
 			} else {
-				return _pipelineDesc[pipelineBase];
+				if (!(renderStates._flag & (RenderCore::Assets::RenderStateSet::Flag::SmoothLines|RenderCore::Assets::RenderStateSet::Flag::LineWeight))) {
+					return _pipelineDesc[pipelineBase];
+				} else {
+					auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+					*nascentDesc = *_pipelineDesc[pipelineBase];
+					SetupLineStates(*nascentDesc, renderStates);
+					return nascentDesc;
+				}
 			}
 		}
 

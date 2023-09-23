@@ -151,6 +151,8 @@ namespace RenderOverlays
 
 		using namespace RenderCore;
 		Techniques::ImmediateDrawableMaterial material;
+		material._stateSet.SetSmoothLines(true);
+		material._hash = material._stateSet.GetHash();
 		auto workingVertices = immDrawables.QueueDraw(
 			lineCount*2, MakeIteratorRange(s_vertexInputLayout), 
 			material, Topology::LineList).Cast<InternalVertex*>();

@@ -199,9 +199,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		ms.alphaToOneEnable = VK_FALSE;
 		ms.minSampleShading = 0.0f;
 
-		if (_rasterizerState.pNext && ((VkBaseInStructure*)_rasterizerState.pNext)->sType == VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT
-			&& !factory.GetXLEFeatures()._samplerAnisotropy)
-			Throw(std::runtime_error("Attempting to create a pipeline with conservative rasterization, but the conservative raster feature is not enabled in DeviceFeatures"));
+		_rasterizerState.MakeCompatible(factory);		// gracefully remove any features we can't support
 
 		VkGraphicsPipelineCreateInfo pipeline = {};
 		pipeline.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;

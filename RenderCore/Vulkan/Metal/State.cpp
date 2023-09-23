@@ -132,12 +132,33 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		}
 	}
 
+	void VulkanRasterizerState::MakeCompatible(ObjectFactory& factory)
+	{
+		if (!factory.GetXLEFeatures()._wideLines)
+			lineWidth = 1.f;
+
+		if (!factory.GetXLEFeatures()._conservativeRaster)
+			if (pNext && ((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT) {
+				assert(((VkBaseInStructure*)pNext)->pNext == nullptr);
+				pNext = nullptr;
+			}
+
+		if (!factory.GetXLEFeatures()._smoothLines)
+			if (pNext && ((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO_EXT) {
+				assert(((VkBaseInStructure*)pNext)->pNext == nullptr);
+				pNext = nullptr;
+			}
+	}
+
 	VulkanRasterizerState::VulkanRasterizerState(const RasterizationDesc& desc)
 	{
 		sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 		pNext = nullptr;
 		flags = 0;
-		polygonMode = AsVkPolygonMode(FillMode::Solid);
+		if (desc._flags & RasterizationDescFlags::SmoothLines)
+			polygonMode = VK_POLYGON_MODE_LINE;
+		else 
+			polygonMode = AsVkPolygonMode(FillMode::Solid);
 		cullMode = AsVkCullMode(desc._cullMode);
 		frontFace = AsVkFrontFace(desc._frontFaceWinding);
 		depthClampEnable = VK_FALSE;
@@ -146,15 +167,25 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 		depthBiasConstantFactor = desc._depthBiasConstantFactor;
 		depthBiasClamp = desc._depthBiasClamp;
 		depthBiasSlopeFactor = desc._depthBiasSlopeFactor;
-		lineWidth = 1.0f;	// (set to 1.0f when this feature is disabled)
+		lineWidth = desc._lineWeight;
 
 		if (desc._flags & RasterizationDescFlags::ConservativeRaster) {
 			pNext = &_conservativeRasterExt;
+			_conservativeRasterExt = {};
 			_conservativeRasterExt.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT;
 			_conservativeRasterExt.pNext = nullptr;
 			_conservativeRasterExt.flags = 0;
 			_conservativeRasterExt.conservativeRasterizationMode = VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT;
 			_conservativeRasterExt.extraPrimitiveOverestimationSize = 0.f;
+		}
+
+		if (desc._flags & RasterizationDescFlags::SmoothLines) {
+			assert(pNext == nullptr);
+			pNext = &_lineExt;
+			_lineExt = {};
+			_lineExt.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO_EXT;
+			_lineExt.lineRasterizationMode = VK_LINE_RASTERIZATION_MODE_RECTANGULAR_SMOOTH_EXT;		// also VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT
+			_lineExt.stippledLineEnable = false;
 		}
 	}
 
@@ -162,15 +193,21 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 	{
 		VkPipelineRasterizationStateCreateInfo::operator=(copyFrom);
 		_conservativeRasterExt = copyFrom._conservativeRasterExt;
+		_lineExt = copyFrom._lineExt;
 		if (pNext == &copyFrom._conservativeRasterExt)
 			pNext = &_conservativeRasterExt;
+		else if (pNext == &copyFrom._lineExt)
+			pNext = &_lineExt;
 	}
     VulkanRasterizerState& VulkanRasterizerState::operator=(const VulkanRasterizerState& copyFrom)
 	{
 		VkPipelineRasterizationStateCreateInfo::operator=(copyFrom);
 		_conservativeRasterExt = copyFrom._conservativeRasterExt;
+		_lineExt = copyFrom._lineExt;
 		if (pNext == &copyFrom._conservativeRasterExt)
 			pNext = &_conservativeRasterExt;
+		else if (pNext == &copyFrom._lineExt)
+			pNext = &_lineExt;
 		return *this;
 	}
 

@@ -593,6 +593,14 @@ namespace RenderCore { namespace ImplVulkan
 		return str;
 	}
 
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceLineRasterizationFeaturesEXT& features)
+	{
+		str << "Line Rasterization Features" << std::endl;
+		str << "Rectangular lines :" << features.rectangularLines << ", Bresenham lines: " << features.bresenhamLines << ", Smooth lines: " << features.smoothLines << std::endl;
+		str << "Stippled rectangular lines :" << features.stippledRectangularLines << ", Stippled Bresenham lines: " << features.stippledBresenhamLines << ", Stippled smooth lines: " << features.stippledSmoothLines << std::endl;
+		return str;
+	}
+
 	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVulkan12Features& features)
 	{
 		std::vector<const char*> enabledFeatures;
@@ -1118,6 +1126,11 @@ namespace RenderCore { namespace ImplVulkan
 					break;
 #endif
 
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT:
+					if (versionCode == 11)
+						str << *(VkPhysicalDeviceLineRasterizationFeaturesEXT*)pNextChain << std::endl;		// ext merged into version 1.1
+					break;
+
 #if VK_VERSION_1_2
 				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES:
 					if (versionCode == 12)
@@ -1352,6 +1365,14 @@ namespace RenderCore { namespace ImplVulkan
 			separateDepthStencilLayoutFeatures.separateDepthStencilLayouts = true;
 			appender->pNext = (VkBaseInStructure*)&separateDepthStencilLayoutFeatures;
 			appender = (VkBaseInStructure*)&separateDepthStencilLayoutFeatures;
+		}
+
+		VkPhysicalDeviceLineRasterizationFeaturesEXT lineRasterizationFeatures = {};
+		if (xleFeatures._smoothLines) {
+			lineRasterizationFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT;
+			lineRasterizationFeatures.smoothLines = true;
+			appender->pNext = (VkBaseInStructure*)&lineRasterizationFeatures;
+			appender = (VkBaseInStructure*)&lineRasterizationFeatures;
 		}
 
 		// Resource types
@@ -1645,6 +1666,7 @@ namespace RenderCore { namespace ImplVulkan
 		APPEND_STRUCT(VkPhysicalDeviceTransformFeedbackFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT);
 		APPEND_STRUCT(VkPhysicalDeviceTextureCompressionASTCHDRFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES_EXT);	// brought into vk1.3 core
 		APPEND_STRUCT(VkPhysicalDeviceShaderFloat16Int8Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES);		// (part of vk1.2 core)
+		APPEND_STRUCT(VkPhysicalDeviceLineRasterizationFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT);		// (part of vk1.1 core)
 
 		#undef APPEND_STRUCT
 
@@ -1657,6 +1679,7 @@ namespace RenderCore { namespace ImplVulkan
 		bool hasConservativeRasterExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasTimelineSemaphoreExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasShaderViewportIndex = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasLineRasterizationExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_LINE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
 
 		DeviceFeatures result;
 
@@ -1672,6 +1695,8 @@ namespace RenderCore { namespace ImplVulkan
 		result._depthBounds = features.features.depthBounds;
 		result._samplerAnisotropy = features.features.samplerAnisotropy;
 		result._wideLines = features.features.wideLines;
+		if (hasLineRasterizationExt)
+			result._smoothLines = VkPhysicalDeviceLineRasterizationFeaturesEXT_inst.smoothLines;		// also rectangularLines & bresenhamLines
 		result._conservativeRaster = hasConservativeRasterExt;
 		result._multiViewport = features.features.multiViewport;
 		result._independentBlend = features.features.independentBlend;
@@ -1807,6 +1832,7 @@ namespace RenderCore { namespace ImplVulkan
 				APPEND_STRUCT(VkPhysicalDeviceVulkanMemoryModelFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
 				APPEND_STRUCT(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
 			#endif
+			APPEND_STRUCT(VkPhysicalDeviceLineRasterizationFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT);
 			vkGetPhysicalDeviceFeatures2(_physicalDevices[configurationIdx]._dev, &features);
 			str << std::endl << "TOGGLEABLE PHYSICAL DEVICE FEATURES" << std::endl;
 			LogPhysicalDeviceFeatures(str, features);

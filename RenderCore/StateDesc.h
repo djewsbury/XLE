@@ -177,7 +177,7 @@ namespace RenderCore
 
     namespace RasterizationDescFlags
     {
-        enum Flag { ConservativeRaster = 1u<<0u };
+        enum Flag { ConservativeRaster = 1u<<0u, SmoothLines = 1u<<1u };
         using BitField = unsigned;
     }
 
@@ -192,6 +192,7 @@ namespace RenderCore
 		float			_depthBiasClamp = 0.f;				///< zero means no clamping
 		float			_depthBiasSlopeFactor = 0.f;
         RasterizationDescFlags::BitField _flags = 0;
+        float           _lineWeight = 1.f;
 
 		uint64_t Hash() const;
     };

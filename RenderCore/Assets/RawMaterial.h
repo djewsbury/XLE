@@ -98,7 +98,7 @@ namespace RenderCore { namespace Assets
             Basic, DeferredDecal, Ordered
         };
         unsigned    _doubleSided : 1;
-        unsigned    _wireframe : 1;
+        unsigned    _smoothLines : 1;
         unsigned    _writeMask : 4;
         BlendType   _blendType : 2;
 
@@ -112,22 +112,28 @@ namespace RenderCore { namespace Assets
         struct Flag
         {
             enum Enum {
-                DoubleSided = 1<<0, Wireframe = 1<<1, WriteMask = 1<<2, 
-                BlendType = 1<<3, ForwardBlend = 1<<4, DepthBias = 1<<5 
+                DoubleSided = 1<<0, SmoothLines = 1<<1, WriteMask = 1<<2,
+                BlendType = 1<<3, ForwardBlend = 1<<4, DepthBias = 1<<5,
+                LineWeight = 1<<6
             };
             typedef unsigned BitField;
         };
-        Flag::BitField  _flag : 6;
-        unsigned        _padding : 3;   // 8 + 15 + 32 + 5 = 60 bits... pad to 64 bits
+        Flag::BitField  _flag : 7;
+        unsigned        _padding : 1;   // 8 + 15 + 32 + 6 = 60 bits... pad to 64 bits
 
-        int             _depthBias;     // do we need all of the bits for this?
+        union
+        {
+            int             _depthBias;     // do we need all of the bits for this?
+            float           _lineWeight;
+        };
 
         RenderStateSet& SetDoubleSided(bool);
-        RenderStateSet& SetWireframe(bool);
+        RenderStateSet& SetSmoothLines(bool);
         RenderStateSet& SetWriteMask(unsigned);
         RenderStateSet& SetBlendType(BlendType);
         RenderStateSet& SetForwardBlend(Blend src, Blend dst, BlendOp op = BlendOp::Add);
         RenderStateSet& SetDepthBias(int);
+        RenderStateSet& SetLineWeight(float);
 
         uint64 GetHash() const;
         RenderStateSet();
@@ -233,7 +239,7 @@ namespace RenderCore { namespace Assets
     inline RenderStateSet::RenderStateSet()
     {
         _doubleSided = false;
-        _wireframe = false;
+        _smoothLines = false;
         _writeMask = 0xf;
         _blendType = BlendType::Basic;
         _depthBias = 0;
@@ -246,10 +252,10 @@ namespace RenderCore { namespace Assets
 		_padding = 0;
     }
     
+    static_assert(sizeof(RenderStateSet) == sizeof(uint64_t), "expecting StateSet to be 64 bits long");
     inline uint64 RenderStateSet::GetHash() const
     {
-        static_assert(sizeof(*this) == sizeof(uint64), "expecting StateSet to be 64 bits long");
-        return *(const uint64*)this;
+        return *(const uint64_t*)this;
     }
 
 }}

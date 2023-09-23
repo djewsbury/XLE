@@ -66,6 +66,7 @@ namespace RenderCore
         bool _depthBounds = false;
         bool _samplerAnisotropy = false;
         bool _wideLines = false;
+        bool _smoothLines = false;
         bool _conservativeRaster = false;
         bool _independentBlend = false;
         bool _multiViewport = false;

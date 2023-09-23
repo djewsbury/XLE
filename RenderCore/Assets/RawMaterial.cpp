@@ -108,10 +108,17 @@ namespace RenderCore { namespace Assets
             }
         }
         {
-            auto child = rootElement.Attribute("Wireframe").As<bool>();
+            auto child = rootElement.Attribute("SmoothLines").As<bool>();
             if (child.has_value()) {
-                result._wireframe = child.value();
-                result._flag |= RenderStateSet::Flag::Wireframe;
+                result._smoothLines = child.value();
+                result._flag |= RenderStateSet::Flag::SmoothLines;
+            }
+        }
+        {
+            auto child = rootElement.Attribute("LineWeight").As<float>();
+            if (child.has_value()) {
+                result._lineWeight = child.value();
+                result._flag |= RenderStateSet::Flag::LineWeight;
             }
         }
         {
@@ -200,8 +207,11 @@ namespace RenderCore { namespace Assets
         if (stateSet._flag & RenderStateSet::Flag::DoubleSided)
             formatter.WriteKeyedValue("DoubleSided", AutoAsString(stateSet._doubleSided));
 
-        if (stateSet._flag & RenderStateSet::Flag::Wireframe)
-            formatter.WriteKeyedValue("Wireframe", AutoAsString(stateSet._wireframe));
+        if (stateSet._flag & RenderStateSet::Flag::SmoothLines)
+            formatter.WriteKeyedValue("SmoothLines", AutoAsString(stateSet._smoothLines));
+
+        if (stateSet._flag & RenderStateSet::Flag::LineWeight)
+            formatter.WriteKeyedValue("LineWeigth", AutoAsString(stateSet._lineWeight));
 
         if (stateSet._flag & RenderStateSet::Flag::WriteMask)
             formatter.WriteKeyedValue("WriteMask", AutoAsString(stateSet._writeMask));
@@ -307,9 +317,13 @@ namespace RenderCore { namespace Assets
             result._doubleSided = override._doubleSided;
             result._flag |= RenderStateSet::Flag::DoubleSided;
         }
-        if (override._flag & RenderStateSet::Flag::Wireframe) {
-            result._wireframe = override._wireframe;
-            result._flag |= RenderStateSet::Flag::Wireframe;
+        if (override._flag & RenderStateSet::Flag::SmoothLines) {
+            result._smoothLines = override._smoothLines;
+            result._flag |= RenderStateSet::Flag::SmoothLines;
+        }
+        if (override._flag & RenderStateSet::Flag::LineWeight) {
+            result._lineWeight = override._lineWeight;
+            result._flag |= RenderStateSet::Flag::LineWeight;
         }
         if (override._flag & RenderStateSet::Flag::WriteMask) {
             result._writeMask = override._writeMask;
@@ -520,10 +534,18 @@ namespace RenderCore { namespace Assets
         return *this;
     }
 
-    RenderStateSet& RenderStateSet::SetWireframe(bool newValue)
+    RenderStateSet& RenderStateSet::SetSmoothLines(bool newValue)
     {
-        _wireframe = newValue;
-        _flag |= Flag::Wireframe;
+        _smoothLines = newValue;
+        _flag |= Flag::SmoothLines;
+        return *this;
+    }
+
+    RenderStateSet& RenderStateSet::SetLineWeight(float newValue)
+    {
+        assert(!(_flag & Flag::DepthBias));
+        _lineWeight = newValue;
+        _flag |= Flag::LineWeight;
         return *this;
     }
 
@@ -557,7 +579,9 @@ namespace RenderCore { namespace Assets
 
     RenderStateSet& RenderStateSet::SetDepthBias(int newValue)
     {
+        assert(!(_flag & Flag::LineWeight));
         _depthBias = newValue;
+        _flag |= Flag::DepthBias;
         return *this;
     }
 

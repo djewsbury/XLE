@@ -47,11 +47,13 @@ namespace RenderCore { namespace Metal_Vulkan
         class VulkanRasterizerState : public VkPipelineRasterizationStateCreateInfo
         {
         public:
+            void MakeCompatible(ObjectFactory&);
             VulkanRasterizerState(const RasterizationDesc& desc = {});
             VulkanRasterizerState(const VulkanRasterizerState&);
             VulkanRasterizerState& operator=(const VulkanRasterizerState&);
         private:
             VkPipelineRasterizationConservativeStateCreateInfoEXT _conservativeRasterExt;
+            VkPipelineRasterizationLineStateCreateInfoEXT _lineExt;
         };
 
             ////////////////////////////////////////////////////////////////////////////////////////////////
