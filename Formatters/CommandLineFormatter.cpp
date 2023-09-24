@@ -138,6 +138,11 @@ namespace Formatters
 	{
 		// Windows does a weird way of combining a argv / argc set into a single string.. but it makes things
 		// super complex for quotation marks
+		while (!str.IsEmpty() && (*str.begin() == ' ' || *str.begin() == '\t')) ++str._start;
+
+		if (str.IsEmpty() || str[0] != '"')
+			return CommandLineFormatter<CharType>(str);			// in this mode, there is no surrounding quotation marks, just the command line as is
+
 		auto workingSpace = std::make_shared<std::vector<CharType>>();
 		workingSpace->resize(str.size());
 		CharType* workingSpaceIterator = AsPointer(workingSpace->begin());
