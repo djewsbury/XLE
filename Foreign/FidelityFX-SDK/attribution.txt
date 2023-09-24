@@ -1,0 +1,9 @@
+
+This folder part of the AMD FidelityFX SDK
+src: https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK
+commit: d7531ae47d8b36a5d4025663e731a47a38be882f
+
+Licensed as per https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/main/LICENSE.txt
+
+Not submodule'd because it's a rather large git repo and we only want a little bit of it.
+
