@@ -82,6 +82,12 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~IExposure();
 	};
 
+	struct ToneMapIntegrationParams
+	{
+		bool _readFromAAOutput = false;
+		bool _outputToPostProcessing = false;
+	};
+
 	class ToneMapAcesOperator : public IBloom, public IExposure, public std::enable_shared_from_this<ToneMapAcesOperator>
 	{
 	public:
@@ -102,16 +108,10 @@ namespace RenderCore { namespace LightingEngine
 			const Techniques::FrameBufferTarget& fbTarget);
 		void CompleteInitialization(IThreadContext& threadContext);
 
-		struct IntegrationParams
-		{
-			bool _readFromAAOutput = false;
-			bool _outputToPostProcessing = false;
-		};
-
 		ToneMapAcesOperator(
 			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 			const ToneMapAcesOperatorDesc& desc,
-			const IntegrationParams& integrationParams);
+			const ToneMapIntegrationParams& integrationParams);
 		~ToneMapAcesOperator();
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _toneMap;
@@ -131,7 +131,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _alignedParamsSize = 0, _alignedBrightPassParamsSize = 0;
 		unsigned _secondStageConstructionState = 0;		// debug usage only
 		ToneMapAcesOperatorDesc _desc;
-		IntegrationParams _integrationParams;
+		ToneMapIntegrationParams _integrationParams;
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		::Assets::DependencyValidation _depVal;
 		unsigned _brightPassMipCountCount = 0;
@@ -165,8 +165,6 @@ namespace RenderCore { namespace LightingEngine
 	class CopyToneMapOperator : public std::enable_shared_from_this<CopyToneMapOperator>
 	{
 	public:
-		void Execute(Techniques::ParsingContext& parsingContext, IResourceView& hdrInput);
-
 		RenderStepFragmentInterface CreateFragment(const FrameBufferProperties& fbProps);
 		void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps);
 
@@ -177,12 +175,16 @@ namespace RenderCore { namespace LightingEngine
 			const Techniques::FrameBufferTarget& fbTarget);
 		void CompleteInitialization(IThreadContext& threadContext);
 
-		CopyToneMapOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool);
+		CopyToneMapOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool, const ToneMapIntegrationParams&);
 		~CopyToneMapOperator();
 	private:
 		std::shared_ptr<Techniques::IShaderOperator> _shader;
+		std::shared_ptr<Techniques::IComputeShaderOperator> _computeShader;
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		unsigned _secondStageConstructionState = 0;		// debug usage only
+		ToneMapIntegrationParams _integrationParams;
+
+		bool UsePixelShaderPath() const;
 	};
 
 }}

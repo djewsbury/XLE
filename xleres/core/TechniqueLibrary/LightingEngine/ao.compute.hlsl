@@ -2,10 +2,10 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "xleres/TechniqueLibrary/Math/ProjectionMath.hlsl"
-#include "xleres/TechniqueLibrary/Math/Misc.hlsl"
-#include "xleres/TechniqueLibrary/Framework/gbuffer.hlsl"
-#include "xleres/Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
+#include "../Math/ProjectionMath.hlsl"
+#include "../Math/Misc.hlsl"
+#include "../Framework/gbuffer.hlsl"
+#include "../../Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
 RWTexture2D<float> Working;
 Texture2D<float> FullResolutionDepths;

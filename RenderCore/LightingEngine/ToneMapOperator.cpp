@@ -392,7 +392,7 @@ namespace RenderCore { namespace LightingEngine
 	ToneMapAcesOperator::ToneMapAcesOperator(
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		const ToneMapAcesOperatorDesc& desc,
-		const IntegrationParams& integrationParams)
+		const ToneMapIntegrationParams& integrationParams)
 	: _secondStageConstructionState(0)
 	, _desc(desc), _integrationParams(integrationParams)
 	{
@@ -403,8 +403,8 @@ namespace RenderCore { namespace LightingEngine
 		_brightPassSmallRadius = _desc._enablePreciseBloom ? 3.5f : 0.f;
 
 		const auto cbAlignmentRules = _pool->GetDevice()->GetDeviceLimits()._constantBufferOffsetAlignment;
-		_alignedParamsSize = CeilToMultiple(sizeof(CB_Params), cbAlignmentRules);
-		_alignedBrightPassParamsSize = CeilToMultiple(sizeof(CB_BrightPassParams), cbAlignmentRules);
+		_alignedParamsSize = (unsigned)CeilToMultiple(sizeof(CB_Params), cbAlignmentRules);
+		_alignedBrightPassParamsSize = (unsigned)CeilToMultiple(sizeof(CB_BrightPassParams), cbAlignmentRules);
 
 		_paramsData.resize(_alignedParamsSize + _alignedBrightPassParamsSize);
 
@@ -892,57 +892,82 @@ namespace RenderCore { namespace LightingEngine
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void CopyToneMapOperator::Execute(Techniques::ParsingContext& parsingContex, IResourceView& hdrInput)
-	{
-		assert(_secondStageConstructionState == 2);
-		assert(_shader);
-
-		ResourceViewStream us { hdrInput };
-		_shader->Draw(parsingContex, us);
-	}
-
 	RenderStepFragmentInterface CopyToneMapOperator::CreateFragment(const FrameBufferProperties& fbProps)
 	{
-		RenderStepFragmentInterface fragment { RenderCore::PipelineType::Graphics };
-		auto hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
-		auto ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
+		RenderStepFragmentInterface fragment { UsePixelShaderPath() ? RenderCore::PipelineType::Graphics : RenderCore::PipelineType::Compute };
+		RenderCore::Techniques::FrameBufferDescFragment::DefineAttachmentHelper hdrInput, ldrOutput;
+		if (_integrationParams._outputToPostProcessing) {
+			ldrOutput = fragment.DefineAttachment("PostProcessInput"_h).NoInitialState().FinalState(BindFlag::UnorderedAccess);
+		} else
+			ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
+		if (_integrationParams._readFromAAOutput) {
+			hdrInput = fragment.DefineAttachment("AAOutput"_h).Discard();
+		} else
+			hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
-		subpass.AppendOutput(ldrOutput);
-		subpass.AppendInput(hdrInput);
 		subpass.SetName("tonemap");
+		
+		if (UsePixelShaderPath()) {
+			subpass.AppendOutput(ldrOutput);
+			subpass.AppendInput(hdrInput);
+			fragment.AddSubpass(
+				std::move(subpass),
+				[op=this](SequenceIterator& iterator) {
+					assert(op->_secondStageConstructionState == 2);
+					assert(op->_shader);
+					ResourceViewStream us { *iterator._rpi.GetInputAttachmentView(0) };
+					op->_shader->Draw(*iterator._parsingContext, us);
+				});
+		} else {
+			subpass.AppendNonFrameBufferAttachmentView(ldrOutput, BindFlag::UnorderedAccess, {TextureViewDesc::Aspect::ColorLinear});
+			subpass.AppendNonFrameBufferAttachmentView(hdrInput, BindFlag::ShaderResource, {TextureViewDesc::Aspect::ColorLinear});
+			fragment.AddSubpass(
+				std::move(subpass),
+				[op=this](SequenceIterator& iterator) {
+					assert(op->_secondStageConstructionState == 2);
+					assert(op->_computeShader);
+					{
+						Metal::BarrierHelper barrierHelper { *iterator._threadContext };
+						barrierHelper.Add(
+							*iterator._rpi.GetNonFrameBufferAttachmentView(0)->GetResource(),
+							Metal::BarrierResourceUsage::NoState(),
+							{BindFlag::UnorderedAccess, ShaderStage::Compute});
+						barrierHelper.Add(
+							*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(),
+							{BindFlag::UnorderedAccess, ShaderStage::Compute},
+							{BindFlag::UnorderedAccess, ShaderStage::Compute});
+					}
+					ResourceViewStream us { *iterator._rpi.GetNonFrameBufferAttachmentView(0), *iterator._rpi.GetNonFrameBufferAttachmentView(1) };
+					UInt2 outputDims { iterator._parsingContext->GetFrameBufferProperties()._width, iterator._parsingContext->GetFrameBufferProperties()._height };
+					const unsigned groupSize = 8;
+					op->_computeShader->Dispatch(*iterator._parsingContext, (outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1, us);
+				});
+		}
 
-		fragment.AddSubpass(
-			std::move(subpass),
-			[op=this](SequenceIterator& iterator) {
-				op->Execute(
-					*iterator._parsingContext,
-					*iterator._rpi.GetInputAttachmentView(0));
-			});
 		return fragment;
 	}
 
 	void CopyToneMapOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps)
 	{
 		const bool precisionTargets = false;
-		UInt2 fbSize{fbProps._width, fbProps._height};
-		Techniques::PreregisteredAttachment attachments[] {
+		UInt2 fbSize { fbProps._width, fbProps._height };
+		stitchingContext.DefineAttachment(
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::InputAttachment,
+					UsePixelShaderPath() ? (BindFlag::RenderTarget | BindFlag::InputAttachment) : (BindFlag::RenderTarget | BindFlag::ShaderResource),
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)),
 				"color-hdr"
-			}
-		};
-		for (const auto& a:attachments)
-			stitchingContext.DefineAttachment(a);
+			});
 	}
 
 	::Assets::DependencyValidation CopyToneMapOperator::GetDependencyValidation() const
 	{
 		assert(_secondStageConstructionState == 2);
-		return _shader->GetDependencyValidation();
+		if (_shader)
+			return _shader->GetDependencyValidation();
+		return _computeShader->GetDependencyValidation();
 	}
 
 	void CopyToneMapOperator::SecondStageConstruction(
@@ -952,32 +977,56 @@ namespace RenderCore { namespace LightingEngine
 		assert(_secondStageConstructionState == 0);
 		_secondStageConstructionState = 1;
 
-		Techniques::PixelOutputStates outputStates;
-		outputStates.Bind(*fbTarget._fbDesc, fbTarget._subpassIdx);
-		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
-		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
-		outputStates.Bind(MakeIteratorRange(blendStates));
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, "SubpassInputAttachment"_h);
-		auto shaderFuture = Techniques::CreateFullViewportOperator(
-			_pool, Techniques::FullViewportOperatorSubType::DisableDepth,
-			BASIC_PIXEL_HLSL ":copy_inputattachment",
-			{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-			outputStates, usi);
-		::Assets::WhenAll(std::move(shaderFuture)).ThenConstructToPromise(
-			std::move(promise),
-			[strongThis=shared_from_this()](auto shader) {
-				assert(strongThis->_secondStageConstructionState == 1);
-				strongThis->_shader = std::move(shader);
-				strongThis->_secondStageConstructionState = 2;
-				return strongThis;
-			});
+		if (UsePixelShaderPath()) {
+
+			Techniques::PixelOutputStates outputStates;
+			outputStates.Bind(*fbTarget._fbDesc, fbTarget._subpassIdx);
+			outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
+			AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
+			outputStates.Bind(MakeIteratorRange(blendStates));
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, "SubpassInputAttachment"_h);
+			auto shaderFuture = Techniques::CreateFullViewportOperator(
+				_pool, Techniques::FullViewportOperatorSubType::DisableDepth,
+				BASIC_PIXEL_HLSL ":copy_inputattachment",
+				{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
+				outputStates, usi);
+			::Assets::WhenAll(std::move(shaderFuture)).ThenConstructToPromise(
+				std::move(promise),
+				[strongThis=shared_from_this()](auto shader) {
+					assert(strongThis->_secondStageConstructionState == 1);
+					strongThis->_shader = std::move(shader);
+					strongThis->_secondStageConstructionState = 2;
+					return strongThis;
+				});
+
+		} else {
+
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, "OutputTexture"_h);
+			usi.BindResourceView(1, "InputTexture"_h);
+			auto shaderFuture = Techniques::CreateComputeOperator(_pool, BASIC_COMPUTE_HLSL ":copy_nonlinearOut", {}, usi);
+			::Assets::WhenAll(std::move(shaderFuture)).ThenConstructToPromise(
+				std::move(promise),
+				[strongThis=shared_from_this()](auto shader) {
+					assert(strongThis->_secondStageConstructionState == 1);
+					strongThis->_computeShader = std::move(shader);
+					strongThis->_secondStageConstructionState = 2;
+					return strongThis;
+				});
+
+		}
 	}
 
 	void CopyToneMapOperator::CompleteInitialization(IThreadContext& threadContext) {}
 
-	CopyToneMapOperator::CopyToneMapOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool)
-	: _pool(std::move(pipelinePool)) {}
+	bool CopyToneMapOperator::UsePixelShaderPath() const
+	{
+		return !_integrationParams._outputToPostProcessing && !_integrationParams._readFromAAOutput;
+	}
+
+	CopyToneMapOperator::CopyToneMapOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool, const ToneMapIntegrationParams& integrationParams)
+	: _pool(std::move(pipelinePool)), _integrationParams(integrationParams) {}
 	CopyToneMapOperator::~CopyToneMapOperator() {}
 
 

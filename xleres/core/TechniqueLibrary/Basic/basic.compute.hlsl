@@ -5,9 +5,11 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../Framework/Binding.hlsl"
+#include "../Utility/Colour.hlsl"
+#include "../../Foreign/ThreadGroupIDSwizzling/ThreadGroupTilingX.hlsl"
 
-RWTexture2D<float4> OutputTexture BIND_NUMERIC_U0;
-Texture2D<float4> InputTexture BIND_NUMERIC_T0;
+RWTexture2D<float4> OutputTexture;
+Texture2D<float4> InputTexture;
 
 [numthreads(8, 8, 1)]
 	void ResampleBilinear(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -48,4 +50,31 @@ Texture2D<float4> InputTexture BIND_NUMERIC_T0;
 	float2 base = float2(floor(inputCoord.x), floor(inputCoord.y));
 	float4 s0 = InputTexture[min(uint2(base)+uint2(0,0), inputDims)];
 	OutputTexture[dispatchThreadId.xy] = s0;
+}
+
+[numthreads(8, 8, 1)]
+	void copy(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+	uint2 textureDims;
+	OutputTexture.GetDimensions(textureDims.x, textureDims.y);
+
+	uint2 threadGroupCounts = uint2((textureDims.x+8-1)/8, (textureDims.y+8-1)/8);
+	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
+	if (all(pixelId < textureDims))
+		OutputTexture[pixelId] = InputTexture[pixelId];
+}
+
+[numthreads(8, 8, 1)]
+	void copy_nonlinearOut(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+	uint2 textureDims;
+	OutputTexture.GetDimensions(textureDims.x, textureDims.y);
+
+	uint2 threadGroupCounts = uint2((textureDims.x+8-1)/8, (textureDims.y+8-1)/8);
+	uint2 pixelId = ThreadGroupTilingX(threadGroupCounts, uint2(8, 8), 8, groupThreadId.xy, groupId.xy);
+	if (all(pixelId < textureDims)) {
+		float4 col = InputTexture[pixelId];
+		col.rgb = LinearToSRGB_Formal(col.rgb);
+		OutputTexture[pixelId] = col;
+	}
 }

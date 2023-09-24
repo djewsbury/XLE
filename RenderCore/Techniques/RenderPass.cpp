@@ -2779,7 +2779,7 @@ namespace RenderCore { namespace Techniques
                         newState->_firstAccessInitialLayout = *interfaceAttachment._initialLayout;
                 }
 
-                if (directionFlags & DirectionFlags::WritesData) {
+                if ((directionFlags & DirectionFlags::WritesData) || result._pipelineType == PipelineType::Compute) {      // We don't know for sure when a compute shader writes to an attachment -- so we have to assume it does
                     newState->_containsDataForSemantic = interfaceAttachment.GetOutputSemanticBinding();
                     newState->_lastWriteSemantic = interfaceAttachment.GetOutputSemanticBinding();
                 }

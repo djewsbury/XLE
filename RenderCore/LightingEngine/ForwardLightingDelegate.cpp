@@ -723,13 +723,14 @@ namespace RenderCore { namespace LightingEngine
 						captures->_taaOperator = std::make_shared<TAAOperator>(pipelinePool, *digest._taa);
 					if (digest._postProcess)
 						captures->_postProcessOperator = std::make_shared<PostProcessOperator>(pipelinePool, *digest._postProcess);
+
+					ToneMapIntegrationParams toneMapIntegrationParams;
+					toneMapIntegrationParams._readFromAAOutput = digest._taa.has_value();
+					toneMapIntegrationParams._outputToPostProcessing = digest._postProcess.has_value();
 					if (digest._tonemapAces) {
-						ToneMapAcesOperator::IntegrationParams integrationParams;
-						integrationParams._readFromAAOutput = digest._taa.has_value();
-						integrationParams._outputToPostProcessing = digest._postProcess.has_value();
-						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces, integrationParams);
+						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces, toneMapIntegrationParams);
 					} else {
-						captures->_copyToneMapOperator = std::make_shared<CopyToneMapOperator>(pipelinePool);
+						captures->_copyToneMapOperator = std::make_shared<CopyToneMapOperator>(pipelinePool, toneMapIntegrationParams);
 					}
 
 					if (digest._skyTextureProcessor) {

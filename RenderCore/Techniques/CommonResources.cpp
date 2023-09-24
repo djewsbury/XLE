@@ -176,6 +176,9 @@ namespace RenderCore { namespace Techniques
             case "SSRDebug"_h: return "SSRDebug";
             case "AAOutput"_h: return "AAOutput";
             case "AAOutput"_h+1: return "AAOutputPrev";
+            case "PostProcessInput"_h: return "PostProcessInput";
+            case "brightpass-working"_h: return "brightpass-working";
+            case "brightpass-highres-blur-working"_h: return "brightpass-highres-blur-working";
             default: return nullptr;
             }
         }
