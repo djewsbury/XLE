@@ -39,6 +39,9 @@ namespace RenderCore { namespace Techniques
 		virtual void Dispatch(ParsingContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 		virtual void Dispatch(IThreadContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
 
+		virtual void Dispatch(ParsingContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Dispatch(IThreadContext&, unsigned countX, unsigned countY, unsigned countZ, const UniformsStream&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+
 		struct DispatchGroupHelper;
 		virtual DispatchGroupHelper BeginDispatches(ParsingContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}, uint64_t pushConstantsBinding = 0) = 0;
 		virtual DispatchGroupHelper BeginDispatches(IThreadContext&, const UniformsStream&, IteratorRange<const IDescriptorSet* const*> = {}, uint64_t pushConstantsBinding = 0) = 0;
@@ -125,6 +128,29 @@ namespace RenderCore { namespace Techniques
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi);
+
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		StringSection<> computeShader,
+		const ParameterBox& selectors,
+		const UniformsStreamInterface& usi0,
+		const UniformsStreamInterface& usi1);
+
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		StringSection<> computeShader,
+		const ParameterBox& selectors,
+		StringSection<> pipelineLayoutAsset,
+		const UniformsStreamInterface& usi0,
+		const UniformsStreamInterface& usi1);
+
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		StringSection<> computeShader,
+		const ParameterBox& selectors,
+		const UniformsStreamInterface& usi0,
+		const UniformsStreamInterface& usi1);
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../Format.h"
+#include "../UniformsStream.h"
 #include <memory>
 #include <optional>
 
@@ -14,14 +15,13 @@ namespace std { template<typename T> class promise; }
 namespace RenderCore { namespace LightingEngine 
 {
 	class RenderStepFragmentInterface;
+	class ComputeAttachmentUniformsTracker;
 	struct ChainedOperatorDesc;
 
 	struct SharpenOperatorDesc
 	{
 		float _amount = 0.8f;
 	};
-
-	class FragmentAttachmentUniformsHelper;
 
 	class PostProcessOperator : public std::enable_shared_from_this<PostProcessOperator>
 	{
@@ -49,7 +49,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
 		unsigned _secondStageConstructionState = 0;		// debug usage only
 		CombinedDesc _desc;
-		std::unique_ptr<FragmentAttachmentUniformsHelper> _uniformsHelper;
+		std::unique_ptr<ComputeAttachmentUniformsTracker> _uniformsHelper;
+		UniformsStreamInterface _attachmentUsi;
 	};
 
 }}

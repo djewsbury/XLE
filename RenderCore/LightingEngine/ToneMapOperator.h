@@ -105,6 +105,7 @@ namespace RenderCore { namespace LightingEngine
 		struct IntegrationParams
 		{
 			bool _readFromAAOutput = false;
+			bool _outputToPostProcessing = false;
 		};
 
 		ToneMapAcesOperator(

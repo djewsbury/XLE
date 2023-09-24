@@ -44,6 +44,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t _hashCode = 0;
 		std::string _name;
 
+		uint64_t GetHash() const { return _hashCode; }
 		PipelineLayoutOptions() = default;
 		PipelineLayoutOptions(std::shared_ptr<ICompiledPipelineLayout>);
 		PipelineLayoutOptions(std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout>, uint64_t, std::string);

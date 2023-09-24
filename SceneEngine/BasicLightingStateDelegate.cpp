@@ -1224,7 +1224,14 @@ namespace SceneEngine
         RenderCore::LightingEngine::SharpenOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
-        // no useful properties yet
+        switch (propertyNameHash) {
+        case "Amount"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._amount = *value;
+                return true;
+            }
+            break;
+        }
         return false;
     }
 

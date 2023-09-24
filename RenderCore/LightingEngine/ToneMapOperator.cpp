@@ -264,9 +264,13 @@ namespace RenderCore { namespace LightingEngine
 		_samples = fbProps._samples;
 		RenderStepFragmentInterface result{PipelineType::Compute};
 
-		// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
+		
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
+		if (_integrationParams._outputToPostProcessing) {
+			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("PostProcessInput"_h).NoInitialState().FinalState(BindFlag::UnorderedAccess), BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
+		} else
+			// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
+			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
 		if (_integrationParams._readFromAAOutput) {
 			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("AAOutput"_h).Discard());
 		} else
@@ -296,7 +300,7 @@ namespace RenderCore { namespace LightingEngine
 
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=shared_from_this(), brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx](SequenceIterator& iterator) {
+			[op=shared_from_this(), brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx, outputToPP=_integrationParams._outputToPostProcessing](SequenceIterator& iterator) {
 				auto& ldrOutput = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				auto& hdrInput = *iterator._rpi.GetNonFrameBufferAttachmentView(1);
 				IResourceView* brightPassHighResBlurWorkingUAV = nullptr, *brightPassHighResBlurWorkingSRV = nullptr, *brightPassMipChainSRV = nullptr;
@@ -329,7 +333,8 @@ namespace RenderCore { namespace LightingEngine
 					MakeIteratorRange(brightPassMipChainUAV, brightPassMipChainUAV+op->_brightPassMipCountCount), brightPassMipChainSRV,
 					brightPassHighResBlurWorkingUAV, brightPassHighResBlurWorkingSRV);
 
-				Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
+				if (!outputToPP)
+					Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
 			});
 
 		return result;

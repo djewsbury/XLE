@@ -77,5 +77,108 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _firstSubpassIndex;
 	};
 
+	/////////////////////////////////////////////////////////////////////////
+	/// <summary>Utility for setting barriers and binding uniforms for attachments</summary>
+	/// Intended for compute pipelines, since graphics pipelines have more features of the 
+	/// render pass system available to them.
+	class ComputeAttachmentUniformsTracker
+	{
+	public:
+		using AttachmentSemantic = uint64_t;
+		using ShaderUniformName = uint64_t;
+
+		struct AttachmentState
+		{
+			LoadStore _loadStore = LoadStore::Retain;
+			std::optional<BindFlag::BitField> _layout;
+			ShaderStage _shaderStageForBarriers = ShaderStage::Compute;
+
+			AttachmentState(BindFlag::BitField, ShaderStage);
+			AttachmentState(LoadStore, BindFlag::BitField, ShaderStage);
+			AttachmentState(LoadStore);
+			AttachmentState() = default;
+			static AttachmentState NoState();
+		};
+		void ExpectAttachment(AttachmentSemantic, AttachmentState);
+		void Barrier(AttachmentSemantic, AttachmentState);
+		void Discard(AttachmentSemantic);
+
+		void Bind(ShaderUniformName, AttachmentSemantic, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
+		void BindWithBarrier(ShaderUniformName, AttachmentSemantic, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
+		UniformsStreamInterface EndUniformsStream();
+
+		Techniques::FrameBufferDescFragment::SubpassDesc CreateSubpass(RenderStepFragmentInterface& fragmentInterface, const std::string& name);
+
+		struct PassHelper;
+		PassHelper BeginPass(IThreadContext&, Techniques::RenderPassInstance&);
+
+		ComputeAttachmentUniformsTracker();
+	private:
+		struct KnownAttachment
+		{
+			std::optional<AttachmentState> _initialState;
+			std::optional<AttachmentState> _currentState;
+			unsigned _firstViewIdx = ~0u;
+		};
+		std::vector<std::pair<AttachmentSemantic, KnownAttachment>> _knownAttachments;
+
+		struct ViewCfg
+		{
+			unsigned _attachmentIdx;
+			BindFlag::Enum _usage;
+			TextureViewDesc _window;
+		};
+		std::vector<ViewCfg> _views;
+
+		struct WorkingUniformsStream
+		{
+			std::vector<uint64_t> _usi;
+		};
+		std::vector<WorkingUniformsStream> _streams;
+
+		struct Cmd
+		{
+			enum class Type { Barrier, Bind, PrepareUniformsStream };
+			Type _type;
+
+			unsigned _attachmentIdx;
+			AttachmentState _barrierOldState;
+			AttachmentState _barrierNewState;
+
+			unsigned _usiIdx;
+			unsigned _viewIdx;
+		};
+		std::vector<Cmd> _cmdList;
+		unsigned _usiCountMax = 0;
+
+		bool _frozen = false;
+	};
+
+	struct ComputeAttachmentUniformsTracker::PassHelper
+	{
+	public:
+		UniformsStream GetNextUniformsStream();
+		void EndPass();
+
+		~PassHelper();
+	private:
+		PassHelper(
+			ComputeAttachmentUniformsTracker& parent,
+			IThreadContext& threadContext,
+			Techniques::RenderPassInstance& rpi);
+		PassHelper(PassHelper&&) = delete;
+		PassHelper& operator=(PassHelper&&) = delete;
+		friend class ComputeAttachmentUniformsTracker;
+
+		std::vector<const IResourceView*> _srvs;
+		Techniques::RenderPassInstance* _rpi;
+		IThreadContext* _threadContext;
+		ComputeAttachmentUniformsTracker* _parent;
+		std::vector<Cmd>::iterator _cmdListIterator;
+		bool _ended = false;
+
+		void AdvanceCommands();
+	};
+
 }}
 

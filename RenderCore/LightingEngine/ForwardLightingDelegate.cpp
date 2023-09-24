@@ -574,7 +574,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		// Build hierarchical depths
-		auto hierachicalDepthsReg = mainSequence.CreateStep_RunFragments(_hierarchicalDepthsOperator->CreateFragment(fbProps));
+		auto hierarchicalDepthsReg = mainSequence.CreateStep_RunFragments(_hierarchicalDepthsOperator->CreateFragment(fbProps));
 
 		// Light tiling & configure lighting descriptors
 		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateInitFragment(fbProps));
@@ -633,7 +633,7 @@ namespace RenderCore { namespace LightingEngine
 			ops->_futureSSR = Internal::SecondStageConstruction(*_ssrOperator, Internal::AsFrameBufferTarget(mainSequence, ssrFragmentReg));
 		if (_ssaoOperator)
 			ops->_futureSSAO = Internal::SecondStageConstruction(*_ssaoOperator, Internal::AsFrameBufferTarget(mainSequence, ssaoFragmentReg));
-		ops->_futureHierarchicalDepths = Internal::SecondStageConstruction(*_hierarchicalDepthsOperator, Internal::AsFrameBufferTarget(mainSequence, hierachicalDepthsReg));
+		ops->_futureHierarchicalDepths = Internal::SecondStageConstruction(*_hierarchicalDepthsOperator, Internal::AsFrameBufferTarget(mainSequence, hierarchicalDepthsReg));
 		if (_taaOperator)
 			ops->_futureTAA = Internal::SecondStageConstruction(*_taaOperator, Internal::AsFrameBufferTarget(mainSequence, taaFragmentReg));
 		if (_postProcessOperator)
@@ -726,6 +726,7 @@ namespace RenderCore { namespace LightingEngine
 					if (digest._tonemapAces) {
 						ToneMapAcesOperator::IntegrationParams integrationParams;
 						integrationParams._readFromAAOutput = digest._taa.has_value();
+						integrationParams._outputToPostProcessing = digest._postProcess.has_value();
 						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces, integrationParams);
 					} else {
 						captures->_copyToneMapOperator = std::make_shared<CopyToneMapOperator>(pipelinePool);
