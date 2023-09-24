@@ -18,7 +18,7 @@ namespace RenderCore { namespace LightingEngine
 
 	struct SharpenOperatorDesc
 	{
-		float _amount;
+		float _amount = 0.8f;
 	};
 
 	class FragmentAttachmentUniformsHelper;

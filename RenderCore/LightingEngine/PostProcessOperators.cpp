@@ -16,6 +16,10 @@
 #include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
 
+#define FFX_CPU 1
+#include "../../Foreign/FidelityFX-SDK/sdk/include/FidelityFX/gpu/ffx_core.h"
+#include "../../Foreign/FidelityFX-SDK/sdk/include/FidelityFX/gpu/cas/ffx_cas.h"
+
 using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine 
@@ -384,6 +388,55 @@ namespace RenderCore { namespace LightingEngine
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	RenderStepFragmentInterface PostProcessOperator::CreateFragment(const FrameBufferProperties& fbProps)
+	{
+		assert(_secondStageConstructionState == 0);
+		RenderStepFragmentInterface result{PipelineType::Compute};
+
+		assert(!_uniformsHelper);
+		_uniformsHelper = std::make_unique<FragmentAttachmentUniformsHelper>();
+		_uniformsHelper->ExpectAttachment("PostProcessInput"_h, {BindFlag::RenderTarget, ShaderStage::Pixel});
+
+		_uniformsHelper->BindWithBarrier("Input"_h, "PostProcessInput"_h);
+		_uniformsHelper->BindWithBarrier("Output"_h, Techniques::AttachmentSemantics::ColorLDR, BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
+		_uniformsHelper->PrepareUniformsStream();
+		_uniformsHelper->Barrier(Techniques::AttachmentSemantics::ColorLDR, {BindFlag::RenderTarget, ShaderStage::Pixel});
+		_uniformsHelper->Discard("PostProcessInput"_h);
+
+		result.AddSubpass(
+			_uniformsHelper->CreateSubpass(result, "post-process"),
+			[op=shared_from_this()](SequenceIterator& iterator) {
+				auto pass = op->_uniformsHelper->BeginPass(iterator._parsingContext->GetThreadContext(), iterator._rpi);
+
+				auto uniforms = pass.GetNextUniformsStream();
+
+				struct ControlUniforms
+				{
+					FfxUInt32x4 _casConstants0;
+					FfxUInt32x4 _casConstants1;
+				} controlUniforms;
+
+				auto& parsingContext = *iterator._parsingContext;
+				UInt2 outputDims { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height };
+				if (op->_desc._sharpen) {
+					ffxCasSetup(
+						controlUniforms._casConstants0,
+						controlUniforms._casConstants1,
+						op->_desc._sharpen->_amount,
+						(float)outputDims[0], (float)outputDims[1],
+						(float)outputDims[0], (float)outputDims[1]);
+				}
+
+				const unsigned groupSize = 16;
+				op->_shader->Dispatch(
+					parsingContext,
+					(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
+					uniforms);
+			});
+
+		return result;
+	}
+
 	void PostProcessOperator::SecondStageConstruction(
 		std::promise<std::shared_ptr<PostProcessOperator>>&& promise,
 		const Techniques::FrameBufferTarget& fbTarget)
@@ -423,40 +476,6 @@ namespace RenderCore { namespace LightingEngine
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], AsTypelessFormat(stitchingContext.GetSystemAttachmentFormat(Techniques::SystemAttachmentFormat::LDRColor)))),
 				"post-process-input"
 			});
-	}
-
-	RenderStepFragmentInterface PostProcessOperator::CreateFragment(const FrameBufferProperties& fbProps)
-	{
-		assert(_secondStageConstructionState == 0);
-		RenderStepFragmentInterface result{PipelineType::Compute};
-
-		assert(!_uniformsHelper);
-		_uniformsHelper = std::make_unique<FragmentAttachmentUniformsHelper>();
-		_uniformsHelper->ExpectAttachment("PostProcessInput"_h, {BindFlag::RenderTarget, ShaderStage::Pixel});
-
-		_uniformsHelper->BindWithBarrier("Input"_h, "PostProcessInput"_h);
-		_uniformsHelper->BindWithBarrier("Output"_h, Techniques::AttachmentSemantics::ColorLDR, BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
-		_uniformsHelper->PrepareUniformsStream();
-		_uniformsHelper->Barrier(Techniques::AttachmentSemantics::ColorLDR, {BindFlag::RenderTarget, ShaderStage::Pixel});
-		_uniformsHelper->Discard("PostProcessInput"_h);
-
-		result.AddSubpass(
-			_uniformsHelper->CreateSubpass(result, "post-process"),
-			[op=shared_from_this()](SequenceIterator& iterator) {
-				auto pass = op->_uniformsHelper->BeginPass(iterator._parsingContext->GetThreadContext(), iterator._rpi);
-
-				auto uniforms = pass.GetNextUniformsStream();
-
-				auto& parsingContext = *iterator._parsingContext;
-				UInt2 outputDims { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height };
-				const unsigned groupSize = 8;
-				op->_shader->Dispatch(
-					parsingContext,
-					(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
-					uniforms);
-			});
-
-		return result;
 	}
 
 	::Assets::DependencyValidation PostProcessOperator::GetDependencyValidation() const
