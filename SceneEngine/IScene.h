@@ -94,6 +94,7 @@ namespace SceneEngine
         void SetOperator(const RenderCore::LightingEngine::AmbientOcclusionOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::TAAOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::SharpenOperatorDesc&);
+        void SetOperator(const RenderCore::LightingEngine::FilmGrainDesc&);
 
         IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> GetLightOperators() const { return _lightResolveOperators; }
         IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> GetShadowOperators() const { return _shadowResolveOperators; }
@@ -120,6 +121,7 @@ namespace SceneEngine
         ChainingTemplate<RenderCore::LightingEngine::AmbientOcclusionOperatorDesc> _ssao;
         ChainingTemplate<RenderCore::LightingEngine::TAAOperatorDesc> _taaOperator;
         ChainingTemplate<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
+        ChainingTemplate<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
         RenderCore::LightingEngine::ChainedOperatorDesc* _firstChainedOperator = nullptr;
 
         template<typename T> void AddToOperatorList(T& op);

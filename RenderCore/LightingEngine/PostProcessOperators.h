@@ -20,7 +20,12 @@ namespace RenderCore { namespace LightingEngine
 
 	struct SharpenOperatorDesc
 	{
-		float _amount = 0.8f;
+		float _amount = 0.4f;
+	};
+
+	struct FilmGrainDesc
+	{
+		float _strength = 0.07f;
 	};
 
 	class PostProcessOperator : public std::enable_shared_from_this<PostProcessOperator>
@@ -37,6 +42,7 @@ namespace RenderCore { namespace LightingEngine
 		struct CombinedDesc
 		{
 			std::optional<SharpenOperatorDesc> _sharpen;
+			std::optional<FilmGrainDesc> _filmGrain;
 		};
 		static std::optional<CombinedDesc> MakeCombinedDesc(const ChainedOperatorDesc* descChain);
 
@@ -51,6 +57,7 @@ namespace RenderCore { namespace LightingEngine
 		CombinedDesc _desc;
 		std::unique_ptr<ComputeAttachmentUniformsTracker> _uniformsHelper;
 		UniformsStreamInterface _attachmentUsi;
+		std::shared_ptr<IResourceView> _noise;
 	};
 
 }}

@@ -45,6 +45,7 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::AmbientOcclusionOperatorDesc> _ssao;
 		ObjectTable<RenderCore::LightingEngine::TAAOperatorDesc> _taaOperator;
 		ObjectTable<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
+		ObjectTable<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
 
 		template<typename Formatter>
 			void Deserialize(Formatter& fmttr) 
@@ -100,6 +101,11 @@ namespace SceneEngine
 				case "Sharpen"_h:
 					RequireBeginElement(fmttr);
 					_sharpenOperator.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+					break;
+				case "FilmGrain"_h:
+					RequireBeginElement(fmttr);
+					_filmGrainOperator.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
 				case "Sky"_h:

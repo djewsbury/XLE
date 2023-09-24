@@ -11,8 +11,10 @@
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/CommonBindings.h"
+#include "../Techniques/DeferredShaderResource.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 
 #define FFX_CPU 1
@@ -25,6 +27,20 @@ namespace RenderCore { namespace LightingEngine
 {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	inline float CalculateHaltonNumber(unsigned index, unsigned base)
+	{
+		// See https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler
+		// This implementation from AMD's capsaicin (MIT license). Note not bothering with the reverse bit trick for base 2
+		float f = 1.0f, result = 0.0f;
+		for (unsigned i = index; i > 0;)
+		{
+			f /= base;
+			result = result + f * (i % base);
+			i = (unsigned)(i / (float)base);
+		}
+		return result;
+	}
 
 	RenderStepFragmentInterface PostProcessOperator::CreateFragment(const FrameBufferProperties& fbProps)
 	{
@@ -50,7 +66,11 @@ namespace RenderCore { namespace LightingEngine
 				{
 					FfxUInt32x4 _casConstants0;
 					FfxUInt32x4 _casConstants1;
+					UInt4 _noiseUniforms;
 				} controlUniforms;
+
+				UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
+				IResourceView* srvs[] = { nullptr };
 
 				auto& parsingContext = *iterator._parsingContext;
 				UInt2 outputDims { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height };
@@ -63,12 +83,20 @@ namespace RenderCore { namespace LightingEngine
 						(float)outputDims[0], (float)outputDims[1]);
 				}
 
+				if (op->_desc._filmGrain) {
+					unsigned jitteringIndex = (iterator.GetFrameToFrameProperties()._frameIdx + 17) % 73;		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
+					controlUniforms._noiseUniforms[0] = unsigned(CalculateHaltonNumber(jitteringIndex + 1, 2) * 256);
+					controlUniforms._noiseUniforms[1] = unsigned(CalculateHaltonNumber(jitteringIndex + 1, 3) * 256);
+					controlUniforms._noiseUniforms[2] = *(uint32_t*)&op->_desc._filmGrain->_strength;
+					srvs[0] = op->_noise.get();
+				}
+
 				const unsigned groupSize = 16;
 				op->_shader->Dispatch(
 					parsingContext,
 					(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
 					pass.GetNextUniformsStream(),
-					ImmediateDataStream { controlUniforms });
+					UniformsStream { srvs, immDatas });
 			});
 
 		return result;
@@ -84,8 +112,10 @@ namespace RenderCore { namespace LightingEngine
 
 		ParameterBox selectors;
 		selectors.SetParameter("SHARPEN", _desc._sharpen.has_value());
+		selectors.SetParameter("FILM_GRAIN", _desc._filmGrain.has_value());
 		UniformsStreamInterface nonAttachmentUsi;
 		nonAttachmentUsi.BindImmediateData(0, "ControlUniforms"_h);
+		nonAttachmentUsi.BindResourceView(0, "NoiseTexture"_h);
 
 		auto shader = Techniques::CreateComputeOperator(
 			_pool,
@@ -95,14 +125,32 @@ namespace RenderCore { namespace LightingEngine
 			_attachmentUsi,
 			nonAttachmentUsi);
 
-		::Assets::WhenAll(shader).ThenConstructToPromise(
-			std::move(promise),
-			[strongThis = shared_from_this()](auto shader) {
-				assert(strongThis->_secondStageConstructionState == 1);
-				strongThis->_shader = std::move(shader);
-				strongThis->_secondStageConstructionState = 2;
-				return strongThis;
-			});
+		if (!_desc._filmGrain) {
+
+			::Assets::WhenAll(shader).ThenConstructToPromise(
+				std::move(promise),
+				[strongThis = shared_from_this()](auto shader) {
+					assert(strongThis->_secondStageConstructionState == 1);
+					strongThis->_shader = std::move(shader);
+					strongThis->_secondStageConstructionState = 2;
+					return strongThis;
+				});
+
+		} else {
+
+			auto balancedNoiseFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
+
+			::Assets::WhenAll(shader, balancedNoiseFuture).ThenConstructToPromise(
+				std::move(promise),
+				[strongThis = shared_from_this()](auto shader, auto noise) {
+					assert(strongThis->_secondStageConstructionState == 1);
+					strongThis->_shader = std::move(shader);
+					strongThis->_noise = noise->GetShaderResource();
+					strongThis->_secondStageConstructionState = 2;
+					return strongThis;
+				});
+
+		 }
 	}
 
 	void PostProcessOperator::PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps)
@@ -133,6 +181,11 @@ namespace RenderCore { namespace LightingEngine
 			switch(descChain->_structureType) {
 			case TypeHashCode<SharpenOperatorDesc>:
 				result._sharpen = Internal::ChainedOperatorCast<SharpenOperatorDesc>(*descChain);
+				foundSomething = true;
+				break;
+
+			case TypeHashCode<FilmGrainDesc>:
+				result._filmGrain = Internal::ChainedOperatorCast<FilmGrainDesc>(*descChain);
 				foundSomething = true;
 				break;
 			}

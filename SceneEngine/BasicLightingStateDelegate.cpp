@@ -294,6 +294,13 @@ namespace SceneEngine
             cfg.SetOperator(_operatorResolveContext._sharpenOperator._objects[0].second);
         }
 
+        if (!_operatorResolveContext._filmGrainOperator._objects.empty()) {
+            if (_operatorResolveContext._filmGrainOperator._objects.size() != 1)
+                Throw(std::runtime_error("Only one film grain operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._filmGrainOperator._objects[0].second);
+        }
+
         if (!_operatorResolveContext._forwardLightingOperators._objects.empty()) {
             if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1 || !_operatorResolveContext._deferredLightingOperators._objects.empty() || !_operatorResolveContext._utilityLightingOperator._objects.empty())
                 Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
@@ -626,6 +633,12 @@ namespace SceneEngine
     {
         _sharpenOperator._desc = operatorDesc;
         AddToOperatorList(_sharpenOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::FilmGrainDesc& operatorDesc)
+    {
+        _filmGrainOperator._desc = operatorDesc;
+        AddToOperatorList(_filmGrainOperator);
     }
 
     void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::SkyOperatorDesc& operatorDesc)
@@ -1228,6 +1241,21 @@ namespace SceneEngine
         case "Amount"_h:
             if (auto value = ConvertOrCast<float>(data, type)) {
                 desc._amount = *value;
+                return true;
+            }
+            break;
+        }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::FilmGrainDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        switch (propertyNameHash) {
+        case "Strength"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._strength = *value;
                 return true;
             }
             break;
