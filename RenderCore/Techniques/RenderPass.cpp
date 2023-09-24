@@ -2656,6 +2656,10 @@ namespace RenderCore { namespace Techniques
             workingAttachments._attachments.push_back(WorkingAttachmentContext::Attachment{ preregisteredInputs[c] });
         }
 
+        // We only care about the final/initial layout not matching when merging together fragments for compute shaders
+        // This is because Graphics renderpasses will just switch the attachments to the layouts requested by the subpasses, anyway
+        bool errorOnLayoutMismatchBetweenFragments = result._pipelineType == PipelineType::Compute;
+
         for (auto f=fragments.begin(); f!=fragments.end(); ++f) {
             std::vector<std::pair<AttachmentName, AttachmentName>> attachmentRemapping;
 
@@ -2749,6 +2753,21 @@ namespace RenderCore { namespace Techniques
                         Throw(std::runtime_error(str.str()));
                     #else
                         Throw(std::runtime_error("Couldn't bind renderpass fragment input request"));
+                    #endif
+                }
+
+                if (errorOnLayoutMismatchBetweenFragments && newState->_lastAccessFinalLayout && interfaceAttachment._initialLayout && (newState->_lastAccessFinalLayout != interfaceAttachment._initialLayout)) {
+                    #if defined(_DEBUG)
+                        debugInfo << "      * Layout mismatch between fragments when for semantic: " << AttachmentSemantic{interfaceAttachment.GetInputSemanticBinding()} << std::endl;
+                        debugInfo << "         Final layout after prior fragment: " << (newState->_lastAccessFinalLayout?BindFlagsAsString(*newState->_lastAccessFinalLayout):s_defaultLayout) << std::endl;
+                        debugInfo << "         Initial layout for new attachment: " << (interfaceAttachment._initialLayout?BindFlagsAsString(*interfaceAttachment._initialLayout):s_defaultLayout) << std::endl;
+                        auto debugInfoStr = debugInfo.str();
+                        Log(Error) << "MergeFragments() failed. Details:" << std::endl << debugInfoStr << std::endl;
+                        std::stringstream str;
+                        str << "Renderpass fragment bind failed related to attachment: " << AttachmentSemantic{interfaceAttachment.GetInputSemanticBinding()} << ". Details follow: \n" << debugInfoStr;
+                        Throw(std::runtime_error(str.str()));
+                    #else
+                        Throw(std::runtime_error("Couldn't bind renderpass fragment input request due to layout mismatch"));
                     #endif
                 }
 
