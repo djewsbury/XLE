@@ -289,8 +289,8 @@ namespace RenderOverlays
 		auto overlayContext = MakeImmediateOverlayContext(parsingContext.GetThreadContext(), immediateDrawables, &fontRenderingManager);
 
 		parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker += vertPadding;
-		auto bottom = viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker;
-		auto top = viewportDims[1] - (parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker + split._sections.size() * lineHeight + (split._sections.size()-1) * paddingBetweenLines);
+		auto bottom = viewportDims[1] - int(parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker);
+		auto top = viewportDims[1] - int(parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker + split._sections.size() * lineHeight + (split._sections.size()-1) * paddingBetweenLines);
 
 		// draw a background quad
 		{
@@ -307,13 +307,14 @@ namespace RenderOverlays
 		}
 
 		parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker += unsigned(split._sections.size()) * lineHeight + unsigned(split._sections.size()-1) * paddingBetweenLines;
-		auto yIterator = viewportDims[1] - parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker;
+		int yIterator = viewportDims[1] - (int)parsingContext._stringHelpers->_bottomOfScreenErrorMsgTracker;
 
 		for (auto s:split._sections) {
-			overlayContext->DrawText(
-				{ 	Float3{horzPadding + horzRectArea, yIterator, 0.f}, 
-					Float3{viewportDims[0] - horzPadding, yIterator + lineHeight, 0.f} },
-				**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Left, s);
+			if (yIterator > -int(lineHeight))
+				overlayContext->DrawText(
+					{ 	Float3{horzPadding + horzRectArea, yIterator, 0.f}, 
+						Float3{viewportDims[0] - horzPadding, yIterator + lineHeight, 0.f} },
+					**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Left, s);
 			yIterator += lineHeight + paddingBetweenLines;
 		}
 
