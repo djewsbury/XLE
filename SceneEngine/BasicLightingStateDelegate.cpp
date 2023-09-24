@@ -287,6 +287,13 @@ namespace SceneEngine
             cfg.SetOperator(_operatorResolveContext._taaOperator._objects[0].second);
         }
 
+        if (!_operatorResolveContext._sharpenOperator._objects.empty()) {
+            if (_operatorResolveContext._sharpenOperator._objects.size() != 1)
+                Throw(std::runtime_error("Only one sharpen operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._sharpenOperator._objects[0].second);
+        }
+
         if (!_operatorResolveContext._forwardLightingOperators._objects.empty()) {
             if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1 || !_operatorResolveContext._deferredLightingOperators._objects.empty() || !_operatorResolveContext._utilityLightingOperator._objects.empty())
                 Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
@@ -613,6 +620,12 @@ namespace SceneEngine
     {
         _taaOperator._desc = operatorDesc;
         AddToOperatorList(_taaOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::SharpenOperatorDesc& operatorDesc)
+    {
+        _sharpenOperator._desc = operatorDesc;
+        AddToOperatorList(_sharpenOperator);
     }
 
     void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::SkyOperatorDesc& operatorDesc)
@@ -1204,6 +1217,14 @@ namespace SceneEngine
             }
             break;
         }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::SharpenOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        // no useful properties yet
         return false;
     }
 

@@ -18,6 +18,7 @@
 #include "SequenceIterator.h"
 #include "LightUniforms.h"
 #include "GBufferOperator.h"
+#include "PostProcessOperators.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/CommonBindings.h"
@@ -57,6 +58,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ScreenSpaceReflectionsOperator> _ssrOperator;
 		std::shared_ptr<SSAOOperator> _ssaoOperator;
 		std::shared_ptr<TAAOperator> _taaOperator;
+		std::shared_ptr<PostProcessOperator> _postProcessOperator;
 		std::shared_ptr<ToneMapAcesOperator> _acesOperator;
 		std::shared_ptr<CopyToneMapOperator> _copyToneMapOperator;
 		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
@@ -396,6 +398,8 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<MultiSampleOperatorDesc> _msaa;
 		std::optional<SkyTextureProcessorDesc> _skyTextureProcessor;
 		std::optional<SkyOperatorDesc> _sky;
+		std::optional<PostProcessOperator::CombinedDesc> _postProcess;
+		bool _hasPostProcessOperators = false;
 
 		ForwardPlusLightScene::ShadowPreparerIdMapping _shadowPrepreparerIdMapping;
 		std::vector<ForwardPlusLightScene::LightOperatorInfo> _lightSceneOperatorInfo;
@@ -506,6 +510,8 @@ namespace RenderCore { namespace LightingEngine
 				}
 				chain = chain->_next;
 			}
+
+			_postProcess = PostProcessOperator::MakeCombinedDesc(globalOperatorsChain);
 		}
 	};
 
@@ -517,6 +523,7 @@ namespace RenderCore { namespace LightingEngine
 		std::future<std::shared_ptr<ScreenSpaceReflectionsOperator>> _futureSSR;
 		std::future<std::shared_ptr<SSAOOperator>> _futureSSAO;
 		std::future<std::shared_ptr<TAAOperator>> _futureTAA;
+		std::future<std::shared_ptr<PostProcessOperator>> _futurePostProcess;
 		std::future<std::shared_ptr<ToneMapAcesOperator>> _futureAces;
 		std::future<std::shared_ptr<CopyToneMapOperator>> _futureCopyToneMap;
 		std::future<std::shared_ptr<SkyOperator>> _futureSky;
@@ -542,6 +549,7 @@ namespace RenderCore { namespace LightingEngine
 		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext, fbProps);
 		if (_ssaoOperator) _ssaoOperator->PreregisterAttachments(stitchingContext, fbProps);
 		if (_taaOperator) _taaOperator->PreregisterAttachments(stitchingContext, fbProps);
+		if (_postProcessOperator) _postProcessOperator->PreregisterAttachments(stitchingContext, fbProps);
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(
@@ -601,7 +609,7 @@ namespace RenderCore { namespace LightingEngine
 		mainSequence.CreateStep_BringUpToDateUniforms();
 
 		// Post processing
-		Sequence::FragmentInterfaceRegistration toneMapReg, taaFragmentReg;
+		Sequence::FragmentInterfaceRegistration toneMapReg, taaFragmentReg, postProcessReg;
 		if (_taaOperator)
 			taaFragmentReg = mainSequence.CreateStep_RunFragments(_taaOperator->CreateFragment(fbProps));
 		if (_acesOperator) {
@@ -610,6 +618,8 @@ namespace RenderCore { namespace LightingEngine
 			assert(_copyToneMapOperator);
 			toneMapReg = mainSequence.CreateStep_RunFragments(_copyToneMapOperator->CreateFragment(fbProps));
 		}
+		if (_postProcessOperator)
+			postProcessReg = mainSequence.CreateStep_RunFragments(_postProcessOperator->CreateFragment(fbProps));
 
 		lightingTechnique.CompleteConstruction(std::move(pipelineAccelerators), stitchingContext, fbProps);
 
@@ -626,6 +636,8 @@ namespace RenderCore { namespace LightingEngine
 		ops->_futureHierarchicalDepths = Internal::SecondStageConstruction(*_hierarchicalDepthsOperator, Internal::AsFrameBufferTarget(mainSequence, hierachicalDepthsReg));
 		if (_taaOperator)
 			ops->_futureTAA = Internal::SecondStageConstruction(*_taaOperator, Internal::AsFrameBufferTarget(mainSequence, taaFragmentReg));
+		if (_postProcessOperator)
+			ops->_futurePostProcess = Internal::SecondStageConstruction(*_postProcessOperator, Internal::AsFrameBufferTarget(mainSequence, postProcessReg));
 		if (_acesOperator)
 			ops->_futureAces = Internal::SecondStageConstruction(*_acesOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));
 		if (_copyToneMapOperator)
@@ -709,6 +721,8 @@ namespace RenderCore { namespace LightingEngine
 						captures->_ssaoOperator = std::make_shared<SSAOOperator>(pipelinePool, *digest._ssao, SSAOOperator::IntegrationParams{true});
 					if (digest._taa)
 						captures->_taaOperator = std::make_shared<TAAOperator>(pipelinePool, *digest._taa);
+					if (digest._postProcess)
+						captures->_postProcessOperator = std::make_shared<PostProcessOperator>(pipelinePool, *digest._postProcess);
 					if (digest._tonemapAces) {
 						ToneMapAcesOperator::IntegrationParams integrationParams;
 						integrationParams._readFromAAOutput = digest._taa.has_value();
@@ -776,6 +790,7 @@ namespace RenderCore { namespace LightingEngine
 							if (secondStageHelper->_futureSSR.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSSR, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureSSAO.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSSAO, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureTAA.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureTAA, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futurePostProcess.valid() && Internal::MarkerTimesOut(secondStageHelper->_futurePostProcess, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureAces.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureAces, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureCopyToneMap.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureCopyToneMap, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureSky.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSky, timeoutTime)) return ::Assets::PollStatus::Continue;
@@ -787,6 +802,7 @@ namespace RenderCore { namespace LightingEngine
 							if (secondStageHelper->_futureSSR.valid()) secondStageHelper->_futureSSR.get();
 							if (secondStageHelper->_futureSSAO.valid()) secondStageHelper->_futureSSAO.get();
 							if (secondStageHelper->_futureTAA.valid()) secondStageHelper->_futureTAA.get();
+							if (secondStageHelper->_futurePostProcess.valid()) secondStageHelper->_futurePostProcess.get();
 							if (secondStageHelper->_futureAces.valid()) secondStageHelper->_futureAces.get();
 							if (secondStageHelper->_futureCopyToneMap.valid()) secondStageHelper->_futureCopyToneMap.get();
 							if (secondStageHelper->_futureSky.valid()) secondStageHelper->_futureSky.get();
@@ -799,6 +815,8 @@ namespace RenderCore { namespace LightingEngine
 								lightingTechnique->_depVal.RegisterDependency(captures->_ssaoOperator->GetDependencyValidation());
 							if (captures->_taaOperator)
 								lightingTechnique->_depVal.RegisterDependency(captures->_taaOperator->GetDependencyValidation());
+							if (captures->_postProcessOperator)
+								lightingTechnique->_depVal.RegisterDependency(captures->_postProcessOperator->GetDependencyValidation());
 							if (captures->_acesOperator)
 								lightingTechnique->_depVal.RegisterDependency(captures->_acesOperator->GetDependencyValidation());
 							if (captures->_copyToneMapOperator)

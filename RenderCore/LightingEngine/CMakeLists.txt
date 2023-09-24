@@ -29,6 +29,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		GBufferOperator.cpp
 		UtilityLightingDelegate.cpp
 		AAOperators.cpp
+		PostProcessOperators.cpp
 		../Assets/TextureCompiler.cpp           # moved here while figuring out the architecture -- due to dependencies with TextureCompilerUtil.cpp
 		)
 
