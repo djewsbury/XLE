@@ -266,8 +266,13 @@ namespace Assets
 		}
 
 		{
-			std::unique_lock<Threading::Mutex> lock(_lock);
-			TryRunPollingFunction(lock);
+			// Use try_lock() here to avoid a very rare deadlock.
+			// We might be inside DefaultAssetHeap<AssetType>::Get(), which calls IsInvalidated, which comes here while the DefaultAssetHeap lock is held
+			// However, another thread might hold our lock while trying to obtain the DefaultAssetHeap lock -- and thereby deadlock.
+			// We're allowed to fail gracefully here, because it will just mean returning Pending
+			std::unique_lock<Threading::Mutex> lock(_lock, std::defer_lock);
+			if (lock.try_lock())
+				TryRunPollingFunction(lock);
 		}
 
 		auto futureState = _pendingFuture.wait_for(std::chrono::seconds(0));
