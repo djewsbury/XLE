@@ -160,6 +160,9 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<Assets::ModelRendererConstruction> _rendererConstruction;	// we retain this for metadata queries
 
+		mutable unsigned _descSetInvalidationHack = 0;
+		void TestDescSetInvalidation() const;
+
 		class GeoCallBuilder;
 		class DrawableGeoBuilder;
 	};

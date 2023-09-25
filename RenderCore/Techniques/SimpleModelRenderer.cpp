@@ -330,6 +330,8 @@ namespace RenderCore { namespace Techniques
 		// if we need the topological batch, make sure to draw the appropriate cmd stream
 		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
 			BuildDrawables(pkts, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
+
+		TestDescSetInvalidation();
 	}
 
 	void SimpleModelRenderer::BuildDrawables(
@@ -579,6 +581,22 @@ namespace RenderCore { namespace Techniques
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void SimpleModelRenderer::TestDescSetInvalidation() const
+	{
+		// HACK -- Force an invalidation event if any of our descriptor sets have got invalid
+		// just doing this for the time being because there's no other path tying the desc set depVals to here
+		auto& depValSys = ::Assets::GetDepValSys();
+		if (depValSys.GlobalChangeIndex() > _descSetInvalidationHack) {
+			bool inval = false;
+			for (auto& descSet:_drawableConstructor->_descriptorSetAccelerators)
+				inval |= TryGetDependencyValidation(*descSet).GetValidationIndex() != 0;
+
+			if (inval)
+				const_cast<::Assets::DependencyValidation&>(_depVal).IncreaseValidationIndex();
+			_descSetInvalidationHack = depValSys.GlobalChangeIndex();
+		}
+	}
 
 	SimpleModelRenderer::SimpleModelRenderer(
 		IDrawablesPool& drawablesPool,
@@ -884,7 +902,7 @@ namespace RenderCore { namespace Techniques
 								}
 
 						if (!gotMatch)
-							Throw(std::runtime_error("Geocall to world unbound in skeleton binding"));
+							Throw(std::runtime_error(StringMeld<256>() << "Command stream input interface unbound in skeleton binding. Hash binding: " << std::hex << name));
 					}
 					
 				} else if (primarySkeleton) {
@@ -902,7 +920,7 @@ namespace RenderCore { namespace Techniques
 								break;
 							}
 						if (elementBindingRange[c] == ~0u)
-							Throw(std::runtime_error("Geocall to world unbound in skeleton binding"));
+							Throw(std::runtime_error(StringMeld<256>() << "Command stream input interface unbound in skeleton binding. Hash binding: " << std::hex << name));
 					}
 				}
 			}

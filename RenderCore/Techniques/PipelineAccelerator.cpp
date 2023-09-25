@@ -719,6 +719,12 @@ namespace RenderCore { namespace Techniques
 		return &accelerator._completed;
 	}
 
+	::Assets::DependencyValidation TryGetDependencyValidation(DescriptorSetAccelerator& accelerator)
+	{
+		// only valid after the actualized descriptor set has completed
+		return accelerator._depVal;
+	}
+
 	ICompiledPipelineLayout* TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId visibilityMarker)
 	{
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
@@ -907,7 +913,8 @@ namespace RenderCore { namespace Techniques
 						Throw(std::runtime_error("Identical DescriptorSetAccelerator initialized for 2 different ConstructionContexts. This is unsafe, because either context could cancel the load"));
 					// It's a little confusing when two identical descriptor set accelerators have the same name -- the actual descriptor set will be named after the
 					// first request. But since this situation can easily happen, there isn't a particularly great way to handle it
-					return l;
+					if (l->_depVal.GetValidationIndex() == 0)
+						return l;
 				}
 
 			if (_drawablesPool) {
