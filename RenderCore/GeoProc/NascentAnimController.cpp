@@ -1146,17 +1146,32 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         for(const auto& dc:geo._unanimatedBase._mainDrawCalls)
             stream << "Draw [" << c++ << "] " << dc << std::endl;
 		for(unsigned sectionIdx=0; sectionIdx<geo._preskinningSections.size(); ++sectionIdx) {
+            stream << "Skinning Section [" << sectionIdx << "]:" << std::endl;
 			c=0;
 			auto& section = geo._preskinningSections[sectionIdx];
 			for(const auto& dc:section._preskinningDrawCalls)
-				stream << "Preskinning Section [" << sectionIdx << "] Draw [" << c++ << "] " << dc << std::endl;
+				stream << StreamIndent(4) << "Preskinning  Draw [" << c++ << "] " << dc << std::endl;
 
-			stream << "Section [" << sectionIdx << "] Joint matrices: ";
-			for (size_t q=0; q<section._jointMatrices.size(); ++q) {
-				if (q != 0) stream << ", ";
-				stream << section._jointMatrices[q];
+			const bool verboseSection = false;
+			if (verboseSection) {
+				stream << StreamIndent(4) << "Joint matrices:" << std::endl;
+				for (size_t q=0; q<section._jointMatrices.size(); ++q) {
+					stream << StreamIndent(8) << "[" << q << "] mapped to: " << section._jointMatrices[q] << ", Inv. Bind by Bind Shape: ";
+					CompactTransformDescription(stream, section._bindShapeByInverseBindMatrices[q]);
+					stream << ", Inverted Inv. Bind by Bind Shape: ";
+					CompactTransformDescription(stream, InvertOrthonormalTransform(section._bindShapeByInverseBindMatrices[q]));
+					stream << std::endl;
+				}
+				stream << "Bind Shape: "; CompactTransformDescription(stream, section._bindShapeMatrix); stream << std::endl;
+				stream << "Post skinning bind matrix: "; CompactTransformDescription(stream, section._postSkinningBindMatrix); stream << std::endl;
+			} else {
+				stream << StreamIndent(4) << "Joint matrices: ";
+				for (size_t q=0; q<section._jointMatrices.size(); ++q) {
+					if (q != 0) stream << ", ";
+					stream << section._jointMatrices[q];
+				}
+				stream << std::endl;
 			}
-			stream << std::endl;
 		}
 		stream << "Geo Space To Node Space: "; CompactTransformDescription(stream, geo._unanimatedBase._geoSpaceToNodeSpace); stream << std::endl;
         
