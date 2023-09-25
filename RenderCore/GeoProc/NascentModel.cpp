@@ -353,6 +353,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	{
 		unsigned RegisterInputInterfaceMarker(const std::string& skeleton, const std::string& name)
 		{
+			if (name.empty())		// some assets can declare a joint index that maps onto nothing
+				return ~0u;
 			auto j = std::make_pair(skeleton, name);
 			auto existing = std::find(_inputInterfaceNames.begin(), _inputInterfaceNames.end(), j);
 			if (existing != _inputInterfaceNames.end()) {
@@ -576,6 +578,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				std::sort(groupGuids.begin(), groupGuids.end());
 				groupGuids.erase(std::unique(groupGuids.begin(), groupGuids.end()), groupGuids.end());
 
+				assert(!cmd.second._localToModel.empty());
 				auto localToWorld = helper.RegisterInputInterfaceMarker({}, cmd.second._localToModel);
 
 				if (!currentTransformMarker.has_value() || localToWorld != currentTransformMarker.value()) {

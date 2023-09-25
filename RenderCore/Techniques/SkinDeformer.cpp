@@ -54,7 +54,7 @@ namespace RenderCore { namespace Techniques
 		unsigned c=0;
 		if (_skeletonBinding.GetModelJointCount()) {
 			for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c) {
-				auto transMachineOutput = _skeletonBinding.ModelJointToMachineOutput(section._jointMatrices[c]);
+				auto transMachineOutput = (section._jointMatrices[c] != uint16_t(~0u)) ? _skeletonBinding.ModelJointToMachineOutput(section._jointMatrices[c]) : ~0u;
 				if (transMachineOutput != ~unsigned(0x0)) {
 					destination[c] = Truncate(Combine(Combine(section._bindShapeByInverseBindMatrices[c], skeletonMachineResult[transMachineOutput]), section._postSkinningBindMatrix));
 				} else {
@@ -371,7 +371,7 @@ namespace RenderCore { namespace Techniques
 			unsigned c=0;
 			if (binding.GetModelJointCount()) {
 				for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c) {
-					auto transMachineOutput = binding.ModelJointToMachineOutput(section._jointMatrices[c]);
+					auto transMachineOutput = (section._jointMatrices[c] != uint16_t(~0u)) ? binding.ModelJointToMachineOutput(section._jointMatrices[c]) : ~0u;
 					if (transMachineOutput != ~unsigned(0x0)) {
 						destination[c] = Truncate(Combine(Combine(section._bindShapeByInverseBindMatrices[c], skeletonMachineOutput[transMachineOutput]), section._postSkinningBindMatrix));
 					} else {
