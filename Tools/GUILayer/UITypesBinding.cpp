@@ -712,30 +712,6 @@ namespace GUILayer
         NotifyPropertyChanged("DoubleSided");
     }
 
-    System::Windows::Forms::CheckState RenderStateSet::Wireframe::get()
-    {
-        auto& stateSet = _underlying->_stateSet;
-        if (stateSet._flag & RenderCore::Assets::RenderStateSet::Flag::Wireframe) {
-            if (stateSet._wireframe) return CheckState::Checked;
-            else return CheckState::Unchecked;
-        }
-        return CheckState::Indeterminate;
-    }
-
-    void RenderStateSet::Wireframe::set(CheckState checkState)
-    {
-        // auto transaction = _underlying->Transaction_Begin("RenderState");
-        auto& stateSet = _underlying->_stateSet;
-        if (checkState == CheckState::Indeterminate) {
-            stateSet._flag &= ~RenderCore::Assets::RenderStateSet::Flag::Wireframe;
-        } else {
-            stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::Wireframe;
-            stateSet._wireframe = (checkState == CheckState::Checked);
-        }
-        // transaction->Commit();
-        NotifyPropertyChanged("Wireframe");
-    }
-
     auto RenderStateSet::DeferredBlend::get() -> DeferredBlendState     { return DeferredBlendState::Unset; }
     void RenderStateSet::DeferredBlend::set(DeferredBlendState)         { NotifyPropertyChanged("DeferredBlend"); }
 

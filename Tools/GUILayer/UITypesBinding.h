@@ -318,7 +318,6 @@ namespace GUILayer
     public:
         using CheckState = System::Windows::Forms::CheckState;
         property CheckState DoubleSided { CheckState get(); void set(CheckState); }
-        property CheckState Wireframe { CheckState get(); void set(CheckState); }
 
         enum class DeferredBlendState { Opaque, Decal, Unset };
         property DeferredBlendState DeferredBlend { DeferredBlendState get(); void set(DeferredBlendState); }
