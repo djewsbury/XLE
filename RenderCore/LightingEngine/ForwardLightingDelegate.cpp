@@ -91,18 +91,22 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
 	}
 
-	inline float CalculateHaltonNumber(unsigned index, unsigned base)
+	template <int Base>
+		inline float CalculateHaltonNumber(unsigned index)
 	{
 		// See https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler
-		// This implementation from AMD's capsaicin (MIT license). Note not bothering with the reverse bit trick for base 2
-		float f = 1.0f, result = 0.0f;
-		for (unsigned i = index; i > 0;)
-		{
-			f /= base;
-			result = result + f * (i % base);
-			i = (unsigned)(i / (float)base);
+		// AMD's capsaicin implementation does not seem perfect. Instead, let's take some cures from the pbr-book
+		// Note not bothering with the reverse bit trick for base 2
+		float reciprocalBaseN = 1.0f, result = 0.0f;
+		float reciprocalBase = 1.f / float(Base);
+		while (index) {
+			auto next = index / Base;
+			auto digit = index - next * Base;
+			result = result * Base + digit;
+			reciprocalBaseN *= reciprocalBase;
+			index = next;
 		}
-		return result;
+		return result * reciprocalBaseN;
 	}
 
 	void ForwardLightingCaptures::SetupCameraJitter(Techniques::ParsingContext& parsingContext, const FrameToFrameProperties& f2fp)
@@ -111,9 +115,9 @@ namespace RenderCore { namespace LightingEngine
 		// following common implementation of TAA, we'll jitter using a Halton sequence.
 		if (_taaOperator) {
 			auto viewport = UInt2 { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height };
-			unsigned jitteringIndex = f2fp._frameIdx % 64;		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
-			float jitterX = (2.0f * CalculateHaltonNumber(jitteringIndex + 1, 2) - 1.0f) / float(viewport[0]);
-			float jitterY = (2.0f * CalculateHaltonNumber(jitteringIndex + 1, 3) - 1.0f) / float(viewport[1]);
+			unsigned jitteringIndex = f2fp._frameIdx % (32*27);		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
+			float jitterX = (2.0f * CalculateHaltonNumber<2>(jitteringIndex) - 1.0f) / float(viewport[0]);
+			float jitterY = (2.0f * CalculateHaltonNumber<3>(jitteringIndex) - 1.0f) / float(viewport[1]);
 			auto& projDesc = parsingContext.GetProjectionDesc();
 			projDesc._cameraToProjection(0, 2) = jitterX;
 			projDesc._cameraToProjection(1, 2) = jitterY;

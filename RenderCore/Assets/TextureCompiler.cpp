@@ -23,6 +23,8 @@
 #include "thousandeyes/futures/then.h"
 #include "Compressonator.h"
 
+#include <random>
+
 namespace RenderCore { namespace Assets
 {
 	::Assets::Blob PrepareDDSBlob(const TextureDesc& tDesc, size_t& headerSize);
@@ -215,6 +217,7 @@ namespace RenderCore { namespace Assets
 		case TextureCompilationRequest::Operation::EquirectFilterDiffuseReference: str << request._srcFile << "-refdiffuse-" << request._faceDim << "-" << AsString(request._format) << "-" << AsString(request._coordinateSystem); break;
 		case TextureCompilationRequest::Operation::ProjectToSphericalHarmonic: str << request._srcFile << "-sh-" << request._coefficientCount << "-" << AsString(request._coordinateSystem); break;
 		case TextureCompilationRequest::Operation::ComputeShader: str << request._shader << "-" << request._width << "x" << request._height << "x" << request._arrayLayerCount << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::BalancedNoise: str << "balanced-noise-" << request._width << "x" << request._height << "-" << AsString(request._format); break;
 		default: UNREACHABLE();
 		}
 		return str;
@@ -256,6 +259,129 @@ namespace RenderCore { namespace Assets
 		return params;
 	}
 
+	template <int Base>
+		inline float CalculateHaltonNumber(unsigned index)
+	{
+		// See https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler
+		// AMD's capsaicin implementation does not seem perfect. Instead, let's take some cures from the pbr-book
+		// Note not bothering with the reverse bit trick for base 2
+		float reciprocalBaseN = 1.0f, result = 0.0f;
+		float reciprocalBase = 1.f / float(Base);
+		while (index) {
+			auto next = index / Base;
+			auto digit = index - next * Base;
+			result = result * Base + digit;
+			reciprocalBaseN *= reciprocalBase;
+			index = next;
+		}
+		return result * reciprocalBaseN;
+	}
+
+	static const unsigned Primes[] = { 2, 3, 5, 7, 11 };
+
+	template <int BaseIdx>
+		inline float CalculateScrambledHaltonNumber(unsigned index)
+	{
+		static unsigned primeSums[dimof(Primes)];
+		static std::vector<uint16_t> digitPerms;
+		if (digitPerms.empty()) {
+			std::mt19937_64 rng(6294384621946ull);
+			unsigned accumulator = 0;
+			for (unsigned c=0; c<dimof(Primes); ++c) {
+				primeSums[c] = accumulator;
+				accumulator += Primes[c];
+			}
+			digitPerms.reserve(accumulator);
+			for (unsigned c=0; c<dimof(Primes); ++c) {
+				auto start = digitPerms.size();
+				for (unsigned q=0; q<Primes[c]; ++q)
+					digitPerms.push_back(q);
+				std::shuffle(digitPerms.begin()+start, digitPerms.end(), rng);
+			}
+		}
+
+		assert(BaseIdx < dimof(Primes));
+		assert((primeSums[BaseIdx] + BaseIdx) <= digitPerms.size());
+		uint16_t* perm = digitPerms.data() + primeSums[BaseIdx];
+
+		int Base = Primes[BaseIdx];
+		float reciprocalBaseN = 1.0f, result = 0.0f;
+		float reciprocalBase = 1.f / float(Base);
+		while (index) {
+			auto next = index / Base;
+			auto digit = index - next * Base;
+			result = result * Base + perm[digit];
+			reciprocalBaseN *= reciprocalBase;
+			index = next;
+		}
+		return reciprocalBaseN * (result + reciprocalBase * perm[0] / (1 - reciprocalBase));
+	}
+
+	class BalancedNoiseTexture : public BufferUploads::IAsyncDataSource
+	{
+	public:
+		virtual std::future<ResourceDesc> GetDesc() override
+		{
+			std::promise<ResourceDesc> promise;
+			promise.set_value(CreateDesc(0, TextureDesc::Plain2D(_width, _height, Format::R32_FLOAT)));
+			return promise.get_future();
+		}
+
+		virtual StringSection<> GetName() const override { return "balanced-noise"; }
+
+		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
+		{
+			assert(subResources.size() == 1);
+			assert(subResources[0]._destination.size() == sizeof(float)*_width*_height);
+			float* dst = (float*)subResources[0]._destination.begin();
+			std::memset(dst, 0, subResources[0]._destination.size());
+
+			// as long as width is an integer cubed and height is an integer squared, we'll get a pattern that visits every pixel
+			unsigned subTableWidth = 3, subTableHeight = 2;
+			unsigned i = 1;
+			while (subTableWidth < _width) { ++i; subTableWidth = i*i*i; }
+			i = 1;
+			while (subTableHeight < _height) { ++i; subTableHeight = i*i; }
+
+			// We can do this in a smarter way by using the inverse-radical-inverse, and solving some simultaneous
+			// equations with modular arithmetic. But since we're building a lookup table anyway, that doesn't seem
+			// of any practical purpose
+			for (unsigned sampleIdx=0; sampleIdx<subTableWidth*subTableHeight; ++sampleIdx) {
+				const bool extraScambling = true;
+				if (extraScambling) {
+					auto x = unsigned(subTableWidth * CalculateScrambledHaltonNumber<1>(sampleIdx)), 
+						y = unsigned(subTableHeight * CalculateScrambledHaltonNumber<0>(sampleIdx));
+					if (x < _width && y < _height)
+						dst[x+y*_width] = sampleIdx / float(subTableWidth*subTableHeight);
+				} else {
+					auto x = unsigned(subTableWidth * CalculateHaltonNumber<3>(sampleIdx)), 
+						y = unsigned(subTableHeight * CalculateHaltonNumber<2>(sampleIdx));
+					if (x < _width && y < _height)
+						dst[x+y*_width] = sampleIdx / float(subTableWidth*subTableHeight);
+				}
+			}
+
+			// We can shuffle the rows to add more randomness. The end result is less uniformly distributed, but also has 
+			// fewer repeating patterns (since there is a slight pattern to the Halton sampler output)
+			// which is better may depend on the application
+			// std::mt19937_64 rng(153483181236ull);
+			// for (unsigned y=0; y<_height; ++y)
+			// 	std::shuffle(&dst[y*_width], &dst[y*_width+_width], rng);
+
+			std::promise<void> promise;
+			promise.set_value();
+			return promise.get_future();
+		}
+
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
+		{
+			return {};
+		}
+
+		unsigned _width, _height;
+		BalancedNoiseTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
+	};
+
 	class TextureCompileOperation : public ::Assets::ICompileOperation
 	{
 	public:
@@ -281,7 +407,8 @@ namespace RenderCore { namespace Assets
 		void Initialize(TextureCompilationRequest request, std::string srcFN, ::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
 		{
 			std::shared_ptr<BufferUploads::IAsyncDataSource> srcPkt;
-			if (request._operation != TextureCompilationRequest::Operation::ComputeShader) {
+			if (request._operation != TextureCompilationRequest::Operation::ComputeShader
+				&& request._operation != TextureCompilationRequest::Operation::BalancedNoise) {
 				if (request._srcFile.empty())
 					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'SourceFile' fields in texture compiler file: " + srcFN));
 				srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(request._srcFile, 0);
@@ -406,6 +533,8 @@ namespace RenderCore { namespace Assets
 					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
 				srcPkt = LightingEngine::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount, request._commandListIntervalMS, request._maxSamplesPerCmdList);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
+			} else if (request._operation == TextureCompilationRequest::Operation::BalancedNoise) {
+				srcPkt = std::make_shared<BalancedNoiseTexture>(request._width, request._height);
 			}
 
 			if (opHelper)

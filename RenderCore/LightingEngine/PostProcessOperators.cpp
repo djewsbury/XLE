@@ -12,6 +12,7 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/DeferredShaderResource.h"
+#include "../Assets/TextureCompiler.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
@@ -28,18 +29,22 @@ namespace RenderCore { namespace LightingEngine
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	inline float CalculateHaltonNumber(unsigned index, unsigned base)
+	template <int Base>
+		inline float CalculateHaltonNumber(unsigned index)
 	{
 		// See https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler
-		// This implementation from AMD's capsaicin (MIT license). Note not bothering with the reverse bit trick for base 2
-		float f = 1.0f, result = 0.0f;
-		for (unsigned i = index; i > 0;)
-		{
-			f /= base;
-			result = result + f * (i % base);
-			i = (unsigned)(i / (float)base);
+		// AMD's capsaicin implementation does not seem perfect. Instead, let's take some cures from the pbr-book
+		// Note not bothering with the reverse bit trick for base 2
+		float reciprocalBaseN = 1.0f, result = 0.0f;
+		float reciprocalBase = 1.f / float(Base);
+		while (index) {
+			auto next = index / Base;
+			auto digit = index - next * Base;
+			result = result * Base + digit;
+			reciprocalBaseN *= reciprocalBase;
+			index = next;
 		}
-		return result;
+		return result * reciprocalBaseN;
 	}
 
 	RenderStepFragmentInterface PostProcessOperator::CreateFragment(const FrameBufferProperties& fbProps)
@@ -84,9 +89,9 @@ namespace RenderCore { namespace LightingEngine
 				}
 
 				if (op->_desc._filmGrain) {
-					unsigned jitteringIndex = (iterator.GetFrameToFrameProperties()._frameIdx + 17) % 73;		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
-					controlUniforms._noiseUniforms[0] = unsigned(CalculateHaltonNumber(jitteringIndex + 1, 2) * 256);
-					controlUniforms._noiseUniforms[1] = unsigned(CalculateHaltonNumber(jitteringIndex + 1, 3) * 256);
+					unsigned jitteringIndex = (iterator.GetFrameToFrameProperties()._frameIdx + 17) % (32*27);		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
+					controlUniforms._noiseUniforms[0] = unsigned(CalculateHaltonNumber<2>(jitteringIndex) * 32);
+					controlUniforms._noiseUniforms[1] = unsigned(CalculateHaltonNumber<3>(jitteringIndex) * 27);
 					controlUniforms._noiseUniforms[2] = *(uint32_t*)&op->_desc._filmGrain->_strength;
 					srvs[0] = op->_noise.get();
 				}
@@ -138,7 +143,11 @@ namespace RenderCore { namespace LightingEngine
 
 		} else {
 
-			auto balancedNoiseFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
+			Assets::TextureCompilationRequest compileRequest;
+			compileRequest._operation = Assets::TextureCompilationRequest::Operation::BalancedNoise;
+			compileRequest._width = compileRequest._height = 256;		// probably could use a smaller texture
+			compileRequest._format = Format::R8_UNORM;
+			auto balancedNoiseFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(compileRequest);
 
 			::Assets::WhenAll(shader, balancedNoiseFuture).ThenConstructToPromise(
 				std::move(promise),

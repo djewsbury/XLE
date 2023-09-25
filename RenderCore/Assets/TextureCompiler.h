@@ -29,7 +29,8 @@ namespace RenderCore { namespace Assets
 			EquirectFilterGlossySpecularReference,
 			EquirectFilterDiffuseReference,
 			ComputeShader,
-			ProjectToSphericalHarmonic
+			ProjectToSphericalHarmonic,
+			BalancedNoise
 		};
 		Operation _operation = Operation::Convert;
 		Format _format = Format::Unknown;
