@@ -408,6 +408,7 @@ namespace RenderCore { namespace Techniques
 		#endif
 		uint64_t _constructionContextGuid = 0;
 		std::string _name;
+		bool _invalidUnreliable = false;
 	};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -719,6 +720,20 @@ namespace RenderCore { namespace Techniques
 		return &accelerator._completed;
 	}
 
+	bool IsInvalid_UnreliableTest(DescriptorSetAccelerator& accelerator, VisibilityMarkerId visibilityMarker)
+	{
+		// This is not ideal because we're just checking a pool in "accelerator". There are potential issues with
+		// cache flushes and other things. It's fine if we're not triggering essential behaviour from the result
+		// (eg, scheduling a screen refresh after TryGetDescriptorSet() returns nullptr) but the return valid should
+		// be considered unreliable
+		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
+			assert(accelerator._ownerPool);
+			AssertPipelineUsageLock(*accelerator._ownerPool);
+		#endif
+		if (accelerator._visibilityMarker <= visibilityMarker) return false;
+		return &accelerator._invalidUnreliable;
+	}
+
 	::Assets::DependencyValidation TryGetDependencyValidation(DescriptorSetAccelerator& accelerator)
 	{
 		// only valid after the actualized descriptor set has completed
@@ -922,6 +937,7 @@ namespace RenderCore { namespace Techniques
 			} else
 				result = std::make_shared<DescriptorSetAccelerator>();
 
+			result->_invalidUnreliable = false;
 			result->_pending = promise.get_future();
 			if (cachei != _descriptorSetAccelerators.end() && cachei->first == hash) {
 				cachei->second = result;		// (we replaced one that expired)
@@ -1304,24 +1320,28 @@ namespace RenderCore { namespace Techniques
 			TRY
 			{
 				auto completed = descSet->_pending.get();
+				descSet->_invalidUnreliable = false;
 				descSet->_depVal = completed.begin()->GetDependencyValidation();
 				descSet->_completed = std::move(*completed.begin());
 				descSet->_visibilityMarker = newVisibilityMarker;
 				descSet->_pending = {};
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 				// we've gone invalid
+				descSet->_invalidUnreliable = true;
 				descSet->_depVal = e.GetDependencyValidation();
 				descSet->_completed = {};
 				descSet->_visibilityMarker = ~VisibilityMarkerId(0);
 				descSet->_pending = {};
 			} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
 				// we've gone invalid
+				descSet->_invalidUnreliable = true;
 				descSet->_depVal = e.GetDependencyValidation();
 				descSet->_completed = {};
 				descSet->_visibilityMarker = ~VisibilityMarkerId(0);
 				descSet->_pending = {};
 			} CATCH(const std::exception&) {
 				// we've gone invalid (no dep val)
+				descSet->_invalidUnreliable = true;
 				descSet->_depVal = {};
 				descSet->_completed = {};
 				descSet->_visibilityMarker = ~VisibilityMarkerId(0);

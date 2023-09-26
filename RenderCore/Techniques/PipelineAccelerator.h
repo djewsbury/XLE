@@ -107,6 +107,7 @@ namespace RenderCore { namespace Techniques
 
 	const IPipelineAcceleratorPool::Pipeline* TryGetPipeline(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig, VisibilityMarkerId);
 	const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator, VisibilityMarkerId);
+	bool IsInvalid_UnreliableTest(DescriptorSetAccelerator& accelerator, VisibilityMarkerId visibilityMarker);
 	::Assets::DependencyValidation TryGetDependencyValidation(DescriptorSetAccelerator& accelerator);
 	ICompiledPipelineLayout* TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId);
 	std::pair<unsigned, unsigned> GetStencilRefValues(const SequencerConfig& sequencerConfig);

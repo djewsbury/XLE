@@ -120,7 +120,7 @@ namespace RenderCore { namespace Techniques
 				assert(drawable._pipeline);
 				if (drawable._pipeline != currentPipelineAccelerator) {
 					auto* pipeline = TryGetPipeline(*drawable._pipeline, sequencerConfig, acceleratorVisibilityId);
-					if (!pipeline) { somethingPending = true; continue; }
+					if (expect_evaluation(!pipeline, false)) { somethingPending = true; continue; }
 
 					assert(pipeline->_metalPipeline);
 					currentPipeline = pipeline;
@@ -153,8 +153,10 @@ namespace RenderCore { namespace Techniques
 				const ActualizedDescriptorSet* matDescSet = nullptr;
 				if (drawable._descriptorSet) {
 					matDescSet = TryGetDescriptorSet(*drawable._descriptorSet, acceleratorVisibilityId);
-					if (!matDescSet) { somethingPending = true; continue; }
-					// assert(parserContext._requiredBufferUploadsCommandList >= matDescSet->GetCompletionCommandList());	// parser context must be configured for this completion cmd list before getting here
+					if (expect_evaluation(!matDescSet, false)) { somethingPending = !IsInvalid_UnreliableTest(*drawable._descriptorSet, acceleratorVisibilityId); continue; }
+					// hack -- ensure the correct command list is requested (this is intended to have been done earlier)
+					parserContext._requiredBufferUploadsCommandList = std::max(parserContext._requiredBufferUploadsCommandList, matDescSet->GetCompletionCommandList());
+					assert(parserContext._requiredBufferUploadsCommandList >= matDescSet->GetCompletionCommandList());	// parser context must be configured for this completion cmd list before getting here
 					parserContext.RequireCommandList(matDescSet->GetCompletionCommandList());
 				}
 
