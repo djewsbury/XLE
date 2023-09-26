@@ -150,12 +150,12 @@ namespace RenderOverlays
 		auto lineCount = (radiusInLines*2+1) + (radiusInLines*2+1);
 
 		using namespace RenderCore;
-		Techniques::ImmediateDrawableMaterial material;
-		material._stateSet.SetSmoothLines(true);
-		material._hash = material._stateSet.GetHash();
+		Techniques::ImmediateDrawableMaterial lineMaterial;
+		lineMaterial._stateSet.SetSmoothLines(true);
+		lineMaterial._hash = lineMaterial._stateSet.GetHash();
 		auto workingVertices = immDrawables.QueueDraw(
 			lineCount*2, MakeIteratorRange(s_vertexInputLayout), 
-			material, Topology::LineList).Cast<InternalVertex*>();
+			lineMaterial, Topology::LineList).Cast<InternalVertex*>();
 
 		{
 			auto i = workingVertices.begin();
@@ -187,6 +187,7 @@ namespace RenderOverlays
 			const float pointerRadialWidth = 0.0025f;
 			const unsigned pointerRadialVerts = 8;
 
+			Techniques::ImmediateDrawableMaterial material;
 			auto workingVertices = immDrawables.QueueDraw(
 				pointerRadialVerts*6*2, MakeIteratorRange(s_vertexInputLayout), 
 				material, Topology::TriangleList).Cast<InternalVertex*>();
