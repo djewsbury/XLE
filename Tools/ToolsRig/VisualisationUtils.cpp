@@ -120,15 +120,18 @@ namespace ToolsRig
         Float3 position = .5f * (box.first + box.second);
 
             // push back to attempt to fill the viewport with the bounding box
-        float verticalHalfDimension = .5f * box.second[2] - box.first[2];
-        position[0] = box.first[0] - (verticalHalfDimension * (1.f + border)) / XlTan(.5f * Deg2Rad(verticalFieldOfView));
+			// Expecting object to be looking along +Y, which is out normal object-to-world
+			// orientation
+        float verticalHalfDimension = .5f * std::max(box.second[0] - box.first[0], box.second[2] - box.first[2]);
+		verticalHalfDimension *= 1.15f;		// expand out a bit so the model doesn't touch the edges of the viewport
+        position[1] = box.first[1] + (verticalHalfDimension * (1.f + border)) / XlTan(.5f * Deg2Rad(verticalFieldOfView));
 
         VisCameraSettings result;
         result._position = position;
         result._focus = .5f * (box.first + box.second);
         result._verticalFieldOfView = verticalFieldOfView;
-        result._farClip = 5.25f * Magnitude(result._focus - result._position);
-        result._nearClip = result._farClip / 10000.f;
+        result._farClip = 10.f * Magnitude(result._focus - result._position);
+        result._nearClip = result._farClip / 100000.f;
 
 		assert(std::isfinite(result._position[0]) && !std::isnan(result._position[0]));
 		assert(std::isfinite(result._position[1]) && !std::isnan(result._position[1]));
@@ -437,6 +440,24 @@ namespace ToolsRig
 		auto* visContentScene = dynamic_cast<ToolsRig::IVisContent*>((*t)->_scene.get());
 		if (visContentScene) {
 			auto boundingBox = visContentScene->GetBoundingBox();
+
+			// make sure we always have some volume in the bounding box, to avoid degenerate cases
+			if ((boundingBox.second[0] - boundingBox.first[0]) < 0.5f) {
+				float a = 0.5f - (boundingBox.second[0] - boundingBox.first[0]);
+				boundingBox.first[0] -= 0.5f * a;
+				boundingBox.second[0] += 0.5f * a;
+			}
+			if ((boundingBox.second[1] - boundingBox.first[1]) < 0.5f) {
+				float a = 0.5f - (boundingBox.second[1] - boundingBox.first[1]);
+				boundingBox.first[1] -= 0.5f * a;
+				boundingBox.second[1] += 0.5f * a;
+			}
+			if ((boundingBox.second[2] - boundingBox.first[2]) < 0.5f) {
+				float a = 0.5f - (boundingBox.second[2] - boundingBox.first[2]);
+				boundingBox.first[2] -= 0.5f * a;
+				boundingBox.second[2] += 0.5f * a;
+			}
+			
 			*_camera = ToolsRig::AlignCameraToBoundingBox(_camera->_verticalFieldOfView, boundingBox);
 		}
 	}
