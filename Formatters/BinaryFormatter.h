@@ -49,6 +49,11 @@ namespace Formatters
 		const BinarySchemata& GetSchemata() const { return *_blockStack.front()._schemata; }
 
 		BinaryInputFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data);
+		BinaryInputFormatter() = default;
+		BinaryInputFormatter(BinaryInputFormatter&&) = default;
+		BinaryInputFormatter& operator=(BinaryInputFormatter&&) = default;
+		BinaryInputFormatter(const BinaryInputFormatter&) = default;
+		BinaryInputFormatter& operator=(const BinaryInputFormatter&) = default;
 	private:
 		struct BlockContext
 		{
@@ -258,6 +263,23 @@ namespace Formatters
 			std::optional<std::string> As()
 		{
 			if (_evalContext == nullptr) return {};
+			return ImpliedTyping::AsString(GetData(), _i->second._typeDesc);
+		}
+
+		template<typename Result>
+			Result ValueOrThrow()
+		{
+			if (_evalContext == nullptr) Throw(std::runtime_error("Bad BinaryBlockMatch query"));
+			Result result;
+			if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(result), ImpliedTyping::TypeOf<Result>(), GetData(), _i->second._typeDesc))
+				Throw(std::runtime_error("Bad BinaryBlockMatch query because of unexpected type for member " + _i->second._stringName));
+			return result;
+		}
+
+		template<>
+			std::optional<std::string> ValueOrThrow()
+		{
+			if (_evalContext == nullptr) Throw(std::runtime_error("Bad BinaryBlockMatch query"));
 			return ImpliedTyping::AsString(GetData(), _i->second._typeDesc);
 		}
 

@@ -14,7 +14,7 @@
 namespace RenderCore { namespace Assets
 {
     enum class CurveInterpolationType : unsigned { None, Linear, Bezier, Hermite, CatmullRom, NURBS };
-    enum class TimeMarkerType : unsigned { None, Default, NURBSKnots };
+    enum class TimeMarkerType : unsigned { None, FrameIndices, NURBSKnots };
 
 	struct CurveDesc
 	{

@@ -34,8 +34,7 @@ namespace Assets
     template<typename Type>
         void PushBack(std::vector<uint8_t>& buffer, const Type& type)
     {
-        std::copy(  (const uint8_t*)&type, (const uint8_t*)PtrAdd(&type, sizeof(Type)), 
-                    std::back_inserter(buffer));
+        buffer.insert(buffer.end(), (const uint8_t*)&type, (const uint8_t*)PtrAdd(&type, sizeof(Type)));
     }
 
     void BlockSerializer::PushBackPointer(size_t value)
@@ -69,7 +68,7 @@ namespace Assets
         newPointer._specialBuffer    = specialBuffer;
         _internalPointers.push_back(newPointer);
 
-        std::copy((const uint8_t*)range.begin(), (const uint8_t*)range.end(), std::back_inserter(_trailingSubBlocks));
+        _trailingSubBlocks.insert(_trailingSubBlocks.end(), (const uint8_t*)range.begin(), (const uint8_t*)range.end());
 
             //
             //      =<>=    Write blank space for this special buffer   =<>=
@@ -79,32 +78,27 @@ namespace Assets
 
     void    BlockSerializer::SerializeValue(uint8_t     value)
     {
-        std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
-                    std::back_inserter(_memory));
+        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
     }
 
     void    BlockSerializer::SerializeValue(uint16_t    value)
     {
-        std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
-                    std::back_inserter(_memory));
+        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
     }
 
     void    BlockSerializer::SerializeValue(uint32_t    value)
     {
-        std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
-                    std::back_inserter(_memory));
+        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
     }
 
     void    BlockSerializer::SerializeValue(uint64_t    value)
     {
-        std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
-                    std::back_inserter(_memory));
+        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
     }
 
     void    BlockSerializer::SerializeValue(float     value)
     {
-        std::copy(  (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)), 
-                    std::back_inserter(_memory));
+        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
     }
 
     void    BlockSerializer::AddPadding(unsigned sizeInBytes)
@@ -152,14 +146,12 @@ namespace Assets
 
     void BlockSerializer::PushBackRaw(const void* data, size_t size)
     {
-        std::copy(  (const uint8_t*)data, (const uint8_t*)PtrAdd(data, size), 
-                    std::back_inserter(_memory));
+        _memory.insert(_memory.end(), (const uint8_t*)data, (const uint8_t*)PtrAdd(data, size));
     }
 
     void BlockSerializer::PushBackRaw_SubBlock(const void* data, size_t size)
     {
-        std::copy(  (const uint8_t*)data, (const uint8_t*)PtrAdd(data, size), 
-                    std::back_inserter(_trailingSubBlocks));
+        _trailingSubBlocks.insert(_trailingSubBlocks.end(), (const uint8_t*)data, (const uint8_t*)PtrAdd(data, size));
     }
 
     void BlockSerializer::RegisterInternalPointer(const InternalPointer& ptr)

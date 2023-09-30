@@ -119,7 +119,7 @@ namespace RenderCore { namespace Assets
             typedef unsigned BitField;
         };
         Flag::BitField  _flag : 7;
-        unsigned        _padding : 1;   // 8 + 15 + 32 + 6 = 60 bits... pad to 64 bits
+        unsigned        _padding : 2;   // 8 + 15 + 32 + 7 = 62 bits... pad to 64 bits
 
         union
         {

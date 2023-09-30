@@ -299,7 +299,7 @@ namespace RenderCore { namespace Assets
 										CurveInterpolationType interpolationType,
 										const Decomp& decomp) never_throws 
 	{
-		if (curveDesc._timeMarkerType == TimeMarkerType::Default) {
+		if (curveDesc._timeMarkerType == TimeMarkerType::FrameIndices) {
 			auto* keyUpper = std::upper_bound(timeMarkers.begin(), timeMarkers.end(), (uint16_t)evalFrame);
 
 				// note -- clamping at start and end positions of the curve
