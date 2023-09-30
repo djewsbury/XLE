@@ -123,6 +123,8 @@ namespace ToolsRig
 			if (!settings._compilationConfigurationName.empty())
 				ele.SetCompilationConfiguration(settings._compilationConfigurationName);
 			ele.SetModelAndMaterialScaffolds(loadingContext, settings._modelName, settings._materialName);
+			if (!settings._skeletonFileName.empty())
+				construction->SetSkeletonScaffold(settings._skeletonFileName);
 			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators);
 
 			std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promisedConstruction;

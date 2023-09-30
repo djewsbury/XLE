@@ -401,6 +401,7 @@ namespace RenderCore { namespace Assets
 							case AnimSamplerComponent::None:
 								assert(!noneParam);
 								noneParam = c;
+								break;
 							}
 						}
 					}

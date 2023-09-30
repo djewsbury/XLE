@@ -10,12 +10,13 @@ namespace ControlsLibraryExt.ModelView
 {
     public class ResourceSelectionTreeViewContext : ITreeView, ITreeListView, IItemView, IObservableContext, ISelectionContext, IDisposable
     {
-        public ResourceSelectionTreeViewContext(GUILayer.IOpaqueResourceFolder rootFolder, GUILayer.IResourceQueryService resourceQuery)
+        public ResourceSelectionTreeViewContext(GUILayer.IOpaqueResourceFolder rootFolder, GUILayer.IResourceQueryService resourceQuery, uint resourceTypeFilter=0)
         {
             m_rootFolder = rootFolder;
             _resourceQuery = resourceQuery;
             m_selection.Changing += TheSelectionChanging;
             m_selection.Changed += TheSelectionChanged;
+            _resourceTypeFilter = resourceTypeFilter;
         }
 
         public void Reload()
@@ -110,15 +111,24 @@ namespace ControlsLibraryExt.ModelView
 
                     foreach (GUILayer.IOpaqueResourceFolder childFolder in subfolders)
                         yield return childFolder;
-
-                    foreach (object resource in resourceFolder.Resources)
-                        yield return resource;
                 }
                 else
                 {
                     foreach (GUILayer.IOpaqueResourceFolder childFolder in resourceFolder.Subfolders)
                         yield return childFolder;
+                }
 
+                if (_resourceTypeFilter != 0)
+                {
+                    foreach (object resource in resourceFolder.Resources)
+                    {
+                        var resourceDesc = _resourceQuery.GetDesc(resource);
+                        if (resourceDesc != null && resourceDesc.HasValue && (resourceDesc.Value.Types & _resourceTypeFilter) != 0)
+                            yield return resource;
+                    }
+                }
+                else
+                {
                     foreach (object resource in resourceFolder.Resources)
                         yield return resource;
                 }
@@ -249,5 +259,6 @@ namespace ControlsLibraryExt.ModelView
         private AdaptableSelection<object> m_selection = new AdaptableSelection<object>();
         private GUILayer.IOpaqueResourceFolder m_rootFolder;
         private GUILayer.IResourceQueryService _resourceQuery;
+        private uint _resourceTypeFilter;
     }
 }
