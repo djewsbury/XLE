@@ -59,7 +59,7 @@ namespace RenderOverlays
 		bool drawBoneNames)
     {
 		auto outputMatrixCount = skeleton.GetOutputMatrixCount();
-        auto vertexCount = outputMatrixCount * 2 * 2 * 3;
+        auto vertexCount = outputMatrixCount * 6 + outputMatrixCount * 6;
 		Techniques::ImmediateDrawableMaterial material;
 		material._stateSet._flag |= RenderCore::Assets::RenderStateSet::Flag::WriteMask;
 		material._stateSet._writeMask = 0;		// disable depth read & write
@@ -97,15 +97,30 @@ namespace RenderOverlays
 		std::vector<uint32_t> parents(outputMatrixCount);
 		skeleton.CalculateParentPointers(MakeIteratorRange(parents));
 		for (unsigned c=0; c<parents.size(); ++c) {
-			if (parents[c] >= outputMatrices.size()) continue;
+			if (parents[c] >= outputMatrices.size()) {
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				continue;
+			}
 
 			auto childPosition = TransformPoint(localToWorld, ExtractTranslation(outputMatrices[c]));
 			auto parentPosition = TransformPoint(localToWorld, ExtractTranslation(outputMatrices[parents[c]]));
 
 			auto axis = parentPosition - childPosition;
 			Float3 tangent;
-			if (!Normalize_Checked<Float3>(&tangent, Cross(cameraForward, axis)))
+			if (!Normalize_Checked<Float3>(&tangent, Cross(cameraForward, axis))) {
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
 				continue;
+			}
 
 			float scaleC = 0.33f * 0.01f * (worldToProjection * Expand(childPosition, 1.0f))[3] * s;	// normalize scale for screen space
 			float scaleP = 0.33f * 0.01f * (worldToProjection * Expand(parentPosition, 1.0f))[3] * s;	// normalize scale for screen space
