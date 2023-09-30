@@ -97,17 +97,17 @@ namespace RenderCore { namespace Assets
 
     const uint32_t* NextTransformationCommand(const uint32_t* cmd) { return NextTransformationCommand_(cmd); }
 
-    T1(Iterator) static Iterator SkipUntilPop(Iterator i, Iterator end, signed& finalIdentLevel)
+    T1(Iterator) static Iterator SkipUntilPop(Iterator i, Iterator end, signed& indentChange)
     {
-        finalIdentLevel = 1;
+        indentChange = 0;
         for (; i!=end;) {
             if (*i == (uint32_t)TransformCommand::PopLocalToWorld) {
-                auto popCount = *(i+1);
-                finalIdentLevel -= signed(popCount);
-                if (finalIdentLevel <= 0)
+                signed popCount = *(i+1);
+                if ((indentChange - popCount) < 0)
                     return i;
+                indentChange -= popCount;
             } else if (*i == (uint32_t)TransformCommand::PushLocalToWorld)
-                ++finalIdentLevel;
+                ++indentChange;
             i = NextTransformationCommand_(i);
         }
         return end;
@@ -136,28 +136,31 @@ namespace RenderCore { namespace Assets
         // the matrix isn't used after the pop, then the push/pop is redundant
         assert(*i == (uint32_t)TransformCommand::PushLocalToWorld);
         ++i;
+        signed indentChange = 0;
 
         bool foundTransformCmd = false;
         for (;i<end;) {
             auto cmd = TransformCommand(*i);
             if (IsTransformCommand(cmd) || IsBindingPointCommand(cmd)) {
-                foundTransformCmd = true;
+                foundTransformCmd |= (indentChange == 0);       // only change to care about transformation commands in the root context 
             } else if (cmd == TransformCommand::PushLocalToWorld) {
-                ++i;
-                signed finalIdentLevel = 0;
-                i = SkipUntilPop(i, end, finalIdentLevel);
-                if (finalIdentLevel < 0 || i == end) {
-                    isRedundant = (finalIdentLevel < -1) || !foundTransformCmd || i == end || (i+2) == end;
-                    return i;
-                }   
+                ++indentChange;
             } else if (cmd == TransformCommand::PopLocalToWorld) {
-                auto popCount = *(i+1);
-                isRedundant = (popCount > 1) || !foundTransformCmd || (i+2) == end;
-                return i;
+                indentChange -= *(i+1);
+                if (indentChange < 0) {
+                    // popped all of the way out the context we're looking at
+                    // push/pop is redundant only if the pop is not useful. And the pop is
+                    // useful only if we can change the transform in this block and we actually use the transform
+                    // sometime after our context is popped off (before the next pop)
+                    bool popIsUseful = foundTransformCmd && indentChange == -1 && (i+2) != end;
+                    isRedundant = !popIsUseful;
+                    return i;
+                }
             }
 
             i = NextTransformationCommand_(i);
         }
+
         isRedundant = true;
         return i;
     }
@@ -287,43 +290,38 @@ namespace RenderCore { namespace Assets
 
     static const uint32_t* FindDownstreamInfluences(
         const uint32_t* i, IteratorRange<const uint32_t*> range, 
-        std::vector<size_t>& result, signed& finalIdentLevel)
+        std::vector<size_t>& result, signed& indentChange)
     {
             // Search forward and find the commands that are going to directly 
             // effected by the transform before i
+        auto initialIndent = indentChange;
         for (;i<range.end();) {
             auto type = AsMergeType(TransformCommand(*i));
             if (type == MergeType::StaticTransform || type == MergeType::Blocker) {
                 // Hitting a static transform blocks any further searches
                 // We can just skip until we pop out of this block (or hit the end of the cmd list)
                 result.push_back(i-range.begin());
-                i = SkipUntilPop(i, range.end(), finalIdentLevel);
-                if (i == range.end()) {
-                    assert(finalIdentLevel == 1);
-                    return i;
-                } else {
-                    return NextTransformationCommand_(i);
-                }
+                signed skipIndentChange;
+                i = SkipUntilPop(i, range.end(), skipIndentChange);
+                indentChange += skipIndentChange;
             } else if (type == MergeType::OutputMatrix) {
                 result.push_back(i-range.begin());
                 i = NextTransformationCommand_(i);
             } else if (type == MergeType::Pop) {
-                auto popCount = *(i+1);
-                finalIdentLevel = popCount-1;
-                return NextTransformationCommand_(i);
+                assert((*i) == (uint32_t)TransformCommand::PopLocalToWorld);
+                indentChange -= *(i+1);
+                return i + 2;
             } else if (type == MergeType::Push) {
                 // Hitting a push operation means we have to branch.
                 // Here, we must find all of the influences in the
                 // pushed branch, and then continue on from the next
                 // pop
-                i = FindDownstreamInfluences(i+1, range, result, finalIdentLevel);
-                if (finalIdentLevel < 0) {
-                    ++finalIdentLevel;
+                ++indentChange;
+                i = FindDownstreamInfluences(i+1, range, result, indentChange);
+                if (indentChange < initialIndent)
                     return i;
-                }
             }
         }
-        finalIdentLevel = 1;
         return i;
     }
 
@@ -554,10 +552,10 @@ namespace RenderCore { namespace Assets
             auto next = NextTransformationCommand_(i);
             if (cmdType == MergeType::StaticTransform) {
                     // Search forward & find influences
-                std::vector<size_t> influences; signed finalIdentLevel = 0;
+                std::vector<size_t> influences; signed foundDownstreamIndentChange = 0;
                 FindDownstreamInfluences(
                     AsPointer(next), MakeIteratorRange(cmdStream),
-                    influences, finalIdentLevel);
+                    influences, foundDownstreamIndentChange);
 
                     // We need to decide whether to merge or not.
                     // If we merge, we must do something for each
@@ -581,15 +579,18 @@ namespace RenderCore { namespace Assets
                 if (influences.size() == 1 && AsMergeType(TransformCommand(cmdStream[influences[0]])) == MergeType::StaticTransform) {
                         // we have a single static transform influence. Let's check the influences for
                         // the other transform.
-                    std::vector<size_t> secondaryInfluences; 
+                    std::vector<size_t> secondaryInfluences;
+                    foundDownstreamIndentChange = 0;
                     FindDownstreamInfluences(
                         &cmdStream[influences[0]], MakeIteratorRange(cmdStream),
-                        secondaryInfluences, finalIdentLevel);
+                        secondaryInfluences, foundDownstreamIndentChange);
                     isSpecialCase = !ShouldDoMerge(MakeIteratorRange(secondaryInfluences), MakeIteratorRange(cmdStream), optimizer);
                 }
 
                 bool doMerge = false;
-                if (isSpecialCase) {
+                if (influences.size() == 1 && AsMergeType(TransformCommand(cmdStream[influences[0]])) == MergeType::Blocker) {
+                    // single influence which is a blocker, never merge in this case
+                } else if (isSpecialCase) {
                     doMerge = ShouldDoSimpleMerge(TransformCommand(*i), TransformCommand(cmdStream[influences[0]]));
                 } else {
                     doMerge = ShouldDoMerge(MakeIteratorRange(influences), MakeIteratorRange(cmdStream), optimizer);
@@ -608,16 +609,26 @@ namespace RenderCore { namespace Assets
                         auto type = AsMergeType(TransformCommand(*i2));
                         if (type == MergeType::StaticTransform) {
                             DoTransformMerge(cmdStream, i2, i);
-                            i = cmdStream.begin()+iPos; next = cmdStream.begin()+nextPos;
                         } else if (type == MergeType::Blocker) {
                             // this case always involves pushing a duplicate of the original command
                             // plus, we need a push/pop pair surrounding it
                             auto insertSize = next-i;
                             i2 = cmdStream.insert(i2, i, next);
-                            i2 = cmdStream.insert(i2, (uint32_t)TransformCommand::PushLocalToWorld);
-                            uint32_t popIntr[] = { (uint32_t)TransformCommand::PopLocalToWorld, 1 };
-                            i2 = cmdStream.insert(i2+1+insertSize, &popIntr[0], &popIntr[2]);
-                            i = cmdStream.begin()+iPos; next = cmdStream.begin()+nextPos;
+                            i2 = cmdStream.insert(i2, (uint32_t)TransformCommand::PushLocalToWorld);        // this actually goes in front of what we've just pushed in 
+                            i2 += insertSize + 1;
+
+                            // the push needs to be balanced at the same time this scope is popped off
+                            signed skipIndentChange;
+                            i2 = SkipUntilPop(i2, cmdStream.end(), skipIndentChange);
+                            if (i2 == cmdStream.end()) {
+                                assert(skipIndentChange == 0);
+                                uint32_t popIntr[] = { (uint32_t)TransformCommand::PopLocalToWorld, 1 };
+                                i2 = cmdStream.insert(i2, &popIntr[0], ArrayEnd(popIntr));
+                            } else {
+                                assert(*i2 == (uint32_t)TransformCommand::PopLocalToWorld);
+                                ++i2;
+                                ++*i2;      // new pop should happen at the same time, so just increase count here
+                            }
                         } else if (type == MergeType::OutputMatrix) {
                             // We must either record this transform to be merged into
                             // this output transform, or we have to insert a push into here
@@ -642,9 +653,10 @@ namespace RenderCore { namespace Assets
                                 i2 = cmdStream.insert(i2, (uint32_t)TransformCommand::PushLocalToWorld);
                                 uint32_t popIntr[] = { (uint32_t)TransformCommand::PopLocalToWorld, 1 };
                                 i2 = cmdStream.insert(i2+1+insertSize+outputMatSize, popIntr, ArrayEnd(popIntr));
-                                i = cmdStream.begin()+iPos; next = cmdStream.begin()+nextPos;
                             }
                         }
+
+                        i = cmdStream.begin()+iPos; next = cmdStream.begin()+nextPos;
                     }
 
                         // remove the original...
@@ -831,10 +843,42 @@ namespace RenderCore { namespace Assets
             }
 
             // note -- there's some more things we could do:
-            //  * remove identity transforms (eg, scale by 1.f, translate by zero)
             //  * simplify RotateAxisAngle_Static to RotateX_Static, RotateY_Static, RotateZ_Static
 
             i = NextTransformationCommand_(i);
+        }
+    }
+
+    static void RemoveIdentityStaticTransforms(std::vector<uint32_t>& cmdStream)
+    {
+        const float identityThreshold = 1e-4f;
+
+        for (auto i=cmdStream.begin(); i!=cmdStream.end();) {
+            auto type = TransformCommand(*i);
+
+            bool isIdentity = false;
+            if (type == TransformCommand::TransformFloat4x4_Static) {
+                isIdentity = Equivalent(*(Float4x4*)AsPointer(i+1), Identity<Float4x4>(), identityThreshold);
+            } else if (type == TransformCommand::Translate_Static) {
+                isIdentity = Equivalent(*(Float3*)AsPointer(i+1), Float3{0.f, 0.f, 0.f}, identityThreshold);
+            } else if (type == TransformCommand::RotateX_Static || type == TransformCommand::RotateY_Static || type == TransformCommand::RotateZ_Static) {
+                isIdentity = Equivalent(*(float*)AsPointer(i+1), 0.f, identityThreshold);
+            } else if (type == TransformCommand::Translate_Static) {
+                float a = *(float*)AsPointer(i+1+3);
+                isIdentity = Equivalent(a, 0.f, identityThreshold);
+            } else if (type == TransformCommand::RotateQuaternion_Static) {
+                isIdentity = Equivalent(*(Quaternion*)AsPointer(i+1), Identity<Quaternion>(), identityThreshold);
+            } else if (type == TransformCommand::UniformScale_Static) {
+                isIdentity = Equivalent(*(float*)AsPointer(i+1), 1.f, identityThreshold);
+            } else if (type == TransformCommand::UniformScale_Static) {
+                isIdentity = Equivalent(*(Float3*)AsPointer(i+1), Float3{1.f, 1.f, 1.f}, identityThreshold);
+            }
+
+            auto nexti = NextTransformationCommand_(i);
+            if (isIdentity) {
+                i = cmdStream.erase(i, nexti);
+            } else
+                i = nexti;
         }
     }
 
@@ -868,6 +912,7 @@ namespace RenderCore { namespace Assets
         MergeSequentialTransforms(result, optimizer);
         RemoveRedundantPushes(result);
         SimplifyTransformTypes(result);
+        RemoveIdentityStaticTransforms(result);
         OptimizePatterns(result);
         RemoveRedundantPushes(result);
 
@@ -1256,7 +1301,7 @@ namespace RenderCore { namespace Assets
         for (auto i=input.begin(); i!=input.end();) {
 			auto nexti = NextTransformationCommand_(i);
             if (IsBindingPointCommand((TransformCommand)*i)) {
-				auto parameter = (*(i+1)) | (uint64_t(*(i+12) << 32ull));       // endian
+				auto parameter = (*(i+1)) | (uint64_t(*(i+12)) << 32ull);       // endian
                 
                 bool in = std::find(filterIn.begin(), filterIn.end(), parameter) != filterIn.end();
                 if (in) {
