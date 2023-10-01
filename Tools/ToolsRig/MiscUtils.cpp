@@ -10,6 +10,9 @@
 #include "../../Assets/OperationContext.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Utility/Threading/Mutex.h"
+#include "../../Utility/Streams/PathUtils.h"
+#include <stack>
+#include <future>
 
 namespace ToolsRig
 {
@@ -41,6 +44,109 @@ namespace ToolsRig
 			}
 		}
 		return result;
+	}
+
+	namespace Internal
+	{
+		TreeOfDirectories CalculateDirectoriesByCompilationTargets(StringSection<> base)
+		{
+			auto modelExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(RenderCore::Assets::ModelScaffold::CompileProcessType);
+			auto animationExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(RenderCore::Assets::AnimationSetScaffold::CompileProcessType);
+			auto skeletonExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(RenderCore::Assets::SkeletonScaffold::CompileProcessType);
+			auto materialExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(RenderCore::Assets::RawMatConfigurations::CompileProcessType);
+
+			TreeOfDirectories result;
+
+			result._directories.push_back(TreeOfDirectories::Directory{
+				(unsigned)result._stringTable.size(),
+				~0u, 0, 0,
+				0, 0
+			});
+			result._stringTable.insert(result._stringTable.end(), base.begin(), base.end());
+			result._stringTable.push_back(0);
+
+			struct PendingDirectory
+			{
+				::Assets::FileSystemWalker _walker;
+				unsigned _indexInResult;
+			};
+			std::stack<PendingDirectory> pendingDirectories;
+			pendingDirectories.emplace(PendingDirectory{::Assets::MainFileSystem::BeginWalk(base), 0});
+
+			while (!pendingDirectories.empty()) {
+
+				auto pendingDir = std::move(pendingDirectories.top());
+				pendingDirectories.pop();
+
+				// Find the targets in this immediate directory
+				CompilationTarget::BitField fileTargets = 0;
+				for (auto f=pendingDir._walker.begin_files(); f!=pendingDir._walker.end_files(); ++f) {
+					auto mountedName = f.Desc()._mountedName;
+					auto ext = MakeFileNameSplitter(mountedName).Extension();
+					auto i = std::find_if(modelExts.begin(), modelExts.end(), [ext](const auto& q) { return XlEqStringI(ext, q.first); });
+					if (i != modelExts.end()) fileTargets |= CompilationTarget::Model;
+					i = std::find_if(animationExts.begin(), animationExts.end(), [ext](const auto& q) { return XlEqStringI(ext, q.first); });
+					if (i != animationExts.end()) fileTargets |= CompilationTarget::Animation;
+					i = std::find_if(skeletonExts.begin(), skeletonExts.end(), [ext](const auto& q) { return XlEqStringI(ext, q.first); });
+					if (i != skeletonExts.end()) fileTargets |= CompilationTarget::Skeleton;
+					i = std::find_if(materialExts.begin(), materialExts.end(), [ext](const auto& q) { return XlEqStringI(ext, q.first); });
+					if (i != materialExts.end()) fileTargets |= CompilationTarget::Material;
+				}
+				result._directories[pendingDir._indexInResult]._fileTargets = fileTargets;
+
+				// propagate up to parents
+				{
+					auto parent = result._directories[pendingDir._indexInResult]._parent;
+					while (parent != ~0u) {
+						result._directories[parent]._subtreeTargets |= fileTargets;
+						parent = result._directories[parent]._parent;
+					}
+				}
+
+				// Queue up children
+				result._directories[pendingDir._indexInResult]._childrenStart = (unsigned)result._directories.size();
+
+				for (auto dir = pendingDir._walker.begin_directories(); dir != pendingDir._walker.end_directories(); ++dir) {
+					auto name = dir.Name();
+					if (name.empty() || name[0] == '.') continue;
+
+					result._directories.push_back(TreeOfDirectories::Directory{
+						(unsigned)result._stringTable.size(),
+						pendingDir._indexInResult, 0, 0,
+						0, 0
+					});
+					result._stringTable.insert(result._stringTable.end(), name.begin(), name.end());
+					result._stringTable.push_back(0);
+
+					pendingDirectories.emplace(PendingDirectory{std::move(*dir), (unsigned)result._directories.size()-1});
+					++result._directories[pendingDir._indexInResult]._childCount;
+				}
+
+			}
+
+			return result;
+		}
+	}
+
+	std::future<TreeOfDirectories> CalculateDirectoriesByCompilationTargets(StringSection<> base)
+	{
+		std::promise<TreeOfDirectories> promise;
+		auto result = promise.get_future();
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), base=base.AsString()]() mutable {
+				TRY {
+					promise.set_value(Internal::CalculateDirectoriesByCompilationTargets(base));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+
+		return result;
+	}
+
+	TreeOfDirectories CalculateDirectoriesByCompilationTargets_Temp(StringSection<> base)
+	{
+		return CalculateDirectoriesByCompilationTargets(base).get();
 	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

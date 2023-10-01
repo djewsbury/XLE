@@ -11,6 +11,7 @@
 namespace Assets { class OperationContext; }
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class SubFrameEvents; }}
+namespace std { template<typename T> class future; }
 
 namespace ToolsRig
 {
@@ -47,6 +48,24 @@ namespace ToolsRig
 		using BitField = unsigned;
 	}
 	CompilationTarget::BitField FindCompilationTargets(StringSection<> ext);
+
+	class TreeOfDirectories
+	{
+	public:
+		struct Directory
+		{
+			unsigned _nameStart;
+			unsigned _parent;
+			unsigned _childrenStart, _childCount;
+			CompilationTarget::BitField _fileTargets, _subtreeTargets;
+		};
+		std::vector<Directory> _directories;
+
+		std::vector<char> _stringTable;
+		std::vector<std::pair<uint64_t, unsigned>> _hashTableLookup;
+	};
+	std::future<TreeOfDirectories> CalculateDirectoriesByCompilationTargets(StringSection<> base);
+	TreeOfDirectories CalculateDirectoriesByCompilationTargets_Temp(StringSection<> base);
 
 	std::shared_ptr<::Assets::OperationContext> CreateLoadingContext();
 

@@ -25,100 +25,191 @@ using namespace System::ComponentModel::Composition;
 
 namespace GUILayer
 {
-	public ref class ResourceFolderBridge : public IOpaqueResourceFolder
-	{
-	public:
-		property IEnumerable<IOpaqueResourceFolder^>^ Subfolders { 
-			virtual IEnumerable<IOpaqueResourceFolder^>^ get() override;
-		}
-		property bool IsLeaf { 
-			virtual bool get() override;
-		}
-        property IEnumerable<Object^>^ Resources { 
-			virtual IEnumerable<Object^>^ get() override;
-		}
-        property IOpaqueResourceFolder^ Parent { 
-			virtual IOpaqueResourceFolder^ get() { return nullptr; }
-		}
-        property String^ Name {
-			virtual String^ get() override { return _name; }
-		}
-
-		static ResourceFolderBridge^ BeginFromRoot();
-		static ResourceFolderBridge^ BeginFrom(String^);
-
-		ResourceFolderBridge();
-		ResourceFolderBridge(::Assets::FileSystemWalker&& walker, String^ name);
-		~ResourceFolderBridge();
-	private:
-		clix::shared_ptr<::Assets::FileSystemWalker> _walker;
-		String^ _name;
-	};
-
 	static String^ Marshal(StringSection<utf8> str)
 	{
 		return clix::detail::StringMarshaler<clix::detail::NetFromCxx>::marshalCxxString<clix::E_UTF8>(str.begin(), str.end());
 	}
 
-	IEnumerable<IOpaqueResourceFolder^>^ ResourceFolderBridge::Subfolders::get()
-	{
-		auto result = gcnew List<IOpaqueResourceFolder^>();
-		for (auto i=_walker->begin_directories(); i!=_walker->end_directories(); ++i)
-			result->Add(gcnew ResourceFolderBridge(*i, clix::marshalString<clix::E_UTF8>(i.Name())));
-		return result;
-	}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	bool ResourceFolderBridge::IsLeaf::get()
+	public ref class ResourceFolderBridge : public IOpaqueResourceFolder
 	{
-		return _walker->begin_directories() == _walker->end_directories();
-	}
-
-	IEnumerable<Object^>^ ResourceFolderBridge::Resources::get()
-	{
-		auto result = gcnew List<Object^>();
-		for (auto i=_walker->begin_files(); i!=_walker->end_files(); ++i) {
-			auto markerAndFS = *i;
-			static_assert(sizeof(decltype(markerAndFS._marker)::value_type)==1, "Math here assumes markers are vectors of byte types");
-			auto res = gcnew array<uint8_t>(int(markerAndFS._marker.size() + sizeof(::Assets::FileSystemId)));
+	public:
+		property IEnumerable<IOpaqueResourceFolder^>^ Subfolders
+		{
+			virtual IEnumerable<IOpaqueResourceFolder^>^ get() override
 			{
-				pin_ptr<uint8_t> pinnedBytes = &res[0];
-				*(::Assets::FileSystemId*)pinnedBytes = markerAndFS._fs;
-				memcpy(&pinnedBytes[sizeof(::Assets::FileSystemId)], markerAndFS._marker.data(), markerAndFS._marker.size());
+				auto result = gcnew List<IOpaqueResourceFolder^>();
+				for (auto i=_walker->begin_directories(); i!=_walker->end_directories(); ++i)
+					result->Add(gcnew ResourceFolderBridge(*i, clix::marshalString<clix::E_UTF8>(i.Name())));
+				return result;
 			}
-			result->Add(res);
 		}
-		return result;
-	}
+		property bool IsLeaf
+		{
+			virtual bool get() override
+			{
+				return _walker->begin_directories() == _walker->end_directories();
+			}
+		}
+		property IEnumerable<Object^>^ Resources
+		{
+			virtual IEnumerable<Object^>^ get() override
+			{
+				auto result = gcnew List<Object^>();
+				for (auto i=_walker->begin_files(); i!=_walker->end_files(); ++i) {
+					auto markerAndFS = *i;
+					static_assert(sizeof(decltype(markerAndFS._marker)::value_type)==1, "Math here assumes markers are vectors of byte types");
+					auto res = gcnew array<uint8_t>(int(markerAndFS._marker.size() + sizeof(::Assets::FileSystemId)));
+					{
+						pin_ptr<uint8_t> pinnedBytes = &res[0];
+						*(::Assets::FileSystemId*)pinnedBytes = markerAndFS._fs;
+						memcpy(&pinnedBytes[sizeof(::Assets::FileSystemId)], markerAndFS._marker.data(), markerAndFS._marker.size());
+					}
+					result->Add(res);
+				}
+				return result;
+			}
+		}
+		property IOpaqueResourceFolder^ Parent
+		{
+			virtual IOpaqueResourceFolder^ get() { return nullptr; }
+		}
+		property String^ Name
+		{
+			virtual String^ get() override { return _name; }
+		}
 
-	ResourceFolderBridge^ ResourceFolderBridge::BeginFromRoot()
-	{
-		return gcnew ResourceFolderBridge(::Assets::MainFileSystem::BeginWalk(), "<root>");
-	}
+		static ResourceFolderBridge^ BeginFromRoot()
+		{
+			return gcnew ResourceFolderBridge(::Assets::MainFileSystem::BeginWalk(), "<root>");
+		}
+		static ResourceFolderBridge^ BeginFrom(String^ base)
+		{
+			auto nativeBase = clix::marshalString<clix::E_UTF8>(base);
+			return gcnew ResourceFolderBridge(::Assets::MainFileSystem::BeginWalk(nativeBase), base);
+		}
 
-	ResourceFolderBridge^ ResourceFolderBridge::BeginFrom(String^ base)
-	{
-		auto nativeBase = clix::marshalString<clix::E_UTF8>(base);
-		return gcnew ResourceFolderBridge(::Assets::MainFileSystem::BeginWalk(nativeBase), base);
-	}
+		ResourceFolderBridge()
+		{}
+		ResourceFolderBridge(::Assets::FileSystemWalker&& walker, String^ name)
+		: _name(name)
+		{
+			_walker = std::make_shared<::Assets::FileSystemWalker>(std::move(walker));
+		}
+		~ResourceFolderBridge()
+		{
+			_walker.reset();
+			delete _walker;
+		}
+	private:
+		clix::shared_ptr<::Assets::FileSystemWalker> _walker;
+		String^ _name;
+	};
 
-	ResourceFolderBridge::ResourceFolderBridge()
-	{
-	}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	ResourceFolderBridge::ResourceFolderBridge(::Assets::FileSystemWalker&& walker, String^ name)
-	: _name(name)
+	public ref class ResourceFolderBridgeFromTreeOfDirectories : public IOpaqueResourceFolder
 	{
-		_walker = std::make_shared<::Assets::FileSystemWalker>(std::move(walker));
-	}
+	public:
+		property IEnumerable<IOpaqueResourceFolder^>^ Subfolders
+		{
+			virtual IEnumerable<IOpaqueResourceFolder^>^ get() override
+			{
+				auto result = gcnew List<IOpaqueResourceFolder^>();
+				auto childCount = _treeOfDirectories->_directories[_dirIdx]._childCount;
+				auto childrenStart = _treeOfDirectories->_directories[_dirIdx]._childrenStart;
+				for (unsigned c=0; c<childCount; ++c)
+					if (((_treeOfDirectories->_directories[childrenStart+c]._fileTargets|_treeOfDirectories->_directories[childrenStart+c]._subtreeTargets)&_targetFilter)!=0)
+						result->Add(gcnew ResourceFolderBridgeFromTreeOfDirectories(_treeOfDirectories, childrenStart+c, _targetFilter));
+				return result;
+			}
+		}
+		property bool IsLeaf
+		{
+			virtual bool get() override
+			{
+				return _treeOfDirectories->_directories[_dirIdx]._childCount == 0;
+			}
+		}
+		property IEnumerable<Object^>^ Resources
+		{
+			virtual IEnumerable<Object^>^ get() override
+			{
+				auto result = gcnew List<Object^>();
+				std::string fullMountedName;
+				{
+					auto i = _dirIdx;
+					while (i != ~0u) {
+						StringSection<> part = &_treeOfDirectories->_stringTable[_treeOfDirectories->_directories[i]._nameStart];
+						fullMountedName.insert(fullMountedName.begin(), part.begin(), part.end());
+						fullMountedName.insert(fullMountedName.begin()+part.size(), '/');
+						i = _treeOfDirectories->_directories[i]._parent;
+					}
+				}
+				auto walker = ::Assets::MainFileSystem::BeginWalk(fullMountedName);
+				for (auto i=walker.begin_files(); i!=walker.end_files(); ++i) {
+					auto mountedName = i.Desc()._mountedName;
+					if ((ToolsRig::FindCompilationTargets(MakeFileNameSplitter(mountedName).Extension())&_targetFilter) == 0)
+						continue;
 
-	ResourceFolderBridge::~ResourceFolderBridge() 
-	{
-		_walker.reset();
-		delete _walker;
-	}
+					auto markerAndFS = *i;
+					static_assert(sizeof(decltype(markerAndFS._marker)::value_type)==1, "Math here assumes markers are vectors of byte types");
+					auto res = gcnew array<uint8_t>(int(markerAndFS._marker.size() + sizeof(::Assets::FileSystemId)));
+					{
+						pin_ptr<uint8_t> pinnedBytes = &res[0];
+						*(::Assets::FileSystemId*)pinnedBytes = markerAndFS._fs;
+						memcpy(&pinnedBytes[sizeof(::Assets::FileSystemId)], markerAndFS._marker.data(), markerAndFS._marker.size());
+					}
+					result->Add(res);
+				}
+				return result;
+			}
+		}
+		property IOpaqueResourceFolder^ Parent
+		{
+			virtual IOpaqueResourceFolder^ get() { return nullptr; }
+		}
+		property String^ Name
+		{
+			virtual String^ get() override { return Marshal(NativeName()); }
+		}
+
+		StringSection<> NativeName()
+		{
+			return &_treeOfDirectories->_stringTable[_treeOfDirectories->_directories[_dirIdx]._nameStart];
+		}
+
+		static ResourceFolderBridgeFromTreeOfDirectories^ BeginFrom(String^ base)
+		{
+			auto nativeBase = clix::marshalString<clix::E_UTF8>(base);
+			auto dirs = ToolsRig::CalculateDirectoriesByCompilationTargets_Temp(nativeBase);
+			auto d = std::make_shared<ToolsRig::TreeOfDirectories>(std::move(dirs));
+			return gcnew ResourceFolderBridgeFromTreeOfDirectories(d, 0, ToolsRig::CompilationTarget::Animation);
+		}
+
+		ResourceFolderBridgeFromTreeOfDirectories()
+		: _treeOfDirectories(nullptr), _dirIdx(0), _targetFilter(~0u)
+		{}
+		ResourceFolderBridgeFromTreeOfDirectories(std::shared_ptr<ToolsRig::TreeOfDirectories> treeOfDirectories, unsigned dirIdx, ToolsRig::CompilationTarget::BitField targetFilter)
+		: _treeOfDirectories(treeOfDirectories), _dirIdx(dirIdx), _targetFilter(targetFilter)
+		{
+		}
+		~ResourceFolderBridgeFromTreeOfDirectories()
+		{
+			_treeOfDirectories.reset();
+			delete _treeOfDirectories;
+		}
+	private:
+		clix::shared_ptr<ToolsRig::TreeOfDirectories> _treeOfDirectories;
+		unsigned _dirIdx;
+		ToolsRig::CompilationTarget::BitField _targetFilter;
+	};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	[Export(IResourceQueryService::typeid)]
-    [PartCreationPolicy(CreationPolicy::Shared)]
+	[PartCreationPolicy(CreationPolicy::Shared)]
 	public ref class ResourceQueryService : public IResourceQueryService
 	{
 	public:
@@ -173,33 +264,33 @@ namespace GUILayer
 		}
 
 		Nullable<ResourceDesc> Base_GetDesc(Object^ identifier)
-        {
-            Uri^ resourceUri = dynamic_cast<Uri^>(identifier);
-            if (resourceUri != nullptr && resourceUri->IsAbsoluteUri)
-            {
-                // note that we can't call LocalPath on a relative uri -- and therefore this is only valid for absolute uris
+		{
+			Uri^ resourceUri = dynamic_cast<Uri^>(identifier);
+			if (resourceUri != nullptr && resourceUri->IsAbsoluteUri)
+			{
+				// note that we can't call LocalPath on a relative uri -- and therefore this is only valid for absolute uris
 
-                ResourceDesc result;
-                result.NaturalName = resourceUri->LocalPath;
-                result.MountedName = resourceUri->LocalPath;
-                result.ShortName = System::IO::Path::GetFileName(resourceUri->LocalPath);
-                result.Filesystem = "RawFS";
-                result.Types = 0;
-                try
-                {
+				ResourceDesc result;
+				result.NaturalName = resourceUri->LocalPath;
+				result.MountedName = resourceUri->LocalPath;
+				result.ShortName = System::IO::Path::GetFileName(resourceUri->LocalPath);
+				result.Filesystem = "RawFS";
+				result.Types = 0;
+				try
+				{
 					System::IO::FileInfo^ fileInfo = gcnew System::IO::FileInfo(resourceUri->LocalPath);
-                    result.SizeInBytes = (UInt64)fileInfo->Length;
-                    result.ModificationTime = fileInfo->LastWriteTime;
-                }
-                catch (System::IO::IOException^)
-                {
-                    result.SizeInBytes = 0;
-                    result.ModificationTime = gcnew DateTime();
-                }
-                return result;
-            }
+					result.SizeInBytes = (UInt64)fileInfo->Length;
+					result.ModificationTime = fileInfo->LastWriteTime;
+				}
+				catch (System::IO::IOException^)
+				{
+					result.SizeInBytes = 0;
+					result.ModificationTime = gcnew DateTime();
+				}
+				return result;
+			}
 			return {};
-        }
+		}
 	};
 
 
