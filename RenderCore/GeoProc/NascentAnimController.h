@@ -74,8 +74,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		IteratorRange<const std::string*>	GetJointNames() const { return MakeIteratorRange(_jointNames); }
 		IteratorRange<const Float4x4*>		GetInverseBindMatrices() const { return MakeIteratorRange(_inverseBindMatrices); }
+        IteratorRange<Float4x4*>		    GetInverseBindMatrices() { return MakeIteratorRange(_inverseBindMatrices); }
 		const Float4x4&						GetBindShapeMatrix() const { return _bindShapeMatrix; }
         const Float4x4&						GetPostSkinningBindMatrix() const { return _postSkinningBindMatrix; }
+        void								SetBindShapeMatrix(const Float4x4& newValue) { _bindShapeMatrix = newValue; }
+        void								SetPostSkinningBindMatrix(const Float4x4& newValue) { _postSkinningBindMatrix = newValue; }
 
         UnboundSkinController(
             std::vector<Float4x4>&& inverseBindMatrices, const Float4x4& bindShapeMatrix, const Float4x4& postSkinningBindMatrix,

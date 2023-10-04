@@ -20,6 +20,9 @@ namespace RenderCore { namespace Assets
 		TransformationMachineOptimizer_Null nullOptimizer;
 		_specializedSkeletonMachine = OptimizeTransformationMachine(_specializedSkeletonMachine, nullOptimizer);
 
+		// Log(Warning) << "-------------------- POST OPTIMIZATION -----------------" << std::endl;
+		// TraceTransformationMachine(Log(Warning), _specializedSkeletonMachine);
+
 		_outputMatrixCount = input.GetOutputMatrixCount();
 	}
 
