@@ -245,8 +245,8 @@ namespace Formatters
 							// ------------------------- previously evaluated members --------------------
 							if (std::find(localVariables.begin(), localVariables.end(), nextStep._nameTokenIndex) != localVariables.end()) {
 								usingDynamicVariable = true;
-								static const unsigned dummy = 1;
-								nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
+								static const unsigned dummy = 0;
+								nextStep.SetQueryResult(dummy);
 								continue;
 							}
 
@@ -431,6 +431,7 @@ namespace Formatters
 		TRY {
 			uint8_t stringParseOutputBuffer[1024];
 			unsigned stringParseOutputIterator = 0;
+			unsigned systemVarBuffer = 0;
 			Utility::Internal::ExpressionEvaluator exprEval{tokenDictionary, expressionCommands};
 			while (auto nextStep = exprEval.GetNextStep()) {
 				assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
@@ -446,17 +447,18 @@ namespace Formatters
 
 				// ------------------------- system variables --------------------
 				if (hash == "align2"_h) {
-					nextStep.SetQueryResult(PtrDiff(_dataIterator.begin(), _originalStart) & 1);
+					systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 1;
+					nextStep.SetQueryResult(systemVarBuffer);
 					gotValue = true;
 				} else if (hash == "align4"_h) {
-					auto align = PtrDiff(_dataIterator.begin(), _originalStart) & 3;
-					align = (align == 0) ? 0 : 4-align;
-					nextStep.SetQueryResult(align);
+					systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 3;
+					systemVarBuffer = (systemVarBuffer == 0) ? 0 : 4-systemVarBuffer;
+					nextStep.SetQueryResult(systemVarBuffer);
 					gotValue = true;
 				} else if (hash == "align8"_h) {
-					auto align = PtrDiff(_dataIterator.begin(), _originalStart) & 7;
-					align = (align == 0) ? 0 : 8-align;
-					nextStep.SetQueryResult(align);
+					systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 7;
+					systemVarBuffer = (systemVarBuffer == 0) ? 0 : 8-systemVarBuffer;
+					nextStep.SetQueryResult(systemVarBuffer);
 					gotValue = true;
 				}
 
