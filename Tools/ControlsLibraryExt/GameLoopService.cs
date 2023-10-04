@@ -9,6 +9,7 @@ using Sce.Atf.Adaptation;
 using Sce.Atf.Applications;
 using Sce.Atf.Controls;
 using Sce.Atf.Controls.Adaptable;
+using System.Diagnostics;
 
 namespace ControlsLibraryExt
 {
@@ -19,6 +20,7 @@ namespace ControlsLibraryExt
         void IInitializable.Initialize()
         {
             Application.Idle += Application_Idle;
+            _frameToFrameMinimum = Stopwatch.Frequency / 60;
         }
 
         private void Application_Idle(object sender, EventArgs e)
@@ -30,7 +32,17 @@ namespace ControlsLibraryExt
                     System.Threading.Thread.Sleep(16);
                 }
 
-                GUILayer.EngineControl.TickRegularAnimation();
+                // note -- this is a non-ideal frame scheduling method; it's only meant to prevent rendering from happening too often
+                long timer = Stopwatch.GetTimestamp();
+                if ((timer - _lastIdleRender) > _frameToFrameMinimum)
+                {
+                    GUILayer.EngineControl.TickRegularAnimation();
+                    _lastIdleRender = timer;
+                }
+                else
+                {
+                    System.Threading.Thread.Sleep(0);       // give up some thread time to avoid a busy loop
+                }
             }
         }
 
@@ -38,6 +50,9 @@ namespace ControlsLibraryExt
         {
             return PeekMessage(out m_msg, IntPtr.Zero, 0, 0, 0) == 0;
         }
+
+        private long _lastIdleRender = 0;
+        private long _frameToFrameMinimum = 0;
 
         [System.Security.SuppressUnmanagedCodeSecurity]
         [DllImport("User32.dll", CharSet = CharSet.Unicode)]
