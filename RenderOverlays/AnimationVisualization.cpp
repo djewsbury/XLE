@@ -69,6 +69,9 @@ namespace RenderOverlays
 			material, Topology::TriangleList).Cast<VisVertex_PC*>();
 		size_t workingVertexIterator = 0;
 
+		const unsigned color = HardwareColor(ColorB{53, 129, 148});
+		const unsigned squareColor = HardwareColor(ColorB{94, 140, 189});
+
 		// Draw a sprite for each output matrix location
 		auto cameraRight = Normalize(ExtractRight_Cam(parserContext.GetProjectionDesc()._cameraToWorld));
 		auto cameraUp = Normalize(ExtractUp_Cam(parserContext.GetProjectionDesc()._cameraToWorld));
@@ -86,24 +89,24 @@ namespace RenderOverlays
 				position + scale * cameraUp + scale * cameraRight
 			};
 
-			workingVertices[workingVertexIterator++] = {corners[0], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[1], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[2], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[2], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[1], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[3], 0xff00af00};
+			workingVertices[workingVertexIterator++] = { corners[0], squareColor };
+			workingVertices[workingVertexIterator++] = { corners[1], squareColor };
+			workingVertices[workingVertexIterator++] = { corners[2], squareColor };
+			workingVertices[workingVertexIterator++] = { corners[2], squareColor };
+			workingVertices[workingVertexIterator++] = { corners[1], squareColor };
+			workingVertices[workingVertexIterator++] = { corners[3], squareColor };
 		}
 
 		std::vector<uint32_t> parents(outputMatrixCount);
 		skeleton.CalculateParentPointers(MakeIteratorRange(parents));
 		for (unsigned c=0; c<parents.size(); ++c) {
 			if (parents[c] >= outputMatrices.size()) {
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
 				continue;
 			}
 
@@ -113,12 +116,12 @@ namespace RenderOverlays
 			auto axis = parentPosition - childPosition;
 			Float3 tangent;
 			if (!Normalize_Checked<Float3>(&tangent, Cross(cameraForward, axis))) {
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
-				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, 0xff00af00 };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
+				workingVertices[workingVertexIterator++] = { Float3{0.f, 0.f, 0.f}, color };
 				continue;
 			}
 
@@ -132,12 +135,12 @@ namespace RenderOverlays
 				parentPosition + scaleP * tangent
 			};
 
-			workingVertices[workingVertexIterator++] = {corners[0], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[1], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[2], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[2], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[1], 0xff00af00};
-			workingVertices[workingVertexIterator++] = {corners[3], 0xff00af00};
+			workingVertices[workingVertexIterator++] = {corners[0], color};
+			workingVertices[workingVertexIterator++] = {corners[1], color};
+			workingVertices[workingVertexIterator++] = {corners[2], color};
+			workingVertices[workingVertexIterator++] = {corners[2], color};
+			workingVertices[workingVertexIterator++] = {corners[1], color};
+			workingVertices[workingVertexIterator++] = {corners[3], color};
 		}
 
 		assert(workingVertexIterator <= vertexCount); 
