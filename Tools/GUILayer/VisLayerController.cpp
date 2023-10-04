@@ -139,6 +139,7 @@ namespace GUILayer
 
 		_pimpl.reset(new VisLayerControllerPimpl());
 		_pimpl->_animState = std::make_shared<ToolsRig::VisAnimationState>();
+		_pimpl->_animState->_activeAnimation = "anim";		// default to something reasonable
 		_pimpl->_camera = std::make_shared<ToolsRig::VisCameraSettings>();
 		_pimpl->_loadingContext = ToolsRig::CreateLoadingContext();
 

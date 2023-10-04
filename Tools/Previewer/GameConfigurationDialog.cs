@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -17,8 +18,19 @@ namespace Previewer
         {
             InitializeComponent();
 
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\xenoviewer"))
+            {
+                //if it does exist, retrieve the stored values  
+                if (key != null)
+                {
+                    starfieldFolder.Text = key.GetValue("Starfield_SrcFolder").ToString();
+                    key.Close();
+                }
+            }
+
             // We can't get this from the registry, so just pick a common default
-            starfieldFolder.Text = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Starfield";
+            if (string.IsNullOrEmpty(starfieldFolder.Text))
+                starfieldFolder.Text = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Starfield";
         }
 
         private void starfieldSelectFolder_Click(object sender, EventArgs e)
@@ -38,6 +50,17 @@ namespace Previewer
         private void fakeOkButton_Click(object sender, EventArgs e)
         {
             var starfieldFolderValue = starfieldFolder.Text.Trim();
+
+            // commit to registry
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\xenoviewer"))
+            {
+                if (key != null)
+                {
+                    key.SetValue("Starfield_SrcFolder", starfieldFolderValue);
+                    key.Close();
+                }
+            }
+
             starfieldFolder.Enabled = false;
 
             // Use XLE bridge utils to configure 
