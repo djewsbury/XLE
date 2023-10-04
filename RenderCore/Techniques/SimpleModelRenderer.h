@@ -58,6 +58,8 @@ namespace RenderCore { namespace Techniques
 	public:
 		unsigned ModelJointToMachineOutput(unsigned elementIdx, unsigned modelJointIdx) const;
 		const Float4x4& ModelJointToUnanimatedTransform(unsigned elementIdx, unsigned modelJointIdx) const;
+		bool ModelJointIsBound(unsigned elementIdx, unsigned modelJointIdx) const;
+		bool AreAllJointsBound() const { return _areAllJointsBound; }
 
 		ModelConstructionSkeletonBinding(const Assets::ModelRendererConstruction& construction);
 		ModelConstructionSkeletonBinding();
@@ -66,6 +68,8 @@ namespace RenderCore { namespace Techniques
 		std::vector<Float4x4>	_unanimatedTransforms;
 		std::vector<unsigned>	_elementStarts;
 		std::vector<Float3x4>	_elementToObject;
+		std::vector<bool>		_isBound;
+		bool					_areAllJointsBound = true;
 	};
 	
 	class SimpleModelRenderer
@@ -238,5 +242,10 @@ namespace RenderCore { namespace Techniques
 	inline const Float4x4& ModelConstructionSkeletonBinding::ModelJointToUnanimatedTransform(unsigned elementIdx, unsigned modelJointIdx) const
 	{
 		return _unanimatedTransforms[_elementStarts[elementIdx] + modelJointIdx];
+	}
+
+	inline bool ModelConstructionSkeletonBinding::ModelJointIsBound(unsigned elementIdx, unsigned modelJointIdx) const
+	{
+		return _isBound[_elementStarts[elementIdx] + modelJointIdx];
 	}
 }}

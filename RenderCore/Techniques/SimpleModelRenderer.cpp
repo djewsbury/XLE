@@ -641,6 +641,28 @@ namespace RenderCore { namespace Techniques
 		}
 
 		_skeletonBinding = ModelConstructionSkeletonBinding{*_rendererConstruction};
+
+		// validate that all skeleton bindings that we're going to need were successfully bound
+		// Bindings that are in our command stream input interface, but aren't required to render the model, are allowed to be unbound
+		for (const auto& cmdStream:_drawableConstructor->_cmdStreams) {
+			unsigned elementIdx = ~0u;
+			for (auto cmd:cmdStream.GetCmdStream()) {
+				switch (cmd.Cmd()) {
+				case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+					{
+						auto transformMarker = cmd.As<unsigned>();
+						if (!_skeletonBinding.ModelJointIsBound(elementIdx, transformMarker)) {
+							auto cmdStreamInput = _rendererConstruction->GetElement(elementIdx)->GetModelScaffold()->FindCommandStreamInputInterface();
+							Throw(std::runtime_error(StringMeld<256>() << "Command stream input interface unbound in skeleton binding. Hash binding: " << std::hex << cmdStreamInput[transformMarker]));
+						}
+					}
+					break;
+				case (uint32_t)DrawableConstructor::Command::BeginElement:
+					elementIdx = cmd.As<unsigned>();
+					break;
+				}
+			}
+		}
 	}
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
@@ -846,6 +868,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto externalSkeletonScaffold = construction.GetSkeletonScaffold();
 		_elementToObject.reserve(construction.GetElementCount());
+		_areAllJointsBound = true;
 
 		for (auto ele:construction) {
 			_elementStarts.push_back((unsigned)_modelJointIndexToMachineOutput.size());
@@ -862,6 +885,8 @@ namespace RenderCore { namespace Techniques
 				auto elementBindingRange = MakeIteratorRange(_modelJointIndexToMachineOutput.end()-cmdStreamInput.size(), _modelJointIndexToMachineOutput.end());
 				_unanimatedTransforms.resize(_unanimatedTransforms.size()+cmdStreamInput.size(), Identity<Float4x4>());
 				auto unanimatedTransformsRange = MakeIteratorRange(_unanimatedTransforms.end()-cmdStreamInput.size(), _unanimatedTransforms.end());
+				_isBound.resize(_isBound.size()+cmdStreamInput.size(), false);
+				auto isBoundRange = MakeIteratorRange(_isBound.end()-cmdStreamInput.size(), _isBound.end());
 				
 				// support 2 skeletons -- in this way if there are nodes that are not matched to the external skeleton,
 				// we can drop back to the embedded skeleton. Since the embedded skeleton always comes from the model
@@ -889,6 +914,7 @@ namespace RenderCore { namespace Techniques
 							if (primaryInterface._outputMatrixNames[c2] == name) {
 								elementBindingRange[c] = unsigned(c2);
 								unanimatedTransformsRange[c] = primaryOutputs[c2];
+								isBoundRange[c] = true;
 								gotMatch = true;
 								break;
 							}
@@ -897,12 +923,12 @@ namespace RenderCore { namespace Techniques
 							for (size_t c2=0; c2<secondaryInterface._outputMatrixNameCount; ++c2)
 								if (secondaryInterface._outputMatrixNames[c2] == name) {
 									unanimatedTransformsRange[c] = secondaryOutputs[c2];
+									isBoundRange[c] = true;
 									gotMatch = true;
 									break;
 								}
 
-						if (!gotMatch)
-							Throw(std::runtime_error(StringMeld<256>() << "Command stream input interface unbound in skeleton binding. Hash binding: " << std::hex << name));
+						_areAllJointsBound &= gotMatch;
 					}
 					
 				} else if (primarySkeleton) {
@@ -917,10 +943,11 @@ namespace RenderCore { namespace Techniques
 							if (primaryInterface._outputMatrixNames[c2] == name) {
 								elementBindingRange[c] = unsigned(c2);
 								unanimatedTransformsRange[c] = primaryOutputs[c2];
+								isBoundRange[c] = true;
 								break;
 							}
-						if (elementBindingRange[c] == ~0u)
-							Throw(std::runtime_error(StringMeld<256>() << "Command stream input interface unbound in skeleton binding. Hash binding: " << std::hex << name));
+
+						_areAllJointsBound &= elementBindingRange[c] != ~0u;
 					}
 				}
 			}
