@@ -30,7 +30,7 @@ namespace GUILayer
 	static void AddRegularAnimation(EngineControl^ ctrl)
 	{
 		for (int c=0; c<s_regularAnimationControls->Count;++c)
-			if (!s_regularAnimationControls.get()[c]->Target == (System::Object^)ctrl)
+			if (s_regularAnimationControls.get()[c]->Target == (System::Object^)ctrl)
 				return;
 		s_regularAnimationControls->Add(gcnew System::WeakReference(ctrl));
 	}
