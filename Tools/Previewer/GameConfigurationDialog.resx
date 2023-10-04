@@ -202,7 +202,7 @@
   </data>
   <data name="label2.Text" xml:space="preserve">
     <value>Select the root starfield folder (the one with starfield.exe)
-Support: .nif model files and core materials settings. No animation support yet.
+Support: .nif model files and core materials settings. Work-in-progress animation support.
 Suggest starting with .nif files in meshes/setdressing on main screen</value>
   </data>
   <data name="&gt;&gt;label2.Name" xml:space="preserve">

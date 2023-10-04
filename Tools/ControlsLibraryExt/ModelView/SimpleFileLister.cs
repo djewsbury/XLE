@@ -355,6 +355,11 @@ namespace ControlsLibraryExt.ModelView
                     if ((resourceDesc.Value.Types & typeFilter & (uint)GUILayer.ResourceTypeFlags.Animation) != 0)
                     {
                         var modelSettings = previewerContext.ModelSettings;
+                        if (String.IsNullOrEmpty(modelSettings.SkeletonFileName) && !_shownSkeletonHint)
+                        {
+                            MessageBox.Show("Just a hint, because it's not obvious right now -- for Starfield assets, you must select a skeleton in order to see the animation.\n\nUse \"Skeletons\" in the file lister dropdown.\nLook in meshes/actors/<<something>>/characterassets.\n\nFor human, pick skeleton.nif, but for other types pick skeleton.rig", "Hint, select a skeleton");
+                            _shownSkeletonHint = true;
+                        }
                         modelSettings.AnimationFileName = resourceDesc?.MountedName;
                         changedSomething = true;
                     }
@@ -402,6 +407,8 @@ namespace ControlsLibraryExt.ModelView
         private ControlHostService _controlHostService = null;
 
         GUILayer.TreeOfDirectoriesCalculator _pendingTreeOfDirectories = null;
+
+        private bool _shownSkeletonHint = false;
 
         #region IControlHostClient
         void IControlHostClient.Activate(Control control) {}
