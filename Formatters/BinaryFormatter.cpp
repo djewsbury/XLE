@@ -13,6 +13,8 @@
 #include "../Utility/StreamUtils.h"
 #include <stack>
 
+using namespace Utility::Literals;
+
 namespace Formatters
 {
 
@@ -230,6 +232,15 @@ namespace Formatters
 						Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
 						while (auto nextStep = exprEval.GetNextStep()) {
 							assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
+							uint64_t hash = def._tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex]._hash;
+
+							// ------------------------- system variables --------------------
+							if (hash == "align2"_h || hash == "align4"_h || hash == "align8"_h) {
+								usingDynamicVariable = true;
+								static const unsigned dummy = 1;
+								nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
+								continue;
+							}
 
 							// ------------------------- previously evaluated members --------------------
 							if (std::find(localVariables.begin(), localVariables.end(), nextStep._nameTokenIndex) != localVariables.end()) {
@@ -250,7 +261,6 @@ namespace Formatters
 								}
 							if (foundTemplateParam) continue;
 
-							uint64_t hash = def._tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex]._hash;
 							assert(hash == Hash64(nextStep._name));
 							
 							if (std::find(dynamicLocalVars.begin(), dynamicLocalVars.end(), hash) != dynamicLocalVars.end()) {
@@ -395,6 +405,7 @@ namespace Formatters
 	BinaryInputFormatter::BinaryInputFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data)
 	: _evalContext(&evalContext)
 	, _dataIterator(data)
+	, _originalStart(data.begin())
 	{
 		assert(_dataIterator.begin() <= _dataIterator.end());
 		_queuedNext = Blob::None;
@@ -433,49 +444,67 @@ namespace Formatters
 				assert(hash == Hash64(nextStep._name));
 				bool gotValue = false;
 
+				// ------------------------- system variables --------------------
+				if (hash == "align2"_h) {
+					nextStep.SetQueryResult(PtrDiff(_dataIterator.begin(), _originalStart) & 1);
+					gotValue = true;
+				} else if (hash == "align4"_h) {
+					auto align = PtrDiff(_dataIterator.begin(), _originalStart) & 3;
+					align = (align == 0) ? 0 : 4-align;
+					nextStep.SetQueryResult(align);
+					gotValue = true;
+				} else if (hash == "align8"_h) {
+					auto align = PtrDiff(_dataIterator.begin(), _originalStart) & 7;
+					align = (align == 0) ? 0 : 8-align;
+					nextStep.SetQueryResult(align);
+					gotValue = true;
+				}
+
 				// ------------------------- previously evaluated members --------------------
-				for (auto block=_blockStack.rbegin(); block!=_blockStack.rend() && !gotValue; ++block) {
-					auto localValue = std::find_if(block->_localEvalContext.begin(), block->_localEvalContext.end(), [hash](const auto& q) {return q.first==hash;});
-					if (localValue != block->_localEvalContext.end()) {
+				if (!gotValue) {
+					for (auto block=_blockStack.rbegin(); block!=_blockStack.rend() && !gotValue; ++block) {
+						auto localValue = std::find_if(block->_localEvalContext.begin(), block->_localEvalContext.end(), [hash](const auto& q) {return q.first==hash;});
+						if (localValue != block->_localEvalContext.end()) {
 
-						// If the value is a string; let's attempt to parse it before we send the results to the 
-						if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
-							if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
-								Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryInputFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
-							auto parsedType = ImpliedTyping::ParseFullMatch(
-								MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
-								MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
-							if (parsedType._type != ImpliedTyping::TypeCat::Void) {
-								nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
-								stringParseOutputIterator += parsedType.GetSize();
-								gotValue = true;
-								break;
+							// If the value is a string; let's attempt to parse it before we send the results to the 
+							if (localValue->second._type._typeHint == ImpliedTyping::TypeHint::String && (localValue->second._type._type == ImpliedTyping::TypeCat::UInt8 || localValue->second._type._type == ImpliedTyping::TypeCat::Int8)) {
+								if (stringParseOutputIterator == dimof(stringParseOutputBuffer))
+									Throw(std::runtime_error("Parsing buffer exceeded in expression evaluation in BinaryInputFormatter."));		// This occurs when we're parsing a lot of strings or large arrays from the source data. Consider an alternative approach, because the system isn't optimized for this
+								auto parsedType = ImpliedTyping::ParseFullMatch(
+									MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
+									MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
+								if (parsedType._type != ImpliedTyping::TypeCat::Void) {
+									nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
+									stringParseOutputIterator += parsedType.GetSize();
+									gotValue = true;
+									break;
+								}
+							} else if (localValue->second._reversedEndian) {
+								assert(localValue->second._type._type > ImpliedTyping::TypeCat::UInt8);
+								// flip endian early in order to avoid pushing flipped endian values into ExpressionEvaluator
+								if (localValue->second._type.GetSize() > 8)
+									Throw(std::runtime_error("Attempting to use a reversed endian large type with a conditional statement. This isn't supported"));
+								auto* buffer = _alloca(localValue->second._type.GetSize());
+								assert(localValue->second._data.size() == localValue->second._type.GetSize());
+								ImpliedTyping::FlipEndian(MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize())), localValue->second._data.begin(), localValue->second._type);
+								nextStep.SetQueryResult(localValue->second._type, MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize())));
+							} else {
+								nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
 							}
-						} else if (localValue->second._reversedEndian) {
-							assert(localValue->second._type._type > ImpliedTyping::TypeCat::UInt8);
-							// flip endian early in order to avoid pushing flipped endian values into ExpressionEvaluator
-							if (localValue->second._type.GetSize() > 8)
-								Throw(std::runtime_error("Attempting to use a reversed endian large type with a conditional statement. This isn't supported"));
-							auto* buffer = _alloca(localValue->second._type.GetSize());
-							assert(localValue->second._data.size() == localValue->second._type.GetSize());
-							ImpliedTyping::FlipEndian(MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize())), localValue->second._data.begin(), localValue->second._type);
-							nextStep.SetQueryResult(localValue->second._type, MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize())));
-						} else {
-							nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
+							gotValue = true;
+							break;
 						}
-						gotValue = true;
-						break;
-					}
 
-					// ------------------------- template variables --------------------
-					if (block == _blockStack.rbegin())	// (only for the immediately enclosing context)
-						for (unsigned p=0; p<(unsigned)block->_definition->_templateParameterNames.size(); ++p)
-							if (block->_definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
-								assert(!(block->_parsingTemplateParamsTypeField & (1<<p)));		// assert value, not type parameter
-								nextStep.SetQueryResult(block->_parsingTemplateParams[p]);
-								gotValue = true;
-								break;
-							}
+						// ------------------------- template variables --------------------
+						if (block == _blockStack.rbegin())	// (only for the immediately enclosing context)
+							for (unsigned p=0; p<(unsigned)block->_definition->_templateParameterNames.size(); ++p)
+								if (block->_definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
+									assert(!(block->_parsingTemplateParamsTypeField & (1<<p)));		// assert value, not type parameter
+									nextStep.SetQueryResult(block->_parsingTemplateParams[p]);
+									gotValue = true;
+									break;
+								}
+					}
 				}
 
 				if (!gotValue) {
@@ -935,6 +964,13 @@ namespace Formatters
 			return { start.begin(), skip.end() };
 		} else
 			Throw(std::runtime_error("Expecting array, block or member while skipping binary blob"));
+	}
+
+	void BinaryInputFormatter::SkipBytes(unsigned byteCount)
+	{
+		if (byteCount > _dataIterator.size())
+			Throw(std::runtime_error("Attempting to skip pass more bytes than are remaining in BinaryInputFormatter"));
+		_dataIterator.first = PtrAdd(_dataIterator.first, byteCount);
 	}
 
 	std::optional<size_t> BinaryInputFormatter::TryCalculateFixedSize(unsigned evalTypeId)

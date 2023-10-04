@@ -37,6 +37,7 @@ namespace Formatters
 
 		IteratorRange<const void*> SkipArrayElements(unsigned count);
 		IteratorRange<const void*> SkipNextBlob();
+		void SkipBytes(unsigned byteCount);
 
 		void PushPattern(std::shared_ptr<BinarySchemata> schemata, BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams = {}, uint32_t templateParamsTypeField = 0u);
 
@@ -78,6 +79,7 @@ namespace Formatters
 		std::deque<BlockContext> _blockStack;
 		EvaluationContext* _evalContext = nullptr;
 		IteratorRange<const void*> _dataIterator;
+		const void* _originalStart;
 		std::vector<unsigned> _passedConditionSymbols;
 		bool _reversedEndian = false;
 
