@@ -44,19 +44,39 @@ namespace ControlsLibraryExt.ModelView
 
     class FileListerOuterControl : UserControl
     {
-        public FileListerOuterControl(ResourceSelectionTreeViewContext allFilesContext, ResourceSelectionTreeViewContext modelFilesContext, ResourceSelectionTreeViewContext animationFilesContext, ResourceSelectionTreeViewContext skeletonFilesContext)
+        public event EventHandler AllFilesSelectionChanged;
+        public event EventHandler ModelsSelectionChanged;
+        public event EventHandler AnimationsSelectionChanged;
+        public event EventHandler SkeletonsSelectionChanged;
+
+        public FileListerOuterControl(string baseDir, GUILayer.TreeOfDirectoriesCalculator pendingTreeOfDirectories, GUILayer.IResourceQueryService resourceQueryService)
         {
-            _allFilesContext = allFilesContext;
-            _modelFilesContext = modelFilesContext; 
-            _animationFilesContext = animationFilesContext;
-            _skeletonFilesContext = skeletonFilesContext;
+            // the "TreeViewControl" and "TreeListViewControl" have different advantages
+            //      TreeViewControl -- supports lazy loading, but no columns, also easier to navigate and expand
+            //      TreeListViewControl -- supports columns, but no lazy loading (everything initialized at startup) and more difficult to expand folders
+            _context[0] = new ResourceSelectionTreeViewContext(GUILayer.ResourceFolderBridge.BeginFrom(baseDir), resourceQueryService);
+            _context[0].SelectionChanged += (object sender, EventArgs e) => AllFilesSelectionChanged.Invoke(sender, e);
+            _pendingTreeOfDirectories = pendingTreeOfDirectories;
+            _resourceQueryService = resourceQueryService;
+
+            if (_pendingTreeOfDirectories.IsReady)
+            {
+                CompleteTreeOfDirectoriesConstruction();
+            }
+            else
+            {
+                _timer = new Timer();
+                _timer.Tick += Timer_CheckTreeOfDirectories;
+                _timer.Interval = 1000;
+                _timer.Start();
+            }
 
             this.SuspendLayout();
 
             ComboBox mode = new ComboBox();
-            mode.Anchor = (System.Windows.Forms.AnchorStyles)(System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right);
-            mode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            mode.Size = new System.Drawing.Size(this.Width, 23);
+            mode.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            mode.DropDownStyle = ComboBoxStyle.DropDownList;
+            mode.Size = new Size(this.Width, 23);
             mode.Items.Add("All Files");
             mode.Items.Add("Models");
             mode.Items.Add("Animations");
@@ -65,14 +85,22 @@ namespace ControlsLibraryExt.ModelView
             mode.SelectedIndexChanged += Mode_SelectedIndexChanged;
 
             var adapter = CreateTreeControlAdapter();
-            adapter.TreeView = allFilesContext;
-            _currentTreeControl = adapter.TreeControl;
-            _currentTreeControl.Anchor = (System.Windows.Forms.AnchorStyles)(System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right | System.Windows.Forms.AnchorStyles.Bottom);
-            _currentTreeControl.Location = new System.Drawing.Point(0, 23);
-            _currentTreeControl.Size = new System.Drawing.Size(this.Width, this.Height-23);
+            adapter.TreeView = _context[0];
+            _treeControls[0] = adapter.TreeControl;
+            _treeControls[0].Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+            _treeControls[0].Location = new Point(0, 23);
+            _treeControls[0].Size = new Size(this.Width, this.Height-23);
+            _currentMode = 0;
+
+            _pendingMsg = new Label();
+            _pendingMsg.Text = "Please wait -- filtering directory tree...";
+            _pendingMsg.TextAlign = ContentAlignment.MiddleCenter;
+            _pendingMsg.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+            _pendingMsg.Location = new Point(0, 23);
+            _pendingMsg.Size = new Size(this.Width, this.Height - 23);
 
             this.Controls.Add(mode);
-            this.Controls.Add(_currentTreeControl);
+            this.Controls.Add(_treeControls[0]);
             this.ResumeLayout(false);
             this.PerformLayout();
         }
@@ -80,54 +108,48 @@ namespace ControlsLibraryExt.ModelView
         protected virtual void Dispose(bool disposing)
         {
             if (!disposing) return;
-            if (_currentTreeControl != null)
-                _currentTreeControl.Dispose();
-            _currentTreeControl = null;
-            _allFilesContext = null;
-            _animationFilesContext = null;
+            for (uint c = 0; c < 4; ++c)
+            {
+                if (_treeControls[c] != null)
+                    _treeControls[c].Dispose();
+                _treeControls[c] = null;
+                if (_context[c] != null)
+                    _context[c].Dispose();
+                _context[c] = null;
+                if (_checkBoxes[c] != null)
+                    _checkBoxes[c].Dispose();
+                _checkBoxes[c] = null;
+            }
+            if (_timer != null)
+            {
+                _timer.Stop();
+                _timer.Dispose();
+                _timer = null;
+            }
         }
 
         private void Mode_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (_currentTreeControl != null)
-            {
-                Controls.Remove(_currentTreeControl);
-                _currentTreeControl.Dispose();
-                _currentTreeControl = null;
-            }
+            Controls.Remove(_treeControls[_currentMode]);
+            if (_checkBoxes[_currentMode] != null)
+                Controls.Remove(_checkBoxes[_currentMode]);
+            Controls.Remove(_pendingMsg);
 
             int newMode = ((ComboBox)sender).SelectedIndex;
-            if (newMode == 0)
+            if (newMode >= 0 && newMode < 4)
             {
-                var adapter = CreateTreeControlAdapter();
-                adapter.TreeView = _allFilesContext;
-                _currentTreeControl = adapter.TreeControl;
-            }
-            else if (newMode == 1)
-            {
-                var adapter = CreateTreeControlAdapter();
-                adapter.TreeView = _modelFilesContext;
-                _currentTreeControl = adapter.TreeControl;
-            }
-            else if (newMode == 2)
-            {
-                var adapter = CreateTreeControlAdapter();
-                adapter.TreeView = _animationFilesContext;
-                _currentTreeControl = adapter.TreeControl;
-            }
-            else if (newMode == 3)
-            {
-                var adapter = CreateTreeControlAdapter();
-                adapter.TreeView = _skeletonFilesContext;
-                _currentTreeControl = adapter.TreeControl;
-            }
-
-            if (_currentTreeControl != null)
-            {
-                _currentTreeControl.Anchor = (System.Windows.Forms.AnchorStyles)(System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right | System.Windows.Forms.AnchorStyles.Bottom);
-                _currentTreeControl.Location = new System.Drawing.Point(0, 23);
-                _currentTreeControl.Size = new System.Drawing.Size(this.Width, this.Height - 23);
-                Controls.Add(_currentTreeControl);
+                _currentMode = newMode;
+                if (_treeControls[_currentMode] != null)
+                {
+                    Controls.Add(_treeControls[_currentMode]);
+                    if (_checkBoxes[_currentMode] != null)
+                        Controls.Add(_checkBoxes[_currentMode]);
+                } else
+                {
+                    _pendingMsg.Location = new Point(0, 23);
+                    _pendingMsg.Size = new Size(this.Width, this.Height - 23);
+                    Controls.Add(_pendingMsg);
+                }
             }
         }
 
@@ -155,31 +177,127 @@ namespace ControlsLibraryExt.ModelView
             return adapter;
         }
 
-        private TreeControl _currentTreeControl;
-        private ResourceSelectionTreeViewContext _allFilesContext;
-        private ResourceSelectionTreeViewContext _modelFilesContext;
-        private ResourceSelectionTreeViewContext _animationFilesContext;
-        private ResourceSelectionTreeViewContext _skeletonFilesContext;
+        private void Timer_CheckTreeOfDirectories(object sender, EventArgs e)
+        {
+            if (_pendingTreeOfDirectories.IsReady)
+            {
+                CompleteTreeOfDirectoriesConstruction();
+            }
+        }
+
+        private void CompleteTreeOfDirectoriesConstruction()
+        {
+            if (_timer != null)
+            {
+                _timer.Stop();
+                _timer.Dispose();
+                _timer = null;
+            }
+
+            _context[1] = new ResourceSelectionTreeViewContext(new GUILayer.ResourceFolderBridgeFromTreeOfDirectories(_pendingTreeOfDirectories, (uint)GUILayer.ResourceTypeFlags.Model), _resourceQueryService, (uint)GUILayer.ResourceTypeFlags.Model);
+            _context[1].SelectionChanged += (object sender, EventArgs e) => ModelsSelectionChanged.Invoke(sender, e);
+
+            _context[2] = new ResourceSelectionTreeViewContext(new GUILayer.ResourceFolderBridgeFromTreeOfDirectories(_pendingTreeOfDirectories, (uint)GUILayer.ResourceTypeFlags.Animation), _resourceQueryService, (uint)GUILayer.ResourceTypeFlags.Animation);
+            _context[2].SelectionChanged += (object sender, EventArgs e) => AnimationsSelectionChanged.Invoke(sender, e);
+
+            _context[3] = new ResourceSelectionTreeViewContext(new GUILayer.ResourceFolderBridgeFromTreeOfDirectories(_pendingTreeOfDirectories, (uint)GUILayer.ResourceTypeFlags.Skeleton), _resourceQueryService, (uint)GUILayer.ResourceTypeFlags.Skeleton);
+            _context[3].SelectionChanged += (object sender, EventArgs e) => SkeletonsSelectionChanged.Invoke(sender, e);
+
+            for (uint c = 1; c < 4; ++c)
+            {
+                var adapter = CreateTreeControlAdapter();
+                adapter.TreeView = _context[c];
+                _treeControls[c] = adapter.TreeControl;
+                _treeControls[c].Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+
+                if (c == 1)
+                {
+                    _treeControls[c].Location = new Point(0, 23);
+                    _treeControls[c].Size = new Size(this.Width, this.Height - 23);
+                }
+                else if (c == 2 || c == 3)
+                {
+                    _treeControls[c].Location = new Point(0, 23 + 23);
+                    _treeControls[c].Size = new Size(this.Width, this.Height - 23 - 23);
+
+                    _checkBoxes[c] = new CheckBox();
+                    _checkBoxes[c].Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+                    _checkBoxes[c].Location = new Point(0, 23);
+                    _checkBoxes[c].Size = new Size(this.Width, 23);
+                }
+
+                if (c == 2)
+                {
+                    _checkBoxes[c].Text = "Disable Animation";
+                    _checkBoxes[c].CheckedChanged += (object sender, EventArgs e) =>
+                    {
+                        if (((CheckBox)sender).Checked)
+                        {
+                            _treeControls[2].Enabled = false;
+                            AnimationsSelectionChanged.Invoke(null, null);
+                        }
+                        else
+                        {
+                            // fake a selection changed event from the tree control
+                            _treeControls[2].Enabled = true;
+                            AnimationsSelectionChanged.Invoke(_context[2], null);
+                        }
+                    };
+                }
+                else if (c == 3)
+                {
+                    _checkBoxes[c].Text = "Use Embedded Skeleton";
+                    _checkBoxes[c].CheckedChanged += (object sender, EventArgs e) =>
+                    {
+                        if (((CheckBox)sender).Checked)
+                        {
+                            _treeControls[3].Enabled = false; 
+                            SkeletonsSelectionChanged.Invoke(null, null);
+                        }
+                        else
+                        {
+                            // fake a selection changed event from the tree control
+                            _treeControls[3].Enabled = true;
+                            SkeletonsSelectionChanged.Invoke(_context[3], null);
+                        }
+                    };
+                }
+            }
+
+            if (_currentMode >= 1 && _currentMode < 4)
+            {
+                Controls.Remove(_pendingMsg);
+                Controls.Add(_treeControls[_currentMode]);
+                if (_checkBoxes[_currentMode] != null)
+                    Controls.Add(_checkBoxes[_currentMode]);
+            }
+        }
+
+        private TreeControl[] _treeControls = new TreeControl[4] { null, null, null, null };
+        private CheckBox[] _checkBoxes = new CheckBox[4] { null, null, null, null };
+        private ResourceSelectionTreeViewContext[] _context = new ResourceSelectionTreeViewContext[4] { null, null, null, null };
+        private int _currentMode = 0;
+        private Label _pendingMsg;
+
+        private GUILayer.TreeOfDirectoriesCalculator _pendingTreeOfDirectories;
+        private GUILayer.IResourceQueryService _resourceQueryService;
+        private Timer _timer = null;
     }
 
     [PartCreationPolicy(CreationPolicy.Shared)]
     [Export(typeof(IInitializable))]
-    public class SimpleFileListerController : IControlHostClient, IInitializable
+    public class SimpleFileListerHost : IControlHostClient, IInitializable
     {
         public void OpenResourceLister()
         {
-            // the "TreeViewControl" and "TreeListViewControl" have different advantages
-            //      TreeViewControl -- supports lazy loading, but no columns, also easier to navigate and expand
-            //      TreeListViewControl -- supports columns, but no lazy loading (everything initialized at startup) and more difficult to expand folders
-            var allFilesContext = new ResourceSelectionTreeViewContext(GUILayer.ResourceFolderBridge.BeginFrom("starfield/data"), _resourceQueryService);
-            var modelFilesContext = new ResourceSelectionTreeViewContext(GUILayer.ResourceFolderBridge.BeginFrom("starfield/data"), _resourceQueryService, (uint)GUILayer.ResourceTypeFlags.Model); 
-            var animationFilesContext = new ResourceSelectionTreeViewContext(GUILayer.ResourceFolderBridge.BeginFrom("starfield/data"), _resourceQueryService, (uint)GUILayer.ResourceTypeFlags.Animation);
-            var skeletonFilesContext = new ResourceSelectionTreeViewContext(GUILayer.ResourceFolderBridge.BeginFrom("starfield/data"), _resourceQueryService, (uint)GUILayer.ResourceTypeFlags.Skeleton);
-            allFilesContext.SelectionChanged += (object sender, EventArgs e) => UpdatePreviewerContextAfterSelectionChange_Internal(sender, e, ~0u);
-            modelFilesContext.SelectionChanged += (object sender, EventArgs e) => UpdatePreviewerContextAfterSelectionChange_Internal(sender, e, (uint)GUILayer.ResourceTypeFlags.Model);
-            animationFilesContext.SelectionChanged += (object sender, EventArgs e) => UpdatePreviewerContextAfterSelectionChange_Internal(sender, e, (uint)GUILayer.ResourceTypeFlags.Animation);
-            skeletonFilesContext.SelectionChanged += (object sender, EventArgs e) => UpdatePreviewerContextAfterSelectionChange_Internal(sender, e, (uint)GUILayer.ResourceTypeFlags.Skeleton);
-            FileListerOuterControl ctrl = new FileListerOuterControl(allFilesContext, modelFilesContext, animationFilesContext, skeletonFilesContext);
+            if (_pendingTreeOfDirectories == null)
+                _pendingTreeOfDirectories = new GUILayer.TreeOfDirectoriesCalculator("starfield/data");
+
+            FileListerOuterControl ctrl = new FileListerOuterControl("starfield/data", _pendingTreeOfDirectories, _resourceQueryService);
+            ctrl.AllFilesSelectionChanged += (object sender, EventArgs e) => UpdatePreviewerContextAfterSelectionChange_Internal(sender, e, ~0u);
+            ctrl.ModelsSelectionChanged += (object sender, EventArgs e) => UpdatePreviewerContextAfterSelectionChange_Internal(sender, e, (uint)GUILayer.ResourceTypeFlags.Model);
+            ctrl.AnimationsSelectionChanged += (object sender, EventArgs e) => UpdatePreviewerContextAfterSelectionChange_Internal(sender, e, (uint)GUILayer.ResourceTypeFlags.Animation);
+            ctrl.SkeletonsSelectionChanged += (object sender, EventArgs e) => UpdatePreviewerContextAfterSelectionChange_Internal(sender, e, (uint)GUILayer.ResourceTypeFlags.Skeleton);
 
             _controlHostService.RegisterControl(
                 ctrl,
@@ -203,44 +321,72 @@ namespace ControlsLibraryExt.ModelView
 
             if (previewerContext != null)
             {
-                var sel = (sender as ResourceSelectionTreeViewContext).LastSelected.As<Array>();
-                if (sel == null) return;
-                var resourceDesc = _resourceQueryService.GetDesc(sel);
-                if (resourceDesc == null) return;
-
-                bool changedSomething = false;
-                if ((resourceDesc.Value.Types & typeFilter & (uint)GUILayer.ResourceTypeFlags.Model) != 0)
+                if (sender != null)
                 {
-                    // It's a model extension. Pass it through to the current settings object
-                    var modelSettings = previewerContext.ModelSettings;
-                    modelSettings.ModelName = resourceDesc?.MountedName;
-                    modelSettings.MaterialName = "";
-                    modelSettings.Supplements = "";
-                    if ((typeFilter & (uint)GUILayer.ResourceTypeFlags.Skeleton) != 0)
-                        modelSettings.SkeletonFileName = "";
-                    // _settings.ResetCamera = true;
-                    changedSomething = true;
-                }
+                    var sel = (sender as ResourceSelectionTreeViewContext).LastSelected.As<Array>();
+                    if (sel == null) return;
+                    var resourceDesc = _resourceQueryService.GetDesc(sel);
+                    if (resourceDesc == null) return;
 
-                if ((resourceDesc.Value.Types & typeFilter & (uint)GUILayer.ResourceTypeFlags.Skeleton) != 0)
-                {
-                    if (!changedSomething)  // don't set this if we just bound is as our model
+                    bool changedSomething = false;
+                    if ((resourceDesc.Value.Types & typeFilter & (uint)GUILayer.ResourceTypeFlags.Model) != 0)
                     {
+                        // It's a model extension. Pass it through to the current settings object
                         var modelSettings = previewerContext.ModelSettings;
-                        modelSettings.SkeletonFileName = resourceDesc?.MountedName;
+                        modelSettings.ModelName = resourceDesc?.MountedName;
+                        modelSettings.MaterialName = "";
+                        modelSettings.Supplements = "";
+                        if ((typeFilter & (uint)GUILayer.ResourceTypeFlags.Skeleton) != 0)
+                            modelSettings.SkeletonFileName = "";
+                        // _settings.ResetCamera = true;
                         changedSomething = true;
                     }
-                }
 
-                if ((resourceDesc.Value.Types & typeFilter & (uint)GUILayer.ResourceTypeFlags.Animation) != 0)
+                    if ((resourceDesc.Value.Types & typeFilter & (uint)GUILayer.ResourceTypeFlags.Skeleton) != 0)
+                    {
+                        if (!changedSomething)  // don't set this if we just bound is as our model
+                        {
+                            var modelSettings = previewerContext.ModelSettings;
+                            modelSettings.SkeletonFileName = resourceDesc?.MountedName;
+                            changedSomething = true;
+                        }
+                    }
+
+                    if ((resourceDesc.Value.Types & typeFilter & (uint)GUILayer.ResourceTypeFlags.Animation) != 0)
+                    {
+                        var modelSettings = previewerContext.ModelSettings;
+                        modelSettings.AnimationFileName = resourceDesc?.MountedName;
+                        changedSomething = true;
+                    }
+
+                    if (changedSomething)
+                        previewerContext.ModelSettings = previewerContext.ModelSettings;
+                }
+                else
                 {
-                    var modelSettings = previewerContext.ModelSettings;
-                    modelSettings.AnimationFileName = resourceDesc?.MountedName;
-                    changedSomething = true;
-                }
+                    // In this mode, we're just clearing out the resource of the specified type
+                    bool changedSomething = false;
+                    if ((typeFilter & (uint)GUILayer.ResourceTypeFlags.Model) != 0)
+                    {
+                        previewerContext.ModelSettings.ModelName = "";
+                        changedSomething = true;
+                    }
 
-                if (changedSomething)
-                    previewerContext.ModelSettings = previewerContext.ModelSettings;
+                    if ((typeFilter & (uint)GUILayer.ResourceTypeFlags.Skeleton) != 0)
+                    {
+                        previewerContext.ModelSettings.SkeletonFileName = "";
+                        changedSomething = true;
+                    }
+
+                    if ((typeFilter & (uint)GUILayer.ResourceTypeFlags.Animation) != 0)
+                    {
+                        previewerContext.ModelSettings.AnimationFileName = "";
+                        changedSomething = true;
+                    }
+
+                    if (changedSomething)
+                        previewerContext.ModelSettings = previewerContext.ModelSettings;
+                }
             }
         }
 
@@ -249,25 +395,13 @@ namespace ControlsLibraryExt.ModelView
             OpenResourceLister();
         }
 
-        public ResourceSelectionTreeViewContext ResourceSelectionContext
-        {
-            get
-            {
-                if (_resourceSelectionContext == null)
-                {
-                    var root = GUILayer.ResourceFolderBridge.BeginFromRoot();
-                    _resourceSelectionContext = new ResourceSelectionTreeViewContext(root, _resourceQueryService);
-                }
-                return _resourceSelectionContext;
-            }
-        }
-        private ResourceSelectionTreeViewContext _resourceSelectionContext = null;
-
         [Import(AllowDefault = true)]
         private GUILayer.IResourceQueryService _resourceQueryService;
 
         [Import(AllowDefault = false)]
         private ControlHostService _controlHostService = null;
+
+        GUILayer.TreeOfDirectoriesCalculator _pendingTreeOfDirectories = null;
 
         #region IControlHostClient
         void IControlHostClient.Activate(Control control) {}

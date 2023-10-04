@@ -82,13 +82,22 @@ namespace ToolsRig
 				CompilationTarget::BitField fileTargets = 0;
 				for (auto f=pendingDir._walker.begin_files(); f!=pendingDir._walker.end_files(); ++f) {
 					auto mountedName = f.Desc()._mountedName;
-					auto ext = MakeFileNameSplitter(mountedName).Extension();
+					auto splitName = MakeFileNameSplitter(mountedName);
+					auto ext = splitName.Extension();
 					auto i = std::find_if(modelExts.begin(), modelExts.end(), [ext](const auto& q) { return XlEqStringI(ext, q.first); });
 					if (i != modelExts.end()) fileTargets |= CompilationTarget::Model;
 					i = std::find_if(animationExts.begin(), animationExts.end(), [ext](const auto& q) { return XlEqStringI(ext, q.first); });
 					if (i != animationExts.end()) fileTargets |= CompilationTarget::Animation;
+
 					i = std::find_if(skeletonExts.begin(), skeletonExts.end(), [ext](const auto& q) { return XlEqStringI(ext, q.first); });
-					if (i != skeletonExts.end()) fileTargets |= CompilationTarget::Skeleton;
+					if (i != skeletonExts.end()) {
+						// To help filter out excess hits, we'll only consider a file a target for a skeleton if it isn't also a model or if it has "skel" in the name
+						if (!(fileTargets & CompilationTarget::Model))
+							fileTargets |= CompilationTarget::Skeleton;
+						else if (XlFindStringI(splitName.File(), "skel"))
+							fileTargets |= CompilationTarget::Skeleton;
+					}
+
 					i = std::find_if(materialExts.begin(), materialExts.end(), [ext](const auto& q) { return XlEqStringI(ext, q.first); });
 					if (i != materialExts.end()) fileTargets |= CompilationTarget::Material;
 				}
@@ -144,10 +153,38 @@ namespace ToolsRig
 		return result;
 	}
 
-	TreeOfDirectories CalculateDirectoriesByCompilationTargets_Temp(StringSection<> base)
+	class TreeOfDirectoriesHelper : public ITreeOfDirectoriesHelper
 	{
-		return CalculateDirectoriesByCompilationTargets(base).get();
+	public:
+		std::shared_ptr<TreeOfDirectories> Get()
+		{
+			ScopedLock(_lock);
+			if (!_result)
+				_result = std::make_shared<TreeOfDirectories>(std::move(_future.get()));
+			return _result;
+		}
+
+		bool IsReady() const
+		{
+			ScopedLock(_lock);
+			if (_result) return true;
+			return _future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+		}
+
+		TreeOfDirectoriesHelper(std::future<TreeOfDirectories>&& future) : _future(std::move(future)) {}
+		~TreeOfDirectoriesHelper() {}
+	private:
+		mutable Threading::Mutex _lock;
+		std::future<TreeOfDirectories> _future;
+		std::shared_ptr<TreeOfDirectories> _result;
+	};
+
+	std::shared_ptr<ITreeOfDirectoriesHelper> CalculateDirectoriesByCompilationTargets_Helper(StringSection<> base)
+	{
+		return std::make_shared<TreeOfDirectoriesHelper>(CalculateDirectoriesByCompilationTargets(base));
 	}
+
+	ITreeOfDirectoriesHelper::~ITreeOfDirectoriesHelper() = default;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

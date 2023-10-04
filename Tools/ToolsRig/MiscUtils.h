@@ -44,7 +44,7 @@ namespace ToolsRig
 
 	namespace CompilationTarget
 	{
-		enum Flags { Model = 1<<0, Animation = 1<<1, Skeleton = 1<<2, Material = 1<<3 };
+		enum Flags { Model = 1<<0, Animation = 1<<1, Skeleton = 1<<2, Material = 1<<3, Texture = 1<<4 };
 		using BitField = unsigned;
 	}
 	CompilationTarget::BitField FindCompilationTargets(StringSection<> ext);
@@ -65,7 +65,16 @@ namespace ToolsRig
 		std::vector<std::pair<uint64_t, unsigned>> _hashTableLookup;
 	};
 	std::future<TreeOfDirectories> CalculateDirectoriesByCompilationTargets(StringSection<> base);
-	TreeOfDirectories CalculateDirectoriesByCompilationTargets_Temp(StringSection<> base);
+	
+	// ITreeOfDirectoriesHelper is required to isolate CLR code from futures
+	class ITreeOfDirectoriesHelper
+	{
+	public:
+		virtual std::shared_ptr<TreeOfDirectories> Get() = 0;
+		virtual bool IsReady() const = 0;
+		virtual ~ITreeOfDirectoriesHelper();
+	};
+	std::shared_ptr<ITreeOfDirectoriesHelper> CalculateDirectoriesByCompilationTargets_Helper(StringSection<> base);
 
 	std::shared_ptr<::Assets::OperationContext> CreateLoadingContext();
 

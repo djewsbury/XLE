@@ -167,7 +167,17 @@ namespace ControlsLibraryExt.ModelView
                         if ((desc.Value.Types & (uint)GUILayer.ResourceTypeFlags.Model) != 0)
                         {
                             info.Properties = new object[] { "Model Type", desc?.Filesystem, desc?.NaturalName };
-                            info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.PackageImage);
+                            info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.PinGreenImage);
+                        }
+                        else if ((desc.Value.Types & (uint)GUILayer.ResourceTypeFlags.Animation) != 0)
+                        {
+                            info.Properties = new object[] { "Animation Type", desc?.Filesystem, desc?.NaturalName };
+                            info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.PinGreenImage);
+                        }
+                        else if ((desc.Value.Types & (uint)GUILayer.ResourceTypeFlags.Skeleton) != 0)
+                        {
+                            info.Properties = new object[] { "Skeleton Type", desc?.Filesystem, desc?.NaturalName };
+                            info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.PinGreenImage);
                         }
                         else
                             info.ImageIndex = info.GetImageList().Images.IndexOfKey(Sce.Atf.Resources.DocumentUnknownImage);

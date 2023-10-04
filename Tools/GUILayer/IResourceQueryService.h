@@ -26,11 +26,12 @@ namespace GUILayer
 
     public enum class ResourceTypeFlags : unsigned
     {
+        // Should match ToolsRig::CompilationTarget
         Model = 1 << 0,
         Animation = 1 << 1,
-        Material = 1 << 2,
-        Texture = 1 << 3,
-        Skeleton = 1 << 4,
+        Skeleton = 1 << 2,
+        Material = 1 << 3,
+        Texture = 1 << 4
     };
 
     public value struct ResourceDesc

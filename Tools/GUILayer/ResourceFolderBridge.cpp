@@ -109,6 +109,27 @@ namespace GUILayer
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	public ref class TreeOfDirectoriesCalculator
+	{
+	public:
+		clix::shared_ptr<ToolsRig::ITreeOfDirectoriesHelper> _underlying;
+
+		property bool IsReady
+		{
+			bool get() { return _underlying->IsReady(); }
+		}
+
+		std::shared_ptr<ToolsRig::TreeOfDirectories> Get()
+		{
+			return _underlying->Get();
+		}
+
+		TreeOfDirectoriesCalculator(String^ base)
+		{
+			_underlying = ToolsRig::CalculateDirectoriesByCompilationTargets_Helper(clix::marshalString<clix::E_UTF8>(base));
+		}
+	};
+
 	public ref class ResourceFolderBridgeFromTreeOfDirectories : public IOpaqueResourceFolder
 	{
 	public:
@@ -180,19 +201,15 @@ namespace GUILayer
 			return &_treeOfDirectories->_stringTable[_treeOfDirectories->_directories[_dirIdx]._nameStart];
 		}
 
-		static ResourceFolderBridgeFromTreeOfDirectories^ BeginFrom(String^ base)
-		{
-			auto nativeBase = clix::marshalString<clix::E_UTF8>(base);
-			auto dirs = ToolsRig::CalculateDirectoriesByCompilationTargets_Temp(nativeBase);
-			auto d = std::make_shared<ToolsRig::TreeOfDirectories>(std::move(dirs));
-			return gcnew ResourceFolderBridgeFromTreeOfDirectories(d, 0, ToolsRig::CompilationTarget::Animation);
-		}
-
 		ResourceFolderBridgeFromTreeOfDirectories()
 		: _treeOfDirectories(nullptr), _dirIdx(0), _targetFilter(~0u)
 		{}
 		ResourceFolderBridgeFromTreeOfDirectories(std::shared_ptr<ToolsRig::TreeOfDirectories> treeOfDirectories, unsigned dirIdx, ToolsRig::CompilationTarget::BitField targetFilter)
 		: _treeOfDirectories(treeOfDirectories), _dirIdx(dirIdx), _targetFilter(targetFilter)
+		{
+		}
+		ResourceFolderBridgeFromTreeOfDirectories(TreeOfDirectoriesCalculator^ treeOfDirectories, ToolsRig::CompilationTarget::BitField targetFilter)
+		: ResourceFolderBridgeFromTreeOfDirectories(treeOfDirectories->Get(), 0, targetFilter)
 		{
 		}
 		~ResourceFolderBridgeFromTreeOfDirectories()

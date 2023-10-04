@@ -121,7 +121,7 @@ namespace Previewer
                 typeof(ControlsLibraryExt.ModelView.Previewer),
                 typeof(ControlsLibraryExt.GameLoopService),
                 typeof(ControlsLibraryExt.AssetTrackingService),
-                typeof(ControlsLibraryExt.ModelView.SimpleFileListerController),
+                typeof(ControlsLibraryExt.ModelView.SimpleFileListerHost),
 
                 typeof(HelpAboutCommand),
                 typeof(ActiveMaterialContext)
