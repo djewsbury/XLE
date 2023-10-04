@@ -58,12 +58,12 @@ namespace RenderCore { namespace Techniques
 				if (transMachineOutput != ~unsigned(0x0)) {
 					destination[c] = Truncate(Combine(Combine(section._bindShapeByInverseBindMatrices[c], skeletonMachineResult[transMachineOutput]), section._postSkinningBindMatrix));
 				} else {
-					destination[c] = Truncate(Combine(section._bindShapeMatrix, section._postSkinningBindMatrix));
+					destination[c] = Truncate(section._bindShapeMatrix);
 				}
 			}
 		} else {
 			for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c)
-				destination[c] = Truncate(Combine(section._bindShapeMatrix, section._postSkinningBindMatrix));
+				destination[c] = Truncate(section._bindShapeMatrix);
 		}
 
 		for (; c<destination.size(); ++c)
@@ -375,12 +375,12 @@ namespace RenderCore { namespace Techniques
 					if (transMachineOutput != ~unsigned(0x0)) {
 						destination[c] = Truncate(Combine(Combine(section._bindShapeByInverseBindMatrices[c], skeletonMachineOutput[transMachineOutput]), section._postSkinningBindMatrix));
 					} else {
-						destination[c] = Truncate(Combine(section._bindShapeMatrix, section._postSkinningBindMatrix));
+						destination[c] = Truncate(section._bindShapeMatrix);
 					}
 				}
 			} else {
 				for (; c<std::min(section._jointMatrices.size(), destination.size()); ++c)
-					destination[c] = Truncate(Combine(section._bindShapeMatrix, section._postSkinningBindMatrix));
+					destination[c] = Truncate(section._bindShapeMatrix);
 			}
 
 			for (; c<destination.size(); ++c)
