@@ -188,6 +188,26 @@ namespace ToolsRig
 								std::move(animBinding), depVal,
 							});
 					});
+			} else if (!settings._skeletonFileName.empty()) {
+				auto skeletonFuture = ::Assets::MakeAssetPtr<SkeletonScaffold>(settings._skeletonFileName);
+				::Assets::WhenAll(rendererFuture, skeletonFuture, std::move(futureConstruction)).ThenConstructToPromise(
+					std::move(promise), 
+					[deformAccelerators](
+						std::shared_ptr<SimpleModelRenderer> renderer,
+						std::shared_ptr<SkeletonScaffold> skeleton,
+						std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) {
+
+						auto depVal = ::Assets::GetDepValSys().Make();
+						depVal.RegisterDependency(renderer->GetDependencyValidation());
+						depVal.RegisterDependency(skeleton->GetDependencyValidation());
+
+						return std::make_shared<ModelSceneRendererState>(
+							ModelSceneRendererState {
+								renderer, std::move(construction),
+								nullptr, skeleton, nullptr, nullptr,
+								{}, depVal,
+							});
+					});
 			} else {
 				::Assets::WhenAll(rendererFuture, std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
