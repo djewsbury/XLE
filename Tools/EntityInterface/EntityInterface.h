@@ -50,6 +50,7 @@ namespace EntityInterface
         // (or underneath) change 
         virtual ::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPoint) const = 0;
         virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> mountPoint) const = 0;
+        virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> TryBeginFormatter(StringSection<> mountPoint) const = 0;
 
         virtual ~IEntityMountingTree() = default;
     };
@@ -60,6 +61,8 @@ namespace EntityInterface
     }
 
     std::shared_ptr<IEntityMountingTree> CreateMountingTree(MountingTreeFlags::BitField = 0);
+
+    std::shared_ptr<Formatters::IDynamicInputFormatter> CreateEmptyFormatter();
 
     using EntityId = uint64_t;
     using StringAndHash = std::pair<StringSection<>, uint64_t>;

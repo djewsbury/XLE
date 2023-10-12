@@ -302,7 +302,7 @@ namespace EntityInterface
 	public:
 		DocumentId MountDocument(
 			StringSection<> mountPount,
-			std::shared_ptr<IEntityDocument> doc)
+			std::shared_ptr<IEntityDocument> doc) override
 		{
 			ScopedLock(_mountsLock);
 			Mount mnt;
@@ -326,7 +326,7 @@ namespace EntityInterface
 			return result;
 		}
 
-		bool UnmountDocument(DocumentId doc)
+		bool UnmountDocument(DocumentId doc) override
 		{
 			ScopedLock(_mountsLock);
 			for (auto mnt=_mounts.begin(); mnt!=_mounts.end(); ++mnt)
@@ -337,12 +337,12 @@ namespace EntityInterface
 			return false;
 		}
 
-		::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const
+		::Assets::DependencyValidation GetDependencyValidation(StringSection<> mountPount) const override
 		{
 			return {};
 		}
 
-		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> inputMountPoint) const
+		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatterInternal(StringSection<> inputMountPoint, bool throwOnMissing) const
 		{
 			ScopedLock(_mountsLock);
 
@@ -396,9 +396,13 @@ namespace EntityInterface
 			if (overlappingMounts.empty()) {
 				std::promise<std::shared_ptr<Formatters::IDynamicInputFormatter>> promise;
 				auto future = promise.get_future();
-				promise.set_exception(std::make_exception_ptr(OSServices::Exceptions::IOException{
-					OSServices::Exceptions::IOException::Reason::FileNotFound,
-					"No configuration data found at mount point: %s", inputMountPoint.AsString().c_str()}));
+				if (throwOnMissing) {
+					promise.set_exception(std::make_exception_ptr(OSServices::Exceptions::IOException{
+						OSServices::Exceptions::IOException::Reason::FileNotFound,
+						"No configuration data found at mount point: %s", inputMountPoint.AsString().c_str()}));
+				} else {
+					promise.set_value(CreateEmptyFormatter());
+				}
 				return future;
 			}
 
@@ -453,6 +457,9 @@ namespace EntityInterface
 				});
 			return future;
 		}
+
+		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> inputMountPoint) const override { return BeginFormatterInternal(inputMountPoint, true); }
+		std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> TryBeginFormatter(StringSection<> inputMountPoint) const override { return BeginFormatterInternal(inputMountPoint, false); }
 
 		MountingTree(MountingTreeFlags::BitField flags) : _flags(flags) {}
 
@@ -737,4 +744,29 @@ namespace EntityInterface
 
 	Switch::Switch() {}
 	Switch::~Switch() {}
+
+
+	std::shared_ptr<Formatters::IDynamicInputFormatter> CreateEmptyFormatter()
+	{
+		class EmptyFormatter : public Formatters::IDynamicInputFormatter
+		{
+		public:
+			Formatters::FormatterBlob PeekNext() override { return Formatters::FormatterBlob::None; }
+
+			bool TryBeginElement() override { return false; }
+			bool TryEndElement() override { return false; }
+			bool TryKeyedItem(StringSection<>&) override { return false; }
+			bool TryKeyedItem(uint64_t&) override { return false; }
+
+			bool TryStringValue(StringSection<>&) override { return false; }
+			bool TryRawValue(IteratorRange<const void*>&, ImpliedTyping::TypeDesc&) override { return false; }
+			bool TryCastValue(IteratorRange<void*>, const ImpliedTyping::TypeDesc&) override { return false; }
+
+			void SkipValueOrElement() override {}
+
+			Formatters::StreamLocation GetLocation() const override { return {}; }
+			::Assets::DependencyValidation GetDependencyValidation() const override { return {}; }
+		};
+		return std::make_shared<EmptyFormatter>();
+	}
 }

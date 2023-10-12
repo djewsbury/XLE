@@ -37,9 +37,19 @@ namespace EntityInterface
 				return;
 			}
 
-			::Assets::WhenAll(ToolsRig::Services::GetEntityMountingTree().BeginFormatter(mountLocation)).ThenConstructToPromise(
+			::Assets::WhenAll(ToolsRig::Services::GetEntityMountingTree().TryBeginFormatter(mountLocation)).ThenConstructToPromise(
 				std::move(promise),
 				[](auto fmttr) { return MountedData{*fmttr}; });
+		}
+
+		static const T& LoadWithStallOrDefault(::Assets::Initializer<> mountLocation)
+		{
+			auto marker = ::Assets::MakeAssetMarker<MountedData>(mountLocation);
+			marker->StallWhilePending();		// stall
+			if (auto* actualized = marker->TryActualize())
+				return actualized->get();
+			static T def;
+			return def;
 		}
 
 		static const T& LoadOrDefault(::Assets::Initializer<> mountLocation)
