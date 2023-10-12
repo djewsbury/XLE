@@ -17,23 +17,28 @@ FilenameRules s_filenameRules('/', true);
 
 struct CmdLine
 {
-	std::string _input = "./";
+	struct Input
+	{
+		std::string _srcFolder = "./";
+		std::string _pre;
+	};
 	std::string _output = "out.pak";
-	std::string _pre;
+	std::vector<Input> _inputs;	
 	bool _verbose = false;
 
 	CmdLine(int argc, char const*const* argv)
 	{
+		std::string pre;
 		auto fmttr = Formatters::MakeCommandLineFormatter(argc, argv);
 		StringSection<> keyname;
 		for (;;) {
 			if (fmttr.TryKeyedItem(keyname)) {
 				if (XlEqStringI(keyname, "i"))
-					_input = Formatters::RequireStringValue(fmttr);
+					_inputs.emplace_back(Input{Formatters::RequireStringValue(fmttr).AsString(), pre});
 				else if (XlEqStringI(keyname, "o"))
 					_output = Formatters::RequireStringValue(fmttr);
 				else if (XlEqStringI(keyname, "pre"))
-					_pre = Formatters::RequireStringValue(fmttr);
+					pre = Formatters::RequireStringValue(fmttr);
 				else if (XlEqStringI(keyname, "v"))
 					_verbose = true;
 			} else if (fmttr.PeekNext() == Formatters::FormatterBlob::None) {
@@ -50,7 +55,12 @@ int main(int argc, char** argv)
 
 		CmdLine cmdLine { argc, argv };
 
-		std::cout << "Creating archive " << cmdLine._output << " from source files in " << cmdLine._input << std::endl;
+		std::cout << "Creating archive " << cmdLine._output << " from source files in ";
+		for (unsigned c=0; c<cmdLine._inputs.size(); ++c) {
+			if (c!=0) std::cout << ", ";
+		 	std::cout << cmdLine._inputs[c]._srcFolder;
+		}
+		std::cout << std::endl;
 
 		struct PendingFile
 		{
@@ -64,27 +74,29 @@ int main(int argc, char** argv)
 		unsigned stringTableIterator = 0;
 
 		// Collect up the list of input files and start generating the string and hash tables
-		auto root = std::filesystem::path(cmdLine._input);
-		auto baseInSrc = MakeSplitPath(root.lexically_normal().string()).Rebuild(s_filenameRules);
-		auto baseInSrcSplit = MakeSplitPath(baseInSrc);
+		for (auto input:cmdLine._inputs) {
+			auto root = std::filesystem::path(input._srcFolder);
+			auto baseInSrc = MakeSplitPath(root.lexically_normal().string()).Rebuild(s_filenameRules);
+			auto baseInSrcSplit = MakeSplitPath(baseInSrc);
 
-		for (const auto& entry:std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::follow_directory_symlink)) {
-			if (!entry.is_regular_file()) continue;
-			auto fn = entry.path().lexically_normal().string();
-			if (XlEqStringI(MakeStringSection(fn), MakeStringSection(cmdLine._output))) continue;
+			for (const auto& entry:std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::follow_directory_symlink)) {
+				if (!entry.is_regular_file()) continue;
+				auto fn = entry.path().lexically_normal().string();
+				if (XlEqStringI(MakeStringSection(fn), MakeStringSection(cmdLine._output))) continue;
 
-			// skip files that begin with '.'
-			auto justfn = entry.path().filename();
-			if (justfn.empty() || *justfn.string().begin() == '.') continue;
+				// skip files that begin with '.'
+				auto justfn = entry.path().filename();
+				if (justfn.empty() || *justfn.string().begin() == '.') continue;
 
-			auto normalizedEntry = MakeSplitPath(fn).Rebuild(s_filenameRules);
-			auto normalizedEntryRelative = MakeRelativePath(baseInSrcSplit, MakeSplitPath(normalizedEntry), s_filenameRules);
-			if (!cmdLine._pre.empty())
-				normalizedEntryRelative = cmdLine._pre + "/" + normalizedEntryRelative;
+				auto normalizedEntry = MakeSplitPath(fn).Rebuild(s_filenameRules);
+				auto normalizedEntryRelative = MakeRelativePath(baseInSrcSplit, MakeSplitPath(normalizedEntry), s_filenameRules);
+				if (!input._pre.empty())
+					normalizedEntryRelative = input._pre + "/" + normalizedEntryRelative;
 
-			auto hash = HashFilenameAndPath(MakeStringSection(normalizedEntryRelative), s_filenameRules);
-			pendingFiles.push_back(PendingFile { (uint64_t)entry.file_size(), entry, (unsigned)pendingFiles.size(), hash, normalizedEntryRelative });
-			stringTableIterator += unsigned(normalizedEntryRelative.size()) + 1;
+				auto hash = HashFilenameAndPath(MakeStringSection(normalizedEntryRelative), s_filenameRules);
+				pendingFiles.push_back(PendingFile { (uint64_t)entry.file_size(), entry, (unsigned)pendingFiles.size(), hash, normalizedEntryRelative });
+				stringTableIterator += unsigned(normalizedEntryRelative.size()) + 1;
+			}
 		}
 
 		if (cmdLine._verbose)
