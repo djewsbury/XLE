@@ -12,6 +12,7 @@
 #include "../../RenderOverlays/OverlayEffects.h"
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../Assets/Marker.h"
+#include "../../Foreign/yoga/yoga/Yoga.h"
 
 namespace PlatformRig { namespace Overlays
 {
@@ -99,7 +100,7 @@ namespace PlatformRig { namespace Overlays
 		{
 			LayoutEngine le;
 			auto rootNode = le.NewNode();
-			le.PushRoot(rootNode, {32, 32});
+			le.PushRoot(rootNode, Rect{{0,0}, {32, 32}});
 			YGNodeStyleSetMaxWidth(rootNode, (float)maxWidth);
 			YGNodeStyleSetMaxHeight(rootNode, 1440);		// we need to set some maximum height to allow the dimensions returned in the layout to adapt to the children
 

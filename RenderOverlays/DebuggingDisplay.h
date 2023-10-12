@@ -19,26 +19,10 @@
 #include <vector>
 #include <map>
 
+namespace RenderOverlays { struct ImmediateLayout; }
+
 namespace RenderOverlays { namespace DebuggingDisplay
 {
-    struct Layout /////////////////////////////////////////////////////////////////////
-    {
-        Rect    _maximumSize;
-        Coord   _maxRowWidth;
-        Coord   _caretX, _caretY;
-        Coord   _currentRowMaxHeight;
-        Coord   _paddingInternalBorder;
-        Coord   _paddingBetweenAllocations;
-
-        Layout(const Rect& maximumSize);
-        Rect    AllocateFullWidth(Coord height);
-        Rect    AllocateFullHeight(Coord width);
-        Rect    AllocateFullHeightFraction(float proportionOfWidth);
-        Rect    AllocateFullWidthFraction(float proportionOfHeight);
-        Rect    Allocate(Coord2 dimensions);
-        Rect    GetMaximumSize() const { return _maximumSize; }
-        Coord   GetWidthRemaining();
-    };
 
     typedef uint64_t InteractableId;
     InteractableId InteractableId_Make(StringSection<char> name);
@@ -50,12 +34,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
     class Interactables
     {
     public:
-        struct HotArea { Rect _rect; InteractableId _id = 0; };
+        struct HotArea { Rect _rect; InteractableId _id = 0; std::string _label; };
         std::vector<HotArea> _hotAreas;
 
-        void                Register(const HotArea& widget);
-        void                Register(Rect rect, InteractableId id) { Register(HotArea{rect, id}); }
-        std::vector<HotArea> Intersect(const Coord2& position) const;
+        void Register(const HotArea& widget);
+        void Register(Rect rect, InteractableId id) { Register(HotArea{rect, id}); }
+        auto Intersect(const Coord2& position) const -> std::vector<HotArea>;
     };
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -63,6 +47,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
     public:
         bool                    HasMouseOver(InteractableId id);
+        bool                    HasMouseOver(InteractableId id, const std::string& label);
         InteractableId          TopMostId() const;
         Interactables::HotArea  TopMostHotArea() const;
         bool                    IsMouseButtonHeld(unsigned buttonIndex = 0) const   { return !!(_mouseButtonsHeld&(1<<buttonIndex)); }
@@ -99,7 +84,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
     public:
         using IOverlayContext = RenderOverlays::IOverlayContext;
-		using Layout = RenderOverlays::DebuggingDisplay::Layout;
+		using Layout = RenderOverlays::ImmediateLayout;
 		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
 		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
 		using InputSnapshot = OSServices::InputSnapshot;
@@ -261,9 +246,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
     Rect DrawEmbeddedInRightEdge(IOverlayContext& context, const Rect& rect);
     Coord DrawTableEntry(IOverlayContext& context, const Rect& rect, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted = false);
 
-    void DrawTableHeaders(IOverlayContext& context, Layout& layout, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders);
-    void DrawTableBase(IOverlayContext& context, Layout& layout);
-    bool DrawTableEntry(IOverlayContext& context, Layout& layout, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted = false);
+    void DrawTableHeaders(IOverlayContext& context, ImmediateLayout& layout, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders);
+    void DrawTableBase(IOverlayContext& context, ImmediateLayout& layout);
+    bool DrawTableEntry(IOverlayContext& context, ImmediateLayout& layout, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted = false);
 
     ///////////////////////////////////////////////////////////////////////////////////
     struct InterfaceStateHelper
@@ -333,7 +318,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         std::vector<Panel> _panels;
 
         void    RenderPanelControls(        IOverlayContext&    context,
-                                            unsigned            panelIndex, const std::string& name, Layout&layout, bool allowDestroy,
+                                            unsigned            panelIndex, const std::string& name, ImmediateLayout&layout, bool allowDestroy,
                                             Interactables&      interactables, InterfaceState& interfaceState);
         bool    ProcessInputPanelControls(  InterfaceState&     interfaceState, const PlatformRig::InputContext& inputContext, const OSServices::InputSnapshot&    evnt);
     };

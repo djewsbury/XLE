@@ -5,11 +5,90 @@
 #include "LayoutEngine.h"
 #include "CommonWidgets.h"
 
+#include "../Foreign/yoga/yoga/Yoga.h"
 #include "../Foreign/yoga/yoga/YGNode.h"
 
 namespace RenderOverlays
 {
-	using namespace DebuggingDisplay;
+///////////////////////////////////////////////////////////////////////////////////
+
+	ImmediateLayout::ImmediateLayout(const Rect& maximumSize, Direction direction)
+	{
+		_maximumSize = maximumSize;
+		_direction = direction;
+		_caret = 0;
+		_paddingInternalBorder = 8;
+		_paddingBetweenAllocations = 4;
+	}
+
+	ImmediateLayout::ImmediateLayout()
+	{
+		_maximumSize = Rect { {0,0}, {0,0} };
+		_direction = Direction::Row;
+		_caret = 0;
+		_paddingInternalBorder = 8;
+		_paddingBetweenAllocations = 4;
+	}
+
+	Rect    ImmediateLayout::Allocate(Coord size)
+	{
+		auto maxMainAxis = GetMaxMainAxis();
+		auto maxY = std::min(_caret+size, maxMainAxis);
+
+		Rect result;
+		if (_direction == Direction::Row) {
+			result._topLeft[0]        = _maximumSize._topLeft[0] + _paddingInternalBorder + _caret;
+			result._bottomRight[0]    = _maximumSize._topLeft[0] + _paddingInternalBorder + maxY;
+			result._topLeft[1]        = _maximumSize._topLeft[1] + _paddingInternalBorder;
+			result._bottomRight[1]    = _maximumSize._bottomRight[1] - _paddingInternalBorder;
+		} else {
+			result._topLeft[0]        = _maximumSize._topLeft[0] + _paddingInternalBorder;
+			result._bottomRight[0]    = _maximumSize._bottomRight[0] - _paddingInternalBorder;
+			result._topLeft[1]        = _maximumSize._topLeft[1] + _paddingInternalBorder + _caret;
+			result._bottomRight[1]    = _maximumSize._topLeft[1] + _paddingInternalBorder + maxY;
+		}
+		_caret = std::min(_caret+size+_paddingBetweenAllocations, maxMainAxis);
+
+		return result;
+	}
+
+	Rect    ImmediateLayout::AllocateFraction(float proportionOfSize)
+	{
+		return Allocate(Coord(GetMaxMainAxis() * proportionOfSize));
+	}
+
+	Coord   ImmediateLayout::GetSpaceRemaining() const
+	{
+		return GetMaxMainAxis() - _caret;
+	}
+
+	Coord   ImmediateLayout::GetMaxMainAxis() const
+	{
+		auto maxMainAxis = (_direction == Direction::Row) ? _maximumSize.Width() : _maximumSize.Height();
+		maxMainAxis = std::max(0, maxMainAxis - 2*_paddingInternalBorder);
+		return maxMainAxis;
+	}
+
+	void ImmediateLayout::SetDirection(Direction dir)
+	{
+		if (_direction == dir)
+			return;
+
+		if (_direction == Direction::Row) {
+			assert(dir == Direction::Column);
+			_maximumSize._topLeft[0] += _caret;
+			_caret = 0;
+			_direction = Direction::Column;
+		} else {
+			assert(_direction == Direction::Column);
+			assert(dir == Direction::Row);
+			_maximumSize._topLeft[1] += _caret;
+			_caret = 0;
+			_direction = Direction::Row;
+		}
+	}
+
+///////////////////////////////////////////////////////////////////////////////////
 
 	static Rect TransformRect(const Float3x3& transform, const Rect& input)
 	{
@@ -67,7 +146,7 @@ namespace RenderOverlays
 		_workingStack.pop();
 	}
 
-	void LayoutEngine::PushRoot(YGNodeRef node, Coord2 containerSize)
+	void LayoutEngine::PushRoot(YGNodeRef node, Rect containerSize)
 	{
 		_workingStack.push(node);
 		_roots.emplace_back(node, containerSize);
@@ -83,7 +162,7 @@ namespace RenderOverlays
 
 	ImbuedNode* LayoutEngine::NewImbuedNode(uint64_t guid)
 	{
-		auto ptr = std::make_unique<ImbuedNode>(MakeUniqueYogaNode(), guid);
+		auto ptr = std::make_unique<ImbuedNode>(MakeUniqueYogaNode(), guid, unsigned(_roots.size()-1));
 		auto res = ptr.get();
 		_imbuedNodes.push_back(std::move(ptr));
 		return res;
@@ -141,11 +220,11 @@ namespace RenderOverlays
 
 		LayedOutWidgets result;
 		for (auto& r:_roots)
-			YGNodeCalculateLayout(r.first, (float)r.second[0], (float)r.second[1], YGDirectionInherit); // YGDirectionLTR);
+			YGNodeCalculateLayout(r.first, (float)r.second.Width(), (float)r.second.Height(), YGDirectionInherit); // YGDirectionLTR);
 
 		result._layedOutLocations.reserve(_imbuedNodes.size());
 		for (auto& n:_imbuedNodes)
-			if (n->_nodeAttachments._drawDelegate) {
+			if (n->_nodeAttachments._drawDelegate || n->_postCalculateDelegate) {
 				auto ygNode = n->YGNode();
 				Float2 topLeft { YGNodeLayoutGetLeft(ygNode), YGNodeLayoutGetTop(ygNode) };
 				auto parent = YGNodeGetParent(ygNode);
@@ -153,6 +232,7 @@ namespace RenderOverlays
 					topLeft += Float2 { YGNodeLayoutGetLeft(parent), YGNodeLayoutGetTop(parent) };
 					parent = YGNodeGetParent(parent);
 				}
+				topLeft += _roots[n->_rootIndex].second._topLeft;
 				Float2 bottomRight;
 				bottomRight[0] = topLeft[0] + (int)YGNodeLayoutGetWidth(ygNode);
 				bottomRight[1] = topLeft[1] + (int)YGNodeLayoutGetHeight(ygNode);
@@ -165,6 +245,10 @@ namespace RenderOverlays
 				};
 
 				result._layedOutLocations.emplace_back(frame, content);
+
+				if (n->_postCalculateDelegate)
+					n->_postCalculateDelegate(ygNode, frame, content);
+
 			} else {
 				Rect zero { Coord2(0,0), Coord2(0,0) };
 				result._layedOutLocations.emplace_back(zero, zero);

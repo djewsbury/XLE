@@ -15,7 +15,7 @@ namespace Overlays
     class ShadowFrustumDebugger : public RenderOverlays::DebuggingDisplay::IWidget
     {
     public:
-        typedef RenderOverlays::DebuggingDisplay::Layout Layout;
+        typedef RenderOverlays::ImmediateLayout Layout;
         typedef RenderOverlays::DebuggingDisplay::Interactables Interactables;
         typedef RenderOverlays::DebuggingDisplay::InterfaceState InterfaceState;
 

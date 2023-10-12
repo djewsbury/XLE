@@ -8,6 +8,7 @@
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
 #include "../../RenderOverlays/OverlayEffects.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/AssetSetManager.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetHeap.h"
@@ -93,7 +94,7 @@ namespace PlatformRig { namespace Overlays
 	{
 	public:
 		using IOverlayContext = RenderOverlays::IOverlayContext;
-		using Layout = RenderOverlays::DebuggingDisplay::Layout;
+		using Layout = RenderOverlays::ImmediateLayout;
 		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
 		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
 		using InputSnapshot = OSServices::InputSnapshot;
@@ -106,17 +107,18 @@ namespace PlatformRig { namespace Overlays
 			using namespace Assets;
 			_trackedAssetList->Lock();
 			TRY {
+				layout.SetDirection(Layout::Direction::Column);
 				for (const auto&r:_trackedAssetList->GetCurrentRecords()) {
 					assert(r.second._state == AssetState::Invalid);
 
-					auto titleRect = layout.AllocateFullWidth(lineHeight);
+					auto titleRect = layout.Allocate(lineHeight);
 					if (titleRect.Height() < lineHeight) break;
 					FillRectangle(context, titleRect, titleBkground);
 					RenderOverlays::DrawText().Draw(context, titleRect, r.second._initializer);
 
 					auto msg = std::stringstream{AsString(r.second._actualizationLog)};
 					for (std::string line; std::getline(msg, line, '\n');) {
-						auto allocation = layout.AllocateFullWidth(lineHeight);
+						auto allocation = layout.Allocate(lineHeight);
 						if (allocation.Height() <= 0) break;
 						RenderOverlays::DrawText().Color(0xffcfcfcf).Draw(context, allocation, line);
 					}
@@ -248,22 +250,23 @@ namespace PlatformRig { namespace Overlays
 		if (!fnt) return;
 		const auto lineHeight = (*fnt)->GetFontProperties()._lineHeight;
 
+		layout.SetDirection(Layout::Direction::Column);
 		if (!activeOperations.empty())
 			RenderOverlays::DrawText()
 				.Font(**fnt)
-				.Draw(context, layout.AllocateFullWidth(lineHeight), "Compilation operations may result in very high GPU usage");
+				.Draw(context, layout.Allocate(lineHeight), "Compilation operations may result in very high GPU usage");
 
 		if (_offset) {
 			const auto* text = "^ ^ ^";
 			RenderOverlays::DrawText()
 				.Font(**fnt)
 				.Alignment(RenderOverlays::TextAlignment::Center)
-				.Draw(context, layout.AllocateFullWidth(lineHeight), MakeStringSection(text));
+				.Draw(context, layout.Allocate(lineHeight), MakeStringSection(text));
 		}
 		
 		for (auto op=activeOperations.begin()+std::min(activeOperations.size(), (size_t)_offset); op!=activeOperations.end(); ++op) {
 			auto h = lineHeight * 2 + 2 * (sectionPadding + sectionMargin);
-			auto section = layout.AllocateFullWidth(h);
+			auto section = layout.Allocate(h);
 			if (section.Height() < h) break;
 
 			if (blurryBackground) {
@@ -281,17 +284,17 @@ namespace PlatformRig { namespace Overlays
 			circleArea._topLeft = (trim - Coord2{h, h})/2;
 			circleArea._bottomRight = (trim + Coord2{h, h})/2;
 
-			Layout textArea = RenderOverlays::Rect { {section._topLeft[0] + h + 16, section._topLeft[1]}, section._bottomRight };
+			Layout textArea { RenderOverlays::Rect { {section._topLeft[0] + h + 16, section._topLeft[1]}, section._bottomRight }, Layout::Direction::Column };
 			char buffer[1024];
 			{
-				auto description = textArea.AllocateFullWidth(lineHeight);
+				auto description = textArea.Allocate(lineHeight);
 				RenderOverlays::StringEllipsis(buffer, dimof(buffer), **fnt, MakeStringSection(op->_description), description.Width());
 				RenderOverlays::DrawText()
 					.Font(**fnt)
 					.Draw(context, description, buffer);
 			}
 			if (!op->_msg.empty()) {
-				auto msg = textArea.AllocateFullWidth(lineHeight);
+				auto msg = textArea.Allocate(lineHeight);
 				RenderOverlays::StringEllipsis(buffer, dimof(buffer), **fnt, MakeStringSection(op->_msg), msg.Width());
 				RenderOverlays::DrawText()
 					.Font(**fnt)

@@ -21,6 +21,7 @@
 #include "../../RenderOverlays/Overlays/Browser.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/OverlayApparatus.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 //#include "../../RenderOverlays/OverlayUtils.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"

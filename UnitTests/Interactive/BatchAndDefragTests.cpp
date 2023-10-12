@@ -121,14 +121,14 @@ namespace UnitTests
 
 			if (_batchingDisplay0) {
 				// draw on left
-				RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{0, 0}, Coord2{viewport[0]/2, viewport[1]}}};
+				RenderOverlays::ImmediateLayout layout{Rect{Coord2{0, 0}, Coord2{viewport[0]/2, viewport[1]}}};
 				RenderOverlays::DebuggingDisplay::Interactables interactables;
 				RenderOverlays::DebuggingDisplay::InterfaceState interfaceState;
 				_batchingDisplay0->Render(*overlayContext, layout, interactables, interfaceState);
 			}
 			if (_batchingDisplay1) {
 				// draw on right
-				RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{viewport[0]/2, 0}, Coord2{viewport[0], viewport[1]}}};
+				RenderOverlays::ImmediateLayout layout{Rect{Coord2{viewport[0]/2, 0}, Coord2{viewport[0], viewport[1]}}};
 				RenderOverlays::DebuggingDisplay::Interactables interactables;
 				RenderOverlays::DebuggingDisplay::InterfaceState interfaceState;
 				_batchingDisplay1->Render(*overlayContext, layout, interactables, interfaceState);

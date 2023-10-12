@@ -14,7 +14,7 @@ namespace PlatformRig { namespace Overlays
     {
     public:
         typedef RenderOverlays::IOverlayContext IOverlayContext;
-        typedef RenderOverlays::DebuggingDisplay::Layout Layout;
+        typedef RenderOverlays::ImmediateLayout Layout;
         typedef RenderOverlays::DebuggingDisplay::Interactables Interactables;
         typedef RenderOverlays::DebuggingDisplay::InterfaceState InterfaceState;
         typedef OSServices::InputSnapshot InputSnapshot;

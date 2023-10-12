@@ -8,6 +8,7 @@
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -48,8 +49,10 @@ namespace PlatformRig { namespace Overlays
 		VmaDetailedStatistics* stats = &_stats.total;
 		if (_memoryHeap < VK_MAX_MEMORY_HEAPS) stats = &_stats.memoryHeap[_memoryHeap];
 
+		layout.SetDirection(Layout::Direction::Column);
+
 		{
-			auto titleRect = layout.AllocateFullWidth(30);
+			auto titleRect = layout.Allocate(30);
 			FillRectangle(context, titleRect, titleBkground);
 			titleRect._topLeft[0] += 8;
 			auto* font = _headingFont->TryActualize();
@@ -65,18 +68,18 @@ namespace PlatformRig { namespace Overlays
 		}
 		
 		char buffer[256];
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "VkDeviceMemory count: " << stats->statistics.blockCount).AsStringSection());
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "VmaAllocation count: " << stats->statistics.allocationCount).AsStringSection());
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "VkDeviceMemory size: " << ByteCount{stats->statistics.blockBytes}).AsStringSection());
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "VmaAllocation size: " << ByteCount{stats->statistics.allocationBytes}).AsStringSection());
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "Allocator overhead: " << ByteCount{stats->statistics.blockBytes-stats->statistics.allocationBytes}).AsStringSection());
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "Allocation size min/max: " << ByteCount{stats->allocationSizeMin} << " / " << ByteCount{stats->allocationSizeMax}).AsStringSection());
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "Unused size min/max: " << ByteCount{stats->unusedRangeSizeMin} << " / " << ByteCount{stats->unusedRangeSizeMax}).AsStringSection());
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (StringMeldInPlace(buffer) << "Unused ranges count: " << stats->unusedRangeCount).AsStringSection());
+		DrawText().Draw(context, layout.Allocate(lineHeight), (StringMeldInPlace(buffer) << "VkDeviceMemory count: " << stats->statistics.blockCount).AsStringSection());
+		DrawText().Draw(context, layout.Allocate(lineHeight), (StringMeldInPlace(buffer) << "VmaAllocation count: " << stats->statistics.allocationCount).AsStringSection());
+		DrawText().Draw(context, layout.Allocate(lineHeight), (StringMeldInPlace(buffer) << "VkDeviceMemory size: " << ByteCount{stats->statistics.blockBytes}).AsStringSection());
+		DrawText().Draw(context, layout.Allocate(lineHeight), (StringMeldInPlace(buffer) << "VmaAllocation size: " << ByteCount{stats->statistics.allocationBytes}).AsStringSection());
+		DrawText().Draw(context, layout.Allocate(lineHeight), (StringMeldInPlace(buffer) << "Allocator overhead: " << ByteCount{stats->statistics.blockBytes-stats->statistics.allocationBytes}).AsStringSection());
+		DrawText().Draw(context, layout.Allocate(lineHeight), (StringMeldInPlace(buffer) << "Allocation size min/max: " << ByteCount{stats->allocationSizeMin} << " / " << ByteCount{stats->allocationSizeMax}).AsStringSection());
+		DrawText().Draw(context, layout.Allocate(lineHeight), (StringMeldInPlace(buffer) << "Unused size min/max: " << ByteCount{stats->unusedRangeSizeMin} << " / " << ByteCount{stats->unusedRangeSizeMax}).AsStringSection());
+		DrawText().Draw(context, layout.Allocate(lineHeight), (StringMeldInPlace(buffer) << "Unused ranges count: " << stats->unusedRangeCount).AsStringSection());
 
-		layout.AllocateFullWidth(lineHeight);
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Press 0-9 to select a specific heap (or ` for all).");
-		DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Press 'q' to write out a report to vk_alloc.json");
+		layout.Allocate(lineHeight);
+		DrawText().Draw(context, layout.Allocate(lineHeight), "Press 0-9 to select a specific heap (or ` for all).");
+		DrawText().Draw(context, layout.Allocate(lineHeight), "Press 'q' to write out a report to vk_alloc.json");
 	}
 
 	ProcessInputResult VulkanMemoryAllocatorDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input)

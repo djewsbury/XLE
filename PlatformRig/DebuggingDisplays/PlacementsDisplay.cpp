@@ -35,6 +35,7 @@
 #include "../../Utility/FastParseValue.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/FormatterUtils.h"
+#include "../../Foreign/yoga/yoga/Yoga.h"
 #include <sstream>
 
 using namespace Utility::Literals;
@@ -64,7 +65,7 @@ namespace PlatformRig { namespace Overlays
 	class ToolTipHover
 	{
 	public:
-		void Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform);
+		void Render(IOverlayContext& context, ImmediateLayout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform);
 		ProcessInputResult ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
 		Coord2 GetDimensions() const;
@@ -78,7 +79,7 @@ namespace PlatformRig { namespace Overlays
 		LayedOutWidgets _layedOutWidgets;
 	};
 
-	void ToolTipHover::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform)
+	void ToolTipHover::Render(IOverlayContext& context, ImmediateLayout& layout, Interactables&interactables, InterfaceState& interfaceState, const Float3x3& transform)
 	{
 		DrawContext drawContext{context, interactables, interfaceState};
 		_layedOutWidgets.Draw(drawContext, transform);
@@ -583,7 +584,7 @@ namespace PlatformRig { namespace Overlays
 
 		ToolTipStyler()
 		{
-			_staticData = &EntityInterface::MountedData<StaticData>::LoadOrDefault("cfg/displays/tooltipstyler"_initializer);
+			_staticData = &EntityInterface::MountedData<StaticData>::LoadWithStallOrDefault("cfg/displays/tooltipstyler"_initializer);
 			_headingFont = ActualizeFont(_staticData->_headingFont);
 			_valueFont = ActualizeFont(_staticData->_valueFont);
 
@@ -599,7 +600,8 @@ namespace PlatformRig { namespace Overlays
 			} else {
 				futureFont = MakeFont(name);
 			}
-			return futureFont->Actualize();		// stall
+			futureFont->StallWhilePending();		// stall
+			return futureFont->Actualize();
 		}
 
 		unsigned _dotWidth = 8;
@@ -623,7 +625,7 @@ namespace PlatformRig { namespace Overlays
 		auto localToCell = TryAnyCast<Float4x4>(metadataQuery("LocalToCell"_h));
 
 		auto rootNode = le.NewNode();
-		le.PushRoot(rootNode, {32, 32});
+		le.PushRoot(rootNode, {{0,0}, {32, 32}});
 		YGNodeStyleSetMaxWidth(rootNode, 768);
 		YGNodeStyleSetMaxHeight(rootNode, 1440);		// we need to set some maximum height to allow the dimensions returned in the layout to adapt to the children
 
@@ -743,7 +745,7 @@ namespace PlatformRig { namespace Overlays
 		LayoutEngine le;
 
 		auto rootNode = le.NewNode();
-		le.PushRoot(rootNode, {32, 32});
+		le.PushRoot(rootNode, {{0,0}, {32, 32}});
 		YGNodeStyleSetFlexDirection(rootNode, YGFlexDirectionColumn);
 		YGNodeStyleSetJustifyContent(rootNode, YGJustifyFlexStart);
 		YGNodeStyleSetAlignItems(rootNode, YGAlignStretch);		// stretch out each item to fill the entire row

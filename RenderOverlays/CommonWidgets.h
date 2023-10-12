@@ -3,7 +3,9 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #pragma once
+
 #include "DebuggingDisplay.h"
+#include "../Assets/AssetsCore.h"
 #include "../Utility/StringFormat.h"
 
 namespace RenderOverlays
@@ -127,7 +129,6 @@ namespace RenderOverlays { namespace CommonWidgets
 	template<typename Type>
 		void Styler::LeftRight(DrawContext& drawContext, Rect valueBox, uint64_t interactable, StringSection<> name, Type value) const
 	{
-		using namespace DebuggingDisplay;
 		Rect leftRect { valueBox._topLeft, Coord2{(valueBox._topLeft[0]+valueBox._bottomRight[0])/2, valueBox._bottomRight[1]} };
 		Rect rightRect { Coord2{(valueBox._topLeft[0]+valueBox._bottomRight[0])/2, valueBox._topLeft[1]}, valueBox._bottomRight };
 
@@ -156,7 +157,7 @@ namespace RenderOverlays { namespace CommonWidgets
 			leftColor, leftColor, leftColor,
 			rightColor, rightColor, rightColor
 		};
-		FillTriangles(drawContext.GetContext(), arrows, arrowColors, dimof(arrows)/3);
+		DebuggingDisplay::FillTriangles(drawContext.GetContext(), arrows, arrowColors, dimof(arrows)/3);
 
 		auto margin = GetLeftRightLabelsHorizontalMargin();
 		DrawText().Color({191, 123, 0}).Alignment(TextAlignment::Left).Draw(drawContext.GetContext(), {valueBox._topLeft+Coord2{margin, 0}, valueBox._bottomRight-Coord2{margin, 0}}, name);
@@ -168,7 +169,6 @@ namespace RenderOverlays { namespace CommonWidgets
 	template<typename Type>
 		void Styler::Bounded(DrawContext& drawContext, Rect valueBox, uint64_t interactable, StringSection<> name, Type value, Type leftSideValue, Type rightSideValue) const
 	{
-		using namespace DebuggingDisplay;
 		assert(drawContext._hoverings);
 		float alpha = (value - leftSideValue) / float(rightSideValue - leftSideValue);
 		alpha = std::max(0.f, std::min(1.0f, alpha));

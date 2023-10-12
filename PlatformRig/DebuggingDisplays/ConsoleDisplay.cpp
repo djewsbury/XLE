@@ -9,6 +9,7 @@
 #include "../../RenderOverlays/OverlayEffects.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../Utility/UTFUtils.h"
@@ -52,10 +53,11 @@ namespace PlatformRig { namespace Overlays
         const float         textHeight      = res->_font->GetFontProperties()._lineHeight;
         const Coord         entryBoxHeight  = Coord(textHeight) + 2 * layout._paddingBetweenAllocations;
 
-        const Rect          historyArea     = layout.AllocateFullWidth(consoleMaxSize.Height() - 2 * layout._paddingInternalBorder - layout._paddingBetweenAllocations - entryBoxHeight);
-        const Rect          entryBoxArea    = layout.AllocateFullWidth(entryBoxHeight);
+        layout.SetDirection(Layout::Direction::Column);
+        const Rect          historyArea     = layout.Allocate(consoleMaxSize.Height() - 2 * layout._paddingInternalBorder - layout._paddingBetweenAllocations - entryBoxHeight);
+        const Rect          entryBoxArea    = layout.Allocate(entryBoxHeight);
 
-        Layout              historyAreaLayout(historyArea);
+        Layout              historyAreaLayout(historyArea, Layout::Direction::Column);
         historyAreaLayout._paddingInternalBorder = 0;
         unsigned            linesToRender   = (unsigned)XlFloor((historyArea.Height() - 2*historyAreaLayout._paddingInternalBorder) / (textHeight + historyAreaLayout._paddingBetweenAllocations));
 
@@ -86,7 +88,7 @@ namespace PlatformRig { namespace Overlays
 
         auto lines = _console->GetLines(linesToRender, _scrollBack);
         signed emptyLines = signed(linesToRender) - signed(lines.size());
-        for (signed c=0; c<emptyLines; ++c) { historyAreaLayout.AllocateFullWidth(Coord(textHeight)); }
+        for (signed c=0; c<emptyLines; ++c) { historyAreaLayout.Allocate(Coord(textHeight)); }
         for (auto i=lines.cbegin(); i!=lines.cend(); ++i) {
             char buffer[1024];
             ucs2_2_utf8(AsPointer(i->begin()), i->size(), (utf8*)buffer, dimof(buffer));
@@ -94,7 +96,7 @@ namespace PlatformRig { namespace Overlays
                 .Alignment(TextAlignment::Left)
                 .Color(textColor)
                 .Font(*res->_font)
-                .Draw(context, historyAreaLayout.AllocateFullWidth(Coord(textHeight)), buffer);
+                .Draw(context, historyAreaLayout.Allocate(Coord(textHeight)), buffer);
         }
 
         RenderOverlays::CommonWidgets::Render(context, entryBoxArea, res->_font, _textEntry);

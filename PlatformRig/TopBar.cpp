@@ -8,6 +8,7 @@
 #include "../RenderOverlays/OverlayPrimitives.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../RenderOverlays/OverlayEffects.h"
+#include "../RenderOverlays/LayoutEngine.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/UniformsStream.h"
 #include "../RenderCore/IDevice.h"
@@ -84,7 +85,7 @@ namespace PlatformRig
 			IOverlayContext& context,
 			Rect rect, ColorB col, unsigned height);
 
-		Rect ScreenTitle(RenderOverlays::IOverlayContext&, Layout& layout, float requestedWidth) override;
+		Rect ScreenTitle(RenderOverlays::IOverlayContext&, ImmediateLayout& layout, float requestedWidth) override;
 		Rect Menu(RenderOverlays::IOverlayContext&, float requestedWidth) override;
 		Rect FrameRigDisplay(RenderOverlays::IOverlayContext&) override;
 		void RenderFrame(IOverlayContext& context) override;
@@ -95,7 +96,7 @@ namespace PlatformRig
 		const ThemeStaticData& _themeStaticData;
 		Rect _outerRect;
 		bool _renderedFrame = false;
-		Layout _layout;
+		ImmediateLayout _layout;
 		unsigned _menusAllocated = 0;
 	};
 
@@ -243,7 +244,7 @@ namespace PlatformRig
 		vertices[5] = Vertex_PC { AsPixelCoords(D), HardwareColor(col) };
 	}
 
-	Rect TopBarManager::ScreenTitle(RenderOverlays::IOverlayContext& overlayContext, Layout& layout, float requestedWidth)
+	Rect TopBarManager::ScreenTitle(RenderOverlays::IOverlayContext& overlayContext, ImmediateLayout& layout, float requestedWidth)
 	{
 		// awkwardly, we render the parts we're interested in on demand, because we don't actually know the state of the bar until
 		// we get to this point
@@ -252,9 +253,10 @@ namespace PlatformRig
 			_renderedFrame = true;
 		}
 
-		Rect frame = _layout.AllocateFullHeight(_topBarStaticData._headingPadding*2 + requestedWidth);
+		_layout.SetDirection(ImmediateLayout::Direction::Row);
+		Rect frame = _layout.Allocate(_topBarStaticData._headingPadding*2 + requestedWidth);
 		RenderObjectBkgrnd(overlayContext, frame, _themeStaticData._headingBkgrnd, _topBarStaticData._headingHeight);
-		_layout.AllocateFullHeight(_topBarStaticData._headingHeight);		// extra space for the border
+		_layout.Allocate(_topBarStaticData._headingHeight);		// extra space for the border
 
 		Rect content;
 		content._topLeft = frame._topLeft + Coord2 { _topBarStaticData._headingPadding, _topBarStaticData._headingPadding };
@@ -272,9 +274,10 @@ namespace PlatformRig
 			_renderedFrame = true;
 		}
 
-		Rect frame = _layout.AllocateFullHeight(_topBarStaticData._headingPadding*2 + requestedWidth);
+		_layout.SetDirection(ImmediateLayout::Direction::Row);
+		Rect frame = _layout.Allocate(_topBarStaticData._headingPadding*2 + requestedWidth);
 		RenderObjectBkgrnd(overlayContext, frame, _themeStaticData._menuBkgrnd[std::min(_menusAllocated, (unsigned)dimof(_themeStaticData._menuBkgrnd))], _topBarStaticData._headingHeight);
-		_layout.AllocateFullHeight(_topBarStaticData._headingHeight);		// extra space for the border
+		_layout.Allocate(_topBarStaticData._headingHeight);		// extra space for the border
 		++_menusAllocated;
 
 		Rect content;

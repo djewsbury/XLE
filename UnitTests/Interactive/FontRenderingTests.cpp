@@ -40,6 +40,7 @@ namespace UnitTests
 			using namespace RenderOverlays::DebuggingDisplay;
 			auto* tex = _renderingManager->GetUnderlyingTextureResource().get();
 			auto desc = tex->GetDesc();
+			layout.SetDirection(ImmediateLayout::Direction::Row);
 			auto rect = layout.AllocateFullHeight(std::min((int)desc._textureDesc._width, layout.GetWidthRemaining()));
 			if (rect.Height() > desc._textureDesc._height)
 				rect._bottomRight[1] = rect._topLeft[1] + desc._textureDesc._height;
@@ -79,7 +80,7 @@ namespace UnitTests
 				testHelper.GetOverlayApparatus()->_fontRenderingManager.get());
 
 			Int2 viewport {parserContext.GetViewport()._width, parserContext.GetViewport()._height};
-			RenderOverlays::DebuggingDisplay::Layout layout{Rect{Coord2{0, 0}, Coord2{viewport[0], viewport[1]}}};
+			RenderOverlays::ImmediateLayout layout{Rect{Coord2{0, 0}, Coord2{viewport[0], viewport[1]}}};
 
 			// draw....
 			if (_mode == Mode::ShowFontTexture) {

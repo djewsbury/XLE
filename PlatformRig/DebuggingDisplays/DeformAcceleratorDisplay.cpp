@@ -8,6 +8,7 @@
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -35,7 +36,8 @@ namespace PlatformRig { namespace Overlays
 		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
 		{
-			auto titleRect = layout.AllocateFullWidth(30);
+			layout.SetDirection(Layout::Direction::Column);
+			auto titleRect = layout.Allocate(30);
 			FillRectangle(context, titleRect, titleBkground);
 			titleRect._topLeft[0] += 8;
 			auto* font = _headingFont->TryActualize();
@@ -49,19 +51,19 @@ namespace PlatformRig { namespace Overlays
 		}
 
 		auto metrics = _deformAccelerators->GetMetrics();
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Accelerators readied: %u", (unsigned)metrics._acceleratorsReadied);
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Deformers readied: %u", (unsigned)metrics._deformersReadied);
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Instances readied: %u", (unsigned)metrics._instancesReadied);
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), StringMeld<64>() << "CPU Deform Allocation: " << ByteCount{metrics._cpuDeformAllocation});
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), StringMeld<64>() << "GPU Deform Allocation: " << ByteCount{metrics._gpuDeformAllocation});
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), StringMeld<64>() << "Uniform Deform Allocation: " << ByteCount{metrics._uniformDeformAllocation});
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Dispatch count: %u", (unsigned)metrics._dispatchCount);
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Vertex count: %u", (unsigned)metrics._vertexCount);
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Ave vertex size: %.1f bytes", metrics._vertexCount?metrics._gpuDeformAllocation/(float)metrics._vertexCount:0.f);
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Ave vertices per dispatch: %u", metrics._dispatchCount?metrics._vertexCount/metrics._dispatchCount:0);
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), "Descriptor set writes count: %u", (unsigned)metrics._descriptorSetWrites);		
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), StringMeld<64>() << "Constant data size: " << ByteCount{metrics._constantDataSize});
-		DrawText().FormatAndDraw(context, layout.AllocateFullWidth(lineHeight), StringMeld<64>() << "Input static data size: " << ByteCount{metrics._inputStaticDataSize});
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "Accelerators readied: %u", (unsigned)metrics._acceleratorsReadied);
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "Deformers readied: %u", (unsigned)metrics._deformersReadied);
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "Instances readied: %u", (unsigned)metrics._instancesReadied);
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeld<64>() << "CPU Deform Allocation: " << ByteCount{metrics._cpuDeformAllocation});
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeld<64>() << "GPU Deform Allocation: " << ByteCount{metrics._gpuDeformAllocation});
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeld<64>() << "Uniform Deform Allocation: " << ByteCount{metrics._uniformDeformAllocation});
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "Dispatch count: %u", (unsigned)metrics._dispatchCount);
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "Vertex count: %u", (unsigned)metrics._vertexCount);
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "Ave vertex size: %.1f bytes", metrics._vertexCount?metrics._gpuDeformAllocation/(float)metrics._vertexCount:0.f);
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "Ave vertices per dispatch: %u", metrics._dispatchCount?metrics._vertexCount/metrics._dispatchCount:0);
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "Descriptor set writes count: %u", (unsigned)metrics._descriptorSetWrites);		
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeld<64>() << "Constant data size: " << ByteCount{metrics._constantDataSize});
+		DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeld<64>() << "Input static data size: " << ByteCount{metrics._inputStaticDataSize});
 	}
 
 	auto    DeformAcceleratorPoolDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult

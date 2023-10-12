@@ -8,6 +8,7 @@
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../RenderCore/IAnnotator.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
@@ -239,12 +240,13 @@ namespace PlatformRig { namespace Overlays
 
         static const InteractableId sectionToolsId = InteractableId_Make("GPUProfilerSectionTools");
 
+        layout.SetDirection(ImmediateLayout::Direction::Column);
         unsigned sectionHeight = 96;
         for (unsigned c2=0; c2<dimof(_sections); ++c2) {
             Section& section = _sections[smoothedSectionCosts[c2].second];
             if (section._id && !(section._flags & Section::Flag_Hide)) {
                 //  Main outline for the section...
-                Rect sectionRect = layout.AllocateFullWidth( sectionHeight );
+                Rect sectionRect = layout.Allocate( sectionHeight );
                 if (!IsGood(sectionRect))
                     break;
 
@@ -252,9 +254,9 @@ namespace PlatformRig { namespace Overlays
                 static ColorB outlineColor{255,255,255,255};
                 FillAndOutlineRoundedRectangle(context, sectionRect, backgroundColor, outlineColor);
 
-                Layout sectionLayout(sectionRect);
-                Rect labelRect = sectionLayout.AllocateFullHeightFraction( .15f );
-                Rect historyRect = sectionLayout.AllocateFullHeightFraction( .85f );
+                Layout sectionLayout(sectionRect, Layout::Direction::Row);
+                Rect labelRect = sectionLayout.AllocateFraction( .15f );
+                Rect historyRect = sectionLayout.AllocateFraction( .85f );
 
                 //  Section name in the top third of the label rect
                 Rect sectionNameRect( 

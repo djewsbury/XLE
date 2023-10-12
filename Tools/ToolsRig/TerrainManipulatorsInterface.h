@@ -11,7 +11,8 @@
 
 namespace OSServices { class InputSnapshot; }
 namespace PlatformRig { class IInputListener; }
-namespace RenderOverlays { class IOverlayContext; namespace DebuggingDisplay { class InterfaceState; struct Layout; class Interactables; class DebugScreensSystem; }; class Font; }
+namespace RenderOverlays { class IOverlayContext; struct ImmediateLayout; class Font; }
+namespace RenderOverlays { namespace DebuggingDisplay { class InterfaceState; class Interactables; class DebugScreensSystem; }}
 namespace SceneEngine { class TerrainManager; class IIntersectionScene; }
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ParsingContext; class DrawingApparatus; class IPipelineAcceleratorPool; }}
@@ -56,7 +57,7 @@ namespace ToolsRig
     class ManipulatorsDisplay : public RenderOverlays::DebuggingDisplay::IWidget
     {
     public:
-        void    Render( RenderOverlays::IOverlayContext& context, RenderOverlays::DebuggingDisplay::Layout& layout, 
+        void    Render( RenderOverlays::IOverlayContext& context, RenderOverlays::ImmediateLayout& layout, 
                         RenderOverlays::DebuggingDisplay::Interactables&interactables, 
                         RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState);
         ProcessInputResult    ProcessInput(RenderOverlays::DebuggingDisplay::InterfaceState& interfaceState, const OSServices::InputSnapshot& input);

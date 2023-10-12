@@ -15,6 +15,7 @@
 #include "../../RenderOverlays/ShapesInternal.h"
 #include "../../RenderOverlays/DrawText.h"
 #include "../../RenderOverlays/OverlayEffects.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Tools/EntityInterface/MountedData.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Assets/Continuation.h"
@@ -259,10 +260,11 @@ namespace PlatformRig { namespace Overlays
                 Rect(Coord2(fullSize._topLeft[0], fullSize._topLeft[1]+layout._paddingInternalBorder), Coord2(fullSize._bottomRight[0], fullSize._bottomRight[1]-layout._paddingInternalBorder)),
                 middle);
 
-            layout.AllocateFullHeight(75);
+            layout.SetDirection(ImmediateLayout::Direction::Row);
+            layout.Allocate(75);
 
             for (const auto& g:GraphTabs::Groups) {
-                auto rect = layout.AllocateFullHeight(150);
+                auto rect = layout.Allocate(150);
 
                 auto hash = Hash64(g.first);
                 if (interfaceState.HasMouseOver(hash)) {
@@ -303,10 +305,10 @@ namespace PlatformRig { namespace Overlays
                 .Flags(0)
                 .Draw(context, dropDownMenuRect, dropDown->first);
 
-            Layout dd(dropDownRect);
+            Layout dd(dropDownRect, Layout::Direction::Column);
             dd._paddingInternalBorder = dropDownInternalBorder;
             for (unsigned c=0; c<dropDown->second.size(); ++c) {
-                auto rect = dd.AllocateFullWidth(20);
+                auto rect = dd.Allocate(20);
                 auto col = smallText;
 
                 const auto* name = GraphTabs::Names[unsigned(dropDown->second.begin()[c])];
@@ -611,6 +613,7 @@ namespace PlatformRig { namespace Overlays
     {
         static unsigned GraphHeight = 196;
         using UploadDataType = RenderCore::BufferUploads::UploadDataType;
+        layout.SetDirection(Layout::Direction::Column);
 
         switch (_graphsMode) {
         case GraphTabs::Uploads:
@@ -621,14 +624,14 @@ namespace PlatformRig { namespace Overlays
         case GraphTabs::StagingBufferAllocated:
             DrawDoubleGraph(
                 context, interactables, interfaceState,
-                layout.AllocateFullWidth(GraphHeight),
+                layout.Allocate(GraphHeight),
                 0, 1,
                 "Textures", _graphsMode, (unsigned)UploadDataType::Texture,
                 "Textures", _graphsMode, (unsigned)UploadDataType::Texture);
 
             DrawDoubleGraph(
                 context, interactables, interfaceState,
-                layout.AllocateFullWidth(GraphHeight),
+                layout.Allocate(GraphHeight),
                 2, 3,
                 "Geometry", _graphsMode, (unsigned)UploadDataType::GeometryBuffer,
                 "Uniforms", _graphsMode, (unsigned)UploadDataType::UniformBuffer);
@@ -637,7 +640,7 @@ namespace PlatformRig { namespace Overlays
         default:
             DrawDoubleGraph(
                 context, interactables, interfaceState,
-                layout.AllocateFullWidth(GraphHeight),
+                layout.Allocate(GraphHeight),
                 0, 1,
                 GraphTabs::Names[_graphsMode], _graphsMode, (unsigned)UploadDataType::Texture,
                 GraphTabs::Names[_graphsMode], _graphsMode, (unsigned)UploadDataType::Texture);
@@ -645,14 +648,14 @@ namespace PlatformRig { namespace Overlays
         };
     }
 
-    static void DrawTableBackground(IOverlayContext& context, Layout& layout)
+    static void DrawTableBackground(IOverlayContext& context, ImmediateLayout& layout)
     {
         auto& themeStaticData = EntityInterface::MountedData<ThemeStaticData>::LoadOrDefault("cfg/displays/theme"_initializer);
 
 		if (auto* blurryBackground = context.GetService<BlurryBackgroundEffect>()) {
 			ColorAdjust colAdj;
 			colAdj._luminanceOffset = 0.025f; colAdj._saturationMultiplier = 0.65f;
-			auto outerRect = Layout{layout}.AllocateFullWidthFraction(1.f);
+			auto outerRect = ImmediateLayout{layout}.AllocateFullWidthFraction(1.f);
 			SoftShadowRectangle(
 				context,
 				{outerRect._topLeft + Coord2(themeStaticData._shadowOffset0, themeStaticData._shadowOffset0), outerRect._bottomRight + Coord2(themeStaticData._shadowOffset1, themeStaticData._shadowOffset1)},
@@ -663,7 +666,7 @@ namespace PlatformRig { namespace Overlays
 				blurryBackground->GetResourceView(RenderOverlays::BlurryBackgroundEffect::Type::NarrowAccurateBlur),
 				colAdj, themeStaticData._semiTransparentTint);
 		} else
-			FillRectangle(context, Layout{layout}.AllocateFullWidthFraction(1.f), RenderOverlays::ColorB { 0, 0, 0, 145 });
+			FillRectangle(context, ImmediateLayout{layout}.AllocateFullWidthFraction(1.f), RenderOverlays::ColorB { 0, 0, 0, 145 });
     }
 
     void    BufferUploadDisplay::DrawStatistics(
@@ -1088,7 +1091,8 @@ namespace PlatformRig { namespace Overlays
     {
         auto metrics = _batchedResources->CalculateMetrics();
 
-        layout.AllocateFullWidth(32);  // leave some space at the top
+        layout.SetDirection(Layout::Direction::Column);
+        layout.Allocate(32);  // leave some space at the top
         static ColorB textColour(192, 192, 192, 128);
         static ColorB unallocatedLineColour(192, 192, 192, 128);
 
@@ -1109,17 +1113,17 @@ namespace PlatformRig { namespace Overlays
 
         {
             char buffer[256];
-            DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), 
+            DrawText().Color(textColour).FormatAndDraw(context, layout.Allocate(16), 
                 StringMeldInPlace(buffer) << "Heap count: " << metrics._heaps.size() << " / Total allocated: " << ByteCount{allocatedSpace} << " / Total unallocated: " << ByteCount{unallocatedSpace});
             if (!metrics._heaps.empty()) {
-                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16), 
+                DrawText().Color(textColour).FormatAndDraw(context, layout.Allocate(16), 
                     StringMeldInPlace(buffer) << "Largest free block: " << ByteCount{largestFreeBlock} << " / Average unallocated: " << ByteCount{unallocatedSpace/metrics._heaps.size()});
-                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                DrawText().Color(textColour).FormatAndDraw(context, layout.Allocate(16),
                     StringMeldInPlace(buffer) << "Block count: " << totalBlockCount << " / Ave block size: " << ByteCount{allocatedSpace/totalBlockCount});
 
-                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                DrawText().Color(textColour).FormatAndDraw(context, layout.Allocate(16),
                     StringMeldInPlace(buffer) << "Total Alloc: " << ByteCount{metrics._totalAllocateBytes} << " / Ave per frame: " << ByteCount{(size_t)_runningAveAllocs});
-                DrawText().Color(textColour).FormatAndDraw(context, layout.AllocateFullWidth(16),
+                DrawText().Color(textColour).FormatAndDraw(context, layout.Allocate(16),
                     StringMeldInPlace(buffer) << "Total Reposition: " << ByteCount{metrics._totalRepositionBytes} << " / Ave per frame: " << ByteCount{(size_t)_runningAveRepositions});
             }
         }
@@ -1128,8 +1132,8 @@ namespace PlatformRig { namespace Overlays
 
         {
             const unsigned lineHeight = 4;
-            Rect outsideRect = layout.AllocateFullWidth(Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
-            Rect heapAllocationDisplay = Layout(outsideRect).AllocateFullWidthFraction(100.f);
+            Rect outsideRect = layout.Allocate(Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
+            Rect heapAllocationDisplay = Layout(outsideRect).AllocateFraction(100.f);
 
             OutlineRectangle(context, outsideRect, 0xff000000);
 

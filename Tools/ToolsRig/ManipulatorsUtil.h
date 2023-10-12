@@ -26,7 +26,7 @@ namespace ToolsRig
     class IManipulator;
 
     Rect DrawManipulatorControls(
-        IOverlayContext& context, DebuggingDisplay::Layout& layout, Interactables&interactables, InterfaceState& interfaceState,
+        IOverlayContext& context, ImmediateLayout& layout, Interactables&interactables, InterfaceState& interfaceState,
         IManipulator& manipulator, const char title[]);
 
     bool HandleManipulatorsControls(

@@ -10,6 +10,7 @@
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"

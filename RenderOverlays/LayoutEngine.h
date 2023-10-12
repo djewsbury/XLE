@@ -8,7 +8,6 @@
 #include "../Math/Matrix.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/MemoryUtils.h"
-#include "../Foreign/yoga/yoga/Yoga.h"
 #include <stack>
 #include <vector>
 #include <memory>
@@ -16,8 +15,68 @@
 namespace PlatformRig { class InputContext; }
 namespace OSServices { class InputSnapshot; }
 
+struct YGNode;
+typedef struct YGNode* YGNodeRef;
+struct YGSize;
+extern "C" { void YGNodeFree(const YGNodeRef); }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmicrosoft-enum-forward-reference"
+enum YGMeasureMode;
+#pragma GCC diagnostic pop
+
 namespace RenderOverlays
 {
+
+	struct ImmediateLayout /////////////////////////////////////////////////////////////////////
+	{
+		Rect    _maximumSize;
+		Coord   _caret;
+		Coord   _paddingInternalBorder;
+		Coord   _paddingBetweenAllocations;
+
+		enum Direction { Row, Column };
+		Direction _direction = Direction::Row;
+
+		ImmediateLayout(const Rect& maximumSize, Direction direction = Direction::Row);
+		ImmediateLayout();
+		Rect    Allocate(Coord size);
+		Rect    AllocateFraction(float proportionOfSize);
+		Coord   GetSpaceRemaining() const;
+		Coord   GetMaxMainAxis() const;
+		Rect    GetMaximumSize() const { return _maximumSize; }
+		Direction GetDirection() const { return _direction; }
+		void    SetDirection(Direction dir);
+
+		// ----- legacy interface --- (prefer methods above)
+		Rect    AllocateFullWidth(Coord height)
+		{
+			SetDirection(Direction::Column);
+			return Allocate(height);
+		}
+		Rect    AllocateFullHeight(Coord width)
+		{
+			SetDirection(Direction::Row);
+			return Allocate(width);
+		}
+		Rect    AllocateFullWidthFraction(float proportionOfWidth)
+		{
+			SetDirection(Direction::Column);
+			return AllocateFraction(proportionOfWidth);
+		}
+		Rect    AllocateFullHeightFraction(float proportionOfHeight)
+		{
+			SetDirection(Direction::Row);
+			return AllocateFraction(proportionOfHeight);
+		}
+		Coord   GetWidthRemaining()
+		{
+			assert(_direction == Direction::Row);
+			return GetSpaceRemaining();
+		}
+	};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	struct DrawContext;
 	struct IOContext;
 
@@ -100,7 +159,7 @@ namespace RenderOverlays
 		void PushNode(YGNodeRef);
 		void PopNode();
 
-		void PushRoot(YGNodeRef, Coord2 containerSize);
+		void PushRoot(YGNodeRef, Rect containerSize);
 		GuidStackHelper& GuidStack() { return _guidStack; }
 
 		LayoutEngine();
@@ -108,7 +167,7 @@ namespace RenderOverlays
 
 	private:
 		std::stack<YGNodeRef> _workingStack;
-		std::vector<std::pair<YGNodeRef, Coord2>> _roots;
+		std::vector<std::pair<YGNodeRef, Rect>> _roots;
 		GuidStackHelper _guidStack;
 
 		std::vector<std::unique_ptr<ImbuedNode>> _imbuedNodes;
@@ -121,13 +180,18 @@ namespace RenderOverlays
 	{
 	public:
 		LayedOutWidgets::NodeDelegates _nodeAttachments;
+
 		std::function<YGSize(float, YGMeasureMode, float, YGMeasureMode)> _measureDelegate;
+		std::function<void(YGNodeRef, Rect, Rect)> _postCalculateDelegate;
 
 		YGNodeRef YGNode() { return _ygNode.get(); }
 		operator YGNodeRef() { return YGNode(); }
-		ImbuedNode(YogaNodePtr&& ygNode, uint64_t guid) : _ygNode(std::move(ygNode)) { _nodeAttachments._guid = guid; }
+		uint64_t Guid() const { return _nodeAttachments._guid; }
+		ImbuedNode(YogaNodePtr&& ygNode, uint64_t guid, unsigned rootIndex) : _ygNode(std::move(ygNode)), _rootIndex(rootIndex) { _nodeAttachments._guid = guid; }
 	private:
 		YogaNodePtr _ygNode;
+		unsigned _rootIndex;
+		friend class LayoutEngine;
 	};
 
 }

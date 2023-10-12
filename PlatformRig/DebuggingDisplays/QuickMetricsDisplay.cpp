@@ -5,6 +5,7 @@
 #include "QuickMetricsDisplay.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../Assets/Marker.h"
@@ -22,8 +23,9 @@ namespace PlatformRig { namespace Overlays
 
 		auto oldBetweenAllocations = layout._paddingBetweenAllocations;
 		layout._paddingBetweenAllocations = 0;
-		Layout textArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 12);
-		auto scrollArea = layout.AllocateFullHeight(layout.GetWidthRemaining());
+		layout.SetDirection(Layout::Direction::Row);
+		Layout textArea = layout.Allocate(layout.GetSpaceRemaining() - layout._paddingInternalBorder - 12);
+		auto scrollArea = layout.Allocate(layout.GetSpaceRemaining());
 		layout._paddingBetweenAllocations = oldBetweenAllocations;
 
 		DebuggingDisplay::ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, _lines.size(), textArea.GetMaximumSize().Height()/(float)lineHeight);

@@ -6,8 +6,10 @@
 #include "Font.h"
 #include "ShapesRendering.h"
 #include "DrawText.h"
+#include "LayoutEngine.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../Assets/Continuation.h"
+#include "../Assets/AssetsCore.h"
 
 #include "../Assets/AssetServices.h"
 #include "../Assets/AssetSetManager.h"
@@ -124,10 +126,10 @@ namespace RenderOverlays { namespace CommonWidgets
 	void Styler::SectionHeader(DrawContext& context, Rect rectangle, StringSection<> name, bool expanded) const
 	{
 		using namespace DebuggingDisplay;
-		Layout layout { rectangle };
+		ImmediateLayout layout { rectangle, ImmediateLayout::Direction::Row };
 		layout._paddingInternalBorder = 0;
-		auto flipperRect = layout.AllocateFullHeight(14);
-		auto titleRect = layout.AllocateFullHeight(layout.GetWidthRemaining());
+		auto flipperRect = layout.Allocate(14);
+		auto titleRect = layout.Allocate(layout.GetSpaceRemaining());
 
 		if (!expanded) {
 			auto flipperRectCenter = (flipperRect._topLeft+flipperRect._bottomRight)/2;

@@ -6,6 +6,7 @@
 
 #include "ToneMapSettings.h"
 #include "../DrawText.h"
+#include "../LayoutEngine.h"
 #include "../../SceneEngine/Tonemap.h"
 
 namespace Overlays

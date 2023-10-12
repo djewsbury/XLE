@@ -12,6 +12,7 @@
 #include "../../RenderOverlays/ShapesInternal.h"
 #include "../../RenderOverlays/DrawText.h"
 #include "../../RenderOverlays/OverlayEffects.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -247,7 +248,8 @@ namespace PlatformRig { namespace Overlays
 		if (_tab == 0 || _tab == 1) {
 			auto oldBetweenAllocations = layout._paddingBetweenAllocations;
 			layout._paddingBetweenAllocations = 0;
-			Layout tableArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder);
+			layout.SetDirection(ImmediateLayout::Direction::Row);
+			Layout tableArea = layout.Allocate(layout.GetSpaceRemaining() - layout._paddingInternalBorder);
 			tableArea._paddingInternalBorder = 0;
 			tableArea._paddingBetweenAllocations = 0;
 			layout._paddingBetweenAllocations = oldBetweenAllocations;

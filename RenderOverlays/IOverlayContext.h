@@ -10,6 +10,7 @@
 #include "../Math/Vector.h"
 #include "../Math/Matrix.h"
 #include "../Utility/StringUtils.h"
+#include "../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IResourceView; class MiniInputElementDesc; }
 namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; } }
@@ -68,8 +69,8 @@ namespace RenderOverlays
         virtual void    DrawTriangles   (ProjectionMode proj, const Float3 v[],      uint32 numPoints,       const ColorB& col)    = 0;
         virtual void    DrawTriangles   (ProjectionMode proj, const Float3 v[],      uint32 numPoints,       const ColorB col[])   = 0;
         virtual void    DrawTriangle(
-            ProjectionMode proj, 
-            const Float3& v0,      const ColorB& colV0,    const Float3& v1,     
+            ProjectionMode proj,
+            const Float3& v0,      const ColorB& colV0,    const Float3& v1,
             const ColorB& colV1,   const Float3& v2,       const ColorB& colV2) = 0;
 
         virtual IteratorRange<void*> DrawGeometry(
@@ -78,15 +79,15 @@ namespace RenderOverlays
             RenderCore::Techniques::ImmediateDrawableMaterial&& material) = 0;
 
         virtual void    DrawTexturedQuad(
-            ProjectionMode proj, 
-            const Float3& mins, const Float3& maxs, 
+            ProjectionMode proj,
+            const Float3& mins, const Float3& maxs,
             std::shared_ptr<RenderCore::IResourceView> textureResource,
             ColorB color = ColorB(0xffffffff),
             const Float2& minTex0 = Float2(0.f, 0.f), const Float2& maxTex0 = Float2(1.0f, 1.f)) = 0;
 
         virtual Float2   DrawText(
             const std::tuple<Float3, Float3>& quad,
-            const Font& font, DrawTextFlags::BitField, 
+            const Font& font, DrawTextFlags::BitField,
             ColorB col, TextAlignment alignment, StringSection<char> text) = 0;
 
         using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;

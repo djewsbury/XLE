@@ -8,6 +8,7 @@
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StringFormat.h"
 
@@ -18,11 +19,12 @@ namespace PlatformRig { namespace Overlays
 	using namespace RenderOverlays;
 	using namespace RenderOverlays::DebuggingDisplay;
 
-	static void DrawHeading(IOverlayContext& context, Layout& layout, RenderOverlays::Font& font, StringSection<> msg)
+	static void DrawHeading(IOverlayContext& context, ImmediateLayout& layout, RenderOverlays::Font& font, StringSection<> msg)
 	{
 		const unsigned headerLineHeight = 30;
 		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
-		auto allocation = layout.AllocateFullWidth(headerLineHeight);
+		layout.SetDirection(ImmediateLayout::Direction::Column);
+		auto allocation = layout.Allocate(headerLineHeight);
 		FillRectangle(context, allocation, titleBkground);
 		allocation._topLeft[0] += 8;
 		DrawText()
@@ -44,43 +46,44 @@ namespace PlatformRig { namespace Overlays
 			if (!headingFont) return;
 
 			DrawHeading(context, layout, **headingFont, "Active Monitor");
+			layout.SetDirection(ImmediateLayout::Direction::Column);
 
 			char buffer[256];
 			auto monitors = _dispSettings->GetMonitors();
 			OSServices::DisplaySettingsManager::ModeDesc currentMode;
 			if (_activeMonitorId < monitors.size()) {
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Name: " + monitors[_activeMonitorId]._friendlyName);
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "AdapterId: " << monitors[_activeMonitorId]._adapter << " (" << _dispSettings->GetAdapters()[monitors[_activeMonitorId]._adapter]._friendlyName << ")");
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "LocallyUniqueId: 0x" << std::hex << monitors[_activeMonitorId]._locallyUniqueId);
+				DrawText().Draw(context, layout.Allocate(lineHeight), "Name: " + monitors[_activeMonitorId]._friendlyName);
+				DrawText().Draw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "AdapterId: " << monitors[_activeMonitorId]._adapter << " (" << _dispSettings->GetAdapters()[monitors[_activeMonitorId]._adapter]._friendlyName << ")");
+				DrawText().Draw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "LocallyUniqueId: 0x" << std::hex << monitors[_activeMonitorId]._locallyUniqueId);
 				auto geo = _dispSettings->GetDesktopGeometryForMonitor(_activeMonitorId);
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Geometry X: " << geo._x << ", Y: " << geo._y << " Width: " << geo._width << ", Geometry Height: " << geo._height);
+				DrawText().Draw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Geometry X: " << geo._x << ", Y: " << geo._y << " Width: " << geo._width << ", Geometry Height: " << geo._height);
 				currentMode = _dispSettings->GetCurrentMode(_activeMonitorId);
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Current Mode: " << currentMode._width << "x" << currentMode._height << " (" << currentMode._refreshRate << "Hz) " << (currentMode._hdr == OSServices::DisplaySettingsManager::ToggleableState::Enable ? "HDR" : "LDR"));
+				DrawText().Draw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Current Mode: " << currentMode._width << "x" << currentMode._height << " (" << currentMode._refreshRate << "Hz) " << (currentMode._hdr == OSServices::DisplaySettingsManager::ToggleableState::Enable ? "HDR" : "LDR"));
 				if (_window)
-					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << "Window DPI: " << _window->GetDPI());
+					DrawText().Draw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Window DPI: " << _window->GetDPI());
 			}
 
-			layout.AllocateFullWidth(lineHeight);
+			layout.Allocate(lineHeight);
 
 			switch (_menuMode) {
 			case MenuMode::MainMenu:
 				DrawHeading(context, layout, **headingFont, "Main menu");
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "1. Change active monitor");
+				DrawText().Draw(context, layout.Allocate(lineHeight), "1. Change active monitor");
 				if (_window)
-					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), (_capturedMonitor == _activeMonitorId) ? "2. Release Monitor" : "2. Capture Monitor");
-				DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "3. Change mode");
+					DrawText().Draw(context, layout.Allocate(lineHeight), (_capturedMonitor == _activeMonitorId) ? "2. Release Monitor" : "2. Capture Monitor");
+				DrawText().Draw(context, layout.Allocate(lineHeight), "3. Change mode");
 				if (std::find(_monitorsReleasableMode.begin(), _monitorsReleasableMode.end(), _activeMonitorId) != _monitorsReleasableMode.end())
-					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "4. Release mode");
+					DrawText().Draw(context, layout.Allocate(lineHeight), "4. Release mode");
 				if (_hdrState != OSServices::DisplaySettingsManager::ToggleableState::Enable) {
-					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "5. Request HDR");
+					DrawText().Draw(context, layout.Allocate(lineHeight), "5. Request HDR");
 				} else
-					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "5. Don't request HDR");
+					DrawText().Draw(context, layout.Allocate(lineHeight), "5. Don't request HDR");
 				break;
 
 			case MenuMode::SelectMonitor:
 				DrawHeading(context, layout, **headingFont, "Select Monitor");
 				for (unsigned c=0; c<monitors.size(); ++c)
-					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << char('1' + c) <<  ". " << monitors[c]._friendlyName);
+					DrawText().Draw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << char('1' + c) <<  ". " << monitors[c]._friendlyName);
 				break;
 
 			case MenuMode::ChangeMode:
@@ -88,20 +91,20 @@ namespace PlatformRig { namespace Overlays
 				if (_activeMonitorId < monitors.size()) {
 					auto modes = _dispSettings->GetModes(_activeMonitorId);
 					if (_modeSelectorOffset != 0)
-						DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), u8"\u2191\u2191\u2191 Up arrow");
+						DrawText().Draw(context, layout.Allocate(lineHeight), u8"\u2191\u2191\u2191 Up arrow");
 
 					if (_modeSelectorOffset < modes.size()) {
 						auto m = modes.begin() + _modeSelectorOffset;
 						for (unsigned c=0; c<9; ++c) {
 							if (m == modes.end()) break;
-							DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), StringMeldInPlace(buffer) << char('1' + c) <<  ". " << m->_width << "x" << m->_height << " " << m->_refreshRate << "Hz");
+							DrawText().Draw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << char('1' + c) <<  ". " << m->_width << "x" << m->_height << " " << m->_refreshRate << "Hz");
 							++m;
 						}
 						if (m != modes.end())
-							DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), u8"\u2193\u2193\u2193 Down arrow");
+							DrawText().Draw(context, layout.Allocate(lineHeight), u8"\u2193\u2193\u2193 Down arrow");
 					}
 
-					DrawText().Draw(context, layout.AllocateFullWidth(lineHeight), "Backspace to exit menu");
+					DrawText().Draw(context, layout.Allocate(lineHeight), "Backspace to exit menu");
 				}
 				break;
 			}

@@ -10,6 +10,7 @@
 #include "ShapesRendering.h"
 #include "DrawText.h"
 #include "ShapesInternal.h"
+#include "LayoutEngine.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
@@ -545,7 +546,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         auto& fnt = *ConsoleRig::FindCachedBox<Internal::DefaultFontsBox>()._tableHeaderFont;
         auto fntLineHeight = fnt.GetFontProperties()._lineHeight;
 
-        Layout tempLayout(
+        ImmediateLayout tempLayout(
             Rect { initialRect._topLeft, { initialRect._bottomRight[0], std::min(initialRect._topLeft[1] + int(fntLineHeight)*2, initialRect._bottomRight[1])} });
         tempLayout._paddingInternalBorder = 0;
         tempLayout._paddingBetweenAllocations = 0;
@@ -703,7 +704,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return fntLineHeight*2;
     }
 
-    static Rect AllocateTableEntry(Layout& layout, const TableStaticData& staticData, unsigned width, bool first, bool last)
+    static Rect AllocateTableEntry(ImmediateLayout& layout, const TableStaticData& staticData, unsigned width, bool first, bool last)
     {
         Rect r;
         unsigned additionalPadding = 0;
@@ -730,7 +731,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (!fonts) return 0;
         
         auto& staticData = EntityInterface::MountedData<TableStaticData>::LoadOrDefault("cfg/displays/table"_initializer);
-        Layout tempLayout(rect);
+        ImmediateLayout tempLayout(rect);
         tempLayout._paddingInternalBorder = 0;
         tempLayout._paddingBetweenAllocations = 0;
 
@@ -775,25 +776,25 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return heightUsed;
     }
 
-    void DrawTableHeaders(IOverlayContext& context, Layout& layout, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders)
+    void DrawTableHeaders(IOverlayContext& context, ImmediateLayout& layout, IteratorRange<std::pair<std::string, unsigned>*> fieldHeaders)
     {
-        auto rect = Layout{layout}.AllocateFullWidthFraction(1.f);
+        auto rect = ImmediateLayout{layout}.AllocateFullWidthFraction(1.f);
         if (!IsGood(rect)) return;
         auto height = DrawTableHeaders(context, rect, fieldHeaders);
         layout.AllocateFullWidth(height);
     }
 
-    void DrawTableBase(IOverlayContext& context, Layout& layout)
+    void DrawTableBase(IOverlayContext& context, ImmediateLayout& layout)
     {
-        auto rect = Layout{layout}.AllocateFullWidthFraction(1.f);
+        auto rect = ImmediateLayout{layout}.AllocateFullWidthFraction(1.f);
         if (!IsGood(rect)) return;
         auto height = DrawTableBase(context, rect);
         layout.AllocateFullWidth(height);
     }
 
-    bool DrawTableEntry(IOverlayContext& context, Layout& layout, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted)
+    bool DrawTableEntry(IOverlayContext& context, ImmediateLayout& layout, IteratorRange<const std::pair<std::string, unsigned>*> fieldHeaders, const std::map<std::string, TableElement>& entry, bool highlighted)
     {
-        auto rect = Layout{layout}.AllocateFullWidthFraction(1.f);
+        auto rect = ImmediateLayout{layout}.AllocateFullWidthFraction(1.f);
         if (!IsGood(rect)) return false;
         auto height = DrawTableEntry(context, rect, fieldHeaders, entry, highlighted);
         layout.AllocateFullWidth(height);
@@ -1068,7 +1069,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     static const char* s_PanelControlsButtons[] = {"<", ">", "H", "V", "X"};
     
     void DebugScreensSystem::RenderPanelControls(   IOverlayContext& context,
-                                                    unsigned panelIndex, const std::string& name, Layout&layout, bool allowDestroy,
+                                                    unsigned panelIndex, const std::string& name, ImmediateLayout&layout, bool allowDestroy,
                                                     Interactables& interactables, InterfaceState& interfaceState)
     {
         const unsigned buttonCount   = dimof(s_PanelControlsButtons) - 1 + unsigned(allowDestroy);
@@ -1091,10 +1092,10 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (interfaceState.HasMouseOver(panelControlsId) || interfaceState.HasMouseOver(nameDropDownId)) {
             FillAndOutlineRoundedRectangle(context, buttonsRect, RoundedRectBackgroundColour, RoundedRectOutlineColour);
 
-            Layout buttonsLayout(buttonsRect);
+            ImmediateLayout buttonsLayout(buttonsRect, ImmediateLayout::Direction::Row);
             buttonsLayout._paddingBetweenAllocations = buttonsLayout._paddingInternalBorder = buttonPadding;
             for (unsigned c=0; c<buttonCount; ++c) {
-                Rect buttonRect = buttonsLayout.Allocate(Coord2(buttonSize, buttonSize));
+                Rect buttonRect = buttonsLayout.Allocate(buttonSize);
                 InteractableId id = InteractableId_Make(s_PanelControlsButtons[c])+panelIndex;
                 if (interfaceState.HasMouseOver(id)) {
                     OutlineEllipse(context, buttonRect, ColorB(0xff000000u));
@@ -1106,7 +1107,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 interactables.Register({buttonRect, id});
             }
 
-            Rect nameRect = buttonsLayout.Allocate(Coord2(nameSize, buttonSize));
+            Rect nameRect = buttonsLayout.Allocate(nameSize);
             DrawText().Draw(context, nameRect, MakeStringSection(name));
 
                 //
@@ -1235,7 +1236,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         _interfaceStateHelper.PreRender();
         
-        Layout completeLayout(viewport);
+        ImmediateLayout completeLayout(viewport);
         
         overlayContext.CaptureState();
 
@@ -1262,7 +1263,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                         }
                     }
                     if (IsGood(widgetRect)) {
-                        Layout widgetLayout(widgetRect);
+                        ImmediateLayout widgetLayout(widgetRect);
                         _widgets[i->_widgetIndex]._widget->Render(overlayContext, widgetLayout, _interfaceStateHelper._currentInteractables, _interfaceStateHelper._currentInterfaceState);
 
                             //  if we don't have any system widgets registered, we 
@@ -1273,14 +1274,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
                                 _widgets[i->_widgetIndex]._name, widgetLayout, _panels.size()!=1, _interfaceStateHelper._currentInteractables, _interfaceStateHelper._currentInterfaceState);
                         }
                     }
-                    completeLayout = Layout(nextWidgetRect);
+                    completeLayout = ImmediateLayout(nextWidgetRect);
                     completeLayout._paddingInternalBorder = 0;
                 }
             }
 
                 // render the system widgets last (they will render over the top of anything else that is visible)
             for (auto i=_systemWidgets.cbegin(); i!=_systemWidgets.cend(); ++i) {
-                Layout systemLayout(viewport);
+                ImmediateLayout systemLayout(viewport);
                 i->_widget->Render(overlayContext, systemLayout, _interfaceStateHelper._currentInteractables, _interfaceStateHelper._currentInterfaceState);
             }
 
@@ -1503,6 +1504,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return false;
     }
 
+    bool InterfaceState::HasMouseOver(InteractableId id, const std::string& label)
+    {
+        for(auto i=_mouseOverStack.begin(); i!=_mouseOverStack.end(); ++i)
+            if (i->_id == id && i->_label == label)
+                return true;
+        return false;
+    }
+
     InteractableId          InterfaceState::TopMostId() const
     { 
         // when a capture is set, it hides other widgets from being returned by this method
@@ -1554,138 +1563,6 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
-    Layout::Layout(const Rect& maximumSize)
-    {
-        _maximumSize = maximumSize;
-        _maxRowWidth = 0;
-        _caretX = _caretY = 0;
-        _currentRowMaxHeight = 0;
-        _paddingInternalBorder = 8;
-        _paddingBetweenAllocations = 4;
-    }
-
-    Rect Layout::Allocate(Coord2 dimensions)
-    {
-        Rect rect;
-        unsigned paddedCaretX = _caretX;
-        if (!paddedCaretX) { paddedCaretX += _paddingInternalBorder; } else { paddedCaretX += _paddingBetweenAllocations; }
-        rect._topLeft[0] = _maximumSize._topLeft[0] + paddedCaretX;
-        rect._bottomRight[0] = rect._topLeft[0] + dimensions[0];
-        if (_caretX && rect._bottomRight[0] > (_maximumSize._bottomRight[0] - _paddingInternalBorder)) {
-                // restart row
-             _caretY += _currentRowMaxHeight+_paddingBetweenAllocations;
-            _maxRowWidth = std::max(_maxRowWidth, _currentRowMaxHeight);
-            _currentRowMaxHeight = 0;
-
-            paddedCaretX = _paddingInternalBorder;
-            rect._topLeft[0] = _maximumSize._topLeft[0] + paddedCaretX;
-            rect._bottomRight[0] = rect._topLeft[0] + dimensions[0];
-        }
-
-        _currentRowMaxHeight = std::max(_currentRowMaxHeight, dimensions[1]);
-        if (!_caretY) { _caretY += _paddingInternalBorder; }
-        rect._topLeft[1] = _maximumSize._topLeft[1] + _caretY;
-        rect._bottomRight[1] = rect._topLeft[1] + dimensions[1];
-        _caretX = paddedCaretX + dimensions[0];
-        return rect;
-    }
-
-    Coord Layout::GetWidthRemaining()
-    {
-        auto maxSizeWidth = _maximumSize._bottomRight[0] - _maximumSize._topLeft[0];
-
-            // get the remaining space on the current line
-        if (!_caretX) {
-            return maxSizeWidth - 2 * _paddingInternalBorder;
-        }
-
-        auto attempt = maxSizeWidth - _caretX - _paddingInternalBorder - _paddingBetweenAllocations;
-        if (attempt > 0)
-            return attempt;
-
-        // no space left on the current row. We must implicitly move onto the next row
-        if (!_currentRowMaxHeight)
-            return attempt;
-
-        _caretY += _currentRowMaxHeight+_paddingBetweenAllocations;
-        _maxRowWidth = std::max( _maxRowWidth, _currentRowMaxHeight );
-        _currentRowMaxHeight = 0;
-        _caretX = 0;
-        return maxSizeWidth - 2 * _paddingInternalBorder;
-    }
-
-    Rect Layout::AllocateFullWidth(Coord height)
-    {
-            // restart row
-        if (_currentRowMaxHeight) {
-            _caretY += _currentRowMaxHeight+_paddingBetweenAllocations;
-            _maxRowWidth = std::max( _maxRowWidth, _currentRowMaxHeight );
-            _currentRowMaxHeight = 0;
-            _caretX = 0;
-        }
-
-        if (!_caretY) { _caretY += _paddingInternalBorder; }
-
-        auto maxY = _maximumSize._bottomRight[1]-_paddingInternalBorder;
-
-        Rect result;
-        result._topLeft[0]        = _maximumSize._topLeft[0] + _paddingInternalBorder;
-        result._bottomRight[0]    = _maximumSize._bottomRight[0] - _paddingInternalBorder;
-        result._topLeft[1]        = std::min(maxY, _maximumSize._topLeft[1] + _caretY);
-        result._bottomRight[1]    = std::min(maxY, result._topLeft[1] + height);
-        _caretY += height + _paddingBetweenAllocations;
-    
-        return result;
-    }
-
-    Rect Layout::AllocateFullHeight(Coord width)
-    {
-        // restart row, unless we're already in the middle of an allocateFullHeight
-        bool currentlyAllocatingFullHeight = (_caretY + _currentRowMaxHeight) >= (_maximumSize._bottomRight[1]-_maximumSize._topLeft[1]-2*_paddingInternalBorder);
-        if (!currentlyAllocatingFullHeight && _currentRowMaxHeight) {
-            _caretY += _currentRowMaxHeight+_paddingBetweenAllocations;
-            _maxRowWidth = std::max( _maxRowWidth, _currentRowMaxHeight );
-            _currentRowMaxHeight = 0;
-            _caretX = 0;
-        }
-
-        if (!_caretY) { _caretY += _paddingInternalBorder; }
-        if (!_caretX) { _caretX += _paddingInternalBorder; } else { _caretX += _paddingBetweenAllocations; }
-
-        Rect result;
-        result._topLeft[1]        = _maximumSize._topLeft[1] + _caretY;
-        result._bottomRight[1]    = _maximumSize._bottomRight[1] - _paddingInternalBorder;
-
-        result._topLeft[0]        = _maximumSize._topLeft[0] + _caretX;
-        result._bottomRight[0]    = std::min( result._topLeft[0]+width, _maximumSize._bottomRight[0] - _paddingInternalBorder );
-
-        _currentRowMaxHeight = std::max(_currentRowMaxHeight, result._bottomRight[1]-result._topLeft[1]);
-        _caretX = result._bottomRight[0] - _maximumSize._topLeft[0];
-        return result;
-    }
-    
-    Rect Layout::AllocateFullHeightFraction(float proportionOfWidth)
-    {
-        signed widthAvailable = _maximumSize._bottomRight[0] - _maximumSize._topLeft[0] - 2*_paddingInternalBorder;
-        signed width = unsigned(widthAvailable*proportionOfWidth);
-        return AllocateFullHeight(width);
-    }
-
-    Rect Layout::AllocateFullWidthFraction(float proportionOfHeight)
-    {
-            // restart row
-        if (_currentRowMaxHeight) {
-            _caretY += _currentRowMaxHeight+_paddingBetweenAllocations;
-            _maxRowWidth = std::max( _maxRowWidth, _currentRowMaxHeight );
-            _currentRowMaxHeight = 0;
-            _caretX = 0;
-        }
-
-        signed heightAvailable = _maximumSize._bottomRight[1] - _maximumSize._topLeft[1] - _caretY - _paddingInternalBorder;
-        signed maxHeight = (_maximumSize._bottomRight[1] - _maximumSize._topLeft[1] - _paddingInternalBorder*2);
-        return AllocateFullWidth(std::min(heightAvailable, Coord(maxHeight * proportionOfHeight)));
-    }
-
     const ColorB RandomPaletteColorTable[] = 
     {
         ColorB( 255,207,171 ),

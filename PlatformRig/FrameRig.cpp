@@ -114,8 +114,8 @@ namespace PlatformRig
     class FrameRigDisplay : public IFrameRigDisplay
     {
     public:
-        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
-        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
+        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override;
 
         void SetErrorMsg(std::string msg) { _errorMsg = std::move(msg); }
         void SetStyle(Style style) override { _style = style; }
@@ -511,7 +511,7 @@ namespace PlatformRig
 
     static void DrawMainStats(
         IOverlayContext& context,
-        Layout& layout,
+        ImmediateLayout& layout,
         FrameRigResources& res,
         const std::tuple<float, float, float>& fpsStats,
         const AccumulatedAllocations::CurrentHeapMetrics& heapMetrics,

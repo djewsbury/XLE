@@ -5,6 +5,7 @@
 #include "HierarchicalSpikesDisplay.h"
 #include "../../RenderOverlays/DrawText.h"
 #include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Assets/Continuation.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
@@ -188,20 +189,21 @@ namespace PlatformRig { namespace Overlays
 
         {
             ScopedLock(_pimpl->_entriesLock);
+            layout.SetDirection(Layout::Direction::Column);
             for (auto&section:_pimpl->_trackingEntries) {
                 auto i = _pimpl->_entries.find(section._key);
                 assert(i!=_pimpl->_entries.end());
 
-                Rect sectionRect = layout.AllocateFullWidth( sectionHeight );
+                Rect sectionRect = layout.Allocate( sectionHeight );
                 if (!IsGood(sectionRect)) {
                     break;
                 }
 
                 FillAndOutlineRoundedRectangle(context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
 
-                Layout sectionLayout(sectionRect);
-                Rect labelRect = sectionLayout.AllocateFullHeightFraction( .25f );
-                Rect historyRect = sectionLayout.AllocateFullHeightFraction( .75f );
+                Layout sectionLayout(sectionRect, Layout::Direction::Row);
+                Rect labelRect = sectionLayout.AllocateFraction( .25f );
+                Rect historyRect = sectionLayout.AllocateFraction( .75f );
 
                 //  Section name in the top third of the label rect
                 Rect sectionNameRect(

@@ -6,15 +6,15 @@
 
 #include "../RenderOverlays/OverlayPrimitives.h"
 
-namespace RenderOverlays { class IOverlayContext; }
-namespace RenderOverlays { namespace DebuggingDisplay { struct Layout; class Interactables; class InterfaceState; }}
+namespace RenderOverlays { class IOverlayContext; struct ImmediateLayout; }
+namespace RenderOverlays { namespace DebuggingDisplay { class Interactables; class InterfaceState; }}
 
 namespace PlatformRig
 {
 	class ITopBarManager
 	{
 	public:
-		virtual RenderOverlays::Rect ScreenTitle(RenderOverlays::IOverlayContext&, RenderOverlays::DebuggingDisplay::Layout& layout, float requestedWidth) = 0;
+		virtual RenderOverlays::Rect ScreenTitle(RenderOverlays::IOverlayContext&, RenderOverlays::ImmediateLayout& layout, float requestedWidth) = 0;
 		virtual RenderOverlays::Rect Menu(RenderOverlays::IOverlayContext&, float requestedWidth) = 0;
 		virtual RenderOverlays::Rect FrameRigDisplay(RenderOverlays::IOverlayContext&) = 0;
 		virtual void RenderFrame(RenderOverlays::IOverlayContext&) = 0;

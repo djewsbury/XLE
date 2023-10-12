@@ -1,6 +1,7 @@
 #include "HistoricalProfilerDisplay.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/StringFormat.h"
@@ -89,6 +90,7 @@ namespace PlatformRig { namespace Overlays
         }
 
         unsigned sectionHeight = 96;
+        layout.SetDirection(Layout::Direction::Column);
         for (unsigned sectionIndex=0; sectionIndex < trackingLabels.size(); ++sectionIndex) {
             const char* label = trackingLabels[sectionIndex].first;
             Pimpl::TrackingLabel& section = trackingLabels[sectionIndex].second;
@@ -96,16 +98,16 @@ namespace PlatformRig { namespace Overlays
                 continue;
 
             //  Main outline for the section...
-            Rect sectionRect = layout.AllocateFullWidth( sectionHeight );
+            Rect sectionRect = layout.Allocate( sectionHeight );
             if (!IsGood(sectionRect)) {
                 break;
             }
 
             FillAndOutlineRoundedRectangle(context, sectionRect, ColorB(180,200,255,128), ColorB(255,255,255,128));
 
-            Layout sectionLayout(sectionRect);
-            Rect labelRect = sectionLayout.AllocateFullHeightFraction( .25f );
-            Rect historyRect = sectionLayout.AllocateFullHeightFraction( .75f );
+            Layout sectionLayout(sectionRect, Layout::Direction::Row);
+            Rect labelRect = sectionLayout.AllocateFraction( .25f );
+            Rect historyRect = sectionLayout.AllocateFraction( .75f );
 
             //  Section name in the top third of the label rect
             Rect sectionNameRect(

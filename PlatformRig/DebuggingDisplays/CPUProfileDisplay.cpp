@@ -8,6 +8,7 @@
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../OSServices/TimeUtils.h"
 #include "../../Assets/Continuation.h"
@@ -148,7 +149,7 @@ namespace PlatformRig { namespace Overlays
         const std::vector<IHierarchicalProfiler::ResolvedEvent>& resolvedEvents,
         const std::vector<uint64_t>& toggledItems,
         const ProfilerTableSettings& settings,
-        IOverlayContext& context, Layout& layout,
+        IOverlayContext& context, ImmediateLayout& layout,
         Interactables&interactables, InterfaceState& interfaceState)
     {
 
@@ -174,6 +175,8 @@ namespace PlatformRig { namespace Overlays
         auto* res = ConsoleRig::TryActualizeCachedBox<DrawProfilerResources>();
         if (!res) return;
 
+        layout.SetDirection(ImmediateLayout::Direction::Column);
+
         while (!items.empty()) {
             unsigned treeDepth = items.top().second;
             const auto& evnt = resolvedEvents[items.top().first];
@@ -182,9 +185,11 @@ namespace PlatformRig { namespace Overlays
             const auto idLowerPart = evnt._label ? Hash32(evnt._label, XlStringEnd(evnt._label)) : 0;
             const auto elementId = uint64_t(g_InteractableIdTopPart) << 32ull | uint64_t(idLowerPart);
 
-            auto leftPart = layout.Allocate(Coord2(settings._leftPartWidth, settings._lineHeight));
-            auto middlePart = layout.Allocate(Coord2(settings._middlePartWidth, settings._lineHeight));
-            auto rightPart = layout.Allocate(Coord2(layout.GetWidthRemaining(), settings._lineHeight));
+            ImmediateLayout itemLayout = layout.Allocate(settings._lineHeight);
+            itemLayout._paddingInternalBorder = 0;
+            auto leftPart = itemLayout.Allocate(settings._leftPartWidth);
+            auto middlePart = itemLayout.Allocate(settings._middlePartWidth);
+            auto rightPart = itemLayout.Allocate(layout.GetSpaceRemaining());
 
             if (leftPart._topLeft[1] >= rightPart._bottomRight[1]) {
                 break;  // out of space. Can't fit any more in.
@@ -268,7 +273,7 @@ namespace PlatformRig { namespace Overlays
     {
     public:
         typedef RenderOverlays::IOverlayContext IOverlayContext;
-        typedef RenderOverlays::DebuggingDisplay::Layout Layout;
+        typedef RenderOverlays::ImmediateLayout Layout;
         typedef RenderOverlays::DebuggingDisplay::Interactables Interactables;
         typedef RenderOverlays::DebuggingDisplay::InterfaceState InterfaceState;
         
@@ -304,8 +309,8 @@ namespace PlatformRig { namespace Overlays
             ScopedLock(_resolvedEventsLock);
             resolvedEvents = _resolvedEvents;
         }
-        Layout tableView(layout.GetMaximumSize());
-        tableView._caretY -= _rowOffset * 200;
+        Layout tableView(layout.GetMaximumSize(), ImmediateLayout::Direction::Column);
+        tableView._caret -= _rowOffset * 200;
         static ProfilerTableSettings settings;
         DrawProfilerTable(resolvedEvents, _toggledItems, settings, context, tableView,
                             interactables, interfaceState);

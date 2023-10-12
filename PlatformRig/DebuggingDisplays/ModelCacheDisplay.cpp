@@ -9,6 +9,7 @@
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/AssetHeap.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -67,9 +68,10 @@ namespace PlatformRig { namespace Overlays
 		{
 			auto oldBetweenAllocations = layout._paddingBetweenAllocations;
 			layout._paddingBetweenAllocations = 0;
-			Layout tableArea = layout.AllocateFullHeight(layout.GetWidthRemaining() - layout._paddingInternalBorder - 12);
+			layout.SetDirection(ImmediateLayout::Direction::Row);
+			Layout tableArea = layout.Allocate(layout.GetSpaceRemaining() - layout._paddingInternalBorder - 12);
 			tableArea._paddingInternalBorder = 2;
-			auto scrollBarLocation = layout.AllocateFullHeight(layout.GetWidthRemaining());
+			auto scrollBarLocation = layout.Allocate(layout.GetSpaceRemaining());
 			layout._paddingBetweenAllocations = oldBetweenAllocations;
 			unsigned entryCount = 0, sourceEntryCount = 0, totalHeightUsedByEntries = 0;
 

@@ -14,6 +14,7 @@
 #include "../../RenderOverlays/CommonWidgets.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Assets/Continuation.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/IntrusivePtr.h"
@@ -186,7 +187,7 @@ namespace ToolsRig
     }
 
     Rect DrawManipulatorControls(
-        IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState,
+        IOverlayContext& context, ImmediateLayout& layout, Interactables&interactables, InterfaceState& interfaceState,
         IManipulator& manipulator, const char title[])
     {
         auto mainLayoutSize = layout.GetMaximumSize();
@@ -216,7 +217,7 @@ namespace ToolsRig
             Coord2(mainLayoutSize._bottomRight[0] - screenEdgePadding - width, mainLayoutSize._bottomRight[1] - screenEdgePadding - desiredHeight),
             Coord2(mainLayoutSize._bottomRight[0] - screenEdgePadding, mainLayoutSize._bottomRight[1] - screenEdgePadding));
 
-        Layout internalLayout(controlsRect);
+        ImmediateLayout internalLayout(controlsRect);
         
         FillRectangle(context, controlsRect, backgroundRectangleColour);
         OutlineRectangle(context, Rect(controlsRect._topLeft + Coord2(2,2), controlsRect._bottomRight - Coord2(2,2)), backgroundOutlineColour);

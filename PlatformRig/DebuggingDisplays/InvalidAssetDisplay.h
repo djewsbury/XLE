@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../Assets/AssetsCore.h"
 #include <vector>
 
 namespace Utility { class IHierarchicalProfiler; }
@@ -32,7 +33,7 @@ namespace PlatformRig { namespace Overlays
 	{
 	public:
 		using IOverlayContext = RenderOverlays::IOverlayContext;
-		using Layout = RenderOverlays::DebuggingDisplay::Layout;
+		using Layout = RenderOverlays::ImmediateLayout;
 		using Interactables = RenderOverlays::DebuggingDisplay::Interactables;
 		using InterfaceState = RenderOverlays::DebuggingDisplay::InterfaceState;
 		using InputSnapshot = OSServices::InputSnapshot;
