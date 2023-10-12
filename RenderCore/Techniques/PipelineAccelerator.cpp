@@ -731,7 +731,7 @@ namespace RenderCore { namespace Techniques
 			AssertPipelineUsageLock(*accelerator._ownerPool);
 		#endif
 		if (accelerator._visibilityMarker <= visibilityMarker) return false;
-		return &accelerator._invalidUnreliable;
+		return accelerator._invalidUnreliable;
 	}
 
 	::Assets::DependencyValidation TryGetDependencyValidation(DescriptorSetAccelerator& accelerator)
