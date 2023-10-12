@@ -357,8 +357,8 @@ namespace EntityInterface
 
 		void TestUpstreamValidationIndex() override 
 		{ 
-			if (_bindingEngine->GetModelValidationIndex() != _lastUpstreamModelValidationIndex) {
-				_lastUpstreamModelValidationIndex = _bindingEngine->GetModelValidationIndex();
+			if (_bindingEngine->GetModelDependencyValidation().GetValidationIndex() != _lastUpstreamModelValidationIndex) {
+				_lastUpstreamModelValidationIndex = _bindingEngine->GetModelDependencyValidation().GetValidationIndex();
 				_depVal.IncreaseValidationIndex();
 			}
 		}

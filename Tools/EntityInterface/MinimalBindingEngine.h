@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../../Assets/DepVal.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/ParameterBox.h"
 #include "../../Utility/MemoryUtils.h"
@@ -158,10 +159,19 @@ namespace EntityInterface
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 
-		void InvalidateModel() { ++_modelValidationIndex; }
-		void InvalidateLayout() { ++_layoutValidationIndex; }
-		unsigned GetModelValidationIndex() const { return _modelValidationIndex; }
-		unsigned GetLayoutValidationIndex() const { return _layoutValidationIndex; }
+		void InvalidateModel() { _modelDependencyValidation.IncreaseValidationIndex(); }
+		void InvalidateLayout() { _layoutDependencyValidation.IncreaseValidationIndex(); }
+
+		const ::Assets::DependencyValidation& GetModelDependencyValidation() const { return _modelDependencyValidation; }
+		const ::Assets::DependencyValidation& GetLayoutDependencyValidation() const { return _layoutDependencyValidation; }
+
+		MinimalBindingEngine()
+		{
+			auto& depValSys = ::Assets::GetDepValSys();
+			_modelDependencyValidation = depValSys.Make();
+			_layoutDependencyValidation = depValSys.Make();
+		}
+		~MinimalBindingEngine() = default;
 
 	private:
 		ParameterBox _viewAttachedValues;
@@ -170,8 +180,7 @@ namespace EntityInterface
 		std::set<uint64_t> _layoutInvalidatingModelValues;
 		std::set<uint64_t> _enabledModelValues;
 
-		unsigned _modelValidationIndex = 0;
-		unsigned _layoutValidationIndex = 0;
+		::Assets::DependencyValidation _modelDependencyValidation, _layoutDependencyValidation;
 
 		template<typename T> friend class MinimalBindingValue;
 	};
@@ -242,8 +251,8 @@ namespace EntityInterface
 			assert(_container);
 			_container->_modelMirrorValues.SetParameter(_id, newValue);
 			if (_container->_layoutInvalidatingModelValues.find(_id) != _container->_layoutInvalidatingModelValues.end())
-				++_container->_layoutValidationIndex;
-			++_container->_modelValidationIndex;
+				_container->_layoutDependencyValidation.IncreaseValidationIndex();
+			_container->_modelDependencyValidation.IncreaseValidationIndex();
 			break;
 
 		case MinimalBindingValueType::ViewAttached:
