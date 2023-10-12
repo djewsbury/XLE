@@ -70,10 +70,10 @@ namespace Sample
         #endif
 
         using namespace RenderCore::Assets;
-        _model = ::Assets::MakeAsset<ModelScaffold>(files._skin.c_str());
-        _skeleton = Assets::MakeAsset<SkeletonScaffold>(files._skeleton.c_str());
-        _animationSet = Assets::MakeAsset<AnimationSetScaffold>(files._animationSet.c_str());
-        auto matScaffold = Assets::MakeAsset<MaterialScaffold>(files._skin.c_str(), files._skin.c_str());
+        _model = ::Assets::GetAssetFuture<ModelScaffold>(files._skin.c_str());
+        _skeleton = Assets::GetAssetFuture<SkeletonScaffold>(files._skeleton.c_str());
+        _animationSet = Assets::GetAssetFuture<AnimationSetScaffold>(files._animationSet.c_str());
+        auto matScaffold = Assets::GetAssetFuture<MaterialScaffold>(files._skin.c_str(), files._skin.c_str());
 
         auto searchRules = Assets::DefaultDirectorySearchRules(files._skin.c_str());
         const unsigned levelOfDetail = 0;

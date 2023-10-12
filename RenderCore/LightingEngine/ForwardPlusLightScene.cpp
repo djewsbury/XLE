@@ -389,7 +389,7 @@ namespace RenderCore { namespace LightingEngine
 			constructionServices._pipelineAccelerators, constructionServices._techDelBox);
 
 		helper->_lightTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
-		helper->_glossLUTFuture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(GLOSS_LUT_TEXTURE);
+		helper->_glossLUTFuture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(GLOSS_LUT_TEXTURE);
 
 		using namespace std::placeholders;
 		::Assets::PollToPromise(

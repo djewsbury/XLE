@@ -674,7 +674,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 		auto helper = std::make_shared<ConstructionHelper>();
 
-		helper->_balancedNoiseTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
+		helper->_balancedNoiseTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
 
 		OperatorDigest digest { resolveOperators, shadowOperators, globalOperators };
 

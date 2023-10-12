@@ -46,7 +46,7 @@ namespace RenderCore { namespace Techniques
 		if (!src.GetDescriptorSetFileName().IsEmpty()) {
 			::Assets::DependencyValidation additionalDepVal;
 			TRY {
-				auto layoutFileFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
+				auto layoutFileFuture = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
 				YieldToPool(layoutFileFuture);
 				auto actualLayoutFile = layoutFileFuture.get();
 				additionalDepVal = actualLayoutFile->GetDependencyValidation();

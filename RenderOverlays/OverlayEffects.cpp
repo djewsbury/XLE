@@ -455,7 +455,7 @@ namespace RenderOverlays
 			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
 			usi1);
 
-		auto futureDownsampleOperator = ::Assets::MakeAssetMarkerPtr<FastMipChainOperator>(pool);
+		auto futureDownsampleOperator = ::Assets::GetAssetMarkerPtr<FastMipChainOperator>(pool);
 
 		::Assets::WhenAll(std::move(futureDownsampleOperator), std::move(futureUpsampleOperator)).ThenConstructToPromise(
 			std::move(promise),
@@ -502,8 +502,8 @@ namespace RenderOverlays
 	: _parsingContext(&parsingContext)
 	{
 		const unsigned tapCount = Tweakable("BlurTapCount", 31);
-		_gaussianBlur = ::Assets::MakeAssetMarkerPtr<GaussianBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool, tapCount);
-		_broadBlur = ::Assets::MakeAssetMarkerPtr<BroadBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool);
+		_gaussianBlur = ::Assets::GetAssetMarkerPtr<GaussianBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool, tapCount);
+		_broadBlur = ::Assets::GetAssetMarkerPtr<BroadBlurOperator>(parsingContext.GetTechniqueContext()._graphicsPipelinePool);
 	}
 
 	BlurryBackgroundEffect::~BlurryBackgroundEffect()

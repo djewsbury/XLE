@@ -37,7 +37,7 @@ namespace RenderOverlays
 		StringSection<> ps,
 		StringSection<> definesTable = {})
 	{
-		return ::Assets::MakeAssetMarkerPtr<Metal::ShaderProgram>(
+		return ::Assets::GetAssetMarkerPtr<Metal::ShaderProgram>(
             pipelineLayout,
             vs, ps, definesTable);
 	}
@@ -116,7 +116,7 @@ namespace RenderOverlays
                 BASIC2D_VERTEX_HLSL ":fullscreen:vs_*", 
                 OUTLINE_VIS_PIXEL_HLSL ":main_shadow:ps_*");
 
-            auto tex = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(DISTINCT_COLORS_TEXTURE);
+            auto tex = ::Assets::GetAssetFuturePtr<RenderCore::Techniques::DeferredShaderResource>(DISTINCT_COLORS_TEXTURE);
 
             ::Assets::WhenAll(drawHighlightFuture, drawShadowFuture, tex).ThenConstructToPromise(std::move(promise));
         }
@@ -202,8 +202,8 @@ namespace RenderOverlays
                 components == FormatComponents::DepthStencil
             ||  components == FormatComponents::Stencil;
 
-        auto shaders = ::Assets::MakeAssetMarker<HighlightShaders>(pipelineLayout)->TryActualize();
-        auto shaders2 = ::Assets::MakeAssetMarker<HighlightByStencilShaders>(pipelineLayout, onlyHighlighted, inputAttachmentMode, stencilInput)->TryActualize();
+        auto shaders = ::Assets::GetAssetMarker<HighlightShaders>(pipelineLayout)->TryActualize();
+        auto shaders2 = ::Assets::GetAssetMarker<HighlightByStencilShaders>(pipelineLayout, onlyHighlighted, inputAttachmentMode, stencilInput)->TryActualize();
         if (!shaders || !shaders2) return;
 
         IResourceView* srvs[] = { shaders->_distinctColorsSRV.get(), stencilSrv };
@@ -351,7 +351,7 @@ namespace RenderOverlays
         assert(srv);
         _pimpl->_rpi.End();
 
-        auto shaders = ::Assets::MakeAssetMarker<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
+        auto shaders = ::Assets::GetAssetMarker<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
 		if (srv && shaders) {
             auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*_pimpl->_parsingContext);
 			auto& metalContext = *Metal::DeviceContext::Get(_pimpl->_parsingContext->GetThreadContext());
@@ -384,7 +384,7 @@ namespace RenderOverlays
             //  now we can render these objects over the main image, 
             //  using some filtering
 
-        auto shaders = ::Assets::MakeAssetMarker<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
+        auto shaders = ::Assets::GetAssetMarker<HighlightShaders>(_pimpl->_pipelineLayout)->TryActualize();
         if (srv && shaders) {
             auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(*_pimpl->_parsingContext);
 			auto& metalContext = *Metal::DeviceContext::Get(_pimpl->_parsingContext->GetThreadContext());

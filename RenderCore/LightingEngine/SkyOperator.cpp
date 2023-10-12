@@ -277,7 +277,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		if (_onChangeIBL.AtLeastOneBind()) {
-			_diffuseIBL = ::Assets::MakeAsset<SHCoefficientsAsset>(loadingContext, input, _desc._coordinateSystem);
+			_diffuseIBL = ::Assets::GetAssetFuture<SHCoefficientsAsset>(loadingContext, input, _desc._coordinateSystem);
 
 			Assets::TextureCompilationRequest request;
 			request._operation = Assets::TextureCompilationRequest::Operation::EquirectFilterGlossySpecular;

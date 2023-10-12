@@ -43,11 +43,11 @@ namespace RenderCore { namespace Metal_DX11
     ///             <item>Pixel Shader</item>
     ///         </list>
     ///
-    /// Normally ShaderProgram objects are created and managed using the "Assets::MakeAsset"
+    /// Normally ShaderProgram objects are created and managed using the "Assets::GetAssetFuture"
     /// functions.
     /// For example:
     /// <code>\code
-    ///     auto shader = Assets::MakeAsset<ShaderProgram>("shaders/basic.vertex.hlsl:main:vs_*", "shaders/basic.pixel.hlsl:main:ps_*");
+    ///     auto shader = Assets::GetAssetFuture<ShaderProgram>("shaders/basic.vertex.hlsl:main:vs_*", "shaders/basic.pixel.hlsl:main:ps_*");
     /// \endcode</code>
     ///
     /// But it's also possible to construct a ShaderProgram as a basic object. 

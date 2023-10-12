@@ -600,7 +600,7 @@ namespace ColladaConversion
 		::Assets::DependencyValidation modelCfgFileDepVal;
 		{
 			auto cfgFileName = split.DrivePathAndFilename().AsString() + ".model";
-			auto cfgFile = ::Assets::MakeAssetMarker<std::shared_ptr<::Assets::ResolvedAssetMixin<ModelCompilationConfiguration>>>(cfgFileName);
+			auto cfgFile = ::Assets::GetAssetMarker<std::shared_ptr<::Assets::ResolvedAssetMixin<ModelCompilationConfiguration>>>(cfgFileName);
 			cfgFile->StallWhilePending();
 			if (cfgFile->GetAssetState() == ::Assets::AssetState::Ready) {
 				auto newCfg = std::make_shared<ModelCompilationConfiguration>();

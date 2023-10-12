@@ -297,9 +297,9 @@ namespace ToolsRig
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads)
     {
-		auto sphereMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":sphere");
-		auto tubeMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":tube");
-		auto rectangleMatFuture = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":rectangle");
+		auto sphereMatFuture = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":sphere");
+		auto tubeMatFuture = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":tube");
+		auto rectangleMatFuture = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":rectangle");
 
 		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToPromise(
 			std::move(promise),
@@ -372,7 +372,7 @@ namespace ToolsRig
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
     {
-		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "rawos/game/model/simple/spherestandin.dae")->TryActualize();
+		auto* asset = ::Assets::GetAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "rawos/game/model/simple/spherestandin.dae")->TryActualize();
 		if (asset) {
 			asset->BuildDrawables(exeContext._destinationPkts, matParams, localToWorld);
 			exeContext._completionCmdList = std::max(exeContext._completionCmdList, asset->GetCompletionCmdList());
@@ -387,7 +387,7 @@ namespace ToolsRig
 		const Float4x4& localToWorld, 
 		const ParameterBox& matParams = {})
 	{
-		auto* asset = ::Assets::MakeAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "rawos/game/model/simple/pointerstandin.dae")->TryActualize();
+		auto* asset = ::Assets::GetAssetMarker<SimpleModel>(drawablesPool, pipelineAcceleratorPool, bufferUploads, "rawos/game/model/simple/pointerstandin.dae")->TryActualize();
 		if (asset) {
 			asset->BuildDrawables(exeContext._destinationPkts, matParams, localToWorld);
 			exeContext._completionCmdList = std::max(exeContext._completionCmdList, asset->GetCompletionCmdList());
@@ -469,7 +469,7 @@ namespace ToolsRig
 	{
 		auto pkts = executeContext._destinationPkts;
 		if (Tweakable("DrawMarkers", true)) {
-			auto* visBox = ::Assets::MakeAssetMarker<VisGeoBox>(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads)->TryActualize();
+			auto* visBox = ::Assets::GetAssetMarker<VisGeoBox>(_drawablesPool, _pipelineAcceleratorPool, _bufferUploads)->TryActualize();
 			for (const auto& a:_cubeAnnotations) {
 				auto objects = _objects->FindEntitiesOfType(a._typeNameHash);
 				for (const auto&o:objects) {

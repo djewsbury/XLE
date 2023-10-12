@@ -192,7 +192,7 @@ namespace RenderCore { namespace Techniques
 					if (context) {
 						res._deferredShaderResource = context->ConstructShaderResource(MakeStringSection(boundResource.value()));
 					} else
-						res._deferredShaderResource = ::Assets::MakeAssetPtr<DeferredShaderResource>(MakeStringSection(boundResource.value()));
+						res._deferredShaderResource = ::Assets::GetAssetFuturePtr<DeferredShaderResource>(MakeStringSection(boundResource.value()));
 					_working->_resources.push_back(res);
 					gotBinding = true;
 

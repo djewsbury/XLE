@@ -310,7 +310,7 @@ namespace RenderCore { namespace LightingEngine
 		auto techDelFuture = promisedTechDel.get_future();
 		CreateTechniqueDelegate_GBuffer(
 			std::move(promisedTechDel),
-			::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>(ILLUM_TECH),
+			::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>(ILLUM_TECH),
 			CalculateGBufferDelegateType(opDesc));
 
 		::Assets::WhenAll(std::move(techDelFuture)).CheckImmediately().ThenConstructToPromise(

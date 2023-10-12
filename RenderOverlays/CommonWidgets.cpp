@@ -92,7 +92,7 @@ namespace RenderOverlays { namespace CommonWidgets
 
 	void DefaultFontsBox::ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise)
 	{
-		auto marker = ::Assets::MakeAssetMarker<EntityInterface::MountedData<CommonWidgetsStaticData>>("cfg/displays/commonwidgets");
+		auto marker = ::Assets::GetAssetMarker<EntityInterface::MountedData<CommonWidgetsStaticData>>("cfg/displays/commonwidgets");
 		::Assets::WhenAll(marker).Then(
 			[promise=std::move(promise)](auto futureStaticData) mutable {
 				CommonWidgetsStaticData staticData;

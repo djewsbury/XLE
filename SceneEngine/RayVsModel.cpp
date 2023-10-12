@@ -358,7 +358,7 @@ namespace SceneEngine
 			std::promise<ModelIntersectionTechniqueBox>&& promise,
 			const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool)
 		{
-			auto techniqueSetFile = ::Assets::MakeAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
+			auto techniqueSetFile = ::Assets::GetAssetMarkerPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH);
 
 			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedRayTestDelegate;
 			auto futureRayTestDelegate = promisedRayTestDelegate.get_future();
@@ -381,7 +381,7 @@ namespace SceneEngine
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		Techniques::VisibilityMarkerId visibilityMarkerId)
     {
-		auto* box = ::Assets::MakeAssetMarker<ModelIntersectionTechniqueBox>(pipelineAcceleratorPool)->TryActualize();
+		auto* box = ::Assets::GetAssetMarker<ModelIntersectionTechniqueBox>(pipelineAcceleratorPool)->TryActualize();
 		if (!box)
 			Throw(std::runtime_error("Sequencer configurations pending"));	// prefer to throw before we start the query
 

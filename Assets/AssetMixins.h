@@ -80,7 +80,7 @@ namespace Assets
 			while (i2 != initializer.end() && *i2 != ';') ++i2;
 			if (i2==i) break;
 
-			initialFutures.emplace_back(::Assets::MakeAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
+			initialFutures.emplace_back(::Assets::GetAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
 			i = i2;
 		}
 		assert(!initialFutures.empty());
@@ -100,7 +100,7 @@ namespace Assets
 			while (i2 != initializer.end() && *i2 != ';') ++i2;
 			if (i2==i) break;
 
-			initialFutures.emplace_back(::Assets::MakeAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
+			initialFutures.emplace_back(::Assets::GetAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
 			i = i2;
 		}
 		assert(!initialFutures.empty());
@@ -195,7 +195,7 @@ namespace Assets
 								::Assets::ResChar resolvedFile[MaxPath];
 								searchRules.ResolveFile(resolvedFile, MakeStringSection(name.begin(), colon));
 								std::string fullResolvedName = std::string(resolvedFile) + std::string(colon, name.end());
-								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::MakeAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
+								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
 							} else {
 								Throw(std::runtime_error("TODO -- not handling inherit references within the same file"));
 							}
@@ -318,7 +318,7 @@ namespace Assets
 								::Assets::ResChar resolvedFile[MaxPath];
 								searchRules.ResolveFile(resolvedFile, MakeStringSection(name.begin(), colon));
 								std::string fullResolvedName = std::string(resolvedFile) + std::string(colon, name.end());
-								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::MakeAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
+								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
 							} else {
 								Throw(std::runtime_error("TODO -- not handling inherit references within the same file"));
 							}

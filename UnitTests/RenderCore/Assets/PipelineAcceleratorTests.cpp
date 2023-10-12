@@ -239,7 +239,7 @@ namespace UnitTests
 		auto futureTechDel = promisedTechDel.get_future();
 		Techniques::CreateTechniqueDelegate_Utility(
 			std::move(promisedTechDel),
-			::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"), 
+			::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"), 
 			Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 
 		auto mainPool = testApparatus._pipelineAccelerators;
@@ -487,7 +487,7 @@ namespace UnitTests
 			auto futureTechDel = promisedTechDel.get_future();
 			Techniques::CreateTechniqueDelegate_Utility(
 				std::move(promisedTechDel),
-				::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
+				::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
 				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"cfgId",
@@ -573,7 +573,7 @@ namespace UnitTests
 			auto futureTechDel = promisedTechDel.get_future();
 			Techniques::CreateTechniqueDelegate_Utility(
 				std::move(promisedTechDel),
-				::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
+				::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
 				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"cfgId",
@@ -753,7 +753,7 @@ namespace UnitTests
 
 		// setup technique delegates
 		{
-			auto techniqueSetFile = ::Assets::MakeAssetMarkerPtr<Techniques::TechniqueSetFile>(ILLUM_TECH);
+			auto techniqueSetFile = ::Assets::GetAssetMarkerPtr<Techniques::TechniqueSetFile>(ILLUM_TECH);
 			{
 				std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promise;
 				auto future = promise.get_future();

@@ -384,7 +384,7 @@ namespace UnitTests
 			const unsigned gbufferTypeCode = 1;
 			RenderCore::Techniques::CreateTechniqueDelegate_Deferred(
 				std::move(promisedTechDel),
-				::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH),
+				::Assets::GetAssetFuturePtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH),
 				gbufferTypeCode);
 
 			auto pipelinePool = std::make_shared<Techniques::PipelineCollection>(testHelper->_device);

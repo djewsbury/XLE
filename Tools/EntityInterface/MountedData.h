@@ -44,7 +44,7 @@ namespace EntityInterface
 
 		static const T& LoadWithStallOrDefault(::Assets::Initializer<> mountLocation)
 		{
-			auto marker = ::Assets::MakeAssetMarker<MountedData>(mountLocation);
+			auto marker = ::Assets::GetAssetMarker<MountedData>(mountLocation);
 			marker->StallWhilePending();		// stall
 			if (auto* actualized = marker->TryActualize())
 				return actualized->get();
@@ -54,7 +54,7 @@ namespace EntityInterface
 
 		static const T& LoadOrDefault(::Assets::Initializer<> mountLocation)
 		{
-			auto marker = ::Assets::MakeAssetMarker<MountedData>(mountLocation);
+			auto marker = ::Assets::GetAssetMarker<MountedData>(mountLocation);
 			if (auto* actualized = marker->TryActualize())
 				return actualized->get();
 			static T def;

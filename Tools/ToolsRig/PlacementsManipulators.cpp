@@ -1213,7 +1213,7 @@ namespace ToolsRig
             //  the bottom range.
             //  We will use the first model in the list to calibrate the scatter densitys
 
-        auto* attemptedActualize = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::ModelScaffold>(modelName[0])->TryActualize();
+        auto* attemptedActualize = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::ModelScaffold>(modelName[0])->TryActualize();
         if (!attemptedActualize) return;
 
         auto modelBoundingBox = (*attemptedActualize)->GetStaticBoundingBox();

@@ -643,7 +643,7 @@ namespace RenderCore { namespace LightingEngine
 			SSR_PIPELINE ":Main",
 			usi);
 
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(SSR_PIPELINE ":Main");
+		auto pipelineLayoutFuture = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(SSR_PIPELINE ":Main");
 
 		::Assets::WhenAll(classifyTiles, prepareIndirectArgs, intersect, resolveSpatial, resolveTemporal, reflectionsBlur, pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise), 

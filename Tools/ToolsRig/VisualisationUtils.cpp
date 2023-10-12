@@ -532,7 +532,7 @@ namespace ToolsRig
 #if 0
 		try
         {
-			auto future = ::Assets::MakeAsset<SceneEngine::EnvironmentSettings>(envSettings._envConfigFile);
+			auto future = ::Assets::GetAssetFuture<SceneEngine::EnvironmentSettings>(envSettings._envConfigFile);
 			future->StallWhilePending();
 			SceneEngine::BasicLightingStateDelegate lightingParserDelegate(future->Actualize());
 

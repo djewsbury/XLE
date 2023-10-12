@@ -192,10 +192,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (!XlFindStringI(initializer, profileStr)) {
 			ResChar temp[MaxPath];
 			StringMeldInPlace(temp) << initializer << ":" << profileStr << "*";
-			return ::Assets::MakeAsset<CompiledShaderByteCode>(temp, definesTable);
+			return ::Assets::GetAssetFuture<CompiledShaderByteCode>(temp, definesTable);
 		}
 		else {
-			return ::Assets::MakeAsset<CompiledShaderByteCode>(initializer, definesTable);
+			return ::Assets::GetAssetFuture<CompiledShaderByteCode>(initializer, definesTable);
 		}
 	}
 

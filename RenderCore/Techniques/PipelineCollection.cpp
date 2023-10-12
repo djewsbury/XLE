@@ -36,7 +36,7 @@ namespace RenderCore { namespace Techniques
 			patchExpansions.reserve(patchExpansionsInit.size());
 			for (auto p:patchExpansionsInit) patchExpansions.emplace_back(p, ShaderStage::Compute);
 		}
-		auto filteringFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(MakeFileNameSplitter(shader).AllExceptParameters());
+		auto filteringFuture = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorFilteringRules>(MakeFileNameSplitter(shader).AllExceptParameters());
 		::Assets::WhenAll(filteringFuture).ThenConstructToPromise(
 			std::move(promise),
 			[selectorsCopy = RetainedSelectors{selectors}, shaderCopy=shader.AsString(), sharedPools=_sharedPools, pipelineLayout=std::move(pipelineLayout), patchExpansions=std::move(patchExpansions), compiledPatchCollection]( 

@@ -198,7 +198,7 @@ namespace FixedFunctionModel
 		::Assets::MarkerPtr<BoundShaderVariationSet>& future,
 		StringSection<::Assets::ResChar> modelScaffoldName)
 	{
-		auto scaffoldFuture = ::Assets::MakeAsset<RenderCore::Techniques::Technique>(modelScaffoldName);
+		auto scaffoldFuture = ::Assets::GetAssetFuture<RenderCore::Techniques::Technique>(modelScaffoldName);
 
 		future.SetPollingFunction(
 			[scaffoldFuture](::Assets::MarkerPtr<BoundShaderVariationSet>& thatFuture) -> bool {

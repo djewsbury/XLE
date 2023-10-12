@@ -482,7 +482,7 @@ namespace UnitTests
 
 			std::promise<std::shared_ptr<Techniques::ITechniqueDelegate>> promisedTechDel;
 			auto futureTechDel = promisedTechDel.get_future();
-			Techniques::CreateTechniqueDelegate_Utility(std::move(promisedTechDel), ::Assets::MakeAssetPtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH), Techniques::UtilityDelegateType::FlatColor);
+			Techniques::CreateTechniqueDelegate_Utility(std::move(promisedTechDel), ::Assets::GetAssetFuturePtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH), Techniques::UtilityDelegateType::FlatColor);
 			ParameterBox params;
 			params.SetParameter("RANDOMIZED", seed);
 			auto cfg = testApparatus._pipelineAccelerators->CreateSequencerConfig(

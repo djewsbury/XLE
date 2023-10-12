@@ -128,19 +128,19 @@ namespace RenderOverlays
 
         static void ConstructToPromise(std::promise<std::shared_ptr<StandardResources>>&& promise)
         {
-            auto fillRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
-            auto fillAndOutlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRoundedRect");
-            auto outlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");
-            auto fillRaisedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRect");
-            auto fillRaisedRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRoundedRect");
-            auto fillReverseRaisedRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillReverseRaisedRoundedRect");
-            auto fillEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
-            auto outlineEllipse = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
-            auto softShadowRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
-            auto dashLine = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":DashLine");
-            auto solidNoBorder = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SolidNoBorder");
-            auto fillColorAdjust = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillColorAdjust");
-            auto colorAdjustAndOutlineRoundedRect = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":ColorAdjustAndOutlineRoundedRect");
+            auto fillRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
+            auto fillAndOutlineRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRoundedRect");
+            auto outlineRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");
+            auto fillRaisedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRect");
+            auto fillRaisedRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRoundedRect");
+            auto fillReverseRaisedRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillReverseRaisedRoundedRect");
+            auto fillEllipse = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
+            auto outlineEllipse = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
+            auto softShadowRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
+            auto dashLine = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":DashLine");
+            auto solidNoBorder = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SolidNoBorder");
+            auto fillColorAdjust = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillColorAdjust");
+            auto colorAdjustAndOutlineRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":ColorAdjustAndOutlineRoundedRect");
 
             ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, solidNoBorder, fillColorAdjust, colorAdjustAndOutlineRoundedRect).ThenConstructToPromise(std::move(promise));
         }
@@ -886,7 +886,7 @@ namespace RenderOverlays
 
 		void DefaultFontsBox::ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise)
 		{
-            auto marker = ::Assets::MakeAssetMarker<EntityInterface::MountedData<DefaultFontsStaticData>>("cfg/displays/font");
+            auto marker = ::Assets::GetAssetMarker<EntityInterface::MountedData<DefaultFontsStaticData>>("cfg/displays/font");
             #if 0
                 ::Assets::WhenAll(marker).ThenConstructToPromise(
                     std::move(promise),
@@ -1056,7 +1056,7 @@ namespace RenderOverlays
 	void CreateShapesRenderingTechniqueDelegate(
 		std::promise<std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate>>&& promise)
 	{
-		auto pipelineLayoutFuture = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(RENDEROVERLAYS_SHAPES_PIPELINE ":ImmediateDrawables");
+		auto pipelineLayoutFuture = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(RENDEROVERLAYS_SHAPES_PIPELINE ":ImmediateDrawables");
 		::Assets::WhenAll(pipelineLayoutFuture).ThenConstructToPromise(
 			std::move(promise),
 			[](auto pipelineLayout) { return std::make_shared<ShapesRenderingTechniqueDelegate>(std::move(pipelineLayout)); });

@@ -41,7 +41,7 @@ namespace RenderCore
 
         \par RenderCore::Metal_DX11::ShaderProgram
             This represents a fully configured set of shaders, for use with a draw operation. 
-            ShaderPrograms can be used with the Assets::MakeAsset API, or stored independently.
+            ShaderPrograms can be used with the Assets::GetAssetFuture API, or stored independently.
             While we can interact with VertexShader and PixelShader objects individually, the
             ShaderProgram interface is easiest to use across multiple platforms.
 

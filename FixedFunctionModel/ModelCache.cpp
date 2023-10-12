@@ -60,7 +60,7 @@ namespace FixedFunctionModel
     {
         static ::Assets::PtrToMarkerPtr<RenderCore::Assets::ModelScaffold> CreateModelScaffold(StringSection<::Assets::ResChar> filename)
         {
-            return ::Assets::MakeAsset<RenderCore::Assets::ModelScaffold>(filename);
+            return ::Assets::GetAssetFuture<RenderCore::Assets::ModelScaffold>(filename);
         }
 
         static ::Assets::PtrToMarkerPtr<RenderCore::Assets::MaterialScaffold> CreateMaterialScaffold(
@@ -78,7 +78,7 @@ namespace FixedFunctionModel
                 model = temp;
             }
 
-            return ::Assets::MakeAsset<RenderCore::Assets::MaterialScaffold>(material, model);
+            return ::Assets::GetAssetFuture<RenderCore::Assets::MaterialScaffold>(material, model);
         }
     }
 
@@ -137,7 +137,7 @@ namespace FixedFunctionModel
             StringSection<::Assets::ResChar> modelFilename,
             StringSection<::Assets::ResChar> materialFilename)
         {
-            return ::Assets::MakeAsset<RenderCore::Assets::ModelSupplementScaffold>(
+            return ::Assets::GetAssetFuture<RenderCore::Assets::ModelSupplementScaffold>(
 				MakeStringSection((const ::Assets::ResChar*)&compilerHash, (const ::Assets::ResChar*)PtrAdd(&compilerHash, sizeof(compilerHash))),
 				modelFilename, materialFilename);
         }

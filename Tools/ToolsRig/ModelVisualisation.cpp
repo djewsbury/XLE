@@ -125,15 +125,15 @@ namespace ToolsRig
 			ele.SetModelAndMaterialScaffolds(loadingContext, settings._modelName, settings._materialName);
 			if (!settings._skeletonFileName.empty())
 				construction->SetSkeletonScaffold(settings._skeletonFileName);
-			auto rendererFuture = ::Assets::MakeAssetPtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators);
+			auto rendererFuture = ::Assets::GetAssetFuturePtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators);
 
 			std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promisedConstruction;
-			auto futureConstruction = promisedConstruction.get_future();	// we do have to wait on the construction, because there's a chance that MakeAssetPtr<SimpleModelRenderer> will return something that was previously constructed and already setup
+			auto futureConstruction = promisedConstruction.get_future();	// we do have to wait on the construction, because there's a chance that GetAssetFuturePtr<SimpleModelRenderer> will return something that was previously constructed and already setup
 			construction->FulfillWhenNotPending(std::move(promisedConstruction));
 
 			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
-				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
-				auto skeletonFuture = ::Assets::MakeAssetPtr<SkeletonScaffold>(settings._skeletonFileName);
+				auto animationSetFuture = ::Assets::GetAssetFuturePtr<AnimationSetScaffold>(settings._animationFileName);
+				auto skeletonFuture = ::Assets::GetAssetFuturePtr<SkeletonScaffold>(settings._skeletonFileName);
 				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture, std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
 					[deformAccelerators](
@@ -161,7 +161,7 @@ namespace ToolsRig
 							});
 					});
 			} else if (!settings._animationFileName.empty()) {
-				auto animationSetFuture = ::Assets::MakeAssetPtr<AnimationSetScaffold>(settings._animationFileName);
+				auto animationSetFuture = ::Assets::GetAssetFuturePtr<AnimationSetScaffold>(settings._animationFileName);
 				::Assets::WhenAll(rendererFuture, animationSetFuture, std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
 					[deformAccelerators](
@@ -189,7 +189,7 @@ namespace ToolsRig
 							});
 					});
 			} else if (!settings._skeletonFileName.empty()) {
-				auto skeletonFuture = ::Assets::MakeAssetPtr<SkeletonScaffold>(settings._skeletonFileName);
+				auto skeletonFuture = ::Assets::GetAssetFuturePtr<SkeletonScaffold>(settings._skeletonFileName);
 				::Assets::WhenAll(rendererFuture, skeletonFuture, std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
 					[deformAccelerators](

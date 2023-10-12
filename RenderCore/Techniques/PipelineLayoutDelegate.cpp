@@ -222,7 +222,7 @@ namespace RenderCore { namespace Techniques
 		RenderCore::ShaderLanguage shaderLanguage)
 	{
 		using namespace RenderCore;
-		auto src = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
+		auto src = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
 		::Assets::WhenAll(src).ThenConstructToPromise(
 			std::move(promise),
 			[device, patchInDescSet, shaderLanguage, name=srcFile.AsString()](auto predefinedLayout) {
@@ -237,7 +237,7 @@ namespace RenderCore { namespace Techniques
 		ShaderLanguage shaderLanguage)
 	{
 		using namespace RenderCore;
-		auto src = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
+		auto src = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(srcFile);
 		::Assets::WhenAll(src).ThenConstructToPromise(
 			std::move(promise),
 			[pipelineCollection, shaderLanguage, name=srcFile.AsString()](auto predefinedLayout) {

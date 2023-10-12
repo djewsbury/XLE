@@ -73,7 +73,7 @@ namespace PlatformRig
     {
         constexpr auto ctrlKey = "control"_key;
         if (evnt.IsHeld(ctrlKey)) {
-            auto* t = Assets::MakeAssetMarker<TableOfKeys>(MakeStringSection(_filename))->TryActualize();
+            auto* t = Assets::GetAssetMarker<TableOfKeys>(MakeStringSection(_filename))->TryActualize();
             if (t) {
                 for (auto i=t->GetTable().cbegin(); i!=t->GetTable().cend(); ++i) {
                     if (evnt.IsPress(i->first)) {

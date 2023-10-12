@@ -63,7 +63,7 @@ namespace RenderCore { namespace Assets
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString()](auto&& promise, auto q) {
-				auto chain = ::Assets::MakeAsset<std::shared_ptr<Assets::ModelScaffold>>(model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
@@ -73,7 +73,7 @@ namespace RenderCore { namespace Assets
 		StringSection<> modelName,
 		std::shared_ptr<Assets::ModelCompilationConfiguration> compilationConfig)
 	{
-		return ::Assets::MakeAsset<std::shared_ptr<Assets::ModelScaffold>>(modelName, std::move(compilationConfig));
+		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(modelName, std::move(compilationConfig));
 	}
 
 	static std::shared_future<std::shared_ptr<Assets::ModelScaffold>> CreateModelScaffoldFuture(
@@ -86,7 +86,7 @@ namespace RenderCore { namespace Assets
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString(), opContext=std::move(opContext)](auto&& promise, auto q) {
-				auto chain = ::Assets::MakeAsset<std::shared_ptr<Assets::ModelScaffold>>(std::move(opContext), model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(std::move(opContext), model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
@@ -97,7 +97,7 @@ namespace RenderCore { namespace Assets
 		StringSection<> modelName,
 		std::shared_ptr<Assets::ModelCompilationConfiguration> compilationConfig)
 	{
-		return ::Assets::MakeAsset<std::shared_ptr<Assets::ModelScaffold>>(std::move(opContext), modelName, std::move(compilationConfig));
+		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(std::move(opContext), modelName, std::move(compilationConfig));
 	}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,7 +111,7 @@ namespace RenderCore { namespace Assets
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString(), material=materialName.AsString()](auto&& promise, auto q) {
-				auto chain = ::Assets::MakeAsset<std::shared_ptr<Assets::MaterialScaffold>>(material, model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(material, model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
@@ -121,7 +121,7 @@ namespace RenderCore { namespace Assets
 		StringSection<> materialName, StringSection<> modelName,
 		std::shared_ptr<Assets::ModelCompilationConfiguration> compilationConfig)
 	{
-		return ::Assets::MakeAsset<std::shared_ptr<Assets::MaterialScaffold>>(materialName, modelName, std::move(compilationConfig));
+		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(materialName, modelName, std::move(compilationConfig));
 	}
 
 	static std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> CreateMaterialScaffoldFuture(
@@ -134,7 +134,7 @@ namespace RenderCore { namespace Assets
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString(), opContext=std::move(opContext), material=materialName.AsString()](auto&& promise, auto q) {
-				auto chain = ::Assets::MakeAsset<std::shared_ptr<Assets::MaterialScaffold>>(std::move(opContext), material, model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(std::move(opContext), material, model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
@@ -145,7 +145,7 @@ namespace RenderCore { namespace Assets
 		StringSection<> materialName, StringSection<> modelName,
 		std::shared_ptr<Assets::ModelCompilationConfiguration> compilationConfig)
 	{
-		return ::Assets::MakeAsset<std::shared_ptr<Assets::MaterialScaffold>>(std::move(opContext), materialName, modelName, std::move(compilationConfig));
+		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(std::move(opContext), materialName, modelName, std::move(compilationConfig));
 	}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,8 +167,8 @@ namespace RenderCore { namespace Assets
 				SetModelScaffold(CreateModelScaffoldFuture(model, i2->second), model.AsString());
 				SetMaterialScaffold(CreateMaterialScaffoldFuture(material, model, i2->second), material.AsString());
 			} else {
-				SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(model), model.AsString());
-				SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(material, model), material.AsString());
+				SetModelScaffold(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(model), model.AsString());
+				SetMaterialScaffold(::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(material, model), material.AsString());
 			}
 		}
 		
@@ -193,8 +193,8 @@ namespace RenderCore { namespace Assets
 				SetModelScaffold(CreateModelScaffoldFuture(opContext, model, i2->second), model.AsString());
 				SetMaterialScaffold(CreateMaterialScaffoldFuture(material, model, i2->second), material.AsString());
 			} else {
-				SetModelScaffold(::Assets::MakeAsset<Internal::ModelScaffoldPtr>(opContext, model), model.AsString());
-				SetMaterialScaffold(::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(std::move(opContext), material, model), material.AsString());
+				SetModelScaffold(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(opContext, model), model.AsString());
+				SetMaterialScaffold(::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(std::move(opContext), material, model), material.AsString());
 			}
 		}
 
@@ -270,7 +270,7 @@ namespace RenderCore { namespace Assets
 	{
 		assert(_internal && !_internal->_sealed);
 		auto originalDisableHash = _internal->_disableHash;
-		SetCompilationConfiguration(::Assets::MakeAsset<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>(cfg), cfg.AsString());
+		SetCompilationConfiguration(::Assets::GetAssetFuture<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>(cfg), cfg.AsString());
 		_internal->_disableHash = originalDisableHash;
 		_internal->_hash = 0;
 		return *this;
@@ -351,13 +351,13 @@ namespace RenderCore { namespace Assets
 	{
 		_internal->_skeletonScaffoldHashValue = Hash64(skeleton);
 		_internal->_skeletonScaffoldPtr = nullptr;
-		_internal->_skeletonScaffoldMarker = ::Assets::MakeAsset<std::shared_ptr<Assets::SkeletonScaffold>>(skeleton);
+		_internal->_skeletonScaffoldMarker = ::Assets::GetAssetFuture<std::shared_ptr<Assets::SkeletonScaffold>>(skeleton);
 	}
 	void ModelRendererConstruction::SetSkeletonScaffold(std::shared_ptr<::Assets::OperationContext> opContext, StringSection<> skeleton)
 	{
 		_internal->_skeletonScaffoldHashValue = Hash64(skeleton);
 		_internal->_skeletonScaffoldPtr = nullptr;
-		_internal->_skeletonScaffoldMarker = ::Assets::MakeAsset<std::shared_ptr<Assets::SkeletonScaffold>>(std::move(opContext), skeleton);
+		_internal->_skeletonScaffoldMarker = ::Assets::GetAssetFuture<std::shared_ptr<Assets::SkeletonScaffold>>(std::move(opContext), skeleton);
 		_internal->_skeletonScaffoldInitializer = skeleton.AsString();
 	}
 	void ModelRendererConstruction::SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>> skeleton, std::string initializer)
@@ -538,7 +538,7 @@ namespace RenderCore { namespace Assets
 		result->_internal->_skeletonScaffoldInitializer = src._internal->_skeletonScaffoldInitializer;
 		result->_internal->_skeletonScaffoldHashValue = src._internal->_skeletonScaffoldHashValue;
 		if (src._internal->_skeletonScaffoldMarker.valid() && !src._internal->_skeletonScaffoldInitializer.empty())
-			result->_internal->_skeletonScaffoldMarker = ::Assets::MakeAsset<std::shared_ptr<Assets::SkeletonScaffold>>(std::move(opContext), result->_internal->_skeletonScaffoldInitializer);
+			result->_internal->_skeletonScaffoldMarker = ::Assets::GetAssetFuture<std::shared_ptr<Assets::SkeletonScaffold>>(std::move(opContext), result->_internal->_skeletonScaffoldInitializer);
 
 		// model & material markers
 		result->_internal->_modelScaffoldPtrs = src._internal->_modelScaffoldPtrs;
@@ -559,7 +559,7 @@ namespace RenderCore { namespace Assets
 			std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>> marker;
 			if (cfgMarker != src._internal->_compilationConfigurationMarkers.end() && cfgMarker->first == eleIdx && cfgMarker->second.valid()) {
 				if (cfgName != src._internal->_compilationConfigurationInitializers.end() && cfgName->first == eleIdx) {
-					marker = ::Assets::MakeAsset<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>(cfgName->second);
+					marker = ::Assets::GetAssetFuture<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>(cfgName->second);
 					result->_internal->_compilationConfigurationMarkers.emplace_back(eleIdx, marker);
 				} else {
 					marker = cfgMarker->second;
@@ -573,8 +573,8 @@ namespace RenderCore { namespace Assets
 						if (opContext) result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, CreateModelScaffoldFuture(opContext, modelName->second, marker));
 						else result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, CreateModelScaffoldFuture(modelName->second, marker));
 					} else {
-						if (opContext) result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::ModelScaffoldPtr>(opContext, modelName->second));
-						else result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::ModelScaffoldPtr>(modelName->second));
+						if (opContext) result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(opContext, modelName->second));
+						else result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(modelName->second));
 					}
 				} else {
 					result->_internal->_modelScaffoldMarkers.emplace_back(*modelMarker);
@@ -584,11 +584,11 @@ namespace RenderCore { namespace Assets
 			if (materialMarker != src._internal->_materialScaffoldMarkers.end() && materialMarker->first == eleIdx && materialMarker->second.valid()) {
 				if (modelName != src._internal->_modelScaffoldInitializers.end() && modelName->first == eleIdx) {
 					if (materialName != src._internal->_materialScaffoldInitializers.end() && materialName->first == eleIdx) {
-						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(opContext, materialName->second, modelName->second));
-						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(materialName->second, modelName->second));
+						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(opContext, materialName->second, modelName->second));
+						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(materialName->second, modelName->second));
 					} else {
-						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(opContext, modelName->second, modelName->second));
-						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::MakeAsset<Internal::MaterialScaffoldPtr>(modelName->second, modelName->second));
+						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(opContext, modelName->second, modelName->second));
+						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(modelName->second, modelName->second));
 					}
 				} else {
 					result->_internal->_materialScaffoldMarkers.emplace_back(*materialMarker);

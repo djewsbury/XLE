@@ -147,7 +147,7 @@ namespace RenderCore { namespace LightingEngine
 			compileRequest._operation = Assets::TextureCompilationRequest::Operation::BalancedNoise;
 			compileRequest._width = compileRequest._height = 256;		// probably could use a smaller texture
 			compileRequest._format = Format::R8_UNORM;
-			auto balancedNoiseFuture = ::Assets::MakeAssetPtr<RenderCore::Techniques::DeferredShaderResource>(compileRequest);
+			auto balancedNoiseFuture = ::Assets::GetAssetFuturePtr<RenderCore::Techniques::DeferredShaderResource>(compileRequest);
 
 			::Assets::WhenAll(shader, balancedNoiseFuture).ThenConstructToPromise(
 				std::move(promise),

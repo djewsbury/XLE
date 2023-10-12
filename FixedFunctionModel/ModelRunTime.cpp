@@ -372,10 +372,10 @@ namespace FixedFunctionModel
                         if (searchRules) {
                             ResChar resolvedPath[MaxPath];
                             searchRules->ResolveFile(resolvedPath, dimof(resolvedPath), resourceName.c_str());
-                            boundTextures[dsti] = ::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>(resolvedPath);
+                            boundTextures[dsti] = ::Assets::GetAssetFuture<RenderCore::Techniques::DeferredShaderResource>(resolvedPath);
                             DEBUG_ONLY(boundTextureNames[dsti] = resolvedPath);
                         } else {
-                            boundTextures[dsti] = ::Assets::MakeAsset<RenderCore::Techniques::DeferredShaderResource>(resourceName.c_str());
+                            boundTextures[dsti] = ::Assets::GetAssetFuture<RenderCore::Techniques::DeferredShaderResource>(resourceName.c_str());
                             DEBUG_ONLY(boundTextureNames[dsti] = resourceName);
                         }
                     } CATCH (const ::Assets::Exceptions::InvalidAsset&) {

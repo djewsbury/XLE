@@ -211,7 +211,7 @@ namespace RenderOverlays
 
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size)
 	{
-		return std::reinterpret_pointer_cast<::Assets::MarkerPtr<Font>>(::Assets::MakeAssetMarkerPtr<FTFont>(path, size));
+		return std::reinterpret_pointer_cast<::Assets::MarkerPtr<Font>>(::Assets::GetAssetMarkerPtr<FTFont>(path, size));
 	}
 
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> pathAndSize)

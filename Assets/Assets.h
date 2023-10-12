@@ -13,15 +13,15 @@ namespace Assets
 {
 
 	template<typename AssetType, typename... Params>
-		std::shared_future<AssetType> MakeAsset(Params... initialisers)
+		std::shared_future<AssetType> GetAssetFuture(Params... initialisers)
 	{
 		return Services::GetAssetSets().GetSetForType<AssetType>().Get(std::forward<Params>(initialisers)...)->ShareFuture();
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_future<std::shared_ptr<AssetType>> MakeAssetPtr(Params... initialisers)
+		std::shared_future<std::shared_ptr<AssetType>> GetAssetFuturePtr(Params... initialisers)
 	{
-		return MakeAsset<std::shared_ptr<AssetType>>(std::forward<Params>(initialisers)...);
+		return GetAssetFuture<std::shared_ptr<AssetType>>(std::forward<Params>(initialisers)...);
 	}
 
 	template<typename AssetType, typename... Params>
@@ -41,13 +41,13 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Marker<AssetType>> MakeAssetMarker(Params... initialisers)
+		std::shared_ptr<Marker<AssetType>> GetAssetMarker(Params... initialisers)
 	{
 		return Services::GetAssetSets().GetSetForType<AssetType>().Get(std::forward<Params>(initialisers)...);
 	}
 
 	template<typename AssetType, typename... Params>
-		std::shared_ptr<Marker<std::shared_ptr<AssetType>>> MakeAssetMarkerPtr(Params... initialisers)
+		std::shared_ptr<Marker<std::shared_ptr<AssetType>>> GetAssetMarkerPtr(Params... initialisers)
 	{
 		return Services::GetAssetSets().GetSetForType<std::shared_ptr<AssetType>>().Get(std::forward<Params>(initialisers)...);
 	}

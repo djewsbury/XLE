@@ -303,7 +303,7 @@ namespace RenderCore { namespace LightingEngine
 		const RasterizationLightTileOperatorDesc& config)
 	{
 		const char pipelineLayoutAssetName[] = TILED_LIGHTING_PREPARE_PIPELINE ":GraphicsMain";
-		auto pipelineLayoutMarker = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
+		auto pipelineLayoutMarker = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 		::Assets::WhenAll(pipelineLayoutMarker).ThenConstructToPromise(
 			std::move(promise),
 			[pipelinePool, config, plname=std::string(pipelineLayoutAssetName)](auto&& promise, auto pipelineLayout) {

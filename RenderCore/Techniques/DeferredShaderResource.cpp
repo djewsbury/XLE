@@ -138,7 +138,7 @@ namespace RenderCore { namespace Techniques
             XlCopyString(filename, splitter.AllExceptParameters());
             XlCatString(filename, ".metadata");
 			if (::Assets::MainFileSystem::TryGetDesc(filename)._snapshot._state == ::Assets::FileSnapshot::State::Normal)
-				metaDataFuture = ::Assets::MakeAsset<TextureMetaData>(filename);
+				metaDataFuture = ::Assets::GetAssetFuture<TextureMetaData>(filename);
         }
 
         Assets::TextureLoaderFlags::BitField flags = init._generateMipmaps ? Assets::TextureLoaderFlags::GenerateMipmaps : 0;
@@ -386,7 +386,7 @@ namespace RenderCore { namespace Techniques
             XlCopyString(metadataFile, splitter.AllExceptParameters());
             XlCatString(metadataFile, ".metadata");
 
-            auto res = ::Assets::MakeAsset<TextureMetaData>(metadataFile);
+            auto res = ::Assets::GetAssetFuture<TextureMetaData>(metadataFile);
             res->StallWhilePending();
             auto actual = res->TryActualize();
             if (actual)

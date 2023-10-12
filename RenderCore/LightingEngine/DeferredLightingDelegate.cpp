@@ -191,7 +191,7 @@ namespace RenderCore { namespace LightingEngine
 		assert(gbufferType == GBufferDelegateType::DepthNormal || gbufferType == GBufferDelegateType::DepthNormalParameters);
 		std::promise<std::pair<RenderStepFragmentInterface, BufferUploads::CommandListID>> promise;
 		auto result = promise.get_future();
-		auto normalsFittingTexture = ::Assets::MakeAssetPtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
+		auto normalsFittingTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 
 		::Assets::WhenAll(normalsFittingTexture, techDelBox.GetGBufferDelegate(gbufferType)).ThenConstructToPromise(
 			std::move(promise),

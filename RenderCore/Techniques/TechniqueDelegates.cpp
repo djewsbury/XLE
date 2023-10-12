@@ -116,14 +116,14 @@ namespace RenderCore { namespace Techniques
 		const RasterizationDesc& rasterization,
 		const DepthStencilDesc& depthStencil)
 	{
-		auto techniqueFuture = ::Assets::MakeAssetPtr<Technique>(ILLUM_LEGACY_TECH);
+		auto techniqueFuture = ::Assets::GetAssetFuturePtr<Technique>(ILLUM_LEGACY_TECH);
 		::Assets::WhenAll(techniqueFuture).CheckImmediately().ThenConstructToPromise(
 			std::move(promise),
 			[techniqueIndex, blend, rasterization, depthStencil](auto&& promise, auto technique) {
 				TRY {
 					auto pipelineLayoutName = technique->GetEntry(techniqueIndex)._pipelineLayoutName;
 					if (pipelineLayoutName.empty()) Throw(std::runtime_error("Missing pipeline layout name in legacy technique delegate"));
-					auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(pipelineLayoutName);
+					auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(pipelineLayoutName);
 					::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 						std::move(promise),
 						[technique, techniqueIndex, blend, rasterization, depthStencil](auto pipelineLayout) {
@@ -306,7 +306,7 @@ namespace RenderCore { namespace Techniques
 				[gbufferTypeCode](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile};
-						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
 							[helper=std::move(helper), gbufferTypeCode](auto pipelineLayout) mutable {
@@ -448,7 +448,7 @@ namespace RenderCore { namespace Techniques
 				[flags](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile};
-						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
 							[helper=std::move(helper), flags](auto pipelineLayout) mutable {
@@ -588,7 +588,7 @@ namespace RenderCore { namespace Techniques
 				[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile, shadowGen};
-						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
 							[helper=std::move(helper), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen](auto pipelineLayout) mutable {
@@ -758,7 +758,7 @@ namespace RenderCore { namespace Techniques
 				[preDepthType](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile, preDepthType};
-						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
 							[helper=std::move(helper), preDepthType](auto pipelineLayout) mutable {
@@ -899,7 +899,7 @@ namespace RenderCore { namespace Techniques
 				[utilityType](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile, utilityType};
-						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
 							[helper=std::move(helper), utilityType](auto pipelineLayout) mutable {
@@ -1042,7 +1042,7 @@ namespace RenderCore { namespace Techniques
 				[](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile};
-						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
 							[helper=std::move(helper)](auto pipelineLayout) mutable {
@@ -1164,7 +1164,7 @@ namespace RenderCore { namespace Techniques
 				[soElements=std::move(soElements), soStrides=std::move(soStrides), testTypeParameter](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile};
-						auto pipelineLayout = ::Assets::MakeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
 							[helper=std::move(helper), soElements=std::move(soElements), soStrides=std::move(soStrides), testTypeParameter](auto pipelineLayout) mutable {

@@ -941,9 +941,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         static void ConstructToPromise(std::promise<std::shared_ptr<DebugDisplayResources>>&& promise)
         {
-            auto horizTweakerBarMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
-            auto tagShaderMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
-            auto gridBackgroundMaterial = ::Assets::MakeAsset<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
+            auto horizTweakerBarMaterial = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
+            auto tagShaderMaterial = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
+            auto gridBackgroundMaterial = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
             ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial).ThenConstructToPromise(
                 std::move(promise),
                 [](const auto& horizTweakerBarMaterial, const auto& tagShaderMaterial, const auto& gridBackgroundMaterial) {

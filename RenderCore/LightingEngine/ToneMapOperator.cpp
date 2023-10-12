@@ -462,7 +462,7 @@ namespace RenderCore { namespace LightingEngine
 		// note -- we could consider having all of the shaders share a pipeline layout, and then
 		// just use a single BoundUniforms applied once
 
-		auto pipelineLayout = ::Assets::MakeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(BLOOM_PIPELINE ":ComputeMain");
+		auto pipelineLayout = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(BLOOM_PIPELINE ":ComputeMain");
 		::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 			std::move(promise),
 			[strongThis=shared_from_this()](auto&& promise, auto predefinedPipelineLayout)

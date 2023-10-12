@@ -2442,7 +2442,7 @@ namespace SceneEngine
 
     std::pair<Float3, Float3>   Transaction::GetLocalBoundingBox(unsigned index) const
     {
-        auto* attemptedActualize = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::ModelScaffold>(_objects[index]._model)->TryActualize();
+        auto* attemptedActualize = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::ModelScaffold>(_objects[index]._model)->TryActualize();
         if (!attemptedActualize) return s_invalidBoundingBox;
         return (*attemptedActualize)->GetStaticBoundingBox();
     }
@@ -2470,9 +2470,9 @@ namespace SceneEngine
     {
         const std::shared_ptr<RenderCore::Assets::MaterialScaffold>* attemptedActualize = nullptr;
         if (!_objects[objectIndex]._material.empty()) {
-            attemptedActualize = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(_objects[objectIndex]._material, _objects[objectIndex]._model)->TryActualize();
+            attemptedActualize = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(_objects[objectIndex]._material, _objects[objectIndex]._model)->TryActualize();
         } else {
-            attemptedActualize = ::Assets::MakeAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(_objects[objectIndex]._model, _objects[objectIndex]._model)->TryActualize();
+            attemptedActualize = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(_objects[objectIndex]._model, _objects[objectIndex]._model)->TryActualize();
         }
 
         if (!attemptedActualize) return {};

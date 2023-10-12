@@ -53,7 +53,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				for (unsigned c=0; c<3; ++c) {
 					auto fn = MakeFileNameSplitter(pipelineDesc->_shaders[c]).AllExceptParameters();
 					if (!fn.IsEmpty())
-						filteringFuture[c] = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(fn);
+						filteringFuture[c] = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorFilteringRules>(fn);
 				}
 
 				if (!filteringFuture[(unsigned)ShaderStage::Vertex].valid())
@@ -74,7 +74,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], preconfigurationFuture).CheckImmediately().ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -107,7 +107,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).CheckImmediately().ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -140,7 +140,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								return finalObject;
 							});
 					} else {
-						auto preconfigurationFuture = ::Assets::MakeAssetPtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
+						auto preconfigurationFuture = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
 						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).CheckImmediately().ThenConstructToPromise(
 							std::move(promise),
 							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
@@ -324,11 +324,11 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 		if (patchCollection && !patchExpansions.empty()) {
 			std::vector<uint64_t> patchExpansionsCopy(patchExpansions.begin(), patchExpansions.end());
-			auto res = ::Assets::MakeAsset<CompiledShaderByteCode_InstantiateShaderGraph>(
+			auto res = ::Assets::GetAssetFuture<CompiledShaderByteCode_InstantiateShaderGraph>(
 				MakeStringSection(temp), adjustedDefinesTable, patchCollection, patchExpansionsCopy);
 			return *reinterpret_cast<std::shared_future<CompiledShaderByteCode>*>(&res);
 		} else {
-			return ::Assets::MakeAsset<CompiledShaderByteCode>(MakeStringSection(temp), adjustedDefinesTable);
+			return ::Assets::GetAssetFuture<CompiledShaderByteCode>(MakeStringSection(temp), adjustedDefinesTable);
 		}
 	}
 

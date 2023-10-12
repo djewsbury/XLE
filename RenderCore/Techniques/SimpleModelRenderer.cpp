@@ -832,7 +832,7 @@ namespace RenderCore { namespace Techniques
 	{
 		if (::Assets::Services::GetIntermediateCompilers().HasAssociatedCompiler(Assets::CompoundObjectScaffold::CompileProcessType, modelScaffoldName)) {
 			// This is a compound object
-			::Assets::WhenAll(::Assets::MakeAsset<Assets::CompoundObjectScaffold>(modelScaffoldName)).ThenConstructToPromise(
+			::Assets::WhenAll(::Assets::GetAssetFuture<Assets::CompoundObjectScaffold>(modelScaffoldName)).ThenConstructToPromise(
 				std::move(promise),
 				[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), drawablesPool=std::move(drawablesPool), deformAcceleratorPool=std::move(deformAcceleratorPool)](auto&& promise, const Assets::CompoundObjectScaffold& actualCompoundObject) mutable {
 					// have to wait on the model renderer construction before we can call DeserializeDeformerConstruction

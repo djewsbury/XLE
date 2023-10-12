@@ -208,7 +208,7 @@ namespace UnitTests
 			auto futureTechDel = promisedTechDel.get_future();
 			Techniques::CreateTechniqueDelegate_Utility(
 				std::move(promisedTechDel),
-				::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"), 
+				::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"), 
 				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"test",
@@ -282,7 +282,7 @@ namespace UnitTests
 			auto futureTechDel = promisedTechDel.get_future();
 			Techniques::CreateTechniqueDelegate_Utility(
 				std::move(promisedTechDel),
-				::Assets::MakeAssetPtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
+				::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
 				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
 				"test",
@@ -290,7 +290,7 @@ namespace UnitTests
 				ParameterBox {},
 				fbHelper.GetDesc());
 
-			auto renderer = ::Assets::MakeAssetMarkerPtr<Techniques::SimpleModelRenderer>(
+			auto renderer = ::Assets::GetAssetMarkerPtr<Techniques::SimpleModelRenderer>(
 				techniqueTestApparatus._drawablesPool,
 				pipelineAcceleratorPool,
 				"xleres/DefaultResources/materialsphere.dae",

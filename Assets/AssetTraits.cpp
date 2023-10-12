@@ -21,12 +21,12 @@ namespace Assets { namespace Internal
 
 	std::shared_future<std::shared_ptr<ConfigFileContainer<>>> GetConfigFileContainerFuture(StringSection<ResChar> identifier)
 	{
-		return ::Assets::MakeAssetPtr<ConfigFileContainer<>>(identifier);
+		return ::Assets::GetAssetFuturePtr<ConfigFileContainer<>>(identifier);
 	}
 
 	std::shared_future<std::shared_ptr<ArtifactChunkContainer>> GetChunkFileContainerFuture(StringSection<ResChar> identifier)
 	{
-		return ::Assets::MakeAssetPtr<ArtifactChunkContainer>(identifier);
+		return ::Assets::GetAssetFuturePtr<ArtifactChunkContainer>(identifier);
 	}
 }}
 
