@@ -69,7 +69,6 @@ namespace Assets
 
         virtual unsigned GetValidationIndex(DependencyValidationMarker marker) = 0;
         virtual DependentFileState GetDependentFileState(StringSection<> filename) = 0;
-        virtual void ShadowFile(StringSection<> filename) = 0;
         virtual void CollateDependentFileStates(std::vector<DependentFileState>&, DependencyValidationMarker) = 0;
         virtual void CollateDependentFileUpdates(std::vector<DependencyUpdateReport>&, DependencyValidationMarker) = 0;
 

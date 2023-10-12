@@ -12,6 +12,7 @@
 #include "../../RenderOverlays/DrawText.h"
 #include "../../Formatters/FormatterUtils.h"
 #include "../../Assets/Marker.h"
+#include "../../Foreign/yoga/yoga/Yoga.h"
 #include <vector>
 #include <set>
 #include <stack>
@@ -489,11 +490,9 @@ namespace EntityInterface
 			uint64_t containerGuid = context.GetGuidStack().MakeGuid("##container");
 			context.GetGuidStack().push(containerGuid);
 
-			auto contentContainer = context.GetLayoutEngine().NewImbuedNode(containerGuid);
+			auto contentContainer = context.GetLayoutEngine().InsertAndPushNewImbuedNode(containerGuid);
 			YGNodeStyleSetMargin(contentContainer->YGNode(), YGEdgeAll, 8);
 			YGNodeStyleSetPadding(contentContainer->YGNode(), YGEdgeAll, 2);
-			context.GetLayoutEngine().InsertChildToStackTop(contentContainer->YGNode());
-			context.GetLayoutEngine().PushNode(contentContainer->YGNode());
 
 			contentContainer->_nodeAttachments._drawDelegate = [](DrawContext& draw, Rect frame, Rect content) {
 				CommonWidgets::Styler{}.RectangleContainer(draw, frame);
@@ -563,13 +562,14 @@ namespace EntityInterface
 			} else {
 				futureFont = MakeFont(name);
 			}
-			return futureFont->Actualize();		// stall
+			futureFont->StallWhilePending();		// stall
+			return futureFont->Actualize();
 		}
 	};
 
 	
 
-	static YGNodeRef BeginRoot(IWidgetsLayoutContext& context, Coord2 containerSize)
+	static YGNodeRef BeginRoot(IWidgetsLayoutContext& context, Rect containerSize)
 	{
 		auto windowNode = context.GetLayoutEngine().NewNode();
 		context.GetLayoutEngine().PushRoot(windowNode, containerSize);
@@ -594,7 +594,7 @@ namespace EntityInterface
 		std::shared_ptr<MinimalBindingEngine> _bindingEngine;
 		WriteToLayoutFormatter _layoutFn;
 		unsigned _lastBuiltLayoutValidationIndex = ~0u;
-		UInt2 _lastContainerSize { 0, 0 };
+		Rect _lastContainer { {0,0}, { 0, 0 } };
 		Float3x3 _lastTransform = Identity<Float3x3>();
 
 		void    Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState) override
@@ -604,16 +604,15 @@ namespace EntityInterface
 			container._bottomRight -= Coord2{layout._paddingInternalBorder, layout._paddingInternalBorder};
 
 			// rebuild the layout now if it's invalidated
-			UInt2 containerSize { container.Width(), container.Height() };
-			if (_bindingEngine->GetLayoutValidationIndex() != _lastBuiltLayoutValidationIndex || _lastContainerSize != containerSize) {
+			if (_bindingEngine->GetLayoutDependencyValidation().GetValidationIndex() != _lastBuiltLayoutValidationIndex || _lastContainer != container) {
 				WidgetsLayoutContext formatter { _bindingEngine };
-				BeginRoot(formatter, containerSize);
+				BeginRoot(formatter, container);
 				_layoutFn(formatter);
 				EndRoot(formatter);
 
 				_layedOutWidgets = formatter.BuildLayedOutWidgets();
-				_lastBuiltLayoutValidationIndex = _bindingEngine->GetLayoutValidationIndex();
-				_lastContainerSize = containerSize;
+				_lastBuiltLayoutValidationIndex = _bindingEngine->GetLayoutDependencyValidation().GetValidationIndex();
+				_lastContainer = container;
 			}
 
 			{

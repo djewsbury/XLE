@@ -20,7 +20,9 @@
 #include "../../../Utility/StringFormat.h"
 #include "../../../Utility/Threading/Mutex.h"
 
-// #define TRACK_RESOURCE_GUIDS
+// #if defined(_DEBUG)
+// 	#define TRACK_RESOURCE_GUIDS
+// #endif
 
 #pragma clang diagnostic ignored "-Wswitch"		// warning: case value not in enumerated type 'BindFlag::Enum'
 

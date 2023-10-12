@@ -365,6 +365,9 @@ namespace EntityInterface
 
 		virtual std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginFormatter(StringSection<> internalPoint) override
 		{
+			if (!internalPoint.IsEmpty())
+				Throw(std::runtime_error("BeginFormatter with a internal starting point is not supported for EntityDocumentWithDataBinding"));
+
 			FormatToMinimalBindingEngine fmttr{*_bindingEngine};
 			_modelFunction(fmttr);
 

@@ -343,18 +343,6 @@ namespace Assets
 			return { fileMonitor._filename, snapshot };
 		}
 
-		void ShadowFile(StringSection<ResChar> filename) override
-		{
-			assert(0);
-			/*ScopedLock(_lock);
-			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
-			DependentFileState newState = *(fileMonitor._states.end()-1);
-			newState._status = DependentFileState::Status::Shadowed;
-			fileMonitor._states.push_back(newState);
-			MainFileSystem::TryFakeFileChange(filename);
-			PropagateFileChange(fileMonitor._marker);*/
-		}
-
 		void CollateDependentFileStates(std::vector<DependentFileState>& result, DependencyValidationMarker marker) override
 		{
 			// track down the files in the tree underneath the given marker
