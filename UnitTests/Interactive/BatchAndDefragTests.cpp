@@ -16,6 +16,7 @@
 #include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderOverlays/DrawText.h"
 #include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../PlatformRig/DebuggingDisplays/BufferUploadDisplay.h"
 #include "../../RenderCore/BufferUploads/BatchedResources.h"
 #include "../../Math/ProjectionMath.h"

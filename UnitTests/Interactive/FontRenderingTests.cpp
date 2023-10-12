@@ -16,6 +16,7 @@
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/FontRendering.h"
 #include "../../RenderOverlays/OverlayApparatus.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../Math/Transformations.h"
 #include "../../Assets/Marker.h"
 #include "../../Utility/StringFormat.h"

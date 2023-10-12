@@ -16,6 +16,7 @@
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderOverlays/ShapesRendering.h"
+#include "../../RenderOverlays/LayoutEngine.h"
 #include "../../PlatformRig/CameraManager.h"
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
 #include "../../Math/ProjectionMath.h"
@@ -376,9 +377,9 @@ namespace UnitTests
 
 				using namespace RenderOverlays;
 				using namespace RenderOverlays::DebuggingDisplay;
-				Layout outerLayout {Rect{Coord2(0,0), Coord2(parserContext.GetViewport()._width, parserContext.GetViewport()._height)}};
-				Layout leftLayout { outerLayout.AllocateFullHeightFraction(0.5f) };
-				Layout rightLayout { outerLayout.AllocateFullHeightFraction(0.5f) };
+				ImmediateLayout outerLayout {Rect{Coord2(0,0), Coord2(parserContext.GetViewport()._width, parserContext.GetViewport()._height)}};
+				ImmediateLayout leftLayout { outerLayout.AllocateFullHeightFraction(0.5f) };
+				ImmediateLayout rightLayout { outerLayout.AllocateFullHeightFraction(0.5f) };
 
 				auto topDownRect = leftLayout.AllocateFullWidthFraction(0.5f);
 				auto mainCamRect = leftLayout.AllocateFullWidthFraction(0.5f);
