@@ -44,6 +44,12 @@ namespace Utility
         }
     }
 
+    void    BitHeap::DeallocateAll()
+    {
+        for (auto& h:_heap)
+            h = ~0ull;
+    }
+
     bool    BitHeap::IsAllocated(uint32_t value) const
     {
         uint32_t bitIndex = value&(64-1);

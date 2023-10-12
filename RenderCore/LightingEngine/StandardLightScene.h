@@ -55,6 +55,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		T& GetObject(Indexor);
 		const T& GetObject(Indexor) const;
 
+		void clear();
+
 		Iterator begin();
 		Iterator end();
 		Iterator at(Indexor);
@@ -275,6 +277,23 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto& page = *_pages[pageIdx];
 		auto* data = &page._data[idxWithinPage*sizeof(T)];
 		((T*)data)->~T();
+	}
+
+	template<typename T>
+		void PageHeap<T>::clear()
+	{
+		for (unsigned pIdx=0; pIdx<_pages.size(); ++pIdx) {
+			auto& page = _pages[pIdx];
+			auto allocated = _allocationFlags.InternalArray()[pIdx];
+			while(allocated) {
+				auto idxWithinPage = xl_ctz8(allocated);
+				allocated ^= 1ull << uint64_t(idxWithinPage);
+
+				auto* data = &page->_data[idxWithinPage*sizeof(T)];
+				((T*)data)->~T();
+			}
+		}
+		_allocationFlags.DeallocateAll();
 	}
 
 	template<typename T>

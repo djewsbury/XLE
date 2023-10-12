@@ -92,6 +92,7 @@ namespace Utility
         void    Reserve(uint32_t count);
         unsigned FirstUnallocated() const;
         unsigned AllocatedCount() const;
+        void    DeallocateAll();
         IteratorRange<const uint64_t*> InternalArray() const { return _heap; }
 
         BitHeap(unsigned slotCount = 8 * 64);
