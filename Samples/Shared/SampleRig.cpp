@@ -108,25 +108,11 @@ namespace Sample
             OSServices::Window* _window = nullptr;
         };
 
-        struct ConfigureDevelopmentFeatures
-        {
-            bool _installDefaultDebuggingDisplays = false;
-            bool _useFrameRigSystemDisplay = false;
-            bool _installHotKeysHandler = false;
-
-            std::vector<std::pair<std::string, std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>>> _additionalDebuggingDisplays;
-        };
-
-        struct ConfigureFrameRigDisplay
-        {
-            std::shared_ptr<PlatformRig::IFrameRigDisplay> _frameRigDisplay;
-        };
-
         struct StartupFinished
         {
         };
 
-        using MsgVariant = std::variant<ConfigureRenderDevice*, ConfigureWindowInitialState*, ConfigureDevelopmentFeatures*, ConfigureFrameRigDisplay*, StartupFinished>;
+        using MsgVariant = std::variant<ConfigureRenderDevice*, ConfigureWindowInitialState*, StartupFinished>;
         MsgVariant Pump();
 
         std::shared_ptr<RenderCore::IAPIInstance> _renderCoreAPIInstance;
@@ -143,8 +129,6 @@ namespace Sample
         Phase _phase = Phase::Initial;
 
         ConfigureRenderDevice _configRenderDevice;
-        ConfigureDevelopmentFeatures _configDevelopmentFeatures;
-        ConfigureFrameRigDisplay _configFrameRigDisplay;
         ConfigureWindowInitialState _configWindowInitialState;
     };
 
@@ -186,33 +170,6 @@ namespace Sample
             }
 
         case Phase::PostConfigureWindowInitialState:
-            _phase = Phase::PostConfigureDevelopmentFeatures;
-            return &_configDevelopmentFeatures;
-
-        case Phase::PostConfigureDevelopmentFeatures:
-            if (_configDevelopmentFeatures._useFrameRigSystemDisplay) {
-                auto& frameRig = *_sampleGlobals._windowApparatus->_frameRig;
-                auto frDisplay = frameRig.CreateDisplay(_sampleGlobals._debugOverlaysApparatus->_debugSystem, _sampleGlobals._windowApparatus->_mainLoadingContext);
-                PlatformRig::SetSystemDisplay(*_sampleGlobals._debugOverlaysApparatus->_debugSystem, frDisplay);
-                _phase = Phase::PostConfigureFrameRigDisplay;
-                _configFrameRigDisplay = { frDisplay };
-                return &_configFrameRigDisplay;
-            }
-
-            // intentional fall-through
-
-        case Phase::PostConfigureFrameRigDisplay:
-            if (_configDevelopmentFeatures._installDefaultDebuggingDisplays)
-                InstallDefaultDebuggingDisplays(_sampleGlobals);
-
-            for (const auto& dd:_configDevelopmentFeatures._additionalDebuggingDisplays)
-                _sampleGlobals._displayRegistrations.emplace_back(dd.first, std::move(dd.second));
-            _configDevelopmentFeatures._additionalDebuggingDisplays.clear();
-
-            if (_configDevelopmentFeatures._installHotKeysHandler)
-                _sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.dat"));
-            _sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(_sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem));
-
             _sampleGlobals._windowApparatus->_frameRig->UpdatePresentationChain(*_sampleGlobals._windowApparatus->_presentationChain);
             _sampleRigApparatus->_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_sampleGlobals._windowApparatus->_immediateContext);
 
@@ -256,13 +213,15 @@ namespace Sample
         using MsgVariant = VariantCat<OSServices::SystemMessageVariant, RenderFrame, UpdateFrame, OnRenderTargetUpdate>;
         MsgVariant Pump();
 
+        void ShowWindow(bool newState);
+
         MessageLoop(std::shared_ptr<PlatformRig::WindowApparatus> apparatus);
         ~MessageLoop();
     private:
         std::shared_ptr<PlatformRig::WindowApparatus> _apparatus;
         enum class Pending
         {
-            None, BeginRenderFrame, EndRenderFrame
+            None, BeginRenderFrame, EndRenderFrame, ShowWindow, ShowWindowBeginRenderFrame, ShowWindowEndRenderFrame
         };
         Pending _pending = Pending::None;
 
@@ -275,14 +234,17 @@ namespace Sample
     {
         switch (_pending) {
         case Pending::BeginRenderFrame:
-            _pending = Pending::EndRenderFrame;
+        case Pending::ShowWindowBeginRenderFrame:
+            _pending = (_pending == Pending::ShowWindowBeginRenderFrame) ? Pending::ShowWindowEndRenderFrame : Pending::EndRenderFrame;
             assert(!_activeParsingContext);
             _activeParsingContext = _apparatus->_frameRig->StartupFrame(*_apparatus);
             return RenderFrame { _activeParsingContext.value() };
 
         case Pending::EndRenderFrame:
-            _pending = Pending::None;
+        case Pending::ShowWindowEndRenderFrame:
             {
+                auto originalPending = _pending;
+                _pending = Pending::None;
                 assert(_activeParsingContext);
                 auto parsingContext = std::move(_activeParsingContext.value());
                 _activeParsingContext = {};
@@ -290,9 +252,20 @@ namespace Sample
                 auto frameResult = _apparatus->_frameRig->ShutdownFrame(parsingContext);
 
                 // ------- Yield some process time when appropriate ------
-                _apparatus->_frameRig->IntermedialSleep(*_apparatus, _lastIdleState == OSServices::IdleState::Background, frameResult);
+                if (originalPending == Pending::ShowWindowEndRenderFrame) {
+                    _apparatus->_osWindow->Show();
+                } else
+                    _apparatus->_frameRig->IntermedialSleep(*_apparatus, _lastIdleState == OSServices::IdleState::Background, frameResult);
             }
             break;       // break and continue with next event
+
+        case Pending::ShowWindow:
+            // We force a render target update and render before showing the window to ensure that it has content
+            // when it first appears
+            _pending = Pending::ShowWindowBeginRenderFrame;
+            _lastOverlayConfiguration = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
+            return OnRenderTargetUpdate { _lastOverlayConfiguration._preregAttachments, _lastOverlayConfiguration._fbProps, _lastOverlayConfiguration._systemAttachmentFormats };
+            break;
 
         case Pending::None:
             break;
@@ -333,6 +306,18 @@ namespace Sample
         return VariantCast<MsgVariant>(std::move(msgPump));
     }
 
+    void MessageLoop::ShowWindow(bool newState)
+    {
+        if (!newState) {
+            _apparatus->_osWindow->Show(newState);
+            return;
+        }
+
+        if (_pending != Pending::None)
+            Throw(std::runtime_error("Cannot show window because MessageLoop is in the middle of queued render operation"));
+        _pending = Pending::ShowWindow;
+    }
+
     MessageLoop::MessageLoop(std::shared_ptr<PlatformRig::WindowApparatus> apparatus)
     : _apparatus(std::move(apparatus))
     {
@@ -353,6 +338,37 @@ namespace Sample
         auto updatedAttachments = PlatformRig::InitializeColorLDR(preregAttachments);
         debuggingOverlay.OnRenderTargetUpdate(updatedAttachments, fbProps, systemAttachmentFormats);
     }
+
+    struct ConfigureDevelopmentFeatures
+    {
+        bool _installDefaultDebuggingDisplays = false;
+        bool _useFrameRigSystemDisplay = false;
+        bool _installHotKeysHandler = false;
+
+        std::vector<std::pair<std::string, std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>>> _additionalDebuggingDisplays;
+
+        std::shared_ptr<PlatformRig::IFrameRigDisplay> Apply(SampleGlobals& sampleGlobals)
+        {
+            std::shared_ptr<PlatformRig::IFrameRigDisplay> result;
+            if (_useFrameRigSystemDisplay) {
+                auto& frameRig = *sampleGlobals._windowApparatus->_frameRig;
+                result = frameRig.CreateDisplay(sampleGlobals._debugOverlaysApparatus->_debugSystem, sampleGlobals._windowApparatus->_mainLoadingContext);
+                PlatformRig::SetSystemDisplay(*sampleGlobals._debugOverlaysApparatus->_debugSystem, result);
+            }
+
+            if (_installDefaultDebuggingDisplays)
+                InstallDefaultDebuggingDisplays(sampleGlobals);
+
+            for (const auto& dd:_additionalDebuggingDisplays)
+                sampleGlobals._displayRegistrations.emplace_back(dd.first, std::move(dd.second));
+
+            if (_installHotKeysHandler)
+                sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.dat"));
+            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem));
+
+            return result;
+        }
+    };
 
 	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& config)
     {
@@ -392,14 +408,6 @@ namespace Sample
                 pkt._window->SetTitle(meld);
             }
 
-            else if (std::holds_alternative<StartupLoop::ConfigureDevelopmentFeatures*>(msg)) {
-                auto& pkt = *std::get<StartupLoop::ConfigureDevelopmentFeatures*>(msg);
-
-                pkt._installDefaultDebuggingDisplays = true;
-                pkt._useFrameRigSystemDisplay = true;
-                pkt._installHotKeysHandler = true;
-            }
-
             else if (std::holds_alternative<StartupLoop::StartupFinished>(msg)) {
                 break;
             }
@@ -412,30 +420,18 @@ namespace Sample
         auto rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
         auto cleanup = AutoCleanup([rawosmnt]() { ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt); });
 
+        ConfigureDevelopmentFeatures devFeatures;
+        devFeatures._installDefaultDebuggingDisplays = true;
+        devFeatures._useFrameRigSystemDisplay = true;
+        devFeatures._installHotKeysHandler = true;
+        devFeatures.Apply(sampleGlobals);
+
         sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleOverlay));
         sampleOverlay->OnStartup(sampleGlobals);
 
-            // Pump a single frame to ensure we have some content when the window appears (and then show it)
-        {
-            auto initialConfig = frameRig.GetOverlayConfiguration(*sampleGlobals._windowApparatus->_presentationChain);
-            OnRenderTargetUpdate(
-                *sampleOverlay, *sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem,
-                initialConfig._preregAttachments, initialConfig._fbProps, initialConfig._systemAttachmentFormats);
-        }
-        {
-            auto parserContext = frameRig.StartupFrame(*sampleGlobals._windowApparatus);
-            TRY {
-                sampleOverlay->Render(parserContext);
-                sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->Render(parserContext);
-            } CATCH(const std::exception& e) {
-                RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *sampleGlobals._overlayApparatus, e.what());
-            } CATCH_END
-            frameRig.ShutdownFrame(parserContext);
-        }
-        sampleGlobals._windowApparatus->_osWindow->Show();
-
             //  Finally, we execute the frame loop. 
         MessageLoop msgLoop{sampleGlobals._windowApparatus};
+        msgLoop.ShowWindow(true);
         for (;;) {
             auto msg = msgLoop.Pump();
 
