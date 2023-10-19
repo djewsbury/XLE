@@ -10,19 +10,12 @@
 #include "../../Tools/ToolsRig/ToolsRigServices.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"
 #include "../../PlatformRig/DebugScreenRegistry.h"
 #include "../../PlatformRig/PlatformApparatuses.h"
-#include "../../Assets/OperationContext.h"
-#include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/StringFormat.h"
 
 namespace Sample
 {
-	void NativeModelViewerOverlay::OnUpdate(float deltaTime)
-	{
-	}
-
 	void NativeModelViewerOverlay::OnStartup(const SampleGlobals& globals)
 	{
 		ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
@@ -36,8 +29,8 @@ namespace Sample
 		AddSystem(modelLayer);
 
 		ToolsRig::VisOverlaySettings overlaySettings;
-		overlaySettings._colourByMaterial = 2;
-		overlaySettings._drawNormals = true;
+		overlaySettings._colourByMaterial = 0;
+		overlaySettings._drawNormals = false;
 		overlaySettings._drawWireframe = false;
 
 		auto visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(
@@ -65,56 +58,16 @@ namespace Sample
         visSettings._materialName = "rawos/game/model/galleon/galleon.material";
 		_overlayBinder->SetScene(visSettings);
 		_overlayBinder->SetEnvSettings("cfg/lighting");
-
-		/*scene->StallWhilePending();
-		TRY {
-			auto actualizedScene = scene->Actualize();
-			auto* visContent = dynamic_cast<ToolsRig::IVisContent*>(actualizedScene.get());
-			if (visContent) {
-				auto animationState = std::make_shared<ToolsRig::VisAnimationState>();
-				animationState->_activeAnimation = "idle";
-				animationState->_state = ToolsRig::VisAnimationState::State::Playing;
-				animationState->_anchorTime = std::chrono::steady_clock::now();
-				visContent->BindAnimationState(animationState);
-			}
-		} CATCH(...) {
-		} CATCH_END*/
-
 	}
 
-	auto NativeModelViewerOverlay::ProcessInput(
-		const PlatformRig::InputContext& context,
-		const OSServices::InputSnapshot& evnt) -> PlatformRig::ProcessInputResult
+	void NativeModelViewerOverlay::Configure(SampleConfiguration& cfg)
 	{
-		return OverlaySystemSet::ProcessInput(context, evnt);
+		cfg._presentationChainBindFlags = RenderCore::BindFlag::UnorderedAccess;
+		cfg._windowTitle = "Native Model Viewer (XLE sample)";
 	}
 
-	void NativeModelViewerOverlay::SetActivationState(bool newState) 
-	{
-		OverlaySystemSet::SetActivationState(newState);
-	}
+	NativeModelViewerOverlay::NativeModelViewerOverlay() = default;
+	NativeModelViewerOverlay::~NativeModelViewerOverlay() = default;
 
-	void NativeModelViewerOverlay::Render(
-        RenderCore::Techniques::ParsingContext& parserContext)
-	{
-		OverlaySystemSet::Render(parserContext);
-	}
-
-	void NativeModelViewerOverlay::OnRenderTargetUpdate(
-		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-		const RenderCore::FrameBufferProperties& fbProps,
-		IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
-	{
-		OverlaySystemSet::OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
-	}
-
-	NativeModelViewerOverlay::NativeModelViewerOverlay()
-	{
-	}
-
-	NativeModelViewerOverlay::~NativeModelViewerOverlay()
-	{
-	}
-    
 }
 

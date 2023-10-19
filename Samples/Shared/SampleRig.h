@@ -26,6 +26,7 @@ namespace RenderCore { namespace Techniques
 
 namespace PlatformRig { class MainInputHandler; class WindowApparatus; class DebugOverlaysApparatus; struct DebugScreenRegistration; }
 namespace RenderOverlays { class OverlayApparatus; }
+namespace Formatters { template<typename CharType> class CommandLineFormatter; }
 
 namespace Sample
 {
@@ -47,20 +48,20 @@ namespace Sample
 		~SampleGlobals();
 	};
 
-	class ISampleOverlay : public PlatformRig::IOverlaySystem
+	struct SampleConfiguration
 	{
-	public:
-		virtual void OnUpdate(float deltaTime);
-		virtual void OnStartup(const SampleGlobals& globals);
-	};
-
-	class SampleConfiguration
-	{
-	public:
 		RenderCore::BindFlag::BitField _presentationChainBindFlags = 0;
 		std::string _windowTitle;
 		std::optional<UInt2> _initialWindowSize;
 	};
 
-	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& = {});
+	class ISampleOverlay
+	{
+	public:
+		virtual void OnUpdate(float deltaTime);
+		virtual void OnStartup(const SampleGlobals& globals);
+		virtual void Configure(SampleConfiguration& cfg);
+	};
+
+	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, Formatters::CommandLineFormatter<char>& cmdLine);
 }

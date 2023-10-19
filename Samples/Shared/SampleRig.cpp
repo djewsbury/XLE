@@ -30,6 +30,7 @@
 #include "../../Assets/OSFileSystem.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/AssetSetManager.h"
+#include "../../Assets/XPak.h"
 
 #include "../../OSServices/Log.h"
 #include "../../OSServices/OverlappedWindow.h"
@@ -37,8 +38,12 @@
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../ConsoleRig/Console.h"
 
+#include "../../Formatters/CommandLineFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
+
 #include "../../Utility/Profiling/CPUProfiler.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/Streams/PathUtils.h"
 
 #include <functional>
 #include <variant>
@@ -46,25 +51,6 @@
 namespace Sample
 {
     void InstallDefaultDebuggingDisplays(SampleGlobals& globals);   // DefaultDebuggingDisplays.cpp
-
-    struct SampleRigApparatus
-    {
-        ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniqueServices;
-        ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> _previewSceneRegistry;
-        ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> _entityMountingTree;
-
-        SampleRigApparatus(std::shared_ptr<RenderCore::IDevice> renderDevice)
-        {
-            _techniqueServices = std::make_shared<RenderCore::Techniques::Services>(renderDevice);
-            _previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
-            _entityMountingTree = EntityInterface::CreateMountingTree();
-            ::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
-        }
-        ~SampleRigApparatus()
-        {
-            ::ConsoleRig::GlobalServices::GetInstance().UnloadDefaultPlugins();
-        }
-    };
 
     template<typename V, typename std::size_t... I, typename... O>
         constexpr auto VariantCat_Helper(V&&, std::index_sequence<I...>&&, O&&...) -> 
@@ -89,106 +75,6 @@ namespace Sample
         {
             return VariantCast_<O, std::variant<T...>, T...>(std::move(input));
         }
-
-    class StartupLoop
-    {
-    public:
-
-        struct ConfigureRenderDevice
-        {
-            unsigned _configurationIdx = 0u;
-            RenderCore::DeviceFeatures _deviceFeatures;
-            std::shared_ptr<RenderCore::IAPIInstance> _apiInstance;
-            RenderCore::BindFlag::BitField _presentationChainBindFlags = 0;
-            OSServices::Window* _window = nullptr;
-        };
-
-        struct ConfigureWindowInitialState
-        {
-            OSServices::Window* _window = nullptr;
-        };
-
-        struct StartupFinished
-        {
-        };
-
-        using MsgVariant = std::variant<ConfigureRenderDevice*, ConfigureWindowInitialState*, StartupFinished>;
-        MsgVariant Pump();
-
-        std::shared_ptr<RenderCore::IAPIInstance> _renderCoreAPIInstance;
-        std::shared_ptr<RenderCore::IDevice> _renderCoreDevice;
-        ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
-        std::unique_ptr<OSServices::Window> _osWindow;
-        std::unique_ptr<SampleRigApparatus> _sampleRigApparatus;
-        SampleGlobals _sampleGlobals;
-
-        StartupLoop();
-        ~StartupLoop();
-    private:
-        enum class Phase { Initial, PostConfigureRenderDevice, PostConfigureWindowInitialState, PostConfigureDevelopmentFeatures, PostConfigureFrameRigDisplay, Finished };
-        Phase _phase = Phase::Initial;
-
-        ConfigureRenderDevice _configRenderDevice;
-        ConfigureWindowInitialState _configWindowInitialState;
-    };
-
-    auto StartupLoop::Pump() -> MsgVariant
-    {
-        switch (_phase) {
-        case Phase::Initial:
-            {
-                _renderCoreAPIInstance = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
-
-                _assetServices = std::make_shared<::Assets::Services>();
-                _osWindow = std::make_unique<OSServices::Window>();
-
-                _phase = Phase::PostConfigureRenderDevice;
-                _configRenderDevice = {
-                    0, _renderCoreAPIInstance->QueryFeatureCapability(0),
-                    _renderCoreAPIInstance,
-                    0, _osWindow.get()
-                };
-                return &_configRenderDevice;
-            }
-
-        case Phase::PostConfigureRenderDevice:
-            {
-                _renderCoreDevice = _renderCoreAPIInstance->CreateDevice(_configRenderDevice._configurationIdx, _configRenderDevice._deviceFeatures);
-                _sampleRigApparatus = std::make_unique<SampleRigApparatus>(_renderCoreDevice);
-
-                _sampleGlobals._renderDevice = _renderCoreDevice;
-                _sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(_renderCoreDevice);
-                _sampleGlobals._overlayApparatus = std::make_shared<RenderOverlays::OverlayApparatus>(_sampleGlobals._drawingApparatus);
-                _sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_sampleGlobals._renderDevice);
-                _sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_sampleGlobals._renderDevice);
-                _sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(_osWindow), _sampleGlobals._drawingApparatus.get(), *_sampleGlobals._frameRenderingApparatus, _configRenderDevice._presentationChainBindFlags);
-                _sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(_sampleGlobals._overlayApparatus);
-
-                _phase = Phase::PostConfigureWindowInitialState;
-                _configWindowInitialState = { _sampleGlobals._windowApparatus->_osWindow.get() };
-                return &_configWindowInitialState;
-            }
-
-        case Phase::PostConfigureWindowInitialState:
-            _sampleGlobals._windowApparatus->_frameRig->UpdatePresentationChain(*_sampleGlobals._windowApparatus->_presentationChain);
-            _sampleRigApparatus->_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_sampleGlobals._windowApparatus->_immediateContext);
-
-            // intentional fall-through
-
-        default:
-        case Phase::Finished:
-            _phase = Phase::Finished;
-            return StartupFinished{};
-        }
-    }
-
-    StartupLoop::StartupLoop() = default;
-    StartupLoop::~StartupLoop()
-    {
-        ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
-        if (_renderCoreDevice)
-            _renderCoreDevice->PrepareForDestruction();
-    }
 
     class MessageLoop
     {
@@ -217,6 +103,9 @@ namespace Sample
 
         MessageLoop(std::shared_ptr<PlatformRig::WindowApparatus> apparatus);
         ~MessageLoop();
+        MessageLoop();
+        MessageLoop(MessageLoop&&) = default;
+        MessageLoop& operator=(MessageLoop&&) = default;
     private:
         std::shared_ptr<PlatformRig::WindowApparatus> _apparatus;
         enum class Pending
@@ -327,16 +216,211 @@ namespace Sample
     MessageLoop::~MessageLoop()
     {}
 
+    class StartupLoop
+    {
+    public:
+
+        struct ConfigureGlobalServices
+        {
+            ConsoleRig::StartupConfig _startupCfg;
+            std::string _xleResLocation = "xleres.pak";
+            enum class XLEResType { XPak, OSFileSystem, None };
+            XLEResType _xleResType = XLEResType::XPak;
+        };
+
+        struct ConfigureRenderDevice
+        {
+            unsigned _configurationIdx = 0u;
+            RenderCore::DeviceFeatures _deviceFeatures;
+            std::shared_ptr<RenderCore::IAPIInstance> _apiInstance;
+            RenderCore::BindFlag::BitField _presentationChainBindFlags = 0;
+            OSServices::Window* _window = nullptr;
+        };
+
+        struct ConfigureWindowInitialState
+        {
+            OSServices::Window* _window = nullptr;
+        };
+
+        struct StartupFinished
+        {
+        };
+
+        using MsgVariant = std::variant<ConfigureGlobalServices*, ConfigureRenderDevice*, ConfigureWindowInitialState*, StartupFinished>;
+        MsgVariant Pump();
+
+        MessageLoop ShowWindowAndBeginMessageLoop();
+
+        ConsoleRig::AttachablePtr<ConsoleRig::GlobalServices> _globalServices;
+        struct MountRegistrationToken;
+        std::unique_ptr<MountRegistrationToken> _xleResMountID;
+        ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
+        ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniqueServices;
+        ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> _previewSceneRegistry;
+        ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> _entityMountingTree;
+
+        std::shared_ptr<RenderCore::IAPIInstance> _renderAPIInstance;
+        std::shared_ptr<RenderCore::IDevice> _renderDevice;
+        std::unique_ptr<OSServices::Window> _osWindow;
+
+        SampleGlobals _sampleGlobals;
+
+        std::shared_ptr<::Assets::ArchiveUtility::FileCache> _fileCache;
+
+        StartupLoop(Formatters::CommandLineFormatter<>& cmdLine);
+        ~StartupLoop();
+        StartupLoop(const StartupLoop&) = delete;
+        StartupLoop& operator=(const StartupLoop&) = delete;
+
+    private:
+        enum class Phase { Initial, PostConfigureGlobalServices, PostConfigureRenderDevice, PostConfigureWindowInitialState, PostConfigureDevelopmentFeatures, PostConfigureFrameRigDisplay, Finished };
+        Phase _phase = Phase::Initial;
+
+        ConfigureGlobalServices _configGlobalServices;
+        ConfigureRenderDevice _configRenderDevice;
+        ConfigureWindowInitialState _configWindowInitialState;
+    };
+
+    struct CommandLineArgsDigest
+    {
+        StringSection<> _xleres = "xleres.pak";
+        CommandLineArgsDigest(Formatters::CommandLineFormatter<>& fmttr)
+        {
+            StringSection<> keyname;
+            for (;;) {
+                if (fmttr.TryKeyedItem(keyname)) {
+                    if (XlEqStringI(keyname, "xleres"))
+                        _xleres = Formatters::RequireStringValue(fmttr);
+                } else if (fmttr.PeekNext() == Formatters::FormatterBlob::None) {
+                    break;
+                } else
+                    Formatters::SkipValueOrElement(fmttr);
+            }
+        }
+    };
+
+    struct StartupLoop::MountRegistrationToken
+    {
+        ~MountRegistrationToken()
+        {
+            if (_mountId != ~0u)
+                ::Assets::MainFileSystem::GetMountingTree()->Unmount(_mountId);
+        }
+        ::Assets::MountingTree::MountID _mountId = ~0u;
+    };
+
+    auto StartupLoop::Pump() -> MsgVariant
+    {
+        switch (_phase) {
+        case Phase::Initial:
+            {
+                _phase = Phase::PostConfigureGlobalServices;
+                return &_configGlobalServices;
+            }
+
+        case Phase::PostConfigureGlobalServices:
+            {
+                _globalServices = std::make_shared<ConsoleRig::GlobalServices>(_configGlobalServices._startupCfg);
+
+                _xleResMountID = std::make_unique<MountRegistrationToken>();
+                if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::XPak) {
+                    _fileCache = ::Assets::CreateFileCache(4 * 1024 * 1024);
+                    _xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateXPakFileSystem(_configGlobalServices._xleResLocation, _fileCache));
+                } else if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::OSFileSystem)
+                    _xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS(_configGlobalServices._xleResLocation, _globalServices->GetPollingThread()));
+
+                _renderAPIInstance = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
+
+                _assetServices = std::make_shared<::Assets::Services>();
+                _osWindow = std::make_unique<OSServices::Window>();
+
+                _phase = Phase::PostConfigureRenderDevice;
+                _configRenderDevice = {
+                    0, _renderAPIInstance->QueryFeatureCapability(0),
+                    _renderAPIInstance,
+                    0, _osWindow.get()
+                };
+                return &_configRenderDevice;
+            }
+
+        case Phase::PostConfigureRenderDevice:
+            {
+                _renderDevice = _renderAPIInstance->CreateDevice(_configRenderDevice._configurationIdx, _configRenderDevice._deviceFeatures);
+                _techniqueServices = std::make_shared<RenderCore::Techniques::Services>(_renderDevice);
+                _previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
+                _entityMountingTree = EntityInterface::CreateMountingTree();
+                ::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
+
+                _sampleGlobals._renderDevice = _renderDevice;
+                _sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(_renderDevice);
+                _sampleGlobals._overlayApparatus = std::make_shared<RenderOverlays::OverlayApparatus>(_sampleGlobals._drawingApparatus);
+                _sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_sampleGlobals._renderDevice);
+                _sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_sampleGlobals._renderDevice);
+                _sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(_osWindow), _sampleGlobals._drawingApparatus.get(), *_sampleGlobals._frameRenderingApparatus, _configRenderDevice._presentationChainBindFlags);
+                _sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(_sampleGlobals._overlayApparatus);
+
+                _phase = Phase::PostConfigureWindowInitialState;
+                _configWindowInitialState = { _sampleGlobals._windowApparatus->_osWindow.get() };
+                return &_configWindowInitialState;
+            }
+
+        case Phase::PostConfigureWindowInitialState:
+            _sampleGlobals._windowApparatus->_frameRig->UpdatePresentationChain(*_sampleGlobals._windowApparatus->_presentationChain);
+            _techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_sampleGlobals._windowApparatus->_immediateContext);
+
+            // intentional fall-through
+
+        default:
+        case Phase::Finished:
+            _phase = Phase::Finished;
+            return StartupFinished{};
+        }
+    }
+
+    MessageLoop StartupLoop::ShowWindowAndBeginMessageLoop()
+    {
+        MessageLoop result { _sampleGlobals._windowApparatus };
+        result.ShowWindow(true);
+        return result;
+    }
+
+    StartupLoop::StartupLoop(Formatters::CommandLineFormatter<>& cmdLine)
+    {
+        CommandLineArgsDigest cmdLineDigest { cmdLine };
+        _configGlobalServices._xleResLocation = cmdLineDigest._xleres.AsString();
+        if (XlEqStringI(MakeFileNameSplitter(cmdLineDigest._xleres).Extension(), "pak")) {
+            // by default, search next to the executable if we don't have a fully qualified name
+            if (::Assets::MainFileSystem::TryGetDesc(_configGlobalServices._xleResLocation)._snapshot._state == ::Assets::FileSnapshot::State::DoesNotExist) {
+                char buffer[MaxPath];
+                OSServices::GetProcessPath(buffer, dimof(buffer));
+                _configGlobalServices._xleResLocation = Concatenate(MakeFileNameSplitter(buffer).DriveAndPath(), "/", _configGlobalServices._xleResLocation);
+            }
+            _configGlobalServices._xleResType = ConfigureGlobalServices::XLEResType::XPak;
+        } else
+            _configGlobalServices._xleResType = ConfigureGlobalServices::XLEResType::OSFileSystem;
+    }
+
+    StartupLoop::~StartupLoop()
+    {
+        ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
+        if (_renderDevice)
+            _renderDevice->PrepareForDestruction();
+    }
+
     static void OnRenderTargetUpdate(
-        PlatformRig::IOverlaySystem& mainOverlay,
+        PlatformRig::IOverlaySystem* mainOverlay,
         PlatformRig::IOverlaySystem& debuggingOverlay,
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
         const RenderCore::FrameBufferProperties& fbProps,
         IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
     {
-        mainOverlay.OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
-        auto updatedAttachments = PlatformRig::InitializeColorLDR(preregAttachments);
-        debuggingOverlay.OnRenderTargetUpdate(updatedAttachments, fbProps, systemAttachmentFormats);
+        if (mainOverlay) {
+            mainOverlay->OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
+            auto updatedAttachments = PlatformRig::InitializeColorLDR(preregAttachments);
+            debuggingOverlay.OnRenderTargetUpdate(updatedAttachments, fbProps, systemAttachmentFormats);
+        } else {
+            debuggingOverlay.OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
+        }
     }
 
     struct ConfigureDevelopmentFeatures
@@ -370,27 +454,38 @@ namespace Sample
         }
     };
 
-	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& config)
+    static void LogRenderAPIInstanceStartup(RenderCore::IAPIInstance& apiInstance, const void* underlyingWindowHandle)
     {
+        if (auto* vulkanInstance = query_interface_cast<RenderCore::IAPIInstanceVulkan*>(&apiInstance)) {
+            Log(Verbose) << "-------------- vulkan instance --------------" << std::endl;
+            Log(Verbose) << vulkanInstance->LogInstance(underlyingWindowHandle) << std::endl;
 
-        StartupLoop startup;
+            auto count = apiInstance.GetDeviceConfigurationCount();
+            for (unsigned c=0; c<count; ++c) {
+                Log(Verbose) << "-------------- vulkan properties for device configuration (" << c << ") --------------" << std::endl;
+                Log(Verbose) << vulkanInstance->LogPhysicalDevice(c) << std::endl;
+            }
+        }
+    }
+
+	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, Formatters::CommandLineFormatter<>& cmdLine)
+    {
+        SampleConfiguration config;
+        sampleOverlay->Configure(config);
+
+        StartupLoop startup { cmdLine };
         for (;;) {
             auto msg = startup.Pump();
 
+            if (std::holds_alternative<StartupLoop::ConfigureGlobalServices*>(msg)) {
+                auto& pkt = *std::get<StartupLoop::ConfigureGlobalServices*>(msg);
+
+            }
+
             if (std::holds_alternative<StartupLoop::ConfigureRenderDevice*>(msg)) {
                 auto& pkt = *std::get<StartupLoop::ConfigureRenderDevice*>(msg);
-
-                if (auto* vulkanInstance = query_interface_cast<RenderCore::IAPIInstanceVulkan*>(pkt._apiInstance.get())) {
-                    Log(Verbose) << "-------------- vulkan instance --------------" << std::endl;
-                    Log(Verbose) << vulkanInstance->LogInstance(pkt._window->GetUnderlyingHandle()) << std::endl;
-
-                    auto count = pkt._apiInstance->GetDeviceConfigurationCount();
-                    for (unsigned c=0; c<count; ++c) {
-                        Log(Verbose) << "-------------- vulkan properties for device configuration (" << c << ") --------------" << std::endl;
-                        Log(Verbose) << vulkanInstance->LogPhysicalDevice(c) << std::endl;
-                    }
-                }
-
+                
+                LogRenderAPIInstanceStartup(*pkt._apiInstance, pkt._window->GetUnderlyingHandle());
                 pkt._presentationChainBindFlags = config._presentationChainBindFlags;
             }
 
@@ -400,7 +495,7 @@ namespace Sample
                  if (config._initialWindowSize)
                     pkt._window->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
 
-                auto v = startup._renderCoreDevice->GetDesc();
+                auto v = startup._renderDevice->GetDesc();
                 StringMeld<128> meld;
                 if (!config._windowTitle.empty()) meld << config._windowTitle;
                 else meld << "XLE sample";
@@ -426,12 +521,14 @@ namespace Sample
         devFeatures._installHotKeysHandler = true;
         devFeatures.Apply(sampleGlobals);
 
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleOverlay));
+        auto sampleOverlayAsOverlay = std::dynamic_pointer_cast<PlatformRig::IOverlaySystem>(sampleOverlay);
+
+        if (sampleOverlayAsOverlay)
+            sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleOverlayAsOverlay));
         sampleOverlay->OnStartup(sampleGlobals);
 
-            //  Finally, we execute the frame loop. 
-        MessageLoop msgLoop{sampleGlobals._windowApparatus};
-        msgLoop.ShowWindow(true);
+            //  Finally, we execute the frame loop.
+        auto msgLoop = startup.ShowWindowAndBeginMessageLoop();
         for (;;) {
             auto msg = msgLoop.Pump();
 
@@ -444,7 +541,8 @@ namespace Sample
             else if (std::holds_alternative<MessageLoop::RenderFrame>(msg)) {
                 auto& parserContext = std::get<MessageLoop::RenderFrame>(msg)._parsingContext;
                 TRY {
-                    sampleOverlay->Render(parserContext);
+                    if (sampleOverlayAsOverlay)
+                        sampleOverlayAsOverlay->Render(parserContext);
                     sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem->Render(parserContext);
                 } CATCH(const std::exception& e) {
                     RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *sampleGlobals._overlayApparatus, e.what());
@@ -455,7 +553,7 @@ namespace Sample
             else if (std::holds_alternative<MessageLoop::OnRenderTargetUpdate>(msg)) {
                 auto& rtu = std::get<MessageLoop::OnRenderTargetUpdate>(msg);
                 OnRenderTargetUpdate(
-                    *sampleOverlay, *sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem,
+                    sampleOverlayAsOverlay.get(), *sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem,
                     rtu._preregAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
             }
 
@@ -465,11 +563,13 @@ namespace Sample
             } 
         }
 
+        sampleOverlayAsOverlay.reset();
         sampleOverlay.reset();		// (ensure this gets destroyed before the engine is shutdown)
     }
 
-	void ISampleOverlay::OnStartup(const SampleGlobals& globals) {}
-	void ISampleOverlay::OnUpdate(float deltaTime) {}
+	void ISampleOverlay::OnStartup(const SampleGlobals&) {}
+	void ISampleOverlay::OnUpdate(float) {}
+    void ISampleOverlay::Configure(SampleConfiguration&) {}
 
     SampleGlobals::SampleGlobals() = default;
 	SampleGlobals::~SampleGlobals() = default;

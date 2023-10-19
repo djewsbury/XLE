@@ -5,11 +5,10 @@
 #pragma once
 
 #include "../Shared/SampleRig.h"
+#include "../../PlatformRig/OverlaySystem.h"
 #include <memory>
 #include <vector>
 
-namespace SceneEngine { class IScene; class ILightingStateDelegate; class BasicLightingStateDelegate; }
-namespace RenderCore { namespace Techniques { class CameraDesc; class IPipelineAcceleratorPool; }}
 namespace ToolsRig { class VisOverlayController; }
 namespace PlatformRig { struct DebugScreenRegistration; }
 
@@ -17,23 +16,11 @@ namespace Sample
 {
 	class SampleLightingDelegate;
 
-	class NativeModelViewerOverlay : virtual public PlatformRig::OverlaySystemSet, virtual public ISampleOverlay
+	class NativeModelViewerOverlay : public PlatformRig::OverlaySystemSet, public ISampleOverlay
 	{
 	public:
-		virtual void OnUpdate(float deltaTime) override;
 		virtual void OnStartup(const SampleGlobals& globals) override;
-
-		void Render(
-            RenderCore::Techniques::ParsingContext& parserContext) override;
-		PlatformRig::ProcessInputResult ProcessInput(
-			const PlatformRig::InputContext& context,
-			const OSServices::InputSnapshot& evnt) override;
-        void SetActivationState(bool newState) override;
-
-		virtual void OnRenderTargetUpdate(
-            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-            const RenderCore::FrameBufferProperties& fbProps,
-			IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
+		virtual void Configure(SampleConfiguration& cfg) override;
 
 		NativeModelViewerOverlay();
 		~NativeModelViewerOverlay();
