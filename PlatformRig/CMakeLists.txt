@@ -13,10 +13,11 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         UnitCamera.cpp
         DebugScreensOverlay.cpp
         DebugScreenRegistry.cpp
-        TopBar.cpp)
+        TopBar.cpp
+        SingleWindowAppRig.cpp)
 
     set(DebuggingDisplaysSrc 
-        #InitDebugDisplays.cpp
+        DefaultDebuggingDisplays.cpp
         DebuggingDisplays/BufferUploadDisplay.cpp
         DebuggingDisplays/ConsoleDisplay.cpp
         DebuggingDisplays/CPUProfileDisplay.cpp

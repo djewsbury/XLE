@@ -19,13 +19,12 @@ namespace Sample
 	class NativeModelViewerOverlay : public PlatformRig::OverlaySystemSet, public ISampleOverlay
 	{
 	public:
-		virtual void OnStartup(const SampleGlobals& globals) override;
+		virtual void OnStartup(const PlatformRig::AppRigGlobals& globals) override;
 		virtual void Configure(SampleConfiguration& cfg) override;
 
 		NativeModelViewerOverlay();
 		~NativeModelViewerOverlay();
 	private:
 		std::shared_ptr<ToolsRig::VisOverlayController> _overlayBinder;
-		std::vector<PlatformRig::DebugScreenRegistration> _displayRegistrations;
 	};
 }

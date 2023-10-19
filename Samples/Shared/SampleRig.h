@@ -4,50 +4,17 @@
 
 #pragma once
 
-#include "../../RenderCore/ResourceDesc.h"
-#include "../../PlatformRig/OverlaySystem.h"
-#include "../../ConsoleRig/AttachablePtr.h"
+#include "../../RenderCore/ResourceDesc.h"		// (for BindFlag::BitField)
 #include "../../Math/Vector.h"
 #include <memory>
+#include <optional>
+#include <string>
 
-namespace RenderCore
-{
-	class IDevice;
-	class IPresentationChain;
-}
-
-namespace RenderCore { namespace Techniques
-{
-	class TechniqueContext;
-	class DrawingApparatus;
-	class PrimaryResourcesApparatus;
-	class FrameRenderingApparatus;
-}}
-
-namespace PlatformRig { class MainInputHandler; class WindowApparatus; class DebugOverlaysApparatus; struct DebugScreenRegistration; }
-namespace RenderOverlays { class OverlayApparatus; }
+namespace PlatformRig { class AppRigGlobals; }
 namespace Formatters { template<typename CharType> class CommandLineFormatter; }
 
 namespace Sample
 {
-	class SampleGlobals
-	{
-	public:
-		std::shared_ptr<RenderCore::IDevice> _renderDevice;
-
-        std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
-        std::shared_ptr<RenderOverlays::OverlayApparatus> _overlayApparatus;
-        std::shared_ptr<RenderCore::Techniques::PrimaryResourcesApparatus> _primaryResourcesApparatus;
-        std::shared_ptr<RenderCore::Techniques::FrameRenderingApparatus> _frameRenderingApparatus;
-		std::shared_ptr<PlatformRig::WindowApparatus> _windowApparatus;
-		std::shared_ptr<PlatformRig::DebugOverlaysApparatus> _debugOverlaysApparatus;
-
-		std::vector<PlatformRig::DebugScreenRegistration> _displayRegistrations;
-
-		SampleGlobals();
-		~SampleGlobals();
-	};
-
 	struct SampleConfiguration
 	{
 		RenderCore::BindFlag::BitField _presentationChainBindFlags = 0;
@@ -59,7 +26,7 @@ namespace Sample
 	{
 	public:
 		virtual void OnUpdate(float deltaTime);
-		virtual void OnStartup(const SampleGlobals& globals);
+		virtual void OnStartup(const PlatformRig::AppRigGlobals& globals);
 		virtual void Configure(SampleConfiguration& cfg);
 	};
 

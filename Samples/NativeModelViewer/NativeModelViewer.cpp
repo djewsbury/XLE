@@ -3,20 +3,19 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "NativeModelViewer.h"
-#include "../Shared/SampleRig.h"
 #include "../../Tools/ToolsRig/ModelVisualisation.h"
 #include "../../Tools/ToolsRig/VisualisationUtils.h"
 #include "../../Tools/ToolsRig/BasicManipulators.h"
 #include "../../Tools/ToolsRig/ToolsRigServices.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
-#include "../../PlatformRig/DebugScreenRegistry.h"
 #include "../../PlatformRig/PlatformApparatuses.h"
+#include "../../PlatformRig/SingleWindowAppRig.h"
 #include "../../Utility/StringFormat.h"
 
 namespace Sample
 {
-	void NativeModelViewerOverlay::OnStartup(const SampleGlobals& globals)
+	void NativeModelViewerOverlay::OnStartup(const PlatformRig::AppRigGlobals& globals)
 	{
 		ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
 

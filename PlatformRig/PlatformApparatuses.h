@@ -46,10 +46,6 @@ namespace PlatformRig
 		bool _popUtilityFn = false;
 	};
 
-	void SetSystemDisplay(
-		RenderOverlays::DebuggingDisplay::DebugScreensSystem& debugScreens, 
-		std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> systemDisplay);
-
 	class WindowApparatus
 	{
 	public:

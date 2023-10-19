@@ -86,13 +86,6 @@ namespace PlatformRig
 			ConsoleRig::CrossModule::GetInstance()._services.Remove(Fn_ShowScreen);
 	}
 
-	void SetSystemDisplay(RenderOverlays::DebuggingDisplay::DebugScreensSystem& debugScreens, std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> systemDisplay)
-	{
-		debugScreens.Register(
-			std::move(systemDisplay),
-			"system-display", RenderOverlays::DebuggingDisplay::DebugScreensSystem::SystemDisplay);
-	}
-
 	WindowApparatus::WindowApparatus(
 		std::shared_ptr<OSServices::Window> osWindow,
 		RenderCore::Techniques::DrawingApparatus* drawingApparatus,
