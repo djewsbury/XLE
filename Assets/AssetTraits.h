@@ -107,11 +107,11 @@ namespace Assets
 			return Internal::InvokeAssetConstructor<AssetType>(
 				*file,
 				DefaultDirectorySearchRules(initializer),
-				depVal);
+				::Assets::DependencyValidation(depVal));
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
+			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH (const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
+			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH_END
 	}
 
@@ -134,11 +134,11 @@ namespace Assets
 			return Internal::InvokeAssetConstructor<AssetType>(
 				MakeStringSection(block.get(), PtrAdd(block.get(), size)),
 				DefaultDirectorySearchRules(initializer),
-				depVal);
+				::Assets::DependencyValidation(depVal));
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
+			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH (const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
+			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH_END
 	}
 

@@ -100,6 +100,9 @@ namespace Assets
 
 		template<typename AssetType>
             static const bool HasConstructor_Formatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&, const DirectorySearchRules&, const DependencyValidation&>::value;
+
+		template<typename AssetType>
+            static const bool HasConstructor_SimpleFormatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&>::value;
     }
 
     #define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
@@ -137,6 +140,41 @@ namespace Assets
 					fmttr,
 					DefaultDirectorySearchRules(initializer),
 					container.GetDependencyValidation());
+			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
+			} CATCH (const std::exception& e) {
+				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
+			} CATCH_END
+		}
+	}
+
+	//
+	//		Auto construct to:
+	//			(Formatters::TextInputFormatter<>&)
+	//
+	template<typename AssetType, ENABLE_IF(Internal::HasConstructor_SimpleFormatter<AssetType>)>
+		AssetType AutoConstructAsset(StringSection<char> initializer)
+	{
+		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)
+		// See also AutoConstructToPromise<> variation of this function
+		const char* p = XlFindChar(initializer, ':');
+		if (p) {
+			char buffer[256];
+			XlCopyString(buffer, MakeStringSection(initializer.begin(), p));
+			const auto& container = Internal::GetConfigFileContainer(buffer);
+			TRY {
+				auto fmttr = container.GetFormatter(MakeStringSection(p+1, initializer.end()));
+				return Internal::InvokeAssetConstructor<AssetType>(fmttr);
+			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
+			} CATCH (const std::exception& e) {
+				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
+			} CATCH_END
+		} else {
+			const auto& container = Internal::GetConfigFileContainer(initializer);
+			TRY { 
+				auto fmttr = container.GetRootFormatter();
+				return Internal::InvokeAssetConstructor<AssetType>(fmttr);
 			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
 			} CATCH (const std::exception& e) {
