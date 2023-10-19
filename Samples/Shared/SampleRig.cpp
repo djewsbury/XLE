@@ -90,6 +90,149 @@ namespace Sample
             return VariantCast_<O, std::variant<T...>, T...>(std::move(input));
         }
 
+    class StartupLoop
+    {
+    public:
+
+        struct ConfigureRenderDevice
+        {
+            unsigned _configurationIdx = 0u;
+            RenderCore::DeviceFeatures _deviceFeatures;
+            std::shared_ptr<RenderCore::IAPIInstance> _apiInstance;
+            RenderCore::BindFlag::BitField _presentationChainBindFlags = 0;
+            OSServices::Window* _window = nullptr;
+        };
+
+        struct ConfigureWindowInitialState
+        {
+            OSServices::Window* _window = nullptr;
+        };
+
+        struct ConfigureDevelopmentFeatures
+        {
+            bool _installDefaultDebuggingDisplays = false;
+            bool _useFrameRigSystemDisplay = false;
+            bool _installHotKeysHandler = false;
+
+            std::vector<std::pair<std::string, std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>>> _additionalDebuggingDisplays;
+        };
+
+        struct ConfigureFrameRigDisplay
+        {
+            std::shared_ptr<PlatformRig::IFrameRigDisplay> _frameRigDisplay;
+        };
+
+        struct StartupFinished
+        {
+        };
+
+        using MsgVariant = std::variant<ConfigureRenderDevice*, ConfigureWindowInitialState*, ConfigureDevelopmentFeatures*, ConfigureFrameRigDisplay*, StartupFinished>;
+        MsgVariant Pump();
+
+        std::shared_ptr<RenderCore::IAPIInstance> _renderCoreAPIInstance;
+        std::shared_ptr<RenderCore::IDevice> _renderCoreDevice;
+        ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
+        std::unique_ptr<OSServices::Window> _osWindow;
+        std::unique_ptr<SampleRigApparatus> _sampleRigApparatus;
+        SampleGlobals _sampleGlobals;
+
+        StartupLoop();
+        ~StartupLoop();
+    private:
+        enum class Phase { Initial, PostConfigureRenderDevice, PostConfigureWindowInitialState, PostConfigureDevelopmentFeatures, PostConfigureFrameRigDisplay, Finished };
+        Phase _phase = Phase::Initial;
+
+        ConfigureRenderDevice _configRenderDevice;
+        ConfigureDevelopmentFeatures _configDevelopmentFeatures;
+        ConfigureFrameRigDisplay _configFrameRigDisplay;
+        ConfigureWindowInitialState _configWindowInitialState;
+    };
+
+    auto StartupLoop::Pump() -> MsgVariant
+    {
+        switch (_phase) {
+        case Phase::Initial:
+            {
+                _renderCoreAPIInstance = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
+
+                _assetServices = std::make_shared<::Assets::Services>();
+                _osWindow = std::make_unique<OSServices::Window>();
+
+                _phase = Phase::PostConfigureRenderDevice;
+                _configRenderDevice = {
+                    0, _renderCoreAPIInstance->QueryFeatureCapability(0),
+                    _renderCoreAPIInstance,
+                    0, _osWindow.get()
+                };
+                return &_configRenderDevice;
+            }
+
+        case Phase::PostConfigureRenderDevice:
+            {
+                _renderCoreDevice = _renderCoreAPIInstance->CreateDevice(_configRenderDevice._configurationIdx, _configRenderDevice._deviceFeatures);
+                _sampleRigApparatus = std::make_unique<SampleRigApparatus>(_renderCoreDevice);
+
+                _sampleGlobals._renderDevice = _renderCoreDevice;
+                _sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(_renderCoreDevice);
+                _sampleGlobals._overlayApparatus = std::make_shared<RenderOverlays::OverlayApparatus>(_sampleGlobals._drawingApparatus);
+                _sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_sampleGlobals._renderDevice);
+                _sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_sampleGlobals._renderDevice);
+                _sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(_osWindow), _sampleGlobals._drawingApparatus.get(), *_sampleGlobals._frameRenderingApparatus, _configRenderDevice._presentationChainBindFlags);
+                _sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(_sampleGlobals._overlayApparatus);
+
+                _phase = Phase::PostConfigureWindowInitialState;
+                _configWindowInitialState = { _sampleGlobals._windowApparatus->_osWindow.get() };
+                return &_configWindowInitialState;
+            }
+
+        case Phase::PostConfigureWindowInitialState:
+            _phase = Phase::PostConfigureDevelopmentFeatures;
+            return &_configDevelopmentFeatures;
+
+        case Phase::PostConfigureDevelopmentFeatures:
+            if (_configDevelopmentFeatures._useFrameRigSystemDisplay) {
+                auto& frameRig = *_sampleGlobals._windowApparatus->_frameRig;
+                auto frDisplay = frameRig.CreateDisplay(_sampleGlobals._debugOverlaysApparatus->_debugSystem, _sampleGlobals._windowApparatus->_mainLoadingContext);
+                PlatformRig::SetSystemDisplay(*_sampleGlobals._debugOverlaysApparatus->_debugSystem, frDisplay);
+                _phase = Phase::PostConfigureFrameRigDisplay;
+                _configFrameRigDisplay = { frDisplay };
+                return &_configFrameRigDisplay;
+            }
+
+            // intentional fall-through
+
+        case Phase::PostConfigureFrameRigDisplay:
+            if (_configDevelopmentFeatures._installDefaultDebuggingDisplays)
+                InstallDefaultDebuggingDisplays(_sampleGlobals);
+
+            for (const auto& dd:_configDevelopmentFeatures._additionalDebuggingDisplays)
+                _sampleGlobals._displayRegistrations.emplace_back(dd.first, std::move(dd.second));
+            _configDevelopmentFeatures._additionalDebuggingDisplays.clear();
+
+            if (_configDevelopmentFeatures._installHotKeysHandler)
+                _sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.dat"));
+            _sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(_sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem));
+
+            _sampleGlobals._windowApparatus->_frameRig->UpdatePresentationChain(*_sampleGlobals._windowApparatus->_presentationChain);
+            _sampleRigApparatus->_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_sampleGlobals._windowApparatus->_immediateContext);
+
+            // intentional fall-through
+
+        default:
+        case Phase::Finished:
+            _phase = Phase::Finished;
+            return StartupFinished{};
+        }
+    }
+
+    StartupLoop::StartupLoop() = default;
+    StartupLoop::~StartupLoop()
+    {
+        ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
+        if (_renderCoreDevice)
+            _renderCoreDevice->PrepareForDestruction();
+    }
+
     class MessageLoop
     {
     public:
@@ -213,83 +356,64 @@ namespace Sample
 
 	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, const SampleConfiguration& config)
     {
-            // XLE prefers to avoiding controlling the flow of execution
-            // (in order to promote integration with other systems)
-            // But one consequence of that is there isn't just a single Go() function
-            //      -- we have to do a little bit of configuration work here
-        Log(Verbose) << "Building primary managers" << std::endl;
-        auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
 
-        auto assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>();
-        auto rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
+        StartupLoop startup;
+        for (;;) {
+            auto msg = startup.Pump();
 
-        auto osWindow = std::make_unique<OSServices::Window>();
-        if (config._initialWindowSize)
-            osWindow->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
-        if (auto* vulkanInstance = query_interface_cast<RenderCore::IAPIInstanceVulkan*>(renderAPI.get())) {
-            Log(Verbose) << "-------------- vulkan instance --------------" << std::endl;
-            Log(Verbose) << vulkanInstance->LogInstance(osWindow->GetUnderlyingHandle()) << std::endl;
+            if (std::holds_alternative<StartupLoop::ConfigureRenderDevice*>(msg)) {
+                auto& pkt = *std::get<StartupLoop::ConfigureRenderDevice*>(msg);
 
-            auto count = renderAPI->GetDeviceConfigurationCount();
-            for (unsigned c=0; c<count; ++c) {
-                Log(Verbose) << "-------------- vulkan properties for device configuration (" << c << ") --------------" << std::endl;
-                Log(Verbose) << vulkanInstance->LogPhysicalDevice(c) << std::endl;
+                if (auto* vulkanInstance = query_interface_cast<RenderCore::IAPIInstanceVulkan*>(pkt._apiInstance.get())) {
+                    Log(Verbose) << "-------------- vulkan instance --------------" << std::endl;
+                    Log(Verbose) << vulkanInstance->LogInstance(pkt._window->GetUnderlyingHandle()) << std::endl;
+
+                    auto count = pkt._apiInstance->GetDeviceConfigurationCount();
+                    for (unsigned c=0; c<count; ++c) {
+                        Log(Verbose) << "-------------- vulkan properties for device configuration (" << c << ") --------------" << std::endl;
+                        Log(Verbose) << vulkanInstance->LogPhysicalDevice(c) << std::endl;
+                    }
+                }
+
+                pkt._presentationChainBindFlags = config._presentationChainBindFlags;
             }
+
+            else if (std::holds_alternative<StartupLoop::ConfigureWindowInitialState*>(msg)) {
+                auto& pkt = *std::get<StartupLoop::ConfigureWindowInitialState*>(msg);
+
+                 if (config._initialWindowSize)
+                    pkt._window->Resize((*config._initialWindowSize)[0], (*config._initialWindowSize)[1]);
+
+                auto v = startup._renderCoreDevice->GetDesc();
+                StringMeld<128> meld;
+                if (!config._windowTitle.empty()) meld << config._windowTitle;
+                else meld << "XLE sample";
+                meld << " [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]";
+                pkt._window->SetTitle(meld);
+            }
+
+            else if (std::holds_alternative<StartupLoop::ConfigureDevelopmentFeatures*>(msg)) {
+                auto& pkt = *std::get<StartupLoop::ConfigureDevelopmentFeatures*>(msg);
+
+                pkt._installDefaultDebuggingDisplays = true;
+                pkt._useFrameRigSystemDisplay = true;
+                pkt._installHotKeysHandler = true;
+            }
+
+            else if (std::holds_alternative<StartupLoop::StartupFinished>(msg)) {
+                break;
+            }
+
         }
 
-        auto capability = renderAPI->QueryFeatureCapability(0);
-        auto renderDevice = renderAPI->CreateDevice(0, capability);
-
-        SampleRigApparatus sampleRigApparatus{renderDevice};
-
-            // Many objects are initialized by via helper objects called "apparatuses". These construct and destruct
-            // the objects required to do meaningful work. Often they also initialize the "services" singletons
-            // as they go along
-            // We separate this initialization work like this to provide some flexibility. It's only necessary to
-            // construct as much as will be required for the specific use case 
-        SampleGlobals sampleGlobals;
-        sampleGlobals._renderDevice = std::move(renderDevice);
-        sampleGlobals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(sampleGlobals._renderDevice);
-        sampleGlobals._overlayApparatus = std::make_shared<RenderOverlays::OverlayApparatus>(sampleGlobals._drawingApparatus);
-        sampleGlobals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(sampleGlobals._renderDevice);
-        sampleGlobals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(sampleGlobals._renderDevice);
-        sampleGlobals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(osWindow), sampleGlobals._drawingApparatus.get(), *sampleGlobals._frameRenderingApparatus, config._presentationChainBindFlags);
-        sampleGlobals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(sampleGlobals._overlayApparatus);
-        {
-            auto v = sampleGlobals._renderDevice->GetDesc();
-            StringMeld<128> meld;
-            if (!config._windowTitle.empty()) meld << config._windowTitle;
-            else meld << "XLE sample";
-            meld << " [RenderCore: " << v._buildVersion << ", " << v._buildDate << "]";
-            sampleGlobals._windowApparatus->_osWindow->SetTitle(meld);
-        }
-
-        auto cleanup = AutoCleanup(
-            [rawosmnt, rd=sampleGlobals._renderDevice.get()]() {
-                Log(Verbose) << "Starting shutdown" << std::endl;
-                ::ConsoleRig::GlobalServices::GetInstance().PrepareForDestruction();
-                rd->PrepareForDestruction();
-                ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt);
-            });
-
-            //  Create the debugging system, and add any "displays"
-            //  If we have any custom displays to add, we can add them here. Often it's 
-            //  useful to create a debugging display to go along with any new feature. 
-            //  It just provides a convenient architecture for visualizing important information.
-        Log(Verbose) << "Setup tools and debugging" << std::endl;
+        auto& sampleGlobals = startup._sampleGlobals;
         auto& frameRig = *sampleGlobals._windowApparatus->_frameRig;
-        PlatformRig::SetSystemDisplay(*sampleGlobals._debugOverlaysApparatus->_debugSystem, frameRig.CreateDisplay(sampleGlobals._debugOverlaysApparatus->_debugSystem, sampleGlobals._windowApparatus->_mainLoadingContext));
-        InstallDefaultDebuggingDisplays(sampleGlobals);
 
-            // Final startup operations
-        Log(Verbose) << "Call OnStartup, prepare first frame and show window" << std::endl;
-        sampleOverlay->OnStartup(sampleGlobals);
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::MakeHotKeysHandler("rawos/hotkey.dat"));
-        sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleGlobals._debugOverlaysApparatus->_debugScreensOverlaySystem));
+        auto rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
+        auto cleanup = AutoCleanup([rawosmnt]() { ::Assets::MainFileSystem::GetMountingTree()->Unmount(rawosmnt); });
+
         sampleGlobals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleOverlay));
-
-        frameRig.UpdatePresentationChain(*sampleGlobals._windowApparatus->_presentationChain);
-        sampleRigApparatus._techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*sampleGlobals._windowApparatus->_immediateContext);
+        sampleOverlay->OnStartup(sampleGlobals);
 
             // Pump a single frame to ensure we have some content when the window appears (and then show it)
         {
@@ -311,7 +435,6 @@ namespace Sample
         sampleGlobals._windowApparatus->_osWindow->Show();
 
             //  Finally, we execute the frame loop. 
-        Log(Verbose) << "Beginning the frame loop" << std::endl;
         MessageLoop msgLoop{sampleGlobals._windowApparatus};
         for (;;) {
             auto msg = msgLoop.Pump();
