@@ -26,6 +26,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		ShaderLab_LightingEngine.cpp
 		SampleUtils.cpp
 		MiscUtils.cpp
+		CameraManager.cpp
+		UnitCamera.cpp
 		../EntityInterface/EntityInterface.cpp
 		../EntityInterface/FormatterAdapters.cpp
 		../EntityInterface/RetainedEntities.cpp

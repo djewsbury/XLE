@@ -5,16 +5,16 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "UnitCamera.h"
-#include "../RenderOverlays/DebuggingDisplay.h"
-#include "../Utility/MemoryUtils.h"
-#include "../ConsoleRig/Console.h"
-#include "../Math/Interpolation.h"
+#include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../Utility/MemoryUtils.h"
+#include "../../ConsoleRig/Console.h"
+#include "../../Math/Interpolation.h"
 
-namespace PlatformRig { namespace Camera
+namespace ToolsRig { namespace Camera
 {
     float UnitCamManager::UnitScaleFactor() const
     {
-        return 100.f / _charactersScale;
+        return _charactersScale;
     }
 
     UnitCamManager::UnitCamManager(float charactersScale)

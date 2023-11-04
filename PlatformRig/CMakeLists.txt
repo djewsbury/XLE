@@ -2,7 +2,6 @@
 foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
     set(Src
-        CameraManager.cpp
         DebugHotKeys.cpp
         FrameRig.cpp
         MainInputHandler.cpp
@@ -10,7 +9,6 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         PlatformApparatuses.cpp
         PlatformRigUtil.cpp
         Screenshot.cpp
-        UnitCamera.cpp
         DebugScreensOverlay.cpp
         DebugScreenRegistry.cpp
         TopBar.cpp

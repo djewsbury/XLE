@@ -17,8 +17,9 @@
 #include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/LayoutEngine.h"
-#include "../../PlatformRig/CameraManager.h"
+#include "../../Tools/ToolsRig/CameraManager.h"
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
+#include "../../Tools/ToolsRig/VisualisationUtils.h"
 #include "../../Math/ProjectionMath.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
@@ -473,7 +474,9 @@ namespace UnitTests
 				const OSServices::InputSnapshot& evnt,
 				IInteractiveTestHelper& testHelper) override
 			{
-				PlatformRig::Camera::UpdateCamera_Slew(_mainCamera, 1.f/60.f/100.f, evnt);
+				auto mc = ToolsRig::AsVisCameraSettings(_mainCamera);
+				ToolsRig::Camera::Slew{}.Update(mc, 1.f/60.f/100.f, evnt);
+				_mainCamera = ToolsRig::AsCameraDesc(mc);
 				return true;
 			}
 		};

@@ -4,12 +4,11 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../Core/Types.h"
-#include "../Math/Transformations.h"
+#include "../../Math/Transformations.h"
 
 namespace OSServices { class InputSnapshot; }
 
-namespace PlatformRig { namespace Camera
+namespace ToolsRig { namespace Camera
 {
 
     static const float Fov = 40.f;
@@ -52,7 +51,7 @@ namespace PlatformRig { namespace Camera
         float tiltPitch;
 
         float rotateDamping;
-        uint32 ratateDampingFrameID;
+        uint32_t ratateDampingFrameID;
 
         float fov;
 
@@ -74,17 +73,17 @@ namespace PlatformRig { namespace Camera
 
         float slowDownTimer;
         float slowDownStartDist;
-        uint32 flags;
+        uint32_t flags;
 
         bool controllerDependent;
         float controllerSpeedRate;
 
         bool enabled;
 
-        void AddFlags(uint32 f) { flags |= f; }
-        void RemoveFlags(uint32 f) { flags &= ~f; }
-        void SetFlags(uint32 f) { flags = f; }
-        bool HasFlags(uint32 f) const { return ((flags & f) == f); }
+        void AddFlags(uint32_t f) { flags |= f; }
+        void RemoveFlags(uint32_t f) { flags &= ~f; }
+        void SetFlags(uint32_t f) { flags = f; }
+        bool HasFlags(uint32_t f) const { return ((flags & f) == f); }
 
         void Reset();
 
