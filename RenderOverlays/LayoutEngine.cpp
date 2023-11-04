@@ -108,7 +108,7 @@ namespace RenderOverlays
 				i->_drawDelegate(draw, frame, content);
 
 			if (i->_ioDelegate)
-				draw.GetInteractables().Register({content, i->GetGuid()});
+				draw.GetInteractables().Register(content, i->GetGuid());
 		}
 	}
 
@@ -134,6 +134,12 @@ namespace RenderOverlays
 	{
 		assert(!_workingStack.empty());
 		YGNodeInsertChild(_workingStack.top(), node, YGNodeGetChildCount(_workingStack.top()));
+	}
+
+	YGNodeRef LayoutEngine::GetTopmostNode()
+	{
+		assert(!_workingStack.empty());
+		return _workingStack.top();
 	}
 
 	void LayoutEngine::PushNode(YGNodeRef node)
@@ -198,7 +204,15 @@ namespace RenderOverlays
 		return result;
 	}
 
-	LayedOutWidgets LayoutEngine::BuildLayedOutWidgets()
+	ImbuedNode* LayoutEngine::Find(uint64_t guid)
+	{
+		for (auto r=_imbuedNodes.rbegin(); r!=_imbuedNodes.rend(); ++r)
+			if ((*r)->Guid() == guid)
+				return r->get();
+		return nullptr;
+	}
+
+	LayedOutWidgets LayoutEngine::BuildLayedOutWidgets(Coord2 offsetToOutput, std::optional<Rect> viewportRect)
 	{
 		// If you hit this, it means that a node was using PushNode, but not popped with PopNode. It probably means that
 		// there's container type node that wasn't closed
@@ -223,41 +237,59 @@ namespace RenderOverlays
 			YGNodeCalculateLayout(r.first, (float)r.second.Width(), (float)r.second.Height(), YGDirectionInherit); // YGDirectionLTR);
 
 		result._layedOutLocations.reserve(_imbuedNodes.size());
-		for (auto& n:_imbuedNodes)
-			if (n->_nodeAttachments._drawDelegate || n->_postCalculateDelegate) {
-				auto ygNode = n->YGNode();
-				Float2 topLeft { YGNodeLayoutGetLeft(ygNode), YGNodeLayoutGetTop(ygNode) };
-				auto parent = YGNodeGetParent(ygNode);
-				while (parent) {
-					topLeft += Float2 { YGNodeLayoutGetLeft(parent), YGNodeLayoutGetTop(parent) };
-					parent = YGNodeGetParent(parent);
-				}
-				topLeft += _roots[n->_rootIndex].second._topLeft;
-				Float2 bottomRight;
-				bottomRight[0] = topLeft[0] + (int)YGNodeLayoutGetWidth(ygNode);
-				bottomRight[1] = topLeft[1] + (int)YGNodeLayoutGetHeight(ygNode);
+		for (auto& n:_imbuedNodes) {
 
-				// transform to final frame & content rect (floor to integer here)
-				Rect frame { topLeft, bottomRight };
-				Rect content {
-					topLeft + Int2{ YGNodeLayoutGetPadding(ygNode, YGEdgeLeft), YGNodeLayoutGetPadding(ygNode, YGEdgeTop) },
-					bottomRight - Int2{ YGNodeLayoutGetPadding(ygNode, YGEdgeRight), YGNodeLayoutGetPadding(ygNode, YGEdgeBottom) }
-				};
+			auto ygNode = n->YGNode();
+			Float2 topLeft { YGNodeLayoutGetLeft(ygNode), YGNodeLayoutGetTop(ygNode) };
+			auto parent = YGNodeGetParent(ygNode);
+			while (parent) {
+				topLeft += Float2 { YGNodeLayoutGetLeft(parent), YGNodeLayoutGetTop(parent) };
+				parent = YGNodeGetParent(parent);
+			}
+			topLeft += _roots[n->_rootIndex].second._topLeft;
+			topLeft += offsetToOutput;
+			Float2 bottomRight;
+			bottomRight[0] = topLeft[0] + (int)YGNodeLayoutGetWidth(ygNode);
+			bottomRight[1] = topLeft[1] + (int)YGNodeLayoutGetHeight(ygNode);
 
+			// transform to final frame & content rect (floor to integer here)
+			Rect frame { topLeft, bottomRight };
+			Rect content {
+				topLeft + Int2{ YGNodeLayoutGetPadding(ygNode, YGEdgeLeft), YGNodeLayoutGetPadding(ygNode, YGEdgeTop) },
+				bottomRight - Int2{ YGNodeLayoutGetPadding(ygNode, YGEdgeRight), YGNodeLayoutGetPadding(ygNode, YGEdgeBottom) }
+			};
+
+			if (!viewportRect.has_value() || Intersects(*viewportRect, frame)) {
 				result._layedOutLocations.emplace_back(frame, content);
 
 				if (n->_postCalculateDelegate)
 					n->_postCalculateDelegate(ygNode, frame, content);
-
 			} else {
-				Rect zero { Coord2(0,0), Coord2(0,0) };
-				result._layedOutLocations.emplace_back(zero, zero);
+				result._layedOutLocations.emplace_back(Rect{0,0,0,0}, Rect{0,0,0,0});
 			}
+
+		}
 
 		result._dimensions = {
 			YGNodeLayoutGetWidth(_roots[0].first),
 			YGNodeLayoutGetHeight(_roots[0].first)
 		};
+
+		result._mins = Coord2 { std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max() };
+		result._maxs = Coord2 { std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min() };
+		auto childCount = YGNodeGetChildCount(_roots[0].first);
+		for (unsigned c=0; c<childCount; c++) {
+			auto* child = YGNodeGetChild(_roots[0].first, c);
+			Float2 topLeft { YGNodeLayoutGetLeft(child), YGNodeLayoutGetTop(child) };
+			topLeft += Float2 { YGNodeLayoutGetLeft(_roots[0].first), YGNodeLayoutGetRight(_roots[0].first) };
+			Float2 bottomRight = topLeft + Float2 { YGNodeLayoutGetWidth(child), YGNodeLayoutGetHeight(child) };
+			result._mins[0] = std::min(result._mins[0], (Coord)topLeft[0]);
+			result._mins[1] = std::min(result._mins[1], (Coord)topLeft[1]);
+			result._maxs[0] = std::max(result._maxs[0], (Coord)bottomRight[0]);
+			result._maxs[1] = std::max(result._maxs[1], (Coord)bottomRight[1]);
+		}
+		result._mins += offsetToOutput;
+		result._maxs += offsetToOutput;
 
 		result._nodeAttachments.reserve(_imbuedNodes.size());
 		for (auto& n:_imbuedNodes)

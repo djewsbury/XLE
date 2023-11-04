@@ -99,6 +99,7 @@ namespace RenderOverlays
 		std::vector<std::pair<Rect, Rect>> _layedOutLocations;
 		std::vector<NodeDelegates> _nodeAttachments;
 		Coord2 _dimensions;
+		Coord2 _mins, _maxs;
 
 		void Draw(DrawContext& draw, const Float3x3& transform = Identity<Float3x3>());
 		PlatformRig::ProcessInputResult ProcessInput(IOContext&, const Float3x3& transform = Identity<Float3x3>());
@@ -121,6 +122,8 @@ namespace RenderOverlays
 	public:
 		uint64_t MakeGuid(StringSection<> name) { return Hash64(name, _guidStack.top()); }
 		uint64_t MakeGuid(StringSection<> name, StringSection<> concatenation) { return Hash64(name, Hash64(concatenation, _guidStack.top())); }
+		uint64_t MakeGuid(uint64_t guid) { return HashCombine(guid, _guidStack.top()); }
+		uint64_t MakeGuid() { return IntegerHash64(_incrementingId++) ^ _guidStack.top(); }
 
 		void push(uint64_t guid) { return _guidStack.push(guid); }
 		void pop() { return _guidStack.pop(); }
@@ -131,6 +134,7 @@ namespace RenderOverlays
 		{
 			_guidStack = {};
 			_guidStack.push(DefaultSeed64);
+			_incrementingId = 0;
 		}
 
 		GuidStackHelper()
@@ -139,6 +143,7 @@ namespace RenderOverlays
 		}
 	private:
 		std::stack<uint64_t> _guidStack;
+		unsigned _incrementingId = 0;
 	};
 
 	class LayoutEngine
@@ -153,9 +158,12 @@ namespace RenderOverlays
 		YGNodeRef InsertAndPushNewNode();
 		ImbuedNode* InsertAndPushNewImbuedNode(uint64_t guid);
 
-		LayedOutWidgets BuildLayedOutWidgets();
+		ImbuedNode* Find(uint64_t guid);
+
+		LayedOutWidgets BuildLayedOutWidgets(Coord2 offsetToOutput = Coord2(0,0), std::optional<Rect> viewportRect = {});
 
 		void InsertChildToStackTop(YGNodeRef);
+		YGNodeRef GetTopmostNode();
 		void PushNode(YGNodeRef);
 		void PopNode();
 
