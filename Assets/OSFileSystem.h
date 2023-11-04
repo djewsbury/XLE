@@ -16,7 +16,7 @@ namespace Assets
 
 	namespace OSFileSystemFlags
 	{
-		enum Flags { AllowAbsolute = 1<<0, IgnorePaths = 1<<1 };
+		enum Flags { AllowAbsolute = 1u<<0u, IgnorePaths = 1u<<1u, CacheDirectories = 1<<2u };
 		using BitField = unsigned;
 	}
 

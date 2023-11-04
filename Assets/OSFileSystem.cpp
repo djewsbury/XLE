@@ -6,10 +6,11 @@
 
 #include "OSFileSystem.h"
 #include "IFileSystem.h"
+#include "../OSServices/FileSystemMonitor.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/Streams/PathUtils.h"
-#include "../OSServices/FileSystemMonitor.h"
 #include "../Utility/Conversion.h"
+#include "../Utility/Threading/Mutex.h"
 #include "../Core/Exceptions.h"
 #include "wildcards.hpp"
 #include <sstream>
@@ -126,6 +127,13 @@ namespace Assets
 		std::basic_string<utf16> _rootUTF16;
 		OSFileSystemFlags::BitField _flags;
 		std::shared_ptr<OSServices::RawFSMonitor> _fileSystemMonitor;
+
+		Threading::Mutex _cacheLock;
+		struct CachedDirectory { unsigned _start, _end; };
+		std::vector<std::pair<uint64_t, CachedDirectory>> _cachedDirectory;
+		std::vector<uint64_t> _cachedFns;
+		bool LookupInCache(uint64_t directoryHash, uint64_t fnHash, StringSection<utf8> fn);
+		bool LookupInCache(uint64_t directoryHash, uint64_t fnHash, StringSection<utf16> fn);
 	};
 
 	template<typename CharType>
@@ -140,6 +148,58 @@ namespace Assets
 			++filename._start;
 		}
 		return false;
+	}
+
+	bool FileSystem_OS::LookupInCache(uint64_t directoryHash, uint64_t fnHash, StringSection<utf8> fn)
+	{
+		ScopedLock(_cacheLock);
+		auto i = LowerBound(_cachedDirectory, directoryHash);
+		if (i == _cachedDirectory.end() || i->first != directoryHash) {
+			// build the cache
+			auto dirName = MakeFileNameSplitter(fn).DriveAndPath();
+			
+			char buffer[_rootUTF8.size() + dirName.Length() + 2 + 1];
+			std::copy(_rootUTF8.begin(), _rootUTF8.end(), buffer);
+			std::copy(dirName.begin(), dirName.end(), &buffer[_rootUTF8.size()]);
+			buffer[_rootUTF8.size() + dirName.Length()] = '/';
+			buffer[_rootUTF8.size() + dirName.Length()+1] = '*';
+			buffer[_rootUTF8.size() + dirName.Length()+2] = 0;
+
+			auto start = (unsigned)_cachedFns.size();
+			OSServices::FindFiles(_cachedFns, buffer, OSServices::FindFilesFilter::File, s_defaultFilenameRules);
+			i = _cachedDirectory.insert(i, std::make_pair(directoryHash, CachedDirectory{start, (unsigned)_cachedFns.size()}));
+			std::sort(_cachedFns.begin()+i->second._start, _cachedFns.begin()+i->second._end);
+		}
+		auto e = _cachedFns.begin()+i->second._end;
+		auto i2 = std::lower_bound(_cachedFns.begin()+i->second._start, e, fnHash);
+		return i2 != e && *i2 == fnHash;
+	}
+
+	bool FileSystem_OS::LookupInCache(uint64_t directoryHash, uint64_t fnHash, StringSection<utf16> fn)
+	{
+		ScopedLock(_cacheLock);
+		auto i = LowerBound(_cachedDirectory, directoryHash);
+		if (i == _cachedDirectory.end() || i->first != directoryHash) {
+			// build the cache
+			// convert to utf8, because we need to be in utf8 to call OSServices::FindFiles(), anyway
+			auto utf8Fn = Conversion::Convert<std::string>(fn);
+			auto dirName = MakeFileNameSplitter(utf8Fn).DriveAndPath();
+			
+			char buffer[_rootUTF8.size() + dirName.Length() + 2 + 1];
+			std::copy(_rootUTF8.begin(), _rootUTF8.end(), buffer);
+			std::copy(dirName.begin(), dirName.end(), &buffer[_rootUTF8.size()]);
+			buffer[_rootUTF8.size() + dirName.Length()] = '/';
+			buffer[_rootUTF8.size() + dirName.Length()+1] = '*';
+			buffer[_rootUTF8.size() + dirName.Length()+2] = 0;
+
+			auto start = (unsigned)_cachedFns.size();
+			OSServices::FindFiles(_cachedFns, buffer, OSServices::FindFilesFilter::File, s_defaultFilenameRules);
+			i = _cachedDirectory.insert(i, std::make_pair(directoryHash, CachedDirectory{start, (unsigned)_cachedFns.size()}));
+			std::sort(_cachedFns.begin()+i->second._start, _cachedFns.begin()+i->second._end);
+		}
+		auto e = _cachedFns.begin()+i->second._end;
+		auto i2 = std::lower_bound(_cachedFns.begin()+i->second._start, e, fnHash);
+		return i2 != e && *i2 == fnHash;
 	}
 
 	auto FileSystem_OS::TryTranslate(Marker& result, StringSection<utf8> filename) -> TranslateResult
@@ -169,6 +229,12 @@ namespace Assets
 			auto splitName = MakeFileNameSplitter(filename);
 			name = splitName.FileAndExtension();
 		}
+		if (_flags & OSFileSystemFlags::CacheDirectories) {
+			auto split = MakeFileNameSplitter(filename);
+			if (!LookupInCache(HashFilenameAndPath(split.DriveAndPath(), s_defaultFilenameRules), HashFilename(split.FileAndExtension(), s_defaultFilenameRules), filename))
+				return TranslateResult::Invalid;
+		}
+
 		result.resize(2 + (_rootUTF8.size() + name.Length() + 1) * sizeof(utf8));
 		auto* out = AsPointer(result.begin());
 		*(uint16*)out = 1;
@@ -192,6 +258,12 @@ namespace Assets
 			auto splitName = MakeFileNameSplitter(filename);
 			name = splitName.FileAndExtension();
 		}
+		if (_flags & OSFileSystemFlags::CacheDirectories) {
+			auto split = MakeFileNameSplitter(filename);
+			if (!LookupInCache(HashFilenameAndPath(split.DriveAndPath(), s_defaultFilenameRules), HashFilename(split.FileAndExtension(), s_defaultFilenameRules), filename))
+				return TranslateResult::Invalid;
+		}
+
 		result.resize(2 + (_rootUTF16.size() + name.Length() + 1) * sizeof(utf16));
 		auto* out = AsPointer(result.begin());
 		*(uint16*)out = 2;
