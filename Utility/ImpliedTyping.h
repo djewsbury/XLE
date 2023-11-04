@@ -23,38 +23,34 @@ namespace Utility
             TypeHint    _typeHint = TypeHint::None;
             uint32_t    _arrayCount = 1;
 
-            uint32_t GetSize() const;
+            constexpr uint32_t GetSize() const;
             constexpr TypeDesc() = default;
             constexpr TypeDesc(TypeCat typeCat, uint32_t arrayCount = 1, TypeHint typeHint = TypeHint::None) : _type(typeCat), _typeHint(typeHint), _arrayCount(arrayCount) {}
 
             template<typename Stream> void SerializeMethod(Stream& serializer) const;
-            friend bool operator==(const TypeDesc& lhs, const TypeDesc& rhs);
+            friend constexpr bool operator==(const TypeDesc& lhs, const TypeDesc& rhs);
         };
 
-        /// Calculate type of an object given in string form.
-        /// Object should be formatted in one of the following C++ like patterns:
-        /// 
-        ///  "1u" (or "1ui" or "1ul", etc)
-        ///  "1b" (or "true" or "false")
-        ///  ".3" (or "0.3f", etc)
-        ///  "{1u, 2u, 3u}" (or "[1u, 2u, 3u]")
-        ///  "{1u, 2u, 3u}c" or "{1u, 2u, 3u}v"
-        ///
-        /// This is intended for storing common basic types in text files, and 
-        /// for use while entering data in tools. We want the type of the data to
-        /// be implied by the string representing the data (without needing an
-        /// extra field to describe the type).
-        ///
-        /// This kind of thing is useful when interfacing with scripting languages
-        /// like HLSL and Lua. There are only a few basic types that we need
-        /// to support.
-        ///
-        /// But sometimes we also want to had hints for out to interpret the data.
-        /// For example, 3 floats could be a vector or a colour. We will use C++
-        /// like postfix characters for this (eg, "{1,1,1}c" is a color)
-        TypeDesc TypeOf(const char expression[]);
-
-        // "template<typename Type> TypeDesc TypeOf()" is declared below
+        // Object should be formatted in one of the following C++ like patterns:
+        // 
+        //  "1u" (or "1ui" or "1ul", etc)
+        //  "1b" (or "true" or "false")
+        //  ".3" (or "0.3f", etc)
+        //  "{1u, 2u, 3u}" (or "[1u, 2u, 3u]")
+        //  "{1u, 2u, 3u}c" or "{1u, 2u, 3u}v"
+        //
+        // This is intended for storing common basic types in text files, and 
+        // for use while entering data in tools. We want the type of the data to
+        // be implied by the string representing the data (without needing an
+        // extra field to describe the type).
+        //
+        // This kind of thing is useful when interfacing with scripting languages
+        // like HLSL and Lua. There are only a few basic types that we need
+        // to support.
+        //
+        // But sometimes we also want to had hints for out to interpret the data.
+        // For example, 3 floats could be a vector or a colour. We will use C++
+        // like postfix characters for this (eg, "{1,1,1}c" is a color)
 
         // Two similar breeds of functions below:
         //      Parse / ParseFullMatch
@@ -162,6 +158,27 @@ namespace Utility
             StringSection<> op,
             const VariantNonRetained& operand);
 
+        struct VariantRetained
+        {
+            TypeDesc _type = TypeCat::Void;
+            char _smallBuffer[2*sizeof(uint64_t)];
+            std::vector<uint8_t> _largeBuffer;
+            bool _reverseEndian = false;
+
+            operator VariantNonRetained() const;
+
+            template<typename DestType>
+                DestType RequireCastValue() const;
+
+            template<typename DestType>
+                std::optional<DestType> TryCastValue() const;
+
+            template<typename SrcType>
+                VariantRetained(SrcType);
+            VariantRetained(TypeDesc, IteratorRange<const void*>, bool reverseEndian=false);
+            VariantRetained() = default;
+        };
+
         //////////////////////////////////////////////////////////////////////////////////////
             // Template implementations //
         //////////////////////////////////////////////////////////////////////////////////////
@@ -191,7 +208,38 @@ namespace Utility
         constexpr TypeDesc InternalTypeOf(const std::basic_string<ucs4>*)     { return TypeDesc{TypeCat::UInt32, (uint32_t)~uint32_t(0), TypeHint::String}; }
 
         template<typename Type> 
-            decltype(InternalTypeOf(std::declval<Type const*>())) TypeOf() { return InternalTypeOf((Type const*)nullptr); }
+            constexpr decltype(InternalTypeOf(std::declval<Type const*>())) TypeOf() { return InternalTypeOf((Type const*)nullptr); }
+
+        constexpr uint32_t TypeDesc::GetSize() const
+        {
+            switch (_type) {
+            case TypeCat::Bool: return sizeof(bool)*unsigned(_arrayCount);
+
+            case TypeCat::Int8:
+            case TypeCat::UInt8: return sizeof(uint8_t)*unsigned(_arrayCount);
+
+            case TypeCat::Int16:
+            case TypeCat::UInt16: return sizeof(uint16_t)*unsigned(_arrayCount);
+
+            case TypeCat::Int32:
+            case TypeCat::UInt32:
+            case TypeCat::Float: return sizeof(uint32_t)*unsigned(_arrayCount);
+
+            case TypeCat::Int64:
+            case TypeCat::UInt64:
+            case TypeCat::Double: return sizeof(uint64_t)*unsigned(_arrayCount);
+
+            case TypeCat::Void:
+            default: return 0;
+            }
+        }
+
+        constexpr bool operator==(const TypeDesc& lhs, const TypeDesc& rhs)
+        {
+                // (note -- ignoring type hint for this comparison (because the hint isn't actually related to the structure of the data)
+            return lhs._type == rhs._type
+                && lhs._arrayCount == rhs._arrayCount;
+        }
 
         template<typename Type>
             inline std::string AsString(const Type& type, bool strongTyping)
@@ -237,9 +285,6 @@ namespace Utility
         template<typename DestType>
             DestType VariantNonRetained::RequireCastValue() const
         {
-            if (_type._type == TypeCat::Void)
-                Throw(std::runtime_error("Attempting to read void value"));
-
             bool srcIsString = ((_type._type == TypeCat::Int8) || (_type._type == TypeCat::UInt8)) && _type._typeHint == TypeHint::String;
             if constexpr (std::is_same_v<std::decay_t<DestType>, std::string>) {
                 if (srcIsString) {
@@ -248,6 +293,7 @@ namespace Utility
                     std::memcpy(result.data(), _data.begin(), result.size());
                     return result;
                 } else {
+                    // note that void just becomes an empty string
                     if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
                         ReversedEndianHelper helper { _data, _type };
                         return AsString(helper._reversedData, _type);
@@ -262,6 +308,9 @@ namespace Utility
                         return casted;
                     Throw(std::runtime_error("Could not interpret (" + str.AsString() + ") as " + typeid(DestType).name()));
                 } else {
+                    if (_type._type == TypeCat::Void)
+                        Throw(std::runtime_error("Attempting to read void value in VariantNonRetained"));
+
                     if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
                         ReversedEndianHelper helper { _data, _type };
                         DestType result;
@@ -320,6 +369,134 @@ namespace Utility
                     }
                 }
             }
+        }
+
+        inline VariantRetained::operator VariantNonRetained() const
+        {
+            auto size = _type.GetSize();
+            if (size <= sizeof(_smallBuffer)) {
+                return VariantNonRetained { _type, MakeIteratorRange(_smallBuffer, _smallBuffer+size), _reverseEndian };
+            } else {
+                assert(_largeBuffer.size() == size);
+                return VariantNonRetained { _type, MakeIteratorRange(_largeBuffer), _reverseEndian };
+            }
+        }
+
+        inline VariantRetained::VariantRetained(TypeDesc type, IteratorRange<const void*> data, bool reverseEndian)
+        : _type(type), _reverseEndian(reverseEndian)
+        {
+            assert(_type.GetSize() == data.size());
+            if (data.size() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)data.begin(), (const uint8_t*)data.end(), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)data.begin(), (const uint8_t*)data.end());
+        }
+
+        template<typename DestType>
+            inline DestType VariantRetained::RequireCastValue() const { return operator VariantNonRetained().RequireCastValue<DestType>(); }
+
+        template<typename DestType>
+            inline std::optional<DestType> VariantRetained::TryCastValue() const { return operator VariantNonRetained().TryCastValue(); }
+
+        template<typename SrcType>
+            VariantRetained::VariantRetained(SrcType src)
+        {
+            using S = std::decay_t<SrcType>;
+            static_assert(TypeOf<S>()._type != TypeCat::Void, "VariantRetained constructed with type that cannot be represented with the ImpliedTyping system");
+            static_assert(TypeOf<S>().GetSize() == sizeof(SrcType));
+            _type = TypeOf<S>();
+            if constexpr (sizeof(SrcType) <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)&src, (const uint8_t*)(&src+1), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)&src, (const uint8_t*)(&src+1));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(const char s[])
+        {
+            _type = TypeOf<const char*>();
+            _type._arrayCount = XlStringSize(s);
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(const utf16 s[])
+        {
+            _type = TypeOf<const utf16*>();
+            _type._arrayCount = XlStringSize(s);
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(const utf32 s[])
+        {
+            _type = TypeOf<const utf32*>();
+            _type._arrayCount = XlStringSize(s);
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(const ucs4 s[])
+        {
+            _type = TypeOf<const ucs4*>();
+            _type._arrayCount = XlStringSize(s);
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(std::basic_string<char> str)
+        {
+            _type = TypeOf<std::basic_string<char>>();
+            _type._arrayCount = str.size();
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)str.data(), (const uint8_t*)(str.data()+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(std::basic_string<utf16> str)
+        {
+            _type = TypeOf<std::basic_string<utf16>>();
+            _type._arrayCount = str.size();
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)str.data(), (const uint8_t*)(str.data()+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(std::basic_string<utf32> str)
+        {
+            _type = TypeOf<std::basic_string<utf32>>();
+            _type._arrayCount = str.size();
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)str.data(), (const uint8_t*)(str.data()+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(std::basic_string<ucs4> str)
+        {
+            _type = TypeOf<std::basic_string<ucs4>>();
+            _type._arrayCount = str.size();
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)str.data(), (const uint8_t*)(str.data()+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
     }
 }

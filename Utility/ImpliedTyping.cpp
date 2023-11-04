@@ -11,44 +11,6 @@
 
 namespace Utility { namespace ImpliedTyping
 {
-    uint32_t TypeDesc::GetSize() const
-    {
-        switch (_type) {
-        case TypeCat::Bool: return sizeof(bool)*unsigned(_arrayCount);
-
-        case TypeCat::Int8:
-        case TypeCat::UInt8: return sizeof(uint8_t)*unsigned(_arrayCount);
-
-        case TypeCat::Int16:
-        case TypeCat::UInt16: return sizeof(uint16_t)*unsigned(_arrayCount);
-
-        case TypeCat::Int32:
-        case TypeCat::UInt32:
-        case TypeCat::Float: return sizeof(uint32_t)*unsigned(_arrayCount);
-
-        case TypeCat::Int64:
-        case TypeCat::UInt64:
-        case TypeCat::Double: return sizeof(uint64_t)*unsigned(_arrayCount);
-
-        case TypeCat::Void:
-        default: return 0;
-        }
-    }
-
-    bool operator==(const TypeDesc& lhs, const TypeDesc& rhs)
-    {
-            // (note -- ignoring type hint for this comparison (because the hint isn't actually related to the structure of the data)
-        return lhs._type == rhs._type
-            && lhs._arrayCount == rhs._arrayCount;
-    }
-
-    TypeDesc TypeOf(const char expression[]) 
-    {
-            // not implemented
-        assert(0);
-        return TypeDesc{};
-    }
-
     bool Cast(
         IteratorRange<void*> dest, TypeDesc destType,
         IteratorRange<const void*> rawSrc, TypeDesc srcType)
@@ -1377,7 +1339,8 @@ namespace Utility { namespace ImpliedTyping
             if (desc._type == TypeCat::UInt16 || desc._type == TypeCat::Int16) {
                 return Conversion::Convert<std::string>(std::basic_string<utf16>((const utf16*)data.begin(), (const utf16*)PtrAdd(data.begin(), desc._arrayCount * sizeof(utf16))));
             }
-        }
+        } else if (desc._type == TypeCat::Void)
+            return {};
 
         std::stringstream result;
         assert(data.size() >= desc.GetSize());
