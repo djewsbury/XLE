@@ -31,41 +31,41 @@ namespace XLEMath
         //      <math.h> by setting "_USE_MATH_DEFINES". But that just seems
         //      silly.
         //
-    static const float gE               = 2.71828182845904523536f;
-    static const float gLog2E           = 1.44269504088896340736f;
-    static const float gLog10E          = 0.434294481903251827651f;
-    static const float gLn2             = 0.693147180559945309417f;
-    static const float gLn10            = 2.30258509299404568402f;
-    static const float gPI              = 3.14159265358979323846f;
-    static const float gHalfPI          = 1.57079632679489661923f;
-    static const float gQuarterPI       = 0.785398163397448309616f;
-    static const float gSqrt2           = 1.41421356237309504880f;
-    static const float gReciprocalSqrt2 = 0.707106781186547524401f;
-    static const float gSqrtHalf        = 0.707106781186547524401f;
+    static constexpr float gE               = 2.71828182845904523536f;
+    static constexpr float gLog2E           = 1.44269504088896340736f;
+    static constexpr float gLog10E          = 0.434294481903251827651f;
+    static constexpr float gLn2             = 0.693147180559945309417f;
+    static constexpr float gLn10            = 2.30258509299404568402f;
+    static constexpr float gPI              = 3.14159265358979323846f;
+    static constexpr float gHalfPI          = 1.57079632679489661923f;
+    static constexpr float gQuarterPI       = 0.785398163397448309616f;
+    static constexpr float gSqrt2           = 1.41421356237309504880f;
+    static constexpr float gReciprocalSqrt2 = 0.707106781186547524401f;
+    static constexpr float gSqrtHalf        = 0.707106781186547524401f;
 
         //
         //      Prefer Xl... functions over using the standard library math
         //      functions directly.
         //
-    inline float XlSin(float radians)                   { return std::sin(radians); }
-    inline float XlCos(float radians)                   { return std::cos(radians); }
-    inline float XlTan(float radians)                   { return std::tan(radians); }
-    inline float XlASin(float x)                        { return std::asin(x); }
-    inline float XlACos(float x)                        { return std::acos(x); }
-    inline float XlATan(float x)                        { return std::atan(x); }
-    inline float XlATan2(float y, float x)              { return std::atan2(y, x); }
-    inline float XlCotangent(float radians)             { return 1.f/std::tan(radians); }
-    inline float XlFMod(float value, float modulo)      { return std::fmod(value, modulo); }
-    inline float XlAbs(float value)                     { return std::abs(value); }
-    inline float XlFloor(float value)                   { return std::floor(value); }
-    inline float XlCeil(float value)                    { return std::ceil(value); }
-    inline float XlExp(float value)                     { return std::exp(value); }
-    inline float XlLog(float value)                     { return std::log(value); }
+    constexpr float XlSin(float radians)                   { return std::sin(radians); }
+    constexpr float XlCos(float radians)                   { return std::cos(radians); }
+    constexpr float XlTan(float radians)                   { return std::tan(radians); }
+    constexpr float XlASin(float x)                        { return std::asin(x); }
+    constexpr float XlACos(float x)                        { return std::acos(x); }
+    constexpr float XlATan(float x)                        { return std::atan(x); }
+    constexpr float XlATan2(float y, float x)              { return std::atan2(y, x); }
+    constexpr float XlCotangent(float radians)             { return 1.f/std::tan(radians); }
+    constexpr float XlFMod(float value, float modulo)      { return std::fmod(value, modulo); }
+    constexpr float XlAbs(float value)                     { return std::abs(value); }
+    constexpr float XlFloor(float value)                   { return std::floor(value); }
+    constexpr float XlCeil(float value)                    { return std::ceil(value); }
+    constexpr float XlExp(float value)                     { return std::exp(value); }
+    constexpr float XlLog(float value)                     { return std::log(value); }
 
-    T1(Primitive) inline Primitive XlSqrt(Primitive value)      { return std::sqrt(value); }
-    T1(Primitive) inline Primitive XlRSqrt(Primitive value)     { return Primitive(1) / std::sqrt(value); }  // no standard reciprocal sqrt?
+    T1(Primitive) constexpr Primitive XlSqrt(Primitive value)      { return std::sqrt(value); }
+    T1(Primitive) constexpr Primitive XlRSqrt(Primitive value)     { return Primitive(1) / std::sqrt(value); }  // no standard reciprocal sqrt?
 
-    T1(Primitive) inline bool XlRSqrt_Checked(Primitive* output, Primitive value)                   
+    T1(Primitive) constexpr bool XlRSqrt_Checked(Primitive* output, Primitive value)                   
     {
         assert(output);
             // this is used by Normalize_Checked to check for vectors
@@ -77,15 +77,15 @@ namespace XLEMath
         return true;
     }
 
-    T1(Primitive) inline Primitive XlAbs(Primitive value)     { return std::abs(value); }
+    T1(Primitive) constexpr Primitive XlAbs(Primitive value)     { return std::abs(value); }
 
-    inline std::tuple<float, float> XlSinCos(float angle)
+    constexpr std::tuple<float, float> XlSinCos(float angle)
     {
         return std::make_tuple(XlSin(angle), XlCos(angle));
     }
 
-    inline float Deg2Rad(float input)               { return input / 180.f * gPI; }
-    inline float Rad2Deg(float input)               { return input * 180.f / gPI; }
+    constexpr float Deg2Rad(float input)               { return input / 180.f * gPI; }
+    constexpr float Rad2Deg(float input)               { return input * 180.f / gPI; }
 
         //
         //      Useful general math functions:
@@ -102,13 +102,13 @@ namespace XLEMath
         //
 
     template<typename Type>
-        inline bool Equivalent(Type a, Type b, Type tolerance) 
+        constexpr bool Equivalent(Type a, Type b, Type tolerance) 
     {
         Type d = a-b;
         return d < tolerance && d > -tolerance;
     }
 
-    inline bool AdaptiveEquivalent(float A, float B, float epsilon)
+    constexpr bool AdaptiveEquivalent(float A, float B, float epsilon)
 	{
 		// from https://floating-point-gui.de/errors/comparison/
 		// More robust way of doing these comparisons; with better support through the whole number line
@@ -126,7 +126,7 @@ namespace XLEMath
 		}	
 	}
 
-	inline bool AdaptiveEquivalent(double A, double B, double epsilon)
+	constexpr bool AdaptiveEquivalent(double A, double B, double epsilon)
 	{
 		auto absA = std::abs(A);
 		auto absB = std::abs(B);
@@ -142,26 +142,26 @@ namespace XLEMath
 	}
 
     template < typename T >
-    T Clamp(T value, T minval, T maxval) {
+    constexpr T Clamp(T value, T minval, T maxval) {
         return std::max(std::min(value, maxval), minval);
     }
 
-    inline float LinearInterpolate(float lhs, float rhs, float alpha)
+    constexpr float LinearInterpolate(float lhs, float rhs, float alpha)
     {
         return (rhs - lhs) * alpha + lhs;
     }
 
-    inline double LinearInterpolate(double lhs, double rhs, double alpha)
+    constexpr double LinearInterpolate(double lhs, double rhs, double alpha)
     {
         return (rhs - lhs) * alpha + lhs;
     }
 
-    inline int LinearInterpolate(int lhs, int rhs, float alpha)
+    constexpr int LinearInterpolate(int lhs, int rhs, float alpha)
     {
         return int((rhs - lhs) * alpha + .5f) + lhs;
     }
 
-    inline int64_t LinearInterpolate(int64_t lhs, int64_t rhs, float alpha)
+    constexpr int64_t LinearInterpolate(int64_t lhs, int64_t rhs, float alpha)
     {
         return int((rhs - lhs) * alpha + .5f) + lhs;
     }
@@ -185,9 +185,9 @@ namespace XLEMath
             return val;
         }
     #else
-        inline float BranchlessMin(float a, float b) { return std::min(a, b); }
-        inline float BranchlessMax(float a, float b) { return std::max(a, b); }
-        inline float BranchlessClamp(float val, float minval, float maxval) { return Clamp(val, minval, maxval); }
+        constexpr float BranchlessMin(float a, float b) { return std::min(a, b); }
+        constexpr float BranchlessMax(float a, float b) { return std::max(a, b); }
+        constexpr float BranchlessClamp(float val, float minval, float maxval) { return Clamp(val, minval, maxval); }
     #endif
 
     template<typename Type> const Type& Identity();
