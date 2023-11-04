@@ -69,6 +69,7 @@ namespace RenderOverlays
         void CaptureState() override;
         void ReleaseState() override;
         void SetState(const OverlayState& state) override;
+        void SetEncoderState(const RenderCore::Techniques::EncoderState&) override;
 
         void* GetService(uint64_t) override;
         void AttachService(uint64_t, void*) override;

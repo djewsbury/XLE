@@ -236,6 +236,11 @@ namespace RenderOverlays
 		_currentState = state;
 	}
 
+	void ImmediateOverlayContext::SetEncoderState(const RenderCore::Techniques::EncoderState& state)
+	{
+		_immediateDrawables->QueueEncoderState(state);
+	}
+
 	BufferUploads::CommandListID ImmediateOverlayContext::GetRequiredBufferUploadsCommandList() const
 	{ 
 		return _requiredBufferUploadsCommandList;

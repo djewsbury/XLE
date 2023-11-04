@@ -76,9 +76,55 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
+	template<typename Chain>
+		struct EncoderStateDrawable
+	{
+		Chain _chain;
+		ExecuteDrawableFn* _chainFn;
+		EncoderState _encoderState;
+
+		static void ExecuteFn(ParsingContext& parsingContext, const ExecuteDrawableContext& drawContext, const Drawable& drawable)
+		{
+			auto& customDrawable = *((EncoderStateDrawable<Chain>*)&drawable);
+			if (customDrawable._encoderState._states & (EncoderState::States::Scissor|EncoderState::States::Viewport|EncoderState::States::NoScissor)) {
+				ViewportDesc viewport = parsingContext.GetViewport();
+				ScissorRect scissor { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
+				if (customDrawable._encoderState._states & EncoderState::States::Viewport)
+					viewport = customDrawable._encoderState._viewport;
+				if (customDrawable._encoderState._states & EncoderState::States::Scissor)
+					scissor = customDrawable._encoderState._scissor;
+
+				drawContext.SetViewports({&viewport, &viewport+1}, {&scissor, &scissor+1});
+			}
+			if (customDrawable._encoderState._states & EncoderState::States::DepthBounds)
+				drawContext.SetDepthBounds(customDrawable._encoderState._depthBounds.first, customDrawable._encoderState._depthBounds.second);
+			if (customDrawable._encoderState._states & EncoderState::States::StencilRef)
+				drawContext.SetStencilRef(customDrawable._encoderState._stencilRef.first, customDrawable._encoderState._stencilRef.second);
+
+			customDrawable._chainFn(parsingContext, drawContext, customDrawable._chain);
+		}
+	};
+
 	class ImmediateDrawables : public IImmediateDrawables
 	{
 	public:
+		template<typename Drawable>
+			Drawable* AllocateDrawable(ExecuteDrawableFn* drawableFn)
+		{
+			if (_pendingEncoderState._states) {
+				auto* d = _workingPkt._drawables.Allocate<EncoderStateDrawable<Drawable>>();
+				d->_chain._drawFn = &EncoderStateDrawable<Drawable>::ExecuteFn;
+				d->_chainFn = drawableFn;
+				d->_encoderState = _pendingEncoderState;
+				_pendingEncoderState._states = 0;
+				return &d->_chain;
+			} else {
+				auto* d = _workingPkt._drawables.Allocate<Drawable>();
+				d->_drawFn = drawableFn;
+				return d;
+			}
+		}
+
 		IteratorRange<void*> QueueDraw(
 			size_t vertexCount,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
@@ -87,7 +133,7 @@ namespace RenderCore { namespace Techniques
 		{
 			auto vStride = CalculateVertexStride(inputAssembly);
 			auto vertexDataSize = vertexCount * vStride;
-			if (!vertexDataSize) return {};	
+			if (!vertexDataSize) return {};
 
 			auto pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 
@@ -101,6 +147,7 @@ namespace RenderCore { namespace Techniques
 				&& topology != Topology::TriangleStrip
 				&& topology != Topology::LineStrip
 				&& material._combinable
+				&& !_pendingEncoderState._states
 				;
 			assert(material._hash != ~0ull);	// used as a sentinel for non-combinable materials
 			#if defined(_DEBUG)
@@ -116,7 +163,7 @@ namespace RenderCore { namespace Techniques
 				return UpdateLastDrawCallVertexCount(vertexCount);
 			} else {
 				auto vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
-				auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
+				auto* drawable = AllocateDrawable<DrawableWithVertexCount>(&DrawableWithVertexCount::ExecuteFn);
 				auto* geo = _workingPkt.CreateTemporaryGeo();
 				geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
 				geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
@@ -129,7 +176,6 @@ namespace RenderCore { namespace Techniques
 				drawable->_vertexCount = (unsigned)vertexCount;
 				drawable->_vertexStride = vStride;
 				drawable->_bytesAllocated = (unsigned)vertexDataSize;
-				drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
 				if (material._uniformStreamInterface) {
 					drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 					drawable->_uniforms = material._uniforms;
@@ -147,7 +193,8 @@ namespace RenderCore { namespace Techniques
 			const ImmediateDrawableMaterial& material = {},
 			Topology topology = Topology::TriangleList) override
 		{
-			auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
+			bool indexed = customGeo->_ibFormat != Format(0);
+			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn);
 			drawable->_geo = customGeo.get();
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_vertexCount = (unsigned)indexOrVertexCount;
@@ -156,8 +203,6 @@ namespace RenderCore { namespace Techniques
 			drawable->_vertexStride = 0;
 			drawable->_bytesAllocated = 0;
 			DEBUG_ONLY(drawable->_userGeo = true;)
-			bool _indexed = drawable->_geo->_ibFormat != Format(0);
-			drawable->_drawFn = _indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn;
 			if (material._uniformStreamInterface && material._uniformStreamInterface->GetHash()) {
 				drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 				drawable->_uniforms = material._uniforms;
@@ -174,7 +219,8 @@ namespace RenderCore { namespace Techniques
 			const ImmediateDrawableMaterial& material = {},
 			Topology topology = Topology::TriangleList) override
 		{
-			auto* drawable = _workingPkt._drawables.Allocate<DrawableWithVertexCount>();
+			bool indexed = customGeo->_ibFormat != Format(0);
+			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn);
 			drawable->_geo = customGeo.get();
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_descriptorSet = nullptr;
@@ -183,8 +229,6 @@ namespace RenderCore { namespace Techniques
 			drawable->_vertexStride = 0;
 			drawable->_bytesAllocated = 0;
 			DEBUG_ONLY(drawable->_userGeo = true;)
-			bool _indexed = drawable->_geo->_ibFormat != Format(0);
-			drawable->_drawFn = _indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn;
 			if (material._uniformStreamInterface && material._uniformStreamInterface->GetHash()) {
 				drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 				drawable->_uniforms = material._uniforms;
@@ -192,6 +236,11 @@ namespace RenderCore { namespace Techniques
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
 			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
+		}
+
+		void QueueEncoderState(const EncoderState& encoderState) override
+		{
+			_pendingEncoderState.MergeIn(encoderState);
 		}
 
 		IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) override
@@ -310,6 +359,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
 		std::vector<std::shared_ptr<DrawableGeo>> _customGeosInWorkingPkt;
 		VisibilityMarkerId _pipelineAcceleratorsVisibility = 0;
+		EncoderState _pendingEncoderState;
 
 		template<typename InputAssemblyType>
 			PipelineAccelerator* GetPipelineAccelerator(
