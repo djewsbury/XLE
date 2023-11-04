@@ -28,6 +28,7 @@ namespace Assets
 
         void            RegisterDependency(const DependencyValidation&);
         void            RegisterDependency(const DependentFileState& state);
+        void            DeregisterDependency(DependencyValidationMarker);
 
         void            IncreaseValidationIndex();      // (also increases validation index for any depvals dependent on this one)
 
@@ -77,7 +78,7 @@ namespace Assets
         /// <param name="validationMarker">Callback to receive invalidation events</param>
         /// <param name="filename">Normally formatted filename</param>
         virtual void RegisterFileDependency(
-            DependencyValidationMarker validationMarker, 
+            DependencyValidationMarker validationMarker,
             const DependentFileState& fileState) = 0;
 
         /// <summary>Registers a dependency on another resource</summary>
@@ -87,6 +88,10 @@ namespace Assets
         /// will also receive the OnChange() message.
         virtual void RegisterAssetDependency(
             DependencyValidationMarker dependentResource, 
+            DependencyValidationMarker dependency) = 0;
+
+        virtual void DeregisterAssetDependency(
+            DependencyValidationMarker dependentResource,
             DependencyValidationMarker dependency) = 0;
 
         virtual void IncreaseValidationIndex(DependencyValidationMarker depVal) = 0;

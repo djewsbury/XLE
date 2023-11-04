@@ -23,8 +23,9 @@ namespace Assets
 		public:
 			MonitoredFileId _marker;
 			std::vector<FileSnapshot> _snapshots;
-			unsigned _mostRecentSnapshotIdx =0 ;
+			unsigned _mostRecentSnapshotIdx = 0;
 			std::string _filename;
+			std::atomic<bool> _initializationComplete = false;
 
 			virtual void OnChange() override;
 		};
@@ -37,19 +38,19 @@ namespace Assets
 
 		DependencyValidation Make(IteratorRange<const StringSection<>*> filenames) override SEALED
 		{
-			ScopedLock(_lock);
+			std::unique_lock<decltype(_lock)> l(_lock);
 			DependencyValidation result = MakeAlreadyLocked();
 			for (const auto& fn:filenames)
-				RegisterFileDependencyAlreadyLocked(result._marker, fn);
+				RegisterFileDependencyAlreadyLocked(result._marker, fn, l);
 			return result;
 		}
 		
 		DependencyValidation Make(IteratorRange<const DependentFileState*> filestates) override SEALED
 		{
-			ScopedLock(_lock);
+			std::unique_lock<decltype(_lock)> l(_lock);
 			DependencyValidation result = MakeAlreadyLocked();
 			for (const auto& state:filestates)
-				RegisterFileDependencyAlreadyLocked(result._marker, state._filename, state._snapshot);
+				RegisterFileDependencyAlreadyLocked(result._marker, state._filename, state._snapshot, l);
 			return result;
 		}
 
@@ -149,32 +150,51 @@ namespace Assets
 			assert(_entries[marker]._refCount == 0);
 		}
 
-		MonitoredFile& GetMonitoredFileAlreadyLocked(StringSection<> filename)
+		MonitoredFile& GetMonitoredFileAlreadyLocked(StringSection<> filename, std::unique_lock<Threading::Mutex>& l)
 		{
 			auto hash = HashFilenameAndPath(filename);
 			auto existing = LowerBound(_monitoredFiles, hash);
 
 			if (existing == _monitoredFiles.end() || existing->first != hash) {
 				auto newMonitoredFile = std::make_shared<MonitoredFile>();
+				existing = _monitoredFiles.insert(existing, std::make_pair(hash, newMonitoredFile));
+				newMonitoredFile->_marker = (MonitoredFileId)_monitoredFiles.size();		// must be done before we unlock
+
+				l = {};
+
+				// Call TryMonitor outside of our lock, because it's of an unknown cost
+				// However note that we indirectly include this work within the lock again in CollateDependentFileStates
+				//	-- so it's not safe for TryMonitor to use DepValSys
+
 				FileSnapshot snapshot{FileSnapshot::State::DoesNotExist, 0};
 				auto monitoringResult = MainFileSystem::TryMonitor(snapshot, filename, newMonitoredFile);
 				(void)monitoringResult;		// allow this to fail silently
 				newMonitoredFile->_snapshots.push_back(snapshot);
-				newMonitoredFile->_marker = (MonitoredFileId)_monitoredFiles.size();
 				newMonitoredFile->_filename = filename.AsString();
 				newMonitoredFile->_mostRecentSnapshotIdx = 0;
-				existing = _monitoredFiles.insert(existing, std::make_pair(hash, newMonitoredFile));
-			}
+				newMonitoredFile->_initializationComplete.store(true);
 
-			return *existing->second.get();
+				l = std::unique_lock<Threading::Mutex>(_lock);
+				return *newMonitoredFile;
+			} else {
+				if (existing->second->_initializationComplete.load()) {
+					return *existing->second;
+				} else {
+					auto res = existing->second; 
+					l = {};
+					while (!res->_initializationComplete.load()) std::this_thread::sleep_for(std::chrono::seconds(0));
+					l = std::unique_lock<Threading::Mutex>(_lock);
+					return *res;
+				}
+			}
 		}
 
 		void RegisterFileDependency(
 			DependencyValidationMarker validationMarker, 
 			const DependentFileState& fileState) override
 		{
-			ScopedLock(_lock);
-			RegisterFileDependencyAlreadyLocked(validationMarker, fileState._filename, fileState._snapshot);
+			std::unique_lock<decltype(_lock)> l(_lock);
+			RegisterFileDependencyAlreadyLocked(validationMarker, fileState._filename, fileState._snapshot, l);
 		}
 
 		static unsigned FindOrAddSnapshot(std::vector<FileSnapshot>& snapshots, const FileSnapshot& search)
@@ -188,9 +208,10 @@ namespace Assets
 		void RegisterFileDependencyAlreadyLocked(
 			DependencyValidationMarker validationMarker, 
 			StringSection<> filename,
-			const FileSnapshot& snapshot)
+			const FileSnapshot& snapshot,
+			std::unique_lock<Threading::Mutex>& lock)
 		{
-			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
+			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename, lock);
 			unsigned snapshotIndex = FindOrAddSnapshot(fileMonitor._snapshots, snapshot);
 			auto insertRange = EqualRange(_fileLinks, validationMarker);
 			bool alreadyRegistered = false;
@@ -212,9 +233,10 @@ namespace Assets
 
 		void RegisterFileDependencyAlreadyLocked(
 			DependencyValidationMarker validationMarker, 
-			StringSection<> filename)
+			StringSection<> filename,
+			std::unique_lock<Threading::Mutex>& lock)
 		{
-			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
+			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename, lock);
 			auto insertRange = EqualRange(_fileLinks, validationMarker);
 			for (auto r=insertRange.first; r!=insertRange.second; ++r)
 				if (r->second.first == fileMonitor._marker)
@@ -249,6 +271,27 @@ namespace Assets
 		{
 			ScopedLock(_lock);
 			RegisterAssetDependencyAlreadyLocked(dependentResource, dependency);
+		}
+
+		void DeregisterAssetDependency(
+			DependencyValidationMarker dependentResource, 
+			DependencyValidationMarker dependency) override
+		{
+			ScopedLock(_lock);
+			assert(dependentResource < _entries.size());
+			assert(dependency < _entries.size());
+			assert(dependency != DependencyValidationMarker_Invalid);
+			assert(dependentResource != DependencyValidationMarker_Invalid);
+			assert(_entries[dependentResource]._refCount > 0);
+			assert(_entries[dependency]._refCount > 0);
+
+			auto insertRange = EqualRange(_assetLinks, dependentResource);
+			for (auto r=insertRange.first; r!=insertRange.second; ++r)
+				if (r->second == dependency) {
+					_assetLinks.erase(r);
+					ReleaseAlreadyLocked(dependency);
+					return;
+				}
 		}
 
 		static bool InSortedRange(IteratorRange<const DependencyValidationMarker*> range, DependencyValidationMarker marker)
@@ -336,8 +379,8 @@ namespace Assets
 
 		DependentFileState GetDependentFileState(StringSection<> filename) override
 		{
-			ScopedLock(_lock);
-			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename);
+			std::unique_lock<decltype(_lock)> l(_lock);
+			auto& fileMonitor = GetMonitoredFileAlreadyLocked(filename, l);
 			assert(!fileMonitor._snapshots.empty());
 			const auto& snapshot = fileMonitor._snapshots[fileMonitor._mostRecentSnapshotIdx];
 			return { fileMonitor._filename, snapshot };
@@ -376,6 +419,8 @@ namespace Assets
 					if (file->second->_marker == i->first) break;
 
 				if (file != _monitoredFiles.end()) {
+					while (!file->second->_initializationComplete.load()) std::this_thread::sleep_for(std::chrono::seconds(0));
+
 					// We might end up with multiple references to the same file -- if so, back only the oldest one
 					// If there are multiples, they must all have the same state
 					uint64_t modificationTime = ~0ull;
@@ -424,6 +469,8 @@ namespace Assets
 					if (file->second->_marker == i->first) break;
 
 				if (file != _monitoredFiles.end()) {
+					while (!file->second->_initializationComplete.load()) std::this_thread::sleep_for(std::chrono::seconds(0));
+
 					// We might end up with multiple references to the same file -- if so, back only the oldest one
 					// If there are multiples, they must all have the same state
 					uint64_t modificationTime = ~0ull;
@@ -493,6 +540,13 @@ namespace Assets
 	{
 		assert(_marker != DependencyValidationMarker_Invalid);
 		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->RegisterFileDependency(_marker, state);
+	}
+
+	void            DependencyValidation::DeregisterDependency(DependencyValidationMarker dependency)
+	{
+		assert(_marker != DependencyValidationMarker_Invalid);
+		assert(dependency != DependencyValidationMarker_Invalid);
+		return checked_cast<DependencyValidationSystem*>(&GetDepValSys())->DeregisterAssetDependency(_marker, dependency);
 	}
 
 	void            DependencyValidation::IncreaseValidationIndex()
