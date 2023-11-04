@@ -8,7 +8,7 @@
 
 namespace Formatters
 {
-	template<typename CharType>
+	template<typename CharType = char>
 		class CommandLineFormatter
 	{
 	public:

@@ -67,5 +67,21 @@ namespace PlatformRig
 			Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
 		}
 	}
+
+	inline RenderOverlays::ColorB DeserializeColor(const ImpliedTyping::VariantNonRetained& value)
+	{
+		if (auto intForm = value.TryCastValue<unsigned>()) {
+			return *intForm;
+		} else if (auto tripletForm = value.TryCastValue<UInt3>()) {
+			return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+		} else if (auto quadForm = value.TryCastValue<UInt4>()) {
+			return RenderOverlays::ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+		} else {
+			if (auto str = value.TryCastValue<std::string>()) {
+				Throw(std::runtime_error("Could not interpret value as color: " + *str));
+			} else
+				Throw(std::runtime_error("Could not interpret value as color"));
+		}
+	}
 }
 

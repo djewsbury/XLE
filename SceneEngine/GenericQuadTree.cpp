@@ -889,6 +889,7 @@ namespace SceneEngine
 
 	unsigned GenericQuadTree::GetMaxResults() const
     {
+        if (!_dataBlock) return 0;
         return GetPimpl()._maxCullResults;
     }
     

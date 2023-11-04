@@ -22,7 +22,7 @@ using namespace System::Collections::Generic;
 using System::Runtime::InteropServices::OutAttribute;
 
 namespace RenderCore { namespace Assets { class RawMaterial; class MaterialScaffoldMaterial; } }
-namespace ToolsRig { class VisOverlaySettings; class VisMouseOver; class VisAnimationState; class MaterialVisSettings; }
+namespace ToolsRig { class VisOverlaySettings; class VisMouseOver; class VisAnimationState; struct MaterialVisSettings; }
 namespace Assets { class DirectorySearchRules; }
 namespace SceneEngine { class IScene; }
 namespace PlatformRig { namespace Overlays { class ITrackedAssetList; }}

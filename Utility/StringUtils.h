@@ -102,6 +102,15 @@ namespace Utility
         return i - str;
     }
 
+    constexpr size_t XlStringSize(const utf32* str)
+    {
+        // string size returns the number of fixed sized "utf32" elements in the string
+        // (even if this is not the same as the number of characters)
+        auto* i = str;
+        while (*i) ++i;
+        return i - str;
+    }
+
     constexpr size_t XlStringSize(const ucs2* str)
     {
         // string size returns the number of fixed sized "ucs2" elements in the string

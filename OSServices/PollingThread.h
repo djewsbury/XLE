@@ -40,7 +40,7 @@ namespace OSServices
 	 * 
 	 * All OSs provide some means to efficiently wait for, and react to, events raised
 	 * by "waitable objects". Typically these waitable objects are related to features
-	 * provided by drivers -- such as asynchrous file reads, network socket, etc.
+	 * provided by drivers -- such as asynchronous file reads, network socket, etc.
 	 * 
 	 * Even though all OSs provide roughly the same concepts, the actual API and behaviour
 	 * can be quite different. For example, on Windows we have WaitForMultipleObjects and
@@ -52,7 +52,7 @@ namespace OSServices
 	 * patterns. In this case, futures are a great pattern -- they can be used in 3 different
 	 * ways, all of which are useful
 	 * 
-	 * 	- checking the status intermittantly (eg, future.wait_for(0))
+	 * 	- checking the status intermittently (eg, future.wait_for(0))
 	 *  - stalling a thread until the future has a result (eg, future.get()/future.wait())
 	 *  - triggering some follow up (eg, when(future, ...))
 	 * 

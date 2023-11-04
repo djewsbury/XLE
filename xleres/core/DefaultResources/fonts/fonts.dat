@@ -11,6 +11,7 @@
     MetropolitanoMedium=<:(xleres/DefaultResources/fonts/Metropolitano/Metropolitano-Medium.ttf):>
     Petra=<:(xleres/DefaultResources/fonts/PetraSans/PetraSans-Regular.ttf):>
     PetraItalic=<:(xleres/DefaultResources/fonts/PetraSans/PetraSans-Italic.ttf):>
+    PetraBold=<:(xleres/DefaultResources/fonts/PetraSans/PetraSans-Bold.ttf):>
     Anka=<:(xleres/DefaultResources/fonts/AnkaCoder/AnkaCoder-r.ttf):>
     AnkaB=<:(xleres/DefaultResources/fonts/AnkaCoder/AnkaCoder-b.ttf):>
     AnkaI=<:(xleres/DefaultResources/fonts/AnkaCoder/AnkaCoder-i.ttf):>

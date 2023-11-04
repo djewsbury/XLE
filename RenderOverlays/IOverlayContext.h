@@ -13,7 +13,7 @@
 #include "../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IResourceView; class MiniInputElementDesc; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; } }
+namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; class EncoderState; } }
 namespace RenderCore { namespace Assets { class ShaderPatchCollection; } }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
@@ -102,7 +102,8 @@ namespace RenderOverlays
 
         virtual void    CaptureState    () = 0;
         virtual void    ReleaseState    () = 0;
-        virtual void    SetState        (const OverlayState& state) = 0;
+        virtual void    SetState        (const OverlayState&) = 0;
+        virtual void    SetEncoderState (const RenderCore::Techniques::EncoderState&) = 0;
 
         virtual RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables() = 0;
         virtual RenderCore::BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const = 0;

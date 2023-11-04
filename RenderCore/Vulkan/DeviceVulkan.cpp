@@ -2644,7 +2644,7 @@ namespace RenderCore { namespace ImplVulkan
 
 	void PresentationChain::PresentToQueue(Metal_Vulkan::SubmissionQueue& queue, IteratorRange<const VkSemaphore*> commandBufferSyncs)
 	{
-		if (_lastAcquiredImage > unsigned(_images.size())) return;
+		assert(_lastAcquiredImage < unsigned(_images.size()));
 		queue.Present(_swapChain.get(), _lastAcquiredImage, commandBufferSyncs);
 		_lastAcquiredImage = ~0x0u;
 	}
@@ -3130,6 +3130,9 @@ namespace RenderCore { namespace ImplVulkan
 		auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Primary);
 		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
 		deviceContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+		#if defined(_DEBUG)
+			_submissionQueue->GetTracker()->AttachName(deviceContext->GetActiveCommandList().GetPrimaryTrackerMarker(), "BeginPrimaryCommandList");
+		#endif
         return deviceContext;
     }
 
@@ -3138,6 +3141,9 @@ namespace RenderCore { namespace ImplVulkan
 		auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Secondary);
 		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
 		deviceContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
+		#if defined(_DEBUG)
+			_submissionQueue->GetTracker()->AttachName(deviceContext->GetActiveCommandList().GetPrimaryTrackerMarker(), "BeginSecondaryCommandList");
+		#endif
         return deviceContext;
     }
 }}
