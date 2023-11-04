@@ -11,6 +11,7 @@
 #include "../Utility/StringUtils.h" // for StringSection
 #include "../Utility/Optional.h"
 #include "../Utility/IteratorUtils.h"
+#include "../Utility/Streams/PathUtils.h"       // for s_defaultFilenameRules
 #include <memory>       // for std::unique_ptr
 
 #include <vector>
@@ -152,6 +153,10 @@ namespace OSServices
 		typedef unsigned BitField;
 	}
 	std::vector<std::string> FindFiles(const std::string& searchPath, FindFilesFilter::BitField filter = FindFilesFilter::All);
+    void FindFiles(
+        std::vector<uint64_t>& hashNames,
+        const char searchPath[], FindFilesFilter::BitField filter = FindFilesFilter::All,
+        const FilenameRules& hashingFnRules = s_defaultFilenameRules);
 
     bool GetCurrentDirectory(uint32_t dim, char dst[]);
     void ChDir(const utf8 path[]);

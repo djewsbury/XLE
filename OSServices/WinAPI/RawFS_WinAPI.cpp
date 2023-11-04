@@ -497,14 +497,31 @@ namespace OSServices
 		if (findHandle != INVALID_HANDLE_VALUE) {
 			do {
 				bool isDir = !!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
-				if (filter & (1<<unsigned(isDir))) {
+				if (filter & (1<<unsigned(isDir)))
 					result.push_back(basePath + findData.cFileName);
-				}
 			} while (FindNextFileA(findHandle, &findData));
 			FindClose(findHandle);
 		}
 
 		return result;
+	}
+
+	void FindFiles(
+        std::vector<uint64_t>& hashNames,
+        const char searchPath[], FindFilesFilter::BitField filter,
+		const FilenameRules& hashingFnRules)
+	{
+		WIN32_FIND_DATAA findData;
+		memset(&findData, 0, sizeof(findData));
+		HANDLE findHandle = FindFirstFileA(searchPath, &findData);
+		if (findHandle != INVALID_HANDLE_VALUE) {
+			do {
+				bool isDir = !!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+				if (filter & (1<<unsigned(isDir)))
+					hashNames.push_back(HashFilename(MakeStringSection(findData.cFileName), hashingFnRules));
+			} while (FindNextFileA(findHandle, &findData));
+			FindClose(findHandle);
+		}
 	}
 
 	static size_t GetFileSize(HANDLE fileHandle)
