@@ -5,9 +5,11 @@
 #pragma once
 
 #include "../PollingThread.h"
+#include "../../Utility/StringUtils.h"
 #include <cstdint>
 #include <string>
 #include <any>
+#include <optional>
 
 typedef struct _OVERLAPPED OVERLAPPED;
 
@@ -54,4 +56,8 @@ namespace OSServices
     static const XlHandle XlHandle_Invalid = XlHandle(~size_t(0x0));
 
     std::string SystemErrorCodeAsString(int errorCode);
+    std::string GetAppDataPath();
+    std::optional<std::string> ModalSelectFolderDialog(StringSection<> = {});
+    void MessageUser(StringSection<> text, StringSection<> title);
+    bool CopyToSystemClipboard(StringSection<> text);
 }

@@ -14,6 +14,8 @@
 #include "../../Utility/Threading/LockFree.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/Conversion.h"
+#include "../../Utility/FunctionUtils.h"
 #include "IncludeWindows.h"
 #include <process.h>
 #include <share.h>
@@ -24,6 +26,9 @@
 #include <shellapi.h>
 #include <ImageHlp.h>
 #include <avrt.h>
+#include <shlobj.h>
+#include <objbase.h>
+#include <shobjidl.h>
 
 namespace OSServices
 {
@@ -290,6 +295,99 @@ FileTime GetModuleFileTime()
     assert(succeeded);
 
     return result;
+}
+
+std::string GetAppDataPath()
+{
+    // Requires Vista or later
+    PWSTR wpath;
+    auto hres = SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &wpath);
+    if (!SUCCEEDED(hres)) {
+        CoTaskMemFree(wpath);
+        return {};
+    }
+    std::wstring temp = wpath;
+    CoTaskMemFree(wpath);
+    return Conversion::Convert<std::string>(temp);
+}
+
+std::optional<std::string> ModalSelectFolderDialog(StringSection<> initialFolder)
+{
+    // Windows Vista API for common dialogs
+    // See https://learn.microsoft.com/en-us/windows/win32/shell/common-file-dialog
+
+    IFileDialog *pfd = nullptr;
+    auto hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
+    if (!SUCCEEDED(hr)) return {};
+    auto cleanup0 = AutoCleanup([pfd]() { pfd->Release(); });
+
+    DWORD dwFlags = 0;
+    hr = pfd->GetOptions(&dwFlags);
+    if (!SUCCEEDED(hr)) return {};
+    hr = pfd->SetOptions(dwFlags | FOS_PICKFOLDERS | FOS_PATHMUSTEXIST);
+    if (!SUCCEEDED(hr)) return {};
+
+    if (!initialFolder.IsEmpty()) {
+        std::wstring winitial = Conversion::Convert<std::wstring>(initialFolder);
+        IShellItem *psi = nullptr;
+        hr = SHCreateItemFromParsingName(winitial.c_str(), nullptr, IID_PPV_ARGS(&psi));
+        if (SUCCEEDED(hr)) {
+            hr = pfd->SetFolder(psi);
+            assert(SUCCEEDED(hr));
+        }
+        if (psi) psi->Release();
+    }
+
+    hr = pfd->Show(NULL);
+    if (!SUCCEEDED(hr)) return {};
+
+    IShellItem *psiResult;
+    hr = pfd->GetResult(&psiResult);
+    if (!SUCCEEDED(hr)) return {};
+
+    PWSTR pszFilePath = nullptr;
+    hr = psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
+    if (!SUCCEEDED(hr)) { CoTaskMemFree(pszFilePath); return {}; }
+
+    std::wstring wresult = pszFilePath;
+    CoTaskMemFree(pszFilePath);
+    psiResult->Release();
+
+    return Conversion::Convert<std::string>(wresult);
+}
+
+void MessageUser(StringSection<> text, StringSection<> title)
+{
+    ::MessageBoxA(nullptr, text.AsString().c_str(), title.AsString().c_str(), MB_OK);
+}
+
+bool CopyToSystemClipboard(StringSection<> text)
+{
+    // See https://learn.microsoft.com/en-us/windows/win32/dataxchg/using-the-clipboard
+    if (!OpenClipboard(nullptr))
+        return false; 
+
+    auto hglbCopy = GlobalAlloc(GMEM_MOVEABLE, (text.size() + 1) * sizeof(TCHAR)); 
+    if (!hglbCopy) { 
+        CloseClipboard(); 
+        return FALSE; 
+    }
+    auto lptstrCopy = (TCHAR*)GlobalLock(hglbCopy); 
+    static_assert(sizeof(char) == sizeof(decltype(text)::value_type));
+    std::memcpy(lptstrCopy, text.begin(), text.size() * sizeof(TCHAR)); 
+    lptstrCopy[text.size()] = 0;
+    GlobalUnlock(hglbCopy); 
+
+    if (!EmptyClipboard()) {
+        CloseClipboard();
+        GlobalFree(hglbCopy);
+        return false;
+    }
+
+    SetClipboardData(CF_TEXT, hglbCopy);
+
+    CloseClipboard();
+    return true;
 }
 
 // void GetProcessPath(ucs2 dst[], size_t bufferCount)    { GetModuleFileNameW(NULL, (wchar_t*)dst, (DWORD)bufferCount); }
