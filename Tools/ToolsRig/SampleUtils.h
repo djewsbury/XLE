@@ -21,13 +21,13 @@ namespace ToolsRig
 	class PluginConfiguration
 	{
 	public:
-		std::vector<std::string> GetConfigurationNames() const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		std::string CreateDigest() const;
+		bool EmptyDigest() const;
 		
-		using Configurations = std::vector<std::pair<std::string, EntityInterface::EntityId>>;		// name of the actual game configuration, rather than the plugin name
+		using ConfigurationsToCleanup = std::vector<EntityInterface::EntityId>;
 		PluginConfiguration(
-			Configurations&& configurations,
+			ConfigurationsToCleanup&& configurationsToCleanup,
 			std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog>&& applyLogs,
 			::Assets::DependencyValidation depVal);
 		~PluginConfiguration();
@@ -42,12 +42,16 @@ namespace ToolsRig
 			std::shared_ptr<::Assets::OperationContext> opContext,
 			Formatters::IDynamicInputFormatter& formatter);
 
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<PluginConfiguration>>&& promise,
+			std::shared_ptr<::Assets::OperationContext> opContext);
+
 		PluginConfiguration(PluginConfiguration&&) = delete;
 		PluginConfiguration& operator=(PluginConfiguration&&) = delete;
 
 	private:
 		::Assets::DependencyValidation _depVal;
-		Configurations _configurations;
+		ConfigurationsToCleanup _configurationsToCleanup;
 		std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog> _applyLogs;
 	};
 

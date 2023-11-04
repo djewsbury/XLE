@@ -18,20 +18,9 @@
 namespace ToolsRig
 {
 
-	std::vector<std::string> PluginConfiguration::GetConfigurationNames() const
-	{
-		std::vector<std::string> result;
-		result.reserve(_configurations.size());
-		for (const auto& p:_configurations) result.push_back(p.first);
-		return result;
-	}
-
 	std::string PluginConfiguration::CreateDigest() const
 	{
 		std::stringstream log;
-		for (auto p:_configurations)
-			log << "Configuration (" << p.first << ") was configured." << std::endl;
-		log << std::endl;
 		for (auto i:_applyLogs) {
 			if (i._initializationLog.empty()) {
 				log << "Plugin (" << i._pluginName << ") applied with no messages." << std::endl;
@@ -43,26 +32,32 @@ namespace ToolsRig
 		return log.str();
 	}
 
+	bool PluginConfiguration::EmptyDigest() const
+	{
+		for (auto i:_applyLogs)
+			if (!i._initializationLog.empty())
+				return false;
+		return true;
+	}
+
 	PluginConfiguration::PluginConfiguration(
-		Configurations&& configurations,
+		ConfigurationsToCleanup&& configurationsToCleanup,
 		std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog>&& applyLogs,
 		::Assets::DependencyValidation depVal)
-	: _configurations(std::move(configurations)), _applyLogs(std::move(applyLogs)), _depVal(std::move(depVal)) {}
+	: _configurationsToCleanup(std::move(configurationsToCleanup)), _applyLogs(std::move(applyLogs)), _depVal(std::move(depVal)) {}
 
-	static void CleanupConfiguredPlugins(const PluginConfiguration::Configurations& plugins)
+	static void CleanupConfiguredPlugins(const PluginConfiguration::ConfigurationsToCleanup& plugins)
 	{
 		if (!plugins.empty()) {
 			auto& previewSceneRegistry = ToolsRig::Services::GetPreviewSceneRegistry();
-			for (auto& cfg:plugins) {
-				auto plugin = previewSceneRegistry.GetConfigurablePlugin(cfg.first);
-				if (plugin) plugin->DeleteEntity(cfg.second);
-			}
+			for (auto& cfg:plugins)
+				previewSceneRegistry.GetConfigurablePluginDocument()->DeleteEntity(cfg);
 		}
 	}
 
 	PluginConfiguration::~PluginConfiguration()
 	{
-		CleanupConfiguredPlugins(_configurations);
+		CleanupConfiguredPlugins(_configurationsToCleanup);
 	}
 
 	void PluginConfiguration::ConstructToPromise(
@@ -78,39 +73,17 @@ namespace ToolsRig
 			});
 	}
 
-	void PluginConfiguration::ConstructToPromise(
+	static void ConstructToPromiseInternal(
 		std::promise<std::shared_ptr<PluginConfiguration>>&& promise,
 		std::shared_ptr<::Assets::OperationContext> opContext,
-		Formatters::IDynamicInputFormatter& formatter)
+		PluginConfiguration::ConfigurationsToCleanup&& configurationsToCleanup,
+		::Assets::DependencyValidation depVal)
 	{
-		Configurations configurations;
 		TRY {
-			StringSection<> keyname;
-			// apply the configuration to the preview scene registry immediately, as we're loading it
 			auto& previewSceneRegistry = ToolsRig::Services::GetPreviewSceneRegistry();
-			auto configurablePluginDoc = previewSceneRegistry.GetConfigurablePluginDocument();
-			while (formatter.TryKeyedItem(keyname)) {
-				auto rootEntityName = keyname.AsString();
-				auto entity = configurablePluginDoc->AssignEntityId();
-				if (configurablePluginDoc->CreateEntity(EntityInterface::MakeStringAndHash(keyname), entity, {})) {
-					RequireBeginElement(formatter);
-					while (formatter.TryKeyedItem(keyname)) {
-						EntityInterface::PropertyInitializer propInit;
-						propInit._prop = EntityInterface::MakeStringAndHash(keyname);
-						propInit._data = RequireRawValue(formatter, propInit._type);
-						configurablePluginDoc->SetProperty(entity, MakeIteratorRange(&propInit, &propInit+1));
-					}
-					RequireEndElement(formatter);
-					configurations.emplace_back(rootEntityName, entity);
-				} else {
-					promise.set_exception(std::make_exception_ptr(std::runtime_error("No plugin could handle configuration for (" + keyname.AsString() + "). This could mean that the associated plugin dll failed to load.")));
-					return;
-				}
-			}
-
 			auto pluginsPendingApply = previewSceneRegistry.ApplyConfigurablePlugins(opContext);
 			if (pluginsPendingApply.empty()) {
-				promise.set_value(std::make_shared<PluginConfiguration>(std::move(configurations), std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog>{}, formatter.GetDependencyValidation()));
+				promise.set_value(std::make_shared<PluginConfiguration>(std::move(configurationsToCleanup), std::vector<IPreviewSceneRegistry::ApplyConfigurablePluginLog>{}, depVal));
 				return;
 			}
 
@@ -119,12 +92,12 @@ namespace ToolsRig
 			{
 				std::vector<std::future<IPreviewSceneRegistry::ApplyConfigurablePluginLog>> _pendingApplies;
 				unsigned _completedIdx = 0;
-				Configurations _configurations;
+				PluginConfiguration::ConfigurationsToCleanup _configurationsToCleanup;
 				::Assets::DependencyValidation _depVal;
 			};
 			auto helper = std::make_shared<Helper>();
-			helper->_configurations = std::move(configurations);
-			helper->_depVal = formatter.GetDependencyValidation();
+			helper->_configurationsToCleanup = std::move(configurationsToCleanup);
+			helper->_depVal = std::move(depVal);
 			helper->_pendingApplies = std::move(pluginsPendingApply);
 
 			::Assets::PollToPromise(
@@ -146,16 +119,61 @@ namespace ToolsRig
 						for (auto& f:helper->_pendingApplies)
 							logs.push_back(f.get());
 
-						return std::make_shared<PluginConfiguration>(std::move(helper->_configurations), std::move(logs), std::move(helper->_depVal));
+						return std::make_shared<PluginConfiguration>(std::move(helper->_configurationsToCleanup), std::move(logs), std::move(helper->_depVal));
 					} CATCH (...) {
-						CleanupConfiguredPlugins(helper->_configurations);
+						CleanupConfiguredPlugins(helper->_configurationsToCleanup);
 						throw;
-					} CATCH_END				
+					} CATCH_END
 				});
 		} CATCH (...) {
-			CleanupConfiguredPlugins(configurations);
+			CleanupConfiguredPlugins(configurationsToCleanup);		// must not have been moved out to helper->_configurationsToCleanup yet
 			promise.set_exception(std::current_exception());
 		} CATCH_END
+	}
+
+	void PluginConfiguration::ConstructToPromise(
+		std::promise<std::shared_ptr<PluginConfiguration>>&& promise,
+		std::shared_ptr<::Assets::OperationContext> opContext,
+		Formatters::IDynamicInputFormatter& formatter)
+	{
+		ConfigurationsToCleanup configurationsToCleanup;
+		TRY {
+			StringSection<> keyname;
+			// apply the configuration to the preview scene registry immediately, as we're loading it
+			auto& previewSceneRegistry = ToolsRig::Services::GetPreviewSceneRegistry();
+			auto configurablePluginDoc = previewSceneRegistry.GetConfigurablePluginDocument();
+			while (formatter.TryKeyedItem(keyname)) {
+				auto entity = configurablePluginDoc->AssignEntityId();
+				if (configurablePluginDoc->CreateEntity(EntityInterface::MakeStringAndHash(keyname), entity, {})) {
+					RequireBeginElement(formatter);
+					while (formatter.TryKeyedItem(keyname)) {
+						EntityInterface::PropertyInitializer propInit;
+						propInit._prop = EntityInterface::MakeStringAndHash(keyname);
+						propInit._data = RequireRawValue(formatter, propInit._type);
+						configurablePluginDoc->SetProperty(entity, MakeIteratorRange(&propInit, &propInit+1));
+					}
+					RequireEndElement(formatter);
+					configurationsToCleanup.emplace_back(entity);
+				} else {
+					promise.set_exception(std::make_exception_ptr(std::runtime_error("No plugin could handle configuration for (" + keyname.AsString() + "). This could mean that the associated plugin dll failed to load.")));
+					return;
+				}
+			}
+
+			ConstructToPromiseInternal(std::move(promise), std::move(opContext), std::move(configurationsToCleanup), formatter.GetDependencyValidation());
+		} CATCH (...) {
+			CleanupConfiguredPlugins(configurationsToCleanup);
+			promise.set_exception(std::current_exception());
+		} CATCH_END
+	}
+
+	void PluginConfiguration::ConstructToPromise(
+		std::promise<std::shared_ptr<PluginConfiguration>>&& promise,
+		std::shared_ptr<::Assets::OperationContext> opContext)
+	{
+		ConstructToPromiseInternal(
+			std::move(promise), std::move(opContext),
+			{}, {});
 	}
 
 	class ConfigurationHelper : public ::Assets::IAsyncMarker
