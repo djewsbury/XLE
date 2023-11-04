@@ -487,10 +487,22 @@ namespace RenderCore { namespace Techniques
 		realContext._encoder->DrawIndexedIndirect(*realContext._pipeline, res, offset);
 	}
 
+	void ExecuteDrawableContext::SetViewports(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects) const
+	{
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
+		realContext._encoder->Bind(viewports, scissorRects);
+	}
+
 	void ExecuteDrawableContext::SetStencilRef(unsigned frontFaceStencil, unsigned backFaceStencil) const
 	{
 		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._encoder->SetStencilRef(frontFaceStencil, backFaceStencil);
+	}
+
+	void ExecuteDrawableContext::SetDepthBounds(float minDepthValue, float maxDepthValue) const
+	{
+		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
+		realContext._encoder->SetDepthBounds(minDepthValue, maxDepthValue);
 	}
 
 	namespace Internal
