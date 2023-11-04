@@ -21,6 +21,8 @@ namespace Assets
 	{
 	public:
 		FormatterAssetMixin(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal);
+		FormatterAssetMixin(ObjectType&&);
+		FormatterAssetMixin(const ObjectType&);
 		FormatterAssetMixin() = default;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -66,6 +68,11 @@ namespace Assets
 	, _searchRules(searchRules)
 	, _depVal(depVal)
 	{}
+
+	template<typename ObjectType>
+		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(ObjectType&& moveFrom) : ObjectType(std::move(moveFrom)) {}
+	template<typename ObjectType>
+		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(const ObjectType& copyFrom) : ObjectType(copyFrom) {}
 
 	template <typename ObjectType, typename BaseAssetType>
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(

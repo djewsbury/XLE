@@ -86,6 +86,17 @@ namespace Assets
 		assert(0);		// didn't find it
 	}
 
+	void OperationContext::ClearProgress(OperationId id)
+	{
+		ScopedLock(_mutex);
+		for (auto i=_pimpl->_ops.begin(); i!=_pimpl->_ops.end(); ++i)
+			if (i->first == id) {
+				i->second._progress = {};
+				return;
+			}
+		assert(0);		// didn't find it
+	}
+
 	auto OperationContext::GetActiveOperations() -> std::vector<OperationDesc>
 	{
 		ScopedLock(_mutex);
@@ -152,6 +163,12 @@ namespace Assets
 	{
 		if (_context)
 			_context->SetProgress(_opId, completed, total);
+	}
+
+	void OperationContextHelper::ClearProgress()
+	{
+		if (_context)
+			_context->ClearProgress(_opId);
 	}
 
 	OperationContextHelper::OperationContextHelper() = default;

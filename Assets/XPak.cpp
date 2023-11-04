@@ -119,7 +119,7 @@ namespace Assets
 				return res;
 			}
 
-			FileCache::FileCache(size_t maxCachedBytes)
+			FileCache(size_t maxCachedBytes)
 			: _maxCachedBytes(maxCachedBytes), _defaultPageSize(1024*1024) 
 			, _nextPageId(1)
 			{
@@ -127,7 +127,7 @@ namespace Assets
 				_currentAllocatedInPages = 0;
 			}
 
-			FileCache::~FileCache() {}
+			~FileCache() {}
 
 		private:
 			Threading::Mutex _lock;

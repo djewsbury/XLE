@@ -88,6 +88,7 @@ namespace Assets
 		void SetDescription(OperationId, std::string);
 		void SetMessage(OperationId, std::string);
 		void SetProgress(OperationId, unsigned completed, unsigned total);
+		void ClearProgress(OperationId);
 
 		OperationContext();
 		~OperationContext();
@@ -117,6 +118,7 @@ namespace Assets
 			void SetMessage(std::string);
 			void SetDescription(std::string);
 			void SetProgress(unsigned completed, unsigned total);
+			void ClearProgress();
 
 			OperationContextHelper();
 			~OperationContextHelper();
