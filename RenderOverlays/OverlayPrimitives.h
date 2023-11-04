@@ -6,6 +6,7 @@
 
 #include "../Math/Vector.h"
 #include "../Utility/IteratorUtils.h"
+#include <optional>
 
 namespace RenderCore { class MiniInputElementDesc; }
 
@@ -17,12 +18,12 @@ namespace RenderOverlays
     {
         uint8_t b, g, r, a;
 
-        ColorB();
-        ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_ = 0xff);
-        ColorB(uint32_t rawColor);
-        unsigned AsUInt32() const;
-        static ColorB FromNormalized(float r_, float g_, float b_, float a_ = 1.f);
-        static ColorB FromNormalized(const Float4& v);
+        ColorB() = default;
+        constexpr ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_ = 0xff);
+        constexpr ColorB(uint32_t rawColor);
+        constexpr unsigned AsUInt32() const;
+        static constexpr ColorB FromNormalized(float r_, float g_, float b_, float a_ = 1.f);
+        static constexpr ColorB FromNormalized(const Float4& v);
         Float4 AsNormalized() const;
 
         static const ColorB White;
@@ -46,16 +47,16 @@ namespace RenderOverlays
         Rect(Coord left, Coord top, Coord right, Coord bottom) : _topLeft(left, top), _bottomRight(right, bottom) {}
         Rect() {}
 
-        Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }
-        Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
+        constexpr Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }
+        constexpr Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
 
-        static Rect Invalid() { return Rect { {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}, {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}}; }
+        static inline Rect Invalid() { return Rect { {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}, {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}}; }
 
-        inline Rect& operator-=(const Coord2& rhs) { _topLeft -= rhs; _bottomRight -= rhs; return *this; }
-        inline Rect& operator+=(const Coord2& rhs) { _topLeft += rhs; _bottomRight += rhs; return *this; }
+        constexpr Rect& operator-=(const Coord2& rhs) { _topLeft -= rhs; _bottomRight -= rhs; return *this; }
+        constexpr Rect& operator+=(const Coord2& rhs) { _topLeft += rhs; _bottomRight += rhs; return *this; }
     };
 
-    inline bool Intersects(const Rect& lhs, const Rect& rhs)
+    constexpr bool Intersects(const Rect& lhs, const Rect& rhs)
     {
         return 
             !(  lhs._bottomRight[0] <= rhs._topLeft[0]
@@ -64,7 +65,7 @@ namespace RenderOverlays
             ||  lhs._topLeft[1] >= rhs._bottomRight[1]);
     }
 
-    inline bool Contains(
+    constexpr bool Contains(
         const Rect& bigger, 
         const Rect& smaller)
     {
@@ -75,7 +76,7 @@ namespace RenderOverlays
             &&  smaller._bottomRight[1] <= bigger._bottomRight[1]);
     }
 
-    inline bool Contains(
+    constexpr bool Contains(
         const Rect& rect,
         const Coord2& pt)
     {
@@ -83,7 +84,7 @@ namespace RenderOverlays
             && rect._bottomRight[0] >= pt[0] && rect._bottomRight[1] >= pt[1];
     }
 
-    inline bool IsGood(const Rect& rect)
+    constexpr bool IsGood(const Rect& rect)
     {
         return  rect._topLeft[0] < rect._bottomRight[0]
             &&  rect._topLeft[1] < rect._bottomRight[1];
@@ -102,6 +103,8 @@ namespace RenderOverlays
         Left, Center, Right,
         BottomLeft, Bottom, BottomRight
     };
+
+    std::optional<TextAlignment> AsTextAlignment(StringSection<char>);
 
     namespace DrawTextFlags
     {
@@ -139,28 +142,30 @@ namespace RenderOverlays
     std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect);
     unsigned    HardwareColor(ColorB input);
 
-    inline ColorB::ColorB() {}
-    inline ColorB::ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_) : a(a_), r(r_), g(g_), b(b_) {}
-    inline ColorB::ColorB(uint32_t rawColor) { a = rawColor >> 24u; r = (rawColor >> 16u) & 0xffu; g = (rawColor >> 8u) & 0xffu; b = rawColor & 0xffu; }
-    inline unsigned ColorB::AsUInt32() const { return (uint32_t(a) << 24u) | (uint32_t(r) << 16u) | (uint32_t(g) << 8u) | uint32_t(b); }
-    inline ColorB ColorB::FromNormalized(float r_, float g_, float b_, float a_)
+    constexpr ColorB::ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_) : a(a_), r(r_), g(g_), b(b_) {}
+    constexpr ColorB::ColorB(uint32_t rawColor) : a(rawColor >> 24u), r((rawColor >> 16u) & 0xffu), g((rawColor >> 8u) & 0xffu), b(rawColor & 0xffu) {}
+    constexpr unsigned ColorB::AsUInt32() const { return (uint32_t(a) << 24u) | (uint32_t(r) << 16u) | (uint32_t(g) << 8u) | uint32_t(b); }
+    constexpr ColorB ColorB::FromNormalized(float r_, float g_, float b_, float a_)
     {
         return ColorB(  ClampToUInt8(int32_t(r_ * 255.f + 0.5f)), ClampToUInt8(int32_t(g_ * 255.f + 0.5f)), 
                         ClampToUInt8(int32_t(b_ * 255.f + 0.5f)), ClampToUInt8(int32_t(a_ * 255.f + 0.5f)));
     }
-    inline ColorB ColorB::FromNormalized(const Float4& v) { return FromNormalized(v[0], v[1], v[2], v[3]); }
+    constexpr ColorB ColorB::FromNormalized(const Float4& v) { return FromNormalized(v[0], v[1], v[2], v[3]); }
     inline Float4 ColorB::AsNormalized() const { return { r/255.f, g/255.f, b/255.f, a/255.f }; }
 
-    inline float LinearToSRGB_Formal(float input)
+    constexpr float LinearToSRGB_Formal(float input)
     {
         return std::max(std::min(input*12.92f, 0.0031308f),1.055f*std::pow(input,0.41666f)-0.055f);
     }
 
-    inline float SRGBToLinear_Formal(float input)
+    constexpr float SRGBToLinear_Formal(float input)
     {
         if (input <= 0.04045f) {
             return input / 12.92f;
         } else
             return std::pow((input+0.055f)/1.055f, 2.4f);
     }
+
+    inline Float4 LinearToSRGB_Formal(Float4 input) { return { LinearToSRGB_Formal(input[0]), LinearToSRGB_Formal(input[1]), LinearToSRGB_Formal(input[2]), LinearToSRGB_Formal(input[3]) }; }
+    inline Float4 SRGBToLinear_Formal(Float4 input) { return { SRGBToLinear_Formal(input[0]), SRGBToLinear_Formal(input[1]), SRGBToLinear_Formal(input[2]), SRGBToLinear_Formal(input[3]) }; }
 }

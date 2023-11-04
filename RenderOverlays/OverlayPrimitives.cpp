@@ -66,6 +66,21 @@ namespace RenderOverlays
 
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements2D = Vertex_PC_inputElements2D;
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements3D = Vertex_PC_inputElements3D;
+
+	std::optional<TextAlignment> AsTextAlignment(StringSection<> str)
+	{
+		if (XlEqString(str, "TopLeft")) return TextAlignment::TopLeft;
+		if (XlEqString(str, "Top")) return TextAlignment::Top;
+		if (XlEqString(str, "TopRight")) return TextAlignment::TopRight;
+		if (XlEqString(str, "Left")) return TextAlignment::Left;
+		if (XlEqString(str, "Center")) return TextAlignment::Center;
+		if (XlEqString(str, "Right")) return TextAlignment::Right;
+		if (XlEqString(str, "BottomLeft")) return TextAlignment::BottomLeft;
+		if (XlEqString(str, "Bottom")) return TextAlignment::Bottom;
+		if (XlEqString(str, "BottomRight")) return TextAlignment::BottomRight;
+		return {};
+
+	}
 }
 
 
