@@ -235,7 +235,7 @@ namespace Formatters
 							uint64_t hash = def._tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex]._hash;
 
 							// ------------------------- system variables --------------------
-							if (hash == "align2"_h || hash == "align4"_h || hash == "align8"_h) {
+							if (hash == "align2"_h || hash == "align4"_h || hash == "align8"_h || hash == "nullterm"_h) {
 								usingDynamicVariable = true;
 								static const unsigned dummy = 1;
 								nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
@@ -458,6 +458,12 @@ namespace Formatters
 				} else if (hash == "align8"_h) {
 					systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 7;
 					systemVarBuffer = (systemVarBuffer == 0) ? 0 : 8-systemVarBuffer;
+					nextStep.SetQueryResult(systemVarBuffer);
+					gotValue = true;
+				} else if (hash == "nullterm"_h) {
+					// how many bytes until the next null byte
+					systemVarBuffer = 0;
+					while (systemVarBuffer < _dataIterator.size() && ((const uint8_t*)_dataIterator.begin())[systemVarBuffer] != 0) ++systemVarBuffer;
 					nextStep.SetQueryResult(systemVarBuffer);
 					gotValue = true;
 				}
@@ -799,9 +805,6 @@ namespace Formatters
 				assert(arrayCount <= std::numeric_limits<decltype(finalTypeDesc._arrayCount)>::max());
 				finalTypeDesc._arrayCount = (uint32_t)arrayCount;
 				if (isCharType) finalTypeDesc._typeHint = ImpliedTyping::TypeHint::String;
-			} else {
-				// expression evaluator treats anything we pass with the string hint as a string, even if it doesn't make sense to be so
-				assert(finalTypeDesc._typeHint != ImpliedTyping::TypeHint::String);
 			}
 
 			auto nameToken = cmds[1];
