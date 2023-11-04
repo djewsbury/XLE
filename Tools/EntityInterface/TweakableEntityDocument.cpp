@@ -46,7 +46,9 @@ namespace EntityInterface
 		{
 			Blob b { Formatters::FormatterBlob::KeyedItem };
 			b._valueBegin = _data.size();
-			b._valueEnd = b._valueBegin + name.size();
+			b._valueEnd = b._valueBegin + name.size() + sizeof(uint64_t);
+			auto hash = Hash64(name);
+			_data.insert(_data.end(), (const uint8_t*)&hash, (const uint8_t*)(&hash+1));
 			_data.insert(_data.end(), name.begin(), name.end());
 			_blobs.emplace_back(std::move(b));
 		}
@@ -77,9 +79,11 @@ namespace EntityInterface
 		{
 			Blob b { Formatters::FormatterBlob::KeyedItem };
 			b._valueBegin = _data.size();
-			b._valueEnd = b._valueBegin + name.size();
+			b._valueEnd = b._valueBegin + name.size() + sizeof(uint64_t);
 			b._bindingEngineId = id;
 			b._useBindingEngineId = true;
+			auto hash = Hash64(name);
+			_data.insert(_data.end(), &hash, &hash+1);
 			_data.insert(_data.end(), name.begin(), name.end());
 			_blobs.emplace_back(std::move(b));
 		}
@@ -98,8 +102,6 @@ namespace EntityInterface
 	public:
 		Formatters::FormatterBlob PeekNext() override
 		{
-			while (_iterator != _recording->_blobs.end() && _iterator->_useBindingEngineId && !_bindingEngine->IsEnabled(_iterator->_bindingEngineId))
-				++_iterator;
 			if (_iterator == _recording->_blobs.end())
 				return Formatters::FormatterBlob::None;
 			return _iterator->_type;
@@ -128,33 +130,31 @@ namespace EntityInterface
 			if (PeekNext() != Formatters::FormatterBlob::KeyedItem)
 				return false;
 
-			name = MakeStringSection(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd).Cast<char>();
+			assert((_iterator->_valueEnd - _iterator->_valueBegin) >= sizeof(uint64_t));
+			name = MakeStringSection(
+				_recording->_data.begin() + _iterator->_valueBegin + sizeof(uint64_t),
+				_recording->_data.begin() + _iterator->_valueEnd).Cast<char>();
 			++_iterator;
 			return true;
 		}
 
 		bool TryKeyedItem(uint64_t& name) override
 		{
-			StringSection<> str;
-			if (!TryKeyedItem(str))
+			if (PeekNext() != Formatters::FormatterBlob::KeyedItem)
 				return false;
-			name = Hash64(str);
+
+			assert((_iterator->_valueEnd - _iterator->_valueBegin) >= sizeof(uint64_t));
+			name = *(const uint64_t*)(AsPointer(_recording->_data.begin()) + _iterator->_valueBegin);
+			++_iterator;
 			return true;
 		}
 
 		void GetNextValueBlob(IteratorRange<const void*>& value, ImpliedTyping::TypeDesc& type)
 		{
 			assert(_iterator != _recording->_blobs.end() && _iterator->_type == Formatters::FormatterBlob::Value);
-			if (!_iterator->_useBindingEngineId) {
-				value = MakeIteratorRange(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd);
-				type = _iterator->_valueType;
-			} else {
-				assert(_bindingEngine->IsEnabled(_iterator->_bindingEngineId));
-				auto v = _bindingEngine->TryGetModelValue(_iterator->_bindingEngineId);
-				assert(v.has_value());
-				value = v->_data;
-				type = v->_type;
-			}
+			assert(!_iterator->_useBindingEngineId);
+			value = MakeIteratorRange(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd);
+			type = _iterator->_valueType;
 		}
 
 		bool TryStringValue(StringSection<>& value) override
@@ -191,8 +191,13 @@ namespace EntityInterface
 
 			IteratorRange<const void*> rawValue; ImpliedTyping::TypeDesc rawType;
 			GetNextValueBlob(rawValue, rawType);
-			if (!ImpliedTyping::Cast(destinationBuffer, type, rawValue, rawType))
-				return false;
+			if (rawType._typeHint == ImpliedTyping::TypeHint::String && (rawType._type == ImpliedTyping::TypeCat::UInt8 || rawType._type == ImpliedTyping::TypeCat::Int8)) {
+				if (!ImpliedTyping::ConvertFullMatch(MakeStringSection((const char*)rawValue.begin(), (const char*)rawValue.end()), destinationBuffer, type))
+					return false;
+			} else {
+				if (!ImpliedTyping::Cast(destinationBuffer, type, rawValue, rawType))
+					return false;
+			}
 
 			++_iterator;
 			return true;
@@ -221,10 +226,8 @@ namespace EntityInterface
 
 		PlaybackFormatter(
 			std::shared_ptr<FormatterRecording> recording,
-			std::shared_ptr<MinimalBindingEngine> bindingEngine,
 			::Assets::DependencyValidation depVal)
 		: _recording(std::move(recording))
-		, _bindingEngine(std::move(bindingEngine))
 		, _depVal(std::move(depVal))
 		{
 			_iterator = _recording->_blobs.begin();
@@ -232,8 +235,45 @@ namespace EntityInterface
 
 		std::shared_ptr<FormatterRecording> _recording;
 		std::vector<FormatterRecording::Blob>::iterator _iterator;
-		std::shared_ptr<MinimalBindingEngine> _bindingEngine;
 		::Assets::DependencyValidation _depVal;
+	};
+
+	class PlaybackFormatterWithBindingEngine : public PlaybackFormatter
+	{
+	public:
+		Formatters::FormatterBlob PeekNext() override
+		{
+			while (_iterator != _recording->_blobs.end() && _iterator->_useBindingEngineId && !_bindingEngine->IsEnabled(_iterator->_bindingEngineId))
+				++_iterator;
+			if (_iterator == _recording->_blobs.end())
+				return Formatters::FormatterBlob::None;
+			return _iterator->_type;
+		}
+
+		void GetNextValueBlob(IteratorRange<const void*>& value, ImpliedTyping::TypeDesc& type)
+		{
+			assert(_iterator != _recording->_blobs.end() && _iterator->_type == Formatters::FormatterBlob::Value);
+			if (!_iterator->_useBindingEngineId) {
+				value = MakeIteratorRange(_recording->_data.begin() + _iterator->_valueBegin, _recording->_data.begin() + _iterator->_valueEnd);
+				type = _iterator->_valueType;
+			} else {
+				assert(_bindingEngine->IsEnabled(_iterator->_bindingEngineId));
+				auto v = _bindingEngine->TryGetModelValue(_iterator->_bindingEngineId);
+				assert(v.has_value());
+				value = v->_data;
+				type = v->_type;
+			}
+		}
+
+		PlaybackFormatterWithBindingEngine(
+			std::shared_ptr<FormatterRecording> recording,
+			std::shared_ptr<MinimalBindingEngine> bindingEngine,
+			::Assets::DependencyValidation depVal)
+		: PlaybackFormatter(std::move(recording), std::move(depVal))
+		, _bindingEngine(std::move(bindingEngine))
+		{}
+
+		std::shared_ptr<MinimalBindingEngine> _bindingEngine;
 	};
 
 	class FormatToMinimalBindingEngine : public IOutputFormatterWithDataBinding
@@ -373,7 +413,7 @@ namespace EntityInterface
 
 			std::promise<std::shared_ptr<Formatters::IDynamicInputFormatter>> promise;
 			auto result = promise.get_future();
-			promise.set_value(std::make_shared<PlaybackFormatter>(fmttr._recording, _bindingEngine, _depVal));
+			promise.set_value(std::make_shared<PlaybackFormatterWithBindingEngine>(fmttr._recording, _bindingEngine, _depVal));
 			return result;
 		}
 
@@ -407,6 +447,62 @@ namespace EntityInterface
 	}
 
 	IDynamicOutputFormatter::~IDynamicOutputFormatter() = default;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	std::shared_ptr<FormatterRecording> CopyToRecording(Formatters::TextInputFormatter<>& formatter)
+	{
+		auto result = std::make_shared<FormatterRecording>();
+
+		unsigned subtreeEle = 0;
+		bool t;
+		Formatters::TextInputFormatter<>::InteriorSection str;
+		for (;;) {
+			switch(formatter.PeekNext()) {
+			case Formatters::FormatterBlob::BeginElement:
+				t = formatter.TryBeginElement();
+				assert(t); (void)t;
+				++subtreeEle;
+				result->PushBeginElement();
+				break;
+
+			case Formatters::FormatterBlob::EndElement:
+				if (!subtreeEle) return result;    // end now, while the EndElement is primed
+
+				t = formatter.TryEndElement();
+				assert(t); (void)t;
+				--subtreeEle;
+				result->PushEndElement();
+				break;
+
+			case Formatters::FormatterBlob::KeyedItem:
+				t = formatter.TryKeyedItem(str);
+				assert(t); (void)t;
+				result->PushKeyedItem(str);
+				break;
+
+			case Formatters::FormatterBlob::Value:
+				t = formatter.TryStringValue(str);
+				assert(t); (void)t;
+				result->PushStringValue(str);
+				break;
+
+			case Formatters::FormatterBlob::CharacterData:
+				ThrowFormatException(formatter, "CharacterData not supported in formatter recording");
+				break;
+
+			default:
+				ThrowFormatException(formatter, "Unexpected blob or end of stream hit while skipping forward");
+			}
+		}
+
+		return result;
+	}
+
+	std::shared_ptr<Formatters::IDynamicInputFormatter> PlaybackRecording(std::shared_ptr<FormatterRecording> recording, ::Assets::DependencyValidation depVal)
+	{
+		return std::make_shared<PlaybackFormatter>(std::move(recording), std::move(depVal));
+	}
 
 }
 
