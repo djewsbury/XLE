@@ -115,7 +115,7 @@ namespace ToolsRig
 				if (modifierMode == Translate) {
 
 					float distanceToFocus = Magnitude(_visCameraSettings->_focus -_visCameraSettings->_position);
-					float speedScale = distanceToFocus * XlTan(0.5f * Deg2Rad(_visCameraSettings->_verticalFieldOfView));
+					float speedScale = distanceToFocus * XlTan(0.5f * _visCameraSettings->_verticalFieldOfView);
 
 						//  Translate the camera, but don't change forward direction
 						//  Speed should be related to the distance to the focus point -- so that
@@ -159,7 +159,7 @@ namespace ToolsRig
         if (evnt._wheelDelta) {
             float distanceToFocus = Magnitude(_visCameraSettings->_focus -_visCameraSettings->_position);
 
-            float speedScale = distanceToFocus * XlTan(0.5f * Deg2Rad(_visCameraSettings->_verticalFieldOfView));
+            float speedScale = distanceToFocus * XlTan(0.5f * _visCameraSettings->_verticalFieldOfView);
             auto movement = std::min(evnt._wheelDelta * speedScale * _wheelTranslateSpeed, distanceToFocus - 0.1f);
 
             Float3 translation = movement * forward;

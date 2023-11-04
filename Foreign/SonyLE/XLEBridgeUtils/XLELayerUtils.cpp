@@ -70,7 +70,7 @@ namespace XLEBridgeUtils
         ToolsRig::VisCameraSettings visCam;
         visCam._position = AsFloat3(camera->WorldEye);
         visCam._focus = AsFloat3(camera->WorldLookAtPoint);
-        visCam._verticalFieldOfView = camera->YFov * 180.f / gPI;
+        visCam._verticalFieldOfView = camera->YFov;
         visCam._nearClip = camera->NearZ;
         visCam._farClip = camera->FarZ;
         return gcnew GUILayer::CameraDescWrapper(visCam);

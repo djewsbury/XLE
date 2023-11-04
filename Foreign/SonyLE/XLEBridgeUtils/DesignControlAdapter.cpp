@@ -94,7 +94,7 @@ namespace XLEBridgeUtils
                 dstCam._bottom = camera->Frustum->Bottom;
             } else {
                 dstCam._projection = ToolsRig::VisCameraSettings::Projection::Perspective;
-                dstCam._verticalFieldOfView = camera->YFov * 180.f / gPI;
+                dstCam._verticalFieldOfView = camera->YFov;
             }
             _layerControl->Render();
 

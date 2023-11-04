@@ -63,7 +63,7 @@ namespace ToolsRig
             Float3(0.f, 0.f, 1.f), camSettings._position);
         result._farClip = camSettings._farClip;
         result._nearClip = camSettings._nearClip;
-        result._verticalFieldOfView = Deg2Rad(camSettings._verticalFieldOfView);
+        result._verticalFieldOfView = camSettings._verticalFieldOfView;
         result._left = camSettings._left;
         result._top = camSettings._top;
         result._right = camSettings._right;
@@ -86,7 +86,7 @@ namespace ToolsRig
 		result._projection = (cameraDesc._projection == CameraDesc::Projection::Orthogonal)
 			? VisCameraSettings::Projection::Orthogonal
 			: VisCameraSettings::Projection::Perspective;
-		result._verticalFieldOfView = Rad2Deg(cameraDesc._verticalFieldOfView);
+		result._verticalFieldOfView = cameraDesc._verticalFieldOfView;
 		result._left = cameraDesc._left;
 		result._top = cameraDesc._top;
 		result._right = cameraDesc._right;
@@ -124,7 +124,7 @@ namespace ToolsRig
 			// orientation
         float verticalHalfDimension = .5f * std::max(box.second[0] - box.first[0], box.second[2] - box.first[2]);
 		verticalHalfDimension *= 1.15f;		// expand out a bit so the model doesn't touch the edges of the viewport
-        position[1] = box.first[1] + (verticalHalfDimension * (1.f + border)) / XlTan(.5f * Deg2Rad(verticalFieldOfView));
+        position[1] = box.first[1] + (verticalHalfDimension * (1.f + border)) / XlTan(.5f * verticalFieldOfView);
 
         VisCameraSettings result;
         result._position = position;
