@@ -92,6 +92,7 @@ namespace PlatformRig
 			// when it first appears
 			_pending = Pending::ShowWindowBeginRenderFrame;
 			_lastOverlayConfiguration = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
+			_lastOverlayConfigurationGood = true;
 			return OnRenderTargetUpdate { _lastOverlayConfiguration._preregAttachments, _lastOverlayConfiguration._fbProps, _lastOverlayConfiguration._systemAttachmentFormats };
 			break;
 
@@ -100,38 +101,64 @@ namespace PlatformRig
 		}
 
 		assert(!_activeParsingContext);
-		auto msgPump = OSServices::Window::SingleWindowMessagePump(*_apparatus->_osWindow);
-		PlatformRig::CommonEventHandling(*_apparatus, msgPump);
-		if (std::holds_alternative<OSServices::Idle>(msgPump)) {
+		for (;;) {
+			auto msgPump = OSServices::Window::SingleWindowMessagePump(*_apparatus->_osWindow);
+			if (std::holds_alternative<OSServices::Idle>(msgPump)) {
 
-			 // if we don't have any immediate OS events to process, it may be time to render
-			auto& idle = std::get<OSServices::Idle>(msgPump);
+				// if we don't have any immediate OS events to process, it may be time to render
+				auto& idle = std::get<OSServices::Idle>(msgPump);
 
-			if (idle._state == OSServices::IdleState::Background) {
-				// Bail if we're minimized (don't have to check this in the foreground case)
-				auto presChainDesc = _apparatus->_presentationChain->GetDesc();
-				if (!(presChainDesc._width * presChainDesc._height)) {
-					Threading::Sleep(64);       // minimized and inactive
-					return idle;
+				if (idle._state == OSServices::IdleState::Background) {
+					// Bail if we're minimized (don't have to check this in the foreground case)
+					auto presChainDesc = _apparatus->_presentationChain->GetDesc();
+					if (!(presChainDesc._width * presChainDesc._height)) {
+						Threading::Sleep(64);       // minimized and inactive
+						return idle;
+					}
 				}
-			}
 
-			_pending = Pending::BeginRenderFrame;
-			_lastIdleState = idle._state;
-			return UpdateFrame { _apparatus->_frameRig->GetSmoothedDeltaTime() * Tweakable("TimeScale", 1.0f) };
+				_pending = Pending::BeginRenderFrame;
+				_lastIdleState = idle._state;
+				return UpdateFrame { _apparatus->_frameRig->GetSmoothedDeltaTime() * Tweakable("TimeScale", 1.0f) };
 
-		} else if (std::holds_alternative<OSServices::WindowResize>(msgPump)) {
+			} else if (std::holds_alternative<OSServices::WindowResize>(msgPump)) {
 
-			// slightly awkward here -- we return PlatformRig::WindowResize only if we're not returning OnRenderTargetUpdate
-			auto newConfig = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
-			if (newConfig._hash != _lastOverlayConfiguration._hash) {
-				_lastOverlayConfiguration = std::move(newConfig);
-				return OnRenderTargetUpdate { _lastOverlayConfiguration._preregAttachments, _lastOverlayConfiguration._fbProps, _lastOverlayConfiguration._systemAttachmentFormats };
-			}
+				auto resize = std::get<OSServices::WindowResize>(msgPump);
+				auto& frameRig = *_apparatus->_frameRig;
 
+				frameRig.GetTechniqueContext()._frameBufferPool->Reset();
+				frameRig.ReleaseDoubleBufferAttachments();
+				frameRig.GetTechniqueContext()._attachmentPool->ResetActualized();
+				auto desc = _apparatus->_presentationChain->GetDesc();
+				desc._width = resize._newWidth;
+				desc._height = resize._newHeight;
+				_apparatus->_presentationChain->ChangeConfiguration(*_apparatus->_immediateContext, desc);
+				frameRig.UpdatePresentationChain(*_apparatus->_presentationChain);
+
+				auto newConfig = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
+				if (newConfig._hash != _lastOverlayConfiguration._hash) {
+					_lastOverlayConfiguration = std::move(newConfig);
+					_lastOverlayConfigurationGood = true;
+					return OnRenderTargetUpdate { _lastOverlayConfiguration._preregAttachments, _lastOverlayConfiguration._fbProps, _lastOverlayConfiguration._systemAttachmentFormats };
+				}
+
+			} else if (std::holds_alternative<OSServices::InputSnapshot>(msgPump)) {
+
+				auto clientRect = _apparatus->_osWindow->GetRect();
+				InputContext context;
+				WindowingSystemView view { {clientRect.first._x, clientRect.first._y}, {clientRect.second._x, clientRect.second._y} };
+				context.AttachService2(view);
+				auto evnt = std::get<OSServices::InputSnapshot>(msgPump);
+				ProcessInputResult processResult = ProcessInputResult::Passthrough;
+				if (_apparatus->_mainInputHandler)
+					processResult = _apparatus->_mainInputHandler->OnInputEvent(context, evnt);
+
+				if (processResult != ProcessInputResult::Consumed)
+					return InputEvent { std::move(evnt), std::move(context) };
+
+			} else
+				return Internal::VariantCast<MsgVariant>(std::move(msgPump));
 		}
-		
-		return Internal::VariantCast<MsgVariant>(std::move(msgPump));
 	}
 
 	void MessageLoop::ShowWindow(bool newState)
@@ -144,6 +171,14 @@ namespace PlatformRig
 		if (_pending != Pending::None)
 			Throw(std::runtime_error("Cannot show window because MessageLoop is in the middle of queued render operation"));
 		_pending = Pending::ShowWindow;
+	}
+
+	auto MessageLoop::GetLastRenderTargets() -> std::optional<OnRenderTargetUpdate>
+	{
+		if (!_lastOverlayConfigurationGood) return {};
+		return OnRenderTargetUpdate {
+			_lastOverlayConfiguration._preregAttachments, _lastOverlayConfiguration._fbProps, _lastOverlayConfiguration._systemAttachmentFormats
+		};
 	}
 
 	MessageLoop::MessageLoop(std::shared_ptr<PlatformRig::WindowApparatus> apparatus)
@@ -201,6 +236,12 @@ namespace PlatformRig
 				_xleResMountID = std::make_unique<MountRegistrationToken>();
 				if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::XPak) {
 					_fileCache = ::Assets::CreateFileCache(4 * 1024 * 1024);
+					// by default, search next to the executable if we don't have a fully qualified name
+					if (::Assets::MainFileSystem::TryGetDesc(_configGlobalServices._xleResLocation)._snapshot._state == ::Assets::FileSnapshot::State::DoesNotExist) {
+						char buffer[MaxPath];
+						OSServices::GetProcessPath(buffer, dimof(buffer));
+						_configGlobalServices._xleResLocation = Concatenate(MakeFileNameSplitter(buffer).DriveAndPath(), "/", _configGlobalServices._xleResLocation);
+					}
 					_xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateXPakFileSystem(_configGlobalServices._xleResLocation, _fileCache));
 				} else if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::OSFileSystem)
 					_xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS(_configGlobalServices._xleResLocation, _globalServices->GetPollingThread()));
@@ -265,12 +306,6 @@ namespace PlatformRig
 		CommandLineArgsDigest cmdLineDigest { cmdLine };
 		_configGlobalServices._xleResLocation = cmdLineDigest._xleres.AsString();
 		if (XlEqStringI(MakeFileNameSplitter(cmdLineDigest._xleres).Extension(), "pak")) {
-			// by default, search next to the executable if we don't have a fully qualified name
-			if (::Assets::MainFileSystem::TryGetDesc(_configGlobalServices._xleResLocation)._snapshot._state == ::Assets::FileSnapshot::State::DoesNotExist) {
-				char buffer[MaxPath];
-				OSServices::GetProcessPath(buffer, dimof(buffer));
-				_configGlobalServices._xleResLocation = Concatenate(MakeFileNameSplitter(buffer).DriveAndPath(), "/", _configGlobalServices._xleResLocation);
-			}
 			_configGlobalServices._xleResType = ConfigureGlobalServices::XLEResType::XPak;
 		} else
 			_configGlobalServices._xleResType = ConfigureGlobalServices::XLEResType::OSFileSystem;

@@ -56,6 +56,12 @@ namespace PlatformRig
 			float _deltaTime;
 		};
 
+		struct InputEvent
+		{
+			OSServices::InputSnapshot _evnt;
+			InputContext _content;
+		};
+
 		struct OnRenderTargetUpdate
 		{
 			IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> _preregAttachments;
@@ -63,10 +69,11 @@ namespace PlatformRig
 			IteratorRange<const RenderCore::Format*> _systemAttachmentFormats;
 		};
 
-		using MsgVariant = Internal::VariantCat<OSServices::SystemMessageVariant, RenderFrame, UpdateFrame, OnRenderTargetUpdate>;
+		using MsgVariant = Internal::VariantCat<OSServices::SystemMessageVariant, RenderFrame, UpdateFrame, InputEvent, OnRenderTargetUpdate>;
 		MsgVariant Pump();
 
 		void ShowWindow(bool newState);
+		std::optional<OnRenderTargetUpdate> GetLastRenderTargets();
 
 		MessageLoop(std::shared_ptr<WindowApparatus> apparatus);
 		~MessageLoop();
@@ -84,6 +91,7 @@ namespace PlatformRig
 		std::optional<RenderCore::Techniques::ParsingContext> _activeParsingContext;
 		OSServices::IdleState _lastIdleState = OSServices::IdleState::Foreground;
 		FrameRig::OverlayConfiguration _lastOverlayConfiguration;
+		bool _lastOverlayConfigurationGood = false;
 	};
 
 	class DebugOverlaysApparatus;
