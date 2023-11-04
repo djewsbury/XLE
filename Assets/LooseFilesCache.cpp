@@ -449,7 +449,7 @@ namespace Assets
 					for (const auto&prod:_productsFile._compileProducts)
 						if (prod._type == requests[r]._chunkTypeCode) {
 							result[r]._reopenFunction = [fs=_filesystem, fn=prod._intermediateArtifact]() -> std::shared_ptr<IFileInterface> {
-								return OpenFileInterface(*fs, fn, "rb", 0);
+								return OpenFileInterface(*fs, fn, "rb", OSServices::FileShareMode::Read);
 							};
 							foundExactMatch = true;
 							break;
@@ -469,8 +469,7 @@ namespace Assets
 				bool foundMulti = false;
 				for (const auto&prod:_productsFile._compileProducts)
 					if (prod._type == ChunkType_Multi) {
-						// open with no sharing
-						auto mainChunkFile = OpenFileInterface(*_filesystem, prod._intermediateArtifact, "rb", 0);
+						auto mainChunkFile = OpenFileInterface(*_filesystem, prod._intermediateArtifact, "rb", OSServices::FileShareMode::Read);
 						ArtifactChunkContainer temp(prod._intermediateArtifact, _depVal);
 						auto fromMulti = temp.ResolveRequests(*mainChunkFile, MakeIteratorRange(requestsForMulti));
 						for (size_t c=0; c<fromMulti.size(); ++c)
