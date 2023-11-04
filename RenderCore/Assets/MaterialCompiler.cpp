@@ -57,18 +57,162 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<typename Type>
-		static std::pair<std::unique_ptr<uint8_t[], PODAlignedDeletor>, size_t> SerializeViaStreamFormatterToBuffer(const Type& type)
+	namespace Internal
 	{
-		MemoryOutputStream<utf8> strm;
-		{ Formatters::TextOutputFormatter fmtter{strm}; fmtter << type; }
-		auto strmBuffer = MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End());
-		std::unique_ptr<uint8_t[], PODAlignedDeletor> result { (uint8_t*)XlMemAlign(strmBuffer.size(), sizeof(uint64_t)) };
-		std::memcpy(result.get(), strmBuffer.begin(), strmBuffer.size());
-		return { std::move(result), strmBuffer.size() };
+		struct PendingAssets
+		{
+			SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>> _resolvedNames;
+			using MaterialMarker = std::shared_ptr<::Assets::Marker<ResolvedMaterial>>;
+			std::vector<std::pair<MaterialGuid, MaterialMarker>> _materials;
+		};
+
+		template<typename Type>
+			static std::pair<std::unique_ptr<uint8_t[], PODAlignedDeletor>, size_t> SerializeViaStreamFormatterToBuffer(const Type& type)
+		{
+			MemoryOutputStream<utf8> strm;
+			{ Formatters::TextOutputFormatter fmtter{strm}; fmtter << type; }
+			auto strmBuffer = MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End());
+			std::unique_ptr<uint8_t[], PODAlignedDeletor> result { (uint8_t*)XlMemAlign(strmBuffer.size(), sizeof(uint64_t)) };
+			std::memcpy(result.get(), strmBuffer.begin(), strmBuffer.size());
+			return { std::move(result), strmBuffer.size() };
+		}
+
+		void Serialize(
+			::Assets::BlockSerializer& blockSerializer,
+			PendingAssets& pendingAssets,
+			std::vector<::Assets::DependencyValidationMarker>& depVals)
+		{
+			struct SerializedBlock1
+			{
+				uint64_t _hash = 0;
+				size_t _dataSize = 0;
+				std::unique_ptr<uint8_t[], PODAlignedDeletor> _data;
+			};
+			struct SerializedBlock2
+			{
+				uint64_t _hash = 0;
+				::Assets::BlockSerializer _subBlock;
+			};
+			std::vector<SerializedBlock2> resolved;
+			std::vector<SerializedBlock1> patchCollections;
+			resolved.reserve(pendingAssets._materials.size());
+			patchCollections.reserve(pendingAssets._materials.size());
+
+			for (const auto&m:pendingAssets._materials) {
+				auto state = m.second->StallWhilePending();
+				assert(state.value() == ::Assets::AssetState::Ready);
+				auto& resolvedMat = m.second->Actualize();
+
+				::Assets::BlockSerializer tempBlock;
+
+				if (resolvedMat._resources.GetCount())
+					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachShaderResourceBindings, resolvedMat._resources);
+				if (resolvedMat._selectors.GetCount())
+					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachSelectors, resolvedMat._selectors);
+				if (resolvedMat._uniforms.GetCount())
+					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachConstants, resolvedMat._uniforms);
+				if (!resolvedMat._samplers.empty()) {
+					tempBlock << (uint32_t)MaterialCommand::AttachSamplerBindings;
+					auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
+					for (auto& s:resolvedMat._samplers) {
+						tempBlock << Hash64(s.first);
+						tempBlock << s.second;
+					}
+					tempBlock.PushSizeValueAtRecall(recall);
+				}
+				tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachStateSet, resolvedMat._stateSet.GetHash());
+
+				if (resolvedMat._patchCollection.GetHash() != 0) {
+					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachPatchCollectionId, resolvedMat._patchCollection.GetHash());
+
+					bool gotExisting = false;
+					for (const auto&p:patchCollections)
+						gotExisting |= p._hash == resolvedMat._patchCollection.GetHash();
+
+					if (!gotExisting) {
+						// ShaderPatchCollection is mostly strings; so we just serialize it as a text block
+						auto buffer = SerializeViaStreamFormatterToBuffer(resolvedMat._patchCollection);
+						patchCollections.emplace_back(SerializedBlock1{resolvedMat._patchCollection.GetHash(), buffer.second, std::move(buffer.first)});
+					}
+				}
+
+				resolved.emplace_back(SerializedBlock2{m.first, std::move(tempBlock)});
+				depVals.emplace_back(resolvedMat.GetDependencyValidation());
+			}
+
+			std::sort(resolved.begin(), resolved.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
+			std::sort(patchCollections.begin(), patchCollections.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
+			std::sort(pendingAssets._resolvedNames.begin(), pendingAssets._resolvedNames.end(), CompareFirst2{});
+
+				// "resolved" is now actually the data we want to write out
+			auto outerRecall = blockSerializer.CreateRecall(sizeof(uint32_t));
+			for (const auto& m:resolved) {
+				blockSerializer << (uint32_t)ScaffoldCommand::Material;
+				blockSerializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
+				blockSerializer << m._hash;
+				blockSerializer << m._subBlock.SizePrimaryBlock();
+				blockSerializer.SerializeSubBlock(m._subBlock);
+			}
+			for (const auto& pc:patchCollections) {
+				blockSerializer << (uint32_t)ScaffoldCommand::ShaderPatchCollection;
+				blockSerializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
+				blockSerializer << pc._hash;
+				blockSerializer << pc._dataSize;
+				blockSerializer.SerializeSubBlock(MakeIteratorRange(pc._data.get(), PtrAdd(pc._data.get(), pc._dataSize)));
+			}
+			blockSerializer << MakeCmdAndSerializable(ScaffoldCommand::MaterialNameDehash, pendingAssets._resolvedNames);
+			blockSerializer.PushSizeValueAtRecall(outerRecall);
+		}
+
+		struct SourceModelHelper
+		{
+			std::string _sourceModel;
+			std::shared_ptr<ModelCompilationConfiguration> _sourceModelConfiguration;
+			std::shared_ptr<::Assets::Marker<RawMatConfigurations>> _modelMatFuture;
+
+			const RawMatConfigurations& GetModelMatConfigs() { return _modelMatFuture->Actualize(); }
+
+			::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>> GetMaterialMarkerPtr(const std::string& cfg) const
+			{
+				char buffer[3*MaxPath];
+				auto meld = StringMeldInPlace(buffer);
+				meld << _sourceModel << ":" << cfg;
+				if (_sourceModelConfiguration)
+					return ::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection(), _sourceModelConfiguration);
+				else 
+					return ::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection());
+			}
+
+			SourceModelHelper(
+				std::string sourceModel,
+				std::shared_ptr<ModelCompilationConfiguration> sourceModelConfiguration)
+			: _sourceModel(std::move(sourceModel)), _sourceModelConfiguration(std::move(sourceModelConfiguration))
+			{
+					// Ensure we strip off parameters from the source model filename before we get here.
+					// the parameters are irrelevant to the compiler -- so if they stay on the request
+					// name, will we end up with multiple assets that are equivalent
+				{
+					auto splitter = MakeFileNameSplitter(_sourceModel);
+					if (!splitter.ParametersWithDivider().IsEmpty())
+						_sourceModel = splitter.AllExceptParameters().AsString();
+				}
+
+				if (_sourceModelConfiguration) _modelMatFuture = ::Assets::GetAssetMarker<RawMatConfigurations>(_sourceModel, _sourceModelConfiguration);
+				else _modelMatFuture = ::Assets::GetAssetMarker<RawMatConfigurations>(_sourceModel);
+				auto modelMatState = _modelMatFuture->StallWhilePending();
+				if (modelMatState == ::Assets::AssetState::Invalid)
+					Throw(::Assets::Exceptions::ConstructionError(
+						::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
+						_modelMatFuture->GetDependencyValidation(),
+						StringMeld<3*MaxPath>() << "Failed while loading material information from source model (" << _sourceModel << ") with msg (" << ::Assets::AsString(_modelMatFuture->GetActualizationLog()) << ")"));
+
+			}
+
+			SourceModelHelper() = default;
+		};
 	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 	
 	static ::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
 	{
@@ -86,42 +230,15 @@ namespace RenderCore { namespace Assets
 		if (sourceMaterial == sourceModel)
 			sourceMaterial = {};
 
-		char buffer[3*MaxPath];
-
-			// Ensure we strip off parameters from the source model filename before we get here.
-			// the parameters are irrelevant to the compiler -- so if they stay on the request
-			// name, will we end up with multiple assets that are equivalent
-		{
-			auto splitter = MakeFileNameSplitter(sourceModel);
-			if (!splitter.ParametersWithDivider().IsEmpty())
-				sourceModel = splitter.AllExceptParameters().AsString();
-		}
-
-		std::shared_ptr<::Assets::Marker<RawMatConfigurations>> modelMatFuture;
-		if (sourceModelConfiguration) modelMatFuture = ::Assets::GetAssetMarker<RawMatConfigurations>(sourceModel, sourceModelConfiguration);
-		else modelMatFuture = ::Assets::GetAssetMarker<RawMatConfigurations>(sourceModel);
-		auto modelMatState = modelMatFuture->StallWhilePending();
-		if (modelMatState == ::Assets::AssetState::Invalid)
-			Throw(::Assets::Exceptions::ConstructionError(
-				::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
-				modelMatFuture->GetDependencyValidation(),
-				StringMeldInPlace(buffer) << "Failed while loading material information from source model (" << sourceModel << ") with msg (" << ::Assets::AsString(modelMatFuture->GetActualizationLog()) << ")"));
-
-		const auto& modelMat = modelMatFuture->Actualize();
-
-		std::vector<::Assets::DependencyValidationMarker> depVals;
-		depVals.emplace_back(modelMat.GetDependencyValidation());
+		Internal::SourceModelHelper sourceModelHelper { sourceModel, std::move(sourceModelConfiguration) };
+		const auto& modelMat = sourceModelHelper.GetModelMatConfigs();
 
 			//  for each configuration, we want to build a resolved material
-		struct PendingAssets
-		{
-			SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>> _resolvedNames;
-			using MaterialMarker = std::shared_ptr<::Assets::Marker<ResolvedMaterial>>;
-			std::vector<std::pair<MaterialGuid, MaterialMarker>> _materials;
-		} pendingAssets;
+		Internal::PendingAssets pendingAssets;
 		pendingAssets._resolvedNames.reserve(modelMat._configurations.size());
 		pendingAssets._materials.reserve(modelMat._configurations.size());
 
+		char buffer[3*MaxPath];
 		for (const auto& cfg:modelMat._configurations) {
 			ShaderPatchCollection patchCollection;
 			std::basic_stringstream<::Assets::ResChar> resName;
@@ -151,31 +268,18 @@ namespace RenderCore { namespace Assets
 		
 				// resolve in model:configuration
 				// This is a little different, because we have to pass the "sourceModelConfiguration" down the chain
-			{
-				auto meld = StringMeldInPlace(buffer);
-				meld << sourceModel << ":" << cfg;
-				std::shared_ptr<::Assets::Marker<std::shared_ptr<CompilableMaterialAssetMixin<RawMaterial>>>> partialMaterial;
-				if (sourceModelConfiguration) partialMaterial = ::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection(), sourceModelConfiguration);
-				else partialMaterial = ::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection());
-				partialMaterials.emplace_back(std::move(partialMaterial));
-			}
+			partialMaterials.emplace_back(sourceModelHelper.GetMaterialMarkerPtr(cfg));
 
 			if (!sourceMaterial.empty()) {
 					// resolve in material:*
-				{
-					auto meld = StringMeldInPlace(buffer);
-					meld << sourceMaterial << ":*";
-					auto partialMaterial = ::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection());
-					partialMaterials.emplace_back(std::move(partialMaterial));
-				}
+				partialMaterials.emplace_back(
+					::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(
+						(StringMeldInPlace(buffer) << sourceMaterial << ":*").AsStringSection()));
 
 					// resolve in the main material:cfg
-				{
-					auto meld = StringMeldInPlace(buffer);
-					meld << sourceMaterial << ":" << cfg;
-					auto partialMaterial = ::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(meld.AsStringSection());
-					partialMaterials.emplace_back(std::move(partialMaterial));
-				}
+				partialMaterials.emplace_back(
+					::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(
+						(StringMeldInPlace(buffer) << sourceMaterial << ":" << cfg).AsStringSection()));
 			}
 
 			auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
@@ -187,87 +291,10 @@ namespace RenderCore { namespace Assets
 			pendingAssets._resolvedNames.push_back(std::make_pair(guid, std::move(resNameVec)));
 		}
 
-		struct SerializedBlock1
-		{
-			uint64_t _hash = 0;
-			size_t _dataSize = 0;
-			std::unique_ptr<uint8_t[], PODAlignedDeletor> _data;
-		};
-		struct SerializedBlock2
-		{
-			uint64_t _hash = 0;
-			::Assets::BlockSerializer _subBlock;
-		};
-		std::vector<SerializedBlock2> resolved;
-		std::vector<SerializedBlock1> patchCollections;
-		resolved.reserve(pendingAssets._materials.size());
-		patchCollections.reserve(pendingAssets._materials.size());
-
-		for (const auto&m:pendingAssets._materials) {
-			auto state = m.second->StallWhilePending();
-			assert(state.value() == ::Assets::AssetState::Ready);
-			auto& resolvedMat = m.second->Actualize();
-
-			::Assets::BlockSerializer tempBlock;
-
-			if (resolvedMat._resources.GetCount())
-				tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachShaderResourceBindings, resolvedMat._resources);
-			if (resolvedMat._selectors.GetCount())
-				tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachSelectors, resolvedMat._selectors);
-			if (resolvedMat._uniforms.GetCount())
-				tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachConstants, resolvedMat._uniforms);
-			if (!resolvedMat._samplers.empty()) {
-				tempBlock << (uint32_t)MaterialCommand::AttachSamplerBindings;
-				auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
-				for (auto& s:resolvedMat._samplers) {
-					tempBlock << Hash64(s.first);
-					tempBlock << s.second;
-				}
-				tempBlock.PushSizeValueAtRecall(recall);
-			}
-			tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachStateSet, resolvedMat._stateSet.GetHash());
-
-			if (resolvedMat._patchCollection.GetHash() != 0) {
-				tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachPatchCollectionId, resolvedMat._patchCollection.GetHash());
-
-				bool gotExisting = false;
-				for (const auto&p:patchCollections)
-					gotExisting |= p._hash == resolvedMat._patchCollection.GetHash();
-
-				if (!gotExisting) {
-					// ShaderPatchCollection is mostly strings; so we just serialize it as a text block
-					auto buffer = SerializeViaStreamFormatterToBuffer(resolvedMat._patchCollection);
-					patchCollections.emplace_back(SerializedBlock1{resolvedMat._patchCollection.GetHash(), buffer.second, std::move(buffer.first)});
-				}
-			}
-
-			resolved.emplace_back(SerializedBlock2{m.first, std::move(tempBlock)});
-			depVals.emplace_back(resolvedMat.GetDependencyValidation());
-		}
-
-		std::sort(resolved.begin(), resolved.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
-		std::sort(patchCollections.begin(), patchCollections.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
-		std::sort(pendingAssets._resolvedNames.begin(), pendingAssets._resolvedNames.end(), CompareFirst<MaterialGuid, SerializableVector<char>>());
-
-			// "resolved" is now actually the data we want to write out
+		std::vector<::Assets::DependencyValidationMarker> depVals;
+		depVals.emplace_back(modelMat.GetDependencyValidation());
 		::Assets::BlockSerializer blockSerializer;
-		auto outerRecall = blockSerializer.CreateRecall(sizeof(uint32_t));
-		for (const auto& m:resolved) {
-			blockSerializer << (uint32_t)ScaffoldCommand::Material;
-			blockSerializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
-			blockSerializer << m._hash;
-			blockSerializer << m._subBlock.SizePrimaryBlock();
-			blockSerializer.SerializeSubBlock(m._subBlock);
-		}
-		for (const auto& pc:patchCollections) {
-			blockSerializer << (uint32_t)ScaffoldCommand::ShaderPatchCollection;
-			blockSerializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
-			blockSerializer << pc._hash;
-			blockSerializer << pc._dataSize;
-			blockSerializer.SerializeSubBlock(MakeIteratorRange(pc._data.get(), PtrAdd(pc._data.get(), pc._dataSize)));
-		}
-		blockSerializer << MakeCmdAndSerializable(ScaffoldCommand::MaterialNameDehash, pendingAssets._resolvedNames);
-		blockSerializer.PushSizeValueAtRecall(outerRecall);
+		Internal::Serialize(blockSerializer, pendingAssets, depVals);
 
 		return {
 			std::vector<::Assets::SerializedArtifact>{
@@ -294,6 +321,207 @@ namespace RenderCore { namespace Assets
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static std::shared_ptr<MaterialScaffold> ConstructMaterialScaffoldSync(
+		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::string sourceModel, std::shared_ptr<ModelCompilationConfiguration> sourceModelConfiguration,
+		std::vector<std::string> materialsToInstantiate)
+	{
+		assert(materialsToInstantiate.empty() || (sourceModel.empty() && sourceModelConfiguration == nullptr));		// one or the other
+
+		Internal::SourceModelHelper sourceModelHelper;
+		std::vector<::Assets::DependencyValidationMarker> depVals;
+		bool useSourceModel = materialsToInstantiate.empty();
+		if (useSourceModel) {
+			sourceModelHelper = { sourceModel, std::move(sourceModelConfiguration) };
+			const auto& modelMat = sourceModelHelper.GetModelMatConfigs();
+			materialsToInstantiate = modelMat._configurations;
+			depVals.emplace_back(modelMat.GetDependencyValidation());		// record a dependency here incase it's empty
+		}
+
+			//  for each configuration, we want to build a resolved material
+		Internal::PendingAssets pendingAssets;
+		pendingAssets._resolvedNames.reserve(materialsToInstantiate.size());
+		pendingAssets._materials.reserve(materialsToInstantiate.size());
+
+		char buffer[3*MaxPath];
+		for (const auto& cfg:materialsToInstantiate) {
+			ShaderPatchCollection patchCollection;
+			std::basic_stringstream<::Assets::ResChar> resName;
+			auto guid = MakeMaterialGuid(MakeStringSection(cfg));
+
+			std::vector<::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>> partialMaterials;
+			if (useSourceModel)
+				partialMaterials.emplace_back(sourceModelHelper.GetMaterialMarkerPtr(cfg));
+
+			auto o0 = construction->_inlineMaterialOverrides.begin();
+			auto o1 = construction->_materialFileOverrides.begin();
+			auto o2 = construction->_futureMaterialOverrides.begin();
+			for (unsigned overrideIdx=0; overrideIdx<construction->_nextOverrideIdx; ++overrideIdx) {
+
+				if (o0 != construction->_inlineMaterialOverrides.end() && o0->first._overrideIdx == overrideIdx) {
+
+					if (o0->first._application == 0 || o0->first._application == guid) {
+						auto marker = std::make_shared<::Assets::MarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>>();
+						marker->SetAssetForeground(std::make_shared<CompilableMaterialAssetMixin<RawMaterial>>(o0->second));
+						partialMaterials.emplace_back(std::move(marker));
+					}
+					++o0;
+
+				} else if (o1 != construction->_materialFileOverrides.end() && o1->first._overrideIdx == overrideIdx) {
+
+					if (o1->first._application == 0 || o1->first._application == guid) {
+						if (o1->first._application == 0) {
+							partialMaterials.emplace_back(
+								::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(
+									(StringMeldInPlace(buffer) << o1->second << ":*").AsStringSection()));
+						} else {
+							partialMaterials.emplace_back(
+								::Assets::GetAssetMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>(
+									(StringMeldInPlace(buffer) << o1->second << ":" << cfg).AsStringSection()));
+						}
+					}
+					++o1;
+
+				} else if (o2 != construction->_futureMaterialOverrides.end() && o2->first._overrideIdx == overrideIdx) {
+					if (o2->first._application == 0 || o2->first._application == guid)
+						partialMaterials.push_back(o2->second);
+					++o2;
+				}
+
+			}
+
+			auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
+			ResolvedMaterial::ConstructToPromise(marker->AdoptPromise(), partialMaterials);
+
+			pendingAssets._materials.push_back(std::make_pair(guid, std::move(marker)));
+
+			SerializableVector<char> resNameVec(cfg.begin(), cfg.end());
+			pendingAssets._resolvedNames.push_back(std::make_pair(guid, std::move(resNameVec)));
+		}
+
+		::Assets::BlockSerializer blockSerializer;
+		Internal::Serialize(blockSerializer, pendingAssets, depVals);
+		auto memBlock = blockSerializer.AsMemoryBlock();
+		::Assets::Block_Initialize(memBlock.get());
+
+		return std::make_shared<MaterialScaffold>(
+			std::move(memBlock), blockSerializer.Size(),
+			::Assets::GetDepValSys().MakeOrReuse(depVals));
+	}
+
+	void ConstructMaterialScaffold(
+		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::string sourceModel, std::shared_ptr<ModelCompilationConfiguration> sourceModelConfiguration)
+	{
+		::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), construction=std::move(construction), sourceModel=std::move(sourceModel), sourceModelConfiguration=std::move(sourceModelConfiguration)]() mutable {
+				TRY {
+					promise.set_value(ConstructMaterialScaffoldSync(construction, sourceModel, sourceModelConfiguration, {}));
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+	}
+
+	void ConstructMaterialScaffold(
+		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::string sourceModel, std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<ModelCompilationConfiguration>>> sourceModelConfiguration)
+	{
+		::Assets::WhenAll(sourceModelConfiguration).ThenConstructToPromise(
+			std::move(promise),
+			[construction=std::move(construction), sourceModel=std::move(sourceModel)](auto sourceModelConfiguration) {
+				return ConstructMaterialScaffoldSync(construction, sourceModel, sourceModelConfiguration, {});
+			});
+	}
+
+	void ConstructMaterialScaffold(
+		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		IteratorRange<const std::string*> materialsToInstantiate)
+	{
+		assert(!materialsToInstantiate.empty());	// confuses ConstructMaterialScaffoldSync if we call it with an empty materialsToInstantiate
+		if (materialsToInstantiate.empty()) {
+			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialScaffold call because there are no materials to instantiate specified")));
+			return;
+		}
+
+		::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), construction=std::move(construction), cfgs=std::vector<std::string>(materialsToInstantiate.begin(), materialsToInstantiate.end())]() mutable {
+				TRY {
+					promise.set_value(ConstructMaterialScaffoldSync(construction, nullptr, nullptr, std::move(cfgs)));
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void MaterialScaffoldConstruction::AddOverride(StringSection<> application, RawMaterial&& mat)
+	{
+		_inlineMaterialOverrides.emplace_back(Override{MakeMaterialGuid(application), _nextOverrideIdx++}, std::move(mat));
+		_hash = 0;
+	}
+
+	void MaterialScaffoldConstruction::AddOverride(StringSection<> application, ::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>&& mat)
+	{
+		_futureMaterialOverrides.emplace_back(Override{MakeMaterialGuid(application), _nextOverrideIdx++}, std::move(mat));
+		_disableHash = true;
+		_hash = 0;
+	}
+
+	void MaterialScaffoldConstruction::AddOverride(StringSection<> application, std::string&& materialFileIdentifier)
+	{
+		_materialFileOverrides.emplace_back(Override{MakeMaterialGuid(application), _nextOverrideIdx++}, std::move(materialFileIdentifier));
+		_hash = 0;
+	}
+
+	void MaterialScaffoldConstruction::AddOverride(RawMaterial&& mat)
+	{
+		_inlineMaterialOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
+		_hash = 0;
+	}
+
+	void MaterialScaffoldConstruction::AddOverride(::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>&& mat)
+	{
+		_futureMaterialOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
+		_disableHash = true;
+		_hash = 0;
+	}
+
+	void MaterialScaffoldConstruction::AddOverride(std::string&& materialFileIdentifier)
+	{
+		_materialFileOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(materialFileIdentifier));
+		_hash = 0;
+	}
+
+	bool MaterialScaffoldConstruction::CanBeHashed() const { return !_disableHash; }
+	uint64_t MaterialScaffoldConstruction::GetHash() const
+	{
+		if (_hash == 0) {
+			_hash = DefaultSeed64;
+			auto i = _inlineMaterialOverrides.begin();
+			auto i2 = _materialFileOverrides.begin();
+			auto i3 = _futureMaterialOverrides.begin();
+			for (unsigned c=0; c<_nextOverrideIdx; ++c) {
+				if (i != _inlineMaterialOverrides.end() && i->first._overrideIdx == c) {
+					_hash = i->second.CalculateHash(_hash) + i->first._application;
+					++i;
+				} else if (i2 != _materialFileOverrides.end() && i2->first._overrideIdx == c) {
+					_hash = Hash64(i2->second, _hash) + i->first._application;
+					++i2;
+				} else 
+					Throw(std::runtime_error("Attempting to create a hash for a MaterialScaffoldConstruction which cannot be hashed"));
+			}
+		}
+		return _hash;
+	}
+
+	MaterialScaffoldConstruction::MaterialScaffoldConstruction() = default;
+	MaterialScaffoldConstruction::~MaterialScaffoldConstruction() = default;
 
 }}
 

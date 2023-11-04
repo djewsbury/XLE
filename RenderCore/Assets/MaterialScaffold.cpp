@@ -75,11 +75,17 @@ namespace RenderCore { namespace Assets
 	{}
 
 	MaterialScaffold::MaterialScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
-	: _depVal(depVal)
+	: MaterialScaffold(std::move(chunks[0]._buffer), chunks[0]._bufferSize, depVal)
 	{
 		assert(chunks.size() == 1);
-		_rawMemoryBlock = std::move(chunks[0]._buffer);
-		_rawMemoryBlockSize = chunks[0]._bufferSize;
+	}
+
+	MaterialScaffold::MaterialScaffold(
+		std::unique_ptr<uint8[], PODAlignedDeletor>	rawMemoryBlock,
+		size_t rawMemoryBlockSize, const ::Assets::DependencyValidation& depVal)
+	: _rawMemoryBlock(std::move(rawMemoryBlock)), _rawMemoryBlockSize(rawMemoryBlockSize)
+	, _depVal(depVal)
+	{
 
 		for (auto cmd:GetOuterCommandStream()) {
 			switch (cmd.Cmd()) {

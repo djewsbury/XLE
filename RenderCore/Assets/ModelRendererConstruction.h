@@ -19,6 +19,7 @@ namespace RenderCore { namespace Assets
 	class MaterialScaffold;
 	class SkeletonScaffold;
 	class ModelCompilationConfiguration;
+	class MaterialScaffoldConstruction;
 
 	class ModelRendererConstruction : public std::enable_shared_from_this<ModelRendererConstruction>
 	{
@@ -28,8 +29,9 @@ namespace RenderCore { namespace Assets
 		{
 		public:
 			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material);
-			ElementConstructor& SetModelAndMaterialScaffolds(std::shared_ptr<::Assets::OperationContext> opContext, StringSection<> model, StringSection<> material);
-			
+			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, std::shared_ptr<MaterialScaffoldConstruction>);
+			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model);
+
 			ElementConstructor& SetModelScaffold(std::shared_future<std::shared_ptr<Assets::ModelScaffold>>, std::string initializer={});
 			ElementConstructor& SetModelScaffold(std::shared_ptr<Assets::ModelScaffold>, std::string initializer={});
 			
@@ -44,6 +46,11 @@ namespace RenderCore { namespace Assets
 			ElementConstructor& SetDeformerBindPoint(uint64_t);
 
 			ElementConstructor& SetName(const std::string&);
+
+			std::shared_future<std::shared_ptr<Assets::ModelScaffold>> GetFutureModelScaffold();
+			std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> GetFutureMaterialScaffold();
+
+			unsigned ElementId() const { return _elementId; }
 		private:
 			unsigned _elementId = ~0u;
 			Internal* _internal = nullptr;
@@ -61,12 +68,14 @@ namespace RenderCore { namespace Assets
 		unsigned GetElementCount() const;
 
 		void SetSkeletonScaffold(StringSection<>);
-		void SetSkeletonScaffold(std::shared_ptr<::Assets::OperationContext>, StringSection<>);
 		void SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>>, std::string initializer={});
 		void SetSkeletonScaffold(const std::shared_ptr<Assets::SkeletonScaffold>&);
 		std::shared_ptr<Assets::SkeletonScaffold> GetSkeletonScaffold() const;
 
+		void SetOperationContext(std::shared_ptr<::Assets::OperationContext>);
+
 		uint64_t GetHash() const;
+		bool CanBeHashed() const;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<ModelRendererConstruction>>&& promise);
 		::Assets::AssetState GetAssetState() const;
@@ -93,6 +102,7 @@ namespace RenderCore { namespace Assets
 		public:
 			std::shared_ptr<Assets::ModelScaffold> GetModelScaffold() const;
 			std::shared_ptr<Assets::MaterialScaffold> GetMaterialScaffold() const;
+			std::shared_ptr<Assets::MaterialScaffoldConstruction> GetMaterialScaffoldConstruction() const;
 			std::shared_ptr<Assets::ModelCompilationConfiguration> GetCompilationConfiguration() const;
 			std::optional<Float4x4> GetElementToObject() const;
 			std::string GetModelScaffoldName() const;
@@ -109,12 +119,14 @@ namespace RenderCore { namespace Assets
 			using ModelScaffoldPtr = std::shared_ptr<Assets::ModelScaffold>;
 			using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>;
 			using MaterialScaffoldPtr = std::shared_ptr<Assets::MaterialScaffold>;
+			using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialScaffoldConstruction>;
 			using CompilationConfigurationMarker = std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>;
 			using CompilationConfigurationPtr = std::shared_ptr<Assets::ModelCompilationConfiguration>;
 			Iterator<ModelScaffoldMarker> _msmi;
 			Iterator<ModelScaffoldPtr> _mspi;
 			Iterator<MaterialScaffoldMarker> _matsmi;
 			Iterator<MaterialScaffoldPtr> _matspi;
+			Iterator<MaterialScaffoldConstructionPtr> _matscpi;
 			Iterator<CompilationConfigurationMarker> _ccmi;
 			Iterator<CompilationConfigurationPtr> _ccpi;
 			Iterator<Float4x4> _etoi;

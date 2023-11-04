@@ -56,7 +56,7 @@ namespace RenderCore { namespace Assets
 
 		uint64_t CalculateHash(uint64_t) const;
 
-		ModelCompilationConfiguration(Formatters::TextInputFormatter<char>& fmttr);
+		explicit ModelCompilationConfiguration(Formatters::TextInputFormatter<char>& fmttr);
 		ModelCompilationConfiguration();
 		~ModelCompilationConfiguration();
 

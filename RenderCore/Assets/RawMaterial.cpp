@@ -527,6 +527,23 @@ namespace RenderCore { namespace Assets
             _inherit.emplace_back(value);
     }
 
+    uint64_t RawMaterial::CalculateHash(uint64_t seed) const
+    {
+        uint64_t hashes[] {
+            _resources.GetHash(), _resources.GetParameterNamesHash(),
+            _selectors.GetHash(), _selectors.GetParameterNamesHash(),
+            _uniforms.GetHash(), _uniforms.GetParameterNamesHash(),
+            _stateSet.GetHash(),
+            _patchCollection.GetHash()
+        };
+        auto result = Hash64(MakeIteratorRange(hashes), seed);
+        for (auto& s:_samplers)
+            result = Hash64(s.first, s.second.Hash() + result);
+        for (auto& i:_inherit)
+            result = Hash64(i, result);
+        return result;
+    }
+
     RenderStateSet& RenderStateSet::SetDoubleSided(bool newValue)
     {
         _doubleSided = newValue;

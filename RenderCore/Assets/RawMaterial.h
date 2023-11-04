@@ -179,9 +179,11 @@ namespace RenderCore { namespace Assets
 		IteratorRange<const std::string*> GetInherited() const { return _inherit; }
 
         void SerializeMethod(Formatters::TextOutputFormatter& formatter) const;
+
+        uint64_t CalculateHash(uint64_t seed = DefaultSeed64) const;
         
         RawMaterial();
-        RawMaterial(Formatters::TextInputFormatter<utf8>& formatter);
+        explicit RawMaterial(Formatters::TextInputFormatter<utf8>& formatter);
         ~RawMaterial();
     };
 

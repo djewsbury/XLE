@@ -8,6 +8,7 @@
 #include "ModelScaffold.h"
 #include "MaterialScaffold.h"
 #include "ModelCompilationConfiguration.h"
+#include "MaterialCompiler.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/IArtifact.h"
@@ -24,6 +25,7 @@ namespace RenderCore { namespace Assets
 		using ModelScaffoldPtr = std::shared_ptr<Assets::ModelScaffold>;
 		using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>;
 		using MaterialScaffoldPtr = std::shared_ptr<Assets::MaterialScaffold>;
+		using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialScaffoldConstruction>;
 		using CompilationConfigurationMarker = std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>;
 		using CompilationConfigurationPtr = std::shared_ptr<Assets::ModelCompilationConfiguration>;
 
@@ -31,6 +33,7 @@ namespace RenderCore { namespace Assets
 		std::vector<std::pair<ElementId, ModelScaffoldPtr>> _modelScaffoldPtrs;
 		std::vector<std::pair<ElementId, MaterialScaffoldMarker>> _materialScaffoldMarkers;
 		std::vector<std::pair<ElementId, MaterialScaffoldPtr>> _materialScaffoldPtrs;
+		std::vector<std::pair<ElementId, MaterialScaffoldConstructionPtr>> _materialScaffoldConstructionPtrs;
 		std::vector<std::pair<ElementId, CompilationConfigurationMarker>> _compilationConfigurationMarkers;
 		std::vector<std::pair<ElementId, CompilationConfigurationPtr>> _compilationConfigurationPtrs;
 		std::vector<std::pair<ElementId, Float4x4>> _elementToObjects;
@@ -43,6 +46,7 @@ namespace RenderCore { namespace Assets
 
 		std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>> _skeletonScaffoldMarker;
 		std::shared_ptr<Assets::SkeletonScaffold> _skeletonScaffoldPtr;
+		std::shared_ptr<::Assets::OperationContext> _opContext;
 		std::string _skeletonScaffoldInitializer;
 		uint64_t _skeletonScaffoldHashValue = 0u;
 
@@ -153,22 +157,39 @@ namespace RenderCore { namespace Assets
 	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
+		assert(!model.IsEmpty());
 		auto originalDisableHash = _internal->_disableHash;
 
-		if (material.IsEmpty()) material = model;
+		auto materialForAsset = material;
+		if (materialForAsset.IsEmpty()) materialForAsset = model;
 
 		auto i = LowerBound(_internal->_compilationConfigurationMarkers, _elementId);
 		if (i != _internal->_compilationConfigurationMarkers.end() && i->first == _elementId) {
-			SetModelScaffold(CreateModelScaffoldFuture(model, i->second), model.AsString());
-			SetMaterialScaffold(CreateMaterialScaffoldFuture(material, model, i->second), material.AsString());
+			if (_internal->_opContext) {
+				SetModelScaffold(CreateModelScaffoldFuture(_internal->_opContext, model, i->second), model.AsString());
+				SetMaterialScaffold(CreateMaterialScaffoldFuture(_internal->_opContext, materialForAsset, model, i->second), material.AsString());
+			} else {
+				SetModelScaffold(CreateModelScaffoldFuture(model, i->second), model.AsString());
+				SetMaterialScaffold(CreateMaterialScaffoldFuture(materialForAsset, model, i->second), material.AsString());
+			}
 		} else {
 			auto i2 = LowerBound(_internal->_compilationConfigurationPtrs, _elementId);
-			if (i2 != _internal->_compilationConfigurationPtrs.end() && i->first == _elementId) {
-				SetModelScaffold(CreateModelScaffoldFuture(model, i2->second), model.AsString());
-				SetMaterialScaffold(CreateMaterialScaffoldFuture(material, model, i2->second), material.AsString());
+			if (i2 != _internal->_compilationConfigurationPtrs.end() && i2->first == _elementId) {
+				if (_internal->_opContext) {
+					SetModelScaffold(CreateModelScaffoldFuture(_internal->_opContext, model, i2->second), model.AsString());
+					SetMaterialScaffold(CreateMaterialScaffoldFuture(_internal->_opContext, materialForAsset, model, i2->second), material.AsString());
+				} else {
+					SetModelScaffold(CreateModelScaffoldFuture(model, i2->second), model.AsString());
+					SetMaterialScaffold(CreateMaterialScaffoldFuture(materialForAsset, model, i2->second), material.AsString());
+				}
 			} else {
-				SetModelScaffold(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(model), model.AsString());
-				SetMaterialScaffold(::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(material, model), material.AsString());
+				if (_internal->_opContext) {
+					SetModelScaffold(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(_internal->_opContext, model), model.AsString());
+					SetMaterialScaffold(::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(_internal->_opContext, materialForAsset, model), material.AsString());
+				} else {
+					SetModelScaffold(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(model), model.AsString());
+					SetMaterialScaffold(::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(materialForAsset, model), material.AsString());
+				}
 			}
 		}
 		
@@ -176,31 +197,45 @@ namespace RenderCore { namespace Assets
 		_internal->_hash = 0;
 		return *this;
 	}
-	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(std::shared_ptr<::Assets::OperationContext> opContext, StringSection<> model, StringSection<> material) -> ElementConstructor&
+	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(StringSection<> model, std::shared_ptr<MaterialScaffoldConstruction> scaffoldPtr) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
+		assert(scaffoldPtr);
+		assert(!model.IsEmpty());
 		auto originalDisableHash = _internal->_disableHash;
+		auto canBeHashed = scaffoldPtr->CanBeHashed();
+		auto i4 = LowerBound(_internal->_materialScaffoldConstructionPtrs, _elementId);
+		if (i4 != _internal->_materialScaffoldConstructionPtrs.end() && i4->first == _elementId) i4->second = std::move(scaffoldPtr);
+		else i4 = _internal->_materialScaffoldConstructionPtrs.insert(i4, {_elementId, std::move(scaffoldPtr)});
 
-		if (material.IsEmpty()) material = model;
+		std::promise<std::shared_ptr<MaterialScaffold>> promisedScaffold;
+		auto futureScaffold = promisedScaffold.get_future();
 
+		auto modelStr = model.AsString();
 		auto i = LowerBound(_internal->_compilationConfigurationMarkers, _elementId);
 		if (i != _internal->_compilationConfigurationMarkers.end() && i->first == _elementId) {
-			SetModelScaffold(CreateModelScaffoldFuture(opContext, model, i->second), model.AsString());
-			SetMaterialScaffold(CreateMaterialScaffoldFuture(material, model, i->second), material.AsString());
+			SetModelScaffold(CreateModelScaffoldFuture(model, i->second), modelStr);
+			ConstructMaterialScaffold(std::move(promisedScaffold), i4->second, modelStr, i->second);
 		} else {
 			auto i2 = LowerBound(_internal->_compilationConfigurationPtrs, _elementId);
-			if (i2 != _internal->_compilationConfigurationPtrs.end() && i->first == _elementId) {
-				SetModelScaffold(CreateModelScaffoldFuture(opContext, model, i2->second), model.AsString());
-				SetMaterialScaffold(CreateMaterialScaffoldFuture(material, model, i2->second), material.AsString());
+			if (i2 != _internal->_compilationConfigurationPtrs.end() && i2->first == _elementId) {
+				SetModelScaffold(CreateModelScaffoldFuture(model, i2->second), modelStr);
+				ConstructMaterialScaffold(std::move(promisedScaffold), i4->second, modelStr, i2->second);
 			} else {
-				SetModelScaffold(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(opContext, model), model.AsString());
-				SetMaterialScaffold(::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(std::move(opContext), material, model), material.AsString());
+				SetModelScaffold(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(model), modelStr);
+				ConstructMaterialScaffold(std::move(promisedScaffold), i4->second, modelStr, nullptr);
 			}
 		}
 
-		_internal->_disableHash = originalDisableHash;
+		SetMaterialScaffold(std::move(futureScaffold));
+
+		_internal->_disableHash = originalDisableHash || !canBeHashed;
 		_internal->_hash = 0;
 		return *this;
+	}
+	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(StringSection<> model) -> ElementConstructor&
+	{
+		return SetModelAndMaterialScaffolds(model, StringSection<>{});
 	}
 	auto ModelRendererConstruction::ElementConstructor::SetModelScaffold(std::shared_future<std::shared_ptr<Assets::ModelScaffold>> scaffoldMarker, std::string initializer) -> ElementConstructor&
 	{
@@ -347,17 +382,30 @@ namespace RenderCore { namespace Assets
 		return *this; 
 	}
 
+	std::shared_future<std::shared_ptr<Assets::ModelScaffold>> ModelRendererConstruction::ElementConstructor::GetFutureModelScaffold()
+	{
+		auto i = LowerBound(_internal->_modelScaffoldMarkers, _elementId);
+		if (i != _internal->_modelScaffoldMarkers.end() && i->first == _elementId)
+			return i->second;
+		return {};
+	}
+
+	std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> ModelRendererConstruction::ElementConstructor::GetFutureMaterialScaffold()
+	{
+		auto i = LowerBound(_internal->_materialScaffoldMarkers, _elementId);
+		if (i != _internal->_materialScaffoldMarkers.end() && i->first == _elementId)
+			return i->second;
+		return {};
+	}
+
 	void ModelRendererConstruction::SetSkeletonScaffold(StringSection<> skeleton)
 	{
 		_internal->_skeletonScaffoldHashValue = Hash64(skeleton);
 		_internal->_skeletonScaffoldPtr = nullptr;
-		_internal->_skeletonScaffoldMarker = ::Assets::GetAssetFuture<std::shared_ptr<Assets::SkeletonScaffold>>(skeleton);
-	}
-	void ModelRendererConstruction::SetSkeletonScaffold(std::shared_ptr<::Assets::OperationContext> opContext, StringSection<> skeleton)
-	{
-		_internal->_skeletonScaffoldHashValue = Hash64(skeleton);
-		_internal->_skeletonScaffoldPtr = nullptr;
-		_internal->_skeletonScaffoldMarker = ::Assets::GetAssetFuture<std::shared_ptr<Assets::SkeletonScaffold>>(std::move(opContext), skeleton);
+		if (_internal->_opContext) {
+			_internal->_skeletonScaffoldMarker = ::Assets::GetAssetFuture<std::shared_ptr<Assets::SkeletonScaffold>>(_internal->_opContext, skeleton);
+		} else
+			_internal->_skeletonScaffoldMarker = ::Assets::GetAssetFuture<std::shared_ptr<Assets::SkeletonScaffold>>(skeleton);
 		_internal->_skeletonScaffoldInitializer = skeleton.AsString();
 	}
 	void ModelRendererConstruction::SetSkeletonScaffold(std::shared_future<std::shared_ptr<Assets::SkeletonScaffold>> skeleton, std::string initializer)
@@ -380,6 +428,10 @@ namespace RenderCore { namespace Assets
 		if (_internal->_skeletonScaffoldMarker.valid())
 			return _internal->_skeletonScaffoldMarker.get();
 		return nullptr;
+	}
+	void ModelRendererConstruction::SetOperationContext(std::shared_ptr<::Assets::OperationContext> opContext)
+	{
+		_internal->_opContext = std::move(opContext);
 	}
 
 	template<typename Marker, typename Time>
@@ -516,6 +568,7 @@ namespace RenderCore { namespace Assets
 			markers.push_back(m.second.get()->GetDependencyValidation());
 		}
 		// _internal->_compilationConfigurationPtrs don't have depvals
+		// also can't get depVals from _internal->_materialScaffoldConstructionPtrs until they've been converted into _materialScaffoldMarkers
 
 		if (_internal->_skeletonScaffoldMarker.valid()) {
 			assert(_internal->_skeletonScaffoldMarker.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
@@ -543,6 +596,7 @@ namespace RenderCore { namespace Assets
 		// model & material markers
 		result->_internal->_modelScaffoldPtrs = src._internal->_modelScaffoldPtrs;
 		result->_internal->_materialScaffoldPtrs = src._internal->_materialScaffoldPtrs;
+		result->_internal->_materialScaffoldConstructionPtrs = src._internal->_materialScaffoldConstructionPtrs;
 		result->_internal->_compilationConfigurationPtrs = src._internal->_compilationConfigurationPtrs;
 		result->_internal->_modelScaffoldInitializers = src._internal->_modelScaffoldInitializers;
 		result->_internal->_materialScaffoldInitializers = src._internal->_materialScaffoldInitializers;
@@ -553,25 +607,32 @@ namespace RenderCore { namespace Assets
 			auto modelMarker = LowerBound(src._internal->_modelScaffoldMarkers, eleIdx);
 			auto materialName = LowerBound(src._internal->_materialScaffoldInitializers, eleIdx);
 			auto materialMarker = LowerBound(src._internal->_materialScaffoldMarkers, eleIdx);
+			auto materialConstruction = LowerBound(src._internal->_materialScaffoldConstructionPtrs, eleIdx);
 			auto cfgName = LowerBound(src._internal->_compilationConfigurationInitializers, eleIdx);
 			auto cfgMarker = LowerBound(src._internal->_compilationConfigurationMarkers, eleIdx);
+			auto cfgPtr = LowerBound(src._internal->_compilationConfigurationPtrs, eleIdx);
 
-			std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>> marker;
+			std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>> futureModelCompilationConfiguration;
+			std::shared_ptr<Assets::ModelCompilationConfiguration> modelCompilationConfiguration;
 			if (cfgMarker != src._internal->_compilationConfigurationMarkers.end() && cfgMarker->first == eleIdx && cfgMarker->second.valid()) {
 				if (cfgName != src._internal->_compilationConfigurationInitializers.end() && cfgName->first == eleIdx) {
-					marker = ::Assets::GetAssetFuture<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>(cfgName->second);
-					result->_internal->_compilationConfigurationMarkers.emplace_back(eleIdx, marker);
+					futureModelCompilationConfiguration = ::Assets::GetAssetFuture<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>(cfgName->second);
+					result->_internal->_compilationConfigurationMarkers.emplace_back(eleIdx, futureModelCompilationConfiguration);
 				} else {
-					marker = cfgMarker->second;
+					futureModelCompilationConfiguration = cfgMarker->second;
 					result->_internal->_compilationConfigurationMarkers.emplace_back(*cfgMarker);
 				}
-			}
+			} else if (cfgPtr != src._internal->_compilationConfigurationPtrs.end() && cfgPtr->first == eleIdx)
+				modelCompilationConfiguration = cfgPtr->second;
 
 			if (modelMarker != src._internal->_modelScaffoldMarkers.end() && modelMarker->first == eleIdx && modelMarker->second.valid()) {
 				if (modelName != src._internal->_modelScaffoldInitializers.end() && modelName->first == eleIdx) {
-					if (marker.valid()) {
-						if (opContext) result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, CreateModelScaffoldFuture(opContext, modelName->second, marker));
-						else result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, CreateModelScaffoldFuture(modelName->second, marker));
+					if (futureModelCompilationConfiguration.valid()) {
+						if (opContext) result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, CreateModelScaffoldFuture(opContext, modelName->second, futureModelCompilationConfiguration));
+						else result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, CreateModelScaffoldFuture(modelName->second, futureModelCompilationConfiguration));
+					} else if (modelCompilationConfiguration) {
+						if (opContext) result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, CreateModelScaffoldFuture(opContext, modelName->second, modelCompilationConfiguration));
+						else result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, CreateModelScaffoldFuture(modelName->second, modelCompilationConfiguration));
 					} else {
 						if (opContext) result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(opContext, modelName->second));
 						else result->_internal->_modelScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(modelName->second));
@@ -581,19 +642,45 @@ namespace RenderCore { namespace Assets
 				}
 			}
 
-			if (materialMarker != src._internal->_materialScaffoldMarkers.end() && materialMarker->first == eleIdx && materialMarker->second.valid()) {
+			bool foundMaterial = false;
+			if (materialConstruction != src._internal->_materialScaffoldConstructionPtrs.end() && materialConstruction->first == eleIdx) {
 				if (modelName != src._internal->_modelScaffoldInitializers.end() && modelName->first == eleIdx) {
-					if (materialName != src._internal->_materialScaffoldInitializers.end() && materialName->first == eleIdx) {
-						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(opContext, materialName->second, modelName->second));
-						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(materialName->second, modelName->second));
+					std::promise<std::shared_ptr<MaterialScaffold>> promisedScaffold;
+					auto futureScaffold = promisedScaffold.get_future();
+
+					auto modelStr = modelName->second;
+					if (futureModelCompilationConfiguration.valid()) {
+						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second, modelStr, futureModelCompilationConfiguration);
+					} else if (modelCompilationConfiguration) {
+						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second, modelStr, modelCompilationConfiguration);
 					} else {
-						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(opContext, modelName->second, modelName->second));
-						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(modelName->second, modelName->second));
+						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second, modelStr, nullptr);
 					}
-				} else {
-					result->_internal->_materialScaffoldMarkers.emplace_back(*materialMarker);
+
+					result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, std::move(futureScaffold));
+					foundMaterial = true;
 				}
 			}
+			
+			if (!foundMaterial && materialName != src._internal->_materialScaffoldInitializers.end() && materialName->first == eleIdx) {
+				if (modelName != src._internal->_modelScaffoldInitializers.end() && modelName->first == eleIdx) {
+					auto finalMaterialName = materialName->second.empty() ? modelName->second : materialName->second;
+					if (futureModelCompilationConfiguration.valid()) {
+						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, CreateMaterialScaffoldFuture(opContext, finalMaterialName, modelName->second, futureModelCompilationConfiguration));
+						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, CreateMaterialScaffoldFuture(finalMaterialName, modelName->second, futureModelCompilationConfiguration));
+					} else if (modelCompilationConfiguration) {
+						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, CreateMaterialScaffoldFuture(opContext, finalMaterialName, modelName->second, modelCompilationConfiguration));
+						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, CreateMaterialScaffoldFuture(finalMaterialName, modelName->second, modelCompilationConfiguration));
+					} else {
+						if (opContext) result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(opContext, finalMaterialName, modelName->second));
+						else result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, ::Assets::GetAssetFuture<Internal::MaterialScaffoldPtr>(finalMaterialName, modelName->second));
+					}
+					foundMaterial = true;
+				}
+			}
+
+			if (!foundMaterial && materialMarker != src._internal->_materialScaffoldMarkers.end() && materialMarker->first == eleIdx && materialMarker->second.valid())
+				result->_internal->_materialScaffoldMarkers.emplace_back(*materialMarker);		// just have to reuse what we had before, because it can't be recreated
 		}
 
 		// etc
@@ -621,6 +708,7 @@ namespace RenderCore { namespace Assets
 		result._value._mspi = _internal->_modelScaffoldPtrs.begin();
 		result._value._matsmi = _internal->_materialScaffoldMarkers.begin();
 		result._value._matspi = _internal->_materialScaffoldPtrs.begin();
+		result._value._matscpi = _internal->_materialScaffoldConstructionPtrs.begin();
 		result._value._ccmi = _internal->_compilationConfigurationMarkers.begin();
 		result._value._ccpi = _internal->_compilationConfigurationPtrs.begin();
 		result._value._etoi = _internal->_elementToObjects.begin();
@@ -638,6 +726,7 @@ namespace RenderCore { namespace Assets
 		result._value._mspi = _internal->_modelScaffoldPtrs.end();
 		result._value._matsmi = _internal->_materialScaffoldMarkers.end();
 		result._value._matspi = _internal->_materialScaffoldPtrs.end();
+		result._value._matscpi = _internal->_materialScaffoldConstructionPtrs.end();
 		result._value._ccmi = _internal->_compilationConfigurationMarkers.end();
 		result._value._ccpi = _internal->_compilationConfigurationPtrs.end();
 		result._value._etoi = _internal->_elementToObjects.begin();
@@ -669,13 +758,16 @@ namespace RenderCore { namespace Assets
 		if (!_internal->_hash) {
 			// collate the resource names, ensuring that we're careful about the sparse data structure
 			auto ii0 = MakeIteratorRange(_internal->_modelScaffoldInitializers), ii1 = MakeIteratorRange(_internal->_materialScaffoldInitializers), ii2 = MakeIteratorRange(_internal->_compilationConfigurationInitializers);
+			auto ii3 = MakeIteratorRange(_internal->_materialScaffoldConstructionPtrs);
 			for (unsigned e=0; e<_internal->_elementCount; ++e) {
 				while (!ii0.empty() && ii0.first->first < e) ++ii0.first;
 				while (!ii1.empty() && ii1.first->first < e) ++ii1.first;
 				while (!ii2.empty() && ii2.first->first < e) ++ii2.first;
+				while (!ii3.empty() && ii3.first->first < e) ++ii3.first;
 				if (!ii0.empty() && ii0.first->first == e) _internal->_hash = Hash64(ii0.first->second, _internal->_hash); else _internal->_hash = HashCombine(0, _internal->_hash);
 				if (!ii1.empty() && ii1.first->first == e) _internal->_hash = Hash64(ii1.first->second, _internal->_hash); else _internal->_hash = HashCombine(0, _internal->_hash);
 				if (!ii2.empty() && ii2.first->first == e) _internal->_hash = Hash64(ii2.first->second, _internal->_hash); else _internal->_hash = HashCombine(0, _internal->_hash);
+				if (!ii3.empty() && ii3.first->first == e) _internal->_hash = HashCombine(ii3.first->second->GetHash(), _internal->_hash); else _internal->_hash = HashCombine(0, _internal->_hash);
 			}
 			_internal->_hash = Hash64(AsPointer(_internal->_elementToObjects.begin()), AsPointer(_internal->_elementToObjects.end()), _internal->_hash);
 			_internal->_hash = Hash64(AsPointer(_internal->_deformerBindPoints.begin()), AsPointer(_internal->_deformerBindPoints.end()), _internal->_hash);
@@ -683,6 +775,11 @@ namespace RenderCore { namespace Assets
 		}
 
 		return _internal->_hash;
+	}
+
+	bool ModelRendererConstruction::CanBeHashed() const
+	{
+		return !_internal->_disableHash;
 	}
 
 	ModelRendererConstruction::ModelRendererConstruction()
@@ -707,6 +804,7 @@ namespace RenderCore { namespace Assets
 		while (_value._mspi!=_value._internal->_modelScaffoldPtrs.end() && _value._mspi->first < e) ++_value._mspi;
 		while (_value._matsmi!=_value._internal->_materialScaffoldMarkers.end() && _value._matsmi->first < e) ++_value._matsmi;
 		while (_value._matspi!=_value._internal->_materialScaffoldPtrs.end() && _value._matspi->first < e) ++_value._matspi;
+		while (_value._matscpi!=_value._internal->_materialScaffoldConstructionPtrs.end() && _value._matscpi->first < e) ++_value._matscpi;
 		while (_value._ccmi!=_value._internal->_compilationConfigurationMarkers.end() && _value._ccmi->first < e) ++_value._ccmi;
 		while (_value._ccpi!=_value._internal->_compilationConfigurationPtrs.end() && _value._ccpi->first < e) ++_value._ccpi;
 		while (_value._etoi!=_value._internal->_elementToObjects.end() && _value._etoi->first < e) ++_value._etoi;
@@ -737,6 +835,14 @@ namespace RenderCore { namespace Assets
 			assert(_matsmi->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready);		// we should be ready, via ModelRendererConstruction::FulfillWhenNotPending before getting here
 			return _matsmi->second.get();
 		}
+		return nullptr;
+	}
+
+	std::shared_ptr<Assets::MaterialScaffoldConstruction> ModelRendererConstruction::ElementIterator::Value::GetMaterialScaffoldConstruction() const
+	{
+		assert(_internal);
+		if (_matscpi!=_internal->_materialScaffoldConstructionPtrs.end() && _matscpi->first == _elementId)
+			return _matscpi->second;
 		return nullptr;
 	}
 

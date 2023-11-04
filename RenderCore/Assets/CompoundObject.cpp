@@ -20,7 +20,6 @@ namespace RenderCore { namespace Assets
 	template<typename Formatter>
 		void DeserializeModelRendererConstruction(
 			ModelRendererConstruction& result,
-			std::shared_ptr<::Assets::OperationContext> loadingContext,
 			Formatter& fmttr)
 	{
 		StringSection<> keyname;
@@ -33,7 +32,7 @@ namespace RenderCore { namespace Assets
 					auto newElement = result.AddElement();
 					if (modelCommand._model.empty())
 						Throw(std::runtime_error("Missing model name in DrawModel command"));
-					newElement.SetModelAndMaterialScaffolds(loadingContext, modelCommand._model, modelCommand._material);
+					newElement.SetModelAndMaterialScaffolds(modelCommand._model, modelCommand._material);
 					if (modelCommand._scale || modelCommand._translation) {
 						auto modelToObject = AsFloat4x4(
 							ScaleRotationTranslationM{
@@ -53,7 +52,7 @@ namespace RenderCore { namespace Assets
 			case Formatters::FormatterBlob::Value:
 				if (XlEqString(keyname, "Skeleton")) {
 					auto skeletonName = RequireStringValue(fmttr).AsString();
-					result.SetSkeletonScaffold(loadingContext, skeletonName);
+					result.SetSkeletonScaffold(skeletonName);
 				} else
 					Throw(Formatters::FormatException("Unexpected attribute in CompoundObject", fmttr.GetLocation()));
 				break;
@@ -66,12 +65,10 @@ namespace RenderCore { namespace Assets
 
 	template void DeserializeModelRendererConstruction(
 		ModelRendererConstruction&,
-		std::shared_ptr<::Assets::OperationContext>,
 		Formatters::IDynamicInputFormatter&);
 
 	template void DeserializeModelRendererConstruction(
 		ModelRendererConstruction&,
-		std::shared_ptr<::Assets::OperationContext>,
 		Formatters::TextInputFormatter<>&);
 
 	uint64_t CompoundObjectScaffold::GetHash() const { return _modelRendererConstruction->GetHash(); }
@@ -111,8 +108,8 @@ namespace RenderCore { namespace Assets
 		auto container = ::Assets::ConfigFileContainer<>(_blob, _depVal);
 		auto fmttr = container.GetRootFormatter();
 		_modelRendererConstruction = std::make_shared<ModelRendererConstruction>();
-		std::shared_ptr<::Assets::OperationContext> operationContext;		// todo
-		DeserializeModelRendererConstruction(*_modelRendererConstruction, operationContext, fmttr);
+		// todo _modelRendererConstruction->SetOperationContext(...);
+		DeserializeModelRendererConstruction(*_modelRendererConstruction, fmttr);
 	}
 
 	CompoundObjectScaffold::~CompoundObjectScaffold() {}

@@ -38,6 +38,9 @@ namespace RenderCore { namespace Assets
 
 		MaterialScaffold();
 		MaterialScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
+		MaterialScaffold(
+			std::unique_ptr<uint8[], PODAlignedDeletor>	rawMemoryBlock,
+			size_t rawMemoryBlockSize, const ::Assets::DependencyValidation& depVal);
 		~MaterialScaffold();
 
 		static const auto CompileProcessType = ConstHash64Legacy<'ResM', 'at'>::Value;

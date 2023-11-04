@@ -91,7 +91,6 @@ namespace RenderCore { namespace Assets
 	template<typename Formatter>
 		void DeserializeModelRendererConstruction(
 			RenderCore::Assets::ModelRendererConstruction& dst,
-			std::shared_ptr<::Assets::OperationContext> loadingContext,
 			Formatter&);
 }}
 

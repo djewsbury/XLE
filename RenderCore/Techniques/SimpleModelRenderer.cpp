@@ -851,7 +851,7 @@ namespace RenderCore { namespace Techniques
 				});
 		} else {
 			auto construction = std::make_shared<Assets::ModelRendererConstruction>();
-			construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, {});
+			construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName);
 			ConstructToPromise(
 				std::move(promise),
 				std::move(drawablesPool), std::move(pipelineAcceleratorPool), nullptr, std::move(construction),
