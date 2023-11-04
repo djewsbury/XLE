@@ -276,7 +276,7 @@ namespace RenderOverlays
     void OutlineRoundedRectangle(
         IOverlayContext& context, const Rect & rect, 
         ColorB colour, 
-        float width, float roundedProportion,
+        float width, float roundedProportion, float roundingMaxPixels,
         Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
@@ -286,7 +286,7 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { width }));
         mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(width) ^ cornerFlags;
 
@@ -303,7 +303,7 @@ namespace RenderOverlays
     void FillRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB fillColor,
-        float roundedProportion,
+        float roundedProportion, float roundingMaxPixels,
         Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
@@ -313,7 +313,7 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
         mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
 
@@ -331,7 +331,7 @@ namespace RenderOverlays
         IOverlayContext& context, 
         const Rect & rect,
         ColorB fillColor, ColorB outlineColour,
-        float borderWidth, float roundedProportion,
+        float borderWidth, float roundedProportion, float roundingMaxPixels,
         Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
@@ -341,7 +341,7 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidth }));
         mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(borderWidth) ^ cornerFlags;
 
@@ -358,7 +358,7 @@ namespace RenderOverlays
     void FillRaisedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
-        float roundedProportion,
+        float roundedProportion, float roundingMaxPixels,
         Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
@@ -368,7 +368,7 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRaisedRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
         mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
 
@@ -385,7 +385,7 @@ namespace RenderOverlays
     void FillDepressedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
-        float roundedProportion,
+        float roundedProportion, float roundingMaxPixels,
         Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
@@ -395,7 +395,7 @@ namespace RenderOverlays
         if (!res) return;
 
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillReverseRaisedRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
         mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
 
@@ -521,7 +521,7 @@ namespace RenderOverlays
         Float2 texCoordMin, Float2 texCoordMax,
         std::shared_ptr<RenderCore::IResourceView> tex, const ColorAdjust& colorAdjust, ColorB modulation,
         ColorB outlineColour,
-        float outlineWidth, float roundedProportion,
+        float outlineWidth, float roundedProportion, float roundingMaxPixels,
         Corner::BitField cornerFlags)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
@@ -535,7 +535,7 @@ namespace RenderOverlays
         mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags ^ FloatBits(outlineWidth);
         mat._hash = tex ? HashCombine(tex->GetResource()->GetGUID(), mat._hash) : mat._hash;
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, cornerFlags }));
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
         mat._uniforms._resourceViews.emplace_back(std::move(tex));
         Internal::DrawPCCTTQuad(

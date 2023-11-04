@@ -13,6 +13,7 @@
 cbuffer RoundedRectSettings
 {
     float RoundedProportion;
+    float RoundingMaxPixels;
     uint CornerFlags;
 }
 
@@ -35,7 +36,7 @@ ShapeResult RoundedRectShape_Calculate(
     float2 pixelSize = float2(GetUDDS(coords).x, GetVDDS(coords).y);
     float2 borderSize = borderSizePix * pixelSize;
 
-    float roundedPix = min((maxCoords.y - minCoords.y)/GetVDDS(coords).y, (maxCoords.x - minCoords.x)/GetUDDS(coords).x) * roundedProportion;
+    float roundedPix = min(min((maxCoords.y - minCoords.y)/GetVDDS(coords).y, (maxCoords.x - minCoords.x)/GetUDDS(coords).x) * roundedProportion, RoundingMaxPixels);
     float roundedHeight = roundedPix * GetVDDS(coords).y;
     float roundedWidth = roundedPix * GetUDDS(coords).x;
 

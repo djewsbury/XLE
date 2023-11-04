@@ -33,17 +33,17 @@ namespace RenderOverlays
     void FillRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB fillColor,
-        float roundedProportion = 1.f / 8.f,
+        float roundedProportion = 1.f / 8.f, float roundingMaxPixels = 16.f,
         Corner::BitField cornerFlags = 0xf);
     void FillAndOutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB fillColor, ColorB outlineColour,
-        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
+        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f, float roundingMaxPixels = 16.f,
         Corner::BitField cornerFlags = 0xf);
     void OutlineRoundedRectangle(
         IOverlayContext& context, const Rect& rect, 
         ColorB colour, 
-        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
+        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f, float roundingMaxPixels = 16.f,
         Corner::BitField cornerFlags = 0xf);
 
     void FillRaisedRectangle(
@@ -52,12 +52,12 @@ namespace RenderOverlays
     void FillRaisedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
-        float roundedProportion = 1.f / 8.f,
+        float roundedProportion = 1.f / 8.f, float roundingMaxPixels = 16.f,
         Corner::BitField cornerFlags = 0xf);
     void FillDepressedRoundedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor,
-        float roundedProportion = 1.f / 8.f,
+        float roundedProportion = 1.f / 8.f, float roundingMaxPixels = 16.f,
         Corner::BitField cornerFlags = 0xf);
 
     void        FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour);
@@ -87,7 +87,7 @@ namespace RenderOverlays
         Float2 texCoordMin, Float2 texCoordMax,
         std::shared_ptr<RenderCore::IResourceView>, const ColorAdjust&, ColorB modulation=ColorB::White,
         ColorB outlineColour=ColorB::Black,
-        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f,
+        float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f, float roundingMaxPixels = 16.f,
         Corner::BitField cornerFlags = 0xf);
 
 	///////////////////////////////////////////////////////////////////////////////////
