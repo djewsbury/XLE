@@ -234,6 +234,39 @@ namespace Assets
 
 			return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
 		}
+
+		template<typename CharType>
+			auto TryTranslate(StringSection<CharType> filename) -> std::pair<IFileSystem::Marker, FileSystemId>
+		{
+			MountingTree::CandidateObject candidateObject;
+			auto& ptrs = GetPtrs();
+			auto lookup = ptrs.s_mainMountingTree->Lookup(filename);
+			if (lookup.IsAbsolutePath() && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
+					// There isn't a FileSystemId for the default fs, so we can't return a valid result here
+				return {{}, ~0u};
+			}
+
+			for (;;) {
+				auto r = lookup.TryGetNext(candidateObject);
+				if (r == LookupResult::Invalidated) {
+                    // "Mounting point lookup was invalidated when the mounting tree changed. Do not change the mount or unmount filesystems while other threads may be accessing the same mounting tree."
+                    lookup = ptrs.s_mainMountingTree->Lookup(filename);
+                    continue;
+                }
+
+				if (r == LookupResult::NoCandidates) 
+					break;
+
+				// RawOS filesystems can give us a translation success even without checkin if the file exists. We have to use TryGetDesc to verify
+				// if the file really exists
+				assert(candidateObject._fileSystem);
+				auto res = candidateObject._fileSystem->TryGetDesc(candidateObject._marker);
+				if (res._snapshot._state != FileSnapshot::State::DoesNotExist)
+					return { std::move(candidateObject._marker), candidateObject._mountId };
+			}
+
+			return {{}, ~0u};
+		}
 	}
 
 	//
@@ -276,6 +309,11 @@ namespace Assets
 		return Internal::TryGetDesc(filename);
 	}
 
+	auto MainFileSystem::TryTranslate(StringSection<utf8> filename) -> std::pair<IFileSystem::Marker, FileSystemId>
+	{
+		return Internal::TryTranslate(filename);
+	}
+
 	auto MainFileSystem::TryOpen(std::unique_ptr<IFileInterface>& result, StringSection<utf16> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
 	{
 		return Internal::TryOpen(result, filename, openMode, shareMode);
@@ -304,6 +342,11 @@ namespace Assets
 	FileDesc MainFileSystem::TryGetDesc(StringSection<utf16> filename)
 	{
 		return Internal::TryGetDesc(filename);
+	}
+
+	auto MainFileSystem::TryTranslate(StringSection<utf16> filename) -> std::pair<IFileSystem::Marker, FileSystemId>
+	{
+		return Internal::TryTranslate(filename);
 	}
 
 	OSServices::BasicFile MainFileSystem::OpenBasicFile(StringSection<utf8> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode)

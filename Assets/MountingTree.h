@@ -37,7 +37,7 @@ namespace Assets
 		class CandidateObject;
 		class EnumerableLookup;
 
-		EnumerableLookup	Lookup(StringSection<utf8> filename);
+		EnumerableLookup	Lookup(StringSection<utf8> filename);		// parameter must out-live the result (EnumerableLookup takes internal pointers)
 		EnumerableLookup	Lookup(StringSection<utf16> filename);
 
 		// todo -- consider a "cached lookup" that should return the single most ideal candidate
@@ -78,6 +78,7 @@ namespace Assets
 		std::shared_ptr<IFileSystem>	_fileSystem;
 		IFileSystem::Marker				_marker;
 		std::basic_string<utf8>			_mountPoint;
+		MountingTree::MountID			_mountId;
 	};
 
 	class MountingTree::EnumerableLookup
@@ -98,7 +99,7 @@ namespace Assets
 			EnumerableLookup& operator=(EnumerableLookup&&) = default;
 		#endif
 	private:
-		std::vector<uint8_t>		_request;
+		IteratorRange<const void*> _request;
 		enum Encoding { UTF8, UTF16 };
 		Encoding				_encoding;
 		mutable uint32_t		_nextMountToTest;
@@ -106,12 +107,12 @@ namespace Assets
 		MountingTree::Pimpl *	_pimpl;			// raw pointer; client must be careful
 
 		mutable uint64			_cachedHashValues[8] = { 0,0,0,0,0,0,0,0 };
-		mutable IteratorRange<const uint8_t*> _segments[8];
+		mutable IteratorRange<const uint8_t*> _segments[8];		// contains internal pointers into the input data
 		unsigned 				_segmentCount;
 		mutable unsigned		_nextHashValueToBuild;
 		bool					_isAbsolutePath;
 
-		EnumerableLookup(std::vector<uint8_t>&& request, Encoding encoding, MountingTree::Pimpl* pimpl);
+		EnumerableLookup(IteratorRange<const void*> request, Encoding encoding, MountingTree::Pimpl* pimpl);
 		EnumerableLookup();
 
 		template<typename CharType>

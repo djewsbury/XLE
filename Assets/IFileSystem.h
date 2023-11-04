@@ -244,6 +244,7 @@ namespace Assets
 		static IOReason	TryMonitor(FileSnapshot&, StringSection<utf8> filename, const std::shared_ptr<IFileMonitor>& evnt);
 		static IOReason	TryFakeFileChange(StringSection<utf8> filename);
 		static FileDesc	TryGetDesc(StringSection<utf8> filename);
+		static auto TryTranslate(StringSection<utf8>) -> std::pair<IFileSystem::Marker, FileSystemId>;
 
 		static OSServices::BasicFile OpenBasicFile(StringSection<utf8> filename, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
 		static OSServices::MemoryMappedFile OpenMemoryMappedFile(StringSection<utf8> filename, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
@@ -255,6 +256,7 @@ namespace Assets
 		static IOReason	TryMonitor(FileSnapshot&, StringSection<utf16> filename, const std::shared_ptr<IFileMonitor>& evnt);
 		static IOReason	TryFakeFileChange(StringSection<utf16> filename);
 		static FileDesc	TryGetDesc(StringSection<utf16> filename);
+		static auto TryTranslate(StringSection<utf16>) -> std::pair<IFileSystem::Marker, FileSystemId>;
 
 		static IFileSystem* GetFileSystem(FileSystemId id);
 		static std::basic_string<utf8> GetMountPoint(FileSystemId id);

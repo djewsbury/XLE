@@ -92,8 +92,8 @@ namespace Assets
 			return Result::Invalidated;
 
 		auto requestString = MakeStringSection(
-			(const CharType*)AsPointer(_request.cbegin()), 
-			(const CharType*)AsPointer(_request.cend()));
+			(const CharType*)_request.begin(), 
+			(const CharType*)_request.end());
 
 		for (;;) {
 			if (_nextMountToTest >= (uint32_t)_pimpl->_mounts.size())
@@ -110,6 +110,7 @@ namespace Assets
 					result._fileSystem = mt._fileSystem;
 					result._marker = std::move(marker);
 					result._mountPoint = mt._mountPointBuffer;
+					result._mountId = mt._id;
 					return Result::Success;
 				}
 				continue;
@@ -144,6 +145,7 @@ namespace Assets
 					result._fileSystem = mt._fileSystem;
 					result._marker = std::move(marker);
 					result._mountPoint = mt._mountPointBuffer;
+					result._mountId = mt._id;
 					return Result::Success;
 				}
 			}
@@ -174,8 +176,8 @@ namespace Assets
 	}
 
 	MountingTree::EnumerableLookup::EnumerableLookup(
-		std::vector<uint8_t>&& request, Encoding encoding, MountingTree::Pimpl* pimpl)
-	: _request(std::move(request))
+		IteratorRange<const void*> request, Encoding encoding, MountingTree::Pimpl* pimpl)
+	: _request(request)
 	, _encoding(encoding)
 	, _nextMountToTest(0)
 	, _isAbsolutePath(false)
@@ -190,7 +192,7 @@ namespace Assets
 		// string we effectively have to iterate over the entire thing...
 		_segmentCount = 0;
 		if (_encoding == Encoding::UTF8) {
-			StringSection<char> totalSection { (char*)AsPointer(_request.begin()), (char*)AsPointer(_request.end()) };
+			StringSection<char> totalSection { (const char*)request.begin(), (const char*)request.end() };
 			const char* iterator = totalSection.begin();
 			while (iterator < totalSection.end()) {
 				iterator = SkipSeparators<char>({iterator, totalSection.end()});
@@ -233,7 +235,7 @@ namespace Assets
 				_isAbsolutePath |= std::find((const char*)_segments[0].begin(), (const char*)_segments[0].end(), ':') != (const char*)_segments[0].end();
 			}
 		} else {
-			StringSection<utf16> totalSection { (utf16*)AsPointer(_request.begin()), (utf16*)AsPointer(_request.end()) };
+			StringSection<utf16> totalSection { (const utf16*)request.begin(), (const utf16*)request.end() };
 			const utf16* iterator = totalSection.begin();
 			while (iterator < totalSection.end()) {
 				iterator = SkipSeparators<utf16>({iterator, totalSection.end()});
@@ -314,15 +316,13 @@ namespace Assets
 		// So, given this, it seems like maybe the linear list could be the ideal option? Anyway, it 
 		// gives the fastest resolution when the highest priority filesystem is the one selected.
 
-		std::vector<uint8_t> request(filename.begin(), filename.end());
-		return EnumerableLookup { std::move(request), EnumerableLookup::Encoding::UTF8, _pimpl.get() };
+		return EnumerableLookup { {filename.begin(), filename.end()}, EnumerableLookup::Encoding::UTF8, _pimpl.get() };
 	}
 
 	auto MountingTree::Lookup(StringSection<utf16> filename) -> EnumerableLookup
 	{
 		if (filename.IsEmpty()) return {};
-		std::vector<uint8_t> request((const uint8_t*)filename.begin(), (const uint8_t*)filename.end());
-		return EnumerableLookup { std::move(request), EnumerableLookup::Encoding::UTF16, _pimpl.get() };
+		return EnumerableLookup { {filename.begin(), filename.end()}, EnumerableLookup::Encoding::UTF16, _pimpl.get() };
 	}
 
 	static std::string SimplifyMountPoint(StringSection<> input, const FilenameRules& fnRules)
