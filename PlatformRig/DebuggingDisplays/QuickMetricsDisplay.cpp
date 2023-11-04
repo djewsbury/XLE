@@ -31,7 +31,7 @@ namespace PlatformRig { namespace Overlays
 		DebuggingDisplay::ScrollBar::Coordinates scrollCoordinates(scrollArea, 0.f, _lines.size(), textArea.GetMaximumSize().Height()/(float)lineHeight);
 		_scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, _scrollOffset);
 		DebuggingDisplay::DrawScrollBar(context, scrollCoordinates, _scrollOffset);
-		interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});
+		interactables.Register(scrollCoordinates.InteractableRect(), _scrollBar.GetID());
 
 		if (unsigned(_scrollOffset) < _lines.size()) {
 			auto l = _lines.begin() + unsigned(_scrollOffset);

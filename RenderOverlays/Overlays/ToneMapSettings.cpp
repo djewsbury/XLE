@@ -69,7 +69,7 @@ namespace Overlays
                 ScrollBar::Coordinates::Flags::NoUpDown|ScrollBar::Coordinates::Flags::Horizontal);
             *objects[q]._member = _scrollers[q].CalculateCurrentOffset(scrollCoordinates, *objects[q]._member);
             HTweakerBar_Draw(context, scrollCoordinates, *objects[q]._member);
-            interactables.Register({scrollCoordinates.InteractableRect(), scrollBarId+q});
+            interactables.Register(scrollCoordinates.InteractableRect(), scrollBarId+q);
 
             DrawText().Alignment(TextAlignment::Right).FormatAndDraw(context, scrollBar, "%.3f", *objects[q]._member);
         }
@@ -164,7 +164,7 @@ namespace Overlays
                 ScrollBar::Coordinates::Flags::NoUpDown|ScrollBar::Coordinates::Flags::Horizontal);
             *objects[q]._member = _scrollers[q].CalculateCurrentOffset(scrollCoordinates, *objects[q]._member);
             HTweakerBar_Draw(context, scrollCoordinates, *objects[q]._member);
-            interactables.Register({scrollCoordinates.InteractableRect(), scrollBarId+q});
+            interactables.Register(scrollCoordinates.InteractableRect(), scrollBarId+q);
 
             DrawText().Alignment(TextAlignment::Right).FormatAndDraw(context, scrollBar, "%.3f", *objects[q]._member);
         }

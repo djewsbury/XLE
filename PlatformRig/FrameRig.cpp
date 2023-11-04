@@ -615,7 +615,7 @@ namespace PlatformRig
 
                     }
 
-                    interactables.Register({rect, Id_FrameRigDisplaySubMenu+c});
+                    interactables.Register(rect, Id_FrameRigDisplaySubMenu+c);
                     pt = rect._topLeft - Coord2(margin, 0);
                     menuHeight = std::max(menuHeight, unsigned(rect._bottomRight[1] - rect._topLeft[1]));
                 }
@@ -650,7 +650,7 @@ namespace PlatformRig
                             .Alignment(TextAlignment::Left)
                             .Draw(context, rect, i->_name);
 
-                        interactables.Register({rect, i->_hashCode});
+                        interactables.Register(rect, i->_hashCode);
                     }
                 }
             }
@@ -707,7 +707,7 @@ namespace PlatformRig
 
             DrawMainStats(context, innerLayout, *res, f, heapMetrics, frameAllocations);
 
-            interactables.Register({displayRect, Id_FrameRigDisplayMain});
+            interactables.Register(displayRect, Id_FrameRigDisplayMain);
         }
 
         if (_style == Style::Normal) {
@@ -718,7 +718,7 @@ namespace PlatformRig
                 Layout outerKeyHelpRect = outerRect;
                 outerKeyHelpRect._maximumSize._topLeft[1] += staticData->_verticalOffset;
 
-                CommonWidgets::Styler styler;
+                auto& styler = CommonWidgets::Styler::Get();
                 DrawContext drawContext{context, interactables, interfaceState};
 
                 std::vector<const char*> keys, keyLabels;
@@ -817,8 +817,6 @@ namespace PlatformRig
         _debugSystem = std::move(debugSystem);
         _loadingContext = std::move(loadingContext);
         _subMenuOpen = 0;
-
-        RenderOverlays::CommonWidgets::Styler::StallForDefaultFonts();
     }
 
     FrameRigDisplay::~FrameRigDisplay()

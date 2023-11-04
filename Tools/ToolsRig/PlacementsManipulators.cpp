@@ -1436,7 +1436,7 @@ namespace ToolsRig
                     AsPixelCoords(iconRect._bottomRight),
                     texture->GetShaderResource());
                 if (iconIds[c]) {
-                    interactables.Register({iconRect, iconIds[c]});
+                    interactables.Register(iconRect, iconIds[c]);
                 }
             }
         
@@ -1479,7 +1479,7 @@ namespace ToolsRig
                 }
 				*/
 
-                interactables.Register({previewRect, Id_SelectedModel});
+                interactables.Register(previewRect, Id_SelectedModel);
             }
 
         } else {

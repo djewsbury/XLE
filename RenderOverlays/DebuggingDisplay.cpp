@@ -1026,11 +1026,16 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     static InterfaceState BuildInterfaceState(Interactables& interactables, const PlatformRig::InputContext& viewInputContext, const Coord2& mousePosition, unsigned mouseButtonsHeld, InterfaceState::Capture capture)
     {
-        auto i = std::find_if(interactables._hotAreas.begin(), interactables._hotAreas.end(), [capturingId=capture._hotArea._id](const auto& c) { return c._id == capturingId; });
-        if (i != interactables._hotAreas.end()) {
-            capture._hotArea = *i;
-        } else
-            capture = {};
+        auto i = std::find_if(interactables._hotAreaLights.begin(), interactables._hotAreaLights.end(), [capturingId=capture._hotArea._id](const auto& c) { return c._id == capturingId; });
+        if (i != interactables._hotAreaLights.end()) {
+            capture._hotArea = {i->_rect, i->_id};
+        } else {
+            auto i = std::find_if(interactables._hotAreas.begin(), interactables._hotAreas.end(), [capturingId=capture._hotArea._id](const auto& c) { return c._id == capturingId; });
+            if (i != interactables._hotAreas.end()) {
+                capture._hotArea = *i;
+            } else
+                capture = {};
+        }
 
         return InterfaceState(viewInputContext, mousePosition, mouseButtonsHeld, interactables.Intersect(mousePosition), capture);
     }
@@ -1086,7 +1091,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         const InteractableId nameDropDownId           = InteractableId_Make("PanelControls_NameDropDown")   + panelIndex;
         const InteractableId nameDropDownWidgetId     = InteractableId_Make("PanelControls_NameDropDownWidget");
         const InteractableId backButtonId             = InteractableId_Make("PanelControls_BackButton")     + panelIndex;
-        interactables.Register({buttonsRect, panelControlsId});
+        interactables.Register(buttonsRect, panelControlsId);
 
             //      panel controls are only visible when we've got a mouse over...
         if (interfaceState.HasMouseOver(panelControlsId) || interfaceState.HasMouseOver(nameDropDownId)) {
@@ -1104,7 +1109,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                     OutlineEllipse(context, buttonRect, ColorB(0xffffffffu));
                     DrawText().Color(0xffffffffu).Draw(context, buttonRect, s_PanelControlsButtons[c]);
                 }
-                interactables.Register({buttonRect, id});
+                interactables.Register(buttonRect, id);
             }
 
             Rect nameRect = buttonsLayout.Allocate(nameSize);
@@ -1114,7 +1119,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 //      If the mouse is over the name rect, we get a drop list list
                 //      of the screens available...
                 //
-            interactables.Register({nameRect, nameRectId});
+            interactables.Register(nameRect, nameRectId);
             if (interfaceState.HasMouseOver(nameRectId) || interfaceState.HasMouseOver(nameDropDownId)) {
                     /////////////////////////////
                 const Coord dropDownSize = Coord(_widgets.size() * buttonSize + (_widgets.size()+1) * buttonPadding);
@@ -1122,7 +1127,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                                             Coord2(nameRect._topLeft[0]+nameSize, nameRect._bottomRight[1]-3+dropDownSize));
                 FillRectangle(context, dropDownRect, RoundedRectBackgroundColour);
                 const Rect dropDownInteractableRect(Coord2(dropDownRect._topLeft[0], dropDownRect._topLeft[1]-8), Coord2(dropDownRect._bottomRight[0], dropDownRect._bottomRight[1]));
-                interactables.Register({dropDownInteractableRect, nameDropDownId});
+                interactables.Register(dropDownInteractableRect, nameDropDownId);
 
                     /////////////////////////////
                 unsigned y = dropDownRect._topLeft[1] + buttonPadding;
@@ -1137,7 +1142,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                     }
                     DrawText().Draw(context, partRect, MakeStringSection(i->_name));
                     y += buttonSize + buttonPadding;
-                    interactables.Register({partRect, thisId});
+                    interactables.Register(partRect, thisId);
                 }
                     /////////////////////////////
             }
@@ -1147,7 +1152,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (panelIndex < _panels.size() && !_panels[panelIndex]._backButton.empty()) {
             Rect backButtonRect(    Coord2(layout._maximumSize._topLeft[0] + 8, layout._maximumSize._topLeft[1] + 4),
                                     Coord2(layout._maximumSize._topLeft[0] + 8 + 100, layout._maximumSize._topLeft[1] + 4 + buttonSize));
-            interactables.Register({backButtonRect, backButtonId});
+            interactables.Register(backButtonRect, backButtonId);
             const bool mouseOver = interfaceState.HasMouseOver(backButtonId);
             if (mouseOver) {
                 FillAndOutlineRoundedRectangle(context, backButtonRect, RoundedRectBackgroundColour, RoundedRectOutlineColour);
@@ -1504,27 +1509,20 @@ namespace RenderOverlays { namespace DebuggingDisplay
         return false;
     }
 
-    bool InterfaceState::HasMouseOver(InteractableId id, const std::string& label)
-    {
-        for(auto i=_mouseOverStack.begin(); i!=_mouseOverStack.end(); ++i)
-            if (i->_id == id && i->_label == label)
-                return true;
-        return false;
-    }
-
-    InteractableId          InterfaceState::TopMostId() const
+    InteractableId InterfaceState::TopMostId() const
     { 
         // when a capture is set, it hides other widgets from being returned by this method
         if (_capture._hotArea._id) return _capture._hotArea._id;
         return (!_mouseOverStack.empty())?_mouseOverStack[_mouseOverStack.size()-1]._id:0;
     }
 
-    Interactables::HotArea   InterfaceState::TopMostHotArea() const
+    auto InterfaceState::TopMostHotArea() const -> const Interactables::HotArea&
     {
         if (_capture._hotArea._id) return _capture._hotArea;  // unfortunately we only have the widget information for widgets under the cursor
         if (!_mouseOverStack.empty())
             return _mouseOverStack[_mouseOverStack.size()-1];
-        return {};
+        static Interactables::HotArea result;
+        return result;
     }
 
     void InterfaceState::BeginCapturing(const Interactables::HotArea& widget)
@@ -1539,9 +1537,14 @@ namespace RenderOverlays { namespace DebuggingDisplay
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
-    void Interactables::Register(const HotArea& widget)
+    void Interactables::Register(Rect rect, InteractableId id)
     {
-        _hotAreas.push_back( widget );
+        _hotAreaLights.push_back( HotAreaLight{rect, id} );
+    }
+
+    void Interactables::Register(Rect rect, InteractableId id, std::any&& tag)
+    {
+        _hotAreas.push_back( HotArea{rect, id, std::move(tag)} );
     }
 
     static bool Intersection(const Rect& rect, const Coord2& position)
@@ -1554,11 +1557,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
     std::vector<Interactables::HotArea> Interactables::Intersect(const Coord2& position) const
     {
         std::vector<HotArea> result;
-        for (std::vector<HotArea>::const_iterator i=_hotAreas.begin(); i!=_hotAreas.end(); ++i) {
-            if (Intersection(i->_rect, position)) {
+        for (auto i=_hotAreaLights.begin(); i!=_hotAreaLights.end(); ++i)
+            if (Intersection(i->_rect, position))
+                result.push_back(HotArea{i->_rect, i->_id});
+        for (auto i=_hotAreas.begin(); i!=_hotAreas.end(); ++i)
+            if (Intersection(i->_rect, position))
                 result.push_back(*i);
-            }
-        }
         return result;
     }
 

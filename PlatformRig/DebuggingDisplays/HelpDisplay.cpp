@@ -117,7 +117,7 @@ namespace PlatformRig { namespace Overlays
 				YGNodeStyleSetJustifyContent(keyContainer, YGJustifyFlexStart);
 				YGNodeStyleSetAlignItems(keyContainer, YGAlignCenter);
 
-				CommonWidgets::Styler styler;
+				auto& styler = CommonWidgets::Styler::Get();
 				for (auto& k:_keyHelps) {
 					auto measure0 = styler.MeasureKeyIndicator(k._helpText, k._key);
 
@@ -132,7 +132,7 @@ namespace PlatformRig { namespace Overlays
 					YGNodeStyleSetMargin(*widget, YGEdgeVertical, 4);
 
 					widget->_nodeAttachments._drawDelegate = [kd=k](DrawContext& drawContext, Rect frame, Rect content) {
-						CommonWidgets::Styler styler;
+						auto& styler = CommonWidgets::Styler::Get();
 						auto data = styler.MeasureKeyIndicator_Precalculate(frame.Width(), frame.Height(), kd._helpText, kd._key);
 						styler.KeyIndicator(drawContext, frame, data.get());
 					};
@@ -151,7 +151,7 @@ namespace PlatformRig { namespace Overlays
 				YGNodeStyleSetAlignItems(textContainer, YGAlignFlexStart);
 				YGNodeStyleSetMargin(textContainer, YGEdgeHorizontal, 16.f);
 
-				auto fnt = CommonWidgets::Styler::TryGetDefaultFontsBox()->_buttonFont;
+				auto fnt = CommonWidgets::DefaultFontsBox::Get()._buttonFont;
 
 				for (auto& t:_textBlocks) {
 					auto widget = le.NewImbuedNode(0);
@@ -197,7 +197,6 @@ namespace PlatformRig { namespace Overlays
 		HelpDisplay()
 		{
 			_headingFont = RenderOverlays::MakeFont("OrbitronBlack", 20);
-			CommonWidgets::Styler::StallForDefaultFonts();
 		}
 
 	private:

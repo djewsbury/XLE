@@ -60,6 +60,7 @@ namespace PlatformRig { namespace Overlays
 
         float _barBorderSize;
         float _barRoundedProportion;
+        float _barRoundingMaxPixels;
 
         ProfilerTableSettings()
         {
@@ -82,6 +83,7 @@ namespace PlatformRig { namespace Overlays
 
             _barBorderSize = 2.f;
             _barRoundedProportion = 1.f / 2.f;
+            _barRoundingMaxPixels = 64.f;
         }
     };
 
@@ -129,7 +131,7 @@ namespace PlatformRig { namespace Overlays
                 context,
                 Rect{Coord2(middleX - barHalfWidth, rect._topLeft[1]), Coord2(middleX + barHalfWidth, rect._bottomRight[1])},
                 highlighted ? settings._highlightBarColor0 : settings._barColor0, ColorB::White,
-                settings._barBorderSize, settings._barRoundedProportion);
+                settings._barBorderSize, settings._barRoundedProportion, settings._barRoundingMaxPixels);
         } else {
             Coord barMaxWidth = rect._bottomRight[0] - rect._topLeft[0];
             Coord barWidth = Coord(std::min(barSize, 1.f) * float(barMaxWidth));
@@ -202,7 +204,7 @@ namespace PlatformRig { namespace Overlays
                 && (evnt._firstChild != HierarchicalCPUProfiler::ResolvedEvent::s_id_Invalid);
 
             Rect totalElement(leftPart._topLeft, rightPart._bottomRight);
-            interactables.Register({totalElement, elementId});
+            interactables.Register(totalElement, elementId);
             bool highlighted = interfaceState.HasMouseOver(elementId);
 
                 //  Behind the text readout, we want to draw a bar that represents the "inclusive" time

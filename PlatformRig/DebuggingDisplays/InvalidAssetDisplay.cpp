@@ -275,9 +275,9 @@ namespace PlatformRig { namespace Overlays
 					blurryBackground->AsTextureCoords(section._topLeft), blurryBackground->AsTextureCoords(section._bottomRight),
 					blurryBackground->GetResourceView(RenderOverlays::BlurryBackgroundEffect::Type::NarrowAccurateBlur), RenderOverlays::ColorAdjust{}, RenderOverlays::ColorB::White,
 					staticData._border, 2.f,
-					0.5f);
+					0.5f, (float)section.Height());
 			} else
-				RenderOverlays::OutlineRoundedRectangle(context, section, staticData._border, 2.f, 0.5f);
+				RenderOverlays::OutlineRoundedRectangle(context, section, staticData._border, 2.f, 0.5f, (float)section.Height());
 
 			auto circleArea = RenderOverlays::Rect { section._topLeft, {section._topLeft[0] + h, section._bottomRight[1]} };
 			Coord2 trim = circleArea._bottomRight + circleArea._topLeft;

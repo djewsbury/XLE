@@ -127,8 +127,8 @@ namespace ToolsRig
     {
         Rect manipulatorLeft(rect._topLeft, Coord2(LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), rect._bottomRight[1]));
         Rect manipulatorRight(Coord2(LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], 0.5f), rect._topLeft[1]), rect._bottomRight);
-        interactables.Register({manipulatorLeft, left});
-        interactables.Register({manipulatorRight, right});
+        interactables.Register(manipulatorLeft, left);
+        interactables.Register(manipulatorRight, right);
 
         if (interfaceState.HasMouseOver(left)) {
                 // draw a little triangle pointing to the left. It's only visible on mouse-over
@@ -221,7 +221,7 @@ namespace ToolsRig
         
         FillRectangle(context, controlsRect, backgroundRectangleColour);
         OutlineRectangle(context, Rect(controlsRect._topLeft + Coord2(2,2), controlsRect._bottomRight - Coord2(2,2)), backgroundOutlineColour);
-        interactables.Register({controlsRect, Id_TotalRect});
+        interactables.Register(controlsRect, Id_TotalRect);
 
         const auto headingRect = internalLayout.AllocateFullWidth(25);
         DrawText()
@@ -239,7 +239,7 @@ namespace ToolsRig
             const auto rect = internalLayout.AllocateFullWidth(lineHeight);
             float* p = (float*)PtrAdd(&manipulator, parameter._valueOffset);
 
-            interactables.Register({rect, Id_CurFloatParameters+c});
+            interactables.Register(rect, Id_CurFloatParameters+c);
             auto formatting = ButtonForegroundColor(interfaceState, Id_CurFloatParameters+c);
 
                 // background (with special shader)
@@ -282,7 +282,7 @@ namespace ToolsRig
             unsigned* p = (unsigned*)PtrAdd(&manipulator, parameter._valueOffset);
             bool value = !!((*p) & (1<<parameter._bitIndex));
 
-            interactables.Register({rect, Id_CurBoolParameters+c});
+            interactables.Register(rect, Id_CurBoolParameters+c);
             auto formatting = ButtonForegroundColor(interfaceState, Id_CurBoolParameters+c);
 
             char buffer[256];
@@ -315,9 +315,9 @@ namespace ToolsRig
             //
 
         Rect selectedManipulatorRect = internalLayout.AllocateFullWidth(lineHeight);
-        interactables.Register({selectedManipulatorRect, Id_SelectedManipulator});
+        interactables.Register(selectedManipulatorRect, Id_SelectedManipulator);
         RenderOverlays::DrawContext drawContext{context, interactables, interfaceState};
-        RenderOverlays::CommonWidgets::Styler{}.ButtonBasic(drawContext, selectedManipulatorRect, Id_SelectedManipulator, manipulator.GetName());
+        RenderOverlays::CommonWidgets::Styler::Get().ButtonBasic(drawContext, selectedManipulatorRect, Id_SelectedManipulator, manipulator.GetName());
 
             //  this button is a left/right selector. Create interactable rectangles for the left and right sides
         DrawAndRegisterLeftRight(

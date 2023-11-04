@@ -25,7 +25,6 @@ namespace PlatformRig
 	class InputContext
 	{
 	public:
-
         void* GetService(uint64_t) const;
         void AttachService(uint64_t, void*);
 
@@ -36,8 +35,8 @@ namespace PlatformRig
 
         InputContext();
         ~InputContext();
-        InputContext(InputContext&&) = delete;
-        InputContext& operator=(InputContext&&) = delete;
+        InputContext(InputContext&&);
+        InputContext& operator=(InputContext&&);
     private:
         std::vector<std::pair<uint64_t, void*>> _services;
 	};

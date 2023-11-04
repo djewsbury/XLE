@@ -154,7 +154,6 @@ namespace RenderOverlays
 		if (!dstSize)
 			return;
 
-		assert(!src.IsEmpty());
 		auto finalCount = std::min(dstSize-1, src.size());
 		std::copy(src.begin(), src.begin()+finalCount, dst);
 		dst[finalCount] = '\0';
@@ -786,6 +785,23 @@ namespace RenderOverlays
 	Float2 Quad::Extent() const
 	{
 		return max - Center();
+	}
+
+	std::shared_ptr<Font> MakeDummyFont()
+	{
+		class DummyFont : public Font
+		{
+		public:
+			FontProperties		GetFontProperties() const override { return {}; }
+			Bitmap				GetBitmap(ucs4 ch) const override { return {}; }
+			Float2		GetKerning(int prevGlyph, ucs4 ch, int* curGlyph) const override { return {0,0}; }
+			Float2		GetKerningReverse(int prevGlyph, ucs4 ch, int* curGlyph) const override { return {0,0}; }
+			float		GetKerning(ucs4 prev, ucs4 ch) const override { return 0; }
+			GlyphProperties		GetGlyphProperties(ucs4 ch) const override { return {}; }
+			DummyFont() { _hashCode = 0; }
+		};
+		static auto result = std::make_shared<DummyFont>();		// note -- relying on compiler to make this thread safe
+		return result;
 	}
 }
 

@@ -8,6 +8,8 @@
 #include "../Assets/AssetsCore.h"
 #include "../Utility/StringFormat.h"
 
+namespace std { template<typename T> class shared_future; }
+
 namespace RenderOverlays
 {
 	namespace CommonWidgets { class HoveringLayer; }
@@ -66,7 +68,9 @@ namespace RenderOverlays { namespace CommonWidgets
 		void Reset(const std::basic_string<CharType>& currentLine);
 	};
 
-	void    Render(IOverlayContext& context, const Rect& entryBoxArea, const std::shared_ptr<Font>& font, const TextEntry<>& textEntry);
+	void    Render(
+		IOverlayContext& context, const Rect& entryBoxArea, const std::shared_ptr<Font>& font, const TextEntry<>& textEntry,
+		ColorB textColor = ColorB { 0xff, 0xff, 0xff }, ColorB caretColor = ColorB { 0xaf, 0xaf, 0xaf }, ColorB selectionColor = ColorB { 0x7f, 0x7f, 0x7f, 0x7f });
 
 	class HoveringLayer
 	{
@@ -78,14 +82,26 @@ namespace RenderOverlays { namespace CommonWidgets
 	class DefaultFontsBox
 	{
 	public:
+		std::shared_ptr<RenderOverlays::Font> _fallbackFont;
 		std::shared_ptr<RenderOverlays::Font> _editBoxFont;
 		std::shared_ptr<RenderOverlays::Font> _buttonFont;
 		std::shared_ptr<RenderOverlays::Font> _headingFont;
+		std::shared_ptr<RenderOverlays::Font> _sectionHeaderFont;
 		::Assets::DependencyValidation _depVal;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont, ::Assets::DependencyValidation depVal);
+		static DefaultFontsBox& Get();		// always returns something, but doesn't stall
+		static void StallUntilReady();
+
+		DefaultFontsBox(
+			std::shared_ptr<RenderOverlays::Font> fallbackFont,
+			std::shared_ptr<RenderOverlays::Font> editBoxFont,
+			std::shared_ptr<RenderOverlays::Font> buttonFont,
+			std::shared_ptr<RenderOverlays::Font> headingFont,
+			std::shared_ptr<RenderOverlays::Font> sectionHeaderFont,
+			::Assets::DependencyValidation depVal);
+		DefaultFontsBox();
 		static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise);
 	};
 
@@ -114,16 +130,27 @@ namespace RenderOverlays { namespace CommonWidgets
 		MeasuredRectangle MeasureKeyIndicator(StringSection<> label, StringSection<> key);
 		std::shared_ptr<void> MeasureKeyIndicator_Precalculate(Coord width, Coord height, StringSection<> label, StringSection<> key);
 
-		DefaultFontsBox& GetDefaultFontsBox() { return *_fonts; }
-		static DefaultFontsBox* TryGetDefaultFontsBox();
-		static void StallForDefaultFonts();
+		static Styler& Get();		// always returns something, but doesn't stall
+		static void StallUntilReady();
+		static std::shared_future<std::shared_ptr<Styler>> GetFuture();
+		static ::Assets::PtrToMarkerPtr<Styler> GetMarker();
+		static std::shared_ptr<Styler> CreateSync();
 
-		Styler();
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		Styler(
+			std::shared_ptr<DefaultFontsBox> fonts,
+			const CommonWidgetsStaticData& staticData,
+			::Assets::DependencyValidation depVal);
+
+		static void ConstructToPromise(std::promise<std::shared_ptr<Styler>>&& promise);
 	private:
-		DefaultFontsBox* _fonts;
-		const CommonWidgetsStaticData* _staticData;
+		std::shared_ptr<DefaultFontsBox> _fonts;
+		std::unique_ptr<CommonWidgetsStaticData> _staticData;
+		::Assets::DependencyValidation _depVal;
 
 		unsigned GetLeftRightLabelsHorizontalMargin() const;
+		Styler();
 	};
 
 	template<typename Type>
@@ -135,9 +162,9 @@ namespace RenderOverlays { namespace CommonWidgets
 		bool leftHighlighted = drawContext.GetInterfaceState().HasMouseOver(interactable) && Contains(leftRect, drawContext.GetInterfaceState().MousePosition());
 		bool rightHighlighted = drawContext.GetInterfaceState().HasMouseOver(interactable) && Contains(rightRect, drawContext.GetInterfaceState().MousePosition());
 		if (leftHighlighted)
-			FillRoundedRectangle(drawContext.GetContext(), leftRect, ColorB{58, 58, 58}, 0.4f, Corner::TopLeft|Corner::BottomLeft);
+			FillRoundedRectangle(drawContext.GetContext(), leftRect, ColorB{58, 58, 58}, 0.4f, 16.f, Corner::TopLeft|Corner::BottomLeft);
 		if (rightHighlighted)
-			FillRoundedRectangle(drawContext.GetContext(), rightRect, ColorB{58, 58, 58}, 0.4f, Corner::TopRight|Corner::BottomRight);
+			FillRoundedRectangle(drawContext.GetContext(), rightRect, ColorB{58, 58, 58}, 0.4f, 16.f, Corner::TopRight|Corner::BottomRight);
 
 		// FillDepressedRoundedRectangle(drawContext.GetContext(), valueBox, ColorB{38, 38, 38}, 0.4f);
 		OutlineRoundedRectangle(drawContext.GetContext(), valueBox, ColorB{0x7f, 0x7f, 0x7f}, 1.f, 0.4f);
@@ -174,7 +201,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		alpha = std::max(0.f, std::min(1.0f, alpha));
 		ColorB filledAreaColor = (drawContext.GetInterfaceState().HasMouseOver(interactable) && !drawContext.GetInterfaceState().IsMouseButtonHeld() && drawContext._hoverings->_hoveringCtrl != interactable) ? ColorB{58, 58, 58} : ColorB{51, 51, 51};
 		ColorB outlineColor = (drawContext.GetInterfaceState().HasMouseOver(interactable) && !drawContext.GetInterfaceState().IsMouseButtonHeld() && drawContext._hoverings->_hoveringCtrl != interactable) ? ColorB{0x9f, 0x9f, 0x9f} : ColorB{0x7f, 0x7f, 0x7f};
-		FillRoundedRectangle(drawContext.GetContext(), Rect{{LinearInterpolate(valueBox._topLeft[0], valueBox._bottomRight[0], alpha), valueBox._topLeft[1]}, valueBox._bottomRight}, filledAreaColor, 0.4f, Corner::TopRight|Corner::BottomRight);
+		FillRoundedRectangle(drawContext.GetContext(), Rect{{LinearInterpolate(valueBox._topLeft[0], valueBox._bottomRight[0], alpha), valueBox._topLeft[1]}, valueBox._bottomRight}, filledAreaColor, 0.4f, 16.f, Corner::TopRight|Corner::BottomRight);
 		OutlineRoundedRectangle(drawContext.GetContext(), valueBox, outlineColor, 1.f, 0.4f);
 
 		auto margin = GetLeftRightLabelsHorizontalMargin();

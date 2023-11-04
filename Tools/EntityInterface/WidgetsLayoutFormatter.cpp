@@ -99,7 +99,7 @@ namespace EntityInterface
 			ElementMargins(*mainCtrl);
 			mainCtrl->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), modelValue, interactable](DrawContext& draw, Rect frame, Rect content) {
 				if (auto str = modelValue.TryQueryNonLayoutAsString())
-					CommonWidgets::Styler{}.LeftRight(draw, frame, interactable, nameStr, *str);
+					CommonWidgets::Styler::Get().LeftRight(draw, frame, interactable, nameStr, *str);
 			};
 			return mainCtrl;
 		}
@@ -171,8 +171,6 @@ namespace EntityInterface
 			auto labelNode = context.GetLayoutEngine().NewImbuedNode(0);
 			context.GetLayoutEngine().InsertChildToStackTop(*labelNode);
 
-			auto* defaultFonts = RenderOverlays::CommonWidgets::Styler::TryGetDefaultFontsBox();
-			assert(defaultFonts);
 			auto maxWidth = RenderOverlays::StringWidth(*_font, name);
 			YGNodeStyleSetWidth(*labelNode, maxWidth);
 			YGNodeStyleSetHeight(*labelNode, _font->GetFontProperties()._lineHeight);
@@ -219,12 +217,10 @@ namespace EntityInterface
 					if (c == 0) corners |= Corner::TopLeft|Corner::BottomLeft;
 					if ((c+1) == options.size()) corners |= Corner::TopRight|Corner::BottomRight;
 
-					auto* defaultFonts = RenderOverlays::CommonWidgets::Styler::TryGetDefaultFontsBox();
-					assert(defaultFonts);
 					auto labelFittingHelper = std::make_shared<Internal::LabelFittingHelper>(options[c].second);
 					node->_nodeAttachments._drawDelegate = [labelFittingHelper, corners, value=options[c].first, modelValue, font=_font](DrawContext& draw, Rect frame, Rect content) {
 						bool selected = modelValue.QueryNonLayout().value() == value;
-						OutlineRoundedRectangle(draw.GetContext(), frame, selected ? ColorB{96, 96, 96} : ColorB{64, 64, 64}, 1.f, 0.4f, corners);
+						OutlineRoundedRectangle(draw.GetContext(), frame, selected ? ColorB{96, 96, 96} : ColorB{64, 64, 64}, 1.f, 0.4f, 32.f, corners);
 						labelFittingHelper->Fit(content.Width(), *font);
 						DrawText().Alignment(TextAlignment::Center).Font(*font).Draw(draw.GetContext(), content, labelFittingHelper->_fitLabel);
 					};
@@ -259,7 +255,7 @@ namespace EntityInterface
 			YGNodeStyleSetHeight(stateBox->YGNode(), 16);
 			YGNodeStyleSetMargin(stateBox->YGNode(), YGEdgeHorizontal, _staticData->_checkboxHorizontalMargin);
 			stateBox->_nodeAttachments._drawDelegate = [modelValue](DrawContext& draw, Rect frame, Rect content) {
-				CommonWidgets::Styler{}.CheckBox(draw, content, modelValue.QueryNonLayout().value());
+				CommonWidgets::Styler::Get().CheckBox(draw, content, modelValue.QueryNonLayout().value());
 			};
 			stateBox->_nodeAttachments._ioDelegate = [modelValue](auto& ioContext, Rect, Rect) {
 				if (ioContext.GetEvent().IsRelease_LButton()) {
@@ -324,7 +320,7 @@ namespace EntityInterface
 			YGNodeStyleSetFlexShrink(newNode->YGNode(), 0.f);
 
 			newNode->_nodeAttachments._drawDelegate = [](DrawContext& draw, Rect frame, Rect content) {
-				CommonWidgets::Styler{}.XToggleButton(draw, frame);
+				CommonWidgets::Styler::Get().XToggleButton(draw, frame);
 			};
 
 			newNode->_nodeAttachments._ioDelegate = [ctrlGuid, state=context.GetBindingEnginePtr()](auto& ioContext, Rect, Rect) {
@@ -347,7 +343,7 @@ namespace EntityInterface
 
 			if (hierarchyState == HierarchicalEnabledState::NoImpact) {
 				baseNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString()](DrawContext& draw, Rect frame, Rect content) {
-					CommonWidgets::Styler{}.DisabledStateControl(draw, frame, nameStr);
+					CommonWidgets::Styler::Get().DisabledStateControl(draw, frame, nameStr);
 				};
 
 				baseNode->_nodeAttachments._ioDelegate = [interactable, state=context.GetBindingEnginePtr()](auto& ioContext, Rect, Rect) {
@@ -378,7 +374,7 @@ namespace EntityInterface
 				YGNodeStyleSetHeight(sliderNode->YGNode(), baseLineHeight+2*_staticData->_verticalPadding);
 				ElementMargins(*sliderNode);
 				sliderNode->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), interactable, leftSideValue, rightSideValue, modelValue](DrawContext& draw, Rect frame, Rect content) {
-					CommonWidgets::Styler{}.Bounded(draw, frame, interactable, nameStr, modelValue.QueryNonLayout().value(), leftSideValue.QueryNonLayout().value(), rightSideValue.QueryNonLayout().value());
+					CommonWidgets::Styler::Get().Bounded(draw, frame, interactable, nameStr, modelValue.QueryNonLayout().value(), leftSideValue.QueryNonLayout().value(), rightSideValue.QueryNonLayout().value());
 				};
 				sliderNode->_nodeAttachments._ioDelegate = [interactable, leftSideValue, rightSideValue, modelValue](IOContext& ioContext, Rect frame, Rect content) {
 					auto* hoverings = ioContext.GetInputContext().GetService<RenderOverlays::CommonWidgets::HoveringLayer>();
@@ -462,7 +458,7 @@ namespace EntityInterface
 				YGNodeInsertChild(outerNode, headerContainer->YGNode(), YGNodeGetChildCount(outerNode));
 				
 				headerContainer->_nodeAttachments._drawDelegate = [nameStr=name.AsString(), isOpen](DrawContext& draw, Rect frame, Rect content) {
-					CommonWidgets::Styler{}.SectionHeader(draw, content, nameStr, isOpen);
+					CommonWidgets::Styler::Get().SectionHeader(draw, content, nameStr, isOpen);
 				};
 
 				headerContainer->_nodeAttachments._ioDelegate = [containerGuid, state=context.GetBindingEnginePtr()](auto& ioContext, Rect, Rect) {
@@ -495,7 +491,7 @@ namespace EntityInterface
 			YGNodeStyleSetPadding(contentContainer->YGNode(), YGEdgeAll, 2);
 
 			contentContainer->_nodeAttachments._drawDelegate = [](DrawContext& draw, Rect frame, Rect content) {
-				CommonWidgets::Styler{}.RectangleContainer(draw, frame);
+				CommonWidgets::Styler::Get().RectangleContainer(draw, frame);
 			};
 
 			DisabledStateButton(context, containerGuid, "Enable", context.EnabledByHierarchy());

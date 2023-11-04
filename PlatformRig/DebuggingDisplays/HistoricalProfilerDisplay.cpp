@@ -139,7 +139,7 @@ namespace PlatformRig { namespace Overlays
                 Rect mouseOverRect(sectionRect._topLeft, Coord2(LinearInterpolate(labelRect._topLeft[0], labelRect._bottomRight[0], .12f), sectionRect._bottomRight[1]));
                 mouseOverRect._topLeft[0] += 4; mouseOverRect._topLeft[1] += 4;
                 mouseOverRect._bottomRight[0] -= 4; mouseOverRect._bottomRight[1] -= 4;
-                interactables.Register({mouseOverRect, sectionToolsId+sectionIndex});
+                interactables.Register(mouseOverRect, sectionToolsId+sectionIndex);
 
                 if (interfaceState.HasMouseOver(sectionToolsId+sectionIndex)) {
                     const char* buttonNames[] = {"P", "H", "R"};
@@ -167,7 +167,7 @@ namespace PlatformRig { namespace Overlays
                             OutlineEllipse(context, buttonRect, ColorB(0xffffffffu));
                             DrawText().Color(0xffffffffu).Draw(context, buttonRect, buttonNames[c]);
                         }
-                        interactables.Register({buttonRect, id});
+                        interactables.Register(buttonRect, id);
                     }
                 }
             }

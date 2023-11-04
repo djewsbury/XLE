@@ -45,8 +45,8 @@ namespace PlatformRig { namespace Overlays
 		using namespace RenderOverlays::DebuggingDisplay;
         InteractableId id = InteractableId_Make(name);
 		RenderOverlays::DrawContext drawContext{context, interactables, interfaceState};
-		RenderOverlays::CommonWidgets::Styler{}.ButtonBasic(drawContext, buttonRect, id, name);
-        interactables.Register({buttonRect, id});
+		RenderOverlays::CommonWidgets::Styler::Get().ButtonBasic(drawContext, buttonRect, id, name);
+        interactables.Register(buttonRect, id);
     }
 
     static const char* s_tabNames[] = { "ModelRenderers", "ModelScaffolds", "MaterialScaffolds" };
@@ -145,7 +145,7 @@ namespace PlatformRig { namespace Overlays
 			ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, tableAreaHeight / (float)averageEntryHeight);
 			scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, scrollOffset);
 			DrawScrollBar(context, scrollCoordinates, scrollOffset, interfaceState.HasMouseOver(_scrollBar.GetID()) ? RenderOverlays::ColorB(120, 120, 120) : RenderOverlays::ColorB(51, 51, 51));
-			interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});
+			interactables.Register(scrollCoordinates.InteractableRect(), _scrollBar.GetID());
 		}
 	}
 

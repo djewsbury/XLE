@@ -42,9 +42,11 @@ namespace RenderOverlays { namespace CommonWidgets
 
 	struct CommonWidgetsStaticData
 	{
+		std::string _fallbackFont = "Petra:16";
 		std::string _editBoxFont = "DosisBook:16";
 		std::string _buttonFont = "DosisExtraBold:20";
 		std::string _headingFont = "DosisExtraBold:20";
+		std::string _sectionHeaderFont = "DosisExtraBold:16";
 
 		unsigned _keyIndicatorBorderWeight = 4;
 		ColorB _keyIndicatorHighlight = ColorB{0xff35376e};
@@ -67,9 +69,11 @@ namespace RenderOverlays { namespace CommonWidgets
 			uint64_t keyname;
 			while (TryKeyedItem(fmttr, keyname)) {
 				switch (keyname) {
+				case "FallbackFont"_h: _fallbackFont = Formatters::RequireStringValue(fmttr).AsString(); break;
 				case "EditBoxFont"_h: _editBoxFont = Formatters::RequireStringValue(fmttr).AsString(); break;
 				case "ButtonFont"_h: _buttonFont = Formatters::RequireStringValue(fmttr).AsString(); break;
 				case "HeadingFont"_h: _headingFont = Formatters::RequireStringValue(fmttr).AsString(); break;
+				case "SectionHeaderFont"_h: _sectionHeaderFont = Formatters::RequireStringValue(fmttr).AsString(); break;
 
 				case "KeyIndicatorBorderWeight"_h: _keyIndicatorBorderWeight = Formatters::RequireCastValue<decltype(_keyIndicatorBorderWeight)>(fmttr); break;
 				case "KeyIndicatorHighlight"_h: _keyIndicatorHighlight = DeserializeColor(fmttr); break;
@@ -106,12 +110,14 @@ namespace RenderOverlays { namespace CommonWidgets
 
 				TRY {
 					::Assets::WhenAll(
+						RenderOverlays::MakeFont(staticData._fallbackFont),
 						RenderOverlays::MakeFont(staticData._editBoxFont),
 						RenderOverlays::MakeFont(staticData._buttonFont),
-						RenderOverlays::MakeFont(staticData._headingFont)).ThenConstructToPromise(
+						RenderOverlays::MakeFont(staticData._headingFont),
+						RenderOverlays::MakeFont(staticData._sectionHeaderFont)).ThenConstructToPromise(
 							std::move(promise),
-							[depVal = std::move(depVal)](auto f0, auto f1, auto f2) mutable {
-								return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(depVal));
+							[depVal = std::move(depVal)](auto f0, auto f1, auto f2, auto f3, auto f4) mutable {
+								return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(f3), std::move(f4), std::move(depVal));
 							});
 				} CATCH (...) {
 					promise.set_exception(std::current_exception());
@@ -119,9 +125,28 @@ namespace RenderOverlays { namespace CommonWidgets
 			});
 	}
 
-	DefaultFontsBox::DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont, ::Assets::DependencyValidation depVal)
-	: _editBoxFont(std::move(editBoxFont)), _buttonFont(std::move(buttonFont)), _headingFont(std::move(headingFont)), _depVal(std::move(depVal))
+	DefaultFontsBox::DefaultFontsBox(std::shared_ptr<RenderOverlays::Font> fallbackFont, std::shared_ptr<RenderOverlays::Font> editBoxFont, std::shared_ptr<RenderOverlays::Font> buttonFont, std::shared_ptr<RenderOverlays::Font> headingFont, std::shared_ptr<RenderOverlays::Font> sectionHeaderFont, ::Assets::DependencyValidation depVal)
+	: _fallbackFont(std::move(fallbackFont)), _editBoxFont(std::move(editBoxFont)), _buttonFont(std::move(buttonFont)), _headingFont(std::move(headingFont)), _sectionHeaderFont(std::move(sectionHeaderFont)), _depVal(std::move(depVal))
 	{}
+
+	DefaultFontsBox::DefaultFontsBox()
+	{
+		_fallbackFont = _editBoxFont = _buttonFont = _headingFont = _sectionHeaderFont = MakeDummyFont();
+	}
+
+	DefaultFontsBox& DefaultFontsBox::Get()
+	{
+		auto* p = ::Assets::GetAssetMarkerPtr<DefaultFontsBox>()->TryActualize();
+		if (p) return *p->get();
+
+		static DefaultFontsBox fallback;
+		return fallback;
+	}
+
+	void DefaultFontsBox::StallUntilReady()
+	{
+		::Assets::GetAssetMarkerPtr<DefaultFontsBox>()->StallWhilePending();
+	}
 
 	void Styler::SectionHeader(DrawContext& context, Rect rectangle, StringSection<> name, bool expanded) const
 	{
@@ -151,7 +176,7 @@ namespace RenderOverlays { namespace CommonWidgets
 			FillTriangles(context.GetContext(), arrows, arrowColors, dimof(arrows)/3);
 		}
 
-		DrawText().Alignment(TextAlignment::Left).Draw(context.GetContext(), titleRect, name);
+		DrawText().Alignment(TextAlignment::Left).Font(*_fonts->_sectionHeaderFont).Draw(context.GetContext(), titleRect, name);
 	}
 
 	void Styler::XToggleButton(DrawContext& context, const Rect& xBoxRect) const
@@ -341,24 +366,68 @@ namespace RenderOverlays { namespace CommonWidgets
 		KeyIndicatorKey(context, breakdown._keyFrame, breakdown._keyContent, precalc._fitKey);
 	}
 
-	DefaultFontsBox* Styler::TryGetDefaultFontsBox()
+	Styler& Styler::Get()
 	{
-		return ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>();
+		auto* p = ::Assets::GetAssetMarkerPtr<Styler>()->TryActualize();
+		if (p) return *p->get();
+
+		static Styler fallback;		// note -- relying on compiler threadsafe protections
+		return fallback;
 	}
 
-	void Styler::StallForDefaultFonts()
+	void Styler::StallUntilReady()
 	{
 		// hack -- just wait for this to be completed
-		while (!ConsoleRig::TryActualizeCachedBox<DefaultFontsBox>())
-			::Assets::Services::GetAssetSets().OnFrameBarrier();
+		::Assets::GetAssetMarkerPtr<Styler>()->StallWhilePending();
 	}
 
 	unsigned Styler::GetLeftRightLabelsHorizontalMargin() const { return _staticData->_leftRightLabelsHorizontalMargin; }
 
+	Styler::Styler(
+		std::shared_ptr<DefaultFontsBox> fonts,
+		const CommonWidgetsStaticData& staticData,
+		::Assets::DependencyValidation depVal)
+	: _fonts(std::move(fonts)), _depVal(std::move(depVal))
+	{
+		_staticData = std::make_unique<CommonWidgetsStaticData>(staticData);
+	}
+
 	Styler::Styler()
 	{
-		_fonts = TryGetDefaultFontsBox();
-		_staticData = &EntityInterface::MountedData<CommonWidgetsStaticData>::LoadOrDefault("cfg/displays/commonwidgets");
+		_fonts = std::make_shared<DefaultFontsBox>();
+		_staticData = std::make_unique<CommonWidgetsStaticData>();
+	}
+
+	std::shared_future<std::shared_ptr<Styler>> Styler::GetFuture()
+	{
+		return ::Assets::GetAssetMarkerPtr<Styler>()->ShareFuture();
+	}
+
+	::Assets::PtrToMarkerPtr<Styler> Styler::GetMarker()
+	{
+		return ::Assets::GetAssetMarkerPtr<Styler>();
+	}
+
+	std::shared_ptr<Styler> Styler::CreateSync()
+	{
+		auto marker = ::Assets::GetAssetMarkerPtr<Styler>();
+		marker->StallWhilePending();
+		return marker->Actualize();
+	}
+
+	void Styler::ConstructToPromise(std::promise<std::shared_ptr<Styler>>&& promise)
+	{
+		::Assets::WhenAll(
+			::Assets::GetAssetMarkerPtr<DefaultFontsBox>(),
+			::Assets::GetAssetMarker<EntityInterface::MountedData<CommonWidgetsStaticData>>("cfg/displays/commonwidgets")).ThenConstructToPromise(
+				std::move(promise),
+				[](auto&& defaultFonts, auto&& staticData) {
+					::Assets::DependencyValidationMarker markers[] {
+						defaultFonts->GetDependencyValidation(),
+						staticData.GetDependencyValidation()
+					};
+					return std::make_shared<Styler>(std::move(defaultFonts), std::move(staticData), ::Assets::GetDepValSys().MakeOrReuse(markers));
+				});
 	}
 
 	Styler::MeasuredRectangle Styler::MeasureKeyIndicator(StringSection<> label, StringSection<> key)
@@ -535,13 +604,11 @@ namespace RenderOverlays { namespace CommonWidgets
 
 	template class TextEntry<char>;
 
-	void    Render(IOverlayContext& context, const Rect& entryBoxArea, const std::shared_ptr<Font>& font, const TextEntry<>& textEntry)
+	void    Render(
+		IOverlayContext& context, const Rect& entryBoxArea, const std::shared_ptr<Font>& font, const TextEntry<>& textEntry,
+		ColorB textColor, ColorB caretColor, ColorB selectionColor)
 	{
 		using namespace DebuggingDisplay;
-		const ColorB       textColor       = ColorB(0xff, 0xff, 0xff);
-		const ColorB       caretColor      = ColorB(0xaf, 0xaf, 0xaf);
-		const ColorB       selectionColor  = ColorB(0x7f, 0x7f, 0x7f, 0x7f);
-
 		Coord caretOffset = 0;
 		Coord selStart = 0, selEnd = 0;
 		if (!textEntry._currentLine.empty()) {

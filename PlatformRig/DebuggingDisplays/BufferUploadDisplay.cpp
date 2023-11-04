@@ -41,8 +41,8 @@ namespace PlatformRig { namespace Overlays
     {
         InteractableId id = InteractableId_Make(name);
         RenderOverlays::DrawContext drawContext{context, interactables, interfaceState};
-        RenderOverlays::CommonWidgets::Styler{}.ButtonBasic(drawContext, buttonRect, id, name);
-        interactables.Register({buttonRect, id});
+        RenderOverlays::CommonWidgets::Styler::Get().ButtonBasic(drawContext, buttonRect, id, name);
+        interactables.Register(buttonRect, id);
     }
 
     BufferUploadDisplay::GPUMetrics::GPUMetrics()
@@ -240,7 +240,7 @@ namespace PlatformRig { namespace Overlays
                             .Flags(0)
                             .Draw(context, rect, g.first);
                     }
-                    interactables.Register({rect, hash});
+                    interactables.Register(rect, hash);
                 }
             }
 
@@ -279,7 +279,7 @@ namespace PlatformRig { namespace Overlays
                         .Draw(context, rect, g.first);
                 }
 
-                interactables.Register({rect, hash});
+                interactables.Register(rect, hash);
             }
         }
 
@@ -294,7 +294,7 @@ namespace PlatformRig { namespace Overlays
             Rect dropDownRect;
             dropDownRect._topLeft = Coord2(dropDownMenuRect._topLeft[0], dropDownMenuRect._bottomRight[1]);
             dropDownRect._bottomRight = dropDownRect._topLeft + dropDownSize;
-            interactables.Register({dropDownRect, Hash64(dropDown->first)});
+            interactables.Register(dropDownRect, Hash64(dropDown->first));
 
             FillRectangle(context, dropDownRect, mouseOver);
             DrawBottomLeftRight(context, dropDownRect, ColorB::White);
@@ -328,7 +328,7 @@ namespace PlatformRig { namespace Overlays
                         AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), col,
                         AsPixelCoords(rect._bottomRight), col);
 
-                interactables.Register({rect, hash});
+                interactables.Register(rect, hash);
             }
         }
     }
@@ -603,7 +603,7 @@ namespace PlatformRig { namespace Overlays
                 } else if (interfaceState.HasMouseOver(id)) {
                     FillRectangle(context, graphPart, ColorB(0x3f7f7f7fu));
                 }
-                interactables.Register({graphPart, id});
+                interactables.Register(graphPart, id);
                 ++iterator;
             }
         }
@@ -811,9 +811,7 @@ namespace PlatformRig { namespace Overlays
         DrawTableBackground(context, layout);
         DrawTableHeaders(context, layout, MakeIteratorRange(headers));
 
-        Font* tableValuesFont = nullptr;
-        if (auto* table = RenderOverlays::Internal::TryGetDefaultFontsBox())
-            tableValuesFont = table->_tableValuesFont.get();
+        Font* tableValuesFont = RenderOverlays::Internal::GetDefaultFontsBox()._tableValuesFont.get();
 
         unsigned frameCounter = 0;
         char buffer[256], buffer2[1024];
@@ -827,8 +825,7 @@ namespace PlatformRig { namespace Overlays
                     const auto& retire = commandList.Retirement(i2);
                     Description(StringMeldInPlace(buffer), retire._desc);
                     auto name = ColouriseFilename(retire._name);
-                    if (tableValuesFont)
-                        StringEllipsisDoubleEnded(buffer2, dimof(buffer2), *tableValuesFont, MakeStringSection(name), MakeStringSection("/\\"), (float)headers[2].second);
+                    StringEllipsisDoubleEnded(buffer2, dimof(buffer2), *tableValuesFont, MakeStringSection(name), MakeStringSection("/\\"), (float)headers[2].second);
                     bool success = DrawTableEntry(context, layout, MakeIteratorRange(headers),
                         {   std::make_pair("Name", buffer2),
                             std::make_pair("Latency (ms)", XlDynFormatString("%6.2f", float(double(retire._retirementTime-retire._requestTime)*_reciprocalTimerFrequency*1000.))),

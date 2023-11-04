@@ -108,18 +108,15 @@ namespace PlatformRig { namespace Overlays
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
 
-		auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
-		assert(defaultFonts);
-		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_headingFont, MakeStringSection(label)));
+		auto& defaultFonts = CommonWidgets::DefaultFontsBox::Get();
+		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts._headingFont, MakeStringSection(label)));
 		YGNodeStyleSetHeight(*labelNode, CommonWidgets::Styler::baseLineHeight);
 		YGNodeStyleSetFlexGrow(*labelNode, 0.f);		// don't grow, because our parent is column direction, and we want to have a fixed height
 		YGNodeStyleSetMargin(*labelNode, YGEdgeAll, 2);
 		YGNodeStyleSetAlignSelf(*labelNode, YGAlignCenter);
 		
 		labelNode->_nodeAttachments._drawDelegate = [label=std::move(label)](DrawContext& draw, Rect frame, Rect content) {
-			auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
-			if (defaultFonts)
-				DrawText().Font(*defaultFonts->_headingFont).Draw(draw.GetContext(), content, label);
+			DrawText().Font(*CommonWidgets::DefaultFontsBox::Get()._headingFont).Draw(draw.GetContext(), content, label);
 		};
 		return labelNode;
 	}
@@ -140,17 +137,14 @@ namespace PlatformRig { namespace Overlays
 		auto labelNode = layoutEngine.NewImbuedNode(0);
 		layoutEngine.InsertChildToStackTop(*labelNode);
 
-		auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
-		assert(defaultFonts);
-		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts->_buttonFont, MakeStringSection(str)));
-		YGNodeStyleSetHeight(*labelNode, defaultFonts->_buttonFont->GetFontProperties()._lineHeight);
+		auto& defaultFonts = CommonWidgets::DefaultFontsBox::Get();
+		YGNodeStyleSetWidth(*labelNode, StringWidth(*defaultFonts._buttonFont, MakeStringSection(str)));
+		YGNodeStyleSetHeight(*labelNode, defaultFonts._buttonFont->GetFontProperties()._lineHeight);
 		YGNodeStyleSetFlexGrow(*labelNode, 0.f);
 		YGNodeStyleSetFlexShrink(*labelNode, 0.f);
 
 		labelNode->_nodeAttachments._drawDelegate = [str=std::move(str)](DrawContext& draw, Rect frame, Rect content) {
-			auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
-			if (defaultFonts)
-				DrawText().Font(*defaultFonts->_buttonFont).Draw(draw.GetContext(), content, str);
+			DrawText().Font(*CommonWidgets::DefaultFontsBox::Get()._buttonFont).Draw(draw.GetContext(), content, str);
 		};
 		return labelNode;
 	}
@@ -926,7 +920,6 @@ namespace PlatformRig { namespace Overlays
 		, _placementsEditor(std::move(placements))
 		{
 			_headingFont = RenderOverlays::MakeFont("OrbitronBlack", 20);
-			CommonWidgets::Styler::StallForDefaultFonts();
 		}
 
 	private:

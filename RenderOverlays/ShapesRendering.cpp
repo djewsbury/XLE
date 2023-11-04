@@ -928,9 +928,18 @@ namespace RenderOverlays
             #endif
 		}
 
-        DefaultFontsBox* TryGetDefaultFontsBox()
+        DefaultFontsBox::DefaultFontsBox()
         {
-            return ConsoleRig::TryActualizeCachedBox<Internal::DefaultFontsBox>();
+            _defaultFont = _tableHeaderFont = _tableValuesFont = MakeDummyFont();
+        }
+
+        DefaultFontsBox& GetDefaultFontsBox()
+        {
+            auto* p = ::Assets::GetAssetMarkerPtr<DefaultFontsBox>()->TryActualize();
+            if (p) return *p->get();
+
+            static DefaultFontsBox fallback;
+            return fallback;
         }
 	}
 

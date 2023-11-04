@@ -240,7 +240,7 @@ namespace PlatformRig { namespace Overlays
 						.Flags(0)
 						.Draw(context, tabLabelRects[c], s_tabNames[c]);
 
-	 				interactables.Register({tabLabelRects[c], InteractableId_Make(s_tabNames[c])});
+	 				interactables.Register(tabLabelRects[c], InteractableId_Make(s_tabNames[c]));
 				}
 		}
 
@@ -257,10 +257,7 @@ namespace PlatformRig { namespace Overlays
 
 			Rect scrollBarLocation = Rect::Invalid();
 
-			Font* tableValuesFont = nullptr;
-			if (auto* table = RenderOverlays::Internal::TryGetDefaultFontsBox())
-				tableValuesFont = table->_tableValuesFont.get();
-			
+			Font* tableValuesFont = RenderOverlays::Internal::GetDefaultFontsBox()._tableValuesFont.get();
 			auto tableValueInteractableId = InteractableId_Make("TableValue");
 
             std::vector<Float3> lines;
@@ -303,7 +300,7 @@ namespace PlatformRig { namespace Overlays
 					lines.push_back(AsPixelCoords(Coord2(lineRect._topLeft[0]+8, lineRect._topLeft[1]+4)));
 					lines.push_back(AsPixelCoords(Coord2(lineRect._bottomRight[0]-8, lineRect._topLeft[1]+4)));
 
-					interactables.Register({usedArea, tableValueInteractableId+entryCount});
+					interactables.Register(usedArea, tableValueInteractableId+entryCount);
 
 					++entryCount;
 				}
@@ -343,7 +340,7 @@ namespace PlatformRig { namespace Overlays
 					lines.push_back(AsPixelCoords(Coord2(lineRect._topLeft[0]+8, lineRect._topLeft[1]+4)));
 					lines.push_back(AsPixelCoords(Coord2(lineRect._bottomRight[0]-8, lineRect._topLeft[1]+4)));
 
-					interactables.Register({usedArea, tableValueInteractableId+entryCount});
+					interactables.Register(usedArea, tableValueInteractableId+entryCount);
 
 					++entryCount;
 				}
@@ -357,7 +354,7 @@ namespace PlatformRig { namespace Overlays
 				ScrollBar::Coordinates scrollCoordinates(scrollBarLocation, 0.f, sourceEntryCount, entryCount-(unsigned)scrollOffset);
 				scrollOffset = _scrollBar.CalculateCurrentOffset(scrollCoordinates, scrollOffset);
 				DrawScrollBar(context, scrollCoordinates, scrollOffset, interfaceState.HasMouseOver(_scrollBar.GetID()) ? RenderOverlays::ColorB(120, 120, 120) : RenderOverlays::ColorB(51, 51, 51));
-				interactables.Register({scrollCoordinates.InteractableRect(), _scrollBar.GetID()});
+				interactables.Register(scrollCoordinates.InteractableRect(), _scrollBar.GetID());
 			}
 
 		} else if (_tab == 2) {

@@ -18,6 +18,7 @@
 #include <functional>
 #include <vector>
 #include <map>
+#include <any>
 
 namespace RenderOverlays { struct ImmediateLayout; }
 
@@ -34,11 +35,13 @@ namespace RenderOverlays { namespace DebuggingDisplay
     class Interactables
     {
     public:
-        struct HotArea { Rect _rect; InteractableId _id = 0; std::string _label; };
+        struct HotAreaLight { Rect _rect; InteractableId _id = 0; };
+        struct HotArea { Rect _rect; InteractableId _id = 0; std::any _tag; };
         std::vector<HotArea> _hotAreas;
+        std::vector<HotAreaLight> _hotAreaLights;
 
-        void Register(const HotArea& widget);
-        void Register(Rect rect, InteractableId id) { Register(HotArea{rect, id}); }
+        void Register(Rect rect, InteractableId id);
+        void Register(Rect rect, InteractableId id, std::any&& tag);
         auto Intersect(const Coord2& position) const -> std::vector<HotArea>;
     };
 
@@ -46,12 +49,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
     class InterfaceState
     {
     public:
-        bool                    HasMouseOver(InteractableId id);
-        bool                    HasMouseOver(InteractableId id, const std::string& label);
-        InteractableId          TopMostId() const;
-        Interactables::HotArea  TopMostHotArea() const;
-        bool                    IsMouseButtonHeld(unsigned buttonIndex = 0) const   { return !!(_mouseButtonsHeld&(1<<buttonIndex)); }
-        Coord2                  MousePosition() const                               { return _mousePosition; }
+        bool            HasMouseOver(InteractableId id);
+        InteractableId  TopMostId() const;
+        auto            TopMostHotArea() const -> const Interactables::HotArea&;
+        bool            IsMouseButtonHeld(unsigned buttonIndex = 0) const   { return !!(_mouseButtonsHeld&(1<<buttonIndex)); }
+        Coord2          MousePosition() const                               { return _mousePosition; }
 
         void BeginCapturing(const Interactables::HotArea& widget);
         void EndCapturing();
@@ -63,8 +65,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
         };
         const Capture& GetCapture() const                     { return _capture;  }
 
-        const std::vector<Interactables::HotArea>& GetMouseOverStack() const         { return _mouseOverStack; }
-        const PlatformRig::WindowingSystemView& GetWindowingSystemView() const      { return _viewInputContext; }
+        IteratorRange<const Interactables::HotArea*> GetMouseOverStack() const  { return _mouseOverStack; }
+        const PlatformRig::WindowingSystemView& GetWindowingSystemView() const  { return _viewInputContext; }
 
         InterfaceState();
         InterfaceState( const PlatformRig::InputContext& viewInputContext,

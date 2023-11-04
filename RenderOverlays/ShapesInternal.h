@@ -32,11 +32,12 @@ namespace RenderOverlays { namespace Internal
 			::Assets::DependencyValidation depVal)
 		: _defaultFont(std::move(defaultFont)), _tableHeaderFont(std::move(headerFont)), _tableValuesFont(std::move(valuesFont)), _depVal(std::move(depVal))
 		{}
+		DefaultFontsBox();
 
 		static void ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise);
 	};
 
-	DefaultFontsBox* TryGetDefaultFontsBox();
+	DefaultFontsBox& GetDefaultFontsBox();
 
 	void DrawPCCTTQuad(
 		IOverlayContext& context,
@@ -49,8 +50,9 @@ namespace RenderOverlays { namespace Internal
 	struct CB_RoundedRectSettings
 	{
 		float _roundedProportion = 1.f / 8.f;
+		float _roundingMaxPixels = 16.f;
 		unsigned _cornerFlags = 0xf;
-		unsigned _dummy[2];
+		unsigned _dummy[1];
 	};
 
 	struct CB_ShapesFramework
