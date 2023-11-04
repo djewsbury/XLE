@@ -14,6 +14,7 @@
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/DeformAccelerator.h"
 #include "../../RenderCore/Techniques/DeformGeometryInfrastructure.h"
+#include "../../RenderCore/Techniques/DeformerConstruction.h"
 #include "../../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderOverlays/AnimationVisualization.h"
@@ -29,13 +30,15 @@
 namespace ToolsRig
 {
 	using RenderCore::Assets::ModelScaffold;
-    using RenderCore::Assets::MaterialScaffold;
+	using RenderCore::Assets::MaterialScaffold;
 	using RenderCore::Assets::AnimationSetScaffold;
 	using RenderCore::Assets::SkeletonScaffold;
-    using RenderCore::Assets::SkeletonMachine;
+	using RenderCore::Assets::SkeletonMachine;
+	using RenderCore::Assets::ModelRendererConstruction;
 	using RenderCore::Techniques::SimpleModelRenderer;
 	using RenderCore::Techniques::ICustomDrawDelegate;
 	using RenderCore::Techniques::RendererSkeletonInterface;
+	using RenderCore::Techniques::DeformerConstruction;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -118,117 +121,104 @@ namespace ToolsRig
 			const std::shared_ptr<::Assets::OperationContext>& loadingContext,
 			const ModelVisSettings& settings)
 		{
-			auto construction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
+			auto construction = std::make_shared<ModelRendererConstruction>();
+			construction->SetOperationContext(loadingContext);
 			auto ele = construction->AddElement();
 			if (!settings._compilationConfigurationName.empty())
 				ele.SetCompilationConfiguration(settings._compilationConfigurationName);
-			ele.SetModelAndMaterialScaffolds(loadingContext, settings._modelName, settings._materialName);
+			ele.SetModelAndMaterialScaffolds(settings._modelName, settings._materialName);
 			if (!settings._skeletonFileName.empty())
 				construction->SetSkeletonScaffold(settings._skeletonFileName);
-			auto rendererFuture = ::Assets::GetAssetFuturePtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators);
 
-			std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promisedConstruction;
-			auto futureConstruction = promisedConstruction.get_future();	// we do have to wait on the construction, because there's a chance that GetAssetFuturePtr<SimpleModelRenderer> will return something that was previously constructed and already setup
-			construction->FulfillWhenNotPending(std::move(promisedConstruction));
+			std::shared_future<std::shared_ptr<AnimationSetScaffold>> futureAnimationSet;
+			if (!settings._animationFileName.empty())
+				futureAnimationSet = ::Assets::GetAssetFuturePtr<AnimationSetScaffold>(settings._animationFileName);
+			
+			ConstructToPromise(std::move(promise), drawablesPool, pipelineAcceleratorPool, deformAccelerators, loadingContext, construction, std::move(futureAnimationSet), nullptr);
+		}
 
-			if (!settings._animationFileName.empty() && !settings._skeletonFileName.empty()) {
-				auto animationSetFuture = ::Assets::GetAssetFuturePtr<AnimationSetScaffold>(settings._animationFileName);
-				auto skeletonFuture = ::Assets::GetAssetFuturePtr<SkeletonScaffold>(settings._skeletonFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture, skeletonFuture, std::move(futureConstruction)).ThenConstructToPromise(
+		static void ConstructToPromise(
+			std::promise<std::shared_ptr<ModelSceneRendererState>>&& promise,
+			const std::shared_ptr<RenderCore::Techniques::IDrawablesPool>& drawablesPool,
+			const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
+			const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators,
+			const std::shared_ptr<::Assets::OperationContext>& loadingContext,
+			std::shared_ptr<ModelRendererConstruction> construction,
+			std::shared_future<std::shared_ptr<AnimationSetScaffold>> futureAnimationSet,
+			std::shared_ptr<DeformerConstruction> deformerConstruction)
+		{
+			std::shared_future<std::shared_ptr<SimpleModelRenderer>> rendererFuture;
+			std::future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> futureConstruction;
+
+			TRY {
+				if (construction->CanBeHashed() && !deformerConstruction) {
+					rendererFuture = ::Assets::GetAssetFuturePtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators, deformerConstruction);
+				} else {
+					rendererFuture = ::Assets::ConstructToFuturePtr<SimpleModelRenderer>(drawablesPool, pipelineAcceleratorPool, nullptr, construction, deformAccelerators, deformerConstruction);
+				}
+
+				std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promisedConstruction;
+				futureConstruction = promisedConstruction.get_future();	// we do have to wait on the construction, because there's a chance that GetAssetFuturePtr<SimpleModelRenderer> will return something that was previously constructed and already setup
+				construction->FulfillWhenNotPending(std::move(promisedConstruction));
+			} CATCH (...) {
+				promise.set_exception(std::current_exception());
+				return;
+			} CATCH_END
+
+			if (futureAnimationSet.valid()) {
+				::Assets::WhenAll(rendererFuture, std::move(futureAnimationSet), std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
 					[deformAccelerators](
 						std::shared_ptr<SimpleModelRenderer> renderer,
 						std::shared_ptr<AnimationSetScaffold> animationSet,
-						std::shared_ptr<SkeletonScaffold> skeleton,
 						std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) {
+
+						auto result = std::make_shared<ModelSceneRendererState>();
+						result->_renderer = std::move(renderer);
+						result->_rendererConstruction = std::move(construction);
+						result->_animationScaffold = std::move(animationSet);
 						
-						RenderCore::Assets::AnimationSetBinding animBinding(
-							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
-							skeleton->GetSkeletonMachine());
-
-						auto skeletonInterface = BuildSkeletonInterface(*renderer, *deformAccelerators, skeleton->GetSkeletonMachine().GetOutputInterface());
-
-						auto depVal = ::Assets::GetDepValSys().Make();
-						depVal.RegisterDependency(renderer->GetDependencyValidation());
-						depVal.RegisterDependency(animationSet->GetDependencyValidation());
-						depVal.RegisterDependency(skeleton->GetDependencyValidation());
-
-						return std::make_shared<ModelSceneRendererState>(
-							ModelSceneRendererState {
-								renderer, std::move(construction),
-								nullptr, skeleton, animationSet, skeletonInterface,
-								std::move(animBinding), depVal,
-							});
-					});
-			} else if (!settings._animationFileName.empty()) {
-				auto animationSetFuture = ::Assets::GetAssetFuturePtr<AnimationSetScaffold>(settings._animationFileName);
-				::Assets::WhenAll(rendererFuture, animationSetFuture, std::move(futureConstruction)).ThenConstructToPromise(
-					std::move(promise), 
-					[deformAccelerators](
-						std::shared_ptr<SimpleModelRenderer> renderer,
-						std::shared_ptr<AnimationSetScaffold> animationSet,
-						std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) {
+						const SkeletonMachine* skeleMachine;
+						result->_skeletonScaffold = result->_rendererConstruction->GetSkeletonScaffold();
+						if (result->_skeletonScaffold) {
+							skeleMachine = &result->_skeletonScaffold->GetSkeletonMachine();
+						} else {
+							result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModelScaffold();
+							skeleMachine = result->_modelScaffoldForEmbeddedSkeleton->EmbeddedSkeleton();
+						}
+						assert(skeleMachine);
 						
-						auto modelScaffold = construction->GetElement(0)->GetModelScaffold();
-						assert(modelScaffold->EmbeddedSkeleton());
-						RenderCore::Assets::AnimationSetBinding animBinding(
-							animationSet->ImmutableData()._animationSet.GetOutputInterface(), 
-							*modelScaffold->EmbeddedSkeleton());
+						result->_animSetBinding = RenderCore::Assets::AnimationSetBinding{
+							result->_animationScaffold->ImmutableData()._animationSet.GetOutputInterface(),
+							*skeleMachine};
 
-						auto skeletonInterface = BuildSkeletonInterface(*renderer, *deformAccelerators, modelScaffold->EmbeddedSkeleton()->GetOutputInterface());
+						result->_skeletonInterface = BuildSkeletonInterface(*result->_renderer, *deformAccelerators, skeleMachine->GetOutputInterface());
 
-						auto depVal = ::Assets::GetDepValSys().Make();
-						depVal.RegisterDependency(renderer->GetDependencyValidation());
-						depVal.RegisterDependency(animationSet->GetDependencyValidation());
-
-						return std::make_shared<ModelSceneRendererState>(
-							ModelSceneRendererState {
-								renderer, std::move(construction),
-								modelScaffold, nullptr, animationSet, skeletonInterface,
-								std::move(animBinding), depVal,
-							});
-					});
-			} else if (!settings._skeletonFileName.empty()) {
-				auto skeletonFuture = ::Assets::GetAssetFuturePtr<SkeletonScaffold>(settings._skeletonFileName);
-				::Assets::WhenAll(rendererFuture, skeletonFuture, std::move(futureConstruction)).ThenConstructToPromise(
-					std::move(promise), 
-					[deformAccelerators](
-						std::shared_ptr<SimpleModelRenderer> renderer,
-						std::shared_ptr<SkeletonScaffold> skeleton,
-						std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) {
-
-						auto depVal = ::Assets::GetDepValSys().Make();
-						depVal.RegisterDependency(renderer->GetDependencyValidation());
-						depVal.RegisterDependency(skeleton->GetDependencyValidation());
-
-						return std::make_shared<ModelSceneRendererState>(
-							ModelSceneRendererState {
-								renderer, std::move(construction),
-								nullptr, skeleton, nullptr, nullptr,
-								{}, depVal,
-							});
+						result->_depVal = ::Assets::GetDepValSys().Make();
+						result->_depVal.RegisterDependency(result->_renderer->GetDependencyValidation());
+						result->_depVal.RegisterDependency(result->_animationScaffold->GetDependencyValidation());
+						return result;
 					});
 			} else {
 				::Assets::WhenAll(rendererFuture, std::move(futureConstruction)).ThenConstructToPromise(
 					std::move(promise), 
 					[](std::shared_ptr<SimpleModelRenderer> renderer, std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) {
-						auto firstModelScaffold = construction->GetElement(0)->GetModelScaffold();
-						return std::make_shared<ModelSceneRendererState>(
-							ModelSceneRendererState {
-								renderer, std::move(construction),
-								firstModelScaffold, nullptr, nullptr, nullptr,
-								{}, renderer->GetDependencyValidation(),
-							});
+						auto result = std::make_shared<ModelSceneRendererState>();
+						result->_renderer = std::move(renderer);
+						result->_rendererConstruction = std::move(construction);
+						result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModelScaffold();
+						result->_depVal = result->_renderer->GetDependencyValidation();
+						return result;
 					});
 			}
-        }
+		}
 	};
 
 	class ModelScene : public SceneEngine::IScene, public IVisContent
-    {
-    public:
+	{
+	public:
 		virtual void ExecuteScene(
-            RenderCore::IThreadContext& threadContext,
+			RenderCore::IThreadContext& threadContext,
 			SceneEngine::ExecuteSceneContext& executeContext) const override
 		{
 			const auto instanceIdx = 0u;
@@ -335,13 +325,13 @@ namespace ToolsRig
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 			std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
 			std::shared_ptr<ModelSceneRendererState> actualized,
-			const ModelVisSettings& settings)
+			uint64_t materialBindingFilter = 0)
 		: _pipelineAcceleratorPool(std::move(pipelineAcceleratorPool))
 		, _deformAcceleratorPool(std::move(deformAcceleratorPool))
 		, _actualized(std::move(actualized))
 		{
-			if (settings._materialBindingFilter)
-				_preDrawDelegate = std::make_shared<MaterialFilterDelegate>(settings._materialBindingFilter);
+			if (materialBindingFilter)
+				_preDrawDelegate = std::make_shared<MaterialFilterDelegate>(materialBindingFilter);
 		}
 
 	protected:
@@ -396,27 +386,39 @@ namespace ToolsRig
 			if (_actualized->_skeletonInterface)
 				_actualized->_skeletonInterface->FeedInSkeletonMachineResults(instanceIdx, MakeIteratorRange(skeletonMachineOutput, &skeletonMachineOutput[outputMatrixCount]));
 		}
-    };
+	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	Assets::PtrToMarkerPtr<SceneEngine::IScene> MakeScene(
-		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
-		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
-		std::shared_ptr<::Assets::OperationContext> loadingContext,
+	Assets::PtrToMarkerPtr<SceneEngine::IScene> ModelVisUtility::MakeScene(
 		const ModelVisSettings& settings)
 	{
-		auto rendererFuture = ::Assets::ConstructToMarkerPtr<ModelSceneRendererState>(drawablesPool, pipelineAcceleratorPool, deformAcceleratorPool, loadingContext, settings);
+		auto rendererFuture = ::Assets::ConstructToMarkerPtr<ModelSceneRendererState>(_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext, settings);
 		// Must use a marker to ModelScene, and then reinterpret it over to the generic type, in order
 		// to propagate dependency validations correctly (since GetDependencyValidation is part of ModelScene, not IScene)
 		auto result = std::make_shared<Assets::MarkerPtr<ModelScene>>();
 		::Assets::WhenAll(rendererFuture).ThenConstructToPromise(
 			result->AdoptPromise(),
-			[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), deformAcceleratorPool=std::move(deformAcceleratorPool), loadingContext=std::move(loadingContext), settings](auto renderer) {
-				return std::make_shared<ModelScene>(pipelineAcceleratorPool, deformAcceleratorPool, renderer, settings);
+			[pipelineAcceleratorPool=_pipelineAcceleratorPool, deformAcceleratorPool=_deformAcceleratorPool, settings](auto renderer) mutable {
+				return std::make_shared<ModelScene>(std::move(pipelineAcceleratorPool), std::move(deformAcceleratorPool), std::move(renderer), settings._materialBindingFilter);
 			});
 		return std::reinterpret_pointer_cast<Assets::MarkerPtr<SceneEngine::IScene>>(result);
+	}
+
+	void ModelVisUtility::MakeScene(
+		std::promise<std::shared_ptr<SceneEngine::IScene>>&& promise,
+		std::shared_ptr<ModelRendererConstruction> construction,
+		std::shared_future<std::shared_ptr<AnimationSetScaffold>> futureAnimationSet,
+		std::shared_ptr<RenderCore::Techniques::DeformerConstruction> deformerConstruction)
+	{
+		auto rendererFuture = ::Assets::ConstructToFuturePtr<ModelSceneRendererState>(
+			_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext,
+			std::move(construction), std::move(futureAnimationSet), std::move(deformerConstruction));
+		::Assets::WhenAll(std::move(rendererFuture)).ThenConstructToPromise(
+			std::move(promise),
+			[pipelineAcceleratorPool=_pipelineAcceleratorPool, deformAcceleratorPool=_deformAcceleratorPool](auto renderer) mutable {
+				return std::make_shared<ModelScene>(std::move(pipelineAcceleratorPool), std::move(deformAcceleratorPool), renderer);
+			});
 	}
 
 	uint64_t ModelVisSettings::GetHash() const
@@ -433,206 +435,10 @@ namespace ToolsRig
 	}
 
 	ModelVisSettings::ModelVisSettings()
-    {
+	{
 		_levelOfDetail = 0;
 		_materialBindingFilter = 0;
-    }
-
-#if 0
-
-	using FixedFunctionModel::ModelRenderer;
-	using FixedFunctionModel::SharedStateSet;
-    using FixedFunctionModel::ModelCache;
-	using FixedFunctionModel::ModelCacheModel;
-    using FixedFunctionModel::DelayedDrawCallSet;
-
-    static void RenderWithEmbeddedSkeleton(
-        const FixedFunctionModel::ModelRendererContext& context,
-        const ModelRenderer& model,
-        const SharedStateSet& sharedStateSet,
-        const ModelScaffold* scaffold)
-    {
-        if (scaffold) {
-            model.Render(
-                context, sharedStateSet, Identity<Float4x4>(), 
-                FixedFunctionModel::EmbeddedSkeletonPose(*scaffold).GetMeshToModel());
-        } else {
-            model.Render(context, sharedStateSet, Identity<Float4x4>());
-        }
-    }
-
-    static void PrepareWithEmbeddedSkeleton(
-        DelayedDrawCallSet& dest, 
-        const ModelRenderer& model,
-        const SharedStateSet& sharedStateSet,
-        const ModelScaffold* scaffold)
-    {
-        if (scaffold) {
-            model.Prepare(
-                dest, sharedStateSet, Identity<Float4x4>(), 
-                FixedFunctionModel::EmbeddedSkeletonPose(*scaffold).GetMeshToModel());
-        } else {
-            model.Prepare(dest, sharedStateSet, Identity<Float4x4>());
-        }
-    }
-    
-    class FixedFunctionModelSceneParser : public SceneEngine::IScene
-    {
-    public:
-        void ExecuteScene(
-            RenderCore::IThreadContext& context,
-			RenderCore::Techniques::ParsingContext& parserContext,
-            SceneEngine::LightingParserContext& lightingParserContext, 
-            RenderCore::Techniques::BatchFilter batchFilter,
-            SceneEngine::PreparedScene& preparedPackets,
-            unsigned techniqueIndex) const 
-        {
-            auto delaySteps = SceneEngine::AsDelaySteps(batchFilter);
-            if (delaySteps.empty()) return;
-
-            auto metalContext = RenderCore::Metal::DeviceContext::Get(context);
-
-            FixedFunctionModel::SharedStateSet::CaptureMarker captureMarker;
-            if (_sharedStateSet)
-				captureMarker = _sharedStateSet->CaptureState(context, parserContext.GetRenderStateDelegate(), {});
-
-            using namespace RenderCore;
-            Metal::ConstantBuffer drawCallIndexBuffer(
-				Metal::GetObjectFactory(), 
-				CreateDesc(BindFlag::ConstantBuffer, CPUAccess::WriteDynamic, GPUAccess::Read, LinearBufferDesc::Create(sizeof(unsigned)*4)), "drawCallIndex");
-            metalContext->GetNumericUniforms(ShaderStage::Geometry).Bind(MakeResourceList(drawCallIndexBuffer));
-
-            if (Tweakable("RenderSkinned", false)) {
-                if (delaySteps[0] == FixedFunctionModel::DelayStep::OpaqueRender) {
-                    auto preparedAnimation = _model->CreatePreparedAnimation();
-                    FixedFunctionModel::SkinPrepareMachine prepareMachine(
-                        *_modelScaffold, _modelScaffold->EmbeddedSkeleton());
-                    RenderCore::Assets::AnimationState animState = {0.f, 0u};
-                    prepareMachine.PrepareAnimation(context, *preparedAnimation, animState);
-                    _model->PrepareAnimation(context, *preparedAnimation, prepareMachine.GetSkeletonBinding());
-
-                    FixedFunctionModel::MeshToModel meshToModel(
-                        *preparedAnimation, &prepareMachine.GetSkeletonBinding());
-
-                    _model->Render(
-                        FixedFunctionModel::ModelRendererContext(*metalContext, parserContext, techniqueIndex),
-                        *_sharedStateSet, Identity<Float4x4>(), 
-                        meshToModel, preparedAnimation.get());
-
-                    if (Tweakable("RenderSkeleton", false)) {
-                        prepareMachine.RenderSkeleton(
-                            context, parserContext, 
-                            animState, Identity<Float4x4>());
-                    }
-                }
-            } else {
-                const bool fillInStencilInfo = (_settings->_colourByMaterial != 0);
-
-                for (auto i:delaySteps)
-                    ModelRenderer::RenderPrepared(
-                        FixedFunctionModel::ModelRendererContext(*metalContext.get(), parserContext, techniqueIndex),
-                        *_sharedStateSet, _delayedDrawCalls, i,
-                        [&metalContext, &drawCallIndexBuffer, &fillInStencilInfo](ModelRenderer::DrawCallEvent evnt)
-                        {
-                            if (fillInStencilInfo) {
-                                // hack -- we just adjust the depth stencil state to enable the stencil buffer
-                                //          no way to do this currently without dropping back to low level API
-                                #if GFXAPI_TARGET == GFXAPI_DX11
-                                    Metal::DepthStencilState dss(*metalContext);
-                                    D3D11_DEPTH_STENCIL_DESC desc;
-                                    dss.GetUnderlying()->GetDesc(&desc);
-                                    desc.StencilEnable = true;
-                                    desc.StencilWriteMask = 0xff;
-                                    desc.StencilReadMask = 0xff;
-                                    desc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-                                    desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
-                                    desc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
-                                    desc.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-                                    desc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
-                                    desc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
-                                    desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
-                                    desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
-                                    auto newDSS = Metal::GetObjectFactory().CreateDepthStencilState(&desc);
-                                    metalContext->GetUnderlying()->OMSetDepthStencilState(newDSS.get(), 1+evnt._drawCallIndex);
-                                #endif
-                            }
-
-                            unsigned drawCallIndexB[4] = { evnt._drawCallIndex, 0, 0, 0 };
-                            drawCallIndexBuffer.Update(*metalContext, drawCallIndexB, sizeof(drawCallIndexB));
-
-                            metalContext->DrawIndexed(evnt._indexCount, evnt._firstIndex, evnt._firstVertex);
-                        });
-            }
-        }
-
-		virtual void ExecuteScene(
-            RenderCore::IThreadContext& threadContext,
-			SceneEngine::SceneExecuteContext& executeContext) const override
-		{
-		}
-
-		VisCameraSettings AlignCamera()
-		{
-			return AlignCameraToBoundingBox(40.f, _boundingBox);
-		}
-
-		FixedFunctionModelSceneParser(
-			const VisOverlaySettings& settings,
-			ModelRenderer& model, const std::pair<Float3, Float3>& boundingBox, SharedStateSet& sharedStateSet,
-			const ModelScaffold* modelScaffold = nullptr)
-		: _model(&model), _boundingBox(boundingBox), _sharedStateSet(&sharedStateSet)
-		, _settings(&settings), _modelScaffold(modelScaffold) 
-		, _delayedDrawCalls(TypeHashCode<ModelRenderer>)
-		{
-			PrepareWithEmbeddedSkeleton(
-				_delayedDrawCalls, *_model,
-				*_sharedStateSet, modelScaffold);
-			ModelRenderer::Sort(_delayedDrawCalls);
-		}
-	protected:
-		ModelRenderer* _model;
-		SharedStateSet* _sharedStateSet;
-		std::pair<Float3, Float3> _boundingBox;
-
-		const VisOverlaySettings* _settings;
-		const ModelScaffold* _modelScaffold;
-		DelayedDrawCallSet _delayedDrawCalls;
-	};
-
-	std::unique_ptr<SceneEngine::IScene> CreateModelScene(const ModelCacheModel& model)
-    {
-        ModelVisSettings settings;
-        return std::make_unique<FixedFunctionModelSceneParser>(
-            settings,
-            *model._renderer, model._boundingBox, *model._sharedStateSet);
-    }
-
-	static ModelCacheModel GetModel(
-		ModelCache& cache,
-		ModelVisSettings& settings)
-	{
-		std::vector<ModelCache::SupplementGUID> supplements;
-		{
-			const auto& s = settings._supplements;
-			size_t offset = 0;
-			for (;;) {
-				auto comma = s.find_first_of(',', offset);
-				if (comma == std::string::npos) comma = s.size();
-				if (offset == comma) break;
-				auto hash = ConstHash64LegacyFromString(AsPointer(s.begin()) + offset, AsPointer(s.begin()) + comma);
-				supplements.push_back(hash);
-				offset = comma;
-			}
-		}
-
-		return cache.GetModel(
-			MakeStringSection(settings._modelName), 
-			MakeStringSection(settings._materialName),
-			MakeIteratorRange(supplements),
-			settings._levelOfDetail);
 	}
-
-#endif
 
 }
 

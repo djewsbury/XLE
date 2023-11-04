@@ -22,9 +22,8 @@ namespace OSServices { class OnChangeCallback; }
 
 namespace ToolsRig
 {
-    class MaterialVisSettings
+    struct MaterialVisSettings
     {
-    public:
         enum class GeometryType { Sphere, Cube, Plane2D };
         GeometryType _geometryType = GeometryType::Sphere;
     };

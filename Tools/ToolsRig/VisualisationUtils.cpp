@@ -1360,9 +1360,8 @@ namespace ToolsRig
 				if (_visualisationOverlay) _visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
 
 				if (!_modelVisSettings._modelName.empty()) {
-					_sceneMarker = MakeScene(
-						_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext,
-						_modelVisSettings);
+					_sceneMarker = ModelVisUtility{_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext}
+						.MakeScene(_modelVisSettings);
 					_pendingSceneActualize = true;
 				} else {
 					if (_sceneOverlay) _sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{}, _loadingContext);
@@ -1408,9 +1407,8 @@ namespace ToolsRig
 		_pimpl->_sceneBindType = Pimpl::SceneBindType::ModelVisSettings;
 		_pimpl->_modelVisSettings = visSettings;
 		if (!visSettings._modelName.empty()) {
-			_pimpl->_sceneMarker = MakeScene(
-				_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool, _pimpl->_loadingContext,
-				visSettings);
+			_pimpl->_sceneMarker = ModelVisUtility{_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool, _pimpl->_loadingContext}
+				.MakeScene(visSettings);
 			_pimpl->_pendingSceneActualize = true;
 		} else {
 			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->SetEmptyScene();
@@ -1514,6 +1512,12 @@ namespace ToolsRig
 		_pimpl->UpdateVisualizationError();
 
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_lightingState);
+	}
+
+	void VisOverlayController::SetCamera(std::shared_ptr<VisCameraSettings> camera)
+	{
+		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(camera);
+		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(camera);
 	}
 
 	void VisOverlayController::AttachSceneOverlay(std::shared_ptr<ISimpleSceneOverlay> sceneOverlay)

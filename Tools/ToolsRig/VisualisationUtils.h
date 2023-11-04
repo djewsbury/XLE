@@ -199,8 +199,8 @@ namespace ToolsRig
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
         std::shared_ptr<VisCameraSettings> camera);
 
-    class ModelVisSettings;
-    class MaterialVisSettings;
+    struct ModelVisSettings;
+    struct MaterialVisSettings;
 
     /// <summary>Assigns scene and environmental settings to visualisation overlays</summary>
     /// This separates the code for managing hot reloading events out of the overlays themselves,
@@ -216,6 +216,8 @@ namespace ToolsRig
         void SetEnvSettings(StringSection<>);
         void SetEnvSettings(::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate>);
         void SetEnvSettings(std::shared_ptr<SceneEngine::ILightingStateDelegate>);
+
+        void SetCamera(std::shared_ptr<VisCameraSettings>);
 
         void AttachSceneOverlay(std::shared_ptr<ISimpleSceneOverlay>);
         void AttachVisualisationOverlay(std::shared_ptr<VisualisationOverlay>);
@@ -262,11 +264,11 @@ namespace ToolsRig
         _position = Float3(-10.f, 0.f, 0.f);
         _focus = Zero<Float3>();
         _nearClip = 0.1f;
-        _farClip = 1000.f;
+        _farClip = 100000.f;
         _projection = Projection::Perspective;
-        _verticalFieldOfView = 40.f;
-        _left = _top = -1.f;
-        _right = _bottom = 1.f;
+        _verticalFieldOfView = Deg2Rad(40.f);
+        _left = _bottom = -1.f;
+        _right = _top = 1.f;
     }
 }
 
