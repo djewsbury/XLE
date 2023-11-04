@@ -854,6 +854,10 @@ namespace Utility
         };
         std::vector<Entry> _entries;
 
+        #if defined(_DEBUG)
+            mutable Threading::Mutex    _lock;
+        #endif
+
         struct CompareStart
         {
             bool operator()(const Entry&lhs, Marker value)      { return lhs._start < value; }

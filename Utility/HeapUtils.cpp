@@ -819,6 +819,11 @@ namespace Utility
 
     std::pair<signed,signed> ReferenceCountingLayer::AddRef(unsigned start, unsigned size, StringSection<> name)
     {
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
+
         Marker internalStart = ToInternalSize(start);
         Marker internalSize = ToInternalSize(AlignSize(size));
 
@@ -934,6 +939,11 @@ namespace Utility
 
     size_t ReferenceCountingLayer::Validate()
     {
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
+
         size_t result = 0;
         for (std::vector<Entry>::iterator i=_entries.begin(); i<_entries.end(); ++i) {
             assert(i->_start < i->_end);
@@ -947,6 +957,11 @@ namespace Utility
 
     unsigned ReferenceCountingLayer::CalculatedReferencedSpace() const
     {
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
+
         unsigned result = 0;
         for (std::vector<Entry>::const_iterator i=_entries.begin(); i<_entries.end(); ++i) {
             result += ToExternalSize(i->_end-i->_start);
@@ -956,6 +971,11 @@ namespace Utility
 
     void ReferenceCountingLayer::PerformDefrag(const std::vector<RepositionStep>& defrag)
     {
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
+
         std::vector<Entry>::iterator entryIterator = _entries.begin();
         for (   std::vector<RepositionStep>::const_iterator s=defrag.begin(); 
                 s!=defrag.end() && entryIterator!=_entries.end();) {
@@ -992,6 +1012,11 @@ namespace Utility
 
     std::pair<signed,signed> ReferenceCountingLayer::Release(unsigned start, unsigned size)
     {
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
+
         Marker internalStart = ToInternalSize(start);
         Marker internalSize = ToInternalSize(AlignSize(size));
 
@@ -1127,6 +1152,11 @@ namespace Utility
 
     bool        ReferenceCountingLayer::ValidateBlock(unsigned start, unsigned size) const
     {
+        #if defined(_DEBUG)
+            std::unique_lock lockTest(_lock, std::try_to_lock);
+            assert(lockTest);
+        #endif
+
         Marker internalStart = ToInternalSize(start);
         Marker internalEnd = internalStart+ToInternalSize(AlignSize(size));
         std::vector<Entry>::const_iterator i = std::lower_bound(_entries.begin(), _entries.end(), internalStart, CompareStart());

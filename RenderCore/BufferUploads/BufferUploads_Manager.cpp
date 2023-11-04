@@ -292,7 +292,7 @@ namespace RenderCore { namespace BufferUploads
 
         void    CompleteWaitForDescFuture(TransactionRefHolder&& ref, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField);
         void    CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResource> oversizeResource, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc);
-        void    UnqueueBytes(UploadDataType type, unsigned bytes);
+        void    DequeueBytes(UploadDataType type, unsigned bytes);
 
         void    TransferBackFinalResource(
             TransactionRefHolder& ref,
@@ -480,7 +480,7 @@ namespace RenderCore { namespace BufferUploads
                     // It doesn't make sense to do this on a transfer queue -- we should just build a graphics queue command list
                     context.GetFallbackGraphicsQueueResourceUploadHelper().DeviceBasedCopy(*helper->_dst.GetContainingResource(), *helper->_src.GetContainingResource(), helper->_steps);
                     helper->_promise.set_value(cmdListUnderConstruction);
-                    ++context.GetMetricsUnderConstruction()._contextOperations;
+                    ++context.GetMetricsUnderConstruction()._contextOperations;     // even though it's a fallback graphics queue operation, it still counts for this
                 } CATCH (...) {
                     helper->_promise.set_exception(std::current_exception());
                 } CATCH_END
@@ -964,7 +964,7 @@ namespace RenderCore { namespace BufferUploads
         }
     }
 
-    void AssemblyLine::UnqueueBytes(UploadDataType type, unsigned bytes)
+    void AssemblyLine::DequeueBytes(UploadDataType type, unsigned bytes)
     {
         auto newValue = _currentQueuedBytes[(unsigned)type] -= bytes;
         assert(newValue >= 0);
@@ -987,7 +987,7 @@ namespace RenderCore { namespace BufferUploads
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
             transaction->_promisePending = false;
-            UnqueueBytes((UploadDataType)uploadDataType, uploadRequestSize);
+            DequeueBytes((UploadDataType)uploadDataType, uploadRequestSize);
             return true;
         }
 
@@ -1035,9 +1035,9 @@ namespace RenderCore { namespace BufferUploads
             }
 
             if (!didInitialisationDuringCreation) {
-                assert(finalConstruction.GetContainingResource()->GetDesc()._bindFlags & BindFlag::TransferDst);    // need TransferDst to recieve staging data
+                assert(finalConstruction.GetContainingResource()->GetDesc()._bindFlags & BindFlag::TransferDst);    // need TransferDst to receive staging data
 
-                auto helper = context.GetResourceUploadHelper();
+                auto& helper = context.GetResourceUploadHelper();
                 if (!helper.CanDirectlyMap(*finalConstruction.GetContainingResource())) {
 
                     auto stagingByteCount = objectSize;
@@ -1075,7 +1075,7 @@ namespace RenderCore { namespace BufferUploads
                         // oversized allocations will go via a cmd list staging allocation, which has provisions
                         // to create short-lived large staging buffers
                         helper.UpdateFinalResourceViaCmdListAttachedStaging(
-                            context.GetRenderCoreThreadContext(), finalConstruction, *resourceCreateStep._initialisationData);
+                            finalConstruction, *resourceCreateStep._initialisationData);
                     }
 
                     didContextOperation = true;
@@ -1128,7 +1128,7 @@ namespace RenderCore { namespace BufferUploads
             transaction->_promisePending = false;
         } CATCH_END
 
-        UnqueueBytes((UploadDataType)uploadDataType, uploadRequestSize);
+        DequeueBytes((UploadDataType)uploadDataType, uploadRequestSize);
         return true;
     }
 
@@ -1147,14 +1147,14 @@ namespace RenderCore { namespace BufferUploads
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
             transaction->_promisePending = false;
-            UnqueueBytes((UploadDataType)AsUploadDataType(transaction->_desc, prepareStagingStep._bindFlags), RenderCore::ByteCount(transaction->_desc));
+            DequeueBytes((UploadDataType)AsUploadDataType(transaction->_desc, prepareStagingStep._bindFlags), RenderCore::ByteCount(transaction->_desc));
             return true;
         }
 
         try {
             const auto& desc = prepareStagingStep._desc;
             auto byteCount = RenderCore::ByteCount(desc);
-            auto helper = context.GetResourceUploadHelper();
+            auto& helper = context.GetResourceUploadHelper();
             auto alignment = helper.CalculateStagingBufferOffsetAlignment(desc);
 
             using namespace RenderCore;
@@ -1198,7 +1198,7 @@ namespace RenderCore { namespace BufferUploads
                 metricsUnderConstruction._stagingBytesAllocated[(unsigned)AsUploadDataType(desc, prepareStagingStep._bindFlags)] += stagingConstruction.GetAllocationSize();
 
                 Metal::ResourceMap map{
-                    context.GetRenderCoreDevice(),      // we can also get the device context with *Metal::DeviceContext::Get(*context.GetRenderCoreThreadContext())
+                    context.GetRenderCoreDevice(),
                     context.GetStagingPage().GetStagingResource(),
                     Metal::ResourceMap::Mode::WriteDiscardPrevious,
                     stagingConstruction.GetResourceOffset(), stagingConstruction.GetAllocationSize()};
@@ -1249,7 +1249,7 @@ namespace RenderCore { namespace BufferUploads
         } catch (...) {
             transaction->_promise.set_exception(std::current_exception());
             transaction->_promisePending = false;
-            UnqueueBytes((UploadDataType)AsUploadDataType(transaction->_desc, prepareStagingStep._bindFlags), RenderCore::ByteCount(transaction->_desc));
+            DequeueBytes((UploadDataType)AsUploadDataType(transaction->_desc, prepareStagingStep._bindFlags), RenderCore::ByteCount(transaction->_desc));
         }
 
         return true;
@@ -1324,7 +1324,7 @@ namespace RenderCore { namespace BufferUploads
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
             transaction->_promisePending = false;
-            UnqueueBytes((UploadDataType)dataType, descByteCount);
+            DequeueBytes((UploadDataType)dataType, descByteCount);
             return true;
         }
 
@@ -1389,7 +1389,7 @@ namespace RenderCore { namespace BufferUploads
             transaction->_promisePending = false;
         } CATCH_END
 
-        UnqueueBytes((UploadDataType)dataType, descByteCount);
+        DequeueBytes((UploadDataType)dataType, descByteCount);
         return true;
     }
 
@@ -1602,7 +1602,10 @@ namespace RenderCore { namespace BufferUploads
             _pendingRetirements.clear();
         }
 
-        if (!doResolve && (metricsUnderConstruction._contextOperations!=0)) {
+        assert((metricsUnderConstruction._contextOperations!=0) == context.HasOpenCommandList());
+        bool hasOpenCommandList = context.HasOpenCommandList();
+
+        if (!doResolve && hasOpenCommandList) {
             // If we wouldn't otherwise resolve, but it's been X amount of time since the last resolve, then go ahead and 
             // resolve anyway.
             // This timeout should probably be slightly longer than a frame -- so that this is only a backup for when the
@@ -1610,7 +1613,13 @@ namespace RenderCore { namespace BufferUploads
             const auto autoResolveTimeout = std::chrono::milliseconds(20);
             if ((now - _lastResolveTime) > autoResolveTimeout) {
                 doResolve = true;
-                CompleteCurrentCmdListID();
+
+                // There is an issue when we have a "fallback graphics queue" cmdlist, but not a transfer queue cmdlist
+                // In these cases, we have to submit the graphics queue cmdlist in order to avoid locking up the async trackers, but
+                // we can't advance the cmdListId, because without a transfer queue cmdlist, we can't change the semaphores reliably
+                // So if we hit this case, we submit the cmdlists, but we don't update the cmdlist ids
+                if (context.HasOpenMainContextCommandList())
+                    CompleteCurrentCmdListID();     // sends the current cmdlist to _cmdListsToResolve
 
                 // Note duplication from above -- we need the same logic for handling the newly created entry in _cmdListsToResolve
                 //  - we can't actually consider this cmd list finished until all of the frame priority operations have actually completed successfully
@@ -1626,7 +1635,7 @@ namespace RenderCore { namespace BufferUploads
 
             /////////////// ~~~~ /////////////// ~~~~ ///////////////
         if (doResolve) {
-            if ((metricsUnderConstruction._contextOperations!=0) || !context.GetDeferredOperationsUnderConstruction().IsEmpty())
+            if (hasOpenCommandList || !context.GetDeferredOperationsUnderConstruction().IsEmpty())
                 context.QueueToHardware(cmdListToComplete);     // command lists are sequential; so we only care about the latest one completed, even if multiple ended up begin completed
 
             metricsUnderConstruction._assemblyLineMetrics = CalculateMetrics(context);

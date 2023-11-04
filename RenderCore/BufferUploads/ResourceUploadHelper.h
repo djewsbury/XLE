@@ -12,12 +12,12 @@
 #include <utility>
 
 namespace Utility { struct RepositionStep; }
-namespace Utility { template<typename Type, int Count> class LockFreeFixedSizeQueue; }
 namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; } }
 
 namespace RenderCore { namespace BufferUploads { struct StagingPageMetrics; } }
 namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 {
+    class UploadsThreadContext;
     class ResourceUploadHelper
     {
     public:
@@ -55,7 +55,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             IResource& stagingResource, unsigned stagingOffset, unsigned stagingSize);
 
         void UpdateFinalResourceViaCmdListAttachedStaging(
-            IThreadContext& context,
             const ResourceLocator& finalResource,
             IDataPacket& initialisationData);
 
@@ -85,25 +84,133 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             IteratorRange<const Utility::RepositionStep*> steps);
         void DeviceBasedCopy(IResource& destination, IResource& source);
 
-            ////////   C O N S T R U C T I O N   ////////
-        ResourceUploadHelper(IThreadContext& renderCoreContext);
-        ResourceUploadHelper(IDevice& device, Metal::DeviceContext& metalContext);
-        ~ResourceUploadHelper();
-
-        static ResourceUploadHelper BeginSecondaryCommandList(IThreadContext& renderCoreContext);
-
         #if GFXAPI_TARGET == GFXAPI_DX11
             private: 
                 bool _useUpdateSubresourceWorkaround;
         #endif
 
     private:
-        Metal::DeviceContext*   _metalContext;
+        Metal::DeviceContext*   _cmdListWriter;
+        IThreadContext*         _threadContext;
         IDevice*                _device;
 		unsigned 				_copyBufferOffsetAlignment = 1;
+
+        void EnsureOpenCmdListWriter();
+
+            ////////   C O N S T R U C T I O N   ////////
+        ResourceUploadHelper(IThreadContext& renderCoreContext);
+        ResourceUploadHelper(IDevice& device, Metal::DeviceContext& metalContext);
+        ResourceUploadHelper();
+        ~ResourceUploadHelper();
+
+        ResourceUploadHelper(const ResourceUploadHelper&) = default;
+        ResourceUploadHelper& operator=(const ResourceUploadHelper&) = default;
+
+        friend class UploadsThreadContext;
     };
 
+    IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt);
     using QueueMarker = uint64_t;
+    class StagingPage;
+
+        //////   T H R E A D   C O N T E X T   //////
+
+    class UploadsThreadContext
+    {
+    public:
+        void    QueueToHardware(std::optional<CommandListID> completeCmdList);
+        bool    AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired, MarkCommandListDependencyFlags::BitField flags);
+
+        CommandListMetrics      PopMetrics();
+        CommandListMetrics&     GetMetricsUnderConstruction();
+
+        CommandListID                   CommandList_GetReadyForGraphicsQueue() const;
+        std::optional<CommandListID>    CommandList_LatestPendingProcessing() const;
+
+        class DeferredOperations;
+        DeferredOperations&     GetDeferredOperationsUnderConstruction();
+
+        unsigned    FrameId() const;
+        void        AdvanceFrameId();
+
+        StagingPage&                GetStagingPage();
+        void                        UpdateGPUTracking();
+        std::optional<QueueMarker>  CommandListToHardwareQueueMarker(CommandListID cmdList);
+
+        ResourceUploadHelper&       GetResourceUploadHelper() { return _helper; }
+        ResourceUploadHelper&       GetFallbackGraphicsQueueResourceUploadHelper();
+        IDevice&                    GetRenderCoreDevice() { return *_mainContext->GetDevice(); }
+        bool                        IsDedicatedTransferContext() const;
+
+        bool    HasOpenCommandList() const;
+        bool    HasOpenMainContextCommandList() const;
+
+        UploadsThreadContext(
+            std::shared_ptr<IThreadContext> graphicsQueueContext,
+            std::shared_ptr<IThreadContext> transferQueueContext,
+            bool reserveStagingSpace,
+            bool backgroundContext);
+        ~UploadsThreadContext();
+    private:
+        ResourceUploadHelper _helper, _fallbackGraphicsHelper;
+        std::shared_ptr<IThreadContext> _mainContext;
+        std::shared_ptr<IThreadContext> _fallbackGraphicsQueueContext;
+
+        struct Pimpl;
+        std::unique_ptr<Pimpl> _pimpl;
+    };
+
+    class UploadsThreadContext::DeferredOperations
+    {
+    public:
+        struct DeferredCopy
+        {
+            ResourceLocator _destination;
+            ResourceDesc _resourceDesc;
+            std::vector<uint8_t> _temporaryBuffer;
+        };
+
+        struct DeferredDefragCopy
+        {
+            std::shared_ptr<IResource> _destination;
+            std::shared_ptr<IResource> _source;
+            std::vector<RepositionStep> _steps;
+            DeferredDefragCopy(std::shared_ptr<IResource> destination, std::shared_ptr<IResource> source, const std::vector<RepositionStep>& steps);
+            ~DeferredDefragCopy();
+        };
+
+        struct ResourceTransfer
+        {
+            ResourceLocator _resource;
+            BindFlag::BitField _transferQueueLayout = 0;
+            BindFlag::BitField _graphicsQueueLayout = 0;
+            CommandListID _cmdList = 0;
+        };
+
+        void Add(DeferredCopy&& copy);
+        void Add(DeferredDefragCopy&& copy);
+        void AddDelayedDelete(ResourceLocator&& locator);
+        void Add(ResourceTransfer&& transfer);
+
+        void CommitToImmediate_PreCommandList(ResourceUploadHelper& helper);
+        void CommitToImmediate_PostCommandList(ResourceUploadHelper& helper);
+        void CommitToImmediate_ResourceTransfers(ResourceUploadHelper& helper);
+        bool IsEmpty() const;
+
+        void swap(DeferredOperations& other);
+
+        DeferredOperations();
+        DeferredOperations(DeferredOperations&& moveFrom) = default;
+        DeferredOperations& operator=(DeferredOperations&& moveFrom) = default;
+        ~DeferredOperations();
+    private:
+        std::vector<DeferredCopy>       _deferredCopies;
+        std::vector<DeferredDefragCopy> _deferredDefragCopies;
+        std::vector<ResourceLocator>    _delayedDeletes;
+        std::vector<ResourceTransfer>   _transfers;
+    };
+
+        /////////////////////////////////////////////////////////////////////
 
     class StagingPage
     {
@@ -171,103 +278,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         #endif
     };
 
-    IDevice::ResourceInitializer AsResourceInitializer(IDataPacket& pkt);
-
-        //////   T H R E A D   C O N T E X T   //////
-
-    class UploadsThreadContext
-    {
-    public:
-        void                    QueueToHardware(std::optional<CommandListID> completeCmdList);
-        bool                    AdvanceGraphicsQueue(IThreadContext& commitTo, CommandListID cmdListRequired, MarkCommandListDependencyFlags::BitField flags);
-
-        CommandListMetrics      PopMetrics();
-        CommandListMetrics&     GetMetricsUnderConstruction();
-
-        CommandListID           CommandList_GetReadyForGraphicsQueue() const;
-        std::optional<CommandListID>    CommandList_LatestPendingProcessing() const;
-
-        class DeferredOperations;
-        DeferredOperations&     GetDeferredOperationsUnderConstruction();
-
-        unsigned                FrameId() const;
-        void                    AdvanceFrameId();
-
-        StagingPage&                        GetStagingPage();
-        void                                UpdateGPUTracking();
-        std::optional<QueueMarker>          CommandListToHardwareQueueMarker(CommandListID cmdList);
-
-        ResourceUploadHelper    GetResourceUploadHelper();
-        ResourceUploadHelper    GetFallbackGraphicsQueueResourceUploadHelper();
-        IThreadContext&         GetRenderCoreThreadContext() { return *_mainContext; }
-        IThreadContext&         GetFallbackGraphicsQueueThreadContext() { return *_fallbackGraphicsQueueContext; }
-        IDevice&                GetRenderCoreDevice() { return *_mainContext->GetDevice(); }
-        bool                    IsDedicatedTransferContext() const;
-
-        UploadsThreadContext(
-            std::shared_ptr<IThreadContext> graphicsQueueContext,
-            std::shared_ptr<IThreadContext> transferQueueContext,
-            bool reserveStagingSpace,
-            bool backgroundContext);
-        ~UploadsThreadContext();
-    private:
-        std::shared_ptr<IThreadContext> _mainContext;
-        std::shared_ptr<IThreadContext> _fallbackGraphicsQueueContext;
-
-        struct Pimpl;
-        std::unique_ptr<Pimpl> _pimpl;
-    };
-
-    class UploadsThreadContext::DeferredOperations
-    {
-    public:
-        struct DeferredCopy
-        {
-            ResourceLocator _destination;
-            ResourceDesc _resourceDesc;
-            std::vector<uint8_t> _temporaryBuffer;
-        };
-
-        struct DeferredDefragCopy
-        {
-            std::shared_ptr<IResource> _destination;
-            std::shared_ptr<IResource> _source;
-            std::vector<RepositionStep> _steps;
-            DeferredDefragCopy(std::shared_ptr<IResource> destination, std::shared_ptr<IResource> source, const std::vector<RepositionStep>& steps);
-            ~DeferredDefragCopy();
-        };
-
-        struct ResourceTransfer
-        {
-            ResourceLocator _resource;
-            BindFlag::BitField _transferQueueLayout = 0;
-            BindFlag::BitField _graphicsQueueLayout = 0;
-            CommandListID _cmdList = 0;
-        };
-
-        void Add(DeferredCopy&& copy);
-        void Add(DeferredDefragCopy&& copy);
-        void AddDelayedDelete(ResourceLocator&& locator);
-        void Add(ResourceTransfer&& transfer);
-
-        void CommitToImmediate_PreCommandList(ResourceUploadHelper& helper);
-        void CommitToImmediate_PostCommandList(ResourceUploadHelper& helper);
-        void CommitToImmediate_ResourceTransfers(ResourceUploadHelper& helper);
-        bool IsEmpty() const;
-
-        void swap(DeferredOperations& other);
-
-        DeferredOperations();
-        DeferredOperations(DeferredOperations&& moveFrom) = default;
-        DeferredOperations& operator=(DeferredOperations&& moveFrom) = default;
-        ~DeferredOperations();
-    private:
-        std::vector<DeferredCopy>       _deferredCopies;
-        std::vector<DeferredDefragCopy> _deferredDefragCopies;
-        std::vector<ResourceLocator>    _delayedDeletes;
-        std::vector<ResourceTransfer>   _transfers;
-    };
-
         /////////////////////////////////////////////////////////////////////
 
     struct BufferMetrics : public ResourceDesc
@@ -292,9 +302,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
             ////////   F U N C T I O N A L I T Y   F L A G S   ////////
 
-#if 1
-
-        //          Use these to customise behaviour for platforms
+        //          Use these to customize behaviour for platforms
         //          without lots of #if defined(...) type code
     #if GFXAPI_TARGET == GFXAPI_DX11
 		static const bool SupportsResourceInitialisation_Texture = true;
@@ -309,7 +317,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 		static const bool SupportsResourceInitialisation_Buffer = true;
         static const bool CanDoPartialMaps = false;
 	#elif GFXAPI_TARGET == GFXAPI_VULKAN
-		// Vulkan capabilities haven't been tested!
 		static const bool SupportsResourceInitialisation_Texture = false;
 		static const bool SupportsResourceInitialisation_Buffer = false;
 		static const bool UseMapBasedDefrag = false;
@@ -317,7 +324,6 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 	#else
         #error Graphics API not configured in ResourceUploadHelper.h
     #endif
-#endif
 
         /////////////////////////////////////////////////////////////////////
 

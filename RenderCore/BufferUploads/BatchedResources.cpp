@@ -51,7 +51,7 @@ namespace RenderCore { namespace BufferUploads
 		std::vector<std::unique_ptr<HeapedResource>> _heaps;
 		ResourceDesc _prototype;
 		IDevice* _device;
-		mutable Threading::ReadWriteMutex _lock;
+		mutable Threading::Mutex _lock;
 		std::weak_ptr<IManager> _bufferUploads;
 		BindFlag::BitField _fallbackBindFlags;
 
@@ -88,6 +88,11 @@ namespace RenderCore { namespace BufferUploads
 			std::optional<std::thread::id> _tickThread;
 		#endif
 
+		std::unique_ptr<ActiveReposition> StartReposition(
+			IManager& bufferUploads,
+			HeapedResource& srcHeap,
+			std::vector<RepositionStep>&& steps);
+
 		BatchedResources(const BatchedResources&);
 		BatchedResources& operator=(const BatchedResources&);
 	};
@@ -120,20 +125,10 @@ namespace RenderCore { namespace BufferUploads
 	class BatchedResources::ActiveReposition
 	{
 	public:
-		void	Tick(EventListManager& evntListMan);
+		void	Tick(EventListManager& evntListMan, BufferUploads::IManager&);
 		bool	IsComplete(EventListID processedEventList);
 		void	Clear();
 
-		HeapedResource*     GetSourceHeap() { return _srcHeap; }
-		IteratorRange<const RepositionStep*> GetSteps() const { return _steps; }
-
-		ActiveReposition(
-			BatchedResources& resourceSystem,
-			IManager& bufferUploads,
-			HeapedResource& srcHeap,
-			std::vector<RepositionStep>&& steps);
-		~ActiveReposition();
-	private:
 		std::optional<EventListID>			_eventId;
 		ResourceLocator						_dstUberBlock;
 		HeapedResource*						_srcHeap;
@@ -152,7 +147,7 @@ namespace RenderCore { namespace BufferUploads
 		_totalAllocateBytes += size;
 
 		{
-			std::unique_lock<decltype(_lock)> lk(_lock);
+			ScopedLock(_lock);
 			{
 				HeapedResource* bestHeap = NULL;
 				unsigned bestHeapLargestBlock = ~unsigned(0x0);
@@ -196,7 +191,7 @@ namespace RenderCore { namespace BufferUploads
 		newHeap->AddRef(allocation, size);
 
 		{
-			ScopedModifyLock(_lock);
+			ScopedLock(_lock);
 			_heaps.push_back(std::move(newHeap));
 		}
 
@@ -207,7 +202,7 @@ namespace RenderCore { namespace BufferUploads
 		IResource& resource, 
 		size_t offset, size_t size)
 	{
-		ScopedReadLock(_lock);
+		ScopedLock(_lock);
 		HeapedResource* heap = NULL;
 		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
 			if ((*i)->_heapResource.get() == &resource) {
@@ -226,7 +221,7 @@ namespace RenderCore { namespace BufferUploads
 		IResource& resource, 
 		size_t offset, size_t size)
 	{
-		ScopedReadLock(_lock);
+		ScopedLock(_lock);
 		HeapedResource* heap = NULL;
 		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
 			if ((*i)->_heapResource.get() == &resource) {
@@ -289,7 +284,7 @@ namespace RenderCore { namespace BufferUploads
 	BatchedResources::ResultFlags::BitField BatchedResources::IsBatchedResource(
 		IResource* resource) const
 	{
-		ScopedReadLock(_lock);
+		ScopedLock(_lock);
 		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i)
 			if ((*i)->_heapResource.get() == resource)
 				return ResultFlags::IsBatched|((*i)->_lockedForDefrag?ResultFlags::ActiveReposition:0);
@@ -298,7 +293,7 @@ namespace RenderCore { namespace BufferUploads
 
 	BatchedResources::ResultFlags::BitField BatchedResources::Validate(const ResourceLocator& locator) const
 	{
-		ScopedReadLock(_lock);
+		ScopedLock(_lock);
 
 			//      check to make sure the same resource isn't showing up twice
 		for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
@@ -322,7 +317,7 @@ namespace RenderCore { namespace BufferUploads
 
 	BatchingSystemMetrics BatchedResources::CalculateMetrics() const
 	{
-		ScopedReadLock(_lock);
+		ScopedLock(_lock);
 		BatchingSystemMetrics result;
 		result._heaps.reserve(_heaps.size());
 		for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
@@ -344,18 +339,21 @@ namespace RenderCore { namespace BufferUploads
 			else assert(_tickThread == std::this_thread::get_id());
 		#endif
 
+		auto bu = _bufferUploads.lock();
+		if (!bu) return;
+
 		if (_activeDefrag.get()) {
 				//
 				//      Check on the status of the defrag step; and commit to the 
 				//      active resource as necessary
 				//
 			ActiveReposition* existingActiveDefrag = _activeDefrag.get();
-			existingActiveDefrag->Tick(_eventListManager);
+			existingActiveDefrag->Tick(_eventListManager, *bu);
 			if (existingActiveDefrag->IsComplete(_eventListManager._currentEventListProcessedId.load())) {
-				auto* sourceHeap = _activeDefrag->GetSourceHeap();
+				auto* sourceHeap = _activeDefrag->_srcHeap;
 				_activeDefrag->Clear();
 
-				ScopedReadLock(_lock);
+				ScopedLock(_lock);
 				if (sourceHeap->_heap.IsEmpty()) {
 					// we deferred destruction of this heap until now
 					for (auto i=_heaps.begin(); i!=_heaps.end(); ++i)
@@ -378,7 +376,6 @@ namespace RenderCore { namespace BufferUploads
 			return;
 		}
 
-
 		const unsigned minWeightToDoSomething = _prototype._linearBufferDesc._sizeInBytes / 4; // only do something when there's X byte difference between total available space and the largest block
 		const unsigned largestBlockThreshold = _prototype._linearBufferDesc._sizeInBytes / 8;
 		unsigned bestWeight = minWeightToDoSomething;
@@ -391,14 +388,22 @@ namespace RenderCore { namespace BufferUploads
 		HeapedResource* bestIncrementalDefragHeap = nullptr;
 		std::vector<RepositionStep> bestIncrementalDefragSteps;
 		const unsigned minDefragQuant = 16*1024;
+		const unsigned minHeapCountForHeapDrain = 8;
 		int bestIncrementalDefragQuant = minDefragQuant;
 
 		{
-			ScopedReadLock(_lock);
+			ScopedLock(_lock);
 			for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
 
 				// evaluate candidacy for a small incremental move
 				if (((*i)->_size - (*i)->_allocatedSpace) > bestIncrementalDefragQuant) {
+
+					// Check a hash value to ensure we're not triggering a defrag for the same heap over and over
+					// This can happens when none of the blocks from the defrag operation actually moved; meaning it most likely remains
+					// the most optimal defrag operation
+					if ((*i)->_heap.CalculateHash() == (*i)->_hashLastDefrag)
+						continue;
+
 					auto steps = (*i)->_heap.CalculateIncrementalDefragCandidate();
 					if (!steps._steps.empty()) {
 						int increase = steps._newLargestFreeBlock - (int)(*i)->_heap.CalculateLargestFreeBlock();
@@ -417,14 +422,15 @@ namespace RenderCore { namespace BufferUploads
 				auto availableSpace = (*i)->_size - (*i)->_allocatedSpace;
 				if (largestBlock*2 > availableSpace) continue;			// we want to at least double the largest block size in order to make this worthwhile
 
+				// As above, reject heaps that haven't changed since last defrag event
+				if ((*i)->_heap.CalculateHash() == (*i)->_hashLastDefrag)
+					continue;
+
 				auto weight = availableSpace - largestBlock;
 				if (weight > bestWeight) {
 					assert((*i)->_heapResource);
-						//      if the heap hasn't changed since the last time this heap was used as a defrag source, then there's no use in picking it again
-					if ((*i)->_hashLastDefrag != (*i)->_heap.CalculateHash()) {
-						bestHeapForCompression = i->get();
-						bestWeight = weight;
-					}
+					bestHeapForCompression = i->get();
+					bestWeight = weight;
 				}
 			}
 
@@ -432,14 +438,12 @@ namespace RenderCore { namespace BufferUploads
 				// set _lockedForDefrag before we exit _lock, because this prevents destroying this heap
 				auto oldLocked = bestIncrementalDefragHeap->_lockedForDefrag.exchange(true);
 				assert(!oldLocked); (void)oldLocked;
-				// If you hit the following assert it means we're triggering the same defrag multiple times
-				// This usually happens when non of the blocks from the defrag operation actually moved; meaning it most likely remains
-				// the most optimal defrag operation
+
 				auto newState = bestIncrementalDefragHeap->_heap.CalculateHash();
 				assert(newState != bestIncrementalDefragHeap->_hashLastDefrag);
 				bestIncrementalDefragHeap->_hashLastDefrag = newState;
 			} else {
-				if (!bestHeapForCompression && largestBlockForHeapDrain > heapDrainThreshold) {
+				if (!bestHeapForCompression && largestBlockForHeapDrain > heapDrainThreshold && _heaps.size() >= minHeapCountForHeapDrain) {
 					// Look for the first small heap that where we can move the entire contents to another heap
 					for (auto i=_heaps.begin(); i!=_heaps.end(); ++i) {
 						if ((*i)->_allocatedSpace < heapDrainThreshold) {
@@ -456,9 +460,9 @@ namespace RenderCore { namespace BufferUploads
 
 					compression = bestHeapForCompression->_heap.CalculateHeapCompression();
 
-					auto newState = bestHeapForCompression->_heap.CalculateHash();
-					assert(newState != bestHeapForCompression->_hashLastDefrag);
-					bestHeapForCompression->_hashLastDefrag = newState;
+					// bestHeapForCompression->_hashLastDefrag *may* equal bestHeapForCompression->_heap.CalculateHash() here, but 
+					// only if we're going through the "heap drain" path
+					bestHeapForCompression->_hashLastDefrag = bestHeapForCompression->_heap.CalculateHash();
 				}
 			}
 		}
@@ -472,8 +476,7 @@ namespace RenderCore { namespace BufferUploads
 			_recentRepositionBytes += byteCount;
 			_totalRepositionBytes += byteCount;
 
-			auto newDefrag = std::make_unique<ActiveReposition>(
-				*this, *_bufferUploads.lock(), *bestIncrementalDefragHeap, std::move(bestIncrementalDefragSteps));
+			auto newDefrag = StartReposition(*bu, *bestIncrementalDefragHeap, std::move(bestIncrementalDefragSteps));
 
 			assert(!_activeDefrag);
 			_activeDefrag = std::move(newDefrag);
@@ -483,8 +486,7 @@ namespace RenderCore { namespace BufferUploads
 			_recentRepositionBytes += byteCount;
 			_totalRepositionBytes += byteCount;
 
-			auto newDefrag = std::make_unique<ActiveReposition>(
-				*this, *_bufferUploads.lock(), *bestHeapForCompression, std::move(compression));
+			auto newDefrag = StartReposition(*bu, *bestHeapForCompression, std::move(compression));
 
 			assert(!_activeDefrag);
 			_activeDefrag = std::move(newDefrag);
@@ -497,7 +499,7 @@ namespace RenderCore { namespace BufferUploads
 					for (unsigned b=0; b<blockCount; ++b) {
 						auto block = bestHeapForCompression->_refCounts.GetEntry(b);
 						bool foundOne = false;
-						for (auto i =_activeDefrag->GetSteps().begin(); i!=_activeDefrag->GetSteps().end(); ++i)
+						for (auto i =_activeDefrag->_steps.begin(); i!=_activeDefrag->_steps.end(); ++i)
 							if (block.first >= i->_sourceStart && block.second <= i->_sourceEnd) {
 								foundOne = true;
 								break;
@@ -507,6 +509,39 @@ namespace RenderCore { namespace BufferUploads
 				}
 			#endif
 		}
+	}
+
+	auto BatchedResources::StartReposition(
+		IManager& bufferUploads,
+		HeapedResource& srcHeap,
+		std::vector<RepositionStep>&& steps) -> std::unique_ptr<ActiveReposition>
+	{
+		auto result = std::make_unique<ActiveReposition>();
+
+		result->_srcHeap = &srcHeap;
+		result->_steps = std::move(steps);
+
+		size_t dstSizeRequired = 0;
+		for (const auto& s:result->_steps) {
+			assert(s._sourceEnd > s._sourceStart);
+			dstSizeRequired = std::max(dstSizeRequired, size_t(s._destination + s._sourceEnd - s._sourceStart));
+		}
+		assert(dstSizeRequired);
+		assert(dstSizeRequired < srcHeap._size);		// can't be 100% of a heap -- that would require no defrag, and would fail the upcoming Allocate()
+		result->_dstUberBlock = Allocate(dstSizeRequired, "reposition-uber-block");
+		assert(!result->_dstUberBlock.IsEmpty());
+		if (!result->_dstUberBlock.IsWholeResource())
+			for (auto& s:result->_steps)
+				s._destination += result->_dstUberBlock.GetRangeInContainingResource().first;
+
+		result->_futureRepositionCmdList = bufferUploads.Begin(
+			result->_dstUberBlock.GetContainingResource(),
+			srcHeap._heapResource,
+			result->_steps);
+		if (!result->_futureRepositionCmdList.valid())
+			Throw(std::runtime_error("Failed while queuing reposition transaction"));
+
+		return result;
 	}
 
 	EventListID   BatchedResources::EventList_GetPublishedID() const { return _eventListManager._currentEventListPublishedId; }
@@ -690,10 +725,16 @@ namespace RenderCore { namespace BufferUploads
 		#endif
 	}
 
-	void BatchedResources::ActiveReposition::Tick(EventListManager& evntListMan)
+	void BatchedResources::ActiveReposition::Tick(EventListManager& evntListMan, BufferUploads::IManager& bufferUploads)
 	{
 		if (!_repositionCmdList.has_value() && _futureRepositionCmdList.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
 			_repositionCmdList = _futureRepositionCmdList.get();
+
+		// Manually check on the status of the cmd list in the buffer uploads manager
+		// Since we've the cmd list id directly from the buffer uploads system internals, we have no guarantees that it will
+		// complete at any point in the future if we create a graphics cmd list that waits on it
+		if (_repositionCmdList && !bufferUploads.IsComplete(*_repositionCmdList))
+			return;
 		
 		if (_repositionCmdList && !_eventId.has_value()) {
 			// publish the changes to encourage the client to move across to the newly updated position
@@ -717,36 +758,6 @@ namespace RenderCore { namespace BufferUploads
 		_srcHeap = nullptr;
 		_steps.clear();
 	}
-
-	BatchedResources::ActiveReposition::ActiveReposition(
-		BatchedResources& resourceSystem,
-		IManager& bufferUploads,
-		HeapedResource& srcHeap,
-		std::vector<RepositionStep>&& steps)
-	: _srcHeap(&srcHeap), _steps(std::move(steps))
-	{
-		size_t dstSizeRequired = 0;
-		for (const auto& s:_steps) {
-			assert(s._sourceEnd > s._sourceStart);
-			dstSizeRequired = std::max(dstSizeRequired, size_t(s._destination + s._sourceEnd - s._sourceStart));
-		}
-		assert(dstSizeRequired);
-		assert(dstSizeRequired < srcHeap._size);		// can't be 100% of a heap -- that would require no defrag, and would fail the upcoming Allocate()
-		_dstUberBlock = resourceSystem.Allocate(dstSizeRequired, "reposition-uber-block");
-		assert(!_dstUberBlock.IsEmpty());
-		if (!_dstUberBlock.IsWholeResource())
-			for (auto& s:_steps)
-				s._destination += _dstUberBlock.GetRangeInContainingResource().first;
-
-		_futureRepositionCmdList = bufferUploads.Begin(
-			_dstUberBlock.GetContainingResource(),
-			srcHeap._heapResource,
-			_steps);
-		if (!_futureRepositionCmdList.valid())
-			Throw(std::runtime_error("Failed while queuing reposition transaction"));
-	}
-
-	BatchedResources::ActiveReposition::~ActiveReposition() {}
 
 	std::shared_ptr<IBatchedResources> CreateBatchedResources(
 		IDevice& device, const std::shared_ptr<IManager>& bufferUploads, 
