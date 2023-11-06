@@ -548,17 +548,13 @@ namespace UnitTests
 				// object in multiple different ways). The PipelineAcceleratorPool takes care of managing that -- including
 				// try to maintain in memory only those pipelines that are required
 				auto techniqueDelegate = std::make_shared<UnitTestTechniqueDelegate>();
-				auto cfg = pipelinePool->CreateSequencerConfig(
-					"cfg",
-					techniqueDelegate,
-					ParameterBox{}, 
-					fbHelper.GetDesc(), 0);
+				auto cfg = pipelinePool->CreateSequencerConfig("cfg");
+				pipelinePool->SetTechniqueDelegate(*cfg, techniqueDelegate);
+				pipelinePool->SetFrameBufferDesc(*cfg, fbHelper.GetDesc(), 0);
 
-				auto cfgOutputRed = pipelinePool->CreateSequencerConfig(
-					"cfgOutputRed",
-					techniqueDelegate,
-					ParameterBox{ std::make_pair("OUTPUT_RED", "1") }, 
-					fbHelper.GetDesc(), 0);
+				auto cfgOutputRed = pipelinePool->CreateSequencerConfig("cfgOutputRed", ParameterBox{ std::make_pair("OUTPUT_RED", "1") });
+				pipelinePool->SetTechniqueDelegate(*cfgOutputRed, techniqueDelegate);
+				pipelinePool->SetFrameBufferDesc(*cfgOutputRed, fbHelper.GetDesc(), 0);
 
 				{
 					auto pipelineAccelerator = pipelinePool->CreatePipelineAccelerator(
@@ -620,7 +616,9 @@ namespace UnitTests
 				auto patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
 				
 				auto techniqueDelegate = std::make_shared<UnitTestTechniqueDelegate>();
-				auto cfg = pipelinePool->CreateSequencerConfig("cfg", techniqueDelegate, ParameterBox{}, fbHelper.GetDesc(), 0);
+				auto cfg = pipelinePool->CreateSequencerConfig("cfg");
+				pipelinePool->SetTechniqueDelegate(*cfg, techniqueDelegate);
+				pipelinePool->SetFrameBufferDesc(*cfg, fbHelper.GetDesc(), 0);
 
 				auto pipelineAccelerator = pipelinePool->CreatePipelineAccelerator(
 					patchCollection,

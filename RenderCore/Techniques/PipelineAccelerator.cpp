@@ -46,13 +46,13 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace Techniques
 {
-	using SequencerConfigId = uint64_t;
+	using InternalSequencerConfigId = uint64_t;
 	class PipelineAcceleratorPool;
 
-	class SequencerConfig
+	class InternalSequencerConfig
 	{
 	public:
-		SequencerConfigId _cfgId = ~0ull;
+		InternalSequencerConfigId _cfgId = ~0ull;
 
 		std::shared_ptr<ITechniqueDelegate> _delegate;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
@@ -70,6 +70,28 @@ namespace RenderCore { namespace Techniques
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 			PipelineAcceleratorPool* _ownerPool = nullptr;
 		#endif
+	};
+
+	class SequencerConfig : public std::enable_shared_from_this<SequencerConfig>
+	{
+	public:
+		// note -- we should only access this from the main thread / visibility barrier thread -- because there's not explicit threading checks
+		InternalSequencerConfigId _internalConfigId = ~0ull;
+		std::shared_ptr<InternalSequencerConfig> _internalConfig;
+		std::shared_future<std::shared_ptr<ITechniqueDelegate>> _futureDelegate;
+		std::shared_ptr<ITechniqueDelegate> _actualDelegate;
+		ParameterBox _sequencerSelectors;
+		FrameBufferDesc _fbDesc;
+		unsigned _subpassIdx = 0;
+		std::string _name;
+		VisibilityMarkerId _visibilityMarker = ~VisibilityMarkerId(0);
+		::Assets::Blob _actualizationLog;
+
+		std::vector<std::pair<std::promise<VisibilityMarkerId>, std::weak_ptr<PipelineAccelerator>>> _pendingVisibilityMarkers;
+
+		// _internalConfigId is read from outside of the lock, but other members should be protected by this lock
+		// do not lock this mutex while already holding _constructionLock, because we sometimes take the locks in the other order
+		mutable Threading::Mutex _lock;
 	};
 
 	#if defined(PA_ADDITIONAL_THREADING_CHECKS)
@@ -116,7 +138,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<bool> _hasCompletedPipelineConstructionLock;				// parallel to _completedPipelines, but protected by the _constructionLock, not the _pipelineUsageLock
 
 		std::shared_future<Pipeline> BeginPrepareForSequencerStateAlreadyLocked(
-			std::shared_ptr<SequencerConfig> cfg,
+			std::shared_ptr<InternalSequencerConfig> cfg,
 			const ParameterBox& globalSelectors,
 			const std::shared_ptr<PipelineCollection>& pipelineCollection, const std::shared_ptr<IPipelineLayoutDelegate>& layoutDelegate);
 
@@ -124,15 +146,15 @@ namespace RenderCore { namespace Techniques
 			std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 			std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
 			PipelineCollection& pipelineCollection, IPipelineLayoutDelegate& layoutDelegate,
-			const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg);
+			const ParameterBox& globalSelectors, std::shared_ptr<InternalSequencerConfig> cfg);
 
-		bool HasCurrentOrFuturePipeline(const SequencerConfig& cfg) const;
+		bool HasCurrentOrFuturePipeline(const InternalSequencerConfig& cfg) const;
 
 		static PipelineLayoutOptions PatchPipelineLayout(
-			IPipelineLayoutDelegate& layoutDelegate, const SequencerConfig& cfg,
+			IPipelineLayoutDelegate& layoutDelegate, const InternalSequencerConfig& cfg,
 			std::shared_ptr<Assets::PredefinedDescriptorSetLayout> materialDescSet);
 
-		Pipeline* TryGetPipeline(const SequencerConfig& cfg, VisibilityMarkerId visibilityMarker);
+		Pipeline* TryGetPipeline(InternalSequencerConfigId seqCfgId, VisibilityMarkerId visibilityMarker);
 	
 		std::shared_ptr<Assets::ShaderPatchCollection> _shaderPatches;
 		ParameterBox _materialSelectors;
@@ -149,7 +171,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 		std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
 		PipelineCollection& pipelineCollection, IPipelineLayoutDelegate& layoutDelegate,
-		const ParameterBox& globalSelectors, std::shared_ptr<SequencerConfig> cfg)
+		const ParameterBox& globalSelectors, std::shared_ptr<InternalSequencerConfig> cfg)
 	{
 		auto pipelineDesc = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
 		std::promise<Techniques::GraphicsPipelineAndLayout> metalPipelinePromise;
@@ -193,7 +215,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	auto PipelineAccelerator::BeginPrepareForSequencerStateAlreadyLocked(
-		std::shared_ptr<SequencerConfig> cfg,
+		std::shared_ptr<InternalSequencerConfig> cfg,
 		const ParameterBox& globalSelectors,
 		const std::shared_ptr<PipelineCollection>& pipelineCollection, const std::shared_ptr<IPipelineLayoutDelegate>& layoutDelegate) -> std::shared_future<Pipeline>
 	{
@@ -244,7 +266,7 @@ namespace RenderCore { namespace Techniques
 		return futurePipeline;
 	}
 
-	bool PipelineAccelerator::HasCurrentOrFuturePipeline(const SequencerConfig& cfg) const
+	bool PipelineAccelerator::HasCurrentOrFuturePipeline(const InternalSequencerConfig& cfg) const
 	{
 		#if defined(_DEBUG)
 			unsigned poolId = unsigned(cfg._cfgId >> 32ull);
@@ -267,26 +289,27 @@ namespace RenderCore { namespace Techniques
 		return false;
 	}
 
-	auto PipelineAccelerator::TryGetPipeline(const SequencerConfig& cfg, VisibilityMarkerId visibilityMarker) -> Pipeline*
+	auto PipelineAccelerator::TryGetPipeline(InternalSequencerConfigId seqCfgId, VisibilityMarkerId visibilityMarker) -> Pipeline*
 	{
 		#if defined(_DEBUG)
-			unsigned poolId = unsigned(cfg._cfgId >> 32ull);
+			unsigned poolId = unsigned(seqCfgId >> 32ull);
 			if (poolId != _ownerPoolId)
 				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
 		#endif
 
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			AssertPipelineUsageLock(*cfg._ownerPool);
+			// we can't make this test anymore because we only have the seqCfgId, we can't find our way back to the PipelineAcceleratorPool
+			// AssertPipelineUsageLock(*this);
 		#endif
 
-		unsigned sequencerIdx = unsigned(cfg._cfgId);
+		unsigned sequencerIdx = unsigned(seqCfgId);
 		if (sequencerIdx >= _completedPipelines.size() || _completedPipelines[sequencerIdx]._visibilityMarker > visibilityMarker || !_completedPipelines[sequencerIdx]._pipeline._metalPipeline)
 			return nullptr;
 		return &_completedPipelines[sequencerIdx]._pipeline;
 	}
 
 	PipelineLayoutOptions PipelineAccelerator::PatchPipelineLayout(
-		IPipelineLayoutDelegate& layoutDelegate, const SequencerConfig& sequencerCfg,
+		IPipelineLayoutDelegate& layoutDelegate, const InternalSequencerConfig& sequencerCfg,
 		std::shared_ptr<Assets::PredefinedDescriptorSetLayout> materialDescSet)
 	{
 		if (!materialDescSet)
@@ -415,7 +438,7 @@ namespace RenderCore { namespace Techniques
 		//		P   O   O   L
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class PipelineAcceleratorPool : public IPipelineAcceleratorPool
+	class PipelineAcceleratorPool : public IPipelineAcceleratorPool, public std::enable_shared_from_this<PipelineAcceleratorPool>
 	{
 	public:
 		std::shared_ptr<PipelineAccelerator> CreatePipelineAccelerator(
@@ -432,7 +455,7 @@ namespace RenderCore { namespace Techniques
 			Topology topology,
 			const Assets::RenderStateSet& stateSet) override;
 
-		virtual std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
+		std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
 			const std::shared_ptr<ResourceConstructionContext>& constructionContext,
 			const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
@@ -440,12 +463,10 @@ namespace RenderCore { namespace Techniques
 			std::string&& name,
 			const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding) override;
 
-		std::shared_ptr<SequencerConfig> CreateSequencerConfig(
-			const std::string& name,
-			std::shared_ptr<ITechniqueDelegate> delegate,
-			const ParameterBox& sequencerSelectors,
-			const FrameBufferDesc& fbDesc,
-			unsigned subpassIndex = 0) override;
+		std::shared_ptr<SequencerConfig> CreateSequencerConfig(const std::string& name, const ParameterBox& sequencerSelectors) override;
+		void SetTechniqueDelegate(SequencerConfig&, std::shared_ptr<ITechniqueDelegate>) override;
+		void SetTechniqueDelegate(SequencerConfig&, std::shared_future<std::shared_ptr<ITechniqueDelegate>>) override;
+		void SetFrameBufferDesc(SequencerConfig&, const FrameBufferDesc& fbDesc, unsigned subpassIndex) override;
 
 		std::future<VisibilityMarkerId> GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const override;
 		std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>> GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const override;
@@ -479,7 +500,7 @@ namespace RenderCore { namespace Techniques
 		//		1. _constructionLock
 		//		2. _pipelineUsageLock
 		//
-		// _constructionLock is used for all construction operations; CreatePipelineAccelerator, CreateSequencerConfig, etc
+		// _constructionLock is used for all construction operations; CreatePipelineAccelerator, ReuseOrCreateSequencerConfig, etc
 		// _pipelineUsageLock is used for actually retrieving the pipeline/descriptor set with TryGetPipeline, etc
 		// Construction operations can happen in parallel with pipeline usage operations, so different kinds of clients won't
 		// interfere with each other. 
@@ -490,19 +511,30 @@ namespace RenderCore { namespace Techniques
 		mutable Threading::Mutex _constructionLock;
 		mutable std::shared_mutex _pipelineUsageLock;
 		ParameterBox _globalSelectors;
-		std::vector<std::pair<uint64_t, std::weak_ptr<SequencerConfig>>> _sequencerConfigs;
+		std::vector<std::pair<uint64_t, std::weak_ptr<InternalSequencerConfig>>> _sequencerConfigs;
 		std::vector<std::pair<uint64_t, std::weak_ptr<PipelineAccelerator>>> _pipelineAccelerators;
 		std::vector<std::pair<uint64_t, std::weak_ptr<DescriptorSetAccelerator>>> _descriptorSetAccelerators;
 
-		SequencerConfig MakeSequencerConfig(
+		InternalSequencerConfig MakeInternalSequencerConfig(
 			/*out*/ uint64_t& hash,
 			std::shared_ptr<ITechniqueDelegate> delegate,
 			const ParameterBox& sequencerSelectors,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex);
 
+		std::shared_ptr<InternalSequencerConfig> ReuseOrCreateSequencerConfigAlreadyLocked(
+			const std::string& name,
+			std::shared_ptr<ITechniqueDelegate> delegate,
+			const ParameterBox& sequencerSelectors,
+			const FrameBufferDesc& fbDesc,
+			unsigned subpassIndex = 0);
+
+		void ReassignInternalSequencerConfig(SequencerConfig& cfg);
+
 		void RebuildAllPipelinesAlreadyLocked(unsigned poolGuid);
 		void RebuildAllPipelinesAlreadyLocked(unsigned poolGuid, PipelineAccelerator& pipeline, uint64_t pipelineHash);
+
+		void GetPipelineMarkerInternal(std::promise<VisibilityMarkerId>&&, PipelineAccelerator& pipelineAccelerator, InternalSequencerConfigId sequencerConfigId) const;
 
 		std::shared_ptr<SamplerPool> _samplerPool;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
@@ -514,7 +546,7 @@ namespace RenderCore { namespace Techniques
 		{
 			std::atomic<VisibilityMarkerId> _lastPublishedVisibilityMarker;
 			Threading::Mutex _lock;
-			std::vector<std::pair<uint64_t, SequencerConfigId>> _pipelineFuturesToCheck;
+			std::vector<std::pair<uint64_t, InternalSequencerConfigId>> _pipelineFuturesToCheck;
 			std::vector<uint64_t> _descSetFuturesToCheck;
 		};
 		std::shared_ptr<FuturesToCheckHelper> _futuresToCheckHelper;
@@ -525,9 +557,9 @@ namespace RenderCore { namespace Techniques
 
 		struct NewlyQueued
 		{
-			std::shared_future<PipelineAccelerator::Pipeline> _future; uint64_t _acceleratorHash; SequencerConfigId _cfgId; 
+			std::shared_future<PipelineAccelerator::Pipeline> _future; uint64_t _acceleratorHash; InternalSequencerConfigId _cfgId; 
 			NewlyQueued() = default;
-			NewlyQueued(std::shared_future<PipelineAccelerator::Pipeline> future, uint64_t acceleratorHash, SequencerConfigId cfgId) : _future(std::move(future)), _acceleratorHash(acceleratorHash), _cfgId(cfgId) {}
+			NewlyQueued(std::shared_future<PipelineAccelerator::Pipeline> future, uint64_t acceleratorHash, InternalSequencerConfigId cfgId) : _future(std::move(future)), _acceleratorHash(acceleratorHash), _cfgId(cfgId) {}
 		};
 		void SetupNewlyQueuedAlreadyLocked(IteratorRange<const NewlyQueued*>);
 
@@ -585,7 +617,21 @@ namespace RenderCore { namespace Techniques
 			std::chrono::hours(1), std::tuple<std::decay_t<FutureTypes>...>{std::forward<FutureTypes>(futures)...}, std::move(continuation));
 	}
 
-	std::future<VisibilityMarkerId> PipelineAcceleratorPool::GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const
+	std::future<VisibilityMarkerId> PipelineAcceleratorPool::GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& cfg) const
+	{
+		std::promise<VisibilityMarkerId> promise;
+		auto future = promise.get_future();
+
+		auto sequencerConfigId = cfg._internalConfigId;
+		if (sequencerConfigId == ~0ull) {
+			ScopedLock(cfg._lock);
+			const_cast<SequencerConfig&>(cfg)._pendingVisibilityMarkers.emplace_back(std::move(promise), pipelineAccelerator.weak_from_this());
+		} else
+			GetPipelineMarkerInternal(std::move(promise), pipelineAccelerator, sequencerConfigId);
+		return future;
+	}
+
+	void PipelineAcceleratorPool::GetPipelineMarkerInternal(std::promise<VisibilityMarkerId>&& promise, PipelineAccelerator& pipelineAccelerator, InternalSequencerConfigId sequencerConfigId) const
 	{
 		// We must lock both "_constructionLock" & "_pipelineUsageLock" for this -- so it's less advisable to call this often
 		// TryGetPipeline doesn't take a lock and is more efficient to call frequently
@@ -606,20 +652,18 @@ namespace RenderCore { namespace Techniques
 		#endif
 
 		#if defined(_DEBUG)
-			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);
+			unsigned poolId = unsigned(sequencerConfigId >> 32ull);
 			if (poolId != _guid || pipelineAccelerator._ownerPoolId != _guid)
 				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
 		#endif
 
 		auto pending = std::find_if(
 			pipelineAccelerator._pendingPipelines.begin(), pipelineAccelerator._pendingPipelines.end(),
-			[cfgId=uint32_t(sequencerConfig._cfgId)](const auto& p) { return p.first == cfgId; });
+			[seqIndex=uint32_t(sequencerConfigId)](const auto& p) { return p.first == seqIndex; });
 		if (pending != pipelineAccelerator._pendingPipelines.end()) {
-			std::promise<VisibilityMarkerId> newPromise;
-			auto result = newPromise.get_future();
 			#if !defined(PA_SEPARATE_CONTINUATIONS)
 				::Assets::WhenAll(pending->second).ThenConstructToPromise(
-					std::move(newPromise),
+					std::move(promise),
 					[helper=_futuresToCheckHelper](const auto&) {
 						// the visibility marker should always be the next one
 						return helper->_lastPublishedVisibilityMarker.load()+1;
@@ -627,28 +671,28 @@ namespace RenderCore { namespace Techniques
 			#else
 				_continuationExecutor->watch(
 					MakeTimedWaitable(
-						std::move(newPromise),
+						std::move(promise),
 						[helper=_futuresToCheckHelper](auto&& promise, auto&&) {
 							// the visibility marker should always be the next one
 							promise.set_value(helper->_lastPublishedVisibilityMarker.load()+1);
 						},
 						pending->second));
 			#endif
-			return result;
+			return;
 		}
 
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 			AssertPipelineUsageLock(*this);
 		#endif
 		
-		auto seqIndex = unsigned(sequencerConfig._cfgId);
-		if (seqIndex >= pipelineAccelerator._completedPipelines.size())
-			return {};
+		auto seqIndex = unsigned(sequencerConfigId);
+		if (seqIndex >= pipelineAccelerator._completedPipelines.size()) {
+			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad seqIndex in pipeline accelerator pool")));
+			return;
+		}
 
 		auto& completed = pipelineAccelerator._completedPipelines[seqIndex];
-		std::promise<VisibilityMarkerId> immediatePromise;
-		immediatePromise.set_value((VisibilityMarkerId)completed._visibilityMarker); // includes invalid, & not pending case
-		return immediatePromise.get_future();
+		promise.set_value((VisibilityMarkerId)completed._visibilityMarker); // includes invalid, & not pending case
 	}
 
 	std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>> PipelineAcceleratorPool::GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const
@@ -697,17 +741,20 @@ namespace RenderCore { namespace Techniques
 		const SequencerConfig& sequencerConfig,
 		VisibilityMarkerId visibilityMarker)
 	{
+		auto seqCfg = sequencerConfig._internalConfigId;
+		if (seqCfg == ~0ull) return nullptr;
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			assert(sequencerConfig._ownerPool);
-			AssertPipelineUsageLock(*sequencerConfig._ownerPool);
+			// we can't make this test anymore because we only have the seqCfgId, we can't find our way back to the PipelineAcceleratorPool
+			// assert(sequencerConfig._ownerPool);
+			// AssertPipelineUsageLock(*sequencerConfig._ownerPool);
 		#endif
 		#if defined(_DEBUG)
-			unsigned poolId = unsigned(sequencerConfig._cfgId >> 32ull);
+			unsigned poolId = unsigned(seqCfg >> 32ull);
 			if (poolId != pipelineAccelerator._ownerPoolId)
 				Throw(std::runtime_error("Mixing a pipeline accelerator from an incorrect pool"));
 		#endif
 		
-		return pipelineAccelerator.TryGetPipeline(sequencerConfig, visibilityMarker);
+		return pipelineAccelerator.TryGetPipeline(seqCfg, visibilityMarker);
 	}
 
 	const ActualizedDescriptorSet* TryGetDescriptorSet(DescriptorSetAccelerator& accelerator, VisibilityMarkerId visibilityMarker)
@@ -742,18 +789,25 @@ namespace RenderCore { namespace Techniques
 
 	ICompiledPipelineLayout* TryGetCompiledPipelineLayout(const SequencerConfig& sequencerConfig, VisibilityMarkerId visibilityMarker)
 	{
+		ScopedLock(sequencerConfig._lock);
+		if (!sequencerConfig._internalConfig)
+			return nullptr;
+
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			assert(sequencerConfig._ownerPool);
+			assert(sequencerConfig._internalConfig->_ownerPool);
 		#endif
-		return sequencerConfig._compiledPipelineLayout.get();
+		return sequencerConfig._internalConfig->_compiledPipelineLayout.get();
 	}
 
 	std::pair<unsigned, unsigned> GetStencilRefValues(const SequencerConfig& sequencerConfig)
 	{
-		return { sequencerConfig._frontFaceStencilRef, sequencerConfig._backFaceStencilRef };
+		ScopedLock(sequencerConfig._lock);
+		if (!sequencerConfig._internalConfig)
+			return { ~0u, ~0u };
+		return { sequencerConfig._internalConfig->_frontFaceStencilRef, sequencerConfig._internalConfig->_backFaceStencilRef };
 	}
 
-	SequencerConfig PipelineAcceleratorPool::MakeSequencerConfig(
+	InternalSequencerConfig PipelineAcceleratorPool::MakeInternalSequencerConfig(
 		/*out*/ uint64_t& hash,
 		std::shared_ptr<ITechniqueDelegate> delegate,
 		const ParameterBox& sequencerSelectors,
@@ -764,7 +818,7 @@ namespace RenderCore { namespace Techniques
 		// if it's here already. Other create it and return the result
 		assert(!fbDesc.GetSubpasses().empty());
 
-		SequencerConfig cfg;
+		InternalSequencerConfig cfg;
 		cfg._delegate = std::move(delegate);
 		cfg._sequencerSelectors = sequencerSelectors;
 
@@ -1008,24 +1062,127 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	auto PipelineAcceleratorPool::CreateSequencerConfig(
+	std::shared_ptr<SequencerConfig> PipelineAcceleratorPool::CreateSequencerConfig(const std::string& name, const ParameterBox& sequencerSelectors)
+	{
+		auto cfg = std::make_shared<SequencerConfig>();
+		cfg->_name = name;
+		cfg->_sequencerSelectors = sequencerSelectors;
+		return cfg;
+	}
+
+	void PipelineAcceleratorPool::SetTechniqueDelegate(SequencerConfig& cfg, std::shared_ptr<ITechniqueDelegate> techDel)
+	{
+		ScopedLock(cfg._lock);
+		cfg._actualDelegate = std::move(techDel);
+		cfg._futureDelegate = {};
+	}
+
+	void PipelineAcceleratorPool::SetTechniqueDelegate(SequencerConfig& cfg, std::shared_future<std::shared_ptr<ITechniqueDelegate>> futureTechDel)
+	{
+		ScopedLock(cfg._lock);
+		if (futureTechDel.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+			SetTechniqueDelegate(cfg, futureTechDel.get());
+		} else {
+			cfg._actualDelegate = nullptr;
+			cfg._futureDelegate = std::move(futureTechDel);
+			ReassignInternalSequencerConfig(cfg);
+		}
+	}
+
+	void PipelineAcceleratorPool::SetFrameBufferDesc(SequencerConfig& cfg, const FrameBufferDesc& fbDesc, unsigned subpassIndex)
+	{
+		ScopedLock(cfg._lock);
+		cfg._fbDesc = fbDesc;
+		cfg._subpassIdx = subpassIndex;
+		ReassignInternalSequencerConfig(cfg);
+	}
+
+	void PipelineAcceleratorPool::ReassignInternalSequencerConfig(SequencerConfig& cfg)
+	{
+		// expecting cfg._lock to be taken, regardless
+		if (cfg._fbDesc.GetSubpasses().empty()) {
+			cfg._internalConfig = nullptr;
+			cfg._internalConfigId = ~0ull;
+			return;
+		}
+		if (!cfg._actualDelegate) {
+			if (cfg._futureDelegate.valid()) {
+
+				auto continuation = [helper=_futuresToCheckHelper, weakCfg=cfg.weak_from_this(), weakThis=weak_from_this()](auto&&) mutable {
+					auto l = weakThis.lock();
+					auto cfg = weakCfg.lock();
+					if (!l || !cfg) return;
+
+					ScopedLock(cfg->_lock);
+					if (!cfg->_actualDelegate) {
+						assert(cfg->_futureDelegate.valid());
+						cfg->_actualDelegate = cfg->_futureDelegate.get();		// using this future, even if it's not the one our continuation is associated with
+						cfg->_futureDelegate = {};
+						std::shared_ptr<InternalSequencerConfig> newInternalCfg;
+						ScopedLock(l->_constructionLock);
+						newInternalCfg = l->ReuseOrCreateSequencerConfigAlreadyLocked(
+							cfg->_name,
+							cfg->_actualDelegate,
+							cfg->_sequencerSelectors, cfg->_fbDesc, cfg->_subpassIdx);
+
+						cfg->_internalConfigId = newInternalCfg->_cfgId;
+						cfg->_internalConfig = std::move(newInternalCfg);
+					} else {
+						assert(!cfg->_futureDelegate.valid());
+						cfg->_futureDelegate = {};
+					}
+
+					// Now that we have an assigned sequencer cfg, proceed with the next step of 
+					std::vector<std::pair<std::promise<VisibilityMarkerId>, std::weak_ptr<PipelineAccelerator>>> pendingVisibilityMarkers;
+					std::swap(pendingVisibilityMarkers, cfg->_pendingVisibilityMarkers);
+					for (auto& p:pendingVisibilityMarkers)
+						if (auto pa = p.second.lock())
+							l->GetPipelineMarkerInternal(std::move(p.first), *pa, cfg->_internalConfigId);
+				};
+
+				#if !defined(PA_SEPARATE_CONTINUATIONS)
+					::Assets::WhenAll(cfg->_futureDelegate).Then(std::move(continuation));
+				#else
+					_continuationExecutor->watch(MakeTimedWaitableJustContinuation(std::move(continuation), cfg._futureDelegate));
+				#endif
+
+				return;
+			} else {
+				cfg._internalConfig = nullptr;
+				cfg._internalConfigId = ~0ull;
+				return;
+			}
+		}
+
+		std::shared_ptr<InternalSequencerConfig> newInternalCfg;
+		{
+			ScopedLock(_constructionLock);
+			newInternalCfg = ReuseOrCreateSequencerConfigAlreadyLocked(
+				cfg._name,
+				cfg._actualDelegate,
+				cfg._sequencerSelectors, cfg._fbDesc,  cfg._subpassIdx);
+		}
+
+		cfg._internalConfigId = newInternalCfg->_cfgId;
+		cfg._internalConfig = std::move(newInternalCfg);		// careful we don't drop the reference when assigning back to what it was
+	}
+
+	auto PipelineAcceleratorPool::ReuseOrCreateSequencerConfigAlreadyLocked(
 		const std::string& name,
 		std::shared_ptr<ITechniqueDelegate> delegate,
 		const ParameterBox& sequencerSelectors,
 		const FrameBufferDesc& fbDesc,
-		unsigned subpassIndex) -> std::shared_ptr<SequencerConfig>
+		unsigned subpassIndex) -> std::shared_ptr<InternalSequencerConfig>
 	{
-		ScopedLock(_constructionLock);
-
 		std::vector<NewlyQueued> newlyQueued;
 
 		uint64_t hash = 0;
-		auto cfg = MakeSequencerConfig(hash, delegate, sequencerSelectors, fbDesc, subpassIndex);
+		auto cfg = MakeInternalSequencerConfig(hash, delegate, sequencerSelectors, fbDesc, subpassIndex);
 
 		// Look for an existing configuration with the same settings
 		for (auto i=_sequencerConfigs.begin(); i!=_sequencerConfigs.end(); ++i) {
 			if (i->first == hash) {
-				auto cfgId = SequencerConfigId(i - _sequencerConfigs.begin()) | (SequencerConfigId(_guid) << 32ull);
+				auto cfgId = InternalSequencerConfigId(i - _sequencerConfigs.begin()) | (InternalSequencerConfigId(_guid) << 32ull);
 				
 				auto result = i->second.lock();
 
@@ -1033,7 +1190,7 @@ namespace RenderCore { namespace Techniques
 				// our pointer. Note that we only even hold a weak pointer, so if the caller doesn't hold
 				// onto the result, it's just going to expire once more
 				if (!result) {
-					result = std::make_shared<SequencerConfig>(std::move(cfg));
+					result = std::make_shared<InternalSequencerConfig>(std::move(cfg));
 					result->_name = name;
 					result->_pipelineLayout = result->_delegate->GetPipelineLayout();
 					auto layoutInitializer = result->_pipelineLayout->MakePipelineLayoutInitializerWithAutoMatching(
@@ -1068,8 +1225,8 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		auto cfgId = SequencerConfigId(_sequencerConfigs.size()) | (SequencerConfigId(_guid) << 32ull);
-		auto result = std::make_shared<SequencerConfig>(std::move(cfg));
+		auto cfgId = InternalSequencerConfigId(_sequencerConfigs.size()) | (InternalSequencerConfigId(_guid) << 32ull);
+		auto result = std::make_shared<InternalSequencerConfig>(std::move(cfg));
 		result->_name = name;
 		result->_pipelineLayout = result->_delegate->GetPipelineLayout();
 		// Pass in empty auto initializers to allow pipeline layouts with AutoDescriptorSet, but act as if the shader
@@ -1106,7 +1263,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<NewlyQueued> newlyQueued;
 
 		for (unsigned c=0; c<_sequencerConfigs.size(); ++c) {
-			auto cfgId = SequencerConfigId(c) | (SequencerConfigId(poolGuid) << 32ull);
+			auto cfgId = InternalSequencerConfigId(c) | (InternalSequencerConfigId(poolGuid) << 32ull);
 			if (auto l = _sequencerConfigs[c].second.lock()) {
 				assert(unsigned(l->_cfgId) == c);
 				auto future = pipeline.BeginPrepareForSequencerStateAlreadyLocked(l, _globalSelectors, _pipelineCollection, _layoutDelegate);
@@ -1189,7 +1346,7 @@ namespace RenderCore { namespace Techniques
 			// also don't do it if we've also invalidated a full sequencer cfg this frame
 			const bool checkForInvalidatedAccelerators = true;
 			if (checkForInvalidatedAccelerators && !_sequencerConfigs.empty()) {
-				std::shared_ptr<SequencerConfig> seqCfg;
+				std::shared_ptr<InternalSequencerConfig> seqCfg;
 				for (unsigned c=0; c<_sequencerConfigs.size(); ++c) {
 					auto idx = (c+_lastSequencerCfgHotReloadCheck)%_sequencerConfigs.size();
 					seqCfg = _sequencerConfigs[idx].second.lock();
@@ -1239,7 +1396,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		// check for completed futures
-		std::vector<std::pair<uint64_t, SequencerConfigId>> thisTimePipelinesToCheck;
+		std::vector<std::pair<uint64_t, InternalSequencerConfigId>> thisTimePipelinesToCheck;
 		std::vector<uint64_t> thisTimeDescSetsToCheck;
 		{
 			ScopedLock(_futuresToCheckHelper->_lock);

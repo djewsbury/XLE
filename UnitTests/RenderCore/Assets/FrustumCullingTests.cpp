@@ -174,11 +174,9 @@ namespace UnitTests
 			drawableGeo->_vertexStreams[0]._resource = sphereVb;
 			drawableGeo->_vertexStreamCount = 1;
 
-			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				"test",
-				std::make_shared<SimpleTechniqueDelegate>(),
-				ParameterBox {},
-				fbHelper.GetDesc());
+			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig("test");
+			pipelineAcceleratorPool->SetTechniqueDelegate(*cfgId, std::make_shared<SimpleTechniqueDelegate>());
+			pipelineAcceleratorPool->SetFrameBufferDesc(*cfgId, fbHelper.GetDesc());
 
 			auto pipelineWithTexCoord = pipelineAcceleratorPool->CreatePipelineAccelerator(
 				nullptr,

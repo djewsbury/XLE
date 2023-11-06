@@ -420,11 +420,9 @@ namespace UnitTests
 					parameterResource = rpi.GetOutputAttachmentResource(2);
 					depthResource = rpi.GetDepthStencilAttachmentResource();
 
-					auto gbufferWriteCfg = testApparatus._pipelineAccelerators->CreateSequencerConfig(
-						"gbufferWriteCfg",
-						futureTechDel.get(),
-						ParameterBox {},
-						rpi.GetFrameBufferDesc());
+					auto gbufferWriteCfg = testApparatus._pipelineAccelerators->CreateSequencerConfig("gbufferWriteCfg");
+					testApparatus._pipelineAccelerators->SetTechniqueDelegate(*gbufferWriteCfg, std::move(futureTechDel));
+					testApparatus._pipelineAccelerators->SetFrameBufferDesc(*gbufferWriteCfg, rpi.GetFrameBufferDesc());
 
 					{
 						Techniques::DrawablesPacket pkt;
@@ -483,11 +481,9 @@ namespace UnitTests
 					frag.AddSubpass(std::move(subpass));
 					RenderCore::Techniques::RenderPassInstance rpi(parsingContext, frag);
 
-					auto writeDirectCfg = testApparatus._pipelineAccelerators->CreateSequencerConfig(
-						"writeDirectCfg",
-						std::make_shared<WriteWorldCoordsDelegate>(),
-						ParameterBox {},
-						rpi.GetFrameBufferDesc());
+					auto writeDirectCfg = testApparatus._pipelineAccelerators->CreateSequencerConfig("writeDirectCfg");
+					testApparatus._pipelineAccelerators->SetTechniqueDelegate(*writeDirectCfg, std::make_shared<WriteWorldCoordsDelegate>());
+					testApparatus._pipelineAccelerators->SetFrameBufferDesc(*writeDirectCfg, rpi.GetFrameBufferDesc());
 
 					directWorldPosition = rpi.GetOutputAttachmentResource(0);
 					directWorldNormal = rpi.GetOutputAttachmentResource(1);

@@ -303,10 +303,9 @@ namespace RenderCore { namespace LightingEngine
 		_fbDescsPendingStitch.clear();
 
 		for (const auto& createSequencerConfig:_sequencerConfigsPendingConstruction) {
-			auto seqCfg = pipelineAccelerators.CreateSequencerConfig(
-				createSequencerConfig._name,
-				createSequencerConfig._delegate, createSequencerConfig._sequencerSelectors, 
-				_fbDescs[createSequencerConfig._fbDescIndex]._fbDesc, createSequencerConfig._subpassIndex);
+			auto seqCfg = pipelineAccelerators.CreateSequencerConfig(createSequencerConfig._name,createSequencerConfig._sequencerSelectors);
+			pipelineAccelerators.SetTechniqueDelegate(*seqCfg, createSequencerConfig._delegate);
+			pipelineAccelerators.SetFrameBufferDesc(*seqCfg, _fbDescs[createSequencerConfig._fbDescIndex]._fbDesc, createSequencerConfig._subpassIndex);
 			assert(createSequencerConfig._stepIndex < _steps.size());
 			assert(_steps[createSequencerConfig._stepIndex]._type == ExecuteStep::Type::ExecuteDrawables);
 			assert(_steps[createSequencerConfig._stepIndex]._sequencerConfig == nullptr);

@@ -284,11 +284,9 @@ namespace RenderCore { namespace Techniques
 			auto hash = Metal::GraphicsPipelineBuilder::CalculateFrameBufferRelevance(fbDesc, subpassIndex);
 			auto i = LowerBound(_sequencerConfigs, hash);
 			if (i==_sequencerConfigs.end() || i->first != hash) {
-				auto result = _pipelineAcceleratorPool->CreateSequencerConfig(
-					"immediate-drawables",
-					techniqueDelegate,
-					ParameterBox{},
-					fbDesc, subpassIndex);
+				auto result = _pipelineAcceleratorPool->CreateSequencerConfig("immediate-drawables");
+				_pipelineAcceleratorPool->SetTechniqueDelegate(*result, techniqueDelegate);
+				_pipelineAcceleratorPool->SetFrameBufferDesc(*result, fbDesc, subpassIndex);
 				i = _sequencerConfigs.insert(i, std::make_pair(hash, std::move(result)));
 			}
 			return *i->second;

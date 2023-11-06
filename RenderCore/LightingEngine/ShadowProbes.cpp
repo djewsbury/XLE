@@ -358,7 +358,10 @@ namespace RenderCore { namespace LightingEngine
 				.ThenConstructToPromise(
 					std::move(futureSequencerConfig),
 					[pipelineAccelerators=_pimpl->_pipelineAccelerators, fbDesc](auto techDel) {
-						return pipelineAccelerators->CreateSequencerConfig("shadow-probe", techDel, {}, fbDesc, 0);
+						auto cfg = pipelineAccelerators->CreateSequencerConfig("shadow-probe");
+						pipelineAccelerators->SetTechniqueDelegate(*cfg, techDel);
+						pipelineAccelerators->SetFrameBufferDesc(*cfg, fbDesc, 0);
+						return cfg;
 					});
 		}
 

@@ -485,11 +485,9 @@ namespace UnitTests
 			Techniques::CreateTechniqueDelegate_Utility(std::move(promisedTechDel), ::Assets::GetAssetFuturePtr<RenderCore::Techniques::TechniqueSetFile>(ILLUM_TECH), Techniques::UtilityDelegateType::FlatColor);
 			ParameterBox params;
 			params.SetParameter("RANDOMIZED", seed);
-			auto cfg = testApparatus._pipelineAccelerators->CreateSequencerConfig(
-				"threaded-cfg",
-				futureTechDel.get(),		// stall for tech del
-				std::move(params),
-				rpi.GetFrameBufferDesc());
+			auto cfg = testApparatus._pipelineAccelerators->CreateSequencerConfig("threaded-cfg", std::move(params));
+			testApparatus._pipelineAccelerators->SetTechniqueDelegate(*cfg, std::move(futureTechDel));
+			testApparatus._pipelineAccelerators->SetFrameBufferDesc(*cfg, rpi.GetFrameBufferDesc());
 
 			{
 				const Float2 worldMins{0.f, 0.f}, worldMaxs{100.f, 100.f};

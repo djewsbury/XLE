@@ -239,16 +239,14 @@ namespace UnitTests
 		auto futureTechDel = promisedTechDel.get_future();
 		Techniques::CreateTechniqueDelegate_Utility(
 			std::move(promisedTechDel),
-			::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"), 
+			::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
 			Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
 
 		auto mainPool = testApparatus._pipelineAccelerators;
 		mainPool->SetGlobalSelector("GLOBAL_SEL", 55);
-		auto cfgId = mainPool->CreateSequencerConfig(
-			"cfgId",
-			futureTechDel.get(),		// note -- stall
-			ParameterBox { std::make_pair("SEQUENCER_SEL", "37") },
-			MakeSimpleFrameBufferDesc());
+		auto cfgId = mainPool->CreateSequencerConfig("cfgId", ParameterBox { std::make_pair("SEQUENCER_SEL", "37") });
+		mainPool->SetTechniqueDelegate(*cfgId, std::move(futureTechDel));
+		mainPool->SetFrameBufferDesc(*cfgId, MakeSimpleFrameBufferDesc());
 
 		RenderCore::Assets::RenderStateSet doubledSidedStateSet;
 		doubledSidedStateSet._doubleSided = true;
@@ -322,11 +320,9 @@ namespace UnitTests
 				BindFlag::RenderTarget,
 				TextureDesc::Plain2D(64, 64, Format::R8G8B8A8_UNORM_SRGB));
 			UnitTestFBHelper fbHelper(*testHelper->_device, *threadContext, targetDesc);
-			auto cfgIdWithColor = mainPool->CreateSequencerConfig(
-				"cfgIdWithColor",
-				futureTechDel.get(),		// note -- stall
-				ParameterBox { std::make_pair("COLOR_RED", "1") },
-				MakeSimpleFrameBufferDesc());
+			auto cfgIdWithColor = mainPool->CreateSequencerConfig("cfgIdWithColor", ParameterBox { std::make_pair("COLOR_RED", "1") });
+			mainPool->SetTechniqueDelegate(*cfgIdWithColor, std::move(futureTechDel));
+			mainPool->SetFrameBufferDesc(*cfgIdWithColor, MakeSimpleFrameBufferDesc());
 
 			auto vertexBuffer = testHelper->CreateVB(vertices_fullViewport);
 
@@ -348,11 +344,9 @@ namespace UnitTests
 			REQUIRE(breakdown0.begin()->first == 0xff0000ff);
 
 			// Change the sequencer config to now set the COLOR_GREEN selector
-			cfgIdWithColor = mainPool->CreateSequencerConfig(
-				"cfgIdWithColor",
-				futureTechDel.get(),		// note -- stall
-				ParameterBox { std::make_pair("COLOR_GREEN", "1") },
-				MakeSimpleFrameBufferDesc());
+			cfgIdWithColor = mainPool->CreateSequencerConfig("cfgIdWithColor", ParameterBox { std::make_pair("COLOR_GREEN", "1") });
+			mainPool->SetTechniqueDelegate(*cfgIdWithColor, std::move(futureTechDel));
+			mainPool->SetFrameBufferDesc(*cfgIdWithColor, MakeSimpleFrameBufferDesc());
 
 			{
 				auto finalPipelineFuture = StallForPipeline(*mainPool, *pipelineWithTexCoord, *cfgIdWithColor);
@@ -489,11 +483,9 @@ namespace UnitTests
 				std::move(promisedTechDel),
 				::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
 				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
-			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				"cfgId",
-				futureTechDel.get(),		// note -- stall
-				ParameterBox {},
-				fbHelper.GetDesc());
+			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig("cfgId");
+			pipelineAcceleratorPool->SetTechniqueDelegate(*cfgId, std::move(futureTechDel));
+			pipelineAcceleratorPool->SetFrameBufferDesc(*cfgId, fbHelper.GetDesc());
 
 			RenderCore::Assets::RenderStateSet doubledSidedStateSet;
 			doubledSidedStateSet._doubleSided = true;
@@ -575,11 +567,9 @@ namespace UnitTests
 				std::move(promisedTechDel),
 				::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
 				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
-			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				"cfgId",
-				futureTechDel.get(),		// note -- stall
-				ParameterBox {},
-				fbHelper.GetDesc());
+			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig("cfgId");
+			pipelineAcceleratorPool->SetTechniqueDelegate(*cfgId, std::move(futureTechDel));
+			pipelineAcceleratorPool->SetFrameBufferDesc(*cfgId, fbHelper.GetDesc());
 
 			auto patches = GetPatchCollectionFromText(s_patchCollectionBasicTexturing);
 			RenderCore::Assets::RenderStateSet doubledSidedStateSet;
@@ -821,7 +811,9 @@ namespace UnitTests
 							FrameBufferDesc fbDesc { std::move(attachments), std::move(subpasses) };
 
 							ParameterBox seqSelectors;
-							auto cfg = helper->_pool->CreateSequencerConfig({}, techDel, std::move(seqSelectors), fbDesc, 0);
+							auto cfg = helper->_pool->CreateSequencerConfig({});
+							helper->_pool->SetTechniqueDelegate(*cfg, std::move(techDel));
+							helper->_pool->SetFrameBufferDesc(*cfg, fbDesc, 0);
 							ScopedLock(helper->_lock);
 							helper->_activeSequencerConfigs.push_back(cfg);
 

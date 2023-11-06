@@ -64,7 +64,7 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_Deferred(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		unsigned gbufferTypeCode);
 
 	namespace TechniqueDelegateForwardFlags { 
@@ -73,12 +73,12 @@ namespace RenderCore { namespace Techniques
 	}
 	void CreateTechniqueDelegate_Forward(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags = 0);
 
 	void CreateTechniqueDelegate_DepthOnly(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		const RSDepthBias& singleSidedBias = RSDepthBias{},
         const RSDepthBias& doubleSidedBias = RSDepthBias{},
         CullMode cullMode = CullMode::Back,
@@ -87,7 +87,7 @@ namespace RenderCore { namespace Techniques
 	enum class ShadowGenType { GSAmplify, VertexIdViewInstancing };
 	void CreateTechniqueDelegate_ShadowGen(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		ShadowGenType shadowGenType = ShadowGenType::GSAmplify,
 		const RSDepthBias& singleSidedBias = RSDepthBias{},
         const RSDepthBias& doubleSidedBias = RSDepthBias{},
@@ -96,27 +96,27 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_RayTest(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit);
 
 	enum class PreDepthType { DepthOnly, DepthMotion, DepthMotionNormal, DepthMotionNormalRoughness, DepthMotionNormalRoughnessAccumulation };
 	void CreateTechniqueDelegate_PreDepth(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		PreDepthType preDepthType);
 
 	enum class UtilityDelegateType { FlatColor, CopyDiffuseAlbedo, CopyWorldSpacePosition, CopyWorldSpaceNormal, CopyRoughness, CopyMetal, CopySpecular, CopyCookedAO, SolidWireframe };
 	void CreateTechniqueDelegate_Utility(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		UtilityDelegateType utilityType);
 
 	std::optional<UtilityDelegateType> AsUtilityDelegateType(StringSection<>);
 
 	void CreateTechniqueDelegate_ProbePrepare(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet);
+		TechniqueSetFileFuture techniqueSet);
 
 	/** <summary>Backwards compatibility for legacy style techniques</summary>
 	This delegate allows for loading techniques from a legacy fixed function technique file.
@@ -134,6 +134,8 @@ namespace RenderCore { namespace Techniques
 
 	enum class IllumType { NoPerPixel, PerPixel, PerPixelAndEarlyRejection, PerPixelCustomLighting };
 	IllumType CalculateIllumType(const CompiledShaderPatchCollection& patchCollection);
+
+	TechniqueSetFileFuture GetDefaultTechniqueSetFileFuture();
 
 }}
 

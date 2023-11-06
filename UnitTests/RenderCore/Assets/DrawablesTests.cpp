@@ -210,11 +210,9 @@ namespace UnitTests
 				std::move(promisedTechDel),
 				::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"), 
 				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
-			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				"test",
-				futureTechDel.get(),		// note -- stall
-				ParameterBox {},
-				fbHelper.GetDesc());
+			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig("test");
+			pipelineAcceleratorPool->SetTechniqueDelegate(*cfgId, std::move(futureTechDel));
+			pipelineAcceleratorPool->SetFrameBufferDesc(*cfgId, fbHelper.GetDesc());
 
 			auto pipelineWithTexCoord = pipelineAcceleratorPool->CreatePipelineAccelerator(
 				patches,
@@ -284,11 +282,9 @@ namespace UnitTests
 				std::move(promisedTechDel),
 				::Assets::GetAssetFuturePtr<Techniques::TechniqueSetFile>("ut-data/basic.tech"),
 				Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
-			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig(
-				"test",
-				futureTechDel.get(),		// note -- stall
-				ParameterBox {},
-				fbHelper.GetDesc());
+			auto cfgId = pipelineAcceleratorPool->CreateSequencerConfig("test");
+			pipelineAcceleratorPool->SetTechniqueDelegate(*cfgId, std::move(futureTechDel));
+			pipelineAcceleratorPool->SetFrameBufferDesc(*cfgId, fbHelper.GetDesc());
 
 			auto renderer = ::Assets::GetAssetMarkerPtr<Techniques::SimpleModelRenderer>(
 				techniqueTestApparatus._drawablesPool,

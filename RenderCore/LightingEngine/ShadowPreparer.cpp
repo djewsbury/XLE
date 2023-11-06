@@ -468,12 +468,9 @@ namespace RenderCore { namespace LightingEngine
 		FrameBufferProperties fbProps { desc._width, desc._height };
 		_fbDesc = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(&fragment, &fragment+1), fbProps);
 
-		_sequencerConfigs = pipelineAccelerators->CreateSequencerConfig(
-			"shadow-prepare",
-			shadowGenDelegate,
-			sequencerSelectors,
-			_fbDesc._fbDesc,
-			0);
+		_sequencerConfigs = pipelineAccelerators->CreateSequencerConfig("shadow-prepare", sequencerSelectors);
+		pipelineAccelerators->SetTechniqueDelegate(*_sequencerConfigs, shadowGenDelegate);
+		pipelineAccelerators->SetFrameBufferDesc(*_sequencerConfigs, _fbDesc._fbDesc, 0);
 		_uniformDelegate = std::make_shared<UniformDelegate>(*this);
 
 		_descSetGood = false;

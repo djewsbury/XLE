@@ -13,6 +13,7 @@
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/ConfigFileContainer.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StreamUtils.h"
@@ -298,10 +299,10 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-			const TechniqueSetFileFuture& techniqueSet,
+			TechniqueSetFileFuture techniqueSet,
 			unsigned gbufferTypeCode)
 		{
-			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[gbufferTypeCode](auto&& promise, auto techniqueSetFile) {
 					TRY {
@@ -326,10 +327,10 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_Deferred(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		unsigned gbufferTypeCode)
 	{
-		TechniqueDelegate_Deferred::ConstructToPromise(std::move(promise), techniqueSet, gbufferTypeCode);
+		TechniqueDelegate_Deferred::ConstructToPromise(std::move(promise), std::move(techniqueSet), gbufferTypeCode);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -440,10 +441,10 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-			const TechniqueSetFileFuture& techniqueSet,
+			TechniqueSetFileFuture techniqueSet,
 			TechniqueDelegateForwardFlags::BitField flags)
 		{
-			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[flags](auto&& promise, auto techniqueSetFile) {
 					TRY {
@@ -469,10 +470,10 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_Forward(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		TechniqueDelegateForwardFlags::BitField flags)
 	{
-		TechniqueDelegate_Forward::ConstructToPromise(std::move(promise), techniqueSet, flags);
+		TechniqueDelegate_Forward::ConstructToPromise(std::move(promise), std::move(techniqueSet), flags);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -577,13 +578,13 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-			const TechniqueSetFileFuture& techniqueSet,
+			TechniqueSetFileFuture techniqueSet,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
 		{
-			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen](auto&& promise, auto techniqueSetFile) {
 					TRY {
@@ -609,23 +610,23 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_DepthOnly(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
 	{
-		TechniqueDelegate_DepthOnly::ConstructToPromise(std::move(promise), techniqueSet, singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
+		TechniqueDelegate_DepthOnly::ConstructToPromise(std::move(promise), std::move(techniqueSet), singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
 	}
 
 	void CreateTechniqueDelegate_ShadowGen(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		ShadowGenType shadowGenType,
 		const RSDepthBias& singleSidedBias,
         const RSDepthBias& doubleSidedBias,
         CullMode cullMode, FaceWinding faceWinding)
 	{
-		TechniqueDelegate_DepthOnly::ConstructToPromise(std::move(promise), techniqueSet, singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
+		TechniqueDelegate_DepthOnly::ConstructToPromise(std::move(promise), std::move(techniqueSet), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -750,10 +751,10 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-			const TechniqueSetFileFuture& techniqueSet,
+			TechniqueSetFileFuture techniqueSet,
 			PreDepthType preDepthType)
 		{
-			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[preDepthType](auto&& promise, auto techniqueSetFile) {
 					TRY {
@@ -780,10 +781,10 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_PreDepth(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		PreDepthType preDepthType)
 	{
-		TechniqueDelegate_PreDepth::ConstructToPromise(std::move(promise), techniqueSet, preDepthType);
+		TechniqueDelegate_PreDepth::ConstructToPromise(std::move(promise), std::move(techniqueSet), preDepthType);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -891,10 +892,10 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-			const TechniqueSetFileFuture& techniqueSet,
+			TechniqueSetFileFuture techniqueSet,
 			UtilityDelegateType utilityType)
 		{
-			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[utilityType](auto&& promise, auto techniqueSetFile) {
 					TRY {
@@ -921,10 +922,10 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_Utility(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		UtilityDelegateType type)
 	{
-		TechniqueDelegate_Utility::ConstructToPromise(std::move(promise), techniqueSet, type);
+		TechniqueDelegate_Utility::ConstructToPromise(std::move(promise), std::move(techniqueSet), type);
 	}
 
 	std::optional<UtilityDelegateType> AsUtilityDelegateType(StringSection<> input)
@@ -1035,9 +1036,9 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-			const TechniqueSetFileFuture& techniqueSet)
+			TechniqueSetFileFuture techniqueSet)
 		{
-			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[](auto&& promise, auto techniqueSetFile) {
 					TRY {
@@ -1062,9 +1063,9 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_ProbePrepare(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet)
+		TechniqueSetFileFuture techniqueSet)
 	{
-		TechniqueDelegate_ProbePrepare::ConstructToPromise(std::move(promise), techniqueSet);
+		TechniqueDelegate_ProbePrepare::ConstructToPromise(std::move(promise), std::move(techniqueSet));
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1153,13 +1154,13 @@ namespace RenderCore { namespace Techniques
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-			const TechniqueSetFileFuture& techniqueSet,
+			TechniqueSetFileFuture techniqueSet,
 			unsigned testTypeParameter,
 			const StreamOutputInitializers& soInit)
 		{
 			auto soElements = NormalizeInputAssembly(soInit._outputElements);
 			auto soStrides = std::vector<unsigned>(soInit._outputBufferStrides.begin(), soInit._outputBufferStrides.end());
-			::Assets::WhenAll(techniqueSet).CheckImmediately().ThenConstructToPromise(
+			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[soElements=std::move(soElements), soStrides=std::move(soStrides), testTypeParameter](auto&& promise, auto techniqueSetFile) {
 					TRY {
@@ -1186,11 +1187,11 @@ namespace RenderCore { namespace Techniques
 
 	void CreateTechniqueDelegate_RayTest(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
-		const TechniqueSetFileFuture& techniqueSet,
+		TechniqueSetFileFuture techniqueSet,
 		unsigned testTypeParameter,
 		const StreamOutputInitializers& soInit)
 	{
-		TechniqueDelegate_RayTest::ConstructToPromise(std::move(promise), techniqueSet, testTypeParameter, soInit);
+		TechniqueDelegate_RayTest::ConstructToPromise(std::move(promise), std::move(techniqueSet), testTypeParameter, soInit);
 	}
 
 	uint64_t GraphicsPipelineDesc::GetHash() const
@@ -1242,6 +1243,11 @@ namespace RenderCore { namespace Techniques
 	}
 
 	::Assets::DependencyValidation ITechniqueDelegate::GetDependencyValidation() { return {}; }
+
+	TechniqueSetFileFuture GetDefaultTechniqueSetFileFuture()
+	{
+		return ::Assets::GetAssetFuturePtr<TechniqueSetFile>(ILLUM_TECH);
+	}
 
 	static std::atomic<uint64_t> s_nextTechniqueDelegateGuid = 1;
 	ITechniqueDelegate::ITechniqueDelegate() : _guid(s_nextTechniqueDelegateGuid++) {}

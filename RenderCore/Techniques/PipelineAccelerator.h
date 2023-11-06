@@ -23,7 +23,7 @@ namespace RenderCore
 namespace RenderCore { namespace Assets { class RenderStateSet; class ShaderPatchCollection; class PredefinedDescriptorSetLayout; class ScaffoldCmdIterator; } }
 namespace RenderCore { class IDevice; class IDescriptorSet; class UniformsStreamInterface; class IResourceView; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
-namespace std { template<typename Type> class future; }
+namespace std { template<typename Type> class future; template<typename Type> class shared_future; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -72,27 +72,25 @@ namespace RenderCore { namespace Techniques
 			std::string&& name,
 			const std::shared_ptr<DeformerToDescriptorSetBinding>& deformBinding = {}) = 0;
 
-		virtual std::shared_ptr<SequencerConfig> CreateSequencerConfig(
-			const std::string& name,
-			std::shared_ptr<ITechniqueDelegate> delegate,
-			const ParameterBox& sequencerSelectors,
-			const FrameBufferDesc& fbDesc,
-			unsigned subpassIndex = 0) = 0;
+		virtual std::shared_ptr<SequencerConfig> CreateSequencerConfig(const std::string& name, const ParameterBox& sequencerSelectors = {}) = 0;
+		virtual void SetTechniqueDelegate(SequencerConfig&, std::shared_ptr<ITechniqueDelegate> delegate) = 0;
+		virtual void SetTechniqueDelegate(SequencerConfig&, std::shared_future<std::shared_ptr<ITechniqueDelegate>> delegate) = 0;
+		virtual void SetFrameBufferDesc(SequencerConfig&, const FrameBufferDesc& fbDesc, unsigned subpassIndex = 0) = 0;
 
 		class Pipeline;
 
 		virtual auto GetPipelineMarker(PipelineAccelerator& pipelineAccelerator, const SequencerConfig& sequencerConfig) const -> std::future<VisibilityMarkerId> = 0;
 		virtual auto GetDescriptorSetMarker(DescriptorSetAccelerator& accelerator) const -> std::future<std::pair<VisibilityMarkerId, BufferUploads::CommandListID>> = 0;
 
-		virtual void	SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
-		T1(Type) void   SetGlobalSelector(StringSection<> name, Type value);
-		virtual void	RemoveGlobalSelector(StringSection<> name) = 0;
+		virtual void SetGlobalSelector(StringSection<> name, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type) = 0;
+		T1(Type) void SetGlobalSelector(StringSection<> name, Type value);
+		virtual void RemoveGlobalSelector(StringSection<> name) = 0;
 
 		virtual VisibilityMarkerId VisibilityBarrier(VisibilityMarkerId expectedVisibility=~0u) = 0;
 		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
 
-		virtual void 	LockForReading() const = 0;
-		virtual void 	UnlockForReading() const = 0;
+		virtual void LockForReading() const = 0;
+		virtual void UnlockForReading() const = 0;
 
 		struct Records;
 		virtual Records LogRecords() const = 0;

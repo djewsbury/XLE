@@ -230,10 +230,9 @@ namespace UnitTests
 			std::move(promisedTechDel),
 			testApparatus._sharedDelegates->GetTechniqueSetFile(),
 			RenderCore::Techniques::UtilityDelegateType::CopyDiffuseAlbedo);
-		auto sequencerConfig = testApparatus._pipelineAccelerators->CreateSequencerConfig(
-			"WriteDownsampleInput",
-			futureTechDel.get(),		// note -- stall
-			{}, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+		auto sequencerConfig = testApparatus._pipelineAccelerators->CreateSequencerConfig("WriteDownsampleInput");
+		testApparatus._pipelineAccelerators->SetTechniqueDelegate(*sequencerConfig, std::move(futureTechDel));
+		testApparatus._pipelineAccelerators->SetFrameBufferDesc(*sequencerConfig, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 
 		if (1) {
 			Techniques::DrawablesPacket pkt;

@@ -342,15 +342,13 @@ namespace SceneEngine
 			subpasses.emplace_back(SubpassDesc{});
 			_fbDesc = FrameBufferDesc { {}, std::move(subpasses) };
 
-			_frustumTestSequencerCfg = pipelineAcceleratorPool.CreateSequencerConfig(
-				"frustum-test",
-				_frustumTechniqueDelegate,
-				{}, _fbDesc);
+			_frustumTestSequencerCfg = pipelineAcceleratorPool.CreateSequencerConfig("frustum-test");
+			pipelineAcceleratorPool.SetTechniqueDelegate(*_frustumTestSequencerCfg, _frustumTechniqueDelegate);
+			pipelineAcceleratorPool.SetFrameBufferDesc(*_frustumTestSequencerCfg, _fbDesc);
 
-			_rayTestSequencerCfg = pipelineAcceleratorPool.CreateSequencerConfig(
-				"ray-vs-model",
-				_rayTestTechniqueDelegate,
-				{}, _fbDesc);
+			_rayTestSequencerCfg = pipelineAcceleratorPool.CreateSequencerConfig("ray-vs-model");
+			pipelineAcceleratorPool.SetTechniqueDelegate(*_rayTestSequencerCfg, _rayTestTechniqueDelegate);
+			pipelineAcceleratorPool.SetFrameBufferDesc(*_rayTestSequencerCfg, _fbDesc);
 		}
 		ModelIntersectionTechniqueBox() = default;
 

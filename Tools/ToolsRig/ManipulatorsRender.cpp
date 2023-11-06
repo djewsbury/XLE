@@ -99,10 +99,9 @@ namespace ToolsRig
             std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> forwardIllumDelegate)
         : _forwardIllumDelegate(std::move(forwardIllumDelegate))
 		{
-            _renderHighlightCfg = pipelineAcceleratorPool.CreateSequencerConfig(
-                "render-highlight",
-				_forwardIllumDelegate, ParameterBox{}, 
-				fbDesc);
+            _renderHighlightCfg = pipelineAcceleratorPool.CreateSequencerConfig("render-highlight");
+            pipelineAcceleratorPool.SetTechniqueDelegate(*_renderHighlightCfg, _forwardIllumDelegate);
+            pipelineAcceleratorPool.SetFrameBufferDesc(*_renderHighlightCfg, fbDesc);
 		}
         TechniqueBox() = default;
 

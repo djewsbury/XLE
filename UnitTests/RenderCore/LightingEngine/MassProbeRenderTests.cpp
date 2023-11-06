@@ -294,7 +294,10 @@ namespace UnitTests
 		sp.SetName("prepare-probe");
 		if (multiView) sp.SetViewInstanceMask(~0u);
 		FrameBufferDesc representativeFB(std::move(attachments), std::vector<SubpassDesc>{sp});
-		return pipelineAccelerators.CreateSequencerConfig(name, techniqueDelegate, ParameterBox{}, representativeFB, 0);
+		auto cfg = pipelineAccelerators.CreateSequencerConfig(name);
+		pipelineAccelerators.SetTechniqueDelegate(*cfg, techniqueDelegate);
+		pipelineAccelerators.SetFrameBufferDesc(*cfg, representativeFB, 0);
+		return cfg;
 	}
 
 	// Simpliest method -- we just create a massive render target with separate subpasses for each
