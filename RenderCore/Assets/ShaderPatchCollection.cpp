@@ -21,7 +21,7 @@ namespace RenderCore { namespace Assets
 	{
 		if (src.IsEmpty()) return {};
 		auto splitName = MakeFileNameSplitter(src);
-		if (splitName.DriveAndPath().IsEmpty()) {
+		if (splitName.StemAndPath().IsEmpty()) {
 			char resolvedFile[MaxPath];
 			searchRules.ResolveFile(resolvedFile, splitName.FileAndExtension());
 			if (resolvedFile[0]) {

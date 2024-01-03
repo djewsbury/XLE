@@ -495,7 +495,7 @@ namespace GUILayer
 	{
 		char resolvedName[MaxPath];
 		auto splitter = MakeFileNameSplitter(name);
-		auto rootName = splitter.DrivePathAndFilename();
+		auto rootName = splitter.StemPathAndFilename();
 		auto importedName = _imports.find(rootName.AsString());
 		if (importedName != _imports.end()) {
 			resolvedName[0] = '\0';

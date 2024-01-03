@@ -214,7 +214,7 @@ namespace GraphLanguage
 	{
 		char resolvedName[MaxPath];
 		auto splitter = MakeFileNameSplitter(name);
-		auto rootName = splitter.DrivePathAndFilename();
+		auto rootName = splitter.StemPathAndFilename();
 		auto importedName = _parsedGraphFile->_imports.find(rootName.AsString());
 		if (importedName != _parsedGraphFile->_imports.end()) {
 			resolvedName[0] = '\0';

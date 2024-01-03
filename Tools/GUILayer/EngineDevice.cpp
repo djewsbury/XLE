@@ -156,7 +156,7 @@ namespace GUILayer
             if (::Assets::MainFileSystem::TryGetDesc(finalXleRes)._snapshot._state == ::Assets::FileSnapshot::State::DoesNotExist) {
                 char buffer[MaxPath];
                 OSServices::GetProcessPath(buffer, dimof(buffer));
-                finalXleRes = Concatenate(MakeFileNameSplitter(buffer).DriveAndPath(), "/", finalXleRes);
+                finalXleRes = Concatenate(MakeFileNameSplitter(buffer).StemAndPath(), "/", finalXleRes);
             }
             _fsMounts.push_back(::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateXPakFileSystem(finalXleRes, fileCache)));
         } else

@@ -289,7 +289,7 @@ namespace GUILayer
 
     static void PrepareDirectoryForFile(std::string& destinationFile)
     {
-        OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(destinationFile).DriveAndPath());
+        OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(destinationFile).StemAndPath());
     }
 
     ref class TextPendingExport : public EditorSceneManager::PendingExport

@@ -32,18 +32,18 @@ namespace Utility
             CharType GetSeparator() const { return (CharType)_separator; }
         bool IsCaseSensitive() const { return _isCaseSensitive; }
 
-        FilenameRules(char separator, bool isCaseSensitive)
+        constexpr FilenameRules(char separator, bool isCaseSensitive)
             : _separator(separator), _isCaseSensitive(isCaseSensitive) {}
     protected:
         char _separator;
         bool _isCaseSensitive;
     };
 
-    extern FilenameRules s_defaultFilenameRules;
+    constexpr FilenameRules s_defaultFilenameRules('/', true);
 
 	//////////////////////////////////////////////////////////////////////////////
 	/// <summary>Split a filename into its component parts</summary>
-	/// Separates a filename into drive, path, file, extension and parameters.
+	/// Separates a filename into stem, path, file, extension and parameters.
     /// Handy for separating out an individual part of a filename (such as just
     /// getting the extension)
     ///
@@ -64,7 +64,7 @@ namespace Utility
 	public:
         using Section = StringSection<CharType>;
 
-		Section		Drive() const					{ return _drive; }
+		Section		Stem() const					{ return _stem; }
 		Section		Path() const					{ return _path; }
 		Section		File() const					{ return _file; }
 		Section		Extension() const				{ return !_extension.IsEmpty() ? Section(_extension._start+1, _extension._end) : Section(); }
@@ -72,10 +72,10 @@ namespace Utility
         Section		Parameters() const				{ return !_parameters.IsEmpty() ? Section(_parameters._start+1, _parameters._end) : Section(); }
         Section     ParametersWithDivider() const   { return _parameters; }
 
-		Section     DriveAndPath() const			{ return Section(_drive._start, _path._end); }
+		Section     StemAndPath() const			    { return Section(_stem._start, _path._end); }
 		Section	    FileAndExtension() const        { return Section(_file._start, _extension._end); }
-        Section     AllExceptParameters() const     { return Section(_drive._start, _parameters._start); }
-		Section		DrivePathAndFilename() const	{ return Section(_drive._start, _file._end); }
+        Section     AllExceptParameters() const     { return Section(_stem._start, _parameters._start); }
+		Section		StemPathAndFilename() const	{ return Section(_stem._start, _file._end); }
 
         Section     FullFilename() const            { return _fullFilename; }
 
@@ -83,7 +83,7 @@ namespace Utility
         FileNameSplitter(const std::basic_string<CharType>& rawString);
         FileNameSplitter(Section rawString);
 	private:
-		Section     _drive;
+		Section     _stem;
 		Section     _path;
 		Section     _file;
 		Section     _extension;
@@ -116,7 +116,7 @@ namespace Utility
 		unsigned    GetSectionCount() const;
 		SectionType GetSectionType(unsigned index) const;
 		Section     GetSection(unsigned index) const;
-        Section     GetDrive() const;
+        Section     GetStem() const;
 		SplitPath   Simplify() const;
         bool        BeginsWithSeparator() const     { return _beginsWithSeparator; }
 		bool        EndsWithSeparator() const       { return _endsWithSeparator; }
@@ -147,12 +147,12 @@ namespace Utility
 		std::vector<Section>	_sections;          // vector here means we need heap allocations (but it avoid imposing confusing limitations)
 		bool                    _beginsWithSeparator;
         bool                    _endsWithSeparator;
-        Section                 _drive;
+        Section                 _stem;
 
         SplitPath(
             std::vector<Section>&& sections, 
             bool beginsWithSeparator, bool endsWithSeparator, 
-            Section drive);
+            Section stem);
 	};
 
 	template<typename CharType> SplitPath<CharType> MakeSplitPath(const CharType rawString[]) { return SplitPath<CharType>(rawString); }

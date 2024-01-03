@@ -102,7 +102,7 @@ namespace GUILayer
             // also set the material name (the old material file probably won't match the new model file)
         auto nativeName = clix::marshalString<clix::E_UTF8>(value);
         auto split = MakeFileNameSplitter(nativeName);
-        nativeName = split.DrivePathAndFilename().AsString() + ".material";
+        nativeName = split.StemPathAndFilename().AsString() + ".material";
         _materialName = Utils::MakeAssetName(clix::marshalString<clix::E_UTF8>(nativeName));
     }
 

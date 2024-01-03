@@ -757,7 +757,7 @@ namespace ToolsRig
                         ::Assets::IntermediatesStore::GetDependentFileState(modelFilename),
                         ::Assets::IntermediatesStore::GetDependentFileState(materialFilename)
                     },
-                MakeFileNameSplitter(modelFilename).DriveAndPath().AsString()
+                MakeFileNameSplitter(modelFilename).StemAndPath().AsString()
             };
     }
 

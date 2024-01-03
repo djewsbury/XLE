@@ -72,7 +72,7 @@ namespace Assets
 
     void DirectorySearchRules::AddSearchDirectoryFromFilename(StringSection<ResChar> filename)
     {
-        AddSearchDirectory(MakeFileNameSplitter(filename).DriveAndPath());
+        AddSearchDirectory(MakeFileNameSplitter(filename).StemAndPath());
     }
 
 	void DirectorySearchRules::SetBaseFile(StringSection<ResChar> file)

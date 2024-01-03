@@ -599,7 +599,7 @@ namespace ColladaConversion
 		// Always load a .model file next to the input file -- this might contain addition configuration options
 		::Assets::DependencyValidation modelCfgFileDepVal;
 		{
-			auto cfgFileName = split.DrivePathAndFilename().AsString() + ".model";
+			auto cfgFileName = split.StemPathAndFilename().AsString() + ".model";
 			auto cfgFile = ::Assets::GetAssetMarker<std::shared_ptr<::Assets::ResolvedAssetMixin<ModelCompilationConfiguration>>>(cfgFileName);
 			cfgFile->StallWhilePending();
 			if (cfgFile->GetAssetState() == ::Assets::AssetState::Ready) {

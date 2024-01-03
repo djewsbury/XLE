@@ -52,7 +52,8 @@ namespace ConsoleRig
 		OSServices::GetProcessPath((utf8*)processPath, dimof(processPath));
     	OSServices::GetCurrentDirectory(dimof(cwd), cwd);
 
-		auto group0 = OSServices::FindFiles(MakeFileNameSplitter(processPath).DriveAndPath().AsString() + "/*Plugin.dll");
+		auto processPathStem = MakeFileNameSplitter(processPath).StemAndPath().AsString();
+		auto group0 = OSServices::FindFiles(processPathStem + "/*Plugin.dll");
 		auto group1 = OSServices::FindFiles(std::string(cwd) + "/*Plugin.dll");
 
 		std::set<std::string> candidatePlugins;

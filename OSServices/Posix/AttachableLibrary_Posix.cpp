@@ -36,7 +36,7 @@ namespace OSServices
                 if (!_pimpl->_library) {
                     char processPath[PATH_MAX];
                     OSServices::GetProcessPath(processPath, dimof(processPath));
-                    std::string testPath = MakeFileNameSplitter(MakeStringSection(processPath)).DriveAndPath().AsString() + "/" + _pimpl->_filename;
+                    std::string testPath = MakeFileNameSplitter(MakeStringSection(processPath)).StemAndPath().AsString() + "/" + _pimpl->_filename;
                     _pimpl->_library = dlopen(testPath.c_str(), RTLD_NOW | RTLD_LOCAL);
                 }
             #endif

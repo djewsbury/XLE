@@ -691,7 +691,7 @@ namespace Assets
 		char processPath[MaxPath];
 		OSServices::GetProcessPath((utf8*)processPath, dimof(processPath));
 		result.AddSearchDirectory(
-			MakeFileNameSplitter(processPath).DriveAndPath());
+			MakeFileNameSplitter(processPath).StemAndPath());
 		
 		char appDir[MaxPath];
     	OSServices::GetCurrentDirectory(dimof(appDir), appDir);

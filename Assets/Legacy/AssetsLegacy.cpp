@@ -36,7 +36,7 @@ namespace Assets { namespace Legacy
         auto relPath = 
             MakeRelativePath(
                 BaseDir(),
-                SplitPath<ResChar>(srcSplit.DriveAndPath()),
+                SplitPath<ResChar>(srcSplit.StemAndPath()),
                 rules);
 
         XlCopyString(dest._fn, relPath.c_str());

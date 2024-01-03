@@ -156,7 +156,7 @@ namespace Assets
 		auto i = LowerBound(_cachedDirectory, directoryHash);
 		if (i == _cachedDirectory.end() || i->first != directoryHash) {
 			// build the cache
-			auto dirName = MakeFileNameSplitter(fn).DriveAndPath();
+			auto dirName = MakeFileNameSplitter(fn).StemAndPath();
 			
 			char buffer[_rootUTF8.size() + dirName.Length() + 2 + 1];
 			std::copy(_rootUTF8.begin(), _rootUTF8.end(), buffer);
@@ -166,7 +166,7 @@ namespace Assets
 			buffer[_rootUTF8.size() + dirName.Length()+2] = 0;
 
 			auto start = (unsigned)_cachedFns.size();
-			OSServices::FindFiles(_cachedFns, buffer, OSServices::FindFilesFilter::File, s_defaultFilenameRules);
+			OSServices::FindFiles(_cachedFns, buffer, OSServices::FindFilesFilter::File, OSServices::s_rawos_fileNameRules);
 			i = _cachedDirectory.insert(i, std::make_pair(directoryHash, CachedDirectory{start, (unsigned)_cachedFns.size()}));
 			std::sort(_cachedFns.begin()+i->second._start, _cachedFns.begin()+i->second._end);
 		}
@@ -183,7 +183,7 @@ namespace Assets
 			// build the cache
 			// convert to utf8, because we need to be in utf8 to call OSServices::FindFiles(), anyway
 			auto utf8Fn = Conversion::Convert<std::string>(fn);
-			auto dirName = MakeFileNameSplitter(utf8Fn).DriveAndPath();
+			auto dirName = MakeFileNameSplitter(utf8Fn).StemAndPath();
 			
 			char buffer[_rootUTF8.size() + dirName.Length() + 2 + 1];
 			std::copy(_rootUTF8.begin(), _rootUTF8.end(), buffer);
@@ -193,7 +193,7 @@ namespace Assets
 			buffer[_rootUTF8.size() + dirName.Length()+2] = 0;
 
 			auto start = (unsigned)_cachedFns.size();
-			OSServices::FindFiles(_cachedFns, buffer, OSServices::FindFilesFilter::File, s_defaultFilenameRules);
+			OSServices::FindFiles(_cachedFns, buffer, OSServices::FindFilesFilter::File, OSServices::s_rawos_fileNameRules);
 			i = _cachedDirectory.insert(i, std::make_pair(directoryHash, CachedDirectory{start, (unsigned)_cachedFns.size()}));
 			std::sort(_cachedFns.begin()+i->second._start, _cachedFns.begin()+i->second._end);
 		}
@@ -231,7 +231,7 @@ namespace Assets
 		}
 		if (_flags & OSFileSystemFlags::CacheDirectories) {
 			auto split = MakeFileNameSplitter(filename);
-			if (!LookupInCache(HashFilenameAndPath(split.DriveAndPath(), s_defaultFilenameRules), HashFilename(split.FileAndExtension(), s_defaultFilenameRules), filename))
+			if (!LookupInCache(HashFilenameAndPath(split.StemAndPath(), OSServices::s_rawos_fileNameRules), HashFilename(split.FileAndExtension(), OSServices::s_rawos_fileNameRules), filename))
 				return TranslateResult::Invalid;
 		}
 
@@ -260,7 +260,7 @@ namespace Assets
 		}
 		if (_flags & OSFileSystemFlags::CacheDirectories) {
 			auto split = MakeFileNameSplitter(filename);
-			if (!LookupInCache(HashFilenameAndPath(split.DriveAndPath(), s_defaultFilenameRules), HashFilename(split.FileAndExtension(), s_defaultFilenameRules), filename))
+			if (!LookupInCache(HashFilenameAndPath(split.StemAndPath(), OSServices::s_rawos_fileNameRules), HashFilename(split.FileAndExtension(), OSServices::s_rawos_fileNameRules), filename))
 				return TranslateResult::Invalid;
 		}
 

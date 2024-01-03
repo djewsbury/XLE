@@ -202,7 +202,7 @@ namespace Assets
 			return nullptr;
 
 		{
-			auto compileProductsDirectory = MakeFileNameSplitter(intermediateName).DriveAndPath();
+			auto compileProductsDirectory = MakeFileNameSplitter(intermediateName).StemAndPath();
 			if (!compileProductsDirectory.IsEmpty())
 				for (auto& artifacts:finalProductsFile._compileProducts)
 					if (!LooksLikeAbsolutePath(artifacts._intermediateArtifact))
@@ -261,7 +261,7 @@ namespace Assets
 		// MakeProductsFileName limits the result to MaxPath-20
 		//	Those extra 20 characters allow for: "-<blockname>.metrics.s" so long as <blockname> does not exceed 9 characters 
 		auto productsName = MakeProductsFileName(archivableName);
-		OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(productsName).DriveAndPath());
+		OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(productsName).StemAndPath());
 		std::vector<std::pair<std::string, std::string>> renameOps;
 
 		// Will we create one chunk file that will contain most of the artifacts
@@ -307,7 +307,7 @@ namespace Assets
 			renameOps.push_back({mainBlobName + ".s", mainBlobName});
 		}
 
-		auto compileProductsDirectory = MakeFileNameSplitter(productsName).DriveAndPath();
+		auto compileProductsDirectory = MakeFileNameSplitter(productsName).StemAndPath();
 		{
 			// convert filenames in compileProductsFile to be relative to the file we're about to write out
 			auto simplifedCompileProducts = compileProductsFile;

@@ -187,7 +187,7 @@ namespace OSServices
 
 		auto split = MakeFileNameSplitter(filename);
 		utf8 directoryName[MaxPath];
-		MakeSplitPath(split.DriveAndPath()).Simplify().Rebuild(directoryName);
+		MakeSplitPath(split.StemAndPath()).Simplify().Rebuild(directoryName);
 		auto hash = HashFilenameAndPath(MakeStringSection(directoryName));
 
 		{
@@ -228,7 +228,7 @@ namespace OSServices
 	{
 		auto split = MakeFileNameSplitter(filename);
 		utf8 directoryName[MaxPath];
-		MakeSplitPath(split.DriveAndPath()).Simplify().Rebuild(directoryName);
+		MakeSplitPath(split.StemAndPath()).Simplify().Rebuild(directoryName);
 
 		{
 			ScopedLock(_pimpl->_conduitConsumer->_monitoredDirectoriesLock);

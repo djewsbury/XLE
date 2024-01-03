@@ -56,7 +56,7 @@ namespace ConsoleRig
         utf8 appPath[MaxPath];
         OSServices::GetProcessPath(appPath, dimof(appPath));
 		auto splitter = MakeFileNameSplitter(appPath);
-        return splitter.DriveAndPath().AsString() + "/../Working";
+        return splitter.StemAndPath().AsString() + "/../Working";
     }
 
     /// <summary>Manages configuration settings for logging</summary>

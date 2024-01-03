@@ -227,7 +227,7 @@ namespace RenderCore { namespace Metal_DX11
                     timeMarker._filename = (const char*)path;
                     _includeFiles.push_back(timeMarker);
                     
-                    auto newDirectory = FileNameSplitter<utf8>(path).DriveAndPath().AsString();
+                    auto newDirectory = FileNameSplitter<utf8>(path).StemAndPath().AsString();
                     auto i = std::find(_searchDirectories.cbegin(), _searchDirectories.cend(), newDirectory);
                     if (i==_searchDirectories.cend()) {
                         _searchDirectories.push_back(newDirectory);

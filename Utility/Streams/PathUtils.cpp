@@ -162,7 +162,7 @@ namespace Utility
         const auto* pathStart = rawString._start;
 
 		// Since we use a colon for both the parameters divider and after the drive name on Windows,
-		// there can be some ambiguity. We can solve that by putting some restrictons on how we use
+		// there can be some ambiguity. We can solve that by putting some restrictions on how we use
 		// drive names
 		//  - drive names can't have dots or slashes
 		//  - when ':' is used as a drive name separator, it must immediately be followed by a slash
@@ -171,10 +171,10 @@ namespace Utility
 		auto firstColon = std::find(rawString._start, rawString._end, ':');
 		if (firstColon < std::find_first_of(rawString._start, rawString._end, sepsAndDot, ArrayEnd(sepsAndDot))
 			&& (firstColon+1) < rawString.end() && (*(firstColon+1) == '\\' || *(firstColon+1) == '/')) {
-    		_drive = Section(rawString._start, firstColon+1);
+    		_stem = Section(rawString._start, firstColon+1);
             pathStart = firstColon+1;
         } else {
-            _drive = Section(rawString._start, rawString._start);
+            _stem = Section(rawString._start, rawString._start);
         }
 
 		auto lastSlash = FindLastOf(rawString._start, rawString._end, seps, ArrayEnd(seps));
@@ -222,7 +222,7 @@ namespace Utility
 		return _sections[index];
 	}
 
-    TC auto SplitPath<CharType>::GetDrive() const -> Section { return _drive; }
+    TC auto SplitPath<CharType>::GetStem() const -> Section { return _stem; }
 
 	TC auto SplitPath<CharType>::Simplify() const -> SplitPath
 	{
@@ -247,16 +247,16 @@ namespace Utility
 		auto endsWithSeparator = _endsWithSeparator;
 		if (result.empty()) endsWithSeparator = false;
 
-		return SplitPath(std::move(result), _beginsWithSeparator, endsWithSeparator, _drive);
+		return SplitPath(std::move(result), _beginsWithSeparator, endsWithSeparator, _stem);
 	}
 
 	TC auto SplitPath<CharType>::Rebuild(const FilenameRules& rules) const -> String
 	{
 		std::basic_stringstream<CharType> stream;
 
-        if (!_drive.IsEmpty()) {
-            auto*s = _drive._start;
-            while (s!=_drive._end) {
+        if (!_stem.IsEmpty()) {
+            auto*s = _stem._start;
+            while (s!=_stem._end) {
                 auto chr = ConvertPathChar(*s++, rules);
                 stream.write(&chr, 1);
             }
@@ -292,9 +292,9 @@ namespace Utility
         auto* i = dest;
         auto* iend = &dest[destCount];
 
-        if (!_drive.IsEmpty()) {
-            auto*s = _drive._start;
-            while (s!=_drive._end && i!=iend) {
+        if (!_stem.IsEmpty()) {
+            auto*s = _stem._start;
+            while (s!=_stem._end && i!=iend) {
                 if (s >= dest && s < iend) assert(s>=i);   // check for reading&writing from the same place
                 *i++ = ConvertPathChar(*s++, rules);
             }
@@ -338,10 +338,10 @@ namespace Utility
         auto firstSep = std::find_first_of(i, iend, sepsAndDot, ArrayEnd(sepsAndDot));
         auto firstColon = std::find(i, iend, ':');
         if (firstColon != iend && firstSep != iend && firstColon < firstSep) {
-            _drive = Section(i, firstColon+1);
+            _stem = Section(i, firstColon+1);
             i = firstColon+1;
         } else {
-            _drive = Section(i, i);
+            _stem = Section(i, i);
         }
 
         auto* leadingSeps = FindFirstNotOf(i, iend, seps, ArrayEnd(seps));
@@ -381,7 +381,7 @@ namespace Utility
 	: _sections(std::forward<std::vector<Section>>(sections))
 	, _beginsWithSeparator(beginsWithSeparator)
     , _endsWithSeparator(endsWithSeparator)
-    , _drive(drive)
+    , _stem(drive)
 	{}
 
 	TC SplitPath<CharType>::SplitPath(std::vector<Section>&& sections)
@@ -397,7 +397,7 @@ namespace Utility
     : _sections(std::move(moveFrom._sections))
     , _beginsWithSeparator(moveFrom._beginsWithSeparator)
     , _endsWithSeparator(moveFrom._endsWithSeparator)
-    , _drive(moveFrom._drive)
+    , _stem(moveFrom._stem)
     {
     }
 
@@ -406,7 +406,7 @@ namespace Utility
         _sections = std::move(moveFrom._sections);
         _beginsWithSeparator = moveFrom._beginsWithSeparator;
         _endsWithSeparator = moveFrom._endsWithSeparator;
-        _drive = moveFrom._drive;
+        _stem = moveFrom._stem;
         return *this;
     }
 
@@ -434,8 +434,8 @@ namespace Utility
             // then we'll assume that destinationObject is on the same drive
         auto destinationObject = iDestinationObject.Simplify();
         
-        if (!iDestinationObject.GetDrive().IsEmpty()) {
-            if (!XlEqStringI(iBasePath.GetDrive(), iDestinationObject.GetDrive()))
+        if (!iDestinationObject.GetStem().IsEmpty()) {
+            if (!XlEqStringI(iBasePath.GetStem(), iDestinationObject.GetStem()))
                 return destinationObject.Rebuild(rules);
         }
 
@@ -762,12 +762,12 @@ namespace Utility
 	{
 		auto split = MakeFileNameSplitter(filename);
 		std::stringstream str;
-		if (!split.DriveAndPath().IsEmpty()) {
+		if (!split.StemAndPath().IsEmpty()) {
 			const bool gradualBrightnessChange = true;
 			if (!gradualBrightnessChange) {
-				str << "{color:9f9f9f}" << split.DriveAndPath();
+				str << "{color:9f9f9f}" << split.StemAndPath();
 			} else {
-				auto splitPath = MakeSplitPath(split.DriveAndPath());
+				auto splitPath = MakeSplitPath(split.StemAndPath());
 				if (splitPath.BeginsWithSeparator()) str << "/";
 				for (unsigned c=0; c<splitPath.GetSectionCount(); ++c) {
 					float alpha = c/float(splitPath.GetSectionCount());

@@ -1037,7 +1037,7 @@ namespace Assets
 		_directoryFileName = _mainFileName + ".dir";
 
 			// (make sure the directory provided exists)
-		OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(_mainFileName).DriveAndPath());
+		OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(_mainFileName).StemAndPath());
 	}
 
 	ArchiveCache::~ArchiveCache() 

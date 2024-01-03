@@ -139,7 +139,7 @@ namespace RenderCore { namespace Metal_DX11
 						timeMarker._filename = path;
 						_includeFiles.push_back(timeMarker);
 						
-						auto newDirectory = MakeFileNameSplitter(path).DriveAndPath().AsString();
+						auto newDirectory = MakeFileNameSplitter(path).StemAndPath().AsString();
 						auto i = std::find(_searchDirectories.cbegin(), _searchDirectories.cend(), newDirectory);
 						if (i==_searchDirectories.cend()) {
 							_searchDirectories.push_back(newDirectory);
@@ -333,12 +333,12 @@ namespace RenderCore { namespace Metal_DX11
 			}
 
 			auto naturalNameSplit = MakeFileNameSplitter(filenameForCompiler);
-			includeHandler._expectedSearchPrefix = naturalNameSplit.DriveAndPath().AsString();
-			if (naturalNameSplit.Drive().IsEmpty()) {
+			includeHandler._expectedSearchPrefix = naturalNameSplit.StemAndPath().AsString();
+			if (naturalNameSplit.Stem().IsEmpty()) {
 				// the compiler appears to prepend "./" in all cases, except if there's a drive specified (even if string begins with a / or \)
 				includeHandler._expectedSearchPrefix = "./" + includeHandler._expectedSearchPrefix;
 			}
-			includeHandler._replacementSearchPrefix = MakeFileNameSplitter(shaderPath._filename).DriveAndPath().AsString();
+			includeHandler._replacementSearchPrefix = MakeFileNameSplitter(shaderPath._filename).StemAndPath().AsString();
 
 			IDxcCompilerArgs* rawArgs = nullptr;
 			auto res2 = _utils->BuildArguments(

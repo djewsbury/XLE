@@ -646,7 +646,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	static std::ostream& CompressFilename(std::ostream& str, StringSection<> path)
 	{
 		auto split = MakeFileNameSplitter(path);
-		if (!split.DriveAndPath().IsEmpty()) {
+		if (!split.StemAndPath().IsEmpty()) {
 			return str << ".../" << split.FileAndExtension();
 		} else
 			return str << path;
