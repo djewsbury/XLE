@@ -6,6 +6,8 @@
 #include "Matrix.h"
 #include <optional>
 
+#include "..\..\XLEExt\Foreign\delabella\predicates.h"		// todo -- test -- don't check in
+
 // We can define the handiness of 2D space as such:
 // If we wanted to rotate the X axis so that it lies on the Y axis, 
 // which is the shortest direction to rotate in? Is it clockwise, or counterclockwise?
@@ -24,18 +26,8 @@ namespace XLEMath
 	template<> constexpr double GetEpsilon<double>() { return 1e-8; }
 	template<> constexpr float GetTimeEpsilon<float>() { return 1e-4f; }
 	template<> constexpr double GetTimeEpsilon<double>() { return 1e-8; }
-
-	template<> inline const Vector2T<int64_t>& Zero<Vector2T<int64_t>>()
-    {
-        static Vector2T<int64_t> result(0ll, 0ll);
-        return result;
-    }
-
-	template<> inline const Vector3T<int64_t>& Zero<Vector3T<int64_t>>()
-    {
-        static Vector3T<int64_t> result(0ll, 0ll, 0ll);
-        return result;
-    }
+	template<> inline const Vector2T<int64_t>& Zero<Vector2T<int64_t>>() { static Vector2T<int64_t> result(0ll, 0ll); return result; }
+	template<> inline const Vector3T<int64_t>& Zero<Vector3T<int64_t>>() { static Vector3T<int64_t> result(0ll, 0ll, 0ll); return result; }
 
     T1(T) auto IsFiniteNumber(T value) -> typename std::enable_if<std::is_floating_point<T>::value, bool>::type
     {
@@ -60,12 +52,25 @@ namespace XLEMath
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	T1(Primitive) using PointAndTime = Vector3T<Primitive>;
+	enum class EdgeCollapseType {
+		Collapse,					// vertex is moving towards a collapse event, as normal
+		NonCollapse_Movement,		// no collapse, but we still calculated movement. Usually happens in cases of colinear vertices
+		NonCollapse					// no collapse, and could not calculate any movement. Usually happens when vertices are too close together, or when there are "flat-v" cases, or edges lying on top of each other
+	};
+	T1(Primitive) struct EdgeCollapse
+	{
+		EdgeCollapseType _type;
+		PointAndTime<Primitive> _pointAndTime;
+
+		static EdgeCollapse NonCollapse() { return { EdgeCollapseType::NonCollapse, Zero<PointAndTime<Primitive>>() }; }
+	};
 
 	enum WindingType { Left, Right, Straight, FlatV };
 	T1(Primitive) Primitive WindingDeterminant(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two)
 	{
 		// This is the 2d dot product of (one - zero) and a vector orthogonal to two - zero
-		return (one[0] - zero[0]) * (two[1] - zero[1]) - (one[1] - zero[1]) * (two[0] - zero[0]);
+		// return (one[0] - zero[0]) * (two[1] - zero[1]) - (one[1] - zero[1]) * (two[0] - zero[0]);
+		return predicates::adaptive::orient2d(&zero[0], &one[0], &two[0]);		// DONT CHECK IN -- TEST
 	}
 
 	T1(Primitive) std::pair<WindingType, Primitive> CalculateWindingType(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two, Primitive threshold)
@@ -78,6 +83,7 @@ namespace XLEMath
 			if (sign > threshold) return {Left, sign};
 			if (sign < -threshold) return {Right, sign};
 		#endif
+
 		Primitive d = (zero[0] - one[0]) * (two[0] - one[0]) + (zero[1] - one[1]) * (two[1] - one[1]);
 		return {(d > 0) ? FlatV : Straight, sign};
 	}
@@ -175,7 +181,7 @@ namespace XLEMath
 		auto D = vex2 - vex1 + N1;
 
 		// where do A->B and C->D intersect?
-		// result is is the distance travelled in "movementTime"
+		// result is is the distance traveled in "movementTime"
 		return LineIntersection<Primitive>({A, B}, {C, D});
 	}
 
@@ -212,16 +218,13 @@ namespace XLEMath
 		return true;
 	}
 
-	T1(Primitive) static std::optional<Vector3T<Primitive>> CalculateEdgeCollapse_Offset(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
+	T1(Primitive) static std::optional<PointAndTime<Primitive>> CalculateEdgeCollapse_Offset(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
 	{
 		// If the points are already too close together, the math will not be accurate enough
 		// We must just use the current time as a close-enough approximation of the collapse time
 		//if (Equivalent(p0, p1, GetEpsilon<Primitive>())) {
-		if (p0 == p1) {		// bitwise comparison intended
-			// Vector2T<Primitive> pt = (p0 + p1) / Primitive(2);
-			// return Expand(pt, Primitive(0));
+		if (p0 == p1)		// bitwise comparison intended
 			return Expand(p0, Primitive(0));
-		}
 
 		Matrix3x3T<Primitive> M;
 		Vector3T<Primitive> res;
@@ -249,21 +252,69 @@ namespace XLEMath
 		return result;
 	}
 
-	T1(Primitive) static std::optional<Vector3T<Primitive>> CalculateColinearEdgeCollapse(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
+	T1(Primitive) static Vector3T<Primitive> CalculateVelocityColinearSequence(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
+	{
+		// Calculate the velocity for 4 colinear segments. They must all be straight -- it can't be a switchback/"V" situation anywhere
+		auto diff = p1 - p0;
+		// if the middle segment is of a reasonable length, use it -- otherwise use the other points
+		if (std::max(std::abs(diff[0]), std::abs(diff[1])) > GetEpsilon<Primitive>()) {
+			auto movement = EdgeTangentToMovementDir<Primitive>(p1 - p0);
+			return { movement / std::hypot(movement[0], movement[1]), Primitive(1) }; 
+		} else {
+			auto movement = EdgeTangentToMovementDir<Primitive>(p2 - pm1);
+			return { movement / std::hypot(movement[0], movement[1]), Primitive(1) }; 
+		}
+	}
+
+	T1(Primitive) static std::optional<EdgeCollapse<Primitive>> CalculateColinearEdgeCollapse(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
 	{
 		auto epsilon = GetEpsilon<Primitive>();
-		auto magFactor0 = Primitive(4) / MagnitudeSquared(p1 - pm1), magFactor1 = Primitive(4) / MagnitudeSquared(p2 - p0);
-		// Primitive magFactor0 = 1, magFactor1 = 1;
+		// auto magFactor0 = Primitive(4) / MagnitudeSquared(p1 - pm1), magFactor1 = Primitive(4) / MagnitudeSquared(p2 - p0);
+		Primitive magFactor0 = 1, magFactor1 = 1;
 		auto winding0 = CalculateWindingType(pm1, p0, p1, epsilon*magFactor0);
 		auto winding1 = CalculateWindingType(p0, p1, p2, epsilon*magFactor1);
-		if (winding0.first == WindingType::Straight && std::abs(winding0.second) < std::abs(winding1.second)) {
+
+		auto attempt0 = CalculateEdgeCollapse_Offset(pm1, p0, p1, p2);
+		(void)attempt0;	// DONT CHECK IN
+
+		if (winding0.first == WindingType::FlatV && winding1.first == WindingType::FlatV) {
+
+			return EdgeCollapse<Primitive>::NonCollapse();
+
+		} else if (winding0.first == WindingType::FlatV) {
+
+			if (winding1.first == WindingType::Straight)
+				return EdgeCollapse<Primitive>{ EdgeCollapseType::NonCollapse_Movement, CalculateVelocityColinearSequence(p0, p0, p1, p2) };
+
+			// we can try to get a collapse by moving p1 towards p0, but p0 is just frozen
+			auto movement = EdgeTangentToMovementDir<Primitive>(p2 - p1);
+			movement /= std::hypot(movement[0], movement[1]);
+
+			return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, { p0, Dot(p0 - p1, movement) } };
+
+		} else if (winding1.first == WindingType::FlatV) {
+
+			if (winding0.first == WindingType::Straight)
+				return EdgeCollapse<Primitive>{ EdgeCollapseType::NonCollapse_Movement, CalculateVelocityColinearSequence(pm1, p0, p1, p1) };
+
+			// we can try to get a collapse by moving p0 towards p1, but p1 is just frozen
+			auto movement = EdgeTangentToMovementDir<Primitive>(p0 - pm1);
+			movement /= std::hypot(movement[0], movement[1]);
+
+			return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, { p1, Dot(p1 - p0, movement) } };
+
+		} else if (winding0.first == WindingType::Straight && std::abs(winding0.second) < std::abs(winding1.second)) {
+
 			// See comments below for working
-			if (winding1.first == WindingType::Straight) return {};		// everything colinear
+			if (winding1.first == WindingType::Straight)
+				return EdgeCollapse<Primitive>{ EdgeCollapseType::NonCollapse_Movement, CalculateVelocityColinearSequence(pm1, p0, p1, p2) };
 
 			auto movement0 = EdgeTangentToMovementDir<Primitive>(p1 - pm1);
 			movement0 /= std::hypot(movement0[0], movement0[1]);
 			auto movement1Opt = CalculateVertexVelocity_LineIntersection<Primitive>(p0, p1, p2, 1);
-			if (!movement1Opt) return {};
+			if (!movement1Opt)
+				return {}; // fallback to non-colinear methods
+
 			auto movement1 = movement1Opt.value();
 
 			auto A = movement0[1] - movement1[1], B = p0[1] - p1[1];
@@ -276,19 +327,19 @@ namespace XLEMath
 				auto root1 = (-b - std::sqrt(q)) / (2 * a);
 				if (root0 >= 0 && root1 >= 0) {
 					if (root0 < root1) {
-						return Vector3T<Primitive>(p0 + movement0 * root0, root0);
+						return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * root0, root0) };
 					} else {
-						return Vector3T<Primitive>(p0 + movement0 * root1, root1);
+						return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * root1, root1) };
 					}
 				} else if (root0 >= 0) {
-					return Vector3T<Primitive>(p0 + movement0 * root0, root0);
+					return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * root0, root0) };
 				} else if (root1 >= 0) {
-					return Vector3T<Primitive>(p0 + movement0 * root1, root1);
+					return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * root1, root1) };
 				} else {
 					if (root0 > root1) {
-						return Vector3T<Primitive>(p0 + movement0 * root0, root0);
+						return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * root0, root0) };
 					} else {
-						return Vector3T<Primitive>(p0 + movement0 * root1, root1);
+						return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * root1, root1) };
 					}
 				}
 			} else if (a > 0) {
@@ -296,20 +347,22 @@ namespace XLEMath
 				auto W = (minimum*A+B), U = (minimum*C+D);
 				auto minDistSq = W*W+U*U;
 				if (minDistSq < epsilon*epsilon)
-					return Vector3T<Primitive>(p0 + movement0 * minimum, minimum);
+					return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * minimum, minimum) };
 			}
 
-			return {};
+			return {}; // fallback to non-colinear methods
 
 		} else if (winding1.first == WindingType::Straight) {
-			if (winding0.first == WindingType::Straight) return {};		// everything colinear
+
+			if (winding0.first == WindingType::Straight)
+				return EdgeCollapse<Primitive>{ EdgeCollapseType::NonCollapse_Movement, CalculateVelocityColinearSequence(pm1, p0, p1, p2) };
 
 			// p0 -> p1 -> p2 may be colinear
 			// assume pm1 -> p1 > p2 is not colinear and try to find a collision point
 			//
 			// Because 2 edges are colinear, there are an infinite number of valid movement directions for p1
 			// (ie, it needn't actually move normal to the edge). But the speed it moves relative to the
-			// edge is contrained.
+			// edge is constrained.
 			//
 			// So, we could find a collapse solution in almost every case... However this can cause problems
 			// in the algorithm because we can end up assuming that a vertex is moving in multiple ways at
@@ -317,7 +370,9 @@ namespace XLEMath
 			// the number of collapses we make, but it's more consistent
 
 			auto movement0Opt = CalculateVertexVelocity_LineIntersection<Primitive>(pm1, p0, p1, 1);
-			if (!movement0Opt) return {};
+			if (!movement0Opt)
+				return {}; // fallback to non-colinear methods
+
 			auto movement0 = movement0Opt.value();
 			auto movement1 = EdgeTangentToMovementDir<Primitive>(p2-p0);
 			movement1 /= std::hypot(movement1[0], movement1[1]);
@@ -355,19 +410,19 @@ namespace XLEMath
 				// Return a positive root if possible, otherwise return the root closest to zero
 				if (root0 >= 0 && root1 >= 0) {
 					if (root0 < root1) {
-						return Vector3T<Primitive>(p1 + movement1 * root0, root0);
+						return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p1 + movement1 * root0, root0) };
 					} else {
-						return Vector3T<Primitive>(p1 + movement1 * root1, root1);
+						return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p1 + movement1 * root1, root1) };
 					}
 				} else if (root0 >= 0) {
-					return Vector3T<Primitive>(p1 + movement1 * root0, root0);
+					return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p1 + movement1 * root0, root0) };
 				} else if (root1 >= 0) {
-					return Vector3T<Primitive>(p1 + movement1 * root1, root1);
+					return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p1 + movement1 * root1, root1) };
 				} else {
 					if (root0 > root1) {
-						return Vector3T<Primitive>(p0 + movement0 * root0, root0);
+						return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * root0, root0) };
 					} else {
-						return Vector3T<Primitive>(p0 + movement0 * root1, root1);
+						return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p0 + movement0 * root1, root1) };
 					}
 				}
 			} else if (a > 0) {
@@ -375,19 +430,27 @@ namespace XLEMath
 				auto W = (minimum*A+B), U = (minimum*C+D);
 				auto minDistSq = W*W+U*U;
 				if (minDistSq < epsilon*epsilon)
-					return Vector3T<Primitive>(p1 + movement1 * minimum, minimum);
+					return EdgeCollapse<Primitive>{ EdgeCollapseType::Collapse, Vector3T<Primitive>(p1 + movement1 * minimum, minimum) };
 			}
 
-			return {};
+			return {}; // fallback to non-colinear methods
+
 		} else
-			return {};
+
+			return {}; // fallback to non-colinear methods
 	}
 
-	T1(Primitive) static std::optional<Vector3T<Primitive>> CalculateEdgeCollapse_Offset_ColinearTest(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
+	T1(Primitive) static EdgeCollapse<Primitive> CalculateEdgeCollapse_Offset_ColinearTest(Vector2T<Primitive> pm1, Vector2T<Primitive> p0, Vector2T<Primitive> p1, Vector2T<Primitive> p2)
 	{
 		auto result = CalculateColinearEdgeCollapse(pm1, p0, p1, p2);
-		if (result) return result;
-		return CalculateEdgeCollapse_Offset(pm1, p0, p1, p2);
+		if (result)
+			return *result;
+
+		auto attempt0 = CalculateEdgeCollapse_Offset(pm1, p0, p1, p2);
+		if (attempt0)
+			return { EdgeCollapseType::Collapse, *attempt0 };
+
+		return EdgeCollapse<Primitive>::NonCollapse();
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

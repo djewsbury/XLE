@@ -555,7 +555,7 @@ namespace UnitTests
 		}
 	}
 
-	template<typename Primitive> void SaveStraightSkeletonToFile(const StraightSkeleton<Primitive>& ss, IteratorRange<const Float2*> boundaryLoop, const std::string& name)
+	template<typename Primitive> void SaveStraightSkeletonToFile(const StraightSkeleton<Primitive>& ss, IteratorRange<const Vector2T<Primitive>*> boundaryLoop, const std::string& name)
 	{
 		auto outputName = std::filesystem::temp_directory_path() / "xle-unit-tests" / (name + ".ply");
 		std::ofstream plyOut(outputName);
@@ -705,8 +705,8 @@ namespace UnitTests
 		// static constexpr unsigned randomCellCount = 9u;
 		// static constexpr unsigned randomCellCount = 32u;
 		// static constexpr unsigned randomCellCount = 64u;
-		static constexpr unsigned randomCellCount = 256u;
-		// static constexpr unsigned randomCellCount = 2048u;
+		// static constexpr unsigned randomCellCount = 256u;
+		static constexpr unsigned randomCellCount = 2048u;
 
 		using namespace RenderCore;
 		class HexGridStraightSkeleton : public IInteractiveTestOverlay
@@ -770,7 +770,7 @@ namespace UnitTests
 			HexCellField _cellField;
 			StraightSkeletonPreview<float> _preview;
 			std::mt19937_64 _rng;
-			float maxInset = 10.f;
+			float maxInset = 30.f;
 			
 			HexGridStraightSkeleton(std::mt19937_64&& rng)
 			: _rng(std::move(rng))
@@ -1043,6 +1043,45 @@ namespace UnitTests
 		for (auto& c:ninja) c = (c - Float2{1000, 1000}) * 0.05;
 		std::reverse(ninja, &ninja[dimof(ninja)]);
 
+		// A series of instantaneous motorcycles, including motorcycles between parallel edges and colinear vertices
+		// Try this camera:
+		// visCamera._left = -4.5 * scale;
+		// visCamera._right = -6.3f * scale;
+		// visCamera._top = 9.0f * scale;
+		// visCamera._bottom = 12.f * scale;
+		Float2 difficultMotorcycle[] = {
+			Float2 { -5.5400009155273438, 11.5 },
+			Float2 { -6, 11.5 },
+			Float2 { -6, 11.300003051757812 },
+			Float2 { -5.5400009155273438, 11.300003051757812 },
+			Float2 { -5.5400009155273438, 11.199996948242188 },
+			Float2 { -5.4599990844726562, 11.199996948242188 },
+			Float2 { -5.4599990844726562, 11.300003051757812 },
+			Float2 { -5, 11.300003051757812 },
+			Float2 { -5, 10.839996337890625 },
+			Float2 { -5.0999984741210938, 10.839996337890625 },
+			Float2 { -5.0999984741210938, 10.760002136230469 },
+			Float2 { -5, 10.760002136230469 },
+			Float2 { -5, 9.839996337890625 },
+			Float2 { -5.0999984741210938, 9.839996337890625 },
+			Float2 { -5.0999984741210938, 9.7600021362304688 },
+			Float2 { -5, 9.7600021362304688 },
+			Float2 { -5, 9.3000030517578125 },
+			Float2 { -4.7999992370605469, 9.3000030517578125 },
+			Float2 { -4.7999992370605469, 9.7600021362304688 },
+			Float2 { -4.9000015258789062, 9.7600021362304688 },
+			Float2 { -4.9000015258789062, 9.839996337890625 },
+			Float2 { -4.7999992370605469, 9.839996337890625 },
+			Float2 { -4.7999992370605469, 10.760002136230469 },
+			Float2 { -4.9000015258789062, 10.760002136230469 },
+			Float2 { -4.9000015258789062, 10.839996337890625 },
+			Float2 { -4.7999992370605469, 10.839996337890625 },
+			Float2 { -4.7999992370605469, 11.5 },
+			Float2 { -5.4599990844726562, 11.5 },
+			Float2 { -5.4599990844726562, 11.400001525878906 },
+			Float2 { -5.5400009155273438, 11.400001525878906 }
+		};
+
 		REQUIRE(ValidatePolygonLoop<float>(eagle) == true);
 		REQUIRE(ValidatePolygonLoop<float>(dancingMan) == true);
 		REQUIRE(ValidatePolygonLoop<float>(secretaryBird) == true);
@@ -1052,6 +1091,7 @@ namespace UnitTests
 		REQUIRE(ValidatePolygonLoop<float>(perseus) == true);
 		REQUIRE(ValidatePolygonLoop<float>(eagleFlight) == true);
 		REQUIRE(ValidatePolygonLoop<float>(ninja) == true);
+		REQUIRE(ValidatePolygonLoop<float>(difficultMotorcycle) == true);
 
 		REQUIRE(ValidatePolygonLoop<float>(womanWithSpear) == false);
 		REQUIRE(ValidatePolygonLoop<float>(archer) == false);
@@ -1091,6 +1131,11 @@ namespace UnitTests
 					_currentInputIdx = (_currentInputIdx+1)%_inputs.size();
 					_preview = StraightSkeletonPreview<float>(_inputs[_currentInputIdx], _maxInset);
 					SaveStraightSkeletonToFile<float>(_preview._straightSkeleton, MakeIteratorRange(_inputs[_currentInputIdx]), "straightskeleton-arbitrary");
+				} else if (evnt._pressedChar == 'd') {
+					std::vector<Double2> doubles;
+					for (auto f:_inputs[_currentInputIdx]) doubles.emplace_back(f);
+					auto p = StraightSkeletonPreview<double>(doubles, (double)_maxInset);
+					SaveStraightSkeletonToFile<double>(p._straightSkeleton, MakeIteratorRange(doubles), "straightskeleton-arbitrary-dbls");
 				}
 				return false;
 			}
@@ -1104,7 +1149,7 @@ namespace UnitTests
 		};
 
 		{
-			auto tester = std::make_shared<SwitchStraightSkeletonOverlay>();			
+			auto tester = std::make_shared<SwitchStraightSkeletonOverlay>();
 			tester->_inputs.emplace_back(std::vector<Float2>(eagle, &eagle[dimof(eagle)]));
 			tester->_inputs.emplace_back(std::vector<Float2>(dancingMan, &dancingMan[dimof(dancingMan)]));
 			tester->_inputs.emplace_back(std::vector<Float2>(secretaryBird, &secretaryBird[dimof(secretaryBird)]));
@@ -1114,6 +1159,7 @@ namespace UnitTests
 			tester->_inputs.emplace_back(std::vector<Float2>(perseus, &perseus[dimof(perseus)]));
 			tester->_inputs.emplace_back(std::vector<Float2>(eagleFlight, &eagleFlight[dimof(eagleFlight)]));
 			tester->_inputs.emplace_back(std::vector<Float2>(ninja, &ninja[dimof(ninja)]));
+			tester->_inputs.emplace_back(std::vector<Float2>(difficultMotorcycle, &difficultMotorcycle[dimof(difficultMotorcycle)]));
 			tester->_preview = StraightSkeletonPreview<float>(tester->_inputs[tester->_currentInputIdx], tester->_maxInset);
 			testHelper->Run(StartingCamera(), tester);
 		}

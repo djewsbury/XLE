@@ -203,10 +203,15 @@ namespace XLEMath
 		auto res = FindCrashEvent<Primitive>(p0-p2, p1-p2, motorcycle.Velocity());
 		auto epsilon = GetEpsilon<Primitive>();
 		if (!res || res.value()[2] < -epsilon) return {};
-		// if (!res || res.value()[2] < 0) return {};
 
 		auto pointAndTime = res.value();
 		pointAndTime += Expand(p2, calcTime);
+
+		// special case -- if two points are equivalent in the initial loop, we will
+		// consider them to have crashed (even if they are supposed to move away from
+		// each other). Sometimes this is useful, though, and the alternative of two
+		// different loops with a shared point won't work.
+		if (pointAndTime[2] < epsilon) return {};
 
 		// We have to test to ensure that the intersection point is actually lying within
 		// the edge segment (we only know currently that it is colinear)
@@ -306,7 +311,7 @@ namespace XLEMath
 	{
 		if (loop0._loopId == loop1._loopId) {
 			// Any expanding loop can motorcycle into itself. And a expanding loop can have a contracting part, which 
-			// can motorcycle into itself (imagine an exaggerated cresent moon)
+			// can motorcycle into itself (imagine an exaggerated crescent moon)
 			return true;
 		}
 
@@ -385,9 +390,9 @@ namespace XLEMath
 			legacyV0.PositionAtTime(calcTime),
 			legacyV1.PositionAtTime(calcTime),
 			legacyV2.PositionAtTime(calcTime)); 
-		if (!res) return {};
-		if (res.value()[2] < 0) return {};		// this happens when an edge is expanding, not collapsing
-		return OffsetTime(res.value(), calcTime);
+		if (res._type != EdgeCollapseType::Collapse) return {};
+		if (res._pointAndTime[2] < 0) return {};		// this happens when an edge is expanding, not collapsing
+		return OffsetTime(res._pointAndTime, calcTime);
 	}
 
 	T1(Primitive) static PointAndTime<Primitive> CalculateAnchor1(VertexId vm2i, VertexId vm1i, VertexId v0i, VertexId v1i, VertexId v2i, VertexSet<Primitive> vSet, Primitive calcTime)
@@ -399,32 +404,34 @@ namespace XLEMath
 		auto v2 = vSet[v2i].PositionAtTime(calcTime);
 
 		// "V" shape protection. If we attempt to calculate the velocity in these cases, we can't find it accurately
-		// we often end up with vertices that fly off in wierd directions. Once we end up with these wierd colinear/flat V
-		// shapes, the algorithm doesn't care where the vertices are on the line; and so we end up with wierd results
+		// we often end up with vertices that fly off in weird directions. Once we end up with these weird colinear/flat V
+		// shapes, the algorithm doesn't care where the vertices are on the line; and so we end up with weird results
 		// These cases should either collapse or change due to a motorcycle crash essentially immediately, so zero 
 		// velocity should be fine
-		auto epsilon = GetEpsilon<Primitive>();
-		auto magFactor = Primitive(4) / MagnitudeSquared(v1 - vm1);
-		auto winding = CalculateWindingType(vm1, v0, v1, epsilon*magFactor);
-		if (winding.first == WindingType::FlatV)
-			return vSet[v0i]._anchor0;
+		// auto epsilon = GetEpsilon<Primitive>();
+		// // auto magFactor = Primitive(4) / MagnitudeSquared(v1 - vm1);
+		// Primitive magFactor = 1;
+		// auto winding = CalculateWindingType(vm1, v0, v1, epsilon*magFactor);
+		// if (winding.first == WindingType::FlatV)
+		// 	return vSet[v0i]._anchor0;
 
 		auto collapse0 = CalculateEdgeCollapse_Offset_ColinearTest<Primitive>(vm2-v0, vm1-v0, Zero<Vector2T<Primitive>>(), v1-v0);
 		auto collapse1 = CalculateEdgeCollapse_Offset_ColinearTest<Primitive>(vm1-v0, Zero<Vector2T<Primitive>>(), v1-v0, v2-v0);
 
-		if (collapse0.has_value() && collapse1.has_value()) {
+		if (collapse0._type != EdgeCollapseType::NonCollapse && collapse1._type != EdgeCollapseType::NonCollapse) {
 			// the collapses should both be in the same direction, but let's choose the sooner one
-			if (collapse0.value()[2] > 0 && collapse0.value()[2] < collapse1.value()[2]) {
-				return collapse0.value() + Vector3T<Primitive>{v0, calcTime};
+			if (collapse0._pointAndTime[2] > 0 && collapse0._pointAndTime[2] < collapse1._pointAndTime[2]) {
+				return collapse0._pointAndTime + Vector3T<Primitive>{v0, calcTime};
 			} else {
-				return collapse1.value() + Vector3T<Primitive>{v0, calcTime};
+				return collapse1._pointAndTime + Vector3T<Primitive>{v0, calcTime};
 			}
-		} else if (collapse0.has_value()) {
-			return collapse0.value() + Vector3T<Primitive>{v0, calcTime};
-		} else if (collapse1.has_value()) {
-			return collapse1.value() + Vector3T<Primitive>{v0, calcTime};
+		} else if (collapse0._type != EdgeCollapseType::NonCollapse) {
+			return collapse0._pointAndTime + Vector3T<Primitive>{v0, calcTime};
+		} else if (collapse1._type != EdgeCollapseType::NonCollapse) {
+			return collapse1._pointAndTime + Vector3T<Primitive>{v0, calcTime};
 		} else {
-			// Some edges won't collapse (due to parallel edges, etc)
+			// Some edges won't collapse (due to parallel edges, etc). We will attempt to get a velocity
+			// by looking at the vertex in isolation
 			auto velocity = CalculateVertexVelocity_LineIntersection(vm1, v0, v1, Primitive(1));
 			if (velocity)
 				return vSet[v0i]._anchor0 + PointAndTime<Primitive>{velocity.value(), Primitive(1)};
@@ -556,6 +563,7 @@ namespace XLEMath
 				auto crashTime = m._crashPt[2];
 				if (crashTime < loop._lastEventBatchEarliest && loop._lastEventBatchEarliest <= loop._lastEventBatchLatest) continue;
 				if (crashTime < (earliestTime + maxEventChain * GetTimeEpsilon<Primitive>())) {
+					assert(m._motor != m._edgeHead && m._motor != m._edgeTail);
 					events.push_back(Event<Primitive>::MotorcycleCrash(m._edgeLoop, m._crashPt, m._motor, m._edgeHead, m._edgeTail, loop._loopId));
 					earliestTime = std::min(crashTime, earliestTime);
 					#if defined(_DEBUG)
@@ -595,7 +603,8 @@ namespace XLEMath
 					prevPrevEdge->_tail, prevEdge->_tail, edge->_tail, edge->_head, next->_head, 
 					_vertices, calcTime);
 
-				// Each reflex vertex in the graph must result in a "motocycle segment".
+				// Each reflex vertex or colinear vertex in the graph must result in a "motorcycle segment".
+				// Colinear vertices can motorcycle into parallel edges (at which point there's often a series of instantaneous motorcycles)
 				// We already know the velocity of the head of the motorcycle; and it has a fixed tail that
 				// stays at the original position
 				if (v0._anchor0 != v0._anchor1) {
@@ -607,7 +616,7 @@ namespace XLEMath
 					auto v1 = GetVertex<Primitive>(_vertices, edge->_tail).PositionAtTime(calcTime);
 					auto v2 = GetVertex<Primitive>(_vertices, edge->_head).PositionAtTime(calcTime);
 					auto windingType = CalculateWindingType(v0, v1, v2, GetEpsilon<Primitive>()).first;
-					if (windingType == WindingType::Right)
+					if (windingType != WindingType::Left)
 						loop._motorcycleSegments.emplace_back(MotorcycleSegment<Primitive>{edge->_tail});
 				}
 			}
@@ -1428,7 +1437,7 @@ namespace XLEMath
 			}
 		assert(loop._edges.size() != 1);
 
-		if (loop._edges.size() > 1 && collapseGroupInfo._head != collapseGroupInfo._tail) {				
+		if (loop._edges.size() > 1 && collapseGroupInfo._head != collapseGroupInfo._tail) {
 			auto tail = FindInAndOut(MakeIteratorRange(loop._edges), collapseGroupInfo._tail).first;
 			auto head = FindInAndOut(MakeIteratorRange(loop._edges), collapseGroupInfo._head).second;
 			assert(tail != loop._edges.end() && head != loop._edges.end());
@@ -1774,7 +1783,7 @@ namespace XLEMath
 
 	T1(Primitive) void StraightSkeletonGraph<Primitive>::ProcessEvents(std::vector<Event<Primitive>>& evnts)
 	{
-		// It may make sense to resolve all collapses first, because those calculations are simplier, and
+		// It may make sense to resolve all collapses first, because those calculations are simpler, and
 		// might help prevent near-identical vertex positions from creating precision error in motorcycle
 		// calculations
 		const bool resolveCollapsesFirst = false;
@@ -1795,7 +1804,7 @@ namespace XLEMath
 			} else {
 				assert(evnts.begin()->_type == EventType::MultiLoopMotorcycleCrash);
 				// For a multicycle between 2 loops; we start off by merging the 2 loops
-				// After the merge, we can handle this has a standard motorcycle crash
+				// After the merge, we can handle this has a standard motorcycle crash1
 				ProcessLoopMergeEvents(evnts);
 			}
 		}
@@ -1895,11 +1904,11 @@ namespace XLEMath
 			ProcessEvents(events);
 		}
 
-
-		// santize remaining loops
-		std::vector<Event<Primitive>> santizeEvents;
-		std::vector<Event<Primitive>> originalSantizeEvents;
 		if (0) {
+			// sanitize remaining loops
+			std::vector<Event<Primitive>> sanitizeEvents;
+			std::vector<Event<Primitive>> originalSanitizeEvents;
+
 			for (auto& l:_loops) {
 				if (l._edges.size() <= 2) continue;
 
@@ -1920,14 +1929,14 @@ namespace XLEMath
 				UpdateLoopStage2(l);
 				UpdateLoopStage3(l);
 				auto earliestTime = std::numeric_limits<Primitive>::max();
-				FindMotorcycleCrashes(santizeEvents, earliestTime, l);
+				FindMotorcycleCrashes(sanitizeEvents, earliestTime, l);
 			}
-			std::sort(santizeEvents.begin(), santizeEvents.end(), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
-			auto end = santizeEvents.begin();
-			while (end != santizeEvents.end() && end->_eventTime < maxTime) ++end;
-			santizeEvents.erase(end, santizeEvents.end());
-			originalSantizeEvents = santizeEvents;
-			ProcessEvents(santizeEvents);
+			std::sort(sanitizeEvents.begin(), sanitizeEvents.end(), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
+			auto end = sanitizeEvents.begin();
+			while (end != sanitizeEvents.end() && end->_eventTime < maxTime) ++end;
+			sanitizeEvents.erase(end, sanitizeEvents.end());
+			originalSanitizeEvents = sanitizeEvents;
+			ProcessEvents(sanitizeEvents);
 		}
 
 		StraightSkeleton<Primitive> result;
@@ -2000,13 +2009,35 @@ namespace XLEMath
 		for (size_t v=0; v<vertices.size(); ++v) {
 			loop._edges.emplace_back(WavefrontEdge<Primitive>{vertexOffset + unsigned((v+1)%vertices.size()), vertexOffset + unsigned(v)});
 			_graph->_originalBoundaryEdges.push_back({vertexOffset + unsigned((v+1)%vertices.size()), vertexOffset + unsigned(v)});
-			_graph->_vertices.push_back(Vertex<Primitive>{PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}, FaceId(vertexOffset+((v+vertices.size()-1)%vertices.size())), FaceId(vertexOffset+v)});
+			_graph->_vertices.emplace_back(PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}, FaceId(vertexOffset+((v+vertices.size()-1)%vertices.size())), FaceId(vertexOffset+v));
 		}
 		loop._loopId = _graph->_nextLoopId++;
 		loop._signedAreaAtLatestEvent = CalculateSignedAreaAtTime<Primitive>(loop._edges, _graph->_vertices, 0);
 		loop._signOfInitialLoop = std::copysign(Primitive(1), loop._signedAreaAtLatestEvent);
 		_graph->_loops.emplace_back(std::move(loop));
 		_graph->_boundaryPointCount += vertices.size();
+	}
+
+	T1(Primitive) void StraightSkeletonCalculator<Primitive>::AddLoop(size_t count, Primitive xComponents[], Primitive yComponents[], size_t stride)
+	{
+		assert(count >= 2);
+		WavefrontLoop<Primitive> loop;
+		loop._edges.reserve(count);
+		_graph->_vertices.reserve(_graph->_vertices.size() + count);
+		unsigned vertexOffset = (unsigned)_graph->_vertices.size();
+		for (size_t v=0; v<count; ++v) {
+			loop._edges.emplace_back(WavefrontEdge<Primitive>{vertexOffset + unsigned((v+1)%count), vertexOffset + unsigned(v)});
+			_graph->_originalBoundaryEdges.push_back({vertexOffset + unsigned((v+1)%count), vertexOffset + unsigned(v)});
+			_graph->_vertices.emplace_back(
+				PointAndTime<Primitive>{*PtrAdd(xComponents, v*stride), *PtrAdd(yComponents, v*stride), Primitive(0)},
+				PointAndTime<Primitive>{*PtrAdd(xComponents, v*stride), *PtrAdd(yComponents, v*stride), Primitive(0)},
+				FaceId(vertexOffset+((v+count-1)%count)), FaceId(vertexOffset+v));
+		}
+		loop._loopId = _graph->_nextLoopId++;
+		loop._signedAreaAtLatestEvent = CalculateSignedAreaAtTime<Primitive>(loop._edges, _graph->_vertices, 0);
+		loop._signOfInitialLoop = std::copysign(Primitive(1), loop._signedAreaAtLatestEvent);
+		_graph->_loops.emplace_back(std::move(loop));
+		_graph->_boundaryPointCount += count;
 	}
 
 	T1(Primitive) StraightSkeleton<Primitive> StraightSkeletonCalculator<Primitive>::Calculate(Primitive maxInset)
@@ -2135,7 +2166,7 @@ namespace XLEMath
 					return false;
 		}
 
-		// survived the guantlet
+		// survived the gauntlet
 		return true;
 	}
 
