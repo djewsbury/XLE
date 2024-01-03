@@ -173,11 +173,11 @@ namespace RenderCore
 
         auto        GetDependencyValidation() const -> const ::Assets::DependencyValidation& { return _depVal; }
 
-        static const uint64 CompileProcessType;
-
     private:
 		::Assets::Blob			_shader;
 		::Assets::DependencyValidation		_depVal;
     };
+
+    constexpr auto GetCompileProcessType(CompiledShaderByteCode*) { return ConstHash64Legacy<'Shdr', 'Byte', 'Code'>::Value; }
 }
 

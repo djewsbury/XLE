@@ -313,7 +313,7 @@ namespace RenderCore
 					definesTable = initializers.GetInitializer<std::string>(1);
 
 				// we don't encode the targetCode, because we assume it's always the same
-				assert(targetCode == CompiledShaderByteCode::CompileProcessType);
+				assert(targetCode == GetCompileProcessType((CompiledShaderByteCode*)nullptr));
 				auto splitFN = MakeFileNameSplitter(res._filename);
 				auto entryId = Hash64(res._entryPoint, Hash64(definesTable, Hash64(res._shaderModel, Hash64(splitFN.Extension()))));
 				assert(res._compilationFlags < 64);
@@ -326,7 +326,7 @@ namespace RenderCore
 				bool compressedFN = true;
 				if (compressedFN) {
 					// shader model & extension already considered in entry id; we just need to look at the directory and filename here
-					archiveName << splitFN.File() << "-" << std::hex << HashFilenameAndPath(splitFN.DriveAndPath());
+					archiveName << splitFN.File() << "-" << std::hex << HashFilenameAndPath(splitFN.StemAndPath());
 					descriptiveName << res._filename << ":" << res._entryPoint << "[" << definesTable << "]" << res._shaderModel << "-" << res._compilationFlags << "-" << compilerCapabilities;
 				} else {
 					archiveName << res._filename;
@@ -336,7 +336,7 @@ namespace RenderCore
 			}
 		};
 
-		uint64_t outputAssetTypes[] = { CompiledShaderByteCode::CompileProcessType };
+		uint64_t outputAssetTypes[] = { GetCompileProcessType((CompiledShaderByteCode*)nullptr) };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes));

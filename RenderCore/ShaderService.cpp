@@ -98,8 +98,6 @@ namespace RenderCore
 		return MakeStringSection(hdr._entryPoint);
     }
 
-    const uint64 CompiledShaderByteCode::CompileProcessType = ConstHash64Legacy<'Shdr', 'Byte', 'Code'>::Value;
-
         ////////////////////////////////////////////////////////////
 
     ILowLevelCompiler::ResId::ResId(StringSection<ResChar> filename, StringSection<ResChar> entryPoint, StringSection<ResChar> shaderModel)
