@@ -365,13 +365,15 @@ namespace Assets
 		*/
 
 		XPakFileSystem(StringSection<> archive, std::shared_ptr<ArchiveUtility::FileCache> fileCache);
+		XPakFileSystem(IteratorRange<const void*> embeddedData, OSServices::FileTime modFileTime, std::shared_ptr<ArchiveUtility::FileCache> fileCache);
 		~XPakFileSystem();
 	private:
-		OSServices::MemoryMappedFile _archive;
 		void Initialize();
+		void Initialize(IteratorRange<const void*> data);
 
 		IteratorRange<const Internal::XPakStructures::FileEntry*> _fileEntries;
 		IteratorRange<const uint64_t*> _hashTable;
+		IteratorRange<const void*> _archiveData;
 		const char* _stringTable;
 
 		struct MarkerContents
@@ -380,8 +382,10 @@ namespace Assets
 		};
 		Marker AsMarker(uint32_t fileIndex);
 
+		OSServices::FileTime _modificationFileTime;
+
+		OSServices::MemoryMappedFile _archive;
 		std::string _archiveName;
-		FileDesc _archiveDesc;
 		ArchiveUtility::ArchiveDanglingFileMonitor _danglingFileMonitor;
 
 		std::shared_ptr<ArchiveUtility::FileCache> _fileCache;
@@ -425,22 +429,22 @@ namespace Assets
 		assert(m._fileIndex <= _fileEntries.size());
 		const auto& entry = _fileEntries[m._fileIndex];
 
-		if ((entry._flags + entry._compressedSize) > _archive.GetSize())
+		if ((entry._flags + entry._compressedSize) > _archiveData.size())
 			Throw(std::runtime_error("File entry corrupted in archive lookup table"));
 
 		auto srcData = MakeIteratorRange(
-			PtrAdd(_archive.GetData().begin(), entry._offset),
-			PtrAdd(_archive.GetData().begin(), entry._offset+entry._compressedSize));
+			PtrAdd(_archiveData.begin(), entry._offset),
+			PtrAdd(_archiveData.begin(), entry._offset+entry._compressedSize));
 
 		if (entry._compressedSize < entry._decompressedSize) {
 
 			auto resourceGuid = HashCombine(_hashTable[m._fileIndex], entry._contentsHash);
 			auto file = _fileCache->Reserve(resourceGuid, entry._decompressedSize, &XPakDecompressBlob, srcData);
-			result = std::make_unique<ArchiveUtility::ArchiveFileBufferedDecompress>(std::move(file), _danglingFileMonitor, _archiveDesc._snapshot._modificationTime);
+			result = std::make_unique<ArchiveUtility::ArchiveFileBufferedDecompress>(std::move(file), _danglingFileMonitor, _modificationFileTime);
 			
 		} else {
 
-			result = CreateArchiveFileUncompressed(_danglingFileMonitor, srcData, _archiveDesc._snapshot._modificationTime);
+			result = CreateArchiveFileUncompressed(_danglingFileMonitor, srcData, _modificationFileTime);
 
 		}
 		return IOReason::Success;
@@ -460,8 +464,8 @@ namespace Assets
 		const auto& entry = _fileEntries[m._fileIndex];
 
 		auto srcData = MakeIteratorRange(
-			PtrAdd(_archive.GetData().begin(), entry._offset),
-			PtrAdd(_archive.GetData().begin(), entry._offset+entry._compressedSize));
+			PtrAdd(_archiveData.begin(), entry._offset),
+			PtrAdd(_archiveData.begin(), entry._offset+entry._compressedSize));
 
 		if (entry._compressedSize < entry._decompressedSize) {
 
@@ -471,7 +475,7 @@ namespace Assets
 
 		} else {
 
-			result = ArchiveUtility::CreateTrackedMemoryMappedFile(_danglingFileMonitor, srcData);
+			result = ArchiveUtility::CreateTrackedMemoryMappedFile(_danglingFileMonitor, {(void*)srcData.begin(), (void*)srcData.end()});
 
 		}
 
@@ -485,7 +489,7 @@ namespace Assets
 			return IOReason::Invalid;
 		}
 
-		snapshot = { FileSnapshot::State::Normal, _archiveDesc._snapshot._modificationTime };
+		snapshot = { FileSnapshot::State::Normal, _modificationFileTime };
 		return IOReason::Invalid;
 	}
 
@@ -507,7 +511,7 @@ namespace Assets
 		std::string fn = &_stringTable[entry._stringTableOffset];
 		return FileDesc{
 			fn, fn,
-			{ FileSnapshot::State::Normal, _archiveDesc._snapshot._modificationTime },
+			{ FileSnapshot::State::Normal, _modificationFileTime },
 			entry._decompressedSize};
 	}
 
@@ -539,37 +543,49 @@ namespace Assets
 
 	void XPakFileSystem::Initialize()
 	{
-		_archiveDesc = MainFileSystem::TryGetDesc(_archiveName);		// only using stats of the first archive with the file table in it (in practice, they multi-part archives should all have the same modification date)
+		auto archiveDesc = MainFileSystem::TryGetDesc(_archiveName);		// only using stats of the first archive with the file table in it (in practice, they multi-part archives should all have the same modification date)
 		_archive = MainFileSystem::OpenMemoryMappedFile(_archiveName, 0u, "r");
+		_modificationFileTime = archiveDesc._snapshot._modificationTime;
+		Initialize(_archive.GetData());
+	}
 
-		auto& hdr = *(const Internal::XPakStructures::Header*)_archive.GetData().begin();
+	void XPakFileSystem::Initialize(IteratorRange<const void*> data)
+	{
+		_archiveData = data;
+
+		auto& hdr = *(const Internal::XPakStructures::Header*)data.begin();
 		if (hdr._majik != 'KAPX')
 			Throw(std::runtime_error("Archive does not appear to be a XPAK file, or file corrupted (initial bytes don't contain magic number)"));
 
 		if (hdr._version != 0)
 			Throw(std::runtime_error("Archive incorrect version (only version 0 supported)"));
 
-		if ((hdr._fileEntriesOffset + hdr._fileCount) > _archive.GetData().size())
+		if ((hdr._fileEntriesOffset + hdr._fileCount) > data.size())
 			Throw(std::runtime_error("Bad file list in XPAK file (header appears to be corrupted)"));
 
 		_fileEntries = MakeIteratorRange(
-			(const Internal::XPakStructures::FileEntry*)PtrAdd(_archive.GetData().begin(), hdr._fileEntriesOffset),
-			(const Internal::XPakStructures::FileEntry*)PtrAdd(_archive.GetData().begin(), hdr._fileEntriesOffset + sizeof(Internal::XPakStructures::FileEntry)*hdr._fileCount));
+			(const Internal::XPakStructures::FileEntry*)PtrAdd(data.begin(), hdr._fileEntriesOffset),
+			(const Internal::XPakStructures::FileEntry*)PtrAdd(data.begin(), hdr._fileEntriesOffset + sizeof(Internal::XPakStructures::FileEntry)*hdr._fileCount));
 
 		_hashTable = MakeIteratorRange(
-			(const uint64_t*)PtrAdd(_archive.GetData().begin(), hdr._hashTableOffset),
-			(const uint64_t*)PtrAdd(_archive.GetData().begin(), hdr._hashTableOffset + sizeof(uint64_t)*hdr._fileCount));
+			(const uint64_t*)PtrAdd(data.begin(), hdr._hashTableOffset),
+			(const uint64_t*)PtrAdd(data.begin(), hdr._hashTableOffset + sizeof(uint64_t)*hdr._fileCount));
 
-		_stringTable = (const char*)PtrAdd(_archive.GetData().begin(), hdr._stringTableOffset);
+		_stringTable = (const char*)PtrAdd(data.begin(), hdr._stringTableOffset);
 	}
 
 	XPakFileSystem::XPakFileSystem(StringSection<> archive, std::shared_ptr<ArchiveUtility::FileCache> fileCache)
 	: _archiveName(archive.AsString())
 	, _fileCache(std::move(fileCache))
 	{
-		const size_t fileCacheSize = 4*1024*1024;
-		_fileCache = std::make_shared<ArchiveUtility::FileCache>(fileCacheSize);
 		Initialize();
+	}
+
+	XPakFileSystem::XPakFileSystem(IteratorRange<const void*> embeddedData, OSServices::FileTime modFileTime, std::shared_ptr<ArchiveUtility::FileCache> fileCache)
+	: _fileCache(std::move(fileCache))
+	{
+		_modificationFileTime = modFileTime;
+		Initialize(embeddedData);
 	}
 
 	XPakFileSystem::~XPakFileSystem()
@@ -584,6 +600,11 @@ namespace Assets
 	std::shared_ptr<ArchiveUtility::FileCache> CreateFileCache(size_t sizeInBytes)
 	{
 		return std::make_shared<ArchiveUtility::FileCache>(sizeInBytes);
+	}
+
+	std::shared_ptr<IFileSystem> CreateXPakFileSystem(IteratorRange<const void*> embeddedData, OSServices::FileTime modFileTime, std::shared_ptr<ArchiveUtility::FileCache> fileCache)
+	{
+		return std::make_shared<XPakFileSystem>(embeddedData, modFileTime, std::move(fileCache));
 	}
 
 }
