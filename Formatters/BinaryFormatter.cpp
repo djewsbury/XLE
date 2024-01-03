@@ -338,25 +338,6 @@ namespace Formatters
 		return resultSize;
 	}
 
-	static const char* AsString(ImpliedTyping::TypeCat type)
-	{
-		switch(type) {
-		case ImpliedTyping::TypeCat::Void: return "void";
-		case ImpliedTyping::TypeCat::Bool: return "bool";
-		case ImpliedTyping::TypeCat::Int8: return "int8";
-		case ImpliedTyping::TypeCat::UInt8: return "uint8";
-		case ImpliedTyping::TypeCat::Int16: return "int16";
-		case ImpliedTyping::TypeCat::UInt16: return "uint16";
-		case ImpliedTyping::TypeCat::Int32: return "int32";
-		case ImpliedTyping::TypeCat::UInt32: return "uint32";
-		case ImpliedTyping::TypeCat::Int64: return "int64";
-		case ImpliedTyping::TypeCat::UInt64: return "uint64";
-		case ImpliedTyping::TypeCat::Float: return "float32";
-		case ImpliedTyping::TypeCat::Double: return "float64";
-		default: return "<<unknown>>";
-		}
-	}
-
 	std::ostream& EvaluationContext::SerializeEvaluatedType(std::ostream& str, unsigned typeId) const
 	{
 		const auto& type = _evaluatedTypes[typeId];
@@ -366,7 +347,7 @@ namespace Formatters
 			str << type._schemata->GetAliasName(type._alias);
 		} else {
 			assert(type._params.empty());
-			str << AsString(type._valueTypeDesc._type);
+			str << ImpliedTyping::AsString(type._valueTypeDesc._type);
 			if (type._valueTypeDesc._arrayCount > 1)
 				str << "[" << type._valueTypeDesc._arrayCount << "]";
 		}
@@ -402,8 +383,8 @@ namespace Formatters
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	BinaryInputFormatter::BinaryInputFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data)
-	: _evalContext(&evalContext)
+	BinaryInputFormatter::BinaryInputFormatter(IteratorRange<const void*> data, std::shared_ptr<EvaluationContext> evalContext)
+	: _evalContext(std::move(evalContext))
 	, _dataIterator(data)
 	, _originalStart(data.begin())
 	{
@@ -1076,7 +1057,7 @@ namespace Formatters
 	}
 
 	BinaryBlockMatch::BinaryBlockMatch(BinaryInputFormatter& formatter)
-	: _evalContext(&formatter.GetEvaluationContext())
+	: _evalContext(formatter.GetEvaluationContext().get())
 	{
 		unsigned blockType = 0;
 		bool startWithBeginBlock = formatter.TryBeginBlock(blockType);
@@ -1193,7 +1174,7 @@ namespace Formatters
 		return { (const char*)valueData.begin(), (const char*)valueData.end() };
 	}
 
-	static void SerializeValueWithDecoder(
+	void SerializeValueWithDecoder(
 		std::ostream& str,
 		IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type,
 		const Formatters::BitFieldDefinition& def)
@@ -1203,19 +1184,32 @@ namespace Formatters
 		if (!ImpliedTyping::Cast(MakeOpaqueIteratorRange(bits), ImpliedTyping::TypeOf<uint64_t>(), data, type)) {
 			str << "Could not interpret value (" << ImpliedTyping::AsString(data, type) << ") using bitfield decoder" << std::endl;
 		} else {
-			for (auto bitDef:def._bitRanges) {
-				auto mask = ((1<<bitDef._count)-1) << bitDef._min;
-				if (bits & mask) {
+			if (bits == 0) {
+				str << 0;
+			} else {
+				uint64_t interpretedMask = 0;
+				for (auto bitDef:def._bitRanges) {
+					auto mask = uint64_t((1<<bitDef._count)-1) << uint64_t(bitDef._min);
+					if (bits & mask) {
+						if (!first) str << " | "; else first = false;
+						str << bitDef._name;
+						if (bitDef._count != 1)
+							str << "(" << std::hex << (bits & mask) << bitDef._min << std::dec << ")";
+					}
+					interpretedMask |= mask;
+				}
+				bits &= ~interpretedMask;
+				while (bits) {
+					auto idx = xl_ctz8(bits);
 					if (!first) str << " | "; else first = false;
-					str << bitDef._name;
-					if (bitDef._count != 1)
-						str << "(" << std::hex << (bits & mask) << bitDef._min << std::dec << ")";
+					str << "Bit" << idx;
+					bits ^= 1ull<<uint64_t(idx);
 				}
 			}
 		}
 	}
 
-	static void SerializeValueWithDecoder(
+	void SerializeValueWithDecoder(
 		std::ostream& str,
 		IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type,
 		const ParameterBox& enumLiterals)
@@ -1246,7 +1240,7 @@ namespace Formatters
 
 		if (formatter.TryBeginBlock(evaluatedTypeId)) {
 			str << StreamIndent{indent};
-			formatter.GetEvaluationContext().SerializeEvaluatedType(str, evaluatedTypeId);
+			formatter.GetEvaluationContext()->SerializeEvaluatedType(str, evaluatedTypeId);
 			str << " " << name << std::endl;
 			SerializeBlock(str, formatter, indent+4);
 			if (!formatter.TryEndBlock())
@@ -1266,10 +1260,10 @@ namespace Formatters
 			}
 
 			str << StreamIndent{indent};
-			formatter.GetEvaluationContext().SerializeEvaluatedType(str, evaluatedTypeId);
+			formatter.GetEvaluationContext()->SerializeEvaluatedType(str, evaluatedTypeId);
 			str << " " << name << " = ";
 			bool serializedViaDecoder = false;
-			auto& evalType = formatter.GetEvaluationContext().GetEvaluatedTypeDesc(evaluatedTypeId);
+			auto& evalType = formatter.GetEvaluationContext()->GetEvaluatedTypeDesc(evaluatedTypeId);
 			if (evalType._alias != ~0u) {
 				auto& schemata = *evalType._schemata;
 				auto& alias = schemata.GetAlias(evalType._alias);
@@ -1286,7 +1280,7 @@ namespace Formatters
 			str << std::endl;
 		} else if (formatter.TryBeginArray(arrayCount, evaluatedTypeId)) {
 			str << StreamIndent{indent};
-			formatter.GetEvaluationContext().SerializeEvaluatedType(str, evaluatedTypeId);
+			formatter.GetEvaluationContext()->SerializeEvaluatedType(str, evaluatedTypeId);
 			str << " " << name << "[" << arrayCount << "]" << std::endl;
 			for (unsigned c=0; c<arrayCount; ++c)
 				SerializeValue(str, formatter, StringMeld<256>() << "<Element " << c << ">", indent+4);

@@ -44,12 +44,12 @@ namespace Formatters
 		bool ReversedEndian() const { return _reversedEndian; }
 		void SetReversedEndian(bool newState) { _reversedEndian = newState; }
 
-		EvaluationContext& GetEvaluationContext() const { return *_evalContext; }
+		const std::shared_ptr<EvaluationContext>& GetEvaluationContext() const { return _evalContext; }
 		IteratorRange<const void*> GetRemainingData() const { return _dataIterator; }
 		IteratorRange<const unsigned*> GetPassedConditionSymbols() const { return _passedConditionSymbols; }
 		const BinarySchemata& GetSchemata() const { return *_blockStack.front()._schemata; }
 
-		BinaryInputFormatter(EvaluationContext& evalContext, IteratorRange<const void*> data);
+		explicit BinaryInputFormatter(IteratorRange<const void*> data, std::shared_ptr<EvaluationContext> evalContext = std::make_shared<EvaluationContext>());
 		BinaryInputFormatter() = default;
 		BinaryInputFormatter(BinaryInputFormatter&&) = default;
 		BinaryInputFormatter& operator=(BinaryInputFormatter&&) = default;
@@ -77,7 +77,7 @@ namespace Formatters
 			std::vector<std::pair<uint64_t, ImpliedTyping::VariantNonRetained>> _localEvalContext;
 		};
 		std::deque<BlockContext> _blockStack;
-		EvaluationContext* _evalContext = nullptr;
+		std::shared_ptr<EvaluationContext> _evalContext;
 		IteratorRange<const void*> _dataIterator;
 		const void* _originalStart;
 		std::vector<unsigned> _passedConditionSymbols;
@@ -99,6 +99,8 @@ namespace Formatters
 	void RequireEndArray(BinaryInputFormatter&);
 	StringSection<> RequireStringValue(BinaryInputFormatter&);
 	std::ostream& SerializeBlock(std::ostream& str, BinaryInputFormatter& formatter, unsigned indent = 0);
+	void SerializeValueWithDecoder(std::ostream& str, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type, const Formatters::BitFieldDefinition& def);
+	void SerializeValueWithDecoder(std::ostream& str, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type, const ParameterBox& enumLiterals);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

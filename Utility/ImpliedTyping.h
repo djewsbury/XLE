@@ -115,6 +115,8 @@ namespace Utility
         template<typename Type>
             inline std::string AsString(const Type& type, bool strongTyping = false);
 
+        const char* AsString(TypeCat);
+
 
         // note -- Cast() never does string parsing, even if src is a string and the dst is not
         bool Cast(
@@ -415,7 +417,7 @@ namespace Utility
             inline VariantRetained::VariantRetained(const char s[])
         {
             _type = TypeOf<const char*>();
-            _type._arrayCount = XlStringSize(s);
+            _type._arrayCount = (uint32_t)XlStringSize(s);
             if (_type.GetSize() <= sizeof(_smallBuffer)) {
                 std::copy((const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount), _smallBuffer);
             } else
@@ -426,7 +428,7 @@ namespace Utility
             inline VariantRetained::VariantRetained(const utf16 s[])
         {
             _type = TypeOf<const utf16*>();
-            _type._arrayCount = XlStringSize(s);
+            _type._arrayCount = (uint32_t)XlStringSize(s);
             if (_type.GetSize() <= sizeof(_smallBuffer)) {
                 std::copy((const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount), _smallBuffer);
             } else
@@ -437,7 +439,7 @@ namespace Utility
             inline VariantRetained::VariantRetained(const utf32 s[])
         {
             _type = TypeOf<const utf32*>();
-            _type._arrayCount = XlStringSize(s);
+            _type._arrayCount = (uint32_t)XlStringSize(s);
             if (_type.GetSize() <= sizeof(_smallBuffer)) {
                 std::copy((const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount), _smallBuffer);
             } else
@@ -448,7 +450,7 @@ namespace Utility
             inline VariantRetained::VariantRetained(const ucs4 s[])
         {
             _type = TypeOf<const ucs4*>();
-            _type._arrayCount = XlStringSize(s);
+            _type._arrayCount = (uint32_t)XlStringSize(s);
             if (_type.GetSize() <= sizeof(_smallBuffer)) {
                 std::copy((const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount), _smallBuffer);
             } else
@@ -459,7 +461,7 @@ namespace Utility
             inline VariantRetained::VariantRetained(std::basic_string<char> str)
         {
             _type = TypeOf<std::basic_string<char>>();
-            _type._arrayCount = str.size();
+            _type._arrayCount = (uint32_t)str.size();
             if (_type.GetSize() <= sizeof(_smallBuffer)) {
                 std::copy((const uint8_t*)str.data(), (const uint8_t*)(str.data()+_type._arrayCount), _smallBuffer);
             } else
@@ -470,7 +472,7 @@ namespace Utility
             inline VariantRetained::VariantRetained(std::basic_string<utf16> str)
         {
             _type = TypeOf<std::basic_string<utf16>>();
-            _type._arrayCount = str.size();
+            _type._arrayCount = (uint32_t)str.size();
             if (_type.GetSize() <= sizeof(_smallBuffer)) {
                 std::copy((const uint8_t*)str.data(), (const uint8_t*)(str.data()+_type._arrayCount), _smallBuffer);
             } else
@@ -481,7 +483,7 @@ namespace Utility
             inline VariantRetained::VariantRetained(std::basic_string<utf32> str)
         {
             _type = TypeOf<std::basic_string<utf32>>();
-            _type._arrayCount = str.size();
+            _type._arrayCount = (uint32_t)str.size();
             if (_type.GetSize() <= sizeof(_smallBuffer)) {
                 std::copy((const uint8_t*)str.data(), (const uint8_t*)(str.data()+_type._arrayCount), _smallBuffer);
             } else
@@ -492,7 +494,7 @@ namespace Utility
             inline VariantRetained::VariantRetained(std::basic_string<ucs4> str)
         {
             _type = TypeOf<std::basic_string<ucs4>>();
-            _type._arrayCount = str.size();
+            _type._arrayCount = (uint32_t)str.size();
             if (_type.GetSize() <= sizeof(_smallBuffer)) {
                 std::copy((const uint8_t*)str.data(), (const uint8_t*)(str.data()+_type._arrayCount), _smallBuffer);
             } else

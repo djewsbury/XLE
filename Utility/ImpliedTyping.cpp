@@ -15,7 +15,7 @@ namespace Utility { namespace ImpliedTyping
         IteratorRange<void*> dest, TypeDesc destType,
         IteratorRange<const void*> rawSrc, TypeDesc srcType)
     {
-        // Casting from string types to non-string types can be unexpected -- beacuse it's a cast, not a parse
+        // Casting from string types to non-string types can be unexpected -- because it's a cast, not a parse
         // it's very rare that we would want a cast in this case
         assert(srcType._typeHint != ImpliedTyping::TypeHint::String || destType._typeHint == ImpliedTyping::TypeHint::String);
 
@@ -369,7 +369,7 @@ namespace Utility { namespace ImpliedTyping
         IteratorRange<void*> dest, TypeDesc destType,
         IteratorRange<const void*> rawSrc, TypeDesc srcType)
     {
-        // Casting from string types to non-string types can be unexpected -- beacuse it's a cast, not a parse
+        // Casting from string types to non-string types can be unexpected -- because it's a cast, not a parse
         // it's very rare that we would want a cast in this case
         assert(srcType._typeHint != ImpliedTyping::TypeHint::String || destType._typeHint == ImpliedTyping::TypeHint::String);
 
@@ -1829,6 +1829,25 @@ namespace Utility { namespace ImpliedTyping
             auto* s = (const uint64_t*)src;
             while (count--)
                 *d++ = FlipEndian(*s++);
+        }
+    }
+
+    const char* AsString(TypeCat tc)
+    {
+        switch (tc) {
+        case TypeCat::Void: return "void";
+        case TypeCat::Bool: return "bool";
+        case TypeCat::Int8: return "int8";
+        case TypeCat::UInt8: return "uint8";
+        case TypeCat::Int16: return "int16";
+        case TypeCat::UInt16: return "uint16";
+        case TypeCat::Int32: return "int32";
+        case TypeCat::UInt32: return "uint32";
+        case TypeCat::Int64: return "int64";
+        case TypeCat::UInt64: return "uint64";
+        case TypeCat::Float: return "float32";
+        case TypeCat::Double: return "float64";
+        default: return "<<unknown>>";
         }
     }
 

@@ -55,10 +55,10 @@ namespace UnitTests
 		std::vector<uint64_t> bigBuffer(1024, 0);
 		((templ*)bigBuffer.data())->SomeValue = 5 + 0x30;
 		((templ*)bigBuffer.data())->AnotherValue = 32.5f;
-		Formatters::EvaluationContext context;
-		context.SetGlobalParameter("Version", 48);
+		auto context = std::make_shared<Formatters::EvaluationContext>();
+		context->SetGlobalParameter("Version", 48);
 
-		Formatters::BinaryInputFormatter formatter(context, bigBuffer);
+		Formatters::BinaryInputFormatter formatter(bigBuffer, context);
 		formatter.PushPattern(decl, decl->FindBlockDefinition("TestBlock"));
         std::stringstream str;
 		Formatters::SerializeBlock(str, formatter);
@@ -67,7 +67,7 @@ namespace UnitTests
         REQUIRE(out.find("thisShouldntBeHere") == std::string::npos);
         REQUIRE(out.find("butThisShouldBeHere") != std::string::npos);
 
-		Formatters::BinaryInputFormatter formatter2(context, bigBuffer);
+		Formatters::BinaryInputFormatter formatter2(bigBuffer, context);
 		formatter2.PushPattern(decl, decl->FindBlockDefinition("TestBlock"));
 		Formatters::BinaryBlockMatch blockMatch(formatter2);
 		REQUIRE(blockMatch["SomeValue"].As<int64_t>() == ((templ*)bigBuffer.data())->SomeValue);
