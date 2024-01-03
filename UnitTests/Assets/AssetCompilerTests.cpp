@@ -508,9 +508,10 @@ namespace UnitTests
 	class TestChunkRequestsAssetWithCompileProcessType : public TestChunkRequestsAsset
 	{
 	public:
-		static const uint64_t CompileProcessType = Type_UnitTestArtifact;
 		using TestChunkRequestsAsset::TestChunkRequestsAsset;
 	};
+
+	constexpr auto GetCompileProcessType(TestChunkRequestsAssetWithCompileProcessType*) { return Type_UnitTestArtifact; }
 
 	TEST_CASE( "AssetCompilers-ImplicitCompilation", "[assets]" )
 	{

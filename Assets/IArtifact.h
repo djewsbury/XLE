@@ -189,7 +189,7 @@ namespace Assets
 			if constexpr (Internal::AssetTraits2<AssetType>::HasChunkRequests) {
 				chunks = container.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			} else {
-				auto defaultChunkRequestCode = Internal::RemoveSmartPtrType<AssetType>::CompileProcessType;
+				auto defaultChunkRequestCode = GetCompileProcessType((Internal::RemoveSmartPtrType<AssetType>*)nullptr);
 				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
 				chunks = container.ResolveRequests(MakeIteratorRange(&request, &request+1));
 			}
@@ -212,7 +212,7 @@ namespace Assets
 			if constexpr (Internal::AssetTraits2<AssetType>::HasChunkRequests) {
 				chunks = ArtifactChunkContainer{blob, depVal, requestParameters}.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			} else {
-				auto defaultChunkRequestCode = Internal::RemoveSmartPtrType<AssetType>::CompileProcessType;
+				auto defaultChunkRequestCode = GetCompileProcessType((Internal::RemoveSmartPtrType<AssetType>*)nullptr);
 				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
 				chunks = ArtifactChunkContainer{blob, depVal, requestParameters}.ResolveRequests(MakeIteratorRange(&request, &request+1));
 			}
@@ -272,7 +272,7 @@ namespace Assets
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<typename Promise, ENABLE_IF(Internal::HasConstructToPromiseFromBlob<Promise>::value)>
-		void AutoConstructToPromiseSynchronously(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = Internal::PromisedTypeRemPtr<Promise>::CompileProcessType)
+		void AutoConstructToPromiseSynchronously(Promise&& promise, const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = GetCompileProcessType((Internal::PromisedTypeRemPtr<Promise>*)nullptr))
 	{
 		if (artifactCollection.GetAssetState() == ::Assets::AssetState::Invalid) {
 			promise.set_exception(std::make_exception_ptr(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)}));
@@ -299,7 +299,7 @@ namespace Assets
 	}
 
 	template<typename Promise>
-		void AutoConstructToPromiseFromPendingCompile(Promise&& promise, const ArtifactCollectionFuture& pendingCompile, CompileRequestCode targetCode = Internal::RemoveSmartPtrType<Internal::PromisedType<Promise>>::CompileProcessType)
+		void AutoConstructToPromiseFromPendingCompile(Promise&& promise, const ArtifactCollectionFuture& pendingCompile, CompileRequestCode targetCode = GetCompileProcessType((Internal::RemoveSmartPtrType<Internal::PromisedType<Promise>>*)nullptr))
 	{
 		::Assets::PollToPromise(
 			std::move(promise),
@@ -321,7 +321,7 @@ namespace Assets
 	template<typename Promise>
 		static void DefaultCompilerConstructionSynchronously(
 			Promise&& promise,
-			CompileRequestCode targetCode,		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
+			CompileRequestCode targetCode,		// typically GetCompileProcessType((Internal::RemoveSmartPtrType<AssetType>*)nullptr)
 			InitializerPack&& initializerPack,
 			OperationContext* operationContext = nullptr)
 	{
@@ -363,7 +363,7 @@ namespace Assets
 	template<typename Promise>
 		static void DefaultCompilerConstructionSynchronously(
 			Promise&& promise,
-			CompileRequestCode targetCode,		// typically Internal::RemoveSmartPtrType<AssetType>::CompileProcessType,
+			CompileRequestCode targetCode,		// typically GetCompileProcessType((Internal::RemoveSmartPtrType<AssetType>*)nullptr)
 			InitializerPack&& initializerPack,
 			VariantFunctions&& progressiveResultConduit,
 			OperationContext* operationContext = nullptr)
@@ -412,7 +412,7 @@ namespace Assets
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[initPack=InitializerPack{std::forward<Params>(initialisers)...}, promise=std::move(promise)]() mutable {
-				DefaultCompilerConstructionSynchronously(std::move(promise), Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack));
+				DefaultCompilerConstructionSynchronously(std::move(promise), GetCompileProcessType((Internal::PromisedTypeRemPtr<Promise>*)nullptr), std::move(initPack));
 			});
 	}
 
@@ -423,7 +423,7 @@ namespace Assets
 	{
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[initPack=InitializerPack{std::forward<Params>(initialisers)...}, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
-				DefaultCompilerConstructionSynchronously(std::move(promise), Internal::PromisedTypeRemPtr<Promise>::CompileProcessType, std::move(initPack), opContext.get());
+				DefaultCompilerConstructionSynchronously(std::move(promise), GetCompileProcessType((Internal::PromisedTypeRemPtr<Promise>*)nullptr), std::move(initPack), opContext.get());
 			});
 	}
 

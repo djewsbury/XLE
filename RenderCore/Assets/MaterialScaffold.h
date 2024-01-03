@@ -43,7 +43,6 @@ namespace RenderCore { namespace Assets
 			size_t rawMemoryBlockSize, const ::Assets::DependencyValidation& depVal);
 		~MaterialScaffold();
 
-		static const auto CompileProcessType = ConstHash64Legacy<'ResM', 'at'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[1];
 	protected:
 		std::vector<std::pair<uint64_t, Machine>> _materialMachines;
@@ -59,6 +58,8 @@ namespace RenderCore { namespace Assets
 	static constexpr uint64 ChunkType_ResolvedMat = ConstHash64Legacy<'ResM', 'at'>::Value;
 	static constexpr uint64 ChunkType_PatchCollections = ConstHash64Legacy<'Patc', 'hCol'>::Value;
 	static constexpr unsigned ResolvedMat_ExpectedVersion = 1;
+
+	constexpr auto GetCompileProcessType(MaterialScaffold*) { return ConstHash64Legacy<'ResM', 'at'>::Value; }
 
 }}
 

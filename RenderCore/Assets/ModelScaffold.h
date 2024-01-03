@@ -75,7 +75,6 @@ namespace RenderCore { namespace Assets
 		ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
 		~ModelScaffold();
 
-		static const auto CompileProcessType = ConstHash64Legacy<'Mode', 'l'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[2];
 	private:
 		std::vector<Machine>	_geoMachines;
@@ -91,6 +90,8 @@ namespace RenderCore { namespace Assets
 
 		IteratorRange<ScaffoldCmdIterator> GetOuterCommandStream() const;
 	};
+
+	constexpr auto GetCompileProcessType(ModelScaffold*) { return ConstHash64Legacy<'Mode', 'l'>::Value; }
 
 	inline auto ModelScaffold::GetGeoMachine(GeoIdx idx) const -> Machine
 	{
@@ -133,7 +134,6 @@ namespace RenderCore { namespace Assets
 		ModelSupplementScaffold();
 		~ModelSupplementScaffold();
 
-		static const auto CompileProcessType = ConstHash64Legacy<'Mode', 'l'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[2];
 
 	private:
@@ -141,6 +141,8 @@ namespace RenderCore { namespace Assets
 		::Assets::ArtifactReopenFunction			_largeBlocksReopen;
 		::Assets::DependencyValidation							_depVal;
 	};
+
+	constexpr auto GetCompileProcessType(ModelSupplementScaffold*) { return ConstHash64Legacy<'Mode', 'l'>::Value; }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -177,7 +179,6 @@ namespace RenderCore { namespace Assets
 
 		const ::Assets::DependencyValidation&					GetDependencyValidation() const { return _depVal;  }
 
-		static const auto CompileProcessType = ConstHash64Legacy<'Skel', 'eton'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[1];
 
 		SkeletonScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
@@ -190,6 +191,8 @@ namespace RenderCore { namespace Assets
 		std::unique_ptr<uint8[], PODAlignedDeletor>    _rawMemoryBlock;
 		::Assets::DependencyValidation _depVal;
 	};
+
+	constexpr auto GetCompileProcessType(SkeletonScaffold*) { return ConstHash64Legacy<'Skel', 'eton'>::Value; }
 
 	/// <summary>Structural data for animation</summary>
 	/// Represents a set of animation that can potentially be applied to a skeleton.
@@ -205,7 +208,6 @@ namespace RenderCore { namespace Assets
 
 		const ::Assets::DependencyValidation&					GetDependencyValidation() const { return _depVal; }
 
-		static const auto CompileProcessType = ConstHash64Legacy<'Anim', 'Set'>::Value;
 		static const ::Assets::ArtifactRequest ChunkRequests[1];
 
 		AnimationSetScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
@@ -218,6 +220,8 @@ namespace RenderCore { namespace Assets
 		std::unique_ptr<uint8[], PODAlignedDeletor>    _rawMemoryBlock;
 		::Assets::DependencyValidation _depVal;
 	};
+
+	constexpr auto GetCompileProcessType(AnimationSetScaffold*) { return ConstHash64Legacy<'Anim', 'Set'>::Value; }
 
 
 }}

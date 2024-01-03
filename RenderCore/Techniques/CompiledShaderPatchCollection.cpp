@@ -244,9 +244,6 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64Legacy<'Inst', 'shdr'>::Value;
-	const uint64 CompiledShaderByteCode_InstantiateShaderGraph::CompileProcessType = CompileProcess_InstantiateShaderGraph;
-
 	static auto AssembleShader(
 		const CompiledShaderPatchCollection& patchCollection,
 		StringSection<> mainSourceFile,
@@ -377,7 +374,7 @@ namespace RenderCore { namespace Techniques
 		virtual std::vector<TargetDesc> GetTargets() const override
 		{
 			return {
-				TargetDesc { CompileProcess_InstantiateShaderGraph, "main" }
+				TargetDesc { GetCompileProcessType((CompiledShaderByteCode_InstantiateShaderGraph*)nullptr), "main" }
 			};
 		}
 		
@@ -386,7 +383,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<::Assets::SerializedArtifact> result;
 			if (_byteCode._payload)
 				result.push_back({
-					CompileProcess_InstantiateShaderGraph, 0, "main",
+					GetCompileProcessType((CompiledShaderByteCode_InstantiateShaderGraph*)nullptr), 0, "main",
 					_byteCode._payload});
 			if (_byteCode._errors)
 				result.push_back({
@@ -446,7 +443,7 @@ namespace RenderCore { namespace Techniques
 				auto& patchCollection = *initializers.GetInitializer<std::shared_ptr<CompiledShaderPatchCollection>>(2);
 				const auto& patchFunctions = initializers.GetInitializer<std::vector<uint64_t>>(3);
 
-				assert(targetCode == CompileProcess_InstantiateShaderGraph);
+				assert(targetCode == GetCompileProcessType((CompiledShaderByteCode_InstantiateShaderGraph*)nullptr));
 				auto splitFN = MakeFileNameSplitter(res._filename);
 				auto entryId = HashCombine(HashCombine(HashCombine(Hash64(res._entryPoint), Hash64(definesTable)), Hash64(res._shaderModel)), Hash64(splitFN.Extension()));
 				entryId = HashCombine(patchCollection.GetGUID(), entryId);
@@ -458,7 +455,7 @@ namespace RenderCore { namespace Techniques
 				bool compressedFN = true;
 				if (compressedFN) {
 					// shader model & extension already considered in entry id; we just need to look at the directory and filename here
-					archiveName << splitFN.File() << "-" << std::hex << HashFilenameAndPath(splitFN.DriveAndPath());
+					archiveName << splitFN.File() << "-" << std::hex << HashFilenameAndPath(splitFN.StemAndPath());
 					descriptiveName << res._filename << ":" << res._entryPoint << "[" << definesTable << "]" << res._shaderModel;
 				} else {
 					archiveName << res._filename;
@@ -468,7 +465,7 @@ namespace RenderCore { namespace Techniques
 				return ::Assets::IIntermediateCompilers::SplitArchiveName { archiveName.AsString(), entryId, descriptiveName.AsString() };
 			}};
 
-		uint64_t outputAssetTypes[] = { CompileProcess_InstantiateShaderGraph };
+		uint64_t outputAssetTypes[] = { GetCompileProcessType((CompiledShaderByteCode_InstantiateShaderGraph*)nullptr) };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes));

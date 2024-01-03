@@ -83,21 +83,8 @@ namespace Assets
 			class AssetTraits2_
 		{
 		private:
-			struct HasCompileProcessTypeHelper
-			{
-				struct FakeBase { static const uint64_t CompileProcessType; };
-				struct TestSubject : public FakeBase, public AssetType {};
-
-				template <typename C, C> struct Check;
-
-				// This technique is based on an implementation from StackOverflow. Here, taking the address
-				// of the static member variable in TestSubject would be ambiguous, iff CompileProcessType 
-				// is actually a member of AssetType (otherwise, the member in FakeBase is found)
-				template <typename C> static std::false_type Test(Check<const uint64_t*, &C::CompileProcessType> *);
-				template <typename> static std::true_type Test(...);
-
-				static const bool value = decltype(Test<TestSubject>(0))::value;
-			};
+			template<typename T> static auto HasCompileProcessTypeHelper(int) -> std::is_integral<decltype(GetCompileProcessType(std::declval<T*>()))>;
+			template<typename...> static auto HasCompileProcessTypeHelper(...) -> std::false_type;
 
 			template<typename T> static auto HasChunkRequestsHelper(int) -> decltype(&T::ChunkRequests[0], std::true_type{});
 			template<typename...> static auto HasChunkRequestsHelper(...) -> std::false_type;
@@ -106,7 +93,7 @@ namespace Assets
 			static const bool Constructor_Blob = std::is_constructible<AssetType, ::Assets::Blob&&, DependencyValidation&&, StringSection<>>::value;
 			static const bool Constructor_ArtifactRequestResult = std::is_constructible<AssetType, IteratorRange<ArtifactRequestResult*>, DependencyValidation&&>::value;
 
-			static const bool HasCompileProcessType = HasCompileProcessTypeHelper::value;
+			static const bool HasCompileProcessType = decltype(HasCompileProcessTypeHelper<AssetType>(0))::value;
 			static const bool HasChunkRequests = decltype(HasChunkRequestsHelper<AssetType>(0))::value;
 		};
 

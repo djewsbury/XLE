@@ -84,7 +84,7 @@ namespace RenderCore { namespace Assets
 		std::vector<std::string> files;
 		for (auto w=walk.begin_files(); w!=walk.end_files(); ++w) {
 			auto f = w.Desc()._mountedName;
-			if (intermediateCompilers.HasAssociatedCompiler(AnimationSetScaffold::CompileProcessType, f))
+			if (intermediateCompilers.HasAssociatedCompiler(GetCompileProcessType((AnimationSetScaffold*)nullptr), f))
 				files.push_back(f);
 		}
 

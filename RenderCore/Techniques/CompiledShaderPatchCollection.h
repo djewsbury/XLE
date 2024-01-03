@@ -114,10 +114,10 @@ namespace RenderCore { namespace Techniques
 	class CompiledShaderByteCode_InstantiateShaderGraph : public CompiledShaderByteCode
 	{
 	public:
-		static const uint64 CompileProcessType;
-
 		using CompiledShaderByteCode::CompiledShaderByteCode;
 	};
+
+	constexpr uint64_t GetCompileProcessType(CompiledShaderByteCode_InstantiateShaderGraph*) { return ConstHash64Legacy<'Inst', 'shdr'>::Value; }
 
 	::Assets::CompilerRegistration RegisterInstantiateShaderGraphCompiler(
 		const std::shared_ptr<IShaderSource>& shaderSource,

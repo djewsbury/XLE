@@ -66,7 +66,7 @@ namespace Assets
 		// matches are case sensitive
 		virtual void AssociateRequest(
 			RegisteredCompilerId compiler,
-			IteratorRange<const CompileRequestCode*> compileRequestCode,	///< id used to request this compilation operation. Matches "CompileProcessType" in compilable asset types
+			IteratorRange<const CompileRequestCode*> compileRequestCode,	///< id used to request this compilation operation. Matches "GetCompileProcessType()" in compilable asset types
 			const std::string& matchPattern = {}							///< compiler will be invoked for assets that match this pattern
 			) = 0;
 

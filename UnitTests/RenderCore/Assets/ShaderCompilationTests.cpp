@@ -94,17 +94,17 @@ namespace UnitTests
 
 			// Using RenderCore::ShaderService, ensure that we can compile a simple shader (this shader should compile successfully)
 			auto compileMarker = ::Assets::Internal::BeginCompileOperation(
-				RenderCore::CompiledShaderByteCode::CompileProcessType,
+				GetCompileProcessType((RenderCore::CompiledShaderByteCode*)nullptr),
 				::Assets::InitializerPack { "ut-data/IncludeDirective.hlsl:main:vs_*", "SOME_DEFINE=1" });
 			REQUIRE(compileMarker != nullptr);
-			auto compiledFromFile = compileMarker->InvokeCompile(RenderCore::CompiledShaderByteCode::CompileProcessType);
+			auto compiledFromFile = compileMarker->InvokeCompile(GetCompileProcessType((RenderCore::CompiledShaderByteCode*)nullptr));
 			REQUIRE(compiledFromFile.Valid());
 			compiledFromFile.StallWhilePending();
 			REQUIRE(compiledFromFile.GetAssetState() == ::Assets::AssetState::Ready);
 			auto& artifacts = compiledFromFile.GetArtifactCollection();
 			REQUIRE((bool)artifacts.GetDependencyValidation());
 			REQUIRE(artifacts.GetAssetState() == ::Assets::AssetState::Ready);
-			::Assets::ArtifactRequest request { "", RenderCore::CompiledShaderByteCode::CompileProcessType, ~0u, ::Assets::ArtifactRequest::DataType::SharedBlob };
+			::Assets::ArtifactRequest request { "", GetCompileProcessType((RenderCore::CompiledShaderByteCode*)nullptr), ~0u, ::Assets::ArtifactRequest::DataType::SharedBlob };
 			auto reqRes = artifacts.ResolveRequests(MakeIteratorRange(&request, &request+1));
 			REQUIRE(reqRes.size() == 1);
 			auto blob = reqRes[0]._sharedBlob;
@@ -123,10 +123,10 @@ namespace UnitTests
 			// do this twice to ensure that all requests, even after the first, receive the correct error log
 			for (unsigned c=0; c<2; ++c) {
 				auto compileMarker = ::Assets::Internal::BeginCompileOperation(
-					RenderCore::CompiledShaderByteCode::CompileProcessType,
+					GetCompileProcessType((RenderCore::CompiledShaderByteCode*)nullptr),
 					::Assets::InitializerPack { "ut-data/ShaderWithError.hlsl:main:vs_*" });
 				REQUIRE(compileMarker != nullptr);
-				auto collection = compileMarker->GetArtifact(RenderCore::CompiledShaderByteCode::CompileProcessType);
+				auto collection = compileMarker->GetArtifact(GetCompileProcessType((RenderCore::CompiledShaderByteCode*)nullptr));
 				if (!collection.first) {
 					collection.second.StallWhilePending();
 					// The marker itself is marked as ready, but the artifact collection should be marked as invalid
@@ -192,7 +192,7 @@ namespace UnitTests
 		static_assert(::Assets::Internal::AssetTraits2<RenderCore::CompiledShaderByteCode>::HasCompileProcessType);
 		static_assert(!::Assets::Internal::HasConstructToPromiseClassOverride<RenderCore::CompiledShaderByteCode, const char*>::value);
 		ByteCodeFuture byteCodeFuture("unit test compile for " + fn.AsString());
-		::Assets::DefaultCompilerConstructionSynchronously(byteCodeFuture.AdoptPromise(), RenderCore::CompiledShaderByteCode::CompileProcessType, fn);
+		::Assets::DefaultCompilerConstructionSynchronously(byteCodeFuture.AdoptPromise(), GetCompileProcessType((RenderCore::CompiledShaderByteCode*)nullptr), fn);
 		return byteCodeFuture;
 	}
 	

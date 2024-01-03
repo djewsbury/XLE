@@ -830,7 +830,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		StringSection<> modelScaffoldName)
 	{
-		if (::Assets::Services::GetIntermediateCompilers().HasAssociatedCompiler(Assets::CompoundObjectScaffold::CompileProcessType, modelScaffoldName)) {
+		if (::Assets::Services::GetIntermediateCompilers().HasAssociatedCompiler(GetCompileProcessType((Assets::CompoundObjectScaffold*)nullptr), modelScaffoldName)) {
 			// This is a compound object
 			::Assets::WhenAll(::Assets::GetAssetFuture<Assets::CompoundObjectScaffold>(modelScaffoldName)).ThenConstructToPromise(
 				std::move(promise),

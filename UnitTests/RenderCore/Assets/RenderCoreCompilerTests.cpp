@@ -76,7 +76,7 @@ namespace UnitTests
 
 		SECTION("Compile material scaffold")
 		{
-			auto targetCode = RenderCore::Assets::MaterialScaffold::CompileProcessType;
+			auto targetCode = GetCompileProcessType((RenderCore::Assets::MaterialScaffold*)nullptr);
 			auto marker = compilers.Prepare(
 				targetCode, 
 				::Assets::InitializerPack { "ut-data/test.material", "fake-model" });
@@ -179,7 +179,7 @@ namespace UnitTests
 
 		SECTION("ModelScaffold compilation")
 		{
-			auto targetCode = RenderCore::Assets::ModelScaffold::CompileProcessType;
+			auto targetCode = GetCompileProcessType((RenderCore::Assets::ModelScaffold*)nullptr);
 			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model" });
 			REQUIRE(marker != nullptr);
 			auto artifactQuery = marker->GetArtifact(targetCode);

@@ -33,7 +33,6 @@ namespace ShaderSourceParser
 
 		void MergeIn(const SelectorFilteringRules& source);
 
-		static constexpr auto CompileProcessType = ConstHash64Legacy<'Filt', 'erRu', 'les'>::Value;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		friend void SerializationOperator(
@@ -53,6 +52,8 @@ namespace ShaderSourceParser
 		uint64_t _hash = 0ull;
 		void RecalculateHash();
 	};
+
+	constexpr auto GetCompileProcessType(SelectorFilteringRules*) { return ConstHash64Legacy<'Filt', 'erRu', 'les'>::Value; }
 
 	class SelectorPreconfiguration
 	{

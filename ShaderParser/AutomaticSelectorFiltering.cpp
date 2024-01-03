@@ -313,7 +313,7 @@ namespace ShaderSourceParser
 			std::vector<::Assets::SerializedArtifact> artifacts;
 			{
 				::Assets::SerializedArtifact artifact;
-				artifact._chunkTypeCode = SelectorFilteringRules::CompileProcessType;
+				artifact._chunkTypeCode = GetCompileProcessType((SelectorFilteringRules*)nullptr);
 				artifact._name = "filtering-rules";
 				artifact._version = 1;
 				artifact._data = ::Assets::AsBlob(memStream.AsString());
@@ -337,7 +337,7 @@ namespace ShaderSourceParser
 			return {
 				std::move(artifacts),
 				::Assets::GetDepValSys().Make(depFileStates),
-				SelectorFilteringRules::CompileProcessType
+				GetCompileProcessType((SelectorFilteringRules*)nullptr)
 			};
 		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 			Throw(::Assets::Exceptions::ConstructionError(e, handler.MakeDependencyValidation()));
@@ -355,7 +355,7 @@ namespace ShaderSourceParser
 			"shader-selector-filtering-compiler",
 			ShaderSelectorFilteringCompileOperation,
 			[](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
-				assert(targetCode == SelectorFilteringRules::CompileProcessType);
+				assert(targetCode == GetCompileProcessType((SelectorFilteringRules*)nullptr));
 				::Assets::IIntermediateCompilers::SplitArchiveName result;
 				auto fn = initializers.GetInitializer<std::string>(0);
 				result._entryId = Hash64(fn);
@@ -364,7 +364,7 @@ namespace ShaderSourceParser
 				return result;
 			});
 
-		uint64_t outputAssetTypes[] = { SelectorFilteringRules::CompileProcessType };
+		uint64_t outputAssetTypes[] = { GetCompileProcessType((SelectorFilteringRules*)nullptr) };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes));

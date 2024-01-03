@@ -41,19 +41,19 @@ namespace UnitTests
 		::Assets::ArtifactCollectionFuture modelCompile;
 		::Assets::ArtifactCollectionFuture materialCompile;
 		{
-			auto targetCode = RenderCore::Assets::ModelScaffold::CompileProcessType;
+			auto targetCode = GetCompileProcessType((RenderCore::Assets::ModelScaffold*)nullptr);
 			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model" });
 			REQUIRE(marker != nullptr);
 
-			modelCompile = marker->InvokeCompile(RenderCore::Assets::ModelScaffold::CompileProcessType);
+			modelCompile = marker->InvokeCompile(GetCompileProcessType((RenderCore::Assets::ModelScaffold*)nullptr));
 			REQUIRE(modelCompile.Valid());
 		}
 		{
-			auto targetCode = RenderCore::Assets::MaterialScaffold::CompileProcessType;
+			auto targetCode = GetCompileProcessType((RenderCore::Assets::MaterialScaffold*)nullptr);
 			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model", "fake-model" });
 			REQUIRE(marker != nullptr);
 
-			materialCompile = marker->InvokeCompile(RenderCore::Assets::MaterialScaffold::CompileProcessType);
+			materialCompile = marker->InvokeCompile(GetCompileProcessType((RenderCore::Assets::MaterialScaffold*)nullptr));
 			REQUIRE(materialCompile.Valid());
 		}
 

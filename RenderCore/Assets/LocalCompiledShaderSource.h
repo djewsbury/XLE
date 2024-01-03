@@ -68,7 +68,7 @@ namespace RenderCore { namespace Assets
             std::shared_ptr<ILowLevelCompiler> compiler,
             std::shared_ptr<ISourceCodePreprocessor> preprocessor,
             const DeviceDesc& devDesc,
-			uint64_t associatedCompileProcessType = CompiledShaderByteCode::CompileProcessType);
+			uint64_t associatedCompileProcessType = GetCompileProcessType((CompiledShaderByteCode*)nullptr));
         ~LocalCompiledShaderSource();
     protected:
         std::shared_ptr<ShaderCacheSet> _shaderCacheSet;

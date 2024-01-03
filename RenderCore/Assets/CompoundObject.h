@@ -51,8 +51,6 @@ namespace RenderCore { namespace Assets
 			const ::Assets::DependencyValidation& depVal);
 		NascentCompoundObject();
 		~NascentCompoundObject();
-
-		static const auto CompileProcessType = ConstHash64Legacy<'Comp', 'ound'>::Value;
 	private:
 		::Assets::DependencyValidation _depVal;
 		mutable uint64_t _hash = 0;
@@ -60,6 +58,8 @@ namespace RenderCore { namespace Assets
 		template<typename Formatter>
 			void Construct(Formatter&);
 	};
+
+	constexpr uint64_t GetCompileProcessType(NascentCompoundObject*) { return ConstHash64Legacy<'Comp', 'ound'>::Value; }
 
 	class CompoundObjectScaffold
 	{
@@ -80,13 +80,13 @@ namespace RenderCore { namespace Assets
 			::Assets::DependencyValidation depVal);
 		CompoundObjectScaffold(const ::Assets::Blob& blob, const ::Assets::DependencyValidation& depVal, StringSection<> requestParameters);
 		~CompoundObjectScaffold();
-
-		static const auto CompileProcessType = ConstHash64Legacy<'Comp', 'ound'>::Value;
 	private:
 		std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> _modelRendererConstruction;
 		::Assets::Blob _blob;
 		::Assets::DependencyValidation _depVal;
 	};
+
+	constexpr uint64_t GetCompileProcessType(CompoundObjectScaffold*) { return ConstHash64Legacy<'Comp', 'ound'>::Value; }
 
 	template<typename Formatter>
 		void DeserializeModelRendererConstruction(

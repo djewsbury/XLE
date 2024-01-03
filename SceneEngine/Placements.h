@@ -36,7 +36,6 @@ namespace SceneEngine
 		void LogDetails(const char title[]) const;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const	{ return _dependencyValidation; }
-		static const auto CompileProcessType = ChunkType_Placements;
 		static const ::Assets::ArtifactRequest ChunkRequests[1];
 
 		PlacementsScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
@@ -52,6 +51,8 @@ namespace SceneEngine
 		void ReplaceString(const char oldString[], const char newString[]);
 		friend class EditorOverlayCellRenderer;
 	};
+
+	constexpr auto GetCompileProcessType(PlacementsScaffold*) { return ChunkType_Placements; }
 
 	inline auto            	PlacementsScaffold::GetObjectReferences() const -> IteratorRange<const ObjectReference*>	{ return _objects; }
 	inline auto            	PlacementsScaffold::GetCellSpaceBoundaries() const -> IteratorRange<const BoundingBox*>	{ return _cellSpaceBoundaries; }
