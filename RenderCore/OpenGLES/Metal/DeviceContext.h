@@ -100,7 +100,7 @@ namespace RenderCore { namespace Metal_OpenGLES
         template<int Count> void BindPS(const ResourceList<ShaderResourceView, Count>& shaderResources);
         template<int Count> void BindPS(const ResourceList<SamplerState, Count>& samplerStates);
 
-        void SetViewportAndScissorRects(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects);
+        void SetViewportAndScissorRects(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const Rect2D*> scissorRects);
 
         using GraphicsPipelineBuilder::Bind;
 

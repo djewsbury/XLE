@@ -143,7 +143,7 @@ namespace RenderCore { namespace LightingEngine
 		if (_outputs._lightCount) {
 			auto encoder = metalContext.BeginGraphicsEncoder(*_prepareBitFieldLayout);
 			ViewportDesc viewport { 0, 0, (float)_lightTileBufferSize[0], (float)_lightTileBufferSize[1] };
-			ScissorRect scissorRect { 0, 0, _lightTileBufferSize[0], _lightTileBufferSize[1] };
+			Rect2D scissorRect { 0, 0, _lightTileBufferSize[0], _lightTileBufferSize[1] };
 			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
 
 			UniformsStream us;

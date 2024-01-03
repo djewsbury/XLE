@@ -281,6 +281,20 @@ namespace RenderCore
 		PatchList16 = 48    // D3D11_PRIMITIVE_TOPOLOGY_16_CONTROL_POINT_PATCHLIST	= 48
 	};
 
+    class Rect2D
+    {
+    public:
+        int _x, _y;
+        unsigned _width, _height;
+        bool _originIsUpperLeft;
+
+        Rect2D(int x=0, int y=0, unsigned width=0, unsigned height=0, bool originIsUpperLeft=true)
+        : _x(x), _y(y)
+        , _width(width), _height(height)
+        , _originIsUpperLeft(originIsUpperLeft)
+        {}
+    };
+
 	class ViewportDesc
     {
     public:
@@ -299,20 +313,6 @@ namespace RenderCore
             assert(_width >= 0.f);
             assert(_height >= 0.f);
         }
-    };
-
-    class ScissorRect
-    {
-    public:
-        int _x, _y;
-        unsigned _width, _height;
-        bool _originIsUpperLeft;
-
-        ScissorRect(int x=0, int y=0, unsigned width=0, unsigned height=0, bool originIsUpperLeft=true)
-        : _x(x), _y(y)
-        , _width(width), _height(height)
-        , _originIsUpperLeft(originIsUpperLeft)
-        {}
     };
 
     const char* AsString(AddressMode);

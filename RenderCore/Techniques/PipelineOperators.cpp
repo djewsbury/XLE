@@ -44,6 +44,13 @@ namespace RenderCore { namespace Techniques
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			auto encoder = metalContext.BeginGraphicsEncoder(*_pipelineLayout);
 
+			// A little awkward, but mirroring what we do in Drawables::Draw(), we set the viewport immediately after beginning
+			// the encoder. This might be better if we made this a DeviceContext function, rather than an encoder function
+			//	-- and just called it after beginning the render pass
+			auto viewport = parsingContext.GetViewport();
+			Rect2D scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
+			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
+
 			ApplyUniformsGraphics(*parsingContext.GetUniformDelegateManager(), metalContext, encoder, parsingContext, boundUniforms, 0);
 			if (!descSets.empty())
 				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 1);

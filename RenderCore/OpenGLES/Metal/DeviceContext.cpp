@@ -242,7 +242,7 @@ namespace RenderCore { namespace Metal_OpenGLES
         CheckGLError("Bind RasterizationState");
     }
 
-    void DeviceContext::SetViewportAndScissorRects(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects)
+    void DeviceContext::SetViewportAndScissorRects(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const Rect2D*> scissorRects)
     {
         CheckGLError("Before Bind Viewport");
 
@@ -283,7 +283,7 @@ namespace RenderCore { namespace Metal_OpenGLES
             // If a scissor rect is not specified, disable the scissor test
             glDisable(GL_SCISSOR_TEST);
         }
-        CheckGLError("Bind ScissorRect");
+        CheckGLError("Bind Rect2D");
     }
 
     void DeviceContext::Draw(unsigned vertexCount, unsigned startVertexLocation)

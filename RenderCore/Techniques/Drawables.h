@@ -72,7 +72,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		void		ApplyLooseUniforms(const UniformsStream&) const;
 		void 		ApplyDescriptorSets(IteratorRange<const IDescriptorSet* const*>) const;
-		void 		SetViewports(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects) const;
+		void 		SetViewports(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const Rect2D*> scissorRects) const;
 		void		SetStencilRef(unsigned frontFaceStencil, unsigned backFaceStencil) const;
 		void		SetDepthBounds(float minDepthValue, float maxDepthValue) const;
 
@@ -231,7 +231,7 @@ namespace RenderCore { namespace Techniques
 
 	enum class Batch
 	{
-		Opaque, Blending, Topological, Max
+		Opaque, Decal, Blending, Topological, Max
 	};
 	
 	namespace BatchFlags
@@ -239,6 +239,7 @@ namespace RenderCore { namespace Techniques
 		enum Flags
 		{
 			Opaque = 1u<<unsigned(Batch::Opaque),
+			Decal = 1u<<unsigned(Batch::Decal),
 			Blending = 1u<<unsigned(Batch::Blending),
 			Topological = 1u<<unsigned(Batch::Topological)
 		};

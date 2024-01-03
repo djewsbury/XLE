@@ -282,7 +282,7 @@ namespace RenderCore { namespace Techniques
 			assert(pipelineLayout);
 			auto encoder = metalContext.BeginGraphicsEncoder(*pipelineLayout);
 			auto viewport = parserContext.GetViewport();
-			ScissorRect scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
+			Rect2D scissorRect { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
 			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
 			Draw(metalContext, encoder, parserContext, pipelineAccelerators, sequencerConfig, drawablePkt, *pipelineLayout, drawOptions);
 		} CATCH (...) {
@@ -487,7 +487,7 @@ namespace RenderCore { namespace Techniques
 		realContext._encoder->DrawIndexedIndirect(*realContext._pipeline, res, offset);
 	}
 
-	void ExecuteDrawableContext::SetViewports(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const ScissorRect*> scissorRects) const
+	void ExecuteDrawableContext::SetViewports(IteratorRange<const ViewportDesc*> viewports, IteratorRange<const Rect2D*> scissorRects) const
 	{
 		auto& realContext = *(Internal::RealExecuteDrawableContext*)this;
 		realContext._encoder->Bind(viewports, scissorRects);

@@ -42,7 +42,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		return vp;
 	}
 
-	static VkRect2D AsVkRect2D(const ScissorRect& input, const float renderTargetHeight)
+	static VkRect2D AsVkRect2D(const Rect2D& input, const float renderTargetHeight)
 	{
 		VkRect2D scissor;
 		scissor.offset.x = input._x;
@@ -94,7 +94,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void        GraphicsEncoder::Bind(
 		IteratorRange<const ViewportDesc*> viewports,
-		IteratorRange<const ScissorRect*> scissorRects)
+		IteratorRange<const Rect2D*> scissorRects)
 	{
 		// maxviewports: VkPhysicalDeviceLimits::maxViewports
 		// VkPhysicalDeviceFeatures::multiViewport must be enabled
