@@ -182,7 +182,7 @@ namespace ToolsRig
 						result->_skeletonScaffold = result->_rendererConstruction->GetSkeletonScaffold();
 						if (result->_skeletonScaffold) {
 							skeleMachine = &result->_skeletonScaffold->GetSkeletonMachine();
-						} else {
+						} else if (result->_rendererConstruction->GetElementCount() > 0) {
 							result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModelScaffold();
 							skeleMachine = result->_modelScaffoldForEmbeddedSkeleton->EmbeddedSkeleton();
 						}
@@ -206,7 +206,8 @@ namespace ToolsRig
 						auto result = std::make_shared<ModelSceneRendererState>();
 						result->_renderer = std::move(renderer);
 						result->_rendererConstruction = std::move(construction);
-						result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModelScaffold();
+						if (result->_rendererConstruction->GetElementCount() > 0)
+							result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModelScaffold();
 						result->_depVal = result->_renderer->GetDependencyValidation();
 						return result;
 					});
@@ -244,7 +245,6 @@ namespace ToolsRig
 		{
 			assert(_actualized->_rendererConstruction->GetElementCount() >= 1);
 			return _actualized->_rendererConstruction->GetElement(0)->GetModelScaffold()->GetStaticBoundingBox(); 
-			assert(0); return {};
 		}
 
 		std::shared_ptr<ICustomDrawDelegate> SetCustomDrawDelegate(const std::shared_ptr<ICustomDrawDelegate>& delegate) override
