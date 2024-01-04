@@ -383,6 +383,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		assert(_owner && _idxOffset != ~0u);
 		auto pageIdx = _idxOffset >> 6;
 		auto indexInPage = xl_ctz8(_q);
+		assert(_owner->_allocationFlags.IsAllocated(_idxOffset+indexInPage));
 		return *(T*)&_owner->_pages[pageIdx]->_data[indexInPage*sizeof(T)];
 	}
 	template<typename T>
@@ -391,6 +392,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		assert(_owner && _idxOffset != ~0u);
 		auto pageIdx = _idxOffset >> 6;
 		auto indexInPage = xl_ctz8(_q);
+		assert(_owner->_allocationFlags.IsAllocated(_idxOffset+indexInPage));
 		return *(const T*)&_owner->_pages[pageIdx]->_data[indexInPage*sizeof(T)];
 	}
 	template<typename T>
@@ -409,6 +411,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 			_q = ~_allocationFlags[0];
 			++_allocationFlags.first;
+			_idxOffset += 64;
 		}
 		return *this;
 	}

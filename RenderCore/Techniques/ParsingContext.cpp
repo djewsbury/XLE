@@ -65,7 +65,7 @@ namespace RenderCore { namespace Techniques
 		}
     }
 
-    void ParsingContext::BindAttachment(uint64_t semantic, std::shared_ptr<IResource> resource, bool isInitialized, BindFlags::BitField currentLayout, const TextureViewDesc& defaultView)
+    void ParsingContext::BindAttachment(uint64_t semantic, std::shared_ptr<IResource> resource, bool isInitialized, BindFlag::BitField currentLayout, const TextureViewDesc& defaultView)
     {
         auto semanticName = AttachmentSemantics::TryDehash(semantic);
         _internal->_stitchingContext.DefineAttachment(
@@ -77,7 +77,7 @@ namespace RenderCore { namespace Techniques
         _internal->_attachmentReservation.Bind(semantic, std::move(resource), currentLayout);
     }
 
-    void ParsingContext::BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain> presChain, BindFlags::BitField currentLayout, const TextureViewDesc& defaultView)
+    void ParsingContext::BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain> presChain, BindFlag::BitField currentLayout, const TextureViewDesc& defaultView)
     {
         assert(presChain);
         auto semanticName = AttachmentSemantics::TryDehash(semantic);

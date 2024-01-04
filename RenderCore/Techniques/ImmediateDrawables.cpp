@@ -88,7 +88,7 @@ namespace RenderCore { namespace Techniques
 			auto& customDrawable = *((EncoderStateDrawable<Chain>*)&drawable);
 			if (customDrawable._encoderState._states & (EncoderState::States::Scissor|EncoderState::States::Viewport|EncoderState::States::NoScissor)) {
 				ViewportDesc viewport = parsingContext.GetViewport();
-				ScissorRect scissor { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
+				Rect2D scissor { (int)viewport._x, (int)viewport._y, (unsigned)viewport._width, (unsigned)viewport._height };
 				if (customDrawable._encoderState._states & EncoderState::States::Viewport)
 					viewport = customDrawable._encoderState._viewport;
 				if (customDrawable._encoderState._states & EncoderState::States::Scissor)

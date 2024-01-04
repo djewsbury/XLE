@@ -20,6 +20,7 @@
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; } }
 namespace RenderCore { namespace LightingEngine { class ILightScene; struct LightSourceOperatorDesc; struct ShadowOperatorDesc; class IProbeRenderingInstance; }}
+namespace RenderOverlays { class FontRenderingManager; }
 namespace Assets { class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
@@ -73,7 +74,8 @@ namespace SceneEngine
     public:
         virtual void ExecuteOverlay(
             RenderCore::Techniques::ParsingContext&,
-            RenderCore::Techniques::IImmediateDrawables&) = 0;
+            RenderCore::Techniques::IImmediateDrawables&,
+            RenderOverlays::FontRenderingManager*) = 0;
         virtual ~ISceneOverlay();
     };
 

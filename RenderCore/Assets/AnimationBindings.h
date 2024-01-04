@@ -19,8 +19,8 @@ namespace RenderCore { namespace Assets
                                             IteratorRange<const void*> parameterBlock) const;
 		unsigned GetOutputMatrixCount() const { return _outputMatrixCount; }
 
-		AnimationSetBinding(const AnimationSet::OutputInterface&		output,
-							const SkeletonMachine&    					input);
+		AnimationSetBinding(const AnimationSet::OutputInterface&		animSetOutput,
+							const SkeletonMachine&    					skeletonMachine);
 		AnimationSetBinding() = default;
 
 	private:

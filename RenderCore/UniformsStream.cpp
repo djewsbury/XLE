@@ -211,7 +211,7 @@ namespace RenderCore
 	{
 		PushConstantsBinding binding;
 		binding._name = name;
-		binding._cbSize = bufferSize;
+		binding._cbSize = (unsigned)bufferSize;
 		binding._shaderStage = shaderStage;
 		_pushConstants.push_back(std::move(binding));
 	}

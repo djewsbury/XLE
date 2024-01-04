@@ -20,8 +20,8 @@ namespace RenderCore
 		class ConstValue
 		{
 		public:
-			template<typename Type> const Type& ReinterpretCast();
-			Float4 AsFloat4();
+			template<typename Type> const Type& ReinterpretCast() const;
+			Float4 AsFloat4() const;
 			IteratorRange<void*> _data;
 			RenderCore::Format _format = RenderCore::Format(0);
 		};
@@ -156,7 +156,7 @@ namespace RenderCore
 	}
 
 	template<typename Type> 
-		const Type& VertexElementIterator::ConstValue::ReinterpretCast()
+		const Type& VertexElementIterator::ConstValue::ReinterpretCast() const
 	{
 		assert(_data.size() >= sizeof(Type));
 		return *(const Type*)_data.begin();
@@ -551,7 +551,7 @@ namespace RenderCore
 		return result;
 	}
 
-	inline Float4 VertexElementIterator::ConstValue::AsFloat4()
+	inline Float4 VertexElementIterator::ConstValue::AsFloat4() const
 	{
 		assert(_data.size() >= BitsPerPixel(_format) / 8);
 		switch (_format) {

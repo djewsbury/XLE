@@ -63,12 +63,12 @@ namespace RenderCore { namespace Techniques
 		};
 
 		States::BitField _states = 0;
-		ScissorRect _scissor;
+		Rect2D _scissor;
 		ViewportDesc _viewport;
 		std::pair<float, float> _depthBounds;
 		std::pair<unsigned, unsigned> _stencilRef;
 
-		EncoderState& SetScissor(const ScissorRect&);
+		EncoderState& SetScissor(const Rect2D&);
 		EncoderState& ClearScissor();
 		EncoderState& SetViewport(const ViewportDesc&);
 		EncoderState& SetDepthBounds(float minDepthValue, float maxDepthValue);
@@ -119,7 +119,7 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	inline EncoderState& EncoderState::SetScissor(const ScissorRect& scissor) { _states |= States::Scissor; _states &= ~States::NoScissor; _scissor = scissor; return *this; }
+	inline EncoderState& EncoderState::SetScissor(const Rect2D& scissor) { _states |= States::Scissor; _states &= ~States::NoScissor; _scissor = scissor; return *this; }
 	inline EncoderState& EncoderState::ClearScissor() { _states |= States::NoScissor; _states &= ~States::Scissor; return *this; }
 	inline EncoderState& EncoderState::SetViewport(const ViewportDesc& viewport) { _states |= States::Viewport; _viewport = viewport; return *this; }
 	inline EncoderState& EncoderState::SetDepthBounds(float minDepthValue, float maxDepthValue) { _states |= States::DepthBounds; _depthBounds = {minDepthValue, maxDepthValue}; return *this; }

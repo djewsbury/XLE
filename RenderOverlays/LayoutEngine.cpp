@@ -219,7 +219,6 @@ namespace RenderOverlays
 		assert(_workingStack.empty());
 		_guidStack.pop();
 		assert(_guidStack.empty());
-		assert(!_roots.empty());
 		if (_roots.empty())
 			return {};
 
@@ -278,18 +277,20 @@ namespace RenderOverlays
 		result._mins = Coord2 { std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max() };
 		result._maxs = Coord2 { std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min() };
 		auto childCount = YGNodeGetChildCount(_roots[0].first);
-		for (unsigned c=0; c<childCount; c++) {
-			auto* child = YGNodeGetChild(_roots[0].first, c);
-			Float2 topLeft { YGNodeLayoutGetLeft(child), YGNodeLayoutGetTop(child) };
-			topLeft += Float2 { YGNodeLayoutGetLeft(_roots[0].first), YGNodeLayoutGetRight(_roots[0].first) };
-			Float2 bottomRight = topLeft + Float2 { YGNodeLayoutGetWidth(child), YGNodeLayoutGetHeight(child) };
-			result._mins[0] = std::min(result._mins[0], (Coord)topLeft[0]);
-			result._mins[1] = std::min(result._mins[1], (Coord)topLeft[1]);
-			result._maxs[0] = std::max(result._maxs[0], (Coord)bottomRight[0]);
-			result._maxs[1] = std::max(result._maxs[1], (Coord)bottomRight[1]);
+		if (childCount) {
+			for (unsigned c=0; c<childCount; c++) {
+				auto* child = YGNodeGetChild(_roots[0].first, c);
+				Float2 topLeft { YGNodeLayoutGetLeft(child), YGNodeLayoutGetTop(child) };
+				topLeft += Float2 { YGNodeLayoutGetLeft(_roots[0].first), YGNodeLayoutGetRight(_roots[0].first) };
+				Float2 bottomRight = topLeft + Float2 { YGNodeLayoutGetWidth(child), YGNodeLayoutGetHeight(child) };
+				result._mins[0] = std::min(result._mins[0], (Coord)topLeft[0]);
+				result._mins[1] = std::min(result._mins[1], (Coord)topLeft[1]);
+				result._maxs[0] = std::max(result._maxs[0], (Coord)bottomRight[0]);
+				result._maxs[1] = std::max(result._maxs[1], (Coord)bottomRight[1]);
+			}
+			result._mins += offsetToOutput;
+			result._maxs += offsetToOutput;
 		}
-		result._mins += offsetToOutput;
-		result._maxs += offsetToOutput;
 
 		result._nodeAttachments.reserve(_imbuedNodes.size());
 		for (auto& n:_imbuedNodes)

@@ -628,12 +628,12 @@ namespace Utility
         auto jumpOverGapThreshold = MarkerHeap<Marker>::ToInternalSize(8*1024);
 
         auto i = _markers.begin();
-        unsigned preceedingUnallocatedSpace = *(i+1)-*i;
+        unsigned precedingUnallocatedSpace = *(i+1)-*i;
         ++i;
-        if (!preceedingUnallocatedSpace) {
+        if (!precedingUnallocatedSpace) {
             ++i; // we never move a block allocated at 0 so skip directly over that and the next unallocated space
             if ((i+1) == _markers.end()) return {};
-            preceedingUnallocatedSpace = *(i+1)-*i;
+            precedingUnallocatedSpace = *(i+1)-*i;
             ++i;
         }
         for (;i<_markers.end()-2;) {
@@ -649,14 +649,14 @@ namespace Utility
             // If moving this block will expand the contiguous unallocated space sufficiently,
             // then let's do it
             // In certain situations, this can even move all allocations from the heap
-            if (allocatedSpace < preceedingUnallocatedSpace && allocatedSpace < successiveUnallocatedSpace
-                && preceedingUnallocatedSpace+allocatedSpace+successiveUnallocatedSpace >= meaningfulSizeThreshold) {
+            if (allocatedSpace < precedingUnallocatedSpace && allocatedSpace < successiveUnallocatedSpace
+                && precedingUnallocatedSpace+allocatedSpace+successiveUnallocatedSpace >= meaningfulSizeThreshold) {
                 result._steps.push_back(RepositionStep{*i, *endRun, destinationIterator});
                 destinationIterator += allocatedSpace;
-                preceedingUnallocatedSpace += allocatedSpace + successiveUnallocatedSpace;
-                result._newLargestFreeBlock = std::max(result._newLargestFreeBlock, preceedingUnallocatedSpace);
+                precedingUnallocatedSpace += allocatedSpace + successiveUnallocatedSpace;
+                result._newLargestFreeBlock = std::max(result._newLargestFreeBlock, precedingUnallocatedSpace);
             } else {
-                preceedingUnallocatedSpace = successiveUnallocatedSpace;
+                precedingUnallocatedSpace = successiveUnallocatedSpace;
             }
             i = endRun+1;
         }

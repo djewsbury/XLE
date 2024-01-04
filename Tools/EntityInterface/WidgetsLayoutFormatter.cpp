@@ -255,11 +255,11 @@ namespace EntityInterface
 			YGNodeStyleSetHeight(stateBox->YGNode(), 16);
 			YGNodeStyleSetMargin(stateBox->YGNode(), YGEdgeHorizontal, _staticData->_checkboxHorizontalMargin);
 			stateBox->_nodeAttachments._drawDelegate = [modelValue](DrawContext& draw, Rect frame, Rect content) {
-				CommonWidgets::Styler::Get().CheckBox(draw, content, modelValue.QueryNonLayout().value());
+				CommonWidgets::Styler::Get().CheckBox(draw, content, modelValue.QueryNonLayout().value_or(false));
 			};
 			stateBox->_nodeAttachments._ioDelegate = [modelValue](auto& ioContext, Rect, Rect) {
 				if (ioContext.GetEvent().IsRelease_LButton()) {
-					modelValue.Set(!modelValue.QueryNonLayout().value());
+					modelValue.Set(!modelValue.QueryNonLayout().value_or(false));
 					return PlatformRig::ProcessInputResult::Consumed;
 				}
 				return PlatformRig::ProcessInputResult::Consumed;

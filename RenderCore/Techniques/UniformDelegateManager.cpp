@@ -525,7 +525,7 @@ namespace RenderCore { namespace Techniques
 				for (auto& src:initializer._bindItems._resourceViews)
 					newResourceViews[newResourceViewCount++] = src;
 
-				auto resource = storage.GetResource();					
+				auto resource = storage.GetResource();
 				auto beginAndEndInRes = storage.GetBeginAndEndInResource(); 
 				immDataIterator = 0;
 				for (auto& slot:bindTypesAndIdx) {

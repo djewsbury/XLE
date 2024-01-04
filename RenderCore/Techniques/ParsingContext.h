@@ -15,7 +15,7 @@ namespace Assets { namespace Exceptions { class RetrievalError; }}
 namespace Utility { class ParameterBox; }
 namespace RenderCore { class IResource; class IThreadContext; class ViewportDesc; class IDescriptorSet; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
-namespace RenderCore { namespace BindFlags { using BitField = unsigned; }}
+namespace RenderCore { namespace BindFlag { using BitField = unsigned; }}
 
 namespace RenderCore { namespace Techniques 
 {
@@ -89,8 +89,8 @@ namespace RenderCore { namespace Techniques
         FragmentStitchingContext& GetFragmentStitchingContext();
         AttachmentReservation& GetAttachmentReservation();
         FrameBufferProperties& GetFrameBufferProperties();
-        void BindAttachment(uint64_t semantic, std::shared_ptr<IResource>, bool isInitialized, BindFlags::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});      // set initialLayout=~0u for never initialized
-        void BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain>, BindFlags::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});
+        void BindAttachment(uint64_t semantic, std::shared_ptr<IResource>, bool isInitialized, BindFlag::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});      // set initialLayout=~0u for never initialized
+        void BindAttachment(uint64_t semantic, std::shared_ptr<IPresentationChain>, BindFlag::BitField currentLayout=~0u, const TextureViewDesc& defaultView = {});
         AttachmentReservation SwapAttachmentReservation(AttachmentReservation&&);
 
 			//  ----------------- Overlays for late rendering -----------------

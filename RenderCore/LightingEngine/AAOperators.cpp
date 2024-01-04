@@ -122,26 +122,27 @@ namespace RenderCore { namespace LightingEngine
 					Metal::BarrierHelper barrierHelper{iterator._parsingContext->GetThreadContext()};
 					// AAOutput initialize
 					barrierHelper.Add(
-						*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(), 
+						*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(),
 						Metal::BarrierResourceUsage::NoState(),
 						{BindFlag::UnorderedAccess, ShaderStage::Compute});
 					// depth DepthStencil -> ShaderResource
 					barrierHelper.Add(
-						*iterator._rpi.GetNonFrameBufferAttachmentView(4)->GetResource(), 
+						*iterator._rpi.GetNonFrameBufferAttachmentView(4)->GetResource(),
 						{BindFlag::DepthStencil, ShaderStage::Pixel},
 						{BindFlag::ShaderResource, ShaderStage::Compute});
 					// AAOutputPrev UnorderedAccess -> ShaderResource
-					if (op->_desc._sharpenHistory)
-						if (op->_firstFrame)
+					if (op->_desc._sharpenHistory) {
+						if (op->_firstFrame) {
 							barrierHelper.Add(
-								*iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource(), 
+								*iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource(),
 								Metal::BarrierResourceUsage::NoState(),
 								{BindFlag::ShaderResource, ShaderStage::Compute});
-						else
+						} else
 							barrierHelper.Add(
-								*iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource(), 
+								*iterator._rpi.GetNonFrameBufferAttachmentView(2)->GetResource(),
 								{BindFlag::UnorderedAccess, ShaderStage::Compute},
 								{BindFlag::ShaderResource, ShaderStage::Compute});
+					}
 				}
 
 				IResourceView* outputShaderResource = nullptr, *outputPrevUnorderedAccess = nullptr;
