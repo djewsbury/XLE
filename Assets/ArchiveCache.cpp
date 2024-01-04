@@ -562,16 +562,18 @@ namespace Assets
 			}
 
 					// write the new debugging file
-			TRY {
-				std::unique_ptr<IFileInterface> outputFile;
-				if (TryOpen(outputFile, *_filesystem, MakeStringSection(debugFilename), "wb") == MainFileSystem::IOReason::Success) {
-					FileOutputStream stream(std::move(outputFile));
-					Formatters::TextOutputFormatter formatter(stream);
-					for (const auto&i:attachedStrings)
-						formatter.WriteKeyedValue(i.first, i.second);
-				}
-			} CATCH (...) {
-			} CATCH_END
+			if (!attachedStrings.empty()) {
+				TRY {
+					std::unique_ptr<IFileInterface> outputFile;
+					if (TryOpen(outputFile, *_filesystem, MakeStringSection(debugFilename), "wb") == MainFileSystem::IOReason::Success) {
+						FileOutputStream stream(std::move(outputFile));
+						Formatters::TextOutputFormatter formatter(stream);
+						for (const auto&i:attachedStrings)
+							formatter.WriteKeyedValue(i.first, i.second);
+					}
+				} CATCH (...) {
+				} CATCH_END
+			}
 		}
 
 		{
@@ -1034,6 +1036,7 @@ namespace Assets
 	, _cachedDependencyTableValid(false)
 	, _filesystem(std::move(filesystem))
 	{
+		assert(!_mainFileName.empty());
 		_directoryFileName = _mainFileName + ".dir";
 
 			// (make sure the directory provided exists)

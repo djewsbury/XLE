@@ -321,6 +321,7 @@ namespace ConsoleRig
             _pimpl->_continuationExecutor->stop();
         _pimpl->_shortTaskPool->StallAndDrainQueue();
         _pimpl->_longTaskPool->StallAndDrainQueue();
+        _pimpl->_intermediatesStore->FlushToDisk();
         _pimpl->_cachedBoxManager->Clear();
         _pimpl->_assetsSetsManager->Clear();
         UnloadDefaultPlugins();
