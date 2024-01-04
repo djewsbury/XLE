@@ -22,6 +22,10 @@
 #include <sstream>
 #include <map>
 
+// #if defined(_DEBUG)
+//	#define WRITE_METRICS
+// #endif
+
 using namespace Utility::Literals;
 
 namespace RenderCore { namespace Assets { namespace GeoProc
@@ -789,12 +793,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		serializer.PushSizeValueAtRecall(recall);
 
-		// SerializationOperator human-readable metrics information
-		std::stringstream metricsStream;
-		TraceMetrics(metricsStream, geoObjects, generatedCmdStreams, embeddedSkeleton, cmdStreamDehashHelpers);
-
 		auto scaffoldBlock = ::Assets::AsBlob(serializer);
-		auto metricsBlock = ::Assets::AsBlob(metricsStream);
+		#if defined(WRITE_METRICS)
+			// SerializationOperator human-readable metrics information
+			std::stringstream metricsStream;
+			TraceMetrics(metricsStream, geoObjects, generatedCmdStreams, embeddedSkeleton, cmdStreamDehashHelpers);
+			auto metricsBlock = ::Assets::AsBlob(metricsStream);
+		#endif
 
 		return
 			{
@@ -804,9 +809,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				::Assets::SerializedArtifact{
 					RenderCore::Assets::ChunkType_ModelScaffoldLargeBlocks, ModelScaffoldLargeBlocksVersion, name,
 					std::move(largeResourcesBlock)},
-				::Assets::SerializedArtifact{
-					RenderCore::Assets::ChunkType_Metrics, 0, "skin-" + name, 
-					std::move(metricsBlock)}
+				#if defined(WRITE_METRICS)
+					::Assets::SerializedArtifact{
+						RenderCore::Assets::ChunkType_Metrics, 0, "skin-" + name, 
+						std::move(metricsBlock)}
+				#endif
 			};
 	}
 

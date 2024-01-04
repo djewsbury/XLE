@@ -11,6 +11,10 @@
 #include "../Assets/NascentChunk.h"
 #include <sstream>
 
+// #if defined(_DEBUG)
+// 	#define WRITE_METRICS
+// #endif
+
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	std::vector<::Assets::SerializedArtifact> SerializeSkinToChunks(
@@ -28,17 +32,21 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	{
 		auto block = ::Assets::SerializeToBlob(skeleton);
 
-		std::stringstream metricsStream;
-		SerializationOperator(metricsStream, skeleton.GetSkeletonMachine());
-		auto metricsBlock = ::Assets::AsBlob(metricsStream);
+		#if defined(WRITE_METRICS)
+			std::stringstream metricsStream;
+			SerializationOperator(metricsStream, skeleton.GetSkeletonMachine());
+			auto metricsBlock = ::Assets::AsBlob(metricsStream);
+		#endif
 
 		return {
 			::Assets::SerializedArtifact{
 				RenderCore::Assets::ChunkType_Skeleton, 0, name, 
 				std::move(block)},
-			::Assets::SerializedArtifact{
-				RenderCore::Assets::ChunkType_Metrics, 0, "skel-" + name, 
-				std::move(metricsBlock)}
+			#if defined(WRITE_METRICS)
+				::Assets::SerializedArtifact{
+					RenderCore::Assets::ChunkType_Metrics, 0, "skel-" + name, 
+					std::move(metricsBlock)}
+			#endif
 		};
 	}
 
@@ -50,17 +58,21 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SerializationOperator(serializer, animationSet);
 		auto block = ::Assets::AsBlob(serializer);
 
-		std::stringstream metricsStream;
-		SerializationOperator(metricsStream, animationSet);
-		auto metricsBlock = ::Assets::AsBlob(metricsStream);
+		#if defined(WRITE_METRICS)
+			std::stringstream metricsStream;
+			SerializationOperator(metricsStream, animationSet);
+			auto metricsBlock = ::Assets::AsBlob(metricsStream);
+		#endif
 
 		return {
 			::Assets::SerializedArtifact{
 				RenderCore::Assets::ChunkType_AnimationSet, 0, name, 
 				std::move(block)},
-			::Assets::SerializedArtifact{
-				RenderCore::Assets::ChunkType_Metrics, 0, "anim-" + name, 
-				std::move(metricsBlock)}
+			#if defined(WRITE_METRICS)
+				::Assets::SerializedArtifact{
+					RenderCore::Assets::ChunkType_Metrics, 0, "anim-" + name, 
+					std::move(metricsBlock)}
+			#endif
 		};
 	}
 

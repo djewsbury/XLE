@@ -171,7 +171,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             auto influenceCount = *influenceI;
 			auto vertexIndex = std::distance(src._influenceCount.begin(), influenceI);
 
-			if (influenceCount == ~0u) continue;
+            if (_originalIndexToBucketIndex.size() <= (size_t)vertexIndex)
+				_originalIndexToBucketIndex.resize(vertexIndex+1, ~0u);
+			assert(_originalIndexToBucketIndex[vertexIndex] == ~0u);
+
+			if (influenceCount == ~0u)
+                continue;       // possibly another controller is deforming this vertex
 
                 //
                 //      Sometimes the input data has joints attached at very low weight
@@ -253,7 +258,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 accumulatingNormalizedTotal = newNormalizedTotal;
             }
             assert(accumulatingNormalizedTotal == normalizedTotalWeightValue);
-            assert(normalizedTotalWeightValue == 0xff);
+            assert(normalizedTotalWeightValue == 0xff || !influenceCount);
 
             // clip off any zero weight influences
             for (size_t c=0; c<influenceCount; ++c)
@@ -285,11 +290,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                 }
             #endif
 
-			if (_originalIndexToBucketIndex.size() <= (size_t)vertexIndex)
-				_originalIndexToBucketIndex.resize(vertexIndex+1, ~0u);
-			assert(_originalIndexToBucketIndex[vertexIndex] == ~0u);
-
-			
 			if (influenceCount > 8) {
 				if (influenceCount > 16) {
 					Log(Warning)
@@ -360,8 +360,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         Bucket b16;
         b16._weightCount = 16;
         b16._vertexBufferSize = bucket16._weightAttachments.size() * sizeof(VertexWeightAttachment<16>);
-        b16._vertexBufferData = std::make_unique<uint8_t[]>(b16._vertexBufferSize);
-        XlCopyMemory(b16._vertexBufferData.get(), AsPointer(bucket16._weightAttachments.begin()), b16._vertexBufferSize);
+        if (b16._vertexBufferSize) {
+            b16._vertexBufferData = std::make_unique<uint8_t[]>(b16._vertexBufferSize);
+            XlCopyMemory(b16._vertexBufferData.get(), AsPointer(bucket16._weightAttachments.begin()), b16._vertexBufferSize);
+        }
         b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8G8B8A8_UNORM, 1, 0));
 		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 1, Format::R8G8B8A8_UNORM, 1, 4));
 		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 2, Format::R8G8B8A8_UNORM, 1, 8));
@@ -374,8 +376,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		Bucket b8;
         b8._weightCount = 8;
         b8._vertexBufferSize = bucket8._weightAttachments.size() * sizeof(VertexWeightAttachment<8>);
-        b8._vertexBufferData = std::make_unique<uint8_t[]>(b8._vertexBufferSize);
-        XlCopyMemory(b8._vertexBufferData.get(), AsPointer(bucket8._weightAttachments.begin()), b8._vertexBufferSize);
+        if (b8._vertexBufferSize) {
+            b8._vertexBufferData = std::make_unique<uint8_t[]>(b8._vertexBufferSize);
+            XlCopyMemory(b8._vertexBufferData.get(), AsPointer(bucket8._weightAttachments.begin()), b8._vertexBufferSize);
+        }
         b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8G8B8A8_UNORM, 1, 0));
 		b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 1, Format::R8G8B8A8_UNORM, 1, 4));
         b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8G8B8A8_UINT, 1, 8));
@@ -384,34 +388,37 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		Bucket b4;
         b4._weightCount = 4;
         b4._vertexBufferSize = bucket4._weightAttachments.size() * sizeof(VertexWeightAttachment<4>);
-        b4._vertexBufferData = std::make_unique<uint8_t[]>(b4._vertexBufferSize);
-        XlCopyMemory(b4._vertexBufferData.get(), AsPointer(bucket4._weightAttachments.begin()), b4._vertexBufferSize);
+        if (b4._vertexBufferSize) {
+            b4._vertexBufferData = std::make_unique<uint8_t[]>(b4._vertexBufferSize);
+            XlCopyMemory(b4._vertexBufferData.get(), AsPointer(bucket4._weightAttachments.begin()), b4._vertexBufferSize);
+        }
         b4._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8G8B8A8_UNORM, 1, 0));
         b4._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8G8B8A8_UINT, 1, 4));
 
         Bucket b2;
         b2._weightCount = 2;
         b2._vertexBufferSize = bucket2._weightAttachments.size() * sizeof(VertexWeightAttachment<2>);
-        b2._vertexBufferData = std::make_unique<uint8_t[]>(b2._vertexBufferSize);
-        XlCopyMemory(b2._vertexBufferData.get(), AsPointer(bucket2._weightAttachments.begin()), b2._vertexBufferSize);
+        if (b2._vertexBufferSize) {
+            b2._vertexBufferData = std::make_unique<uint8_t[]>(b2._vertexBufferSize);
+            XlCopyMemory(b2._vertexBufferData.get(), AsPointer(bucket2._weightAttachments.begin()), b2._vertexBufferSize);
+        }
         b2._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8G8_UNORM, 1, 0));
         b2._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8G8_UINT, 1, 2));
 
         Bucket b1;
         b1._weightCount = 1;
         b1._vertexBufferSize = bucket1._weightAttachments.size() * sizeof(VertexWeightAttachment<1>);
-        b1._vertexBufferData = std::make_unique<uint8_t[]>(b1._vertexBufferSize);
-        XlCopyMemory(b1._vertexBufferData.get(), AsPointer(bucket1._weightAttachments.begin()), b1._vertexBufferSize);
+        if (b1._vertexBufferSize) {
+            b1._vertexBufferData = std::make_unique<uint8_t[]>(b1._vertexBufferSize);
+            XlCopyMemory(b1._vertexBufferData.get(), AsPointer(bucket1._weightAttachments.begin()), b1._vertexBufferSize);
+        }
         b1._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8_UNORM, 1, 0));
         b1._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8_UINT, 1, 1));
 
         Bucket b0;
         b0._weightCount = 0;
         b0._vertexBufferSize = bucket0._weightAttachments.size() * sizeof(VertexWeightAttachment<0>);
-        if (b0._vertexBufferSize) {
-            b0._vertexBufferData = std::make_unique<uint8_t[]>(b0._vertexBufferSize);
-            XlCopyMemory(b0._vertexBufferData.get(), AsPointer(bucket0._weightAttachments.begin()), b0._vertexBufferSize);
-        }
+        assert(b0._vertexBufferSize == 0);
 
 		_bucket[0] = std::move(b0);
 		_bucket[1] = std::move(b1);
@@ -529,14 +536,24 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 					break;
 				}
 			}
-			// If we did not get an assigment, our bucketIndex will still be ~0u
-			assert(bucketIndex != ~0u);
-			// A vertex can actually get associated with multiple controllers
-			// In these cases, we always select the first controller that applies to the vertex
-			// (basically under the assumption that all controllers will generate the same final position for the vertex)
-			// In general, we don't want to split vertices for controllers -- because that could lead
-			// to situations where the animation causes the mesh manifold to separate (which doesn't
-			// seem like something that would be desireable)
+
+            // If we did not get an assignment, our bucketIndex will still be ~0u. We have to assign it somewhere, so it goes
+            // into the zero-weight bucket of the first controller
+            if (bucketIndex == ~0u) {
+                assert(!controllers.empty());
+                bucketIndex = ControllerAndBucketIndex(0, 0, bucketsPerController);
+            } else {
+                #if defined(_DEBUG)
+                    if (controllers.size() > 1)
+                        for (auto q=controllerIdx+1; q!=controllers.size(); ++q) {
+                            // ensure that the same vertex is not assigned to two different controllers
+                            auto& buckettedController = buckettedControllers[q];
+                            assert(originalIndex >= buckettedController._originalIndexToBucketIndex.size()
+                                ||	buckettedController._originalIndexToBucketIndex[originalIndex] == ~0u);
+                        }
+                #endif
+            }
+
 			vertexMappingByFinalOrdering.push_back(VertexIndices{c, bucketIndex, originalIndex});
         }
 
@@ -681,22 +698,24 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         }
 
 		#if defined(_DEBUG)
-			unsigned weightsOffset = 0;
+            unsigned weightsOffset = 0;
             auto weightsFormat = Format::Unknown;
-            for (auto i=finalWeightBufferFormat->cbegin(); i!=finalWeightBufferFormat->cend(); ++i) {
-                if (!XlCompareStringI(i->_semanticName.c_str(), "WEIGHTS") && i->_semanticIndex == 0) {
-                    weightsOffset = i->_alignedByteOffset;
-                    weightsFormat = i->_nativeFormat;
-                    break;
-                }
-            }
-			unsigned indicesOffset = 0;
+            unsigned indicesOffset = 0;
             auto indicesFormat = Format::Unknown;
-            for (auto i=finalWeightBufferFormat->cbegin(); i!=finalWeightBufferFormat->cend(); ++i) {
-                if (!XlCompareStringI(i->_semanticName.c_str(), "JOINTINDICES") && i->_semanticIndex == 0) {
-                    indicesOffset = i->_alignedByteOffset;
-                    indicesFormat = i->_nativeFormat;
-                    break;
+            if (finalWeightBufferFormat) {
+                for (auto i=finalWeightBufferFormat->cbegin(); i!=finalWeightBufferFormat->cend(); ++i) {
+                    if (!XlCompareStringI(i->_semanticName.c_str(), "WEIGHTS") && i->_semanticIndex == 0) {
+                        weightsOffset = i->_alignedByteOffset;
+                        weightsFormat = i->_nativeFormat;
+                        break;
+                    }
+                }
+                for (auto i=finalWeightBufferFormat->cbegin(); i!=finalWeightBufferFormat->cend(); ++i) {
+                    if (!XlCompareStringI(i->_semanticName.c_str(), "JOINTINDICES") && i->_semanticIndex == 0) {
+                        indicesOffset = i->_alignedByteOffset;
+                        indicesFormat = i->_nativeFormat;
+                        break;
+                    }
                 }
             }
 		#endif
@@ -741,8 +760,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 							[dstElement](const InputElementDesc& e) {
 								return e._semanticName == dstElement->_semanticName && e._semanticIndex == dstElement->_semanticIndex;
 							});
-						if (srcElement == bucket._vertexInputLayout.cend())
+						if (srcElement == bucket._vertexInputLayout.cend()) {
+                            // Happens in the zero-weight case. Our output buffer is zeroed out beforehand
 							continue;
+                        }
 
                             // (todo -- precalculate this min of element sizes)
 						unsigned elementSize = std::min(BitsPerPixel(srcElement->_nativeFormat)/8, BitsPerPixel(dstElement->_nativeFormat)/8);
