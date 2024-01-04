@@ -485,12 +485,6 @@ namespace OSServices
 	{
 		std::vector<std::string> result;
 
-		char buffer[256];
-		Legacy::XlDirname(buffer, dimof(buffer), searchPath.c_str());
-		std::string basePath = buffer;
-		if (!basePath.empty() && basePath[basePath.size()-1]!='/' && basePath[basePath.size()-1]!='\\') {
-			basePath += "/";
-		}
 		WIN32_FIND_DATAA findData;
 		memset(&findData, 0, sizeof(findData));
 		HANDLE findHandle = FindFirstFileA(searchPath.c_str(), &findData);
@@ -498,7 +492,7 @@ namespace OSServices
 			do {
 				bool isDir = !!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 				if (filter & (1<<unsigned(isDir)))
-					result.push_back(basePath + findData.cFileName);
+					result.push_back(findData.cFileName);
 			} while (FindNextFileA(findHandle, &findData));
 			FindClose(findHandle);
 		}

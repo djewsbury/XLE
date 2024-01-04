@@ -150,15 +150,17 @@ namespace RenderCore { namespace Assets
         std::vector<std::string> allArchives;
         while (!dirs.empty()) {
             auto dir = dirs.back();
+            assert(!dir.empty() && (dir.back() == '/' || dir.back() == '\\'));
             dirs.pop_back();
 
             auto files = OSServices::FindFiles(dir + "*.dir", OSServices::FindFilesFilter::File);
+            for (auto& f:files) f = dir + f;    // prepend full directory
             allArchives.insert(allArchives.end(), files.begin(), files.end());
 
             auto subDirs = OSServices::FindFiles(dir + "*.*", OSServices::FindFilesFilter::Directory);
             for (auto d=subDirs.cbegin(); d!=subDirs.cend(); ++d) {
                 if (!d->empty() && d->at(d->size()-1) != '.') {
-                    dirs.push_back(*d + "/");
+                    dirs.push_back(dir + *d + "/");
                 }
             }
         }

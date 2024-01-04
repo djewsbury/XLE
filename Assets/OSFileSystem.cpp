@@ -158,7 +158,7 @@ namespace Assets
 			// build the cache
 			auto dirName = MakeFileNameSplitter(fn).StemAndPath();
 			
-			char buffer[_rootUTF8.size() + dirName.Length() + 2 + 1];
+			VLA(char, buffer, _rootUTF8.size() + dirName.Length() + 2 + 1);
 			std::copy(_rootUTF8.begin(), _rootUTF8.end(), buffer);
 			std::copy(dirName.begin(), dirName.end(), &buffer[_rootUTF8.size()]);
 			buffer[_rootUTF8.size() + dirName.Length()] = '/';
@@ -185,7 +185,7 @@ namespace Assets
 			auto utf8Fn = Conversion::Convert<std::string>(fn);
 			auto dirName = MakeFileNameSplitter(utf8Fn).StemAndPath();
 			
-			char buffer[_rootUTF8.size() + dirName.Length() + 2 + 1];
+			VLA(char, buffer, _rootUTF8.size() + dirName.Length() + 2 + 1);
 			std::copy(_rootUTF8.begin(), _rootUTF8.end(), buffer);
 			std::copy(dirName.begin(), dirName.end(), &buffer[_rootUTF8.size()]);
 			buffer[_rootUTF8.size() + dirName.Length()] = '/';
@@ -222,10 +222,8 @@ namespace Assets
 		//		1. prepending the root dir
 		//		2. adding a null terminator to the end of the string
 		StringSection<utf8> name = filename;
-		if (!(_flags * OSFileSystemFlags::AllowAbsolute)) {
-			if (IsAbsolutePath(filename))
-				return TranslateResult::Invalid;
-		} else if (_flags & OSFileSystemFlags::IgnorePaths) {
+		assert((_flags & OSFileSystemFlags::AllowAbsolute) || !IsAbsolutePath(filename));
+		if (_flags & OSFileSystemFlags::IgnorePaths) {
 			auto splitName = MakeFileNameSplitter(filename);
 			name = splitName.FileAndExtension();
 		}
@@ -251,10 +249,8 @@ namespace Assets
 			return TranslateResult::Invalid;
 
 		StringSection<utf16> name = filename;
-		if (!(_flags * OSFileSystemFlags::AllowAbsolute)) {
-			if (IsAbsolutePath(filename))
-				return TranslateResult::Invalid;
-		} else if (_flags & OSFileSystemFlags::IgnorePaths) {
+		assert((_flags & OSFileSystemFlags::AllowAbsolute) || !IsAbsolutePath(filename));
+		if (_flags & OSFileSystemFlags::IgnorePaths) {
 			auto splitName = MakeFileNameSplitter(filename);
 			name = splitName.FileAndExtension();
 		}
@@ -447,15 +443,15 @@ namespace Assets
     {
         std::string dir;
 		if (!baseDirectory.IsEmpty()) {
-			if (!(_flags * OSFileSystemFlags::AllowAbsolute) && IsAbsolutePath(baseDirectory))
-				return {};
-			dir = _rootUTF8 + baseDirectory.AsString();
-			if (baseDirectory[baseDirectory.size()-1] != '/' && baseDirectory[baseDirectory.size()-1] != '\\')
-				dir += '/';
+			assert((_flags & OSFileSystemFlags::AllowAbsolute) || !IsAbsolutePath(baseDirectory));
+			if (baseDirectory[baseDirectory.size()-1] != '/' && baseDirectory[baseDirectory.size()-1] != '\\') {
+				dir = Concatenate(_rootUTF8, baseDirectory.AsString(), "/*");
+			} else {
+				dir = Concatenate(_rootUTF8, baseDirectory.AsString(), "*");
+			}
 		} else {
-			dir = _rootUTF8;
+			dir = Concatenate(_rootUTF8, "*");
 		}
-		dir += "*";
         auto temp = OSServices::FindFiles(dir, OSServices::FindFilesFilter::File);
         std::vector<IFileSystem::Marker> res;
         res.reserve(temp.size());
@@ -464,10 +460,12 @@ namespace Assets
 			for (const auto&t:temp) {
 				if (matcher.matches(t)) {
 					Marker marker;
-					marker.resize(2 + (t.size()+ 1) * sizeof(utf8));
+					marker.resize(2 + ((dir.size()-1) + (t.size()+ 1)) * sizeof(utf8));
 					auto* out = AsPointer(marker.begin());
 					*(uint16*)out = 1;
 					uint8* dst = (uint8*)PtrAdd(out, 2);
+					std::copy(dir.begin(), dir.end()-1, dst);		// without the '*'
+					dst += dir.size()-1;
 					std::copy(t.begin(), t.end(), dst);
 					dst[t.size()] = 0;
 
@@ -478,10 +476,12 @@ namespace Assets
 			// just selecting everything, skip over the pattern matcher
 			for (const auto&t:temp) {
 				Marker marker;
-				marker.resize(2 + (t.size()+ 1) * sizeof(utf8));
+				marker.resize(2 + ((dir.size()-1) + (t.size()+ 1)) * sizeof(utf8));
 				auto* out = AsPointer(marker.begin());
 				*(uint16*)out = 1;
 				uint8* dst = (uint8*)PtrAdd(out, 2);
+				std::copy(dir.begin(), dir.end()-1, dst);		// without the '*'
+				dst += dir.size()-1;
 				std::copy(t.begin(), t.end(), dst);
 				dst[t.size()] = 0;
 
@@ -496,8 +496,7 @@ namespace Assets
     {
         std::string dir;
 		if (!baseDirectory.IsEmpty()) {
-			if (!(_flags * OSFileSystemFlags::AllowAbsolute) && IsAbsolutePath(baseDirectory))
-				return {};
+			assert((_flags & OSFileSystemFlags::AllowAbsolute) || !IsAbsolutePath(baseDirectory));
 			dir = _rootUTF8 + baseDirectory.AsString();
 			if (baseDirectory[baseDirectory.size()-1] != '/' && baseDirectory[baseDirectory.size()-1] != '\\')
 				dir += '/';
@@ -510,9 +509,9 @@ namespace Assets
         res.reserve(temp.size());
         auto rootSplit = MakeSplitPath(_rootUTF8);
         for (const auto&t:temp) {
-			auto fn = MakeFileNameSplitter(t).FileAndExtension();
-			if (!XlEqString(fn, ".") && !XlEqString(fn, ".."))
-				res.push_back(fn.AsString());
+			assert(MakeFileNameSplitter(t).FileAndExtension().size() == t.size());
+			if (!XlEqString(t, ".") && !XlEqString(t, ".."))
+				res.push_back(t);		// note, stripping off '*' from 'dir' here
         }
         return res;
     }

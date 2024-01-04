@@ -93,16 +93,15 @@ namespace OSServices
 		if (dir != NULL) {
 			struct dirent *entry;
 			while ((entry = readdir(dir)) != NULL) {
-				auto full_path = searchPath + "/" + entry->d_name;
 				if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
 					continue;
 				}
 				if ((entry->d_type == DT_DIR) && (filter & FindFilesFilter::Directory)) {
-					fileList.push_back(full_path);
+					fileList.push_back(entry->d_name);
 				}
 
 				if ((entry->d_type == DT_REG) && (filter & FindFilesFilter::File)) {
-					fileList.push_back(full_path);
+					fileList.push_back(entry->d_name);
 				}
 			}
 			closedir(dir);

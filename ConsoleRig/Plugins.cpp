@@ -58,9 +58,9 @@ namespace ConsoleRig
 
 		std::set<std::string> candidatePlugins;
 		for (auto c:group0)
-			candidatePlugins.insert(MakeSplitPath(c).Rebuild());
+			candidatePlugins.insert(MakeSplitPath(Concatenate(processPathStem, "/", c)).Rebuild());
 		for (auto c:group1)
-			candidatePlugins.insert(MakeSplitPath(c).Rebuild());
+			candidatePlugins.insert(MakeSplitPath(Concatenate(cwd, "/", c)).Rebuild());
 
 		for (auto& c:candidatePlugins) {
 			auto library = std::make_shared<OSServices::AttachableLibrary>(c);

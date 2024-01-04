@@ -115,7 +115,18 @@ namespace Assets
 		StringSection<ResChar> searchPath, 
 		OSServices::FindFilesFilter::BitField filter)
 	{
-		return OSServices::FindFiles(searchPath.AsString(), filter);
+		auto res = OSServices::FindFiles(searchPath.AsString(), filter);
+
+        // prepend the full search path
+        auto dir = MakeFileNameSplitter(searchPath).StemAndPath();
+        if (!dir.IsEmpty()) {
+            if (*(dir.end()-1) != '/' && *(dir.end()-1) != '\\') {
+                for (auto& f:res) f = Concatenate(dir, "/", f);
+            } else {
+                for (auto& f:res) f = Concatenate(dir, f);
+            }
+        }
+        return res;
 	}
 
     void DirectorySearchRules::ResolveFile(ResChar destination[], unsigned destinationCount, StringSection<ResChar> baseName) const
