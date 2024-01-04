@@ -806,7 +806,7 @@ namespace PlatformRig { namespace Overlays
         IOverlayContext& context, Layout& layout, 
         Interactables& interactables, InterfaceState& interfaceState)
     {
-        std::pair<std::string, unsigned> headers[] = { std::make_pair("Latency (ms)", 180), std::make_pair("Description", 220), std::make_pair("Name", 5000) };
+        std::pair<std::string, unsigned> headers[] = { std::make_pair("Latency (ms)", 180), std::make_pair("Description", 220), std::make_pair("CmdList", 150), std::make_pair("Name", 5000) };
 
         DrawTableBackground(context, layout);
         DrawTableHeaders(context, layout, MakeIteratorRange(headers));
@@ -819,7 +819,7 @@ namespace PlatformRig { namespace Overlays
             if (_lockedFrameId != ~unsigned(0x0) && i->_frameId != _lockedFrameId) {
                 continue;
             }
-            for (int cl=int(i->_commandListEnd)-1; cl>=int(i->_commandListStart); --cl) {
+            for (int cl=int(i->_commandListEnd)-1; cl>=std::max(int(i->_commandListStart), 0); --cl) {
                 const auto& commandList = _recentHistory[cl];
                 for (unsigned i2=0; i2<commandList.RetirementCount(); ++i2) {
                     const auto& retire = commandList.Retirement(i2);
@@ -829,6 +829,7 @@ namespace PlatformRig { namespace Overlays
                     bool success = DrawTableEntry(context, layout, MakeIteratorRange(headers),
                         {   std::make_pair("Name", buffer2),
                             std::make_pair("Latency (ms)", XlDynFormatString("%6.2f", float(double(retire._retirementTime-retire._requestTime)*_reciprocalTimerFrequency*1000.))),
+                            std::make_pair("CmdList", std::to_string(retire._cmdList)),
                             std::make_pair("Description", std::string{buffer}) });
                     if (!success) break;
                 }

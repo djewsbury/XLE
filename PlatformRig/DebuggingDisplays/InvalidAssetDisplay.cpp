@@ -300,6 +300,13 @@ namespace PlatformRig { namespace Overlays
 					.Font(**fnt)
 					.Color(staticData._message)
 					.Draw(context, msg, buffer);
+			} else if (op->_progress) {
+				auto msg = textArea.Allocate(lineHeight);
+				StringMeldInPlace(buffer) << op->_progress->first << " / " << op->_progress->second;
+				RenderOverlays::DrawText()
+					.Font(**fnt)
+					.Color(staticData._message)
+					.Draw(context, msg, buffer);
 			}
 
 			if (op->_progress && op->_progress->second) {
