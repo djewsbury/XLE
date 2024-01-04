@@ -22,9 +22,6 @@ namespace PlatformRig
     class WindowApparatus;
     class IFrameRigDisplay;
 
-    std::vector<RenderCore::Techniques::PreregisteredAttachment> InitializeColorLDR(
-        IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*>);
-
     class FrameRig
     {
     public:

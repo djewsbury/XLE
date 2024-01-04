@@ -25,7 +25,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	RenderPassInstance RenderPassToPresentationTarget(
-        ParsingContext& parserContext,
+		ParsingContext& parserContext,
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
@@ -34,7 +34,7 @@ namespace RenderCore { namespace Techniques
 		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation));
 		frag.AddSubpass(std::move(subpass));
 		auto clear = AsClearValueColor(clearColor);
-        return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clear, &clear+1)}};
+		return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clear, &clear+1)}};
 	}
 
 	RenderPassInstance RenderPassToPresentationTargetWithOptionalInitialize(ParsingContext& parserContext)
@@ -54,8 +54,8 @@ namespace RenderCore { namespace Techniques
 	}
 
 	RenderPassInstance RenderPassToPresentationTarget(
-		const RenderCore::IResourcePtr& presentationTarget,
-        ParsingContext& parserContext,
+		const IResourcePtr& presentationTarget,
+		ParsingContext& parserContext,
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
@@ -64,7 +64,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
-        ParsingContext& parserContext,
+		ParsingContext& parserContext,
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
@@ -78,22 +78,22 @@ namespace RenderCore { namespace Techniques
 		subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation));
 		frag.AddSubpass(std::move(subpass));
 
-        auto clear = AsClearValueColor(clearColor);
+		auto clear = AsClearValueColor(clearColor);
 		return RenderPassInstance{ parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clear, &clear+1)}};
 	}
 
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
-		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
-        ParsingContext& parserContext,
+		const std::shared_ptr<IResource>& presentationTarget,
+		ParsingContext& parserContext,
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
-        parserContext.GetAttachmentReservation().Bind(AttachmentSemantics::ColorLDR, presentationTarget, BindFlag::Enum(0));
+		parserContext.GetAttachmentReservation().Bind(AttachmentSemantics::ColorLDR, presentationTarget, BindFlag::Enum(0));
 		return RenderPassToPresentationTargetWithDepthStencil(parserContext, loadOperation, clearColor);
 	}
 
 	RenderPassInstance RenderPassToDepthStencil(
-        ParsingContext& parserContext,
+		ParsingContext& parserContext,
 		LoadStore loadOperation,
 		ClearValue clearValue)
 	{
@@ -101,7 +101,7 @@ namespace RenderCore { namespace Techniques
 		SubpassDesc subpass;
 		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation));
 		frag.AddSubpass(std::move(subpass));
-        return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clearValue, &clearValue+1)}};	
+		return RenderPassInstance{parserContext, frag, RenderPassBeginDesc{MakeIteratorRange(&clearValue, &clearValue+1)}};	
 	}
 
 	IResource* GetAttachmentResource(ParsingContext& parsingContext, uint64_t semantic)
@@ -132,7 +132,7 @@ namespace RenderCore { namespace Techniques
 	IResource* GetAttachmentResourceAndBarrierToLayout(
 		Techniques::ParsingContext& parsingContext,
 		uint64_t semantic,
-		BindFlags::BitField newLayout)
+		BindFlag::BitField newLayout)
 	{
 		// See GetAttachmentResource
 		auto preregs = parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
@@ -160,4 +160,33 @@ namespace RenderCore { namespace Techniques
 
 		return resource;
 	}
+
+	std::vector<Techniques::PreregisteredAttachment> InitializeColorLDR(
+		IteratorRange<const Techniques::PreregisteredAttachment*> input)
+	{
+		std::vector<Techniques::PreregisteredAttachment> result = {input.begin(), input.end()};
+		auto i = std::find_if(result.begin(), result.end(), [](const auto& q) { return q._semantic == Techniques::AttachmentSemantics::ColorLDR; });
+		if (i != result.end()) {
+			i->_state = Techniques::PreregisteredAttachment::State::Initialized;
+			i->_layout = BindFlag::RenderTarget;
+		}
+		return result;
+	}
+
+	std::vector<Techniques::PreregisteredAttachment> ConfigureCommonOverlayAttachments(
+		IteratorRange<const Techniques::PreregisteredAttachment*> systemPreregs,
+		const FrameBufferProperties& fbProps,
+		IteratorRange<const Format*> systemAttachmentFormats)
+	{
+		// Return a reasonable set of preregistered attachments, as we'd expect to see them after a 3d scene has been rendered
+		auto result = InitializeColorLDR(systemPreregs);
+		result.push_back(
+			Techniques::PreregisteredAttachment
+			{	Techniques::AttachmentSemantics::MultisampleDepth,
+				CreateDesc(BindFlag::DepthStencil|BindFlag::ShaderResource, TextureDesc::Plain2D(fbProps._width, fbProps._height, systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil])),
+				{},
+				Techniques::PreregisteredAttachment::State::Initialized, BindFlag::DepthStencil });
+		return result;
+	}
+
 }}

@@ -53,7 +53,7 @@ namespace GUILayer
             auto rtu = windowRig.GetFrameRig().GetOverlayConfiguration(*windowRig.GetPresentationChain());
             _mainOverlaySystemSet->OnRenderTargetUpdate(rtu._preregAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
             if (_debugOverlaysApparatus.get()) {
-                auto updatedAttachments = PlatformRig::InitializeColorLDR(rtu._preregAttachments);
+                auto updatedAttachments = RenderCore::Techniques::InitializeColorLDR(rtu._preregAttachments);
                 _debugOverlaysApparatus->_debugScreensOverlaySystem->OnRenderTargetUpdate(updatedAttachments, rtu._fbProps, rtu._systemAttachmentFormats);
             }
             _pendingUpdateRenderTargets = false;

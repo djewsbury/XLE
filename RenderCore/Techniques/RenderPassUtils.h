@@ -9,7 +9,7 @@
 #include <memory>
 
 namespace RenderCore { class IThreadContext; class IResource; }
-namespace RenderCore { namespace BindFlags { using BitField = unsigned; }}
+namespace RenderCore { namespace BindFlag { using BitField = unsigned; }}
 
 namespace RenderCore { namespace Techniques
 {
@@ -17,31 +17,31 @@ namespace RenderCore { namespace Techniques
 	class ParsingContext;
 
 	RenderPassInstance RenderPassToPresentationTarget(
-        ParsingContext& parserContext,
+		ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain,
 		unsigned clearColor = 0xff000000);
 
 	RenderPassInstance RenderPassToPresentationTargetWithOptionalInitialize(ParsingContext& parserContext);
 
 	RenderPassInstance RenderPassToPresentationTarget(
-		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
-        ParsingContext& parserContext,
+		const std::shared_ptr<IResource>& presentationTarget,
+		ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain,
 		unsigned clearColor = 0xff000000);
 
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
-        ParsingContext& parserContext,
+		ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain,
 		unsigned clearColor = 0xff000000);
 	
 	RenderPassInstance RenderPassToPresentationTargetWithDepthStencil(
-		const std::shared_ptr<RenderCore::IResource>& presentationTarget,
-        ParsingContext& parserContext,
+		const std::shared_ptr<IResource>& presentationTarget,
+		ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain,
 		unsigned clearColor = 0xff000000);
 
 	RenderPassInstance RenderPassToDepthStencil(
-        ParsingContext& parserContext,
+		ParsingContext& parserContext,
 		LoadStore loadOperation = LoadStore::Retain,
 		ClearValue clearValue = MakeClearValue(0.f, 0));
 
@@ -52,5 +52,15 @@ namespace RenderCore { namespace Techniques
 	IResource* GetAttachmentResourceAndBarrierToLayout(
 		Techniques::ParsingContext& parsingContext,
 		uint64_t semantic,
-		BindFlags::BitField newLayout);
+		BindFlag::BitField newLayout);
+
+	std::vector<Techniques::PreregisteredAttachment> InitializeColorLDR(
+		IteratorRange<const Techniques::PreregisteredAttachment*>);
+
+	std::vector<Techniques::PreregisteredAttachment> ConfigureCommonOverlayAttachments(
+		IteratorRange<const Techniques::PreregisteredAttachment*> systemPreregs,
+		const FrameBufferProperties& fbProps,
+		IteratorRange<const Format*> systemAttachmentFormats);
+
+
 }}

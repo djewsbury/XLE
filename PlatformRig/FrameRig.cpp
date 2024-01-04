@@ -353,16 +353,6 @@ namespace PlatformRig
         return result;
     }
 
-    std::vector<RenderCore::Techniques::PreregisteredAttachment> InitializeColorLDR(
-        IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> input)
-    {
-        std::vector<RenderCore::Techniques::PreregisteredAttachment> result = {input.begin(), input.end()};
-        auto i = std::find_if(result.begin(), result.end(), [](const auto& q) { return q._semantic == RenderCore::Techniques::AttachmentSemantics::ColorLDR; });
-        if (i != result.end())
-            i->_state = RenderCore::Techniques::PreregisteredAttachment::State::Initialized;
-        return result;
-    }
-
     void FrameRig::ReleaseDoubleBufferAttachments()
     {
         // we may need to clear all of the captured attachments sometimes (for example, before a swap chain resolution change)

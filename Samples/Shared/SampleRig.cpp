@@ -13,6 +13,7 @@
 
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
+#include "../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../RenderCore/DeviceInitialization.h"
 #include "../../RenderCore/Vulkan/IDeviceVulkan.h"
 
@@ -154,7 +155,7 @@ namespace Sample
 	{
 		if (mainOverlay) {
 			mainOverlay->OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
-			auto updatedAttachments = PlatformRig::InitializeColorLDR(preregAttachments);
+			auto updatedAttachments = RenderCore::Techniques::InitializeColorLDR(preregAttachments);
 			debuggingOverlay.OnRenderTargetUpdate(updatedAttachments, fbProps, systemAttachmentFormats);
 		} else {
 			debuggingOverlay.OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);

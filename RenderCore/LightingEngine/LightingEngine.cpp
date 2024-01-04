@@ -702,12 +702,9 @@ namespace RenderCore { namespace LightingEngine
 			case Sequence::ExecuteStep::Type::BeginRenderPassInstance:
 				{
 					assert(next->_fbDescIdx < _stepper->_remainingSequences.front()->_fbDescs.size());
-					Techniques::RenderPassBeginDesc beginDesc;
-					beginDesc._frameIdx = _frameToFrameProps->_frameIdx;
 					_iterator->_rpi = Techniques::RenderPassInstance{
 						*_iterator->_parsingContext,
-						_stepper->_remainingSequences.front()->_fbDescs[next->_fbDescIdx],
-						beginDesc};
+						_stepper->_remainingSequences.front()->_fbDescs[next->_fbDescIdx]};
 				}
 				break;
 

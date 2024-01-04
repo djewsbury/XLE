@@ -383,7 +383,6 @@ namespace RenderCore { namespace Techniques
     struct RenderPassBeginDesc
     {
         IteratorRange<const ClearValue*>    _clearValues;
-        unsigned _frameIdx = 0;
     };
 
     /// <summary>Stores a set of retained frame buffers, which can be reused frame-to-frame</summary>
