@@ -180,6 +180,7 @@ namespace RenderCore { namespace Techniques
 					drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 					drawable->_uniforms = material._uniforms;
 				}
+				drawable->_matHash = material._hash;
 				_lastQueuedDrawable = drawable;
 				_lastQueuedDrawVertexCountOffset = 0;
 				return vertexStorage._data;
@@ -207,6 +208,7 @@ namespace RenderCore { namespace Techniques
 				drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 				drawable->_uniforms = material._uniforms;
 			}
+			drawable->_matHash = material._hash;
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
 			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
@@ -233,6 +235,7 @@ namespace RenderCore { namespace Techniques
 				drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
 				drawable->_uniforms = material._uniforms;
 			}
+			drawable->_matHash = material._hash;
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
 			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
