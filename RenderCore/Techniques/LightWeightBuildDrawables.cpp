@@ -125,14 +125,16 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto* transformsPkt = (Float3x4*)pktForAllocations->AllocateStorage(DrawablesPacket::Storage::CPU, sizeof(Float3x4)*objectToWorlds.size())._data.begin();
+					auto transformsPkt = pktForAllocations->AllocateStorage(DrawablesPacket::Storage::CPU, sizeof(Float3x4)*objectToWorlds.size())._data;
+					assert(transformsPkt.size() == sizeof(Float3x4)*objectToWorlds.size());
+					auto finalObjectsToWorlds = (Float3x4*)transformsPkt.begin();
 					assert(transformMarker != ~0u);		// SetTransformMarker must come first
 					if (geoSpaceToNodeSpace) {
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
-							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]));
+							finalObjectsToWorlds[c] = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]));
 					} else
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
-							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]);
+							finalObjectsToWorlds[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]);
 
 					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
 						if (!drawables[dc._batchFilter]) continue;
@@ -146,7 +148,7 @@ namespace RenderCore { namespace Techniques
 						drawable._firstIndex = dc._firstIndex;
 						drawable._indexCount = dc._indexCount;
 						drawable._objectToWorldCount = (unsigned)objectToWorlds.size();
-						drawable._objectToWorlds = transformsPkt;
+						drawable._objectToWorlds = finalObjectsToWorlds;
 						drawable._deformInstanceIdx = deformInstanceIdx;
 					}
 				}
@@ -220,6 +222,11 @@ namespace RenderCore { namespace Techniques
 		}
 		if (!pktForAllocations) return;		// no overlap between our output pkts and what's in 'pkts'
 
+		#if defined(_DEBUG)
+			Internal::InstancedFixedSkeletonViewMask_Drawable* starts[dimof(cmdStream._drawCallCounts)];
+			for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) starts[c] = drawables[c];
+		#endif
+
 		const unsigned deformInstanceIdx = ~0u;
 
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
@@ -242,17 +249,18 @@ namespace RenderCore { namespace Techniques
 				{
 					struct DrawCallsRef { unsigned _start, _end; };
 					auto& drawCallsRef = cmd.As<DrawCallsRef>();
-					auto* extraData = pktForAllocations->AllocateStorage(DrawablesPacket::Storage::CPU, (sizeof(Float3x4)+sizeof(uint32_t))*objectToWorlds.size())._data.begin();
-					auto* transformsPkt = (Float3x4*)extraData;
+					auto extraData = pktForAllocations->AllocateStorage(DrawablesPacket::Storage::CPU, (sizeof(Float3x4)+sizeof(uint32_t))*objectToWorlds.size())._data;
+					assert(extraData.size() == (sizeof(Float3x4)+sizeof(uint32_t))*objectToWorlds.size());
+					auto* finalObjectToWorlds = (Float3x4*)extraData.begin();
 					assert(transformMarker != ~0u);		// SetTransformMarker must come first
 					if (geoSpaceToNodeSpace) {
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
-							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]));
+							finalObjectToWorlds[c] = Combine_NoDebugOverhead(*(const Float3x4*)geoSpaceToNodeSpace, Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]));
 					} else
 						for (unsigned c=0; c<objectToWorlds.size(); ++c)
-							transformsPkt[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]);
+							finalObjectToWorlds[c] = Combine_NoDebugOverhead(*(const Float3x4*)&constructor._baseTransforms[transformMarker+baseTransformsRange.first], objectToWorlds[c]);
 
-					auto* viewMasksPkt = (uint32_t*)PtrAdd(extraData, sizeof(Float3x4)*objectToWorlds.size());
+					auto* viewMasksPkt = (uint32_t*)PtrAdd(extraData.begin(), sizeof(Float3x4)*objectToWorlds.size());
 					for (unsigned c=0; c<viewMasks.size(); ++c) viewMasksPkt[c] = viewMasks[c];
 
 					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
@@ -267,7 +275,7 @@ namespace RenderCore { namespace Techniques
 						drawable._firstIndex = dc._firstIndex;
 						drawable._indexCount = dc._indexCount;
 						drawable._objectToWorldCount = (unsigned)objectToWorlds.size();
-						drawable._objectToWorlds = transformsPkt;
+						drawable._objectToWorlds = finalObjectToWorlds;
 						drawable._deformInstanceIdx = deformInstanceIdx;
 						drawable._viewMasks = viewMasksPkt;
 					}
@@ -275,6 +283,10 @@ namespace RenderCore { namespace Techniques
 				break;
 			}
 		}
+
+		#if defined(_DEBUG)
+			for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) assert(((drawables[c] - starts[c]) == cmdStream._drawCallCounts[c]) || !pkts[c]);		// expecting draw call count to match promised count
+		#endif
 	}
 
 	namespace Internal

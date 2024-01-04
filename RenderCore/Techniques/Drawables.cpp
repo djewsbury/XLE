@@ -669,18 +669,20 @@ namespace RenderCore { namespace Techniques
 						MakeIteratorRange(
 							PtrAdd(i->_memory.get(), i->_used),
 							PtrAdd(i->_memory.get(), i->_used+size)),
-						unsigned(std::distance(_cpuStoragePages.begin(), i) * CPUPageSize + i->_used) };
+						0u };
 					i->_used += size;
 					return result;
 				}
 			}
 			CPUStoragePage newPage;
-			newPage._memory = std::make_unique<uint8_t[]>(CPUPageSize);
-			newPage._allocated = CPUPageSize;
+			auto pageSize = CPUPageSize;
+			while (pageSize < size) pageSize += pageSize/2;	// expand if we're asking for a particularly large block of memory -- but oversizing just a bit would be preferable if we're reusing pages from frame to frame
+			newPage._memory = std::make_unique<uint8_t[]>(pageSize);
+			newPage._allocated = pageSize;
 			newPage._used = size;
 			AllocateStorageResult result { 
 				MakeIteratorRange(newPage._memory.get(), PtrAdd(newPage._memory.get(), size)),
-				unsigned(_cpuStoragePages.size() * CPUPageSize) };
+				0u };
 			_cpuStoragePages.emplace_back(std::move(newPage));
 			return result;
 		}
