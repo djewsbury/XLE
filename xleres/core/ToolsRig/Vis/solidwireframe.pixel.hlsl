@@ -30,13 +30,13 @@ float edgeFactor2( float2 coords, float width )
 
 float4 main(GStoPS input) : SV_Target0
 {
-	float E = edgeFactor( input.barycentricCoords, 1.5f );
+	float E = edgeFactor( input.barycentricCoords, 1.f );
 	return float4( E.xxx, 1.f );
 }
 
 float4 blend(GStoPS input) : SV_Target0
 {
-	float E = edgeFactor( input.barycentricCoords, 1.5f );
+	float E = edgeFactor( input.barycentricCoords, 1.f );
 	return float4( E.xxx, 1-E );
 }
 
