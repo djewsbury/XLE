@@ -204,7 +204,10 @@ namespace Utility
             using iterator = Iterator;
 
             // operator[] is only available on iterator range for types other than void*/const void*
-            auto operator[](size_t index) const -> decltype(*std::declval<const Iterator>()) { return this->first[index]; }
+            template<typename I=Iterator>
+                auto operator[](size_t index) const -> decltype(std::declval<const I>()[std::declval<size_t>()]) { return this->first[index]; }
+            auto front() const -> const decltype(*std::declval<const Iterator>())& { assert(!empty()); return *this->first; }
+            auto back() const -> const decltype(*std::declval<const Iterator>())& { assert(!empty()); return *(this->second-1); }
 
             template<typename I=Iterator>
                 auto data() const -> decltype(AsPointer(std::declval<const I>())) { return AsPointer(this->first); }

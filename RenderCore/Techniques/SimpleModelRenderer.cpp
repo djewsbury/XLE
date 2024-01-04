@@ -886,7 +886,7 @@ namespace RenderCore { namespace Techniques
 				_unanimatedTransforms.resize(_unanimatedTransforms.size()+cmdStreamInput.size(), Identity<Float4x4>());
 				auto unanimatedTransformsRange = MakeIteratorRange(_unanimatedTransforms.end()-cmdStreamInput.size(), _unanimatedTransforms.end());
 				_isBound.resize(_isBound.size()+cmdStreamInput.size(), false);
-				auto isBoundRange = MakeIteratorRange(_isBound.end()-cmdStreamInput.size(), _isBound.end());
+				auto isBoundRange = _isBound.end()-cmdStreamInput.size();
 				
 				// support 2 skeletons -- in this way if there are nodes that are not matched to the external skeleton,
 				// we can drop back to the embedded skeleton. Since the embedded skeleton always comes from the model
