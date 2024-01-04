@@ -44,3 +44,36 @@ namespace XLEMath
 {
     std::ostream& CompactTransformDescription(std::ostream& str, const Float4x4& transform);
 }
+
+namespace cml
+{
+	inline std::ostream& operator<<(std::ostream& o, XLEMath::Vector2T<uint8_t> v)
+	{
+		return o << (unsigned)v[0] << ' ' << (unsigned)v[1];		// avoid issues streaming uint8_t by casting to a larger integral type
+	}
+
+	inline std::ostream& operator<<(std::ostream& o, XLEMath::Vector3T<uint8_t> v)
+	{
+		return o << (unsigned)v[0] << ' ' << (unsigned)v[1] << ' ' << (unsigned)v[2];		// avoid issues streaming uint8_t by casting to a larger integral type
+	}
+
+	inline std::ostream& operator<<(std::ostream& o, XLEMath::Vector4T<uint8_t> v)
+	{
+		return o << (unsigned)v[0] << ' ' << (unsigned)v[1] << ' ' << (unsigned)v[2] << ' ' << (unsigned)v[3];		// avoid issues streaming uint8_t by casting to a larger integral type
+	}
+
+	inline std::ostream& operator<<(std::ostream& o, XLEMath::Vector2T<int8_t> v)
+	{
+		return o << (signed)v[0] << ' ' << (signed)v[1];		// avoid issues streaming uint8_t by casting to a larger integral type
+	}
+
+	inline std::ostream& operator<<(std::ostream& o, XLEMath::Vector3T<int8_t> v)
+	{
+		return o << (signed)v[0] << ' ' << (signed)v[1] << ' ' << (signed)v[2];		// avoid issues streaming uint8_t by casting to a larger integral type
+	}
+
+	inline std::ostream& operator<<(std::ostream& o, XLEMath::Vector4T<int8_t> v)
+	{
+		return o << (signed)v[0] << ' ' << (signed)v[1] << ' ' << (signed)v[2] << ' ' << (signed)v[3];		// avoid issues streaming uint8_t by casting to a larger integral type
+	}
+}

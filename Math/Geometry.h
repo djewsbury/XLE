@@ -80,7 +80,7 @@ namespace XLEMath
 	{
 		Vector3T<Primitive> _position;
 		unsigned _lhsIdx, _rhsIdx;
-		float _alpha;
+		Primitive _alpha;
 	};
 
     template<typename Primitive>
@@ -184,6 +184,21 @@ namespace XLEMath
 		s += q + r;		// addition order is important, we want to add q+r first
 
 		std::tie(h, r) = TwoProductFMA(lhs[2], rhs[2]);
+		std::tie(p, q) = TwoSum(p, h);
+		s += q + r;		// addition order is important, we want to add q+r first
+
+		// 's' is the extra precision we get through this method
+		return { p,  s };
+	}
+
+	template<typename Primitive>
+		static std::pair<Primitive, Primitive> Dot_Accurate(const Vector2T<Primitive>& lhs, const Vector2T<Primitive>& rhs)
+	{
+		Primitive p, s;
+		std::tie(p, s) = TwoProductFMA(lhs[0], rhs[0]);
+
+		Primitive h, r, q;
+		std::tie(h, r) = TwoProductFMA(lhs[1], rhs[1]);
 		std::tie(p, q) = TwoSum(p, h);
 		s += q + r;		// addition order is important, we want to add q+r first
 
@@ -318,6 +333,41 @@ namespace XLEMath
 
 	template<typename Primitive>
 		static Primitive MagnitudeSquared_Accurate(Vector3T<Primitive> input)
+	{
+		auto magSq = Dot_Accurate(input, input);
+		return magSq.first + magSq.second;
+	}
+
+	static Float2 Normalize_Accurate(Float2 input)
+	{
+		auto magSq = Dot_Accurate(input, input);
+		#if defined(HAS_SSE_INSTRUCTIONS)
+			// making use of SSE rsqrt (which is SIMD, but we'll only use one out of 4 results of the calculation)
+			magSq.first += magSq.second;
+			__m128 mm128 = _mm_load1_ps(&magSq.first);
+			mm128 = _mm_rsqrt_ss(mm128);
+			_mm_store_ss(&magSq.first, mm128);
+			return input * magSq.first;
+		#else
+			return input / std::sqrt(magSq.first + magSq.second);
+		#endif
+	}
+
+	static Vector2T<double> Normalize_Accurate(Vector2T<double> input)
+	{
+		auto magSq = Dot_Accurate(input, input);
+		return input / std::sqrt(magSq.first + magSq.second);
+	}
+
+	template<typename Primitive>
+		static Primitive Magnitude_Accurate(Vector2T<Primitive> input)
+	{
+		auto magSq = Dot_Accurate(input, input);
+		return std::sqrt(magSq.first + magSq.second);
+	}
+
+	template<typename Primitive>
+		static Primitive MagnitudeSquared_Accurate(Vector2T<Primitive> input)
 	{
 		auto magSq = Dot_Accurate(input, input);
 		return magSq.first + magSq.second;

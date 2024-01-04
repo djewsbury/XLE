@@ -859,7 +859,7 @@ namespace XLEMath
 
     template<bool IdentityAabbToLocalSpace>
         CullTestResult ArbitraryConvexVolumeTester::TestAABBInternal(
-            const Float3x4& aabbToLocalSpace, 
+            const Float3x4& aabbToLocalSpace,
             Float3 mins, Float3 maxs) const
     {
         assert(mins[0] <= maxs[0] && mins[1] <= maxs[1] && mins[2] <= maxs[2]);
