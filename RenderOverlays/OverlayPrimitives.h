@@ -43,20 +43,20 @@ namespace RenderOverlays
     struct Rect ///////////////////////////////////////////////////////////////////////
     {
         Coord2      _topLeft, _bottomRight;
-        Rect(const Coord2& topLeft, const Coord2& bottomRight) : _topLeft(topLeft), _bottomRight(bottomRight) {}
+        inline Rect(const Coord2& topLeft, const Coord2& bottomRight) : _topLeft(topLeft), _bottomRight(bottomRight) {}
         Rect(Coord left, Coord top, Coord right, Coord bottom) : _topLeft(left, top), _bottomRight(right, bottom) {}
         Rect() {}
 
-        constexpr Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }
-        constexpr Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
+        inline Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }
+        inline Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
 
         static inline Rect Invalid() { return Rect { {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}, {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}}; }
 
-        constexpr Rect& operator-=(const Coord2& rhs) { _topLeft -= rhs; _bottomRight -= rhs; return *this; }
-        constexpr Rect& operator+=(const Coord2& rhs) { _topLeft += rhs; _bottomRight += rhs; return *this; }
+        inline Rect& operator-=(const Coord2& rhs) { _topLeft -= rhs; _bottomRight -= rhs; return *this; }
+        inline Rect& operator+=(const Coord2& rhs) { _topLeft += rhs; _bottomRight += rhs; return *this; }
     };
 
-    constexpr bool Intersects(const Rect& lhs, const Rect& rhs)
+    inline bool Intersects(const Rect& lhs, const Rect& rhs)
     {
         return 
             !(  lhs._bottomRight[0] <= rhs._topLeft[0]
@@ -65,7 +65,7 @@ namespace RenderOverlays
             ||  lhs._topLeft[1] >= rhs._bottomRight[1]);
     }
 
-    constexpr bool Contains(
+    inline bool Contains(
         const Rect& bigger, 
         const Rect& smaller)
     {
@@ -76,7 +76,7 @@ namespace RenderOverlays
             &&  smaller._bottomRight[1] <= bigger._bottomRight[1]);
     }
 
-    constexpr bool Contains(
+    inline bool Contains(
         const Rect& rect,
         const Coord2& pt)
     {
@@ -84,10 +84,17 @@ namespace RenderOverlays
             && rect._bottomRight[0] >= pt[0] && rect._bottomRight[1] >= pt[1];
     }
 
-    constexpr bool IsGood(const Rect& rect)
+    inline bool IsGood(const Rect& rect)
     {
         return  rect._topLeft[0] < rect._bottomRight[0]
             &&  rect._topLeft[1] < rect._bottomRight[1];
+    }
+
+    inline Rect Intersection(const Rect& lhs, const Rect& rhs)
+    {
+        return {
+            std::max(lhs._topLeft[0], rhs._topLeft[0]), std::max(lhs._topLeft[1], rhs._topLeft[1]),
+            std::min(lhs._bottomRight[0], rhs._bottomRight[0]), std::min(lhs._bottomRight[1], rhs._bottomRight[1]) };
     }
 
     inline Rect operator-(const Rect& lhs, const Coord2& rhs) { return { lhs._topLeft - rhs, lhs._bottomRight - rhs }; }
