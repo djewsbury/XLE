@@ -930,7 +930,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         const auto vertexSize = BitsPerPixel(sourceStream.GetFormat()) / 8;
         std::vector<uint8_t> finalVB;
         finalVB.reserve(vertexSize * sourceStream.GetCount());
-        size_t finalVBCount = 0;
         auto srcStreamStride = sourceStream.GetStride();
 
         const unsigned highBit = 1u<<31u;
@@ -957,7 +956,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
             // finally, return the source data adapter
         return std::make_shared<RawVertexSourceDataAdapter>(
-            std::move(finalVB), finalVBCount, vertexSize,
+            std::move(finalVB), finalVB.size() / vertexSize, vertexSize,
             sourceStream.GetFormat(), sourceStream.GetProcessingFlags(), sourceStream.GetFormatHint());
     }
 
@@ -979,6 +978,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             // We will keep a record of all vertices that are found to be "close". Afterwards,
             // we should combine these pairs into chains of vertices. These chains get combined
             // into a single vertex, which is the one that is closest to the averaged vertex.
+            //
+            // Note that this will actually miss some close vertices. There is a case where 2 vertices
+            // are separated one one cardinal plane in the first test, and then separated by another
+            // cardinal plane in the second. The vertices have to be perfectly positions, but it can
+            // happen
+            //
+            // We can create a better algorithm by using a single hashing list, but adding each vertex
+            // into it 4 times (or alternatively just having 4 lists)
         auto quant = Float4(2.f*threshold, 2.f*threshold, 2.f*threshold, 2.f*threshold);
         auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>());
         auto quantizedSet1 = BuildQuantizedCoords(sourceStream, quant, Float4(threshold, threshold, threshold, threshold));
