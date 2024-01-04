@@ -76,6 +76,22 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
+	std::vector<uint64_t> ModelScaffold::GetMaterialBindingSymbols() const
+	{
+		std::vector<uint64_t> result;
+		for (const auto& cmdStream:_commandStreams)
+			for (auto cmd:cmdStream.second)
+				if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetMaterialAssignments) {
+					auto materialGuids = cmd.RawData().Cast<const uint64_t*>();
+					result.insert(result.end(), materialGuids.begin(), materialGuids.end());
+				}
+		std::sort(result.begin(), result.end());
+		result.erase(
+			std::unique(result.begin(), result.end()),
+			result.end());
+		return result;
+	}
+
 	ModelScaffold::ModelScaffold() {}
 	ModelScaffold::ModelScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
 	: _depVal{depVal}

@@ -56,6 +56,7 @@ namespace RenderCore { namespace Assets
 	public:
 		IteratorRange<ScaffoldCmdIterator> CommandStream(uint64_t cmdStreamId = s_CmdStreamGuid_Default) const;
 		std::vector<uint64_t> CollateCommandStreams() const;
+		std::vector<uint64_t> GetMaterialBindingSymbols() const;
 
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
 		using GeoIdx = unsigned;
