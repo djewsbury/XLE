@@ -225,8 +225,7 @@ namespace PlatformRig
             if (_subFrameEvents)
                 _subFrameEvents->_onPrePresent.Invoke(context);
 
-            if (parserContext._requiredBufferUploadsCommandList)
-                Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(context, parserContext._requiredBufferUploadsCommandList);
+            Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(context, parserContext._requiredBufferUploadsCommandList);
 
             {
                 Metal::BarrierHelper barrierHelper(context);

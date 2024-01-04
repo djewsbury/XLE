@@ -77,6 +77,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 
 		void ChangeSteadyState(BindFlag::BitField);
+		void DestroyImmediate();
 
 		Resource(
 			ObjectFactory& factory, const Desc& desc,
@@ -263,6 +264,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		static BarrierResourceUsage AllCommandsRead();
 		static BarrierResourceUsage AllCommandsWrite();
 		static BarrierResourceUsage AllCommandsReadAndWrite();
+		static BarrierResourceUsage ComputeShaderRead();
+		static BarrierResourceUsage ComputeShaderWrite();
+		static BarrierResourceUsage ComputeShaderReadAndWrite();
 		static BarrierResourceUsage NoState();
 		static BarrierResourceUsage Preinitialized();
 

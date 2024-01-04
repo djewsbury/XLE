@@ -238,6 +238,50 @@ namespace RenderCore { namespace Metal_Vulkan
 		return result;
 	}
 
+	template<typename Obj>
+		Obj* ReleaseFromSharedPtr(std::shared_ptr<Obj>&& src)
+	{
+		struct HackPtr : public std::_Ptr_base<Obj>
+		{
+		public:
+			Obj* get() const { return std::_Ptr_base<Obj>::get(); }
+			HackPtr(std::_Ptr_base<Obj>&& src)
+			{
+				std::_Ptr_base<Obj>::_Move_construct_from(std::move(src));
+			}
+		};
+
+		HackPtr h{std::move(src)};
+		return h.get();
+	}
+
+	void Resource::DestroyImmediate()
+	{
+		// Defeat the normal protection methods and just destroy the object immediately
+		// note this can be dangerous -- the caller must ensure that the gpu will not 
+		// attempt to access this memory in the future
+		assert(!_mem);
+		auto& destroyer = GetObjectFactory().GetImmediateDestroyer();
+		if (_underlyingImage) {
+			assert(_underlyingImage.unique());
+			auto image = ReleaseFromSharedPtr(std::move(_underlyingImage));
+			if (_vmaMem) {
+				destroyer.Destroy(image, _vmaMem);
+				_vmaMem = nullptr;
+			} else
+				destroyer.Destroy(image);
+		}
+		if (_underlyingBuffer) {
+			assert(_underlyingBuffer.unique());
+			auto buffer = ReleaseFromSharedPtr(std::move(_underlyingBuffer));
+			if (_vmaMem) {
+				destroyer.Destroy(buffer, _vmaMem);
+				_vmaMem = nullptr;
+			} else
+				destroyer.Destroy(buffer);
+		}
+	}
+
 	Resource::Resource(
 		ObjectFactory& factory, const Desc& desc, StringSection<> name,
 		const std::function<SubResourceInitData(SubResourceId)>& initData)

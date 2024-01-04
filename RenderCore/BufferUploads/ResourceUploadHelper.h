@@ -244,6 +244,8 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         void UpdateConsumerMarker();
         size_t MaxSize() const { return _stagingBufferHeap.HeapSize(); }
 
+        void Hold(std::shared_ptr<IResource> res);
+
         StagingPage(IThreadContext& threadContext, unsigned size);
         ~StagingPage();
         StagingPage(StagingPage&&) = default;
@@ -267,6 +269,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         {
             QueueMarker _releaseMarker;
             unsigned _pendingNewFront = ~0u;
+            std::vector<std::shared_ptr<IResource>> _heldResources;
         };
         std::vector<AllocationWaitingOnDevice> _allocationsWaitingOnDevice;
 

@@ -519,6 +519,12 @@ namespace RenderCore { namespace Metal_Vulkan
 		_destruction = destruction;
 	}
 
+    IDestructionQueue& ObjectFactory::GetImmediateDestroyer()
+    {
+        assert(_immediateDestruction);
+        return *_immediateDestruction;
+    }
+
     #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
         struct ObjectFactory::ResourceVisibilityHelper
         {

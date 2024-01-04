@@ -1373,8 +1373,12 @@ namespace RenderCore { namespace BufferUploads
                 auto stagingSize = ByteCount(transferStagingToFinalStep._oversizeResource->GetDesc());
                 context.GetResourceUploadHelper().UpdateFinalResourceFromStaging(
                     transaction->_finalResource, *transferStagingToFinalStep._oversizeResource, 0, stagingSize);
-                // we'd ideally like to destroy transferStagingToFinalStep._oversizeResource with a cmd list specific destruction order
-                // but that can't be done without adding a whole bunch of extra infrastructure
+
+                // The normal deletion infrastructure doesn't consider the state of the buffer uploads 
+                // cmdlist (since it's on a different queue).
+                // We need to explicitly protect temporary texture from being destroyed, using the same
+                // mechanisms that control the normal staging buffer
+                context.GetStagingPage().Hold(std::move(transferStagingToFinalStep._oversizeResource));
             }
 
             metricsUnderConstruction._bytesUploadTotal += descByteCount;
@@ -1823,7 +1827,13 @@ namespace RenderCore { namespace BufferUploads
 
     void                    Manager::StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id, MarkCommandListDependencyFlags::BitField flags)
     {
-        if (!id || id == CommandListID_Invalid) return;
+        assert(id != CommandListID_Invalid);
+        if (!id) {
+            // when id is zero, we're just going to poke the queue for anything queued up
+            _backgroundContext->AdvanceGraphicsQueue(immediateContext, 0, flags);
+            return;
+        }
+
         while (!_backgroundContext->AdvanceGraphicsQueue(immediateContext, id, flags)) {
             _assemblyLine->TriggerWakeupEvent();
             std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));

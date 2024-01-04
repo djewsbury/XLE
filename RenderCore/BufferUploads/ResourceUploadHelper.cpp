@@ -523,15 +523,22 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 if (status != Metal_Vulkan::IAsyncTracker::MarkerStatus::ConsumerCompleted && status != Metal_Vulkan::IAsyncTracker::MarkerStatus::Abandoned)
                     break;
 
-                assert(_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u);
-                _stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
+                if (_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u)
+                    _stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
+                #if GFXAPI_TARGET == GFXAPI_VULKAN
+                    // Attempt to destroy all "held" resources immediately -- instead of waiting for the 
+                    // normal lifetime protection schemes to kick in. This is appropriate only when the
+                    // held resource is only used by this queue
+                    for (const auto& i:_allocationsWaitingOnDevice.front()._heldResources)
+                        checked_cast<Metal_Vulkan::Resource*>(i.get())->DestroyImmediate();
+                #endif
                 _allocationsWaitingOnDevice.erase(_allocationsWaitingOnDevice.begin());
             }
         } else {
             QueueMarker queueMarker = _asyncTracker->GetConsumerMarker();
             while (!_allocationsWaitingOnDevice.empty() && _allocationsWaitingOnDevice.front()._releaseMarker <= queueMarker) {
-                assert(_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u);
-                _stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
+                if (_allocationsWaitingOnDevice.front()._pendingNewFront != ~0u)
+                    _stagingBufferHeap.ResetFront(_allocationsWaitingOnDevice.front()._pendingNewFront);
                 _allocationsWaitingOnDevice.erase(_allocationsWaitingOnDevice.begin());
             }
         }
@@ -584,6 +591,27 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
     void StagingPage::Abandon(unsigned allocationId) { Release(allocationId, true); }
 
+    void StagingPage::Hold(std::shared_ptr<IResource> res)
+    {
+        // hold onto the given resource and release it using the same rules that we use
+        // for staging page allocations
+
+        #if defined(_DEBUG)
+            assert(_boundThread == std::this_thread::get_id());
+        #endif
+
+		QueueMarker releaseMarker = _asyncTracker->GetProducerMarker();
+
+        if (!_allocationsWaitingOnDevice.empty() && _allocationsWaitingOnDevice.back()._releaseMarker == releaseMarker) {
+            _allocationsWaitingOnDevice.back()._heldResources.emplace_back(std::move(res));
+        } else {
+            _allocationsWaitingOnDevice.push_back({releaseMarker});
+            _allocationsWaitingOnDevice.back()._heldResources.emplace_back(std::move(res));
+            if (_allocationsWaitingOnDevice.size() > 16)        // try to avoid this getting too long, since we update it lazily
+                UpdateConsumerMarker();
+        }
+    }
+
     auto StagingPage::GetQuickMetrics() const -> StagingPageMetrics
     {
         #if defined(_DEBUG)
@@ -597,11 +625,15 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         result._bytesAwaitingDevice = 0;
         if (!_allocationsWaitingOnDevice.empty()) {
             auto newFront = _allocationsWaitingOnDevice.back()._pendingNewFront;
-            if (newFront > heapMetrics._front) {
-                result._bytesAwaitingDevice = newFront - heapMetrics._front;
-            } else {
-                result._bytesAwaitingDevice = _stagingBufferHeap.HeapSize() - heapMetrics._front + newFront;
+            if (newFront != ~0u) {
+                if (newFront > heapMetrics._front) {
+                    result._bytesAwaitingDevice = newFront - heapMetrics._front;
+                } else {
+                    result._bytesAwaitingDevice = _stagingBufferHeap.HeapSize() - heapMetrics._front + newFront;
+                }
             }
+            for (const auto& i:_allocationsWaitingOnDevice.back()._heldResources)
+                result._bytesAwaitingDevice += ByteCount(i->GetDesc());     // not super accurate, since we're only checking some of the queued resources
         }
         result._bytesLockedDueToOrdering = 0;
         for (auto a=_activeAllocations.begin(); a!=_activeAllocations.end(); ++a) {
@@ -840,8 +872,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                     advanceGraphicsQueueCount = _pimpl->_advanceGraphicsQueueCount++;
                 unsigned cmdlistIterator = _pimpl->_commandListIDReadyForGraphicsQueue;
                 while (!_pimpl->_queuedForAdvanceGraphicsQueue.empty()) {
-
-                    if (cmdlistIterator < cmdListRequired && (advanceGraphicsQueueCount - _pimpl->_queuedForAdvanceGraphicsQueue.front()._advanceGraphicsQueueCountAtQueueTime) < maxIdlyQueuedCount)
+                    if (cmdlistIterator >= cmdListRequired && (advanceGraphicsQueueCount - _pimpl->_queuedForAdvanceGraphicsQueue.front()._advanceGraphicsQueueCountAtQueueTime) < maxIdlyQueuedCount)
                         break;      // don't need to process following cmdlists immediately, they can sit queued for the moment
 
                     if (cmdListToProcessCount >= dimof(cmdListsToProcess)) {
@@ -1073,6 +1104,15 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         return HasOpenMainContextCommandList() || _pimpl->_fallbackGraphicsQueueCmdList;
     }
 
+    static unsigned CalculateStagingBufferSpace()
+    {
+        // Allocate enough room for 4 4k*4k textures with mipmaps
+        // We want this to be inline with the size of real textures in order to avoid
+        // wasting space
+        auto largeTexSize = ByteCount(TextureDesc::Plain2D( 4096, 4096, Format::BC7_UNORM_SRGB, 13 ));
+        return 4 * largeTexSize;
+    }
+
     UploadsThreadContext::UploadsThreadContext(
         std::shared_ptr<IThreadContext> graphicsQueueContext,
         std::shared_ptr<IThreadContext> transferQueueContext,
@@ -1098,7 +1138,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _helper = ResourceUploadHelper { *_mainContext };
 
         if (reserveStagingSpace) {
-            const unsigned stagingPageSize = 64*1024*1024;
+            const unsigned stagingPageSize = CalculateStagingBufferSpace();
             _pimpl->_stagingPage = std::make_unique<StagingPage>(*_mainContext, stagingPageSize);
 
             auto& objectFactory = RenderCore::Metal::GetObjectFactory(*_mainContext->GetDevice());

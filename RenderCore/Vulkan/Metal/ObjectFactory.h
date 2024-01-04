@@ -163,6 +163,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		std::shared_ptr<IDestructionQueue> CreateMarkerTrackingDestroyer(const std::shared_ptr<IAsyncTracker>&);
 		void SetDefaultDestroyer(const std::shared_ptr<IDestructionQueue>&);
         VmaAllocator GetVmaAllocator() { return _vmaAllocator; }
+        IDestructionQueue& GetImmediateDestroyer();
 
         #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
             void ForgetResource(uint64_t resourceGuid) const;
