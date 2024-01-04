@@ -4,8 +4,10 @@
 
 #include "MountingTree.h"
 #include "../Utility/MemoryUtils.h"
+#include "../Utility/FastParseValue.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/Streams/PathUtils.h"
+#include "../Utility/Conversion.h"
 #include <atomic>
 
 namespace Assets
@@ -39,10 +41,10 @@ namespace Assets
 		uint32_t			_changeId = 1;	// start at one so we can use 0 as a sentinel
 		Threading::RecursiveMutex	_mountsLock;
 		bool				_hasAtLeastOneMount;
-		AbsolutePathMode    _absolutePathMode;
+		
+		Mount 				_defaultMount;
 
-		Pimpl(const FilenameRules &rules) : _rules(rules), _hasAtLeastOneMount(false),
-		                                    _absolutePathMode(AbsolutePathMode::RawOS) {}
+		Pimpl(const FilenameRules &rules) : _rules(rules), _hasAtLeastOneMount(false) {}
 	};
 
 	template<typename CharType>
@@ -54,8 +56,10 @@ namespace Assets
 	template<typename CharType>
 		static const CharType* FindFirstSeparator(StringSection<CharType> section)
 	{
-		const CharType seps[] = { (CharType)'\\', (CharType)'/' };
-		return std::find_first_of(section.begin(), section.end(), seps, ArrayEnd(seps));
+		auto i = section.begin();
+		for (;i!=section.end(); ++i)
+			if (IsSeparator(*i)) break;
+		return i;
 	}
 
 	template<typename CharType>
@@ -94,6 +98,33 @@ namespace Assets
 		auto requestString = MakeStringSection(
 			(const CharType*)_request.begin(), 
 			(const CharType*)_request.end());
+		IFileSystem::Marker marker;
+
+		if (_type == Type::FullyQualified) {
+			// special case for requests that explicitly identify the mounted filesystem
+			if (_nextMountToTest != 0) return Result::NoCandidates;
+			++_nextMountToTest;
+
+			const MountingTree::Pimpl::Mount* mt;
+			if (_fullyQualifiedMountId == ~0u) mt = &_pimpl->_defaultMount;
+			else {
+				for (const auto& m:_pimpl->_mounts)
+					if (m._id == _fullyQualifiedMountId) {
+						mt = &m;
+						break;
+					}
+			}
+
+			auto transResult = mt->_fileSystem->TryTranslate(marker, requestString);
+			if (transResult == IFileSystem::TranslateResult::Success) {
+				result._fileSystem = mt->_fileSystem;
+				result._marker = std::move(marker);
+				result._mountPoint = mt->_mountPointBuffer;
+				result._mountId = mt->_id;
+				return Result::Success;
+			}
+			return Result::NoCandidates;
+		}
 
 		for (;;) {
 			if (_nextMountToTest >= (uint32_t)_pimpl->_mounts.size())
@@ -104,7 +135,6 @@ namespace Assets
 
 			// simple case for mount depth 0
 			if (mt._depth == 0) {
-				IFileSystem::Marker marker;
 				auto transResult = mt._fileSystem->TryTranslate(marker, requestString);
 				if (transResult == IFileSystem::TranslateResult::Success) {
 					result._fileSystem = mt._fileSystem;
@@ -139,7 +169,6 @@ namespace Assets
 					(const CharType*)_segments[mt._depth].begin(), 
 					requestString.end());
 
-				IFileSystem::Marker marker;
 				auto transResult = mt._fileSystem->TryTranslate(marker, remainderSection);
 				if (transResult == IFileSystem::TranslateResult::Success) {
 					result._fileSystem = mt._fileSystem;
@@ -175,12 +204,88 @@ namespace Assets
 		return isRawFilesystem;
 	}
 
+	template<typename CharType>
+		void MountingTree::EnumerableLookup::Configure(StringSection<CharType> totalSection)
+	{
+		const CharType* iterator = totalSection.begin();
+
+		StringSection<CharType> stem;
+		bool isAbsolutePath = false;
+
+		auto segmentBegin = iterator;
+		for (;;) {
+			if (expect_evaluation(iterator == totalSection.end(), false)) break;
+			if (expect_evaluation(*iterator == ':' && iterator+1 != totalSection.end() && IsSeparator(*(iterator+1)), false)) {
+				// stem ends in ":/"
+				// Eat this segment, and then continue to loop, looking for the first segment after the stem
+				if (!stem.IsEmpty())
+					Throw(std::runtime_error("Multiple stems in pathname: " + Conversion::Convert<std::string>(totalSection.AsString())));
+				stem = MakeStringSection(segmentBegin, iterator);
+				iterator+=2;
+				segmentBegin = iterator;
+			} else if (expect_evaluation(IsSeparator(*iterator), false)) {
+				isAbsolutePath = iterator == segmentBegin;		// ie, starts with a separator
+				break;
+			} else
+				++iterator;
+		}
+
+		for(;;) {
+			if (iterator != segmentBegin) {
+				bool processed = false;
+				if (expect_evaluation(*segmentBegin == '.', false)) {
+					if (segmentBegin+1 == iterator) {
+						// If we find "./", we can ignore that entirely
+						// This also applies to "./" at the start of the input -- we just skip it
+						// It's not relevant here; because "./" refers to a directory, not a file
+						// and the mounting tree system only handles files, not directories
+						processed = true;
+					} else if (*(segmentBegin+1) == '.' && (segmentBegin+2) == iterator) {
+						// this is exactly ".."
+						// we should ignore the last segment
+						if (!_segmentCount) {
+							// If there are more '..' than specified segments, we consider this an
+							// absolute path and don't try to apply the mounting tree system
+							isAbsolutePath = true;
+							break;
+						} else {
+							--_segmentCount;
+							processed = true;
+						}
+					}
+				}
+
+				if (!processed) {
+					if (_segmentCount < dimof(_segments))
+						_segments[_segmentCount] = { (const uint8_t*)segmentBegin, (const uint8_t*)iterator };
+					++_segmentCount;
+				}
+			}
+
+			iterator = SkipSeparators<CharType>({iterator, totalSection.end()});
+			if (iterator == totalSection.end()) break;
+			segmentBegin = iterator;
+			iterator = FindFirstSeparator<CharType>({iterator, totalSection.end()});
+		}
+
+		// If the filename begins with a "/" or a Windows-style drive (eg, c:/) then we can't
+		// use the mounting system, and we must drop back to the raw OS filesystem.
+		_type = isAbsolutePath ? Type::FullyQualified : Type::Normal;
+		if (expect_evaluation(!stem.IsEmpty(), false)) {
+			auto parseEnd = FastParseValue(stem, _fullyQualifiedMountId);
+			if (parseEnd == stem.end()) {
+				_request.first = (const void*)(stem.end()+2);	// advance over the stem
+			} else
+				_fullyQualifiedMountId = ~0u;	// fallback to default FS (eg, this might be a OS drive specifier)
+			_type = Type::FullyQualified;
+		}
+	}
+
 	MountingTree::EnumerableLookup::EnumerableLookup(
 		IteratorRange<const void*> request, Encoding encoding, MountingTree::Pimpl* pimpl)
 	: _request(request)
 	, _encoding(encoding)
 	, _nextMountToTest(0)
-	, _isAbsolutePath(false)
 	, _pimpl(pimpl)
 	, _changeId(0)
 	, _nextHashValueToBuild(0)
@@ -193,90 +298,10 @@ namespace Assets
 		_segmentCount = 0;
 		if (_encoding == Encoding::UTF8) {
 			StringSection<char> totalSection { (const char*)request.begin(), (const char*)request.end() };
-			const char* iterator = totalSection.begin();
-			while (iterator < totalSection.end()) {
-				iterator = SkipSeparators<char>({iterator, totalSection.end()});
-				auto segmentBegin = iterator;
-				iterator = FindFirstSeparator<char>({iterator, totalSection.end()});
-
-				if (iterator != segmentBegin) {
-					if (*segmentBegin == '.') {
-						if (segmentBegin+1 == iterator) {
-							// If we find "./", we can ignore that entirely
-							// This also applies to "./" at the start of the input -- we just skip it
-							// It's not relevant here; because "./" refers to a directory, not a file
-							// and the mounting tree system only handles files, not directories
-							continue;
-						} else if (*(segmentBegin+1) == '.' && (segmentBegin+2) == iterator) {
-							// this is exactly ".."
-							// we should ignore the last segment
-							if (!_segmentCount) {
-								// If there are more '..' than specified segments, we consider this an
-								// absolute path and don't try to apply the mounting tree syste,
-								_isAbsolutePath = true;
-								break;
-							} else {
-								--_segmentCount;
-								continue;
-							}
-						}
-					}
-
-					if (_segmentCount < dimof(_segments))
-						_segments[_segmentCount] = { (const uint8_t*)segmentBegin, (const uint8_t*)iterator };
-					++_segmentCount;
-				}
-			}
-
-			// If the filename begins with a "/" or a Windows-style drive (eg, c:/) then we can't
-			// use the mounting system, and we must drop back to the raw OS filesystem.
-			_isAbsolutePath |= !totalSection.IsEmpty() && IsSeparator(totalSection[0]);
-			if (_segmentCount >= 2) {
-				_isAbsolutePath |= std::find((const char*)_segments[0].begin(), (const char*)_segments[0].end(), ':') != (const char*)_segments[0].end();
-			}
+			Configure(totalSection);
 		} else {
 			StringSection<utf16> totalSection { (const utf16*)request.begin(), (const utf16*)request.end() };
-			const utf16* iterator = totalSection.begin();
-			while (iterator < totalSection.end()) {
-				iterator = SkipSeparators<utf16>({iterator, totalSection.end()});
-				auto segmentBegin = iterator;
-				iterator = FindFirstSeparator<utf16>({iterator, totalSection.end()});
-
-				if (iterator != segmentBegin) {
-					if (*segmentBegin == '.') {
-						if (segmentBegin+1 == iterator) {
-							// If we find "./", we can ignore that entirely
-							// This also applies to "./" at the start of the input -- we just skip it
-							// It's not relevant here; because "./" refers to a directory, not a file
-							// and the mounting tree system only handles files, not directories
-							continue;
-						} else if (*(segmentBegin+1) == '.' && (segmentBegin+2) == iterator) {
-							// this is exactly ".."
-							// we should ignore the last segment
-							if (!_segmentCount) {
-								// If there are more '..' than specified segments, we consider this an
-								// absolute path and don't try to apply the mounting tree syste,
-								_isAbsolutePath = true;
-								break;
-							} else {
-								--_segmentCount;
-								continue;
-							}
-						}
-					}
-
-					if (_segmentCount < dimof(_segments))
-						_segments[_segmentCount] = { (const uint8_t*)segmentBegin, (const uint8_t*)iterator };
-					++_segmentCount;
-				}
-			}
-
-			// If the filename begins with a "/" or a Windows-style drive (eg, c:/) then we can't
-			// use the mounting system, and we must drop back to the raw OS filesystem.
-			_isAbsolutePath |= !totalSection.IsEmpty() && IsSeparator(totalSection[0]);
-			if (_segmentCount >= 2) {
-				_isAbsolutePath |= std::find((const utf16*)_segments[0].begin(), (const utf16*)_segments[0].end(), ':') != (const utf16*)_segments[0].end();
-			}
+			Configure(totalSection);
 		}
 	}
 
@@ -379,6 +404,17 @@ namespace Assets
 		return nullptr;
 	}
 
+	std::shared_ptr<IFileSystem> MountingTree::GetMountedFileSystemPtr(MountID mountId)
+	{
+		ScopedLock(_pimpl->_mountsLock);
+		auto i = std::find_if(
+			_pimpl->_mounts.begin(), _pimpl->_mounts.end(),
+			[mountId](const Pimpl::Mount& m) { return m._id == mountId; });
+		if (i != _pimpl->_mounts.end())
+			return i->_fileSystem;
+		return {};
+	}
+
 	std::basic_string<utf8> MountingTree::GetMountPoint(MountID mountId)
 	{
 		ScopedLock(_pimpl->_mountsLock);
@@ -390,28 +426,72 @@ namespace Assets
 		return {};
 	}
 
-	void MountingTree::SetAbsolutePathMode(AbsolutePathMode newMode)
+	void MountingTree::SetDefaultFileSystem(std::shared_ptr<IFileSystem> fs)
 	{
-		_pimpl->_absolutePathMode = newMode;
+		_pimpl->_defaultMount._fileSystem = std::move(fs);
 	}
 
-	auto MountingTree::GetAbsolutePathMode() -> AbsolutePathMode
+	const std::shared_ptr<IFileSystem>& MountingTree::GetDefaultFileSystem()
 	{
-		return _pimpl->_absolutePathMode;
-	}
-
-	bool MountingTree::LooksLikeAbsolutePath(StringSection<utf8> filename)
-	{
-		bool isAbsolutePath = !filename.IsEmpty() && IsSeparator(filename[0]);
-		isAbsolutePath |= !MakeSplitPath(filename).GetDrive().IsEmpty();
-		return isAbsolutePath;
+		return _pimpl->_defaultMount._fileSystem;
 	}
 
 	FileSystemWalker MountingTree::BeginWalk(StringSection<utf8> initialSubDirectory)
 	{
-		// Find each filesystem that matches the 
-		auto splitInitial = MakeSplitPath(initialSubDirectory).Simplify();
 		std::vector<FileSystemWalker::StartingFS> result;
+
+		// have to check to the start of the string to see if the "fully qualified" logic needs to apply
+		auto i = initialSubDirectory.begin();
+		bool fullyQual = false;
+		unsigned fullyQualMountId = ~0u;
+		while (i != initialSubDirectory.end()) {
+			if (IsSeparator(*i)) {
+				fullyQual = i == initialSubDirectory.begin();
+				break;
+			} else if (*i == ':') {
+				fullyQual = true;
+				auto parseEnd = FastParseValue(MakeStringSection(initialSubDirectory.begin(), i), fullyQualMountId);
+				if (parseEnd == i) initialSubDirectory = i+1;	// skip past the stem in the request
+				else fullyQualMountId = ~0u;
+				break;
+			} else
+				++i;
+		}
+		if (fullyQual) {
+			if (fullyQualMountId != ~0u) {
+
+				for (const auto& m:_pimpl->_mounts)
+					if (m._id == fullyQualMountId) {
+
+						#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+							if (auto searchingFsVerification = std::dynamic_pointer_cast<ISearchableFileSystem>(m._fileSystem))
+								result.push_back({{}, initialSubDirectory.AsString(), searchingFsVerification, m._id});
+						#else
+							if (auto* searchingFs = dynamic_cast<ISearchableFileSystem*>(m._fileSystem.get()))
+								result.push_back({{}, initialSubDirectory.AsString(), searchingFs, m._id});
+						#endif
+
+						break;
+					}
+
+			} else {
+
+				auto& fs = _pimpl->_defaultMount._fileSystem;
+				#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+					if (auto searchingFsVerification = std::dynamic_pointer_cast<ISearchableFileSystem>(fs))
+						result.push_back({{}, initialSubDirectory.AsString(), searchingFsVerification, 0});
+				#else
+					if (auto* searchingFs = dynamic_cast<ISearchableFileSystem*>(fs.get()))
+						result.push_back({{}, initialSubDirectory.AsString(), searchingFs, 0});
+				#endif
+
+			}
+
+			return FileSystemWalker(std::move(result));
+		}
+
+		// Find each filesystem that can potentially overlap the given initial subdirectory
+		auto splitInitial = MakeSplitPath(initialSubDirectory).Simplify();
 		ScopedLock(_pimpl->_mountsLock);
 		for (const auto&mount:_pimpl->_mounts) {
 			auto* searchingFs = dynamic_cast<ISearchableFileSystem*>(mount._fileSystem.get());
@@ -455,7 +535,7 @@ namespace Assets
 		return result;
 	}
 
-	MountingTree::MountingTree(FilenameRules& rules)
+	MountingTree::MountingTree(FilenameRules rules)
 	{
 		_pimpl = std::make_unique<Pimpl>(rules);
 	}

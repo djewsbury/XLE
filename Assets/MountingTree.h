@@ -50,16 +50,15 @@ namespace Assets
 		MountID			Mount(StringSection<utf8> mountPoint, std::shared_ptr<IFileSystem> system);
 		void			Unmount(MountID mountId);
 		IFileSystem*	GetMountedFileSystem(MountID);
+		std::shared_ptr<IFileSystem> GetMountedFileSystemPtr(MountID);
 		std::basic_string<utf8>		GetMountPoint(MountID);
 
-		enum class AbsolutePathMode { MountingTree, RawOS };
-		void        SetAbsolutePathMode(AbsolutePathMode newMode);
-		AbsolutePathMode GetAbsolutePathMode();
-		bool 		LooksLikeAbsolutePath(StringSection<utf8> filename);
+		void SetDefaultFileSystem(std::shared_ptr<IFileSystem>);
+		const std::shared_ptr<IFileSystem>& GetDefaultFileSystem();
 
 		FileSystemWalker BeginWalk(StringSection<utf8> initialSubDirectory);
 
-		MountingTree(Utility::FilenameRules& rules);
+		MountingTree(Utility::FilenameRules rules);
 		~MountingTree();
 
 		MountingTree(const MountingTree&) = delete;
@@ -89,7 +88,7 @@ namespace Assets
 		enum class Result { Success, NoCandidates, Invalidated };
 		Result TryGetNext(CandidateObject& result) const;
 		bool IsGood() const { return _pimpl != nullptr; }
-		bool IsAbsolutePath() const { return _isAbsolutePath; }
+		bool IsFullyQualifiedPath() const { return _type == Type::FullyQualified; }
 
 		EnumerableLookup(const EnumerableLookup&) = delete;
 		EnumerableLookup& operator=(const EnumerableLookup&) = delete;
@@ -110,13 +109,19 @@ namespace Assets
 		mutable IteratorRange<const uint8_t*> _segments[8];		// contains internal pointers into the input data
 		unsigned 				_segmentCount;
 		mutable unsigned		_nextHashValueToBuild;
-		bool					_isAbsolutePath;
+
+		enum Type { Normal, FullyQualified };
+		Type _type = Type::Normal;
+		mutable uint32_t _fullyQualifiedMountId = ~0u;
 
 		EnumerableLookup(IteratorRange<const void*> request, Encoding encoding, MountingTree::Pimpl* pimpl);
 		EnumerableLookup();
 
 		template<typename CharType>
 			Result TryGetNext_Internal(CandidateObject& result) const;
+
+		template<typename CharType>
+			void Configure(StringSection<CharType>);
 
 		friend class MountingTree;
 	};

@@ -16,7 +16,6 @@ namespace Assets
 	struct Ptrs
 	{
 		std::shared_ptr<MountingTree> s_mainMountingTree;
-		std::shared_ptr<IFileSystem> s_defaultFileSystem;
 	};
 	Ptrs& GetPtrs()
 	{
@@ -57,13 +56,6 @@ namespace Assets
 			MountingTree::CandidateObject candidateObject;
 			auto& ptrs = GetPtrs();
 			auto lookup = ptrs.s_mainMountingTree->Lookup(filename);
-			if (lookup.IsAbsolutePath() && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
-					// attempt opening with the default file system...
-				if (ptrs.s_defaultFileSystem)
-					return ::Assets::TryOpen(result, *ptrs.s_defaultFileSystem, filename, openMode, shareMode);
-				return IFileSystem::IOReason::FileNotFound;
-			}
-			
 			for (;;) {
 				auto r = lookup.TryGetNext(candidateObject);
 				if (r == LookupResult::Invalidated) {
@@ -92,13 +84,6 @@ namespace Assets
 			MountingTree::CandidateObject candidateObject;
 			auto& ptrs = GetPtrs();
 			auto lookup = ptrs.s_mainMountingTree->Lookup(filename);
-			if (lookup.IsAbsolutePath() && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
-					// attempt opening with the default file system...
-				if (ptrs.s_defaultFileSystem)
-					return ::Assets::TryOpen(result, *ptrs.s_defaultFileSystem, filename, size, openMode, shareMode);
-				return IFileSystem::IOReason::FileNotFound;
-			}
-
 			for (;;) {
                 auto r = lookup.TryGetNext(candidateObject);
                 if (r == LookupResult::Invalidated) {
@@ -126,12 +111,6 @@ namespace Assets
 			MountingTree::CandidateObject candidateObject;
 			auto& ptrs = GetPtrs();
 			auto lookup = ptrs.s_mainMountingTree->Lookup(filename);
-			if (lookup.IsAbsolutePath() && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
-					// attempt opening with the default file system...
-				if (ptrs.s_defaultFileSystem)
-					return ::Assets::TryMonitor(*ptrs.s_defaultFileSystem, snapshot, filename, evnt);
-				return IFileSystem::IOReason::FileNotFound;
-			}
 
 			std::optional<FileSnapshot> firstExistingSnapshot;
 			bool gotSuccessfulMonitor = false;
@@ -172,13 +151,6 @@ namespace Assets
 			MountingTree::CandidateObject candidateObject;
 			auto& ptrs = GetPtrs();
 			auto lookup = ptrs.s_mainMountingTree->Lookup(filename);
-			if (lookup.IsAbsolutePath() && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
-					// attempt opening with the default file system...
-				if (ptrs.s_defaultFileSystem)
-					return ::Assets::TryFakeFileChange(*ptrs.s_defaultFileSystem, filename);
-				return IFileSystem::IOReason::FileNotFound;
-			}
-
 			for (;;) {
 				auto r = lookup.TryGetNext(candidateObject);
 				if (r == LookupResult::Invalidated) {
@@ -206,13 +178,6 @@ namespace Assets
 			MountingTree::CandidateObject candidateObject;
 			auto& ptrs = GetPtrs();
 			auto lookup = ptrs.s_mainMountingTree->Lookup(filename);
-			if (lookup.IsAbsolutePath() && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
-					// attempt opening with the default file system...
-				if (ptrs.s_defaultFileSystem)
-					return ::Assets::TryGetDesc(*ptrs.s_defaultFileSystem, filename);
-				return FileDesc{ std::basic_string<utf8>(), std::basic_string<utf8>(), {FileSnapshot::State::DoesNotExist} };
-			}
-
 			for (;;) {
 				auto r = lookup.TryGetNext(candidateObject);
 				if (r == LookupResult::Invalidated) {
@@ -241,11 +206,6 @@ namespace Assets
 			MountingTree::CandidateObject candidateObject;
 			auto& ptrs = GetPtrs();
 			auto lookup = ptrs.s_mainMountingTree->Lookup(filename);
-			if (lookup.IsAbsolutePath() && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
-					// There isn't a FileSystemId for the default fs, so we can't return a valid result here
-				return {{}, ~0u};
-			}
-
 			for (;;) {
 				auto r = lookup.TryGetNext(candidateObject);
 				if (r == LookupResult::Invalidated) {
