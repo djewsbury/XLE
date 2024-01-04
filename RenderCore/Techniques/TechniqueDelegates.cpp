@@ -237,7 +237,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
+			nascentDesc->_rasterization = BuildDefaultRasterizationDesc(stateSet);
 			bool deferredDecal = 
 					(stateSet._flag & Assets::RenderStateSet::Flag::BlendType)
 				&&	(stateSet._blendType == Assets::RenderStateSet::BlendType::DeferredDecal);
@@ -373,7 +373,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
+			nascentDesc->_rasterization = BuildDefaultRasterizationDesc(stateSet);
 
 			if (stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend) {
 				nascentDesc->_blend.push_back(AttachmentBlendDesc {
@@ -570,7 +570,7 @@ namespace RenderCore { namespace Techniques
 		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
 		{
 			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
-            _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};			
+            _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};
 
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
@@ -835,9 +835,15 @@ namespace RenderCore { namespace Techniques
 			unsigned cullDisable = 0;
 			if (stateSet._flag & Assets::RenderStateSet::Flag::DoubleSided)
 				cullDisable = !!stateSet._doubleSided;
-			nascentDesc->_rasterization = _rs[cullDisable];
-			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWrite;
-			nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
+			nascentDesc->_rasterization = BuildDefaultRasterizationDesc(stateSet);
+			nascentDesc->_depthStencil = _dss[(stateSet._flag & Assets::RenderStateSet::Flag::WriteMask) ? (stateSet._writeMask & 3) : 3];
+			if (_allowBlending && stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend) {
+				nascentDesc->_blend.push_back(AttachmentBlendDesc {
+					stateSet._forwardBlendOp != BlendOp::NoBlending,
+					stateSet._forwardBlendSrc, stateSet._forwardBlendDst, stateSet._forwardBlendOp });
+			} else {
+				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
+			}
 			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			auto illumType = CalculateIllumType(shaderPatches);
@@ -879,12 +885,14 @@ namespace RenderCore { namespace Techniques
 		TechniqueDelegate_Utility(
 			TechniqueFileHelper&& helper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
-			UtilityDelegateType utilityType)
+			UtilityDelegateType utilityType, bool allowBlending)
 		: _techniqueFileHelper{std::move(helper)}, _pipelineLayout(std::move(pipelineLayout))
-		, _utilityType(utilityType)
+		, _utilityType(utilityType), _allowBlending(allowBlending)
 		{
-			_rs[0x0] = CommonResourceBox::s_rsDefault;
-            _rs[0x1] = CommonResourceBox::s_rsCullDisable;
+			_dss[0] = CommonResourceBox::s_dsDisable;
+			_dss[1] = CommonResourceBox::s_dsWriteOnly;
+			_dss[2] = CommonResourceBox::s_dsReadOnly;
+			_dss[3] = CommonResourceBox::s_dsReadWrite;
 
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
@@ -893,18 +901,18 @@ namespace RenderCore { namespace Techniques
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 			TechniqueSetFileFuture techniqueSet,
-			UtilityDelegateType utilityType)
+			UtilityDelegateType utilityType, bool allowBlending)
 		{
 			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
-				[utilityType](auto&& promise, auto techniqueSetFile) {
+				[utilityType, allowBlending](auto&& promise, auto techniqueSetFile) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile, utilityType};
 						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
-							[helper=std::move(helper), utilityType](auto pipelineLayout) mutable {
-								return std::make_shared<TechniqueDelegate_Utility>(std::move(helper), std::move(pipelineLayout), utilityType);
+							[helper=std::move(helper), utilityType, allowBlending](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_Utility>(std::move(helper), std::move(pipelineLayout), utilityType, allowBlending);
 							});
 					} CATCH (...) {
 						promise.set_exception(std::current_exception());
@@ -914,8 +922,9 @@ namespace RenderCore { namespace Techniques
 
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
-		RasterizationDesc _rs[2];
 		UtilityDelegateType _utilityType;
+		DepthStencilDesc _dss[4];
+		bool _allowBlending;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
 		::Assets::DependencyValidation _depVal;
 	};
@@ -923,9 +932,9 @@ namespace RenderCore { namespace Techniques
 	void CreateTechniqueDelegate_Utility(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		TechniqueSetFileFuture techniqueSet,
-		UtilityDelegateType type)
+		UtilityDelegateType type, bool allowBlending)
 	{
-		TechniqueDelegate_Utility::ConstructToPromise(std::move(promise), std::move(techniqueSet), type);
+		TechniqueDelegate_Utility::ConstructToPromise(std::move(promise), std::move(techniqueSet), type, allowBlending);
 	}
 
 	std::optional<UtilityDelegateType> AsUtilityDelegateType(StringSection<> input)
@@ -980,7 +989,7 @@ namespace RenderCore { namespace Techniques
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
-			nascentDesc->_rasterization = BuildDefaultRastizerDesc(stateSet);
+			nascentDesc->_rasterization = BuildDefaultRasterizationDesc(stateSet);
 
 			if (stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend) {
 				nascentDesc->_blend.push_back(AttachmentBlendDesc {
@@ -1222,7 +1231,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	RasterizationDesc BuildDefaultRastizerDesc(const Assets::RenderStateSet& states)
+	RasterizationDesc BuildDefaultRasterizationDesc(const Assets::RenderStateSet& states)
 	{
 		auto cullMode = CullMode::Back;
 		auto fillMode = FillMode::Solid;

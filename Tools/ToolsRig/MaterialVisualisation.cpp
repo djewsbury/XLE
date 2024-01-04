@@ -419,7 +419,7 @@ namespace ToolsRig
 
 			ResolvedTechnique result;
 			result._shaderProgram = ResolveVariation(*shaderPatches, selectors);
-			result._rasterization = BuildDefaultRastizerDesc(stateSet);
+			result._rasterization = BuildDefaultRasterizationDesc(stateSet);
 
 			#pragma warning(disable:4127) // conditional expression is constant
 				// disable blending to avoid problem when rendering single component stuff 

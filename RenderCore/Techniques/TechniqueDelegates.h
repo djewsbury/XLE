@@ -110,7 +110,8 @@ namespace RenderCore { namespace Techniques
 	void CreateTechniqueDelegate_Utility(
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		TechniqueSetFileFuture techniqueSet,
-		UtilityDelegateType utilityType);
+		UtilityDelegateType utilityType,
+		bool allowBlending = true);
 
 	std::optional<UtilityDelegateType> AsUtilityDelegateType(StringSection<>);
 
@@ -130,7 +131,7 @@ namespace RenderCore { namespace Techniques
 		const RasterizationDesc& rasterization,
 		const DepthStencilDesc& depthStencil);
 
-	RasterizationDesc BuildDefaultRastizerDesc(const Assets::RenderStateSet& states);
+	RasterizationDesc BuildDefaultRasterizationDesc(const Assets::RenderStateSet& states);
 
 	enum class IllumType { NoPerPixel, PerPixel, PerPixelAndEarlyRejection, PerPixelCustomLighting };
 	IllumType CalculateIllumType(const CompiledShaderPatchCollection& patchCollection);
