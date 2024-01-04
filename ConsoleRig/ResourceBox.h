@@ -117,11 +117,13 @@ namespace ConsoleRig
 		auto& boxTable = Internal::GetBoxFutureTable<std::decay_t<Box>>();
 		auto i = LowerBound(boxTable, hashValue);
 		if (i!=boxTable.end() && i->first==hashValue) {
-			if (::Assets::IsInvalidated(*i->second)) {
-				i->second = std::make_shared<::Assets::MarkerPtr<Box>>();
-				Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
-				Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
-			}
+			#if defined(_DEBUG)	// requires frequent locks of the dep val global lock -- too expensive for release
+				if (::Assets::IsInvalidated(*i->second)) {
+					i->second = std::make_shared<::Assets::MarkerPtr<Box>>();
+					Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
+					Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
+				}
+			#endif
 			return *i->second->Actualize();
 		}
 
@@ -162,11 +164,13 @@ namespace ConsoleRig
 		auto& boxTable = Internal::GetBoxFutureTable<std::decay_t<Box>>();
 		auto i = LowerBound(boxTable, hashValue);
 		if (i!=boxTable.end() && i->first==hashValue) {
-			if (::Assets::IsInvalidated(*i->second)) {
-				i->second = std::make_shared<::Assets::MarkerPtr<Box>>();
-				Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
-				Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
-			}
+			#if defined(_DEBUG)	// requires frequent locks of the dep val global lock -- too expensive for release
+				if (::Assets::IsInvalidated(*i->second)) {
+					i->second = std::make_shared<::Assets::MarkerPtr<Box>>();
+					Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
+					Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
+				}
+			#endif
 			auto* res = i->second->TryActualize();
 			if (!res) return nullptr;
 			return res->get();
