@@ -1540,6 +1540,60 @@ namespace XLEMath
 		return MakeObjectToWorld(forward, adjustedUp, adjustedRight, position);
 	}
 
+    Float3x4 MakeCameraToWorld3x4(const Float3& forward, const Float3& up, const Float3& right, const Float3& position)
+    {
+        return Float3x4(
+            right[0], up[0], -forward[0], position[0],
+            right[1], up[1], -forward[1], position[1],
+            right[2], up[2], -forward[2], position[2]);
+    }
+
+    Float3x4 MakeCameraToWorld3x4(const Float3& forward, const Float3& up, const Float3& position)
+    {
+        Float3 right = Cross(forward, up);
+        if (XlAbs(MagnitudeSquared(right)) < 1e-10f) {
+                // If forward and up are perpendicular, right will be zero
+                // length (or close to zero).
+                // We need to pick another up in this case
+                //  -- ideally the caller would provide a better up vector
+            right = Cross(forward, Float3(0.f, 1.f, 0.f));
+            if (XlAbs(MagnitudeSquared(right)) < 1e-10f)
+                right = Cross(forward, Float3(1.f, 0.f, 0.f));
+        }
+
+        Float3 adjustedUp       = Normalize(Cross(right, forward));
+        Float3 adjustedRight    = Normalize(Cross(forward, adjustedUp));
+
+        return MakeCameraToWorld3x4(forward, adjustedUp, adjustedRight, position);
+    }
+
+	Float3x4 MakeObjectToWorld3x4(const Float3& forward, const Float3& up, const Float3& right, const Float3& position)
+	{
+		return Float3x4(
+			right[0], forward[0], up[0], position[0],
+			right[1], forward[1], up[1], position[1],
+			right[2], forward[2], up[2], position[2]);
+	}
+
+	Float3x4    MakeObjectToWorld3x4(const Float3& forward, const Float3& up, const Float3& position)
+	{
+		Float3 right = Cross(forward, up);
+		if (XlAbs(MagnitudeSquared(right)) < 1e-10f) {
+			// If forward and up are perpendicular, right will be zero
+			// length (or close to zero).
+			// We need to pick another up in this case
+			//  -- ideally the caller would provide a better up vector
+			right = Cross(forward, Float3(0.f, 1.f, 0.f));
+			if (XlAbs(MagnitudeSquared(right)) < 1e-10f)
+				right = Cross(forward, Float3(1.f, 0.f, 0.f));
+		}
+
+		Float3 adjustedUp = Normalize(Cross(right, forward));
+		Float3 adjustedRight = Normalize(Cross(forward, adjustedUp));
+
+		return MakeObjectToWorld3x4(forward, adjustedUp, adjustedRight, position);
+	}
+
     signed ArbitraryRotation::IsRotationX() const
     {
             // This math only works correctly if the axis is of a reasonable

@@ -35,8 +35,6 @@ namespace XLEMath
         T1(Primitive) using Matrix3x4T = cml::matrix< Primitive, cml::fixed<3,4>, cml::col_basis>;
         T1(Primitive) using Matrix4x4T = cml::matrix< Primitive, cml::fixed<4,4>, cml::col_basis>;
 
-        Float4x4        Expand(const Float3x3& rotationScalePart, const Float3& translationPart);
-
         template<typename BasicType, int I, int J>
 			inline bool Equivalent(
 				cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis> lhs, 
@@ -106,6 +104,7 @@ namespace XLEMath
     }
 
     Float4x4        Expand(const Float3x3& rotationScalePart, const Float3& translationPart);
+    Float3x4        Expand3x4(const Float3x3& rotationScalePart, const Float3& translationPart);
 
     inline const float* AsFloatArray(const Float4x4& m)    { return &m(0,0); }
     inline float* AsFloatArray(Float4x4& m)                { return &m(0,0); }

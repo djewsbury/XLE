@@ -264,6 +264,11 @@ namespace XLEMath
 	inline void SetForward(Float4x4& matrix, const Float3& forward)			{ matrix(0,1) = forward[0]; matrix(1,1) = forward[1]; matrix(2,1) = forward[2]; }
 	inline void SetUp(Float4x4& matrix, const Float3& up)					{ matrix(0,2) = up[0]; matrix(1,2) = up[1]; matrix(2,2) = up[2]; }
 
+    inline void SetTranslation(Float3x4& matrix, const Float3& position)	{ matrix(0,3) = position[0]; matrix(1,3) = position[1]; matrix(2,3) = position[2]; }
+	inline void SetRight(Float3x4& matrix, const Float3& right)				{ matrix(0,0) = right[0]; matrix(1,0) = right[1]; matrix(2,0) = right[2]; }
+	inline void SetForward(Float3x4& matrix, const Float3& forward)			{ matrix(0,1) = forward[0]; matrix(1,1) = forward[1]; matrix(2,1) = forward[2]; }
+	inline void SetUp(Float3x4& matrix, const Float3& up)					{ matrix(0,2) = up[0]; matrix(1,2) = up[1]; matrix(2,2) = up[2]; }
+
     ScaleRotationTranslationQ    SphericalInterpolate(const ScaleRotationTranslationQ& lhs, const ScaleRotationTranslationQ& rhs, float alpha);
 
     Float4x4    AsFloat4x4(const ScaleTranslation& input);
@@ -313,6 +318,12 @@ namespace XLEMath
 
 	Float4x4    MakeObjectToWorld(const Float3& forward, const Float3& up, const Float3& position);
 	Float4x4    MakeObjectToWorld(const Float3& forward, const Float3& up, const Float3& right, const Float3& position);
+
+    Float3x4    MakeCameraToWorld3x4(const Float3& forward, const Float3& up, const Float3& position);
+    Float3x4    MakeCameraToWorld3x4(const Float3& forward, const Float3& up, const Float3& right, const Float3& position);
+
+	Float3x4    MakeObjectToWorld3x4(const Float3& forward, const Float3& up, const Float3& position);
+	Float3x4    MakeObjectToWorld3x4(const Float3& forward, const Float3& up, const Float3& right, const Float3& position);
 
     inline void CopyTransform(Float3x4& destination, const Float4x4& localToWorld)
     {
