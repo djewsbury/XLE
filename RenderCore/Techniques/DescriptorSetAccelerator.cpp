@@ -79,6 +79,7 @@ namespace RenderCore { namespace Techniques
 					}
 				}
 
+				_allReadyBefore = std::max(_allReadyBefore, _resources.size());
 				for (size_t c=_allReadyBefore-_resources.size(); c<_cbUploadMarkers.size(); ++c) {
 					assert(_cbUploadMarkers[c]._future.valid());
 					if (_cbUploadMarkers[c]._future.wait_until(timeoutTime) == std::future_status::timeout) {
@@ -183,6 +184,7 @@ namespace RenderCore { namespace Techniques
 				auto hashName = s._nameHash + a;
 				std::optional<std::string> boundResource = machineHelper._resourceBindings ? machineHelper._resourceBindings->GetParameterAsString(hashName) : std::optional<std::string>{};
 				if (boundResource.has_value() && !boundResource.value().empty()) {
+
 					if (s._type != DescriptorType::SampledTexture)
 						Throw(std::runtime_error("Attempting to bind resource to non-texture descriptor slot for slot " + s._name));
 
@@ -202,9 +204,8 @@ namespace RenderCore { namespace Techniques
 				} else if ((s._type == DescriptorType::UniformBuffer || s._type == DescriptorType::UniformBufferDynamicOffset) && s._cbIdx < (unsigned)layout._constantBuffers.size()) {
 
 					bool animated = false;
-					if (deformBinding) {
+					if (deformBinding)
 						animated = std::find_if(deformBinding->_animatedSlots.begin(), deformBinding->_animatedSlots.end(), [slotIdx=s._slotIdx](const auto& q) { return q.first == slotIdx; }) != deformBinding->_animatedSlots.end();
-					}
 
 					if (!animated) {
 						auto& cbLayout = layout._constantBuffers[s._cbIdx];
