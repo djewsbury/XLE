@@ -8,11 +8,12 @@
 #include "../Utility/StringUtils.h"
 #include "../Utility/IteratorUtils.h"
 #include <memory>
+#include <future>
 
 namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; }}
 namespace RenderCore { namespace BufferUploads { class IManager; using CommandListID = uint32_t; }}
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Assets { class SkeletonMachine; class ModelRendererConstruction;  }}
+namespace RenderCore { namespace Assets { class SkeletonMachine; class ModelRendererConstruction; class SkeletonBinding; }}
 namespace Assets { class OperationContext; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace SceneEngine
@@ -39,6 +40,8 @@ namespace SceneEngine
 
 		class AnimationConfigureHelper;
 		AnimationConfigureHelper BeginAnimationConfigure();
+
+		virtual std::shared_future<RenderCore::Assets::SkeletonBinding> CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface) = 0;
 
 		virtual void OnFrameBarrier() = 0;
 		virtual void CancelConstructions() = 0;
@@ -67,6 +70,9 @@ namespace SceneEngine
 		void CullAndBuildDrawables(
 			unsigned instanceIdx, const Float3x4& localToWorld);
 
+		void CullAndBuildDrawables(
+			unsigned instanceIdx, const Float3& translation, const Float3x3& rotation, float uniformScale);
+
 		BuildDrawablesHelper(
 			ICharacterScene& scene,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
@@ -91,6 +97,8 @@ namespace SceneEngine
 	public:
 		bool SetRenderer(void* renderer);
 		void ApplySingleAnimation(unsigned instanceIdx, uint64_t id, float time);
+		IteratorRange<const Float4x4*> GetSkeletonMachineOutput();
+
 		AnimationConfigureHelper(ICharacterScene& scene);
 	private:
 		ICharacterScene* _scene;

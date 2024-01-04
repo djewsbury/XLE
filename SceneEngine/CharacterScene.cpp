@@ -95,6 +95,7 @@ namespace SceneEngine
 			Renderer _renderer;
 			Animator _animator;
 			BitHeap _allocatedInstances;
+			std::shared_future<CharacterSceneInternal::Renderer> _pendingRenderer;
 			::Assets::DependencyValidation _depVal;
 		};
 
@@ -125,6 +126,7 @@ namespace SceneEngine
 		void OnFrameBarrier() override;
 		void CancelConstructions() override;
 
+		std::shared_future<RenderCore::Assets::SkeletonBinding> CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface) override;
 		RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) override;
 
 		std::shared_ptr<Assets::OperationContext> GetLoadingContext() override;
@@ -340,7 +342,7 @@ namespace SceneEngine
 
 		std::promise<CharacterSceneInternal::Renderer> rendererPromise;
 		std::promise<CharacterSceneInternal::Animator> animatorPromise;
-		std::shared_future<CharacterSceneInternal::Renderer> rendererFuture = rendererPromise.get_future();
+		newEntry->_pendingRenderer = rendererPromise.get_future();
 		auto animatorFuture = animatorPromise.get_future();
 
 		::Assets::WhenAll(newEntry->_model->_completedConstruction, deformerConstructionFuture).ThenConstructToPromise(
@@ -398,7 +400,7 @@ namespace SceneEngine
 				}
 			});
 
-		::Assets::WhenAll(rendererFuture, newEntry->_animSet->_animSetFuture, newEntry->_model->_completedConstruction).ThenConstructToPromise(
+		::Assets::WhenAll(newEntry->_pendingRenderer, newEntry->_animSet->_animSetFuture, newEntry->_model->_completedConstruction).ThenConstructToPromise(
 			std::move(animatorPromise),
 			[deformAcceleratorPool=_deformAcceleratorPool](const auto& renderer, auto animSet, auto modelConstruction) mutable {
 				CharacterSceneInternal::Animator result;
@@ -423,7 +425,7 @@ namespace SceneEngine
 				return result;
 			});
 
-		::Assets::WhenAll(rendererFuture, std::move(animatorFuture)).Then(
+		::Assets::WhenAll(newEntry->_pendingRenderer, std::move(animatorFuture)).Then(
 			[dstEntryWeak=std::weak_ptr<CharacterSceneInternal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](auto rendererFuture, auto animatorFuture) {
 				auto scene = sceneWeak.lock();
 				if (scene) {
@@ -444,6 +446,31 @@ namespace SceneEngine
 
 		_renderers.emplace_back(newEntry);
 		return newEntry;
+	}
+
+	std::shared_future<RenderCore::Assets::SkeletonBinding> CharacterScene::CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface)
+	{
+		assert(renderer);
+		ScopedLock(_poolLock);
+
+		std::promise<RenderCore::Assets::SkeletonBinding> promise;
+		auto result = promise.get_future();
+
+		auto& rendererEntry = *((const CharacterSceneInternal::RendererEntry*)renderer.get());
+		if (rendererEntry._pendingRenderer.valid()) {
+			::Assets::WhenAll(rendererEntry._pendingRenderer).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[ii = std::vector<uint64_t>{inputInterface.begin(), inputInterface.end()}](const auto& renderer) {
+					return RenderCore::Assets::SkeletonBinding { renderer.GetSkeletonMachine().GetOutputInterface(), ii };
+				});
+		} else {
+			promise.set_value(
+				RenderCore::Assets::SkeletonBinding {
+					rendererEntry._renderer.GetSkeletonMachine().GetOutputInterface(),
+					inputInterface });
+		}
+
+		return result;
 	}
 
 	RenderCore::BufferUploads::CommandListID CharacterScene::GetCompletionCommandList(void* renderer)
@@ -491,6 +518,28 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
+		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+	}
+
+	void ICharacterScene::BuildDrawablesHelper::CullAndBuildDrawables(
+		unsigned instanceIdx, const Float3& translation, const Float3x3& rotation, float uniformScale)
+	{
+		auto composedTransform = Expand3x4(rotation, translation);
+		if (_complexCullingVolume && _complexCullingVolume->TestAABB(composedTransform, uniformScale*_activeRenderer->_aabb.first, uniformScale*_activeRenderer->_aabb.second) == CullTestResult::Culled)
+			return;
+
+		Combine_IntoRHS(UniformScale{uniformScale}, composedTransform);
+		uint32_t viewMask = 0;
+		for (unsigned v=0; v<_views.size(); ++v) {
+			auto localToClip = Combine(composedTransform, _views[v]._worldToProjection);
+			viewMask |= (!CullAABB(localToClip, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
+		}
+		if (!viewMask) return;
+
+		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			composedTransform, instanceIdx, viewMask);
 		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
@@ -562,6 +611,12 @@ namespace SceneEngine
 			instanceIdx, MakeIteratorRange(_activeAnimator->_skeletonMachineOutput));
 	}
 
+	IteratorRange<const Float4x4*> ICharacterScene::AnimationConfigureHelper::GetSkeletonMachineOutput()
+	{
+		assert(_activeAnimator);
+		return _activeAnimator->_skeletonMachineOutput;
+	}
+
 	ICharacterScene::AnimationConfigureHelper::AnimationConfigureHelper(ICharacterScene& scene)
 	: _scene(&scene), _activeAnimator(nullptr), _activeSkeletonMachine(nullptr)
 	{}
@@ -575,6 +630,7 @@ namespace SceneEngine
 			if (!l) continue;
 			l->_renderer = std::move(u._renderer);
 			l->_animator = std::move(u._animator);
+			l->_pendingRenderer = {};
 			// todo -- set dep val
 		}
 		_pendingUpdates.clear();
@@ -582,6 +638,7 @@ namespace SceneEngine
 			auto l = u._dst.lock();
 			if (!l) continue;
 			l->_depVal = std::move(u._depVal);
+			l->_pendingRenderer = {};
 			// todo -- record exception msg
 		}
 		_pendingExceptionUpdates.clear();
