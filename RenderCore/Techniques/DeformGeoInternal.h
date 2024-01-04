@@ -202,6 +202,7 @@ namespace RenderCore { namespace Techniques
 			bool _pendingCreateSharedResources = true;
 			SignalDelegateId _onFrameBarrierDelegate = ~0u;
 			SubFrameEvents* _subFrameEvents = nullptr;
+			unsigned _lastDepValGlobalChangeIndex = 0;
 			Threading::Mutex _mutex;
 
 			void RebuildSharedResources();

@@ -129,14 +129,17 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	void DeformerPipelineCollection::OnFrameBarrier()
 	{
 		ScopedLock(_mutex);
+		
+		auto depValGlobalChangeIndex = ::Assets::GetDepValSys().GlobalChangeIndex();
+
 		bool rebuildAllPipelines = false;
-		if (_pendingCreateSharedResources || ::Assets::IsInvalidated(_preparedSharedResources)) {
+		if (_pendingCreateSharedResources || (depValGlobalChangeIndex != _lastDepValGlobalChangeIndex && ::Assets::IsInvalidated(_preparedSharedResources))) {
 			RebuildSharedResources();
 			rebuildAllPipelines = true;
 		}
 
 		for (unsigned c=0; c<_pipelines.size(); ++c)
-			if (rebuildAllPipelines || ::Assets::IsInvalidated(*_pipelines[c])) {
+			if (rebuildAllPipelines || (depValGlobalChangeIndex != _lastDepValGlobalChangeIndex && ::Assets::IsInvalidated(*_pipelines[c]))) {
 				auto operatorMarker = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
 				::Assets::WhenAll(_preparedSharedResources.ShareFuture()).ThenConstructToPromise(
 					operatorMarker->AdoptPromise(),
@@ -150,6 +153,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					});
 				_pipelines[c] = std::move(operatorMarker);
 			}
+
+		_lastDepValGlobalChangeIndex = depValGlobalChangeIndex;
 	}
 
 	void DeformerPipelineCollection::RegisterOnFrameBarrierCallback(SubFrameEvents& subFrameEvents)
