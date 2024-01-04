@@ -211,7 +211,7 @@ namespace RenderCore { namespace Assets
             formatter.WriteKeyedValue("SmoothLines", AutoAsString(stateSet._smoothLines));
 
         if (stateSet._flag & RenderStateSet::Flag::LineWeight)
-            formatter.WriteKeyedValue("LineWeigth", AutoAsString(stateSet._lineWeight));
+            formatter.WriteKeyedValue("LineWeight", AutoAsString(stateSet._lineWeight));
 
         if (stateSet._flag & RenderStateSet::Flag::WriteMask)
             formatter.WriteKeyedValue("WriteMask", AutoAsString(stateSet._writeMask));
@@ -602,25 +602,14 @@ namespace RenderCore { namespace Assets
         return *this;
     }
 
-	RawMatConfigurations::RawMatConfigurations(
-		const ::Assets::Blob& blob,
-		const ::Assets::DependencyValidation& depVal,
-		StringSection<::Assets::ResChar>)
+	RawMaterialSet_Internal::RawMaterialSet_Internal(Formatters::TextInputFormatter<char>& fmttr)
     {
-            //  Get associated "raw" material information. This is should contain the material information attached
-            //  to the geometry export (eg, .dae file).
-
-        if (blob && !blob->empty()) {
-            Formatters::TextInputFormatter<utf8> formatter(MakeIteratorRange(*blob).template Cast<const void*>());
-
-            StringSection<> keyName;
-            while (formatter.TryKeyedItem(keyName)) {
-                _configurations.push_back(keyName.AsString());
-                SkipValueOrElement(formatter);
-            }
+        StringSection<> keyName;
+        while (fmttr.TryKeyedItem(keyName)) {
+            Formatters::RequireBeginElement(fmttr);
+            _materials.emplace_back(keyName.AsString(), RawMaterial{fmttr});
+            Formatters::RequireEndElement(fmttr);
         }
-
-        _validationCallback = depVal;
     }
 
     static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "material"); }

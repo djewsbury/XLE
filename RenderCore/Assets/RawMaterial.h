@@ -215,23 +215,18 @@ namespace RenderCore { namespace Assets
 
     using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial, CompilableMaterialAssetMixin<RawMaterial>>;
 
-	class RawMatConfigurations
+	class RawMaterialSet_Internal
     {
     public:
-        std::vector<std::string> _configurations;
+        std::vector<std::pair<std::string, RawMaterial>> _materials;
 
-		RawMatConfigurations(
-			const ::Assets::Blob& locator,
-			const ::Assets::DependencyValidation& depVal,
-			StringSection<> requestParameters);
-        RawMatConfigurations() = default;
-
-        static const auto CompileProcessType = ConstHash64Legacy<'RawM', 'at'>::Value;
-
-        auto GetDependencyValidation() const -> const ::Assets::DependencyValidation& { return _validationCallback; }
-    protected:
-        ::Assets::DependencyValidation _validationCallback;
+		RawMaterialSet_Internal(Formatters::TextInputFormatter<char>& fmttr);
+        RawMaterialSet_Internal() = default;
     };
+
+    using RawMaterialSet = ::Assets::FormatterAssetMixin<RawMaterialSet_Internal>;
+
+    constexpr auto GetCompileProcessType(RawMaterialSet*) { return ConstHash64Legacy<'RawM', 'at'>::Value; }
 #endif
 
     template<typename Value> void RawMaterial::BindResource(StringSection<> name, const Value& value) { _resources.SetParameter(name, value); }

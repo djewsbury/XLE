@@ -29,14 +29,15 @@ namespace RenderCore { namespace Assets
 		{
 		public:
 			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, StringSection<> material);
-			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model, std::shared_ptr<MaterialScaffoldConstruction>);
 			ElementConstructor& SetModelAndMaterialScaffolds(StringSection<> model);
 
+			ElementConstructor& SetModelScaffold(StringSection<> model);
 			ElementConstructor& SetModelScaffold(std::shared_future<std::shared_ptr<Assets::ModelScaffold>>, std::string initializer={});
 			ElementConstructor& SetModelScaffold(std::shared_ptr<Assets::ModelScaffold>, std::string initializer={});
 			
 			ElementConstructor& SetMaterialScaffold(std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>, std::string initializer={});
 			ElementConstructor& SetMaterialScaffold(std::shared_ptr<Assets::MaterialScaffold>, std::string initializer={});
+			ElementConstructor& SetMaterialScaffold(std::shared_ptr<MaterialScaffoldConstruction>, std::string initializer={});
 
 			ElementConstructor& SetCompilationConfiguration(StringSection<>);
 			ElementConstructor& SetCompilationConfiguration(std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<RenderCore::Assets::ModelCompilationConfiguration>>>, std::string initializer={});

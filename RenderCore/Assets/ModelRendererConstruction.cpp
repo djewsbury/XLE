@@ -9,6 +9,7 @@
 #include "MaterialScaffold.h"
 #include "ModelCompilationConfiguration.h"
 #include "MaterialCompiler.h"
+#include "RawMaterial.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/IArtifact.h"
@@ -197,45 +198,32 @@ namespace RenderCore { namespace Assets
 		_internal->_hash = 0;
 		return *this;
 	}
-	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(StringSection<> model, std::shared_ptr<MaterialScaffoldConstruction> scaffoldPtr) -> ElementConstructor&
+	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(StringSection<> model) -> ElementConstructor&
+	{
+		return SetModelAndMaterialScaffolds(model, StringSection<>{});
+	}
+	auto ModelRendererConstruction::ElementConstructor::SetModelScaffold(StringSection<> model) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
-		assert(scaffoldPtr);
 		assert(!model.IsEmpty());
 		auto originalDisableHash = _internal->_disableHash;
-		auto canBeHashed = scaffoldPtr->CanBeHashed();
-		auto i4 = LowerBound(_internal->_materialScaffoldConstructionPtrs, _elementId);
-		if (i4 != _internal->_materialScaffoldConstructionPtrs.end() && i4->first == _elementId) i4->second = std::move(scaffoldPtr);
-		else i4 = _internal->_materialScaffoldConstructionPtrs.insert(i4, {_elementId, std::move(scaffoldPtr)});
-
-		std::promise<std::shared_ptr<MaterialScaffold>> promisedScaffold;
-		auto futureScaffold = promisedScaffold.get_future();
 
 		auto modelStr = model.AsString();
 		auto i = LowerBound(_internal->_compilationConfigurationMarkers, _elementId);
 		if (i != _internal->_compilationConfigurationMarkers.end() && i->first == _elementId) {
 			SetModelScaffold(CreateModelScaffoldFuture(model, i->second), modelStr);
-			ConstructMaterialScaffold(std::move(promisedScaffold), i4->second, modelStr, i->second);
 		} else {
 			auto i2 = LowerBound(_internal->_compilationConfigurationPtrs, _elementId);
 			if (i2 != _internal->_compilationConfigurationPtrs.end() && i2->first == _elementId) {
 				SetModelScaffold(CreateModelScaffoldFuture(model, i2->second), modelStr);
-				ConstructMaterialScaffold(std::move(promisedScaffold), i4->second, modelStr, i2->second);
 			} else {
 				SetModelScaffold(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(model), modelStr);
-				ConstructMaterialScaffold(std::move(promisedScaffold), i4->second, modelStr, nullptr);
 			}
 		}
 
-		SetMaterialScaffold(std::move(futureScaffold));
-
-		_internal->_disableHash = originalDisableHash || !canBeHashed;
+		_internal->_disableHash = originalDisableHash;
 		_internal->_hash = 0;
 		return *this;
-	}
-	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterialScaffolds(StringSection<> model) -> ElementConstructor&
-	{
-		return SetModelAndMaterialScaffolds(model, StringSection<>{});
 	}
 	auto ModelRendererConstruction::ElementConstructor::SetModelScaffold(std::shared_future<std::shared_ptr<Assets::ModelScaffold>> scaffoldMarker, std::string initializer) -> ElementConstructor&
 	{
@@ -299,6 +287,32 @@ namespace RenderCore { namespace Assets
 		}
 
 		_internal->_disableHash = true;
+		return *this;
+	}
+	auto ModelRendererConstruction::ElementConstructor::SetMaterialScaffold(std::shared_ptr<MaterialScaffoldConstruction> scaffold, std::string initializer) -> ElementConstructor&
+	{
+		assert(_internal && !_internal->_sealed);
+		assert(scaffold);
+		auto originalDisableHash = _internal->_disableHash;
+		auto canBeHashed = scaffold->CanBeHashed();
+		auto i4 = LowerBound(_internal->_materialScaffoldConstructionPtrs, _elementId);
+		if (i4 != _internal->_materialScaffoldConstructionPtrs.end() && i4->first == _elementId) i4->second = scaffold;
+		else i4 = _internal->_materialScaffoldConstructionPtrs.insert(i4, {_elementId, scaffold});
+
+		// Create and set a material scaffold -- but this requires finding the model 
+		std::promise<std::shared_ptr<MaterialScaffold>> promisedScaffold;
+		auto futureScaffold = promisedScaffold.get_future();
+		ConstructMaterialScaffold(std::move(promisedScaffold), i4->second);
+		SetMaterialScaffold(std::move(futureScaffold));
+
+		if (!initializer.empty()) {
+			auto ii = LowerBound(_internal->_materialScaffoldInitializers, _elementId);
+			if (ii != _internal->_materialScaffoldInitializers.end() && ii->first == _elementId) ii->second = std::move(initializer);
+			else _internal->_materialScaffoldInitializers.insert(ii, {_elementId, std::move(initializer)});
+		}
+
+		_internal->_disableHash = originalDisableHash || !canBeHashed;
+		_internal->_hash = 0;
 		return *this;
 	}
 	auto ModelRendererConstruction::ElementConstructor::SetCompilationConfiguration(StringSection<> cfg) -> ElementConstructor&
@@ -650,11 +664,11 @@ namespace RenderCore { namespace Assets
 
 					auto modelStr = modelName->second;
 					if (futureModelCompilationConfiguration.valid()) {
-						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second, modelStr, futureModelCompilationConfiguration);
+						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second);
 					} else if (modelCompilationConfiguration) {
-						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second, modelStr, modelCompilationConfiguration);
+						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second);
 					} else {
-						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second, modelStr, nullptr);
+						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second);
 					}
 
 					result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, std::move(futureScaffold));

@@ -21,8 +21,9 @@ namespace Assets
 	{
 	public:
 		FormatterAssetMixin(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal);
-		FormatterAssetMixin(ObjectType&&);
-		FormatterAssetMixin(const ObjectType&);
+		FormatterAssetMixin(ObjectType&&, ::Assets::DirectorySearchRules&& = {}, ::Assets::DependencyValidation&& = {});
+		FormatterAssetMixin(const ObjectType&, const ::Assets::DirectorySearchRules& = {}, const ::Assets::DependencyValidation& = {});
+		FormatterAssetMixin(Blob&&, ::Assets::DependencyValidation&& = {}, StringSection<> = {});
 		FormatterAssetMixin() = default;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -31,6 +32,8 @@ namespace Assets
 	private:
 		::Assets::DirectorySearchRules _searchRules;
 		::Assets::DependencyValidation _depVal;
+
+		Formatters::TextInputFormatter<char> AsFormatter(const Blob&);
 	};
 
 	template <typename ObjectType, typename BaseAssetType=FormatterAssetMixin<ObjectType>>
@@ -69,10 +72,28 @@ namespace Assets
 	, _depVal(depVal)
 	{}
 
+	namespace Internal { inline Formatters::TextInputFormatter<char>& RemoveConst(const Formatters::TextInputFormatter<char>& f) { return const_cast<Formatters::TextInputFormatter<char>&>(f); }}
+
 	template<typename ObjectType>
-		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(ObjectType&& moveFrom) : ObjectType(std::move(moveFrom)) {}
+		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(Blob&& blob, ::Assets::DependencyValidation&& depVal, StringSection<>)
+	: ObjectType(Internal::RemoveConst(AsFormatter(blob)))
+	, _depVal(std::move(depVal))
+	{}
+
 	template<typename ObjectType>
-		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(const ObjectType& copyFrom) : ObjectType(copyFrom) {}
+		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(ObjectType&& moveFrom, ::Assets::DirectorySearchRules&& searchRules, ::Assets::DependencyValidation&& depVal)
+	: ObjectType(std::move(moveFrom)), _searchRules(std::move(searchRules)), _depVal(std::move(depVal)) {}
+	template<typename ObjectType>
+		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(const ObjectType& copyFrom, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	: ObjectType(copyFrom), _searchRules(searchRules), _depVal(depVal) {}
+
+	template<typename ObjectType>
+		Formatters::TextInputFormatter<char> FormatterAssetMixin<ObjectType>::AsFormatter(const Blob& blob)
+	{
+		if (!blob)
+			return Formatters::TextInputFormatter<char>{};
+		return Formatters::TextInputFormatter<char>{ MakeIteratorRange(*blob).template Cast<const void*>() };
+	}
 
 	template <typename ObjectType, typename BaseAssetType>
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(
