@@ -396,6 +396,11 @@ namespace Assets
 		return GetPtrs().s_mainMountingTree->GetMountedFileSystem(id);		// in all current cases the FileSystemId overlaps with the MountId in s_mainMountingTree
 	}
 
+	std::shared_ptr<IFileSystem> MainFileSystem::GetFileSystemPtr(FileSystemId id)
+	{
+		return GetPtrs().s_mainMountingTree->GetMountedFileSystemPtr(id);		// in all current cases the FileSystemId overlaps with the MountId in s_mainMountingTree
+	}
+
 	std::basic_string<utf8> MainFileSystem::GetMountPoint(FileSystemId id)
 	{
 		return GetPtrs().s_mainMountingTree->GetMountPoint(id);
@@ -403,23 +408,52 @@ namespace Assets
 
 	FileSystemWalker MainFileSystem::BeginWalk(StringSection<utf8> initialSubDirectory)
 	{
-		auto& ptrs = GetPtrs();
-		if (ptrs.s_mainMountingTree->LooksLikeAbsolutePath(initialSubDirectory) && ptrs.s_mainMountingTree->GetAbsolutePathMode() == MountingTree::AbsolutePathMode::RawOS) {
-			return ::Assets::BeginWalk(std::dynamic_pointer_cast<ISearchableFileSystem>(GetPtrs().s_defaultFileSystem), initialSubDirectory);
-		} else {
-			return GetPtrs().s_mainMountingTree->BeginWalk(initialSubDirectory);
-		}
+		return GetPtrs().s_mainMountingTree->BeginWalk(initialSubDirectory);
+	}
+
+	FileSystemWalker MainFileSystem::BeginWalk(IteratorRange<const FileSystemId*> fileSystems, StringSection<utf8> initialSubDirectory)
+	{
+		auto& mountingTree = *GetPtrs().s_mainMountingTree;
+		std::vector<FileSystemWalker::StartingFS> startingFS;
+		auto initialSplit = MakeSplitPath(initialSubDirectory);
+		#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
+			for (auto id:fileSystems) {
+				if (auto fs = std::dynamic_pointer_cast<ISearchableFileSystem>(mountingTree.GetMountedFileSystemPtr(id))) {
+					auto mntPt = mountingTree.GetMountPoint(id);
+					auto splitMntPt = MakeSplitPath(mntPt);
+					startingFS.push_back({
+						{}, MakeRelativePath(splitMntPt, initialSplit),
+						std::move(fs), id});
+				}
+			}
+		#else
+			for (auto id:fileSystems) {
+				if (auto fs = dynamic_cast<ISearchableFileSystem*>(mountingTree.GetMountedFileSystemPtr(id).get())) {
+					auto mntPt = mountingTree.GetMountPoint(id);
+					auto splitMntPt = MakeSplitPath(mntPt);
+					startingFS.push_back({
+						{}, MakeRelativePath(splitMntPt, initialSplit),
+						fs, id});
+				}
+			}
+		#endif
+		return FileSystemWalker(std::move(startingFS));
+
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	const std::shared_ptr<MountingTree>& MainFileSystem::GetMountingTree() { assert(GetPtrs().s_mainMountingTree); return GetPtrs().s_mainMountingTree; }
-	const std::shared_ptr<IFileSystem>& MainFileSystem::GetDefaultFileSystem() { return GetPtrs().s_defaultFileSystem; }
+	const std::shared_ptr<IFileSystem>& MainFileSystem::GetDefaultFileSystem() { return GetPtrs().s_mainMountingTree->GetDefaultFileSystem(); }
 	void MainFileSystem::Init(const std::shared_ptr<MountingTree>& mountingTree, const std::shared_ptr<IFileSystem>& defaultFileSystem)
 	{
 		auto& ptrs = GetPtrs();
 		ptrs.s_mainMountingTree = mountingTree;
-		ptrs.s_defaultFileSystem = defaultFileSystem;
+		if (ptrs.s_mainMountingTree) {
+			ptrs.s_mainMountingTree->SetDefaultFileSystem(defaultFileSystem);
+		} else {
+			assert(!defaultFileSystem);		// can't handle null mounting tree but non-null defaultFileSystem currently
+		}
 	}
 
     void MainFileSystem::Shutdown()
@@ -561,8 +595,8 @@ namespace Assets
 
 	#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
 		FileSystemWalker::StartingFS::StartingFS(
-			const std::basic_string<utf8>& pendingDirectories,
-			const std::basic_string<utf8>& internalPoint,
+			const std::string& pendingDirectories,
+			const std::string& internalPoint,
 			std::weak_ptr<ISearchableFileSystem> fs,
 			FileSystemId fsId)
 		: _pendingDirectories(pendingDirectories)
@@ -575,8 +609,8 @@ namespace Assets
 		}
 	#else
 		FileSystemWalker::StartingFS::StartingFS(
-			const std::basic_string<utf8>& pendingDirectories,
-			const std::basic_string<utf8>& internalPoint,
+			const std::string& pendingDirectories,
+			const std::string& internalPoint,
 			ISearchableFileSystem* fs,
 			FileSystemId fsId)
 		: _pendingDirectories(pendingDirectories)
@@ -603,7 +637,7 @@ namespace Assets
 
 		struct SubDirectory
 		{
-			std::basic_string<utf8> _name;
+			std::string _name;
 			std::vector<unsigned> _filesystemIndices;
 		};
 		std::vector<std::pair<uint64_t, SubDirectory>> _directories;
@@ -625,6 +659,7 @@ namespace Assets
 
 				CheckPointers(fs);
 				auto foundMarkers = fs._fs->FindFiles(MakeStringSection(fs._internalPoint), "*");
+				auto mountPoint = MainFileSystem::GetMountPoint(fs._fsId);
 
 				auto* baseFS = dynamic_cast<IFileSystem*>(fs._fs);
 				assert(baseFS);
@@ -638,7 +673,8 @@ namespace Assets
 						continue;
 					}
 
-					auto hash = HashFilenameAndPath(MakeStringSection(desc._naturalName));
+					// see notes in Name() -- desc._mountedName will include some directory parts, we will strip it down to just the filename part
+					auto hash = HashFilenameAndPath(MakeFileNameSplitter(desc._mountedName).FileAndExtension());
 					auto existing = std::find_if(
 						_files.begin(), _files.end(),
 						[hash](const SubFile& file) { return file._naturalNameHash == hash; });
@@ -647,7 +683,7 @@ namespace Assets
 					// first. Normally this should only happen when 2 different filesystems have a file
 					// with the same name, mounted at the same location.
 					if (existing == _files.end()) {
-						desc._mountedName = MainFileSystem::GetMountPoint(fs._fsId) + desc._mountedName;
+						desc._mountedName = mountPoint + desc._mountedName;
 						_files.emplace_back(SubFile{
 							fsIdx, std::move(m), 
 							std::move(desc), hash});
@@ -860,6 +896,21 @@ namespace Assets
 	FileDesc FileSystemWalker::FileIterator::Desc() const
 	{
 		return _helper->_pimpl->_files[_idx]._desc;
+	}
+
+	std::string FileSystemWalker::FileIterator::Name() const
+	{
+		#if defined(_DEBUG)
+			// We could calculate this in a more expensive way by using MakeRelativePath using the mounted filename
+			// and the mounted path of the directory... But it should just ultimately come down to stripping off
+			// any path components from the filename
+			auto& fs = _helper->_pimpl->_fileSystems[_helper->_pimpl->_files[_idx]._filesystemIndex];
+			auto fsMountedPath = Concatenate(MainFileSystem::GetMountPoint(fs._fsId), "/", fs._internalPoint);
+			auto fsPath = MakeSplitPath(fsMountedPath);
+			auto test = MakeRelativePath(fsPath, MakeSplitPath(_helper->_pimpl->_files[_idx]._desc._mountedName));
+			assert(XlEqString(MakeFileNameSplitter(_helper->_pimpl->_files[_idx]._desc._mountedName).FileAndExtension(), test));
+		#endif
+		return MakeFileNameSplitter(_helper->_pimpl->_files[_idx]._desc._mountedName).FileAndExtension().AsString();
 	}
 
 	FileSystemWalker::FileIterator::FileIterator(const FileSystemWalker* helper, unsigned idx)

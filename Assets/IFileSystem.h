@@ -106,7 +106,7 @@ namespace Assets
 		public:
 			FileSystemWalker get() const;
 			FileSystemWalker operator*() const { return get(); }
-			std::basic_string<utf8> Name() const;
+			std::string Name() const;
 			friend bool operator==(const DirectoryIterator& lhs, const DirectoryIterator& rhs)
 			{
 				assert(lhs._helper == rhs._helper);
@@ -136,6 +136,7 @@ namespace Assets
 			Value get() const;
 			Value operator*() const { return get(); }
 			FileDesc Desc() const;
+			std::string Name() const;
 			friend bool operator==(const FileIterator& lhs, const FileIterator& rhs)
 			{
 				assert(lhs._helper == rhs._helper);
@@ -160,7 +161,7 @@ namespace Assets
 		FileIterator begin_files() const;
 		FileIterator end_files() const;
 
-		FileSystemWalker RecurseTo(const std::basic_string<utf8>& subDirectory) const;
+		FileSystemWalker RecurseTo(const std::string& subDirectory) const;
 
 		FileSystemWalker();
 		~FileSystemWalker();
@@ -172,21 +173,21 @@ namespace Assets
 
 		struct StartingFS
 		{
-			std::basic_string<utf8> _pendingDirectories;
-			std::basic_string<utf8> _internalPoint;
+			std::string _pendingDirectories;
+			std::string _internalPoint;
 			ISearchableFileSystem* _fs;
 			FileSystemId _fsId = FileSystemId_Invalid;
 			#if defined(XLE_VERIFY_FILESYSTEMWALKER_POINTERS)
 				std::weak_ptr<ISearchableFileSystem> _fsVerification;
 				StartingFS(
-					const std::basic_string<utf8>& pendingDirectories,
-					const std::basic_string<utf8>& internalPoint,
+					const std::string& pendingDirectories,
+					const std::string& internalPoint,
 					std::weak_ptr<ISearchableFileSystem> fs,
 					FileSystemId fsId);
 			#else
 				StartingFS(
-					const std::basic_string<utf8>& pendingDirectories,
-					const std::basic_string<utf8>& internalPoint,
+					const std::string& pendingDirectories,
+					const std::string& internalPoint,
 					ISearchableFileSystem* fs,
 					FileSystemId fsId);
 			#endif
@@ -195,6 +196,7 @@ namespace Assets
 		FileSystemWalker(std::vector<StartingFS>&& fileSystems);
 
 		friend class MountingTree;
+		friend class MainFileSystem;
 		friend FileSystemWalker BeginWalk(const std::shared_ptr<ISearchableFileSystem>&, StringSection<>);
 	};
 
@@ -259,9 +261,11 @@ namespace Assets
 		static auto TryTranslate(StringSection<utf16>) -> std::pair<IFileSystem::Marker, FileSystemId>;
 
 		static IFileSystem* GetFileSystem(FileSystemId id);
+		static std::shared_ptr<IFileSystem> GetFileSystemPtr(FileSystemId id);
 		static std::basic_string<utf8> GetMountPoint(FileSystemId id);
 
 		static FileSystemWalker BeginWalk(StringSection<utf8> initialSubDirectory = "");
+		static FileSystemWalker BeginWalk(IteratorRange<const FileSystemId*> fileSystems, StringSection<utf8> initialSubDirectory = "");
 
 		static const std::shared_ptr<MountingTree>& GetMountingTree();
 		static const std::shared_ptr<IFileSystem>& GetDefaultFileSystem();
