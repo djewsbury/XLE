@@ -810,6 +810,14 @@ namespace RenderCore { namespace Techniques
 		return *this;
 	}
 
+	ManualDrawableWriter& ManualDrawableWriter::ConfigureDescriptorSet(
+		std::shared_ptr<DescriptorSetAccelerator> descSet)
+	{
+		assert(!_descriptorSetAccelerator);
+		_descriptorSetAccelerator = std::move(descSet);
+		return *this;
+	}
+
 	ManualDrawableWriter::ManualDrawableWriter(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
 	: _pipelineAccelerators(std::move(pipelineAccelerators))
 	{}

@@ -142,6 +142,9 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder);								// retained while we need access to materialMachine
 
+		ManualDrawableWriter& ConfigureDescriptorSet(
+			std::shared_ptr<DescriptorSetAccelerator> descSet);
+
 			//////
 
 		ManualDrawableWriter(std::shared_ptr<IPipelineAcceleratorPool>);
