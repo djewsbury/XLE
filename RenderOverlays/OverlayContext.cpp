@@ -14,6 +14,7 @@
 #include "../RenderCore/StateDesc.h"
 #include "../RenderCore/UniformsStream.h"
 #include "../RenderOverlays/OverlayApparatus.h"
+#include "../Math/Transformations.h"
 #include "../Assets/Assets.h"
 #include "../OSServices/Log.h"
 #include "../ConsoleRig/ResourceBox.h"
@@ -168,7 +169,7 @@ namespace RenderOverlays
 		data[5] = Vertex{Float3(maxs[0], maxs[1], mins[2]), col, Float2(maxTex0[0], maxTex0[1])};
 	}
 
-	Float2 ImmediateOverlayContext::DrawText	 (  const std::tuple<Float3, Float3>& quad, 
+	Float2 ImmediateOverlayContext::DrawText	 (  const std::tuple<Float3, Float3>& quad,
 													const Font& font, DrawTextFlags::BitField flags,
 													ColorB col,
 													TextAlignment alignment, StringSection<char> text)
@@ -183,7 +184,7 @@ namespace RenderOverlays
 			q.max = {0,0};
 		return Draw(
 			*_threadContext,
-			*_immediateDrawables, 
+			*_immediateDrawables,
 			*_fontRenderingManager,
 			font, flags,
 			alignedPosition[0], alignedPosition[1],
@@ -191,6 +192,35 @@ namespace RenderOverlays
 			text,
 			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
 			col);
+	}
+
+	void ImmediateOverlayContext::DrawText(
+			const Float3x4& localToWorld,
+			const Font& font, DrawTextFlags::BitField flags,
+			ColorB col, RenderCore::Assets::RenderStateSet stateSet,
+			bool center, StringSection<char> text)
+	{
+		if (!_fontRenderingManager) return;
+
+		if (center) {
+			// integrate a little offset into the local-to-world
+			Float2 alignedPosition = AlignText(font, Quad{}, TextAlignment::Center, text);
+			auto adjLocalToWorld = localToWorld;
+			Combine_IntoRHS(Float3{alignedPosition, 0.f}, adjLocalToWorld);
+			Draw(
+				*_threadContext,
+				*_immediateDrawables,
+				*_fontRenderingManager,
+				font, flags,
+				text, adjLocalToWorld, stateSet, col);
+		} else {
+			Draw(
+				*_threadContext,
+				*_immediateDrawables,
+				*_fontRenderingManager,
+				font, flags,
+				text, localToWorld, stateSet, col);
+		}
 	}
 
 	Float2  ImmediateOverlayContext::DrawTextWithTable(
@@ -212,7 +242,7 @@ namespace RenderOverlays
 			alignedPosition = AlignText(*fontTable[0].first, q, alignment, text);
 		return DrawWithTable(
 			*_threadContext,
-			*_immediateDrawables, 
+			*_immediateDrawables,
 			*_fontRenderingManager,
 			fontTable,
 			alignedPosition[0], alignedPosition[1],

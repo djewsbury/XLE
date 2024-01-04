@@ -6,11 +6,13 @@
 
 #include "Font.h"
 #include "OverlayPrimitives.h"
+#include "../Math/Matrix.h"
 #include <vector>
 #include <memory>
 
 namespace RenderCore { class IResource; class IResourceView; class IThreadContext; class IDevice; }
 namespace RenderCore { namespace Techniques { class IImmediateDrawables; }}
+namespace RenderCore { namespace Assets { class RenderStateSet; }}
 
 namespace RenderOverlays
 {
@@ -34,6 +36,14 @@ namespace RenderOverlays
 						float x, float y, float maxX, float maxY,
 						StringSection<ucs4> text,
 						float scale, float depth,
+						ColorB col);
+
+	void 		Draw(	RenderCore::IThreadContext& threadContext,
+						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						FontRenderingManager& textureMan,
+						const Font& font, DrawTextFlags::BitField flags,
+						StringSection<> text,
+						const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet,
 						ColorB col);
 
 	using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;

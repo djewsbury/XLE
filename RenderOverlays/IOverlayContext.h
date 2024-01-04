@@ -14,7 +14,7 @@
 
 namespace RenderCore { class IResourceView; class MiniInputElementDesc; }
 namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; class EncoderState; } }
-namespace RenderCore { namespace Assets { class ShaderPatchCollection; } }
+namespace RenderCore { namespace Assets { class ShaderPatchCollection; class RenderStateSet; } }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderOverlays
@@ -89,6 +89,12 @@ namespace RenderOverlays
             const std::tuple<Float3, Float3>& quad,
             const Font& font, DrawTextFlags::BitField,
             ColorB col, TextAlignment alignment, StringSection<char> text) = 0;
+
+        virtual void   DrawText(
+            const Float3x4& localToWorld,
+            const Font& font, DrawTextFlags::BitField,
+            ColorB col, RenderCore::Assets::RenderStateSet stateSet,
+            bool center, StringSection<char> text) = 0;
 
         using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;
         virtual Float2  DrawTextWithTable(

@@ -53,6 +53,12 @@ namespace RenderOverlays
             const Font& font, DrawTextFlags::BitField, 
             ColorB col, TextAlignment alignment, StringSection<char> text) override;
 
+        void   DrawText(
+            const Float3x4& localToWorld,
+            const Font& font, DrawTextFlags::BitField,
+            ColorB col, RenderCore::Assets::RenderStateSet stateSet,
+            bool center, StringSection<char> text) override;
+
         virtual Float2  DrawTextWithTable(
             const std::tuple<Float3, Float3>& quad,
 			FontPtrAndFlags fontTable[256],
