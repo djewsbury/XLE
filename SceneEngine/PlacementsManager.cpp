@@ -972,7 +972,7 @@ namespace SceneEngine
             unsigned advancedObjects = 0;
             while (!context.Finished()) {
                 auto nextIndex = context.NextIndex();
-                if (nextIndex >= (drawableCount-advancedObjects) * objCount) break;
+                if (nextIndex >= (objCount-advancedObjects) * drawableCount) break;
 
                 unsigned objectIdx = advancedObjects + nextIndex / drawableCount;
                 unsigned drawable = nextIndex % drawableCount;
