@@ -8,6 +8,7 @@
 
 #include "../OSServices/OverlappedWindow.h"
 #include "../RenderCore/IDevice_Forward.h"
+#include "../Math/Vector.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/FunctionUtils.h"
 
@@ -37,6 +38,12 @@ namespace PlatformRig
 
     void InitDebugDisplays(RenderOverlays::DebuggingDisplay::DebugScreensSystem& system);
     void ShowDebugScreen(StringSection<>);
+
+    class InputContext;
+    using Coord2 = Int2;
+    InputContext InputContextForSubView(
+        const InputContext& superViewContext,
+        Coord2 subViewMins, Coord2 subViewMaxs);
 
 }
 

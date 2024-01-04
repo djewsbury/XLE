@@ -146,15 +146,14 @@ namespace PlatformRig
 
 				auto clientRect = _apparatus->_osWindow->GetRect();
 				InputContext context;
-				WindowingSystemView view { {clientRect.first._x, clientRect.first._y}, {clientRect.second._x, clientRect.second._y} };
-				context.AttachService2(view);
+				context._view = { {clientRect.first._x, clientRect.first._y}, {clientRect.second._x, clientRect.second._y} };
 				auto evnt = std::get<OSServices::InputSnapshot>(msgPump);
 				ProcessInputResult processResult = ProcessInputResult::Passthrough;
 				if (_apparatus->_mainInputHandler)
 					processResult = _apparatus->_mainInputHandler->OnInputEvent(context, evnt);
 
 				if (processResult != ProcessInputResult::Consumed)
-					return InputEvent { std::move(evnt), std::move(context) };
+					return InputEvent { std::move(evnt), std::move(context) };		// note that the "services" we attach to context must out-live the InputEvent we return
 
 			} else
 				return Internal::VariantCast<MsgVariant>(std::move(msgPump));

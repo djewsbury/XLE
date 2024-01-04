@@ -1028,11 +1028,11 @@ namespace RenderOverlays { namespace DebuggingDisplay
     {
         auto i = std::find_if(interactables._hotAreaLights.begin(), interactables._hotAreaLights.end(), [capturingId=capture._hotArea._id](const auto& c) { return c._id == capturingId; });
         if (i != interactables._hotAreaLights.end()) {
-            capture._hotArea = {i->_rect, i->_id};
+            capture._hotArea._rect = i->_rect;
         } else {
             auto i = std::find_if(interactables._hotAreas.begin(), interactables._hotAreas.end(), [capturingId=capture._hotArea._id](const auto& c) { return c._id == capturingId; });
             if (i != interactables._hotAreas.end()) {
-                capture._hotArea = *i;
+                capture._hotArea._rect = i->_rect;
             } else
                 capture = {};
         }
@@ -1478,6 +1478,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             capture._driftDuringCapture += Coord2{std::abs(drift[0]), std::abs(drift[1])};
             _currentInterfaceState  = BuildInterfaceState(_currentInteractables, context, _currentMouse, _currentMouseHeld, capture);
         }
+        _currentInterfaceState.SetWindowingSystemView(context._view);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -1497,8 +1498,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
     ,   _mouseOverStack(mouseStack)
     ,   _capture(capture)
     {
-        if (auto* v=viewInputContext.GetService<PlatformRig::WindowingSystemView>())
-            _viewInputContext = *v;
+        _viewInputContext = viewInputContext._view;
     }
 
     bool InterfaceState::HasMouseOver(InteractableId id) 

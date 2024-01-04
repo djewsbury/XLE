@@ -67,6 +67,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         IteratorRange<const Interactables::HotArea*> GetMouseOverStack() const  { return _mouseOverStack; }
         const PlatformRig::WindowingSystemView& GetWindowingSystemView() const  { return _viewInputContext; }
+        void SetWindowingSystemView(const PlatformRig::WindowingSystemView& view) { _viewInputContext = view; }
 
         InterfaceState();
         InterfaceState( const PlatformRig::InputContext& viewInputContext,

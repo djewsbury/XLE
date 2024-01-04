@@ -210,12 +210,9 @@ namespace ToolsRig
 		const PlatformRig::InputContext& context,
 		const OSServices::InputSnapshot& evnt) -> ProcessInputResult
     {
-        auto* view = context.GetService<PlatformRig::WindowingSystemView>();
-        if (!view) return PlatformRig::ProcessInputResult::Passthrough;
-
 		SceneEngine::IntersectionTestContext intersectionContext {
 			AsCameraDesc(*_camera),
-			view->_viewMins, view->_viewMaxs,
+			context._view._viewMins, context._view._viewMaxs,
 			_drawingApparatus };
 
         if (!_activeManipulators.empty()) {

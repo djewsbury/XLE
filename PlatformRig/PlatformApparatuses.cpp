@@ -126,8 +126,7 @@ namespace PlatformRig
 
 			auto clientRect = windowApparatus._osWindow->GetRect();
             PlatformRig::InputContext context;
-			PlatformRig::WindowingSystemView view { {clientRect.first._x, clientRect.first._y}, {clientRect.second._x, clientRect.second._y} };
-			context.AttachService2(view);
+			context._view = { {clientRect.first._x, clientRect.first._y}, {clientRect.second._x, clientRect.second._y} };
             windowApparatus._mainInputHandler->OnInputEvent(context, std::get<OSServices::InputSnapshot>(msgPump));
 
         } else if (std::holds_alternative<OSServices::WindowResize>(msgPump)) {

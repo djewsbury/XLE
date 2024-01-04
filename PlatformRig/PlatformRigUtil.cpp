@@ -6,6 +6,7 @@
 
 #include "PlatformRigUtil.h"
 #include "FrameRig.h"
+#include "InputContext.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../RenderCore/Techniques/Techniques.h"
@@ -98,6 +99,20 @@ namespace PlatformRig
             lua_pushnil(luaState.GetLuaState());
             lua_setglobal(luaState.GetLuaState(), a.first.c_str());
         }
+    }
+
+
+    InputContext InputContextForSubView(
+        const InputContext& superViewContext,
+        Coord2 subViewMins, Coord2 subViewMaxs)
+    {
+        PlatformRig::InputContext subContext = superViewContext;
+        auto v = superViewContext._view;
+        subContext._view = {
+            { std::max(v._viewMins[0], subViewMins[0]), std::max(v._viewMins[1], subViewMins[1]) },
+            { std::min(v._viewMaxs[0], subViewMaxs[0]), std::min(v._viewMaxs[1], subViewMaxs[1]) },
+        };
+        return subContext;
     }
 
 }

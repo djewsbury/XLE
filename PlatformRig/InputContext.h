@@ -25,18 +25,22 @@ namespace PlatformRig
 	class InputContext
 	{
 	public:
+        WindowingSystemView _view;
+
         void* GetService(uint64_t) const;
         void AttachService(uint64_t, void*);
 
         template<typename Type>
-            Type* GetService() const { return (Type*)GetService(typeid(std::decay_t<Type>).hash_code()); }
+            Type* GetService() const { return (Type*)GetService(typeid(std::decay_t<Type>).hash_code()); static_assert(!std::is_same_v<std::decay_t<Type>, WindowingSystemView>); }
         template<typename Type>
-            void AttachService2(Type& type) { AttachService(typeid(std::decay_t<Type>).hash_code(), &type); }
+            void AttachService2(Type& type) { AttachService(typeid(std::decay_t<Type>).hash_code(), &type); static_assert(!std::is_same_v<std::decay_t<Type>, WindowingSystemView>); }
 
         InputContext();
         ~InputContext();
         InputContext(InputContext&&);
         InputContext& operator=(InputContext&&);
+        InputContext(const InputContext&);
+        InputContext& operator=(const InputContext&);
     private:
         std::vector<std::pair<uint64_t, void*>> _services;
 	};

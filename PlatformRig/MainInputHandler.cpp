@@ -67,5 +67,7 @@ namespace PlatformRig
     InputContext::~InputContext() = default;
     InputContext::InputContext(InputContext&&) = default;
     InputContext& InputContext::operator=(InputContext&&) = default;
+    InputContext::InputContext(const InputContext&) = default;
+    InputContext& InputContext::operator=(const InputContext&) = default;
 }
 
