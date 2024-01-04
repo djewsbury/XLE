@@ -20,6 +20,7 @@ namespace Assets
 		};
 		std::vector<std::pair<OperationId, RegisteredOp>> _ops;
 		OperationId _nextOperationId = 1u;
+		std::atomic<bool> _cancelAllOperations;
 	};
 
 	void OperationContext::EndWithFutureAlreadyLocked(OperationId opId, Internal::VariantFutureSet::Id futureId)
@@ -97,6 +98,11 @@ namespace Assets
 		assert(0);		// didn't find it
 	}
 
+	void OperationContext::CancelAllOperations()
+	{
+		_pimpl->_cancelAllOperations = true;
+	}
+
 	auto OperationContext::GetActiveOperations() -> std::vector<OperationDesc>
 	{
 		ScopedLock(_mutex);
@@ -169,6 +175,13 @@ namespace Assets
 	{
 		if (_context)
 			_context->ClearProgress(_opId);
+	}
+
+	bool OperationContextHelper::IsCancelled()
+	{
+		if (_context)
+			return _context->_pimpl->_cancelAllOperations.load();
+		return false;
 	}
 
 	OperationContextHelper::OperationContextHelper() = default;

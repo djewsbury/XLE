@@ -89,6 +89,7 @@ namespace Assets
 		void SetMessage(OperationId, std::string);
 		void SetProgress(OperationId, unsigned completed, unsigned total);
 		void ClearProgress(OperationId);
+		void CancelAllOperations();
 
 		OperationContext();
 		~OperationContext();
@@ -105,6 +106,7 @@ namespace Assets
 			void EndWithFutureAlreadyLocked(OperationId opId, Internal::VariantFutureSet::Id futureId);
 		#endif
 		uint64_t _guid = 0;
+		friend struct OperationContextHelper;
 	};
 	
 	std::shared_ptr<OperationContext> CreateOperationContext();
@@ -119,6 +121,7 @@ namespace Assets
 			void SetDescription(std::string);
 			void SetProgress(unsigned completed, unsigned total);
 			void ClearProgress();
+			bool IsCancelled();
 
 			OperationContextHelper();
 			~OperationContextHelper();
