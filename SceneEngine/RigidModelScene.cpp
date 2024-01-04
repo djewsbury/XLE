@@ -174,15 +174,28 @@ namespace SceneEngine
 		std::vector<RigidModelSceneInternal::PendingExceptionUpdate> _pendingExceptionUpdates;
 		Signal<IteratorRange<const std::pair<uint64_t, ::Assets::AssetHeapRecord>*>> _updateSignal;
 		unsigned _lastDepValGlobalChangeIndex = 0;
+		unsigned _expirationCheckIterator = 0;
 
 		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> construction) override
 		{
-			auto hash = construction->GetHash();
+			std::optional<uint64_t> hash;
+			// If we cannot get a hash value from the mrc, we just assume that every separate ModelRendererConstruction
+			// is unique (which is probably likely to be true)
+			if (construction->CanBeHashed())
+				hash = construction->GetHash();
+
 			ScopedLock(_poolLock);
-			auto i = LowerBound(_modelEntries, hash);
-			if (i != _modelEntries.end() && i->first == hash) {
-				auto l = i->second.lock();
-				if (l) return std::move(l);
+			decltype(_modelEntries)::iterator i;
+			if (hash) {
+				i = LowerBound(_modelEntries, *hash);
+				if (i != _modelEntries.end() && i->first == hash) {
+					auto l = i->second.lock();
+					if (l) return std::move(l);
+				}
+			} else {
+				// ensure that this same pointer hasn't already been added
+				for(const auto&q:_modelEntries)
+					assert(q.second.owner_before(construction) || construction.owner_before(q.second));
 			}
 
 			auto newEntry = std::make_shared<RigidModelSceneInternal::ModelEntry>();
@@ -191,11 +204,13 @@ namespace SceneEngine
 			construction->FulfillWhenNotPending(std::move(promise));
 			newEntry->_referenceHolder = std::move(construction);
 
-			if (i != _modelEntries.end() && i->first == hash) {
-				i->second = newEntry;		// rebuilding after previously expiring
-			} else {
-				_modelEntries.insert(i, {hash, newEntry});
-			}
+			if (hash) {
+				if (i != _modelEntries.end() && i->first == hash) {
+					i->second = newEntry;		// rebuilding after previously expiring
+				} else
+					_modelEntries.insert(i, {*hash, newEntry});
+			} else
+				_modelEntries.emplace_back(~0ull, std::move(newEntry));
 
 			return std::move(newEntry);
 		}
@@ -365,7 +380,7 @@ namespace SceneEngine
 			// asset tracking
 			{
 				std::pair<uint64_t, ::Assets::AssetHeapRecord> rendererRecord;
-				rendererRecord.first = newEntry._model->_referenceHolder->GetHash();
+				rendererRecord.first = (newEntry._model->_referenceHolder->CanBeHashed()) ? newEntry._model->_referenceHolder->GetHash() : ~0ull;
 				rendererRecord.second._initializer = GetShortDescription(*newEntry._model->_referenceHolder);
 				rendererRecord.second._state = ::Assets::AssetState::Pending;
 				rendererRecord.second._typeCode = 0;
@@ -403,7 +418,8 @@ namespace SceneEngine
 				rendererRecord._initializer = GetShortDescription(*dst->_model->_referenceHolder);;
 				rendererRecord._state = ::Assets::AssetState::Ready;
 				rendererRecord._typeCode = 0;
-				updateRecords.emplace_back(dst->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
+				auto hash = dst->_model->_referenceHolder->CanBeHashed() ? dst->_model->_referenceHolder->GetHash() : ~0ull;
+				updateRecords.emplace_back(hash, std::move(rendererRecord));
 			}
 			_pendingUpdates.clear();
 			for (auto&u:_pendingExceptionUpdates) {
@@ -424,7 +440,8 @@ namespace SceneEngine
 				rendererRecord._state = ::Assets::AssetState::Invalid;
 				rendererRecord._typeCode = 0;
 				rendererRecord._actualizationLog = u._log;
-				updateRecords.emplace_back(dst->_model->_referenceHolder->GetHash(), std::move(rendererRecord));
+				auto hash = dst->_model->_referenceHolder->CanBeHashed() ? dst->_model->_referenceHolder->GetHash() : ~0ull;
+				updateRecords.emplace_back(hash, std::move(rendererRecord));
 			}
 			_pendingExceptionUpdates.clear();
 			
@@ -438,6 +455,19 @@ namespace SceneEngine
 						// call CreateRenderer again to reconstruct this renderer
 						auto res = CreateRendererAlreadyLocked(r._model, r._deformer);
 						assert(!res.owner_before(r._renderer) && !r._renderer.owner_before(res)); (void)res;
+					}
+				}
+			}
+
+			{
+				// check for expired renderers. Only need to check a limit number per frame
+				const unsigned expirationCheckCount = 6;
+				for (unsigned c=0; c<expirationCheckCount && !_renderers.empty(); ++c) {
+					auto i = _renderers.begin() + (_expirationCheckIterator % _renderers.size());
+					if (i->_renderer.expired() && !i->_pendingRenderer.valid()) {
+						_renderers.erase(i);
+					} else {
+						++_expirationCheckIterator;
 					}
 				}
 			}
@@ -472,7 +502,8 @@ namespace SceneEngine
 				rendererRecord._initializer = GetShortDescription(*rendererEntry._model->_referenceHolder);;
 				rendererRecord._state = ::Assets::AssetState::Ready;
 				rendererRecord._typeCode = 0;
-				result.emplace_back(rendererEntry._model->_referenceHolder->GetHash(), std::move(rendererRecord));
+				auto hash = rendererEntry._model->_referenceHolder->CanBeHashed() ? rendererEntry._model->_referenceHolder->GetHash() : ~0ull;
+				result.emplace_back(hash, std::move(rendererRecord));
 			}
 
 			std::sort(result.begin(), result.end(), CompareFirst2());
