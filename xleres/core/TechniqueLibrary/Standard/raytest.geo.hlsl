@@ -152,15 +152,25 @@ bool TriangleInFrustum(float4 p0, float4 p1, float4 p2)
 			result.triangleA = float4(input[0].worldPosition, barycentric.x);
 			result.triangleB = float4(input[1].worldPosition, barycentric.y);
 			result.triangleC = float4(input[2].worldPosition, barycentric.z);
-			result.properties.x = asuint(intersectionResult.x);
-			result.properties.y = DrawableIndex;
-			result.properties.z = PacketIndex;
-			result.properties.w = 0;
-			result.normal = normalize(
-				  barycentric.x * VSOUT_GetWorldVertexNormal(input[0])
-				+ barycentric.y * VSOUT_GetWorldVertexNormal(input[1])
-				+ barycentric.z * VSOUT_GetWorldVertexNormal(input[2]));
-			outputStream.Append(result);
+
+			// Test for intersecting with the backface of the triangle. We could reject the triangle with BackfaceSign() 
+			// earlier if had screen-projected positions
+			#if MAT_DOUBLE_SIDED_LIGHTING
+				if (true) {
+			#else
+				if (dot(cross(result.triangleB.xyz - result.triangleA.xyz, result.triangleC.xyz - result.triangleA.xyz), RayDirection) <= 0) {
+			#endif
+
+				result.properties.x = asuint(intersectionResult.x);
+				result.properties.y = DrawableIndex;
+				result.properties.z = PacketIndex;
+				result.properties.w = 0;
+				result.normal = normalize(
+					barycentric.x * VSOUT_GetWorldVertexNormal(input[0])
+					+ barycentric.y * VSOUT_GetWorldVertexNormal(input[1])
+					+ barycentric.z * VSOUT_GetWorldVertexNormal(input[2]));
+				outputStream.Append(result);
+			}
 		}
 	}
 
