@@ -60,4 +60,6 @@ namespace OSServices
     std::optional<std::string> ModalSelectFolderDialog(StringSection<> = {});
     void MessageUser(StringSection<> text, StringSection<> title);
     bool CopyToSystemClipboard(StringSection<> text);
+    void SetThreadName(StringSection<> text);
+    bool OpenExternalBrowser(StringSection<> link);
 }

@@ -329,7 +329,7 @@ namespace RenderCore { namespace Assets
 		// We need to call this in every thread that uses the DirectXTex library.
 		//  ... it should be ok to call it multiple times in the same thread, so
 		//      let's just call it every time.
-		CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
 		return [](StringSection<> filename, TextureLoaderFlags::BitField flags) -> std::shared_ptr<BufferUploads::IAsyncDataSource> {
 			// assert(!(flags & TextureLoaderFlags::GenerateMipmaps));
 			return std::make_shared<DDSDataSource>(filename.AsString());
@@ -479,7 +479,7 @@ namespace RenderCore { namespace Assets
 		// We need to call this in every thread that uses the DirectXTex library.
 		//  ... it should be ok to call it multiple times in the same thread, so
 		//      let's just call it every time.
-		CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
 		return [](StringSection<> filename, TextureLoaderFlags::BitField flags) -> std::shared_ptr<BufferUploads::IAsyncDataSource> {
 			return std::make_shared<WICDataSource>(filename.AsString(), flags);
 		};

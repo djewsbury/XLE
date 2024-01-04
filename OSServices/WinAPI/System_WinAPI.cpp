@@ -297,6 +297,26 @@ FileTime GetModuleFileTime()
     return result;
 }
 
+FileTime GetModuleFileTime(const utf8 moduleFilename[])
+{
+    char path[MaxPath];
+    GetModulePath(path, dimof(path), moduleFilename);
+
+    LOADED_IMAGE loadedImage;
+    XlZeroMemory(loadedImage);
+    bool succeeded = MapAndLoad(path, nullptr, &loadedImage, FALSE, TRUE);
+    if (!succeeded)
+        return 0;
+
+    // we only get the low 32 bits of the timestamp from this -- 
+    FileTime result = loadedImage.FileHeader->FileHeader.TimeDateStamp;
+
+    succeeded = UnMapAndLoad(&loadedImage);
+    assert(succeeded);
+
+    return result;
+}
+
 std::string GetAppDataPath()
 {
     // Requires Vista or later
@@ -388,6 +408,40 @@ bool CopyToSystemClipboard(StringSection<> text)
 
     CloseClipboard();
     return true;
+}
+
+bool OpenExternalBrowser(StringSection<> link)
+{
+    if (link.IsEmpty()) return false;
+
+    // refuse anything that looks like it might be file -- we're begin quite conservative here, and will 
+    // reject some things that might actually be valid URLs
+    if (link[0] == '/' || link[0] == '\\') return false;
+    auto splitPath = MakeFileNameSplitter(link);
+    if (!splitPath.Stem().IsEmpty() && !XlEqString(splitPath.Stem(), "http:") && !XlEqString(splitPath.Stem(), "https:")) return false;
+    auto* startServer = XlFindNot({splitPath.Stem().end(), link.end()}, "/\\");
+    if (!startServer) return false;
+    auto* firstSep = XlFindAnyChar({startServer, link.end()}, "\\/");
+    if (firstSep && XlFindChar(MakeStringSection(firstSep, link.end()), '.')) return false;       // reject dots after the first separator -- again, valid for urls, but we'll reject conservatively
+    if (XlFindStringI(link, ".exe") || XlFindStringI(link, ".bat") || XlFindStringI(link, ".cmd")) return false;
+    auto dotCom = XlFindStringI(link, ".com");
+    if (dotCom && (dotCom+4) == link.end() && splitPath.Stem().IsEmpty()) return false;       // must allow .com in the server name, but try to avoid it if it's not explicitly a url
+
+    std::string finalLink;
+    // stem validated as either http or https already
+    if (!splitPath.Stem().IsEmpty()) finalLink = link.AsString();
+    else finalLink = Concatenate("https://", link);
+
+    // We must have called CoInitializeEx() in this thread. Just in case, we'll do it now.
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
+
+    HINSTANCE res = ShellExecuteA(nullptr, "open", finalLink.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    return ((size_t)res) > 32;        // as per msvc docs, only numbers greater than 32 are success
+}
+
+void SetThreadName(StringSection<> text)
+{
+    SetThreadDescription(GetCurrentThread(), Conversion::Convert<std::wstring>(text).c_str());
 }
 
 // void GetProcessPath(ucs2 dst[], size_t bufferCount)    { GetModuleFileNameW(NULL, (wchar_t*)dst, (DWORD)bufferCount); }

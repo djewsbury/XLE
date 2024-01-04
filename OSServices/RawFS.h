@@ -20,6 +20,12 @@
 
 namespace OSServices 
 {
+    #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+		constexpr FilenameRules s_rawos_fileNameRules('/', false);
+	#else
+		constexpr FilenameRules s_rawos_fileNameRules('/', true);
+	#endif
+
     namespace Exceptions
     {
         class IOException : public ::Exceptions::BasicLabel
@@ -167,7 +173,8 @@ namespace OSServices
     using ModuleId = size_t;
     ModuleId GetCurrentModuleId();
     FileTime GetModuleFileTime();
-    
+    FileTime GetModuleFileTime(const utf8 moduleFilename[]);
+
     void DeleteFile(const utf8 path[]);
     void MoveFile(const utf8 destination[], const utf8 source[]);
 
