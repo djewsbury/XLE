@@ -194,7 +194,11 @@ namespace RenderCore { namespace Techniques
 		accelerators.resize(_accelerators.size());		// subframe heap candidate
 		unsigned activeAcceleratorCount=0;
 		unsigned reservationBytes[AllocationType_Max] = {0,0,0};
+		unsigned allocationAlignments[AllocationType_Max] = {1,1,1};
 		unsigned maxInstanceCount = 0;
+
+		allocationAlignments[AllocationType_GPUVB] = threadContext.GetDevice()->GetDeviceLimits()._unorderedAccessBufferOffsetAlignment;
+
 		{
 			ScopedLock(_acceleratorsLock);
 			for (auto a=_accelerators.begin(); a!=_accelerators.end();) {
@@ -212,7 +216,7 @@ namespace RenderCore { namespace Techniques
 				
 				if (instanceCount) {
 					for (unsigned c=0; c<AllocationType_Max; ++c)
-						reservationBytes[c] += accelerator->_reservationPerInstance[c] * instanceCount;
+						reservationBytes[c] += CeilToMultiple(accelerator->_reservationPerInstance[c] * instanceCount, allocationAlignments[c]);
 					accelerators[activeAcceleratorCount++] = std::move(accelerator);
 					maxInstanceCount = std::max(maxInstanceCount, instanceCount);
 				} else {
@@ -245,18 +249,18 @@ namespace RenderCore { namespace Techniques
 			unsigned uniformBufferPageOffset = 0;
 
 			if (reservationBytes[AllocationType::AllocationType_CPUVB]) {
-				cpuMap = attachedStorage.MapStorage(reservationBytes[AllocationType::AllocationType_CPUVB], BindFlag::VertexBuffer);
+				cpuMap = attachedStorage.MapStorage(reservationBytes[AllocationType::AllocationType_CPUVB], BindFlag::VertexBuffer, allocationAlignments[AllocationType_CPUVB]);
 				cpuVBV = cpuMap.AsVertexBufferView();
 				cpuDst = cpuMap.GetData();
 				assert(cpuVBV._resource);
 			}
 			if (reservationBytes[AllocationType::AllocationType_GPUVB]) {
-				gpuBufferAndRange = attachedStorage.AllocateDeviceOnlyRange(reservationBytes[AllocationType::AllocationType_GPUVB], BindFlag::VertexBuffer|BindFlag::UnorderedAccess);
+				gpuBufferAndRange = attachedStorage.AllocateDeviceOnlyRange(reservationBytes[AllocationType::AllocationType_GPUVB], BindFlag::VertexBuffer|BindFlag::UnorderedAccess, allocationAlignments[AllocationType_GPUVB]);
 				gpuVBV = gpuBufferAndRange.AsVertexBufferView();
 				assert(gpuVBV._resource);
 			}
 			if (reservationBytes[AllocationType::AllocationType_UniformBuffer]) {
-				uniformBufferMap = attachedStorage.MapStorageFromNamedPage(reservationBytes[AllocationType::AllocationType_UniformBuffer], _cbNamedPage);
+				uniformBufferMap = attachedStorage.MapStorageFromNamedPage(reservationBytes[AllocationType::AllocationType_UniformBuffer], _cbNamedPage, allocationAlignments[AllocationType_UniformBuffer]);
 				uniformBufferDst = uniformBufferMap.GetData();
 				uniformBufferPageOffset = uniformBufferMap.AsConstantBufferView()._prebuiltRangeBegin;
 			}
@@ -329,6 +333,8 @@ namespace RenderCore { namespace Techniques
 						accelerator->_instanceToReadiedOffset[allType][i] = movingOffsets[allType];
 						movingOffsets[allType] += accelerator->_reservationPerInstance[allType];
 					}
+
+					movingOffsets[allType] = CeilToMultiple(movingOffsets[allType], allocationAlignments[allType]);	// ensure we end up with correct offset alignment
 				}
 
 				++_readyInstancesMetrics._acceleratorsReadied;
@@ -356,7 +362,7 @@ namespace RenderCore { namespace Techniques
 	void DeformAcceleratorPool::SetVertexInputBarrier(IThreadContext& threadContext) const
 	{
 		if (_pendingVertexInputBarrier) {
-			// we're expeting the output to be used as a vertex attribute; so we require a barrier here
+			// we're expecting the output to be used as a vertex attribute; so we require a barrier here
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
 			barrier.pNext = nullptr;
@@ -397,6 +403,14 @@ namespace RenderCore { namespace Techniques
 			assert(accelerator._parametersAttachment && accelerator._reservationPerInstance[AllocationType_UniformBuffer]);
 			assert(accelerator._uniformBufferPageResourceBaseOffset != ~0u);
 			return accelerator._uniformBufferPageResourceBaseOffset + accelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instanceIdx];
+		}
+
+		void BarrierGeoDeformTemporaries(IThreadContext& threadContext, IResourceView& gpuTemporariesBufferView)
+		{
+			Metal::BarrierHelper{threadContext}.Add(
+				*gpuTemporariesBufferView.GetResource(),
+				Metal::BarrierResourceUsage::ComputeShaderWrite(),
+				Metal::BarrierResourceUsage::ComputeShaderRead());
 		}
 	}
 	
