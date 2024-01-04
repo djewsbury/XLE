@@ -40,6 +40,7 @@ namespace RenderCore { namespace BufferUploads
         ResourceDesc _desc;
         std::string _name;
         TimeMarker _requestTime, _retirementTime;
+        CommandListID _cmdList;
     };
 
     struct CommandListMetrics

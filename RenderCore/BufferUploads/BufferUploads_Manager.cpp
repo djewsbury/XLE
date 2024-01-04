@@ -170,7 +170,7 @@ namespace RenderCore { namespace BufferUploads
             Transaction* _transaction = nullptr;
             AssemblyLine* _assemblyLine = nullptr;
             TransactionID GetID() const;
-            void SuccessfulRetirement();
+            void SuccessfulRetirement(CommandListID);
             TransactionRefHolder() = default;
             TransactionRefHolder(Transaction& transaction, AssemblyLine& assemblyLine);
             TransactionRefHolder(TransactionRefHolder&& moveFrom);
@@ -192,7 +192,7 @@ namespace RenderCore { namespace BufferUploads
         TransactionRefHolder    AllocateTransaction(TransactionOptions::BitField flags);
         void                    ApplyRepositions(const ResourceLocator& dst, IResource& src, IteratorRange<const RepositionStep*> steps);
 
-        std::atomic<int>        _currentQueuedBytes[(unsigned)UploadDataType::Max];
+        std::atomic<ptrdiff_t>  _currentQueuedBytes[(unsigned)UploadDataType::Max];
         unsigned                _nextTransactionIdTopPart;
         unsigned                _peakPrepareStaging, _peakTransferStagingToFinal, _peakCreateFromDataPacket;
         int64_t                 _waitTime;
@@ -275,7 +275,7 @@ namespace RenderCore { namespace BufferUploads
             std::function<void()> _fn;
         };
 
-        void    SystemReleaseTransaction(Transaction* transaction, bool abort = false);
+        void    SystemReleaseTransaction(Transaction* transaction, bool abort = false, CommandListID = ~0u);
 
         bool    Process(CreateFromDataPacketStep& resourceCreateStep, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction);
         bool    Process(PrepareStagingStep& prepareStagingStep, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction, const CommandListBudget& budgetUnderConstruction);
@@ -292,7 +292,7 @@ namespace RenderCore { namespace BufferUploads
 
         void    CompleteWaitForDescFuture(TransactionRefHolder&& ref, std::future<ResourceDesc> descFuture, std::shared_ptr<IAsyncDataSource> data, std::shared_ptr<IResourcePool> pool, BindFlag::BitField);
         void    CompleteWaitForDataFuture(TransactionRefHolder&& ref, std::future<void> prepareFuture, PlatformInterface::StagingPage::Allocation&& stagingAllocation, std::shared_ptr<IResource> oversizeResource, std::shared_ptr<IResourcePool> pool, const ResourceDesc& finalResourceDesc);
-        void    DequeueBytes(UploadDataType type, unsigned bytes);
+        void    DequeueBytes(UploadDataType type, size_t bytes);
 
         void    TransferBackFinalResource(
             TransactionRefHolder& ref,
@@ -490,7 +490,7 @@ namespace RenderCore { namespace BufferUploads
         return result;
     }
 
-    void AssemblyLine::SystemReleaseTransaction(Transaction* transaction, bool abort)
+    void AssemblyLine::SystemReleaseTransaction(Transaction* transaction, bool abort, CommandListID cmdList)
     {
         auto newRefCount = --transaction->_referenceCount;
         assert(newRefCount>=0);
@@ -502,6 +502,7 @@ namespace RenderCore { namespace BufferUploads
                 retirement._name = transaction->_name;
                 retirement._requestTime = transaction->_requestTime;
                 retirement._retirementTime = OSServices::GetPerformanceCounter();
+                retirement._cmdList = cmdList;
                 ScopedLock(_pendingRetirementsLock);
                 _pendingRetirements.push_back(retirement);
             }
@@ -543,10 +544,10 @@ namespace RenderCore { namespace BufferUploads
         return uint64_t(_transaction->_heapIndex) | uint64(_transaction->_idTopPart) << 32ull;
     }
 
-    void AssemblyLine::TransactionRefHolder::SuccessfulRetirement()
+    void AssemblyLine::TransactionRefHolder::SuccessfulRetirement(CommandListID cmdList)
     {
         if (_transaction) {
-            _assemblyLine->SystemReleaseTransaction(_transaction, false);
+            _assemblyLine->SystemReleaseTransaction(_transaction, false, cmdList);
             _transaction = nullptr; _assemblyLine = nullptr;
         }
     }
@@ -964,7 +965,7 @@ namespace RenderCore { namespace BufferUploads
         }
     }
 
-    void AssemblyLine::DequeueBytes(UploadDataType type, unsigned bytes)
+    void AssemblyLine::DequeueBytes(UploadDataType type, size_t bytes)
     {
         auto newValue = _currentQueuedBytes[(unsigned)type] -= bytes;
         assert(newValue >= 0);
@@ -1143,6 +1144,7 @@ namespace RenderCore { namespace BufferUploads
 
         auto* transaction = prepareStagingStep._transactionRef._transaction;
         assert(transaction);
+        assert(RenderCore::ByteCount(transaction->_desc) == RenderCore::ByteCount(prepareStagingStep._desc));
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
@@ -1292,7 +1294,7 @@ namespace RenderCore { namespace BufferUploads
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
             transaction->_promisePending = false;
-            _currentQueuedBytes[(unsigned)AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags)] += RenderCore::ByteCount(finalResourceDesc);
+            DequeueBytes(AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags), RenderCore::ByteCount(finalResourceDesc));
             return;
         }
 
@@ -1306,7 +1308,7 @@ namespace RenderCore { namespace BufferUploads
         } catch(...) {
             transaction->_promise.set_exception(std::current_exception());
             transaction->_promisePending = false;
-            _currentQueuedBytes[(unsigned)AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags)] += RenderCore::ByteCount(finalResourceDesc);
+            DequeueBytes(AsUploadDataType(finalResourceDesc, finalResourceDesc._bindFlags), RenderCore::ByteCount(finalResourceDesc));
         }
     }
 
@@ -1320,6 +1322,7 @@ namespace RenderCore { namespace BufferUploads
         assert(transaction);
         auto dataType = (unsigned)AsUploadDataType(transferStagingToFinalStep._finalResourceDesc, transferStagingToFinalStep._finalResourceDesc._bindFlags);
         auto descByteCount = RenderCore::ByteCount(transaction->_desc);     // needs to match CompleteWaitForDescFuture in order to reset _currentQueuedBytes correctly
+        assert(descByteCount == RenderCore::ByteCount(transferStagingToFinalStep._finalResourceDesc));
 
         if (transaction->_cancelledByClient.load()) {
             transaction->_promise.set_exception(std::make_exception_ptr(std::runtime_error("Cancelled before completion")));
@@ -1425,7 +1428,7 @@ namespace RenderCore { namespace BufferUploads
         ref._transaction->_finalResource = ResourceLocator { std::move(locator), layoutInBackgroundContext ? cmdListUnderConstruction : 0u };
         ref._transaction->_promise.set_value(ref._transaction->_finalResource);
         ref._transaction->_promisePending = false;
-        ref.SuccessfulRetirement();
+        ref.SuccessfulRetirement(cmdListUnderConstruction);
     }
 
     auto AssemblyLine::DrainPriorityQueueSet(QueueSet& queueSet, unsigned stepMask, PlatformInterface::UploadsThreadContext& context, CommandListID cmdListUnderConstruction) -> DrainPriorityQueueSetResult

@@ -93,7 +93,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         Metal::DeviceContext*   _cmdListWriter;
         IThreadContext*         _threadContext;
         IDevice*                _device;
-		unsigned 				_copyBufferOffsetAlignment = 1;
+		unsigned 				_optimalCopyBufferOffsetAlignment = 1;
 
         void EnsureOpenCmdListWriter();
 

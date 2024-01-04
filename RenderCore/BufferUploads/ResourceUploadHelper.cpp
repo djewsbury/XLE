@@ -330,7 +330,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
     unsigned ResourceUploadHelper::CalculateStagingBufferOffsetAlignment(const ResourceDesc& desc)
     {
         using namespace RenderCore;
-		unsigned alignment = _copyBufferOffsetAlignment;
+		unsigned alignment = _optimalCopyBufferOffsetAlignment;
 		if (desc._type == ResourceDesc::Type::Texture) {
 			auto compressionParam = GetCompressionParameters(desc._textureDesc._format);
 			if (compressionParam._blockWidth != 1) {
@@ -362,8 +362,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         for (auto& s:steps) {
             assert(s._sourceEnd > s._sourceStart);
             assert((s._destination + s._sourceEnd - s._sourceStart) <= destination.GetDesc()._linearBufferDesc._sizeInBytes);
-            assert((s._sourceStart % _copyBufferOffsetAlignment) == 0);
-            assert((s._destination % _copyBufferOffsetAlignment) == 0);
+            // _optimalCopyBufferOffsetAlignment isn't a strict requirement (at least on Vulkan)
+            // this function is used by the defragmentation system -- which can sometimes not respect this offset limitations
+            // Let's instead just make this a non-error when off alignment
+            // assert((s._sourceStart % _optimalCopyBufferOffsetAlignment) == 0);
+            // assert((s._destination % _optimalCopyBufferOffsetAlignment) == 0);
             blitEncoder.Copy(
                 CopyPartial_Dest{destination, s._destination},
                 CopyPartial_Src{source, s._sourceStart, s._sourceEnd});
@@ -393,20 +396,20 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 	{
         _device = renderCoreContext.GetDevice().get();
         _threadContext = &renderCoreContext;
-		_copyBufferOffsetAlignment = _device->GetDeviceLimits()._copyBufferOffsetAlignment;
+		_optimalCopyBufferOffsetAlignment = _device->GetDeviceLimits()._copyBufferOffsetAlignment;
         _cmdListWriter = nullptr;
 	}
     ResourceUploadHelper::ResourceUploadHelper(IDevice& device, Metal::DeviceContext& metalContext)
 	{
         _device = &device;
         _threadContext = nullptr;
-		_copyBufferOffsetAlignment = _device->GetDeviceLimits()._copyBufferOffsetAlignment;
+		_optimalCopyBufferOffsetAlignment = _device->GetDeviceLimits()._copyBufferOffsetAlignment;
         _cmdListWriter = &metalContext;
 	}
     ResourceUploadHelper::ResourceUploadHelper()
     {
         _cmdListWriter = nullptr; _threadContext = nullptr; _device = nullptr;
-        _copyBufferOffsetAlignment = 1;
+        _optimalCopyBufferOffsetAlignment = 1;
     }
     ResourceUploadHelper::~ResourceUploadHelper() {}
 

@@ -2034,6 +2034,14 @@ namespace RenderCore { namespace ImplVulkan
 		pools._temporaryStorageManager = std::make_unique<Metal_Vulkan::TemporaryStorageManager>(objFactory, _graphicsQueue->GetTracker());
 
 		auto& limits = objFactory.GetPhysicalDeviceProperties().limits;
+		if (xleFeatures._emulateRestrictiveLimits) {
+			// artificially just the limits to emulate more restrictive hardware
+			auto& l = const_cast<VkPhysicalDeviceLimits&>(limits);
+			l.minUniformBufferOffsetAlignment = std::max(l.minUniformBufferOffsetAlignment, 64ull);
+			l.minStorageBufferOffsetAlignment = std::max(l.minStorageBufferOffsetAlignment, 64ull);
+			l.minTexelBufferOffsetAlignment = std::max(l.minTexelBufferOffsetAlignment, 64ull);
+			l.optimalBufferCopyOffsetAlignment = std::max(l.optimalBufferCopyOffsetAlignment, 64ull);
+		}
 		_limits._constantBufferOffsetAlignment = (uint32_t)limits.minUniformBufferOffsetAlignment;
 		_limits._unorderedAccessBufferOffsetAlignment = (uint32_t)limits.minStorageBufferOffsetAlignment;
 		_limits._texelBufferOffsetAlignment = (uint32_t)limits.minTexelBufferOffsetAlignment;
@@ -2044,6 +2052,11 @@ namespace RenderCore { namespace ImplVulkan
 		assert(_limits._texelBufferOffsetAlignment != 0);
 		assert(_limits._copyBufferOffsetAlignment != 0);
 		assert(_limits._maxPushConstantsSize != 0);
+
+		// possible other limits to check:
+		// 	maxTexelBufferElements
+		// 	maxUniformBufferRange
+		// 	maxStorageBufferRange
 	}
 
     Device::~Device()

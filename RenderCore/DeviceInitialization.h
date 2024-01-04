@@ -95,6 +95,9 @@ namespace RenderCore
         // queues
         bool _dedicatedTransferQueue = false;
         bool _dedicatedComputeQueue = false;
+
+        // simulate inconvenient hardware
+        bool _emulateRestrictiveLimits = false;
     };
 
     enum class PhysicalDeviceType { Unknown, DiscreteGPU, IntegratedGPU, VirtualGPU, CPU };
