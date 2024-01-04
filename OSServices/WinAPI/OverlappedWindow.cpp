@@ -359,7 +359,7 @@ namespace OSServices
         wc.cbClsExtra       = 0;
         wc.cbWndExtra       = 0;
         wc.hInstance        = CurrentModule::GetInstance().Handle();
-        wc.hIcon            = ::LoadIcon(nullptr, IDI_INFORMATION);
+        wc.hIcon            = ::LoadIcon(CurrentModule::GetInstance().HInstance(), "IDI_ICON1");
         wc.hCursor          = ::LoadCursor(nullptr, IDC_ARROW); 
         wc.hbrBackground    = (HBRUSH)nullptr;
         wc.lpszMenuName     = 0;
