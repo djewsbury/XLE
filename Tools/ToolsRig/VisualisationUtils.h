@@ -70,6 +70,10 @@ namespace ToolsRig
         float verticalFieldOfView, 
         const std::pair<Float3, Float3>& boxIn);
 
+    VisCameraSettings AlignCameraToBoundingBoxFromAbove(
+        float verticalFieldOfView, 
+        const std::pair<Float3, Float3>& boxIn);
+
 	RenderCore::Techniques::CameraDesc AsCameraDesc(const VisCameraSettings& camSettings);
     VisCameraSettings AsVisCameraSettings(const RenderCore::Techniques::CameraDesc&, float distanceToFocus=5.f);
     void ConfigureParsingContext(RenderCore::Techniques::ParsingContext&, const VisCameraSettings&);
@@ -85,10 +89,11 @@ namespace ToolsRig
         bool            _drawGrid = true;
     };
 
-    class VisMouseOver
+    class ContinuousSceneQuery
     {
     public:
-        bool			_hasMouseOver = false;
+        enum State {  Pending, Empty, Good };
+        State			_state = State::Pending;
         Float3			_intersectionPt = Zero<Float3>();
         unsigned		_drawCallIndex = 0u;
         uint64_t		_materialGuid = 0;
@@ -109,7 +114,7 @@ namespace ToolsRig
 		float _animationTime = 0.f;
 		std::chrono::steady_clock::time_point _anchorTime;
 		enum class State { Stopped, Playing, BindPose };
-		State _state = State::Stopped;
+		State _state = State::BindPose;
 
 		ChangeEvent _changeEvent;
 	};
@@ -144,8 +149,9 @@ namespace ToolsRig
         virtual void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
 		virtual void Set(std::shared_ptr<SceneEngine::IScene> scene, std::shared_ptr<::Assets::OperationContext> loadingContext = nullptr) = 0;
         virtual void SetEmptyScene() = 0;
+        virtual void ShowLoadingIndicator() = 0;
 
-        virtual void Set(std::shared_ptr<VisCameraSettings> camera) = 0;
+        virtual void Set(std::shared_ptr<VisCameraSettings> camera, bool resetCamera=true) = 0;
 		virtual void ResetCamera() = 0;
 
         virtual void ReportError(StringSection<> msg) = 0;
@@ -158,17 +164,65 @@ namespace ToolsRig
         const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& lightingEngineApparatus,
         const std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool>& deformAccelerators);
 
-	class VisualisationOverlay : public PlatformRig::IOverlaySystem
+    struct ModelVisSettings;
+    struct MaterialVisSettings;
+
+    /// <summary>Assigns scene and environmental settings to visualisation overlays</summary>
+    /// This separates the code for managing hot reloading events out of the overlays themselves,
+    /// and allows a set of overlays to be managed all at once
+    class VisOverlayController
     {
     public:
-		void Set(std::shared_ptr<SceneEngine::IScene> scene);
-		void Set(const std::shared_ptr<VisCameraSettings>&);
+        class IVisualisationOverlay;
+        void SetScene(const ModelVisSettings&);
+        void SetScene(const MaterialVisSettings&, std::shared_ptr<RenderCore::Assets::RawMaterial> = nullptr);
+        void SetScene(std::shared_ptr<SceneEngine::IScene>);
+        void SetScene(::Assets::PtrToMarkerPtr<SceneEngine::IScene>);
+
+        void SetEnvSettings(StringSection<>);
+        void SetEnvSettings(::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate>);
+        void SetEnvSettings(std::shared_ptr<SceneEngine::ILightingStateDelegate>);
+
+        void SetCamera(std::shared_ptr<VisCameraSettings>, bool resetCamera = true);
+
+        void AttachSceneOverlay(std::shared_ptr<ISimpleSceneOverlay>);
+        void AttachVisualisationOverlay(std::shared_ptr<IVisualisationOverlay>);
+
+        SceneEngine::IScene* TryGetScene();
+        const std::shared_ptr<::Assets::OperationContext>& GetLoadingContext();
+
+        VisOverlayController(
+            std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
+		    std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
+            std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
+            std::shared_ptr<::Assets::OperationContext> loadingContext);
+        ~VisOverlayController();
+    private:
+        struct Pimpl;
+        std::unique_ptr<Pimpl> _pimpl;
+    };
+
+    class VisOverlayController::IVisualisationOverlay
+    {
+    public:
+        virtual void Set(std::shared_ptr<SceneEngine::IScene>) = 0;
+		virtual void Set(const std::shared_ptr<VisCameraSettings>&, bool) = 0;
+        virtual ~IVisualisationOverlay();
+    };
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class VisualisationOverlay : public PlatformRig::IOverlaySystem, public VisOverlayController::IVisualisationOverlay
+    {
+    public:
+		void Set(std::shared_ptr<SceneEngine::IScene> scene) override;
+		void Set(const std::shared_ptr<VisCameraSettings>&, bool) override;
 		void Set(const VisOverlaySettings& overlaySettings);
 		void Set(const std::shared_ptr<VisAnimationState>&);
         void ReportError(StringSection<>);
 
 		const VisOverlaySettings& GetOverlaySettings() const;
-        std::shared_ptr<VisMouseOver> GetMouseOver() const;
+        std::shared_ptr<ContinuousSceneQuery> GetMouseOver() const;
 
         virtual void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
@@ -195,46 +249,10 @@ namespace ToolsRig
 		std::shared_ptr<PlatformRig::IInputListener> listener);
 
     std::shared_ptr<PlatformRig::IInputListener> CreateMouseTrackingInputListener(
-        std::shared_ptr<VisMouseOver> mouseOver,
+        std::shared_ptr<ContinuousSceneQuery> mouseOver,
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+        std::shared_ptr<SceneEngine::IScene> scene,
         std::shared_ptr<VisCameraSettings> camera);
-
-    struct ModelVisSettings;
-    struct MaterialVisSettings;
-
-    /// <summary>Assigns scene and environmental settings to visualisation overlays</summary>
-    /// This separates the code for managing hot reloading events out of the overlays themselves,
-    /// and allows a set of overlays to be managed all at once
-    class VisOverlayController
-    {
-    public:
-        void SetScene(const ModelVisSettings&);
-        void SetScene(const MaterialVisSettings&, std::shared_ptr<RenderCore::Assets::RawMaterial> = nullptr);
-        void SetScene(std::shared_ptr<SceneEngine::IScene>);
-        void SetScene(::Assets::PtrToMarkerPtr<SceneEngine::IScene>);
-
-        void SetEnvSettings(StringSection<>);
-        void SetEnvSettings(::Assets::PtrToMarkerPtr<SceneEngine::ILightingStateDelegate>);
-        void SetEnvSettings(std::shared_ptr<SceneEngine::ILightingStateDelegate>);
-
-        void SetCamera(std::shared_ptr<VisCameraSettings>);
-
-        void AttachSceneOverlay(std::shared_ptr<ISimpleSceneOverlay>);
-        void AttachVisualisationOverlay(std::shared_ptr<VisualisationOverlay>);
-
-        SceneEngine::IScene* TryGetScene();
-        const std::shared_ptr<::Assets::OperationContext>& GetLoadingContext();
-
-        VisOverlayController(
-            std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
-		    std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
-            std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> deformAcceleratorPool,
-            std::shared_ptr<::Assets::OperationContext> loadingContext);
-        ~VisOverlayController();
-    private:
-        struct Pimpl;
-        std::unique_ptr<Pimpl> _pimpl;
-    };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

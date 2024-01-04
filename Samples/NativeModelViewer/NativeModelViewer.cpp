@@ -19,12 +19,10 @@ namespace Sample
 	{
 		ToolsRig::MountTextEntityDocument("cfg/lighting", "rawos/defaultenv.dat");
 
-		auto camera = std::make_shared<ToolsRig::VisCameraSettings>();
 		auto modelLayer = ToolsRig::CreateSimpleSceneOverlay(
 			globals._overlayApparatus,
 			std::make_shared<RenderCore::LightingEngine::LightingEngineApparatus>(globals._drawingApparatus),
 			globals._drawingApparatus->_deformAccelerators);
-		modelLayer->Set(camera);
 		AddSystem(modelLayer);
 
 		ToolsRig::VisOverlaySettings overlaySettings;
@@ -35,8 +33,17 @@ namespace Sample
 		auto visOverlay = std::make_shared<ToolsRig::VisualisationOverlay>(
 			globals._overlayApparatus,
 			overlaySettings);
-		visOverlay->Set(camera);
 		AddSystem(visOverlay);
+
+		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(
+			globals._drawingApparatus->_drawablesPool, globals._drawingApparatus->_pipelineAccelerators, globals._drawingApparatus->_deformAccelerators,
+			globals._windowApparatus->_mainLoadingContext);
+		_overlayBinder->AttachSceneOverlay(modelLayer);
+		_overlayBinder->AttachVisualisationOverlay(visOverlay);
+
+		auto camera = std::make_shared<ToolsRig::VisCameraSettings>();
+		modelLayer->Set(camera);
+		_overlayBinder->SetCamera(camera);
 
 		{
 			auto manipulators = std::make_shared<ToolsRig::ManipulatorStack>(camera, globals._drawingApparatus);
@@ -45,12 +52,6 @@ namespace Sample
 				ToolsRig::CreateCameraManipulator(camera, ToolsRig::CameraManipulatorMode::Blender_RightButton));
 			AddSystem(ToolsRig::MakeLayerForInput(manipulators));
 		}
-
-		_overlayBinder = std::make_shared<ToolsRig::VisOverlayController>(
-			globals._drawingApparatus->_drawablesPool, globals._drawingApparatus->_pipelineAccelerators, globals._drawingApparatus->_deformAccelerators,
-			globals._windowApparatus->_mainLoadingContext);
-		_overlayBinder->AttachSceneOverlay(modelLayer);
-		_overlayBinder->AttachVisualisationOverlay(visOverlay);
 
 		ToolsRig::ModelVisSettings visSettings {};
 		visSettings._modelName = "rawos/game/model/galleon/galleon.dae";

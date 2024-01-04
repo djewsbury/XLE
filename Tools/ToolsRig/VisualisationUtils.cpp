@@ -124,13 +124,14 @@ namespace ToolsRig
 			// orientation
         float verticalHalfDimension = .5f * std::max(box.second[0] - box.first[0], box.second[2] - box.first[2]);
 		verticalHalfDimension *= 1.15f;		// expand out a bit so the model doesn't touch the edges of the viewport
-        position[1] = box.first[1] + (verticalHalfDimension * (1.f + border)) / XlTan(.5f * verticalFieldOfView);
+        position[1] = (box.first[1]+box.second[1])/2.f + (verticalHalfDimension * (1.f + border)) / XlTan(.5f * verticalFieldOfView);
 
         VisCameraSettings result;
         result._position = position;
         result._focus = .5f * (box.first + box.second);
         result._verticalFieldOfView = verticalFieldOfView;
-        result._farClip = 10.f * Magnitude(result._focus - result._position);
+        float maxDim = std::max(std::max(std::abs(box.second[0] - box.first[0]), std::abs(box.second[1] - box.first[1])), std::abs(box.second[2] - box.first[2]));
+		result._farClip = std::max(maxDim, 10.f * Magnitude(result._focus - result._position));
         result._nearClip = result._farClip / 100000.f;
 
 		assert(std::isfinite(result._position[0]) && !std::isnan(result._position[0]));
@@ -139,6 +140,45 @@ namespace ToolsRig
 
         return result;
     }
+
+	VisCameraSettings AlignCameraToBoundingBoxFromAbove(
+        float verticalFieldOfView, 
+        const std::pair<Float3, Float3>& boxIn)
+	{
+        auto box = boxIn;
+
+            // convert empty/inverted boxes into something rational...
+        if (    box.first[0] >= box.second[0] 
+            ||  box.first[1] >= box.second[1] 
+            ||  box.first[2] >= box.second[2]) {
+            box.first = Float3(-10.f, -10.f, -10.f);
+            box.second = Float3( 10.f,  10.f,  10.f);
+        }
+
+        const float border = 0.0f;
+        Float3 position = .5f * (box.first + box.second);
+
+            // push back to attempt to fill the viewport with the bounding box
+			// Expecting object to be looking along +Y, which is out normal object-to-world
+			// orientation
+        float verticalHalfDimension = .5f * std::max(std::abs(box.second[0] - box.first[0]), std::abs(box.second[1] - box.first[1]));
+		verticalHalfDimension *= 1.15f;		// expand out a bit so the model doesn't touch the edges of the viewport
+        position[2] = (box.first[2]+box.second[2])/2.f + (verticalHalfDimension * (1.f + border)) / XlTan(.5f * verticalFieldOfView);
+
+        VisCameraSettings result;
+        result._position = position;
+        result._focus = .5f * (box.first + box.second);
+        result._verticalFieldOfView = verticalFieldOfView;
+		float maxDim = std::max(std::max(std::abs(box.second[0] - box.first[0]), std::abs(box.second[1] - box.first[1])), std::abs(box.second[2] - box.first[2]));
+		result._farClip = std::max(maxDim, 10.f * Magnitude(result._focus - result._position));
+        result._nearClip = result._farClip / 100000.f;
+
+		assert(std::isfinite(result._position[0]) && !std::isnan(result._position[0]));
+		assert(std::isfinite(result._position[1]) && !std::isnan(result._position[1]));
+		assert(std::isfinite(result._position[2]) && !std::isnan(result._position[2]));
+
+        return result;
+	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -150,8 +190,9 @@ namespace ToolsRig
 		void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) override;
 		void Set(std::shared_ptr<SceneEngine::IScene> scene, std::shared_ptr<::Assets::OperationContext> loadingContext) override;
 		void SetEmptyScene() override;
+		void ShowLoadingIndicator() override;
 
-		void Set(std::shared_ptr<VisCameraSettings>) override;
+		void Set(std::shared_ptr<VisCameraSettings>, bool) override;
 		void ResetCamera() override;
 		OverlayState GetOverlayState() const override;
 		void ReportError(StringSection<> msg) override;
@@ -224,7 +265,8 @@ namespace ToolsRig
 			auto validationHash = RenderCore::Techniques::HashPreregisteredAttachments(stitchingContext.GetPreregisteredAttachments(), parserContext.GetFrameBufferProperties());
 			assert(_lightingTechniqueTargetsHash == validationHash);		// If you get here, it means that this render target configuration doesn't match what was last used with OnRenderTargetUpdate()
 		#endif
-		_showingLoadingIndicator = false;
+		if (!(parserContext.GetViewport()._width * parserContext.GetViewport()._height))
+			return;
 
 		PreparedScene* actualizedScene = nullptr;
 		if (_preparedSceneFuture) {
@@ -292,7 +334,7 @@ namespace ToolsRig
 					auto log = ::Assets::AsString(_preparedSceneFuture->GetActualizationLog());
 					assert(_fontRenderingManager);
 					RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *_immediateDrawables, *_fontRenderingManager, *_debugShapesDelegate, "SimpleSceneOverlay failed with: " + log);
-				} else {
+				} else if (_preparedSceneFuture || _showingLoadingIndicator) {
 					// Draw a loading indicator,
 					using namespace RenderOverlays::DebuggingDisplay;
 					using namespace RenderOverlays;
@@ -307,8 +349,9 @@ namespace ToolsRig
 					RenderOverlays::ExecuteDraws(parserContext, rpi, *_immediateDrawables, *_debugShapesDelegate);
 
 					StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
-
-					_showingLoadingIndicator = true;
+				} else {
+					// clear, but don't draw anything
+					auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
 				}
 
 			} else {
@@ -337,6 +380,7 @@ namespace ToolsRig
 	{
 		if (!_envSettings || _lightingTechniqueTargets.empty() || (!_scene && !_useNullScene)) {
 			_preparedSceneFuture = nullptr;
+			_showingLoadingIndicator = false;
 			return;
 		}
 
@@ -346,6 +390,7 @@ namespace ToolsRig
 		if (_preparedSceneFuture)
 			_preparedSceneFuture->StallWhilePending();
 		_preparedSceneFuture = nullptr;
+		_showingLoadingIndicator = false;
 
 		_preparedSceneFuture = std::make_shared<::Assets::MarkerPtr<PreparedScene>>("simple-scene-layer");
 
@@ -415,6 +460,11 @@ namespace ToolsRig
 		RebuildPreparedScene();
 	}
 
+	void SimpleSceneOverlay::ShowLoadingIndicator()
+	{
+		_showingLoadingIndicator = true;
+	}
+
 	void SimpleSceneOverlay::SetEmptyScene()
 	{
 		_loadingContext = nullptr;
@@ -423,9 +473,10 @@ namespace ToolsRig
 		RebuildPreparedScene();
 	}
 
-	void SimpleSceneOverlay::Set(std::shared_ptr<VisCameraSettings> camera)
+	void SimpleSceneOverlay::Set(std::shared_ptr<VisCameraSettings> camera, bool resetCamera)
 	{
 		_camera = std::move(camera);
+		_pendingCameraReset = resetCamera;
 	}
 
 	void SimpleSceneOverlay::ResetCamera()
@@ -588,7 +639,8 @@ namespace ToolsRig
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::DrawingApparatus& drawingApparatus,
         std::pair<Float3, Float3> worldSpaceRay,
-		SceneEngine::IScene& scene)
+		SceneEngine::IScene& scene,
+		std::optional<RenderCore::Techniques::ProjectionDesc> viewProjDesc)
 	{
 		using namespace RenderCore;
 		std::vector<SceneEngine::ModelIntersectionStateContext::ResultEntry> results;
@@ -597,10 +649,14 @@ namespace ToolsRig
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
 		pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
 		SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), {}};
+		if (viewProjDesc)
+			sceneExecuteContext._views = { &(*viewProjDesc), &(*viewProjDesc)+1 };
 
 		TRY {
 			auto techniqueContext = MakeRayTestTechniqueContext(drawingApparatus);
 			Techniques::ParsingContext parserContext { techniqueContext, threadContext };
+			if (viewProjDesc)
+				parserContext.GetProjectionDesc() = *viewProjDesc;
 			parserContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
 			scene.ExecuteScene(threadContext, sceneExecuteContext);
@@ -675,7 +731,11 @@ namespace ToolsRig
 			const PlatformRig::InputContext& context,
 			const OSServices::InputSnapshot& evnt)
         {
-			if (evnt._mouseDelta == OSServices::Coord2 { 0, 0 })
+			if (evnt._mouseDelta == OSServices::Coord2 { 0, 0 } && _mouseOver->_state != ContinuousSceneQuery::State::Pending)
+				return ProcessInputResult::Passthrough;
+
+			// early out with zero area viewport
+			if (!((context._view._viewMaxs[0] - context._view._viewMins[0]) * (context._view._viewMaxs[1] - context._view._viewMins[1])))
 				return ProcessInputResult::Passthrough;
 
 			// Limit the update frequency by ensuring that enough time has
@@ -693,9 +753,7 @@ namespace ToolsRig
 			// The preferred option may depend on the particular use case.
 			auto time = std::chrono::steady_clock::now();
 			const auto timePeriod = std::chrono::milliseconds(200u);
-			_timeoutContext = {};
-			if (auto* v = context.GetService<PlatformRig::WindowingSystemView>())
-				_timeoutContext = *v;
+			_timeoutContext = context._view;
 			_timeoutMousePosition = {evnt._mousePosition._x, evnt._mousePosition._y};
 			if ((time - _timeOfLastCalculate) < timePeriod) {
 				auto* osRunLoop = OSServices::GetOSRunLoop();
@@ -707,7 +765,7 @@ namespace ToolsRig
 							auto l = weakThis.lock();
 							if (l) {
 								PlatformRig::InputContext context;
-								context.AttachService2(l->_timeoutContext);
+								context._view = l->_timeoutContext;
 								l->_timeOfLastCalculate = std::chrono::steady_clock::now();
 								l->CalculateForMousePosition(context, l->_timeoutMousePosition);
 								l->_timeoutEvent = ~0u;
@@ -732,30 +790,22 @@ namespace ToolsRig
 			const PlatformRig::InputContext& context,
 			PlatformRig::Coord2 mousePosition)
 		{
-			auto* view = context.GetService<PlatformRig::WindowingSystemView>();
-        	if (!view) {
-				if (_mouseOver->_hasMouseOver) {
-					_mouseOver->_hasMouseOver = false;
-					_mouseOver->_metadataQuery = {};
-					_mouseOver->_changeEvent.Invoke();
-				}
-				return;
-			}
-
             auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
-				AsCameraDesc(*_camera), mousePosition, view->_viewMins, view->_viewMaxs);
+				AsCameraDesc(*_camera), mousePosition, context._view._viewMins, context._view._viewMaxs);
 
             if (!_scene) {
-				if (_mouseOver->_hasMouseOver) {
-					_mouseOver->_hasMouseOver = false;
-					_mouseOver->_metadataQuery = {};
+				auto oldState = _mouseOver->_state;
+				_mouseOver->_state = ContinuousSceneQuery::State::Pending;
+				_mouseOver->_metadataQuery = {};
+				if (_mouseOver->_state != oldState)
 					_mouseOver->_changeEvent.Invoke();
-				}
 				return;
 			}
 
+			auto cameraProjDesc = RenderCore::Techniques::BuildProjectionDesc(AsCameraDesc(*_camera), (context._view._viewMaxs[0] - context._view._viewMins[0]) / float(context._view._viewMaxs[1] - context._view._viewMins[1]));
+
 			auto threadContext = RenderCore::Techniques::GetThreadContext();
-			auto intr = FirstRayIntersection(*threadContext, *_drawingApparatus, worldSpaceRay, *_scene);
+			auto intr = FirstRayIntersection(*threadContext, *_drawingApparatus, worldSpaceRay, *_scene, cameraProjDesc);
 			if (intr._type != 0) {
 				unsigned drawCallIndex = ~0u;
 				uint64_t materialGuid = ~0ull;
@@ -765,18 +815,19 @@ namespace ToolsRig
 				}
 				if (        drawCallIndex != _mouseOver->_drawCallIndex
 						||  materialGuid != _mouseOver->_materialGuid
-						||  !_mouseOver->_hasMouseOver) {
+						||  _mouseOver->_state != ContinuousSceneQuery::State::Good) {
 
-					_mouseOver->_hasMouseOver = true;
+					_mouseOver->_state = ContinuousSceneQuery::State::Good;
 					_mouseOver->_drawCallIndex = drawCallIndex;
 					_mouseOver->_materialGuid = materialGuid;
 					_mouseOver->_metadataQuery = std::move(intr._metadataQuery);
 					_mouseOver->_changeEvent.Invoke();
 				}
 			} else {
-				if (_mouseOver->_hasMouseOver) {
-					_mouseOver->_hasMouseOver = false;
-					_mouseOver->_metadataQuery = {};
+				auto oldState = _mouseOver->_state;
+				_mouseOver->_state = ContinuousSceneQuery::State::Empty;
+				_mouseOver->_metadataQuery = {};
+				if (oldState != ContinuousSceneQuery::State::Empty) {
 					_mouseOver->_changeEvent.Invoke();
 				}
 			}
@@ -785,7 +836,7 @@ namespace ToolsRig
 		void Set(std::shared_ptr<SceneEngine::IScene> scene) { _scene = std::move(scene); }
 
         MouseOverTrackingListener(
-            std::shared_ptr<VisMouseOver> mouseOver,
+            std::shared_ptr<ContinuousSceneQuery> mouseOver,
             std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
             std::shared_ptr<VisCameraSettings> camera)
         : _mouseOver(std::move(mouseOver))
@@ -795,7 +846,7 @@ namespace ToolsRig
         ~MouseOverTrackingListener() {}
 
     protected:
-        std::shared_ptr<VisMouseOver> _mouseOver;
+        std::shared_ptr<ContinuousSceneQuery> _mouseOver;
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
         std::shared_ptr<VisCameraSettings> _camera;
         
@@ -808,11 +859,14 @@ namespace ToolsRig
     };
 
 	std::shared_ptr<PlatformRig::IInputListener> CreateMouseTrackingInputListener(
-        std::shared_ptr<VisMouseOver> mouseOver,
+        std::shared_ptr<ContinuousSceneQuery> mouseOver,
         std::shared_ptr<RenderCore::Techniques::DrawingApparatus> drawingApparatus,
+		std::shared_ptr<SceneEngine::IScene> scene,
         std::shared_ptr<VisCameraSettings> camera)
 	{
-		return std::make_shared<MouseOverTrackingListener>(std::move(mouseOver), std::move(drawingApparatus), std::move(camera));
+		auto res =  std::make_shared<MouseOverTrackingListener>(std::move(mouseOver), std::move(drawingApparatus), std::move(camera));
+		res->Set(std::move(scene));
+		return res;
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -834,7 +888,7 @@ namespace ToolsRig
     {
     public:
 		VisOverlaySettings _settings;
-        std::shared_ptr<VisMouseOver> _mouseOver;
+        std::shared_ptr<ContinuousSceneQuery> _mouseOver;
 		std::shared_ptr<VisCameraSettings> _cameraSettings;
 		std::shared_ptr<VisAnimationState> _animState;
 		std::shared_ptr<MouseOverTrackingListener> _inputListener;
@@ -871,7 +925,7 @@ namespace ToolsRig
 	static void RenderTrackingOverlay(
         RenderOverlays::IOverlayContext& context,
 		const RenderOverlays::Rect& viewport,
-		const ToolsRig::VisMouseOver& mouseOver, 
+		const ToolsRig::ContinuousSceneQuery& mouseOver, 
 		const SceneEngine::IScene& scene)
     {
         using namespace RenderOverlays::DebuggingDisplay;
@@ -963,7 +1017,7 @@ namespace ToolsRig
 
 		bool doColorByMaterial = 
 			(_pimpl->_settings._colourByMaterial == 1)
-			|| (_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_hasMouseOver);
+			|| (_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_state == ContinuousSceneQuery::State::Good);
 		doColorByMaterial &= _pimpl->_scene != nullptr;
 
 		if (_pimpl->_settings._drawWireframe || _pimpl->_settings._drawNormals || _pimpl->_settings._skeletonMode || doColorByMaterial) {
@@ -1047,7 +1101,7 @@ namespace ToolsRig
         }
 
 		bool writeMaterialName = 
-			(_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_hasMouseOver && _pimpl->_scene);
+			(_pimpl->_settings._colourByMaterial == 2 && _pimpl->_mouseOver->_state == ContinuousSceneQuery::State::Good && _pimpl->_scene);
 
 		if (writeMaterialName || _pimpl->_settings._drawBasisAxis || _pimpl->_settings._drawGrid) {
 
@@ -1093,7 +1147,7 @@ namespace ToolsRig
 			_pimpl->_inputListener->Set(_pimpl->_scene);
 	}
 
-	void VisualisationOverlay::Set(const std::shared_ptr<VisCameraSettings>& camera)
+	void VisualisationOverlay::Set(const std::shared_ptr<VisCameraSettings>& camera, bool)
 	{
 		_pimpl->_cameraSettings = camera;
 		_pimpl->_inputListener = nullptr;
@@ -1116,7 +1170,7 @@ namespace ToolsRig
 		return _pimpl->_settings;
 	}
 
-	std::shared_ptr<VisMouseOver> VisualisationOverlay::GetMouseOver() const
+	std::shared_ptr<ContinuousSceneQuery> VisualisationOverlay::GetMouseOver() const
 	{
 		return _pimpl->_mouseOver;
 	}
@@ -1222,12 +1276,18 @@ namespace ToolsRig
 					Pimpl::SequencerCfgs cfgs;
 					auto fbFrag = CreateVisFBFrag();
 					auto stitched = stitching.TryStitchFrameBufferDesc({&fbFrag, &fbFrag+1}, fbProps);
-					cfgs._visWireframeCfg = pipelineAccelerators->CreateSequencerConfig("vis-wireframe", visWireframeDelegate, ParameterBox{}, stitched._fbDesc);
-					cfgs._visNormalsCfg = pipelineAccelerators->CreateSequencerConfig("vis-normals", visNormalsDelegate, ParameterBox{}, stitched._fbDesc);
+					cfgs._visWireframeCfg = pipelineAccelerators->CreateSequencerConfig("vis-wireframe");
+					pipelineAccelerators->SetTechniqueDelegate(*cfgs._visWireframeCfg, std::move(visWireframeDelegate));
+					pipelineAccelerators->SetFrameBufferDesc(*cfgs._visWireframeCfg, stitched._fbDesc);
+					cfgs._visNormalsCfg = pipelineAccelerators->CreateSequencerConfig("vis-normals");
+					pipelineAccelerators->SetTechniqueDelegate(*cfgs._visNormalsCfg, std::move(visNormalsDelegate));
+					pipelineAccelerators->SetFrameBufferDesc(*cfgs._visNormalsCfg, stitched._fbDesc);
 
 					auto justStencilFrag = CreateVisJustStencilFrag();
 					auto justStencilStitched = stitching.TryStitchFrameBufferDesc({&justStencilFrag, &justStencilFrag+1}, fbProps);
-					cfgs._primeStencilCfg = pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil", primeStencilBufferDelegate, ParameterBox{}, justStencilStitched._fbDesc);
+					cfgs._primeStencilCfg = pipelineAccelerators->CreateSequencerConfig("vis-prime-stencil");
+					pipelineAccelerators->SetTechniqueDelegate(*cfgs._primeStencilCfg, std::move(primeStencilBufferDelegate));
+					pipelineAccelerators->SetFrameBufferDesc(*cfgs._primeStencilCfg, justStencilStitched._fbDesc);
 					return cfgs;
 				});
 	}
@@ -1245,7 +1305,7 @@ namespace ToolsRig
 		_pimpl->_drawingApparatus = immediateDrawingApparatus->_mainDrawingApparatus;
         _pimpl->_settings = overlaySettings;
 
-        _pimpl->_mouseOver = std::make_shared<VisMouseOver>();
+        _pimpl->_mouseOver = std::make_shared<ContinuousSceneQuery>();
     }
 
     VisualisationOverlay::~VisualisationOverlay() {}
@@ -1295,7 +1355,7 @@ namespace ToolsRig
         std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAcceleratorPool;
 
         std::shared_ptr<ISimpleSceneOverlay> _sceneOverlay;
-        std::shared_ptr<VisualisationOverlay> _visualisationOverlay;
+        std::vector<std::shared_ptr<IVisualisationOverlay>> _visualisationOverlays;
 
         enum class SceneBindType { ModelVisSettings, MaterialVisSettings, Ptr, Marker };
         SceneBindType _sceneBindType = SceneBindType::Ptr;
@@ -1328,7 +1388,7 @@ namespace ToolsRig
 		if (_pendingSceneActualize && _sceneMarker) {
 			if (auto* actualized = _sceneMarker->TryActualize()) {
 				if (_sceneOverlay) _sceneOverlay->Set(*actualized, _loadingContext);
-				if (_visualisationOverlay) _visualisationOverlay->Set(*actualized);
+				for (auto& v:_visualisationOverlays) v->Set(*actualized);
 				_pendingSceneActualize = false;
 			} else if (_sceneMarker->GetAssetState() == ::Assets::AssetState::Invalid) {
 				_sceneReportedError = "Scene load failed with error: " + ::Assets::AsString(_sceneMarker->GetActualizationLog());
@@ -1353,7 +1413,7 @@ namespace ToolsRig
 			if (_sceneBindType == SceneBindType::ModelVisSettings && _sceneMarker && ::Assets::IsInvalidated(*_sceneMarker)) {
 				// scene hot reload
 				if (_sceneOverlay) _sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-				if (_visualisationOverlay) _visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+				for (auto& v:_visualisationOverlays) v->Set(std::shared_ptr<SceneEngine::IScene>{});
 
 				if (!_modelVisSettings._modelName.empty()) {
 					_sceneMarker = ModelVisUtility{_drawablesPool, _pipelineAcceleratorPool, _deformAcceleratorPool, _loadingContext}
@@ -1361,7 +1421,7 @@ namespace ToolsRig
 					_pendingSceneActualize = true;
 				} else {
 					if (_sceneOverlay) _sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{}, _loadingContext);
-					if (_visualisationOverlay) _visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+					for (auto& v:_visualisationOverlays) v->Set(std::shared_ptr<SceneEngine::IScene>{});
 					_pendingSceneActualize = false;
 				}
 				
@@ -1396,7 +1456,7 @@ namespace ToolsRig
 	void VisOverlayController::SetScene(const ModelVisSettings& visSettings)
 	{
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+		for (auto& v:_pimpl->_visualisationOverlays) v->Set(std::shared_ptr<SceneEngine::IScene>{});
 
 		_pimpl->_scene = nullptr;
 		_pimpl->_sceneMarker = nullptr;
@@ -1405,6 +1465,7 @@ namespace ToolsRig
 		if (!visSettings._modelName.empty()) {
 			_pimpl->_sceneMarker = ModelVisUtility{_pimpl->_drawablesPool, _pimpl->_pipelineAcceleratorPool, _pimpl->_deformAcceleratorPool, _pimpl->_loadingContext}
 				.MakeScene(visSettings);
+			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->ShowLoadingIndicator();
 			_pimpl->_pendingSceneActualize = true;
 		} else {
 			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->SetEmptyScene();
@@ -1428,7 +1489,7 @@ namespace ToolsRig
 		_pimpl->UpdateVisualizationError();
 
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene);
-		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
+		for (auto& v:_pimpl->_visualisationOverlays) v->Set(_pimpl->_scene);
 	}
 
 	void VisOverlayController::SetScene(std::shared_ptr<SceneEngine::IScene> scene)
@@ -1441,7 +1502,7 @@ namespace ToolsRig
 		_pimpl->UpdateVisualizationError();
 
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_scene, _pimpl->_loadingContext);
-		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(_pimpl->_scene);
+		for (auto& v:_pimpl->_visualisationOverlays) v->Set(_pimpl->_scene);
 	}
 
 	void VisOverlayController::SetScene(Assets::PtrToMarkerPtr<SceneEngine::IScene> marker)
@@ -1454,11 +1515,12 @@ namespace ToolsRig
 		auto* actual = _pimpl->_sceneMarker->TryActualize();
 		if (actual) {
 			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(*actual, _pimpl->_loadingContext);
-			if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(*actual);
+			for (auto& v:_pimpl->_visualisationOverlays) v->Set(*actual);
 			_pimpl->_pendingSceneActualize = false;
 		} else {
 			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-			if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+			if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->ShowLoadingIndicator();
+			for (auto& v:_pimpl->_visualisationOverlays) v->Set(std::shared_ptr<SceneEngine::IScene>{});
 			_pimpl->_pendingSceneActualize = true;
 		}
 		_pimpl->_sceneReportedError = {};
@@ -1510,10 +1572,10 @@ namespace ToolsRig
 		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(_pimpl->_lightingState);
 	}
 
-	void VisOverlayController::SetCamera(std::shared_ptr<VisCameraSettings> camera)
+	void VisOverlayController::SetCamera(std::shared_ptr<VisCameraSettings> camera, bool resetCamera)
 	{
-		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(camera);
-		if (_pimpl->_visualisationOverlay) _pimpl->_visualisationOverlay->Set(camera);
+		if (_pimpl->_sceneOverlay) _pimpl->_sceneOverlay->Set(camera, resetCamera);
+		for (auto& v:_pimpl->_visualisationOverlays) v->Set(camera, resetCamera);
 	}
 
 	void VisOverlayController::AttachSceneOverlay(std::shared_ptr<ISimpleSceneOverlay> sceneOverlay)
@@ -1548,24 +1610,25 @@ namespace ToolsRig
 			_pimpl->_sceneOverlay->Set(std::shared_ptr<SceneEngine::ILightingStateDelegate>{});
 	}
 
-	void VisOverlayController::AttachVisualisationOverlay(std::shared_ptr<VisualisationOverlay> visualisationOverlay)
+	void VisOverlayController::AttachVisualisationOverlay(std::shared_ptr<IVisualisationOverlay> visualisationOverlay)
 	{
-		if (_pimpl->_visualisationOverlay && _pimpl->_visualisationOverlay != visualisationOverlay) {
-			_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
-		}
+		for (auto& v:_pimpl->_visualisationOverlays)
+			if (v == visualisationOverlay)
+				return;
 
-		_pimpl->_visualisationOverlay = std::move(visualisationOverlay);
+		auto* v = visualisationOverlay.get();
+		_pimpl->_visualisationOverlays.push_back(std::move(visualisationOverlay));
 
 		// set current scene state
 		if (_pimpl->_scene) {
-			_pimpl->_visualisationOverlay->Set(_pimpl->_scene);
+			v->Set(_pimpl->_scene);
 		} else if (_pimpl->_sceneMarker) {
 			if (auto* actual = _pimpl->_sceneMarker->TryActualize()) {
-				_pimpl->_visualisationOverlay->Set(*actual);
+				v->Set(*actual);
 			} else
-				_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+				v->Set(std::shared_ptr<SceneEngine::IScene>{});
 		} else
-			_pimpl->_visualisationOverlay->Set(std::shared_ptr<SceneEngine::IScene>{});
+			v->Set(std::shared_ptr<SceneEngine::IScene>{});
 
 		_pimpl->UpdateVisualizationError();
 	}
@@ -1608,6 +1671,8 @@ namespace ToolsRig
 		if (_pimpl->_mainThreadTickFn != ~0u)
 			RenderCore::Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_pimpl->_mainThreadTickFn);
 	}
+
+	VisOverlayController::IVisualisationOverlay::~IVisualisationOverlay() = default;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
