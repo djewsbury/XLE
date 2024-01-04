@@ -442,7 +442,10 @@ namespace RenderCore { namespace Techniques
 		}
 
 		auto sharedRes = _pipelineCollection->_preparedSharedResources.TryActualize();
-		if (!sharedRes) return;
+		if (!sharedRes) {
+			assert(0);
+			return;
+		}
 
 		auto encoder = metalContext.BeginComputeEncoder(*sharedRes->_pipelineLayout);
 		Metal::CapturedStates capturedStates;
@@ -454,26 +457,29 @@ namespace RenderCore { namespace Techniques
 		sharedRes->_boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
 		++metrics._descriptorSetWrites;
 
-		const Techniques::ComputePipelineAndLayout* currentPipelineLayout = nullptr;
+		const Techniques::ComputePipelineAndLayout* currentPipeline = nullptr;
 		unsigned currentPipelineMarker = ~0u;
 
 		const unsigned instanceCount = (unsigned)instanceIndices.size();
 		const unsigned wavegroupWidth = 64;
 		for (const auto&dispatch:_dispatches) {
 			if (dispatch._pipelineMarker != currentPipelineMarker) {
-				currentPipelineLayout = _pipelineCollection->_pipelines[dispatch._pipelineMarker]->TryActualize();
+				currentPipeline = _pipelineCollection->_pipelines[dispatch._pipelineMarker]->TryActualize();
 				currentPipelineMarker = dispatch._pipelineMarker;
 			}
-			if (!currentPipelineLayout) continue;
-				
-			InvocationParams invocationParams { 
+			if (!currentPipeline) {
+				assert(0);
+				continue;
+			}
+
+			InvocationParams invocationParams {
 				dispatch._vertexCount,  dispatch._firstVertex,
 				instanceCount, outputInstanceStride, outputInstanceStride, dispatch._iaParamsIdx,
 				dispatch._softInfluenceCount, dispatch._firstJointTransform,
 				dispatch._skinIAParamsIdx, _jointMatricesInstanceStride };
 			auto groupCount = (dispatch._vertexCount*instanceCount+wavegroupWidth-1)/wavegroupWidth;
 			encoder.PushConstants(VK_SHADER_STAGE_COMPUTE_BIT, 0, MakeOpaqueIteratorRange(invocationParams));
-			encoder.Dispatch(*currentPipelineLayout->_pipeline, groupCount, 1, 1);
+			encoder.Dispatch(*currentPipeline->_pipeline, groupCount, 1, 1);
 			metrics._vertexCount += groupCount*wavegroupWidth;
 		}
 
@@ -563,13 +569,13 @@ namespace RenderCore { namespace Techniques
 			unsigned skelVBStride = skelVb._ia._vertexStride;
 			unsigned weightsOffset = ~0u, indicesOffset = ~0u;
 			Format weightsFormat = Format::Unknown, indicesFormat = Format::Unknown;
-			unsigned parrallelElementsCount = 0;
+			unsigned parallelElementsCount = 0;
 			for (unsigned c=0; ; ++c) {
 				auto weightsElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "WEIGHTS", c);
 				auto jointIndicesElement = Internal::FindElement(MakeIteratorRange(skelVb._ia._elements), "JOINTINDICES", c);
 				if (!weightsElement || !jointIndicesElement)
 					break;
-				if (!parrallelElementsCount) {
+				if (!parallelElementsCount) {
 					weightsOffset = weightsElement->_alignedByteOffset;
 					indicesOffset = jointIndicesElement->_alignedByteOffset;
 					weightsFormat = weightsElement->_format;
@@ -586,7 +592,7 @@ namespace RenderCore { namespace Techniques
 				}
 				assert(GetComponentCount(GetComponents(weightsElement->_format)) == GetComponentCount(GetComponents(jointIndicesElement->_format)));
 				influencesPerVertex += GetComponentCount(GetComponents(weightsElement->_format));
-				++parrallelElementsCount;
+				++parallelElementsCount;
 			}
 
 			if (weightsOffset == ~0u || indicesOffset == ~0u)
@@ -656,11 +662,13 @@ namespace RenderCore { namespace Techniques
 
 			Internal::GPUDeformEntryHelper helper{bindings, start->_geoId};
 			auto selectors = helper._selectors;
-			selectors.SetParameter("JOINT_INDICES_TYPE", (unsigned)GetComponentType(start->_indicesFormat));
-			selectors.SetParameter("JOINT_INDICES_PRECISION", (unsigned)GetComponentPrecision(start->_indicesFormat));
-			selectors.SetParameter("WEIGHTS_TYPE", (unsigned)GetComponentType(start->_weightsFormat));
-			selectors.SetParameter("WEIGHTS_PRECISION", (unsigned)GetComponentPrecision(start->_weightsFormat));
 			selectors.SetParameter("INFLUENCE_COUNT", (unsigned)start->_sectionInfluencesPerVertex);
+			if (start->_sectionInfluencesPerVertex) {
+				selectors.SetParameter("JOINT_INDICES_TYPE", (unsigned)GetComponentType(start->_indicesFormat));
+				selectors.SetParameter("JOINT_INDICES_PRECISION", (unsigned)GetComponentPrecision(start->_indicesFormat));
+				selectors.SetParameter("WEIGHTS_TYPE", (unsigned)GetComponentType(start->_weightsFormat));
+				selectors.SetParameter("WEIGHTS_PRECISION", (unsigned)GetComponentPrecision(start->_weightsFormat));
+			}			
 			auto pipelineMarker = _pipelineCollection->GetPipeline(std::move(selectors));
 			for (auto q=start; q!=s; ++q) {
 				assert(q->_indicesFormat == start->_indicesFormat);
@@ -669,6 +677,7 @@ namespace RenderCore { namespace Techniques
 				for (unsigned dc=0; dc<q->_preskinningDrawCalls.size(); ++dc) {
 					const auto& draw = q->_preskinningDrawCalls[dc];
 					assert(draw._firstIndex == ~unsigned(0x0));		// avoid confusion; this isn't used for anything
+
 					Dispatch dispatch;
 					dispatch._iaParamsIdx = (unsigned)_iaParams.size();
 					dispatch._skinIAParamsIdx = q->_skinIAParamsIdx;
@@ -677,6 +686,15 @@ namespace RenderCore { namespace Techniques
 					dispatch._softInfluenceCount = q->_drawCallWeightsPerVertex[dc];
 					dispatch._pipelineMarker = pipelineMarker;
 					dispatch._firstJointTransform = q->_rangeInJointMatrices.first;
+
+					if (q->_drawCallWeightsPerVertex[dc] == 0 && start->_sectionInfluencesPerVertex != 0) {
+						// Special case for zero weights, when mixed in non-zero weights. Avoid using SoftInfluenceCount = 0 in this
+						// case, instead just use a zero-weight shader
+						auto selectors2 = helper._selectors;
+						selectors2.SetParameter("INFLUENCE_COUNT", 0);
+						dispatch._pipelineMarker = _pipelineCollection->GetPipeline(std::move(selectors2));
+					}
+
 					_dispatches.push_back(dispatch);
 				}
 			}
@@ -691,12 +709,16 @@ namespace RenderCore { namespace Techniques
 				return lhs._pipelineMarker < rhs._pipelineMarker;
 			});
 
+		auto* device = _pipelineCollection->_pipelineCollection->GetDevice().get();
 		std::vector<uint8_t> uploadBuffer;
-		uploadBuffer.reserve(_iaParams.size() * sizeof(Internal::GPUDeformerIAParams) + _skinIAParams.size() * sizeof(SkinIAParams));
+		// we're creating one buffer with both _iaParams and _skinIAParams -- but we must respect hardware offset requirements
+		size_t offsetForSkinParams = CeilToMultiple(_iaParams.size() * sizeof(Internal::GPUDeformerIAParams), std::max(1u, device->GetDeviceLimits()._unorderedAccessBufferOffsetAlignment));
+		uploadBuffer.reserve(offsetForSkinParams + _skinIAParams.size() * sizeof(SkinIAParams));
 		uploadBuffer.insert(uploadBuffer.end(), (const uint8_t*)AsPointer(_iaParams.begin()), (const uint8_t*)AsPointer(_iaParams.end()));
+		uploadBuffer.resize(offsetForSkinParams, 0);	// buffer for alignment
 		uploadBuffer.insert(uploadBuffer.end(), (const uint8_t*)AsPointer(_skinIAParams.begin()), (const uint8_t*)AsPointer(_skinIAParams.end()));
 
-		auto utilitiesBuffer = _pipelineCollection->_pipelineCollection->GetDevice()->CreateResource(
+		auto utilitiesBuffer = device->CreateResource(
 			CreateDesc(
 				BindFlag::ShaderResource | BindFlag::UnorderedAccess | BindFlag::TransferDst,
 				LinearBufferDesc::Create(uploadBuffer.size())), "skin-ia-data");
@@ -706,7 +728,7 @@ namespace RenderCore { namespace Techniques
 		_linearBufferCompletion = std::move(transaction._future);
 
 		_iaParamsView = utilitiesBuffer->CreateBufferView(BindFlag::ShaderResource, 0, _iaParams.size() * sizeof(Internal::GPUDeformerIAParams));
-		_skinIAParamsView = utilitiesBuffer->CreateBufferView(BindFlag::ShaderResource, _iaParams.size() * sizeof(Internal::GPUDeformerIAParams), _skinIAParams.size() * sizeof(SkinIAParams));
+		_skinIAParamsView = utilitiesBuffer->CreateBufferView(BindFlag::ShaderResource, offsetForSkinParams, _skinIAParams.size() * sizeof(SkinIAParams));
 	}
 
 	bool GPUSkinDeformer::IsCPUDeformer() const { return false; }

@@ -1,12 +1,14 @@
 
 #include "deform-helper.compute.hlsl"
 
-#if JOINT_INDICES_TYPE != 2 || JOINT_INDICES_PRECISION != 8
-	#error Unsupported skinning joint indicies type
-#endif
+#if INFLUENCE_COUNT > 0
+	#if JOINT_INDICES_TYPE != 2 || JOINT_INDICES_PRECISION != 8
+		#error Unsupported skinning joint indicies type
+	#endif
 
-#if WEIGHTS_TYPE != 4 || WEIGHTS_PRECISION != 8
-	#error Unsupported skinning weights type
+	#if WEIGHTS_TYPE != 4 || WEIGHTS_PRECISION != 8
+		#error Unsupported skinning weights type
+	#endif
 #endif
 
 ByteAddressBuffer StaticVertexAttachments : register(t5);
@@ -41,7 +43,7 @@ uint LoadIndexPack(uint vertexIdx, uint influenceCount, SkinIAParamsStruct iaPar
 
 struct SkinInvocationStruct
 {
-	uint SoftInfluenceCount;
+	uint SoftInfluenceCount;		// cannot be zero unless INFLUENCE_COUNT is also zero!
 	uint FirstJointTransform;		// per section, not per geo
 	uint SkinParamsIdx;
 	uint JointMatricesInstanceStride;
