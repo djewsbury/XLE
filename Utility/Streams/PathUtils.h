@@ -177,6 +177,10 @@ namespace Utility
 
     std::string ColouriseFilename(StringSection<> filename);
 
+    // returns null if no match, otherwise the first character in str after the fragment (which can be str.end())
+    template<typename CharType>
+        const CharType* PathBeginsWith(StringSection<CharType> longerString, StringSection<CharType> fragment, const FilenameRules& rules = s_defaultFilenameRules);
+
     namespace Legacy
     {
         XL_UTILITY_API void XlConcatPath(char* dst, int count, const char* a, const char* b, const char* bEnd);

@@ -621,6 +621,15 @@ char*  XlFindAnyChar(char s[], const char delims[])
     return nullptr;
 }
 
+const char*  XlFindAnyChar(StringSection<char> s, const char delims[])
+{
+    for (const auto& chr:s)
+        for (const char *d = delims; *d; ++d)
+            if (chr == *d) return &chr;
+    return nullptr;
+}
+
+
 const char*  XlFindNot(const char s[], const char delims[])
 {
     for (const char* i = s; *i; ++i) {
@@ -636,6 +645,18 @@ const char*  XlFindNot(const char s[], const char delims[])
 char*  XlFindNot(char s[], const char delims[])
 {
     for (char* i = s; *i; ++i) {
+        const char *d = delims;
+        for (; *d; ++d) {
+            if (*i == *d) break;
+        }
+        if (*d == '\0') return i;
+    }
+    return nullptr;
+}
+
+const char*  XlFindNot(StringSection<char> s, const char delims[])
+{
+    for (auto* i = s.begin(); i!=s.end(); ++i) {
         const char *d = delims;
         for (; *d; ++d) {
             if (*i == *d) break;

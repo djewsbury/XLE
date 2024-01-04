@@ -228,8 +228,10 @@ namespace Utility
 	XL_UTILITY_API const char*  XlFindChar          (StringSection<char> s, char ch);
     XL_UTILITY_API const char*  XlFindAnyChar       (const char s[], const char ch[]);
     XL_UTILITY_API char*        XlFindAnyChar       (char s[], const char delims[]);
+    XL_UTILITY_API const char*  XlFindAnyChar       (StringSection<char> s, const char delims[]);
     XL_UTILITY_API const char*  XlFindNot           (const char s[], const char ch[]);
     XL_UTILITY_API char*        XlFindNot           (char s[], const char delims[]);
+    XL_UTILITY_API const char*  XlFindNot           (StringSection<char> s, const char delims[]);
     XL_UTILITY_API const char*  XlFindCharReverse   (const char* s, char ch);
     XL_UTILITY_API const char*  XlFindString        (const char* s, const char* x);
     XL_UTILITY_API char*        XlFindString        (char* s, const char* x);

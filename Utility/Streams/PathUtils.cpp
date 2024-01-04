@@ -787,7 +787,43 @@ namespace Utility
 		return str.str();
 	}
 
-    FilenameRules s_defaultFilenameRules('/', true);
+	template<typename CharType>
+		const CharType* PathBeginsWith(StringSection<CharType> longerString, StringSection<CharType> fragment, const FilenameRules& rules)
+	{
+		// we can't check the string lengths initially because of the sequential separators rule
+		auto a = longerString.begin(), b = fragment.begin();
+		if (rules.IsCaseSensitive()) {
+			for (;;) {
+				if (b == fragment.end()) return a;
+				if (a == longerString.end()) return nullptr;
+
+				// special case for separators (allowing strings of sequential separators)
+				if (*a == '\\' || *a == '/') {
+					if (*b != '\\' && *b != '/') return nullptr;
+					while (a!=longerString.end() &&  (*a == '\\' || *a == '/')) ++a;
+					while (b!=fragment.end() &&  (*b == '\\' || *b == '/')) ++b;
+				} else {
+					if (*a != *b) return nullptr;
+					++a; ++b;
+				}
+			}
+		} else {
+			for (;;) {
+				if (b == fragment.end()) return a;
+				if (a == longerString.end()) return nullptr;
+
+				// special case for separators (allowing strings of sequential separators)
+				if (*a == '\\' || *a == '/') {
+					if (*b != '\\' && *b != '/') return nullptr;
+					while (a!=longerString.end() &&  (*a == '\\' || *a == '/')) ++a;
+					while (b!=fragment.end() &&  (*b == '\\' || *b == '/')) ++b;
+				} else {
+					if (XlToLower(*a) != XlToLower(*b)) return nullptr;
+					++a; ++b;
+				}
+			}
+		}
+	}
 
     template class FileNameSplitter<utf8>;
 	template class FileNameSplitter<utf16>;
@@ -798,6 +834,9 @@ namespace Utility
     template std::basic_string<utf8> MakeRelativePath(const SplitPath<utf8>&, const SplitPath<utf8>&, const FilenameRules&);
 	template std::basic_string<utf16> MakeRelativePath(const SplitPath<utf16>&, const SplitPath<utf16>&, const FilenameRules&);
     template std::basic_string<ucs2> MakeRelativePath(const SplitPath<ucs2>&, const SplitPath<ucs2>&, const FilenameRules&);
+	template const utf8* PathBeginsWith(StringSection<utf8>, StringSection<utf8>, const FilenameRules&);
+	template const utf16* PathBeginsWith(StringSection<utf16>, StringSection<utf16>, const FilenameRules&);
+	template const ucs2* PathBeginsWith(StringSection<ucs2>, StringSection<ucs2>, const FilenameRules&);
 
 }
 
