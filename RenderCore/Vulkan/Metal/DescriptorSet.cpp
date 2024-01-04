@@ -356,7 +356,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						imageInfos[c] = {};		// we don't know the correct dummy type to apply here, so we can't set a good binding
 					}
 				}
-				if (minElementIdx < maxElementIdx)
+				if (minElementIdx <= maxElementIdx)
 					WriteArrayBinding<VkDescriptorImageInfo>(
 						descriptorSetBindPoint,
 						AsVkDescriptorType(slotType),
@@ -400,7 +400,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						bufferInfos[c] = {};
 					}
 				}
-				if (minElementIdx < maxElementIdx)
+				if (minElementIdx <= maxElementIdx)
 					WriteArrayBinding<VkDescriptorBufferInfo>(
 						descriptorSetBindPoint,
 						AsVkDescriptorType(slotType),
@@ -431,7 +431,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					}
 				}
 
-				if (minElementIdx < maxElementIdx)
+				if (minElementIdx <= maxElementIdx)
 					WriteArrayBinding<VkBufferView>(
 						descriptorSetBindPoint,
 						AsVkDescriptorType(slotType),
