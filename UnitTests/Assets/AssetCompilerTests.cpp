@@ -336,7 +336,6 @@ namespace UnitTests
 		::Assets::MainFileSystem::Init(mountingTree, nullptr);*/
 
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
-		::Assets::MainFileSystem::GetMountingTree()->SetAbsolutePathMode(Assets::MountingTree::AbsolutePathMode::RawOS);
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
@@ -410,7 +409,6 @@ namespace UnitTests
 	TEST_CASE( "AssetCompilers-HandlingCompilationFailures", "[assets]" )
 	{
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
-		::Assets::MainFileSystem::GetMountingTree()->SetAbsolutePathMode(Assets::MountingTree::AbsolutePathMode::RawOS);
 
 		auto tempDirPath = std::filesystem::temp_directory_path() / "xle-unit-tests";
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory

@@ -105,17 +105,17 @@ static const char* s_basicTechniqueFile = R"--(
 		Preconfiguration=xleres/Config/Preconfiguration.hlsl
 		PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
 
-	CopyDiffuseAlbedo_NoPatches=~
+	Utility_NoPatches=~
 		Inherit=~; Shared
-		PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:copyDiffuseAlbedo
+		PixelShader=xleres/TechniqueLibrary/Standard/nopatches.pixel.hlsl:utility
 
-	CopyDiffuseAlbedo_PerPixel=~
+	Utility_PerPixel=~
 		Inherit=~; Shared
-		PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:copyDiffuseAlbedo
+		PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:utility
 		
-	CopyDiffuseAlbedo_PerPixelAndEarlyRejection=~
+	Utility_PerPixelAndEarlyRejection=~
 		Inherit=~; Shared
-		PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:copyDiffuseAlbedoWithEarlyRejection
+		PixelShader=xleres/TechniqueLibrary/Standard/depthonly.pixel.hlsl:utilityWithEarlyRejection
 
 	~~~~~~~~~~~~~~~~~~~~~
 	

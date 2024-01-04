@@ -16,16 +16,19 @@
 
 namespace ToolsRig
 {
+	constexpr auto s_ModelScaffold_CompileProcessType = GetCompileProcessType((RenderCore::Assets::ModelScaffold*)nullptr);
+	constexpr auto s_AnimationSetScaffold_CompileProcessType = GetCompileProcessType((RenderCore::Assets::AnimationSetScaffold*)nullptr);
+	constexpr auto s_SkeletonScaffold_CompileProcessType = GetCompileProcessType((RenderCore::Assets::SkeletonScaffold*)nullptr);
+	constexpr auto s_RawMaterialSet_CompileProcessType = GetCompileProcessType((RenderCore::Assets::RawMaterialSet*)nullptr);
+
 	std::vector<std::pair<std::string, std::string>> GetModelExtensions()
 	{
-		return ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(
-			RenderCore::Assets::ModelScaffold::CompileProcessType);
+		return ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(s_ModelScaffold_CompileProcessType);
 	}
 
 	std::vector<std::pair<std::string, std::string>> GetAnimationSetExtensions()
 	{
-		return ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(
-			RenderCore::Assets::AnimationSetScaffold::CompileProcessType);
+		return ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(s_AnimationSetScaffold_CompileProcessType);
 	}
 
 	CompilationTarget::BitField FindCompilationTargets(StringSection<> ext)
@@ -33,13 +36,13 @@ namespace ToolsRig
 		auto types = ::Assets::Services::GetIntermediateCompilers().GetTargetCodesForExtension(ext);
 		CompilationTarget::BitField result = 0;
 		for (auto t:types) {
-			if (t == RenderCore::Assets::ModelScaffold::CompileProcessType) {
+			if (t == s_ModelScaffold_CompileProcessType) {
 				result |= CompilationTarget::Flags::Model;
-			} else if (t == RenderCore::Assets::AnimationSetScaffold::CompileProcessType) {
+			} else if (t == s_AnimationSetScaffold_CompileProcessType) {
 				result |= CompilationTarget::Flags::Animation;
-			} else if (t == RenderCore::Assets::SkeletonScaffold::CompileProcessType) {
+			} else if (t == s_SkeletonScaffold_CompileProcessType) {
 				result |= CompilationTarget::Flags::Skeleton;
-			} else if (t == RenderCore::Assets::RawMatConfigurations::CompileProcessType) {
+			} else if (t == s_RawMaterialSet_CompileProcessType) {
 				result |= CompilationTarget::Flags::Material;
 			}
 		}
@@ -50,10 +53,10 @@ namespace ToolsRig
 	{
 		TreeOfDirectories CalculateDirectoriesByCompilationTargets(StringSection<> base)
 		{
-			auto modelExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(RenderCore::Assets::ModelScaffold::CompileProcessType);
-			auto animationExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(RenderCore::Assets::AnimationSetScaffold::CompileProcessType);
-			auto skeletonExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(RenderCore::Assets::SkeletonScaffold::CompileProcessType);
-			auto materialExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(RenderCore::Assets::RawMatConfigurations::CompileProcessType);
+			auto modelExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(s_ModelScaffold_CompileProcessType);
+			auto animationExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(s_AnimationSetScaffold_CompileProcessType);
+			auto skeletonExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(s_SkeletonScaffold_CompileProcessType);
+			auto materialExts = ::Assets::Services::GetIntermediateCompilers().GetExtensionsForTargetCode(s_RawMaterialSet_CompileProcessType);
 
 			TreeOfDirectories result;
 

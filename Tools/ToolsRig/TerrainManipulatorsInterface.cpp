@@ -43,15 +43,13 @@ namespace ToolsRig
     {
         auto p = _parent.lock();
         if (p) {
-            if (auto* view = context.GetService<PlatformRig::WindowingSystemView>()) {
-                SceneEngine::IntersectionTestContext intersectionContext {
-                    AsCameraDesc(*p->_camera),
-                    view->_viewMins, view->_viewMaxs,
-                    p->_drawingApparatus };
+            SceneEngine::IntersectionTestContext intersectionContext {
+                AsCameraDesc(*p->_camera),
+                context._view._viewMins, context._view._viewMaxs,
+                p->_drawingApparatus };
 
-                if (auto a = p->GetActiveManipulator()) {
-                    return a->OnInputEvent(evnt, intersectionContext, p->_intersectionTestScene.get()) ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
-                }
+            if (auto a = p->GetActiveManipulator()) {
+                return a->OnInputEvent(evnt, intersectionContext, p->_intersectionTestScene.get()) ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
             }
         }
         return ProcessInputResult::Passthrough;

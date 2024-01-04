@@ -6,6 +6,7 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/NascentChunk.h"
 #include "../../Assets/MemoryFile.h"
+#include "../../Formatters/TextFormatter.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Conversion.h"
 #include <stdexcept>
@@ -162,7 +163,7 @@ namespace UnitTests
 				// "./" at the very start
 				lookup = mountingTree->Lookup("./ut-data/internalFolder/exampleFileThree.file");
 				REQUIRE(lookup.IsGood());
-				REQUIRE(!lookup.IsAbsolutePath());
+				REQUIRE(!lookup.IsFullyQualifiedPath());
 				REQUIRE(lookup.TryGetNext(obj) == ::Assets::MountingTree::EnumerableLookup::Result::Success);
 				REQUIRE(obj._mountPoint == "ut-data/");
 
@@ -189,7 +190,7 @@ namespace UnitTests
 				// root is the root of the mounting tree (not the root of the raw FS)
 				lookup = mountingTree->Lookup("/ut-data/internalFolder/exampleFileThree.file");
 				REQUIRE(lookup.IsGood());
-				REQUIRE(lookup.IsAbsolutePath());
+				REQUIRE(lookup.IsFullyQualifiedPath());
 				REQUIRE(lookup.TryGetNext(obj) == ::Assets::MountingTree::EnumerableLookup::Result::Success);
 				REQUIRE(obj._mountPoint == "ut-data/");
 			}
@@ -204,7 +205,7 @@ namespace UnitTests
 				// "./" at the very start
 				lookup = mountingTree->Lookup(u"./ut-data/internalFolder/exampleFileThree.file");
 				REQUIRE(lookup.IsGood());
-				REQUIRE(!lookup.IsAbsolutePath());
+				REQUIRE(!lookup.IsFullyQualifiedPath());
 				REQUIRE(lookup.TryGetNext(obj) == ::Assets::MountingTree::EnumerableLookup::Result::Success);
 				REQUIRE(obj._mountPoint == "ut-data/");
 
@@ -231,7 +232,7 @@ namespace UnitTests
 				// root is the root of the mounting tree (not the root of the raw FS)
 				lookup = mountingTree->Lookup(u"/ut-data/internalFolder/exampleFileThree.file");
 				REQUIRE(lookup.IsGood());
-				REQUIRE(lookup.IsAbsolutePath());
+				REQUIRE(lookup.IsFullyQualifiedPath());
 				REQUIRE(lookup.TryGetNext(obj) == ::Assets::MountingTree::EnumerableLookup::Result::Success);
 				REQUIRE(obj._mountPoint == "ut-data/");
 			}

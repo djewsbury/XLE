@@ -195,8 +195,8 @@ namespace UnitTests
 			RenderCore::ViewportDesc viewports[1];
 			viewports[0] = RenderCore::ViewportDesc{ 0.f, 0.f, (float)targetDesc._textureDesc._width, (float)targetDesc._textureDesc._height };
 			viewports[0]._originIsUpperLeft = originIsUpperLeft;
-			RenderCore::ScissorRect scissorRects[1];
-			scissorRects[0] = RenderCore::ScissorRect{ (int)x, (int)y, (unsigned)w, (unsigned)h };
+			RenderCore::Rect2D scissorRects[1];
+			scissorRects[0] = RenderCore::Rect2D{ (int)x, (int)y, (unsigned)w, (unsigned)h };
 			scissorRects[0]._originIsUpperLeft = originIsUpperLeft;
 			encoder.Bind(MakeIteratorRange(viewports), MakeIteratorRange(scissorRects));
 		};
@@ -347,8 +347,8 @@ namespace UnitTests
 				RenderCore::Viewport viewports[1];
 				viewports[0] = RenderCore::Viewport{ 0.f, (float)targetDesc._textureDesc._height, (float)targetDesc._textureDesc._width, -(float)targetDesc._textureDesc._height };
 				viewports[0].OriginIsUpperLeft = false;
-				RenderCore::ScissorRect scissorRects[1];
-				scissorRects[0] = RenderCore::ScissorRect{ 0, 0, targetDesc._textureDesc._width, targetDesc._textureDesc._height };
+				RenderCore::Rect2D scissorRects[1];
+				scissorRects[0] = RenderCore::Rect2D{ 0, 0, targetDesc._textureDesc._width, targetDesc._textureDesc._height };
 				scissorRects[0].OriginIsUpperLeft = false;
 				metalContext.SetViewportAndScissorRects(MakeIteratorRange(viewports), MakeIteratorRange(scissorRects));
 				RenderQuad(*testHelper, metalContext, MakeIteratorRange(vertices_fullViewport), RasterizationDesc{CullMode::Back, FaceWinding::CW});

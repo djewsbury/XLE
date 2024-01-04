@@ -18,6 +18,7 @@
 #include "../../../Assets/AssetTraits.h"
 #include "../../../Assets/AssetServices.h"
 #include "../../../Assets/Assets.h"
+#include "../../../Formatters/TextFormatter.h"
 #include "../../../Math/Vector.h"
 #include "../../../Math/MathSerialization.h"
 #include "../../../ConsoleRig/AttachablePtr.h"
@@ -209,10 +210,10 @@ namespace UnitTests
 
 		SECTION("Get material settings from a model file")
 		{
-			auto& cfgs = ::Assets::ActualizeAsset<RenderCore::Assets::RawMatConfigurations>("fake-model");
-			REQUIRE(cfgs._configurations.size() == 2);
-			REQUIRE(cfgs._configurations[0] == "Material0");
-			REQUIRE(cfgs._configurations[1] == "Material1");
+			auto& cfgs = ::Assets::ActualizeAsset<RenderCore::Assets::RawMaterialSet>("fake-model");
+			REQUIRE(cfgs._materials.size() == 2);
+			REQUIRE(cfgs._materials[0].first == "Material0");
+			REQUIRE(cfgs._materials[1].first == "Material1");
 
 			auto material0 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::ResolvedMaterial>("fake-model:Material0");
 			REQUIRE(material0->_uniforms.GetParameter<float>("Brightness") == 50_a);
