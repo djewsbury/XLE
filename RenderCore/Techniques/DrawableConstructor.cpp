@@ -81,23 +81,23 @@ namespace RenderCore { namespace Techniques
 
 		static Batch CalculateBatchForStateSet(const Assets::RenderStateSet& stateSet)
 		{
-			if (stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend && stateSet._forwardBlendOp != BlendOp::NoBlending) {
-				if (stateSet._flag & Assets::RenderStateSet::Flag::BlendType) {
-					switch (stateSet._blendType) {
-					case Assets::RenderStateSet::BlendType::Basic: 
-					case Assets::RenderStateSet::BlendType::Ordered:
+			if (stateSet._flag & Assets::RenderStateSet::Flag::BlendType) {
+				switch (stateSet._blendType) {
+				case Assets::RenderStateSet::BlendType::Basic:
+				case Assets::RenderStateSet::BlendType::Ordered:
+				default:
+					if (stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend && stateSet._forwardBlendOp != BlendOp::NoBlending)
 						return Batch::Blending;
-						break;
-					case Assets::RenderStateSet::BlendType::DeferredDecal:
-					default:
-						return Batch::Opaque; 
-						break;
-					}
-				} else {
-					return Batch::Blending;
+					else
+						return Batch::Opaque;
+				case Assets::RenderStateSet::BlendType::DeferredDecal:
+					return Batch::Decal;
 				}
 			}
-			return Batch::Opaque;
+			if (stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend && stateSet._forwardBlendOp != BlendOp::NoBlending)
+				return Batch::Blending;
+			else
+				return Batch::Opaque;
 		}
 
 		class DrawableGeoBuilder

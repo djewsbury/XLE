@@ -92,7 +92,7 @@ namespace RenderCore { namespace LightingEngine
 			mainSubpass.SetName("Utility");
 
 			ParameterBox box;
-			result.AddSubpass(std::move(mainSubpass), mainDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending);
+			result.AddSubpass(std::move(mainSubpass), mainDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Decal|Techniques::BatchFlags::Blending);
 		}
 
 		return result;
