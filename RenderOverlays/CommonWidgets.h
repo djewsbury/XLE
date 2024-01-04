@@ -25,6 +25,8 @@ namespace RenderOverlays
 		DebuggingDisplay::InterfaceState* _interfaceState = nullptr;
 		CommonWidgets::HoveringLayer* _hoverings = nullptr;
 
+		Rect _scissor = Rect{0,0,0,0}, _defaultScissor = Rect{0,0,0,0};		// setting this will not modify the true encoder scissor state, but it should be kept equal to it
+
 		DrawContext(IOverlayContext& context, DebuggingDisplay::Interactables& interactables, DebuggingDisplay::InterfaceState& interfaceState)
 		: _context(&context), _interactables(&interactables), _interfaceState(&interfaceState) {}
 
