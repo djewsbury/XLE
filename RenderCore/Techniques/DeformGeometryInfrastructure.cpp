@@ -24,12 +24,15 @@ namespace RenderCore { namespace Techniques
 		static std::vector<uint8_t> GenerateDeformStaticInputForCPUDeform(
 			IteratorRange<const SourceDataTransform*> inputLoadRequests,
 			unsigned destinationBufferSize);
+
+		void BarrierGeoDeformTemporaries(IThreadContext& threadContext, IResourceView& gpuTemporariesBufferView);
 	}
 
 	class DeformGeoInfrastructure : public IDeformGeoAttachment
 	{
 	public:
 		std::vector<std::shared_ptr<IGeoDeformer>> _deformOps;
+		std::vector<unsigned> _temporaryBarriers;
 		DeformerToRendererBinding _rendererGeoInterface;
 
 		std::vector<uint8_t> _deformStaticDataInput;
@@ -65,7 +68,15 @@ namespace RenderCore { namespace Techniques
 				for (const auto&d:_deformOps)
 					d->ExecuteCPU(instanceIdx, _outputVBSize, staticDataPartRange, temporaryDeformRange, cpuBufferOutputRange);
 			} else {
-				for (const auto&d:_deformOps) {
+				assert(!_temporaryBarriers.empty());	// should at least have a sentinel
+				auto barrierIterator = _temporaryBarriers.begin();
+				for (unsigned dIdx=0; dIdx!=_deformOps.size(); ++dIdx) {
+					if (dIdx == *barrierIterator) {
+						Internal::BarrierGeoDeformTemporaries(threadContext, *_gpuTemporariesBufferView);
+						++barrierIterator;
+					}
+
+					const auto&d = _deformOps[dIdx];
 					IGeoDeformer::Metrics deformerMetrics;
 					d->ExecuteGPU(
 						threadContext,
@@ -139,6 +150,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<IGeoDeformer> _deformer;
 			DeformerInputBinding::GeoBinding _binding;
 			unsigned _elementIdx, _geoIdx;
+			unsigned _barrierIdx;
 		};
 		std::vector<PendingDeformerBind> pendingDeformerBinds;
 
@@ -150,9 +162,9 @@ namespace RenderCore { namespace Techniques
 			while (i!=constructionEntries.end() && i->_elementIdx == start->_elementIdx && i->_geoIdx == start->_geoIdx) ++i;
 
 			if (!isCPUDeformer.has_value()) isCPUDeformer = start->_deformer->IsCPUDeformer();
-			
+
 			// for all of the instantiations of the same deformer, of the same element, of the same geo, call Internal::CreateDeformBindings
-			
+
 			std::vector<DeformOperationInstantiation> instantiations;
 			std::vector<DeformerInputBinding::GeoBinding> thisGeoDeformerBindings;
 			instantiations.reserve(i-start);
@@ -177,26 +189,44 @@ namespace RenderCore { namespace Techniques
 
 			// Queue a pending call to IGeoDeformer::Bind
 			for(unsigned c=0; c<(i-start); ++c)
-				pendingDeformerBinds.push_back({start[c]._deformer, std::move(thisGeoDeformerBindings[c]), start->_elementIdx, start->_geoIdx});
+				pendingDeformerBinds.push_back({start[c]._deformer, std::move(thisGeoDeformerBindings[c]), start->_elementIdx, start->_geoIdx, c});
 		}
 
 		if (!isCPUDeformer.has_value()) return nullptr;	// nothing actually instantiated
 		result->_isCPUDeformer = isCPUDeformer.value();
 
+		// Sort pendingDeformerBinds once again, by deformer and barrier idx. 
+		// This should separate all deformers that operate on intermediate outputs from previous deformers into groups such that we only require
+		// the least number of memory barriers
+		std::stable_sort(
+			pendingDeformerBinds.begin(), pendingDeformerBinds.end(),
+			[](const auto& lhs, const auto& rhs) { 
+				if (lhs._barrierIdx < rhs._barrierIdx) return true;
+				if (lhs._barrierIdx > rhs._barrierIdx) return false;
+				if (lhs._deformer < rhs._deformer) return true;
+				if (lhs._deformer > rhs._deformer) return false;
+				return false;	// no preferential ordering from here
+			});
+
 		// Call call Bind on all deformers, for everything calculated in CreateDeformBindings
 		std::vector<std::future<void>> deformerInitFutures;
 		deformerInitFutures.reserve(pendingDeformerBinds.size());
 		while (!pendingDeformerBinds.empty()) {
-			// get the input binding for everthing associated with this deformer
+			// get the input binding for everything associated with this deformer
 			auto deformer = pendingDeformerBinds.begin()->_deformer;
+			auto barrierIdx = pendingDeformerBinds.begin()->_barrierIdx;
+
 			DeformerInputBinding inputBinding;
 			for (auto i=pendingDeformerBinds.begin(); i!=pendingDeformerBinds.end();) {
 				if (i->_deformer == deformer) {
 
 					#if defined(_DEBUG)
+						if (i->_barrierIdx != barrierIdx)
+							Throw(std::runtime_error("Cannot order deformer operations consistently"));
+
 						for (auto i2=pendingDeformerBinds.begin(); i2!=i; ++i2)
 							if (i2->_elementIdx == i->_elementIdx && i2->_geoIdx == i->_geoIdx)
-								Throw(std::runtime_error("Cannot order deformer operations consistantly"));		// if you hit this, it means that two different geos share 2 deformers, but they apply them in different orders
+								Throw(std::runtime_error("Cannot order deformer operations consistently"));		// if you hit this, it means that two different geos share 2 deformers, but they apply them in different orders
 					#endif
 
 					inputBinding._geoBindings.emplace_back(std::make_pair(i->_elementIdx, i->_geoIdx), std::move(i->_binding));
@@ -210,7 +240,12 @@ namespace RenderCore { namespace Techniques
 			if (initFuture.valid())
 				deformerInitFutures.emplace_back(std::move(initFuture));
 			result->_deformOps.push_back(std::move(deformer));
+
+			if (!pendingDeformerBinds.empty()&& pendingDeformerBinds.front()._barrierIdx != barrierIdx)
+				result->_temporaryBarriers.push_back(unsigned(result->_deformOps.size()));
 		}
+
+		result->_temporaryBarriers.push_back(~0u);		// sentinel
 
 		////////////////////////////////////////////////////////////////////////////////////
 
