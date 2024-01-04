@@ -214,11 +214,9 @@ namespace RenderCore { namespace LightingEngine
 
 	void CreateUtilityLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		CreationUtility& utility,
 		const ChainedOperatorDesc* globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit)
+		CreationUtility::OutputTarget outputTarget)
 	{
 		struct ConstructionHelper
 		{
@@ -229,12 +227,12 @@ namespace RenderCore { namespace LightingEngine
 
 		UtilityOperatorDigest digest { globalOperators };
 
-		helper->_techniqueDelegate = techDelBox->GetUtilityDelegate(digest._globalTechniqueDesc._type);
+		helper->_techniqueDelegate = utility._techDelBox->GetUtilityDelegate(digest._globalTechniqueDesc._type);
 
 		helper->_lightSceneFuture = ::Assets::ConstructToFuturePtr<Internal::StandardLightScene>();
 
-		auto resolution = Internal::ExtractOutputResolution(preregisteredAttachmentsInit);
-		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { preregisteredAttachmentsInit.begin(), preregisteredAttachmentsInit.end() };
+		auto resolution = Internal::ExtractOutputResolution(outputTarget._preregisteredAttachments);
+		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { outputTarget._preregisteredAttachments.begin(), outputTarget._preregisteredAttachments.end() };
 
 		::Assets::PollToPromise(
 			std::move(promise),
@@ -243,7 +241,7 @@ namespace RenderCore { namespace LightingEngine
 				if (Internal::MarkerTimesOut(helper->_techniqueDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[helper, techDelBox, pipelineAccelerators, pipelinePool, preregisteredAttachments=std::move(preregisteredAttachments), resolution, digest=std::move(digest)]
+			[helper, utility=utility, preregisteredAttachments=std::move(preregisteredAttachments), resolution, digest=std::move(digest)]
 			(std::promise<std::shared_ptr<CompiledLightingTechnique>>&& thatPromise) {
 
 				TRY {
@@ -253,8 +251,8 @@ namespace RenderCore { namespace LightingEngine
 					// operators
 					auto msaaSamples = digest._msaa ? digest._msaa->_samples : TextureSamples::Create(); 
 					if (digest._sky)
-						captures->_skyOperator = std::make_shared<SkyOperator>(pipelinePool, *digest._sky);
-					captures->_fillBackgroundOperator = std::make_shared<FillBackgroundOperator>(pipelinePool);
+						captures->_skyOperator = std::make_shared<SkyOperator>(utility._pipelinePool, *digest._sky);
+					captures->_fillBackgroundOperator = std::make_shared<FillBackgroundOperator>(utility._pipelinePool);
 
 					if (digest._skyTextureProcessor) {
 						captures->_skyTextureProcessor = CreateSkyTextureProcessor(
@@ -273,7 +271,7 @@ namespace RenderCore { namespace LightingEngine
 					FrameBufferProperties fbProps { resolution[0], resolution[1], msaaSamples };
 					auto secondStageHelper = captures->ConstructMainSequence(
 						*lightingTechnique,
-						pipelineAccelerators,
+						utility._pipelineAccelerators,
 						preregisteredAttachments, fbProps, digest, techniqueDelegate);
 
 					::Assets::PollToPromise(

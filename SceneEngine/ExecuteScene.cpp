@@ -73,13 +73,7 @@ namespace SceneEngine
 		const RenderCore::LightingEngine::ChainedOperatorDesc* globalOperators,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments)
 	{
-		std::promise<std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>> promise;
-		auto future = promise.get_future();
-		RenderCore::LightingEngine::CreateLightingTechnique(
-			std::move(promise),
-			apparatus._pipelineAccelerators, apparatus._lightingOperatorCollection, apparatus._sharedDelegates,
-			resolveOperators, shadowOperators, globalOperators,
-			preregisteredAttachments);
-		return future.get();
+		return RenderCore::LightingEngine::CreationUtility{apparatus}
+			.CreateToFuture(resolveOperators, shadowOperators, globalOperators, {preregisteredAttachments}).get();
 	}
 }

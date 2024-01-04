@@ -358,12 +358,8 @@ namespace ToolsRig
 				TRY {
 					SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
 					envSettings->BindCfg(lightingEngineCfg);
-					auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreateLightingTechnique(
-						lightingApparatus,
-						lightingEngineCfg.GetLightOperators(),
-						lightingEngineCfg.GetShadowOperators(),
-						lightingEngineCfg.GetChainedGlobalOperators(),
-						targets);
+					auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreationUtility{*lightingApparatus}
+						.CreateToFuture(lightingEngineCfg.GetLightOperators(), lightingEngineCfg.GetShadowOperators(), lightingEngineCfg.GetChainedGlobalOperators(), {targets});
 
 					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
 						std::move(promise),

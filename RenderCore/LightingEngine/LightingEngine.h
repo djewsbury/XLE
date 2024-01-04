@@ -39,23 +39,37 @@ namespace RenderCore { namespace LightingEngine
 		ChainedOperatorTemplate() : ChainedOperatorDesc(TypeHashCode<Type>) {}
 	};
 
-	void CreateLightingTechnique(
-		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
-		const ChainedOperatorDesc* globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit);
+	struct CreationUtility
+	{
+		struct OutputTarget
+		{
+			IteratorRange<const Techniques::PreregisteredAttachment*> _preregisteredAttachments;
+		};
 
-	// Simplified construction --
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateLightingTechnique(
-		const std::shared_ptr<LightingEngineApparatus>& apparatus,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const ChainedOperatorDesc* globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments);
+		void CreateToPromise(
+			std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
+			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+			IteratorRange<const ShadowOperatorDesc*> shadowOperators,
+			const ChainedOperatorDesc* globalOperators,
+			OutputTarget outputTarget);
+
+		[[nodiscard]] std::future<std::shared_ptr<CompiledLightingTechnique>> CreateToFuture(
+			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+			IteratorRange<const ShadowOperatorDesc*> shadowOperators,
+			const ChainedOperatorDesc* globalOperators,
+			OutputTarget outputTarget);
+
+		CreationUtility(
+			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+			std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
+			std::shared_ptr<SharedTechniqueDelegateBox> techDelBox);
+
+		CreationUtility(LightingEngineApparatus& apparatus);
+
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+		std::shared_ptr<Techniques::PipelineCollection> _pipelinePool;
+		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
+	};
 
 	class SequencePlayback;
 	// When calling BeginLightingTechniquePlayback, the CompiledLightingTechnique must out-live the returned

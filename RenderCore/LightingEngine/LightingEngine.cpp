@@ -990,15 +990,12 @@ namespace RenderCore { namespace LightingEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void CreateLightingTechnique(
+	void CreationUtility::CreateToPromise(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const ChainedOperatorDesc* globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments)
+		OutputTarget outputTarget)
 	{
 		// Convenience function to select from one of the built-in lighting techniques
 		// We'll scan the list of operator descs and decide on a technique type from what we
@@ -1025,44 +1022,55 @@ namespace RenderCore { namespace LightingEngine
 		if (foundDeferredTechnique) {
 			CreateDeferredLightingTechnique(
 				std::move(promise),
-				pipelineAccelerators, pipelinePool, techDelBox,
+				_pipelineAccelerators, _pipelinePool, _techDelBox,
 				resolveOperators, shadowOperators,
 				globalOperators,
-				preregisteredAttachments);
+				outputTarget._preregisteredAttachments);
 		} else if (foundUtility) {
 			CreateUtilityLightingTechnique(
 				std::move(promise),
-				pipelineAccelerators, pipelinePool, techDelBox,
+				*this,
 				globalOperators,
-				preregisteredAttachments);
+				outputTarget);
 		} else {
 			CreateForwardLightingTechnique(
 				std::move(promise),
-				pipelineAccelerators, pipelinePool, techDelBox,
+				_pipelineAccelerators, _pipelinePool, _techDelBox,
 				resolveOperators, shadowOperators,
 				globalOperators,
-				preregisteredAttachments);
+				outputTarget._preregisteredAttachments);
 		}
 	}
 
 	// Simplified construction --
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreateLightingTechnique(
-		const std::shared_ptr<LightingEngineApparatus>& apparatus,
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreationUtility::CreateToFuture(
 		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const ChainedOperatorDesc* globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments)
+		OutputTarget outputTarget)
 	{
 		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
 		auto result = promisedTechnique.get_future();
-		CreateLightingTechnique(
+		CreateToPromise(
 			std::move(promisedTechnique),
-			apparatus->_pipelineAccelerators,
-			apparatus->_lightingOperatorCollection,
-			apparatus->_sharedDelegates,
 			resolveOperators, shadowGenerators, globalOperators,
-			preregisteredAttachments);
+			outputTarget);
 		return result;
 	}
+
+	CreationUtility::CreationUtility(
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
+		std::shared_ptr<SharedTechniqueDelegateBox> techDelBox)
+	: _pipelineAccelerators(std::move(pipelineAccelerators))
+	, _pipelinePool(std::move(pipelinePool))
+	, _techDelBox(std::move(techDelBox))
+	{}
+
+	CreationUtility::CreationUtility(LightingEngineApparatus& apparatus)
+	: _pipelineAccelerators(apparatus._pipelineAccelerators)
+	, _pipelinePool(apparatus._lightingOperatorCollection)
+	, _techDelBox(apparatus._sharedDelegates)
+	{}
 
 }}

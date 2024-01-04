@@ -25,10 +25,8 @@ namespace RenderCore { namespace LightingEngine
 
 	void CreateUtilityLightingTechnique(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
+		CreationUtility&,
 		const ChainedOperatorDesc* globalOperators,
-		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit);
+		CreationUtility::OutputTarget outputTarget);
 }}
 

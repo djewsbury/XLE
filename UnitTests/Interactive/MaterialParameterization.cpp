@@ -230,9 +230,8 @@ namespace UnitTests
 			LightingEngine::LightSourceOperatorDesc lightOperators[] {
 				LightingEngine::LightSourceOperatorDesc{}
 			};
-			_futureLightingTechnique = LightingEngine::CreateLightingTechnique(
-				_apparatus, lightOperators, {}, &globalChain0,
-				_preRegs);
+			_futureLightingTechnique = LightingEngine::CreationUtility{*_apparatus}
+				.CreateToFuture(lightOperators, {}, &globalChain0, {_preRegs});
 
 			if (specularLight) {
 				auto technique = _futureLightingTechnique.get();		// stall
