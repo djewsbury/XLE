@@ -63,10 +63,22 @@ namespace PlatformRig
 		switch (_pending) {
 		case Pending::BeginRenderFrame:
 		case Pending::ShowWindowBeginRenderFrame:
-			_pending = (_pending == Pending::ShowWindowBeginRenderFrame) ? Pending::ShowWindowEndRenderFrame : Pending::EndRenderFrame;
-			assert(!_activeParsingContext);
-			_activeParsingContext = _apparatus->_frameRig->StartupFrame(*_apparatus);
-			return RenderFrame { _activeParsingContext.value() };
+			{
+				auto presChainDesc = _apparatus->_presentationChain->GetDesc();
+				if (presChainDesc._width * presChainDesc._height) {
+					_pending = (_pending == Pending::ShowWindowBeginRenderFrame) ? Pending::ShowWindowEndRenderFrame : Pending::EndRenderFrame;
+					assert(!_activeParsingContext);
+					_activeParsingContext = _apparatus->_frameRig->StartupFrame(*_apparatus);
+					return RenderFrame { _activeParsingContext.value() };
+				} else {
+					// ------- zero size presentation chain -- fail to render & yield some process time when appropriate ------
+					if (_pending == Pending::ShowWindowBeginRenderFrame) {
+						_apparatus->_osWindow->Show();
+					} else
+						_apparatus->_frameRig->IntermedialSleep(*_apparatus, _lastIdleState == OSServices::IdleState::Background, {});
+					break;
+				}
+			}
 
 		case Pending::EndRenderFrame:
 		case Pending::ShowWindowEndRenderFrame:
@@ -239,9 +251,12 @@ namespace PlatformRig
 					if (::Assets::MainFileSystem::TryGetDesc(_configGlobalServices._xleResLocation)._snapshot._state == ::Assets::FileSnapshot::State::DoesNotExist) {
 						char buffer[MaxPath];
 						OSServices::GetProcessPath(buffer, dimof(buffer));
-						_configGlobalServices._xleResLocation = Concatenate(MakeFileNameSplitter(buffer).DriveAndPath(), "/", _configGlobalServices._xleResLocation);
+						_configGlobalServices._xleResLocation = Concatenate(MakeFileNameSplitter(buffer).StemAndPath(), "/", _configGlobalServices._xleResLocation);
 					}
 					_xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateXPakFileSystem(_configGlobalServices._xleResLocation, _fileCache));
+				} else if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::EmbeddedXPak) {
+					_fileCache = ::Assets::CreateFileCache(4 * 1024 * 1024);
+					_xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateXPakFileSystem(_configGlobalServices._xleResEmbeddedData, OSServices::GetModuleFileTime(), _fileCache));
 				} else if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::OSFileSystem)
 					_xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS(_configGlobalServices._xleResLocation, _globalServices->GetPollingThread()));
 

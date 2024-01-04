@@ -16,7 +16,7 @@
 #include <variant>
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class PreregisteredAttachment; class Services; class PrimaryResourcesApparatus; class FrameReneringApparatus; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class Services; class PrimaryResourcesApparatus; } }
 namespace Assets { class Services; namespace ArchiveUtility { class FileCache; } }
 namespace Formatters { template<typename CharType> class CommandLineFormatter; }
 namespace ToolsRig { class IPreviewSceneRegistry; }
@@ -95,7 +95,7 @@ namespace PlatformRig
 	};
 
 	class DebugOverlaysApparatus;
-	class DebugScreenRegistration;
+	struct DebugScreenRegistration;
 
 	class AppRigGlobals
 	{
@@ -137,8 +137,9 @@ namespace PlatformRig
 		{
 			ConsoleRig::StartupConfig _startupCfg;
 			std::string _xleResLocation = "xleres.pak";
-			enum class XLEResType { XPak, OSFileSystem, None };
+			enum class XLEResType { XPak, OSFileSystem, EmbeddedXPak, None };
 			XLEResType _xleResType = XLEResType::XPak;
+			IteratorRange<const void*> _xleResEmbeddedData;
 		};
 
 		struct ConfigureRenderDevice
