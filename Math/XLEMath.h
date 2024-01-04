@@ -20,6 +20,14 @@
     #include <intrin.h>
 #endif
 
+#define XLE_USE_CONSTEXPR_MATH (__cpp_lib_constexpr_cmath >= 202202L) || (COMPILER_ACTIVE == COMPILER_TYPE_CLANG)
+#if XLE_USE_CONSTEXPR_MATH
+    #define XLE_MATH_CONSTEXPR_OR_INLINE constexpr
+#else
+    #define XLE_MATH_CONSTEXPR_OR_INLINE inline
+#endif
+
+
 // note -   namespace "::Math" causes problems with with .net "::Math"
 //          it's a common name, so it might be used in other foreign libraries
 //          as well. To avoid problems, let's prefer less generic names for root
@@ -47,25 +55,25 @@ namespace XLEMath
         //      Prefer Xl... functions over using the standard library math
         //      functions directly.
         //
-    constexpr float XlSin(float radians)                   { return std::sin(radians); }
-    constexpr float XlCos(float radians)                   { return std::cos(radians); }
-    constexpr float XlTan(float radians)                   { return std::tan(radians); }
-    constexpr float XlASin(float x)                        { return std::asin(x); }
-    constexpr float XlACos(float x)                        { return std::acos(x); }
-    constexpr float XlATan(float x)                        { return std::atan(x); }
-    constexpr float XlATan2(float y, float x)              { return std::atan2(y, x); }
-    constexpr float XlCotangent(float radians)             { return 1.f/std::tan(radians); }
-    constexpr float XlFMod(float value, float modulo)      { return std::fmod(value, modulo); }
-    constexpr float XlAbs(float value)                     { return std::abs(value); }
-    constexpr float XlFloor(float value)                   { return std::floor(value); }
-    constexpr float XlCeil(float value)                    { return std::ceil(value); }
-    constexpr float XlExp(float value)                     { return std::exp(value); }
-    constexpr float XlLog(float value)                     { return std::log(value); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlSin(float radians)                   { return std::sin(radians); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlCos(float radians)                   { return std::cos(radians); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlTan(float radians)                   { return std::tan(radians); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlASin(float x)                        { return std::asin(x); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlACos(float x)                        { return std::acos(x); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlATan(float x)                        { return std::atan(x); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlATan2(float y, float x)              { return std::atan2(y, x); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlCotangent(float radians)             { return 1.f/std::tan(radians); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlFMod(float value, float modulo)      { return std::fmod(value, modulo); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlAbs(float value)                     { return std::abs(value); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlFloor(float value)                   { return std::floor(value); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlCeil(float value)                    { return std::ceil(value); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlExp(float value)                     { return std::exp(value); }
+    XLE_MATH_CONSTEXPR_OR_INLINE float XlLog(float value)                     { return std::log(value); }
 
     T1(Primitive) constexpr Primitive XlSqrt(Primitive value)      { return std::sqrt(value); }
     T1(Primitive) constexpr Primitive XlRSqrt(Primitive value)     { return Primitive(1) / std::sqrt(value); }  // no standard reciprocal sqrt?
 
-    T1(Primitive) constexpr bool XlRSqrt_Checked(Primitive* output, Primitive value)                   
+    T1(Primitive) XLE_MATH_CONSTEXPR_OR_INLINE bool XlRSqrt_Checked(Primitive* output, Primitive value)                   
     {
         assert(output);
             // this is used by Normalize_Checked to check for vectors
@@ -77,9 +85,9 @@ namespace XLEMath
         return true;
     }
 
-    T1(Primitive) constexpr Primitive XlAbs(Primitive value)     { return std::abs(value); }
+    T1(Primitive) XLE_MATH_CONSTEXPR_OR_INLINE Primitive XlAbs(Primitive value)     { return std::abs(value); }
 
-    constexpr std::tuple<float, float> XlSinCos(float angle)
+    XLE_MATH_CONSTEXPR_OR_INLINE std::tuple<float, float> XlSinCos(float angle)
     {
         return std::make_tuple(XlSin(angle), XlCos(angle));
     }
@@ -108,7 +116,7 @@ namespace XLEMath
         return d < tolerance && d > -tolerance;
     }
 
-    constexpr bool AdaptiveEquivalent(float A, float B, float epsilon)
+    XLE_MATH_CONSTEXPR_OR_INLINE bool AdaptiveEquivalent(float A, float B, float epsilon)
 	{
 		// from https://floating-point-gui.de/errors/comparison/
 		// More robust way of doing these comparisons; with better support through the whole number line
@@ -126,7 +134,7 @@ namespace XLEMath
 		}	
 	}
 
-	constexpr bool AdaptiveEquivalent(double A, double B, double epsilon)
+	XLE_MATH_CONSTEXPR_OR_INLINE bool AdaptiveEquivalent(double A, double B, double epsilon)
 	{
 		auto absA = std::abs(A);
 		auto absB = std::abs(B);
