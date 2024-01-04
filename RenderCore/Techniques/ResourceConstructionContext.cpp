@@ -5,8 +5,11 @@
 #include "ResourceConstructionContext.h"
 #include "DeferredShaderResource.h"
 #include "Drawables.h"
+#include "Services.h"
+#include "SubFrameEvents.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../BufferUploads/BatchedResources.h"
+#include "../../Assets/Continuation.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/MemoryUtils.h"
 
@@ -17,11 +20,26 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		Threading::Mutex _lock;
-		std::vector<std::pair<uint64_t, std::shared_future<std::shared_ptr<DeferredShaderResource>>>> _shaderResources;
+		struct ShaderResource
+		{
+			std::shared_future<std::shared_ptr<DeferredShaderResource>> _future;		// pending or invalid state
+			std::weak_ptr<DeferredShaderResource> _completed;
+		};
+		std::vector<std::pair<uint64_t, ShaderResource>> _shaderResources;
 		std::vector<BufferUploads::TransactionID> _uploadMarkers;
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 		std::shared_ptr<RepositionableGeometryConduit> _repositionableGeometry;
+		SignalDelegateId _onFrameBarrierBind = ~0u;
 		uint64_t _guid;
+
+		struct RecentCompletions
+		{
+			Threading::Mutex _lock;
+			std::vector<uint64_t> _shaderResourceCompletions;
+		};
+		std::shared_ptr<RecentCompletions> _recentCompletions;
+
+		void OnFrameBarrier();
 	};
 
 	void ResourceConstructionContext::Cancel()
@@ -43,19 +61,37 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_future<std::shared_ptr<DeferredShaderResource>> ResourceConstructionContext::ConstructShaderResource(StringSection<> initializer)
 	{
+		std::promise<std::shared_ptr<DeferredShaderResource>> promise;
+
 		ScopedLock(_pimpl->_lock);
 		auto hash = Hash64(initializer);
 		auto i = LowerBound(_pimpl->_shaderResources, hash);
-		if (i!=_pimpl->_shaderResources.end() && i->first==hash)
-			return i->second;
+		if (i!=_pimpl->_shaderResources.end() && i->first==hash) {
+			if (i->second._future.valid())
+				return i->second._future;
 
-		std::promise<std::shared_ptr<DeferredShaderResource>> promise;
-		i = _pimpl->_shaderResources.insert(i, std::make_pair(hash, promise.get_future()));
+			if (auto l = i->second._completed.lock()) {
+				promise.set_value(std::move(l));
+				return promise.get_future();
+			}
+
+			// else fall through and re-construct
+			i->second._future = promise.get_future();
+		} else {
+			i = _pimpl->_shaderResources.emplace(i, std::make_pair(hash, Pimpl::ShaderResource{promise.get_future()}));
+		}
+
 		auto uploadID = DeferredShaderResource::ConstructToTrackablePromise(std::move(promise), initializer);
 		if (uploadID != BufferUploads::TransactionID_Invalid)
 			_pimpl->_uploadMarkers.push_back(uploadID);
+
+		::Assets::WhenAll(i->second._future).Then(
+			[rc=_pimpl->_recentCompletions, hash](const auto&) {
+				ScopedLock(rc->_lock);
+				rc->_shaderResourceCompletions.push_back(hash);
+			});
 		
-		return i->second;
+		return i->second._future;
 	}
 
 	std::shared_future<std::shared_ptr<DeferredShaderResource>> ResourceConstructionContext::ConstructShaderResource(const Assets::TextureCompilationRequest& compileRequest)
@@ -144,6 +180,37 @@ namespace RenderCore { namespace Techniques
 		return _pimpl->_guid;
 	}
 
+	void ResourceConstructionContext::Pimpl::OnFrameBarrier()
+	{
+		std::vector<uint64_t> srCompletions;
+		{
+			ScopedLock(_recentCompletions->_lock);
+			std::swap(_recentCompletions->_shaderResourceCompletions, srCompletions);
+		}
+
+		if (srCompletions.empty()) return;
+
+		std::sort(srCompletions.begin(), srCompletions.end());
+		srCompletions.erase(std::unique(srCompletions.begin(), srCompletions.end()), srCompletions.end());
+
+		ScopedLock(_lock);
+		auto i = _shaderResources.begin();
+		for (auto c:srCompletions) {
+			i = LowerBound2(MakeIteratorRange(i, _shaderResources.end()), c);
+			if (i == _shaderResources.end() || i->first != c) continue;
+
+			i->second._completed.reset();
+			TRY {
+				assert(i->second._future.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
+				i->second._completed = i->second._future.get();
+				// Clearing the future will destroy the shader resource, unless some else is holding either the future or a strong pointer directly to the shader resource
+				i->second._future = {};
+			} CATCH(...) {
+				// don't clear the future on exception -- we just leave the future in it's invalid state
+			} CATCH_END
+		}
+	}
+
 	static uint64_t s_nextConstructionContextGuid = 1;
 
 	ResourceConstructionContext::ResourceConstructionContext(
@@ -154,11 +221,16 @@ namespace RenderCore { namespace Techniques
 		_pimpl->_bufferUploads = std::move(bufferUploads);
 		_pimpl->_repositionableGeometry = std::move(repositionableGeo);
 		_pimpl->_guid = s_nextConstructionContextGuid++;
+
+		_pimpl->_recentCompletions = std::make_shared<Pimpl::RecentCompletions>();
+		_pimpl->_onFrameBarrierBind = Services::GetSubFrameEvents()._onFrameBarrier.Bind([p=_pimpl.get()]() { p->OnFrameBarrier(); });
 	}
 
 	ResourceConstructionContext::~ResourceConstructionContext()
 	{
 		Cancel();
+		if (_pimpl->_onFrameBarrierBind != ~0u)
+			Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_pimpl->_onFrameBarrierBind);
 	}
 
 }}
