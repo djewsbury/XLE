@@ -44,11 +44,11 @@ namespace ToolsRig { namespace Camera
 		bool slowMove = input.IsHeld(ctrl);
 		float moveScale = fastMove ? slew._speedScale : (slowMove ? (1.f/slew._speedScale) : 1.f);
 
-		float moveSpeedX = slew._xspeed * moveScale;
-		float moveSpeedY = slew._yspeed * moveScale;
-		float moveSpeedZ = slew._zspeed * moveScale;
-		float yawSpeed   = slew._xturn;
-		float pitchSpeed = slew._yturn;
+		float moveSpeedX = slew._translationSpeed * moveScale;
+		float moveSpeedY = slew._translationSpeed * moveScale;
+		float moveSpeedZ = slew._translationSpeed * moveScale;
+		float yawSpeed   = slew._rotationSpeed;
+		float pitchSpeed = slew._rotationSpeed;
 
 			// panning & rotation
 		Float3 deltaPos(0,0,0);
@@ -73,12 +73,12 @@ namespace ToolsRig { namespace Camera
 			deltaCameraYaw      +=  mouseX * mouseSensitivity; 
 			deltaCameraPitch    +=  mouseY * mouseSensitivity;
 		} else {
-			deltaCameraYaw      += input.IsHeld(left);
-			deltaCameraYaw      -= input.IsHeld(right);
-			deltaCameraPitch    += input.IsHeld(up);
-			deltaCameraPitch    -= input.IsHeld(down);
-			deltaCameraYaw      *= dt * yawSpeed   / 180.f;
-			deltaCameraPitch    *= dt * pitchSpeed / 180.f;
+			deltaCameraYaw      += input.IsHeld(turnLeft);
+			deltaCameraYaw      -= input.IsHeld(turnRight);
+			deltaCameraPitch    += input.IsHeld(turnUp);
+			deltaCameraPitch    -= input.IsHeld(turnDown);
+			deltaCameraYaw      *= dt * yawSpeed;
+			deltaCameraPitch    *= dt * pitchSpeed;
 		}
 
 		return { deltaCameraYaw, deltaCameraPitch, deltaPos };
@@ -136,10 +136,6 @@ namespace ToolsRig { namespace Camera
 		constexpr auto right        = "d"_key;
 		constexpr auto up           = "page up"_key;
 		constexpr auto down         = "page down"_key;
-		constexpr auto turnLeft     = "left"_key;
-		constexpr auto turnRight    = "right"_key;
-		constexpr auto turnUp       = "up"_key;
-		constexpr auto turnDown     = "down"_key;
 
 		bool fastMove     = input.IsHeld(shift);
 		float moveScale   = fastMove ? orbit._speedScale : 1.f;
@@ -228,6 +224,41 @@ namespace ToolsRig { namespace Camera
 		camera._focus += cameraFocusDrift;
 	}
 
+	void OrthogonalFlatCam::Update(VisCameraSettings& camera, const OSServices::InputSnapshot& input, const Float2& projSpaceMouseOver) const
+	{
+		assert(camera._projection == VisCameraSettings::Projection::Orthogonal);
+		float size = std::abs(camera._top - camera._bottom);
+
+		Float3 cameraForward = camera._focus - camera._position;
+		if (!Normalize_Checked(&cameraForward, cameraForward))
+			cameraForward = Float3{0,-1,0};
+
+		Float3 cameraRight = Cross(cameraForward, Float3{0,0,1});
+		if (!Normalize_Checked(&cameraRight, cameraRight))
+			cameraRight = Float3{1,0,0};
+
+		Float3 cameraUp = Cross(cameraRight, cameraForward);
+		if (!Normalize_Checked(&cameraUp, cameraUp))
+			cameraUp = Float3{0,0,1};
+
+		if (input.IsHeld_RButton()) {
+			auto translation
+				=  cameraRight * -input._mouseDelta[0] * size * 0.1f * _translationSpeed
+				+  cameraUp * -input._mouseDelta[1] * size * 0.1f * _translationSpeed;
+			camera._position += translation;
+			camera._focus += translation;
+		}
+
+		if (input._wheelDelta) {
+			// zoom in/out so that the projSpaceMouseOver stays in the same place in proj space
+			float scale = std::exp(-input._wheelDelta / (4.f * 180.f));
+			camera._left = LinearInterpolate(projSpaceMouseOver[0], camera._left, scale);
+			camera._right = LinearInterpolate(projSpaceMouseOver[0], camera._right, scale);
+			camera._top = LinearInterpolate(projSpaceMouseOver[1], camera._top, scale);
+			camera._bottom = LinearInterpolate(projSpaceMouseOver[1], camera._bottom, scale);
+		}
+	}
+
 	void UnitCam::Update(VisCameraSettings& camera, const Float3x4& playerCharacterLocalToWorld, float dt, const OSServices::InputSnapshot& input) const
 	{
 		Camera::ClientUnit clientUnit;
@@ -282,6 +313,11 @@ namespace ToolsRig { namespace Camera
 		cameraToWorld(0,2) = -cameraToWorld(0,2);
 		cameraToWorld(1,2) = -cameraToWorld(1,2);
 		cameraToWorld(2,2) = -cameraToWorld(2,2);
+	}
+
+	void UnitCam::Initialize(float charactersScale)
+	{
+		_unitCamera = CreateUnitCamManager(charactersScale);
 	}
 
 	UnitCam::UnitCam() = default;
@@ -435,6 +471,9 @@ namespace ToolsRig { namespace Camera
 				spherical[0] += input._mouseDelta[1] * props._rotationSpeed;
 				spherical[0] = Clamp(spherical[0], 0.01f, gPI - 0.01f);
 			}
+		} else if (input.IsHeld_LButton()) {
+			spherical[1] += input._mouseDelta[0] * props._rotationSpeed;
+			focus[2] += input._mouseDelta[1] * props._translationSpeed;
 		}
 	}
 
@@ -444,6 +483,7 @@ namespace ToolsRig { namespace Camera
 		const float fovMax = 80.f * gPI / 180.f;
 
 		auto spherical = CartesianToSpherical(camera._position - camera._focus);
+		assert(camera._projection == VisCameraSettings::Projection::Perspective);
 		float a = Clamp((camera._verticalFieldOfView - fovMax) / (fovMin - fovMax), 0.f, 1.f);
 		float zoomFactor = (std::exp(a) - 1.f) / (gE - 1.f);
 
@@ -498,6 +538,13 @@ namespace ToolsRig { namespace Camera
 	}
 
 	CameraInputHandler::~CameraInputHandler() {}
+
+	std::unique_ptr<UnitCamManager> CreateUnitCamManager(float charactersScale)
+	{
+		auto result = std::make_unique<UnitCamManager>(charactersScale);
+		result->InitUnitCamera();
+		return result;
+	}
 
 
 }}

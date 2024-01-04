@@ -23,11 +23,8 @@ namespace ToolsRig { namespace Camera
 
 		float _mouseSensitivity = 20.f;
 		float _speedScale = 20.f;
-		float _xspeed = 10.f;
-		float _yspeed = 10.f;
-		float _zspeed = 10.f;
-		float _xturn = 60.f;
-		float _yturn = 60.f;
+		float _translationSpeed = 10.f;
+		float _rotationSpeed = gPI * .5f;
 	};
 
 	struct Orbit
@@ -45,6 +42,7 @@ namespace ToolsRig { namespace Camera
 		void Update(Float4x4& cameraToWorld, const Float3x4& playerCharacterLocalToWorld, float dt, const OSServices::InputSnapshot& input) const;
 
 		std::unique_ptr<UnitCamManager> _unitCamera;
+		void Initialize(float charactersScale);
 
 		UnitCam();
 		~UnitCam();
@@ -74,6 +72,13 @@ namespace ToolsRig { namespace Camera
 		float _translationSpeed = 0.01f;
 	};
 
+	struct OrthogonalFlatCam
+	{
+		void Update(VisCameraSettings& camera, const OSServices::InputSnapshot& input, const Float2& projSpaceMouseOver) const;
+
+		float _translationSpeed = 0.01f;
+	};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class CameraInputHandler
@@ -93,6 +98,8 @@ namespace ToolsRig { namespace Camera
 		Slew _slew;
 		unsigned _mode = 0;
 	};
+
+	std::unique_ptr<UnitCamManager> CreateUnitCamManager(float charactersScale);
 
 }}
 
