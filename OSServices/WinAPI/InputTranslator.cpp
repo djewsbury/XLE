@@ -16,15 +16,19 @@ namespace OSServices
     public:
         typedef InputSnapshot::ActiveButton ActiveButton;
         
-        Coord2 _currentMousePosition;
+        std::optional<Coord2> _currentMousePosition;
+        std::optional<Coord2> _mousePositionForDeltas;
         std::vector<ActiveButton> _passiveButtonState;
         HWND _hwnd;
+        bool _captureAndHideCursor = false;
+        int _captureCursorLevel = 0;
+        Coord2 _centeringCursorPos{512,512};
+        HCURSOR _oldCursor = nullptr;
     };
 
     InputTranslator::InputTranslator(const void* hwnd)
     {
         _pimpl = std::make_unique<Pimpl>();
-        _pimpl->_currentMousePosition = Coord2(0,0);
         _pimpl->_hwnd = (HWND)hwnd;
     }
 
@@ -35,12 +39,20 @@ namespace OSServices
     InputSnapshot    InputTranslator::OnMouseMove(signed newX, signed newY)
     {
         // using namespace RenderOverlays::DebuggingDisplay;
-        auto oldPos = _pimpl->_currentMousePosition;
-        _pimpl->_currentMousePosition = Coord2(newX, newY);
+        auto newPos = Coord2(newX, newY);
+        auto oldPos = _pimpl->_mousePositionForDeltas.value_or(newPos);
+        _pimpl->_mousePositionForDeltas = _pimpl->_currentMousePosition = newPos;
+
+        if (_pimpl->_captureAndHideCursor && _pimpl->_captureCursorLevel) {
+            SetCursorPos(_pimpl->_centeringCursorPos._x, _pimpl->_centeringCursorPos._y);
+            POINT temp { _pimpl->_centeringCursorPos._x, _pimpl->_centeringCursorPos._y };
+            ScreenToClient(_pimpl->_hwnd, &temp);
+            _pimpl->_mousePositionForDeltas = { temp.x, temp.y };
+        }
 
         InputSnapshot snapShot(
-            GetMouseButtonState(), 0, 0, 
-            _pimpl->_currentMousePosition, _pimpl->_currentMousePosition - oldPos);
+            GetMouseButtonState(), 0, 0,
+            newPos, newPos - oldPos);
         snapShot._activeButtons = _pimpl->_passiveButtonState;
         return snapShot;
     }
@@ -49,10 +61,11 @@ namespace OSServices
     {
         assert(index < 32);
         // using namespace RenderOverlays::DebuggingDisplay;
-		auto oldPos = _pimpl->_currentMousePosition;
-        _pimpl->_currentMousePosition = Coord2(newX, newY);
+		auto newPos = Coord2(newX, newY);
+        auto oldPos = _pimpl->_currentMousePosition.value_or(newPos);
+        _pimpl->_currentMousePosition = newPos;
 
-        InputSnapshot snapShot(GetMouseButtonState(), 1<<index, 0, _pimpl->_currentMousePosition, _pimpl->_currentMousePosition - oldPos);
+        InputSnapshot snapShot(GetMouseButtonState(), 1<<index, 0, newPos, newPos - oldPos);
         snapShot._activeButtons = _pimpl->_passiveButtonState;
         return snapShot;
     }
@@ -61,10 +74,11 @@ namespace OSServices
     {
         assert(index < 32);
         // using namespace RenderOverlays::DebuggingDisplay;
-		auto oldPos = _pimpl->_currentMousePosition;
-        _pimpl->_currentMousePosition = Coord2(newX, newY);
+		auto newPos = Coord2(newX, newY);
+        auto oldPos = _pimpl->_currentMousePosition.value_or(newPos);
+        _pimpl->_currentMousePosition = newPos;
 
-        InputSnapshot snapShot(GetMouseButtonState(), 0, 0, _pimpl->_currentMousePosition, _pimpl->_currentMousePosition - oldPos);
+        InputSnapshot snapShot(GetMouseButtonState(), 0, 0, newPos, newPos - oldPos);
         snapShot._mouseButtonsDblClk |= (1<<index);
         return snapShot;
     }
@@ -72,7 +86,7 @@ namespace OSServices
     InputSnapshot    InputTranslator::OnKeyChange         (unsigned keyCode,  bool newState)
     {
         // using namespace RenderOverlays::DebuggingDisplay;
-        InputSnapshot snapShot(GetMouseButtonState(), 0, 0, _pimpl->_currentMousePosition, Coord2(0,0));
+        InputSnapshot snapShot(GetMouseButtonState(), 0, 0, _pimpl->_currentMousePosition.value_or(Coord2(0,0)), Coord2(0,0));
         snapShot._activeButtons.reserve(_pimpl->_passiveButtonState.size() + 1);
 
         KeyId keyCodeToName = KeyId_Make(AsKeyName(keyCode));
@@ -114,7 +128,7 @@ namespace OSServices
     InputSnapshot            InputTranslator::OnChar(ucs2 chr)
     {
         // using namespace RenderOverlays::DebuggingDisplay;
-        InputSnapshot snapShot(GetMouseButtonState(), 0, 0, _pimpl->_currentMousePosition, Coord2(0,0), chr);
+        InputSnapshot snapShot(GetMouseButtonState(), 0, 0, _pimpl->_currentMousePosition.value_or(Coord2(0,0)), Coord2(0,0), chr);
         snapShot._activeButtons = _pimpl->_passiveButtonState;
         return snapShot;
     }
@@ -122,12 +136,40 @@ namespace OSServices
     InputSnapshot            InputTranslator::OnMouseWheel(signed wheelDelta)
     {
         // using namespace RenderOverlays::DebuggingDisplay;
-        InputSnapshot snapShot(GetMouseButtonState(), 0, wheelDelta, _pimpl->_currentMousePosition, Coord2(0,0));
+        InputSnapshot snapShot(GetMouseButtonState(), 0, wheelDelta, _pimpl->_currentMousePosition.value_or(Coord2(0,0)), Coord2(0,0));
         snapShot._activeButtons = _pimpl->_passiveButtonState;
         return snapShot;
     }
 
-    InputSnapshot    InputTranslator::OnFocusChange()
+    static bool HasFocus(HWND hwnd)
+    {
+        auto focus = GetFocus();
+        while (focus) {
+            if (focus == hwnd)
+                return true;
+            focus = GetParent(focus);
+        }
+        return false;
+    }
+
+    static Coord2 GetCenteringCursorPos(HWND hwnd)
+    {
+        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+
+        MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
+        GetMonitorInfo(monitor, &monitorInfo);
+
+        Coord2 result {
+            (monitorInfo.rcMonitor.right + monitorInfo.rcMonitor.left) / 2,
+            (monitorInfo.rcMonitor.bottom + monitorInfo.rcMonitor.top) / 2 };
+
+        // some safety margins -- 
+        result._x = std::max(512, result._x);
+        result._y = std::max(512, result._y);
+        return result;
+    }
+
+    InputSnapshot    InputTranslator::OnFocusChange(bool becomingActive)
     {
             // we have to reset the "_passiveButtonState" set when we gain or loose focus.
             // this is because we will miss key up messages when not focussed...
@@ -136,9 +178,29 @@ namespace OSServices
         // using namespace RenderOverlays::DebuggingDisplay;
         _pimpl->_passiveButtonState.clear();
 
+        if (_pimpl->_captureAndHideCursor) {
+            if (becomingActive) {
+                if (!_pimpl->_captureCursorLevel) {
+                    SetCapture(_pimpl->_hwnd);
+                    _pimpl->_oldCursor = SetCursor(nullptr);
+                    _pimpl->_centeringCursorPos = GetCenteringCursorPos(_pimpl->_hwnd);
+                    ++_pimpl->_captureCursorLevel;
+                }
+            } else {
+                if (_pimpl->_captureCursorLevel) {
+                    SetCursor(_pimpl->_oldCursor);
+                    _pimpl->_oldCursor = nullptr;
+                    ReleaseCapture();
+                    --_pimpl->_captureCursorLevel;
+                    assert(_pimpl->_captureCursorLevel == 0);
+                }
+            }
+        }
+
 		// send a snapshot that emulates releasing all held mouse buttons
 		auto emulateClickUp = GetMouseButtonState();
-		InputSnapshot snapShot(0, emulateClickUp, 0, _pimpl->_currentMousePosition, Coord2(0,0));
+		InputSnapshot snapShot(0, emulateClickUp, 0, _pimpl->_currentMousePosition.value_or(Coord2(0,0)), Coord2(0,0));
+        _pimpl->_currentMousePosition = {};
 		return snapShot;
     }
 
@@ -260,7 +322,36 @@ namespace OSServices
 
     Coord2    InputTranslator::GetMousePosition()
     {
-        return _pimpl->_currentMousePosition;
+        return _pimpl->_currentMousePosition.value_or(Coord2(0,0));
+    }
+
+    void InputTranslator::CaptureAndHideCursor(bool newState)
+    {
+        if (newState != _pimpl->_captureAndHideCursor) {
+            if (newState) {
+
+                bool hasFocus = true; // assume we have focus right now
+                if (hasFocus && !_pimpl->_captureCursorLevel) {
+                    SetCapture(_pimpl->_hwnd);
+                    _pimpl->_oldCursor = SetCursor(nullptr);
+                    _pimpl->_centeringCursorPos = GetCenteringCursorPos(_pimpl->_hwnd);
+                    ++_pimpl->_captureCursorLevel;
+                }
+
+            } else {
+
+                if (_pimpl->_captureCursorLevel) {
+                    SetCursor(_pimpl->_oldCursor);
+                    _pimpl->_oldCursor = nullptr;
+                    ReleaseCapture();
+                    --_pimpl->_captureCursorLevel;
+                    assert(_pimpl->_captureCursorLevel == 0);
+                }
+
+            }
+        }
+
+        _pimpl->_captureAndHideCursor = newState;
     }
 
 }

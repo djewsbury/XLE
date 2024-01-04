@@ -183,7 +183,7 @@ namespace OSServices
                 switch (msg) {
                 case WM_ACTIVATE:
                     pimpl->_activated = wparam != WA_INACTIVE;
-					if (inputTrans) inputTrans->OnFocusChange();
+					if (pimpl->_inputTranslator) pimpl->_inputTranslator->OnFocusChange(pimpl->_activated);
 
                     // In our "capture monitor" logic, if we're not activated, we shouldn't show the window
                     // at all
@@ -435,6 +435,11 @@ namespace OSServices
     void Window::SetTitle(const char titleText[])
     {
         SetWindowTextA(_pimpl->_hwnd, titleText);
+    }
+
+    void Window::CaptureAndHideCursor(bool newState)
+    {
+        _pimpl->_inputTranslator->CaptureAndHideCursor(newState);
     }
 
     Utility::Signal<SystemMessageVariant&&>& Window::OnMessageImmediate()

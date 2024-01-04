@@ -20,9 +20,10 @@ namespace OSServices
         InputSnapshot    OnKeyChange         (unsigned keyCode,  bool newState);
         InputSnapshot    OnChar              (ucs2 chr);
         InputSnapshot    OnMouseWheel        (signed wheelDelta);
-        InputSnapshot    OnFocusChange       ();
+        InputSnapshot    OnFocusChange       (bool becomingActive);
 
-        Coord2    GetMousePosition();
+        Coord2      GetMousePosition();
+        void        CaptureAndHideCursor(bool captureMode);
 
         InputTranslator(const void* hwnd);
         ~InputTranslator();
