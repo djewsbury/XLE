@@ -5,7 +5,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "operator-util.hlsl"
-#include "../TechniqueLibrary/Utility/Colour.hlsl" // for LightingScale
 
 #if HAS_SCREENSPACE_AO==1
     Texture2D<float>	AmbientOcclusion : register(t5);
@@ -40,5 +39,5 @@ export void Setup(
 
 export float4 FinalizeResolve(float3 resolvedLight, float shadow)
 {
-    return float4((LightingScale*shadow)*resolvedLight, 1.f);
+    return float4(shadow*resolvedLight, 1.f);
 }

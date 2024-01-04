@@ -52,7 +52,7 @@ float copy_depth(float4 position : SV_Position) : SV_Depth
 
 float4 fake_tonemap(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
-	return float4(InputTexture.Load(int3(position.xy, 0)).rgb / LightingScale, 1.f);
+	return float4(InputTexture.Load(int3(position.xy, 0)).rgb, 1.f);
 }
 
 float4 copy_bilinear(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0

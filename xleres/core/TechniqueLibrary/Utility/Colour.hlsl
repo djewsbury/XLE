@@ -58,8 +58,6 @@ float3 LinearToSRGB_Formal(float3 input)
 	return max(min(input*12.92, 0.0031308),1.055*pow(input,0.41666)-0.055);
 }
 
-static const float LightingScale = 1.f;     // note -- LightingScale is currently not working with high res screenshots (it is applied twice, so only 1 is safe)
-
 float4 ByteColor(uint r, uint g, uint b, uint a) { return float4(r/float(0xff), g/float(0xff), b/float(0xff), a/float(0xff)); }
 
 float SRGBLuminance(float3 rgb)

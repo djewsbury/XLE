@@ -5,7 +5,6 @@
 #include "../Framework/VSOUT.hlsl"
 #include "../Framework/gbuffer.hlsl"
 #include "../Math/TextureAlgorithm.hlsl" // (for SystemInputs)
-#include "../Utility/Colour.hlsl"	// for LightingScale
 #include "../../Forward/ForwardPlusLighting.hlsl"
 #include "../../Objects/Templates.pixel.hlsl"
 
@@ -38,10 +37,6 @@ float4 frameworkEntry(VSOUT geo, SystemInputs sys) : SV_Target0
 	#endif
 
 	result.a = sample.blendingAlpha;
-
-	#if MAT_SKIP_LIGHTING_SCALE==0
-		result.rgb *= LightingScale;		// (note -- should we scale by this here? when using this shader with a basic lighting pipeline [eg, for material preview], the scale is unwanted)
-	#endif
 	return result;
 }
 

@@ -10,7 +10,6 @@
 #include "../../LightingEngine/LightDesc.hlsl"
 #include "../../LightingEngine/LightingAlgorithm.hlsl"
 #include "../../Math/TextureAlgorithm.hlsl"
-#include "../../Utility/Colour.hlsl"	                 // for LightingScale
 #include "../../Framework/Binding.hlsl"
 #include "../../Framework/gbuffer.hlsl"
 
@@ -190,7 +189,7 @@ AmbientResolveHelpers AmbientResolveHelpers_Default()
             //  -- and there are so many artefacts!
         float screenSpaceBlend = .5f;
         return float4(
-            litSample.rgb * fresnel / LightingScale,
+            litSample.rgb * fresnel,
             screenSpaceBlend * intersectionQuality * pixelReflectivity);
     }
 #endif

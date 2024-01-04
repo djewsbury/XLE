@@ -8,7 +8,6 @@
 #include "standardlighttypes.hlsl"
 #include "operator-util.hlsl"
 #include "../TechniqueLibrary/Utility/LoadGBuffer.hlsl"
-#include "../TechniqueLibrary/Utility/Colour.hlsl" // for LightingScale
 #include "../TechniqueLibrary/Framework/Binding.hlsl"
 
 #if HAS_SCREENSPACE_AO==1
@@ -47,7 +46,7 @@ float4 main(
     
     // return float4(cascade.frustumCoordinates.xyz, 1.0f);
     // return float4(shadow.xxx, 1.f);
-	return float4((LightingScale*shadow)*result, 1.f);
+	return float4(shadow*result, 1.f);
 }
 
 #endif

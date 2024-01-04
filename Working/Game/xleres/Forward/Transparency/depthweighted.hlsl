@@ -75,12 +75,6 @@ DepthWeightedOutput main_depth_weighted_oi(VSOUT geo, SystemInputs sys)
 		result.rgb *= geo.color.rgb;
 	#endif
 
-	#if MAT_SKIP_LIGHTING_SCALE==0
-		// (note --       should we scale by this here? when using this shader with a
-		//                basic lighting pipeline [eg, for material preview], the scale is unwanted)
-		result.rgb *= LightingScale;
-	#endif
-
 	return BuildDepthWeightedOutput(result, geo, sys);
 }
 

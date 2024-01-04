@@ -93,7 +93,6 @@ bool ToneMapOutputsLinearSpace()
 float4 main(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
 {
 	float4 input = InputTexture.Load(int3(position.xy,0));
-	input.rgb /= LightingScale;
 
 	#if ENABLE_BLOOM==1
 			//	Should the bloom color go through the

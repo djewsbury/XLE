@@ -6,7 +6,6 @@
 
 #include "tonemap.hlsl"
 #include "../../Math/TextureAlgorithm.hlsl"
-#include "../../Utility/Colour.hlsl"		// (for LightingScale)
 
 Texture2D_MaybeMS<float4>	InputTexture BIND_NUMERIC_T0;
 RWTexture2D<float>			OutputLuminance BIND_NUMERIC_U0;
@@ -63,9 +62,9 @@ float2 GetInitialSampleSizeRatio()
 float3 LoadInputColor(int2 pos)
 {
 	#if MSAA_SAMPLERS != 0
-		return InputTexture.Load(int3(pos, 0), 0).rgb / LightingScale;
+		return InputTexture.Load(int3(pos, 0), 0).rgb;
 	#else
-		return InputTexture.Load(int3(pos, 0)).rgb / LightingScale;
+		return InputTexture.Load(int3(pos, 0)).rgb;
 	#endif
 }
 
