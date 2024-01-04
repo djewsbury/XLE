@@ -42,6 +42,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial _fillAndOutlineRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillRaisedRoundedRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillReverseRaisedRoundedRect;
+        RenderCore::Techniques::ImmediateDrawableMaterial _fillAndOutlineRect;
         RenderCore::Techniques::ImmediateDrawableMaterial _fillEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _outlineEllipse;
         RenderCore::Techniques::ImmediateDrawableMaterial _softShadowRect;
@@ -64,6 +65,7 @@ namespace RenderOverlays
             const RenderCore::Assets::ResolvedMaterial& fillRaisedRect,
             const RenderCore::Assets::ResolvedMaterial& fillRaisedRoundedRect,
             const RenderCore::Assets::ResolvedMaterial& fillReverseRaisedRoundedRect,
+            const RenderCore::Assets::ResolvedMaterial& fillAndOutlineRect,
             const RenderCore::Assets::ResolvedMaterial& fillEllipse,
             const RenderCore::Assets::ResolvedMaterial& outlineEllipse,
             const RenderCore::Assets::ResolvedMaterial& softShadowRect,
@@ -78,6 +80,7 @@ namespace RenderOverlays
             _fillRaisedRect = BuildImmediateDrawableMaterial(fillRaisedRect);
             _fillRaisedRoundedRect = BuildImmediateDrawableMaterial(fillRaisedRoundedRect);
             _fillReverseRaisedRoundedRect = BuildImmediateDrawableMaterial(fillReverseRaisedRoundedRect);
+            _fillAndOutlineRect = BuildImmediateDrawableMaterial(fillAndOutlineRect);
             _fillEllipse = BuildImmediateDrawableMaterial(fillEllipse);
             _outlineEllipse = BuildImmediateDrawableMaterial(outlineEllipse);
             _softShadowRect = BuildImmediateDrawableMaterial(softShadowRect);
@@ -107,6 +110,7 @@ namespace RenderOverlays
             _frameworkUSI.BindImmediateData(0, "ShapesFramework"_h);
             _fillEllipse._uniformStreamInterface = &_frameworkUSI;
             _outlineEllipse._uniformStreamInterface = &_frameworkUSI;
+            _fillAndOutlineRect._uniformStreamInterface = &_frameworkUSI;
 
             ::Assets::DependencyValidationMarker depVals[] {
                 fillRoundedRect.GetDependencyValidation(),
@@ -115,6 +119,7 @@ namespace RenderOverlays
                 fillRaisedRect.GetDependencyValidation(),
                 fillRaisedRoundedRect.GetDependencyValidation(),
                 fillReverseRaisedRoundedRect.GetDependencyValidation(),
+                fillAndOutlineRect.GetDependencyValidation(),
                 fillEllipse.GetDependencyValidation(),
                 outlineEllipse.GetDependencyValidation(),
                 softShadowRect.GetDependencyValidation(),
@@ -134,6 +139,7 @@ namespace RenderOverlays
             auto fillRaisedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRect");
             auto fillRaisedRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRoundedRect");
             auto fillReverseRaisedRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillReverseRaisedRoundedRect");
+            auto fillAndOutlineRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRect");
             auto fillEllipse = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
             auto outlineEllipse = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
             auto softShadowRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
@@ -142,7 +148,7 @@ namespace RenderOverlays
             auto fillColorAdjust = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":FillColorAdjust");
             auto colorAdjustAndOutlineRoundedRect = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":ColorAdjustAndOutlineRoundedRect");
 
-            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, solidNoBorder, fillColorAdjust, colorAdjustAndOutlineRoundedRect).ThenConstructToPromise(std::move(promise));
+            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillAndOutlineRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, solidNoBorder, fillColorAdjust, colorAdjustAndOutlineRoundedRect).ThenConstructToPromise(std::move(promise));
         }
 
         std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
@@ -288,7 +294,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { width }));
-        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(width) ^ cornerFlags;
+        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ FloatBits(width) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -315,7 +321,7 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
-        mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
+        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -343,14 +349,14 @@ namespace RenderOverlays
         RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRoundedRect;
         mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
         mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidth }));
-        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(borderWidth) ^ cornerFlags;
+        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ FloatBits(borderWidth) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             fillColor, outlineColour,
-            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
             std::move(mat));
     }
@@ -377,7 +383,7 @@ namespace RenderOverlays
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             fillColor, ColorB::Zero,
-            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
             std::move(mat));
     }
@@ -404,35 +410,33 @@ namespace RenderOverlays
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             fillColor, ColorB::Zero,
-            Float2(0.f, 0.f), Float2(1.f, 1.f), 
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
             std::move(mat));
     }
 
     void FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour)
     {
-        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
-        }
 
-        context.DrawTriangle(
-            ProjectionMode::P2D, 
-            AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])), colour,
-            AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), colour,
-            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])), colour);
+        Float3 v[] {
+            AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
+            AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])),
+            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])),
 
-        context.DrawTriangle(
-            ProjectionMode::P2D, 
-            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])), colour,
-            AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])), colour,
-            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._bottomRight[1])), colour);
+            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])),
+            AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])),
+            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._bottomRight[1]))
+        };
+
+        context.DrawTriangles(ProjectionMode::P2D, v, dimof(v), colour);
     }
 
     void OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB colour, float outlineWidth)
     {
-        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1]) {
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
-        }
         assert(outlineWidth == 1.f);        // resizing border not currently supported
 
         Float3 lines[8];
@@ -449,8 +453,24 @@ namespace RenderOverlays
 
     void        FillAndOutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB fillColour, ColorB outlineColour, float outlineWidth)
     {
-        FillRectangle(context, rect, fillColour);
-        OutlineRectangle(context, rect, outlineColour, outlineWidth);
+        if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
+            return;
+
+        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+        if (!res) return;
+
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRect;
+        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
+        mat._hash ^= FloatBits(outlineWidth);
+
+        Internal::DrawPCCTTQuad(
+            context,
+            AsPixelCoords(rect._topLeft),
+            AsPixelCoords(rect._bottomRight),
+            fillColour, outlineColour,
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
+            Float2{0.f, 0.f}, Float2{1.f, 1.f},
+            std::move(mat));
     }
 
     void FillRaisedRectangle(

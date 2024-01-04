@@ -101,6 +101,13 @@ FillReverseRaisedRoundedRect=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
+FillAndOutlineRect=~
+	Inherit=~; <.>:SolidWithBorder
+	Patches=~
+		=~
+			CommonShapes.hlsl::RectShape_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
+
 FillEllipse=~
 	Inherit=~; <.>:SolidNoBorder
 	Patches=~

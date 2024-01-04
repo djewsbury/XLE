@@ -324,7 +324,7 @@ namespace RenderOverlays
 
 				float finalEllipsisBuffer = 0.f;
 				size_t outBufferRequired = (i-inText.begin()) + (inText.end()-text.end());
-				if (!text.IsEmpty()) {
+				if (i != text._end) {
 					finalEllipsisBuffer = ellipsisWidth;
 					outBufferRequired += 3;
 				}
@@ -374,7 +374,7 @@ namespace RenderOverlays
 
 				float finalEllipsisBuffer = 0.f;
 				size_t outBufferRequired = (text.begin()-inText.begin()) + (inText.end()-i);
-				if (!text.IsEmpty()) {
+				if (i != text._start) {
 					finalEllipsisBuffer = ellipsisWidth;
 					outBufferRequired += 3;
 				}

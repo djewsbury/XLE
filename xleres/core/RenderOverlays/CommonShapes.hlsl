@@ -135,12 +135,21 @@ ShapeResult RectShape_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDes
             texCoord.x >= minCoords.x && texCoord.x < maxCoords.x
         && texCoord.y >= minCoords.y && texCoord.y < maxCoords.y;
 
-    float2 r = float2(
+    float borderSizePix = shapeDesc._borderSizePix;
+    float2 pixelSize = float2(GetUDDS(coords).x, GetVDDS(coords).y);
+    float2 borderSize = borderSizePix * pixelSize;
+    
+    float2 pixelsAway = float2(
         min(maxCoords.x - texCoord.x, texCoord.x) - minCoords.x,
         min(maxCoords.y - texCoord.y, texCoord.y) - minCoords.y);
-    bool border = (texCoord.x <= GetUDDS(coords).x) || (texCoord.y <= GetVDDS(coords).y);
+    // bool border = (texCoord.x <= GetUDDS(coords).x) || (texCoord.y <= GetVDDS(coords).y);
 
-    return MakeShapeResult(float(fill), float(border));
+    pixelsAway = (pixelsAway-borderSize)/(0.25f*borderSize);
+    float border = saturate(smoothstep(1, 0, min(pixelsAway.x, pixelsAway.y)));
+    return MakeShapeResult(fill, border);
+
+
+    // return MakeShapeResult(float(fill), float(border));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

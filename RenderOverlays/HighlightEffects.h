@@ -8,7 +8,7 @@
 
 #include "../../Math/Vector.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class IAttachmentPool; class IFrameBufferPool; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class IAttachmentPool; class IFrameBufferPool; class FrameBufferDescFragment; } }
 namespace RenderCore { class FrameBufferDesc; class FrameBufferProperties; class IThreadContext; class ICompiledPipelineLayout; }
 
 namespace RenderOverlays
@@ -48,6 +48,7 @@ namespace RenderOverlays
         void FinishWithShadow(Float4 shadowColor);
 
 		const RenderCore::FrameBufferDesc& GetFrameBufferDesc() const;
+        static RenderCore::Techniques::FrameBufferDescFragment GetFrameBufferDescFragment();
         
         BinaryHighlight(
             RenderCore::Techniques::ParsingContext& parsingContext);

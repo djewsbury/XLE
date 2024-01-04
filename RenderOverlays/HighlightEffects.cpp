@@ -277,15 +277,9 @@ namespace RenderOverlays
 		return _pimpl->_rpi.GetFrameBufferDesc();
 	}
 
-    BinaryHighlight::BinaryHighlight(
-		Techniques::ParsingContext& parsingContext)
+    RenderCore::Techniques::FrameBufferDescFragment BinaryHighlight::GetFrameBufferDescFragment()
     {
-        using namespace RenderCore;
-        auto pipelineLayout = GetVisPipelineLayout(parsingContext.GetThreadContext().GetDevice());
-        _pimpl = std::make_unique<Pimpl>(std::move(pipelineLayout));
-        _pimpl->_parsingContext = &parsingContext;
-
-		Techniques::FrameBufferDescFragment fbDescFrag;
+        Techniques::FrameBufferDescFragment fbDescFrag;
         auto n_offscreen = fbDescFrag.DefineAttachment(0).FixedFormat(Format::R8G8B8A8_UNORM).MultisamplingMode(false)
             .Clear()
             .FinalState(s_inputAttachmentMode ? LoadStore::DontCare : LoadStore::Retain, BindFlag::ShaderResource);
@@ -307,10 +301,21 @@ namespace RenderOverlays
             subpass1.SetName("highlight");
             fbDescFrag.AddSubpass(std::move(subpass1));
         }
-        
+
+        return fbDescFrag;
+    }
+
+    BinaryHighlight::BinaryHighlight(
+		Techniques::ParsingContext& parsingContext)
+    {
+        using namespace RenderCore;
+        auto pipelineLayout = GetVisPipelineLayout(parsingContext.GetThreadContext().GetDevice());
+        _pimpl = std::make_unique<Pimpl>(std::move(pipelineLayout));
+        _pimpl->_parsingContext = &parsingContext;
+
 		ClearValue clearValues[] = {MakeClearValue(0.f, 0.f, 0.f, 0.f)};
         _pimpl->_rpi = Techniques::RenderPassInstance(
-            parsingContext, fbDescFrag, 
+            parsingContext, GetFrameBufferDescFragment(), 
 			{MakeIteratorRange(clearValues)});
     }
 
