@@ -105,7 +105,7 @@ VSOUT frameworkEntry(VSIN vsin)
 	// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision
 	// assuming 8 bit color inputs	
 	#if VSOUT_HAS_COLOR_LINEAR
-		output.color.rgb = SRGBToLinear(VSIN_GetColor0(vsin).rgb);
+		output.color.rgb = SRGBToLinear_Formal(VSIN_GetColor0(vsin).rgb);
 		#if VSOUT_HAS_VERTEX_ALPHA
 			output.color.a = VSIN_GetColor0(vsin).a;
 		#endif
@@ -114,7 +114,7 @@ VSOUT frameworkEntry(VSIN vsin)
 	#endif
 
 	#if VSOUT_HAS_COLOR_LINEAR1
-		output.color1 = float4(SRGBToLinear(VSIN_GetColor1(vsin).rgb), VSIN_GetColor1(vsin).a);
+		output.color1 = float4(SRGBToLinear_Formal(VSIN_GetColor1(vsin).rgb), VSIN_GetColor1(vsin).a);
 	#endif
 
 	#if VSOUT_HAS_TEXCOORD
