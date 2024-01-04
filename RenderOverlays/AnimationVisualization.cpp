@@ -162,8 +162,8 @@ namespace RenderOverlays
 
 				Float2 viewportSpace { hposition[0] / hposition[3], hposition[1] / hposition[3] };
 				Float2 screenSpace {
-					(viewportSpace[0] *  0.5f + 0.5f) * viewport._width + viewport._x,
-					(viewportSpace[1] *  0.5f + 0.5f) * viewport._height + viewport._y };
+					(viewportSpace[0] *  0.5f + 0.5f) * viewport._width,
+					(viewportSpace[1] *  0.5f + 0.5f) * viewport._height };
 
 				for (;;) {
 					bool foundOverlap = false;
