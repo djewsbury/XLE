@@ -4,6 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#define _SILENCE_CXX17_SHARED_PTR_UNIQUE_DEPRECATION_WARNING 1		// using .unique(), but just for verification inside of an assert()
+
 #include "Resource.h"
 #include "ObjectFactory.h"
 #include "Format.h"
@@ -2273,6 +2275,33 @@ namespace RenderCore { namespace Metal_Vulkan
 		BarrierResourceUsage result;
 		result._accessFlags =  VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
 		result._pipelineStageFlags = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+		result._imageLayout = (VkImageLayout)0;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::ComputeShaderRead()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  VK_ACCESS_SHADER_READ_BIT;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+		result._imageLayout = (VkImageLayout)0;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::ComputeShaderWrite()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  VK_ACCESS_SHADER_WRITE_BIT;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+		result._imageLayout = (VkImageLayout)0;
+		return result;
+	}
+
+	BarrierResourceUsage BarrierResourceUsage::ComputeShaderReadAndWrite()
+	{
+		BarrierResourceUsage result;
+		result._accessFlags =  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+		result._pipelineStageFlags = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		result._imageLayout = (VkImageLayout)0;
 		return result;
 	}
