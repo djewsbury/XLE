@@ -1675,7 +1675,8 @@ namespace RenderCore { namespace Techniques
                 *parsingContext.GetTechniqueContext()._attachmentPool,
                 &parentReservation,
                 beginInfo };
-            parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
+            if (parsingContext.GetViewport()._width == 0.f && parsingContext.GetViewport()._height == 0.f)
+                parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
         } else {
             auto& attachmentPool = *parsingContext.GetTechniqueContext()._attachmentPool;
             _attachmentPoolReservation = attachmentPool.Reserve(stitchedFragment._fullAttachmentDescriptions, &parentReservation);
