@@ -7,12 +7,14 @@
 #include "FT_Font.h"
 #include "../Assets/IFileSystem.h"
 #include "../Assets/Assets.h"
+#include "../Assets/AssetsCore.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../OSServices/RawFS.h"
+#include "../Math/Vector.h"
 #include "../Formatters/TextFormatter.h"
 #include "../Formatters/FormatterUtils.h"
 #include "../Utility/Threading/Mutex.h"
@@ -42,6 +44,36 @@ namespace RenderOverlays
 
 	Threading::Mutex s_mainFontResourcesInstanceLock;
 	ConsoleRig::AttachablePtr<FTFontResources> s_mainFontResourcesInstance;
+
+	class FTFont : public Font 
+	{
+	public:
+		virtual FontProperties GetFontProperties() const;
+		virtual Bitmap GetBitmap(ucs4 ch) const;
+		virtual GlyphProperties GetGlyphProperties(ucs4 ch) const;
+		virtual void GetGlyphPropertiesSorted(
+			IteratorRange<GlyphProperties*> result,
+			IteratorRange<const ucs4*> glyphs) const;
+
+		virtual Float2 GetKerning(int prevGlyph, ucs4 ch, int* curGlyph) const;
+		virtual Float2 GetKerningReverse(int prevGlyph, ucs4 ch, int* curGlyph) const;
+		virtual float GetKerning(ucs4 prev, ucs4 ch) const;
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		FTFont(StringSection<::Assets::ResChar> faceName, int faceSize);
+		virtual ~FTFont();
+	protected:
+		FTFontResources* _resources;
+		int _ascend;
+		std::shared_ptr<FT_FaceRec_> _face;
+		::Assets::Blob _pBuffer;
+		::Assets::DependencyValidation _depVal;
+
+		struct LoadedChar;
+		mutable std::vector<std::pair<ucs4, LoadedChar>> _cachedLoadedChars;
+		FontProperties _fontProperties;
+	};
 
 	FTFont::FTFont(StringSection<::Assets::ResChar> faceName, int faceSize)
 	{
@@ -153,28 +185,81 @@ namespace RenderOverlays
 		return 0.0f;
 	}
 
+	struct FTFont::LoadedChar
+	{
+		FT_GlyphSlot _glyph = nullptr;
+		GlyphProperties _glyphProps;
+		bool _hasBeenRendered = false;
+	};
+
 	auto FTFont::GetGlyphProperties(ucs4 ch) const -> GlyphProperties
 	{
-		auto i = LowerBound(_cachedGlyphProperties, ch);
-		if (i == _cachedGlyphProperties.end() || i->first != ch) {
-			GlyphProperties props;
+		auto i = LowerBound(_cachedLoadedChars, ch);
+		if (i == _cachedLoadedChars.end() || i->first != ch) {
+			LoadedChar LoadedChar;
 			FT_Error error = FT_Load_Char(_face.get(), ch, 0/*FT_LOAD_NO_AUTOHINT*/);
 			if (!error) {
-				FT_GlyphSlot glyph = _face->glyph;
-				props._xAdvance = (float)glyph->advance.x / 64.0f;
+				LoadedChar._glyph = _face->glyph;
+				LoadedChar._glyphProps._xAdvance = (float)LoadedChar._glyph->advance.x / 64.0f;
+				LoadedChar._glyphProps._lsbDelta = LoadedChar._glyph->lsb_delta;
+				LoadedChar._glyphProps._rsbDelta = LoadedChar._glyph->rsb_delta;
 			}
-			i = _cachedGlyphProperties.insert(i, std::make_pair(ch, props));
+			i = _cachedLoadedChars.insert(i, std::make_pair(ch, LoadedChar));
 		}
-		return i->second;
+		return i->second._glyphProps;
+	}
+
+	void FTFont::GetGlyphPropertiesSorted(
+		IteratorRange<GlyphProperties*> result,
+		IteratorRange<const ucs4*> glyphs) const
+	{
+		// Load a number of glyphs at once; looking through our _cachedLoadedChars efficiently because the input
+		// is in sorted order
+		auto i = _cachedLoadedChars.begin();
+		while (!glyphs.empty()) {
+			i = LowerBound2(MakeIteratorRange(i, _cachedLoadedChars.end()), glyphs.front());
+			if (i == _cachedLoadedChars.end() || i->first != glyphs.front()) {
+				LoadedChar LoadedChar;
+				FT_Error error = FT_Load_Char(_face.get(), glyphs.front(), 0/*FT_LOAD_NO_AUTOHINT*/);
+				if (!error) {
+					LoadedChar._glyph = _face->glyph;
+					LoadedChar._glyphProps._xAdvance = (float)LoadedChar._glyph->advance.x / 64.0f;
+					LoadedChar._glyphProps._lsbDelta = LoadedChar._glyph->lsb_delta;
+					LoadedChar._glyphProps._rsbDelta = LoadedChar._glyph->rsb_delta;
+				}
+				i = _cachedLoadedChars.insert(i, std::make_pair(glyphs.front(), LoadedChar));
+			}
+
+			result.front() = i->second._glyphProps;
+
+			++glyphs.first;
+			++result.first;
+		}	
 	}
 
 	auto FTFont::GetBitmap(ucs4 ch) const -> Bitmap
 	{
-		FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER /*| FT_LOAD_NO_AUTOHINT*/);
-		if (error)
-			return Bitmap {};
+		auto i = LowerBound(_cachedLoadedChars, ch);
+		if (i == _cachedLoadedChars.end() || i->first != ch) {
+			LoadedChar LoadedChar;
+			FT_Error error = FT_Load_Char(_face.get(), ch, 0/*FT_LOAD_NO_AUTOHINT*/);
+			if (!error) {
+				LoadedChar._glyph = _face->glyph;
+				LoadedChar._glyphProps._xAdvance = (float)LoadedChar._glyph->advance.x / 64.0f;
+				LoadedChar._glyphProps._lsbDelta = LoadedChar._glyph->lsb_delta;
+				LoadedChar._glyphProps._rsbDelta = LoadedChar._glyph->rsb_delta;
+			}
+			i = _cachedLoadedChars.insert(i, std::make_pair(ch, LoadedChar));
+		}
 
-		FT_GlyphSlot glyph = _face->glyph;
+		if (!i->second._hasBeenRendered) {
+			FT_Error error = FT_Render_Glyph(i->second._glyph, FT_RENDER_MODE_NORMAL);		// also -- LCD render modes, etc
+			if (error)
+				return Bitmap {};		// i->second._hasBeenRendered not set; will always attempt to re-render
+			i->second._hasBeenRendered = true;
+		}
+
+		FT_GlyphSlot glyph = i->second._glyph;
 
 		Bitmap result;
 		result._xAdvance = (float)glyph->advance.x / 64.0f;
@@ -292,6 +377,11 @@ namespace RenderOverlays
 	FTFontResources::~FTFontResources()
 	{
 		FT_Done_FreeType(_ftLib);
+	}
+
+	std::shared_ptr<Font> CreateFTFont(StringSection<::Assets::ResChar> faceName, int faceSize)
+	{
+		return std::make_shared<FTFont>(faceName, faceSize);
 	}
 
 }

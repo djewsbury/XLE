@@ -44,6 +44,7 @@ namespace RenderOverlays
 		struct GlyphProperties
 		{
 			float _xAdvance = 0.f;
+			unsigned _lsbDelta = 0, _rsbDelta = 0;
 		};
 
 		virtual FontProperties		GetFontProperties() const = 0;
@@ -54,6 +55,9 @@ namespace RenderOverlays
 		virtual float       GetKerning(ucs4 prev, ucs4 ch) const = 0;
 
 		virtual GlyphProperties		GetGlyphProperties(ucs4 ch) const = 0;
+		virtual void GetGlyphPropertiesSorted(
+			IteratorRange<GlyphProperties*> result,
+			IteratorRange<const ucs4*> glyphs) const = 0;
 
 		uint64_t			GetHash() const { return _hashCode; }
 

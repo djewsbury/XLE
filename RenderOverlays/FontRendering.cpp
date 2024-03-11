@@ -1099,6 +1099,341 @@ namespace RenderOverlays
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////
 
+	template<bool CheckMaxXY, bool SnapCoords>
+		const char* CalculateFontSpans_WordWrapping_Internal(
+			FontSpan& result,
+			const Font& font, DrawTextFlags::BitField flags,
+			StringSection<> text, ColorB color, ColorB& colorOverride,
+			Float2& iterator, float xAtLineStart, float maxX, float maxY)
+	{
+		using namespace RenderCore;
+		assert(result._glyphCount == 0);
+		if (text.IsEmpty()) return text._start;
+
+		////////
+		struct Instance
+		{
+			ucs4 _chr;
+			Float2 _xy;
+			ColorB _color;
+			unsigned _lineIdx = 0;
+			const char* _textPtr;
+			unsigned _glyphIdx = ~0u;
+		};
+		VLA_UNSAFE_FORCE(Instance, instances, std::min(FontSpan::s_maxInstancesPerSpan, (unsigned)text.size()));
+		unsigned instanceCount = 0;
+		////////
+
+		float x = iterator[0], y = iterator[1];
+		const float xScale = 1.f, yScale = 1.f;
+		if (!CheckMaxXY || (y + yScale * font.GetFontProperties()._lineHeight) <= maxY) {
+			int prevGlyph = 0;
+			float yAtLineStart = y;
+			unsigned lineIdx = 0;
+
+			if constexpr (SnapCoords) {
+				x = xScale * (int)(0.5f + x / xScale);
+				y = yScale * (int)(0.5f + y / yScale);
+			}
+			while (instanceCount < FontSpan::s_maxInstancesPerSpan) {
+				if (!text.IsEmpty() && expect_evaluation(*text._start == '{', false)) {
+					FontRenderingControlStatement ctrl;
+					text = ctrl.TryParse(text);
+					if (ctrl._type == FontRenderingControlStatement::Type::ColorOverride) {
+						colorOverride = ctrl._newColorOverride;
+						continue;
+					}
+				}
+				if (text.IsEmpty()) break;
+
+				auto ptr = text.begin();
+				auto ch = GetNext(text);
+
+				// \n, \r\n, \r all considered new lines
+				if (ch == '\n' || ch == '\r') {
+					if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
+					x = xAtLineStart;
+					prevGlyph = 0;
+					y = yAtLineStart = yAtLineStart + yScale * font.GetFontProperties()._lineHeight;
+					if constexpr (SnapCoords) {
+						x = xScale * (int)(0.5f + x / xScale);
+						y = yScale * (int)(0.5f + y / yScale);
+					}
+					++lineIdx;
+
+					if (CheckMaxXY && (y + yScale * font.GetFontProperties()._lineHeight) > maxY) {
+						text._end = text._start;		// end iteration
+						break;
+					}
+
+					continue;
+				}
+
+				int curGlyph;
+				Float2 v = font.GetKerning(prevGlyph, ch, &curGlyph);
+				x += xScale * v[0];
+				y += yScale * v[1];
+				prevGlyph = curGlyph;
+
+				instances[instanceCount++] = { ch, Float2{x, y}, colorOverride.a?colorOverride:color, lineIdx, ptr };
+
+				if (flags & DrawTextFlags::Outline) x += 2 * xScale;
+			}
+		} else {
+			text._end = text._start;		// end iteration
+		}
+
+		if (!instanceCount) {
+			iterator = {x, y};
+			return text._start;
+		}
+
+		VLA(Instance*, sortedInstances, instanceCount);
+		for (unsigned c=0; c<instanceCount; ++c) sortedInstances[c] = &instances[c];
+		std::sort(sortedInstances, &sortedInstances[instanceCount], [](auto* lhs, auto* rhs) { return lhs->_chr < rhs->_chr; });
+
+		VLA(ucs4, chrsToLookup, instanceCount);
+		unsigned chrsToLookupCount = 0;
+		ucs4 lastChar = ~ucs4(0);
+		for (auto* i=sortedInstances; i!=&sortedInstances[instanceCount]; ++i) {
+			if ((*i)->_chr != lastChar)
+				chrsToLookup[chrsToLookupCount++] = lastChar = (*i)->_chr;		// get unique chars
+			(*i)->_glyphIdx = chrsToLookupCount-1;
+		}
+
+		assert(chrsToLookupCount);
+		VLA_UNSAFE_FORCE(Font::GlyphProperties, glyphProps, chrsToLookupCount);
+		font.GetGlyphPropertiesSorted(
+			MakeIteratorRange(glyphProps, &glyphProps[chrsToLookupCount]),
+			MakeIteratorRange(chrsToLookup, &chrsToLookup[chrsToLookupCount]));
+
+		// whitespace and non-whitespace chars hard coded for now
+		const auto whitespaceDividers = MakeStringSection(" \t");
+		const auto nonWhitespaceDividers = MakeStringSection("");
+		unsigned instanceCountPostClip = instanceCount;
+
+		// Update the x values for each instance, now that we've queried the glyph properties
+		{
+			float xIterator = 0, yIterator = 0;
+
+			// unsigned prev_rsb_delta = 0;
+			unsigned lineIdx = 0;
+			auto i = instances;
+			while (i != &instances[instanceCountPostClip]) {
+				auto starti = i;
+				++i;
+
+				// We've already processed newlines and font rendering control statements. Just look for word wrap issues here
+				// We can wrap immediately before or after a divider
+				bool startsWhitespace = std::find(whitespaceDividers.begin(), whitespaceDividers.end(), starti->_chr) != whitespaceDividers.end();
+				if (!startsWhitespace && std::find(nonWhitespaceDividers.begin(), nonWhitespaceDividers.end(), starti->_chr) == nonWhitespaceDividers.end()) {
+					while (i != &instances[instanceCountPostClip]) {
+						if (i->_lineIdx != starti->_lineIdx) break;
+						bool isWhitespace = std::find(whitespaceDividers.begin(), whitespaceDividers.end(), i->_chr) != whitespaceDividers.end();
+						if (isWhitespace) break;
+						bool isNonWhitespaceDivider = std::find(nonWhitespaceDividers.begin(), nonWhitespaceDividers.end(), i->_chr) != nonWhitespaceDividers.end();
+						if (isNonWhitespaceDivider) break;
+						++i;
+					}
+				}
+
+				// first, check if we need to reset the xIterator
+				if (starti->_lineIdx != lineIdx) {
+					if ((starti->_xy[1] + yIterator + yScale * font.GetFontProperties()._lineHeight) > maxY) {
+						// abort early because we can't fit this in
+						text._start = text._end = starti->_textPtr;		
+						instanceCountPostClip = starti - instances;
+						break;
+					}
+
+					lineIdx = starti->_lineIdx;
+					xIterator = 0;		// reset because we just had a line break
+				}
+
+				// check to see if this entire word can fit on the line
+				if (CheckMaxXY && !startsWhitespace) {
+					bool wordFits = true;
+					float tempXIterator = 0;
+					for (auto q=starti; q!=i; ++q) {
+						auto& glyph = glyphProps[q->_glyphIdx];
+						tempXIterator += glyph._xAdvance * xScale;
+						tempXIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
+					}
+
+					wordFits = ((i-1)->_xy[0] + xIterator + tempXIterator) <= maxX; // attempting to put non whitespace character off the end of the line
+					if (!wordFits) {
+						// Reset to start of line. Note there shouldn't be any kerning issues because we're subtracting that also
+						// (the last character would have been a whitespace or non-whitespace divider, anyway)
+						xIterator = xAtLineStart - starti->_xy[0];
+						yIterator += yScale * font.GetFontProperties()._lineHeight;
+
+						if ((starti->_xy[1] + yIterator + yScale * font.GetFontProperties()._lineHeight) > maxY) {
+							// abort early because we can't fit this in
+							text._start = text._end = starti->_textPtr;		
+							instanceCountPostClip = starti - instances;
+							break;
+						}
+
+						wordFits = ((i-1)->_xy[0] + xIterator + tempXIterator) <= maxX;
+						if (!wordFits) {
+							// abort early because the word is too long, even if it takes an entire line
+							text._start = text._end = starti->_textPtr;
+							instanceCountPostClip = starti - instances;
+							break;
+						}
+					}
+				}
+
+				// whole word does fit, let's commit it
+				for (auto inst=starti; inst!=i; ++inst) {
+					auto& glyph = glyphProps[inst->_glyphIdx];
+
+					/*
+					The freetype library suggests 2 different ways to use the lsb & rsb delta values. This method is
+					sounds like it is intended when for maintaining pixel alignment is needed
+					if (prev_rsb_delta - glyph._lsbDelta > 32)
+						x -= 1.0f;
+					else if (prev_rsb_delta - glyph._lsbDelta < -31)
+						x += 1.0f;
+					prev_rsb_delta = glyph._rsbDelta;
+					*/
+
+					inst->_xy[0] += xIterator;
+					inst->_xy[1] += yIterator;
+
+					xIterator += glyph._xAdvance * xScale;
+					xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
+				}
+			}
+
+			iterator = { x + xIterator, y + yIterator };
+		}
+
+		// Write out everything to the span. Note that we're going back to glyph ordering now
+		assert(result._totalInstanceCount == 0);
+		for (auto* i=sortedInstances; i!=&sortedInstances[instanceCount];) {
+			auto starti = i++;
+			while (i!=&sortedInstances[instanceCount] && (*i)->_glyphIdx == (*starti)->_glyphIdx) ++i;
+
+			auto startOutInstanceCount = result._totalInstanceCount;
+			for  (auto q=starti; q!=i; ++q) {
+				auto idx = (*q) - instances;
+				if (idx >= instanceCountPostClip) continue;		// skip glyphs that failed the word wrap thing
+				result._instances[result._totalInstanceCount]._xy = (*q)->_xy;
+				result._instances[result._totalInstanceCount]._color = (*q)->_color;
+				result._totalInstanceCount++;
+			}
+
+			if (result._totalInstanceCount == startOutInstanceCount) continue;
+			result._glyphs[result._glyphCount] = (*starti)->_chr;
+			result._glyphsInstanceCounts[result._glyphCount] = result._totalInstanceCount - startOutInstanceCount;
+			++result._glyphCount;
+		}
+		result._flags = flags;
+		
+		return text._start;
+	}
+
+	const char* CalculateFontSpans_WordWrapping(
+		std::vector<FontSpan>& result,
+		const Font& font, DrawTextFlags::BitField flags,
+		StringSection<> text, ColorB col,
+		float x, float y, float maxX, float maxY)
+	{
+		Float2 iterator { x, y };
+		ColorB colorOverride = 0x0;
+		while (!text.IsEmpty()) {
+			result.emplace_back();
+			auto adv = CalculateFontSpans_WordWrapping_Internal<true, false>(result.back(), font, flags, text, col, colorOverride, iterator, x, maxX, maxY);
+			if (!result.back()._glyphCount) {
+				result.pop_back();
+				break;
+			}
+			if (text._start == adv) break;
+			text._start = adv;
+		}
+		return text._start;
+	}
+
+	template<typename WorkingSetType>
+		bool Draw_Section(
+			RenderCore::IThreadContext& threadContext,
+			WorkingSetType& workingVertices,
+			FontRenderingManager& textureMan,
+			const Font& font, const FontSpan& span)
+	{
+		if (!span._glyphCount)
+			return true;
+
+		VLA(const FontRenderingManager::Bitmap*, bitmaps, span._glyphCount);
+		bool queryResult = textureMan.GetBitmaps(bitmaps, threadContext, font, MakeIteratorRange(span._glyphs, &span._glyphs[span._glyphCount]));
+		if (!queryResult)
+			return false;
+
+		unsigned firstRenderInstance = 0;
+		for (; firstRenderInstance != span._glyphCount; ++firstRenderInstance)
+			if (bitmaps[firstRenderInstance]->_width * bitmaps[firstRenderInstance]->_height) break;
+		if (firstRenderInstance == span._glyphCount)
+			return true;
+
+		auto estimatedQuadCount = span._totalInstanceCount;
+		if (span._flags & DrawTextFlags::Shadow) estimatedQuadCount += span._totalInstanceCount;
+		if (span._flags & DrawTextFlags::Outline) estimatedQuadCount += 8 * span._totalInstanceCount;
+
+		workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
+
+		assert(!(span._flags & DrawTextFlags::Outline));
+		assert(!(span._flags & DrawTextFlags::Shadow));
+
+		auto i = span._instances;
+		for (unsigned c=0; c<span._glyphCount; ++c) {
+			auto& bitmap = *bitmaps[c];
+			if (!bitmap._width || !bitmap._height) continue;
+
+			auto endi = i+span._glyphsInstanceCounts[c];
+			for (;i!=endi; ++i) {
+				float baseX = i->_xy[0] + bitmap._bitmapOffsetX;
+				float baseY = i->_xy[1] + bitmap._bitmapOffsetY;
+
+				Quad pos = Quad::MinMax(
+					baseX, baseY, 
+					baseX + bitmap._width, baseY + bitmap._height);
+
+				workingVertices.PushQuad(pos, i->_color, bitmap);
+			}
+		}
+
+		return true;
+	}
+
+	bool 		Draw(		RenderCore::IThreadContext& threadContext,
+							RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+							FontRenderingManager& textureMan,
+							const Font& font, const FontSpan& span,
+							const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet)
+	{
+		const float depth = 0.f;
+
+		if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true };
+			bool success = Draw_Section(
+				threadContext, workingSet, textureMan,
+				font, span);
+			if (!success) return false;
+			workingSet.Complete();
+		} else {
+			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true };
+			bool success = Draw_Section(
+				threadContext, workingSet, textureMan,
+				font, span);
+			if (!success) return false;
+			workingSet.Complete();
+		}
+		return true;
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////
+
 	class FontRenderingManager::Pimpl
 	{
 	public:

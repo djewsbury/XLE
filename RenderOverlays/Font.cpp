@@ -798,6 +798,12 @@ namespace RenderOverlays
 			Float2		GetKerningReverse(int prevGlyph, ucs4 ch, int* curGlyph) const override { return {0,0}; }
 			float		GetKerning(ucs4 prev, ucs4 ch) const override { return 0; }
 			GlyphProperties		GetGlyphProperties(ucs4 ch) const override { return {}; }
+			void GetGlyphPropertiesSorted(
+				IteratorRange<GlyphProperties*> result,
+				IteratorRange<const ucs4*> glyphs) const override
+			{
+				for (auto& r:result) r = {};
+			}
 			DummyFont() { _hashCode = 0; }
 		};
 		static auto result = std::make_shared<DummyFont>();		// note -- relying on compiler to make this thread safe

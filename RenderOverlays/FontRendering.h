@@ -59,6 +59,49 @@ namespace RenderOverlays
 						float scale, float depth,
 						ColorB shadowColor);
 
+	struct FontSpan
+	{
+		constexpr static unsigned s_maxInstancesPerSpan = 256;
+		using Glyph = ucs4;
+		Glyph _glyphs[s_maxInstancesPerSpan];
+		unsigned _glyphsInstanceCounts[s_maxInstancesPerSpan];
+		unsigned _glyphCount = 0;
+
+		struct Instance
+		{
+			Float2 _xy;
+			ColorB _color;
+		};
+		Instance _instances[s_maxInstancesPerSpan];
+		unsigned _totalInstanceCount = 0;
+
+		DrawTextFlags::BitField _flags = 0;
+	};
+
+	/**
+	Calculate spans for the given text, until we can't fit any more into the rectangle provided
+	This function does word wrapping.
+
+	Spans are separated based on the maximum number of characters per span (ie, not by lines, etc)
+	Glyph instances are reordered in the spans based on glyph index (ie, not position in the output)
+	No font rendering is done while calculating the output (though we do load characters in order to
+	get advance, etc)
+	
+	Spans can be modified between frames. Advanced users may wish to change spans after they have been
+	generated.
+	*/
+	const char* CalculateFontSpans_WordWrapping(
+		std::vector<FontSpan>& result,
+		const Font& font, DrawTextFlags::BitField flags,
+		StringSection<> text, ColorB col,
+		float x, float y, float maxX, float maxY);
+
+	bool 		Draw(		RenderCore::IThreadContext& threadContext,
+							RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+							FontRenderingManager& textureMan,
+							const Font& font, const FontSpan& span,
+							const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet);
+
 	///////////////////////////////////////////////////////////////////////////////////
 
 	struct FontRenderingControlStatement
