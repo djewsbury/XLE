@@ -495,6 +495,32 @@ namespace RenderOverlays
 		return input;	// no match
 	}
 
+	template<bool SnapCoords, bool CheckMaxXY, typename Instance>
+		static unsigned FindFirstRenderInstance(Instance** sortedInstances, unsigned instanceCount, const FontRenderingManager::Bitmap** bitmaps, float xScale, float yScale, float maxX)
+	{
+		unsigned firstRenderInstance = 0;
+		for (; firstRenderInstance<instanceCount; ++firstRenderInstance) {
+			auto* inst = sortedInstances[firstRenderInstance];
+			auto& bitmap = *bitmaps[inst->_glyphIdx];
+			if (!bitmap._width || !bitmap._height) continue;
+
+			float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
+			float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
+			if constexpr (SnapCoords) {
+				baseX = xScale * (int)(0.5f + baseX / xScale);
+				baseY = yScale * (int)(0.5f + baseY / yScale);
+			}
+
+			Quad pos = Quad::MinMax(
+				baseX, baseY, 
+				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+
+			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true))
+				break;		// this one will render
+		}
+		return firstRenderInstance;
+	}
+
 	template<typename CharType, typename WorkingSetType, bool CheckMaxXY, bool SnapCoords>
 		static bool DrawTemplate_Section(
 			RenderCore::IThreadContext& threadContext,
@@ -524,8 +550,7 @@ namespace RenderOverlays
 		unsigned instanceCount = 0;
 
 		float x = iterator[0], y = iterator[1];
-		float xScale = scale;
-		float yScale = scale;
+		float xScale = scale, yScale = scale;
 		if (!CheckMaxXY || (y + yScale * font.GetFontProperties()._lineHeight) <= maxY) {
 			int prevGlyph = 0;
 			float yAtLineStart = y;
@@ -639,27 +664,7 @@ namespace RenderOverlays
 
 		// Advance until we find the first character that is actually going to render
 		// this is important because we don't want to start the WorkingSetType if absolutely nothing renders (eg, all whitespace)
-		unsigned firstRenderInstance = 0;
-		for (; firstRenderInstance<instanceCount; ++firstRenderInstance) {
-			auto* inst = sortedInstances[firstRenderInstance];
-			auto& bitmap = *bitmaps[inst->_glyphIdx];
-			if (!bitmap._width || !bitmap._height) continue;
-
-			float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
-			float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
-			if constexpr (SnapCoords) {
-				baseX = xScale * (int)(0.5f + baseX / xScale);
-				baseY = yScale * (int)(0.5f + baseY / yScale);
-			}
-
-			Quad pos = Quad::MinMax(
-				baseX, baseY, 
-				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
-
-			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true))
-				break;		// this one will render
-		}
-
+		unsigned firstRenderInstance = FindFirstRenderInstance<SnapCoords, CheckMaxXY>(sortedInstances, instanceCount, bitmaps, xScale, yScale, maxX);
 		if (firstRenderInstance == instanceCount) {
 			iterator = { x + xIterator, y };
 			return true;
@@ -915,7 +920,7 @@ namespace RenderOverlays
 	}
 
 	template<typename CharType>
-		static Float2 DrawWithTableTemplate(
+		static void DrawWithTableTemplate(
 			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 			FontRenderingManager& textureMan,
@@ -928,146 +933,153 @@ namespace RenderOverlays
 			ColorB shadowColor)
 	{
 		using namespace RenderCore;
-		if (text.IsEmpty()) return {0.f, 0.f};
+		if (text.IsEmpty()) return;
 
-		int prevGlyph = 0;
-		float xScale = scale;
-		float yScale = scale;
-		
-		float xAtLineStart = x, yAtLineStart = y;
+		////////
+		using ChrAndFont = std::pair<ucs4, const Font*>;
+		struct Instance
+		{
+			ChrAndFont _chr;
+			Float2 _xy;
+			ColorB _color;
+			unsigned _lineIdx = 0;
+			unsigned _glyphIdx = ~0u;
+		};
+		const size_t maxInstancePerCall = 1024;
+		VLA_UNSAFE_FORCE(Instance, instances, std::min(maxInstancePerCall, text.size()));
+		////////
 
-		auto estimatedQuadCount = text.size();		// note -- shadow & outline will throw this off
+		float xScale = scale, yScale = scale;
 		WorkingVertexSetFontResource workingVertices;
-		bool began = false;
-
-		auto fontSelectorI = fontSelectors.begin();
-		auto colorI = colors.begin();
-		auto shadowC = shadowColor.AsUInt32();
+		bool begun = false;
+		float xAtLineStart = x, yAtLineStart = y;
+		unsigned lineIdx = 0;
 
 		while (!text.IsEmpty()) {
-			auto ch = GetNext(text);
-			auto fontSelector = (fontSelectorI < fontSelectors.end()) ? *fontSelectorI : 0;
-			++fontSelectorI;
-			auto color = (colorI < colors.end()) ? *colorI : 0xffffffff;
-			++colorI;
 
-			// \n, \r\n, \r all considered new lines
-			if (ch == '\n' || ch == '\r') {
-				if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
-				x = xAtLineStart;
-				if (fontTable[0].first)
-					y = yAtLineStart = yAtLineStart + fontTable[0].first->GetFontProperties()._lineHeight;
-				continue;
+			unsigned instanceCount = 0;
+
+			{
+				int prevGlyph = 0;
+				Font* prevFont = nullptr;
+
+				auto fontSelectorI = fontSelectors.begin();
+				auto colorI = colors.begin();
+				auto shadowC = shadowColor.AsUInt32();
+
+				while (instanceCount < maxInstancePerCall && !text.IsEmpty()) {
+
+					auto ch = GetNext(text);
+					auto fontSelector = (fontSelectorI < fontSelectors.end()) ? *fontSelectorI : 0;
+					++fontSelectorI;
+					auto color = (colorI < colors.end()) ? *colorI : 0xffffffff;
+					++colorI;
+
+					// \n, \r\n, \r all considered new lines
+					if (ch == '\n' || ch == '\r') {
+						if (ch == '\r' && text._start!=text.end() && *text._start=='\n') ++text._start;
+						x = xAtLineStart;
+						if (fontTable[0].first)
+							y = yAtLineStart = yAtLineStart + fontTable[0].first->GetFontProperties()._lineHeight;
+						++lineIdx;
+						continue;
+					}
+
+					auto* font = fontTable[fontSelector].first;
+					auto flags = fontTable[fontSelector].second;
+					if (!font) continue;
+
+					int curGlyph;
+					if (prevFont != font) prevGlyph = 0;		// we could just attempt to use the kerning as if the prev font was the same font?
+					Float2 v = font->GetKerning(prevGlyph, ch, &curGlyph);
+					x += xScale * v[0];
+					y += yScale * v[1];
+					prevGlyph = curGlyph; prevFont = font;
+
+					instances[instanceCount++] = { {ch, font}, Float2{x, y}, color, lineIdx };
+				}
 			}
 
-			auto* font = fontTable[fontSelector].first;
-			auto flags = fontTable[fontSelector].second;
-			if (!font) continue;
+			if (!instanceCount) return;
 
-			int curGlyph;
-			Float2 v = font->GetKerning(prevGlyph, ch, &curGlyph);
-			x += xScale * v[0];
-			y += yScale * v[1];
-			prevGlyph = curGlyph;
+			VLA(Instance*, sortedInstances, instanceCount);
+			for (unsigned c=0; c<instanceCount; ++c) sortedInstances[c] = &instances[c];
+			std::sort(sortedInstances, &sortedInstances[instanceCount], [](auto* lhs, auto* rhs) { return lhs->_chr < rhs->_chr; });
 
-			auto bitmap = textureMan.GetBitmap(threadContext, *font, ch);
-
-			float thisX = x;
-			x += bitmap._xAdvance * xScale;
-			x += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
-			if (flags & DrawTextFlags::Outline) {
-				x += 2 * xScale;
+			VLA(ucs4, chrsToLookup, instanceCount);
+			VLA(const Font*, chrsFontsToLookup, instanceCount);
+			unsigned chrsToLookupCount = 0;
+			ChrAndFont lastChar { ~ucs4(0), nullptr };
+			for (auto* i=sortedInstances; i!=&sortedInstances[instanceCount]; ++i) {
+				if ((*i)->_chr != lastChar) {
+					chrsToLookup[chrsToLookupCount] = lastChar.first = (*i)->_chr.first;
+					chrsFontsToLookup[chrsToLookupCount] = lastChar.second = (*i)->_chr.second;
+					++chrsToLookupCount;
+				}
+				(*i)->_glyphIdx = chrsToLookupCount-1;
 			}
-			
-			if (!bitmap._width || !bitmap._height) continue;
 
-			if (!began) {
+			assert(chrsToLookupCount);
+			VLA(const FontRenderingManager::Bitmap*, bitmaps, chrsToLookupCount);
+			{
+				unsigned i = 0;
+				while (i != chrsToLookupCount) {
+					auto starti = i;
+					++i;
+					while (i != chrsToLookupCount && chrsFontsToLookup[i] == chrsFontsToLookup[starti]) ++i;
+
+					bool queryResult = textureMan.GetBitmaps(bitmaps, threadContext, *chrsFontsToLookup[starti], MakeIteratorRange(chrsToLookup+starti, chrsToLookup+i));
+					if (!queryResult)
+						return;
+				}
+			}
+
+			// update the x values for each instance, now we know the set of bitmaps
+			{
+				float xIterator = 0;
+				unsigned lineIdx = 0;
+				for (auto& inst:MakeIteratorRange(instances, &instances[instanceCount])) {
+					auto& bitmap = *bitmaps[inst._glyphIdx];
+
+					if (inst._lineIdx != lineIdx) {
+						lineIdx = inst._lineIdx;
+						xIterator = 0;		// reset because we just had a line break
+					}
+
+					inst._xy[0] += xIterator;
+					xIterator += bitmap._xAdvance * xScale;
+					xIterator += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
+				}
+			}
+
+			unsigned firstRenderInstance = FindFirstRenderInstance<false, false>(sortedInstances, instanceCount, bitmaps, xScale, yScale, std::numeric_limits<float>::max());
+			if (firstRenderInstance == instanceCount)
+				return;
+
+			auto estimatedQuadCount = instanceCount - firstRenderInstance;
+			if (!begun)
 				workingVertices = WorkingVertexSetFontResource{immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true};
-				workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
-				began = true;
+			workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
+
+			for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
+				auto& bitmap = *bitmaps[inst->_glyphIdx];
+				if (!bitmap._width || !bitmap._height) continue;
+
+				float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
+				float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
+
+				Quad pos = Quad::MinMax(
+					baseX, baseY, 
+					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+				workingVertices.PushQuad(pos, inst->_color, bitmap);
 			}
-
-			float baseX = thisX + bitmap._bitmapOffsetX * xScale;
-			float baseY = y + bitmap._bitmapOffsetY * yScale;
-
-			Quad pos = Quad::MinMax(
-				baseX, baseY, 
-				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
-			/*Quad tc = Quad::MinMax(
-				bitmap._tcTopLeft[0], bitmap._tcTopLeft[1], 
-				bitmap._tcBottomRight[0], bitmap._tcBottomRight[1]);*/
-
-#if 0
-			if (flags & DrawTextFlags::Outline) {
-				Quad shadowPos;
-				shadowPos = pos;
-				shadowPos.min[0] -= xScale;
-				shadowPos.max[0] -= xScale;
-				shadowPos.min[1] -= yScale;
-				shadowPos.max[1] -= yScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc);
-
-				shadowPos = pos;
-				shadowPos.min[1] -= yScale;
-				shadowPos.max[1] -= yScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc,);
-
-				shadowPos = pos;
-				shadowPos.min[0] += xScale;
-				shadowPos.max[0] += xScale;
-				shadowPos.min[1] -= yScale;
-				shadowPos.max[1] -= yScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc,);
-
-				shadowPos = pos;
-				shadowPos.min[0] -= xScale;
-				shadowPos.max[0] -= xScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc,);
-
-				shadowPos = pos;
-				shadowPos.min[0] += xScale;
-				shadowPos.max[0] += xScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc,);
-
-				shadowPos = pos;
-				shadowPos.min[0] -= xScale;
-				shadowPos.max[0] -= xScale;
-				shadowPos.min[1] += yScale;
-				shadowPos.max[1] += yScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc);
-
-				shadowPos = pos;
-				shadowPos.min[1] += yScale;
-				shadowPos.max[1] += yScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc,);
-
-				shadowPos = pos;
-				shadowPos.min[0] += xScale;
-				shadowPos.max[0] += xScale;
-				shadowPos.min[1] += yScale;
-				shadowPos.max[1] += yScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc);
-			}
-
-			if (flags & DrawTextFlags::Shadow) {
-				Quad shadowPos = pos;
-				shadowPos.min[0] += xScale;
-				shadowPos.max[0] += xScale;
-				shadowPos.min[1] += yScale;
-				shadowPos.max[1] += yScale;
-				workingVertices.PushQuad(shadowPos, shadowC, tc);
-			}
-#endif
-
-			workingVertices.PushQuad(pos, color, bitmap);
 		}
 
-		if (began)
+		if (begun)
 			workingVertices.Complete();
-		return { x, y };		// y is at the baseline here
 	}
 
-	Float2		DrawWithTable(
+	void DrawWithTable(
 			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 			FontRenderingManager& textureMan,
@@ -1079,7 +1091,7 @@ namespace RenderOverlays
 			float scale, float depth,
 			ColorB shadowColor)
 	{
-		return DrawWithTableTemplate<utf8>(
+		DrawWithTableTemplate<utf8>(
 			threadContext, immediateDrawables, textureMan, fontTable,
 			x, y, maxX, maxY,
 			text, colors, fontSelectors, scale, depth, shadowColor);
@@ -1723,12 +1735,11 @@ namespace RenderOverlays
 		// expecting "chrs" to be in sorted order already
 		uint64_t fontHash = (font.GetHash() & 0xffffffffull) << 32ull;	// we only use the lower 32 bits of the font hash (because we're going to use the fact that the input chrs are in sorted order)
 		auto chrIterator = chrs.begin();
-		auto begini = LowerBound(_glyphs, fontHash|uint64_t(*chrIterator));
-		auto endi = LowerBound(_glyphs, fontHash|0xffffffffull);
 		VLA(ucs4, missingGlyphs, chrs.size());
 		unsigned missingGlyphCount = 0;
 		const Bitmap** bitmapIterator = bitmaps;
-		auto i = begini;
+		auto i = LowerBound(_glyphs, fontHash|uint64_t(*chrIterator));
+		auto endi = LowerBound2(MakeIteratorRange(i, _glyphs.end()), fontHash|0xffffffffull);
 		while (chrIterator != chrs.end()) {
 			auto code = fontHash | *chrIterator;
 			i = LowerBound2(MakeIteratorRange(i, endi), code);

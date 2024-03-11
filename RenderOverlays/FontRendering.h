@@ -47,7 +47,7 @@ namespace RenderOverlays
 						ColorB col);
 
 	using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;
-	Float2		DrawWithTable(
+	void		DrawWithTable(
 						RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 						FontRenderingManager& textureMan,
