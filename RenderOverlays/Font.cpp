@@ -593,14 +593,13 @@ namespace RenderOverlays
 			FontSpan& result,
 			const Font& font, DrawTextFlags::BitField flags,
 			StringSection<> text, ColorB color, ColorB& colorOverride,
-			Float2& iterator, float xAtLineStart, float maxX, float maxY)
+			Float2& iterator, float maxX, float maxY)
 	{
 		using namespace RenderCore;
 		assert(result._glyphCount == 0);
 		if (text.IsEmpty()) return text._start;
 
 		////////
-		const unsigned s_flagWordBreakBefore = 1<<0;
 		struct Instance
 		{
 			ucs4 _chr;
@@ -608,7 +607,6 @@ namespace RenderOverlays
 			ColorB _color;
 			unsigned _lineIdx = 0;
 			const char* _textPtr;
-			unsigned _flags = 0;
 			unsigned _glyphIdx = ~0u;
 			unsigned _wordIdx = ~0u;
 		};
@@ -616,17 +614,15 @@ namespace RenderOverlays
 		unsigned instanceCount = 0;
 		////////
 
-		// divider chars hard coded for now
-		const auto dividers = MakeStringSection(" \t");
-
 		float x = iterator[0], y = iterator[1];
 		const float xScale = 1.f, yScale = 1.f;
+		const float xAtLineStart = 0.f;
 		auto scaledLineHeight = yScale * font.GetFontProperties()._lineHeight;
 		if (!CheckMaxXY || (y + scaledLineHeight) <= maxY) {
 			int prevGlyph = 0;
 			float yAtLineStart = y;
 			unsigned lineIdx = 0;
-			bool pendingWordBreakBefore = false;
+			// bool pendingWordBreakBefore = false;
 
 			if constexpr (SnapCoords) {
 				x = xScale * (int)(0.5f + x / xScale);
@@ -672,9 +668,7 @@ namespace RenderOverlays
 				y += yScale * v[1];
 				prevGlyph = curGlyph;
 
-				bool isDivider = std::find(dividers.begin(), dividers.end(), ch) != dividers.end();
-				instances[instanceCount++] = { ch, Float2{x, y}, colorOverride.a?colorOverride:color, lineIdx, ptr, (isDivider|pendingWordBreakBefore)*s_flagWordBreakBefore };
-				pendingWordBreakBefore = isDivider;
+				instances[instanceCount++] = { ch, Float2{x, y}, colorOverride.a?colorOverride:color, lineIdx, ptr }; // , (isDivider|pendingWordBreakBefore)*s_flagWordBreakBefore };
 
 				if (flags & DrawTextFlags::Outline) x += 2 * xScale;
 			}
@@ -709,6 +703,14 @@ namespace RenderOverlays
 			MakeIteratorRange(glyphProps, &glyphProps[chrsToLookupCount]),
 			MakeIteratorRange(chrsToLookup, &chrsToLookup[chrsToLookupCount]));
 
+		// divider chars hard coded for now
+		// vscode allows &()+,./;?[]| to break (note curious inconsistency here -- things like !*- don't break)
+		// const auto dividers = MakeStringSection("\t ");
+		const auto dividers = MakeStringSection(U"\t &()+,./;?[]|\xffffffff");
+		VLA(bool, glyphIsDivider, chrsToLookupCount);
+		for (unsigned c=0; c<chrsToLookupCount; ++c)
+			glyphIsDivider[c] = *std::lower_bound(dividers.begin(), dividers.end(), chrsToLookup[c]) == chrsToLookup[c];
+
 		unsigned instanceCountPostClip = instanceCount;
 		unsigned wordIndex = 0;
 
@@ -717,7 +719,7 @@ namespace RenderOverlays
 			float xIterator = 0, yIterator = 0;
 
 			// unsigned prev_rsb_delta = 0;
-			unsigned lineIdx = 0;
+			unsigned lineIdx = 0, additionalLines = 0;
 			auto i = instances;
 			while (i != &instances[instanceCountPostClip]) {
 				auto starti = i;
@@ -725,7 +727,8 @@ namespace RenderOverlays
 				// We've already processed newlines and font rendering control statements. Just look for word wrap issues here
 				// We can wrap immediately before or after a divider
 				++i;
-				while (i != &instances[instanceCountPostClip] && i->_lineIdx == starti->_lineIdx && !(i->_flags & s_flagWordBreakBefore)) ++i;
+				if (!glyphIsDivider[(i-1)->_glyphIdx])
+					while (i != &instances[instanceCountPostClip] && i->_lineIdx == starti->_lineIdx && !glyphIsDivider[i->_glyphIdx]) ++i;
 
 				if ((i-starti) == 1 && !(glyphProps[starti->_glyphIdx]._width * glyphProps[starti->_glyphIdx]._height)) {
 					// Simplified version for the common case of just hitting a whitespace character (don't increase word index for the spaces)
@@ -779,6 +782,8 @@ namespace RenderOverlays
 							instanceCountPostClip = starti - instances;
 							break;
 						}
+
+						++additionalLines;
 					}
 				}
 
@@ -799,6 +804,7 @@ namespace RenderOverlays
 					inst->_xy[0] += xIterator;
 					inst->_xy[1] += yIterator;
 					inst->_wordIdx = wordIndex;
+					inst->_lineIdx += additionalLines;		// factor in lines created by word wrapping
 
 					xIterator += glyph._xAdvance * xScale;
 					xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
@@ -825,6 +831,7 @@ namespace RenderOverlays
 				result._instances[result._totalInstanceCount]._xy = (*q)->_xy;
 				result._instances[result._totalInstanceCount]._color = (*q)->_color;
 				result._instances[result._totalInstanceCount]._wordIndex = (*q)->_wordIdx;
+				result._instances[result._totalInstanceCount]._lineIndex = (*q)->_lineIdx;
 
 				result._maxXY[0] = std::max(result._maxXY[0], (*q)->_xy[0] + (glyph._bitmapOffsetX+glyph._width)*xScale);		// (alternatively add advance?)
 				result._maxXY[1] = std::max(result._maxXY[1], (*q)->_xy[1]);
@@ -847,14 +854,14 @@ namespace RenderOverlays
 		std::vector<FontSpan>& result,
 		const Font& font, DrawTextFlags::BitField flags,
 		StringSection<> text, ColorB col,
-		float x, float y, float maxX, float maxY)
+		float maxX, float maxY)
 	{
-		Float2 iterator { x, y };
+		Float2 iterator { 0.f, 0.f };
 		iterator[1] += font.GetFontProperties()._ascenderExcludingAccent;		// drop down to where the first line should start
 		ColorB colorOverride = 0x0;
 		while (!text.IsEmpty()) {
 			result.emplace_back();
-			auto adv = CalculateFontSpans_WordWrapping_Internal<true, false>(result.back(), font, flags, text, col, colorOverride, iterator, x, maxX, maxY);
+			auto adv = CalculateFontSpans_WordWrapping_Internal<true, false>(result.back(), font, flags, text, col, colorOverride, iterator, maxX, maxY);
 			if (!result.back()._glyphCount) {
 				result.pop_back();
 				break;

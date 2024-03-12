@@ -138,7 +138,7 @@ namespace RenderOverlays
 
 	struct FontSpan
 	{
-		constexpr static unsigned s_maxInstancesPerSpan = 256;
+		constexpr static unsigned s_maxInstancesPerSpan = 512;
 		using Glyph = ucs4;
 		Glyph _glyphs[s_maxInstancesPerSpan];
 		unsigned _glyphsInstanceCounts[s_maxInstancesPerSpan];
@@ -148,7 +148,7 @@ namespace RenderOverlays
 		{
 			Float2 _xy;
 			ColorB _color;
-			unsigned _wordIndex;
+			uint16_t _wordIndex, _lineIndex;
 		};
 		Instance _instances[s_maxInstancesPerSpan];
 		unsigned _totalInstanceCount = 0;
@@ -172,7 +172,7 @@ namespace RenderOverlays
 		std::vector<FontSpan>& result,
 		const Font& font, DrawTextFlags::BitField flags,
 		StringSection<> text, ColorB col,
-		float x, float y, float maxX, float maxY);
+		float maxX, float maxY);
 
 	class Quad
 	{
