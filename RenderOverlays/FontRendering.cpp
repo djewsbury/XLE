@@ -1104,7 +1104,8 @@ namespace RenderOverlays
 			RenderCore::IThreadContext& threadContext,
 			WorkingSetType& workingVertices,
 			FontRenderingManager& textureMan,
-			const Font& font, const FontSpan& span)
+			const Font& font, const FontSpan& span,
+			ColorB color)
 	{
 		if (!span._glyphCount)
 			return true;
@@ -1139,7 +1140,7 @@ namespace RenderOverlays
 					baseX, baseY, 
 					baseX + bitmap._width, baseY + bitmap._height);
 
-				workingVertices.PushQuad(pos, i->_color, bitmap);
+				workingVertices.PushQuad(pos, i->_colorOverride.a?i->_colorOverride:color, bitmap);
 			}
 		}
 
@@ -1149,7 +1150,8 @@ namespace RenderOverlays
 	bool 		Draw(		RenderCore::IThreadContext& threadContext,
 							RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 							FontRenderingManager& textureMan,
-							const Font& font, const FontSpan& span)
+							const Font& font, const FontSpan& span,
+							ColorB color)
 	{
 		const float depth = 0.f;
 
@@ -1157,14 +1159,14 @@ namespace RenderOverlays
 			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true };
 			bool success = DrawSpanInternal(
 				threadContext, workingSet, textureMan,
-				font, span);
+				font, span, color);
 			if (!success) return false;
 			workingSet.Complete();
 		} else {
 			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true };
 			bool success = DrawSpanInternal(
 				threadContext, workingSet, textureMan,
-				font, span);
+				font, span, color);
 			if (!success) return false;
 			workingSet.Complete();
 		}

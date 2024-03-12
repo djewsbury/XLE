@@ -62,7 +62,8 @@ namespace RenderOverlays
 	bool 		Draw(		RenderCore::IThreadContext& threadContext,
 							RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 							FontRenderingManager& textureMan,
-							const Font& font, const FontSpan& span);
+							const Font& font, const FontSpan& span,
+							ColorB color);
 
 	///////////////////////////////////////////////////////////////////////////////////
 

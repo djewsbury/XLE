@@ -143,17 +143,19 @@ namespace RenderOverlays
 		Glyph _glyphs[s_maxInstancesPerSpan];
 		unsigned _glyphsInstanceCounts[s_maxInstancesPerSpan];
 		unsigned _glyphCount = 0;
-
-		struct Instance
-		{
-			Float2 _xy;
-			ColorB _color;
-			uint16_t _wordIndex, _lineIndex;
-		};
+		struct Instance { Float2 _xy; ColorB _colorOverride; };
 		Instance _instances[s_maxInstancesPerSpan];
+
+		// The following aren't required for rendering, but may be required for
+		// more processing operations (such as word wrapping, etc)
+		struct InstanceExtra { uint16_t _wordIndex, _lineIndex; };
+		InstanceExtra _instanceExtras[s_maxInstancesPerSpan];
 		unsigned _totalInstanceCount = 0;
 		unsigned _totalWordCount = 0;
-		Float2 _maxXY = {0,0};
+		unsigned _totalLineCount = 0;
+		float _maxX = 0.f;
+
+		std::pair<uint16_t, uint16_t> _originalOrdering[s_maxInstancesPerSpan];		// instance, glyph
 
 		DrawTextFlags::BitField _flags = 0;
 	};
@@ -168,11 +170,13 @@ namespace RenderOverlays
 	///
 	/// Spans can be modified between frames. Advanced users may wish to change spans after they have been
 	/// generated.
-	const char* CalculateFontSpans_WordWrapping(
+	const char* CalculateFontSpans(
 		std::vector<FontSpan>& result,
 		const Font& font, DrawTextFlags::BitField flags,
-		StringSection<> text, ColorB col,
-		float maxX, float maxY);
+		StringSection<> text,
+		unsigned maxLines = ~0u);
+
+	void WordWrapping(FontSpan& span, const Font& font, float maxX);
 
 	class Quad
 	{
