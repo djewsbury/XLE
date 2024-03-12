@@ -138,7 +138,7 @@ namespace RenderOverlays
 
 	struct FontSpan
 	{
-		constexpr static unsigned s_maxInstancesPerSpan = 512;
+		constexpr static unsigned s_maxInstancesPerSpan = 128;
 		using Glyph = ucs4;
 		Glyph _glyphs[s_maxInstancesPerSpan];
 		unsigned _glyphsInstanceCounts[s_maxInstancesPerSpan];
@@ -151,17 +151,25 @@ namespace RenderOverlays
 		struct InstanceExtra { uint16_t _wordIndex, _lineIndex; };
 		InstanceExtra _instanceExtras[s_maxInstancesPerSpan];
 		unsigned _totalInstanceCount = 0;
-		unsigned _totalWordCount = 0;
-		unsigned _totalLineCount = 0;
-		float _maxX = 0.f;
 
 		std::pair<uint16_t, uint16_t> _originalOrdering[s_maxInstancesPerSpan];		// instance, glyph
 
 		DrawTextFlags::BitField _flags = 0;
 	};
 
+	struct CalculateFontSpansControlBlock
+	{
+		unsigned _totalWordCount = 0;
+		unsigned _currentLineIndex = 0;
+		unsigned _nextWordIndex = 0;
+		float _maxX = 0.f;
+		Float2 _iterator { 0.f, 0.f };
+		ColorB _colorOverride { 0x0 };
+	};
+
 	/// Calculate spans for the given text, until we can't fit any more into the rectangle provided
-	/// This function does word wrapping.
+	/// Callers call follow this up with functions such as WordWrapping() to get efficient word wrapping
+	/// on the calculated spans.
 	///
 	/// Spans are separated based on the maximum number of characters per span (ie, not by lines, etc)
 	/// Glyph instances are reordered in the spans based on glyph index (ie, not position in the output)
@@ -170,13 +178,20 @@ namespace RenderOverlays
 	///
 	/// Spans can be modified between frames. Advanced users may wish to change spans after they have been
 	/// generated.
+	///
+	/// This is also intended to support advanced cases where custom text rendering is required. That while,
+	/// while there are functions that render from spans in FontRendering.h, it's also possible to write
+	/// a customized version while still sharing all of the logic related to character layout, etc
 	const char* CalculateFontSpans(
 		std::vector<FontSpan>& result,
+		CalculateFontSpansControlBlock& ctrlBlock,
 		const Font& font, DrawTextFlags::BitField flags,
 		StringSection<> text,
 		unsigned maxLines = ~0u);
 
-	void WordWrapping(FontSpan& span, const Font& font, float maxX);
+	void WordWrapping(
+		IteratorRange<FontSpan*> spans,
+		const Font& font, float maxX);
 
 	class Quad
 	{

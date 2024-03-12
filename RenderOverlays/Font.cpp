@@ -590,10 +590,9 @@ namespace RenderOverlays
 
 	template<bool CheckMaxXY, bool SnapCoords>
 		const char* CalculateFontSpans_Internal(
-			FontSpan& result,
+			FontSpan& result, CalculateFontSpansControlBlock& ctrlBlock,
 			const Font& font, DrawTextFlags::BitField flags,
-			StringSection<> text, ColorB& colorOverride,
-			Float2& iterator, float maxY)
+			StringSection<> text, float maxY)
 	{
 		using namespace RenderCore;
 		assert(result._glyphCount == 0);
@@ -614,16 +613,13 @@ namespace RenderOverlays
 		unsigned instanceCount = 0;
 		////////
 
-		float x = iterator[0], y = iterator[1];
+		float x = ctrlBlock._iterator[0], y = ctrlBlock._iterator[1];
 		const float xScale = 1.f, yScale = 1.f;
 		const float xAtLineStart = 0.f;
 		auto scaledLineHeight = yScale * font.GetFontProperties()._lineHeight;
-		unsigned totalLineCount = 0;
 		if (!CheckMaxXY || (y + scaledLineHeight) <= maxY) {
 			int prevGlyph = 0;
 			float yAtLineStart = y;
-			unsigned lineIdx = 0;
-			// bool pendingWordBreakBefore = false;
 
 			if constexpr (SnapCoords) {
 				x = xScale * (int)(0.5f + x / xScale);
@@ -634,7 +630,7 @@ namespace RenderOverlays
 					FontRenderingControlStatement ctrl;
 					text = ctrl.TryParse(text);
 					if (ctrl._type == FontRenderingControlStatement::Type::ColorOverride) {
-						colorOverride = ctrl._newColorOverride;
+						ctrlBlock._colorOverride = ctrl._newColorOverride;
 						continue;
 					}
 				}
@@ -653,7 +649,7 @@ namespace RenderOverlays
 						x = xScale * (int)(0.5f + x / xScale);
 						y = yScale * (int)(0.5f + y / yScale);
 					}
-					++lineIdx;
+					++ctrlBlock._currentLineIndex;
 
 					if (CheckMaxXY && (y + scaledLineHeight) > maxY) {
 						text._end = text._start;		// end iteration
@@ -669,20 +665,17 @@ namespace RenderOverlays
 				y += yScale * v[1];
 				prevGlyph = curGlyph;
 
-				instances[instanceCount++] = { ch, Float2{x, y}, colorOverride, lineIdx, ptr }; // , (isDivider|pendingWordBreakBefore)*s_flagWordBreakBefore };
-				totalLineCount = lineIdx + 1;
+				instances[instanceCount++] = { ch, Float2{x, y}, ctrlBlock._colorOverride, ctrlBlock._currentLineIndex, ptr };
 
 				if (flags & DrawTextFlags::Outline) x += 2 * xScale;
 			}
-
-			// todo -- might need to backtrace if we didn't land cleanly on a word break or end of string (ie, hit glyph instance limit)
 
 		} else {
 			text._end = text._start;		// end iteration
 		}
 
 		if (!instanceCount) {
-			iterator = {x, y};
+			ctrlBlock._iterator = {x, y};
 			return text._start;
 		}
 
@@ -714,7 +707,6 @@ namespace RenderOverlays
 			glyphIsDivider[c] = *std::lower_bound(dividers.begin(), dividers.end(), chrsToLookup[c]) == chrsToLookup[c];
 
 		unsigned instanceCountPostClip = instanceCount;
-		unsigned wordIndex = 0;
 
 		// Update the x values for each instance, now that we've queried the glyph properties
 		{
@@ -734,7 +726,7 @@ namespace RenderOverlays
 
 				if ((i-starti) == 1 && !(glyphProps[starti->_glyphIdx]._width * glyphProps[starti->_glyphIdx]._height)) {
 					// Simplified version for the common case of just hitting a whitespace character (don't increase word index for the spaces)
-					auto& glyph = glyphProps[i->_glyphIdx];
+					auto& glyph = glyphProps[starti->_glyphIdx];
 					xIterator += glyph._xAdvance * xScale;
 					xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
 					continue;
@@ -769,15 +761,15 @@ namespace RenderOverlays
 
 					inst->_xy[0] += xIterator;
 					inst->_xy[1] += yIterator;
-					inst->_wordIdx = wordIndex;
+					inst->_wordIdx = ctrlBlock._nextWordIndex;
 
 					xIterator += glyph._xAdvance * xScale;
 					xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
 				}
-				++wordIndex;
+				++ctrlBlock._nextWordIndex;
 			}
 
-			iterator = { x + xIterator, y + yIterator };
+			ctrlBlock._iterator = { x + xIterator, y + yIterator };
 		}
 
 		// Write out everything to the span. Note that we're going back to glyph ordering now
@@ -799,7 +791,7 @@ namespace RenderOverlays
 				result._instanceExtras[result._totalInstanceCount]._wordIndex = (*q)->_wordIdx;
 				result._instanceExtras[result._totalInstanceCount]._lineIndex = (*q)->_lineIdx;
 
-				result._maxX = std::max(result._maxX, (*q)->_xy[0] + (glyph._bitmapOffsetX+glyph._width)*xScale);		// (alternatively add advance?)
+				ctrlBlock._maxX = std::max(ctrlBlock._maxX, (*q)->_xy[0] + (glyph._bitmapOffsetX+glyph._width)*xScale);		// (alternatively add advance?)
 				result._originalOrdering[idx] = { result._totalInstanceCount, (*starti)->_glyphIdx };
 				result._totalInstanceCount++;
 			}
@@ -810,41 +802,122 @@ namespace RenderOverlays
 			++result._glyphCount;
 		}
 		result._flags = flags;
-		result._totalWordCount = wordIndex;
-		result._totalLineCount = totalLineCount;
 		(void)std::remove(result._originalOrdering, ArrayEnd(result._originalOrdering), std::make_pair(0xffffu, 0xffffu));
 		
 		return text._start;
 	}
 
-	void WordWrapping(FontSpan& span, const Font& font, float maxX)
+	namespace Internal
 	{
-		if (!span._glyphCount) return;
+		struct FontSpanOriginalOrderingIterator
+		{
+			struct Value
+			{
+				FontSpan* _span;
+				unsigned _idx;
+
+				uint16_t GlyphIndex() const { return _span->_originalOrdering[_idx].second; }
+				ucs4 Glyph() const { return _span->_glyphs[_span->_originalOrdering[_idx].second]; }
+				FontSpan::Instance& Instance()  { return _span->_instances[_span->_originalOrdering[_idx].first]; }
+				FontSpan::InstanceExtra& InstanceExtra()  { return _span->_instanceExtras[_span->_originalOrdering[_idx].first]; }
+			};
+
+			Value& operator*() { return _curValue; }
+			Value* operator->() { return &_curValue; }
+			unsigned GetSpanIdx() const { return _curValue._span - _originalRange.begin(); }
+
+			bool operator==(const FontSpanOriginalOrderingIterator& other) { return _curValue._span == other._curValue._span && _curValue._idx == other._curValue._idx; }
+			bool operator!=(const FontSpanOriginalOrderingIterator& other) { return !operator==(other); }
+			FontSpanOriginalOrderingIterator& operator++()
+			{
+				++_curValue._idx;
+				while  (_curValue._idx == _curValue._span->_totalInstanceCount) {
+					_curValue._idx = 0;
+					++_curValue._span;
+					if (_curValue._span == _originalRange.end() || _curValue._span->_totalInstanceCount) break;
+				}
+				return *this;
+			}
+
+			friend FontSpanOriginalOrderingIterator operator+(const FontSpanOriginalOrderingIterator& lhs, ptrdiff_t offset)
+			{
+				assert(offset >= 0);
+				FontSpanOriginalOrderingIterator result = lhs;
+				while  (offset) {
+					auto maxAdd = std::min((unsigned)offset, result._curValue._span->_totalInstanceCount - result._curValue._idx);
+					result._curValue._idx += maxAdd;
+					offset -= maxAdd;
+					if (result._curValue._idx == result._curValue._span->_totalInstanceCount) {
+						result._curValue._idx = 0;
+						++result._curValue._span;
+						if (result._curValue._span == result._originalRange.end() || result._curValue._span->_totalInstanceCount) break;
+					}
+				}
+				return result;
+			}
+
+			static FontSpanOriginalOrderingIterator Begin(IteratorRange<FontSpan*> spans)
+			{
+				FontSpanOriginalOrderingIterator result;
+				result._curValue._span = spans.begin();
+				result._curValue._idx = 0;
+				result._originalRange = spans;
+				return result;
+			}
+
+			static FontSpanOriginalOrderingIterator End(IteratorRange<FontSpan*> spans)
+			{
+				FontSpanOriginalOrderingIterator result;
+				result._curValue._span = spans.end();
+				result._curValue._idx = 0;
+				result._originalRange = spans;
+				return result;
+			}
+
+		private:
+			Value _curValue;
+			IteratorRange<FontSpan*> _originalRange;
+		};
+	};
+
+	void WordWrapping(
+		IteratorRange<FontSpan*> spans,
+		const Font& font, float maxX)
+	{
+		if (spans.empty()) return;
 
 		unsigned additionalLines = 0;
 		Float2 additionalOffset = { 0, 0 };
-
-		VLA_UNSAFE_FORCE(Font::GlyphProperties, glyphProps, span._glyphCount);
-		font.GetGlyphPropertiesSorted(
-			MakeIteratorRange(glyphProps, &glyphProps[span._glyphCount]),
-			MakeIteratorRange(span._glyphs, &span._glyphs[span._glyphCount]));
-
-		auto spaceAdvance = font.GetGlyphProperties(' ')._xAdvance;
 		auto lineHeight = font.GetFontProperties()._lineHeight;
 
-		auto instances = MakeIteratorRange(span._originalOrdering, &span._originalOrdering[span._totalInstanceCount]);
-		auto i = instances.begin();
-		while (i != instances.end()) {
-			auto starti = i;
-			++i;
-			while (i != instances.end() && span._instanceExtras[i->first]._wordIndex == span._instanceExtras[starti->first]._wordIndex) ++i;
+		// only needed for advance for the final glyph of each word... but still need to query them
+		VLA_UNSAFE_FORCE(Font::GlyphProperties, glyphProps, spans.size() * FontSpan::s_maxInstancesPerSpan);
+		for (unsigned c=0; c<spans.size(); ++c)
+			font.GetGlyphPropertiesSorted(
+				MakeIteratorRange(glyphProps+c*FontSpan::s_maxInstancesPerSpan, glyphProps+(c+1)*FontSpan::s_maxInstancesPerSpan),
+				MakeIteratorRange(spans[c]._glyphs, &spans[c]._glyphs[spans[c]._glyphCount]));
 
-			float finalGlyphAdvance = glyphProps[(i-1)->second]._xAdvance;
-			if ((span._instances[(i-1)->first]._xy[0] + finalGlyphAdvance + additionalOffset[0]) <= maxX) {
+		auto instancesBegin = Internal::FontSpanOriginalOrderingIterator::Begin(spans);
+		auto instanceEnd = Internal::FontSpanOriginalOrderingIterator::End(spans);
+
+		auto i = instancesBegin;
+		while (i != instanceEnd) {
+			auto starti = i;
+			for (;;) {
+				auto next = i+1;
+				if (next == instanceEnd || next->InstanceExtra()._wordIndex != starti->InstanceExtra()._wordIndex) break;
+				i = next;
+			}
+
+			auto lastChr = i;
+			++i;
+
+			float finalGlyphAdvance = glyphProps[lastChr->GlyphIndex()+lastChr.GetSpanIdx()*FontSpan::s_maxInstancesPerSpan]._xAdvance;
+			if ((lastChr->Instance()._xy[0] + finalGlyphAdvance + additionalOffset[0]) <= maxX) {
 				// fits in
 				for (auto q=starti; q!=i; ++q) {
-					span._instances[q->first]._xy += additionalOffset;
-					span._instanceExtras[q->first]._lineIndex += additionalLines;
+					q->Instance()._xy += additionalOffset;
+					q->InstanceExtra()._lineIndex += additionalLines;
 				}
 				continue;
 			}
@@ -852,35 +925,28 @@ namespace RenderOverlays
 			// Have to move this word to the start of the next line
 			// Note there shouldn't be any kerning issues because we're subtracting that also
 			// (the last character would have been a whitespace or non-whitespace divider, anyway)
-			auto wordAdjustment = span._instances[starti->first]._xy[0];
-			float wordXWidth = span._instances[(i-1)->first]._xy[0] + finalGlyphAdvance - wordAdjustment;
 			++additionalLines;
+			additionalOffset[0] = -starti->Instance()._xy[0];
 			additionalOffset[1] += lineHeight;
 			for (auto q=starti; q!=i; ++q) {
-				span._instances[q->first]._xy[0] -= wordAdjustment;
-				span._instances[q->first]._xy[1] += additionalOffset[1];
-				span._instanceExtras[q->first]._lineIndex += additionalLines;
+				q->Instance()._xy += additionalOffset;
+				q->InstanceExtra()._lineIndex += additionalLines;
 			}
-
-			additionalOffset[0] = 0.f;
-			if (i != instances.end())
-				additionalOffset[0] = wordXWidth + spaceAdvance - span._instances[i->first]._xy[0];
 		}
 	}
 
 	const char* CalculateFontSpans(
 		std::vector<FontSpan>& result,
+		CalculateFontSpansControlBlock& ctrlBlock,
 		const Font& font, DrawTextFlags::BitField flags,
 		StringSection<> text,
 		unsigned maxLines)
 	{
-		Float2 iterator { 0.f, 0.f };
-		iterator[1] += font.GetFontProperties()._ascenderExcludingAccent;		// drop down to where the first line should start
-		float maxY = iterator[1] + font.GetFontProperties()._lineHeight * maxLines;
-		ColorB colorOverride = 0x0;
+		ctrlBlock._iterator[1] += font.GetFontProperties()._ascenderExcludingAccent;		// drop down to where the first line should start
+		float maxY = ctrlBlock._iterator[1] + font.GetFontProperties()._lineHeight * maxLines;
 		while (!text.IsEmpty()) {
 			result.emplace_back();
-			auto adv = CalculateFontSpans_Internal<true, false>(result.back(), font, flags, text, colorOverride, iterator, maxY);
+			auto adv = CalculateFontSpans_Internal<true, false>(result.back(), ctrlBlock, font, flags, text, maxY);
 			if (!result.back()._glyphCount) {
 				result.pop_back();
 				break;
