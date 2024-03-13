@@ -483,8 +483,32 @@ namespace RenderCore { namespace Assets
 			[strongThis]() mutable {
 				assert(strongThis->GetAssetState() != ::Assets::AssetState::Pending);
 				// query futures to propagate exceptions
-				for (auto& f:strongThis->_internal->_modelScaffoldMarkers) f.second.get();
-				for (auto& f:strongThis->_internal->_materialScaffoldMarkers) f.second.get();
+				for (auto& f:strongThis->_internal->_modelScaffoldMarkers) {
+					TRY {
+						f.second.get();
+					} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
+						auto i = LowerBound(strongThis->_internal->_modelScaffoldInitializers, f.first);
+						if (i != strongThis->_internal->_modelScaffoldInitializers.end() && i->first == f.first)
+							Throw(::Assets::Exceptions::InvalidAsset(i->second, e.GetDependencyValidation(), ::Assets::AsBlob(i->second + ": " + e.what())));
+					} CATCH (const std::exception& e) {
+						auto i = LowerBound(strongThis->_internal->_modelScaffoldInitializers, f.first);
+						if (i != strongThis->_internal->_modelScaffoldInitializers.end() && i->first == f.first)
+							Throw(::Assets::Exceptions::InvalidAsset(i->second, {}, ::Assets::AsBlob(i->second + ": " + e.what())));
+					} CATCH_END
+				}
+				for (auto& f:strongThis->_internal->_materialScaffoldMarkers) {
+					TRY {
+						f.second.get();
+					} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
+						auto i = LowerBound(strongThis->_internal->_materialScaffoldInitializers, f.first);
+						if (i != strongThis->_internal->_materialScaffoldInitializers.end() && i->first == f.first)
+							Throw(::Assets::Exceptions::InvalidAsset(i->second, e.GetDependencyValidation(), ::Assets::AsBlob(i->second + ": " + e.what())));
+					} CATCH (const std::exception& e) {
+						auto i = LowerBound(strongThis->_internal->_materialScaffoldInitializers, f.first);
+						if (i != strongThis->_internal->_materialScaffoldInitializers.end() && i->first == f.first)
+							Throw(::Assets::Exceptions::InvalidAsset(i->second, {}, ::Assets::AsBlob(i->second + ": " + e.what())));
+					} CATCH_END
+				}
 				if (strongThis->_internal->_skeletonScaffoldMarker.valid()) strongThis->_internal->_skeletonScaffoldMarker.get();
 				return std::move(strongThis);
 			});
@@ -567,26 +591,46 @@ namespace RenderCore { namespace Assets
 		markers.reserve(2 + _internal->_modelScaffoldMarkers.size() + _internal->_modelScaffoldPtrs.size() + _internal->_materialScaffoldMarkers.size() + _internal->_materialScaffoldPtrs.size());
 		for (const auto& m:_internal->_modelScaffoldMarkers) {
 			assert(m.second.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
-			markers.push_back(m.second.get()->GetDependencyValidation());
+			TRY {
+				markers.push_back(m.second.get()->GetDependencyValidation());
+			} CATCH (::Assets::Exceptions::ExceptionWithDepVal& e) {
+				markers.push_back(e.GetDependencyValidation());
+			} CATCH(...) {
+			} CATCH_END
 		}
 		for (const auto& m:_internal->_modelScaffoldPtrs)
 			markers.push_back(m.second->GetDependencyValidation());
 		for (const auto& m:_internal->_materialScaffoldMarkers) {
 			assert(m.second.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
-			markers.push_back(m.second.get()->GetDependencyValidation());
+			TRY {
+				markers.push_back(m.second.get()->GetDependencyValidation());
+			} CATCH (::Assets::Exceptions::ExceptionWithDepVal& e) {
+				markers.push_back(e.GetDependencyValidation());
+			} CATCH(...) {
+			} CATCH_END
 		}
 		for (const auto& m:_internal->_materialScaffoldPtrs)
 			markers.push_back(m.second->GetDependencyValidation());
 		for (const auto& m:_internal->_compilationConfigurationMarkers) {
 			assert(m.second.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
-			markers.push_back(m.second.get()->GetDependencyValidation());
+			TRY {
+				markers.push_back(m.second.get()->GetDependencyValidation());
+			} CATCH (::Assets::Exceptions::ExceptionWithDepVal& e) {
+				markers.push_back(e.GetDependencyValidation());
+			} CATCH(...) {
+			} CATCH_END
 		}
 		// _internal->_compilationConfigurationPtrs don't have depvals
 		// also can't get depVals from _internal->_materialScaffoldConstructionPtrs until they've been converted into _materialScaffoldMarkers
 
 		if (_internal->_skeletonScaffoldMarker.valid()) {
 			assert(_internal->_skeletonScaffoldMarker.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
-			markers.push_back(_internal->_skeletonScaffoldMarker.get()->GetDependencyValidation());
+			TRY {
+				markers.push_back(_internal->_skeletonScaffoldMarker.get()->GetDependencyValidation());
+			} CATCH (::Assets::Exceptions::ExceptionWithDepVal& e) {
+				markers.push_back(e.GetDependencyValidation());
+			} CATCH(...) {
+			} CATCH_END
 		}
 		
 		if (_internal->_skeletonScaffoldPtr)
