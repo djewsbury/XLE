@@ -176,7 +176,7 @@ namespace RenderCore { namespace Techniques
 					}
 				}
 
-				if (rawGeometry) {
+				if (rawGeometry && !rawGeometry->_drawCalls.empty() && rawGeometry->_ib._size) {
 					auto& rg = *rawGeometry;
 
 					// Build the main non-deformed vertex stream
@@ -184,6 +184,7 @@ namespace RenderCore { namespace Techniques
 					auto drawableGeoIdx = (unsigned)_geos.size();
 					auto scaffoldIdx = GetScaffoldIdx(scaffold, modelScaffoldName);
 
+					assert(rg._vb._size);
 					AddStaticLoadRequest(LoadBuffer::VB, DrawableStream::Vertex0, scaffoldIdx, drawableGeoIdx, rg._vb._offset, rg._vb._size);
 					drawableGeo->_vertexStreamCount = 1;
 
@@ -228,8 +229,6 @@ namespace RenderCore { namespace Techniques
 					_geos.push_back(std::move(drawableGeo));
 					return (unsigned)_geos.size()-1;
 				} else {
-					assert(0);
-					// expecting a raw geometry here somewhere
 					return ~0u;
 				}
 			}
@@ -669,7 +668,8 @@ namespace RenderCore { namespace Techniques
 									deformAccelerator,
 									FindDeformerBinding(deformerBinding, elementIdx, geoCallDesc._geoId),
 									modelScaffoldName);
-								modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
+								if (pendingGeoIdx != ~0u)
+									modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
 							} else {
 								pendingGeoIdx = i->second;
 							}
@@ -686,7 +686,7 @@ namespace RenderCore { namespace Techniques
 								}
 							}
 
-							if (rawGeometry) {
+							if (rawGeometry && pendingGeoIdx != ~0u) {
 								unsigned drawCallIterators[2] = {(unsigned)dstCmdStream->_drawCalls.size()};
 
 								if (!Equivalent(rawGeometry->_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
@@ -886,7 +886,7 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{
-		assert(construction.GetAssetState() == ::Assets::AssetState::Ready);
+		assert(construction.GetAssetState() != ::Assets::AssetState::Pending);
 		_pimpl->_pendingDepVals.emplace_back(construction.MakeScaffoldsDependencyValidation());			// required in order to catch invalidations on the compilation configuration files
 		unsigned elementIdx = 0;
 		for (auto e:construction) {
