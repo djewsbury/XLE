@@ -21,6 +21,7 @@
 #include <share.h>
 #include <time.h>
 #include <timeapi.h>
+#include <fstream>
 
 #include <psapi.h>
 #include <shellapi.h>
@@ -439,6 +440,18 @@ bool OpenExternalBrowser(StringSection<> link)
     return ((size_t)res) > 32;        // as per msvc docs, only numbers greater than 32 are success
 }
 
+bool OpenAppDataFolder(StringSection<> subFolder)
+{
+    if (subFolder.IsEmpty()) return false;
+    if (std::find(subFolder.begin(), subFolder.end(), '.') != subFolder.end()) return false;
+
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
+
+    auto finalLink = Concatenate(GetAppDataPath(), "\\", subFolder);
+    HINSTANCE res = ShellExecuteA(nullptr, "open", finalLink.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    return ((size_t)res) > 32;        // as per msvc docs, only numbers greater than 32 are success
+}
+
 void SetThreadName(StringSection<> text)
 {
     SetThreadDescription(GetCurrentThread(), Conversion::Convert<std::wstring>(text).c_str());
@@ -565,6 +578,29 @@ void ConfigureDPIAwareness()
         extFns.Fn_SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     else if (extFns.Fn_SetProcessDPIAware)
         extFns.Fn_SetProcessDPIAware();
+}
+
+std::fstream CreateAppDataFile(StringSection<> appName, StringSection<> fileName, std::ios_base::openmode openMode)
+{
+    std::string santizedAppName = appName.AsString();
+    const char badCharacters[] { '#', '%', '&', '{', '}', '\\', '<', '>', '*', '?', '/', ' ', '$', '!', '\'', '\"', ':', '@', '+', '`', '|', '=' };
+    for (auto& c:santizedAppName)
+        if (std::find(badCharacters, ArrayEnd(badCharacters), c) != ArrayEnd(badCharacters))
+            c = '-';
+
+    auto appDataPath = GetAppDataPath();
+    if (appDataPath.empty())
+        Throw(std::runtime_error("Could not get AppData path in CreateAppDataFile"));
+
+    std::string fullDirectory = Concatenate(appDataPath, "\\", santizedAppName);
+    CreateDirectoryA(fullDirectory.c_str(), nullptr); // try to create this, if it doesn't exist (don't do this recursively, we just want to create the app folder if we can)
+
+    std::string fullfname = Concatenate(fullDirectory, "\\", fileName);
+    auto split = MakeFileNameSplitter(fullfname);
+    auto bkupFile = Concatenate(split.StemPathAndFilename(), ".0", split.ExtensionWithPeriod());
+    DeleteFileA(bkupFile.c_str());
+    MoveFileA(fullfname.c_str(), bkupFile.c_str());
+    return std::fstream { fullfname.c_str(), openMode };
 }
 
 #if 0

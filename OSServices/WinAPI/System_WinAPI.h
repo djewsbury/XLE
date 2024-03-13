@@ -62,4 +62,5 @@ namespace OSServices
     bool CopyToSystemClipboard(StringSection<> text);
     void SetThreadName(StringSection<> text);
     bool OpenExternalBrowser(StringSection<> link);
+    bool OpenAppDataFolder(StringSection<> subFolder);
 }

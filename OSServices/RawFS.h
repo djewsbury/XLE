@@ -179,4 +179,6 @@ namespace OSServices
     void MoveFile(const utf8 destination[], const utf8 source[]);
 
     std::string SystemErrorCodeAsString(int errorCode);
+
+    std::fstream CreateAppDataFile(StringSection<> appName, StringSection<> fileName, std::ios_base::openmode);
 }
