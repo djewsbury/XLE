@@ -6,6 +6,7 @@
 
 #include <string>
 #include <memory>
+#include <iosfwd>
 
 namespace OSServices { class AttachableLibrary; }
 
@@ -27,6 +28,7 @@ namespace ConsoleRig
 		void LoadDefaultPlugins();
 		void DeinitializePlugins();
 		void* FindPluginFunction(const char*);
+		void LogStatus(std::ostream&);
 
 		PluginSet();
 		~PluginSet();

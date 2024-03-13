@@ -11,6 +11,7 @@
 #include <vector>
 #include <set>
 #include <unordered_map>
+#include <ios>
 
 namespace ConsoleRig
 {
@@ -115,6 +116,23 @@ namespace ConsoleRig
 			if (auto* res = p.second->GetFunctionAddress(name))
 				return res;
 		return nullptr;
+	}
+
+	void PluginSet::LogStatus(std::ostream& out)
+	{
+		out << "> Plugin status" << std::endl;
+		for (auto& p:_pimpl->_pluginLibraries) {
+			OSServices::LibVersionDesc v;
+			if (p.second->TryGetVersion(v)) {
+				if (!v._versionString) v._versionString = "<<null>>";
+				if (!v._buildDateString) v._buildDateString = "<<null>>";
+				out << "    Loaded: " << p.first << " (version: " << v._versionString << ", build date: " << v._buildDateString << ")" << std::endl;
+			} else
+				out << "    Loaded: " << p.first << " (no version information)" << std::endl;
+		}
+		for (auto& p:_pimpl->_failedPlugins)
+			out << "    Failed: " << p.first << " (With msg: " << p.second << ")" << std::endl;
+		out << "    " << _pimpl->_plugins.size() << " startup/shutdown plugins registered" << std::endl;
 	}
 
 	PluginSet::PluginSet()
