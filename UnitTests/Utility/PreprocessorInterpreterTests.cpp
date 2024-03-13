@@ -317,9 +317,11 @@ struct VSOUT /////////////////////////////////////////////////////
 			assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 
 			ParameterBox::ParameterName nameHash { nextStep._name };
-			nextStep._queryResult->_type = paramBox.GetParameterType(nameHash);
-			if (nextStep._queryResult->_type._type != ImpliedTyping::TypeCat::Void)
-				nextStep._queryResult->_data = paramBox.GetParameterRawValue(nameHash);
+			ImpliedTyping::VariantNonRetained v;
+			v._type = paramBox.GetParameterType(nameHash);
+			if (v._type._type != ImpliedTyping::TypeCat::Void)
+				v._data = paramBox.GetParameterRawValue(nameHash);
+			nextStep.Return(v);
 		}
 
 		auto result = exprEval.GetResult();
@@ -428,13 +430,13 @@ struct VSOUT /////////////////////////////////////////////////////
 			while (auto nextStep = eval.GetNextStep()) {
 				REQUIRE(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 				if (XlEqString(nextStep._name, "A")) {
-					nextStep.SetQueryResult(A);
+					nextStep.Return(A);
 				} else if (XlEqString(nextStep._name, "B")) {
-					nextStep.SetQueryResult(B);
+					nextStep.Return(B);
 				} else if (XlEqString(nextStep._name, "C")) {
-					nextStep.SetQueryResult(C);
+					nextStep.Return(C);
 				} else if (XlEqString(nextStep._name, "D")) {
-					nextStep.SetQueryResult(D);
+					nextStep.Return(D);
 				} else {
 					FAIL("Base value: " + nextStep._name.AsString());
 				}
@@ -453,11 +455,11 @@ struct VSOUT /////////////////////////////////////////////////////
 			while (auto nextStep = eval.GetNextStep()) {
 				REQUIRE(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
 				if (XlEqString(nextStep._name, "array")) {
-					nextStep.SetQueryResult(array);
+					nextStep.Return(array);
 				} else if (XlEqString(nextStep._name, "index1")) {
-					nextStep.SetQueryResult(index1);
+					nextStep.Return(index1);
 				} else if (XlEqString(nextStep._name, "index2")) {
-					nextStep.SetQueryResult(index2);
+					nextStep.Return(index2);
 				}
 			}
 

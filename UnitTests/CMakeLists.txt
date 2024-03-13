@@ -9,6 +9,7 @@ add_executable(
     Utility/ConversionPatterns.cpp
     Utility/ClassAccessorsTests.cpp
     Utility/PreprocessorInterpreterTests.cpp
+    Utility/HeapTests.cpp
     Math/BasicMaths.cpp
     Math/MathSerialization.cpp
     OSServices/OSServicesAsync.cpp

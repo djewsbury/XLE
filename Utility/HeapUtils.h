@@ -579,15 +579,27 @@ namespace Utility
 	/// Constructors and destructors called correctly. But not thread safe.
 	/// Also will not function correctly for types with alignment restrictions.
 	template<typename Type, unsigned Count>
-		class CircularBuffer
+		class alignas(Type) CircularBuffer
 	{
 	public:
 		Type& front();
 		Type& back();
 		void pop_front();
+		void pop_back();
 		template<typename... Params>
-			bool try_emplace_back(Params... p);
+			bool try_emplace_back(Params&&... p);
+		template<typename... Params>
+			void emplace_front(Params&&... p);
+		template<typename... Params>
+			void emplace(size_t beforeIdx, Params&&... p);
+		void erase(size_t idx);
 		bool empty() const;
+		bool full() const;
+		size_t size() const;
+		Type& at(size_t idx);
+		const Type& at(size_t idx) const;
+
+		void cycle_ordering();
 
 		CircularBuffer();
 		~CircularBuffer();
@@ -595,8 +607,26 @@ namespace Utility
 		CircularBuffer& operator=(CircularBuffer&& moveFrom) never_throws;
 	private:
 		uint8_t		_objects[sizeof(Type)*Count];
-		unsigned	_start, _end;
+		unsigned	_start, _count;
 	};
+
+	template<typename Type, unsigned Count>
+		bool CircularBuffer<Type, Count>::empty() const
+	{
+		return !_count;
+	}
+
+	template<typename Type, unsigned Count>
+		bool CircularBuffer<Type, Count>::full() const
+	{
+		return _count == Count;
+	}
+
+	template<typename Type, unsigned Count>
+		size_t CircularBuffer<Type, Count>::size() const
+	{
+		return _count;
+	}
 
 	template<typename Type, unsigned Count>
 		Type& CircularBuffer<Type, Count>::front()
@@ -609,8 +639,22 @@ namespace Utility
 		Type& CircularBuffer<Type, Count>::back()
 	{
 		assert(!empty());
-		auto b = Internal::Modulo<Count>(_end+Count-1);
+		auto b = Internal::Modulo<Count>(_start+_count-1);
 		return ((Type*)_objects)[b];
+	}
+
+	template<typename Type, unsigned Count>
+		Type& CircularBuffer<Type, Count>::at(size_t idx)
+	{
+		assert(idx < size());
+		return ((Type*)_objects)[Internal::Modulo<Count>(_start+idx)];
+	}
+
+	template<typename Type, unsigned Count>
+		const Type& CircularBuffer<Type, Count>::at(size_t idx) const
+	{
+		assert(idx < size());
+		return ((Type*)_objects)[Internal::Modulo<Count>(_start+idx)];
 	}
 
 	template<typename Type, unsigned Count>
@@ -619,105 +663,187 @@ namespace Utility
 		assert(!empty());
 		((Type*)_objects)[_start].~Type();
 		_start = Internal::Modulo<Count>(_start+1);
-		if (_start == _end) {
-			_start = 0;
-			_end = Count;
-		}
+		--_count;
+	}
+
+	template<typename Type, unsigned Count>
+		void CircularBuffer<Type, Count>::pop_back()
+	{
+		assert(!empty());
+		((Type*)_objects)[Internal::Modulo<Count>(_start+_count-1)].~Type();
+		--_count;
 	}
 
 	template<typename Type, unsigned Count>
 		template<typename... Params>
-			bool CircularBuffer<Type, Count>::try_emplace_back(Params... p)
+			bool CircularBuffer<Type, Count>::try_emplace_back(Params&&... p)
 	{
 		// When _start and _end are equal, the buffer is always full
 		// note that when we're empty, _start=0 && _end == Count (to distinguish it
 		// from the full case)
-		if (_start == _end) return false;
+		if (full()) return false;
 		
 		#pragma push_macro("new")
 		#undef new
-			new(_objects + sizeof(Type)*Internal::Modulo<Count>(_end)) Type(std::forward<Params>(p)...);
+			new(_objects + sizeof(Type)*Internal::Modulo<Count>(_start+_count)) Type(std::forward<Params>(p)...);
 		#pragma pop_macro("new")
-		_end = Internal::Modulo<Count>(_end+1);
+		++_count;
 		return true;
 	}
 
 	template<typename Type, unsigned Count>
-		bool CircularBuffer<Type, Count>::empty() const
+		template<typename... Params>
+			void CircularBuffer<Type, Count>::emplace_front(Params&&... p)
 	{
-		return _start==0 && _end == Count;
+		assert(!full());
+		auto newStart = Internal::Modulo<Count>(_start+Count-1);
+
+		#pragma push_macro("new")
+		#undef new
+			new(_objects + sizeof(Type)*newStart) Type(std::forward<Params>(p)...);
+		#pragma pop_macro("new")
+		_start = newStart;
+		++_count;
+	}
+
+	template<typename Type, unsigned Count>
+		template<typename... Params>
+			void CircularBuffer<Type, Count>::emplace(size_t beforeIdx, Params&&... p)
+	{
+		assert(!full());
+
+		#pragma push_macro("new")
+		#undef new
+
+		// Shift all of the items around, either forward or backwards, to open up the space as beforeIdx
+		// Note that we always do a destruct and reconstruct (rather than move) in the slot that we've
+		// initializing -- to ensure that all of the emplace functions have consistency
+		if (beforeIdx < size()/2) {
+			// shift everything backwards
+			auto newStart = Internal::Modulo<Count>(_start+Count-1);
+			if (beforeIdx != 0) {
+				new(_objects + sizeof(Type)*newStart) Type(std::move(((Type*)_objects)[Internal::Modulo<Count>(newStart+1)]));
+				for (unsigned c=1; c<beforeIdx; ++c)
+					((Type*)_objects)[Internal::Modulo<Count>(newStart+c)] = std::move(((Type*)_objects)[Internal::Modulo<Count>(newStart+c+1)]);
+				((Type*)_objects)[Internal::Modulo<Count>(newStart+beforeIdx)].~Type();
+			}
+			_start = newStart;
+		} else {
+			// shift everything forwards
+			auto newEnd = Internal::Modulo<Count>(_start+_count);
+			auto shiftCount = _count - beforeIdx;
+			if (shiftCount) {
+				new(_objects + sizeof(Type)*newEnd) Type(std::move(((Type*)_objects)[Internal::Modulo<Count>(newEnd+Count-1)]));
+				for (unsigned c=1; c<shiftCount; ++c)
+					((Type*)_objects)[Internal::Modulo<Count>(newEnd+Count-c)] = std::move(((Type*)_objects)[Internal::Modulo<Count>(newEnd+Count-c-1)]);
+				((Type*)_objects)[Internal::Modulo<Count>(_start+beforeIdx)].~Type();
+			}
+		}
+
+		// space opened up, initialize the new object
+		new(_objects + sizeof(Type)*Internal::Modulo<Count>(_start+beforeIdx)) Type(std::forward<Params>(p)...);
+		++_count;
+
+		#pragma pop_macro("new")
+	}
+
+	template<typename Type, unsigned Count>
+		void CircularBuffer<Type, Count>::erase(size_t idx)
+	{
+		assert(idx < size());
+		if (idx == 0) {
+			pop_front();
+			return;
+		}
+
+		// Call destructor for the one we're destroying
+		auto moduloIdx = Internal::Modulo<Count>(_start+idx);
+		auto* erasePtr = &((Type*)_objects)[moduloIdx];
+
+		// Shift all of the future items down, and ultimately reduce _count
+		auto endIdx = Internal::Modulo<Count>(_start+_count);
+		if (endIdx < moduloIdx) {
+			// there's a wrap around
+			auto* e = &((Type*)_objects)[Count];
+			while ((erasePtr+1) < e) {
+				*erasePtr = std::move(*(erasePtr+1));
+				++erasePtr;
+			}
+			*erasePtr = std::move(((Type*)_objects)[0]);
+			erasePtr = (Type*)_objects;
+			// continue --
+		}
+
+		auto* e = &((Type*)_objects)[endIdx];
+		while ((erasePtr+1) < e) {
+			*erasePtr = std::move(*(erasePtr+1));
+			++erasePtr;
+		}
+		erasePtr->~Type(); // delete the trailing one
+		_count--;
+	}	
+
+	template<typename Type, unsigned Count>
+		void CircularBuffer<Type, Count>::cycle_ordering()
+	{
+		// special interface for CircularPagedHeap, which makes back the new front
+		assert(full());
+		_start = Internal::Modulo<Count>(_start+Count-1);
 	}
 
 	template<typename Type, unsigned Count>
 		CircularBuffer<Type, Count>::CircularBuffer()
 	{
-		// special case for empty buffers; _start=0 && _end=Count
-		_start=0;
-		_end=Count;
+		assert((size_t(_objects) % alignof(Type)) == 0);
+		_start=_count=0;
 	}
 
 	template<typename Type, unsigned Count>
 		CircularBuffer<Type,Count>::~CircularBuffer() 
 	{
-		if (_start != 0 || _end != Count)
-			for (unsigned c = _start;;) {
-				auto& src = ((Type*)_objects)[c];
-				(void)src;
-				src.~Type();
-                c=Internal::Modulo<Count>(c+1);
-                if (c==_end) break;
-			}
+		for (unsigned c=0; c<_count; ++c)
+			(((Type*)_objects)[Internal::Modulo<Count>(_start+c)]).~Type();
 	}
 
 	template<typename Type, unsigned Count>
 		CircularBuffer<Type, Count>::CircularBuffer(CircularBuffer&& moveFrom) never_throws
 	{
-		_start = moveFrom._start;
-		_end = moveFrom._end;
-		moveFrom._start = 0;
-		moveFrom._end = Count;
+		_start = 0;
+		_count = moveFrom._count;
 
 		#pragma push_macro("new")
 		#undef new
-		if (_start != 0 || _end != Count)
-			for (unsigned c=_start;;) {
-				auto& src = ((Type*)moveFrom._objects)[c];
-				new(_objects + sizeof(Type)*c) Type(std::move(src));
-				src.~Type();
-                c=Internal::Modulo<Count>(c+1);
-                if (c==_end) break;
-			}
+		for (unsigned c=0; c<_count; ++c) {
+			auto& src = ((Type*)moveFrom._objects)[Internal::Modulo<Count>(moveFrom._start+c)];
+			new(_objects + sizeof(Type)*c) Type(std::move(src));
+			src.~Type();
+		}
 		#pragma pop_macro("new")
+
+		moveFrom._start = 0;
+		moveFrom._count = 0;
 	}
 
 	template<typename Type, unsigned Count>
 		auto CircularBuffer<Type, Count>::operator=(CircularBuffer&& moveFrom) never_throws -> CircularBuffer&
 	{
-		if (_start != 0 || _end != Count)
-			for (unsigned c = _start;;) {
-				auto& src = ((Type*)_objects)[c];
-				(void)src;
-				src.~Type();
-                c=Internal::Modulo<Count>(c+1);
-                if (c==_end) break;
-			}
+		for (unsigned c=0; c<_count; ++c)
+			(((Type*)_objects)[Internal::Modulo<Count>(_start+c)]).~Type();
 
-		_start = moveFrom._start;
-		_end = moveFrom._end;
-		moveFrom._start = 0;
-		moveFrom._end = Count;
+		_start = 0;
+		_count = moveFrom._count;
 
 		#pragma push_macro("new")
 		#undef new
-		if (_start != 0 || _end != Count)
-			for (unsigned c = _start;;) {
-				auto& src = ((Type*)moveFrom._objects)[c];
-				new(_objects + sizeof(Type)*c) Type(std::move(src));
-				src.~Type();
-                c=Internal::Modulo<Count>(c+1);
-                if (c==_end) break;
-			}
+		for (unsigned c=0; c<_count; ++c) {
+			auto& src = ((Type*)moveFrom._objects)[Internal::Modulo<Count>(moveFrom._start+c)];
+			new(_objects + sizeof(Type)*c) Type(std::move(src));
+			src.~Type();
+		}
 		#pragma pop_macro("new")
+
+		moveFrom._start = 0;
+		moveFrom._end = Count;
 		return *this;
 	}
 
@@ -796,6 +922,282 @@ namespace Utility
     {
         return _activePages.size();
     }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	/// <summary>A paged heap, similar to a deque, that uses circular buffers in each page</summary>
+	/// This can significantly reduce the cost of inserting and erasing items in the middle of the heap, at 
+	/// the cost of big penalties for random lookup and some overhead for iteration.
+	template<typename Type, unsigned PageSize=64>
+		class CircularPagedHeap
+	{
+	public:
+		using Page = CircularBuffer<Type, PageSize>;
+		std::vector<std::unique_ptr<Page>> _pages;
+		std::vector<size_t> _indexLookups;
+
+		struct Iterator
+		{
+			Page* _pageIterator = 0;
+			unsigned _idxWithinPage = 0;
+			unsigned _pageIdx = 0;
+			unsigned _countInPriorPages = 0;
+			CircularPagedHeap* _srcHeap = nullptr;
+
+			Type& get() { return _pageIterator->at(_idxWithinPage); }
+			Type& operator*() { return get(); }
+			Type* operator->() { return &get(); }
+
+			void operator++();
+			bool operator==(const Iterator&);
+			bool operator!=(const Iterator&);
+
+			friend Iterator operator+(const Iterator& b, ptrdiff_t offset)
+			{
+				CircularPagedHeap<Type, PageSize>::Iterator result = b;
+				if ((result._idxWithinPage+offset) < result._pageIterator->size()) {
+					result._idxWithinPage += offset;
+				} else {
+					// Use the lookup table "result._srcHeap->_indexLookups" to accelerate the search for the page we need
+					// We use this for all random lookups
+					auto newIdx = result._countInPriorPages + result._idxWithinPage + offset;
+					auto i = std::lower_bound(result._srcHeap->_indexLookups.begin()+result._pageIdx+1, result._srcHeap->_indexLookups.end(), newIdx);
+					assert(i != result._srcHeap->_indexLookups.begin());
+					if (*i != newIdx) --i;
+					result._pageIdx = i - result._srcHeap->_indexLookups.begin();
+					result._countInPriorPages = *i;
+					if (result._pageIdx < result._srcHeap->_pages.size()) {
+						result._pageIterator = result._srcHeap->_pages[result._pageIdx].get();
+						result._idxWithinPage = newIdx - result._countInPriorPages;
+					} else {
+						result._pageIterator = nullptr;
+						result._idxWithinPage = 0;
+					}
+					assert(result._idxWithinPage < PageSize);
+				}
+				return result;
+			}
+
+			friend size_t operator-(const Iterator& lhs, const Iterator& rhs)
+			{
+				assert(lhs._srcHeap == rhs._srcHeap);
+				return (rhs._idxWithinPage+rhs._countInPriorPages) - (lhs._idxWithinPage+lhs._countInPriorPages);
+			}
+
+		private:
+			void CheckMovePage();
+			friend class CircularPagedHeap;
+		};
+
+		Iterator begin();
+		Iterator end();
+		Iterator at(size_t);
+		template<typename... Params>
+			Iterator emplace_back(Params&&...);
+		template<typename... Params>
+			Iterator emplace_anywhere(Params&&...);
+		template<typename... Params>
+			Iterator emplace(const Iterator&, Params&&...);
+		Iterator erase(const Iterator&);
+		bool empty();
+		size_t size();
+
+		CircularPagedHeap();
+		~CircularPagedHeap();
+		CircularPagedHeap(CircularPagedHeap&& moveFrom) never_throws = default;
+		CircularPagedHeap& operator=(CircularPagedHeap&& moveFrom) never_throws = default;
+	};
+
+	template<typename Type, unsigned PageSize>
+		void CircularPagedHeap<Type, PageSize>::Iterator::CheckMovePage()
+	{
+		if (_idxWithinPage >= _srcHeap->_pages[_pageIdx]->size()) {
+			_countInPriorPages += _srcHeap->_pages[_pageIdx]->size();
+			_pageIdx++;
+			_idxWithinPage = 0;
+			if (_pageIdx < _srcHeap->_pages.size()) _pageIterator = _srcHeap->_pages[_pageIdx].get();
+			else _pageIterator = nullptr;
+		}
+	}
+
+	template<typename Type, unsigned PageSize>
+		void CircularPagedHeap<Type, PageSize>::Iterator::operator++()
+	{
+		++_idxWithinPage;
+		CheckMovePage();
+	}
+
+	template<typename Type, unsigned PageSize>
+		bool CircularPagedHeap<Type, PageSize>::Iterator::operator==(const Iterator& other)
+	{
+		assert(_srcHeap == other._srcHeap);
+		return _pageIdx == other._pageIdx && _idxWithinPage == other._idxWithinPage;
+	}
+
+	template<typename Type, unsigned PageSize>
+		bool CircularPagedHeap<Type, PageSize>::Iterator::operator!=(const Iterator& other) { return !operator==(other); }
+
+	template<typename Type, unsigned PageSize>
+		auto CircularPagedHeap<Type, PageSize>::begin() -> Iterator
+	{
+		Iterator result;
+		result._srcHeap = this;
+		if (!_pages.empty())
+			result._pageIterator = _pages.front().get();
+		return result;
+	}
+
+	template<typename Type, unsigned PageSize>
+		auto CircularPagedHeap<Type, PageSize>::end() -> Iterator
+	{
+		Iterator result;
+		result._srcHeap = this;
+		result._pageIdx = (unsigned)_pages.size();
+		return result;
+	}
+
+	template<typename Type, unsigned PageSize>
+		auto CircularPagedHeap<Type, PageSize>::at(size_t idx) -> Iterator
+	{
+		return begin() + idx;
+	}
+
+	template<typename Type, unsigned PageSize>
+		auto CircularPagedHeap<Type, PageSize>::erase(const Iterator& i) -> Iterator
+	{
+		assert(i._srcHeap == this);
+		_pages[i._pageIdx]->erase(i._idxWithinPage);
+
+		// reduce the index lookups by one
+		for (auto q=_indexLookups.begin()+i._pageIdx+1; q<_indexLookups.end(); ++q)
+			--(*q);
+
+		// if we've removed a page entirely, we can just go ahead and destroy it
+		if (_pages[i._pageIdx]->empty()) {
+			_pages.erase(_pages.begin()+i._pageIdx);
+			_indexLookups.erase(_indexLookups.begin()+i._pageIdx);
+
+			Iterator result = i;
+			result._idxWithinPage = 0;
+			if (result._pageIdx < _pages.size()) result._pageIterator = _pages[result._pageIdx].get();
+			else result._pageIterator = nullptr;
+			return result;
+		} else {
+			Iterator result = i;
+			result.CheckMovePage();
+			return result;
+		}
+	}
+
+	template<typename Type, unsigned PageSize>
+		template<typename... Params>
+			auto CircularPagedHeap<Type, PageSize>::emplace_back(Params&&... p) -> Iterator
+	{
+		if (_pages.empty() || _pages.back()->full()) {
+			_pages.emplace_back(std::make_unique<Page>());
+			_indexLookups.emplace_back(_indexLookups.back());
+		}
+
+		_pages.back()->try_emplace_back(std::forward<Params>(p)...);
+		++_indexLookups.back();
+
+		Iterator result;
+		result._srcHeap = this;
+		result._pageIdx = _pages.size()-1;
+		result._idxWithinPage = _pages.back()->size()-1;
+		result._pageIterator = _pages.back().get();
+		result._countInPriorPages = _indexLookups[result._pageIdx];
+		return result;
+	}
+
+	template<typename Type, unsigned PageSize>
+		template<typename... Params>
+			auto CircularPagedHeap<Type, PageSize>::emplace_anywhere(Params&&... p) -> Iterator
+	{
+		for (unsigned c=0; c<_pages.size(); ++c) {
+			if (!_pages[c]->full()) {
+				_pages[c]->try_emplace_back(std::forward<Params>(p)...);
+
+				Iterator result;
+				result._srcHeap = this;
+				result._pageIdx = c;
+				result._idxWithinPage = _pages[c]->size()-1;
+				result._pageIterator = _pages[c].get();
+				result._countInPriorPages = _indexLookups[c];
+
+				// update _indexLookups
+				++c;
+				for (; c<_indexLookups.size(); ++c) ++_indexLookups[c];
+				return result;
+			}
+		}
+		return emplace_back(std::forward<Params>(p)...);
+	}
+
+	template<typename Type, unsigned PageSize>
+		template<typename... Params>
+			 auto CircularPagedHeap<Type, PageSize>::emplace(const Iterator& before, Params&&...p) -> Iterator
+	{
+		// Insert before the given before the position given by the iterator, and return a new iterator
+		// for this position
+		// Here is when we can get some interesting things happening
+		// 1. there is room in the page we want to insert into
+		//		-> easy solution, quick add, but many require some shifting about within the page
+		// 2. the page is full
+		//		-> we must move the last element of the page out and try to fit it in a subsequent
+		//			page. This can result in a recursive walk down the list of pages, doing one swap
+		//			per page
+		assert(before._pageIterator);
+		if (!before._pageIterator->full()) {
+			before._pageIterator->emplace(before._idxWithinPage, std::forward<Params>(p)...);
+			unsigned c=before._pageIdx+1;
+			for (; c<_indexLookups.size(); ++c) ++_indexLookups[c];
+			return before;
+		} else {
+			auto swapper = std::move(before._pageIterator->back());
+			before._pageIterator->pop_back();
+			before._pageIterator->emplace(before._idxWithinPage, std::forward<Params>(p)...);
+
+			// move the swapper down the list of pages until we find somewhere to place it
+			unsigned c=before._pageIdx+1;
+			for (; c<_pages.size(); ++c) {
+				auto& page = *_pages[c];
+				if (page.full()) {
+					std::swap(swapper, page.back());
+					page.cycle_ordering();	// back becomes the new front
+				} else {
+					page.emplace_front(std::move(swapper));
+					break;
+				}
+			}
+
+			if (c == _pages.size()) {
+				// add a new page and make the swapper it's only element
+				emplace_back(std::move(swapper));
+			} else {
+				// else, update the index lookups starting from the page that actually got a new item
+				++c;
+				for (; c<_indexLookups.size(); ++c) ++_indexLookups[c];
+			}
+
+			return before;
+		}
+	}
+
+	template<typename Type, unsigned PageSize>
+		size_t CircularPagedHeap<Type, PageSize>::size() { return _indexLookups.back(); }
+	template<typename Type, unsigned PageSize>
+		bool CircularPagedHeap<Type, PageSize>::empty() { return size() == 0; }
+
+	template<typename Type, unsigned PageSize>
+		CircularPagedHeap<Type, PageSize>::CircularPagedHeap()
+	{
+		_indexLookups.emplace_back(0);
+	}
+
+	template<typename Type, unsigned PageSize>
+		CircularPagedHeap<Type, PageSize>::~CircularPagedHeap()
+	{}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
