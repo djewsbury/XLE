@@ -759,16 +759,20 @@ namespace ToolsRig
 				auto* osRunLoop = OSServices::GetOSRunLoop();
 				if (_timeoutEvent == ~0u && osRunLoop) {
 					std::weak_ptr<MouseOverTrackingListener> weakThis = weak_from_this();
+					std::weak_ptr<RenderCore::IThreadContext> weakThreadContext = RenderCore::Techniques::GetThreadContext();
 					_timeoutEvent = osRunLoop->ScheduleTimeoutEvent(
 						time + timePeriod,
-						[weakThis]() {
+						[weakThis, weakThreadContext]() {
 							auto l = weakThis.lock();
-							if (l) {
+							auto l2 = weakThreadContext.lock();
+							if (l && l2) {
+								auto oldTC = RenderCore::Techniques::SetThreadContext(std::move(l2));
 								PlatformRig::InputContext context;
 								context._view = l->_timeoutContext;
 								l->_timeOfLastCalculate = std::chrono::steady_clock::now();
 								l->CalculateForMousePosition(context, l->_timeoutMousePosition);
 								l->_timeoutEvent = ~0u;
+								RenderCore::Techniques::SetThreadContext(std::move(oldTC));
 							}
 						});
 				}
