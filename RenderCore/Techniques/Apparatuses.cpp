@@ -152,12 +152,12 @@ namespace RenderCore { namespace Techniques
 		//   P R I M A R Y   R E S O U R C E S   //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	PrimaryResourcesApparatus::PrimaryResourcesApparatus(std::shared_ptr<IDevice> device)
+	PrimaryResourcesApparatus::PrimaryResourcesApparatus(std::shared_ptr<IDevice> device, const BufferUploads::ManagerDesc& bufferUploadsConfiguration)
 	{
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(device);
 
-		_bufferUploads = BufferUploads::CreateManager(*device);
+		_bufferUploads = BufferUploads::CreateManager(bufferUploadsConfiguration, *device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 
 		_techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());

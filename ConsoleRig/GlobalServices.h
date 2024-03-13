@@ -50,6 +50,8 @@ namespace ConsoleRig
 		void LoadDefaultPlugins();
 		void UnloadDefaultPlugins();
 
+        std::string GetApplicationName() const;
+
         void PrepareForDestruction();
 
         GlobalServices(const StartupConfig& cfg = StartupConfig());

@@ -25,7 +25,7 @@
 
 using namespace System;
 using namespace System::Drawing;
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 extern "C" __declspec(dllimport) short __stdcall GetKeyState(int nVirtKey);
 

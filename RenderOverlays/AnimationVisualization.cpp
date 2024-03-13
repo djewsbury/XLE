@@ -180,7 +180,8 @@ namespace RenderOverlays
 				} else {
 					name = "Unnamed: " + std::to_string(idx);
 				}
-				overlayContext.DrawText(
+				DrawTextHelper(
+					overlayContext,
 					std::make_tuple(
 						Float3(screenSpace[0] - 100.f, screenSpace[1] - 20.f, 0.f), 
 						Float3(screenSpace[0] + 100.f, screenSpace[1] + 20.f, 0.f)),

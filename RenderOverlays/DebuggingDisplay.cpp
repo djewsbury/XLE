@@ -38,7 +38,7 @@
 #include <string.h>
 
 using namespace Utility::Literals;
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 using namespace Assets::Literals;
 
 #pragma warning(disable:4244)   // conversion from 'int' to 'float', possible loss of data

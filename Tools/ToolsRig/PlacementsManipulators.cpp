@@ -40,7 +40,7 @@
 #include <random>
 #include <chrono>
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 using namespace Utility::Literals;
 
 namespace Overlays { class ModelBrowser; }

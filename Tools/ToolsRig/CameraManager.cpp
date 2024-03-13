@@ -11,7 +11,7 @@
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace ToolsRig { namespace Camera
 {

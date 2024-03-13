@@ -178,6 +178,7 @@ namespace Utility
             template<typename SrcType>
                 VariantRetained(SrcType);
             VariantRetained(TypeDesc, IteratorRange<const void*>, bool reverseEndian=false);
+            VariantRetained(const VariantNonRetained&);
             VariantRetained() = default;
         };
 
@@ -393,6 +394,9 @@ namespace Utility
             } else
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)data.begin(), (const uint8_t*)data.end());
         }
+
+        inline VariantRetained::VariantRetained(const VariantNonRetained& copyFrom)
+        : VariantRetained{copyFrom._type, copyFrom._data, copyFrom._reversedEndian} {}
 
         template<typename DestType>
             inline DestType VariantRetained::RequireCastValue() const { return operator VariantNonRetained().RequireCastValue<DestType>(); }

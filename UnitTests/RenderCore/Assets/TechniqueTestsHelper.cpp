@@ -23,7 +23,7 @@ namespace UnitTests
 		using namespace RenderCore;
 
 		_techniqueServices = std::make_shared<Techniques::Services>(testHelper._device);
-		_bufferUploads = BufferUploads::CreateManager(*testHelper._device);
+		_bufferUploads = BufferUploads::CreateManager({}, *testHelper._device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 		_commonResources = std::make_shared<Techniques::CommonResourceBox>(*testHelper._device);
 		_techniqueServices->SetCommonResources(_commonResources);

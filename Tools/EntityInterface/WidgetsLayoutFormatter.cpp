@@ -17,7 +17,7 @@
 #include <set>
 #include <stack>
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 using namespace Assets::Literals;
 using namespace Utility::Literals;
 
@@ -399,7 +399,7 @@ namespace EntityInterface
 							interfaceState->EndCapturing();
 							hoverings->_hoveringCtrl = 0;
 						} else {
-							hoverings->_textEntry.ProcessInput(*interfaceState, evnt);
+							hoverings->_textEntry.ProcessInput(evnt);
 						}
 					} else {
 						if (evnt.IsPress_LButton()) {

@@ -1211,12 +1211,13 @@ namespace RenderCore { namespace Assets
                     if (outputIndex < result.size()) {
 						assert(result[outputIndex] == ~0u);		// if a given output marker is written to twice, we can end up here. It doesn't make much sense to do this, because only the last value written will be used (this applies both to this function and GenerateOutputTransforms)
                         result[outputIndex] = *workingTransform;
+
+                        // We can't always distinguish siblings from children. If there are two siblings with identical
+                        // transforms, we can end up mistaking it for a parent-child relationship here.
+                        *workingTransform = outputIndex;
                     } else
                         Log(Warning) << "Warning -- bad output matrix index (" << outputIndex << ")" << std::endl;
 
-					// We can't always distinquish siblings from children. If there are two siblings with identical
-					// transforms, we can end up mistaking it for a parent-child relationship here.
-					*workingTransform = outputIndex;
                 }
                 break;
 
@@ -1230,8 +1231,6 @@ namespace RenderCore { namespace Assets
 						*workingTransform = outputIndex;
                     } else
                         Log(Warning) << "Warning -- bad output matrix index in TransformFloat4x4AndWrite_Static (" << outputIndex << ")" << std::endl;
-					// The transformation we wrote doesn't affect the working transform. So we won't consider
-					// the marker we wrote as the new parent on the stack
                 }
                 break;
 
@@ -1245,8 +1244,6 @@ namespace RenderCore { namespace Assets
 						*workingTransform = outputIndex;
                     } else
                         Log(Warning) << "Warning -- bad output matrix index in TransformFloat4x4AndWrite_Parameter (" << outputIndex << ")" << std::endl;
-					// The transformation we wrote doesn't affect the working transform. So we won't consider
-					// the marker we wrote as the new parent on the stack
                 }
                 break;
 

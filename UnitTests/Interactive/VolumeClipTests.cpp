@@ -28,7 +28,7 @@
 #include <random>
 
 using namespace Catch::literals;
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 using namespace std::chrono_literals;
 
 namespace UnitTests

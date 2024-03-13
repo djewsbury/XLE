@@ -17,7 +17,7 @@
 #include "../../Math/Transformations.h"
 #include "../../Utility/TimeUtils.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 static unsigned FrameRenderCount;
 

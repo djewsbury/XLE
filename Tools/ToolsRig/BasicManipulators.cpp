@@ -14,7 +14,7 @@
 #include "../../Math/Geometry.h"
 #include <memory>
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace ToolsRig
 {

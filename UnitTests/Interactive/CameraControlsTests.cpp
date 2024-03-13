@@ -22,7 +22,7 @@
 #include "catch2/catch_approx.hpp"
 
 using namespace Catch::literals;
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace UnitTests
 {

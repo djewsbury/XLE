@@ -22,7 +22,7 @@ namespace RenderCore
 }
 
 namespace Assets { class Services; }
-namespace RenderCore { namespace BufferUploads { class IManager; }}
+namespace RenderCore { namespace BufferUploads { class IManager; class ManagerDesc; }}
 namespace Utility { class HierarchicalCPUProfiler; }
 
 namespace RenderCore { namespace Techniques
@@ -109,7 +109,7 @@ namespace RenderCore { namespace Techniques
 		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
 		unsigned _skinDeformerSystemRegistration = ~0u;
 
-		PrimaryResourcesApparatus(std::shared_ptr<IDevice> device);
+		PrimaryResourcesApparatus(std::shared_ptr<IDevice> device, const BufferUploads::ManagerDesc& bufferUploadsConfiguration);
 		~PrimaryResourcesApparatus();
 		PrimaryResourcesApparatus(PrimaryResourcesApparatus&) = delete;
 		PrimaryResourcesApparatus& operator=(PrimaryResourcesApparatus&) = delete;

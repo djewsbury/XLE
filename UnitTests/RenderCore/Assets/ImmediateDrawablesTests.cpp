@@ -92,7 +92,7 @@ namespace UnitTests
 		Verbose.SetConfiguration(OSServices::MessageTargetConfiguration{});
 
 		auto techniqueServices = ConsoleRig::MakeAttachablePtr<Techniques::Services>(testHelper->_device);
-		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager(*testHelper->_device);
+		std::shared_ptr<BufferUploads::IManager> bufferUploads = BufferUploads::CreateManager({}, *testHelper->_device);
 		techniqueServices->SetBufferUploads(bufferUploads);
 		techniqueServices->SetCommonResources(std::make_shared<Techniques::CommonResourceBox>(*testHelper->_device));
 		techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());

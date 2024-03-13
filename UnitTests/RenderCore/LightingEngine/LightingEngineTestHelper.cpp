@@ -51,7 +51,7 @@ namespace UnitTests
 		_techniqueServices = std::make_shared<Techniques::Services>(_metalTestHelper->_device);
 		_techniqueServices->RegisterTextureLoader("*.[dD][dD][sS])", RenderCore::Assets::CreateDDSTextureLoader());
 		_techniqueServices->RegisterTextureLoader("*", RenderCore::Assets::CreateWICTextureLoader());
-		_bufferUploads = BufferUploads::CreateManager(*_metalTestHelper->_device);
+		_bufferUploads = BufferUploads::CreateManager({}, *_metalTestHelper->_device);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();

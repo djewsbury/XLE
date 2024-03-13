@@ -281,9 +281,8 @@ namespace ConsoleRig
                 } else {
                     _pimpl->_lines.push_back(message.substr(start, end-start));
                 }
-
-                lastLineComplete = completeLine;
             }
+            lastLineComplete = completeLine;
 
             currentOffset = end;
             while (currentOffset < stringLength && (message[currentOffset]=='\r'||message[currentOffset]=='\n')) {

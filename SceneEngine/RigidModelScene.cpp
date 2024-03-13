@@ -57,7 +57,7 @@ namespace SceneEngine
 				if (_skeletonScaffold) {
 					return _skeletonScaffold->GetSkeletonMachine();
 				} else {
-					assert(_firstModelScaffold->EmbeddedSkeleton());
+					assert(_firstModelScaffold && _firstModelScaffold->EmbeddedSkeleton());
 					return *_firstModelScaffold->EmbeddedSkeleton();
 				}
 			}
@@ -301,7 +301,8 @@ namespace SceneEngine
 										renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 										if (completedConstruction->GetElementCount() != 0) {
 											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
-											renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+											if (renderer._firstModelScaffold)
+												renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 										}
 										return renderer;
 									});
@@ -315,7 +316,8 @@ namespace SceneEngine
 										renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 										if (completedConstruction->GetElementCount() != 0) {
 											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
-											renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+											if (renderer._firstModelScaffold)
+												renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 										}
 										return renderer;
 									});
@@ -347,7 +349,8 @@ namespace SceneEngine
 									renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 									if (completedConstruction->GetElementCount() != 0) {
 										renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
-										renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+										if (renderer._firstModelScaffold)
+											renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 									}
 									return renderer;
 								});

@@ -1911,8 +1911,6 @@ namespace RenderCore { namespace ImplVulkan
 		const char* instanceLayers[8];
 		unsigned instanceLayerCount = 0;
 
-		auto availableLayers = EnumerateLayers();
-
 		instanceExtensions[instanceExtensionCount++] = VK_KHR_SURFACE_EXTENSION_NAME;
 		#if PLATFORMOS_TARGET  == PLATFORMOS_WINDOWS
 			instanceExtensions[instanceExtensionCount++] = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
@@ -1922,6 +1920,7 @@ namespace RenderCore { namespace ImplVulkan
 			instanceExtensions[instanceExtensionCount++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 
 			if (_features._debugValidation) {
+				auto availableLayers = EnumerateLayers();
 				auto i = std::find_if(
 					availableLayers.begin(), availableLayers.end(),
 					[](VkLayerProperties layer) { return XlEqString(layer.layerName, "VK_LAYER_KHRONOS_validation"); });

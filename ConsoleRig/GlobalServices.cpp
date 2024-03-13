@@ -361,6 +361,11 @@ namespace ConsoleRig
     const std::shared_ptr<OSServices::PollingThread>& GlobalServices::GetPollingThread() { return _pimpl->_pollingThread; }
     PluginSet& GlobalServices::GetPluginSet() { return *_pimpl->_pluginSet; }
 
+    std::string GlobalServices::GetApplicationName() const
+    {
+        return _pimpl->_cfg._applicationName;
+    }
+
     const std::shared_ptr<thousandeyes::futures::Executor>& GlobalServices::GetContinuationExecutor()
     {
         return _pimpl->_continuationExecutor;

@@ -20,6 +20,7 @@
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
+#include "../../RenderCore/BufferUploads/IBufferUploads.h"		// for ManagerDesc
 #include "../../RenderCore/DeviceInitialization.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Vulkan/IDeviceVulkan.h"
@@ -158,7 +159,7 @@ namespace UnitTests
 			#if !defined(NO_EMBEDDED_RES)
 				_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 			#else
-				_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres", ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
+				_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("C:/code/XLE/xleres/core", ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
 			#endif
 			if (enabledComponents)
 				_rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
@@ -169,7 +170,7 @@ namespace UnitTests
 			_device = renderAPI->CreateDevice(0, renderAPI->QueryFeatureCapability(0));
 			if (!_assetServices) _assetServices = std::make_shared<::Assets::Services>();
 
-			_primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_device);
+			_primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_device, RenderCore::BufferUploads::ManagerDesc{});
 			_frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_device);
 
 			if (enabledComponents & EnabledComponents::RenderCoreTechniques) {
