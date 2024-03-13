@@ -6,6 +6,7 @@
 
 #include "OSServicesPrimitives.h"
 #include "../Utility/StringUtils.h"
+#include "../Utility/MemoryUtils.h"
 #include <assert.h>
 #include <cstdint>
 #include <vector>
@@ -87,6 +88,25 @@ namespace OSServices
     };
 
 	KeyId KeyId_Make(StringSection<char>);
+
+    ///////////////////////////////////////////////////////////////////////////////////
+   
+    namespace Literals
+    {
+        #if (COMPILER_ACTIVE == COMPILER_TYPE_GCC || COMPILER_ACTIVE == COMPILER_TYPE_CLANG) && (__cplusplus < 202002L)
+
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wgnu-string-literal-operator-template"
+                template <typename T, T... chars>
+                    XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _key() never_throws { return ::Utility::Internal::ConstHash32_2<DefaultSeed32, chars...>(); }
+            #pragma GCC diagnostic pop
+
+        #else
+
+            XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _key(const char* str, const size_t len) never_throws { return ::Utility::Internal::ConstHash32_1(str, len); }
+
+        #endif
+    }
 
 	///////////////////////////////////////////////////////////////////////////////////
 	template<typename Iterator> bool InputSnapshot::IsHeld(KeyId key, Iterator begin, Iterator end)
