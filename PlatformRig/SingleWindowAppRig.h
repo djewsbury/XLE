@@ -9,12 +9,15 @@
 #include "../RenderCore/Format.h"
 #include "../RenderCore/DeviceInitialization.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
+#include "../RenderCore/BufferUploads/IBufferUploads.h"		// (for ManagerDesc)
 #include "../ConsoleRig/GlobalServices.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../OSServices/OverlappedWindow.h"
 #include "../Utility/IteratorUtils.h"
 #include <variant>
 #include <memory>
+#include <fstream>
+#include <optional>
 
 namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class Services; class PrimaryResourcesApparatus; } }
 namespace Assets { class Services; namespace ArchiveUtility { class FileCache; } }
@@ -74,6 +77,8 @@ namespace PlatformRig
 
 		void ShowWindow(bool newState);
 		std::optional<OnRenderTargetUpdate> GetLastRenderTargets();
+
+		std::shared_ptr<std::fstream> _appLogFile;
 
 		MessageLoop(std::shared_ptr<WindowApparatus> apparatus);
 		~MessageLoop();
@@ -140,6 +145,8 @@ namespace PlatformRig
 			enum class XLEResType { XPak, OSFileSystem, EmbeddedXPak, None };
 			XLEResType _xleResType = XLEResType::XPak;
 			IteratorRange<const void*> _xleResEmbeddedData;
+			bool _createAppLogFile = false;
+			std::string _applLogWelcomeMsg;
 		};
 
 		struct ConfigureRenderDevice
@@ -149,6 +156,7 @@ namespace PlatformRig
 			std::shared_ptr<RenderCore::IAPIInstance> _apiInstance;
 			RenderCore::BindFlag::BitField _presentationChainBindFlags = 0;
 			OSServices::Window* _window = nullptr;
+			RenderCore::BufferUploads::ManagerDesc _bufferUploadsConfiguration;
 		};
 
 		struct ConfigureWindowInitialState
@@ -180,6 +188,8 @@ namespace PlatformRig
 		AppRigGlobals _globals;
 
 		std::shared_ptr<::Assets::ArchiveUtility::FileCache> _fileCache;
+
+		std::shared_ptr<std::fstream> _appLogFile;
 
 		StartupLoop(Formatters::CommandLineFormatter<char>& cmdLine);
 		~StartupLoop();

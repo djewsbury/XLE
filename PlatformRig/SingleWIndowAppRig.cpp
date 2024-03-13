@@ -17,6 +17,7 @@
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/RenderPass.h"
 #include "../RenderOverlays/OverlayApparatus.h"
+#include "../RenderCore/Vulkan/IDeviceVulkan.h"
 
 #include "../Assets/IFileSystem.h"
 #include "../Assets/MountingTree.h"
@@ -30,6 +31,7 @@
 
 #include "../OSServices/OverlappedWindow.h"
 #include "../ConsoleRig/Console.h"
+#include "../ConsoleRig/Plugins.h"
 #include "../Formatters/CommandLineFormatter.h"
 #include "../Formatters/FormatterUtils.h"
 #include "../Utility/Threading/ThreadingUtils.h"
@@ -89,7 +91,7 @@ namespace PlatformRig
 				auto parsingContext = std::move(_activeParsingContext.value());
 				_activeParsingContext = {};
 
-				auto frameResult = _apparatus->_frameRig->ShutdownFrame(parsingContext);
+				auto frameResult = _apparatus->_frameRig->ShutdownFrame(parsingContext, _appLogFile.get());
 
 				// ------- Yield some process time when appropriate ------
 				if (originalPending == Pending::ShowWindowEndRenderFrame) {
@@ -161,8 +163,16 @@ namespace PlatformRig
 				context._view = { {clientRect.first._x, clientRect.first._y}, {clientRect.second._x, clientRect.second._y} };
 				auto evnt = std::get<OSServices::InputSnapshot>(msgPump);
 				ProcessInputResult processResult = ProcessInputResult::Passthrough;
-				if (_apparatus->_mainInputHandler)
-					processResult = _apparatus->_mainInputHandler->OnInputEvent(context, evnt);
+				if (_apparatus->_mainInputHandler) {
+					auto oldThreadContext = RenderCore::Techniques::SetThreadContext(_apparatus->_immediateContext);
+					TRY {
+						processResult = _apparatus->_mainInputHandler->OnInputEvent(context, evnt);
+					} CATCH(...) {
+						RenderCore::Techniques::SetThreadContext(std::move(oldThreadContext));
+						throw;
+					} CATCH_END
+					RenderCore::Techniques::SetThreadContext(std::move(oldThreadContext));
+				}
 
 				if (processResult != ProcessInputResult::Consumed)
 					return InputEvent { std::move(evnt), std::move(context) };		// note that the "services" we attach to context must out-live the InputEvent we return
@@ -221,6 +231,11 @@ namespace PlatformRig
 		}
 	};
 
+	static std::shared_ptr<std::fstream> InitializeAppLogFile(StringSection<> appName);
+	static void LogAPIInstance(std::ostream&, RenderCore::IAPIInstance&);
+	static void LogRenderDevice(std::ostream&, RenderCore::IDevice&);
+	static void LogAPIInstanceAndPlatformValue(std::ostream&, RenderCore::IAPIInstance&, const void* nativePlatformValue);
+
 	struct StartupLoop::MountRegistrationToken
 	{
 		~MountRegistrationToken()
@@ -242,7 +257,17 @@ namespace PlatformRig
 
 		case Phase::PostConfigureGlobalServices:
 			{
+				if (_configGlobalServices._createAppLogFile) {
+					_appLogFile = InitializeAppLogFile(_configGlobalServices._startupCfg._applicationName);
+					if (_appLogFile) {
+						*_appLogFile << "----------------- log startup -----------------" << std::endl;
+						*_appLogFile << _configGlobalServices._applLogWelcomeMsg << std::endl;
+					}
+				}
+
 				_globalServices = std::make_shared<ConsoleRig::GlobalServices>(_configGlobalServices._startupCfg);
+				if (_appLogFile)
+					*_appLogFile << "> GlobalServices constructor done" << std::endl;
 
 				_xleResMountID = std::make_unique<MountRegistrationToken>();
 				if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::XPak) {
@@ -260,10 +285,23 @@ namespace PlatformRig
 				} else if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::OSFileSystem)
 					_xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS(_configGlobalServices._xleResLocation, _globalServices->GetPollingThread()));
 
+				if (_appLogFile)
+					*_appLogFile << "> Primary resources mounted" << std::endl;
+
 				_renderAPIInstance = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
+
+				if (_appLogFile) {
+					*_appLogFile << "> API Instance initialized" << std::endl;
+					LogAPIInstance(*_appLogFile, *_renderAPIInstance);
+				}
 
 				_assetServices = std::make_shared<::Assets::Services>();
 				_osWindow = std::make_unique<OSServices::Window>();
+
+				if (_appLogFile) {
+					*_appLogFile << "> Window created" << std::endl;
+					LogAPIInstanceAndPlatformValue(*_appLogFile, *_renderAPIInstance, _osWindow->GetUnderlyingHandle());
+				}
 
 				_phase = Phase::PostConfigureRenderDevice;
 				_configRenderDevice = {
@@ -276,19 +314,37 @@ namespace PlatformRig
 
 		case Phase::PostConfigureRenderDevice:
 			{
+				if (_appLogFile) *_appLogFile << "> Creating render device" << std::endl;
 				_renderDevice = _renderAPIInstance->CreateDevice(_configRenderDevice._configurationIdx, _configRenderDevice._deviceFeatures);
+				if (_appLogFile) {
+					*_appLogFile << "> Render device creation successful" << std::endl;
+					LogRenderDevice(*_appLogFile, *_renderDevice);
+				}
+
 				_techniqueServices = std::make_shared<RenderCore::Techniques::Services>(_renderDevice);
 				_previewSceneRegistry = ToolsRig::CreatePreviewSceneRegistry();
 				_entityMountingTree = EntityInterface::CreateMountingTree();
+				
+				if (_appLogFile)
+					*_appLogFile << "> Post-device services successful" << std::endl;
+
 				::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
+
+				if (_appLogFile) {
+					*_appLogFile << "> Load default plugins successful" << std::endl;
+					::ConsoleRig::GlobalServices::GetInstance().GetPluginSet().LogStatus(*_appLogFile);
+				}
 
 				_globals._renderDevice = _renderDevice;
 				_globals._drawingApparatus = std::make_shared<RenderCore::Techniques::DrawingApparatus>(_renderDevice);
 				_globals._overlayApparatus = std::make_shared<RenderOverlays::OverlayApparatus>(_globals._drawingApparatus);
-				_globals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_globals._renderDevice);
+				_globals._primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_globals._renderDevice, _configRenderDevice._bufferUploadsConfiguration);
 				_globals._frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_globals._renderDevice);
 				_globals._windowApparatus = std::make_shared<PlatformRig::WindowApparatus>(std::move(_osWindow), _globals._drawingApparatus.get(), *_globals._frameRenderingApparatus, _configRenderDevice._presentationChainBindFlags);
 				_globals._debugOverlaysApparatus = std::make_shared<PlatformRig::DebugOverlaysApparatus>(_globals._overlayApparatus);
+
+				if (_appLogFile)
+					*_appLogFile << "> Secondary services successful" << std::endl;
 
 				_phase = Phase::PostConfigureWindowInitialState;
 				_configWindowInitialState = { _globals._windowApparatus->_osWindow.get() };
@@ -296,8 +352,14 @@ namespace PlatformRig
 			}
 
 		case Phase::PostConfigureWindowInitialState:
+			if (_appLogFile)
+				*_appLogFile << "> Configure window initial state begin" << std::endl;
+
 			_globals._windowApparatus->_frameRig->UpdatePresentationChain(*_globals._windowApparatus->_presentationChain);
 			_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_globals._windowApparatus->_immediateContext);
+
+			if (_appLogFile)
+				*_appLogFile << "> Configure window initial state end" << std::endl;
 
 			// intentional fall-through
 
@@ -311,6 +373,7 @@ namespace PlatformRig
 	MessageLoop StartupLoop::ShowWindowAndBeginMessageLoop()
 	{
 		MessageLoop result { _globals._windowApparatus };
+		result._appLogFile = _appLogFile;
 		result.ShowWindow(true);
 		return result;
 	}
@@ -360,6 +423,94 @@ namespace PlatformRig
 		debugScreens.Register(
 			std::move(systemDisplay),
 			"system-display", RenderOverlays::DebuggingDisplay::DebugScreensSystem::SystemDisplay);
+	}
+
+	static std::shared_ptr<std::fstream> InitializeAppLogFile(StringSection<> appName)
+	{
+		auto res = OSServices::CreateAppDataFile(appName, "app-log.txt", std::ios::out|std::ios::trunc);
+		if (res.good())
+			return std::make_shared<std::fstream>(std::move(res));
+		return nullptr;
+	}
+
+	static const char* AsString(RenderCore::PhysicalDeviceType type)
+	{
+		switch (type) {
+		case RenderCore::PhysicalDeviceType::Unknown: return "Unknown";
+		case RenderCore::PhysicalDeviceType::DiscreteGPU: return "DiscreteGPU";
+		case RenderCore::PhysicalDeviceType::IntegratedGPU: return "IntegratedGPU";
+		case RenderCore::PhysicalDeviceType::VirtualGPU: return "VirtualGPU";
+		case RenderCore::PhysicalDeviceType::CPU: return "CPU";
+		default: return "<<error>>";
+		}
+	}
+
+	static void LogAPIInstance(std::ostream& out, RenderCore::IAPIInstance& apiInstance)
+	{
+		auto cfgCount = apiInstance.GetDeviceConfigurationCount();
+		out << "API instance with (" << cfgCount << ") configurations" << std::endl;
+		for (unsigned c=0; c<cfgCount; ++c) {
+			auto cfg = apiInstance.GetDeviceConfigurationProps(c);
+			out << "[" << c << "]" << std::endl;
+			out << "    DriverName: " << cfg._driverName << std::endl;
+			out << "    Version / Vendor / Device: " << cfg._driverVersion << " / " << cfg._vendorId << " / " << cfg._deviceId << std::endl;
+			out << "    Type: " << AsString(cfg._physicalDeviceType) << std::endl;
+
+			auto features = apiInstance.QueryFeatureCapability(c);
+			out << "    GeometryShaders: " << features._geometryShaders << std::endl;
+			out << "    ViewInstancingRenderPasses: " << features._viewInstancingRenderPasses << std::endl;
+			out << "    StreamOutput: " << features._streamOutput << std::endl;
+			out << "    DepthBounds: " << features._depthBounds << std::endl;
+			out << "    SampleAnsiotrophy: " << features._samplerAnisotropy << std::endl;
+			out << "    WideLines: " << features._wideLines << std::endl;
+			out << "    SmoothLines: " << features._smoothLines << std::endl;
+			out << "    ConservativeRaster: " << features._conservativeRaster << std::endl;
+			out << "    IndependentBlend: " << features._independentBlend << std::endl;
+			out << "    MultiViewport: " << features._multiViewport << std::endl;
+			out << "    SeparateDepthStencilLayouts: " << features._separateDepthStencilLayouts << std::endl;
+			out << "    CubemapArrays: " << features._cubemapArrays << std::endl;
+			out << "    QueryShaderInvocation: " << features._queryShaderInvocation << std::endl;
+			out << "    QueryStreamOutput: " << features._queryStreamOutput << std::endl;
+			out << "    TimelineSemaphore: " << features._timelineSemaphore << std::endl;
+			out << "    ShaderImageGatherExtended: " << features._shaderImageGatherExtended << std::endl;
+			out << "    PixelShaderStoresAndAtomics: " << features._pixelShaderStoresAndAtomics << std::endl;
+			out << "    VertexGeoTessShaderStoresAndAtomics: " << features._vertexGeoTessellationShaderStoresAndAtomics << std::endl;
+			out << "    ShaderFloat16: " << features._shaderFloat16 << std::endl;
+			out << "    ETC2: " << features._textureCompressionETC2 << std::endl;
+			out << "    ASTC_LDR: " << features._textureCompressionASTC_LDR << std::endl;
+			out << "    ASTC_HDR: " << features._textureCompressionASTC_HDR << std::endl;
+			out << "    BC: " << features._textureCompressionBC << std::endl;
+			out << "    TransferQueue: " << features._dedicatedTransferQueue << std::endl;
+			out << "    ComputeQueue: " << features._dedicatedComputeQueue << std::endl;
+			out << "    EmulateRestrictiveLimits: " << features._emulateRestrictiveLimits << std::endl;
+
+			if (auto* deviceVulkan = (RenderCore::IAPIInstanceVulkan*)apiInstance.QueryInterface(TypeHashCode<RenderCore::IAPIInstanceVulkan>)) {
+				out << "-------------- Extended Vulkan information follows --------------" << std::endl;
+				out << deviceVulkan->LogPhysicalDevice(c) << std::endl;
+				out << "-----------------------------------------------------------------" << std::endl;
+			}
+		}
+	}
+
+	static void LogAPIInstanceAndPlatformValue(std::ostream& out, RenderCore::IAPIInstance& apiInstance, const void* nativePlatformValue)
+	{
+		out << "  Presentation chain compatibility: " << apiInstance.QueryPresentationChainCompatibility(0, nativePlatformValue) << std::endl;
+
+		if (auto* deviceVulkan = (RenderCore::IAPIInstanceVulkan*)apiInstance.QueryInterface(TypeHashCode<RenderCore::IAPIInstanceVulkan>)) {
+			out << "-------------- Extended Vulkan information follows --------------" << std::endl;
+			out << deviceVulkan->LogInstance(nativePlatformValue) << std::endl;
+			out << "-----------------------------------------------------------------" << std::endl;
+		}
+	}
+
+	static void LogRenderDevice(std::ostream& out, RenderCore::IDevice& device)
+	{
+		auto limits = device.GetDeviceLimits();
+		out << "    ConstantBufferOffsetAlignment: " << limits._constantBufferOffsetAlignment << std::endl;
+		out << "    UnorderedAccessBufferOffsetAlignment: " << limits._unorderedAccessBufferOffsetAlignment << std::endl;
+		out << "    TexelBufferOffsetAlignment: " << limits._texelBufferOffsetAlignment << std::endl;
+		out << "    CopyBufferOffsetAlignment: " << limits._copyBufferOffsetAlignment << std::endl;
+		out << "    MaxPushConstantsSize: " << limits._maxPushConstantsSize << std::endl;
 	}
 
 	AppRigGlobals::AppRigGlobals() = default;
