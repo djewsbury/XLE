@@ -17,6 +17,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <iosfwd>
 
 namespace OSServices 
 {
@@ -78,6 +79,7 @@ namespace OSServices
         size_t      Seek(size_t offset, FileSeekAnchor anchor = FileSeekAnchor::Start) never_throws;
         size_t      TellP() const never_throws;
         void        Flush() const never_throws;
+        void        SetEndOfFile() const never_throws;
 
         uint64      GetSize() const never_throws;
 		bool		IsGood() const never_throws;

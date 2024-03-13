@@ -96,7 +96,16 @@ namespace OSServices
             case 'S': result._underlyingFlags |= FILE_FLAG_SEQUENTIAL_SCAN; break;
             
             case 'a':
-                Throw(Exceptions::IOException(Exceptions::IOException::Reason::Complex, "Append file mode not supported"));
+                if (*(i+1) == '+') {
+                    ++i;
+                    result._underlyingAccessMode = FILE_GENERIC_WRITE | FILE_GENERIC_READ;
+                    result._creationDisposition = OPEN_ALWAYS;
+                } else {
+                    result._underlyingAccessMode = FILE_GENERIC_WRITE;
+                    result._creationDisposition = OPEN_ALWAYS;
+                }
+				// unlike fopen, I don't know if we'll initially be at the end of the file
+                break;
 
             case 't':
                 Throw(Exceptions::IOException(Exceptions::IOException::Reason::Complex, "Text oriented file modes not supported"));
@@ -371,6 +380,12 @@ namespace OSServices
 			return SetFilePointer(_file, offset, nullptr, underlingMoveMethod);
 		#endif
     }
+
+	void	BasicFile::SetEndOfFile() const never_throws
+	{
+		bool res = ::SetEndOfFile(_file);
+		assert(res);
+	}
 
     size_t   BasicFile::TellP() const never_throws
     {
