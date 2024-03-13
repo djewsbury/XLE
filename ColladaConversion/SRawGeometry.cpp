@@ -822,12 +822,14 @@ namespace ColladaConversion
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static std::vector<std::string> GetJointNames(
+    static std::pair<std::vector<std::string>, std::vector<Float4x4>> GetJointNames(
         const SkinController& controller,
         const URIResolveContext& resolveContext,
-		IteratorRange<const unsigned*> remapping)
+		IteratorRange<const unsigned*> remapping,
+		SkeletonBindRootFn& calculateSkeletonBindRoot)
     {
         std::vector<std::string> result;
+        std::vector<Float4x4> inverseBindRoots;
 
             // we're expecting an input called "JOINT" that contains the names of joints
             // These names should match the "sid" of nodes within the hierachy of nodes
@@ -871,8 +873,10 @@ namespace ColladaConversion
 			}
 
 			if (remappedElementIndex != ~0u) {
-				if (result.size() <= remappedElementIndex)
+				if (result.size() <= remappedElementIndex) {
 					result.resize(remappedElementIndex+1);
+					inverseBindRoots.resize(remappedElementIndex+1, Identity<Float4x4>());
+				}
 
 				// We must convert from the "sids" in the JOINTS array to node names
 				// This is because we use names (rather than sids) for skeleton/animation
@@ -882,23 +886,24 @@ namespace ColladaConversion
 				// values in the <joints> array (as per the standard). Many files just
 				// duplicate the id and the sid; but where they differ, we must be sure
 				// to use the sid
-				auto nodeId = std::string((const char*)elementStart, (const char*)i);
+				auto nodeId = MakeStringSection((const char*)elementStart, (const char*)i);
 				auto node = FindElement(
 					GuidReference(Hash64(nodeId), jointSourceRef._fileHash), resolveContext, 
 					&IDocScopeIdResolver::FindNodeBySid);
 				if (node) {
 					result[remappedElementIndex] = node.GetName().AsString();
+					if (calculateSkeletonBindRoot)
+						inverseBindRoots[remappedElementIndex] = calculateSkeletonBindRoot(node);
 				} else {
-					result[remappedElementIndex] = nodeId;
+					result[remappedElementIndex] = nodeId.AsString();
 				}
 			}
 
-            // result.push_back(std::string((const char*)elementStart, (const char*)i));
 			++elementIndex;
             if (i == arrayData._end || elementIndex == count) break;
         }
 
-        return result;
+        return { std::move(result), std::move(inverseBindRoots) };
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1093,7 +1098,8 @@ namespace ColladaConversion
 
     auto Convert(   const SkinController& controller, 
                     const URIResolveContext& resolveContext,
-                    const ImportConfiguration& cfg)
+                    const ImportConfiguration& cfg,
+					SkeletonBindRootFn& bindRootFn)
         -> RenderCore::Assets::GeoProc::UnboundSkinController
     {
         auto bindShapeMatrix = Identity<Float4x4>(), postSkinningBindMatrix = Identity<Float4x4>();
@@ -1108,8 +1114,16 @@ namespace ColladaConversion
         ControllerVertexIterator vIterator(controller, resolveContext);
 		
 		auto inverseBindMatrices = GetInverseBindMatrices(controller, resolveContext, {});
-		auto jointNames = GetJointNames(controller, resolveContext, {});
+		std::vector<std::string> jointNames; std::vector<Float4x4> skeletonBindRootMatrices;
+		std::tie(jointNames, skeletonBindRootMatrices) = GetJointNames(controller, resolveContext, {}, bindRootFn);
 		assert(inverseBindMatrices.size() == jointNames.size());
+
+        // the inverse binds exported from Blender are relative to worldspace, but we need them to be relative to the top
+        // of the skeleton (ie, the armature)
+        assert(inverseBindMatrices.size() == skeletonBindRootMatrices.size());
+        for (unsigned c=0; c<std::min(inverseBindMatrices.size(), skeletonBindRootMatrices.size()); ++c)
+            inverseBindMatrices[c] = Combine(skeletonBindRootMatrices[c], inverseBindMatrices[c]);
+
         UnboundSkinController result(
             std::move(inverseBindMatrices), bindShapeMatrix, postSkinningBindMatrix,
             std::move(jointNames));

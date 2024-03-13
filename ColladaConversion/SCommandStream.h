@@ -18,6 +18,7 @@ namespace ColladaConversion
 	class Node; class URIResolveContext;
 
 	void BuildSkeleton(RenderCore::Assets::GeoProc::NascentSkeleton& skeleton, const Node& node, StringSection<> skeletonName = {});
+    Float4x4 CalculateLocalToWorld(Node node);
 
 	auto BuildMaterialTableStrings(
         IteratorRange<const InstanceGeometry::MaterialBinding*> bindings, 

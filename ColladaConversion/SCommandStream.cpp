@@ -50,7 +50,6 @@ namespace ColladaConversion
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	//#pragma warning(disable:4505) // 'RenderCore::ColladaConversion::FloatBits' : unreferenced local function has been removed)
     static unsigned int FloatBits(float input)
     {
             // (or just use a reinterpret cast)
@@ -122,7 +121,7 @@ namespace ColladaConversion
                 //  animated (because normally the animation controller should use the sid to
                 //  reference it)
             auto paramName = std::string(nodeName) + "/" + AsString(trans.GetSid());
-            const bool isAnimated = !trans.GetSid().IsEmpty() && predicate(paramName);
+            const bool isAnimated = !trans.GetSid().IsEmpty() && (!predicate || predicate(paramName));
             parameterType = isAnimated ? ParameterType_Animated : ParameterType_Embedded;
 
                 // We ignore transforms that are too close to their identity...
@@ -262,6 +261,25 @@ namespace ColladaConversion
 
         skeleton.WritePopLocalToWorld(pushCount);
     }
+
+    Float4x4 CalculateLocalToWorld(Node node)
+	{
+        std::vector<Node> nodeChain;
+		while (node) {
+			nodeChain.push_back(node);
+			node = node.GetParent();
+		}
+        RenderCore::Assets::GeoProc::NascentSkeleton dummySkeleton;
+        for (auto q=nodeChain.rbegin(); q!=nodeChain.rend(); ++q) {
+            PushTransformations(dummySkeleton, q->GetFirstTransform(), "", {});
+        }
+        dummySkeleton.WriteOutputMarker("", "output");
+        assert(dummySkeleton.GetSkeletonMachine().GetOutputMatrixCount() == 1);
+        auto output = dummySkeleton.GetSkeletonMachine().GenerateOutputTransforms();
+        if (dummySkeleton.GetSkeletonMachine().GetOutputMatrixCount() != 0 && output)
+            return output[0];
+        return Identity<Float4x4>();
+	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

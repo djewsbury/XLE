@@ -22,6 +22,7 @@ namespace ColladaConversion
     class MeshGeometry;
     class SkinController;
     class URIResolveContext;
+	class Node;
 
 	class ConvertedMeshGeometry
 	{
@@ -32,7 +33,10 @@ namespace ColladaConversion
 
 	ConvertedMeshGeometry Convert(const MeshGeometry& mesh, const URIResolveContext& pubEles, const ImportConfiguration& cfgs);
 
-    auto Convert(const SkinController& controller, const URIResolveContext& pubEles, const ImportConfiguration& cfg)
+	using SkeletonBindRootFn = std::function<Float4x4(const Node&)>;
+    auto Convert(
+		const SkinController& controller, const URIResolveContext& pubEles, 
+		const ImportConfiguration& cfg, SkeletonBindRootFn&)
         -> RenderCore::Assets::GeoProc::UnboundSkinController;
 }
 

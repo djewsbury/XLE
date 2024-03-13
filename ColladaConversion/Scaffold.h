@@ -443,6 +443,7 @@ namespace ColladaConversion
         InstanceGeometry();
         InstanceGeometry(InstanceGeometry&& moveFrom) never_throws;
         InstanceGeometry& operator=(InstanceGeometry&& moveFrom) never_throws;
+        ~InstanceGeometry();
 
     protected:
         void ParseBindMaterial(Formatter& formatter);
@@ -452,14 +453,12 @@ namespace ColladaConversion
     class InstanceController : public InstanceGeometry
     {
     public:
-        const Section& GetSkeleton() const { return _skeleton; }
+        std::vector<Section> _skeletons;
 
         InstanceController(Formatter& formatter);
         InstanceController(InstanceController&& moveFrom) never_throws;
         InstanceController& operator=(InstanceController&& moveFrom) never_throws;
-
-    protected:
-        Section _skeleton;
+        ~InstanceController();
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -681,6 +680,14 @@ namespace ColladaConversion
         void Parse_LibraryAnimations(Formatter& formatter);
         void Parse_Scene(Formatter& formatter);
 
+        IteratorRange<const Effect*> GetEffects() const { return _effects; }
+        IteratorRange<const MeshGeometry*> GetMeshGeometries() const { return _geometries; }
+        IteratorRange<const VisualScene*> GetVisualScenes() const { return _visualScenes; }
+        IteratorRange<const SkinController*> GetSkinControllers() const { return _skinControllers; }
+        IteratorRange<const Material*> GetMaterials() const { return _materials; }
+        IteratorRange<const Image*> GetImages() const { return _images; }
+        IteratorRange<const Animation*> GetAnimations() const { return _animations; }
+
         DocumentScaffold();
         ~DocumentScaffold();
 
@@ -702,7 +709,7 @@ namespace ColladaConversion
         Section GetMainVisualScene() const { return _visualScene; }
         const AssetDesc& GetAssetDesc() const { return _rootAsset; }
 
-    // protected:
+    protected:
         AssetDesc _rootAsset;
 
         std::vector<Effect> _effects;

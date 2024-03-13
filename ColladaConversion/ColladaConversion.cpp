@@ -76,9 +76,16 @@ namespace ColladaConversion
 		~ColladaCompileOp();
     };
 
+	struct SkeletonRoot
+	{
+		std::string _skeletonName;
+		ModelCompilationConfiguration::SkeletonRules _skeletonRules;
+		std::vector<GuidReference> _skeletonRefs;
+	};
+
 	static NascentSkeleton ConvertSkeleton(
 		const ColladaCompileOp& input, const VisualScene& scene,
-		IteratorRange<const std::string*> skinningSkeletons,
+		IteratorRange<const SkeletonRoot*> skinningSkeletons,
 		IteratorRange<const Node*> roots);
 
 	static NascentObjectGuid ConvertGeometryBlock(
@@ -170,19 +177,34 @@ namespace ColladaConversion
 		return IsAncestorOf(node.GetParent(), roots);
 	}
 
-	static std::string GetSkeletonName(const InstanceController& instController, const ::ColladaConversion::URIResolveContext& resolveContext)
+	static std::string GetControllerSkeletonName(const InstanceController& instController, const ::ColladaConversion::URIResolveContext& resolveContext)
 	{
-		auto node = FindElement(
-			GuidReference(instController.GetSkeleton()),
-			resolveContext,
-			&IDocScopeIdResolver::FindNode);
-		if (node)
-			return SkeletonBindingName(node);
+		if (instController._skeletons.empty())
+			return {};
 
-		auto skeleId = instController.GetSkeleton().AsString();
+		auto skeleId = instController._reference.AsString();
 		if (!skeleId.empty() && *skeleId.begin() == '#')
 			skeleId.erase(skeleId.begin());
+		skeleId = "_controller_skeleton_" + skeleId;
 		return skeleId;
+	}
+
+	static Float4x4 FindSkeletonInverseBindRoot(const InstanceController& controller, Node node)
+	{
+		std::vector<uint64_t> skeletonGuidReferences;
+		skeletonGuidReferences.reserve(controller._skeletons.size());
+		for (auto s:controller._skeletons) skeletonGuidReferences.emplace_back(GuidReference{s}._id);
+
+		while (node) {
+			if (std::find(skeletonGuidReferences.begin(), skeletonGuidReferences.end(), node.GetId().GetHash()) != skeletonGuidReferences.end()) {
+				node = node.GetParent();
+				if (!node) return Identity<Float4x4>();
+				return CalculateLocalToWorld(node); // this is a skeleton root
+			}
+			node = node.GetParent();
+		}
+
+		return Identity<Float4x4>();
 	}
 
 	static NascentModel ConvertModel(const ColladaCompileOp& input, const VisualScene& scene, IteratorRange<const Node*> roots)
@@ -242,8 +264,10 @@ namespace ColladaConversion
 					Throw(::Exceptions::BasicLabel("Could not find controller object to instantiate (%s)",
 						instController._reference.AsString().c_str()));
 
-				auto controller = Convert(*scaffoldController, input._resolveContext, input._cfg);
-				auto skeleName = GetSkeletonName(instController, input._resolveContext);
+				ColladaConversion::SkeletonBindRootFn skeletonRootCalculator = [&instController](const Node& n) { return FindSkeletonInverseBindRoot(instController, n); };
+
+				auto controller = Convert(*scaffoldController, input._resolveContext, input._cfg, skeletonRootCalculator);
+				auto skeleName = GetControllerSkeletonName(instController, input._resolveContext);
 
 				model.Add(
 					controllerId, 
@@ -311,29 +335,30 @@ namespace ColladaConversion
 		return roots;
 	}
 
-	static std::vector<std::pair<std::string, ModelCompilationConfiguration::SkeletonRules>> CollateSkeletonRoots(const ColladaCompileOp& input, const VisualScene& scene, IteratorRange<const Node*> roots, const ModelCompilationConfiguration& cfg)
+	static std::vector<SkeletonRoot> CollateSkeletonRoots(const ColladaCompileOp& input, const VisualScene& scene, IteratorRange<const Node*> roots, const ModelCompilationConfiguration& cfg)
 	{
-		std::vector<std::pair<std::string, ModelCompilationConfiguration::SkeletonRules>> skinningSkeletons;
+		std::vector<SkeletonRoot> skinningSkeletons;
 		for (unsigned instSkinControllerIndex=0; instSkinControllerIndex<scene.GetInstanceControllerCount(); ++instSkinControllerIndex) {
             const auto& instController = scene.GetInstanceController(instSkinControllerIndex);
 			auto attachNode = scene.GetInstanceController_Attach(instSkinControllerIndex);
 			if (!IsAncestorOf(attachNode, roots))
 				continue;
 
-			auto name = GetSkeletonName(instController, input._resolveContext);
-			auto i = std::find_if(skinningSkeletons.begin(), skinningSkeletons.end(), [name](const auto& q) { return q.first == name; });
-			if (i == skinningSkeletons.end()) continue;
-
-			skinningSkeletons.emplace_back(name, cfg.MatchSkeletonRules(name));
+			SkeletonRoot root;
+			root._skeletonName = GetControllerSkeletonName(instController, input._resolveContext);
+			root._skeletonRules = cfg.MatchSkeletonRules(root._skeletonName);
+			for (auto i:instController._skeletons)
+				root._skeletonRefs.emplace_back(GuidReference(i));
+			skinningSkeletons.emplace_back(std::move(root));
 		}
-		skinningSkeletons.emplace_back(std::string{}, cfg.MatchSkeletonRules({}));
+		skinningSkeletons.emplace_back(SkeletonRoot{std::string{}, cfg.MatchSkeletonRules({})});
 		return skinningSkeletons;
 	}
 
     ::Assets::SerializedTarget SerializeSkin(const ColladaCompileOp& input, StringSection<utf8> rootNodeName, const ModelCompilationConfiguration& configuration)
     {
         const auto* scene = input._doc->FindVisualScene(
-            GuidReference(input._doc->_visualScene)._id);
+            GuidReference(input._doc->GetMainVisualScene())._id);
         if (!scene)
             Throw(::Exceptions::BasicLabel("No visual scene found"));
 
@@ -343,12 +368,10 @@ namespace ColladaConversion
 
 		auto model = ConvertModel(input, *scene, MakeIteratorRange(roots));
 		auto skinningSkeletons = CollateSkeletonRoots(input, *scene, roots, configuration);
-		std::vector<std::string> skeletonNames;
-		for (const auto&q:skinningSkeletons) skeletonNames.push_back(q.first);
-		auto embeddedSkeleton = ConvertSkeleton(input, *scene, skeletonNames, MakeIteratorRange(roots));
+		auto embeddedSkeleton = ConvertSkeleton(input, *scene, skinningSkeletons, MakeIteratorRange(roots));
 		if (skinningSkeletons.size() != 1)
 			Throw(std::runtime_error("Optimization for multiple skeletons not supported"));
-		OptimizeSkeleton(embeddedSkeleton, model, skinningSkeletons.front().second);
+		OptimizeSkeleton(embeddedSkeleton, model, skinningSkeletons.front()._skeletonRules);
 
 		return { model.SerializeToChunks("skin", embeddedSkeleton, configuration), input.GetDependencyValidation() };
     }
@@ -397,14 +420,14 @@ namespace ColladaConversion
 
 	static NascentSkeleton ConvertSkeleton(
 		const ColladaCompileOp& input, const VisualScene& scene,
-		IteratorRange<const std::string*> skinningSkeletons,
+		IteratorRange<const SkeletonRoot*> skeletonRoots,
 		IteratorRange<const Node*> roots)
 	{
 		NascentSkeleton result;
 		result.WriteOutputMarker("", "identity");
 
-		for (const auto&skeleton:skinningSkeletons) {
-			if (skeleton.empty()) {
+		for (const auto&skeleton:skeletonRoots) {
+			if (skeleton._skeletonName.empty()) {
 				unsigned topLevelPops = 0;
 				auto coordinateTransform = BuildCoordinateTransform(input._doc->GetAssetDesc());
 				if (!Equivalent(coordinateTransform, Identity<Float4x4>(), 1e-5f)) {
@@ -420,16 +443,15 @@ namespace ColladaConversion
 					BuildSkeleton(result, root);
 				result.WritePopLocalToWorld(topLevelPops);
 			} else {
-				auto node = scene.GetRootNode().FindBreadthFirst(
-					[skeleton](const Node& node) {
-						return skeleton == SkeletonBindingName(node);
-					});
-				if (!node)
-					Throw(::Exceptions::BasicLabel("Could not find node for skeleton with binding name (%s)", skeleton.c_str()));
+				for (auto q: skeleton._skeletonRefs) {
+					auto node = FindElement(q, input._resolveContext, &IDocScopeIdResolver::FindNode);
+					if (!node)
+						Throw(::Exceptions::BasicLabel("Could not find node for while processing skeleton (%s)", skeleton._skeletonName.c_str()));
 
-				// Note that we include this skeleton, even if it isn't strictly an ancestor of the nodes
-				// in roots. This is so skin controllers can reference skeletons in arbitrary parts of the scene
-				BuildSkeleton(result, node, skeleton);
+					// Note that we include this skeleton, even if it isn't strictly an ancestor of the nodes
+					// in roots. This is so skin controllers can reference skeletons in arbitrary parts of the scene
+					BuildSkeleton(result, node, skeleton._skeletonName);
+				}
 			}
 		}
 		
@@ -442,12 +464,10 @@ namespace ColladaConversion
 		if (roots.empty()) return {};
 
 		auto skinningSkeletons = CollateSkeletonRoots(input, scene, roots, cfg);
-		std::vector<std::string> skeletonNames;
-		for (const auto&q:skinningSkeletons) skeletonNames.push_back(q.first);
-		auto result = ConvertSkeleton(input, scene, skeletonNames, MakeIteratorRange(roots));
+		auto result = ConvertSkeleton(input, scene, skinningSkeletons, MakeIteratorRange(roots));
 		if (skinningSkeletons.size() != 1)
 			Throw(std::runtime_error("Optimization for multiple skeletons not supported"));
-		OptimizeSkeleton(result, skinningSkeletons.front().second);
+		OptimizeSkeleton(result, skinningSkeletons.front()._skeletonRules);
 
 		return result;
     }
@@ -455,7 +475,7 @@ namespace ColladaConversion
     ::Assets::SerializedTarget SerializeSkeleton(const ColladaCompileOp& input, StringSection<utf8> rootNodeName, const ModelCompilationConfiguration& cfg)
     {
 		const auto* scene = input._doc->FindVisualScene(
-            GuidReference(input._doc->_visualScene)._id);
+            GuidReference(input._doc->GetMainVisualScene())._id);
         if (!scene)
             Throw(::Exceptions::BasicLabel("No visual scene found"));
 
@@ -470,7 +490,7 @@ namespace ColladaConversion
 
         std::vector<std::pair<NascentObjectGuid, RenderCore::Assets::RawMaterial>> compiledEffects;
 
-        const auto& effects = model._doc->_effects;
+        auto effects = model._doc->GetEffects();
         for (auto i=effects.cbegin(); i!=effects.cend(); ++i) {
             TRY
             {
@@ -482,7 +502,7 @@ namespace ColladaConversion
             } CATCH_END
         }
 
-        const auto& mats = model._doc->_materials;
+        auto mats = model._doc->GetMaterials();
         for (auto m=mats.cbegin(); m!=mats.cend(); ++m) {
             GuidReference effect(m->_effectReference);
 			auto i = LowerBound(compiledEffects, NascentObjectGuid { effect._id, effect._fileHash });
@@ -515,7 +535,7 @@ namespace ColladaConversion
     {
 		NascentAnimationSet result;
 
-		const auto& animations = input._doc->_animations;
+		auto animations = input._doc->GetAnimations();
         for (auto i=animations.cbegin(); i!=animations.cend(); ++i) {
             TRY {
 				const float framesPerSecond = 120.f;

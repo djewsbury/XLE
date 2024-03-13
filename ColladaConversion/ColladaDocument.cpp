@@ -1720,19 +1720,10 @@ namespace ColladaConversion
         PARSE_END
     }
 
-    InstanceGeometry::InstanceGeometry() {}
-    InstanceGeometry::InstanceGeometry(InstanceGeometry&& moveFrom) never_throws
-    : _matBindings(std::move(moveFrom._matBindings))
-    {
-        _reference = moveFrom._reference;
-    }
-
-    InstanceGeometry& InstanceGeometry::operator=(InstanceGeometry&& moveFrom) never_throws
-    {
-        _reference = moveFrom._reference;
-        _matBindings = std::move(moveFrom._matBindings);
-        return *this;
-    }
+    InstanceGeometry::InstanceGeometry() = default;
+    InstanceGeometry::InstanceGeometry(InstanceGeometry&& moveFrom) never_throws = default;
+    InstanceGeometry& InstanceGeometry::operator=(InstanceGeometry&& moveFrom) never_throws = default;
+    InstanceGeometry::~InstanceGeometry() = default;
 
 
     InstanceController::InstanceController(Formatter& formatter) 
@@ -1742,7 +1733,9 @@ namespace ColladaConversion
                 ParseBindMaterial(formatter);
             } else if (Is(eleName, "skeleton")) {
                 SkipAllKeyedItems(formatter);
-                formatter.TryCharacterData(_skeleton);
+                StringSection<> skel;
+                if (formatter.TryCharacterData(skel))
+                    _skeletons.emplace_back(skel);
             } else {
                 Log(Warning) << "Skipping element " << eleName << " at " << formatter.GetLocation() << std::endl;
                 SkipElement(formatter);
@@ -1754,17 +1747,9 @@ namespace ColladaConversion
         PARSE_END
     }
 
-    InstanceController::InstanceController(InstanceController&& moveFrom) never_throws
-    : InstanceGeometry(std::forward<InstanceController>(moveFrom))
-    {
-        _skeleton = moveFrom._skeleton;
-    }
-
-    InstanceController& InstanceController::operator=(InstanceController&& moveFrom) never_throws
-    {
-        _skeleton = moveFrom._skeleton;
-        return *this;
-    }
+    InstanceController::InstanceController(InstanceController&& moveFrom) never_throws = default;
+    InstanceController& InstanceController::operator=(InstanceController&& moveFrom) never_throws = default;
+    InstanceController::~InstanceController() = default;
 
     class VisualScene::RawNode
     {
@@ -1843,7 +1828,7 @@ namespace ColladaConversion
                                 // as well as material binding information.
                                 // each <instance_geometry> belongs inside of a 
                             assert(!workingNodes.empty());
-                            _geoInstances.push_back(std::make_pair(workingNodes.top(), InstanceGeometry(formatter)));
+                            _geoInstances.emplace_back(workingNodes.top(), InstanceGeometry(formatter));
 
                         } else if (Is(name, "instance_controller")) {
 
@@ -1851,7 +1836,7 @@ namespace ColladaConversion
                                 // as well as material binding information.
                                 // each <instance_geometry> belongs inside of a 
                             assert(!workingNodes.empty());
-                            _controllerInstances.push_back(std::make_pair(workingNodes.top(), InstanceController(formatter)));
+                            _controllerInstances.emplace_back(workingNodes.top(), InstanceController(formatter));
 
                         } else if (TransformationSet::IsTransform(name)) {
 
