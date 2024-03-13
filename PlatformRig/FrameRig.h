@@ -38,7 +38,8 @@ namespace PlatformRig
             std::shared_ptr<RenderCore::IPresentationChain> presChain);
 
         FrameResult ShutdownFrame(
-            RenderCore::Techniques::ParsingContext& parsingContext);
+            RenderCore::Techniques::ParsingContext& parsingContext,
+            std::ostream* appLog = nullptr);
 
         void IntermedialSleep(
             RenderCore::IThreadContext& threadContext,

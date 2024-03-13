@@ -59,7 +59,7 @@
 #include "DebuggingDisplays/InvalidAssetDisplay.h"
 
 using namespace Assets::Literals;
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 using namespace Utility::Literals;
 
 namespace PlatformRig
@@ -208,7 +208,8 @@ namespace PlatformRig
     }
 
     auto FrameRig::ShutdownFrame(
-        RenderCore::Techniques::ParsingContext& parserContext) -> FrameResult
+        RenderCore::Techniques::ParsingContext& parserContext,
+        std::ostream* appLog) -> FrameResult
     {
         using namespace RenderCore;
         auto* cpuProfiler = _pimpl->_frameCPUProfiler.get();
@@ -237,7 +238,9 @@ namespace PlatformRig
 
 			{
 				CPUProfileEvent_Conditional pEvnt2("Present", cpuProfiler);
-				context.Present(*_pimpl->_activePresentationChain);
+                std::string errorMsgBuffer;
+				context.Present(*_pimpl->_activePresentationChain, errorMsgBuffer);
+				if (!errorMsgBuffer.empty() && appLog) *appLog << "Present error: " << errorMsgBuffer << std::endl;
 			}
 
             if (_subFrameEvents)
@@ -248,13 +251,14 @@ namespace PlatformRig
             if (_subFrameEvents)
                 _subFrameEvents->_onFrameBarrier.Invoke();
 
-            Techniques::SetThreadContext(nullptr);
+            Techniques::SetThreadContext({});
 
         } CATCH(const std::exception& e) {
 			Log(Error) << "Suppressed error in frame rig render: " << e.what() << std::endl;
+            if (appLog) *appLog << "Suppressed error in frame rig render: " << e.what() << std::endl;
 		    if (endAnnotatorFrame)
                 context.GetAnnotator().Frame_End();
-            Techniques::SetThreadContext(nullptr);
+            Techniques::SetThreadContext({});
 	    } CATCH_END
 	
         uint64_t frameBarrierTimePoint = OSServices::GetPerformanceCounter();
