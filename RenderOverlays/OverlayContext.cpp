@@ -68,7 +68,7 @@ namespace RenderOverlays
 		data[0] = Vertex{v, HardwareColor(col), float(size)};
 	}
 
-	void ImmediateOverlayContext::DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col,    uint8_t size)
+	void ImmediateOverlayContext::DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB& col,    uint8_t size)
 	{
 		using Vertex = Vertex_PCR;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -77,7 +77,7 @@ namespace RenderOverlays
 			data[c] = Vertex{v[c], HardwareColor(col), float(size)};
 	}
 
-	void ImmediateOverlayContext::DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[],   uint8_t size)
+	void ImmediateOverlayContext::DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB col[],   uint8_t size)
 	{
 		using Vertex = Vertex_PCR;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -95,7 +95,7 @@ namespace RenderOverlays
 		data[1] = Vertex{v1, HardwareColor(colV1)};
 	}
 
-	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col,    float thickness)
+	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB& col,    float thickness)
 	{
 		using Vertex = Vertex_PC;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -104,7 +104,7 @@ namespace RenderOverlays
 			data[c] = Vertex{v[c], HardwareColor(col)};
 	}
 
-	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[],   float thickness)
+	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB col[],   float thickness)
 	{
 		using Vertex = Vertex_PC;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -113,7 +113,7 @@ namespace RenderOverlays
 			data[c] = Vertex{v[c], HardwareColor(col[c])};
 	}
 
-	void ImmediateOverlayContext::DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col)
+	void ImmediateOverlayContext::DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB& col)
 	{
 		using Vertex = Vertex_PC;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -122,7 +122,7 @@ namespace RenderOverlays
 			data[c] = Vertex{v[c], HardwareColor(col)};
 	}
 
-	void ImmediateOverlayContext::DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[])
+	void ImmediateOverlayContext::DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB col[])
 	{
 		using Vertex = Vertex_PC;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -169,89 +169,6 @@ namespace RenderOverlays
 		data[5] = Vertex{Float3(maxs[0], maxs[1], mins[2]), col, Float2(maxTex0[0], maxTex0[1])};
 	}
 
-	Float2 ImmediateOverlayContext::DrawText	 (  const std::tuple<Float3, Float3>& quad,
-													const Font& font, DrawTextFlags::BitField flags,
-													ColorB col,
-													TextAlignment alignment, StringSection<char> text)
-	{
-		if (!_fontRenderingManager) return Float2{0, 0};
-
-		Quad q;
-		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
-		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
-		Float2 alignedPosition = AlignText(font, q, alignment, text);
-		if (!(flags & DrawTextFlags::Clip))
-			q.max = {0,0};
-		return Draw(
-			*_threadContext,
-			*_immediateDrawables,
-			*_fontRenderingManager,
-			font, flags,
-			alignedPosition[0], alignedPosition[1],
-			q.max[0], q.max[1],
-			text,
-			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
-			col);
-	}
-
-	void ImmediateOverlayContext::DrawText(
-			const Float3x4& localToWorld,
-			const Font& font, DrawTextFlags::BitField flags,
-			ColorB col, RenderCore::Assets::RenderStateSet stateSet,
-			bool center, StringSection<char> text)
-	{
-		if (!_fontRenderingManager) return;
-
-		if (center) {
-			// integrate a little offset into the local-to-world
-			Float2 alignedPosition = AlignText(font, Quad{}, TextAlignment::Center, text);
-			auto adjLocalToWorld = localToWorld;
-			Combine_IntoRHS(Float3{alignedPosition, 0.f}, adjLocalToWorld);
-			Draw(
-				*_threadContext,
-				*_immediateDrawables,
-				*_fontRenderingManager,
-				font, flags,
-				text, adjLocalToWorld, stateSet, col);
-		} else {
-			Draw(
-				*_threadContext,
-				*_immediateDrawables,
-				*_fontRenderingManager,
-				font, flags,
-				text, localToWorld, stateSet, col);
-		}
-	}
-
-	Float2  ImmediateOverlayContext::DrawTextWithTable(
-			const std::tuple<Float3, Float3>& quad,
-			FontPtrAndFlags fontTable[256],
-			TextAlignment alignment,
-			StringSection<> text,
-			IteratorRange<const uint32_t*> colors,
-			IteratorRange<const uint8_t*> fontSelectors,
-			ColorB shadowColor)
-	{
-		if (!_fontRenderingManager) return Float2{0, 0};
-
-		Quad q;
-		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
-		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
-		Float2 alignedPosition = q.min;
-		if (fontTable[0].first)
-			alignedPosition = AlignText(*fontTable[0].first, q, alignment, text);
-		return DrawWithTable(
-			*_threadContext,
-			*_immediateDrawables,
-			*_fontRenderingManager,
-			fontTable,
-			alignedPosition[0], alignedPosition[1],
-			0.f, 0.f,
-			text, colors, fontSelectors,
-			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
-			shadowColor);
-	}
-
 	void ImmediateOverlayContext::CaptureState()
 	{
 		SetState(OverlayState());
@@ -269,16 +186,6 @@ namespace RenderOverlays
 	void ImmediateOverlayContext::SetEncoderState(const RenderCore::Techniques::EncoderState& state)
 	{
 		_immediateDrawables->QueueEncoderState(state);
-	}
-
-	BufferUploads::CommandListID ImmediateOverlayContext::GetRequiredBufferUploadsCommandList() const
-	{ 
-		return _requiredBufferUploadsCommandList;
-	}
-
-	void ImmediateOverlayContext::RequireCommandList(BufferUploads::CommandListID cmdList)
-	{
-		_requiredBufferUploadsCommandList = std::max(_requiredBufferUploadsCommandList, cmdList);
 	}
 
 	static RenderCore::Techniques::ImmediateDrawableMaterial AsMaterial(const OverlayState& state)
@@ -332,10 +239,10 @@ namespace RenderOverlays
 	ImmediateOverlayContext::ImmediateOverlayContext(
 		RenderCore::IThreadContext& threadContext,
 		RenderCore::Techniques::IImmediateDrawables& immediateDrawables)
-	: _immediateDrawables(&immediateDrawables)
-	, _threadContext(&threadContext)
-	, _fontRenderingManager(nullptr)
 	{
+		_immediateDrawables = &immediateDrawables;
+		_threadContext = &threadContext;
+		_fontRenderingManager = nullptr;
 		_texturedUSI = std::make_shared<RenderCore::UniformsStreamInterface>();
 		_texturedUSI->BindResourceView(0, "InputTexture"_h);
 		_requiredBufferUploadsCommandList = 0;
@@ -369,6 +276,14 @@ namespace RenderOverlays
 			RenderOverlays::OverlayApparatus& apparatus)
 	{
 		return MakeImmediateOverlayContext(threadContext, *apparatus._immediateDrawables, apparatus._fontRenderingManager.get());
+	}
+
+	IOverlayContext::IOverlayContext()
+	{
+		_immediateDrawables = nullptr;
+		_threadContext = nullptr;
+		_fontRenderingManager = nullptr;
+		_requiredBufferUploadsCommandList = 0;
 	}
 
 	IOverlayContext::~IOverlayContext() {}

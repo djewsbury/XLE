@@ -9,6 +9,7 @@
 #include "Font.h"
 #include "DebuggingDisplay.h"
 #include "OverlayApparatus.h"
+#include "DrawText.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
@@ -252,7 +253,8 @@ namespace RenderOverlays
 
 		auto font = RenderOverlays::MakeFont("DosisBook", 26)->TryActualize();
 		if (font) {
-			overlayContext->DrawText(
+			DrawTextHelper(
+				*overlayContext,
 				std::make_tuple(Float3{0.f, 0.f, 0.f}, Float3{viewportDims[0], viewportDims[1], 0.f}),
 				**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Center, msg);
 		}
@@ -312,7 +314,8 @@ namespace RenderOverlays
 
 		for (auto s:split._sections) {
 			if (yIterator > -int(lineHeight))
-				overlayContext->DrawText(
+				DrawTextHelper(
+					*overlayContext,
 					{ 	Float3{horzPadding + horzRectArea, yIterator, 0.f}, 
 						Float3{viewportDims[0] - horzPadding, yIterator + lineHeight, 0.f} },
 					**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Left, s);

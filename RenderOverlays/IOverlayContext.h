@@ -8,18 +8,16 @@
 
 #include "OverlayPrimitives.h"
 #include "../Math/Vector.h"
-#include "../Math/Matrix.h"
-#include "../Utility/StringUtils.h"
 #include "../Utility/IteratorUtils.h"
 
-namespace RenderCore { class IResourceView; class MiniInputElementDesc; }
+namespace RenderCore { class IResourceView; class MiniInputElementDesc; class IThreadContext; }
 namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; class EncoderState; } }
-namespace RenderCore { namespace Assets { class ShaderPatchCollection; class RenderStateSet; } }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderOverlays
 {
 	class Font;
+    class FontRenderingManager;
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -59,15 +57,15 @@ namespace RenderOverlays
     {
     public:
         virtual void    DrawPoint       (ProjectionMode proj, const Float3& v,       const ColorB& col,      uint8_t size = 1) = 0;
-        virtual void    DrawPoints      (ProjectionMode proj, const Float3 v[],      uint32 numPoints,       const ColorB& col,    uint8_t size = 1) = 0;
-        virtual void    DrawPoints      (ProjectionMode proj, const Float3 v[],      uint32 numPoints,       const ColorB col[],   uint8_t size = 1) = 0;
+        virtual void    DrawPoints      (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB& col,    uint8_t size = 1) = 0;
+        virtual void    DrawPoints      (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB col[],   uint8_t size = 1) = 0;
 
         virtual void    DrawLine        (ProjectionMode proj, const Float3& v0,      const ColorB& colV0,    const Float3& v1,     const ColorB& colV1,        float thickness = 1.0f) = 0;
-        virtual void    DrawLines       (ProjectionMode proj, const Float3 v[],      uint32 numPoints,       const ColorB& col,    float thickness = 1.0f) = 0;
-        virtual void    DrawLines       (ProjectionMode proj, const Float3 v[],      uint32 numPoints,       const ColorB col[],   float thickness = 1.0f) = 0;
+        virtual void    DrawLines       (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB& col,    float thickness = 1.0f) = 0;
+        virtual void    DrawLines       (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB col[],   float thickness = 1.0f) = 0;
 
-        virtual void    DrawTriangles   (ProjectionMode proj, const Float3 v[],      uint32 numPoints,       const ColorB& col)    = 0;
-        virtual void    DrawTriangles   (ProjectionMode proj, const Float3 v[],      uint32 numPoints,       const ColorB col[])   = 0;
+        virtual void    DrawTriangles   (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB& col)    = 0;
+        virtual void    DrawTriangles   (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB col[])   = 0;
         virtual void    DrawTriangle(
             ProjectionMode proj,
             const Float3& v0,      const ColorB& colV0,    const Float3& v1,
@@ -85,44 +83,47 @@ namespace RenderOverlays
             ColorB color = ColorB(0xffffffff),
             const Float2& minTex0 = Float2(0.f, 0.f), const Float2& maxTex0 = Float2(1.0f, 1.f)) = 0;
 
-        virtual Float2   DrawText(
-            const std::tuple<Float3, Float3>& quad,
-            const Font& font, DrawTextFlags::BitField,
-            ColorB col, TextAlignment alignment, StringSection<char> text) = 0;
-
-        virtual void   DrawText(
-            const Float3x4& localToWorld,
-            const Font& font, DrawTextFlags::BitField,
-            ColorB col, RenderCore::Assets::RenderStateSet stateSet,
-            bool center, StringSection<char> text) = 0;
-
-        using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;
-        virtual Float2  DrawTextWithTable(
-            const std::tuple<Float3, Float3>& quad,
-            FontPtrAndFlags fontTable[256],
-            TextAlignment alignment,
-            StringSection<> text,
-            IteratorRange<const uint32_t*> colors = {},
-            IteratorRange<const uint8_t*> fontSelectors = {},
-            ColorB shadowColor = ColorB::Black) = 0;
-
         virtual void    CaptureState    () = 0;
         virtual void    ReleaseState    () = 0;
         virtual void    SetState        (const OverlayState&) = 0;
         virtual void    SetEncoderState (const RenderCore::Techniques::EncoderState&) = 0;
 
-        virtual RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables() = 0;
-        virtual RenderCore::BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const = 0;
-        virtual void RequireCommandList(RenderCore::BufferUploads::CommandListID) = 0;
-
         virtual void* GetService(uint64_t) = 0;
         virtual void AttachService(uint64_t, void*) = 0;
+
+        RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables();
+        RenderCore::IThreadContext& GetThreadContext();
+        FontRenderingManager* GetFontRenderingManager();
+        RenderCore::BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const;
+        void RequireCommandList(RenderCore::BufferUploads::CommandListID);
 
         template<typename Type>
             Type* GetService() { return (Type*)GetService(typeid(std::decay_t<Type>).hash_code()); }
         template<typename Type>
             void AttachService2(Type& type) { AttachService(typeid(std::decay_t<Type>).hash_code(), &type); }
 
+        IOverlayContext();
         virtual ~IOverlayContext();
+
+    protected:
+        RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
+        RenderCore::IThreadContext* _threadContext;
+        FontRenderingManager* _fontRenderingManager;
+        RenderCore::BufferUploads::CommandListID _requiredBufferUploadsCommandList;
     };
+
+    inline RenderCore::Techniques::IImmediateDrawables& IOverlayContext::GetImmediateDrawables() { return *_immediateDrawables; }
+    inline RenderCore::IThreadContext& IOverlayContext::GetThreadContext() { return *_threadContext; }
+    inline FontRenderingManager* IOverlayContext::GetFontRenderingManager() { return _fontRenderingManager; }
+
+	inline RenderCore::BufferUploads::CommandListID IOverlayContext::GetRequiredBufferUploadsCommandList() const
+	{ 
+		return _requiredBufferUploadsCommandList;
+	}
+
+	inline void IOverlayContext::RequireCommandList(RenderCore::BufferUploads::CommandListID cmdList)
+	{
+		_requiredBufferUploadsCommandList = std::max(_requiredBufferUploadsCommandList, cmdList);
+	}
+
 }

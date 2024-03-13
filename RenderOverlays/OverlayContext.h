@@ -24,18 +24,18 @@ namespace RenderOverlays
     {
     public:
         void    DrawPoint      (ProjectionMode proj, const Float3& v,     const ColorB& col,      uint8_t size) override;
-        void    DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col,    uint8_t size) override;
-        void    DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[],   uint8_t size) override;
+        void    DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB& col,    uint8_t size) override;
+        void    DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB col[],   uint8_t size) override;
 
         void    DrawLine       (ProjectionMode proj, const Float3& v0,    const ColorB& colV0,    const Float3& v1,     const ColorB& colV1, float thickness) override;
-        void    DrawLines      (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col,    float thickness) override;
-        void    DrawLines      (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[],   float thickness) override;
+        void    DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB& col,    float thickness) override;
+        void    DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB col[],   float thickness) override;
 
-        void    DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB& col) override;
-        void    DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32 numPoints,       const ColorB col[]) override;
+        void    DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB& col) override;
+        void    DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB col[]) override;
 
         void    DrawTriangle   (ProjectionMode proj, const Float3& v0,    const ColorB& colV0,    const Float3& v1,     
-                                const ColorB& colV1, const Float3& v2,       const ColorB& colV2) override;
+                                const ColorB& colV1, const Float3& v2,    const ColorB& colV2) override;
 
         IteratorRange<void*> DrawGeometry(
             unsigned vertexCount,
@@ -47,30 +47,6 @@ namespace RenderOverlays
             const Float3& mins, const Float3& maxs, 
             std::shared_ptr<RenderCore::IResourceView> textureResource,
             ColorB color, const Float2& minTex0, const Float2& maxTex0) override;
-
-        Float2   DrawText(
-            const std::tuple<Float3, Float3>& quad, 
-            const Font& font, DrawTextFlags::BitField, 
-            ColorB col, TextAlignment alignment, StringSection<char> text) override;
-
-        void   DrawText(
-            const Float3x4& localToWorld,
-            const Font& font, DrawTextFlags::BitField,
-            ColorB col, RenderCore::Assets::RenderStateSet stateSet,
-            bool center, StringSection<char> text) override;
-
-        virtual Float2  DrawTextWithTable(
-            const std::tuple<Float3, Float3>& quad,
-			FontPtrAndFlags fontTable[256],
-			TextAlignment alignment,
-			StringSection<> text,
-			IteratorRange<const uint32_t*> colors,
-			IteratorRange<const uint8_t*> fontSelectors,
-			ColorB shadowColor) override;
-
-        RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables() override { return *_immediateDrawables; }
-        RenderCore::BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const override;
-        void RequireCommandList(RenderCore::BufferUploads::CommandListID) override;
 
         void CaptureState() override;
         void ReleaseState() override;
@@ -92,12 +68,8 @@ namespace RenderOverlays
         class ShaderBox;
 
     private:
-        RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
-        RenderCore::IThreadContext* _threadContext;
-        FontRenderingManager* _fontRenderingManager;
         OverlayState _currentState;
         std::shared_ptr<RenderCore::UniformsStreamInterface> _texturedUSI;
-        RenderCore::BufferUploads::CommandListID _requiredBufferUploadsCommandList = 0;
         std::vector<std::pair<uint64_t, void*>> _services;
 
         class DrawCall;

@@ -22,6 +22,7 @@
 #include "../Formatters/IDynamicFormatter.h"
 #include "../Formatters/FormatterUtils.h"
 #include "../Math/Geometry.h"
+#include "../Math/Transformations.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../Assets/Continuation.h"
 #include "../Assets/Marker.h"
@@ -852,14 +853,101 @@ namespace RenderOverlays
 
 	///////////////////////////////////////////////////////////////////////////////////
 
+	Float2 DrawTextHelper(
+		IOverlayContext& context,
+		const std::tuple<Float3, Float3>& quad,
+		const Font& font, DrawTextFlags::BitField flags,
+		ColorB col,
+		TextAlignment alignment, StringSection<char> text)
+	{
+		if (!context.GetFontRenderingManager()) return Float2{0, 0};
+
+		Quad q;
+		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
+		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
+		Float2 alignedPosition = AlignText(font, q, alignment, text);
+		if (!(flags & DrawTextFlags::Clip))
+			q.max = {0,0};
+		return Draw(
+			context.GetThreadContext(),
+			context.GetImmediateDrawables(),
+			*context.GetFontRenderingManager(),
+			font, flags,
+			alignedPosition[0], alignedPosition[1],
+			q.max[0], q.max[1],
+			text,
+			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
+			col);
+	}
+
+	void DrawTextHelper(
+		IOverlayContext& context,
+		const Float3x4& localToWorld,
+		const Font& font, DrawTextFlags::BitField flags,
+		ColorB col, RenderCore::Assets::RenderStateSet stateSet,
+		bool center, StringSection<char> text)
+	{
+		if (!context.GetFontRenderingManager()) return;
+
+		if (center) {
+			// integrate a little offset into the local-to-world
+			Float2 alignedPosition = AlignText(font, Quad{}, TextAlignment::Center, text);
+			auto adjLocalToWorld = localToWorld;
+			Combine_IntoRHS(Float3{alignedPosition, 0.f}, adjLocalToWorld);
+			Draw(
+				context.GetThreadContext(),
+				context.GetImmediateDrawables(),
+				*context.GetFontRenderingManager(),
+				font, flags,
+				text, adjLocalToWorld, stateSet, col);
+		} else {
+			Draw(
+				context.GetThreadContext(),
+				context.GetImmediateDrawables(),
+				*context.GetFontRenderingManager(),
+				font, flags,
+				text, localToWorld, stateSet, col);
+		}
+	}
+
+	void DrawTextWithTableHelper(
+		IOverlayContext& context,
+		const std::tuple<Float3, Float3>& quad,
+		FontPtrAndFlags fontTable[256],
+		TextAlignment alignment,
+		StringSection<> text,
+		IteratorRange<const uint32_t*> colors,
+		IteratorRange<const uint8_t*> fontSelectors,
+		ColorB shadowColor)
+	{
+		if (!context.GetFontRenderingManager()) return;
+
+		Quad q;
+		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
+		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
+		Float2 alignedPosition = q.min;
+		if (fontTable[0].first)
+			alignedPosition = AlignText(*fontTable[0].first, q, alignment, text);
+		DrawWithTable(
+			context.GetThreadContext(),
+			context.GetImmediateDrawables(),
+			*context.GetFontRenderingManager(),
+			fontTable,
+			alignedPosition[0], alignedPosition[1],
+			0.f, 0.f,
+			text, colors, fontSelectors,
+			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
+			shadowColor);
+	}
+
 	Coord2 DrawText::Draw(IOverlayContext& context, const Rect& rect, StringSection<> text) const
 	{
 		if (_font) {
-			return context.DrawText(AsPixelCoords(rect), *_font, _flags, _color, _alignment, text);
+			return DrawTextHelper(context, AsPixelCoords(rect), *_font, _flags, _color, _alignment, text);
 		} else {
 			auto* res = ConsoleRig::TryActualizeCachedBox<Internal::DefaultFontsBox>();
 			if (expect_evaluation(res != nullptr, true))
-				return context.DrawText(AsPixelCoords(rect), *res->_defaultFont, _flags, _color, _alignment, text);
+				return DrawTextHelper(context, AsPixelCoords(rect), *res->_defaultFont, _flags, _color, _alignment, text);
 			return {0,0};
 		}
 	}
