@@ -701,10 +701,24 @@ namespace RenderOverlays
 		// divider chars hard coded for now
 		// vscode allows &()+,./;?[]| to break (note curious inconsistency here -- things like !*- don't break)
 		// const auto dividers = MakeStringSection("\t ");
-		const auto dividers = MakeStringSection(U"\t &()+,./;?[]|\xffffffff");
-		VLA(bool, glyphIsDivider, chrsToLookupCount);
-		for (unsigned c=0; c<chrsToLookupCount; ++c)
-			glyphIsDivider[c] = *std::lower_bound(dividers.begin(), dividers.end(), chrsToLookup[c]) == chrsToLookup[c];
+		constexpr auto dividers = MakeStringSection(U"\t &()+,./;?[]|\xffffffff");
+		bool dividersBreakBefore[] = {true, true, true, true, true, true, false, false, true, false, false, true, true, true, true};
+		static_assert(dimof(dividersBreakBefore) == dividers.size());
+		VLA(bool, glyphDividesBefore, chrsToLookupCount);
+		VLA(bool, glyphDividesAfter, chrsToLookupCount);
+		{
+			auto i = dividers.begin();
+			assert(std::is_sorted(dividers.begin(), dividers.end()));
+			for (unsigned c=0; c<chrsToLookupCount; ++c) {
+				i = std::lower_bound(i, dividers.end(), chrsToLookup[c]);
+				if (*i == chrsToLookup[c]) { // require sentinel
+					glyphDividesBefore[c] = dividersBreakBefore[i-dividers.begin()];
+					glyphDividesAfter[c] = true;
+				} else {
+					glyphDividesBefore[c] = glyphDividesAfter[c] = false;
+				}
+			}
+		}
 
 		unsigned instanceCountPostClip = instanceCount;
 
@@ -719,10 +733,9 @@ namespace RenderOverlays
 				auto starti = i;
 
 				// We've already processed newlines and font rendering control statements. Just look for word wrap issues here
-				// We can wrap immediately before or after a divider
+				// Some dividers allow us to wrap before, other only after. For example ',' only allows us to wrap after
 				++i;
-				if (!glyphIsDivider[(i-1)->_glyphIdx])
-					while (i != &instances[instanceCountPostClip] && i->_lineIdx == starti->_lineIdx && !glyphIsDivider[i->_glyphIdx]) ++i;
+				while (i != &instances[instanceCountPostClip] && i->_lineIdx == starti->_lineIdx && !glyphDividesBefore[i->_glyphIdx] && !glyphDividesAfter[(i-1)->_glyphIdx]) ++i;
 
 				if ((i-starti) == 1 && !(glyphProps[starti->_glyphIdx]._width * glyphProps[starti->_glyphIdx]._height)) {
 					// Simplified version for the common case of just hitting a whitespace character (don't increase word index for the spaces)
