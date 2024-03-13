@@ -67,7 +67,6 @@ namespace RenderOverlays
 		};
 		static const int VertexSize = sizeof(Vertex);
 		static RenderCore::MiniInputElementDesc s_inputElements[];
-		static RenderCore::Techniques::ImmediateDrawableMaterial CreateMaterial();
 
 		void PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap);
 		void Complete();
@@ -75,16 +74,15 @@ namespace RenderOverlays
 
 		WorkingVertexSetFontResource(
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-			std::shared_ptr<RenderCore::IResourceView> textureView,
+			const RenderCore::Techniques::ImmediateDrawableMaterial& material,
 			float depth, bool snap);
 		WorkingVertexSetFontResource();
 
 	protected:
 		RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
-		RenderCore::Techniques::ImmediateDrawableMaterial _material;
+		const RenderCore::Techniques::ImmediateDrawableMaterial* _material;
 		IteratorRange<Vertex*> 	_currentAllocation;
 		Vertex*            		_currentIterator;
-		std::shared_ptr<RenderCore::IResourceView> _textureView;
 		float _depth;
 		bool _snap;
 	};
@@ -160,46 +158,44 @@ namespace RenderOverlays
 			result.SetParameter("FONT_RENDERER", 1);
 			return result;
 		}
-	}
-	static RenderCore::UniformsStreamInterface s_fontResourceUSI = Internal::CreateFontResourceUSI();
-	static ParameterBox s_fontRendererSelectorBoxFontResource = Internal::CreateFontRendererSelectorBoxFontResource();
 
-	RenderCore::Techniques::ImmediateDrawableMaterial WorkingVertexSetFontResource::CreateMaterial()
-	{
-		RenderCore::Techniques::ImmediateDrawableMaterial material;
-		material._uniformStreamInterface = &s_fontResourceUSI;
-		material._stateSet = RenderCore::Assets::RenderStateSet{};
-		material._shaderSelectors = &s_fontRendererSelectorBoxFontResource;
-		material._hash = HashCombine(s_fontResourceUSI.GetHash(), s_fontRendererSelectorBoxFontResource.GetHash());
-		return material;
+		static RenderCore::UniformsStreamInterface s_fontResourceUSI = Internal::CreateFontResourceUSI();
+		static ParameterBox s_fontRendererSelectorBoxFontResource = Internal::CreateFontRendererSelectorBoxFontResource();
+
+		static RenderCore::Techniques::ImmediateDrawableMaterial CreateMaterialForFontResource()
+		{
+			RenderCore::Techniques::ImmediateDrawableMaterial material;
+			material._uniformStreamInterface = &s_fontResourceUSI;
+			material._stateSet = RenderCore::Assets::RenderStateSet{};
+			material._shaderSelectors = &s_fontRendererSelectorBoxFontResource;
+			material._hash = HashCombine(s_fontResourceUSI.GetHash(), s_fontRendererSelectorBoxFontResource.GetHash());
+			return material;
+		}
 	}
 
 	void WorkingVertexSetFontResource::ReserveQuads(unsigned reservedQuads)
 	{
-		assert(!_currentIterator && _textureView);
+		assert(!_currentIterator);
 		assert(reservedQuads != 0);
-		static auto material = CreateMaterial();
-		material._uniforms._resourceViews.push_back(std::move(_textureView));		// super un-thread-safe
 		_currentAllocation = _immediateDrawables->QueueDraw(
 			reservedQuads * 6,
 			MakeIteratorRange(s_inputElements), 
-			material).Cast<Vertex*>();
+			*_material).Cast<Vertex*>();
 		_currentIterator = _currentAllocation.begin();
-		material._uniforms._resourceViews.clear();
 	}
 
 	WorkingVertexSetFontResource::WorkingVertexSetFontResource(
 		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-		std::shared_ptr<RenderCore::IResourceView> textureView,
+		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
 		float depth, bool snap)
 	: _immediateDrawables(&immediateDrawables)
-	, _textureView(std::move(textureView))
+	, _material(&material)
 	, _currentIterator{nullptr}
 	, _depth(depth), _snap(snap)
 	{}
 
 	WorkingVertexSetFontResource::WorkingVertexSetFontResource()
-	: _immediateDrawables{nullptr}, _currentIterator{nullptr}, _depth(0.f), _snap(false) {}
+	: _immediateDrawables{nullptr}, _material(nullptr), _currentIterator{nullptr}, _depth(0.f), _snap(false) {}
 
 	static RenderCore::MiniInputElementDesc s_inputElements3D[] = 
 	{
@@ -242,30 +238,29 @@ namespace RenderOverlays
 
 		void ReserveQuads(unsigned reservedQuads)
 		{
-			assert(!_currentIterator && _textureView);
+			assert(!_currentIterator);
 			assert(reservedQuads != 0);
-			static auto material = CreateMaterial();
-			material._stateSet = _stateSet;
-			material._hash = HashCombine(_stateSet.GetHash(), "WorkingVertexSetFontResource3D"_h);
-			material._uniforms._resourceViews.push_back(std::move(_textureView));		// super un-thread-safe
 			_currentAllocation = _immediateDrawables->QueueDraw(
 				reservedQuads * 6,
 				MakeIteratorRange(s_inputElements3D), 
-				material).Cast<Vertex*>();
+				_modifiedMaterial).Cast<Vertex*>();
 			_currentIterator = _currentAllocation.begin();
-			material._uniforms._resourceViews.clear();
 		}
 
 		WorkingVertexSetFontResource3D(
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-			std::shared_ptr<RenderCore::IResourceView> textureView,
+			const RenderCore::Techniques::ImmediateDrawableMaterial& baseMaterial,
 			const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet)
-		: WorkingVertexSetFontResource(immediateDrawables, std::move(textureView), 0.f, false)
-		, _localToWorld(localToWorld), _stateSet(stateSet) {}
+		: WorkingVertexSetFontResource(immediateDrawables, baseMaterial, 0.f, false)
+		, _localToWorld(localToWorld), _modifiedMaterial(baseMaterial)
+		{
+			_modifiedMaterial._stateSet = stateSet;
+			_modifiedMaterial._hash = HashCombine(stateSet.GetHash(), "WorkingVertexSetFontResource3D"_h);
+		}
 		WorkingVertexSetFontResource3D() {}
 	protected:
 		Float3x4 _localToWorld;
-		RenderCore::Assets::RenderStateSet _stateSet;
+		RenderCore::Techniques::ImmediateDrawableMaterial _modifiedMaterial;
 	};
 
 
@@ -280,7 +275,6 @@ namespace RenderOverlays
 		};
 		static const int VertexSize = sizeof(Vertex);
 		static RenderCore::MiniInputElementDesc s_inputElements[];
-		static RenderCore::Techniques::ImmediateDrawableMaterial CreateMaterial();
 
 		void PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap);
 		void Complete();
@@ -288,16 +282,15 @@ namespace RenderOverlays
 
 		WorkingVertexSetPCT(
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-			std::shared_ptr<RenderCore::IResourceView> textureView,
+			const RenderCore::Techniques::ImmediateDrawableMaterial& material,
 			float depth, bool snap);
 		WorkingVertexSetPCT();
 
 	protected:
 		RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
-		RenderCore::Techniques::ImmediateDrawableMaterial _material;
+		const RenderCore::Techniques::ImmediateDrawableMaterial* _material;
 		IteratorRange<Vertex*> 	_currentAllocation;
 		Vertex*            		_currentIterator;
-		std::shared_ptr<RenderCore::IResourceView> _textureView;
 		float _depth;
 		bool _snap;
 	};
@@ -372,47 +365,44 @@ namespace RenderOverlays
 			result.SetParameter("FONT_RENDERER", 1);
 			return result;
 		}
-	}
 
-	static RenderCore::UniformsStreamInterface s_inputTextureUSI = Internal::CreateInputTextureUSI();
-	static ParameterBox s_fontRendererSelectorBox = Internal::CreateFontRendererSelectorBox();
+		static RenderCore::UniformsStreamInterface s_inputTextureUSI = Internal::CreateInputTextureUSI();
+		static ParameterBox s_fontRendererSelectorBox = Internal::CreateFontRendererSelectorBox();
 
-	RenderCore::Techniques::ImmediateDrawableMaterial WorkingVertexSetPCT::CreateMaterial()
-	{
-		RenderCore::Techniques::ImmediateDrawableMaterial material;
-		material._uniformStreamInterface = &s_inputTextureUSI;
-		material._stateSet = RenderCore::Assets::RenderStateSet{};
-		material._shaderSelectors = &s_fontRendererSelectorBox;
-		material._hash = HashCombine(s_fontResourceUSI.GetHash(), s_fontRendererSelectorBoxFontResource.GetHash());
-		return material;
+		static RenderCore::Techniques::ImmediateDrawableMaterial CreateMaterialForPCT()
+		{
+			RenderCore::Techniques::ImmediateDrawableMaterial material;
+			material._uniformStreamInterface = &s_inputTextureUSI;
+			material._stateSet = RenderCore::Assets::RenderStateSet{};
+			material._shaderSelectors = &s_fontRendererSelectorBox;
+			material._hash = HashCombine(s_fontResourceUSI.GetHash(), s_fontRendererSelectorBoxFontResource.GetHash());
+			return material;
+		}
 	}
 
 	void WorkingVertexSetPCT::ReserveQuads(unsigned reservedQuads)
 	{
-		assert(!_currentIterator && _textureView);
+		assert(!_currentIterator);
 		assert(reservedQuads != 0);
-		static auto material = CreateMaterial();
-		material._uniforms._resourceViews.push_back(std::move(_textureView));		// super un-thread-safe
 		_currentAllocation = _immediateDrawables->QueueDraw(
 			reservedQuads * 6,
 			MakeIteratorRange(s_inputElements), 
-			material).Cast<Vertex*>();
+			*_material).Cast<Vertex*>();
 		_currentIterator = _currentAllocation.begin();
-		material._uniforms._resourceViews.clear();
 	}
 
 	WorkingVertexSetPCT::WorkingVertexSetPCT(
 		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
-		std::shared_ptr<RenderCore::IResourceView> textureView,
+		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
 		float depth, bool snap)
 	: _immediateDrawables(&immediateDrawables)
-	, _textureView(std::move(textureView))
+	, _material(&material)
 	, _currentIterator{nullptr}
 	, _depth(depth), _snap(snap)
 	{}
 
 	WorkingVertexSetPCT::WorkingVertexSetPCT()
-	: _immediateDrawables{nullptr}, _currentIterator{nullptr}, _depth(0.f), _snap(false) {}
+	: _immediateDrawables{nullptr}, _material(nullptr), _currentIterator{nullptr}, _depth(0.f), _snap(false) {}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -812,7 +802,7 @@ namespace RenderOverlays
 		Float2 iterator { x, y };
 		ColorB colorOverride = 0x0;
 		while (!text.IsEmpty()) {
-			WorkingSetType workingSet { immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true };
+			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), depth, true };
 			bool success = DrawTemplate_Section<CharType, WorkingSetType, CheckMaxXY, SnapCoords>(
 				threadContext, workingSet,
 				textureMan, font, flags,
@@ -839,7 +829,7 @@ namespace RenderOverlays
 		Float2 iterator { 0.f, 0.f };
 		ColorB colorOverride = 0x0;
 		while (!text.IsEmpty()) {
-			WorkingSetType workingSet { immediateDrawables, textureMan.GetFontTexture().GetSRV(), localToWorld, stateSet };
+			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), localToWorld, stateSet };
 			bool success = DrawTemplate_Section<CharType, WorkingSetType, false, false>(
 				threadContext, workingSet,
 				textureMan, font, flags,
@@ -1058,7 +1048,7 @@ namespace RenderOverlays
 
 			auto estimatedQuadCount = instanceCount - firstRenderInstance;
 			if (!begun)
-				workingVertices = WorkingVertexSetFontResource{immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true};
+				workingVertices = WorkingVertexSetFontResource{immediateDrawables, textureMan.GetImmediateDrawableMaterial(), depth, true};
 			workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
 
 			for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
@@ -1156,14 +1146,14 @@ namespace RenderOverlays
 		const float depth = 0.f;
 
 		if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true };
+			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), depth, true };
 			bool success = DrawSpanInternal(
 				threadContext, workingSet, textureMan,
 				font, span, color);
 			if (!success) return false;
 			workingSet.Complete();
 		} else {
-			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetFontTexture().GetSRV(), depth, true };
+			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), depth, true };
 			bool success = DrawSpanInternal(
 				threadContext, workingSet, textureMan,
 				font, span, color);
@@ -1192,6 +1182,7 @@ namespace RenderOverlays
 		unsigned _texWidth, _texHeight;
 		unsigned _pageWidth, _pageHeight;
 		FontRenderingManager::Mode _mode;
+		RenderCore::Techniques::ImmediateDrawableMaterial _immediateDrawableMaterial;
 
 		Pimpl(RenderCore::IDevice& device, Mode mode, unsigned pageWidth, unsigned pageHeight, unsigned pageCount)
 		: _pageWidth(pageWidth), _pageHeight(pageHeight)
@@ -1216,6 +1207,10 @@ namespace RenderOverlays
 						} else
 							_activePages.emplace_back(std::move(newPage));
 					}
+
+				_immediateDrawableMaterial = Internal::CreateMaterialForPCT();
+				_immediateDrawableMaterial._uniforms._resourceViews.push_back(_texture->GetSRV());
+
 			} else {
 				auto linearPageSize = _pageWidth * _pageHeight;
 				_pageWidth = linearPageSize;
@@ -1234,6 +1229,9 @@ namespace RenderOverlays
 					} else
 						_activePages.emplace_back(std::move(newPage));
 				}
+
+				_immediateDrawableMaterial = Internal::CreateMaterialForFontResource();
+				_immediateDrawableMaterial._uniforms._resourceViews.push_back(_texture->GetSRV());
 			}
 		}
 	};
@@ -1858,6 +1856,11 @@ namespace RenderOverlays
 		return *_pimpl->_texture;
 	}
 
+	const std::shared_ptr<RenderCore::IResourceView>& FontRenderingManager::GetSRV() const
+	{
+		return _pimpl->_texture->GetSRV();
+	}
+
 	UInt2 FontRenderingManager::GetTextureDimensions()
 	{
 		return UInt2{_pimpl->_texWidth, _pimpl->_texHeight};
@@ -1866,6 +1869,11 @@ namespace RenderOverlays
 	void FontRenderingManager::OnFrameBarrier()
 	{
 		++_currentFrameIdx;
+	}
+
+	const RenderCore::Techniques::ImmediateDrawableMaterial& FontRenderingManager::GetImmediateDrawableMaterial()
+	{
+		return _pimpl->_immediateDrawableMaterial;
 	}
 
 	const std::shared_ptr<RenderCore::IResource>& FontRenderingManager::GetUnderlyingTextureResource()

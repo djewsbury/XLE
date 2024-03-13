@@ -11,7 +11,7 @@
 #include <memory>
 
 namespace RenderCore { class IResource; class IResourceView; class IThreadContext; class IDevice; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; }}
+namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; }}
 namespace RenderCore { namespace Assets { class RenderStateSet; }}
 
 namespace RenderOverlays
@@ -89,7 +89,7 @@ namespace RenderOverlays
 			unsigned _width = 0, _height = 0;
 			Float2 _tcTopLeft = Float2{0.f, 0.f};
 			Float2 _tcBottomRight = Float2{0.f, 0.f};
-			unsigned _lsbDelta = 0, _rsbDelta = 0;
+			signed _lsbDelta = 0, _rsbDelta = 0;
 			unsigned _lastAccessFrame = 0;
 			uint32_t _encodingOffset = 0;
 		};
@@ -105,10 +105,13 @@ namespace RenderOverlays
 			const Font& font,
 			IteratorRange<const ucs4*> chrs);
 
+		const std::shared_ptr<RenderCore::IResourceView>& GetSRV() const;
 		const FontTexture2D& GetFontTexture();
 		UInt2 GetTextureDimensions();
 		void OnFrameBarrier();
 		void AddUploadBarrier(RenderCore::IThreadContext& threadContext);
+
+		const RenderCore::Techniques::ImmediateDrawableMaterial& GetImmediateDrawableMaterial();
 
 		const std::shared_ptr<RenderCore::IResource>& GetUnderlyingTextureResource();		// intended for the debugging display
 	
