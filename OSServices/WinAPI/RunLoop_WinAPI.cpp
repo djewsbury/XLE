@@ -3,7 +3,9 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "RunLoop_WinAPI.h"
+#include "../../OSServices/Log.h"
 #include "../../Utility/IteratorUtils.h"
+#include "../../Core/Exceptions.h"
 #include <chrono>
 
 namespace OSServices
@@ -38,7 +40,11 @@ namespace OSServices
 
 		auto currentTimepoint = std::chrono::steady_clock::now();
 		while (!_timeoutEvents.empty() && _timeoutEvents.begin()->first <= currentTimepoint) {
-			_timeoutEvents.begin()->second._callback();
+			TRY {
+				_timeoutEvents.begin()->second._callback();
+			} CATCH(const std::exception& e) {
+				Log(Warning) << "Suppressed exception in OS trigger callback event: " << e.what() << std::endl;
+			} CATCH_END
 			_timeoutEvents.erase(_timeoutEvents.begin());
 		}
 
