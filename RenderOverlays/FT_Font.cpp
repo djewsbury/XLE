@@ -76,6 +76,8 @@ namespace RenderOverlays
 		FontProperties _fontProperties;
 	};
 
+	constexpr unsigned loadFlags = FT_LOAD_TARGET_LIGHT/* | FT_LOAD_NO_AUTOHINT*/;
+
 	FTFont::FTFont(StringSection<::Assets::ResChar> faceName, int faceSize)
 	{
 		{
@@ -126,7 +128,7 @@ namespace RenderOverlays
 		_fontProperties._ascenderExcludingAccent = _fontProperties._ascender;
 		_fontProperties._fixedWidthAdvance = 0.f;
 
-		error = FT_Load_Char(_face.get(), 'X', FT_LOAD_RENDER);
+		error = FT_Load_Char(_face.get(), 'X', loadFlags);
 		if (!error) {
 			_fontProperties._ascenderExcludingAccent = (float)_face->glyph->bitmap_top;
 			if (FT_IS_FIXED_WIDTH(_face.get()))
@@ -198,7 +200,7 @@ namespace RenderOverlays
 		auto i = LowerBound(_cachedLoadedChars, ch);
 		if (i == _cachedLoadedChars.end() || i->first != ch) {
 			LoadedChar loadedChar;
-			FT_Error error = FT_Load_Char(_face.get(), ch, 0/*FT_LOAD_NO_AUTOHINT*/);
+			FT_Error error = FT_Load_Char(_face.get(), ch, loadFlags);
 			if (!error) {
 				loadedChar._glyph = _face->glyph;
 				loadedChar._glyphProps._xAdvance = (float)loadedChar._glyph->advance.x / 64.0f;
@@ -225,7 +227,7 @@ namespace RenderOverlays
 			i = LowerBound2(MakeIteratorRange(i, _cachedLoadedChars.end()), glyphs.front());
 			if (i == _cachedLoadedChars.end() || i->first != glyphs.front()) {
 				LoadedChar loadedChar;
-				FT_Error error = FT_Load_Char(_face.get(), glyphs.front(), 0/*FT_LOAD_NO_AUTOHINT*/);
+				FT_Error error = FT_Load_Char(_face.get(), glyphs.front(), loadFlags);
 				if (!error) {
 					loadedChar._glyph = _face->glyph;
 					loadedChar._glyphProps._xAdvance = (float)loadedChar._glyph->advance.x / 64.0f;
@@ -251,7 +253,7 @@ namespace RenderOverlays
 		auto i = LowerBound(_cachedLoadedChars, ch);
 		if (i == _cachedLoadedChars.end() || i->first != ch) {
 			LoadedChar loadedChar;
-			FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER/*FT_LOAD_NO_AUTOHINT*/);
+			FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER | loadFlags);
 			if (!error) {
 				loadedChar._glyph = _face->glyph;
 				loadedChar._glyphProps._xAdvance = (float)loadedChar._glyph->advance.x / 64.0f;
@@ -261,6 +263,7 @@ namespace RenderOverlays
 				loadedChar._glyphProps._bitmapOffsetY = -loadedChar._glyph->bitmap_top;
 				loadedChar._glyphProps._width = loadedChar._glyph->bitmap.width;
 				loadedChar._glyphProps._height = loadedChar._glyph->bitmap.rows;
+				loadedChar._hasBeenRendered = true;
 			}
 			i = _cachedLoadedChars.insert(i, std::make_pair(ch, loadedChar));
 			if (error)
@@ -268,7 +271,7 @@ namespace RenderOverlays
 		} else if (!i->second._hasBeenRendered) {
 			// We must load the character again to render, because it seems like only the most recently loaded character
 			// can be rendered
-			FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER/*FT_LOAD_NO_AUTOHINT*/);
+			FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER | loadFlags);
 			if (error)
 				return Bitmap {};		// i->second._hasBeenRendered not set; will always attempt to re-render
 			i->second._hasBeenRendered = true;
