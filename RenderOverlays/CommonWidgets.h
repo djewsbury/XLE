@@ -64,7 +64,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		unsigned                                    _autoCompleteCursor = 0;
 
 		PlatformRig::ProcessInputResult    ProcessInput(
-			DebuggingDisplay::InterfaceState& interfaceState, const OSServices::InputSnapshot& input,
+			const OSServices::InputSnapshot& input,
 			const std::function<std::vector<std::basic_string<CharType>>(const std::basic_string<CharType>&)>& autocompleteFn = nullptr);
 
 		void Reset(const std::basic_string<CharType>& currentLine);

@@ -114,7 +114,7 @@ namespace PlatformRig { namespace Overlays
         auto endI = input._activeButtons.cend();
 
         bool consume = _textEntry.ProcessInput(
-            interfaceState, input,
+            input,
             [](auto currentline) { return ConsoleRig::Console::GetInstance().AutoComplete(currentline); }) == ProcessInputResult::Consumed;
 
         if (input.IsPress(enter)) {

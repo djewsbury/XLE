@@ -17,7 +17,7 @@
 #include "../Formatters/IDynamicFormatter.h"
 #include "../Formatters/FormatterUtils.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 using namespace Utility::Literals;
 
 namespace RenderOverlays { namespace CommonWidgets
@@ -491,7 +491,7 @@ namespace RenderOverlays { namespace CommonWidgets
 
 	template<typename CharType>
 		PlatformRig::ProcessInputResult TextEntry<CharType>::ProcessInput(
-			DebuggingDisplay::InterfaceState& interfaceState, const OSServices::InputSnapshot& input,
+			const OSServices::InputSnapshot& input,
 			const std::function<std::vector<std::basic_string<CharType>>(const std::basic_string<CharType>&)>& autocompleteFn)
 	{
 		bool consume = false;
