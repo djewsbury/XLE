@@ -616,7 +616,7 @@ namespace RenderOverlays
 		float x = ctrlBlock._iterator[0], y = ctrlBlock._iterator[1];
 		const float xScale = 1.f, yScale = 1.f;
 		const float xAtLineStart = 0.f;
-		auto scaledLineHeight = yScale * font.GetFontProperties()._lineHeight;
+		auto scaledLineHeight = yScale * (font.GetFontProperties()._lineHeight + ctrlBlock._additionalLineSpacing);
 		if (!CheckMaxXY || (y + scaledLineHeight) <= maxY) {
 			int prevGlyph = 0;
 			float yAtLineStart = y;
@@ -792,7 +792,7 @@ namespace RenderOverlays
 				result._instanceExtras[result._totalInstanceCount]._lineIndex = (*q)->_lineIdx;
 
 				ctrlBlock._maxX = std::max(ctrlBlock._maxX, (*q)->_xy[0] + (glyph._bitmapOffsetX+glyph._width)*xScale);		// (alternatively add advance?)
-				result._originalOrdering[idx] = { result._totalInstanceCount, (*starti)->_glyphIdx };
+				result._originalOrdering[idx] = { result._totalInstanceCount, result._glyphCount };
 				result._totalInstanceCount++;
 			}
 
@@ -880,15 +880,16 @@ namespace RenderOverlays
 		};
 	};
 
-	void WordWrapping(
+	unsigned WordWrapping(
 		IteratorRange<FontSpan*> spans,
-		const Font& font, float maxX)
+		const Font& font, float maxX,
+		unsigned additionLineSpacing)
 	{
-		if (spans.empty()) return;
+		if (spans.empty()) return 0;
 
 		unsigned additionalLines = 0;
 		Float2 additionalOffset = { 0, 0 };
-		auto lineHeight = font.GetFontProperties()._lineHeight;
+		auto lineHeight = font.GetFontProperties()._lineHeight + additionLineSpacing;
 
 		// only needed for advance for the final glyph of each word... but still need to query them
 		VLA_UNSAFE_FORCE(Font::GlyphProperties, glyphProps, spans.size() * FontSpan::s_maxInstancesPerSpan);
@@ -912,7 +913,8 @@ namespace RenderOverlays
 			auto lastChr = i;
 			++i;
 
-			float finalGlyphAdvance = glyphProps[lastChr->GlyphIndex()+lastChr.GetSpanIdx()*FontSpan::s_maxInstancesPerSpan]._xAdvance;
+			auto glyphIdx = lastChr->GlyphIndex();
+			float finalGlyphAdvance = glyphProps[glyphIdx+lastChr.GetSpanIdx()*FontSpan::s_maxInstancesPerSpan]._xAdvance;
 			if ((lastChr->Instance()._xy[0] + finalGlyphAdvance + additionalOffset[0]) <= maxX) {
 				// fits in
 				for (auto q=starti; q!=i; ++q) {
@@ -933,6 +935,8 @@ namespace RenderOverlays
 				q->InstanceExtra()._lineIndex += additionalLines;
 			}
 		}
+
+		return additionalLines;
 	}
 
 	const char* CalculateFontSpans(
@@ -955,6 +959,51 @@ namespace RenderOverlays
 			text._start = adv;
 		}
 		return text._start;
+	}
+
+	void WordJustification(
+		IteratorRange<FontSpan*> spans,
+		const Font& font, float maxX)
+	{
+		// For each line, identify the words and space them out so that full width is used
+
+		// only needed for advance for the final glyph of each word... but still need to query them
+		VLA_UNSAFE_FORCE(Font::GlyphProperties, glyphProps, spans.size() * FontSpan::s_maxInstancesPerSpan);
+		for (unsigned c=0; c<spans.size(); ++c)
+			font.GetGlyphPropertiesSorted(
+				MakeIteratorRange(glyphProps+c*FontSpan::s_maxInstancesPerSpan, glyphProps+(c+1)*FontSpan::s_maxInstancesPerSpan),
+				MakeIteratorRange(spans[c]._glyphs, &spans[c]._glyphs[spans[c]._glyphCount]));
+
+		auto instancesBegin = Internal::FontSpanOriginalOrderingIterator::Begin(spans);
+		auto instanceEnd = Internal::FontSpanOriginalOrderingIterator::End(spans);
+		const float maxJustify = maxX * 0.33f;
+
+		auto i = instancesBegin;
+		while (i != instanceEnd) {
+			auto starti = i;
+			for (;;) {
+				auto next = i+1;
+				if (next == instanceEnd || next->InstanceExtra()._lineIndex != starti->InstanceExtra()._lineIndex) break;
+				i = next;
+			}
+
+			auto lastChr = i;
+			++i;
+
+			auto& g = glyphProps[lastChr->GlyphIndex()+lastChr.GetSpanIdx()*FontSpan::s_maxInstancesPerSpan];
+			float additionalSpace = maxX - (lastChr->Instance()._xy[0] + (g._bitmapOffsetX + g._width));
+			if (additionalSpace <= 0.f) continue;
+			if (additionalSpace >= maxJustify) continue;
+			
+			auto initialWord = starti->InstanceExtra()._wordIndex;
+			auto wordCount = lastChr->InstanceExtra()._wordIndex - initialWord + 1;
+			if (wordCount <= 1) continue;
+
+			float spacePerWord = additionalSpace / float(wordCount - 1);
+
+			for (auto q=starti; q!=i; ++q)
+				q->Instance()._xy[0] += std::floor(spacePerWord * (q->InstanceExtra()._wordIndex - initialWord));
+		}
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////

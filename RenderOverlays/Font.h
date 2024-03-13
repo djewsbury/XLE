@@ -38,7 +38,7 @@ namespace RenderOverlays
 
 			float _xAdvance = 0.f;
 			signed _bitmapOffsetX = 0, _bitmapOffsetY = 0;
-			unsigned _lsbDelta = 0, _rsbDelta = 0;
+			signed _lsbDelta = 0, _rsbDelta = 0;
 		};
 
 		struct GlyphProperties
@@ -46,7 +46,7 @@ namespace RenderOverlays
 			float _xAdvance = 0.f;
 			unsigned _width = 0, _height = 0;
 			signed _bitmapOffsetX = 0, _bitmapOffsetY = 0;
-			unsigned _lsbDelta = 0, _rsbDelta = 0;
+			signed _lsbDelta = 0, _rsbDelta = 0;
 		};
 
 		virtual FontProperties		GetFontProperties() const = 0;
@@ -159,12 +159,12 @@ namespace RenderOverlays
 
 	struct CalculateFontSpansControlBlock
 	{
-		unsigned _totalWordCount = 0;
 		unsigned _currentLineIndex = 0;
 		unsigned _nextWordIndex = 0;
 		float _maxX = 0.f;
 		Float2 _iterator { 0.f, 0.f };
 		ColorB _colorOverride { 0x0 };
+		unsigned _additionalLineSpacing = 0;
 	};
 
 	/// Calculate spans for the given text, until we can't fit any more into the rectangle provided
@@ -189,7 +189,12 @@ namespace RenderOverlays
 		StringSection<> text,
 		unsigned maxLines = ~0u);
 
-	void WordWrapping(
+	unsigned WordWrapping(
+		IteratorRange<FontSpan*> spans,
+		const Font& font, float maxX,
+		unsigned additionLineSpacing = 0);
+
+	void WordJustification(
 		IteratorRange<FontSpan*> spans,
 		const Font& font, float maxX);
 
