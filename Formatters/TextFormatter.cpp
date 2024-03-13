@@ -51,10 +51,10 @@ namespace Formatters
         lineLength += Count;
     }
 
-    template<typename CharType> 
+    template<typename CharType, unsigned Format> 
         static bool FormattingChar(CharType c)
     {
-        return c=='~' || c==';' || c=='=' || c=='\r' || c=='\n' || c == 0x0;
+        return c=='~' || c==';' || (Format==3?c==':':c=='=') || c=='\r' || c=='\n' || c == 0x0;
     }
 
     template<typename CharType> 
@@ -66,8 +66,9 @@ namespace Formatters
     template<typename CharType> 
         static bool IsSimpleString(StringSection<CharType> str)
     {
+        const unsigned format = 2;
             // if there are formatting chars anywhere in the string, it's not simple
-        if (std::find_if(str.begin(), str.end(), FormattingChar<CharType>) != str.end()) return false;
+        if (std::find_if(str.begin(), str.end(), FormattingChar<CharType, format>) != str.end()) return false;
 
             // If the string beings or ends with whitespace, it is also not simple.
             // This is because the parser will strip off leading and trailing whitespace.
@@ -284,7 +285,7 @@ namespace Formatters
         marker += Count;
     }
 
-    template<typename CharType>
+    template<typename CharType, unsigned Format>
         const CharType* ReadToStringEnd(
             TextStreamMarker<CharType>& marker, bool protectedStringMode)
     {
@@ -293,16 +294,16 @@ namespace Formatters
 
         if (protectedStringMode) {
             const auto* end = marker.End() - patternLength;
-            const auto* ptr = marker.Pointer();
-            while (ptr <= end) {
+            while (marker.Pointer() <= end) {
                 for (unsigned c=0; c<patternLength; ++c)
-                    if (ptr[c] != pattern[c])
+                    if (marker[c] != pattern[c])
                         goto advptr;
 
-                marker.SetPointer(ptr + patternLength);
-                return ptr;
+                auto result = marker.Pointer();
+                marker.SetPointer(marker.Pointer() + patternLength);
+                return result;
             advptr:
-                ++ptr;
+                marker.AdvanceCheckNewLine();   // we must check for newlines as we do this, otherwise line tracking will just be thrown off
             }
 
             Throw(FormatException("String deliminator not found", marker.GetLocation()));
@@ -315,7 +316,7 @@ namespace Formatters
             const auto* stringEnd = ptr;
             for (;;) {
                     // here, hitting EOF is the same as hitting a formatting char
-                if (ptr == end || FormattingChar(*ptr)) {
+                if (ptr == end || FormattingChar<CharType, Format>(*ptr)) {
                     marker.SetPointer(ptr);
                     return stringEnd;
                 } else if (!WhitespaceChar(*ptr)) {
@@ -337,7 +338,8 @@ namespace Formatters
     }
 
     template<typename CharType>
-        auto TextInputFormatter<CharType>::PeekNext() -> Blob
+        template<unsigned Format>
+            auto TextInputFormatter<CharType>::PeekNext_Internal() -> Blob
     {
         if (_primed != FormatterBlob::None) return _primed;
 
@@ -349,6 +351,8 @@ namespace Formatters
                 ReadHeader();
 
             _pendingHeader = false;
+            if (_format != Format)
+                return PeekNext();
         }
 
         while (_marker.Remaining()) {
@@ -376,8 +380,8 @@ namespace Formatters
             case 0xA0:  // (no-break space)
                 Throw(FormatException("Unsupported white space character", GetLocation()));
 
-            case '\r':  // (could be an independant new line, or /r/n combo)
-            case '\n':  // (independant new line. A following /r will be treated as another new line)
+            case '\r':  // (could be an independent new line, or /r/n combo)
+            case '\n':  // (independent new line. A following /r will be treated as another new line)
                 _marker.AdvanceCheckNewLine();
                 _activeLineSpaces = 0;
                 break;
@@ -387,7 +391,7 @@ namespace Formatters
                 ++_marker;
                 break;
 
-            case '=':
+            case (Format==3?':':'='):
                 if (_activeLineSpaces <= _parentBaseLine) {
                     _protectedStringMode = false;
                     return _primed = FormatterBlob::EndElement;
@@ -414,10 +418,10 @@ namespace Formatters
                     Throw(FormatException("Unexpected end of file in the middle of mapping pair", GetLocation()));
 
                 if (*_marker == '\r' || *_marker == '\n')
-                    Throw(FormatException("The value for a key/pair mapping pair must follow immediate after the '='. New lines can not appear here", GetLocation()));
+                    Throw(FormatException("The value for a key/pair mapping pair must follow immediate after the separator. New lines can not appear here", GetLocation()));
 
                 if (TryEat(_marker, Consts::CommentPrefix))
-                    Throw(FormatException("The value for a key/pair mapping pair must follow immediate after the '='. Comments can not appear here", GetLocation()));
+                    Throw(FormatException("The value for a key/pair mapping pair must follow immediate after the separator. Comments can not appear here", GetLocation()));
 
                 if (*_marker == '~') {
                     _protectedStringMode = false;
@@ -468,10 +472,10 @@ namespace Formatters
                 // Unfortunately we have to roll forward a bit to see if there's a '=' after the
                 // next token
                 auto readForwardMarker = _marker;
-                ReadToStringEnd<CharType>(readForwardMarker, _protectedStringMode);
+                ReadToStringEnd<CharType, Format>(readForwardMarker, _protectedStringMode);
                 EatWhitespace<CharType>(readForwardMarker);
 
-                if (*readForwardMarker == '=') {
+                if (*readForwardMarker == (Format==3?':':'=')) {
                     return _primed = FormatterBlob::KeyedItem;
                 } else {
                     return _primed = FormatterBlob::Value;
@@ -483,6 +487,15 @@ namespace Formatters
             // while there are elements on our stack, we need to end them
         if (_baseLineStackPtr > _terminatingBaseLineStackPtr) return _primed = FormatterBlob::EndElement;
         return FormatterBlob::None;
+    }
+
+    template<typename CharType>
+        auto TextInputFormatter<CharType>::PeekNext() -> Blob
+    {
+        if (_format == 3)
+            return PeekNext_Internal<3>();
+        else
+            return PeekNext_Internal<2>();
     }
 
     template<typename CharType>
@@ -516,13 +529,14 @@ namespace Formatters
                 
                 {
                     const auto* aValueStart = _marker.Pointer();
-                    const auto* aValueEnd = ReadToStringEnd<CharType>(_marker, false);
+                    const auto* aValueEnd = ReadToStringEnd<CharType, 2>(_marker, false);
 
                     char convBuffer[12];
                     Conversion::Convert(convBuffer, dimof(convBuffer), aNameStart, aNameEnd);
 
                     if (!XlCompareStringI(convBuffer, "Format")) {
-                        if (Conversion::Convert<int>(MakeStringSection(aValueStart, aValueEnd))!=2)
+                        _format = Conversion::Convert<int>(MakeStringSection(aValueStart, aValueEnd));
+                        if (_format !=2 && _format != 3)
                             Throw(FormatException("Unsupported format in input stream formatter header", GetLocation()));
                     } else if (!XlCompareStringI(convBuffer, "Tab")) {
                         _tabWidth = Conversion::Convert<unsigned>(MakeStringSection(aValueStart, aValueEnd));
@@ -534,7 +548,7 @@ namespace Formatters
 
             default:
                 aNameStart = _marker.Pointer();
-                aNameEnd = ReadToStringEnd<CharType>(_marker, false);
+                aNameEnd = ReadToStringEnd<CharType, 2>(_marker, false);
                 break;
             }
         }
@@ -578,7 +592,8 @@ namespace Formatters
         if (PeekNext() != FormatterBlob::KeyedItem) return false;
 
         name._start = _marker.Pointer();
-        name._end = ReadToStringEnd<CharType>(_marker, _protectedStringMode);
+        if (_format == 3) name._end = ReadToStringEnd<CharType, 3>(_marker, _protectedStringMode);
+        else name._end = ReadToStringEnd<CharType, 2>(_marker, _protectedStringMode);
         EatWhitespace<CharType>(_marker);
 
         _primed = FormatterBlob::None;
@@ -595,16 +610,16 @@ namespace Formatters
         // The same rules also apply for between the '=" and the start of the element/value
 
         if (!_marker.Remaining())
-            Throw(FormatException("Unexpected end of file while looking for a '=' to signify value for keyed item", GetLocation()));
+            Throw(FormatException("Unexpected end of file while looking for a separator to signify value for keyed item", GetLocation()));
 
         if (*_marker == '\r' || *_marker == '\n')
-            Throw(FormatException("New lines can not appear before the '=' in a mapping name/value pair", GetLocation()));
+            Throw(FormatException("New lines can not appear before the separator in a mapping name/value pair", GetLocation()));
 
         if (TryEat(_marker, FormatterConstants<CharType>::CommentPrefix))
-            Throw(FormatException("Comments can not appear before the '=' in a mapping name/value pair", GetLocation()));
+            Throw(FormatException("Comments can not appear before the separator in a mapping name/value pair", GetLocation()));
 
-        if (*_marker != '=')
-            Throw(FormatException("Missing '=' to signify value for keyed item", GetLocation()));
+        if (*_marker != ((_format==3)?':':'='))
+            Throw(FormatException("Missing separator to signify value for keyed item", GetLocation()));
         
         // this can be followed up with either an element (ie, new element containing within
         // itself more elements, sequences, or mapped pairs) or a value. But there must be one
@@ -625,7 +640,8 @@ namespace Formatters
         if (PeekNext() != FormatterBlob::Value) return false;
 
         value._start = _marker.Pointer();
-        value._end = ReadToStringEnd<CharType>(_marker, _protectedStringMode);
+        if (_format == 3) value._end = ReadToStringEnd<CharType, 3>(_marker, _protectedStringMode);
+        else value._end = ReadToStringEnd<CharType, 2>(_marker, _protectedStringMode);
         EatWhitespace<CharType>(_marker);
 
         _primed = FormatterBlob::None;

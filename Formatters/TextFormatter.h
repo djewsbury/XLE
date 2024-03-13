@@ -81,6 +81,8 @@ namespace Formatters
 		bool _pendingHeader;
 
 		void ReadHeader();
+		template<unsigned Format>
+        	auto PeekNext_Internal() -> Blob;
 	};
 
 	class FormatException : public ::Assets::Exceptions::ExceptionWithDepVal
