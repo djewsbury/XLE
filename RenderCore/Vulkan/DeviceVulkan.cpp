@@ -2903,7 +2903,7 @@ namespace RenderCore { namespace ImplVulkan
 		return _metalContext;
 	}
 
-	void            ThreadContext::Present(IPresentationChain& chain)
+	void            ThreadContext::Present(IPresentationChain& chain, std::string& errorMsgBuffer)
 	{
 		assert(_primaryCommandBufferChain);
 
@@ -2926,6 +2926,7 @@ namespace RenderCore { namespace ImplVulkan
 			cmdListSyncs._presentFenceWaitable = true;
 		} CATCH(const std::exception& e) {
 			Log(Warning) << "Failure during queue submission for present: " << e.what() << std::endl;
+			errorMsgBuffer = e.what();
 			cmdListSyncs._presentFenceWaitable = false;		// we cannot wait on this fence, because the cmd list was not submitted
 		} CATCH_END
 

@@ -125,7 +125,7 @@ namespace RenderCore { namespace ImplVulkan
     class ThreadContext : public IThreadContext, public IThreadContextVulkan
     {
     public:
-		void	        Present(IPresentationChain&) override;
+		void	        Present(IPresentationChain&, std::string&) override;
 		IResourcePtr	BeginFrame(IPresentationChain& presentationChain) override;
 		void			CommitCommands(CommitCommandsFlags::BitField) override;
 

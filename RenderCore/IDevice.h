@@ -253,7 +253,7 @@ namespace RenderCore
 		///
 		///   But in theory we can call Present at any time.
 		/// </example>
-		virtual void			Present(IPresentationChain& presentationChain) = 0;
+		virtual void			Present(IPresentationChain& presentationChain, std::string& errorMsgBuffer) = 0;
 
         /// <summary>Finishes some non-presentation GPU work</summary>
         /// When you want to use the GPU for non-presentation work, like rendering to
