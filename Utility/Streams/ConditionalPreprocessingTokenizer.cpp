@@ -543,7 +543,7 @@ namespace Utility
         auto& token2 = dictionary._tokenDefinitions[expression[2]];
         return
             token0._type == Internal::TokenDictionary::TokenType::UnaryMarker
-            && token2._type == Internal::TokenDictionary::TokenType::Operation && XlEqString(token2._value, "!");
+            && token2._type == Internal::TokenDictionary::TokenType::Operation && XlEqString(token2.AsStringSection(), "!");
     }
 
     static bool IsTrue(const Internal::ExpressionTokenList& expr)

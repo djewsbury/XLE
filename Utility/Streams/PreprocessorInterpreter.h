@@ -11,6 +11,7 @@
 #include <map>
 #include <stack>
 #include <functional>
+#include <variant>
 
 namespace Utility
 {
@@ -32,12 +33,16 @@ namespace Utility
 		class TokenDictionary
 		{
 		public:
-			enum class TokenType { UnaryMarker, Literal, Variable, IsDefinedTest, Operation };
+			enum class TokenType { UnaryMarker, Literal, Variable, IsDefinedTest, Operation, UserOperation };
+			using TokenValueVariant = std::variant<std::monostate, std::string, std::pair<std::string, uint64_t>, int64_t>;
 			struct TokenDefinition
 			{
 				TokenType _type;
-				std::string _value;
-				uint64_t _hash = 0;			// can often just be zero, since not all clients need a hash value
+				TokenValueVariant _value;
+
+				StringSection<> AsStringSection() const;
+				uint64_t AsHashValue() const;
+				std::string CastToString() const;
 			};
 			std::vector<TokenDefinition> _tokenDefinitions;
 
@@ -48,7 +53,7 @@ namespace Utility
 				const TokenDictionary& otherDictionary,
 				Token tokenForOtherDictionary);
 
-			Token GetOrAddToken(TokenType type, const std::string& value = {}, uint64_t hash = 0);
+			Token GetOrAddToken(TokenType type, const TokenValueVariant& v = std::monostate{});
 			std::optional<Token> TryGetToken(TokenType type, StringSection<> value) const;
 
 			std::string AsString(IteratorRange<const Token*> tokenList) const;
@@ -63,59 +68,81 @@ namespace Utility
 		class ExpressionEvaluator
 		{
 		public:
-			enum class StepType { LookupVariable, End };
+			enum class StepType { LookupVariable, UserOp, End };
 			struct Step
 			{ 
 				StepType _type = StepType::End;
 				StringSection<> _name; unsigned _nameTokenIndex = ~0u;
-				ImpliedTyping::VariantNonRetained* _queryResult = nullptr;
-				operator bool() const  { return _type != StepType::End; }
 
 				// Note that values blocks passed to *all* variants of SetQueryResult must be retained
 				// throughout the entire lifetime of the ExpressionEvaluator.
 				// It's a special restriction, but it allows us to avoid copies across the interface for
 				// larger values (such as arrays)
-				template<typename Type> void SetQueryResult(const Type& value);
-				template<typename Type, int N> void SetQueryResult(Type (&value)[N]);
-				void SetQueryResult(const ImpliedTyping::TypeDesc& typeDesc, IteratorRange<const void*> data, bool reversedEndian=false);
+				template<typename Type> void Return(const Type& value);
+				template<typename Type> void ReturnNonRetained(const Type& value);
+				template<typename Type, int N> void ReturnNonRetained(Type (&value)[N]);
+				void Return(ImpliedTyping::VariantNonRetained nonRetained);
+
+				operator bool() const  { return _type != StepType::End; }
+
+				// used internally
+				struct Undefined{};
+				using ReturnSled = std::variant<std::monostate, Undefined, ImpliedTyping::VariantNonRetained, ImpliedTyping::VariantRetained>;
+				ReturnSled* _returnSled = nullptr;
+				friend class ExpressionEvaluator;
 			};
 
 			Step GetNextStep();
 			ImpliedTyping::VariantNonRetained GetResult() const;
+
+			ImpliedTyping::VariantRetained PopParameter();
+			const TokenDictionary& GetDictionary() const { return *_dictionary; }
 
 			ExpressionEvaluator(const TokenDictionary&, IteratorRange<const Token*>);
 			~ExpressionEvaluator();
 			ExpressionEvaluator& operator=(ExpressionEvaluator&&) = delete;
 			ExpressionEvaluator(ExpressionEvaluator&&) = delete;
 
-			struct EvaluatedValue;
 		private:
 			std::vector<uint8_t> _evalBlock;
 			const TokenDictionary* _dictionary;
 			IteratorRange<const Token*> _remainingExpression;
-			std::vector<std::pair<TokenDictionary::TokenType, EvaluatedValue>> _evaluation;
-			std::optional<ImpliedTyping::VariantNonRetained> _lastReturnedStep;
+			std::vector<std::pair<TokenDictionary::TokenType, ImpliedTyping::VariantRetained>> _evaluation;
+
+			Step::ReturnSled _lastReturnSled;
 		};
 
-		template<typename Type>
-			void ExpressionEvaluator::Step::SetQueryResult(const Type& value)
-			{
-				_queryResult->_type = ImpliedTyping::TypeOf<Type>();
-				_queryResult->_data = MakeOpaqueIteratorRange(value);
-				_queryResult->_reversedEndian = false;
-			}
-		template<typename Type, int N>
-			void ExpressionEvaluator::Step::SetQueryResult(Type (&value)[N])
-			{
-				_queryResult->_type = { ImpliedTyping::TypeOf<Type>()._type, N};
-				_queryResult->_data = MakeOpaqueIteratorRange(value);
-				_queryResult->_reversedEndian = false;
-			}
-		inline void ExpressionEvaluator::Step::SetQueryResult(const ImpliedTyping::TypeDesc& typeDesc, IteratorRange<const void*> data, bool reversedEndian)
+		template<typename Type> 
+			void ExpressionEvaluator::Step::Return(const Type& value)
 		{
-			_queryResult->_type = typeDesc;
-			_queryResult->_data = { const_cast<void*>(data.begin()), const_cast<void*>(data.end()) };		// we promise to be good
-			_queryResult->_reversedEndian = reversedEndian;
+			assert(_returnSled);
+			*_returnSled = ImpliedTyping::VariantRetained { value };
+		}
+		template<typename Type>
+			void ExpressionEvaluator::Step::ReturnNonRetained(const Type& value)
+		{
+			assert(_returnSled);
+			*_returnSled = ImpliedTyping::VariantNonRetained { ImpliedTyping::TypeOf<Type>(), MakeOpaqueIteratorRange(value) };
+		}
+		template<typename Type, int N>
+			void ExpressionEvaluator::Step::ReturnNonRetained(Type (&value)[N])
+		{
+			assert(_returnSled);
+			*_returnSled = ImpliedTyping::VariantNonRetained{ {ImpliedTyping::TypeOf<Type>()._type, N}, MakeOpaqueIteratorRange(value) };
+		}
+		inline void ExpressionEvaluator::Step::Return(ImpliedTyping::VariantNonRetained nonRetained)
+		{
+			assert(_returnSled);
+			*_returnSled = nonRetained;
+		}
+
+		inline ImpliedTyping::VariantRetained ExpressionEvaluator::PopParameter()
+		{
+			assert(!_evaluation.empty());
+			auto i = std::move(_evaluation.back());
+			assert(i.first == TokenDictionary::TokenType::Literal);
+			_evaluation.pop_back();
+			return i.second;
 		}
 
 		const char* AsString(TokenDictionary::TokenType);

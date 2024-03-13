@@ -128,7 +128,7 @@ namespace Formatters
 					valueStack.pop();
 				}
 			}
-			StringSection<> baseName = blockDef._tokenDictionary._tokenDefinitions[baseNameToken]._value;
+			StringSection<> baseName = blockDef._tokenDictionary._tokenDefinitions[baseNameToken].AsStringSection();
 			return GetEvaluatedType(schemata, baseName, scope, MakeIteratorRange(params, &params[paramCount]), typeBitField);
 		} else {
 			// check if it's already cached, to try to reduce the number of times we have to lookup the same value
@@ -136,7 +136,7 @@ namespace Formatters
 			if (cachedEvals && cachedEvals->_subEvals[baseNameToken] != ~0u)
 				return cachedEvals->_subEvals[baseNameToken];
 
-			StringSection<> baseName = blockDef._tokenDictionary._tokenDefinitions[baseNameToken]._value;
+			StringSection<> baseName = blockDef._tokenDictionary._tokenDefinitions[baseNameToken].AsStringSection();
 			auto result = GetEvaluatedType(schemata, baseName, scope);
 			if (cachedEvals)
 				cachedEvals->_subEvals[baseNameToken] = result;
@@ -232,21 +232,19 @@ namespace Formatters
 						Utility::Internal::ExpressionEvaluator exprEval{def._tokenDictionary, range};
 						while (auto nextStep = exprEval.GetNextStep()) {
 							assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
-							uint64_t hash = def._tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex]._hash;
+							uint64_t hash = def._tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex].AsHashValue();
 
 							// ------------------------- system variables --------------------
 							if (hash == "align2"_h || hash == "align4"_h || hash == "align8"_h || hash == "nullterm"_h) {
 								usingDynamicVariable = true;
-								static const unsigned dummy = 1;
-								nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
+								nextStep.Return(1);	// we use 1 as a default stand-in
 								continue;
 							}
 
 							// ------------------------- previously evaluated members --------------------
 							if (std::find(localVariables.begin(), localVariables.end(), nextStep._nameTokenIndex) != localVariables.end()) {
 								usingDynamicVariable = true;
-								static const unsigned dummy = 0;
-								nextStep.SetQueryResult(dummy);
+								nextStep.Return(0);
 								continue;
 							}
 
@@ -255,7 +253,7 @@ namespace Formatters
 							for (unsigned p=0; p<(unsigned)def._templateParameterNames.size(); ++p)
 								if (def._templateParameterNames[p] == nextStep._nameTokenIndex) {
 									assert(!(evalType._paramTypeField & (1<<p)));		// assert value, not type parameter
-									nextStep.SetQueryResult(evalType._params[p]);
+									nextStep.ReturnNonRetained(evalType._params[p]);
 									foundTemplateParam = true;
 									break;
 								}
@@ -265,14 +263,13 @@ namespace Formatters
 							
 							if (std::find(dynamicLocalVars.begin(), dynamicLocalVars.end(), hash) != dynamicLocalVars.end()) {
 								usingDynamicVariable = true;
-								static const unsigned dummy = 1;
-								nextStep.SetQueryResult(dummy);	// we use 1 as a default stand-in
+								nextStep.Return(1);	// we use 1 as a default stand-in
 								continue;
 							}
 
 							auto globalType = this->_globalState.GetParameterType(hash);
 							if (globalType._type != ImpliedTyping::TypeCat::Void) {
-								nextStep.SetQueryResult(globalType, this->_globalState.GetParameterRawValue(hash));
+								nextStep.Return(ImpliedTyping::VariantNonRetained{globalType, this->_globalState.GetParameterRawValue(hash)});
 								continue;
 							}
 						}
@@ -412,7 +409,6 @@ namespace Formatters
 		TRY {
 			uint8_t stringParseOutputBuffer[1024];
 			unsigned stringParseOutputIterator = 0;
-			unsigned systemVarBuffer = 0;
 			Utility::Internal::ExpressionEvaluator exprEval{tokenDictionary, expressionCommands};
 			while (auto nextStep = exprEval.GetNextStep()) {
 				assert(nextStep._type == Utility::Internal::ExpressionEvaluator::StepType::LookupVariable);
@@ -422,30 +418,30 @@ namespace Formatters
 				// - template values
 				// - context state
 
-				uint64_t hash = tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex]._hash;
+				uint64_t hash = tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex].AsHashValue();
 				assert(hash == Hash64(nextStep._name));
 				bool gotValue = false;
 
 				// ------------------------- system variables --------------------
 				if (hash == "align2"_h) {
-					systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 1;
-					nextStep.SetQueryResult(systemVarBuffer);
+					auto systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 1;
+					nextStep.Return(systemVarBuffer);
 					gotValue = true;
 				} else if (hash == "align4"_h) {
-					systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 3;
+					auto systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 3;
 					systemVarBuffer = (systemVarBuffer == 0) ? 0 : 4-systemVarBuffer;
-					nextStep.SetQueryResult(systemVarBuffer);
+					nextStep.Return(systemVarBuffer);
 					gotValue = true;
 				} else if (hash == "align8"_h) {
-					systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 7;
+					auto systemVarBuffer = PtrDiff(_dataIterator.begin(), _originalStart) & 7;
 					systemVarBuffer = (systemVarBuffer == 0) ? 0 : 8-systemVarBuffer;
-					nextStep.SetQueryResult(systemVarBuffer);
+					nextStep.Return(systemVarBuffer);
 					gotValue = true;
 				} else if (hash == "nullterm"_h) {
 					// how many bytes until the next null byte
-					systemVarBuffer = 0;
+					auto systemVarBuffer = 0;
 					while (systemVarBuffer < _dataIterator.size() && ((const uint8_t*)_dataIterator.begin())[systemVarBuffer] != 0) ++systemVarBuffer;
-					nextStep.SetQueryResult(systemVarBuffer);
+					nextStep.Return(systemVarBuffer);
 					gotValue = true;
 				}
 
@@ -463,7 +459,7 @@ namespace Formatters
 									MakeStringSection((const char*)localValue->second._data.begin(), (const char*)localValue->second._data.end()),
 									MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[dimof(stringParseOutputBuffer)]));
 								if (parsedType._type != ImpliedTyping::TypeCat::Void) {
-									nextStep.SetQueryResult(parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()]));
+									nextStep.Return(ImpliedTyping::VariantNonRetained{parsedType, MakeIteratorRange(&stringParseOutputBuffer[stringParseOutputIterator], &stringParseOutputBuffer[stringParseOutputIterator+parsedType.GetSize()])});
 									stringParseOutputIterator += parsedType.GetSize();
 									gotValue = true;
 									break;
@@ -476,9 +472,9 @@ namespace Formatters
 								auto* buffer = _alloca(localValue->second._type.GetSize());
 								assert(localValue->second._data.size() == localValue->second._type.GetSize());
 								ImpliedTyping::FlipEndian(MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize())), localValue->second._data.begin(), localValue->second._type);
-								nextStep.SetQueryResult(localValue->second._type, MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize())));
+								nextStep.Return(ImpliedTyping::VariantNonRetained{localValue->second._type, MakeIteratorRange(buffer, PtrAdd(buffer, localValue->second._type.GetSize()))});
 							} else {
-								nextStep.SetQueryResult(localValue->second._type, localValue->second._data);
+								nextStep.Return(ImpliedTyping::VariantNonRetained{localValue->second._type, localValue->second._data});
 							}
 							gotValue = true;
 							break;
@@ -489,7 +485,7 @@ namespace Formatters
 							for (unsigned p=0; p<(unsigned)block->_definition->_templateParameterNames.size(); ++p)
 								if (block->_definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
 									assert(!(block->_parsingTemplateParamsTypeField & (1<<p)));		// assert value, not type parameter
-									nextStep.SetQueryResult(block->_parsingTemplateParams[p]);
+									nextStep.ReturnNonRetained(block->_parsingTemplateParams[p]);
 									gotValue = true;
 									break;
 								}
@@ -499,7 +495,7 @@ namespace Formatters
 				if (!gotValue) {
 					auto globalType = this->_evalContext->GetGlobalParameterBox().GetParameterType(hash);
 					if (globalType._type != ImpliedTyping::TypeCat::Void) {
-						nextStep.SetQueryResult(globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash));
+						nextStep.Return(ImpliedTyping::VariantNonRetained{globalType, this->_evalContext->GetGlobalParameterBox().GetParameterRawValue(hash)});
 						gotValue = true;
 					}
 				}
@@ -635,7 +631,7 @@ namespace Formatters
 			return false;
 
 		auto nameToken = cmds[1];
-		name = workingBlock._definition->_tokenDictionary._tokenDefinitions[nameToken]._value;
+		name = workingBlock._definition->_tokenDictionary._tokenDefinitions[nameToken].AsStringSection();
 		return true;
 	}
 
@@ -677,7 +673,7 @@ namespace Formatters
 			return false;
 
 		auto nameToken = cmds[1];
-		name = workingBlock._definition->_tokenDictionary._tokenDefinitions[nameToken]._hash;
+		name = workingBlock._definition->_tokenDictionary._tokenDefinitions[nameToken].AsHashValue();
 		assert(name);
 		return true;
 	}
@@ -791,13 +787,13 @@ namespace Formatters
 			auto nameToken = cmds[1];
 			auto size = finalTypeDesc.GetSize();
 			if (size > _dataIterator.size())
-				Throw(std::runtime_error("Binary Schemata reads past the end of data while reading block " + GetBlockContextString() + ", member: " + def._tokenDictionary._tokenDefinitions[nameToken]._value));
+				Throw(std::runtime_error("Binary Schemata reads past the end of data while reading block " + GetBlockContextString() + ", member: " + def._tokenDictionary._tokenDefinitions[nameToken].AsStringSection().AsString()));
 			resultData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), size));
 			resultTypeDesc = finalTypeDesc;
 			
 			bool reversedEndian = _reversedEndian && resultTypeDesc._type > ImpliedTyping::TypeCat::UInt8;
-			assert(def._tokenDictionary._tokenDefinitions[nameToken]._hash);
-			workingBlock._localEvalContext.emplace_back(def._tokenDictionary._tokenDefinitions[nameToken]._hash, ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData, reversedEndian});
+			assert(def._tokenDictionary._tokenDefinitions[nameToken].AsHashValue());
+			workingBlock._localEvalContext.emplace_back(def._tokenDictionary._tokenDefinitions[nameToken].AsHashValue(), ImpliedTyping::VariantNonRetained{resultTypeDesc, resultData, reversedEndian});
 			
 			evaluatedTypeId = type;
 			cmds.first+=2;
@@ -813,7 +809,7 @@ namespace Formatters
 			auto nameToken = cmds[1];
 			auto size = evalType._valueTypeDesc.GetSize();
 			if (size > _dataIterator.size())
-				Throw(std::runtime_error("Binary Schemata reads past the end of data while reading array in block " + GetBlockContextString() + ", member: " + def._tokenDictionary._tokenDefinitions[nameToken]._value));
+				Throw(std::runtime_error("Binary Schemata reads past the end of data while reading array in block " + GetBlockContextString() + ", member: " + def._tokenDictionary._tokenDefinitions[nameToken].AsStringSection().AsString()));
 			resultData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), size));
 			resultTypeDesc = evalType._valueTypeDesc;
 
@@ -859,8 +855,8 @@ namespace Formatters
 		if (evalType._valueTypeDesc._type != ImpliedTyping::TypeCat::Void) {
 			auto arrayData = MakeIteratorRange(_dataIterator.begin(), PtrAdd(_dataIterator.begin(), evalType._valueTypeDesc.GetSize()));
 			bool reversedEndian = _reversedEndian && evalType._valueTypeDesc._type > ImpliedTyping::TypeCat::UInt8;
-			assert(def._tokenDictionary._tokenDefinitions[nameToken]._hash);
-			workingBlock._localEvalContext.emplace_back(def._tokenDictionary._tokenDefinitions[nameToken]._hash, ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData, reversedEndian});
+			assert(def._tokenDictionary._tokenDefinitions[nameToken].AsHashValue());
+			workingBlock._localEvalContext.emplace_back(def._tokenDictionary._tokenDefinitions[nameToken].AsHashValue(), ImpliedTyping::VariantNonRetained{evalType._valueTypeDesc, arrayData, reversedEndian});
 		}
 
 		return true;

@@ -40,7 +40,7 @@ namespace ShaderSourceParser
 	{
 		auto e = formatter.BeginKeyedElement("TokenDictionary");
 		for (const auto&t:input._tokenDictionary._tokenDefinitions)
-			formatter.WriteSequencedValue(Concatenate(Utility::Internal::AsString(t._type), ":", t._value));
+			formatter.WriteSequencedValue(Concatenate(Utility::Internal::AsString(t._type), ":", t.CastToString()));
 		formatter.EndElement(e);
 
 		e = formatter.BeginKeyedElement("RelevanceTable");
@@ -64,9 +64,9 @@ namespace ShaderSourceParser
 
 			ParameterBox::ParameterName nameHash { nextStep._name };
 			for (auto& p:paramBoxes) {
-				nextStep._queryResult->_type = p->GetParameterType(nameHash);
-				if (nextStep._queryResult->_type._type != ImpliedTyping::TypeCat::Void) {
-					nextStep._queryResult->_data = p->GetParameterRawValue(nameHash);
+				auto type = p->GetParameterType(nameHash);
+				if (type._type != ImpliedTyping::TypeCat::Void) {
+					nextStep.Return(ImpliedTyping::VariantNonRetained{type, p->GetParameterRawValue(nameHash)});
 					break;
 				}
 			}

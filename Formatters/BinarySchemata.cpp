@@ -146,7 +146,7 @@ namespace Formatters
 		}
 
 		workingDefinition._cmdList.push_back((unsigned)Cmd::LookupType);
-		auto baseNameAsToken = workingDefinition._tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, baseName, Hash64(baseName));
+		auto baseNameAsToken = workingDefinition._tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, std::make_pair(baseName, Hash64(baseName)));
 		workingDefinition._cmdList.push_back(baseNameAsToken);
 		workingDefinition._cmdList.push_back(templateParams.size());
 		for (auto t=templateParams.rbegin(); t!=templateParams.rend(); ++t)
@@ -164,7 +164,7 @@ namespace Formatters
 				auto paramName = tokenizer.GetNextToken();
 
 				templateParameterNames.push_back(
-					tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, paramName._value.AsString(), Hash64(paramName._value)));
+					tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, std::make_pair(paramName._value.AsString(), Hash64(paramName._value))));
 				if (paramType == TemplateParameterType::Typename)
 					templateParameterTypeField |= 1u<<unsigned(templateParameterNames.size()-1);
 
@@ -233,7 +233,7 @@ namespace Formatters
 
 				for (;;) {
 					auto name = tokenizer.GetNextToken();
-					auto nameAsToken = workingDefinition._tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, name._value.AsString(), Hash64(name._value));
+					auto nameAsToken = workingDefinition._tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, std::make_pair(name._value.AsString(), Hash64(name._value)));
 
 					next = tokenizer.GetNextToken();
 					if (next == "[") {

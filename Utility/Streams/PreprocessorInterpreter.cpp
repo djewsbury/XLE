@@ -12,6 +12,7 @@
 #include "../Threading/ThreadingUtils.h"
 #include "../MemoryUtils.h"
 #include "../BitUtils.h"
+#include "../StringFormat.h"
 #include "../../Core/Exceptions.h"
 #include "../../Foreign/cparse/shunting-yard.h"
 #include "../../Foreign/cparse/shunting-yard-exceptions.h"
@@ -204,6 +205,7 @@ namespace preprocessor_operations
 			// Create the operator precedence map based on C++ default
 			// precedence order as described on cppreference website:
 			// http://en.cppreference.com/w/cpp/language/operator_precedence
+			// Use negative precedence numbers to create a right to left binary operator (such as the power operator)
 			OppMap_t& opp = calculator::Default().opPrecedence;
 			opp.add("*",  5); opp.add("/", 5); opp.add("%", 5);
 			opp.add("+",  6); opp.add("-", 6);
@@ -237,6 +239,26 @@ namespace preprocessor_operations
 	} __CPARSE_STARTUP;
 }
 
+namespace
+{
+	template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+	template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
+}
+
+namespace std
+{
+	// hack -- this needs to be in std, because it's an alias
+	static std::ostream& operator<<(std::ostream& str, const Utility::Internal::TokenDictionary::TokenValueVariant& variant)
+	{
+		std::visit(overloaded{
+			[&](const std::monostate&) {},
+			[&](const std::string& s) { str << s; },
+			[&](const std::pair<std::string, uint64_t>& p) { str << p.first; },
+			[&](int64_t i) { str << i; },
+		}, variant);
+		return str;
+	}
+}
 
 namespace Utility
 {
@@ -347,6 +369,7 @@ namespace Utility
 			case TokenDictionary::TokenType::Variable: return "Variable";
 			case TokenDictionary::TokenType::IsDefinedTest: return "IsDefinedTest";
 			case TokenDictionary::TokenType::Operation: return "Operation";
+			case TokenDictionary::TokenType::UserOperation: return "UserOperation";
 			default: return "<<unknown>>";
 			}
 		}
@@ -357,21 +380,51 @@ namespace Utility
 			if (XlEqString(input, "Literal")) return TokenDictionary::TokenType::Literal;
 			if (XlEqString(input, "Variable")) return TokenDictionary::TokenType::Variable;
 			if (XlEqString(input, "IsDefinedTest")) return TokenDictionary::TokenType::IsDefinedTest;
+			if (XlEqString(input, "UserOperation")) return TokenDictionary::TokenType::UserOperation;
 			return TokenDictionary::TokenType::Operation;
 		}
 
 		static bool operator==(const TokenDictionary::TokenDefinition& lhs, const TokenDictionary::TokenDefinition& rhs)
 		{
-			return lhs._type == rhs._type && ((lhs._hash == rhs._hash && lhs._hash != 0) || lhs._value == rhs._value);
+			return lhs._type == rhs._type && lhs._value == rhs._value;
 		}
 
-		static bool operator<(const TokenDictionary::TokenDefinition& lhs, const TokenDictionary::TokenDefinition& rhs)
+		const std::string s_emptyString;
+		static const std::string& StringOrEmpty(const TokenDictionary::TokenValueVariant& variant)
 		{
-			if (lhs._type < rhs._type) return true;
-			if (lhs._type > rhs._type) return false;
-			if (lhs._hash < rhs._hash) return true;
-			if (lhs._hash > rhs._hash) return false;
-			return lhs._value < rhs._value;
+			if (variant.index() == 1) return std::get<std::string>(variant);
+			if (variant.index() == 2) return std::get<std::pair<std::string, uint64_t>>(variant).first;
+			return s_emptyString;
+		}
+
+		static bool operator==(const TokenDictionary::TokenValueVariant& variant, const char str[])
+		{
+			if (variant.index() == 1) return std::get<std::string>(variant) == str;
+			if (variant.index() == 2) return std::get<std::pair<std::string, uint64_t>>(variant).first == str;
+			return false;
+		}
+
+		StringSection<> TokenDictionary::TokenDefinition::AsStringSection() const
+		{
+			return MakeStringSection(StringOrEmpty(_value));
+		}
+
+		uint64_t TokenDictionary::TokenDefinition::AsHashValue() const
+		{
+			if (_value.index() == 2) return std::get<std::pair<std::string, uint64_t>>(_value).second;
+			return 0;
+		}
+
+		std::string TokenDictionary::TokenDefinition::CastToString() const
+		{
+			if (_value.index() == 1) return std::get<std::string>(_value);
+			if (_value.index() == 2) return std::get<std::pair<std::string, uint64_t>>(_value).first;
+			if (_value.index() == 3) {
+				StringMeld<64> meld;
+				meld << std::get<int64_t>(_value);
+				return meld.AsString();
+			}
+			return s_emptyString;
 		}
 
 		static bool IsTrue(const ExpressionTokenList& expr) { return expr.size() == 1 && expr[0] == 1; }
@@ -398,13 +451,20 @@ namespace Utility
 					TokenBase& base  = *input.front();
 					
 					if (base.type == OP) {
-						auto op = static_cast<::Token<std::string>*>(&base)->val;
 
-						if (op == "()") {
-							Throw(std::runtime_error("Only defined() is supported in expression parser. Other functions are not supported"));
-						} else {
+						auto op = static_cast<::Token<std::string>*>(&base)->val;
+						if (recordHashes) {
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Operation, std::make_pair(op, Hash64(op))));
+						} else
 							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Operation, op));
-						}
+
+					} else if (base.type == USER_OP) {
+
+						auto op = static_cast<::Token<std::string>*>(&base)->val;
+						if (recordHashes) {
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::UserOperation, std::make_pair(op, Hash64(op))));
+						} else
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::UserOperation, op));
 
 					} else if (base.type == UNARY) {
 
@@ -416,7 +476,7 @@ namespace Utility
 						auto sub = std::find_if(substitutions._substitutions.rbegin(), substitutions._substitutions.rend(), [key](const auto& c) { return c._symbol == key; });
 						if (sub == substitutions._substitutions.rend() || !IsTrue(sub->_condition) || sub->_type == PreprocessorSubstitutions::Type::Undefine) {
 							if (recordHashes) {
-								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Variable, key, Hash64(key)));
+								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Variable, std::make_pair(key, Hash64(key))));
 							} else
 								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Variable, key));
 						} else {
@@ -451,7 +511,7 @@ namespace Utility
 						delete resolvedRef;
 
 						delete input.front();
-						input.pop();
+						input.pop_front();
 						if (input.empty())
 							Throw(std::runtime_error("Missing parameters to defined() function in token stream"));
 						TokenBase& varToTest  = *input.front();
@@ -459,7 +519,7 @@ namespace Utility
 							Throw(std::runtime_error("Missing parameters to defined() function in token stream"));
 						std::string key = static_cast<::Token<std::string>*>(&varToTest)->val;
 						delete input.front();
-						input.pop();
+						input.pop_front();
 						if (input.empty())
 							Throw(std::runtime_error("Missing parameters to defined() function in token stream"));
 						TokenBase& callOp  = *input.front();
@@ -470,7 +530,7 @@ namespace Utility
 						auto sub = std::find_if(substitutions._substitutions.rbegin(), substitutions._substitutions.rend(), [key](const auto& c) { return c._symbol == key; });
 						if (sub == substitutions._substitutions.rend() || !IsTrue(sub->_condition) || sub->_type == PreprocessorSubstitutions::Type::Undefine) {
 							if (recordHashes) {
-								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::IsDefinedTest, key, Hash64(key)));
+								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::IsDefinedTest, std::make_pair(key, Hash64(key))));
 							} else
 								reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::IsDefinedTest, key));
 						} else {
@@ -484,21 +544,21 @@ namespace Utility
 						
 						std::string literal = packToken::str(&base);
 						if (recordHashes) {
-							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Literal, literal, Hash64(literal)));
+							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Literal, std::make_pair(literal, Hash64(literal))));
 						} else
 							reversePolishOrdering.push_back(dictionary.GetOrAddToken(TokenDictionary::TokenType::Literal, literal));
 
 					}
 
 					delete input.front();
-					input.pop();
+					input.pop_front();
 				}
 
 				return reversePolishOrdering;
 			} CATCH (...) {
 				while (!input.empty()) {
 					delete input.front();
-					input.pop();
+					input.pop_front();
 				}
 				throw;
 			} CATCH_END
@@ -682,7 +742,7 @@ namespace Utility
 							// order. This might mean reversing lhs and rhs where it makes sense
 							// We will attempt to reverse as many operators as we can, but "&&" and "||" are going
 							// to be the most important ones
-							auto reversedOperator = preprocessor_operations::NumeralOperation_FlippedOperandOperator(token._value);
+							auto reversedOperator = preprocessor_operations::NumeralOperation_FlippedOperandOperator(StringOrEmpty(token._value));
 							if (!reversedOperator.IsEmpty()) {
 								std::vector<Token> reversedPart;
 								reversedPart.reserve(rrange.end() - lrange.begin());
@@ -702,7 +762,7 @@ namespace Utility
 							// it applies to (ie; !(lhs < rhs) becomes (lhs >= rhs))
 							const auto& internalOp = _tokenDefinitions[*(rrange.end()-1)];
 							if (internalOp._type == TokenType::Operation) {
-								auto negated = preprocessor_operations::NumeralOperation_NegatedOperator(internalOp._value);
+								auto negated = preprocessor_operations::NumeralOperation_NegatedOperator(StringOrEmpty(internalOp._value));
 								if (!negated.IsEmpty()) {
 									*(rrange.end()-1) = GetOrAddToken(TokenType::Operation, negated.AsString());
 									expr.erase(expr.begin()+idx);
@@ -777,7 +837,7 @@ namespace Utility
 					std::stringstream str;
 
 					if (l_token.first.empty()) {	// we get an empty string for the unary marker
-						opPrecedence = opp.prec("L"+token._value);
+						opPrecedence = opp.prec("L"+StringOrEmpty(token._value));
 						bool rhsNeedsBrackets = r_token.second >= opPrecedence;
 
 						str << token._value;
@@ -786,7 +846,7 @@ namespace Utility
 						} else 
 							str << r_token.first;
 					} else {
-						opPrecedence = opp.prec(token._value);
+						opPrecedence = opp.prec(StringOrEmpty(token._value));
 						bool lhsNeedsBrackets = l_token.second > opPrecedence;
 						bool rhsNeedsBrackets = r_token.second >= opPrecedence;
 
@@ -805,34 +865,52 @@ namespace Utility
 				} else if (token._type == TokenType::UnaryMarker) {
 					evaluation.push(std::make_pair(std::string{}, 0));
 				} else if (token._type == TokenType::IsDefinedTest) {
-					evaluation.push(std::make_pair(Concatenate("defined(", token._value, ")"), 0));
+					std::stringstream str;
+					str << "defined(" << token._value << ")";
+					evaluation.push(std::make_pair(str.str(), 0));
 				} else {
-					evaluation.push(std::make_pair(token._value, 0));
+					std::stringstream str;
+					str << token._value;
+					evaluation.push(std::make_pair(str.str(), 0));
 				}
 			}
 			assert(evaluation.size() == 1);
 			return evaluation.top().first;
 		}
 
-		Token TokenDictionary::GetOrAddToken(TokenType type, const std::string& value, uint64_t hash)
+		Token TokenDictionary::GetOrAddToken(TokenType type, const TokenValueVariant& v)
 		{
-			assert(!hash || hash == Hash64(value));
-			TokenDictionary::TokenDefinition token { type, value, hash };
-			auto existing = std::find(_tokenDefinitions.begin(), _tokenDefinitions.end(), token);
+			auto existing = std::find(_tokenDefinitions.begin(), _tokenDefinitions.end(), TokenDictionary::TokenDefinition{type, v});
 			if (existing == _tokenDefinitions.end()) {
 
-				// ensure there are no tokens that differ just by hash value
-				#if defined(_DEBUG)
-					for (auto&i:_tokenDefinitions)
-						assert(i._type != type || i._value != value);
-				#endif
+				// if we're look for a string with hash, search for same string without hash (and vice versa)
+				if (v.index() == 2) {
+					existing = std::find(_tokenDefinitions.begin(), _tokenDefinitions.end(), TokenDictionary::TokenDefinition{type, StringOrEmpty(v)});
+					if (existing != _tokenDefinitions.end()) {
+						existing->_value = v;	// update with hash value
+						return (Token)std::distance(_tokenDefinitions.begin(), existing);
+					}
 
-				_tokenDefinitions.push_back(token);
+					// ensure there are no tokens that differ just by hash value
+					#if defined(_DEBUG)
+						existing = std::find_if(_tokenDefinitions.begin(), _tokenDefinitions.end(), [type, s=StringOrEmpty(v)](const auto& q) {
+							return q._value.index() == 2 && std::get<std::pair<std::string, uint64_t>>(q._value).first == s;
+						});
+						assert(existing == _tokenDefinitions.end());
+					#endif
+
+				} else if (v.index() == 1) {
+					// ( we have the same string, just with a hash)
+					existing = std::find_if(_tokenDefinitions.begin(), _tokenDefinitions.end(), [type, s=std::get<std::string>(v)](const auto& q) {
+						return q._value.index() == 2 && std::get<std::pair<std::string, uint64_t>>(q._value).first == s;
+					});
+					if (existing != _tokenDefinitions.end())
+						return (Token)std::distance(_tokenDefinitions.begin(), existing);
+				}
+
+				_tokenDefinitions.emplace_back(TokenDefinition{type, v});
 				return (Token)_tokenDefinitions.size() - 1;
 			} else {
-				if (!existing->_hash)
-					existing->_hash = hash;
-				assert(type != existing->_type || ((!hash || existing->_hash == hash) && existing->_value == value));
 				return (Token)std::distance(_tokenDefinitions.begin(), existing);
 			}
 		}
@@ -841,7 +919,7 @@ namespace Utility
 		{
 			auto existing = std::find_if(
 				_tokenDefinitions.begin(), _tokenDefinitions.end(), 
-				[type, value](const auto& c) { return c._type == type && XlEqString(value, c._value); });
+				[type, value](const auto& c) { return c._type == type && XlEqString(value, c.AsStringSection()); });
 			if (existing != _tokenDefinitions.end())
 				return (Token)std::distance(_tokenDefinitions.begin(), existing);
 			return {};
@@ -858,7 +936,7 @@ namespace Utility
 			for (const auto&token:tokenListForOtherDictionary) {
 				auto& trns = translated[token];
 				if (trns == ~0u)
-					trns = GetOrAddToken(otherDictionary._tokenDefinitions[token]._type, otherDictionary._tokenDefinitions[token]._value, otherDictionary._tokenDefinitions[token]._hash);
+					trns = GetOrAddToken(otherDictionary._tokenDefinitions[token]._type, otherDictionary._tokenDefinitions[token]._value);
 				result.push_back(trns);
 			}
 			return result;
@@ -868,79 +946,44 @@ namespace Utility
 			const TokenDictionary& otherDictionary,
 			Token tokenForOtherDictionary)
 		{
-			return GetOrAddToken(otherDictionary._tokenDefinitions[tokenForOtherDictionary]._type, otherDictionary._tokenDefinitions[tokenForOtherDictionary]._value, otherDictionary._tokenDefinitions[tokenForOtherDictionary]._hash);
+			return GetOrAddToken(otherDictionary._tokenDefinitions[tokenForOtherDictionary]._type, otherDictionary._tokenDefinitions[tokenForOtherDictionary]._value);
 		}
 
 		uint64_t TokenDictionary::CalculateHash() const
 		{
 			uint64_t result = DefaultSeed64;
-			for (const auto& def:_tokenDefinitions)
-				result = HashCombine(Hash64(def._value, (uint64_t)def._type), result);
+			for (const auto& def:_tokenDefinitions) {
+				std::visit(overloaded{
+					[&](const std::monostate&) { result = rotl64(result, (unsigned)def._type); },
+					[&](const std::string& str) { result = Hash64(str, rotl64(result, (unsigned)def._type)); },
+					[&](const std::pair<std::string, uint64_t>& p) { result = HashCombine(p.second, rotl64(result, (unsigned)def._type)); },
+					[&](int64_t p) { result = HashCombine(p, rotl64(result, (unsigned)def._type)); },
+					}, def._value);
+			}
 			return result;
 		}
+
+		static std::string s_string0 { "0" };
+		static std::string s_string1 { "1" };
+		static std::string s_stringLogicalAnd { "&&" };
+		static std::string s_stringLogicalOr { "||" };
+		static std::string s_stringNot { "!" };
 
 		TokenDictionary::TokenDictionary()
 		{
 			// We have a few utility tokens which have universal values -- just for
 			// convenience's sake
-			_tokenDefinitions.push_back({TokenDictionary::TokenType::Literal, "0"});		// s_fixedTokenFalse
-			_tokenDefinitions.push_back({TokenDictionary::TokenType::Literal, "1"});		// s_fixedTokenTrue
-			_tokenDefinitions.push_back({TokenDictionary::TokenType::Operation, "&&"});		// s_fixedTokenLogicalAnd
-			_tokenDefinitions.push_back({TokenDictionary::TokenType::Operation, "||"});		// s_fixedTokenLogicalOr
-			_tokenDefinitions.push_back({TokenDictionary::TokenType::Operation, "!"});		// s_fixedTokenNot
+			_tokenDefinitions.push_back({TokenDictionary::TokenType::Literal, 0});		// s_fixedTokenFalse
+			_tokenDefinitions.push_back({TokenDictionary::TokenType::Literal, 1});		// s_fixedTokenTrue
+			_tokenDefinitions.push_back({TokenDictionary::TokenType::Operation, s_stringLogicalAnd});		// s_fixedTokenLogicalAnd
+			_tokenDefinitions.push_back({TokenDictionary::TokenType::Operation, s_stringLogicalOr});		// s_fixedTokenLogicalOr
+			_tokenDefinitions.push_back({TokenDictionary::TokenType::Operation, s_stringNot});		// s_fixedTokenNot
 			_tokenDefinitions.push_back({TokenDictionary::TokenType::UnaryMarker});			// s_fixedTokenUnaryMarker
 		}
 
 		TokenDictionary::~TokenDictionary() {}
 
-		struct ExpressionEvaluator::EvaluatedValue
-		{
-			ImpliedTyping::TypeDesc _type = ImpliedTyping::TypeCat::Void;
-			bool _useRetainedValue = false;
-			uint64_t _retainedValue;		// can't hold arrays
-			IteratorRange<const void*> _nonRetainedValue;
-			bool _nonRetainedValueReversedEndian = false;
-
-			#if defined(_DEBUG)
-				uint64_t _validationBuffer = 0;
-			#endif
-
-			operator ImpliedTyping::VariantNonRetained() const
-			{
-				#if defined(_DEBUG)
-					if (!_useRetainedValue) {
-						if (_nonRetainedValue.size() <= sizeof(_validationBuffer))
-							assert(std::memcmp(&_validationBuffer, _nonRetainedValue.begin(), _nonRetainedValue.size()) == 0);
-						assert(_type.GetSize() == _nonRetainedValue.size());
-					}
-				#endif
-				return ImpliedTyping::VariantNonRetained{ _type, _useRetainedValue ? MakeOpaqueIteratorRange(_retainedValue) : _nonRetainedValue, _nonRetainedValueReversedEndian };
-			}
-			EvaluatedValue() = default;
-			EvaluatedValue(const ImpliedTyping::VariantNonRetained& copyFrom)
-			: _type(copyFrom._type), _useRetainedValue(false), _nonRetainedValue(copyFrom._data), _nonRetainedValueReversedEndian(copyFrom._reversedEndian)
-			{
-				assert(_type.GetSize() == _nonRetainedValue.size());
-				#if defined(_DEBUG)
-					if (_nonRetainedValue.size() <= sizeof(_validationBuffer))
-						std::memcpy(&_validationBuffer, _nonRetainedValue.begin(), _nonRetainedValue.size());
-				#endif
-			}
-			EvaluatedValue(const EvaluatedValue& copyFrom) = default;
-			EvaluatedValue& operator=(const EvaluatedValue& copyFrom) = default;
-
-			template<typename Type>
-				EvaluatedValue(Type value)
-				:_type{ImpliedTyping::TypeOf<Type>()}
-				, _useRetainedValue{true}
-				, _retainedValue{0}	// clear for clarity
-				, _nonRetainedValueReversedEndian{false}
-				{
-					assert(_type._type != ImpliedTyping::TypeCat::Void);
-					assert(_type.GetSize() <= sizeof(_retainedValue));
-					*(Type*)&_retainedValue = value;
-				}
-		};
+		using EvaluatedValue = ImpliedTyping::VariantRetained;
 
 		static bool EvalBlock_HasBeenEvaluated(IteratorRange<const uint8_t*> evalBlock, unsigned tokenIdx)
 		{
@@ -949,34 +992,34 @@ namespace Utility
 			return (evalBlock[idx] >> bit) & 1;
 		}
 
-		static void EvalBlock_Set(IteratorRange<uint8_t*> evalBlock, unsigned tokenIdx, unsigned tokenCount, const ExpressionEvaluator::EvaluatedValue& value)
+		static void EvalBlock_Set(IteratorRange<uint8_t*> evalBlock, unsigned tokenIdx, unsigned tokenCount, EvaluatedValue&& value)
 		{
 			assert(tokenIdx < tokenCount);
 			auto idx = tokenIdx / 8;
 			auto bit = tokenIdx % 8;
 			evalBlock[idx] |= 1<<bit;
 			auto valuesOffset = CeilToMultiplePow2(tokenCount, 8) / 8;
-			((ExpressionEvaluator::EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx] = value;
+			((EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx] = std::move(value);
 		}
 
-		static const ExpressionEvaluator::EvaluatedValue& EvalBlock_Get(IteratorRange<const uint8_t*> evalBlock, unsigned tokenIdx, unsigned tokenCount)
+		static const EvaluatedValue& EvalBlock_Get(IteratorRange<const uint8_t*> evalBlock, unsigned tokenIdx, unsigned tokenCount)
 		{
 			assert(tokenIdx < tokenCount);
 			assert(EvalBlock_HasBeenEvaluated(evalBlock, tokenIdx));
 			auto valuesOffset = CeilToMultiplePow2(tokenCount, 8) / 8;
-			return ((ExpressionEvaluator::EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx];
+			return ((EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx];
 		}
 
 		static std::vector<uint8_t> EvalBlock_Initialize(unsigned tokenCount)
 		{
 			std::vector<uint8_t> result;
 			auto valuesOffset = CeilToMultiplePow2(tokenCount, 8) / 8;
-			result.resize(tokenCount * sizeof(ExpressionEvaluator::EvaluatedValue) + valuesOffset);
+			result.resize(tokenCount * sizeof(EvaluatedValue) + valuesOffset);
 			for (unsigned c=0; c<valuesOffset; ++c) result[c] = 0;
 			return result;
 		}
 		
-		static ImpliedTyping::VariantNonRetained UndefinedToZero(const ExpressionEvaluator::EvaluatedValue& value)
+		static ImpliedTyping::VariantNonRetained UndefinedToZero(const EvaluatedValue& value)
 		{
 			// undefined variables treated as 0, as per pre-processor rules
 			if (value._type._type == ImpliedTyping::TypeCat::Void) {
@@ -986,8 +1029,57 @@ namespace Utility
 			return value;
 		}
 
+		static EvaluatedValue AsEvaluatedValue(StringSection<> token)
+		{
+			EvaluatedValue v;
+			v._type = ImpliedTyping::ParseFullMatch(
+				token,
+				MakeOpaqueIteratorRange(v._smallBuffer));
+			if (v._type._type == ImpliedTyping::TypeCat::Void)
+				Throw(std::runtime_error("Literal not understood in expression (" + token.AsString() + ")"));
+
+			switch (v._type._type) {
+			case ImpliedTyping::TypeCat::UInt8: v._type._type = ImpliedTyping::TypeCat::Int8; break;
+			case ImpliedTyping::TypeCat::UInt16: v._type._type = ImpliedTyping::TypeCat::Int16; break;
+			case ImpliedTyping::TypeCat::UInt32: v._type._type = ImpliedTyping::TypeCat::Int32; break;
+			case ImpliedTyping::TypeCat::UInt64: v._type._type = ImpliedTyping::TypeCat::Int64; break;
+			default: break;
+			}
+			return v;
+		}
+
+		static EvaluatedValue AsEvaluatedValue(const TokenDictionary::TokenValueVariant& v)
+		{
+			switch (v.index()) {
+			default:
+			case 0:
+				return {};
+
+			case 1:
+				return AsEvaluatedValue(MakeStringSection(std::get<std::string>(v)));
+			case 2:
+				return AsEvaluatedValue(MakeStringSection(std::get<std::pair<std::string, uint64_t>>(v).first));
+
+			case 3:
+				return EvaluatedValue { std::get<int64_t>(v) };
+			}
+		}
+
+		static EvaluatedValue AsEvaluatedValue(ExpressionEvaluator::Step::ReturnSled&& v)
+		{
+			switch (v.index()) {
+			default:
+			case 0:
+			case 1: return {};
+			case 2: return std::move(std::get<ImpliedTyping::VariantNonRetained>(std::move(v)));
+			case 3: return std::move(std::get<ImpliedTyping::VariantRetained>(std::move(v)));
+			}
+		}
+
 		auto ExpressionEvaluator::GetNextStep() -> Step
 		{
+			using namespace Internal;		// required to find operator<<
+
 			// advance the expression evaluation until there's some IO...
 			using TokenType = TokenDictionary::TokenType;
 			while (!_remainingExpression.empty()) {
@@ -1001,12 +1093,11 @@ namespace Utility
 					assert(r_token.first == TokenType::Literal);
 					if (l_token.first == TokenType::UnaryMarker) {
 						EvaluatedValue v;
-						v._useRetainedValue = true;
-						v._type = ImpliedTyping::TryUnaryOperator(MakeOpaqueIteratorRange(v._retainedValue), token._value, UndefinedToZero(r_token.second));
+						v._type = ImpliedTyping::TryUnaryOperator(MakeOpaqueIteratorRange(v._smallBuffer), StringOrEmpty(token._value), UndefinedToZero(r_token.second));
 						if (v._type == ImpliedTyping::TypeCat::Void)
-							Throw(std::runtime_error("Could not evaluate operator (" + token._value + ") in expression evaluator"));
+							Throw(std::runtime_error((StringMeld<128>() << "Could not evaluate operator (" << token._value << ") in expression evaluator").AsString()));
 						_evaluation.emplace_back(TokenType::Literal, v);
-					} else if (XlEqString(token._value, "[]")) {
+					} else if (XlEqString(StringOrEmpty(token._value), "[]")) {
 						// array lookup
 						ImpliedTyping::VariantNonRetained indexor_ = r_token.second;
 						unsigned indexor;
@@ -1021,11 +1112,10 @@ namespace Utility
 								EvaluatedValue v;
 								v._type = array._type;
 								v._type._arrayCount = 1;
-								v._useRetainedValue = true;
 								auto src = MakeIteratorRange(PtrAdd(array._data.begin(), indexor*v._type.GetSize()), PtrAdd(array._data.begin(), (indexor+1)*v._type.GetSize()));
-								assert(src.size() <= sizeof(v._retainedValue));
-								v._retainedValue = 0;
-								std::memcpy(&v._retainedValue, src.begin(), src.size());
+								assert(src.size() <= sizeof(v._smallBuffer));
+								XlZeroMemory(v._smallBuffer);
+								std::memcpy(&v._smallBuffer, src.begin(), src.size());
 								_evaluation.emplace_back(TokenType::Literal, v);
 							}
 						} else {
@@ -1035,23 +1125,33 @@ namespace Utility
 					} else {
 						assert(l_token.first == TokenType::Literal);
 						EvaluatedValue v;
-						v._useRetainedValue = true;
-						v._type = ImpliedTyping::TryBinaryOperator(MakeOpaqueIteratorRange(v._retainedValue), token._value, UndefinedToZero(l_token.second), UndefinedToZero(r_token.second));
+						v._type = ImpliedTyping::TryBinaryOperator(MakeOpaqueIteratorRange(v._smallBuffer), StringOrEmpty(token._value), UndefinedToZero(l_token.second), UndefinedToZero(r_token.second));
 						if (v._type == ImpliedTyping::TypeCat::Void)
-							Throw(std::runtime_error("Could not evaluate operator (" + token._value + ") in expression evaluator"));
+							Throw(std::runtime_error((StringMeld<128>() << "Could not evaluate operator (" << token._value << ") in expression evaluator").AsString()));
 						_evaluation.emplace_back(TokenType::Literal, v);
+					}
+
+				} else if (token._type == TokenType::UserOperation) {
+
+					// With a user operation, we don't actually know how many parameters are on the stack
+					if (_lastReturnSled.index() != 0) {
+						// the caller just returned us a value
+						_evaluation.emplace_back(TokenType::Literal, AsEvaluatedValue(std::move(_lastReturnSled)));
+					} else {
+						_lastReturnSled = Step::Undefined{};
+						return Step { StepType::UserOp, StringOrEmpty(token._value), tokenIdx, &_lastReturnSled };
 					}
 
 				} else if (token._type == TokenType::Variable) {
 
 					if (!EvalBlock_HasBeenEvaluated(_evalBlock, tokenIdx)) {
 						
-						if (_lastReturnedStep.has_value()) {
+						if (_lastReturnSled.index() != 0) {
 							// the caller just returned us a value
-							EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { *_lastReturnedStep });
+							EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), AsEvaluatedValue(std::move(_lastReturnSled)));
 						} else {
-							_lastReturnedStep = ImpliedTyping::VariantNonRetained{};
-							return Step { StepType::LookupVariable, MakeStringSection(token._value), tokenIdx, &_lastReturnedStep.value() };
+							_lastReturnSled = Step::Undefined{};
+							return Step { StepType::LookupVariable, StringOrEmpty(token._value), tokenIdx, &_lastReturnSled };
 						}
 
 					}
@@ -1062,12 +1162,24 @@ namespace Utility
 
 					if (!EvalBlock_HasBeenEvaluated(_evalBlock, tokenIdx)) {
 
-						if (_lastReturnedStep.has_value()) {
-							bool isDefined = _lastReturnedStep->_type._type != ImpliedTyping::TypeCat::Void;
-							EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { isDefined });
-						} else {
-							_lastReturnedStep = ImpliedTyping::VariantNonRetained{};
-							return Step { StepType::LookupVariable, MakeStringSection(token._value), tokenIdx, &_lastReturnedStep.value() };
+						switch(_lastReturnSled.index()) {
+						case 1: // undefined
+							EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { false });
+							break;
+
+						case 2: // nonretained
+							EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { 
+								std::get<ImpliedTyping::VariantNonRetained>(_lastReturnSled)._type._type != ImpliedTyping::TypeCat::Void });
+							break;
+
+						case 3: // retained
+							EvalBlock_Set(MakeIteratorRange(_evalBlock), tokenIdx, _dictionary->_tokenDefinitions.size(), EvaluatedValue { 
+								std::get<ImpliedTyping::VariantRetained>(_lastReturnSled)._type._type != ImpliedTyping::TypeCat::Void });
+							break;
+
+						case 0:
+							_lastReturnSled = Step::Undefined{};
+							return Step { StepType::LookupVariable, StringOrEmpty(token._value), tokenIdx, &_lastReturnSled };
 						}
 
 					}
@@ -1076,31 +1188,14 @@ namespace Utility
 
 				} else if (token._type == TokenType::Literal) {
 
-					EvaluatedValue v;
-					v._retainedValue = 0;
-					v._useRetainedValue = true;
-					v._type = ImpliedTyping::ParseFullMatch(
-						MakeStringSection(token._value),
-						MakeOpaqueIteratorRange(v._retainedValue));
-					if (v._type._type == ImpliedTyping::TypeCat::Void)
-						Throw(std::runtime_error("Literal not understood in expression (" + token._value + ")"));
-
-					switch (v._type._type) {
-					case ImpliedTyping::TypeCat::UInt8: v._type._type = ImpliedTyping::TypeCat::Int8; break;
-					case ImpliedTyping::TypeCat::UInt16: v._type._type = ImpliedTyping::TypeCat::Int16; break;
-					case ImpliedTyping::TypeCat::UInt32: v._type._type = ImpliedTyping::TypeCat::Int32; break;
-					case ImpliedTyping::TypeCat::UInt64: v._type._type = ImpliedTyping::TypeCat::Int64; break;
-					default: break;
-					}
-
-					_evaluation.emplace_back(TokenType::Literal, v);
+					_evaluation.emplace_back(TokenType::Literal, AsEvaluatedValue(token._value));
 					
 				} else {
-					assert(token._value.empty());
+					assert(StringOrEmpty(token._value).empty());
 					_evaluation.emplace_back(token._type, EvaluatedValue{});
 				}
 
-				_lastReturnedStep = {};
+				_lastReturnSled = std::monostate{};
 				++_remainingExpression.first;
 			}
 
