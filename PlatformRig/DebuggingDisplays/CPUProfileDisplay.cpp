@@ -20,7 +20,7 @@
 #include <iomanip>
 #include <functional>
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace PlatformRig { namespace Overlays
 {

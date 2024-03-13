@@ -18,7 +18,7 @@
 #include "../../ConsoleRig/ResourceBox.h"
 #include <assert.h>
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace PlatformRig { namespace Overlays
 {

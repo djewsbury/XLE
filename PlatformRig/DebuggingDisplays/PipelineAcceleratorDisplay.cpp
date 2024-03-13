@@ -22,7 +22,7 @@
 #include "../../Formatters/FormatterUtils.h"
 #include "../../Tools/EntityInterface/MountedData.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 using namespace Utility::Literals;
 using namespace Assets::Literals;
 

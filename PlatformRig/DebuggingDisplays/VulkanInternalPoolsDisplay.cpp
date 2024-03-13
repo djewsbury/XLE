@@ -15,7 +15,7 @@
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/StringFormat.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace PlatformRig { namespace Overlays
 {

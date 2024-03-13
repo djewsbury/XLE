@@ -16,7 +16,7 @@
 #include "../Utility/UTFUtils.h"
 #include "../Utility/Conversion.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace PlatformRig
 {

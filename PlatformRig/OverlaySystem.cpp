@@ -20,7 +20,7 @@
 #include "../Assets/Assets.h"
 #include "../ConsoleRig/Console.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace PlatformRig
 {

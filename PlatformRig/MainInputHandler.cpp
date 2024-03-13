@@ -10,7 +10,7 @@
 #include "../Utility/MemoryUtils.h"
 #include <assert.h>
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace PlatformRig
 {

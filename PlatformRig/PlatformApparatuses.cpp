@@ -27,7 +27,7 @@
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/FunctionUtils.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace PlatformRig
 {

@@ -18,7 +18,7 @@
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../Math/Vector.h"
 
-using namespace PlatformRig::Literals;
+using namespace OSServices::Literals;
 
 namespace PlatformRig
 {
