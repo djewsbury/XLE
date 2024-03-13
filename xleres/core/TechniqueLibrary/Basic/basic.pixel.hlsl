@@ -9,6 +9,8 @@
 #include "../Framework/VSOUT.hlsl"
 #include "../Utility/Colour.hlsl"
 
+#include "../Math/EdgeDetection.hlsl"
+
 Texture2D		InputTexture;
 [[vk::input_attachment_index(0)]] SubpassInput<float4> SubpassInputAttachment;
 #if VSOUT_HAS_FONTTABLE && defined(FONT_RENDERER)
@@ -17,15 +19,64 @@ Texture2D		InputTexture;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if VSOUT_HAS_FONTTABLE && defined(FONT_RENDERER)
+	float FontEdgeTrick(VSOUT vsout)
+	{
+		float filteredX = 0.f, filteredY = 0.f;
+		for (int y=0; y<5; ++y)
+			for (int x=0; x<5; ++x) {
+				int qx = int(vsout.fontTable.y*vsout.texCoord.x)+2*(x-2);
+				int qy = int(vsout.fontTable.z*vsout.texCoord.y)+2*(y-2);
+				if (qx >= 0 && qx < vsout.fontTable.y && qy >= 0 && qy < vsout.fontTable.z) {
+					uint idx = vsout.fontTable.x + (qy * vsout.fontTable.y + qx);
+					float sample = FontResource[idx].r;
+					filteredX += ScharrHoriz5x5[x][y] * sample;
+					filteredY += ScharrHoriz5x5[y][x] * sample;
+				}
+			}
+		// return max(abs(filteredX), abs(filteredY));
+		return (max(abs(filteredX), abs(filteredY))) < (VSOUT_GetColor0(vsout).a);
+	}
+
+	float BilinearFontLookup(VSOUT vsout)
+	{
+		float2 AB = float2(vsout.fontTable.y * vsout.texCoord.x, vsout.fontTable.z * vsout.texCoord.y);
+		uint2 xy = uint2(AB);
+		uint2 xy2 = uint2(min(vsout.fontTable.y-1, xy.x+1), min(vsout.fontTable.z-1, xy.y+1));
+
+		AB -= xy;
+		float s0 = FontResource[vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy.x)].r;
+		float s1 = FontResource[vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy2.x)].r;
+		float s2 = FontResource[vsout.fontTable.x + (xy2.y * vsout.fontTable.y + xy.x)].r;
+		float s3 = FontResource[vsout.fontTable.x + (xy2.y * vsout.fontTable.y + xy2.x)].r;
+
+		return 
+			  s0 * (1.f - AB.x) * (1.f - AB.y)
+			+ s1 * (      AB.x) * (1.f - AB.y)
+			+ s2 * (1.f - AB.x) * (      AB.y)
+			+ s3 * (      AB.x) * (      AB.y)
+			;
+	}
+
+	float PointFontLookup(VSOUT vsout)
+	{
+		// we could do morton order style swizzling here -- but I'm not sure how useful it would be, given the src should be fairly small...? Might be better off just try to compress the src as much as possible
+		uint2 xy = uint2(vsout.fontTable.y * vsout.texCoord.x, vsout.fontTable.z * vsout.texCoord.y);
+		uint idx = vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy.x);
+		return FontResource[idx].r;
+	}
+
+#endif
+
 float4 frameworkEntry(VSOUT vsout) : SV_Target0
 {
 	float4 result = 1.0.rrrr;
 
 	#if VSOUT_HAS_FONTTABLE && defined(FONT_RENDERER)
-		// we could do morton order style swizzling here -- but I'm not sure how useful it would be, given the src should be fairly small...? Might be better off just try to compress the src as much as possible
-		uint2 xy = uint2(vsout.fontTable.y * vsout.texCoord.x, vsout.fontTable.z * vsout.texCoord.y);
-		uint idx = vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy.x);
-		result.a *= FontResource[idx].r;
+		// return FontEdgeTrick(vsout);
+		result.a *= PointFontLookup(vsout);
+		if (VSOUT_GetColor0(vsout).a < 1.f)
+			result.a *= FontEdgeTrick(vsout);		// (fade in trick based on gradients; just for fun)
 	#elif VSOUT_HAS_TEXCOORD
 		#if defined(FONT_RENDERER)
 			result.a *= InputTexture.Sample(PointClampSampler, VSOUT_GetTexCoord0(vsout)).r;
