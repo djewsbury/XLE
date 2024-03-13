@@ -148,6 +148,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         UploadsThreadContext(
             std::shared_ptr<IThreadContext> graphicsQueueContext,
             std::shared_ptr<IThreadContext> transferQueueContext,
+            unsigned stagingPageSize,
             bool reserveStagingSpace,
             bool backgroundContext);
         ~UploadsThreadContext();

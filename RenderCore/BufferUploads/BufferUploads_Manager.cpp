@@ -28,8 +28,10 @@
 #include <functional>
 #include "thousandeyes/futures/then.h"
 
-// #define BU_SEPARATELY_THREADED_CONTINUATIONS 1
-#if defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+#define BU_SEPARATELY_THREADED_CONTINUATIONS 1
+#define BU_ASSEMBLY_LINE_THREADED_CONTINUATIONS 1
+
+#if BU_SEPARATELY_THREADED_CONTINUATIONS
     #include "../ConsoleRig/GlobalServices.h"
     #include "../Assets/ContinuationExecutor.h"
 #endif
@@ -133,8 +135,10 @@ namespace RenderCore { namespace BufferUploads
 
         virtual void watch(std::unique_ptr<thousandeyes::futures::Waitable> w) override;
         virtual void stop() override;
+
+        enum class ContinuationMode { AssemblyLineThread, SeparateThread };
         
-        AssemblyLine(IDevice& device);
+        AssemblyLine(IDevice& device, ContinuationMode continuationMode);
         ~AssemblyLine();
 
     protected:
@@ -251,13 +255,15 @@ namespace RenderCore { namespace BufferUploads
         Threading::Mutex _onBackgroundFrameLock;
         unsigned _lastContextFrameId = 0;
 
-        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+        ContinuationMode _continuationMode;
+        #if BU_ASSEMBLY_LINE_THREADED_CONTINUATIONS
             std::vector<std::unique_ptr<thousandeyes::futures::Waitable>> _activeFutureWaitables;
             unsigned _futureWaitablesIterator = 0;
             std::thread::id _futureWaitablesThread;
             Threading::Mutex _stagingFutureWaitablesLock;
             std::vector<std::unique_ptr<thousandeyes::futures::Waitable>> _stagingFutureWaitables;
-        #else
+        #endif
+        #if BU_SEPARATELY_THREADED_CONTINUATIONS
             std::shared_ptr<thousandeyes::futures::Executor> _continuationExecutor;
         #endif
         void StallWhileCheckingFutures(std::chrono::steady_clock::time_point timeoutTime);
@@ -643,16 +649,20 @@ namespace RenderCore { namespace BufferUploads
 
     void AssemblyLine::watch(std::unique_ptr<thousandeyes::futures::Waitable> w)
     {
-        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
-            if (std::this_thread::get_id() == _futureWaitablesThread) {
-                _activeFutureWaitables.push_back(std::move(w));
-            } else {
-                ScopedLock(_stagingFutureWaitablesLock);
-                _stagingFutureWaitables.push_back(std::move(w));
-                _wakeupEvent.Increment();
+        #if BU_ASSEMBLY_LINE_THREADED_CONTINUATIONS
+            if (_continuationMode == ContinuationMode::AssemblyLineThread) {
+                if (std::this_thread::get_id() == _futureWaitablesThread) {
+                    _activeFutureWaitables.push_back(std::move(w));
+                } else {
+                    ScopedLock(_stagingFutureWaitablesLock);
+                    _stagingFutureWaitables.push_back(std::move(w));
+                    _wakeupEvent.Increment();
+                }
             }
-        #else
-            _continuationExecutor->watch(std::move(w));
+        #endif
+        #if BU_SEPARATELY_THREADED_CONTINUATIONS
+            if (_continuationMode == ContinuationMode::SeparateThread)
+                _continuationExecutor->watch(std::move(w));
         #endif
     }
 
@@ -663,42 +673,46 @@ namespace RenderCore { namespace BufferUploads
 
     void AssemblyLine::BindBackgroundThread()
     {
-        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
+        #if BU_ASSEMBLY_LINE_THREADED_CONTINUATIONS
             _futureWaitablesThread = std::this_thread::get_id();
         #endif
     }
 
     void AssemblyLine::StallWhileCheckingFutures(std::chrono::steady_clock::time_point timeoutTime)
     {
-        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
-            assert(std::this_thread::get_id() == _futureWaitablesThread);
+        #if BU_ASSEMBLY_LINE_THREADED_CONTINUATIONS
+            if (_continuationMode == ContinuationMode::AssemblyLineThread) {
+                assert(std::this_thread::get_id() == _futureWaitablesThread);
 
-            {
-                ScopedLock(_stagingFutureWaitablesLock);
-                _activeFutureWaitables.reserve(_activeFutureWaitables.size() + _stagingFutureWaitables.size());
-                for (auto& w:_stagingFutureWaitables) _activeFutureWaitables.emplace_back(std::move(w));
-                _stagingFutureWaitables.clear();
-            }
-
-            auto timeout = std::chrono::microseconds{500};
-            while (!_activeFutureWaitables.empty()) {
-                if (_wakeupEvent.Peek() || std::chrono::steady_clock::now() > timeoutTime)
-                    break;      // still have to do _wakeupEvent.Wait() to clear out the signal
-
-                bool readyForDispatch = _activeFutureWaitables[_futureWaitablesIterator]->wait(timeout);
-                if (!readyForDispatch) {
-                    _futureWaitablesIterator = (_futureWaitablesIterator+1)%_activeFutureWaitables.size();
-                    continue;
+                {
+                    ScopedLock(_stagingFutureWaitablesLock);
+                    _activeFutureWaitables.reserve(_activeFutureWaitables.size() + _stagingFutureWaitables.size());
+                    for (auto& w:_stagingFutureWaitables) _activeFutureWaitables.emplace_back(std::move(w));
+                    _stagingFutureWaitables.clear();
                 }
-                auto w = std::move(_activeFutureWaitables[_futureWaitablesIterator]);
-                _activeFutureWaitables.erase(_activeFutureWaitables.begin()+_futureWaitablesIterator);
-                w->dispatch();
-                if (_futureWaitablesIterator >= _activeFutureWaitables.size()) _futureWaitablesIterator = 0;
-            }
 
-            _wakeupEvent.WaitUntil(timeoutTime);
-        #else
-            _wakeupEvent.Wait();
+                auto timeout = std::chrono::microseconds{500};
+                while (!_activeFutureWaitables.empty()) {
+                    if (_wakeupEvent.Peek() || std::chrono::steady_clock::now() > timeoutTime)
+                        break;      // still have to do _wakeupEvent.Wait() to clear out the signal
+
+                    bool readyForDispatch = _activeFutureWaitables[_futureWaitablesIterator]->wait(timeout);
+                    if (!readyForDispatch) {
+                        _futureWaitablesIterator = (_futureWaitablesIterator+1)%_activeFutureWaitables.size();
+                        continue;
+                    }
+                    auto w = std::move(_activeFutureWaitables[_futureWaitablesIterator]);
+                    _activeFutureWaitables.erase(_activeFutureWaitables.begin()+_futureWaitablesIterator);
+                    w->dispatch();
+                    if (_futureWaitablesIterator >= _activeFutureWaitables.size()) _futureWaitablesIterator = 0;
+                }
+
+                _wakeupEvent.WaitUntil(timeoutTime);
+            }
+        #endif
+        #if BU_SEPARATELY_THREADED_CONTINUATIONS
+            if (_continuationMode == ContinuationMode::SeparateThread)
+                _wakeupEvent.Wait();
         #endif
     }
 
@@ -784,9 +798,10 @@ namespace RenderCore { namespace BufferUploads
         return *this;
     }
 
-    AssemblyLine::AssemblyLine(IDevice& device)
+    AssemblyLine::AssemblyLine(IDevice& device, ContinuationMode continuationMode)
     :   _device(&device)
     ,   _transactionsHeap((2*1024)<<4)
+    , _continuationMode(continuationMode)
     {
         _nextTransactionIdTopPart = 64;
         _transactions.resize(2*1024);
@@ -797,14 +812,19 @@ namespace RenderCore { namespace BufferUploads
         _pendingRetirements.reserve(64);
         _lastResolveTime = std::chrono::steady_clock::now();
 
-        #if !defined(BU_SEPARATELY_THREADED_CONTINUATIONS)
-            _activeFutureWaitables.reserve(2048);
-            _stagingFutureWaitables.reserve(2048);
-        #else
-            _continuationExecutor = std::make_shared<::Assets::ContinuationExecutor>(
-                std::chrono::microseconds(500),
-                thousandeyes::futures::detail::InvokerWithNewThread{},
-                ::Assets::InvokerToThreadPool{ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool()});
+        #if BU_ASSEMBLY_LINE_THREADED_CONTINUATIONS
+            if (_continuationMode == ContinuationMode::AssemblyLineThread) {
+                _activeFutureWaitables.reserve(2048);
+                _stagingFutureWaitables.reserve(2048);
+            }
+        #endif
+        #if BU_SEPARATELY_THREADED_CONTINUATIONS
+            if (_continuationMode == ContinuationMode::SeparateThread) {
+                _continuationExecutor = std::make_shared<::Assets::ContinuationExecutor>(
+                    std::chrono::microseconds(500),
+                    thousandeyes::futures::detail::InvokerWithNewThread{},
+                    ::Assets::InvokerToThreadPool{ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool()});
+            }
         #endif
     }
 
@@ -1800,7 +1820,7 @@ namespace RenderCore { namespace BufferUploads
 
         unsigned GetGUID() const override { return _guid; }
 
-        Manager(IDevice& renderDevice);
+        Manager(const ManagerDesc& desc, IDevice& renderDevice);
         ~Manager();
 
     private:
@@ -1827,16 +1847,27 @@ namespace RenderCore { namespace BufferUploads
 
     void                    Manager::StallAndMarkCommandListDependency(IThreadContext& immediateContext, CommandListID id, MarkCommandListDependencyFlags::BitField flags)
     {
+        auto* context = _backgroundContext ? _backgroundContext.get() : _foregroundContext.get();
+
         assert(id != CommandListID_Invalid);
         if (!id) {
             // when id is zero, we're just going to poke the queue for anything queued up
-            _backgroundContext->AdvanceGraphicsQueue(immediateContext, 0, flags);
+            context->AdvanceGraphicsQueue(immediateContext, 0, flags);
             return;
         }
 
-        while (!_backgroundContext->AdvanceGraphicsQueue(immediateContext, id, flags)) {
-            _assemblyLine->TriggerWakeupEvent();
-            std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
+        if (_backgroundContext) {
+            while (!context->AdvanceGraphicsQueue(immediateContext, id, flags)) {
+                _assemblyLine->TriggerWakeupEvent();
+                std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
+            }
+        } else {
+            while (!context->AdvanceGraphicsQueue(immediateContext, id, flags)) {
+                assert(_foregroundStepMask);
+                if (_foregroundStepMask)
+                    _assemblyLine->Process(_foregroundStepMask, *_foregroundContext.get());
+                std::this_thread::sleep_for(std::chrono::nanoseconds(500*1000));
+            }
         }
     }
 
@@ -1847,9 +1878,10 @@ namespace RenderCore { namespace BufferUploads
 
     CommandListMetrics      Manager::PopMetrics()
     {
-        CommandListMetrics result = _backgroundContext->PopMetrics();
-        if (result._commitTime != 0x0) {
-            return result;
+        if (_backgroundContext) {
+            CommandListMetrics result = _backgroundContext->PopMetrics();
+            if (result._commitTime != 0x0)
+                return result;
         }
         return _foregroundContext->PopMetrics();
     }
@@ -1862,7 +1894,8 @@ namespace RenderCore { namespace BufferUploads
             // Assembly line uses the number of times we've run AdvanceFrameId() for some
             // internal scheduling -- so we need to wake it up now, because it may do something
         _foregroundContext->AdvanceFrameId();
-        _backgroundContext->AdvanceFrameId();
+        if (_backgroundContext)
+            _backgroundContext->AdvanceFrameId();
         _assemblyLine->TriggerWakeupEvent();
 
         PlatformInterface::Resource_RecalculateVideoMemoryHeadroom();
@@ -1880,7 +1913,7 @@ namespace RenderCore { namespace BufferUploads
 
     static unsigned s_nextManagerGuid = 1;
 
-    Manager::Manager(IDevice& renderDevice) : _assemblyLine(std::make_shared<AssemblyLine>(renderDevice))
+    Manager::Manager(const ManagerDesc& desc, IDevice& renderDevice)
     {
         if (!renderDevice.GetDeviceFeatures()._timelineSemaphore)
             Throw(std::runtime_error("Timeline semphores device feature is disabled, but is required by BufferUploads"));
@@ -1888,11 +1921,12 @@ namespace RenderCore { namespace BufferUploads
         _shutdownBackgroundThread = false;
         _guid = s_nextManagerGuid++;
 
-        bool multithreadingOk = true;
+        bool multithreadingOk = desc._allowMultithreading;
+        // const auto nsightMode = ConsoleRig::CrossModule::GetInstance()._services.CallDefault("nsight"_h, false);
+        // if (nsightMode)
+        //     multithreadingOk = false;
 
-        const auto nsightMode = ConsoleRig::CrossModule::GetInstance()._services.CallDefault("nsight"_h, false);
-        if (nsightMode)
-            multithreadingOk = false;
+        _assemblyLine = std::make_shared<AssemblyLine>(renderDevice, multithreadingOk ? AssemblyLine::ContinuationMode::AssemblyLineThread : AssemblyLine::ContinuationMode::SeparateThread);
 
         auto immediateDeviceContext = renderDevice.GetImmediateContext();
         decltype(immediateDeviceContext) backgroundDeviceContext;
@@ -1939,7 +1973,10 @@ namespace RenderCore { namespace BufferUploads
         }
 
         const auto stagingOnForegroundContext = !_backgroundStepMask;
-        _foregroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(immediateDeviceContext), nullptr, stagingOnForegroundContext, false);
+        _foregroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(
+            std::move(immediateDeviceContext), nullptr,
+            desc._stagingPageBytes,
+            stagingOnForegroundContext, false);
 
         if (_backgroundStepMask) {
 
@@ -1948,7 +1985,10 @@ namespace RenderCore { namespace BufferUploads
                 if (auto* vulkanDevice = query_interface_cast<IDeviceVulkan*>(&renderDevice))
                     transferQueueContext = vulkanDevice->CreateDedicatedTransferContext();
 
-            _backgroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(std::move(backgroundDeviceContext), std::move(transferQueueContext), true, true);
+            _backgroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(
+                std::move(backgroundDeviceContext), std::move(transferQueueContext),
+                desc._stagingPageBytes,
+                true, true);
             _backgroundThread = std::make_unique<std::thread>(
                 [this](){ 
                     _backgroundContext->GetStagingPage().BindThread();
@@ -2001,9 +2041,24 @@ namespace RenderCore { namespace BufferUploads
         return *this;
     }
 
-    std::unique_ptr<IManager> CreateManager(IDevice& renderDevice)
+    static unsigned CalculateStagingBufferSpace()
     {
-        return std::make_unique<Manager>(renderDevice);
+        // Allocate enough room for 4 4k*4k textures with mipmaps
+        // We want this to be inline with the size of real textures in order to avoid
+        // wasting space
+        auto largeTexSize = ByteCount(TextureDesc::Plain2D( 4096, 4096, Format::BC7_UNORM_SRGB, 13 ));
+        return 4 * largeTexSize;
+    }
+
+    ManagerDesc::ManagerDesc()
+    {
+        _allowMultithreading = true;
+        _stagingPageBytes = CalculateStagingBufferSpace();
+    }
+
+    std::unique_ptr<IManager> CreateManager(const ManagerDesc& desc, IDevice& renderDevice)
+    {
+        return std::make_unique<Manager>(desc, renderDevice);
     }
 
     IManager::~IManager() {}

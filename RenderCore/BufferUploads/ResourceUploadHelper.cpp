@@ -804,7 +804,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         newCommandList._id = completeCmdList.value_or(~0u);
 
         #if GFXAPI_TARGET == GFXAPI_VULKAN
-            if (completeCmdList) {
+            if (completeCmdList && _pimpl->_transferQueueTimeline) {
                 // note -- we can't just open an empty command list here. On nvidia, the signal does not appear to be triggered if
                 // it's attached to an empty command list
                 assert(_helper._cmdListWriter);
@@ -936,13 +936,14 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                 commandList._deferredOperations.CommitToImmediate_ResourceTransfers(helper);
                 commandList._deferredOperations.CommitToImmediate_PostCommandList(helper);
 
-                auto metalCmdList = metalContext->ResolveCommandList();
-                metalContext.reset();
-
-                if (commandList._id != ~0u) {
+                std::shared_ptr<RenderCore::Metal::CommandList> metalCmdList;
+                if (commandList._id != ~0u && _transferQueueTimeline) {
+                    metalCmdList = metalContext->ResolveCommandList();
+                    metalContext.reset();
                     metalCmdList->AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
                     metalCmdList->AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
-                }
+                } else 
+                    metalContext.reset();
 
                 if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo)) {
                     if (commandList._graphicsQueueAdditionalCmdList)
@@ -950,15 +951,18 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
                         
                     // the command list generated will become a "pre-frame" command list; meaning it will go into
                     // the queue earlier than the main frame rendering command list
-                    threadContextVulkan->AddPreFrameCommandList(std::move(*metalCmdList));
+                    if (metalCmdList)
+                        threadContextVulkan->AddPreFrameCommandList(std::move(*metalCmdList));
                 } else {
                     UNREACHABLE();      // missing gfx api specific implementation
                 }
             } else if (commandList._id != ~0u) {
-                auto& metalContext = *Metal::DeviceContext::Get(commitTo);
-                assert(metalContext.HasActiveCommandList());
-                metalContext.GetActiveCommandList().AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
-                metalContext.GetActiveCommandList().AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
+                if (_transferQueueTimeline) {
+                    auto& metalContext = *Metal::DeviceContext::Get(commitTo);
+                    assert(metalContext.HasActiveCommandList());
+                    metalContext.GetActiveCommandList().AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
+                    metalContext.GetActiveCommandList().AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
+                }
 
                 if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(&commitTo)) {
                     if (commandList._graphicsQueueAdditionalCmdList)
@@ -1104,18 +1108,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         return HasOpenMainContextCommandList() || _pimpl->_fallbackGraphicsQueueCmdList;
     }
 
-    static unsigned CalculateStagingBufferSpace()
-    {
-        // Allocate enough room for 4 4k*4k textures with mipmaps
-        // We want this to be inline with the size of real textures in order to avoid
-        // wasting space
-        auto largeTexSize = ByteCount(TextureDesc::Plain2D( 4096, 4096, Format::BC7_UNORM_SRGB, 13 ));
-        return 4 * largeTexSize;
-    }
-
     UploadsThreadContext::UploadsThreadContext(
         std::shared_ptr<IThreadContext> graphicsQueueContext,
         std::shared_ptr<IThreadContext> transferQueueContext,
+        unsigned stagingPageSize,
         bool reserveStagingSpace, bool backgroundContext)
     {
         _pimpl = std::make_unique<Pimpl>();
@@ -1138,11 +1134,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _helper = ResourceUploadHelper { *_mainContext };
 
         if (reserveStagingSpace) {
-            const unsigned stagingPageSize = CalculateStagingBufferSpace();
             _pimpl->_stagingPage = std::make_unique<StagingPage>(*_mainContext, stagingPageSize);
 
             auto& objectFactory = RenderCore::Metal::GetObjectFactory(*_mainContext->GetDevice());
-            _pimpl->_transferQueueTimeline = objectFactory.CreateTimelineSemaphore();
+            if (_pimpl->_isDedicatedTransferContext)
+                _pimpl->_transferQueueTimeline = objectFactory.CreateTimelineSemaphore();
             _pimpl->_graphicsQueueTimeline = objectFactory.CreateTimelineSemaphore();
         }
     }
