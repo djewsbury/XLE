@@ -124,7 +124,7 @@ namespace RenderCore { namespace Techniques
 	UnderlyingAPI GetTargetAPI();
 
 	std::shared_ptr<IThreadContext> GetThreadContext();
-	void SetThreadContext(const std::shared_ptr<IThreadContext>&);
+	std::weak_ptr<IThreadContext> SetThreadContext(std::weak_ptr<IThreadContext>);
 
 }}
 

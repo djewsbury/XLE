@@ -411,9 +411,11 @@ namespace RenderCore { namespace Techniques
 		return threadContext;
 	}
 
-	void SetThreadContext(const std::shared_ptr<IThreadContext>& threadContext)
+	std::weak_ptr<IThreadContext> SetThreadContext(std::weak_ptr<IThreadContext> threadContext)
 	{
-		s_mainThreadContext = threadContext;
+		auto result = std::move(s_mainThreadContext);
+		s_mainThreadContext = std::move(threadContext);
+		return result;
 	}
 
 }}
