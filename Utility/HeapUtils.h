@@ -843,7 +843,7 @@ namespace Utility
 		#pragma pop_macro("new")
 
 		moveFrom._start = 0;
-		moveFrom._end = Count;
+		moveFrom._count = 0;
 		return *this;
 	}
 
@@ -947,8 +947,10 @@ namespace Utility
 			Type& get() { return _pageIterator->at(_idxWithinPage); }
 			Type& operator*() { return get(); }
 			Type* operator->() { return &get(); }
+			explicit operator bool() const { return _pageIterator; }
 
 			void operator++();
+			void operator+=(ptrdiff_t offset);
 
 			friend bool operator==(const Iterator& lhs, const Iterator& rhs)
 			{
@@ -960,26 +962,7 @@ namespace Utility
 			friend Iterator operator+(const Iterator& b, ptrdiff_t offset)
 			{
 				CircularPagedHeap<Type, PageSize>::Iterator result = b;
-				if ((result._idxWithinPage+offset) < result._pageIterator->size()) {
-					result._idxWithinPage += offset;
-				} else {
-					// Use the lookup table "result._srcHeap->_indexLookups" to accelerate the search for the page we need
-					// We use this for all random lookups
-					auto newIdx = result._countInPriorPages + result._idxWithinPage + offset;
-					auto i = std::lower_bound(result._srcHeap->_indexLookups.begin()+result._pageIdx+1, result._srcHeap->_indexLookups.end(), newIdx);
-					assert(i != result._srcHeap->_indexLookups.begin());
-					if (*i != newIdx) --i;
-					result._pageIdx = i - result._srcHeap->_indexLookups.begin();
-					result._countInPriorPages = *i;
-					if (result._pageIdx < result._srcHeap->_pages.size()) {
-						result._pageIterator = result._srcHeap->_pages[result._pageIdx].get();
-						result._idxWithinPage = newIdx - result._countInPriorPages;
-					} else {
-						result._pageIterator = nullptr;
-						result._idxWithinPage = 0;
-					}
-					assert(result._idxWithinPage < PageSize);
-				}
+				result += offset;
 				return result;
 			}
 
@@ -1032,6 +1015,30 @@ namespace Utility
 		CheckMovePage();
 	}
 
+	template<typename Type, unsigned PageSize>
+		void CircularPagedHeap<Type, PageSize>::Iterator::operator+=(ptrdiff_t offset)
+	{
+		if ((_idxWithinPage+offset) < _pageIterator->size()) {
+			_idxWithinPage += offset;
+		} else {
+			// Use the lookup table "_srcHeap->_indexLookups" to accelerate the search for the page we need
+			// We use this for all random lookups
+			auto newIdx = _countInPriorPages + _idxWithinPage + offset;
+			auto i = std::lower_bound(_srcHeap->_indexLookups.begin()+_pageIdx+1, _srcHeap->_indexLookups.end(), newIdx);
+			assert(i != _srcHeap->_indexLookups.begin());
+			if (*i != newIdx) --i;
+			_pageIdx = i - _srcHeap->_indexLookups.begin();
+			_countInPriorPages = *i;
+			if (_pageIdx < _srcHeap->_pages.size()) {
+				_pageIterator = _srcHeap->_pages[_pageIdx].get();
+				_idxWithinPage = newIdx - _countInPriorPages;
+			} else {
+				_pageIterator = nullptr;
+				_idxWithinPage = 0;
+			}
+			assert(_idxWithinPage < PageSize);
+		}
+	}
 
 	template<typename Type, unsigned PageSize>
 		auto CircularPagedHeap<Type, PageSize>::begin() -> Iterator
@@ -1221,57 +1228,32 @@ namespace Utility
 		struct Iterator
 		{
 			const Entry* _entry;
-			unsigned _sparseValueOffset = 0;
+			unsigned _sparseValueOffset;
 
 			unsigned get() { return _entry->_firstSparseValue + _sparseValueOffset; }
 			unsigned operator*() { return get(); }
 			T DenseSequenceValue();
+			explicit operator bool() const;
 			
 			void operator++();
+			void operator+=(size_t);
+
 			friend bool operator==(const Iterator& lhs, const Iterator& rhs) { return lhs._entry == rhs._entry && lhs._sparseValueOffset == rhs._sparseValueOffset; }
 			friend bool operator!=(const Iterator& lhs, const Iterator& rhs) { return !operator==(lhs, rhs); }
 
 			friend Iterator operator+(const Iterator& b, size_t offset)
 			{
-				// Advance forward the given number of entries in the mapped set
-				// Ie, we're advancing an arbitrary number of pre-mapped 'T' values
-				uint64_t maskPriorBits = (1ull << uint64_t(b._sparseValueOffset)) - 1ull;
-				uint64_t remainingBits = b._entry->_allocationFlags & ~maskPriorBits;
-				// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
-				if (auto q = _pdep_u64(1ull << uint64_t(offset), remainingBits)) {
-					// we're advancing within the same range
-					Iterator result = b;
-					result._sparseValueOffset = xl_ctz8(q);
-					return result;
-				} else {
-					offset -= popcount(remainingBits);
-					Iterator result = b;
-					result._sparseValueOffset = 64;
-					++result._entry;
-					while (result._entry->_allocationFlags) {
-						if (offset < 64) {
-							auto q = _pdep_u64(1ull << uint64_t(offset), result._entry->_allocationFlags);
-							if (q) {
-								result._sparseValueOffset = xl_ctz8(q);
-								return result;
-							} else {
-								offset -= popcount(result._entry->_allocationFlags);
-								++result._entry;
-							}
-						} else {
-							offset -= popcount(result._entry->_allocationFlags);
-							++result._entry;
-						}
-					}
-					return result;
-				}
+				Iterator result = b;
+				result += offset;
+				return result;
 			}
 		};
 
-		Iterator Remap(T);
-		Iterator Remap(T, Iterator hint);
+		Iterator Remap(T) const;
+		Iterator Remap(T, Iterator hint) const;
 		bool IsAllocated(T) const;
 		Iterator Allocate(T);
+		Iterator Allocate(Iterator i);
 		Iterator Deallocate(Iterator);
 
 		Iterator begin();
@@ -1296,6 +1278,7 @@ namespace Utility
 	template<typename T>
 		T RemappingBitHeap<T>::Iterator::DenseSequenceValue()
 	{
+		assert(_entry->_allocationFlags);
 		uint64_t maskLower = (1ull << uint64_t(_sparseValueOffset)) - 1ull;
 		return _entry->_precedingDenseValues + popcount(_entry->_allocationFlags & maskLower);
 	}
@@ -1315,13 +1298,52 @@ namespace Utility
 	}
 
 	template<typename T>
-		auto RemappingBitHeap<T>::Remap(T t) -> Iterator
+		void RemappingBitHeap<T>::Iterator::operator+=(size_t offset)
 	{
+		// Advance forward the given number of entries in the mapped set
+		// Ie, we're advancing an arbitrary number of pre-mapped 'T' values
+		uint64_t maskPriorBits = (1ull << uint64_t(_sparseValueOffset)) - 1ull;
+		uint64_t remainingBits = _entry->_allocationFlags & ~maskPriorBits;
+		// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
+		if (auto q = _pdep_u64(1ull << uint64_t(offset), remainingBits)) {
+			// we're advancing within the same range
+			_sparseValueOffset = xl_ctz8(q);
+		} else {
+			offset -= popcount(remainingBits);
+			_sparseValueOffset = 64;
+			++_entry;
+			while (_entry->_allocationFlags) {
+				if (offset < 64) {
+					auto q = _pdep_u64(1ull << uint64_t(offset), _entry->_allocationFlags);
+					if (q) {
+						_sparseValueOffset = xl_ctz8(q);
+						return;
+					} else {
+						offset -= popcount(_entry->_allocationFlags);
+						++_entry;
+					}
+				} else {
+					offset -= popcount(_entry->_allocationFlags);
+					++_entry;
+				}
+			}
+		}
+	}
+
+	template<typename T>
+		RemappingBitHeap<T>::Iterator::operator bool() const
+	{
+		// shifting by a number greater than 64ull is allowed to produce non-zero values
+		return (_sparseValueOffset < 64u) * (_entry->_allocationFlags & (1ull << uint64_t(_sparseValueOffset)));
+	}
+
+	template<typename T>
+		auto RemappingBitHeap<T>::Remap(T t) const -> Iterator
+	{
+		assert(t != std::numeric_limits<T>::max());	// using this value as a sentinel
 		auto i = std::upper_bound(_allocationsTable.begin(), _allocationsTable.end(), t, CompareUtil{});	// requires sentinel
 		if (i != _allocationsTable.begin()) --i;
-		assert(i->_allocationFlags);
-		assert((t - i->_firstSparseValue) < 64u);
-		assert(i->_allocationFlags & (1ull << uint64_t(t - i->_firstSparseValue)));	// ensure that it's actually allocated
+
 		Iterator result;
 		result._entry = AsPointer(i);
 		result._sparseValueOffset = t - i->_firstSparseValue;
@@ -1329,13 +1351,12 @@ namespace Utility
 	}
 
 	template<typename T>
-		auto RemappingBitHeap<T>::Remap(T, Iterator hint) -> Iterator
+		auto RemappingBitHeap<T>::Remap(T, Iterator hint) const -> Iterator
 	{
+		assert(t != std::numeric_limits<T>::max());	// using this value as a sentinel
 		auto i = std::upper_bound(hint._entry, AsPointer(_allocationsTable.end()), t, CompareUtil{});	// requires sentinel
 		if (i != _allocationFlags.begin()) --i;
-		assert(i->_allocationFlags);
-		assert((t - i->_firstSparseValue) < 64u);
-		assert(i->_allocationFlags & (1ull << uint64_t(t - i->_firstSparseValue)));	// ensure that it's actually allocated
+
 		Iterator result;
 		result._entry = AsPointer(i);
 		result._sparseValueOffset = t - i->_firstSparseValue;
@@ -1352,11 +1373,14 @@ namespace Utility
 	}
 
 	template<typename T>
-		auto RemappingBitHeap<T>::Allocate(T t) -> Iterator
+		auto RemappingBitHeap<T>::Allocate(T t) -> Iterator { return Allocate(Remap(t)); }
+
+	template<typename T>
+		auto RemappingBitHeap<T>::Allocate(Iterator insertion) -> Iterator
 	{
-		assert(t != std::numeric_limits<T>::max());	// using this value as a sentinel
-		auto i = std::upper_bound(_allocationsTable.begin(), _allocationsTable.end(), t, CompareUtil{});	// requires sentinel
-		if (i != _allocationsTable.begin()) --i;
+		assert(!insertion);
+		auto t = insertion.get();
+		auto i = _allocationsTable.begin() + (insertion._entry - AsPointer(_allocationsTable.begin()));
 		if (!i->_allocationFlags) {
 			// appending to the end
 			auto alignedT = t & ~(64ull - 1ull);
