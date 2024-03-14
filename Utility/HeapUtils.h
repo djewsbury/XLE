@@ -1211,56 +1211,56 @@ namespace Utility
 		class RemappingBitHeap
 	{
 	public:
+		struct Entry
+		{
+			T _firstSparseValue;
+			uint64_t _allocationFlags;
+			unsigned _precedingDenseValues;
+		};
+
 		struct Iterator
 		{
-			IteratorRange<std::pair<T, uint64_t>*> _range;
-			unsigned _bitOffset = 0;
+			const Entry* _entry;
+			unsigned _sparseValueOffset = 0;
 
-			unsigned get() { return _range.first->first + _bitOffset; }
+			unsigned get() { return _entry->_firstSparseValue + _sparseValueOffset; }
 			unsigned operator*() { return get(); }
-			T SparseSequenceValue();
+			T DenseSequenceValue();
 			
 			void operator++();
-			friend bool operator==(const Iterator& lhs, const Iterator& rhs)
-			{
-				assert(lhs._range.second == rhs._range.second);
-				return lhs._range.first == rhs._range.first && lhs._bitOffset == rhs._bitOffset;
-			}
-
+			friend bool operator==(const Iterator& lhs, const Iterator& rhs) { return lhs._entry == rhs._entry && lhs._sparseValueOffset == rhs._sparseValueOffset; }
 			friend bool operator!=(const Iterator& lhs, const Iterator& rhs) { return !operator==(lhs, rhs); }
 
 			friend Iterator operator+(const Iterator& b, size_t offset)
 			{
 				// Advance forward the given number of entries in the mapped set
 				// Ie, we're advancing an arbitrary number of pre-mapped 'T' values
-				assert(!b._range.empty());
-				uint64_t maskPriorBits = (1ull << uint64_t(b._bitOffset)) - 1ull;
-				uint64_t remainingBits = b._range.front().second & ~maskPriorBits;
+				uint64_t maskPriorBits = (1ull << uint64_t(b._sparseValueOffset)) - 1ull;
+				uint64_t remainingBits = b._entry->_allocationFlags & ~maskPriorBits;
 				// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
-				auto q = _pdep_u64(1ull << uint64_t(offset), remainingBits);
-				if (q) {
+				if (auto q = _pdep_u64(1ull << uint64_t(offset), remainingBits)) {
 					// we're advancing within the same range
 					Iterator result = b;
-					result._bitOffset = xl_ctz8(q);
+					result._sparseValueOffset = xl_ctz8(q);
 					return result;
 				} else {
 					offset -= popcount(remainingBits);
 					Iterator result = b;
-					result._bitOffset = 0;
-					++result._range.first;
-					while (result._range.first->second) {
+					result._sparseValueOffset = 64;
+					++result._entry;
+					while (result._entry->_allocationFlags) {
 						if (offset < 64) {
-							auto q = _pdep_u64(1ull << uint64_t(offset), result._range.first->second);
+							auto q = _pdep_u64(1ull << uint64_t(offset), result._entry->_allocationFlags);
 							if (q) {
-								result._bitOffset = xl_ctz8(q);
+								result._sparseValueOffset = xl_ctz8(q);
 								return result;
 							} else {
-								offset -= popcount(result._range.first->second);
-								++result._range.first;
+								offset -= popcount(result._entry->_allocationFlags);
+								++result._entry;
 							}
 						} else {
-							offset -= popcount(result._range.first->second);
-							++result._range.first;
+							offset -= popcount(result._entry->_allocationFlags);
+							++result._entry;
 						}
 					}
 					return result;
@@ -1276,98 +1276,116 @@ namespace Utility
 
 		Iterator begin();
 		Iterator end();
-		Iterator at(size_t);
-		Iterator erase(const Iterator&);
-		bool empty();
-		size_t size();
+		Iterator at(size_t offset) { return begin() + offset; }
+		Iterator erase(Iterator i) { return Deallocate(i); }
+		bool empty() { return _allocationsTable.size() == 1; }
+		size_t size() { return _allocationsTable.back()._precedingDenseValues; }
 
 		RemappingBitHeap();
 	private:
-		std::vector<std::pair<T, uint64_t>> _allocationFlags;
+		std::vector<Entry> _allocationsTable;
+
+		struct CompareUtil
+		{
+			inline bool operator()(const Entry& lhs, const Entry& rhs) const	{ return lhs._firstSparseValue < rhs._firstSparseValue; }
+			inline bool operator()(const Entry& lhs, T rhs) const				{ return lhs._firstSparseValue < rhs; }
+			inline bool operator()(T lhs, const Entry& rhs) const				{ return lhs < rhs._firstSparseValue; }
+		};
 	};
+
+	template<typename T>
+		T RemappingBitHeap<T>::Iterator::DenseSequenceValue()
+	{
+		uint64_t maskLower = (1ull << uint64_t(_sparseValueOffset)) - 1ull;
+		return _entry->_precedingDenseValues + popcount(_entry->_allocationFlags & maskLower);
+	}
 
 	template<typename T>
 		void RemappingBitHeap<T>::Iterator::operator++()
 	{
-		assert(_range.front().second);
-		uint64_t maskBitOffsetAndLower = (1ull << uint64_t(_bitOffset+1)) - 1ull;
-		uint64_t remainingBits = _range.front().second & ~maskBitOffsetAndLower;
+		assert(_entry->_allocationFlags);
+		uint64_t maskBitOffsetAndLower = (1ull << uint64_t(_sparseValueOffset+1)) - 1ull;
+		uint64_t remainingBits = _entry->_allocationFlags & ~maskBitOffsetAndLower;
 		if (remainingBits) {
-			_bitOffset = xl_ctz8(remainingBits);
+			_sparseValueOffset = xl_ctz8(remainingBits);
 		} else {
-			++_range.first;
-			_bitOffset = _range.first->second ? xl_ctz8(_range.first->second) : 0;
+			++_entry;
+			_sparseValueOffset = xl_ctz8(_entry->_allocationFlags);
 		}
 	}
 
 	template<typename T>
 		auto RemappingBitHeap<T>::Remap(T t) -> Iterator
 	{
-		auto i = UpperBound(_allocationFlags, t);	// requires sentinel
-		if (i != _allocationFlags.begin()) --i;
-		assert(i->second);
-		assert((t - i->first) < 64u);
-		assert(i->second & (1ull << uint64_t(t - i->first)));	// ensure that it's actually allocated
+		auto i = std::upper_bound(_allocationsTable.begin(), _allocationsTable.end(), t, CompareUtil{});	// requires sentinel
+		if (i != _allocationsTable.begin()) --i;
+		assert(i->_allocationFlags);
+		assert((t - i->_firstSparseValue) < 64u);
+		assert(i->_allocationFlags & (1ull << uint64_t(t - i->_firstSparseValue)));	// ensure that it's actually allocated
 		Iterator result;
-		result._range = MakeIteratorRange(i, _allocationFlags.end());
-		result._bitOffset = t - i->first;
+		result._entry = AsPointer(i);
+		result._sparseValueOffset = t - i->_firstSparseValue;
 		return result;
 	}
 
 	template<typename T>
 		auto RemappingBitHeap<T>::Remap(T, Iterator hint) -> Iterator
 	{
-		auto i = UpperBound2(MakeIteratorRange(hint._range.first, _allocationFlags.end()), t);	// requires sentinel
+		auto i = std::upper_bound(hint._entry, AsPointer(_allocationsTable.end()), t, CompareUtil{});	// requires sentinel
 		if (i != _allocationFlags.begin()) --i;
-		assert(i->second);
-		assert((t - i->first) < 64u);
-		assert(i->second & (1ull << uint64_t(t - i->first)));	// ensure that it's actually allocated
+		assert(i->_allocationFlags);
+		assert((t - i->_firstSparseValue) < 64u);
+		assert(i->_allocationFlags & (1ull << uint64_t(t - i->_firstSparseValue)));	// ensure that it's actually allocated
 		Iterator result;
-		result._range = MakeIteratorRange(i, _allocationFlags.end());
-		result._bitOffset = t - i->first;
+		result._entry = AsPointer(i);
+		result._sparseValueOffset = t - i->_firstSparseValue;
 		return result;
 	}
 
 	template<typename T>
 		bool RemappingBitHeap<T>::IsAllocated(T t) const
 	{
-		auto i = UpperBound(_allocationFlags, t);	// requires sentinel
-		if (i != _allocationFlags.begin()) --i;
-		if ((t - i->first) >= 64u) return false;
-		return !!(i->second & (1ull << uint64_t(t - i->first)));
+		auto i = std::upper_bound(_allocationsTable.begin(), _allocationsTable.end(), t, CompareUtil{});	// requires sentinel
+		if (i != _allocationsTable.begin()) --i;
+		if ((t - i->_firstSparseValue) >= 64u) return false;
+		return !!(i->_allocationFlags & (1ull << uint64_t(t - i->_firstSparseValue)));
 	}
 
 	template<typename T>
 		auto RemappingBitHeap<T>::Allocate(T t) -> Iterator
 	{
 		assert(t != std::numeric_limits<T>::max());	// using this value as a sentinel
-		auto i = UpperBound(_allocationFlags, t);	// requires sentinel
-		if (i != _allocationFlags.begin()) --i;
-		if (!i->second) {
+		auto i = std::upper_bound(_allocationsTable.begin(), _allocationsTable.end(), t, CompareUtil{});	// requires sentinel
+		if (i != _allocationsTable.begin()) --i;
+		if (!i->_allocationFlags) {
 			// appending to the end
 			auto alignedT = t & ~(64ull - 1ull);
-			i = _allocationFlags.insert(i, std::make_pair(alignedT, 0));
+			i = _allocationsTable.insert(i, Entry{(T)alignedT, 0, i->_precedingDenseValues});
 			auto offset = t - alignedT;
-			i->second |= 1ull << uint64_t(offset);				// mark allocated
+			i->_allocationFlags |= 1ull << uint64_t(offset);				// mark allocated
 			Iterator result;
-			result._range = {i, _allocationFlags.end()};
-			result._bitOffset = offset;
+			result._entry = AsPointer(i);
+			result._sparseValueOffset = offset;
+
+			++i; while (i!=_allocationsTable.end()) { ++i->_precedingDenseValues; ++i; }
 			return result;
 		} else {
-			auto offset = t - i->first;
+			auto offset = t - i->_firstSparseValue;
 			if (offset < 64) {
-				assert(!(i->second & (1ull << uint64_t(offset))));	// ensure that it's not already allocated
-				i->second |= 1ull << uint64_t(offset);				// mark allocated
+				assert(!(i->_allocationFlags & (1ull << uint64_t(offset))));	// ensure that it's not already allocated
+				i->_allocationFlags |= 1ull << uint64_t(offset);				// mark allocated
 			} else {
-				// we have to insert a new entry into the _allocationFlags table
+				// we have to insert a new entry into the _allocationsTable table
 				auto alignedT = t & ~(64ull - 1ull);
-				i = _allocationFlags.insert(i+1, std::make_pair(alignedT, 0));
+				i = _allocationsTable.insert(i+1, Entry{(T)alignedT, 0, (i+1)->_precedingDenseValues});
 				offset = t - alignedT;
-				i->second |= 1ull << uint64_t(offset);				// mark allocated
+				i->_allocationFlags |= 1ull << uint64_t(offset);				// mark allocated
 			}
 			Iterator result;
-			result._range = {i, _allocationFlags.end()};
-			result._bitOffset = offset;
+			result._entry = AsPointer(i);
+			result._sparseValueOffset = offset;
+
+			++i; while (i!=_allocationsTable.end()) { ++i->_precedingDenseValues; ++i; }
 			return result;
 		}
 	}
@@ -1375,21 +1393,20 @@ namespace Utility
 	template<typename T>
 		auto RemappingBitHeap<T>::Deallocate(Iterator i) -> Iterator
 	{
-		assert(i._range.second == AsPointer(_allocationFlags.end()));
-		assert(i._range.first->second & (1ull << uint64_t(i._bitOffset)));
-		auto newBits = i._range.first->second & ~(1ull << uint64_t(i._bitOffset));
+		assert(i._entry->_allocationFlags & (1ull << uint64_t(i._sparseValueOffset)));
+		auto newBits = i._entry->_allocationFlags & ~(1ull << uint64_t(i._sparseValueOffset));
 		if (newBits) {
-			auto q = i._range.first;
+			auto q = const_cast<Entry*>(i._entry);
 			++i;
-			q->second = newBits;
+			q->_allocationFlags = newBits;
+			++q; while (q!=AsPointer(_allocationsTable.end())) { --q->_precedingDenseValues; ++q; }
 			return i;
 		} else {
-			// we're removing an entire entry in the "_allocationFlags" range
-			auto q = _allocationFlags.erase(_allocationFlags.begin() + (i._range.first - AsPointer(_allocationFlags.begin())));
-			i._range = {q, _allocationFlags.end()};
-			i._bitOffset = 0;
-			if (q != _allocationFlags.end())
-				i._bitOffset = xl_ctz8(q->second);
+			// we're removing an entire entry in the "_allocationsTable" range
+			auto q = _allocationsTable.erase(_allocationsTable.begin() + (i._entry - AsPointer(_allocationsTable.begin())));
+			i._entry = AsPointer(q);
+			i._sparseValueOffset = xl_ctz8(q->_allocationFlags);
+			++q; while (q!=_allocationsTable.end()) { --q->_precedingDenseValues; ++q; }
 			return i;
 		}
 	}
@@ -1398,25 +1415,25 @@ namespace Utility
 		auto RemappingBitHeap<T>::begin() -> Iterator
 	{
 		Iterator result;
-		result._range = MakeIteratorRange(_allocationFlags);
-		result._bitOffset = result._range.first->second ? xl_ctz8(result._range.first->second) : 0;
+		result._entry = AsPointer(_allocationsTable.begin());
+		result._sparseValueOffset = xl_ctz8(result._entry->_allocationFlags);
 		return result;
 	}
 
 	template<typename T>
 		auto RemappingBitHeap<T>::end() -> Iterator
 	{
-		assert(!_allocationFlags.empty());
+		assert(!_allocationsTable.empty());
 		Iterator result;
-		result._range = MakeIteratorRange(_allocationFlags.end()-1, _allocationFlags.end());
-		result._bitOffset = 0;
+		result._entry = AsPointer(_allocationsTable.end()-1);
+		result._sparseValueOffset = 64;
 		return result;
 	}
 
 	template<typename T>
 		RemappingBitHeap<T>::RemappingBitHeap()
 	{
-		_allocationFlags.emplace_back(std::numeric_limits<T>::max(), 0); // sentinel
+		_allocationsTable.emplace_back(Entry{std::numeric_limits<T>::max(), 0, 0}); // sentinel
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////

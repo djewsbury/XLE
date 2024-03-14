@@ -220,6 +220,7 @@ namespace UnitTests
 		REQUIRE(*i == 385);
 		++i;
 		REQUIRE(i == heap.end());
+		REQUIRE(heap.size() == 6);
 
 		REQUIRE(*(heap.begin()+0) == 5);
 		REQUIRE(*(heap.begin()+1) == 6);
@@ -229,22 +230,30 @@ namespace UnitTests
 		REQUIRE(*(heap.begin()+5) == 385);
 		REQUIRE((heap.begin()+6) == heap.end());
 
+		REQUIRE(heap.Remap(5).DenseSequenceValue() == 0);
+		REQUIRE(heap.Remap(6).DenseSequenceValue() == 1);
+		REQUIRE(heap.Remap(32).DenseSequenceValue() == 2);
+		REQUIRE(heap.Remap(64).DenseSequenceValue() == 3);
+		REQUIRE(heap.Remap(100).DenseSequenceValue() == 4);
+		REQUIRE(heap.Remap(385).DenseSequenceValue() == 5);
+
 		REQUIRE(heap.IsAllocated(32));
 		heap.Deallocate(heap.begin()+2);
 		REQUIRE(!heap.IsAllocated(32));
-
-		REQUIRE(heap.IsAllocated(64));
-		heap.Deallocate(heap.Remap(64));
-		REQUIRE(!heap.IsAllocated(64));
 
 		REQUIRE(heap.IsAllocated(100));
 		heap.Deallocate(heap.Remap(100));
 		REQUIRE(!heap.IsAllocated(100));
 
+		REQUIRE(heap.IsAllocated(64));
+		heap.Deallocate(heap.Remap(64));
+		REQUIRE(!heap.IsAllocated(64));
+
 		REQUIRE(*(heap.begin()+0) == 5);
 		REQUIRE(*(heap.begin()+1) == 6);
 		REQUIRE(*(heap.begin()+2) == 385);
 		REQUIRE((heap.begin()+3) == heap.end());
+		REQUIRE(heap.size() == 3);
 	}
 
 }
