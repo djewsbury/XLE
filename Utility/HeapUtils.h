@@ -949,8 +949,13 @@ namespace Utility
 			Type* operator->() { return &get(); }
 
 			void operator++();
-			bool operator==(const Iterator&);
-			bool operator!=(const Iterator&);
+
+			friend bool operator==(const Iterator& lhs, const Iterator& rhs)
+			{
+				assert(lhs._srcHeap == rhs._srcHeap);
+				return lhs._pageIdx == rhs._pageIdx && lhs._idxWithinPage == rhs._idxWithinPage;
+			}
+			friend bool operator!=(const Iterator& lhs, const Iterator& rhs) { return !operator==(lhs, rhs); }
 
 			friend Iterator operator+(const Iterator& b, ptrdiff_t offset)
 			{
@@ -1027,15 +1032,6 @@ namespace Utility
 		CheckMovePage();
 	}
 
-	template<typename Type, unsigned PageSize>
-		bool CircularPagedHeap<Type, PageSize>::Iterator::operator==(const Iterator& other)
-	{
-		assert(_srcHeap == other._srcHeap);
-		return _pageIdx == other._pageIdx && _idxWithinPage == other._idxWithinPage;
-	}
-
-	template<typename Type, unsigned PageSize>
-		bool CircularPagedHeap<Type, PageSize>::Iterator::operator!=(const Iterator& other) { return !operator==(other); }
 
 	template<typename Type, unsigned PageSize>
 		auto CircularPagedHeap<Type, PageSize>::begin() -> Iterator
@@ -1198,6 +1194,230 @@ namespace Utility
 	template<typename Type, unsigned PageSize>
 		CircularPagedHeap<Type, PageSize>::~CircularPagedHeap()
 	{}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	inline unsigned nthset(uint64_t x, unsigned n)
+	{
+		// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
+		// Note that _pdep_u64 uses BMI2 instruction set
+		// Intel: introduced in Haswell
+		// AMD: before Zen3, _pdep_u64 is microcode and so may not be optimal
+		return _tzcnt_u64(_pdep_u64(1ull << n, x));
+	}
+
+	/// <summary>Remaps a sparse ordered sequence of numbers onto a dense one with the same ordering</summary>
+	template<typename T>
+		class RemappingBitHeap
+	{
+	public:
+		struct Iterator
+		{
+			IteratorRange<std::pair<T, uint64_t>*> _range;
+			unsigned _bitOffset = 0;
+
+			unsigned get() { return _range.first->first + _bitOffset; }
+			unsigned operator*() { return get(); }
+			T SparseSequenceValue();
+			
+			void operator++();
+			friend bool operator==(const Iterator& lhs, const Iterator& rhs)
+			{
+				assert(lhs._range.second == rhs._range.second);
+				return lhs._range.first == rhs._range.first && lhs._bitOffset == rhs._bitOffset;
+			}
+
+			friend bool operator!=(const Iterator& lhs, const Iterator& rhs) { return !operator==(lhs, rhs); }
+
+			friend Iterator operator+(const Iterator& b, size_t offset)
+			{
+				// Advance forward the given number of entries in the mapped set
+				// Ie, we're advancing an arbitrary number of pre-mapped 'T' values
+				assert(!b._range.empty());
+				uint64_t maskPriorBits = (1ull << uint64_t(b._bitOffset)) - 1ull;
+				uint64_t remainingBits = b._range.front().second & ~maskPriorBits;
+				// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
+				auto q = _pdep_u64(1ull << uint64_t(offset), remainingBits);
+				if (q) {
+					// we're advancing within the same range
+					Iterator result = b;
+					result._bitOffset = xl_ctz8(q);
+					return result;
+				} else {
+					offset -= popcount(remainingBits);
+					Iterator result = b;
+					result._bitOffset = 0;
+					++result._range.first;
+					while (result._range.first->second) {
+						if (offset < 64) {
+							auto q = _pdep_u64(1ull << uint64_t(offset), result._range.first->second);
+							if (q) {
+								result._bitOffset = xl_ctz8(q);
+								return result;
+							} else {
+								offset -= popcount(result._range.first->second);
+								++result._range.first;
+							}
+						} else {
+							offset -= popcount(result._range.first->second);
+							++result._range.first;
+						}
+					}
+					return result;
+				}
+			}
+		};
+
+		Iterator Remap(T);
+		Iterator Remap(T, Iterator hint);
+		bool IsAllocated(T) const;
+		Iterator Allocate(T);
+		Iterator Deallocate(Iterator);
+
+		Iterator begin();
+		Iterator end();
+		Iterator at(size_t);
+		Iterator erase(const Iterator&);
+		bool empty();
+		size_t size();
+
+		RemappingBitHeap();
+	private:
+		std::vector<std::pair<T, uint64_t>> _allocationFlags;
+	};
+
+	template<typename T>
+		void RemappingBitHeap<T>::Iterator::operator++()
+	{
+		assert(_range.front().second);
+		uint64_t maskBitOffsetAndLower = (1ull << uint64_t(_bitOffset+1)) - 1ull;
+		uint64_t remainingBits = _range.front().second & ~maskBitOffsetAndLower;
+		if (remainingBits) {
+			_bitOffset = xl_ctz8(remainingBits);
+		} else {
+			++_range.first;
+			_bitOffset = _range.first->second ? xl_ctz8(_range.first->second) : 0;
+		}
+	}
+
+	template<typename T>
+		auto RemappingBitHeap<T>::Remap(T t) -> Iterator
+	{
+		auto i = UpperBound(_allocationFlags, t);	// requires sentinel
+		if (i != _allocationFlags.begin()) --i;
+		assert(i->second);
+		assert((t - i->first) < 64u);
+		assert(i->second & (1ull << uint64_t(t - i->first)));	// ensure that it's actually allocated
+		Iterator result;
+		result._range = MakeIteratorRange(i, _allocationFlags.end());
+		result._bitOffset = t - i->first;
+		return result;
+	}
+
+	template<typename T>
+		auto RemappingBitHeap<T>::Remap(T, Iterator hint) -> Iterator
+	{
+		auto i = UpperBound2(MakeIteratorRange(hint._range.first, _allocationFlags.end()), t);	// requires sentinel
+		if (i != _allocationFlags.begin()) --i;
+		assert(i->second);
+		assert((t - i->first) < 64u);
+		assert(i->second & (1ull << uint64_t(t - i->first)));	// ensure that it's actually allocated
+		Iterator result;
+		result._range = MakeIteratorRange(i, _allocationFlags.end());
+		result._bitOffset = t - i->first;
+		return result;
+	}
+
+	template<typename T>
+		bool RemappingBitHeap<T>::IsAllocated(T t) const
+	{
+		auto i = UpperBound(_allocationFlags, t);	// requires sentinel
+		if (i != _allocationFlags.begin()) --i;
+		if ((t - i->first) >= 64u) return false;
+		return !!(i->second & (1ull << uint64_t(t - i->first)));
+	}
+
+	template<typename T>
+		auto RemappingBitHeap<T>::Allocate(T t) -> Iterator
+	{
+		assert(t != std::numeric_limits<T>::max());	// using this value as a sentinel
+		auto i = UpperBound(_allocationFlags, t);	// requires sentinel
+		if (i != _allocationFlags.begin()) --i;
+		if (!i->second) {
+			// appending to the end
+			auto alignedT = t & ~(64ull - 1ull);
+			i = _allocationFlags.insert(i, std::make_pair(alignedT, 0));
+			auto offset = t - alignedT;
+			i->second |= 1ull << uint64_t(offset);				// mark allocated
+			Iterator result;
+			result._range = {i, _allocationFlags.end()};
+			result._bitOffset = offset;
+			return result;
+		} else {
+			auto offset = t - i->first;
+			if (offset < 64) {
+				assert(!(i->second & (1ull << uint64_t(offset))));	// ensure that it's not already allocated
+				i->second |= 1ull << uint64_t(offset);				// mark allocated
+			} else {
+				// we have to insert a new entry into the _allocationFlags table
+				auto alignedT = t & ~(64ull - 1ull);
+				i = _allocationFlags.insert(i+1, std::make_pair(alignedT, 0));
+				offset = t - alignedT;
+				i->second |= 1ull << uint64_t(offset);				// mark allocated
+			}
+			Iterator result;
+			result._range = {i, _allocationFlags.end()};
+			result._bitOffset = offset;
+			return result;
+		}
+	}
+
+	template<typename T>
+		auto RemappingBitHeap<T>::Deallocate(Iterator i) -> Iterator
+	{
+		assert(i._range.second == AsPointer(_allocationFlags.end()));
+		assert(i._range.first->second & (1ull << uint64_t(i._bitOffset)));
+		auto newBits = i._range.first->second & ~(1ull << uint64_t(i._bitOffset));
+		if (newBits) {
+			auto q = i._range.first;
+			++i;
+			q->second = newBits;
+			return i;
+		} else {
+			// we're removing an entire entry in the "_allocationFlags" range
+			auto q = _allocationFlags.erase(_allocationFlags.begin() + (i._range.first - AsPointer(_allocationFlags.begin())));
+			i._range = {q, _allocationFlags.end()};
+			i._bitOffset = 0;
+			if (q != _allocationFlags.end())
+				i._bitOffset = xl_ctz8(q->second);
+			return i;
+		}
+	}
+
+	template<typename T>
+		auto RemappingBitHeap<T>::begin() -> Iterator
+	{
+		Iterator result;
+		result._range = MakeIteratorRange(_allocationFlags);
+		result._bitOffset = result._range.first->second ? xl_ctz8(result._range.first->second) : 0;
+		return result;
+	}
+
+	template<typename T>
+		auto RemappingBitHeap<T>::end() -> Iterator
+	{
+		assert(!_allocationFlags.empty());
+		Iterator result;
+		result._range = MakeIteratorRange(_allocationFlags.end()-1, _allocationFlags.end());
+		result._bitOffset = 0;
+		return result;
+	}
+
+	template<typename T>
+		RemappingBitHeap<T>::RemappingBitHeap()
+	{
+		_allocationFlags.emplace_back(std::numeric_limits<T>::max(), 0); // sentinel
+	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -190,5 +190,62 @@ namespace UnitTests
 		std::cout << "5 Diff: " << 100.f * std::chrono::duration_cast<std::chrono::nanoseconds>(h5-m5).count() / float(std::chrono::duration_cast<std::chrono::nanoseconds>(m5-v5).count()) << "%" << std::endl;
 	}
 
+	TEST_CASE( "Utilities-RemappingBitHeap", "[utility]" )
+	{
+		RemappingBitHeap<unsigned> heap;
+		heap.Allocate(5);
+		heap.Allocate(385);
+		heap.Allocate(32);
+		heap.Allocate(100);
+		heap.Allocate(64);
+		heap.Allocate(6);
+
+		auto i = heap.begin();
+		REQUIRE(i != heap.end());
+		REQUIRE(*i == 5);
+		++i;
+		REQUIRE(i != heap.end());
+		REQUIRE(*i == 6);
+		++i;
+		REQUIRE(i != heap.end());
+		REQUIRE(*i == 32);
+		++i;
+		REQUIRE(i != heap.end());
+		REQUIRE(*i == 64);
+		++i;
+		REQUIRE(i != heap.end());
+		REQUIRE(*i == 100);
+		++i;
+		REQUIRE(i != heap.end());
+		REQUIRE(*i == 385);
+		++i;
+		REQUIRE(i == heap.end());
+
+		REQUIRE(*(heap.begin()+0) == 5);
+		REQUIRE(*(heap.begin()+1) == 6);
+		REQUIRE(*(heap.begin()+2) == 32);
+		REQUIRE(*(heap.begin()+3) == 64);
+		REQUIRE(*(heap.begin()+4) == 100);
+		REQUIRE(*(heap.begin()+5) == 385);
+		REQUIRE((heap.begin()+6) == heap.end());
+
+		REQUIRE(heap.IsAllocated(32));
+		heap.Deallocate(heap.begin()+2);
+		REQUIRE(!heap.IsAllocated(32));
+
+		REQUIRE(heap.IsAllocated(64));
+		heap.Deallocate(heap.Remap(64));
+		REQUIRE(!heap.IsAllocated(64));
+
+		REQUIRE(heap.IsAllocated(100));
+		heap.Deallocate(heap.Remap(100));
+		REQUIRE(!heap.IsAllocated(100));
+
+		REQUIRE(*(heap.begin()+0) == 5);
+		REQUIRE(*(heap.begin()+1) == 6);
+		REQUIRE(*(heap.begin()+2) == 385);
+		REQUIRE((heap.begin()+3) == heap.end());
+	}
+
 }
 
