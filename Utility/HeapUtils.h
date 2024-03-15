@@ -948,6 +948,7 @@ namespace Utility
 			Type& operator*() { return get(); }
 			Type* operator->() { return &get(); }
 			explicit operator bool() const { return _pageIterator; }
+			unsigned index() const { return _countInPriorPages + _idxWithinPage; }
 
 			void operator++();
 			void operator+=(ptrdiff_t offset);
@@ -969,7 +970,7 @@ namespace Utility
 			friend size_t operator-(const Iterator& lhs, const Iterator& rhs)
 			{
 				assert(lhs._srcHeap == rhs._srcHeap);
-				return (rhs._idxWithinPage+rhs._countInPriorPages) - (lhs._idxWithinPage+lhs._countInPriorPages);
+				return rhs.index() - lhs.index();
 			}
 
 		private:
@@ -1024,9 +1025,9 @@ namespace Utility
 			// Use the lookup table "_srcHeap->_indexLookups" to accelerate the search for the page we need
 			// We use this for all random lookups
 			auto newIdx = _countInPriorPages + _idxWithinPage + offset;
-			auto i = std::lower_bound(_srcHeap->_indexLookups.begin()+_pageIdx+1, _srcHeap->_indexLookups.end(), newIdx);
+			auto i = std::upper_bound(_srcHeap->_indexLookups.begin()+_pageIdx+1, _srcHeap->_indexLookups.end(), newIdx);
 			assert(i != _srcHeap->_indexLookups.begin());
-			if (*i != newIdx) --i;
+			--i;
 			_pageIdx = i - _srcHeap->_indexLookups.begin();
 			_countInPriorPages = *i;
 			if (_pageIdx < _srcHeap->_pages.size()) {
@@ -1228,15 +1229,19 @@ namespace Utility
 		struct Iterator
 		{
 			const Entry* _entry;
-			unsigned _sparseValueOffset;
+			T _sparseValueOffset;
 
-			unsigned get() { return _entry->_firstSparseValue + _sparseValueOffset; }
-			unsigned operator*() { return get(); }
-			T DenseSequenceValue();
+			T get() const { return _entry->_firstSparseValue + _sparseValueOffset; }
+			T operator*() const { return get(); }
+			T SparseSequenceValue() const { return get(); }
+			unsigned DenseSequenceValue() const;
 			explicit operator bool() const;
+
+			void AdvanceDenseSequence(size_t);
+			void AdvanceSparseSequence(T);
 			
 			void operator++();
-			void operator+=(size_t);
+			void operator+=(size_t offset) { return AdvanceDenseSequence(offset); }
 
 			friend bool operator==(const Iterator& lhs, const Iterator& rhs) { return lhs._entry == rhs._entry && lhs._sparseValueOffset == rhs._sparseValueOffset; }
 			friend bool operator!=(const Iterator& lhs, const Iterator& rhs) { return !operator==(lhs, rhs); }
@@ -1276,9 +1281,8 @@ namespace Utility
 	};
 
 	template<typename T>
-		T RemappingBitHeap<T>::Iterator::DenseSequenceValue()
+		unsigned RemappingBitHeap<T>::Iterator::DenseSequenceValue() const
 	{
-		assert(_entry->_allocationFlags);
 		uint64_t maskLower = (1ull << uint64_t(_sparseValueOffset)) - 1ull;
 		return _entry->_precedingDenseValues + popcount(_entry->_allocationFlags & maskLower);
 	}
@@ -1298,10 +1302,11 @@ namespace Utility
 	}
 
 	template<typename T>
-		void RemappingBitHeap<T>::Iterator::operator+=(size_t offset)
+		void RemappingBitHeap<T>::Iterator::AdvanceDenseSequence(size_t offset)
 	{
-		// Advance forward the given number of entries in the mapped set
-		// Ie, we're advancing an arbitrary number of pre-mapped 'T' values
+		assert(_entry->_allocationFlags);
+		// Advance forward the given number of entries in the dense sequence
+		// Ie, we're advancing an arbitrary number of sparse sequence values
 		uint64_t maskPriorBits = (1ull << uint64_t(_sparseValueOffset)) - 1ull;
 		uint64_t remainingBits = _entry->_allocationFlags & ~maskPriorBits;
 		// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
@@ -1327,6 +1332,20 @@ namespace Utility
 					++_entry;
 				}
 			}
+		}
+	}
+
+	template<typename T>
+		void RemappingBitHeap<T>::Iterator::AdvanceSparseSequence(T offset)
+	{
+		if ((_sparseValueOffset + offset) < 64) {
+			_sparseValueOffset += offset;
+		} else {
+			// We have to find the new page. Note that since we don't know the end of the Entry
+			// array, we can't do a binary search
+			auto sparseSequenceValue = SparseSequenceValue() + offset;
+			while (_entry->_firstSparseValue > sparseSequenceValue) ++_entry;
+			_sparseValueOffset = sparseSequenceValue - _entry->_firstSparseValue;
 		}
 	}
 
