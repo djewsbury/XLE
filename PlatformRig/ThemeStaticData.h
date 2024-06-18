@@ -8,6 +8,7 @@
 #include "../Formatters/TextFormatter.h"		// for FormatException
 #include "../Formatters/IDynamicFormatter.h"
 #include "../Formatters/FormatterUtils.h"
+#include "../Math/MathSerialization.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/ImpliedTyping.h"
 
@@ -50,11 +51,12 @@ namespace PlatformRig
 		}
 	};
 
-	inline RenderOverlays::ColorB DeserializeColor(Formatters::IDynamicInputFormatter& fmttr)
+	template<typename Formatter>
+		inline RenderOverlays::ColorB DeserializeColor(Formatter& fmttr)
 	{
 		IteratorRange<const void*> value;
 		ImpliedTyping::TypeDesc typeDesc;
-		if (!fmttr.TryRawValue(value, typeDesc))
+		if (!Formatters::TryRawValue(fmttr, value, typeDesc))
 			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
 
 		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {

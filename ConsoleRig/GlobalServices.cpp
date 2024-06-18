@@ -194,7 +194,7 @@ namespace ConsoleRig
         }
 		IBoxTable::~IBoxTable() {}
 
-        static std::shared_ptr<::Assets::IntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem, std::string applicationName);
+        static std::shared_ptr<::Assets::IIntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem, std::string applicationName);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -217,7 +217,7 @@ namespace ConsoleRig
         AttachablePtr<::Assets::IDependencyValidationSystem> _depValSys;
         std::shared_ptr<::Assets::IFileSystem> _defaultFilesystem;
         std::shared_ptr<::Assets::MountingTree> _mountingTree;
-        AttachablePtr<::Assets::IntermediatesStore> _intermediatesStore;
+        AttachablePtr<::Assets::IIntermediatesStore> _intermediatesStore;
         AttachablePtr<::Assets::IIntermediateCompilers> _intermediatesCompilers;
         AttachablePtr<::Assets::AssetSetManager> _assetsSetsManager;
 	};
@@ -248,13 +248,11 @@ namespace ConsoleRig
         _pimpl->_defaultFilesystem = ::Assets::CreateFileSystem_OS({}, _pimpl->_pollingThread, ::Assets::OSFileSystemFlags::AllowAbsolute);
         _pimpl->_mountingTree = std::make_shared<::Assets::MountingTree>(s_defaultFilenameRules);
 
-        if (!_pimpl->_intermediatesStore) {
+        if ((cfg._registerTemporaryIntermediates || cfg._inMemoryOnlyIntermediates) && !_pimpl->_intermediatesStore) {
             auto store = Internal::CreateIntermediatesStore(cfg._inMemoryOnlyIntermediates ? nullptr : _pimpl->_defaultFilesystem, cfg._applicationName);
             _pimpl->_intermediatesStore = store;
             _pimpl->_intermediatesCompilers = ::Assets::CreateIntermediateCompilers(store);
         }
-
-        assert(_pimpl->_intermediatesCompilers);
 
         if (!_pimpl->_assetsSetsManager)
             _pimpl->_assetsSetsManager = std::make_shared<::Assets::AssetSetManager>();
@@ -270,6 +268,16 @@ namespace ConsoleRig
             CrossModule::GetInstance()._services.Add("nsight"_h, []() { return true; });
 
         _pimpl->_pluginSet = std::make_unique<PluginSet>();
+    }
+
+    void GlobalServices::RegisterIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> fs, std::string fsMountPt)
+    {
+        if (_pimpl->_intermediatesStore || _pimpl->_intermediatesCompilers)
+            Throw(std::runtime_error("Attempting to register intermediates store multiple times"));
+
+        auto store = ::Assets::CreateArchivedIntermediatesStore(std::move(fs), std::move(fsMountPt));
+        _pimpl->_intermediatesStore = store;
+        _pimpl->_intermediatesCompilers = ::Assets::CreateIntermediateCompilers(store);
     }
 
     GlobalServices::~GlobalServices() 
@@ -382,9 +390,10 @@ namespace ConsoleRig
         _applicationName = "XLEApp";
         _logConfigFile = "log.dat";
         _setWorkingDir = false;
-        _redirectCout = true;
+        _redirectCout = false;
         _inMemoryOnlyIntermediates = false;
         _enableDPIAwareness = true;
+        _registerTemporaryIntermediates = false;
         _longTaskThreadPoolCount = 4;
         _shortTaskThreadPoolCount = 2;
     }
@@ -496,7 +505,7 @@ namespace ConsoleRig
 
     namespace Internal
     {
-        std::shared_ptr<::Assets::IntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem, std::string applicationName)
+        std::shared_ptr<::Assets::IIntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem, std::string applicationName)
         {
             const char storeVersionString[] = "0.0.0";
             #if defined(_DEBUG)
@@ -515,9 +524,9 @@ namespace ConsoleRig
 
             auto tempDirPath = std::filesystem::temp_directory_path() / applicationName;
             if (intermediatesFilesystem) {
-                return std::make_shared<::Assets::IntermediatesStore>(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString);
+                return ::Assets::CreateTemporaryCacheIntermediatesStore(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString);
             } else {
-                return std::make_shared<::Assets::IntermediatesStore>();
+                return ::Assets::CreateMemoryOnlyIntermediatesStore();
             }
         }
     }

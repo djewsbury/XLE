@@ -104,11 +104,25 @@ namespace PlatformRig
 		case Pending::ShowWindow:
 			// We force a render target update and render before showing the window to ensure that it has content
 			// when it first appears
-			_pending = Pending::ShowWindowBeginRenderFrame;
-			_lastOverlayConfiguration = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
-			_lastOverlayConfigurationGood = true;
-			return OnRenderTargetUpdate { _lastOverlayConfiguration._preregAttachments, _lastOverlayConfiguration._fbProps, _lastOverlayConfiguration._systemAttachmentFormats };
-			break;
+			// (also update the presentation chain and return an OnRenderTargetUpdate when required)
+			{
+				auto& frameRig = *_apparatus->_frameRig;
+
+				frameRig.GetTechniqueContext()._frameBufferPool->Reset();
+				frameRig.ReleaseDoubleBufferAttachments();
+				frameRig.GetTechniqueContext()._attachmentPool->ResetActualized();
+				auto desc = _apparatus->_presentationChain->GetDesc();
+				auto windowRect = _apparatus->_osWindow->GetRect();
+				desc._width = windowRect.second._x - windowRect.first._x;
+				desc._height = windowRect.second._y - windowRect.first._y;
+				_apparatus->_presentationChain->ChangeConfiguration(*_apparatus->_immediateContext, desc);
+				frameRig.UpdatePresentationChain(*_apparatus->_presentationChain);
+
+				_pending = Pending::ShowWindowBeginRenderFrame;
+				_lastOverlayConfiguration = frameRig.GetOverlayConfiguration(*_apparatus->_presentationChain);
+				_lastOverlayConfigurationGood = true;
+				return OnRenderTargetUpdate { _lastOverlayConfiguration._preregAttachments, _lastOverlayConfiguration._fbProps, _lastOverlayConfiguration._systemAttachmentFormats };
+			}
 
 		case Pending::None:
 			break;
@@ -194,6 +208,11 @@ namespace PlatformRig
 		_pending = Pending::ShowWindow;
 	}
 
+	void MessageLoop::CloseWindow()
+	{
+		_apparatus->_osWindow->Close();
+	}
+
 	auto MessageLoop::GetLastRenderTargets() -> std::optional<OnRenderTargetUpdate>
 	{
 		if (!_lastOverlayConfigurationGood) return {};
@@ -261,7 +280,7 @@ namespace PlatformRig
 					_appLogFile = InitializeAppLogFile(_configGlobalServices._startupCfg._applicationName);
 					if (_appLogFile) {
 						*_appLogFile << "----------------- log startup -----------------" << std::endl;
-						*_appLogFile << _configGlobalServices._applLogWelcomeMsg << std::endl;
+						*_appLogFile << _configGlobalServices._appLogWelcomeMsg << std::endl;
 					}
 				}
 
@@ -288,7 +307,7 @@ namespace PlatformRig
 				if (_appLogFile)
 					*_appLogFile << "> Primary resources mounted" << std::endl;
 
-				_renderAPIInstance = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
+				_renderAPIInstance = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI(), _configGlobalServices._renderAPIFeatures);
 
 				if (_appLogFile) {
 					*_appLogFile << "> API Instance initialized" << std::endl;
@@ -303,6 +322,13 @@ namespace PlatformRig
 					LogAPIInstanceAndPlatformValue(*_appLogFile, *_renderAPIInstance, _osWindow->GetUnderlyingHandle());
 				}
 
+				_phase = Phase::PostConfigureAssetCompilers;
+				_configAssetCompilers = {};
+				return &_configAssetCompilers;
+			}
+
+		case Phase::PostConfigureAssetCompilers:
+			{
 				_phase = Phase::PostConfigureRenderDevice;
 				_configRenderDevice = {
 					0, _renderAPIInstance->QueryFeatureCapability(0),

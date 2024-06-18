@@ -42,6 +42,8 @@ namespace RenderCore { namespace Techniques
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
 		_interface._preconfiguration = src.GetPreconfigurationFileName().AsString();
+		for (unsigned c=0; c<dimof(_interface._overrideShaders); ++c)
+			_interface._overrideShaders[c] = src.GetOverrideShader(ShaderStage(c));
 
 		if (!src.GetDescriptorSetFileName().IsEmpty()) {
 			::Assets::DependencyValidation additionalDepVal;

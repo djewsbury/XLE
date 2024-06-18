@@ -40,7 +40,7 @@ namespace Assets
 		IIntermediateCompilers::CompileOperationDelegate2 _delegateWithConduit;
 		IIntermediateCompilers::ArchiveNameDelegate _archiveNameDelegate;
 		DependencyValidation _compilerLibraryDepVal;
-		IntermediatesStore::CompileProductsGroupId _storeGroupId = 0;
+		IIntermediatesStore::CompileProductsGroupId _storeGroupId = 0;
 		std::atomic<bool> _shuttingDown = false;
 		std::atomic<unsigned> _activeOperationCount = 0;
 	};
@@ -93,7 +93,7 @@ namespace Assets
 
 		virtual void FlushCachedMarkers() override;
 
-		IntermediateCompilers(std::shared_ptr<IntermediatesStore> store);
+		IntermediateCompilers(std::shared_ptr<IIntermediatesStore> store);
         ~IntermediateCompilers();
     protected:
 		class Marker;
@@ -103,7 +103,7 @@ namespace Assets
 		std::unordered_multimap<RegisteredCompilerId, std::string> _extensionsAndDelegatesMap;
 		std::unordered_multimap<RegisteredCompilerId, DelegateAssociation> _requestAssociations;
 		std::unordered_map<uint64_t, std::shared_ptr<Marker>> _markers;
-		std::shared_ptr<IntermediatesStore> _store;
+		std::shared_ptr<IIntermediatesStore> _store;
 		RegisteredCompilerId _nextCompilerId = 1;
     };
 
@@ -122,11 +122,11 @@ namespace Assets
             InitializerPack&& requestName,
             std::shared_ptr<ExtensionAndDelegate> delegate,
 			RegisteredCompilerId registeredCompilerId,
-			std::shared_ptr<IntermediatesStore> intermediateStore);
+			std::shared_ptr<IIntermediatesStore> intermediateStore);
         ~Marker();
     private:
         std::weak_ptr<ExtensionAndDelegate> _delegate;
-		std::shared_ptr<IntermediatesStore> _intermediateStore;
+		std::shared_ptr<IIntermediatesStore> _intermediateStore;
         InitializerPack _initializers;
 		RegisteredCompilerId _registeredCompilerId;
 		VariantFunctions _conduit;
@@ -141,14 +141,14 @@ namespace Assets
 			const VariantFunctions& conduit,
 			OperationContextHelper&& contextHelper,
 			std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& compileMarker,
-			IntermediatesStore* destinationStore);
+			IIntermediatesStore* destinationStore);
 		std::shared_future<ArtifactCollectionFuture::ArtifactCollectionSet> InvokeCompileInternal(OperationContextHelper&&);
     };
 
     std::pair<std::shared_ptr<IArtifactCollection>, ArtifactCollectionFuture> IntermediateCompilers::Marker::GetArtifact(CompileRequestCode targetCode, OperationContext* opContext)
     {
 		auto d = _delegate.lock();
-		if (!d) return {};
+		if (!d) Throw(std::runtime_error("Compiler delegate has expired"));
 
 		// do everything in a lock, to avoid issues with _activeFuture
 		ScopedLock(_activeFutureLock);
@@ -173,6 +173,10 @@ namespace Assets
 
 			if (existingCollection)
 				return {std::move(existingCollection), ArtifactCollectionFuture{}};
+
+			if (!_intermediateStore->AllowStore())
+				// cannot be constructed because a valid object does not exist in the store, and compiling and storing new things is not allowed by the store
+				Throw(std::runtime_error("Compilation is not allowed by the intermediate store"));
 		}
 
 		OperationContextHelper contextHelper;
@@ -219,7 +223,7 @@ namespace Assets
 		const VariantFunctions& conduit,
 		OperationContextHelper&& opHelper,
 		std::promise<ArtifactCollectionFuture::ArtifactCollectionSet>&& promise,
-		IntermediatesStore* destinationStore)
+		IIntermediatesStore* destinationStore)
     {
 		assert(!initializers.IsEmpty());
 
@@ -399,7 +403,7 @@ namespace Assets
         InitializerPack&& initializers,
         std::shared_ptr<ExtensionAndDelegate> delegate,
 		RegisteredCompilerId registeredCompilerId,
-		std::shared_ptr<IntermediatesStore> intermediateStore)
+		std::shared_ptr<IIntermediatesStore> intermediateStore)
     : _delegate(std::move(delegate)), _intermediateStore(std::move(intermediateStore))
 	, _initializers(std::move(initializers))
 	, _registeredCompilerId(registeredCompilerId)
@@ -621,7 +625,7 @@ namespace Assets
 		_markers.clear();
 	}
 
-	IntermediateCompilers::IntermediateCompilers(std::shared_ptr<IntermediatesStore> store)
+	IntermediateCompilers::IntermediateCompilers(std::shared_ptr<IIntermediatesStore> store)
 	: _store(std::move(store))
 	{ 
 	}
@@ -629,7 +633,7 @@ namespace Assets
 
 	IIntermediateCompileMarker::~IIntermediateCompileMarker() {}
 
-	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(std::shared_ptr<IntermediatesStore> store)
+	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(std::shared_ptr<IIntermediatesStore> store)
 	{
 		return std::make_shared<IntermediateCompilers>(std::move(store));
 	}

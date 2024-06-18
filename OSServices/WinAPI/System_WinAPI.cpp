@@ -597,9 +597,15 @@ std::fstream CreateAppDataFile(StringSection<> appName, StringSection<> fileName
 
     std::string fullfname = Concatenate(fullDirectory, "\\", fileName);
     auto split = MakeFileNameSplitter(fullfname);
-    auto bkupFile = Concatenate(split.StemPathAndFilename(), ".0", split.ExtensionWithPeriod());
-    DeleteFileA(bkupFile.c_str());
-    MoveFileA(fullfname.c_str(), bkupFile.c_str());
+    if (openMode & std::ios::out) {
+        auto bkupFile = Concatenate(split.StemPathAndFilename(), ".0", split.ExtensionWithPeriod());
+        DeleteFileA(bkupFile.c_str());
+        if (!(openMode & std::ios::in)) {
+            MoveFileA(fullfname.c_str(), bkupFile.c_str());
+        } else {
+            CopyFileA(fullfname.c_str(), bkupFile.c_str(), FALSE);
+        }
+    }
     return std::fstream { fullfname.c_str(), openMode };
 }
 

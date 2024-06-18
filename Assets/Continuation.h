@@ -115,18 +115,23 @@ namespace Assets
 			return result;
 		}
 
-		std::future<void> ThenOpaqueFuture()
+		void ThenConstructToPromise(std::promise<void>&& promise)
 		{
 			assert(!_checkImmediatelyFulfilled);		// this variation not implemented
 			Internal::LogBeginWatch<void, Internal::FutureResult<FutureTypes>...>();
-			std::promise<void> promise;
-			auto result = promise.get_future();
 			MakeContinuation(
 				std::move(promise),
 				[](std::promise<void>&& promise, std::tuple<FutureTypes...>&& completedFutures) mutable {
 					Internal::LogBeginFulfillPromise<void, Internal::FutureResult<FutureTypes>...>();
 					Internal::FulfillOpaquePromise(promise, std::move(completedFutures));
 				});
+		}
+
+		std::future<void> ThenOpaqueFuture()
+		{
+			std::promise<void> promise;
+			auto result = promise.get_future();
+			ThenConstructToPromise(std::move(promise));
 			return result;
 		}
 

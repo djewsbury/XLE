@@ -50,6 +50,7 @@ namespace RenderCore
     {
     public:
         bool _debugValidation = false;
+        bool _onDemandShaderCompile = true;
     };
 
     // "features" can be toggled on or off at device construction time, and
@@ -98,6 +99,8 @@ namespace RenderCore
 
         // simulate inconvenient hardware
         bool _emulateRestrictiveLimits = false;
+
+        bool _vulkanRenderPass2 = false;
     };
 
     enum class PhysicalDeviceType { Unknown, DiscreteGPU, IntegratedGPU, VirtualGPU, CPU };

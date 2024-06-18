@@ -57,10 +57,11 @@ namespace RenderCore { namespace LightingEngine
 
 	static RenderStepFragmentInterface CreateUtilitySceneFragment(
 		std::shared_ptr<UtilityLightingCaptures> captures,
-		std::shared_ptr<Techniques::ITechniqueDelegate> mainDelegate)
+		std::shared_ptr<Techniques::ITechniqueDelegate> mainDelegate,
+		uint64_t outputAttachment)
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
-		auto output = result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
+		auto output = result.DefineAttachment(outputAttachment).NoInitialState();
 		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::DepthStencil);
 
 		{
@@ -195,7 +196,7 @@ namespace RenderCore { namespace LightingEngine
 
 		// Draw main scene
 		auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
-			CreateUtilitySceneFragment(shared_from_this(), mainTechniqueDelegate));
+			CreateUtilitySceneFragment(shared_from_this(), mainTechniqueDelegate, digest._globalTechniqueDesc._outputAttachment));
 
 		mainSequence.CreateStep_CallFunction(
 			[captures=shared_from_this()](SequenceIterator& iterator) {

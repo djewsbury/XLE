@@ -17,6 +17,7 @@ SamplerState 			BilinearClamp;
 } ControlUniforms;
 
 float2 UpsampleStep_GetOutputReciprocalDims() { return ControlUniforms.A.xy; }
+float Blur_GetFilteringWeight() { return ControlUniforms.A.z; }
 uint UpsampleStep_GetMipIndex() { return asuint(ControlUniforms.B.z); }
 uint2 UpsampleStep_GetThreadGroupCount() { return asuint(ControlUniforms.B.xy); }
 bool UpsampleStep_CopyHighResBlur() { return (bool)asuint(ControlUniforms.B.w); }
@@ -52,6 +53,15 @@ float3 UpsampleFilter_TentCircularBias(float2 tc, uint mipIndex, float2 texelSiz
 	return filteredSample;
 }
 
+float GaussianWeight1D(float offset, float stdDevSq)
+{
+	// See https://en.wikipedia.org/wiki/Gaussian_blur
+	// Note that this is equivalent to the product of 1d weight of x and y
+	const float twiceStdDevSq = 2.0 * stdDevSq;
+	const float C = 1.0 / (pi * twiceStdDevSq);		// can done later, because it's constant for all weights
+	return C * exp(-dot(offset, offset) / twiceStdDevSq);
+}
+
 float GaussianWeight2D(float2 offset, float stdDevSq)
 {
 	// See https://en.wikipedia.org/wiki/Gaussian_blur
@@ -82,8 +92,8 @@ float3 UpsampleFilter_ComplexGaussianPrototype(uint2 pixelId, uint mipIndex, flo
 			// we're begin super particular, so we'll do an integration approximation
 			// ... though maybe the true integral here isn't so hard to calculate
 			float weight = 0.f;
-			for (uint x=0; x<16; ++x)
-				for (uint y=0; y<16; ++y) {
+			[unroll] for (uint x=0; x<16; ++x)
+				[unroll] for (uint y=0; y<16; ++y) {
 					float2 srcMipPixelCenter = float2(
 						srcMipPixelId.x + ((float)x+0.5) / 16.0,
 						srcMipPixelId.y + ((float)y+0.5) / 16.0);
@@ -96,8 +106,8 @@ float3 UpsampleFilter_ComplexGaussianPrototype(uint2 pixelId, uint mipIndex, flo
 		}
 	
 	float3 result = 0.0;
-	for (uint x=0; x<5; ++x)
-		for (uint y=0; y<5; ++y)
+	[unroll] for (uint x=0; x<5; ++x)
+		[unroll] for (uint y=0; y<5; ++y)
 			result += srcData[x][y] * srcWeight[x][y];		// weights already normalized
 	return result;
 }
@@ -114,8 +124,12 @@ float3 UpsampleFilter_ComplexGaussianPrototype(uint2 pixelId, uint mipIndex, flo
 	const float2 baseSourceTC = (float2(pixelId.xy) + offset) * UpsampleStep_GetOutputReciprocalDims();
 
 	// Using the gaussian approach here does give a slightly nicer blur
-	// float3 filteredSample = UpsampleFilter_TentCircularBias(baseSourceTC, mipIndex+1, srcTexelSize);
-	float3 filteredSample = UpsampleFilter_ComplexGaussianPrototype(pixelId, mipIndex+1, UpsampleStep_GetOutputReciprocalDims());
+	float3 filteredSample = UpsampleFilter_TentCircularBias(baseSourceTC, mipIndex+1, srcTexelSize);
+	// float3 filteredSample = UpsampleFilter_ComplexGaussianPrototype(pixelId, mipIndex+1, UpsampleStep_GetOutputReciprocalDims());
+
+	// use Blur_GetFilteringWeight() to adjust the strength of the blur (it's not perfect control, but it can give the sense of increasing/decreasing blur strength)
+	float w = Blur_GetFilteringWeight(); // 
+	filteredSample = lerp(SRGBToLinear_Formal(MipChainUAV[pixelId].rgb), filteredSample, w);
 
 	MipChainUAV[pixelId] = float4(LinearToSRGB_Formal(filteredSample), 1);
 }

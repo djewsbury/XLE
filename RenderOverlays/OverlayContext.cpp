@@ -146,9 +146,10 @@ namespace RenderOverlays
 	IteratorRange<void*> ImmediateOverlayContext::DrawGeometry(
 		unsigned vertexCount,
 		IteratorRange<const RenderCore::MiniInputElementDesc*> inputLayout,
-		RenderCore::Techniques::ImmediateDrawableMaterial&& material)
+		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
+		RenderCore::Techniques::RetainedUniformsStream&& uniforms)
 	{
-		return _immediateDrawables->QueueDraw(vertexCount, inputLayout, std::move(material), Topology::TriangleList);
+		return _immediateDrawables->QueueDraw(vertexCount, inputLayout, material, std::move(uniforms), Topology::TriangleList);
 	}
 
 	void ImmediateOverlayContext::DrawTexturedQuad(
@@ -205,16 +206,18 @@ namespace RenderOverlays
 		if (!drawCall._vertexCount) return {}; // (skip draw calls with zero vertices)
 
 		auto mat = AsMaterial(_currentState);
+		RenderCore::Techniques::RetainedUniformsStream uniforms;
 		if (drawCall._textureResource) {
 			mat._uniformStreamInterface = _texturedUSI.get();
-			mat._uniforms._resourceViews.push_back(drawCall._textureResource);
-			mat._hash = HashCombine(_texturedUSI->GetHash() + drawCall._textureResource->GetResource()->GetGUID(), mat._hash);
+			uniforms._resourceViews.push_back(drawCall._textureResource);
+			mat._hash = _texturedUSI->GetHash() + mat._hash;
+			uniforms._hashForCombining = drawCall._textureResource->GetResource()->GetGUID();
 		}
 
 		return _immediateDrawables->QueueDraw(
 			drawCall._vertexCount,
 			drawCall._inputAssembly,
-			std::move(mat),
+			std::move(mat), std::move(uniforms),
 			drawCall._topology);
 	}
 

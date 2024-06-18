@@ -22,6 +22,7 @@ namespace RenderCore { namespace Techniques
 	struct PreparedResourcesVisibility;
 	class ITechniqueDelegate;
 	class IPipelineLayoutDelegate;
+	class IPipelineAcceleratorPool;
 
 	class RetainedUniformsStream
 	{
@@ -29,6 +30,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<std::shared_ptr<IResourceView>> _resourceViews;
 		std::vector<SharedPkt> _immediateData;
 		std::vector<std::shared_ptr<ISampler>> _samplers;
+		uint64_t _hashForCombining = 0ull;
 
 		RetainedUniformsStream();
 		RetainedUniformsStream(const RetainedUniformsStream&);
@@ -42,7 +44,6 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		const UniformsStreamInterface* _uniformStreamInterface = nullptr;
-		RetainedUniformsStream _uniforms;
 		const ParameterBox* _shaderSelectors = nullptr;
 		RenderCore::Assets::RenderStateSet _stateSet;
 		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _patchCollection;
@@ -83,18 +84,21 @@ namespace RenderCore { namespace Techniques
 			size_t vertexCount,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			const ImmediateDrawableMaterial& material = {},
+			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
 		virtual void QueueDraw(
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
 			std::shared_ptr<DrawableGeo> customGeo,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			const ImmediateDrawableMaterial& material = {},
+			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
 		virtual void QueueDraw(
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
 			std::shared_ptr<DrawableGeo> customGeo,
 			IteratorRange<const InputElementDesc*> inputAssembly,
 			const ImmediateDrawableMaterial& material = {},
+			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
 		virtual void QueueEncoderState(const EncoderState&) = 0;
 		virtual IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) = 0;
@@ -115,7 +119,7 @@ namespace RenderCore { namespace Techniques
 		virtual ~IImmediateDrawables();
 	};
 
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IDevice>, std::shared_ptr<IPipelineLayoutDelegate>);
+	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool>);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

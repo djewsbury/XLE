@@ -6,7 +6,6 @@
 #include "CommonWidgets.h"
 
 #include "../Foreign/yoga/yoga/Yoga.h"
-#include "../Foreign/yoga/yoga/YGNode.h"
 
 namespace RenderOverlays
 {
@@ -224,11 +223,13 @@ namespace RenderOverlays
 
 		for (auto& n:_imbuedNodes)
 			if (n->_measureDelegate) {
-				n->YGNode()->setContext(n.get());
-				n->YGNode()->setMeasureFunc(
-					[](YGNode* node, float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) -> YGSize {
-						return ((ImbuedNode*)node->getContext())->_measureDelegate(width, widthMode, height, heightMode);
-					});
+				YGNodeSetContext(n->YGNode(), n.get());
+				YGNodeSetMeasureFunc(
+					n->YGNode(),
+					[](YGNodeConstRef node, float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) -> YGSize {
+						return ((ImbuedNode*)YGNodeGetContext(node))->_measureDelegate(width, widthMode, height, heightMode);
+					}
+				);
 			}
 
 		LayedOutWidgets result;

@@ -10,6 +10,7 @@ namespace RenderCore { namespace Metal_DX11
 {
 	std::shared_ptr<ILowLevelCompiler> CreateVulkanPrecompiler();
 	std::shared_ptr<ILowLevelCompiler> CreateHLSLToSPIRVCompiler(ILowLevelCompiler::CompilerCapability::BitField);
+	std::shared_ptr<ILowLevelCompiler> CreateDummyShaderCompiler(ILowLevelCompiler::CompilerCapability::BitField capabilities);
 }}
 
 #if defined(ENABLE_GLSLLANG)
@@ -765,7 +766,7 @@ namespace RenderCore { namespace Metal_Vulkan
 namespace RenderCore { namespace Metal_Vulkan
 {
 	std::shared_ptr<ILowLevelCompiler> CreateLowLevelShaderCompiler(
-		IDevice& device, const VulkanCompilerConfiguration& cfg)
+		IDevice& device, const VulkanCompilerConfiguration& cfg, bool realCompiler)
 	{
 		auto* vulkanDevice = (IDeviceVulkan*)device.QueryInterface(TypeHashCode<IDeviceVulkan>);
 		if (!vulkanDevice) return nullptr;
@@ -782,7 +783,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			ILowLevelCompiler::CompilerCapability::BitField capabilities = 0;
 			if (device.GetDeviceFeatures()._shaderFloat16)
 				capabilities |= ILowLevelCompiler::CompilerCapability::Float16;
-			return Metal_DX11::CreateHLSLToSPIRVCompiler(capabilities);
+			if (realCompiler) {
+				return Metal_DX11::CreateHLSLToSPIRVCompiler(capabilities);
+			} else {
+				return Metal_DX11::CreateDummyShaderCompiler(capabilities);
+			}
 		} else {
 			assert(0);
 			return nullptr;

@@ -51,7 +51,7 @@ namespace RenderOverlays
 		Techniques::ImmediateDrawableMaterial material;
 		auto workingVertices = immDrawables.QueueDraw(
 			pointerRadialVerts*6*3, MakeIteratorRange(s_vertexInputLayout), 
-			material, Topology::TriangleList).Cast<InternalVertex*>();
+			material).Cast<InternalVertex*>();
 
 		// use a custom projection matrix to put the geometry where we want on screen
 		// -1 -> 1 becomes A -> B
@@ -156,7 +156,7 @@ namespace RenderOverlays
 		lineMaterial._hash = lineMaterial._stateSet.GetHash();
 		auto workingVertices = immDrawables.QueueDraw(
 			lineCount*2, MakeIteratorRange(s_vertexInputLayout), 
-			lineMaterial, Topology::LineList).Cast<InternalVertex*>();
+			lineMaterial, {}, Topology::LineList).Cast<InternalVertex*>();
 
 		{
 			auto i = workingVertices.begin();
@@ -191,7 +191,7 @@ namespace RenderOverlays
 			Techniques::ImmediateDrawableMaterial material;
 			auto workingVertices = immDrawables.QueueDraw(
 				pointerRadialVerts*6*2, MakeIteratorRange(s_vertexInputLayout), 
-				material, Topology::TriangleList).Cast<InternalVertex*>();
+				material).Cast<InternalVertex*>();
 			
 			struct Pointer
 			{

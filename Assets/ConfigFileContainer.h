@@ -152,7 +152,7 @@ namespace Assets
 	//		Auto construct to:
 	//			(Formatters::TextInputFormatter<>&)
 	//
-	template<typename AssetType, ENABLE_IF(Internal::HasConstructor_SimpleFormatter<AssetType>)>
+	template<typename AssetType, ENABLE_IF(Internal::HasConstructor_SimpleFormatter<AssetType> && !Internal::HasConstructor_Formatter<AssetType>)>
 		AssetType AutoConstructAsset(StringSection<char> initializer)
 	{
 		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)

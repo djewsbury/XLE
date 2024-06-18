@@ -266,15 +266,9 @@ namespace RenderCore { namespace LightingEngine
 
 		
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		if (_integrationParams._outputToPostProcessing) {
-			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("PostProcessInput"_h).NoInitialState().FinalState(BindFlag::UnorderedAccess), BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
-		} else
-			// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
-			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState().FinalState(BindFlag::RenderTarget), BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
-		if (_integrationParams._readFromAAOutput) {
-			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment("AAOutput"_h).Discard());
-		} else
-			spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard());
+		// todo -- what should we set the final state for ColorLDR to be here? just go directly to PresentationSrc?
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(_integrationParams._outputAttachment).NoInitialState().FinalState(_integrationParams._outputState), BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
+		spDesc.AppendNonFrameBufferAttachmentView(result.DefineAttachment(_integrationParams._inputAttachment).Discard());
 		unsigned brightPassMipChainSRVIdx = ~0u, brightPassMipChainUAVIdx = ~0u, brightPassHighResBlurWorkingUAVIdx = ~0u, brightPassHighResBlurWorkingSRVIdx = ~0u;
 		if (_desc._broadBloomMaxRadius > 0.f || _desc._enablePreciseBloom) {
 			auto brightPassMipChain = result.DefineAttachment("brightpass-working"_h).NoInitialState().Discard();
@@ -300,7 +294,7 @@ namespace RenderCore { namespace LightingEngine
 
 		result.AddSubpass(
 			std::move(spDesc),
-			[op=shared_from_this(), brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx, outputToPP=_integrationParams._outputToPostProcessing](SequenceIterator& iterator) {
+			[op=shared_from_this(), brightPassMipChainSRVIdx, brightPassMipChainUAVIdx, brightPassHighResBlurWorkingUAVIdx, brightPassHighResBlurWorkingSRVIdx, outputState=_integrationParams._outputState](SequenceIterator& iterator) {
 				auto& ldrOutput = *iterator._rpi.GetNonFrameBufferAttachmentView(0);
 				auto& hdrInput = *iterator._rpi.GetNonFrameBufferAttachmentView(1);
 				IResourceView* brightPassHighResBlurWorkingUAV = nullptr, *brightPassHighResBlurWorkingSRV = nullptr, *brightPassMipChainSRV = nullptr;
@@ -333,8 +327,8 @@ namespace RenderCore { namespace LightingEngine
 					MakeIteratorRange(brightPassMipChainUAV, brightPassMipChainUAV+op->_brightPassMipCountCount), brightPassMipChainSRV,
 					brightPassHighResBlurWorkingUAV, brightPassHighResBlurWorkingSRV);
 
-				if (!outputToPP)
-					Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, BindFlag::RenderTarget);
+				if (outputState != BindFlag::UnorderedAccess)
+					Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*ldrOutput.GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, outputState);
 			});
 
 		return result;
@@ -895,15 +889,8 @@ namespace RenderCore { namespace LightingEngine
 	RenderStepFragmentInterface CopyToneMapOperator::CreateFragment(const FrameBufferProperties& fbProps)
 	{
 		RenderStepFragmentInterface fragment { UsePixelShaderPath() ? RenderCore::PipelineType::Graphics : RenderCore::PipelineType::Compute };
-		RenderCore::Techniques::FrameBufferDescFragment::DefineAttachmentHelper hdrInput, ldrOutput;
-		if (_integrationParams._outputToPostProcessing) {
-			ldrOutput = fragment.DefineAttachment("PostProcessInput"_h).NoInitialState().FinalState(BindFlag::UnorderedAccess);
-		} else
-			ldrOutput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorLDR).NoInitialState();
-		if (_integrationParams._readFromAAOutput) {
-			hdrInput = fragment.DefineAttachment("AAOutput"_h).Discard();
-		} else
-			hdrInput = fragment.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).Discard();
+		auto ldrOutput = fragment.DefineAttachment(_integrationParams._outputAttachment).NoInitialState().FinalState(_integrationParams._outputState);
+		auto hdrInput = fragment.DefineAttachment(_integrationParams._inputAttachment).Discard();
 
 		Techniques::FrameBufferDescFragment::SubpassDesc subpass;
 		subpass.SetName("tonemap");
@@ -924,7 +911,7 @@ namespace RenderCore { namespace LightingEngine
 			subpass.AppendNonFrameBufferAttachmentView(hdrInput, BindFlag::ShaderResource, {TextureViewDesc::Aspect::ColorLinear});
 			fragment.AddSubpass(
 				std::move(subpass),
-				[op=this](SequenceIterator& iterator) {
+				[op=this, outputState=_integrationParams._outputState](SequenceIterator& iterator) {
 					assert(op->_secondStageConstructionState == 2);
 					assert(op->_computeShader);
 					{
@@ -942,6 +929,9 @@ namespace RenderCore { namespace LightingEngine
 					UInt2 outputDims { iterator._parsingContext->GetFrameBufferProperties()._width, iterator._parsingContext->GetFrameBufferProperties()._height };
 					const unsigned groupSize = 8;
 					op->_computeShader->Dispatch(*iterator._parsingContext, (outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1, us);
+
+					if (outputState != BindFlag::UnorderedAccess)
+						Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*iterator._rpi.GetNonFrameBufferAttachmentView(0)->GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, outputState);
 				});
 		}
 
@@ -1022,7 +1012,7 @@ namespace RenderCore { namespace LightingEngine
 
 	bool CopyToneMapOperator::UsePixelShaderPath() const
 	{
-		return !_integrationParams._outputToPostProcessing && !_integrationParams._readFromAAOutput;
+		return _integrationParams._preferPixelShaderPath;
 	}
 
 	CopyToneMapOperator::CopyToneMapOperator(std::shared_ptr<Techniques::PipelineCollection> pipelinePool, const ToneMapIntegrationParams& integrationParams)

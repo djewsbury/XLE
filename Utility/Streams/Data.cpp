@@ -1442,7 +1442,7 @@ bool Data::SavePrettyValue(char* s, int* len) const
     FixedMemoryOutputStream<char> stream(s, (size_t)*len);
     PrintText(stream, this);
     stream.WriteChar(0);
-    *len = (int)stream.GetBuffer().Length();
+    *len = (int)stream.GetBuffer().LengthChars();
     return true;
 }
 

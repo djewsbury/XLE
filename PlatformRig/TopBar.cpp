@@ -135,14 +135,16 @@ namespace PlatformRig
 
 		RenderOverlays::BlurryBackgroundEffect* blurryBackground;
 		RenderCore::Techniques::ImmediateDrawableMaterial material;
+		RenderCore::Techniques::RetainedUniformsStream uniforms;
 		if ((blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()))
 			if (auto res = blurryBackground->GetResourceView()) {
-				material._hash = HashCombine(s_texturedUSI.GetHash(), res->GetResource()->GetGUID());
+				material._hash = s_texturedUSI.GetHash();
+				uniforms._hashForCombining = res->GetResource()->GetGUID();
 				material._uniformStreamInterface = &s_texturedUSI;
-				material._uniforms._resourceViews.push_back(std::move(res));
+				uniforms._resourceViews.push_back(std::move(res));
 			}
 
-		auto vertices = context.DrawGeometry(dimof(indices), Vertex_PCT::s_inputElements2D, std::move(material)).Cast<Vertex_PCT*>();
+		auto vertices = context.DrawGeometry(dimof(indices), Vertex_PCT::s_inputElements2D, material, std::move(uniforms)).Cast<Vertex_PCT*>();
 		for (unsigned c=0; c<dimof(indices); ++c)
 			vertices[c] = { AsPixelCoords(vertexPositions[indices[c]]), HardwareColor(_themeStaticData._semiTransparentTint), Float2(0,0) };
 		if (blurryBackground)
@@ -195,14 +197,16 @@ namespace PlatformRig
 
 		RenderOverlays::BlurryBackgroundEffect* blurryBackground;
 		RenderCore::Techniques::ImmediateDrawableMaterial material;
+		RenderCore::Techniques::RetainedUniformsStream uniforms;
 		if ((blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()))
 			if (auto res = blurryBackground->GetResourceView()) {
-				material._hash = HashCombine(s_texturedUSI.GetHash(), res->GetResource()->GetGUID());
+				material._hash = s_texturedUSI.GetHash();
+				uniforms._hashForCombining = res->GetResource()->GetGUID();
 				material._uniformStreamInterface = &s_texturedUSI;
-				material._uniforms._resourceViews.push_back(std::move(res));
+				uniforms._resourceViews.push_back(std::move(res));
 			}
 
-		auto vertices = context.DrawGeometry(dimof(indices), Vertex_PCT::s_inputElements2D, std::move(material)).Cast<Vertex_PCT*>();
+		auto vertices = context.DrawGeometry(dimof(indices), Vertex_PCT::s_inputElements2D, material, std::move(uniforms)).Cast<Vertex_PCT*>();
 		for (unsigned c=0; c<dimof(indices); ++c)
 			vertices[c] = { AsPixelCoords(vertexPositions[indices[c]]), HardwareColor(_themeStaticData._semiTransparentTint), Float2(0,0) };
 		if (blurryBackground)
@@ -229,8 +233,7 @@ namespace PlatformRig
 		Rect frame, ColorB col, unsigned height)
 	{
 		// draw a rhombus around the frame, but with some extra triangles
-		RenderCore::Techniques::ImmediateDrawableMaterial material;
-		auto vertices = context.DrawGeometry(6, Vertex_PC::s_inputElements2D, std::move(material)).Cast<Vertex_PC*>();
+		auto vertices = context.DrawGeometry(6, Vertex_PC::s_inputElements2D, {}, {}).Cast<Vertex_PC*>();
 		Coord2 A { frame._topLeft[0], (frame._topLeft[1] + frame._bottomRight[1] - height) / 2 };
 		Coord2 B { frame._topLeft[0] - height, (frame._topLeft[1] + frame._bottomRight[1] + height) / 2 };
 		Coord2 C { frame._bottomRight[0], (frame._topLeft[1] + frame._bottomRight[1] + height) / 2 };

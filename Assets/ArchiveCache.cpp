@@ -950,6 +950,8 @@ namespace Assets
 		{
 			VerifyChangeId_AlreadyLocked(*_archiveCache, _objectId, _changeId);
 
+			if (!_archiveCache->_checkDepVals) return {{}, true};
+
 			auto i = std::lower_bound(_archiveCache->_pendingCommits.begin(), _archiveCache->_pendingCommits.end(), _objectId, ComparePendingCommit());
 			if (i!=_archiveCache->_pendingCommits.end() && i->_objectId == _objectId)
 				return {i->_depValPtr, i->_depValPtr.GetValidationIndex() == 0};
@@ -1027,7 +1029,7 @@ namespace Assets
 	ArchiveCache::ArchiveCache(
 		std::shared_ptr<IFileSystem> filesystem,
 		StringSection<> archiveName, 
-		const OSServices::LibVersionDesc& versionDesc) 
+		const OSServices::LibVersionDesc& versionDesc, bool checkDepVals) 
 	: _mainFileName(archiveName.AsString())
 	, _buildVersionString(versionDesc._versionString)
 	, _buildDateString(versionDesc._buildDateString)
@@ -1035,12 +1037,14 @@ namespace Assets
 	, _cachedCollectionBlockListValid(false)
 	, _cachedDependencyTableValid(false)
 	, _filesystem(std::move(filesystem))
+	, _checkDepVals(checkDepVals)
 	{
 		assert(!_mainFileName.empty());
 		_directoryFileName = _mainFileName + ".dir";
 
 			// (make sure the directory provided exists)
-		OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(_mainFileName).StemAndPath());
+		if (checkDepVals)	// using this as a proxy for enable store
+			OSServices::CreateDirectoryRecursive(MakeFileNameSplitter(_mainFileName).StemAndPath());
 	}
 
 	ArchiveCache::~ArchiveCache() 
@@ -1066,7 +1070,7 @@ namespace Assets
 		if (existing != _archives.cend() && existing->first == hashedName)
 			return existing->second;
 
-		auto newArchive = std::make_shared<::Assets::ArchiveCache>(_filesystem, archiveFilename, _versionDesc);
+		auto newArchive = std::make_shared<::Assets::ArchiveCache>(_filesystem, archiveFilename, _versionDesc, _checkDepVals);
 		_archives.insert(existing, std::make_pair(hashedName, newArchive));
 		return newArchive;
 	}
@@ -1078,7 +1082,7 @@ namespace Assets
 			a.second->FlushToDisk();
 	}
 
-	ArchiveCacheSet::ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const OSServices::LibVersionDesc& versionDesc) : _versionDesc(versionDesc), _filesystem(std::move(filesystem)) {}
+	ArchiveCacheSet::ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const OSServices::LibVersionDesc& versionDesc, bool checkDepVals) : _versionDesc(versionDesc), _filesystem(std::move(filesystem)), _checkDepVals(checkDepVals) {}
 	ArchiveCacheSet::~ArchiveCacheSet() {}
 }
 

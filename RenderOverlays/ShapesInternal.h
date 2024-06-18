@@ -45,7 +45,8 @@ namespace RenderOverlays { namespace Internal
 		ColorB color0, ColorB color1,
 		const Float2& minTex0, const Float2& maxTex0, 
 		const Float2& minTex1, const Float2& maxTex1,
-		RenderCore::Techniques::ImmediateDrawableMaterial&& material);
+		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
+		RenderCore::Techniques::RetainedUniformsStream&& uniforms);
 
 	struct CB_RoundedRectSettings
 	{

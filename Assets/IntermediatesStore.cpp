@@ -29,14 +29,11 @@
 
 namespace Assets
 {
-	class IntermediatesStore::Pimpl
+	class IntermediatesStoreBase : public IIntermediatesStore
 	{
 	public:
 		// in very occasional cases, IFileSystem implementations may use IntermediatesStore during another IntermediatesStore operation
 		std::shared_timed_mutex _lock;
-		mutable std::string _resolvedBaseDirectory;
-		mutable std::unique_ptr<IFileInterface> _markerFile;
-		std::shared_ptr<IFileSystem> _filesystem;
 
 		struct ConstructorOptions
 		{
@@ -58,7 +55,10 @@ namespace Assets
 
 		std::shared_ptr<StoreReferenceCounts> _storeRefCounts;
 
-		void ResolveBaseDirectory() const;
+		std::shared_ptr<IFileSystem> _filesystem;
+		bool _allowStore = false;
+		bool _checkDepVals = false;
+
 		uint64_t MakeHashCode(
 			StringSection<> archivableName,
 			CompileProductsGroupId groupId) const;
@@ -67,9 +67,37 @@ namespace Assets
 			ArchiveEntryId entryId,
 			CompileProductsGroupId groupId) const;
 
+		std::shared_ptr<IArtifactCollection> StoreCompileProducts(
+			StringSection<> archivableName,
+			CompileProductsGroupId groupId,
+			IteratorRange<const SerializedArtifact*> artifacts,
+			::Assets::AssetState state,
+			IteratorRange<const DependencyValidation*> dependencies) override;
+
+		std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
+			StringSection<> archivableName,
+			CompileProductsGroupId groupId) override;
+
+		void StoreCompileProducts(
+			StringSection<> archiveName,
+			ArchiveEntryId entryId,
+			StringSection<> entryDescriptiveName,
+			CompileProductsGroupId groupId,
+			IteratorRange<const SerializedArtifact*> artifacts,
+			::Assets::AssetState state,
+			IteratorRange<const DependencyValidation*> dependencies) override;
+
+		std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
+			StringSection<> archiveName,
+			ArchiveEntryId entryId,
+			CompileProductsGroupId groupId) override;
+
+		bool AllowStore() override;
+		void FlushToDisk() override;
+
 		struct ReadRefCountLock
 		{
-			ReadRefCountLock(Pimpl* pimpl, uint64_t hashCode, StringSection<> descriptiveName)
+			ReadRefCountLock(IntermediatesStoreBase* pimpl, uint64_t hashCode, StringSection<> descriptiveName)
 			: _pimpl(pimpl), _hashCode(hashCode)
 			{
 				ScopedLock(_pimpl->_storeRefCounts->_lock);
@@ -94,13 +122,13 @@ namespace Assets
 				}
 			}
 		private:
-			Pimpl* _pimpl;
+			IntermediatesStoreBase* _pimpl;
 			uint64_t _hashCode;
 		};
 
 		struct WriteRefCountLock
 		{
-			WriteRefCountLock(Pimpl* pimpl, uint64_t hashCode, StringSection<> descriptiveName)
+			WriteRefCountLock(IntermediatesStoreBase* pimpl, uint64_t hashCode, StringSection<> descriptiveName)
 			: _pimpl(pimpl), _hashCode(hashCode)
 			{
 				ScopedLock(_pimpl->_storeRefCounts->_lock);
@@ -124,15 +152,10 @@ namespace Assets
 				}
 			}
 		private:
-			Pimpl* _pimpl;
+			IntermediatesStoreBase* _pimpl;
 			uint64_t _hashCode;
 		};
 	};
-
-	static ResChar ConvChar(ResChar input) 
-	{
-		return (ResChar)((input == '\\')?'/':tolower(input));
-	}
 
 	static std::string MakeSafeName(StringSection<> input)
 	{
@@ -142,14 +165,14 @@ namespace Assets
 		return result;
 	}
 
-	uint64_t IntermediatesStore::Pimpl::MakeHashCode(
+	uint64_t IntermediatesStoreBase::MakeHashCode(
 		StringSection<> archivableName,
 		CompileProductsGroupId groupId) const
 	{
 		return Hash64(archivableName.begin(), archivableName.end(), groupId);
 	}
 
-	uint64_t IntermediatesStore::Pimpl::MakeHashCode(
+	uint64_t IntermediatesStoreBase::MakeHashCode(
 		StringSection<> archiveName,
 		ArchiveEntryId entryId,
 		CompileProductsGroupId groupId) const
@@ -157,20 +180,20 @@ namespace Assets
 		return HashCombine(entryId, Hash64(archiveName.begin(), archiveName.end(), groupId));
 	}
 
-	std::shared_ptr<IArtifactCollection> IntermediatesStore::RetrieveCompileProducts(
+	std::shared_ptr<IArtifactCollection> IntermediatesStoreBase::RetrieveCompileProducts(
 		StringSection<> archivableName,
 		CompileProductsGroupId groupId)
 	{
-		std::shared_lock<std::shared_timed_mutex> l(_pimpl->_lock);
-		auto hashCode = _pimpl->MakeHashCode(archivableName, groupId);
-		Pimpl::ReadRefCountLock readRef(_pimpl.get(), hashCode, archivableName);
+		std::shared_lock<std::shared_timed_mutex> l(_lock);
+		auto hashCode = MakeHashCode(archivableName, groupId);
+		ReadRefCountLock readRef(this, hashCode, archivableName);
 
-		auto groupi = _pimpl->_groups.find(groupId);
-		if (groupi == _pimpl->_groups.end())
+		auto groupi = _groups.find(groupId);
+		if (groupi == _groups.end())
 			Throw(std::runtime_error("GroupId has not be registered in intermediates store during retrieve operation"));
 
 		if (groupi->second._looseFilesStorage)
-			return groupi->second._looseFilesStorage->RetrieveCompileProducts(archivableName, _pimpl->_storeRefCounts, hashCode);
+			return groupi->second._looseFilesStorage->RetrieveCompileProducts(archivableName, _storeRefCounts, hashCode);
 		if (groupi->second._archiveCacheSet) {
 			auto archive = groupi->second._archiveCacheSet->GetArchive(groupi->second._archiveCacheBase + archivableName.AsString());
 			if (archive)
@@ -179,19 +202,22 @@ namespace Assets
 		return nullptr;
 	}
 
-	std::shared_ptr<IArtifactCollection> IntermediatesStore::StoreCompileProducts(
+	std::shared_ptr<IArtifactCollection> IntermediatesStoreBase::StoreCompileProducts(
 		StringSection<> archivableName,
 		CompileProductsGroupId groupId,
 		IteratorRange<const SerializedArtifact*> artifacts,
 		::Assets::AssetState state,
 		IteratorRange<const DependencyValidation*> depVals)
 	{
-		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
-		auto hashCode = _pimpl->MakeHashCode(archivableName, groupId);
-		Pimpl::WriteRefCountLock writeRef(_pimpl.get(), hashCode, archivableName);
+		if (!_allowStore)
+			Throw(std::runtime_error("Attempting to store into a read-only intermediates store"));
 
-		auto groupi = _pimpl->_groups.find(groupId);
-		if (groupi == _pimpl->_groups.end())
+		std::unique_lock<std::shared_timed_mutex> l(_lock);
+		auto hashCode = MakeHashCode(archivableName, groupId);
+		WriteRefCountLock writeRef(this, hashCode, archivableName);
+
+		auto groupi = _groups.find(groupId);
+		if (groupi == _groups.end())
 			Throw(std::runtime_error("GroupId has not be registered in intermediates store during retrieve operation"));
 
 		// Make sure the dependencies are unique, because we tend to get a lot of dupes from certain compile operations
@@ -201,7 +227,7 @@ namespace Assets
 		auto i = std::unique(dependencies.begin(), dependencies.end());
 
 		if (groupi->second._looseFilesStorage)
-			return groupi->second._looseFilesStorage->StoreCompileProducts(archivableName, artifacts, state, {dependencies.begin(), i}, _pimpl->_storeRefCounts, hashCode);
+			return groupi->second._looseFilesStorage->StoreCompileProducts(archivableName, artifacts, state, {dependencies.begin(), i}, _storeRefCounts, hashCode);
 		if (groupi->second._archiveCacheSet) {
 			auto archive = groupi->second._archiveCacheSet->GetArchive(groupi->second._archiveCacheBase + archivableName.AsString());
 			if (!archive)
@@ -212,17 +238,17 @@ namespace Assets
 		return nullptr;
 	}
 
-	std::shared_ptr<IArtifactCollection> IntermediatesStore::RetrieveCompileProducts(
+	std::shared_ptr<IArtifactCollection> IntermediatesStoreBase::RetrieveCompileProducts(
 		StringSection<> archiveName,
 		ArchiveEntryId entryId,
 		CompileProductsGroupId groupId)
 	{
-		std::shared_lock<std::shared_timed_mutex> l(_pimpl->_lock);
-		auto hashCode = _pimpl->MakeHashCode(archiveName, entryId, groupId);
-		Pimpl::ReadRefCountLock readRef(_pimpl.get(), hashCode, (StringMeld<256>() << archiveName << "-" << std::hex << entryId).AsStringSection());
+		std::shared_lock<std::shared_timed_mutex> l(_lock);
+		auto hashCode = MakeHashCode(archiveName, entryId, groupId);
+		ReadRefCountLock readRef(this, hashCode, (StringMeld<256>() << archiveName << "-" << std::hex << entryId).AsStringSection());
 
-		auto groupi = _pimpl->_groups.find(groupId);
-		if (groupi == _pimpl->_groups.end())
+		auto groupi = _groups.find(groupId);
+		if (groupi == _groups.end())
 			Throw(std::runtime_error("GroupId has not be registered in intermediates store during retrieve operation"));
 		if (!groupi->second._archiveCacheSet) return nullptr;
 
@@ -232,7 +258,7 @@ namespace Assets
 		return archive->TryOpenFromCache(entryId);
 	}
 
-	void IntermediatesStore::StoreCompileProducts(
+	void IntermediatesStoreBase::StoreCompileProducts(
 		StringSection<> archiveName,
 		ArchiveEntryId entryId,
 		StringSection<> entryDescriptiveName,
@@ -241,12 +267,15 @@ namespace Assets
 		::Assets::AssetState state,
 		IteratorRange<const DependencyValidation*> depVals)
 	{
-		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
-		auto hashCode = _pimpl->MakeHashCode(archiveName, entryId, groupId);
-		Pimpl::WriteRefCountLock writeRef(_pimpl.get(), hashCode, entryDescriptiveName);
+		if (!_allowStore)
+			Throw(std::runtime_error("Attempting to store into a read-only intermediates store"));
 
-		auto groupi = _pimpl->_groups.find(groupId);
-		if (groupi == _pimpl->_groups.end())
+		std::unique_lock<std::shared_timed_mutex> l(_lock);
+		auto hashCode = MakeHashCode(archiveName, entryId, groupId);
+		WriteRefCountLock writeRef(this, hashCode, entryDescriptiveName);
+
+		auto groupi = _groups.find(groupId);
+		if (groupi == _groups.end())
 			Throw(std::runtime_error("GroupId has not be registered in intermediates store during retrieve operation"));
 
 		if (!groupi->second._archiveCacheSet)
@@ -265,16 +294,163 @@ namespace Assets
 		archive->Commit(entryId, entryDescriptiveName.AsString(), artifacts, state, {dependencies.begin(), i});
 	}
 
-	void IntermediatesStore::FlushToDisk()
+	bool IntermediatesStoreBase::AllowStore()
 	{
-		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
-		if (!_pimpl->_filesystem) return;	// if there's no backing filesystem, we never flush
-		for (const auto&group:_pimpl->_groups)
+		return _allowStore;
+	}
+
+	void IntermediatesStoreBase::FlushToDisk()
+	{
+		std::unique_lock<std::shared_timed_mutex> l(_lock);
+		if (!_filesystem || !_allowStore) return;
+		for (const auto&group:_groups)
 			if (group.second._archiveCacheSet)
 				group.second._archiveCacheSet->FlushToDisk();
 	}
 
-	void IntermediatesStore::Pimpl::ResolveBaseDirectory() const
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class ArchivedIntermediatesStore : public IntermediatesStoreBase
+	{
+	public:
+		CompileProductsGroupId RegisterCompileProductsGroup(
+			StringSection<> name,
+			const OSServices::LibVersionDesc& compilerVersionInfo,
+			bool enableArchiveCacheSet) override;
+		void DeregisterCompileProductsGroup(CompileProductsGroupId) override;
+
+		std::string _filesystemMountPt;
+
+		ArchivedIntermediatesStore(std::shared_ptr<IFileSystem> intermediatesFilesystem, StringSection<> intermediatesFilesystemMountPt);
+		~ArchivedIntermediatesStore();
+	};
+
+	auto ArchivedIntermediatesStore::RegisterCompileProductsGroup(
+		StringSection<> name, 
+		const OSServices::LibVersionDesc& compilerVersionInfo,
+		bool enableArchiveCacheSet) -> CompileProductsGroupId
+	{
+		std::unique_lock<std::shared_timed_mutex> l(_lock);
+		auto id = Hash64(name.begin(), name.end());
+		auto existing = _groups.find(id);
+		if (existing == _groups.end()) {
+			Group newGroup;
+			std::string looseFilesBase = Concatenate(MakeSafeName(name), "/");
+			newGroup._looseFilesStorage = std::make_shared<LooseFilesStorage>(_filesystem, looseFilesBase, _filesystemMountPt, compilerVersionInfo, _checkDepVals);
+			if (enableArchiveCacheSet) {
+				newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(_filesystem, compilerVersionInfo, _checkDepVals);
+				newGroup._archiveCacheBase = looseFilesBase;
+			}
+			_groups.insert({id, std::move(newGroup)});		// ref count starts at 1
+		} else
+			++existing->second._refCount;
+		return id;
+	}
+
+	void ArchivedIntermediatesStore::DeregisterCompileProductsGroup(CompileProductsGroupId id)
+	{
+		std::unique_lock<std::shared_timed_mutex> l(_lock);
+		auto existing = _groups.find(id);
+		if (existing != _groups.end()) {
+			--existing->second._refCount;
+			if (!existing->second._refCount) {
+				if (existing->second._archiveCacheSet)
+					existing->second._archiveCacheSet->FlushToDisk();
+				_groups.erase(existing);
+			}
+		}
+	}
+
+	ArchivedIntermediatesStore::ArchivedIntermediatesStore(std::shared_ptr<IFileSystem> intermediatesFilesystem, StringSection<> intermediatesFilesystemMountPt)
+	{
+		assert(intermediatesFilesystem);
+		_filesystem = std::move(intermediatesFilesystem);
+		_filesystemMountPt = intermediatesFilesystemMountPt.AsString();
+		_storeRefCounts = std::make_shared<StoreReferenceCounts>();
+		_allowStore = false;
+		_checkDepVals = false;
+	}
+
+	ArchivedIntermediatesStore::~ArchivedIntermediatesStore() {}
+
+	std::shared_ptr<IIntermediatesStore> CreateArchivedIntermediatesStore(std::shared_ptr<IFileSystem> intermediatesFilesystem, StringSection<> intermediatesFilesystemMountPt)
+	{
+		return std::make_shared<ArchivedIntermediatesStore>(std::move(intermediatesFilesystem), intermediatesFilesystemMountPt);
+	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class ProgressiveIntermediatesStore : public IntermediatesStoreBase
+	{
+	public:
+		mutable std::string _resolvedBaseDirectory;
+		mutable std::unique_ptr<IFileInterface> _markerFile;
+
+		void ResolveBaseDirectory() const;
+		std::string GetBaseDirectory();
+
+		CompileProductsGroupId RegisterCompileProductsGroup(
+			StringSection<> name,
+			const OSServices::LibVersionDesc& compilerVersionInfo,
+			bool enableArchiveCacheSet) override;
+		void DeregisterCompileProductsGroup(CompileProductsGroupId) override;
+
+		ProgressiveIntermediatesStore(
+			std::shared_ptr<IFileSystem> intermediatesFilesystem,
+			StringSection<> baseDirectory,
+			StringSection<> versionString,
+			StringSection<> configString,
+			bool universal = false);
+		ProgressiveIntermediatesStore();		// default is an in-memory-only intermediates store
+		~ProgressiveIntermediatesStore();
+		ProgressiveIntermediatesStore(const ProgressiveIntermediatesStore&) = delete;
+		ProgressiveIntermediatesStore& operator=(const ProgressiveIntermediatesStore&) = delete;
+	};
+
+	auto ProgressiveIntermediatesStore::RegisterCompileProductsGroup(
+		StringSection<> name, 
+		const OSServices::LibVersionDesc& compilerVersionInfo,
+		bool enableArchiveCacheSet) -> CompileProductsGroupId
+	{
+		std::unique_lock<std::shared_timed_mutex> l(_lock);
+		auto id = Hash64(name.begin(), name.end());
+		auto existing = _groups.find(id);
+		if (existing == _groups.end()) {
+			Group newGroup;
+			if (_filesystem) {
+				auto safeGroupName = MakeSafeName(name);
+				ResolveBaseDirectory();
+				std::string looseFilesBase = Concatenate(_resolvedBaseDirectory, "/", safeGroupName, "/");
+				newGroup._looseFilesStorage = std::make_shared<LooseFilesStorage>(_filesystem, looseFilesBase, std::string{}, compilerVersionInfo, _checkDepVals);
+				if (enableArchiveCacheSet) {
+					newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(_filesystem, compilerVersionInfo, _checkDepVals);
+					newGroup._archiveCacheBase = looseFilesBase;
+				}
+			} else {
+				// in-memory only group
+				newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(nullptr, compilerVersionInfo, _checkDepVals);
+			}
+			_groups.insert({id, std::move(newGroup)});		// ref count starts at 1
+		} else
+			++existing->second._refCount;
+		return id;
+	}
+
+	void ProgressiveIntermediatesStore::DeregisterCompileProductsGroup(CompileProductsGroupId id)
+	{
+		std::unique_lock<std::shared_timed_mutex> l(_lock);
+		auto existing = _groups.find(id);
+		if (existing != _groups.end()) {
+			--existing->second._refCount;
+			if (!existing->second._refCount) {
+				if (existing->second._archiveCacheSet)
+					existing->second._archiveCacheSet->FlushToDisk();
+				_groups.erase(existing);
+			}
+		}
+	}
+
+	void ProgressiveIntermediatesStore::ResolveBaseDirectory() const
 	{
 		if (!_resolvedBaseDirectory.empty()) return;
 		assert(_filesystem);
@@ -349,82 +525,55 @@ namespace Assets
 		_resolvedBaseDirectory = goodBranchDir;
 	}
 
-	auto IntermediatesStore::RegisterCompileProductsGroup(
-		StringSection<> name, 
-		const OSServices::LibVersionDesc& compilerVersionInfo,
-		bool enableArchiveCacheSet) -> CompileProductsGroupId
+
+	std::string ProgressiveIntermediatesStore::GetBaseDirectory()
 	{
-		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
-		auto id = Hash64(name.begin(), name.end());
-		auto existing = _pimpl->_groups.find(id);
-		if (existing == _pimpl->_groups.end()) {
-			Pimpl::Group newGroup;
-			if (_pimpl->_filesystem) {
-				auto safeGroupName = MakeSafeName(name);
-				_pimpl->ResolveBaseDirectory();
-				std::string looseFilesBase = Concatenate(_pimpl->_resolvedBaseDirectory, "/", safeGroupName, "/");
-				newGroup._looseFilesStorage = std::make_shared<LooseFilesStorage>(_pimpl->_filesystem, looseFilesBase, compilerVersionInfo);
-				if (enableArchiveCacheSet) {
-					newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(_pimpl->_filesystem, compilerVersionInfo);
-					newGroup._archiveCacheBase = looseFilesBase;
-				}
-			} else {
-				// in-memory only group
-				newGroup._archiveCacheSet = std::make_shared<ArchiveCacheSet>(nullptr, compilerVersionInfo);
-			}
-			_pimpl->_groups.insert({id, std::move(newGroup)});		// ref count starts at 1
-		} else
-			++existing->second._refCount;
-		return id;
+		ResolveBaseDirectory();
+		return _resolvedBaseDirectory;
 	}
 
-	void IntermediatesStore::DeregisterCompileProductsGroup(CompileProductsGroupId id)
+	ProgressiveIntermediatesStore::ProgressiveIntermediatesStore(
+		std::shared_ptr<IFileSystem> intermediatesFilesystem,
+		StringSection<> baseDirectory, StringSection<> versionString, StringSection<> configString,
+		bool universal)
 	{
-		std::unique_lock<std::shared_timed_mutex> l(_pimpl->_lock);
-		auto existing = _pimpl->_groups.find(id);
-		if (existing != _pimpl->_groups.end()) {
-			--existing->second._refCount;
-			if (!existing->second._refCount) {
-				if (existing->second._archiveCacheSet)
-					existing->second._archiveCacheSet->FlushToDisk();
-				_pimpl->_groups.erase(existing);
-			}
+		_filesystem = intermediatesFilesystem;
+		if (universal) {
+			// This is the "universal" store directory. A single directory is used by all
+			// versions of the game.
+			_resolvedBaseDirectory = baseDirectory.AsString() + "/.int/u";
+		} else {
+			_constructorOptions._baseDir = baseDirectory.AsString();
+			_constructorOptions._versionString = versionString.AsString();
+			_constructorOptions._configString = configString.AsString();
 		}
+		_storeRefCounts = std::make_shared<StoreReferenceCounts>();
+		_allowStore = true;
+		_checkDepVals = true;
 	}
 
-	std::string IntermediatesStore::GetBaseDirectory()
+	ProgressiveIntermediatesStore::ProgressiveIntermediatesStore()
 	{
-		_pimpl->ResolveBaseDirectory();
-		return _pimpl->_resolvedBaseDirectory;
+		_storeRefCounts = std::make_shared<StoreReferenceCounts>();
+		_allowStore = true;
+		_checkDepVals = true;
 	}
 
-	IntermediatesStore::IntermediatesStore(
+	ProgressiveIntermediatesStore::~ProgressiveIntermediatesStore() 
+	{
+	}
+
+	std::shared_ptr<IIntermediatesStore> CreateTemporaryCacheIntermediatesStore(
 		std::shared_ptr<IFileSystem> intermediatesFilesystem,
 		StringSection<> baseDirectory, StringSection<> versionString, StringSection<> configString, 
 		bool universal)
 	{
-		_pimpl = std::make_unique<Pimpl>();
-		_pimpl->_filesystem = intermediatesFilesystem;
-		if (universal) {
-			// This is the "universal" store directory. A single directory is used by all
-			// versions of the game.
-			_pimpl->_resolvedBaseDirectory = baseDirectory.AsString() + "/.int/u";
-		} else {
-			_pimpl->_constructorOptions._baseDir = baseDirectory.AsString();
-			_pimpl->_constructorOptions._versionString = versionString.AsString();
-			_pimpl->_constructorOptions._configString = configString.AsString();
-		}
-		_pimpl->_storeRefCounts = std::make_shared<StoreReferenceCounts>();
+		return std::make_shared<ProgressiveIntermediatesStore>(std::move(intermediatesFilesystem), baseDirectory, versionString, configString, universal);
 	}
 
-	IntermediatesStore::IntermediatesStore()
+	std::shared_ptr<IIntermediatesStore> CreateMemoryOnlyIntermediatesStore()
 	{
-		_pimpl = std::make_unique<Pimpl>();
-		_pimpl->_storeRefCounts = std::make_shared<StoreReferenceCounts>();
-	}
-
-	IntermediatesStore::~IntermediatesStore() 
-	{
+		return std::make_shared<ProgressiveIntermediatesStore>();
 	}
 
 	std::pair<::Assets::DependencyValidation, bool> ConstructDepVal(IteratorRange<const DependentFileState*> files, StringSection<> archivableName)
@@ -456,4 +605,6 @@ namespace Assets
 		}
 		return std::make_pair(std::move(depVal), stillValid);
 	}
+
+	IIntermediatesStore::~IIntermediatesStore() {}
 }

@@ -3,10 +3,12 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ExtensionFunctions.h"
+#include "../../DeviceInitialization.h"
 
 namespace RenderCore { namespace Metal_Vulkan
 {
-    ExtensionFunctions::ExtensionFunctions(VkInstance instance)
+    ExtensionFunctions::ExtensionFunctions(VkInstance instance, const DeviceFeatures& xleFeatures)
+    : _instance(instance)
     {
         _beginTransformFeedback = (PFN_vkCmdBeginTransformFeedbackEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginTransformFeedbackEXT");
 		_bindTransformFeedbackBuffers = (PFN_vkCmdBindTransformFeedbackBuffersEXT)vkGetInstanceProcAddr(instance, "vkCmdBindTransformFeedbackBuffersEXT");
@@ -21,5 +23,10 @@ namespace RenderCore { namespace Metal_Vulkan
         _getSemaphoreCounterValue = (PFN_vkGetSemaphoreCounterValueKHR)vkGetInstanceProcAddr(instance, "vkGetSemaphoreCounterValueKHR");
         _signalSemaphore = (PFN_vkSignalSemaphoreKHR)vkGetInstanceProcAddr(instance, "vkSignalSemaphoreKHR");
         _waitSemaphores = (PFN_vkWaitSemaphoresKHR)vkGetInstanceProcAddr(instance, "vkWaitSemaphoresKHR");
+
+        if (xleFeatures._vulkanRenderPass2)
+            _createRenderPass2 = (PFN_vkCreateRenderPass2KHR)vkGetInstanceProcAddr(instance, "vkCreateRenderPass2KHR");
+        else
+            _createRenderPass2 = nullptr;
     }
 }}

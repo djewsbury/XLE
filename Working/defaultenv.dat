@@ -4,8 +4,7 @@ LightScene=~
     Light=~
 		Name=Ambient
 		Operator=AmbientDefault
-		SkyTexture=C:/code/XLEExt/Working/shaderlab/comfy_cafe_4k.hdr
-		SkyTextureType=Equirectangular
+		EquirectangularSource=C:/code/xenoviewer.distro/Working/pizzo_pernice_2k.hdr
 
 	Light=~
 		Name=Sun
@@ -33,6 +32,9 @@ LightScene=~
 		Position={3, -3, 5}
 		Radius={0.05, 0.05, 0.05}
 
+	Bloom=~
+		Threshold = 10000
+
 LightOperators=~
 	LightSource=~
 		Name=Sphere
@@ -43,6 +45,22 @@ LightOperators=~
 		DominantLight=1
     Ambient=~
 		Name=AmbientDefault
+	Sky=~
+	SkyTextureProcessor=~
+		ProgressiveCompilation = true
+		~~ SpecularCubeMapFormat = R32G32B32A32_FLOAT
+		SpecularCubeMapFaceDimension = 256
+		BlurBackground = false
+		CoordinateSystem = ZUp
+	ToneMapAces=~
+		BroadBloomMaxRadius=128
+		EnablePreciseBloom=true
+	xxTAA=~
+		SharpenHistory=true
+	xxSharpen=~
+		Amount=.4
+	xxFilmGrain=~
+		Strength=.08
 
 environment=~
 	Name=environment

@@ -153,8 +153,6 @@ namespace RenderOverlays
 		unsigned _totalInstanceCount = 0;
 
 		std::pair<uint16_t, uint16_t> _originalOrdering[s_maxInstancesPerSpan];		// instance, glyph
-
-		DrawTextFlags::BitField _flags = 0;
 	};
 
 	struct CalculateFontSpansControlBlock

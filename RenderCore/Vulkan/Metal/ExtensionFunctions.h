@@ -7,6 +7,8 @@
 #include "IncludeVulkan.h"
 #include "VulkanCore.h"
 
+namespace RenderCore { class DeviceFeatures; }
+
 namespace RenderCore { namespace Metal_Vulkan
 {
     class ExtensionFunctions
@@ -26,6 +28,10 @@ namespace RenderCore { namespace Metal_Vulkan
         PFN_vkSignalSemaphoreKHR _signalSemaphore = nullptr;
         PFN_vkWaitSemaphoresKHR _waitSemaphores = nullptr;
 
-        ExtensionFunctions(VkInstance instance);
+        PFN_vkCreateRenderPass2KHR _createRenderPass2 = nullptr;
+
+        VkInstance _instance = nullptr;
+
+        ExtensionFunctions(VkInstance instance, const DeviceFeatures& xleFeatures);
     };
 }}

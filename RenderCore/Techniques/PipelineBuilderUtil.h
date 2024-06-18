@@ -592,13 +592,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		Metal::ComputePipelineBuilder builder;
 		builder.Bind(shader);
 		auto pipeline = builder.CreatePipeline(Metal::GetObjectFactory());
-		::Assets::DependencyValidation depVal; 
-		if (pipelineLayoutDepVal) {
-			depVal = ::Assets::GetDepValSys().Make();
-			depVal.RegisterDependency(pipeline->GetDependencyValidation());
-			depVal.RegisterDependency(pipelineLayoutDepVal);
-		} else
-			depVal = pipeline->GetDependencyValidation();
+		::Assets::DependencyValidationMarker subDepVals[] { pipeline->GetDependencyValidation(), pipelineLayoutDepVal };
+		auto depVal = ::Assets::GetDepValSys().MakeOrReuse(subDepVals);
 		return ComputePipelineAndLayout { std::move(pipeline), pipelineLayout, std::move(depVal) };
 	}
 

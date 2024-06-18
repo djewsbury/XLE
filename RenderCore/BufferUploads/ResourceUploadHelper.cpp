@@ -916,11 +916,15 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         if (annotatorStart)
             commitTo.GetAnnotator().Event("BufferUploads", IAnnotator::EventTypes::MarkerEnd);
 
-        if (!wroteSomeStub && (_pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired)) {
-            auto& metalContext = *Metal::DeviceContext::Get(commitTo);
-            assert(metalContext.HasActiveCommandList());
-            metalContext.GetActiveCommandList().AddWaitBeforeBegin(_pimpl->_graphicsQueueTimeline, cmdListRequired);
-        }
+        // _pimpl->_commandListIDReadyForGraphicsQueue is the highest id of all of the command lists that have actually been
+        //  committed to the _graphicsQueueTimeline
+        // However, we only record these in timeline semaphores if we have _transferQueueTimeline
+        if (_pimpl->_transferQueueTimeline)
+            if (!wroteSomeStub && (_pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired)) {
+                auto& metalContext = *Metal::DeviceContext::Get(commitTo);
+                assert(metalContext.HasActiveCommandList());
+                metalContext.GetActiveCommandList().AddWaitBeforeBegin(_pimpl->_graphicsQueueTimeline, cmdListRequired);
+            }
 
         return _pimpl->_commandListIDReadyForGraphicsQueue >= cmdListRequired;
     }
@@ -1019,7 +1023,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
             auto metalCmdList = metalContext->ResolveCommandList();
             metalContext.reset();
 
-            if (commandList._id != ~0u) {
+            if (commandList._id != ~0u && _transferQueueTimeline) {
                 metalCmdList->AddWaitBeforeBegin(_transferQueueTimeline, commandList._id);
                 metalCmdList->AddSignalOnCompletion(_graphicsQueueTimeline, commandList._id);
             }

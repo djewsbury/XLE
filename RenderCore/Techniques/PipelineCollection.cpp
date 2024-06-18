@@ -78,9 +78,8 @@ namespace RenderCore { namespace Techniques
 	static GraphicsPipelineAndLayout MergeDepVal(const GraphicsPipelineAndLayout& src, const ::Assets::DependencyValidation& cfgDepVal)
 	{
 		GraphicsPipelineAndLayout result = src;
-		result._depVal = ::Assets::GetDepValSys().Make();
-		result._depVal.RegisterDependency(src._depVal);
-		result._depVal.RegisterDependency(cfgDepVal);
+		::Assets::DependencyValidationMarker subDepVals[] { src._depVal, cfgDepVal };
+		result._depVal = ::Assets::GetDepValSys().MakeOrReuse(subDepVals);
 		return result;
 	}
 

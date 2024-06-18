@@ -2,5 +2,6 @@ Default=~
 	RawGeoRules=~
 		*=~
 			16Bit=true
+			MergeDuplicateVertices=true
 			ExcludeAttributes=~
 				TEXBINORMAL

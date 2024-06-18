@@ -9,6 +9,8 @@
 #include "../RenderCore/Techniques/SubFrameEvents.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/Techniques/Services.h"
+#include "../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../RenderCore/Techniques/PipelineCollection.h"
 
 namespace RenderOverlays
 {
@@ -20,8 +22,11 @@ namespace RenderOverlays
 		_depValPtr.RegisterDependency(_mainDrawingApparatus->GetDependencyValidation());
 
 		_shapeRenderingDelegate = std::make_shared<ShapesRenderingDelegate>();
+
+		auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(_mainDrawingApparatus->_device);
+		_overlayPipelineAccelerators = RenderCore::Techniques::CreatePipelineAcceleratorPool(_mainDrawingApparatus->_device, nullptr, pipelineCollection, _shapeRenderingDelegate->GetPipelineLayoutDelegate(), 0);
 		
-		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_mainDrawingApparatus->_device, _shapeRenderingDelegate->GetPipelineLayoutDelegate());
+		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_overlayPipelineAccelerators);
 		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
 
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();

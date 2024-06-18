@@ -93,7 +93,7 @@ void Gaussian(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID
 
 	// wait until every thread has finished loads, then begin
 	// horizontal part
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 
 	F16 w[WING_COUNT+1];
 	[unroll] for (uint c=0; c<WING_COUNT+1; ++c)
@@ -116,7 +116,7 @@ void Gaussian(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID
 
 	// wait until every thread has finished loads, then begin
 	// vertical part
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 
 	for (cy=0; cy<BLOCK_CENTER; cy+=8) {
 		for (cx=0; cx<BLOCK_CENTER; cx+=8) {
@@ -146,8 +146,8 @@ void Gaussian(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID
 	void GaussianRGB(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
 	Gaussian(groupThreadId, groupId, 0);
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 	Gaussian(groupThreadId, groupId, 1);
-	GroupMemoryBarrier();
+	GroupMemoryBarrierWithGroupSync();
 	Gaussian(groupThreadId, groupId, 2);
 }

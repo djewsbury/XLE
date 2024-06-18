@@ -211,9 +211,10 @@ namespace RenderOverlays
             ColorB color0, ColorB color1,
             const Float2& minTex0, const Float2& maxTex0, 
             const Float2& minTex1, const Float2& maxTex1,
-            RenderCore::Techniques::ImmediateDrawableMaterial&& material)
+            const RenderCore::Techniques::ImmediateDrawableMaterial& material,
+            RenderCore::Techniques::RetainedUniformsStream&& uniforms)
         {
-            auto data = context.DrawGeometry(6, Vertex_PCCTT::inputElements2D, std::move(material)).Cast<Vertex_PCCTT*>();
+            auto data = context.DrawGeometry(6, Vertex_PCCTT::inputElements2D, material, std::move(uniforms)).Cast<Vertex_PCCTT*>();
             if (data.empty()) return;
             assert(data.size() == 6);
             auto col0 = HardwareColor(color0);
@@ -243,18 +244,18 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineEllipse;
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
-        mat._hash ^= FloatBits(outlineWidth);
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
+        uniforms._hashForCombining = FloatBits(outlineWidth);
 
         Internal::DrawPCCTTQuad(
             context,
             AsPixelCoords(rect._topLeft),
             AsPixelCoords(rect._bottomRight),
             ColorB::Zero, colour,
-            Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            Float2(0.f, 0.f), Float2(1.f, 1.f), 
-            std::move(mat));
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
+            Float2(0.f, 0.f), Float2(1.f, 1.f),
+            res->_outlineEllipse, std::move(uniforms));
     }
 
     void FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -266,9 +267,9 @@ namespace RenderOverlays
         if (!res) return;
 
         const float borderWidthPix = 1.f;
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillEllipse;
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidthPix }));
-        mat._hash ^= FloatBits(borderWidthPix);
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidthPix }));
+        uniforms._hashForCombining = FloatBits(borderWidthPix);
         
         Internal::DrawPCCTTQuad(
             context,
@@ -277,7 +278,7 @@ namespace RenderOverlays
             colour, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(1.f, 1.f),
-            std::move(mat));
+            res->_fillEllipse, std::move(uniforms));
     }
 
     void OutlineRoundedRectangle(
@@ -292,10 +293,10 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_outlineRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { width }));
-        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ FloatBits(width) ^ cornerFlags;
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { width }));
+        uniforms._hashForCombining = FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ FloatBits(width) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -304,7 +305,7 @@ namespace RenderOverlays
             ColorB::Zero, colour,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(1.f, 1.f),
-            std::move(mat));
+            res->_outlineRoundedRect, std::move(uniforms));
     }
 
     void FillRoundedRectangle(
@@ -319,10 +320,10 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
-        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ cornerFlags;
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
+        uniforms._hashForCombining = FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -331,7 +332,7 @@ namespace RenderOverlays
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            std::move(mat));
+            res->_fillRoundedRect, std::move(uniforms));
     }
 
     void FillAndOutlineRoundedRectangle(
@@ -347,10 +348,10 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidth }));
-        mat._hash ^= FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ FloatBits(borderWidth) ^ cornerFlags;
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { borderWidth }));
+        uniforms._hashForCombining = FloatBits(roundedProportion) ^ FloatBits(roundingMaxPixels) ^ FloatBits(borderWidth) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -359,7 +360,7 @@ namespace RenderOverlays
             fillColor, outlineColour,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            std::move(mat));
+            res->_fillAndOutlineRoundedRect, std::move(uniforms));
     }
 
     void FillRaisedRoundedRectangle(
@@ -374,10 +375,10 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillRaisedRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
-        mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
+        uniforms._hashForCombining = FloatBits(roundedProportion) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -386,7 +387,7 @@ namespace RenderOverlays
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            std::move(mat));
+            res->_fillRaisedRoundedRect, std::move(uniforms));
     }
 
     void FillDepressedRoundedRectangle(
@@ -401,10 +402,10 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillReverseRaisedRoundedRect;
-        mat._uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
-        mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags;
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework {}));
+        uniforms._hashForCombining = FloatBits(roundedProportion) ^ cornerFlags;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -413,7 +414,7 @@ namespace RenderOverlays
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            std::move(mat));
+            res->_fillReverseRaisedRoundedRect, std::move(uniforms));
     }
 
     void FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -460,9 +461,9 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillAndOutlineRect;
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
-        mat._hash ^= FloatBits(outlineWidth);
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
+        uniforms._hashForCombining = FloatBits(outlineWidth);
 
         Internal::DrawPCCTTQuad(
             context,
@@ -471,7 +472,7 @@ namespace RenderOverlays
             fillColour, outlineColour,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            std::move(mat));
+            res->_fillAndOutlineRect, std::move(uniforms));
     }
 
     void FillRaisedRectangle(
@@ -487,7 +488,7 @@ namespace RenderOverlays
             fillColor, fillColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            RenderCore::Techniques::ImmediateDrawableMaterial{res->_fillRaisedRect});
+            res->_fillRaisedRect, {});
     }
 
     void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, unsigned softnessRadius)
@@ -498,7 +499,6 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_softShadowRect;
         const int radiusX = softnessRadius, radiusY = softnessRadius;
         Internal::DrawPCCTTQuad(
             context,
@@ -508,7 +508,7 @@ namespace RenderOverlays
             Float2(    - radiusX / float(rect.Width()),     - radiusY / float(rect.Height())),
             Float2(1.f + radiusX / float(rect.Width()), 1.f + radiusY / float(rect.Height())),
             Float2(radiusX, radiusY), Float2(radiusX, radiusY),
-            std::move(mat));
+            res->_softShadowRect, {});
     }
 
     void        ColorAdjustRectangle(
@@ -522,11 +522,11 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_fillColorAdjust;
-        mat._hash = Hash64(&colorAdjust, &colorAdjust+1, mat._hash);
-        mat._hash = tex ? HashCombine(tex->GetResource()->GetGUID(), mat._hash) : mat._hash;
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
-        mat._uniforms._resourceViews.emplace_back(std::move(tex));
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
+        uniforms._resourceViews.emplace_back(std::move(tex));
+        uniforms._hashForCombining = Hash64(&colorAdjust, &colorAdjust+1);
+        uniforms._hashForCombining = tex ? HashCombine(tex->GetResource()->GetGUID(), uniforms._hashForCombining) : uniforms._hashForCombining;
         Internal::DrawPCCTTQuad(
             context,
             AsPixelCoords(rect._topLeft),
@@ -534,7 +534,7 @@ namespace RenderOverlays
             modulation, ColorB::Zero,
             texCoordMin, texCoordMax,
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            std::move(mat));
+            res->_fillColorAdjust, std::move(uniforms));
     }
 
     void        ColorAdjustAndOutlineRoundedRectangle(
@@ -551,14 +551,14 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_colorAdjustAndOutlineRoundedRect;
-        mat._hash = Hash64(&colorAdjust, &colorAdjust+1, mat._hash);
-        mat._hash ^= FloatBits(roundedProportion) ^ cornerFlags ^ FloatBits(outlineWidth);
-        mat._hash = tex ? HashCombine(tex->GetResource()->GetGUID(), mat._hash) : mat._hash;
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
-        mat._uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
-        mat._uniforms._resourceViews.emplace_back(std::move(tex));
+        RenderCore::Techniques::RetainedUniformsStream uniforms;
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
+        uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
+        uniforms._resourceViews.emplace_back(std::move(tex));
+        uniforms._hashForCombining = Hash64(&colorAdjust, &colorAdjust+1);
+        uniforms._hashForCombining ^= FloatBits(roundedProportion) ^ cornerFlags ^ FloatBits(outlineWidth);
+        uniforms._hashForCombining = tex ? HashCombine(tex->GetResource()->GetGUID(), uniforms._hashForCombining) : uniforms._hashForCombining;
         Internal::DrawPCCTTQuad(
             context,
             AsPixelCoords(rect._topLeft),
@@ -566,7 +566,7 @@ namespace RenderOverlays
             modulation, outlineColour,
             texCoordMin, texCoordMax,
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            std::move(mat));
+            res->_colorAdjustAndOutlineRoundedRect, std::move(uniforms));
     }
 
     void WriteInLineVertices(IteratorRange<Internal::Vertex_PCT*> data, IteratorRange<const Float2*> linePts, ColorB colour, float width)
@@ -795,7 +795,7 @@ namespace RenderOverlays
         mat._hash = ~mat._hash;
 
         const unsigned joinsVertices = 9*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVertices(data, linePts, colour, width);
@@ -813,7 +813,7 @@ namespace RenderOverlays
         mat._hash = ~mat._hash;
 
         const unsigned joinsVertices = 9*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVertices(data, linePts, colour, width);
@@ -826,10 +826,8 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
-
         const unsigned joinsVertices = 6*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*2 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*2 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, res->_dashLine, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVerticesInset(data, linePts, colour, width);
@@ -842,10 +840,8 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_solidNoBorder;
-
         const unsigned joinsVertices = 6*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*2 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, std::move(mat)).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*2 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, res->_solidNoBorder, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVerticesInset(data, linePts, colour, width);
@@ -1090,10 +1086,10 @@ namespace RenderOverlays
             if (doubleSided)
                 pipelineBase += 3;
 
+            std::shared_ptr<Techniques::GraphicsPipelineDesc> nascentDesc;
 			if (shaderPatches.HasPatchType(s_patchShape)) {
-				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+				nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDesc[pipelineBase];
-				SetupLineStates(*nascentDesc, renderStates);
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntry:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchShape, ShaderStage::Pixel);
@@ -1101,21 +1097,17 @@ namespace RenderOverlays
 				nascentDesc->_patchExpansions.emplace_back(s_patchOutline, ShaderStage::Pixel);
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
-				return nascentDesc;
 			} else if (shaderPatches.HasPatchType(s_patchTwoLayersShader)) {
-				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+				nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDesc[pipelineBase];
-				SetupLineStates(*nascentDesc, renderStates);
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryForTwoLayersShader:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchTwoLayersShader, ShaderStage::Pixel);
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
-				return nascentDesc;
 			} else if (shaderPatches.HasPatchType(s_patchFill)) {
-				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+				nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				*nascentDesc = *_pipelineDesc[pipelineBase];
-				SetupLineStates(*nascentDesc, renderStates);
 
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = RENDEROVERLAYS_SHAPES_HLSL ":frameworkEntryJustFill:ps_*";
 				nascentDesc->_patchExpansions.emplace_back(s_patchFill, ShaderStage::Pixel);
@@ -1123,17 +1115,25 @@ namespace RenderOverlays
                 nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_COLOR_LINEAR1", 0);
                 nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_TEXCOORD1", 0);
 
-				return nascentDesc;
-			} else {
-				if (!(renderStates._flag & (RenderCore::Assets::RenderStateSet::Flag::SmoothLines|RenderCore::Assets::RenderStateSet::Flag::LineWeight))) {
-					return _pipelineDesc[pipelineBase];
-				} else {
-					auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-					*nascentDesc = *_pipelineDesc[pipelineBase];
-					SetupLineStates(*nascentDesc, renderStates);
-					return nascentDesc;
-				}
 			}
+
+            if (!shaderPatches.GetOverrideShader(ShaderStage::Vertex).IsEmpty()) {
+                if (!nascentDesc) {
+                    nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                    *nascentDesc = *_pipelineDesc[pipelineBase];
+                }
+                nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = shaderPatches.GetOverrideShader(ShaderStage::Vertex).AsString();
+            }
+
+            if (renderStates._flag & (RenderCore::Assets::RenderStateSet::Flag::SmoothLines|RenderCore::Assets::RenderStateSet::Flag::LineWeight)) {
+                if (!nascentDesc) {
+                    nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                    *nascentDesc = *_pipelineDesc[pipelineBase];
+                }
+                SetupLineStates(*nascentDesc, renderStates);
+            }
+
+            return nascentDesc ? nascentDesc : _pipelineDesc[pipelineBase];
 		}
 
 		virtual std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override { return _pipelineLayout; }

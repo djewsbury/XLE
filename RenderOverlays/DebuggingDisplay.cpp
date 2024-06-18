@@ -988,7 +988,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(r._bottomRight[0], r._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(t, 0.f), Float2(t, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{res->_horizTweakerBarMaterial});
+            res->_horizTweakerBarMaterial, {});
     }
 
     void HTweakerBar_DrawLabel(IOverlayContext& context, const Rect& rect)
@@ -1001,7 +1001,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{res->_tagShaderMaterial});
+            res->_tagShaderMaterial, {});
     }
 
     void HTweakerBar_DrawGridBackground(IOverlayContext& context, const Rect& rect)
@@ -1014,7 +1014,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1])),
             ColorB(0xffffffff), ColorB(0xffffffff),
             Float2(0.f, 0.f), Float2(1.f, 1.f), Float2(0.f, 0.f), Float2(0.f, 0.f),
-            RenderCore::Techniques::ImmediateDrawableMaterial{res->_gridBackgroundMaterial});
+            res->_gridBackgroundMaterial, {});
     }
 
     ///////////////////////////////////////////////////////////////////////////////////
@@ -1471,13 +1471,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
     void InterfaceStateHelper::OnInputEvent(const PlatformRig::InputContext& context, const OSServices::InputSnapshot& evnt)
     {
         _currentMouseHeld = evnt._mouseButtonsDown;
-        if (_currentMouse[0] != evnt._mousePosition[0] || _currentMouse[1] != evnt._mousePosition[1]) {
+        if (_currentMouse[0] != evnt._mousePosition._x || _currentMouse[1] != evnt._mousePosition._y) {
             Coord2 drift = Coord2{evnt._mousePosition._x, evnt._mousePosition._y} - _currentMouse;
             _currentMouse = {evnt._mousePosition._x, evnt._mousePosition._y};
-            auto capture = _currentInterfaceState.GetCapture();
-            capture._driftDuringCapture += Coord2{std::abs(drift[0]), std::abs(drift[1])};
-            _currentInterfaceState  = BuildInterfaceState(_currentInteractables, context, _currentMouse, _currentMouseHeld, capture);
+            _currentInterfaceState.GetCapture()._driftDuringCapture += Coord2{std::abs(drift[0]), std::abs(drift[1])};
         }
+        _currentInterfaceState = BuildInterfaceState(_currentInteractables, context, _currentMouse, _currentMouseHeld, _currentInterfaceState.GetCapture());
         _currentInterfaceState.SetWindowingSystemView(context._view);
     }
 

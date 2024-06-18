@@ -9,7 +9,8 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-            "args": [],
+            "xxargs": [ "-xleres C:\\code\\XLE\\xleres\\core" ],
+            "args": [ "-r \"C:/code/nar-wrld/Src/IntermediatesList.dat\" -o \"temp.pak\"" ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/Working",
             "environment": []

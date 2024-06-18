@@ -198,8 +198,7 @@ namespace PlatformRig { namespace Overlays
 						5, 0, 3,
 						4, 5, 3
 					};
-					RenderCore::Techniques::ImmediateDrawableMaterial material;
-					auto vertices = draw.GetContext().DrawGeometry(dimof(indices), Vertex_PC::s_inputElements2D, std::move(material)).Cast<Vertex_PC*>();
+					auto vertices = draw.GetContext().DrawGeometry(dimof(indices), Vertex_PC::s_inputElements2D, {}, {}).Cast<Vertex_PC*>();
 					for (unsigned c=0; c<dimof(indices); ++c)
 						vertices[c] = Vertex_PC { AsPixelCoords(pts[indices[c]]), HardwareColor(headingBkColor) };
 

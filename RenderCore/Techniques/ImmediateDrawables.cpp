@@ -129,11 +129,12 @@ namespace RenderCore { namespace Techniques
 			size_t vertexCount,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			const ImmediateDrawableMaterial& material,
+			RetainedUniformsStream&& uniforms,
 			Topology topology) override
 		{
 			auto vStride = CalculateVertexStride(inputAssembly);
 			auto vertexDataSize = vertexCount * vStride;
-			if (!vertexDataSize) return {};
+			// if (!vertexDataSize) return {};
 
 			auto pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 
@@ -147,7 +148,6 @@ namespace RenderCore { namespace Techniques
 				&& topology != Topology::TriangleStrip
 				&& topology != Topology::LineStrip
 				&& material._combinable
-				&& !_pendingEncoderState._states
 				;
 			assert(material._hash != ~0ull);	// used as a sentinel for non-combinable materials
 			#if defined(_DEBUG)
@@ -162,12 +162,15 @@ namespace RenderCore { namespace Techniques
 				_lastQueuedDrawVertexCountOffset = _lastQueuedDrawable->_vertexCount;
 				return UpdateLastDrawCallVertexCount(vertexCount);
 			} else {
-				auto vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
 				auto* drawable = AllocateDrawable<DrawableWithVertexCount>(&DrawableWithVertexCount::ExecuteFn);
 				auto* geo = _workingPkt.CreateTemporaryGeo();
-				geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
-				geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
-				geo->_vertexStreamCount = 1;
+				DrawablesPacket::AllocateStorageResult vertexStorage;
+				if (vertexDataSize) {
+					vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
+					geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+					geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
+					geo->_vertexStreamCount = 1;
+				}
 				geo->_ibFormat = Format(0);
 				drawable->_geo = geo;
 				drawable->_pipeline = pipeline;
@@ -176,11 +179,12 @@ namespace RenderCore { namespace Techniques
 				drawable->_vertexCount = (unsigned)vertexCount;
 				drawable->_vertexStride = vStride;
 				drawable->_bytesAllocated = (unsigned)vertexDataSize;
+				drawable->_matHash = material._hash;
 				if (material._uniformStreamInterface) {
 					drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
-					drawable->_uniforms = material._uniforms;
+					drawable->_uniforms = std::move(uniforms);
+					drawable->_matHash = HashCombine(drawable->_matHash, drawable->_uniforms._hashForCombining);
 				}
-				drawable->_matHash = material._hash;
 				_lastQueuedDrawable = drawable;
 				_lastQueuedDrawVertexCountOffset = 0;
 				return vertexStorage._data;
@@ -191,8 +195,9 @@ namespace RenderCore { namespace Techniques
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
 			std::shared_ptr<DrawableGeo> customGeo,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
-			const ImmediateDrawableMaterial& material = {},
-			Topology topology = Topology::TriangleList) override
+			const ImmediateDrawableMaterial& material,
+			RetainedUniformsStream&& uniforms,
+			Topology topology) override
 		{
 			bool indexed = customGeo->_ibFormat != Format(0);
 			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn);
@@ -204,11 +209,12 @@ namespace RenderCore { namespace Techniques
 			drawable->_vertexStride = 0;
 			drawable->_bytesAllocated = 0;
 			DEBUG_ONLY(drawable->_userGeo = true;)
+			drawable->_matHash = material._hash;
 			if (material._uniformStreamInterface && material._uniformStreamInterface->GetHash()) {
 				drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
-				drawable->_uniforms = material._uniforms;
+				drawable->_uniforms = std::move(uniforms);
+				drawable->_matHash = HashCombine(drawable->_matHash, drawable->_uniforms._hashForCombining);
 			}
-			drawable->_matHash = material._hash;
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
 			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
@@ -218,8 +224,9 @@ namespace RenderCore { namespace Techniques
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
 			std::shared_ptr<DrawableGeo> customGeo,
 			IteratorRange<const InputElementDesc*> inputAssembly,
-			const ImmediateDrawableMaterial& material = {},
-			Topology topology = Topology::TriangleList) override
+			const ImmediateDrawableMaterial& material,
+			RetainedUniformsStream&& uniforms,
+			Topology topology) override
 		{
 			bool indexed = customGeo->_ibFormat != Format(0);
 			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn);
@@ -231,9 +238,11 @@ namespace RenderCore { namespace Techniques
 			drawable->_vertexStride = 0;
 			drawable->_bytesAllocated = 0;
 			DEBUG_ONLY(drawable->_userGeo = true;)
+			drawable->_matHash = material._hash;
 			if (material._uniformStreamInterface && material._uniformStreamInterface->GetHash()) {
 				drawable->_looseUniformsInterface = ProtectLifetime(*material._uniformStreamInterface);
-				drawable->_uniforms = material._uniforms;
+				drawable->_uniforms = std::move(uniforms);
+				drawable->_matHash = HashCombine(drawable->_matHash, drawable->_uniforms._hashForCombining);
 			}
 			drawable->_matHash = material._hash;
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
@@ -244,6 +253,8 @@ namespace RenderCore { namespace Techniques
 		void QueueEncoderState(const EncoderState& encoderState) override
 		{
 			_pendingEncoderState.MergeIn(encoderState);
+			_lastQueuedDrawable = nullptr;
+			_lastQueuedDrawVertexCountOffset = 0;
 		}
 
 		IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) override
@@ -341,13 +352,11 @@ namespace RenderCore { namespace Techniques
 			_pipelineAcceleratorsVisibility = _pipelineAcceleratorPool->VisibilityBarrier();
 		}
 
-		ImmediateDrawables(std::shared_ptr<IDevice> device, std::shared_ptr<IPipelineLayoutDelegate> layoutDelegate)
+		ImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
+		: _pipelineAcceleratorPool(std::move(pipelineAccelerators))
 		{
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
-
-			auto pipelineCollection = std::make_shared<PipelineCollection>(device);
-			_pipelineAcceleratorPool = CreatePipelineAcceleratorPool(device, nullptr, pipelineCollection, layoutDelegate, 0);
 		}
 
 	protected:
@@ -406,9 +415,9 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IDevice> device, std::shared_ptr<IPipelineLayoutDelegate> layoutDelegate)
+	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
 	{
-		return std::make_shared<ImmediateDrawables>(std::move(device), std::move(layoutDelegate));
+		return std::make_shared<ImmediateDrawables>(std::move(pipelineAccelerators));
 	}
 
 	void IImmediateDrawables::ExecuteDraws(ParsingContext& parsingContext, const std::shared_ptr<ITechniqueDelegate>& techDel, const RenderPassInstance& rpi)

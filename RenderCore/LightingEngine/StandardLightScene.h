@@ -36,7 +36,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		class PageHeap
 	{
 	public:
-		struct Page
+		struct alignas(T) Page
 		{
 			uint8_t _data[sizeof(T)*64];
 		};

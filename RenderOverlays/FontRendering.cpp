@@ -75,16 +75,19 @@ namespace RenderOverlays
 		WorkingVertexSetFontResource(
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 			const RenderCore::Techniques::ImmediateDrawableMaterial& material,
-			float depth, bool snap);
+			const RenderCore::Techniques::RetainedUniformsStream& uniforms,
+			float depth, bool snap, Float2 offset = Float2{0,0});
 		WorkingVertexSetFontResource();
 
 	protected:
 		RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
 		const RenderCore::Techniques::ImmediateDrawableMaterial* _material;
+		const RenderCore::Techniques::RetainedUniformsStream* _uniforms;
 		IteratorRange<Vertex*> 	_currentAllocation;
 		Vertex*            		_currentIterator;
 		float _depth;
 		bool _snap;
+		Float2 _offset;
 	};
 
 	RenderCore::MiniInputElementDesc WorkingVertexSetFontResource::s_inputElements[] = 
@@ -105,10 +108,10 @@ namespace RenderOverlays
 			assert((_currentIterator + 6) <= _currentAllocation.end());
 		}
 
-		float x0 = positions.min[0];
-		float x1 = positions.max[0];
-		float y0 = positions.min[1];
-		float y1 = positions.max[1];
+		float x0 = positions.min[0] + _offset[0];
+		float x1 = positions.max[0] + _offset[0];
+		float y0 = positions.min[1] + _offset[1];
+		float y1 = positions.max[1] + _offset[1];
 
 		Float3 p0(x0, y0, _depth);
 		Float3 p1(x1, y0, _depth);
@@ -180,18 +183,19 @@ namespace RenderOverlays
 		_currentAllocation = _immediateDrawables->QueueDraw(
 			reservedQuads * 6,
 			MakeIteratorRange(s_inputElements), 
-			*_material).Cast<Vertex*>();
+			*_material, RenderCore::Techniques::RetainedUniformsStream{*_uniforms}).Cast<Vertex*>();
 		_currentIterator = _currentAllocation.begin();
 	}
 
 	WorkingVertexSetFontResource::WorkingVertexSetFontResource(
 		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
-		float depth, bool snap)
+		const RenderCore::Techniques::RetainedUniformsStream& uniforms,
+		float depth, bool snap, Float2 offset)
 	: _immediateDrawables(&immediateDrawables)
-	, _material(&material)
+	, _material(&material), _uniforms(&uniforms)
 	, _currentIterator{nullptr}
-	, _depth(depth), _snap(snap)
+	, _depth(depth), _snap(snap), _offset(offset)
 	{}
 
 	WorkingVertexSetFontResource::WorkingVertexSetFontResource()
@@ -243,15 +247,16 @@ namespace RenderOverlays
 			_currentAllocation = _immediateDrawables->QueueDraw(
 				reservedQuads * 6,
 				MakeIteratorRange(s_inputElements3D), 
-				_modifiedMaterial).Cast<Vertex*>();
+				_modifiedMaterial, RenderCore::Techniques::RetainedUniformsStream{*_uniforms}).Cast<Vertex*>();
 			_currentIterator = _currentAllocation.begin();
 		}
 
 		WorkingVertexSetFontResource3D(
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 			const RenderCore::Techniques::ImmediateDrawableMaterial& baseMaterial,
+			const RenderCore::Techniques::RetainedUniformsStream& uniforms,
 			const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet)
-		: WorkingVertexSetFontResource(immediateDrawables, baseMaterial, 0.f, false)
+		: WorkingVertexSetFontResource(immediateDrawables, baseMaterial, uniforms, 0.f, false)
 		, _localToWorld(localToWorld), _modifiedMaterial(baseMaterial)
 		{
 			_modifiedMaterial._stateSet = stateSet;
@@ -283,16 +288,19 @@ namespace RenderOverlays
 		WorkingVertexSetPCT(
 			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 			const RenderCore::Techniques::ImmediateDrawableMaterial& material,
-			float depth, bool snap);
+			const RenderCore::Techniques::RetainedUniformsStream& uniforms,
+			float depth, bool snap, Float2 offset = Float2{0,0});
 		WorkingVertexSetPCT();
 
 	protected:
 		RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
 		const RenderCore::Techniques::ImmediateDrawableMaterial* _material;
+		const RenderCore::Techniques::RetainedUniformsStream* _uniforms;
 		IteratorRange<Vertex*> 	_currentAllocation;
 		Vertex*            		_currentIterator;
 		float _depth;
 		bool _snap;
+		Float2 _offset;
 	};
 
 	RenderCore::MiniInputElementDesc WorkingVertexSetPCT::s_inputElements[] = 
@@ -312,10 +320,10 @@ namespace RenderOverlays
 			assert((_currentIterator + 6) <= _currentAllocation.end());
 		}
 
-		float x0 = positions.min[0];
-		float x1 = positions.max[0];
-		float y0 = positions.min[1];
-		float y1 = positions.max[1];
+		float x0 = positions.min[0] + _offset[0];
+		float x1 = positions.max[0] + _offset[0];
+		float y0 = positions.min[1] + _offset[1];
+		float y1 = positions.max[1] + _offset[1];
 
 		Float3 p0(x0, y0, _depth);
 		Float3 p1(x1, y0, _depth);
@@ -387,18 +395,19 @@ namespace RenderOverlays
 		_currentAllocation = _immediateDrawables->QueueDraw(
 			reservedQuads * 6,
 			MakeIteratorRange(s_inputElements), 
-			*_material).Cast<Vertex*>();
+			*_material, RenderCore::Techniques::RetainedUniformsStream{*_uniforms}).Cast<Vertex*>();
 		_currentIterator = _currentAllocation.begin();
 	}
 
 	WorkingVertexSetPCT::WorkingVertexSetPCT(
 		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
-		float depth, bool snap)
+		const RenderCore::Techniques::RetainedUniformsStream& uniforms,
+		float depth, bool snap, Float2 offset)
 	: _immediateDrawables(&immediateDrawables)
-	, _material(&material)
+	, _material(&material), _uniforms(&uniforms)
 	, _currentIterator{nullptr}
-	, _depth(depth), _snap(snap)
+	, _depth(depth), _snap(snap), _offset(offset)
 	{}
 
 	WorkingVertexSetPCT::WorkingVertexSetPCT()
@@ -802,7 +811,7 @@ namespace RenderOverlays
 		Float2 iterator { x, y };
 		ColorB colorOverride = 0x0;
 		while (!text.IsEmpty()) {
-			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), depth, true };
+			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true };
 			bool success = DrawTemplate_Section<CharType, WorkingSetType, CheckMaxXY, SnapCoords>(
 				threadContext, workingSet,
 				textureMan, font, flags,
@@ -829,7 +838,7 @@ namespace RenderOverlays
 		Float2 iterator { 0.f, 0.f };
 		ColorB colorOverride = 0x0;
 		while (!text.IsEmpty()) {
-			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), localToWorld, stateSet };
+			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), localToWorld, stateSet };
 			bool success = DrawTemplate_Section<CharType, WorkingSetType, false, false>(
 				threadContext, workingSet,
 				textureMan, font, flags,
@@ -1048,7 +1057,7 @@ namespace RenderOverlays
 
 			auto estimatedQuadCount = instanceCount - firstRenderInstance;
 			if (!begun)
-				workingVertices = WorkingVertexSetFontResource{immediateDrawables, textureMan.GetImmediateDrawableMaterial(), depth, true};
+				workingVertices = WorkingVertexSetFontResource{immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true};
 			workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
 
 			for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
@@ -1105,21 +1114,16 @@ namespace RenderOverlays
 		if (!queryResult)
 			return false;
 
-		unsigned firstRenderInstance = 0;
-		for (; firstRenderInstance != span._glyphCount; ++firstRenderInstance)
-			if (bitmaps[firstRenderInstance]->_width * bitmaps[firstRenderInstance]->_height) break;
-		if (firstRenderInstance == span._glyphCount)
-			return true;
+		assert(bitmaps[0]->_width * bitmaps[0]->_height);	// empty bitmap glyph shouldn't show up
 
-		assert(!(span._flags & DrawTextFlags::Outline));		// not supported in this mode currently
-		assert(!(span._flags & DrawTextFlags::Shadow));
 		auto estimatedQuadCount = span._totalInstanceCount;
 		workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
 
 		auto i = span._instances;
 		for (unsigned c=0; c<span._glyphCount; ++c) {
 			auto& bitmap = *bitmaps[c];
-			if (!bitmap._width || !bitmap._height) continue;
+			assert(bitmap._width && bitmap._height);
+			// if (!bitmap._width || !bitmap._height) continue;
 
 			auto endi = i+span._glyphsInstanceCounts[c];
 			for (;i!=endi; ++i) {
@@ -1141,22 +1145,140 @@ namespace RenderOverlays
 							RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 							FontRenderingManager& textureMan,
 							const Font& font, const FontSpan& span,
-							ColorB color)
+							ColorB color, Float2 offset)
 	{
 		const float depth = 0.f;
 
 		if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), depth, true };
+			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true, offset };
 			bool success = DrawSpanInternal(
 				threadContext, workingSet, textureMan,
 				font, span, color);
 			if (!success) return false;
 			workingSet.Complete();
 		} else {
-			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), depth, true };
+			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true, offset };
 			bool success = DrawSpanInternal(
 				threadContext, workingSet, textureMan,
 				font, span, color);
+			if (!success) return false;
+			workingSet.Complete();
+		}
+		return true;
+	}
+
+	template<typename WorkingSetType>
+		static bool DrawSpanOutlineInternal(
+			RenderCore::IThreadContext& threadContext,
+			WorkingSetType& workingVertices,
+			FontRenderingManager& textureMan,
+			const Font& font, const FontSpan& span,
+			ColorB color, float outlineWidth)
+	{
+		if (!span._glyphCount)
+			return true;
+
+		VLA(const FontRenderingManager::Bitmap*, bitmaps, span._glyphCount);
+		bool queryResult = textureMan.GetBitmaps(bitmaps, threadContext, font, MakeIteratorRange(span._glyphs, &span._glyphs[span._glyphCount]));
+		if (!queryResult)
+			return false;
+
+		assert(bitmaps[0]->_width * bitmaps[0]->_height);	// empty bitmap glyph shouldn't show up
+
+		auto estimatedQuadCount = span._totalInstanceCount;
+		workingVertices.ReserveQuads((unsigned)estimatedQuadCount * 8);
+
+		const float xShift = outlineWidth, yShift = outlineWidth;
+
+		auto i = span._instances;
+		for (unsigned c=0; c<span._glyphCount; ++c) {
+			auto& bitmap = *bitmaps[c];
+			assert(bitmap._width && bitmap._height);
+			// if (!bitmap._width || !bitmap._height) continue;
+
+			auto endi = i+span._glyphsInstanceCounts[c];
+			for (;i!=endi; ++i) {
+				float baseX = i->_xy[0] + bitmap._bitmapOffsetX;
+				float baseY = i->_xy[1] + bitmap._bitmapOffsetY;
+
+				Quad pos = Quad::MinMax(
+					baseX, baseY, 
+					baseX + bitmap._width, baseY + bitmap._height);
+
+				Quad shadowPos;
+				shadowPos = pos;
+				shadowPos.min[0] -= xShift;
+				shadowPos.max[0] -= xShift;
+				shadowPos.min[1] -= yShift;
+				shadowPos.max[1] -= yShift;
+				workingVertices.PushQuad(shadowPos, color, bitmap);
+
+				shadowPos = pos;
+				shadowPos.min[1] -= yShift;
+				shadowPos.max[1] -= yShift;
+				workingVertices.PushQuad(shadowPos, color, bitmap);
+
+				shadowPos = pos;
+				shadowPos.min[0] += xShift;
+				shadowPos.max[0] += xShift;
+				shadowPos.min[1] -= yShift;
+				shadowPos.max[1] -= yShift;
+				workingVertices.PushQuad(shadowPos, color, bitmap);
+
+				shadowPos = pos;
+				shadowPos.min[0] -= xShift;
+				shadowPos.max[0] -= xShift;
+				workingVertices.PushQuad(shadowPos, color, bitmap);
+
+				shadowPos = pos;
+				shadowPos.min[0] += xShift;
+				shadowPos.max[0] += xShift;
+				workingVertices.PushQuad(shadowPos, color, bitmap);
+
+				shadowPos = pos;
+				shadowPos.min[0] -= xShift;
+				shadowPos.max[0] -= xShift;
+				shadowPos.min[1] += yShift;
+				shadowPos.max[1] += yShift;
+				workingVertices.PushQuad(shadowPos, color, bitmap);
+
+				shadowPos = pos;
+				shadowPos.min[1] += yShift;
+				shadowPos.max[1] += yShift;
+				workingVertices.PushQuad(shadowPos, color, bitmap);
+
+				shadowPos = pos;
+				shadowPos.min[0] += xShift;
+				shadowPos.max[0] += xShift;
+				shadowPos.min[1] += yShift;
+				shadowPos.max[1] += yShift;
+				workingVertices.PushQuad(shadowPos, color, bitmap);
+			}
+		}
+
+		return true;
+	}
+
+	bool 		DrawOutline(	RenderCore::IThreadContext& threadContext,
+								RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+								FontRenderingManager& textureMan,
+								const Font& font, const FontSpan& span,
+								ColorB color, float outlineWidth)
+	{
+		const float depth = 0.f;
+
+		if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
+			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true };
+			bool success = DrawSpanOutlineInternal(
+				threadContext, workingSet, textureMan,
+				font, span, color, outlineWidth);
+			if (!success) return false;
+			workingSet.Complete();
+		} else {
+			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true };
+			bool success = DrawSpanOutlineInternal(
+				threadContext, workingSet, textureMan,
+				font, span, color, outlineWidth);
 			if (!success) return false;
 			workingSet.Complete();
 		}
@@ -1183,6 +1305,7 @@ namespace RenderOverlays
 		unsigned _pageWidth, _pageHeight;
 		FontRenderingManager::Mode _mode;
 		RenderCore::Techniques::ImmediateDrawableMaterial _immediateDrawableMaterial;
+		RenderCore::Techniques::RetainedUniformsStream _immediateDrawableUniforms;
 
 		Pimpl(RenderCore::IDevice& device, Mode mode, unsigned pageWidth, unsigned pageHeight, unsigned pageCount)
 		: _pageWidth(pageWidth), _pageHeight(pageHeight)
@@ -1209,7 +1332,7 @@ namespace RenderOverlays
 					}
 
 				_immediateDrawableMaterial = Internal::CreateMaterialForPCT();
-				_immediateDrawableMaterial._uniforms._resourceViews.push_back(_texture->GetSRV());
+				_immediateDrawableUniforms._resourceViews.push_back(_texture->GetSRV());
 
 			} else {
 				auto linearPageSize = _pageWidth * _pageHeight;
@@ -1231,7 +1354,7 @@ namespace RenderOverlays
 				}
 
 				_immediateDrawableMaterial = Internal::CreateMaterialForFontResource();
-				_immediateDrawableMaterial._uniforms._resourceViews.push_back(_texture->GetSRV());
+				_immediateDrawableUniforms._resourceViews.push_back(_texture->GetSRV());
 			}
 		}
 	};
@@ -1874,6 +1997,11 @@ namespace RenderOverlays
 	const RenderCore::Techniques::ImmediateDrawableMaterial& FontRenderingManager::GetImmediateDrawableMaterial()
 	{
 		return _pimpl->_immediateDrawableMaterial;
+	}
+
+	const RenderCore::Techniques::RetainedUniformsStream& FontRenderingManager::GetImmediateDrawableUniforms()
+	{
+		return _pimpl->_immediateDrawableUniforms;
 	}
 
 	const std::shared_ptr<RenderCore::IResource>& FontRenderingManager::GetUnderlyingTextureResource()

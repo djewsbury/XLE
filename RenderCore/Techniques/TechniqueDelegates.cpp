@@ -876,6 +876,11 @@ namespace RenderCore { namespace Techniques
 			mergedTechEntry._selectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
 
 			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+
+			// HACK -- temp
+			if (!shaderPatches.GetOverrideShader(ShaderStage::Geometry).IsEmpty())
+				nascentDesc->_shaders[2] = shaderPatches.GetOverrideShader(ShaderStage::Geometry).AsString();
+
 			return nascentDesc;
 		}
 

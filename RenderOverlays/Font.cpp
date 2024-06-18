@@ -706,6 +706,7 @@ namespace RenderOverlays
 		static_assert(dimof(dividersBreakBefore) == dividers.size());
 		VLA(bool, glyphDividesBefore, chrsToLookupCount);
 		VLA(bool, glyphDividesAfter, chrsToLookupCount);
+		VLA(bool, glyphSuppressDivideAfter, chrsToLookupCount);
 		{
 			auto i = dividers.begin();
 			assert(std::is_sorted(dividers.begin(), dividers.end()));
@@ -717,6 +718,8 @@ namespace RenderOverlays
 				} else {
 					glyphDividesBefore[c] = glyphDividesAfter[c] = false;
 				}
+				// Prevent "divide before" behaviour just before a quote. This is to deal with situations like -- "Something," he said.
+				glyphSuppressDivideAfter[c] = (chrsToLookup[c] == '\"') || (chrsToLookup[c] == '\'');
 			}
 		}
 
@@ -735,7 +738,7 @@ namespace RenderOverlays
 				// We've already processed newlines and font rendering control statements. Just look for word wrap issues here
 				// Some dividers allow us to wrap before, other only after. For example ',' only allows us to wrap after
 				++i;
-				while (i != &instances[instanceCountPostClip] && i->_lineIdx == starti->_lineIdx && !glyphDividesBefore[i->_glyphIdx] && !glyphDividesAfter[(i-1)->_glyphIdx]) ++i;
+				while (i != &instances[instanceCountPostClip] && i->_lineIdx == starti->_lineIdx && !glyphDividesBefore[i->_glyphIdx] && (!glyphDividesAfter[(i-1)->_glyphIdx] || glyphSuppressDivideAfter[i->_glyphIdx])) ++i;
 
 				if ((i-starti) == 1 && !(glyphProps[starti->_glyphIdx]._width * glyphProps[starti->_glyphIdx]._height)) {
 					// Simplified version for the common case of just hitting a whitespace character (don't increase word index for the spaces)
@@ -779,7 +782,10 @@ namespace RenderOverlays
 					xIterator += glyph._xAdvance * xScale;
 					xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
 				}
-				++ctrlBlock._nextWordIndex;
+
+				// attempt to prevent increasing the world index if we come across a word split between multiple spans
+				if (i != &instances[instanceCountPostClip] || glyphDividesAfter[(i-1)->_glyphIdx])
+					++ctrlBlock._nextWordIndex;
 			}
 
 			ctrlBlock._iterator = { x + xIterator, y + yIterator };
@@ -814,7 +820,6 @@ namespace RenderOverlays
 			result._glyphsInstanceCounts[result._glyphCount] = result._totalInstanceCount - startOutInstanceCount;
 			++result._glyphCount;
 		}
-		result._flags = flags;
 		(void)std::remove(result._originalOrdering, ArrayEnd(result._originalOrdering), std::make_pair(0xffffu, 0xffffu));
 		
 		return text._start;
@@ -915,8 +920,15 @@ namespace RenderOverlays
 		auto instanceEnd = Internal::FontSpanOriginalOrderingIterator::End(spans);
 
 		auto i = instancesBegin;
+		unsigned currentLineIdx = 0;
 		while (i != instanceEnd) {
 			auto starti = i;
+
+			if (starti->InstanceExtra()._lineIndex != currentLineIdx) {
+				currentLineIdx = starti->InstanceExtra()._lineIndex;
+				additionalOffset[0] = 0;
+			}
+
 			for (;;) {
 				auto next = i+1;
 				if (next == instanceEnd || next->InstanceExtra()._wordIndex != starti->InstanceExtra()._wordIndex) break;
@@ -927,8 +939,10 @@ namespace RenderOverlays
 			++i;
 
 			auto glyphIdx = lastChr->GlyphIndex();
-			float finalGlyphAdvance = glyphProps[glyphIdx+lastChr.GetSpanIdx()*FontSpan::s_maxInstancesPerSpan]._xAdvance;
-			if ((lastChr->Instance()._xy[0] + finalGlyphAdvance + additionalOffset[0]) <= maxX) {
+			// finalGlyphWidth calculation must agree with our calculations for _maxX in CalculateFontSpans_Internal, otherwise will we get excessive wrapping
+			// float finalGlyphWidth = glyphProps[glyphIdx+lastChr.GetSpanIdx()*FontSpan::s_maxInstancesPerSpan]._xAdvance;
+			float finalGlyphWidth = glyphProps[glyphIdx+lastChr.GetSpanIdx()*FontSpan::s_maxInstancesPerSpan]._bitmapOffsetX+glyphProps[glyphIdx+lastChr.GetSpanIdx()*FontSpan::s_maxInstancesPerSpan]._width;
+			if ((lastChr->Instance()._xy[0] + finalGlyphWidth + additionalOffset[0]) <= maxX) {
 				// fits in
 				for (auto q=starti; q!=i; ++q) {
 					q->Instance()._xy += additionalOffset;
@@ -965,6 +979,7 @@ namespace RenderOverlays
 			result.emplace_back();
 			auto adv = CalculateFontSpans_Internal<true, false>(result.back(), ctrlBlock, font, flags, text, maxY);
 			if (!result.back()._glyphCount) {
+				text._start = adv;		// still advance this, because we might have parsed a control word at the end of the string
 				result.pop_back();
 				break;
 			}
@@ -989,7 +1004,7 @@ namespace RenderOverlays
 
 		auto instancesBegin = Internal::FontSpanOriginalOrderingIterator::Begin(spans);
 		auto instanceEnd = Internal::FontSpanOriginalOrderingIterator::End(spans);
-		const float maxJustify = maxX * 0.33f;
+		const float maxJustify = maxX * 0.2f;
 
 		auto i = instancesBegin;
 		while (i != instanceEnd) {

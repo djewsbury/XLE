@@ -159,5 +159,5 @@ namespace RenderCore { namespace Metal_Vulkan
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    std::shared_ptr<ILowLevelCompiler> CreateLowLevelShaderCompiler(IDevice& device, const VulkanCompilerConfiguration& cfg);
+    std::shared_ptr<ILowLevelCompiler> CreateLowLevelShaderCompiler(IDevice& device, const VulkanCompilerConfiguration& cfg, bool realCompiler);
 }}

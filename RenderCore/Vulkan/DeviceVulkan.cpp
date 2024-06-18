@@ -1394,6 +1394,14 @@ namespace RenderCore { namespace ImplVulkan
 				appender->pNext = (VkBaseInStructure*)&float16Features;
 				appender = (VkBaseInStructure*)&float16Features;
 			}
+
+			VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures shaderSubgroupFeatures = {};
+			if (xleFeatures._shaderFloat16) {
+				shaderSubgroupFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES;
+				shaderSubgroupFeatures.shaderSubgroupExtendedTypes = true;
+				appender->pNext = (VkBaseInStructure*)&shaderSubgroupFeatures;
+				appender = (VkBaseInStructure*)&shaderSubgroupFeatures;
+			}
 		#endif
 
 		// texture compression types
@@ -1445,6 +1453,9 @@ namespace RenderCore { namespace ImplVulkan
 		if (xleFeatures._viewInstancingRenderPasses)
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME; 	// promoted to Vulkan 1.2, HLSL compiler likes to require it
 
+		if (xleFeatures._vulkanRenderPass2)
+			deviceExtensions[deviceExtensionCount++] = VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME; 	// promoted to Vulkan 1.2
+
 		if (enableDebugLayer)
 			deviceLayers[deviceLayerCount++] = "VK_LAYER_KHRONOS_validation";
 
@@ -1456,7 +1467,7 @@ namespace RenderCore { namespace ImplVulkan
 		VkDevice rawResult = nullptr;
 		auto res = vkCreateDevice(physDev._dev, &device_info, Metal_Vulkan::g_allocationCallbacks, &rawResult);
 		if (res != VK_SUCCESS)
-			Throw(VulkanAPIFailure(res, "Failure while creating Vulkan logical device. You must have an up-to-date Vulkan driver installed."));
+			Throw(VulkanAPIFailure(res, "Failure while creating Vulkan logical device. You must have a reasonably recent GPU driver installed, ideally with Vulkan 1.2 support. Typically this can be solved by updating your GPU drivers (using either Windows Update or a laptop manufacturer's utility). However, some older windows 10-only hardware -- such as older Surface tablets -- maybe locked to older versions of Vulkan. In some cases, forcing this app onto your discrete GPU can help."));
 		return VulkanSharedPtr<VkDevice>(
 			rawResult,
 			[](VkDevice dev) { vkDestroyDevice(dev, Metal_Vulkan::g_allocationCallbacks); });
@@ -1603,12 +1614,12 @@ namespace RenderCore { namespace ImplVulkan
 	{
 		if (configurationIdx >= _physicalDevices.size())
 			Throw(std::runtime_error("Invalid configuration index"));
-		return std::make_shared<Device>(_instance, _physicalDevices[configurationIdx], features, _features._debugValidation);
+		return std::make_shared<Device>(_instance, _physicalDevices[configurationIdx], features, _features);
 	}
 
 	std::shared_ptr<IDevice>    APIInstance::CreateDevice(VkPhysicalDevice physDev, unsigned renderingQueueFamily, const DeviceFeatures& features)
 	{
-		return std::make_shared<Device>(_instance, SelectedPhysicalDevice{physDev, renderingQueueFamily}, features, _features._debugValidation);
+		return std::make_shared<Device>(_instance, SelectedPhysicalDevice{physDev, renderingQueueFamily}, features, _features);
 	}
 
 	unsigned                    APIInstance::GetDeviceConfigurationCount()
@@ -1666,6 +1677,7 @@ namespace RenderCore { namespace ImplVulkan
 		APPEND_STRUCT(VkPhysicalDeviceTransformFeedbackFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TRANSFORM_FEEDBACK_FEATURES_EXT);
 		APPEND_STRUCT(VkPhysicalDeviceTextureCompressionASTCHDRFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES_EXT);	// brought into vk1.3 core
 		APPEND_STRUCT(VkPhysicalDeviceShaderFloat16Int8Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES);		// (part of vk1.2 core)
+		APPEND_STRUCT(VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES);		// (part of vk1.2 core)
 		APPEND_STRUCT(VkPhysicalDeviceLineRasterizationFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT);		// (part of vk1.1 core)
 
 		#undef APPEND_STRUCT
@@ -1680,6 +1692,7 @@ namespace RenderCore { namespace ImplVulkan
 		bool hasTimelineSemaphoreExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasShaderViewportIndex = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasLineRasterizationExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_LINE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasRenderPass2Ext = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME); }) != ext._extensions.end();
 
 		DeviceFeatures result;
 
@@ -1715,7 +1728,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._shaderImageGatherExtended = features.features.shaderImageGatherExtended;
 		result._pixelShaderStoresAndAtomics = features.features.fragmentStoresAndAtomics;
 		result._vertexGeoTessellationShaderStoresAndAtomics = features.features.vertexPipelineStoresAndAtomics;
-		result._shaderFloat16 = VkPhysicalDeviceShaderFloat16Int8Features_inst.shaderFloat16;
+		result._shaderFloat16 = VkPhysicalDeviceShaderFloat16Int8Features_inst.shaderFloat16 && VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures_inst.shaderSubgroupExtendedTypes;		// we don't actually enable any float16 types unless shader subgroups can also support them
 
 		// texture compression types
 		result._textureCompressionETC2 = features.features.textureCompressionETC2;
@@ -1729,6 +1742,8 @@ namespace RenderCore { namespace ImplVulkan
 		// queues
 		result._dedicatedTransferQueue = _physicalDevices[configurationIdx]._dedicatedTransferQueueFamily != ~0u;
 		result._dedicatedComputeQueue = _physicalDevices[configurationIdx]._dedicatedComputeQueueFamily != ~0u;
+
+		result._vulkanRenderPass2 = (props.properties.apiVersion >= VK_API_VERSION_1_2) || hasRenderPass2Ext;
 
 		return result;
 	}
@@ -2002,14 +2017,15 @@ namespace RenderCore { namespace ImplVulkan
 		VulkanSharedPtr<VkInstance> instance,
     	SelectedPhysicalDevice physDev,
 		const DeviceFeatures& xleFeatures,
-		bool enableDebugLayer)
+		const APIFeatures& apiFeatures)
 	: _instance(std::move(instance))
 	, _physDev(std::move(physDev))
+	, _allowRealShaderCompiler(apiFeatures._onDemandShaderCompile)
     {
 		_initializationThread = std::this_thread::get_id();
 
-		_underlying = CreateUnderlyingDevice(_physDev, xleFeatures, enableDebugLayer);
-		auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get());
+		_underlying = CreateUnderlyingDevice(_physDev, xleFeatures, apiFeatures._debugValidation);
+		auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get(), xleFeatures);
 		_globalsContainer = std::make_shared<Metal_Vulkan::GlobalsContainer>();
 		_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, xleFeatures, extensionFunctions};
 		auto& objFactory = _globalsContainer->_objectFactory;
@@ -2345,7 +2361,7 @@ namespace RenderCore { namespace ImplVulkan
 	std::shared_ptr<ILowLevelCompiler>		Device::CreateShaderCompiler(const VulkanCompilerConfiguration& cfg)
 	{
 		Metal_Vulkan::Internal::VulkanGlobalsTemp::GetInstance()._legacyRegisterBindings = cfg._legacyBindings;
-		return Metal_Vulkan::CreateLowLevelShaderCompiler(*this, cfg);
+		return Metal_Vulkan::CreateLowLevelShaderCompiler(*this, cfg, _allowRealShaderCompiler);
 	}
 
 	std::shared_ptr<Metal_Vulkan::IAsyncTracker> Device::GetGraphicsQueueAsyncTracker()
@@ -2674,7 +2690,7 @@ namespace RenderCore { namespace ImplVulkan
     PresentationChain::PresentationChain(
 		std::shared_ptr<Device> device,
 		Metal_Vulkan::ObjectFactory& factory,
-        VulkanSharedPtr<VkSurfaceKHR> surface, 
+        VulkanSharedPtr<VkSurfaceKHR> surface,
 		const PresentationChainDesc& requestDesc,
         const void* platformValue)
     : _surface(std::move(surface))

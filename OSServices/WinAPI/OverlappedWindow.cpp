@@ -83,7 +83,7 @@ namespace OSServices
 
 		std::shared_ptr<OSRunLoop_BasicTimer> _runLoop;
         Signal<SystemMessageVariant&&> _onMessageImmediate;
-        std::queue<SystemMessageVariant> _systemMessages;
+        std::deque<SystemMessageVariant> _systemMessages;
 
         std::shared_ptr<DisplaySettingsManager> _displaySettingsManager;
         DisplaySettingsManager::MonitorId _capturedMonitorId = ~0u;
@@ -97,6 +97,10 @@ namespace OSServices
     {
         switch (msg) {
         case WM_CLOSE:
+            ::DestroyWindow(hwnd);
+            break;
+
+        case WM_DESTROY:
             PostQuitMessage(0);
             break;
 
@@ -109,7 +113,7 @@ namespace OSServices
                 auto pimpl = (Window::Pimpl*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
                 if (pimpl && pimpl->_hwnd == hwnd) {
                     pimpl->_onMessageImmediate.Invoke(SystemDisplayChange{});
-                    pimpl->_systemMessages.emplace(SystemDisplayChange{});
+                    pimpl->_systemMessages.emplace_back(SystemDisplayChange{});
 
                     // If we are capturing a monitor, we should realign the window with the new desktop geometry
                     if (pimpl->_displaySettingsManager && pimpl->_capturedMonitorId != ~0u) {
@@ -235,14 +239,21 @@ namespace OSServices
                         // we could also use WM_WINDOWPOSCHANGED, but that adds some extra complcation
                         // it's harder to tell when the app is minimized
                         // & we just get more spam with that message
+
+                        // first, remove any other WindowResize messages that have been queued
+                        auto i = std::remove_if(
+                            pimpl->_systemMessages.begin(), pimpl->_systemMessages.end(), 
+                            [](auto& v) { return std::holds_alternative<WindowResize>(v); });
+                        pimpl->_systemMessages.erase(i, pimpl->_systemMessages.end());
+
                         signed newWidth = ((int)(short)LOWORD(lparam)), newHeight = ((int)(short)HIWORD(lparam));
-                        pimpl->_systemMessages.emplace(WindowResize{newWidth, newHeight});
+                        pimpl->_systemMessages.emplace_back(WindowResize{newWidth, newHeight});
                     }
                     break;
                 }
 
                 if (generatedSnapshot)
-                    pimpl->_systemMessages.emplace(*generatedSnapshot);
+                    pimpl->_systemMessages.emplace_back(*generatedSnapshot);
 
                 if (suppressDefaultHandler)
                     return true;
@@ -266,6 +277,13 @@ namespace OSServices
         ::ShowWindow(_pimpl->_hwnd, newState ? SW_SHOWNORMAL : SW_HIDE);
     }
 
+    void Window::Close()
+    {
+        // We can either post a WM_CLOSE (emulating click the window X button)
+        // or call ::DestroyWindow(_pimpl->_hwnd) directly.
+        ::PostMessageA(_pimpl->_hwnd, WM_CLOSE, 0, 0);
+    }
+
     static constexpr LONG s_styleOverlapped = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME;
     static constexpr LONG s_styleExOverlapped = 0;
 
@@ -283,9 +301,9 @@ namespace OSServices
         _pimpl->_capturedMonitorId = monitorId;
 
         ::SetLastError(0);
-        auto hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_STYLE, s_styleExFullscreen);
+        auto hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_STYLE, s_styleFullscreen);
         assert(hres != 0 || GetLastError() == 0);
-        hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_EXSTYLE, s_styleFullscreen);
+        hres = ::SetWindowLongPtrA(_pimpl->_hwnd, GWL_EXSTYLE, s_styleExFullscreen);
         assert(hres != 0 || GetLastError() == 0);
 
         // Note that we have to call ShowWindow if we're expecting the window to be visible; otherwise we
@@ -452,7 +470,7 @@ namespace OSServices
         MSG msg;
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
-                window._pimpl->_systemMessages.emplace(ShutdownRequest{});
+                window._pimpl->_systemMessages.emplace_back(ShutdownRequest{});
                 continue;
             }
             TranslateMessage(&msg);
@@ -461,7 +479,7 @@ namespace OSServices
 
         if (!window._pimpl->_systemMessages.empty()) {
             auto result = std::move(window._pimpl->_systemMessages.front());
-            window._pimpl->_systemMessages.pop();
+            window._pimpl->_systemMessages.pop_front();
             return result;
         }
 

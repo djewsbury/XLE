@@ -22,9 +22,9 @@
 #include <sstream>
 #include <map>
 
-// #if defined(_DEBUG)
-//	#define WRITE_METRICS
-// #endif
+#if defined(_DEBUG)
+#define WRITE_METRICS
+#endif
 
 using namespace Utility::Literals;
 
@@ -792,6 +792,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 
 		serializer.PushSizeValueAtRecall(recall);
+
+		// prevent zero-sized large resources block
+		if (largeResourcesBlock->empty())
+			largeResourcesBlock->resize(8, 0);
 
 		auto scaffoldBlock = ::Assets::AsBlob(serializer);
 		#if defined(WRITE_METRICS)

@@ -77,10 +77,14 @@ namespace RenderCore
 	class UniformsStreamInterface
 	{
 	public:
-		void BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> _cbElements = {});
-		void BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> _cbElements = {});
-		void BindSampler(unsigned slot, uint64_t hashName);
-		void BindFixedDescriptorSet(unsigned slot, uint64_t hashName, const DescriptorSetSignature* signature = nullptr);
+		constexpr UniformsStreamInterface& BindResourceView(unsigned slot, uint64_t hashName);
+		constexpr UniformsStreamInterface& BindImmediateData(unsigned slot, uint64_t hashName);
+		constexpr UniformsStreamInterface& BindSampler(unsigned slot, uint64_t hashName);
+		constexpr UniformsStreamInterface& BindFixedDescriptorSet(unsigned slot, uint64_t hashName);
+		
+		UniformsStreamInterface& BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*>);
+		UniformsStreamInterface& BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*>);
+		UniformsStreamInterface& BindFixedDescriptorSet(unsigned slot, uint64_t hashName, const DescriptorSetSignature*);
 
 		struct ExplicitCBLayout
 		{
@@ -254,4 +258,47 @@ namespace RenderCore
 	template<typename T0, typename T1> ImmediateDataStream::ImmediateDataStream(const T0& b0, const T1& b1) : ImmediateDataStream(MakeOpaqueIteratorRange(b0), MakeOpaqueIteratorRange(b1)) {}
 	template<typename T0, typename T1, typename T2> ImmediateDataStream::ImmediateDataStream(const T0& b0, const T1& b1, const T2& b2) : ImmediateDataStream(MakeOpaqueIteratorRange(b0), MakeOpaqueIteratorRange(b1), MakeOpaqueIteratorRange(b2)) {}
 	template<typename T0, typename T1, typename T2, typename T3> ImmediateDataStream::ImmediateDataStream(const T0& b0, const T1& b1, const T2& b2, const T3& b3) : ImmediateDataStream(MakeOpaqueIteratorRange(b0), MakeOpaqueIteratorRange(b1), MakeOpaqueIteratorRange(b2), MakeOpaqueIteratorRange(b3)) {}
+
+
+	inline constexpr UniformsStreamInterface& UniformsStreamInterface::BindResourceView(unsigned slot, uint64_t hashName)
+	{
+		if (_resourceViewBindings.size() <= slot)
+			_resourceViewBindings.resize(slot+1);
+
+		_resourceViewBindings[slot] = hashName;
+		_hash = ~0ull;
+		return *this;
+	}
+
+	inline constexpr UniformsStreamInterface& UniformsStreamInterface::BindImmediateData(unsigned slot, uint64_t hashName)
+	{
+		if (_immediateDataBindings.size() <= slot)
+			_immediateDataBindings.resize(slot+1);
+
+		_immediateDataBindings[slot] = hashName;
+		_hash = ~0ull;
+		return *this;
+	}
+
+	inline constexpr UniformsStreamInterface& UniformsStreamInterface::BindSampler(unsigned slot, uint64_t hashName)
+	{
+		if (_samplerBindings.size() <= slot)
+			_samplerBindings.resize(slot+1);
+		_samplerBindings[slot] = hashName;
+		_hash = ~0ull;
+		return *this;
+	}
+
+	inline constexpr UniformsStreamInterface& UniformsStreamInterface::BindFixedDescriptorSet(unsigned slot, uint64_t hashName)
+	{
+		if (_fixedDescriptorSetBindings.size() <= slot)
+			_fixedDescriptorSetBindings.resize(slot+1);
+
+		_fixedDescriptorSetBindings[slot] = hashName;
+		_hash = ~0ull;
+		return *this;
+	}
+
+	inline UniformsStreamInterface::UniformsStreamInterface() : _hash(0) {}
+	inline UniformsStreamInterface::~UniformsStreamInterface() {}
 }

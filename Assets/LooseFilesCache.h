@@ -35,12 +35,15 @@ namespace Assets
 
 		LooseFilesStorage(
 			std::shared_ptr<IFileSystem> filesystem,
-			StringSection<> baseDirectory, const OSServices::LibVersionDesc& compilerVersionInfo);
+			StringSection<> baseDirectory, StringSection<> fsMountPt, const OSServices::LibVersionDesc& compilerVersionInfo,
+			bool checkDepVals);
 		~LooseFilesStorage();
 	private:
 		std::string _baseDirectory;
 		OSServices::LibVersionDesc _compilerVersionInfo;
 		std::shared_ptr<IFileSystem> _filesystem;
+		std::string _fsMountPt;
+		bool _checkDepVals;
 		std::string MakeProductsFileName(StringSection<>);
 	};
 }

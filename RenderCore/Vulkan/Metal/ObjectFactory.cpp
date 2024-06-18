@@ -138,7 +138,22 @@ namespace RenderCore { namespace Metal_Vulkan
     {
         auto d = _destruction.get();
         VkRenderPass rawPtr = nullptr;
-        auto res = vkCreateRenderPass2(_device.get(), &createInfo, g_allocationCallbacks, &rawPtr);
+
+        if (!_extensionFunctions->_createRenderPass2) Throw(std::runtime_error("Error attempting to call vkCreateRenderPass2KHR"));
+        auto res = _extensionFunctions->_createRenderPass2(_device.get(), &createInfo, g_allocationCallbacks, &rawPtr);
+        auto renderPass = VulkanUniquePtr<VkRenderPass>(
+            rawPtr,
+            [d](VkRenderPass pass) { d->Destroy(pass); });
+        if (res != VK_SUCCESS)
+            Throw(VulkanAPIFailure(res, "Failure while creating render pass"));
+        return std::move(renderPass);
+    }
+
+    VulkanUniquePtr<VkRenderPass> ObjectFactory::CreateRenderPass(const VkRenderPassCreateInfo& createInfo) const
+    {
+        auto d = _destruction.get();
+        VkRenderPass rawPtr = nullptr;
+        auto res = vkCreateRenderPass(_device.get(), &createInfo, g_allocationCallbacks, &rawPtr);
         auto renderPass = VulkanUniquePtr<VkRenderPass>(
             rawPtr,
             [d](VkRenderPass pass) { d->Destroy(pass); });

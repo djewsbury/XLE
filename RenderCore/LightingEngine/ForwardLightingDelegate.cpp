@@ -91,45 +91,11 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
 	}
 
-	template <int Base>
-		inline float CalculateHaltonNumber(unsigned index)
-	{
-		// See https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler
-		// AMD's capsaicin implementation does not seem perfect. Instead, let's take some cures from the pbr-book
-		// Note not bothering with the reverse bit trick for base 2
-		float reciprocalBaseN = 1.0f, result = 0.0f;
-		float reciprocalBase = 1.f / float(Base);
-		while (index) {
-			auto next = index / Base;
-			auto digit = index - next * Base;
-			result = result * Base + digit;
-			reciprocalBaseN *= reciprocalBase;
-			index = next;
-		}
-		return result * reciprocalBaseN;
-	}
 
 	void ForwardLightingCaptures::SetupCameraJitter(Techniques::ParsingContext& parsingContext, const FrameToFrameProperties& f2fp)
 	{
-		// Apply camera jitter for temporal anti-aliasing
-		// following common implementation of TAA, we'll jitter using a Halton sequence.
-		if (_taaOperator) {
-			auto viewport = UInt2 { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height };
-			unsigned jitteringIndex = f2fp._frameIdx % (32*27);		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
-			float jitterX = (2.0f * CalculateHaltonNumber<2>(jitteringIndex) - 1.0f) / float(viewport[0]);
-			float jitterY = (2.0f * CalculateHaltonNumber<3>(jitteringIndex) - 1.0f) / float(viewport[1]);
-			auto& projDesc = parsingContext.GetProjectionDesc();
-			projDesc._cameraToProjection(0, 2) = jitterX;
-			projDesc._cameraToProjection(1, 2) = jitterY;
-			projDesc._worldToProjection = Combine(InvertOrthonormalTransform(projDesc._cameraToWorld), projDesc._cameraToProjection);
-
-			// We apply the same jitter to the "prev" camera matrix because otherwise still things would come out with motion
-			// equal to the camera jitter, which creates a kind of continuous bobbing
-			auto& prevProjDesc = parsingContext.GetPrevProjectionDesc();
-			prevProjDesc._cameraToProjection(0, 2) = jitterX;
-			prevProjDesc._cameraToProjection(1, 2) = jitterY;
-			prevProjDesc._worldToProjection = Combine(InvertOrthonormalTransform(prevProjDesc._cameraToWorld), prevProjDesc._cameraToProjection);
-		}
+		if (_taaOperator)
+			ApplyTAACameraJitter(parsingContext, f2fp);
 	}
 
 	void ForwardLightingCaptures::ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
@@ -151,17 +117,8 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler->ClearPreparedShadows();
 
 		// Remove TAA jitter again, because we've applied the temporal smoothing
-		if (_taaOperator) {
-			auto& projDesc = parsingContext.GetProjectionDesc();
-			projDesc._cameraToProjection(0, 2) = 0;
-			projDesc._cameraToProjection(1, 2) = 0;
-			projDesc._worldToProjection = Combine(InvertOrthonormalTransform(projDesc._cameraToWorld), projDesc._cameraToProjection);
-
-			auto& prevProjDesc = parsingContext.GetPrevProjectionDesc();
-			prevProjDesc._cameraToProjection(0, 2) = 0;
-			prevProjDesc._cameraToProjection(1, 2) = 0;
-			prevProjDesc._worldToProjection = Combine(InvertOrthonormalTransform(prevProjDesc._cameraToWorld), prevProjDesc._cameraToProjection);
-		}
+		if (_taaOperator)
+			RemoveTAACameraJitter(parsingContext);
 	}
 
 	OnSkyTextureUpdateFn ForwardLightingCaptures::MakeOnSkyTextureUpdate()
@@ -729,8 +686,9 @@ namespace RenderCore { namespace LightingEngine
 						captures->_postProcessOperator = std::make_shared<PostProcessOperator>(pipelinePool, *digest._postProcess);
 
 					ToneMapIntegrationParams toneMapIntegrationParams;
-					toneMapIntegrationParams._readFromAAOutput = digest._taa.has_value();
-					toneMapIntegrationParams._outputToPostProcessing = digest._postProcess.has_value();
+					toneMapIntegrationParams._inputAttachment = digest._taa.has_value() ? "AAOutput"_h : Techniques::AttachmentSemantics::ColorHDR;
+					toneMapIntegrationParams._outputAttachment = digest._postProcess.has_value() ? "PostProcessInput"_h : Techniques::AttachmentSemantics::ColorLDR;
+					toneMapIntegrationParams._preferPixelShaderPath = !digest._taa.has_value() && !digest._postProcess.has_value();
 					if (digest._tonemapAces) {
 						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces, toneMapIntegrationParams);
 					} else {

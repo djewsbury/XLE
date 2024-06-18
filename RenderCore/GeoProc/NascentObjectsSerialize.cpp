@@ -11,9 +11,9 @@
 #include "../Assets/NascentChunk.h"
 #include <sstream>
 
-// #if defined(_DEBUG)
-// 	#define WRITE_METRICS
-// #endif
+#if defined(_DEBUG)
+	#define WRITE_METRICS
+#endif
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {

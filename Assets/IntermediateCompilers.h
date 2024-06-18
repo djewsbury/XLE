@@ -19,8 +19,8 @@ namespace Assets
 {
 	class ICompileOperation;
 	class IIntermediateCompileMarker;
+	class IIntermediatesStore;
 	class InitializerPack;
-	class IntermediatesStore;
 	class DependencyValidation;
 	struct OperationContextHelper;
 
@@ -84,7 +84,7 @@ namespace Assets
 		virtual ~IIntermediateCompilers() = default;
 	};
 
-	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(std::shared_ptr<IntermediatesStore> store);
+	std::shared_ptr<IIntermediateCompilers> CreateIntermediateCompilers(std::shared_ptr<IIntermediatesStore> store);
 
 	class CompilerRegistration
 	{
@@ -96,8 +96,8 @@ namespace Assets
 			const std::string& name,
 			const std::string& shortName,
 			OSServices::LibVersionDesc srcVersion,
-			const DependencyValidation& compilerDepVal,
-			IIntermediateCompilers::CompileOperationDelegate&& delegate,
+			const DependencyValidation& compilerDepVal = {},
+			IIntermediateCompilers::CompileOperationDelegate&& delegate = {},
 			IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate = {});
 		CompilerRegistration(
 			IIntermediateCompilers& compilers,

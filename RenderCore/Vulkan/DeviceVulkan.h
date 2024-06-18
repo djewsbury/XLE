@@ -237,7 +237,7 @@ namespace RenderCore { namespace ImplVulkan
             VulkanSharedPtr<VkInstance> instance,
             SelectedPhysicalDevice physDev,
             const DeviceFeatures& xleFeatures,
-            bool enableDebugLayer);
+            const APIFeatures& apiFeatures);
         ~Device();
     protected:
 		VulkanSharedPtr<VkInstance>         _instance;
@@ -252,6 +252,7 @@ namespace RenderCore { namespace ImplVulkan
 
         std::shared_ptr<Metal_Vulkan::IDestructionQueue> _destrQueue;
 		DeviceLimits _limits;
+        bool _allowRealShaderCompiler = false;
     };
 
 ////////////////////////////////////////////////////////////////////////////////

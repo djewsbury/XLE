@@ -120,7 +120,10 @@ namespace RenderCore { namespace Techniques
 				assert(drawable._pipeline);
 				if (drawable._pipeline != currentPipelineAccelerator) {
 					auto* pipeline = TryGetPipeline(*drawable._pipeline, sequencerConfig, acceleratorVisibilityId);
-					if (expect_evaluation(!pipeline, false)) { somethingPending = true; continue; }
+					if (expect_evaluation(!pipeline, false)) { 
+						somethingPending = true;
+						continue;
+					}
 
 					assert(pipeline->_metalPipeline);
 					currentPipeline = pipeline;

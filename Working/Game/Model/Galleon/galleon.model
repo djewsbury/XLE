@@ -1,7 +1,25 @@
 RawGeoRules=~
 	*=~
+		MergeDuplicateVertices=true
+		IncludeAttributes=~
+			NORMAL;TEXTANGENT
 		ExcludeAttributes=~
 			COLOR
+
+CommandStreams=~
+	0; adjacency
+
+SkeletonRules=~
+	*=~
+		PreserveAllParameters=false
+		PreserveAllOutputs=false
+		BakeStaticTransforms=true
+		Optimize=true
+		PreserveParameters=~
+		PreserveOutputs=~
+
+Material=~
+	AutoProcessTextures=true
 
 Inherit=~
 	../common.model:Default

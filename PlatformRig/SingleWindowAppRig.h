@@ -76,6 +76,7 @@ namespace PlatformRig
 		MsgVariant Pump();
 
 		void ShowWindow(bool newState);
+		void CloseWindow();
 		std::optional<OnRenderTargetUpdate> GetLastRenderTargets();
 
 		std::shared_ptr<std::fstream> _appLogFile;
@@ -146,7 +147,12 @@ namespace PlatformRig
 			XLEResType _xleResType = XLEResType::XPak;
 			IteratorRange<const void*> _xleResEmbeddedData;
 			bool _createAppLogFile = false;
-			std::string _applLogWelcomeMsg;
+			std::string _appLogWelcomeMsg;
+			RenderCore::APIFeatures _renderAPIFeatures = RenderCore::DefaultAPIFeatures();
+		};
+
+		struct ConfigureAssetCompilers
+		{
 		};
 
 		struct ConfigureRenderDevice
@@ -168,7 +174,7 @@ namespace PlatformRig
 		{
 		};
 
-		using MsgVariant = std::variant<ConfigureGlobalServices*, ConfigureRenderDevice*, ConfigureWindowInitialState*, StartupFinished>;
+		using MsgVariant = std::variant<ConfigureGlobalServices*, ConfigureAssetCompilers*, ConfigureRenderDevice*, ConfigureWindowInitialState*, StartupFinished>;
 		MsgVariant Pump();
 
 		MessageLoop ShowWindowAndBeginMessageLoop();
@@ -197,10 +203,11 @@ namespace PlatformRig
 		StartupLoop& operator=(const StartupLoop&) = delete;
 
 	private:
-		enum class Phase { Initial, PostConfigureGlobalServices, PostConfigureRenderDevice, PostConfigureWindowInitialState, PostConfigureDevelopmentFeatures, PostConfigureFrameRigDisplay, Finished };
+		enum class Phase { Initial, PostConfigureGlobalServices, PostConfigureAssetCompilers, PostConfigureRenderDevice, PostConfigureWindowInitialState, PostConfigureDevelopmentFeatures, PostConfigureFrameRigDisplay, Finished };
 		Phase _phase = Phase::Initial;
 
 		ConfigureGlobalServices _configGlobalServices;
+		ConfigureAssetCompilers _configAssetCompilers;
 		ConfigureRenderDevice _configRenderDevice;
 		ConfigureWindowInitialState _configWindowInitialState;
 	};

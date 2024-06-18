@@ -58,6 +58,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> GetMaterialDescriptorSetPtr() const { return _descriptorSet; }
 			const ShaderSourceParser::SelectorFilteringRules& GetSelectorFilteringRules(unsigned filteringRulesId) const;
 			const std::string& GetPreconfigurationFileName() const { return _preconfiguration; }
+			StringSection<> GetOverrideShader(ShaderStage stage) const { return (unsigned(stage) < dimof(_overrideShaders)) ? MakeStringSection(_overrideShaders[unsigned(stage)]) : StringSection<>{}; }
 
 			bool HasPatchType(uint64_t implementing) const;
 
@@ -67,6 +68,7 @@ namespace RenderCore { namespace Techniques
 			unsigned _materialDescriptorSetSlotIndex;
 			std::vector<ShaderSourceParser::SelectorFilteringRules> _filteringRules;
 			std::string _preconfiguration;
+			std::string _overrideShaders[3];
 
 			friend class CompiledShaderPatchCollection;
 		};

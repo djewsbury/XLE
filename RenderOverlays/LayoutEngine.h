@@ -120,8 +120,8 @@ namespace RenderOverlays
 	class GuidStackHelper
 	{
 	public:
-		uint64_t MakeGuid(StringSection<> name) { return Hash64(name, _guidStack.top()); }
-		uint64_t MakeGuid(StringSection<> name, StringSection<> concatenation) { return Hash64(name, Hash64(concatenation, _guidStack.top())); }
+		uint64_t MakeGuid(StringSection<> name) { return MakeGuid(Hash64(name)); }
+		uint64_t MakeGuid(StringSection<> name, StringSection<> concatenation) { return MakeGuid(Hash64(name, Hash64(concatenation))); }
 		uint64_t MakeGuid(uint64_t guid) { return HashCombine(guid, _guidStack.top()); }
 		uint64_t MakeGuid() { return IntegerHash64(_incrementingId++) ^ _guidStack.top(); }
 
@@ -169,6 +169,7 @@ namespace RenderOverlays
 
 		void PushRoot(YGNodeRef, Rect containerSize);
 		GuidStackHelper& GuidStack() { return _guidStack; }
+		Rect GetRootSize() const { assert(!_roots.empty()); return _roots.back().second; }
 
 		LayoutEngine();
 		~LayoutEngine();

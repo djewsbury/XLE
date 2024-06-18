@@ -20,6 +20,7 @@ struct CmdLine
 	struct Input
 	{
 		std::string _srcFolder = "./";
+		std::string _inputList;
 		std::string _pre;
 	};
 	std::string _output = "out.pak";
@@ -34,7 +35,9 @@ struct CmdLine
 		for (;;) {
 			if (fmttr.TryKeyedItem(keyname)) {
 				if (XlEqStringI(keyname, "i"))
-					_inputs.emplace_back(Input{Formatters::RequireStringValue(fmttr).AsString(), pre});
+					_inputs.emplace_back(Input{Formatters::RequireStringValue(fmttr).AsString(), {}, pre});
+				else if (XlEqStringI(keyname, "r"))
+					_inputs.emplace_back(Input{{}, Formatters::RequireStringValue(fmttr).AsString(), pre});
 				else if (XlEqStringI(keyname, "o"))
 					_output = Formatters::RequireStringValue(fmttr);
 				else if (XlEqStringI(keyname, "pre"))
@@ -48,6 +51,16 @@ struct CmdLine
 		}
 	}
 };
+
+template<typename Fmttr>
+	static std::vector<std::pair<std::string, std::string>> DeserializeFileList(Fmttr& fmttr)
+{
+	std::vector<std::pair<std::string, std::string>> result;
+	StringSection<> keyname;
+	while (fmttr.TryKeyedItem(keyname))
+		result.emplace_back(keyname.AsString(), Formatters::RequireStringValue(fmttr).AsString());
+	return result;
+}
 
 int main(int argc, char** argv)
 {
@@ -75,27 +88,46 @@ int main(int argc, char** argv)
 
 		// Collect up the list of input files and start generating the string and hash tables
 		for (auto input:cmdLine._inputs) {
-			auto root = std::filesystem::path(input._srcFolder);
-			auto baseInSrc = MakeSplitPath(root.lexically_normal().string()).Rebuild(s_filenameRules);
-			auto baseInSrcSplit = MakeSplitPath(baseInSrc);
+			if (!input._srcFolder.empty()) {
+				auto root = std::filesystem::path(input._srcFolder);
+				auto baseInSrc = MakeSplitPath(root.lexically_normal().string()).Rebuild(s_filenameRules);
+				auto baseInSrcSplit = MakeSplitPath(baseInSrc);
 
-			for (const auto& entry:std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::follow_directory_symlink)) {
-				if (!entry.is_regular_file()) continue;
-				auto fn = entry.path().lexically_normal().string();
-				if (XlEqStringI(MakeStringSection(fn), MakeStringSection(cmdLine._output))) continue;
+				for (const auto& entry:std::filesystem::recursive_directory_iterator(root, std::filesystem::directory_options::follow_directory_symlink)) {
+					if (!entry.is_regular_file()) continue;
+					auto fn = entry.path().lexically_normal().string();
+					if (XlEqStringI(MakeStringSection(fn), MakeStringSection(cmdLine._output))) continue;
 
-				// skip files that begin with '.'
-				auto justfn = entry.path().filename();
-				if (justfn.empty() || *justfn.string().begin() == '.') continue;
+					// skip files that begin with '.'
+					auto justfn = entry.path().filename();
+					if (justfn.empty() || *justfn.string().begin() == '.') continue;
 
-				auto normalizedEntry = MakeSplitPath(fn).Rebuild(s_filenameRules);
-				auto normalizedEntryRelative = MakeRelativePath(baseInSrcSplit, MakeSplitPath(normalizedEntry), s_filenameRules);
-				if (!input._pre.empty())
-					normalizedEntryRelative = input._pre + "/" + normalizedEntryRelative;
+					auto normalizedEntry = MakeSplitPath(fn).Rebuild(s_filenameRules);
+					auto normalizedEntryRelative = MakeRelativePath(baseInSrcSplit, MakeSplitPath(normalizedEntry), s_filenameRules);
+					if (!input._pre.empty())
+						normalizedEntryRelative = input._pre + "/" + normalizedEntryRelative;
 
-				auto hash = HashFilenameAndPath(MakeStringSection(normalizedEntryRelative), s_filenameRules);
-				pendingFiles.push_back(PendingFile { (uint64_t)entry.file_size(), entry, (unsigned)pendingFiles.size(), hash, normalizedEntryRelative });
-				stringTableIterator += unsigned(normalizedEntryRelative.size()) + 1;
+					auto hash = HashFilenameAndPath(MakeStringSection(normalizedEntryRelative), s_filenameRules);
+					pendingFiles.push_back(PendingFile { (uint64_t)entry.file_size(), entry, (unsigned)pendingFiles.size(), hash, normalizedEntryRelative });
+					stringTableIterator += unsigned(normalizedEntryRelative.size()) + 1;
+				}
+			}
+
+			if (!input._inputList.empty()) {
+				OSServices::BasicFile out { input._inputList.c_str(), "rb", 0 };
+				auto size = out.GetSize();
+				auto data = std::make_unique<uint8_t[]>(size);
+				out.Read(data.get(), 1, size);
+				
+				::Formatters::TextInputFormatter<> fmttr{MakeIteratorRange(data.get(), PtrAdd(data.get(), size))};
+				auto list = DeserializeFileList(fmttr);
+
+				for (auto l:list) {
+					auto hash = HashFilenameAndPath(MakeStringSection(l.first), s_filenameRules);
+					std::filesystem::directory_entry entry { l.second };
+					pendingFiles.push_back(PendingFile { (uint64_t)entry.file_size(), entry, (unsigned)pendingFiles.size(), hash, l.first });
+					stringTableIterator += unsigned(l.first.size()) + 1;
+				}
 			}
 		}
 

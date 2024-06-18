@@ -337,6 +337,24 @@ namespace Formatters
 	}
 
 	template<typename Formatter>
+		bool TryRawValue(Formatter& formatter, IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc)
+	{
+		if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+			return formatter.TryRawValue(data, typeDesc);
+		} else {
+			static_assert(Formatters::Internal::FormatterTraits<Formatter>::HasTryStringValue);
+			StringSection<> str;
+			if (!formatter.TryStringValue(str))
+				return false;
+			data = { str.begin(), str.end() };
+			typeDesc = ImpliedTyping::TypeOf<char>();
+			typeDesc._arrayCount = str.size();
+			typeDesc._typeHint = ImpliedTyping::TypeHint::String;
+			return true;
+		}
+	}
+
+	template<typename Formatter>
 		bool TryKeyedItem(Formatter& fmttr, uint64_t& keyname)
 	{
 		if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasTryKeyedItemHash) {

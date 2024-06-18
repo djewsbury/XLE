@@ -75,8 +75,8 @@ float4 frameworkEntry(VSOUT vsout) : SV_Target0
 	#if VSOUT_HAS_FONTTABLE && defined(FONT_RENDERER)
 		// return FontEdgeTrick(vsout);
 		result.a *= PointFontLookup(vsout);
-		if (VSOUT_GetColor0(vsout).a < 1.f)
-			result.a *= FontEdgeTrick(vsout);		// (fade in trick based on gradients; just for fun)
+		// if (VSOUT_GetColor0(vsout).a < 1.f)
+		// 	result.a *= FontEdgeTrick(vsout);		// (fade in trick based on gradients; just for fun)
 	#elif VSOUT_HAS_TEXCOORD
 		#if defined(FONT_RENDERER)
 			result.a *= InputTexture.Sample(PointClampSampler, VSOUT_GetTexCoord0(vsout)).r;

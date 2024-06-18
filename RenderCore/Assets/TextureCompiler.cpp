@@ -12,6 +12,7 @@
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/ICompileOperation.h"
+#include "../../Math/SamplingUtil.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Formatters/StreamDOM.h"
 #include "../../Formatters/TextFormatter.h"
@@ -44,10 +45,11 @@ namespace RenderCore { namespace Assets
 		case Format::R10G10B10A2_TYPELESS: return CMP_FORMAT_ARGB_2101010;
 		case Format::R10G10B10A2_UNORM: return CMP_FORMAT_ARGB_2101010;
 
-		case Format::R8G8B8A8_TYPELESS: return CMP_FORMAT_ARGB_8888;
-		case Format::R8G8B8A8_UNORM: return CMP_FORMAT_ARGB_8888;
-		case Format::R8G8B8A8_SNORM: return CMP_FORMAT_ARGB_8888_S;
+		case Format::R8G8B8A8_TYPELESS:
+		case Format::R8G8B8A8_UNORM:
 		case Format::R8G8B8A8_UNORM_SRGB: return CMP_FORMAT_ARGB_8888;
+		case Format::R8G8B8A8_SNORM: return CMP_FORMAT_ARGB_8888_S;
+		
 
 		case Format::R16G16_FLOAT: return CMP_FORMAT_RG_16F;
 		case Format::R16G16_TYPELESS: return CMP_FORMAT_RG_16;
@@ -67,9 +69,9 @@ namespace RenderCore { namespace Assets
 		case Format::R8_UNORM: return CMP_FORMAT_R_8;
 		case Format::R8_SNORM: return CMP_FORMAT_R_8_S;
 
-		case Format::B8G8R8A8_TYPELESS: return CMP_FORMAT_ABGR_8888;
-		case Format::B8G8R8A8_UNORM: return CMP_FORMAT_ABGR_8888;
-		case Format::B8G8R8A8_UNORM_SRGB: return CMP_FORMAT_ABGR_8888;
+		case Format::B8G8R8A8_TYPELESS:
+		case Format::B8G8R8A8_UNORM:
+		case Format::B8G8R8A8_UNORM_SRGB: return CMP_FORMAT_BGRA_8888;
 
 		case Format::R8G8B8_TYPELESS: return CMP_FORMAT_RGB_888;
 		case Format::R8G8B8_UNORM: return CMP_FORMAT_RGB_888;
@@ -133,7 +135,7 @@ namespace RenderCore { namespace Assets
 			_srcTexture.dwPitch    = 0;		// interpretted as packed
 			_srcTexture.format     = AsCompressonatorFormat(desc._textureDesc._format);
 			_srcTexture.dwDataSize = ByteCount(desc._textureDesc);
-			_srcTexture.pData = (CMP_BYTE*)malloc(_srcTexture.dwDataSize);
+			_srcTexture.pData = (CMP_BYTE*)XlMemAlign(_srcTexture.dwDataSize, 64);		// use a very large alignment, even if it's not specifically requested by compressonator
 
 			assert(_srcTexture.format != CMP_FORMAT_Unknown);
 
@@ -151,6 +153,18 @@ namespace RenderCore { namespace Assets
 
 			auto dataFuture = dataSrc.PrepareData(MakeIteratorRange(subres, &subres[mipCount*arrayLayerCount]));
 			dataFuture.wait();
+
+			// as per compressonator example, swizzle BGRA types
+			if (_srcTexture.format == CMP_FORMAT_BGRA_8888) {
+				unsigned char blue;
+				for (CMP_DWORD i = 0; i < _srcTexture.dwDataSize; i += 4)
+				{
+					blue                    = _srcTexture.pData[i];
+					_srcTexture.pData[i]     = _srcTexture.pData[i + 2];
+					_srcTexture.pData[i + 2] = blue;
+				}
+				_srcTexture.format = CMP_FORMAT_RGBA_8888;
+			}
 		}
 
 		CompressonatorTexture()
@@ -160,10 +174,10 @@ namespace RenderCore { namespace Assets
 
 		~CompressonatorTexture()
 		{
-			free(_srcTexture.pData);
+			XlMemAlignFree(_srcTexture.pData);
 		}
 		CompressonatorTexture(CompressonatorTexture&&) = default;
-		CompressonatorTexture& operator=(CompressonatorTexture&&) = default;;
+		CompressonatorTexture& operator=(CompressonatorTexture&&) = default;
 	};
 
 	TextureCompilationRequest MakeTextureCompilationRequest(Formatters::StreamDOMElement<Formatters::TextInputFormatter<>>& operationElement, std::string srcFN)
@@ -259,64 +273,6 @@ namespace RenderCore { namespace Assets
 		return params;
 	}
 
-	template <int Base>
-		inline float CalculateHaltonNumber(unsigned index)
-	{
-		// See https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler
-		// AMD's capsaicin implementation does not seem perfect. Instead, let's take some cures from the pbr-book
-		// Note not bothering with the reverse bit trick for base 2
-		float reciprocalBaseN = 1.0f, result = 0.0f;
-		float reciprocalBase = 1.f / float(Base);
-		while (index) {
-			auto next = index / Base;
-			auto digit = index - next * Base;
-			result = result * Base + digit;
-			reciprocalBaseN *= reciprocalBase;
-			index = next;
-		}
-		return result * reciprocalBaseN;
-	}
-
-	static const unsigned Primes[] = { 2, 3, 5, 7, 11 };
-
-	template <int BaseIdx>
-		inline float CalculateScrambledHaltonNumber(unsigned index)
-	{
-		static unsigned primeSums[dimof(Primes)];
-		static std::vector<uint16_t> digitPerms;
-		if (digitPerms.empty()) {
-			std::mt19937_64 rng(6294384621946ull);
-			unsigned accumulator = 0;
-			for (unsigned c=0; c<dimof(Primes); ++c) {
-				primeSums[c] = accumulator;
-				accumulator += Primes[c];
-			}
-			digitPerms.reserve(accumulator);
-			for (unsigned c=0; c<dimof(Primes); ++c) {
-				auto start = digitPerms.size();
-				for (unsigned q=0; q<Primes[c]; ++q)
-					digitPerms.push_back(q);
-				std::shuffle(digitPerms.begin()+start, digitPerms.end(), rng);
-			}
-		}
-
-		assert(BaseIdx < dimof(Primes));
-		assert((primeSums[BaseIdx] + BaseIdx) <= digitPerms.size());
-		uint16_t* perm = digitPerms.data() + primeSums[BaseIdx];
-
-		int Base = Primes[BaseIdx];
-		float reciprocalBaseN = 1.0f, result = 0.0f;
-		float reciprocalBase = 1.f / float(Base);
-		while (index) {
-			auto next = index / Base;
-			auto digit = index - next * Base;
-			result = result * Base + perm[digit];
-			reciprocalBaseN *= reciprocalBase;
-			index = next;
-		}
-		return reciprocalBaseN * (result + reciprocalBase * perm[0] / (1 - reciprocalBase));
-	}
-
 	class BalancedNoiseTexture : public BufferUploads::IAsyncDataSource
 	{
 	public:
@@ -346,6 +302,7 @@ namespace RenderCore { namespace Assets
 			// We can do this in a smarter way by using the inverse-radical-inverse, and solving some simultaneous
 			// equations with modular arithmetic. But since we're building a lookup table anyway, that doesn't seem
 			// of any practical purpose
+			using namespace XLEMath;
 			for (unsigned sampleIdx=0; sampleIdx<subTableWidth*subTableHeight; ++sampleIdx) {
 				const bool extraScambling = true;
 				if (extraScambling) {
@@ -557,6 +514,12 @@ namespace RenderCore { namespace Assets
 			if (comprDstFormat == CMP_FORMAT_Unknown)
 				Throw(std::runtime_error("Cannot write to the request texture pixel format because it is not supported by the compression library: " + srcFN));
 
+			// simple hack because we can't enter Compressonator while it's working
+			static Threading::Mutex s_compressonatorLock;
+			std::unique_lock l(s_compressonatorLock, std::defer_lock);
+			while (!l.try_lock())
+				YieldToPoolFor(std::chrono::milliseconds(10));
+
 			auto mipCount = dstDesc._mipCount;
 			auto arrayLayerCount = ActualArrayLayerCount(dstDesc);
 			for (unsigned a=0; a<arrayLayerCount; ++a)
@@ -567,7 +530,7 @@ namespace RenderCore { namespace Assets
 
 					CMP_Texture destTexture = {0};
 					destTexture.dwSize     = sizeof(destTexture);
-					destTexture.dwWidth    = srcMipDesc._width;
+					destTexture.dwWidth    = std::max(1u, (unsigned)srcMipDesc._width);
 					destTexture.dwHeight   = std::max(1u, (unsigned)srcMipDesc._height);
 					destTexture.dwPitch    = 0;
 					destTexture.format     = comprDstFormat;
@@ -589,6 +552,8 @@ namespace RenderCore { namespace Assets
 					if (cmp_status != CMP_OK)
 						Throw(std::runtime_error("Compression library failed while processing texture compiler file: " + srcFN));
 				}
+
+			l.unlock();
 
 			_serializedArtifacts = std::vector<::Assets::SerializedArtifact>{
 				{

@@ -51,6 +51,7 @@ namespace RenderOverlays
         inline Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
 
         static inline Rect Invalid() { return Rect { {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}, {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}}; }
+        static inline Rect Zero() { return Rect { 0, 0, 0, 0 }; }
 
         inline Rect& operator-=(const Coord2& rhs) { _topLeft -= rhs; _bottomRight -= rhs; return *this; }
         inline Rect& operator+=(const Coord2& rhs) { _topLeft += rhs; _bottomRight += rhs; return *this; }

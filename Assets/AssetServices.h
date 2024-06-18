@@ -10,18 +10,18 @@ namespace Assets
 {
     class AssetSetManager;
     class IIntermediateCompilers;
-    class IntermediatesStore;
+    class IIntermediatesStore;
 
     class Services
     {
     public:
         static AssetSetManager& GetAssetSets();
         static IIntermediateCompilers& GetIntermediateCompilers();
-        static IntermediatesStore& GetIntermediatesStore();
+        static IIntermediatesStore& GetIntermediatesStore();
 
         static std::shared_ptr<AssetSetManager> GetAssetSetsPtr();
         static std::shared_ptr<IIntermediateCompilers> GetIntermediateCompilersPtr();
-        static std::shared_ptr<IntermediatesStore> GetIntermediatesStorePtr();
+        static std::shared_ptr<IIntermediatesStore> GetIntermediatesStorePtr();
     };
 }
 

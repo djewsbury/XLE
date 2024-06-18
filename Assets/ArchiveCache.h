@@ -58,7 +58,8 @@ namespace Assets
 
 		ArchiveCache(
 			std::shared_ptr<IFileSystem> filesystem,
-			StringSection<char> archiveName, const OSServices::LibVersionDesc&);
+			StringSection<char> archiveName, const OSServices::LibVersionDesc&,
+			bool checkDepVals);
 		~ArchiveCache();
 
 		ArchiveCache(const ArchiveCache&) = delete;
@@ -76,6 +77,7 @@ namespace Assets
 		std::shared_ptr<IFileSystem> _filesystem;
 
 		std::string _buildVersionString, _buildDateString;
+		bool _checkDepVals;
 
 		mutable std::vector<ArtifactDirectoryBlock> _cachedBlockList;
 		mutable bool _cachedBlockListValid;
@@ -100,7 +102,7 @@ namespace Assets
 		std::shared_ptr<::Assets::ArchiveCache> GetArchive(StringSection<char> archiveFilename);
 		void FlushToDisk();
 		
-		ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const OSServices::LibVersionDesc&);
+		ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const OSServices::LibVersionDesc&, bool checkDepVals);
 		~ArchiveCacheSet();
 	protected:
 		typedef std::pair<uint64, std::shared_ptr<::Assets::ArchiveCache>> Archive;
@@ -108,6 +110,7 @@ namespace Assets
 		Threading::Mutex        _archivesLock;
 		std::shared_ptr<IFileSystem> _filesystem;
 		OSServices::LibVersionDesc	_versionDesc;
+		bool _checkDepVals;
 	};
 
 }

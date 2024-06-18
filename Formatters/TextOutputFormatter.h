@@ -20,6 +20,7 @@ namespace Formatters
 
 		ElementId BeginKeyedElement(StringSection<> name);
 		ElementId BeginSequencedElement();
+		ElementId BeginElement();
 		void EndElement(ElementId);
 
 		void WriteKeyedValue(
@@ -27,6 +28,7 @@ namespace Formatters
 			StringSection<> value);
 		void WriteSequencedValue(
 			StringSection<> value);
+		void WriteValue(StringSection<> value);
 		
 		void NewLine();
 

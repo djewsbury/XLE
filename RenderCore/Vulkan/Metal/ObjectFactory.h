@@ -86,6 +86,7 @@ namespace RenderCore { namespace Metal_Vulkan
         VulkanUniquePtr<VkSampler> CreateSampler(const VkSamplerCreateInfo& createInfo) const;
         VulkanUniquePtr<VkFramebuffer> CreateFramebuffer(const VkFramebufferCreateInfo& createInfo) const;
         VulkanUniquePtr<VkRenderPass> CreateRenderPass(const VkRenderPassCreateInfo2& createInfo) const;
+        VulkanUniquePtr<VkRenderPass> CreateRenderPass(const VkRenderPassCreateInfo& createInfo) const;
 
         VulkanUniquePtr<VkBuffer> CreateBufferWithAutoMemory(
             /* out */ VmaAllocation& allocationResult,

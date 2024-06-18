@@ -6,6 +6,7 @@
 
 #include "LightingEngine.h"
 #include "../Techniques/TechniqueDelegates.h"
+#include "../Techniques/CommonBindings.h"
 #include "../ResourceDesc.h"		// for TextureSamples
 #include "../../Assets/AssetsCore.h"
 
@@ -21,6 +22,7 @@ namespace RenderCore { namespace LightingEngine
 	struct UtilityLightingTechniqueDesc
 	{
 		Techniques::UtilityDelegateType _type = Techniques::UtilityDelegateType::SolidWireframe;
+		uint64_t _outputAttachment = Techniques::AttachmentSemantics::ColorLDR;
 	};
 
 	void CreateUtilityLightingTechnique(

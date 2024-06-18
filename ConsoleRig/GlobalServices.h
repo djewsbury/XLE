@@ -13,6 +13,7 @@
 namespace Utility { class ThreadPool; }
 namespace OSServices { class PollingThread; class LibVersionDesc; }
 namespace thousandeyes { namespace futures { class Executor; }}
+namespace Assets { class IFileSystem; }
 
 namespace ConsoleRig
 {
@@ -25,6 +26,7 @@ namespace ConsoleRig
         bool _redirectCout;
         bool _inMemoryOnlyIntermediates;
         bool _enableDPIAwareness;
+        bool _registerTemporaryIntermediates;
         unsigned _longTaskThreadPoolCount;
         unsigned _shortTaskThreadPoolCount;
 
@@ -49,6 +51,8 @@ namespace ConsoleRig
 
 		void LoadDefaultPlugins();
 		void UnloadDefaultPlugins();
+
+        void RegisterIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> fs, std::string fsMountPt);
 
         std::string GetApplicationName() const;
 

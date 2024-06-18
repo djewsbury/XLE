@@ -226,7 +226,10 @@ namespace RenderCore { namespace Techniques
 
     FrameBufferDescFragment::DefineAttachmentHelper& FrameBufferDescFragment::DefineAttachmentHelper::InitialState(LoadStore loadStore)
     {
-        _fragment->_attachments[_attachmentName]._initialLayout = {};
+        if (loadStore == LoadStore::Clear || loadStore == LoadStore::DontCare)
+            _fragment->_attachments[_attachmentName]._initialLayout = 0;        // so we remain compatible with .Clear() & .NoInitialState()
+        else
+            _fragment->_attachments[_attachmentName]._initialLayout = {};
         _fragment->_attachments[_attachmentName]._loadFromPreviousPhase = loadStore;
         return *this;
     }
@@ -2020,7 +2023,7 @@ namespace RenderCore { namespace Techniques
 
             if (    matchingRules._flagsSet & ((uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic|(uint32_t)AttachmentMatchingRules::Flags::SystemFormat)
                 ||  merge._matchingRules._flagsSet & ((uint32_t)AttachmentMatchingRules::Flags::CopyFormatFromSemantic|(uint32_t)AttachmentMatchingRules::Flags::SystemFormat)) {
-                // We should not get there, because the matching rules should be simplied by converting CopyFormatFromSemantic & SystemFormat
+                // We should not get there, because the matching rules should be simplified by converting CopyFormatFromSemantic & SystemFormat
                 // to FixedFormat before we get here
                 assert(0);
             }

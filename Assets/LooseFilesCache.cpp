@@ -58,7 +58,7 @@ namespace Assets
 		std::shared_ptr<IFileSystem> fs,
 		const ::Assets::DependencyValidation& depVal,
 		const std::shared_ptr<StoreReferenceCounts>& refCounts,
-		uint64_t refCountHashCode);
+		uint64_t refCountHashCode, std::string fsMountPt);
 
 	static void SerializationOperator(Formatters::TextOutputFormatter& formatter, const CompileProductsFile& compileProducts)
 	{
@@ -197,9 +197,12 @@ namespace Assets
 
 		CompileProductsFile finalProductsFile;
 		formatter >> finalProductsFile;
-		auto depVal = GetDepVal(finalProductsFile, archivableName);
-		if (!depVal.second)
-			return nullptr;
+		std::pair<::Assets::DependencyValidation, bool> depVal { {}, true };
+		if (_checkDepVals) {
+			depVal = GetDepVal(finalProductsFile, archivableName);
+			if (!depVal.second)
+				return nullptr;
+		}
 
 		{
 			auto compileProductsDirectory = MakeFileNameSplitter(intermediateName).StemAndPath();
@@ -208,7 +211,7 @@ namespace Assets
 					if (!LooksLikeAbsolutePath(artifacts._intermediateArtifact))
 						artifacts._intermediateArtifact = Concatenate(compileProductsDirectory, "/", artifacts._intermediateArtifact);
 		}
-		return MakeArtifactCollection(finalProductsFile, _filesystem, depVal.first, storeRefCounts, hashCode);
+		return MakeArtifactCollection(finalProductsFile, _filesystem, depVal.first, storeRefCounts, hashCode, _fsMountPt);
 	}
 
 	static std::string MakeSafeName(StringSection<> input, size_t sizeLimit = std::numeric_limits<size_t>::max())
@@ -339,7 +342,7 @@ namespace Assets
 			std::filesystem::rename(renameOp.first, renameOp.second);
 		}
 
-		return MakeArtifactCollection(compileProductsFile, _filesystem, GetDepVal(compileProductsFile, archivableName).first, storeRefCounts, hashCode);
+		return MakeArtifactCollection(compileProductsFile, _filesystem, GetDepVal(compileProductsFile, archivableName).first, storeRefCounts, hashCode, _fsMountPt);
 	}
 
 	std::string LooseFilesStorage::MakeProductsFileName(StringSection<> archivableName)
@@ -362,10 +365,12 @@ namespace Assets
 		return result;
 	}
 
-	LooseFilesStorage::LooseFilesStorage(std::shared_ptr<IFileSystem> filesystem, StringSection<> baseDirectory, const OSServices::LibVersionDesc& compilerVersionInfo)
+	LooseFilesStorage::LooseFilesStorage(std::shared_ptr<IFileSystem> filesystem, StringSection<> baseDirectory, StringSection<> fsMountPt, const OSServices::LibVersionDesc& compilerVersionInfo, bool checkDepVals)
 	: _baseDirectory(baseDirectory.AsString())
 	, _compilerVersionInfo(compilerVersionInfo)
 	, _filesystem(std::move(filesystem))
+	, _fsMountPt(fsMountPt.AsString())
+	, _checkDepVals(checkDepVals)
 	{}
 	LooseFilesStorage::~LooseFilesStorage() {}
 
@@ -430,7 +435,7 @@ namespace Assets
 				} else if (requests[r]._dataType == ArtifactRequest::DataType::Filename) {
 					for (const auto&prod:_productsFile._compileProducts)
 						if (prod._type == requests[r]._chunkTypeCode) {
-							result[r] = {nullptr, 0, {}, nullptr, prod._intermediateArtifact};
+							result[r] = {nullptr, 0, {}, nullptr, Concatenate(_fsMountPt, prod._intermediateArtifact)};
 							foundExactMatch = true;
 							break;
 						}
@@ -470,7 +475,7 @@ namespace Assets
 				for (const auto&prod:_productsFile._compileProducts)
 					if (prod._type == ChunkType_Multi) {
 						auto mainChunkFile = OpenFileInterface(*_filesystem, prod._intermediateArtifact, "rb", OSServices::FileShareMode::Read);
-						ArtifactChunkContainer temp(prod._intermediateArtifact, _depVal);
+						ArtifactChunkContainer temp(_filesystem, prod._intermediateArtifact, _depVal);
 						auto fromMulti = temp.ResolveRequests(*mainChunkFile, MakeIteratorRange(requestsForMulti));
 						for (size_t c=0; c<fromMulti.size(); ++c)
 							result[requestsForMultiMapping[c]] = std::move(fromMulti[c]);
@@ -495,10 +500,11 @@ namespace Assets
 			std::shared_ptr<IFileSystem> fs,
 			const DependencyValidation& depVal,
 			const std::shared_ptr<StoreReferenceCounts>& refCounts,
-			uint64_t refCountHashCode)
+			uint64_t refCountHashCode,
+			std::string fsMountPt)
 		: _productsFile(productsFile), _depVal(depVal)
 		, _refCounts(refCounts), _refCountHashCode(refCountHashCode)
-		, _filesystem(std::move(fs))
+		, _filesystem(std::move(fs)), _fsMountPt(std::move(fsMountPt))
 		{
 			ScopedLock(_refCounts->_lock);
 			auto read = LowerBound(_refCounts->_readReferenceCount, _refCountHashCode);
@@ -528,6 +534,7 @@ namespace Assets
 		std::shared_ptr<StoreReferenceCounts> _refCounts;
 		uint64_t _refCountHashCode;
 		std::shared_ptr<IFileSystem> _filesystem;
+		std::string _fsMountPt;
 	};
 
 	static std::shared_ptr<IArtifactCollection> MakeArtifactCollection(
@@ -535,9 +542,9 @@ namespace Assets
 		std::shared_ptr<IFileSystem> fs,
 		const DependencyValidation& depVal,
 		const std::shared_ptr<StoreReferenceCounts>& refCounts,
-		uint64_t refCountHashCode)
+		uint64_t refCountHashCode, std::string fsMountPt)
 	{
-		return std::make_shared<CompileProductsArtifactCollection>(productsFile, std::move(fs), depVal, refCounts, refCountHashCode);
+		return std::make_shared<CompileProductsArtifactCollection>(productsFile, std::move(fs), depVal, refCounts, refCountHashCode, std::move(fsMountPt));
 	}
 
 }

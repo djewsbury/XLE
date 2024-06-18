@@ -55,7 +55,7 @@ namespace RenderCore { namespace Assets
         void LogStats();
         void Clear();
         
-        ShaderCacheSet(const DeviceDesc& devDesc, const std::shared_ptr<::Assets::IntermediatesStore>& intermediateStore);
+        ShaderCacheSet(const DeviceDesc& devDesc, const std::shared_ptr<::Assets::IIntermediatesStore>& intermediateStore);
         ~ShaderCacheSet();
     protected:
         typedef std::pair<uint64, std::shared_ptr<::Assets::ArchiveCache>> Archive;
@@ -64,7 +64,7 @@ namespace RenderCore { namespace Assets
         std::string             _baseFolderName;
         std::string             _versionString;
         std::string             _buildDateString;
-		std::shared_ptr<::Assets::IntermediatesStore> _intermediateStore;
+		std::shared_ptr<::Assets::IIntermediatesStore> _intermediateStore;
     };
 
     std::shared_ptr<::Assets::ArchiveCache> ShaderCacheSet::GetArchive(StringSection<> shaderBaseFilename)
@@ -258,7 +258,7 @@ namespace RenderCore { namespace Assets
         _archives.clear();
     }
     
-    ShaderCacheSet::ShaderCacheSet(const DeviceDesc& devDesc, const std::shared_ptr<::Assets::IntermediatesStore>& intermediateStore)
+    ShaderCacheSet::ShaderCacheSet(const DeviceDesc& devDesc, const std::shared_ptr<::Assets::IIntermediatesStore>& intermediateStore)
 	: _intermediateStore(intermediateStore)
     {
         _baseFolderName = std::string(devDesc._underlyingAPI) + "/";
@@ -396,7 +396,7 @@ namespace RenderCore { namespace Assets
                         MakeIteratorRange(preprocessedOutput._lineMarkers));
 
 				} else {
-					deps.push_back(::Assets::IntermediatesStore::GetDependentFileState(resId._filename));
+					deps.push_back(::Assets::IIntermediatesStore::GetDependentFileState(resId._filename));
 
 					// Don't use TryLoadFileAsMemoryBlock here, because we want exceptions to propagate upwards
 					// Also, allow read & write sharing, because we want to support rapid reloading of shaders that

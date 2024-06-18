@@ -35,65 +35,61 @@ namespace Assets
 	/// executables (eg, a game executable and a GUI tool executable) which we want to use with the same 
 	/// source assets, but they may have been compiled with different version of the engine code. This system
 	/// allows both executables to maintain separate copies of the intermediate store.
-	class IntermediatesStore
+	class IIntermediatesStore
 	{
 	public:
 		using CompileProductsGroupId = uint64_t;
 		using ArchiveEntryId = uint64_t;
 
 		// --------- Store & retrieve loose files ---------
-		std::shared_ptr<IArtifactCollection> StoreCompileProducts(
-            StringSection<> archivableName,
+		virtual std::shared_ptr<IArtifactCollection> StoreCompileProducts(
+			StringSection<> archivableName,
 			CompileProductsGroupId groupId,
 			IteratorRange<const SerializedArtifact*> artifacts,
 			::Assets::AssetState state,
-			IteratorRange<const DependencyValidation*> dependencies);
+			IteratorRange<const DependencyValidation*> dependencies) = 0;
 
-		std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
-            StringSection<> archivableName,
-			CompileProductsGroupId groupId);
+		virtual std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
+			StringSection<> archivableName,
+			CompileProductsGroupId groupId) = 0;
 
 		// --------- Store & retrieve from optimized archive caches ---------
-		void StoreCompileProducts(
-            StringSection<> archiveName,
+		virtual void StoreCompileProducts(
+			StringSection<> archiveName,
 			ArchiveEntryId entryId,
 			StringSection<> entryDescriptiveName,
 			CompileProductsGroupId groupId,
 			IteratorRange<const SerializedArtifact*> artifacts,
 			::Assets::AssetState state,
-			IteratorRange<const DependencyValidation*> dependencies);
+			IteratorRange<const DependencyValidation*> dependencies) = 0;
 
-		std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
-            StringSection<> archiveName,
+		virtual std::shared_ptr<IArtifactCollection> RetrieveCompileProducts(
+			StringSection<> archiveName,
 			ArchiveEntryId entryId,
-			CompileProductsGroupId groupId);
+			CompileProductsGroupId groupId) = 0;
 
 		// --------- Registration & utilities ---------
-		CompileProductsGroupId RegisterCompileProductsGroup(
+		virtual CompileProductsGroupId RegisterCompileProductsGroup(
 			StringSection<> name,
 			const OSServices::LibVersionDesc& compilerVersionInfo,
-			bool enableArchiveCacheSet = false);
-		void DeregisterCompileProductsGroup(CompileProductsGroupId);
+			bool enableArchiveCacheSet = false) = 0;
+		virtual void DeregisterCompileProductsGroup(CompileProductsGroupId) = 0;
 
-		void FlushToDisk();
-
-		std::string GetBaseDirectory();
-
-		IntermediatesStore(
-			std::shared_ptr<IFileSystem> intermediatesFilesystem,
-			StringSection<> baseDirectory,
-			StringSection<> versionString,
-			StringSection<> configString,
-			bool universal = false);
-		IntermediatesStore();		// default is an in-memory-only intermediates store
-		~IntermediatesStore();
-		IntermediatesStore(const IntermediatesStore&) = delete;
-		IntermediatesStore& operator=(const IntermediatesStore&) = delete;
-
-	protected:
-		class Pimpl;
-		std::unique_ptr<Pimpl> _pimpl;
+		virtual bool AllowStore() = 0;
+		virtual void FlushToDisk() = 0;
+		virtual ~IIntermediatesStore();
 	};
+
+	std::shared_ptr<IIntermediatesStore> CreateTemporaryCacheIntermediatesStore(
+		std::shared_ptr<IFileSystem> intermediatesFilesystem,
+		StringSection<> baseDirectory, StringSection<> versionString, StringSection<> configString, 
+		bool universal = false);
+
+	std::shared_ptr<IIntermediatesStore> CreateMemoryOnlyIntermediatesStore();
+
+	std::shared_ptr<IIntermediatesStore> CreateArchivedIntermediatesStore(
+		std::shared_ptr<IFileSystem> intermediatesFilesystem,
+		StringSection<> intermediatesFilesystemMountPt);
 
 	class StoreReferenceCounts
 	{

@@ -55,8 +55,10 @@ namespace RenderCore { namespace Assets
 			// because we need to retain that information on the resource. For example,
 			// if we made R32_** formats typeless here, when we create the shader resource
 			// view there would be no way to know if it was originally a R32_FLOAT, or a R32_UINT (etc)
+			// Also if the texture is explicitly not SRGB, don't switch to typeless here, because we need
+			// to retain that information.
 		auto srcFormat = (RenderCore::Format)metadata.format;
-		if (RenderCore::HasLinearAndSRGBFormats(srcFormat)) {
+		if (RenderCore::HasLinearAndSRGBFormats(srcFormat) && RenderCore::AsSRGBFormat(srcFormat) == srcFormat) {
 			desc._format = RenderCore::AsTypelessFormat(srcFormat);
 		} else {
 			desc._format = srcFormat;
@@ -386,9 +388,15 @@ namespace RenderCore { namespace Assets
 								hresult = LoadFromDDSMemory(file.GetData().begin(), file.GetSize(), DDS_FLAGS_NONE, &that->_texMetadata, that->_image);
 							} else if (fmt == TexFmt::TGA) {
 								hresult = LoadFromTGAMemory(file.GetData().begin(), file.GetSize(), &that->_texMetadata, that->_image);
+
+								// Erase SRGB/linear flag (because the TGA loader won't assign that -- but DDS loader will)
+								that->_texMetadata.format = (DXGI_FORMAT)AsTypelessFormat((Format)that->_texMetadata.format);
 							} else {
 								assert(fmt == TexFmt::WIC);
 								hresult = LoadFromWICMemory(file.GetData().begin(), file.GetSize(), WIC_FLAGS_NONE, &that->_texMetadata, that->_image);
+								
+								// Erase SRGB/linear flag (because the WIC loader won't assign that -- but DDS loader will)
+								that->_texMetadata.format = (DXGI_FORMAT)AsTypelessFormat((Format)that->_texMetadata.format);
 							}
 
 							if (!SUCCEEDED(hresult))
@@ -405,6 +413,9 @@ namespace RenderCore { namespace Assets
 
 								that->_image = std::move(newImage);
 								that->_texMetadata = that->_image.GetMetadata();
+
+								if (fmt != TexFmt::DDS)
+									that->_texMetadata.format = (DXGI_FORMAT)AsTypelessFormat((Format)that->_texMetadata.format);
 							}
 
 							that->_hasBeenInitialized = true;

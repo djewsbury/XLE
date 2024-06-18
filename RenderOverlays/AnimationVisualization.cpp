@@ -66,7 +66,7 @@ namespace RenderOverlays
 		material._hash = material._stateSet.GetHash();
 		auto workingVertices = overlayContext.GetImmediateDrawables().QueueDraw(
 			vertexCount, MakeIteratorRange(s_vertexInputLayout), 
-			material, Topology::TriangleList).Cast<VisVertex_PC*>();
+			material, {}, Topology::TriangleList).Cast<VisVertex_PC*>();
 		size_t workingVertexIterator = 0;
 
 		const unsigned color = HardwareColor(ColorB{53, 129, 148});

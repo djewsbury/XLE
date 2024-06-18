@@ -22,12 +22,23 @@ namespace Assets
         return ResolveRequests(*file, requests);
     }
 
+	static std::unique_ptr<IFileInterface> OpenFileInterface(IFileSystem& filesystem, StringSection<> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode)
+	{
+		std::unique_ptr<IFileInterface> result;
+		auto ioResult = TryOpen(result, filesystem, fn, openMode, shareMode);
+		if (ioResult != MainFileSystem::IOReason::Success || !result)
+			Throw(std::runtime_error("Failed to open file in loose files cache: " + fn.AsString()));
+		return result;
+	}
+
 	std::shared_ptr<IFileInterface> ArtifactChunkContainer::OpenFile() const
 	{
 		std::shared_ptr<IFileInterface> result;
 		if (_blob)
 			return CreateMemoryFile(_blob);
-		return MainFileSystem::OpenFileInterface(_filename.c_str(), "rb");
+        if (_fs)
+		    return OpenFileInterface(*_fs, _filename.c_str(), "rb", OSServices::FileShareMode::Read);
+        return MainFileSystem::OpenFileInterface(_filename.c_str(), "rb", OSServices::FileShareMode::Read);
 	}
 
     std::vector<ArtifactRequestResult> ArtifactChunkContainer::ResolveRequests(
@@ -88,19 +99,38 @@ namespace Assets
 				auto blobCopy = _blob;
 				auto filenameCopy = _filename;
 				auto depValCopy = _validationCallback;
-				chunkResult._reopenFunction = [offset, blobCopy, filenameCopy, depValCopy, initialOffset]() -> std::shared_ptr<IFileInterface> {
-					TRY {
-						std::shared_ptr<IFileInterface> result;
-						if (blobCopy) {
-							result = CreateMemoryFile(blobCopy);
-						} else 
-							result = MainFileSystem::OpenFileInterface(filenameCopy.c_str(), "rb");
-						result->Seek(initialOffset + offset);
-						return result;
-					} CATCH (const std::exception& e) {
-						Throw(Exceptions::ConstructionError(e, depValCopy));
-					} CATCH_END
-				};
+                if (_fs) {
+                    chunkResult._reopenFunction = [offset, blobCopy, fs=std::weak_ptr<IFileSystem>(_fs), filenameCopy, depValCopy, initialOffset]() -> std::shared_ptr<IFileInterface> {
+                        TRY {
+                            auto l = fs.lock();
+                            if (!l) Throw(std::runtime_error("Artifact filesystem expired in reopen function"));
+
+                            std::shared_ptr<IFileInterface> result;
+                            if (blobCopy) {
+                                result = CreateMemoryFile(blobCopy);
+                            } else 
+                                result = OpenFileInterface(*l, filenameCopy.c_str(), "rb", OSServices::FileShareMode::Read);
+                            result->Seek(initialOffset + offset);
+                            return result;
+                        } CATCH (const std::exception& e) {
+                            Throw(Exceptions::ConstructionError(e, depValCopy));
+                        } CATCH_END
+                    };
+                } else {
+                    chunkResult._reopenFunction = [offset, blobCopy, filenameCopy, depValCopy, initialOffset]() -> std::shared_ptr<IFileInterface> {
+                        TRY {
+                            std::shared_ptr<IFileInterface> result;
+                            if (blobCopy) {
+                                result = CreateMemoryFile(blobCopy);
+                            } else 
+                                result = MainFileSystem::OpenFileInterface(filenameCopy.c_str(), "rb", OSServices::FileShareMode::Read);
+                            result->Seek(initialOffset + offset);
+                            return result;
+                        } CATCH (const std::exception& e) {
+                            Throw(Exceptions::ConstructionError(e, depValCopy));
+                        } CATCH_END
+                    };
+                }
 			} else if (r._dataType == ArtifactRequest::DataType::SharedBlob) {
                 chunkResult._sharedBlob = std::make_shared<std::vector<uint8_t>>();
                 chunkResult._sharedBlob->resize(i->_size);
@@ -118,12 +148,14 @@ namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    ArtifactChunkContainer::ArtifactChunkContainer(std::string assetTypeName, DependencyValidation depVal)
-    : _filename(std::move(assetTypeName))
+    ArtifactChunkContainer::ArtifactChunkContainer(std::shared_ptr<IFileSystem> fs, std::string assetTypeName, DependencyValidation depVal)
+    : _fs(std::move(fs))
+    , _filename(std::move(assetTypeName))
     , _validationCallback(std::move(depVal))
     {}
-    ArtifactChunkContainer::ArtifactChunkContainer(StringSection<> assetTypeName)
-    : _filename(assetTypeName.AsString())
+    ArtifactChunkContainer::ArtifactChunkContainer(std::shared_ptr<IFileSystem> fs, StringSection<> assetTypeName)
+    : _fs(std::move(fs))
+    , _filename(assetTypeName.AsString())
     {
 		_validationCallback = GetDepValSys().Make(_filename);
     }

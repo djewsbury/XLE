@@ -63,7 +63,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
             Coord2 _driftDuringCapture = Coord2{0,0};
             Interactables::HotArea _hotArea;
         };
-        const Capture& GetCapture() const                     { return _capture;  }
+        const Capture& GetCapture() const           { return _capture;  }
+        Capture& GetCapture()                       { return _capture;  }
 
         IteratorRange<const Interactables::HotArea*> GetMouseOverStack() const  { return _mouseOverStack; }
         const PlatformRig::WindowingSystemView& GetWindowingSystemView() const  { return _viewInputContext; }

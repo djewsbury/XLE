@@ -82,7 +82,8 @@ namespace Utility
             typedef typename std::basic_streambuf<CharType>::char_type char_type;
 
             bool IsFull() const { return this->pptr() >= this->epptr(); }
-            unsigned Length() const { return unsigned(this->pptr() - this->pbase()); }
+            size_t LengthChars() const { return this->pptr() - this->pbase(); }
+            size_t LengthBytes() const { return PtrDiff(this->pptr(), this->pbase()); }
 
             CharType* Begin() const { return this->pbase(); }
             CharType* End() const   { return this->pptr(); }
@@ -106,6 +107,8 @@ namespace Utility
 
             CharType* Begin() const { return this->pbase(); }
             CharType* End() const   { return this->pptr(); }
+            size_t LengthChars() const { return this->pptr() - this->pbase(); }
+            size_t LengthBytes() const { return PtrDiff(this->pptr(), this->pbase()); }
 
             ResizeableMemoryBuffer() {}
             ~ResizeableMemoryBuffer() {}

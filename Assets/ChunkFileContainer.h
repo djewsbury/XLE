@@ -59,9 +59,9 @@ namespace Assets
 
 		std::shared_ptr<IFileInterface> OpenFile() const;
 
-        ArtifactChunkContainer(std::string assetTypeName, DependencyValidation depVal);
+        ArtifactChunkContainer(std::shared_ptr<IFileSystem> fs, std::string assetTypeName, DependencyValidation depVal);
 		ArtifactChunkContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<>);
-		ArtifactChunkContainer(StringSection<> assetTypeName);      // note -- avoid using, because this will query the depVal for the given file
+		ArtifactChunkContainer(std::shared_ptr<IFileSystem> fs, StringSection<> assetTypeName);      // note -- avoid using, because this will query the depVal for the given file
 		ArtifactChunkContainer();
         ~ArtifactChunkContainer();
 
@@ -71,6 +71,7 @@ namespace Assets
 		ArtifactChunkContainer& operator=(ArtifactChunkContainer&&) never_throws = default;
     private:
         rstring			_filename;
+		std::shared_ptr<IFileSystem> _fs;
 		Blob			_blob;
 		DependencyValidation		_validationCallback;
     };

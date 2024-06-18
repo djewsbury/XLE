@@ -67,6 +67,13 @@ namespace RenderOverlays
 		return C * std::exp(-offset*offset / twiceStdDevSq);
 	}
 
+	static float NormGaussianWeight1D(float offset, float stdDevSq)
+	{
+		// Like GaussianWeight1D, but NormGaussianWeight1D(0) == 1
+		const float twiceStdDevSq = 2.0f * stdDevSq;
+		return std::exp(-offset*offset / twiceStdDevSq);
+	}
+
 	unsigned GaussianBlurOperator::CB_BlurControlUniforms::CalculateSize(unsigned blurTapCount)
 	{
 		auto weightCount = 1+(blurTapCount-1)/2;
@@ -101,11 +108,13 @@ namespace RenderOverlays
 		// True gaussian blur, but smaller blur radius
 		Techniques::FrameBufferDescFragment fbFragment;
 		fbFragment._pipelineType = PipelineType::Compute;
-		fbFragment.DefineAttachment(inputAttachment).FinalState(BindFlag::UnorderedAccess);
-		fbFragment.DefineAttachment("BlurryBackground"_h).NoInitialState().FinalState(BindFlag::ShaderResource).FixedFormat(Format::R8G8B8A8_UNORM).RequireBindFlags(BindFlag::UnorderedAccess);
-		fbFragment.DefineAttachment("BlurryBackgroundTemp"_h).NoInitialState().FinalState(BindFlag::ShaderResource).FixedFormat(Format::R8G8B8A8_UNORM).RequireBindFlags(BindFlag::UnorderedAccess);
+		fbFragment.DefineAttachment(inputAttachment).FinalState(BindFlag::ShaderResource);
+		fbFragment.DefineAttachment("BlurryBackground"_h).NoInitialState().FinalState(BindFlag::ShaderResource).FixedFormat(Format::R8G8B8A8_UNORM).RequireBindFlags(BindFlag::UnorderedAccess|BindFlag::ShaderResource);
+		fbFragment.DefineAttachment("BlurryBackgroundTemp"_h).NoInitialState().FinalState(BindFlag::ShaderResource).FixedFormat(Format::R8G8B8A8_UNORM).RequireBindFlags(BindFlag::UnorderedAccess|BindFlag::ShaderResource);
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
-		sp.AppendNonFrameBufferAttachmentView(0, BindFlag::UnorderedAccess);
+		sp.AppendNonFrameBufferAttachmentView(0, BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::ColorSRGB});
+		sp.AppendNonFrameBufferAttachmentView(1, BindFlag::ShaderResource);
+		sp.AppendNonFrameBufferAttachmentView(2, BindFlag::ShaderResource);
 		sp.AppendNonFrameBufferAttachmentView(1, BindFlag::UnorderedAccess);
 		sp.AppendNonFrameBufferAttachmentView(2, BindFlag::UnorderedAccess);
 		sp.SetName("gaussian-blur");
@@ -113,9 +122,9 @@ namespace RenderOverlays
 
 		Techniques::RenderPassInstance rpi { parsingContext, fbFragment };
 		rpi.AutoNonFrameBufferBarrier({
-			{0, BindFlag::UnorderedAccess, ShaderStage::Compute},
+			{0, BindFlag::ShaderResource, ShaderStage::Compute},
 			{1, BindFlag::UnorderedAccess, ShaderStage::Compute},
-			{2, BindFlag::UnorderedAccess, ShaderStage::Compute}
+			{2, BindFlag::UnorderedAccess, ShaderStage::Compute},
 		});
 
 		auto paramsSize = CB_BlurControlUniforms::CalculateSize(_tapCount);
@@ -142,15 +151,23 @@ namespace RenderOverlays
 			} else {
 				if (c&1) {
 					srvs[0] = rpi.GetNonFrameBufferAttachmentView(2).get();
+					rpi.AutoNonFrameBufferBarrier({
+						{1, BindFlag::UnorderedAccess, ShaderStage::Compute},
+						{2, BindFlag::ShaderResource, ShaderStage::Compute}
+					});
 				} else {
 					srvs[0] = rpi.GetNonFrameBufferAttachmentView(1).get();
+					rpi.AutoNonFrameBufferBarrier({
+						{1, BindFlag::ShaderResource, ShaderStage::Compute},
+						{2, BindFlag::UnorderedAccess, ShaderStage::Compute}
+					});
 				}
 			}
 			// output
 			if (c&1) {
-				srvs[1] = rpi.GetNonFrameBufferAttachmentView(1).get();
+				srvs[1] = rpi.GetNonFrameBufferAttachmentView(3).get();
 			} else {
-				srvs[1] = rpi.GetNonFrameBufferAttachmentView(2).get();
+				srvs[1] = rpi.GetNonFrameBufferAttachmentView(4).get();
 			}
 
 			params._srgbConversionOnInput = (c==0) ? false : true;
@@ -299,6 +316,7 @@ namespace RenderOverlays
 	public:
 		std::shared_ptr<RenderCore::IResourceView> Execute(
 			RenderCore::Techniques::ParsingContext& parsingContext,
+			float blurStrength,
 			uint64_t inputAttachment = RenderCore::Techniques::AttachmentSemantics::ColorLDR);
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
@@ -317,6 +335,7 @@ namespace RenderOverlays
 
 	std::shared_ptr<RenderCore::IResourceView> BroadBlurOperator::Execute(
 		RenderCore::Techniques::ParsingContext& parsingContext,
+		float blurStrength,
 		uint64_t inputAttachment)
 	{
 		using namespace RenderCore;
@@ -339,12 +358,12 @@ namespace RenderOverlays
 
 		Techniques::FrameBufferDescFragment fbFragment;
 		fbFragment._pipelineType = PipelineType::Compute;
-		const unsigned colorLDRAttachment = fbFragment.DefineAttachment(inputAttachment).FinalState(BindFlag::UnorderedAccess);
-		const unsigned workingAttachment = fbFragment.DefineAttachment("BroadBlurryBackground"_h).NoInitialState().FinalState(BindFlag::ShaderResource);
+		const unsigned colorLDRAttachment = fbFragment.DefineAttachment(inputAttachment).FinalState(BindFlag::ShaderResource);
+		const unsigned workingAttachment = fbFragment.DefineAttachment("BroadBlurryBackground"_h).NoInitialState().FinalState(BindFlag::ShaderResource).RequireBindFlags(BindFlag::UnorderedAccess);
 		Techniques::FrameBufferDescFragment::SubpassDesc sp;
-		const auto inputUAV = sp.AppendNonFrameBufferAttachmentView(colorLDRAttachment, BindFlag::UnorderedAccess);
+		const auto inputSRV = sp.AppendNonFrameBufferAttachmentView(colorLDRAttachment, BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::ColorSRGB});
 		const auto allMipsUAV = sp.AppendNonFrameBufferAttachmentView(workingAttachment, BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::Aspect::ColorLinear});
-		const auto allMipsSRV = sp.AppendNonFrameBufferAttachmentView(workingAttachment, BindFlag::ShaderResource);
+		const auto allMipsSRV = sp.AppendNonFrameBufferAttachmentView(workingAttachment, BindFlag::ShaderResource, TextureViewDesc{TextureViewDesc::Aspect::ColorSRGB});
 		TextureViewDesc justTopMip; justTopMip._mipRange = {0, 1};
 		const auto topMipSRV = sp.AppendNonFrameBufferAttachmentView(workingAttachment, BindFlag::ShaderResource, justTopMip);
 		sp.SetName("broad-blur");
@@ -352,7 +371,7 @@ namespace RenderOverlays
 
 		Techniques::RenderPassInstance rpi { parsingContext, fbFragment };
 		rpi.AutoNonFrameBufferBarrier({
-			{inputUAV, BindFlag::UnorderedAccess, ShaderStage::Compute},
+			{inputSRV, BindFlag::ShaderResource, ShaderStage::Compute},
 			{allMipsUAV, BindFlag::UnorderedAccess, ShaderStage::Compute}
 		});
 
@@ -367,8 +386,10 @@ namespace RenderOverlays
 		_downsampleOperator->Execute(
 			parsingContext.GetThreadContext(),
 			MakeIteratorRange(tempUAVs),
-			*rpi.GetNonFrameBufferAttachmentView(inputUAV),
+			*rpi.GetNonFrameBufferAttachmentView(inputSRV),
 			true);
+
+		const float mipFocus = LinearInterpolate(-3.f, std::max(0.f, float(srcMipCount)-3), blurStrength);
 
 		// now upsample operation
 		{
@@ -395,15 +416,20 @@ namespace RenderOverlays
 					threadGroupX = ((mipChainTopDims[0]>>dstMip)+dispatchGroupWidth)/dispatchGroupWidth,
 					threadGroupY = ((mipChainTopDims[1]>>dstMip)+dispatchGroupHeight)/dispatchGroupHeight;
 
+				float w = NormGaussianWeight1D(float(dstMip) - mipFocus, 2.f) * std::min(1.f, blurStrength / 0.1f);
+				if (dstMip < mipFocus) w = 1.f;
+
 				struct ControlUniforms {
 					Float2 _reciprocalDstDims;
-					unsigned _dummy2[2];
+					float _filteringWeight;
+					unsigned _dummy2[1];
 					UInt2 _threadGroupCount;
 					unsigned _mipIndex;
 					unsigned _dummy3;
 				} controlUniforms {
 					Float2 { 1.f/float(mipChainTopDims[0]>>dstMip), 1.f/float(mipChainTopDims[1]>>dstMip) },
-					{0,0},
+					w,
+					{0},
 					{ threadGroupX, threadGroupY },
 					dstMip,
 					0
@@ -464,7 +490,7 @@ namespace RenderOverlays
 			});
 	}
 
-	std::shared_ptr<RenderCore::IResourceView> BlurryBackgroundEffect::GetResourceView(Type type)
+	std::shared_ptr<RenderCore::IResourceView> BlurryBackgroundEffect::GetResourceView(Type type, float blurStrength, uint64_t inputAttachment)
 	{
 		assert(_parsingContext);
 		if (!_backgroundResource) {
@@ -474,7 +500,7 @@ namespace RenderOverlays
 				if (op) {
 					// bring up-to-date compute, because it's typically invalidated at this point
 					_parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*_parsingContext);
-					_backgroundResource = (*op)->Execute(*_parsingContext, Tweakable("BlurRadius", 20.0f));
+					_backgroundResource = (*op)->Execute(*_parsingContext, blurStrength * Tweakable("GaussianBlurRadius", 20.0f), inputAttachment);
 				}
 			} else {
 				assert(type == Type::BroadBlur);
@@ -482,7 +508,7 @@ namespace RenderOverlays
 				if (op) {
 					// bring up-to-date compute, because it's typically invalidated at this point
 					_parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*_parsingContext);
-					_backgroundResource = (*op)->Execute(*_parsingContext);
+					_backgroundResource = (*op)->Execute(*_parsingContext, blurStrength, inputAttachment);
 				}
 			}
 		}
@@ -496,6 +522,24 @@ namespace RenderOverlays
 				screenSpace[0] / float(_parsingContext->GetFrameBufferProperties()._width),
 				screenSpace[1] / float(_parsingContext->GetFrameBufferProperties()._height) };
 		return {0,0};
+	}
+
+	uint64_t BlurryBackgroundEffect::DefaultInputAttachment()
+	{
+		return RenderCore::Techniques::AttachmentSemantics::ColorLDR;
+	}
+
+	float BlurryBackgroundEffect::DefaultBlurStrength()
+	{
+		return 1.f;
+	}
+
+	void BlurryBackgroundEffect::PrepareResources(std::promise<void>&& promise, std::shared_ptr<RenderCore::Techniques::PipelineCollection> pipelinePool)
+	{
+		const unsigned tapCount = Tweakable("BlurTapCount", 31);
+		auto gaussianBlur = ::Assets::GetAssetMarkerPtr<GaussianBlurOperator>(pipelinePool, tapCount);
+		auto broadBlur = ::Assets::GetAssetMarkerPtr<BroadBlurOperator>(pipelinePool);
+		::Assets::WhenAll(std::move(gaussianBlur), std::move(broadBlur)).ThenConstructToPromise(std::move(promise));
 	}
 
 	BlurryBackgroundEffect::BlurryBackgroundEffect(RenderCore::Techniques::ParsingContext& parsingContext)

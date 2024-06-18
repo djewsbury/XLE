@@ -247,7 +247,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		};
 		std::vector<SubpassDependency> _dependencies;
 
-		VkAttachmentDescription2 CreateAttachmentDescription(const WorkingViewedAttachment& viewedAttachment)
+		VkAttachmentDescription2 CreateAttachmentDescription_V2(const WorkingViewedAttachment& viewedAttachment)
 		{
 			auto& res = _workingAttachments[viewedAttachment._mappedAttachmentIdx];
 			AttachmentName resName = res.first; 
@@ -331,6 +331,23 @@ namespace RenderCore { namespace Metal_Vulkan
 			return desc;
 		}
 
+		VkAttachmentDescription CreateAttachmentDescription_V1(const WorkingViewedAttachment& viewedAttachment)
+		{
+			auto V2 = CreateAttachmentDescription_V2(viewedAttachment);
+			VkAttachmentDescription result;
+			result.flags = V2.flags;
+			result.format = V2.format;
+			result.samples = V2.samples;
+			result.loadOp = V2.loadOp;
+			result.storeOp = V2.storeOp;
+			result.stencilLoadOp = V2.stencilLoadOp;
+			result.stencilStoreOp = V2.stencilStoreOp;
+			result.initialLayout = V2.initialLayout;
+			result.finalLayout = V2.finalLayout;
+			assert(V2.pNext == nullptr);
+			return result;
+		}
+
 		static bool ViewsOverlap(const TextureViewDesc& lhs, const TextureViewDesc& rhs) 
 		{
 			// check array layers & mip levels to ensure they overlap
@@ -386,7 +403,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			return true;
 		}
 
-		VkAttachmentReference2 CreateAttachmentReference(
+		VkAttachmentReference2 CreateAttachmentReference_V2(
 			AttachmentName resourceName, const TextureViewDesc& view,
 			Internal::AttachmentResourceUsageType::BitField immediateUsage,
 			Internal::AttachmentResourceUsageType::BitField subpassUsage,
@@ -486,6 +503,21 @@ namespace RenderCore { namespace Metal_Vulkan
 			i->second._lastSubpassLayout = ref.layout;
 			return ref;
 		}
+
+		VkAttachmentReference CreateAttachmentReference_V1(
+			AttachmentName resourceName, const TextureViewDesc& view,
+			Internal::AttachmentResourceUsageType::BitField immediateUsage,
+			Internal::AttachmentResourceUsageType::BitField subpassUsage,
+			unsigned subpassIdx, bool inputAttachmentReference = false)
+		{
+			auto V2 = CreateAttachmentReference_V2(resourceName, view, immediateUsage, subpassUsage, subpassIdx, inputAttachmentReference);
+			VkAttachmentReference result;
+			result.attachment = V2.attachment;
+    		result.layout = V2.layout;
+			// V2.aspectMask is ignored
+			assert(V2.pNext == nullptr);
+			return result;
+		}
 		
 		RenderPassHelper(const FrameBufferDesc& layout)
 		: _layout(&layout)
@@ -498,7 +530,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		const FrameBufferDesc* _layout;
 	};
 
-	VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass(
+	static VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass_V2(
         const Metal_Vulkan::ObjectFactory& factory,
         const FrameBufferDesc& layout)
 	{
@@ -536,7 +568,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
             auto beforeOutputs = attachReferences.size();
             for (auto& a:spDesc.GetOutputs())
-				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Output, subpassAttachmentUsages[a._resourceName], spIdx));
+				attachReferences.push_back(helper.CreateAttachmentReference_V2(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Output, subpassAttachmentUsages[a._resourceName], spIdx));
             desc.pColorAttachments = (const VkAttachmentReference2*)(beforeOutputs+1);
             desc.colorAttachmentCount = uint32_t(attachReferences.size() - beforeOutputs);
             desc.pResolveAttachments = nullptr; // not supported
@@ -546,7 +578,7 @@ namespace RenderCore { namespace Metal_Vulkan
             if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
 				const auto& a = spDesc.GetDepthStencil();
 				desc.pDepthStencilAttachment = (const VkAttachmentReference2*)(attachReferences.size()+1);
-				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::DepthStencil, subpassAttachmentUsages[a._resourceName], spIdx));
+				attachReferences.push_back(helper.CreateAttachmentReference_V2(a._resourceName, a._window, Internal::AttachmentResourceUsageType::DepthStencil, subpassAttachmentUsages[a._resourceName], spIdx));
             } else {
                 desc.pDepthStencilAttachment = nullptr;
             }
@@ -557,7 +589,7 @@ namespace RenderCore { namespace Metal_Vulkan
             // layout, descriptor set and shader must all agree!
             auto beforeInputs = attachReferences.size();
             for (auto& a:spDesc.GetInputs())
-				attachReferences.push_back(helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true));
+				attachReferences.push_back(helper.CreateAttachmentReference_V2(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true));
             desc.pInputAttachments = (const VkAttachmentReference2*)(beforeInputs+1);
             desc.inputAttachmentCount = uint32_t(attachReferences.size() - beforeInputs);
 
@@ -583,7 +615,7 @@ namespace RenderCore { namespace Metal_Vulkan
         std::vector<VkAttachmentDescription2> attachmentDescs;
 		attachmentDescs.reserve(helper._workingViewedAttachments.size());
 		for (const auto& a:helper._workingViewedAttachments)
-			attachmentDescs.push_back(helper.CreateAttachmentDescription(a));
+			attachmentDescs.push_back(helper.CreateAttachmentDescription_V2(a));
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build the VkSubpassDependency objects
@@ -682,6 +714,194 @@ namespace RenderCore { namespace Metal_Vulkan
         return factory.CreateRenderPass(rp_info);
 	}
 
+	static VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass_V1(
+        const Metal_Vulkan::ObjectFactory& factory,
+        const FrameBufferDesc& layout)
+	{
+		const auto subpasses = layout.GetSubpasses();
+		auto attachmentCount = layout.GetAttachments().size();
+		RenderPassHelper helper{layout};
+
+		////////////////////////////////////////////////////////////////////////////////////
+		// Build the VkSubpassDescription objects
+		std::vector<VkAttachmentReference> attachReferences;
+        std::vector<VkSubpassDescription> subpassDesc;
+        subpassDesc.reserve(subpasses.size());
+        for (unsigned spIdx=0; spIdx<subpasses.size(); ++spIdx) {
+			const auto& spDesc = subpasses[spIdx];
+            VkSubpassDescription desc;
+            desc.flags = 0;
+            desc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+			assert(spDesc.GetViewInstanceMask() == 1);
+
+			VLA(Internal::AttachmentResourceUsageType::BitField, subpassAttachmentUsages, attachmentCount);
+			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
+
+			for (const auto& r:spDesc.GetOutputs()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentResourceUsageType::Output;
+			for (const auto& r:spDesc.GetInputs()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentResourceUsageType::Input;
+			if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
+				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::DepthStencil;
+			/*for (const auto& r:spDesc.GetResolveOutputs()) 
+				subpassAttachmentUsages[r._resourceName] |= Internal::AttachmentResourceUsageType::Output;
+			if (spDesc.GetResolveDepthStencil()._resourceName != SubpassDesc::Unused._resourceName)
+				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::Output;*/
+
+            auto beforeOutputs = attachReferences.size();
+            for (auto& a:spDesc.GetOutputs())
+				attachReferences.push_back(helper.CreateAttachmentReference_V1(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Output, subpassAttachmentUsages[a._resourceName], spIdx));
+            desc.pColorAttachments = (const VkAttachmentReference*)(beforeOutputs+1);
+            desc.colorAttachmentCount = uint32_t(attachReferences.size() - beforeOutputs);
+            desc.pResolveAttachments = nullptr; // not supported
+			desc.pPreserveAttachments = nullptr;
+			desc.preserveAttachmentCount = 0;
+
+            if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
+				const auto& a = spDesc.GetDepthStencil();
+				desc.pDepthStencilAttachment = (const VkAttachmentReference*)(attachReferences.size()+1);
+				attachReferences.push_back(helper.CreateAttachmentReference_V1(a._resourceName, a._window, Internal::AttachmentResourceUsageType::DepthStencil, subpassAttachmentUsages[a._resourceName], spIdx));
+            } else {
+                desc.pDepthStencilAttachment = nullptr;
+            }
+
+            // Input attachments are going to be difficult, because they must be bound both
+            // by the sub passes and by the descriptor set! (and they must be explicitly listed as
+            // input attachments in the shader). Holy cow, the render pass, frame buffer, pipeline
+            // layout, descriptor set and shader must all agree!
+            auto beforeInputs = attachReferences.size();
+            for (auto& a:spDesc.GetInputs())
+				attachReferences.push_back(helper.CreateAttachmentReference_V1(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true));
+            desc.pInputAttachments = (const VkAttachmentReference*)(beforeInputs+1);
+            desc.inputAttachmentCount = uint32_t(attachReferences.size() - beforeInputs);
+
+			// preserve & resolve attachments not supported currently
+
+            subpassDesc.push_back(desc);
+        }
+
+        // we need to do a fixup pass over all of the subpasses to generate correct pointers
+        for (auto&p:subpassDesc) {
+            if (p.pInputAttachments)
+                p.pInputAttachments = AsPointer(attachReferences.begin()) + size_t(p.pInputAttachments)-1;
+            if (p.pColorAttachments)
+                p.pColorAttachments = AsPointer(attachReferences.begin()) + size_t(p.pColorAttachments)-1;
+            if (p.pResolveAttachments)
+                p.pResolveAttachments = AsPointer(attachReferences.begin()) + size_t(p.pResolveAttachments)-1;
+            if (p.pDepthStencilAttachment)
+                p.pDepthStencilAttachment = AsPointer(attachReferences.begin()) + size_t(p.pDepthStencilAttachment)-1;
+        }
+
+		////////////////////////////////////////////////////////////////////////////////////
+		// Build the VkAttachmentDescription objects
+        std::vector<VkAttachmentDescription> attachmentDescs;
+		attachmentDescs.reserve(helper._workingViewedAttachments.size());
+		for (const auto& a:helper._workingViewedAttachments)
+			attachmentDescs.push_back(helper.CreateAttachmentDescription_V1(a));
+
+		////////////////////////////////////////////////////////////////////////////////////
+		// Build the VkSubpassDependency objects
+
+        std::vector<VkSubpassDependency> vkDeps;
+		for (unsigned c=0;c<unsigned(subpasses.size()); ++c) {
+			// Find the list of SubPassDependency objects where _second is this subpass. We'll
+			// then find the unique list of subpasses referenced by _first, and generate the
+			// Vulkan object from them.
+			//
+			// Note that there are implicit dependencies to "VK_SUBPASS_EXTERNAL" which are defined
+			// with a standard form. We'll rely on those implicit dependencies, rather than 
+			// explicitly creating them here.
+
+			std::vector<RenderPassHelper::SubpassDependency> terminatingDependencies;
+			for (const auto& d:helper._dependencies)
+				if (d._subpassSecond == c && d._subpassFirst != ~0u)
+					terminatingDependencies.push_back(d);
+
+			std::vector<VkSubpassDependency> deps;
+			for (const auto& d:terminatingDependencies) {
+				auto i = std::find_if(
+					deps.begin(), deps.end(),
+					[&d](const VkSubpassDependency& vkd) { return vkd.srcSubpass == d._subpassFirst; });
+				if (i == deps.end())
+					i = deps.insert(deps.end(), VkSubpassDependency{
+						d._subpassFirst, c, 
+						0, 0, 0, 0,	// mask and access flags set below
+						0});
+
+				// note -- making assumptions about attachments usage here -- (in particular, ignoring shader resources bound to shaders other than the fragment shader)
+				if (d._usageFirst & Internal::AttachmentResourceUsageType::Output) {
+					i->srcAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+					i->srcStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+				}
+				if (d._usageFirst & Internal::AttachmentResourceUsageType::DepthStencil) {
+					i->srcAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+					i->srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+				}
+				if (d._usageFirst & Internal::AttachmentResourceUsageType::Input) {
+					i->srcAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+					i->srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+				}
+
+				if (d._usageSecond & Internal::AttachmentResourceUsageType::Output) {
+					i->dstAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+					i->dstStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+				}
+				if (d._usageSecond & Internal::AttachmentResourceUsageType::DepthStencil) {
+					i->dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+					i->dstStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+				}
+				if (d._usageSecond & Internal::AttachmentResourceUsageType::Input) {
+					i->dstAccessMask |= VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+					i->dstStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+				}
+			}
+
+			vkDeps.insert(vkDeps.end(), deps.begin(), deps.end());
+        }
+
+		/*
+			Vulkan samples tend to setup something like this:
+
+			    // Subpass dependency to wait for wsi image acquired semaphore before starting layout transition
+			VkSubpassDependency subpass_dependency = {};
+			subpass_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+			subpass_dependency.dstSubpass = 0;
+			subpass_dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			subpass_dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			subpass_dependency.srcAccessMask = 0;
+			subpass_dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			subpass_dependency.dependencyFlags = 0;
+		*/
+
+		////////////////////////////////////////////////////////////////////////////////////
+		// Build the final render pass object
+
+        VkRenderPassCreateInfo rp_info = {};
+        rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        rp_info.pNext = nullptr;
+		rp_info.flags = 0;
+        rp_info.attachmentCount = (uint32_t)attachmentDescs.size();
+        rp_info.pAttachments = attachmentDescs.data();
+        rp_info.subpassCount = (uint32_t)subpassDesc.size();
+        rp_info.pSubpasses = subpassDesc.data();
+        rp_info.dependencyCount = (uint32_t)vkDeps.size();
+        rp_info.pDependencies = vkDeps.data();
+
+		// Log(Verbose) << "Vulkan render pass generated: " << std::endl;
+		// Log(Verbose) << rp_info << std::endl;
+
+        return factory.CreateRenderPass(rp_info);
+	}
+
+	VulkanUniquePtr<VkRenderPass> CreateVulkanRenderPass(
+        const Metal_Vulkan::ObjectFactory& factory,
+        const FrameBufferDesc& layout)
+	{
+		if (factory.GetXLEFeatures()._vulkanRenderPass2)
+			return CreateVulkanRenderPass_V2(factory, layout);
+		return CreateVulkanRenderPass_V1(factory, layout);
+	}
+
 	struct MaxDims
 	{
 		unsigned _width = 0, _height = 0;
@@ -732,13 +952,13 @@ namespace RenderCore { namespace Metal_Vulkan
 				subpassAttachmentUsages[spDesc.GetDepthStencil()._resourceName] |= Internal::AttachmentResourceUsageType::DepthStencil;
 
             for (auto& a:spDesc.GetOutputs())
-				helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Output, subpassAttachmentUsages[a._resourceName], spIdx);
+				helper.CreateAttachmentReference_V2(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Output, subpassAttachmentUsages[a._resourceName], spIdx);
             if (spDesc.GetDepthStencil()._resourceName != SubpassDesc::Unused._resourceName) {
 				const auto& a = spDesc.GetDepthStencil();
-				helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::DepthStencil, subpassAttachmentUsages[a._resourceName], spIdx);
+				helper.CreateAttachmentReference_V2(a._resourceName, a._window, Internal::AttachmentResourceUsageType::DepthStencil, subpassAttachmentUsages[a._resourceName], spIdx);
             }
             for (auto& a:spDesc.GetInputs())
-				helper.CreateAttachmentReference(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true);
+				helper.CreateAttachmentReference_V2(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true);
         }
 
 		if (isViewInstancingFrameBuffer && !factory.GetXLEFeatures()._viewInstancingRenderPasses)

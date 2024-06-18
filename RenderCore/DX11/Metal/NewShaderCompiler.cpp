@@ -192,7 +192,7 @@ namespace RenderCore { namespace Metal_DX11
 		return {};
 	}
 
-	class DXShaderCompiler : public ILowLevelCompiler
+	class DummyDXShaderCompiler : public ILowLevelCompiler
 	{
 	public:
 		virtual void AdaptResId(ResId& resId) const override
@@ -213,6 +213,73 @@ namespace RenderCore { namespace Metal_DX11
 			}
 		}
 
+		virtual std::string MakeShaderMetricsString(
+			const void* byteCode, size_t byteCodeSize) const override
+		{
+			return "Shader metrics not yet implemented for dxcompiler";
+		}
+
+		virtual CompilerCapability::BitField GetCapabilities() const override { return _capabilities; }
+		virtual ShaderLanguage GetShaderLanguage() const override { return ShaderLanguage::HLSL; }
+
+		using FixedDefined = std::pair<std::basic_string<wchar_t>, std::basic_string<wchar_t>>;
+
+		struct DefinesTable
+		{
+			std::vector<wchar_t> _buffer;
+			std::vector<DxcDefine> _defines;
+
+			void Add(StringSection<wchar_t> name, StringSection<wchar_t> value);
+			void Add(StringSection<> name, StringSection<> value);
+		};
+		static DefinesTable MakeDefinesTable(
+			StringSection<char> definesTable, const char shaderModel[],
+			IteratorRange<const FixedDefined*> fixedDefines);
+
+		virtual bool DoLowLevelCompile(
+            /*out*/ Payload& payload,
+            /*out*/ Payload& errors,
+            /*out*/ std::vector<::Assets::DependentFileState>& dependencies,
+            const void* sourceCode, size_t sourceCodeLength,
+            const ResId& shaderPath,
+            StringSection<::Assets::ResChar> definesTable,
+            IteratorRange<const SourceLineMarker*> sourceLineMarkers = {}) const override
+		{
+			errors = ::Assets::AsBlob("Attempting to compile with dummy shader compiler");
+			return false;
+		}
+
+        virtual bool DoLowLevelCompile(
+            CompletionFunction&& completionFunction,
+            const void* sourceCode, size_t sourceCodeLength,
+            const ResId& shaderPath,
+            StringSection<::Assets::ResChar> definesTable,
+            IteratorRange<const SourceLineMarker*> sourceLineMarkers) const override
+		{ 
+			return false;
+		}
+
+		DummyDXShaderCompiler(std::vector<FixedDefined>&& fixedDefines, ShaderFeatureLevel featureLevel, std::string defaultShaderModel, CompilerCapability::BitField capabilities)
+		: _fixedDefines(std::move(fixedDefines))
+		, _featureLevel(featureLevel)
+		, _defaultShaderModel(std::move(defaultShaderModel))
+		{
+			_capabilities = capabilities & CompilerCapability::Float16;
+		}
+
+		~DummyDXShaderCompiler() {}
+
+	protected:
+		std::vector<FixedDefined> _fixedDefines;
+		ShaderFeatureLevel _featureLevel;
+
+		std::string _defaultShaderModel;
+		CompilerCapability::BitField _capabilities = 0;
+	};
+
+	class DXShaderCompiler : public DummyDXShaderCompiler
+	{
+	public:
 		static Payload AsPayload(IDxcBlob* input)
 		{
 			auto byteCount = input->GetBufferSize();
@@ -419,57 +486,25 @@ namespace RenderCore { namespace Metal_DX11
 			}
 		}
 
-		virtual std::string MakeShaderMetricsString(
-			const void* byteCode, size_t byteCodeSize) const override
-		{
-			return "Shader metrics not yet implemented for dxcompiler";
-		}
-
-		virtual CompilerCapability::BitField GetCapabilities() const override { return _capabilities; }
-		virtual ShaderLanguage GetShaderLanguage() const override { return ShaderLanguage::HLSL; }
-
-		using FixedDefined = std::pair<std::basic_string<wchar_t>, std::basic_string<wchar_t>>;
-
-		struct DefinesTable
-		{
-			std::vector<wchar_t> _buffer;
-			std::vector<DxcDefine> _defines;
-
-			void Add(StringSection<wchar_t> name, StringSection<wchar_t> value);
-			void Add(StringSection<> name, StringSection<> value);
-		};
-		static DefinesTable MakeDefinesTable(
-			StringSection<char> definesTable, const char shaderModel[],
-			IteratorRange<const FixedDefined*> fixedDefines);
-
 		DXShaderCompiler(std::vector<FixedDefined>&& fixedDefines, ShaderFeatureLevel featureLevel, std::string defaultShaderModel, CompilerCapability::BitField capabilities)
-		: _fixedDefines(std::move(fixedDefines))
-		, _featureLevel(featureLevel)
-		, _defaultShaderModel(std::move(defaultShaderModel))
+		: DummyDXShaderCompiler(std::move(fixedDefines), featureLevel, defaultShaderModel, capabilities)
 		{
 			auto& library = GetDXCompilerLibrary();
 			_utils = library.CreateDXCompilerInterface<IDxcUtils>(CLSID_DxcUtils);
 			_compiler = library.CreateDXCompilerInterface<IDxcCompiler3>(CLSID_DxcCompiler);
-			_capabilities = capabilities & CompilerCapability::Float16;
 		}
 
 		~DXShaderCompiler()
 		{}
 
 	protected:
-		std::vector<FixedDefined> _fixedDefines;
-		ShaderFeatureLevel _featureLevel;
-
 		intrusive_ptr<IDxcUtils> _utils;
 		intrusive_ptr<IDxcCompiler3> _compiler;
-
-		std::string _defaultShaderModel;
-		CompilerCapability::BitField _capabilities = 0;
 
 		mutable Threading::Mutex _lock;
 	};
 
-	void DXShaderCompiler::DefinesTable::Add(StringSection<wchar_t> name, StringSection<wchar_t> value)
+	void DummyDXShaderCompiler::DefinesTable::Add(StringSection<wchar_t> name, StringSection<wchar_t> value)
 	{
 		DxcDefine define;
 		define.Name = LPCWSTR(1+_buffer.size());
@@ -484,7 +519,7 @@ namespace RenderCore { namespace Metal_DX11
 		_defines.push_back(define);
 	}
 
-	void DXShaderCompiler::DefinesTable::Add(StringSection<> name, StringSection<> value)
+	void DummyDXShaderCompiler::DefinesTable::Add(StringSection<> name, StringSection<> value)
 	{
 		DxcDefine define;
 		define.Name = LPCWSTR(1+_buffer.size());
@@ -501,7 +536,7 @@ namespace RenderCore { namespace Metal_DX11
 		_defines.push_back(define);
 	}
 
-	auto DXShaderCompiler::MakeDefinesTable(
+	auto DummyDXShaderCompiler::MakeDefinesTable(
 		StringSection<char> definesTable, const char shaderModel[],
 		IteratorRange<const FixedDefined*> fixedDefines) -> DefinesTable
 	{
@@ -547,5 +582,15 @@ namespace RenderCore { namespace Metal_DX11
 
 		std::string defaultShaderModel = "6_2";
 		return std::make_shared<DXShaderCompiler>(std::move(fixedDefines), ShaderFeatureLevel::Level_11_0, std::move(defaultShaderModel), capabilities);
+	}
+
+	std::shared_ptr<ILowLevelCompiler> CreateDummyShaderCompiler(ILowLevelCompiler::CompilerCapability::BitField capabilities)
+	{
+		std::vector<DXShaderCompiler::FixedDefined> fixedDefines {
+			std::make_pair(L"VULKAN", L"1")
+		};
+
+		std::string defaultShaderModel = "6_2";
+		return std::make_shared<DummyDXShaderCompiler>(std::move(fixedDefines), ShaderFeatureLevel::Level_11_0, std::move(defaultShaderModel), capabilities);
 	}
 }}

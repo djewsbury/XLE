@@ -47,7 +47,7 @@ namespace RenderCore
 	: _resourceViews({&r0, &r1, &r2, &r3, &r4, &r5})
 	{}
 
-	void UniformsStreamInterface::BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements)
+	UniformsStreamInterface& UniformsStreamInterface::BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements)
 	{
 		if (_resourceViewBindings.size() <= slot)
 			_resourceViewBindings.resize(slot+1);
@@ -64,9 +64,10 @@ namespace RenderCore
 			lyt._elements = std::vector<ConstantBufferElementDesc>{cbElements.begin(), cbElements.end()};
 			_cbLayouts.push_back(std::make_pair(hashName, std::move(lyt)));
 		}
+		return *this;
 	}
 
-	void UniformsStreamInterface::BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements)
+	UniformsStreamInterface& UniformsStreamInterface::BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*> cbElements)
 	{
 		if (_immediateDataBindings.size() <= slot)
 			_immediateDataBindings.resize(slot+1);
@@ -83,17 +84,10 @@ namespace RenderCore
 			lyt._elements = std::vector<ConstantBufferElementDesc>{cbElements.begin(), cbElements.end()};
 			_cbLayouts.push_back(std::make_pair(hashName, std::move(lyt)));
 		}
+		return *this;
 	}
 
-	void UniformsStreamInterface::BindSampler(unsigned slot, uint64_t hashName)
-	{
-		if (_samplerBindings.size() <= slot)
-			_samplerBindings.resize(slot+1);
-		_samplerBindings[slot] = hashName;
-		_hash = ~0ull;
-	}
-
-	void UniformsStreamInterface::BindFixedDescriptorSet(unsigned slot, uint64_t hashName, const DescriptorSetSignature* signature)
+	UniformsStreamInterface& UniformsStreamInterface::BindFixedDescriptorSet(unsigned slot, uint64_t hashName, const DescriptorSetSignature* signature)
 	{
 		if (_fixedDescriptorSetBindings.size() <= slot)
 			_fixedDescriptorSetBindings.resize(slot+1);
@@ -110,6 +104,7 @@ namespace RenderCore
 			lyt._signature = signature;
 			_descriptorSetLayouts.push_back(std::make_pair(hashName, std::move(lyt)));
 		}
+		return *this;
 	}
 
 	IteratorRange<const ConstantBufferElementDesc*> UniformsStreamInterface::GetCBLayoutElements(uint64_t hashName) const
@@ -160,9 +155,6 @@ namespace RenderCore
 		_immediateDataBindings.reserve(64);
 		_samplerBindings.reserve(64);
 	}
-
-	UniformsStreamInterface::UniformsStreamInterface() : _hash(0) {}
-	UniformsStreamInterface::~UniformsStreamInterface() {}
 
 	uint64_t DescriptorSetSignature::GetHashIgnoreNames() const
 	{

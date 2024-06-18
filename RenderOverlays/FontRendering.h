@@ -11,7 +11,7 @@
 #include <memory>
 
 namespace RenderCore { class IResource; class IResourceView; class IThreadContext; class IDevice; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; }}
+namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; class RetainedUniformsStream; }}
 namespace RenderCore { namespace Assets { class RenderStateSet; }}
 
 namespace RenderOverlays
@@ -63,7 +63,13 @@ namespace RenderOverlays
 							RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 							FontRenderingManager& textureMan,
 							const Font& font, const FontSpan& span,
-							ColorB color);
+							ColorB color, Float2 offset = Float2{0,0});
+
+	bool 		DrawOutline(	RenderCore::IThreadContext& threadContext,
+								RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+								FontRenderingManager& textureMan,
+								const Font& font, const FontSpan& span,
+								ColorB color, float outlineWidth = 1.f);
 
 	///////////////////////////////////////////////////////////////////////////////////
 
@@ -112,6 +118,7 @@ namespace RenderOverlays
 		void AddUploadBarrier(RenderCore::IThreadContext& threadContext);
 
 		const RenderCore::Techniques::ImmediateDrawableMaterial& GetImmediateDrawableMaterial();
+		const RenderCore::Techniques::RetainedUniformsStream& GetImmediateDrawableUniforms();
 
 		const std::shared_ptr<RenderCore::IResource>& GetUnderlyingTextureResource();		// intended for the debugging display
 	

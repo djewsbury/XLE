@@ -57,7 +57,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pipelineLayout = checked_pointer_cast<CompiledPipelineLayout>(pipelineLayout);
 		_interfaceBindingHash = DefaultSeed64;
 
-		_validationCallback = ::Assets::GetDepValSys().Make();
+		::Assets::DependencyValidationMarker subDepVals[2];
+		unsigned subDepValCount = 0;
 
 		if (vs.GetStage() != ShaderStage::Null) {
 			assert(vs.GetStage() == ShaderStage::Vertex);
@@ -66,7 +67,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Vertex].get(), vs.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Vertex] = vs;
 			assert(_modules[(unsigned)ShaderStage::Vertex]);
-			_validationCallback.RegisterDependency(vs.GetDependencyValidation());
+			subDepVals[subDepValCount++] = vs.GetDependencyValidation();
 
 			_interfaceBindingHash = Hash64(byteCode.begin(), byteCode.end(), _interfaceBindingHash);
 		}
@@ -78,10 +79,12 @@ namespace RenderCore { namespace Metal_Vulkan
 			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Pixel].get(), ps.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Pixel] = ps;
 			assert(_modules[(unsigned)ShaderStage::Pixel]);
-			_validationCallback.RegisterDependency(ps.GetDependencyValidation());
+			subDepVals[subDepValCount++] = ps.GetDependencyValidation();
 
 			_interfaceBindingHash = Hash64(byteCode.begin(), byteCode.end(), _interfaceBindingHash);
 		}
+
+		_validationCallback = ::Assets::GetDepValSys().MakeOrReuse({subDepVals, &subDepVals[subDepValCount]});
     }
     
     ShaderProgram::ShaderProgram(   ObjectFactory& factory,
@@ -104,7 +107,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Geometry].get(), gs.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Geometry] = gs;
 			assert(_modules[(unsigned)ShaderStage::Geometry]);
-			_validationCallback.RegisterDependency(gs.GetDependencyValidation());
+			if (auto subDepVal = gs.GetDependencyValidation())
+				_validationCallback.RegisterDependency(subDepVal);
 
 			_interfaceBindingHash = Hash64(byteCode.begin(), byteCode.end(), _interfaceBindingHash);
 		}
@@ -127,7 +131,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Hull].get(), hs.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Hull] = hs;
 			assert(_modules[(unsigned)ShaderStage::Hull]);
-			_validationCallback.RegisterDependency(hs.GetDependencyValidation());
+			if (auto subDepVal = hs.GetDependencyValidation())
+				_validationCallback.RegisterDependency(subDepVal);
 
 			_interfaceBindingHash = Hash64(byteCode.begin(), byteCode.end(), _interfaceBindingHash);
 		}
@@ -139,7 +144,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			AssignModuleName(factory, _modules[(unsigned)ShaderStage::Domain].get(), ds.GetIdentifier());
 			_compiledCode[(unsigned)ShaderStage::Domain] = ds;
 			assert(_modules[(unsigned)ShaderStage::Domain]);
-			_validationCallback.RegisterDependency(ds.GetDependencyValidation());
+			if (auto subDepVal = ds.GetDependencyValidation())
+				_validationCallback.RegisterDependency(subDepVal);
 
 			_interfaceBindingHash = Hash64(byteCode.begin(), byteCode.end(), _interfaceBindingHash);
 		}

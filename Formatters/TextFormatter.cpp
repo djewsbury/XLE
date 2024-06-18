@@ -133,6 +133,26 @@ namespace Formatters
         #endif
     }
 
+    auto TextOutputFormatter::BeginElement() -> ElementId
+    {
+        DoNewLine();
+
+        _stream->WriteChar(FormatterConstants<utf8>::ElementPrefix);
+
+        _hotLine = true;
+        _currentLineLength += 2;
+        ++_currentIndentLevel;
+		_indentLevelAtStartOfLine = _currentIndentLevel;
+
+        #if defined(STREAM_FORMATTER_CHECK_ELEMENTS)
+            auto id = _nextElementId;
+            _elementStack.push_back(id);
+            return id;
+        #else
+            return 0;
+        #endif
+    }
+
     void TextOutputFormatter::DoNewLine()
     {
         if (_pendingHeader) {
@@ -205,6 +225,34 @@ namespace Formatters
     {
         // it turns out this is identical to a "keyed" value, just with an empty name
         WriteKeyedValue({}, value);
+    }
+
+    void TextOutputFormatter::WriteValue(StringSection<> value)
+    {
+        const unsigned idealLineLength = 100;
+        bool forceNewLine = 
+            (_currentLineLength + value.size()) > idealLineLength
+            || _pendingHeader
+			|| _currentIndentLevel < _indentLevelAtStartOfLine;
+
+        if (forceNewLine) {
+            DoNewLine();
+        } else if (_hotLine) {
+            _stream->WriteChar(';');
+            _stream->WriteChar(' ');
+            _currentLineLength += 2;
+        }
+
+        if (IsSimpleString(value)) {
+            _stream->Write(value);
+        } else {
+            WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
+            _stream->Write(value);
+            WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
+        }
+
+        _currentLineLength += unsigned(value.size());
+        _hotLine = true;
     }
 
     void TextOutputFormatter::EndElement(ElementId id)

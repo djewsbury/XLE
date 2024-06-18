@@ -11,7 +11,7 @@
 #include "../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IResourceView; class MiniInputElementDesc; class IThreadContext; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; class EncoderState; } }
+namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; class RetainedUniformsStream; class EncoderState; } }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderOverlays
@@ -74,7 +74,8 @@ namespace RenderOverlays
         virtual IteratorRange<void*> DrawGeometry(
             unsigned vertexCount,
             IteratorRange<const RenderCore::MiniInputElementDesc*> inputLayout,
-            RenderCore::Techniques::ImmediateDrawableMaterial&& material) = 0;
+            const RenderCore::Techniques::ImmediateDrawableMaterial& material,
+            RenderCore::Techniques::RetainedUniformsStream&& uniforms) = 0;
 
         virtual void    DrawTexturedQuad(
             ProjectionMode proj,

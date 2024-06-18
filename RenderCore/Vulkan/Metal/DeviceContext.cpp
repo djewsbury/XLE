@@ -143,15 +143,17 @@ namespace RenderCore { namespace Metal_Vulkan
 		VkDeviceSize offsets[s_maxBoundVBs];
 		// auto count = (unsigned)std::min(std::min(vertexBuffers.size(), dimof(buffers)), _vbBindingDescriptions.size());
 		assert(vbViews.size() < s_maxBoundVBs);
-		for (unsigned c=0; c<vbViews.size(); ++c) {
-			offsets[c] = vbViews[c]._offset;
-			assert(const_cast<IResource*>(vbViews[c]._resource)->QueryInterface(s_resourceInterface));
-			buffers[c] = checked_cast<const Resource*>(vbViews[c]._resource)->GetBuffer();
+		if (!vbViews.empty()) {
+			for (unsigned c=0; c<vbViews.size(); ++c) {
+				offsets[c] = vbViews[c]._offset;
+				assert(const_cast<IResource*>(vbViews[c]._resource)->QueryInterface(s_resourceInterface));
+				buffers[c] = checked_cast<const Resource*>(vbViews[c]._resource)->GetBuffer();
+			}
+			vkCmdBindVertexBuffers(
+				_sharedState->_commandList.GetUnderlying().get(), 
+				0, vbViews.size(),
+				buffers, offsets);
 		}
-		vkCmdBindVertexBuffers(
-			_sharedState->_commandList.GetUnderlying().get(), 
-			0, vbViews.size(),
-			buffers, offsets);
 
 		if (ibView._resource) {
 			assert(ibView._resource);

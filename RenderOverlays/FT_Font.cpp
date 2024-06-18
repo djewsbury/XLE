@@ -322,7 +322,7 @@ namespace RenderOverlays
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> pathAndSize)
 	{
 		auto colon = pathAndSize.end();
-		while (colon != pathAndSize.begin() && *(colon-1) != ':') --colon;
+		while (colon != pathAndSize.begin() && *(colon-1) != ':' && *(colon-1) != '-') --colon;
 		if (colon != pathAndSize.begin()) {
 			uint32_t fontSize = 0;
 			auto* parseEnd = FastParseValue(MakeStringSection(colon, pathAndSize.end()), fontSize);

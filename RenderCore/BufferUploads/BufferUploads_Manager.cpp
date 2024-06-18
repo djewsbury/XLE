@@ -1916,7 +1916,7 @@ namespace RenderCore { namespace BufferUploads
     Manager::Manager(const ManagerDesc& desc, IDevice& renderDevice)
     {
         if (!renderDevice.GetDeviceFeatures()._timelineSemaphore)
-            Throw(std::runtime_error("Timeline semphores device feature is disabled, but is required by BufferUploads"));
+            Throw(std::runtime_error("Timeline semaphores device feature is disabled, but is required"));
 
         _shutdownBackgroundThread = false;
         _guid = s_nextManagerGuid++;

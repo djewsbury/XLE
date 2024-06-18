@@ -8,6 +8,7 @@
 #include "../Format.h"
 #include "../ResourceDesc.h"
 #include "../Metal/Forward.h"		// for Metal::GraphicsPipeline
+#include "../Techniques/CommonBindings.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
@@ -84,8 +85,10 @@ namespace RenderCore { namespace LightingEngine
 
 	struct ToneMapIntegrationParams
 	{
-		bool _readFromAAOutput = false;
-		bool _outputToPostProcessing = false;
+		uint64_t _inputAttachment = Techniques::AttachmentSemantics::ColorHDR;
+		uint64_t _outputAttachment = Techniques::AttachmentSemantics::ColorLDR;
+		BindFlag::BitField _outputState = BindFlag::RenderTarget;
+		bool _preferPixelShaderPath = false;
 	};
 
 	class ToneMapAcesOperator : public IBloom, public IExposure, public std::enable_shared_from_this<ToneMapAcesOperator>

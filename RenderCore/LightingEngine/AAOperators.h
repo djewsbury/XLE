@@ -69,5 +69,10 @@ namespace RenderCore { namespace LightingEngine
 		bool _firstFrame = true;
 	};
 
+	/////////////////////////// TAA ////////////////////////
+	struct FrameToFrameProperties;
+	void ApplyTAACameraJitter(Techniques::ParsingContext& parsingContext, const FrameToFrameProperties& f2fp);
+	void RemoveTAACameraJitter(Techniques::ParsingContext& parsingContext);
+
 }}
 

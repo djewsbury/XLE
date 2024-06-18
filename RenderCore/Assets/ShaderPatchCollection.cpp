@@ -66,6 +66,9 @@ namespace RenderCore { namespace Assets
 			_descriptorSet = src._descriptorSet;
 		if (!src._preconfiguration.empty())
 			_preconfiguration = src._preconfiguration;
+		for (unsigned c=0; c<dimof(src._overrideShaders); ++c)
+			if (!src._overrideShaders[c].empty())
+				_overrideShaders[c] = src._overrideShaders[c];
 
 		SortAndCalculateHash();
 	}
@@ -88,6 +91,14 @@ namespace RenderCore { namespace Assets
 	void ShaderPatchCollection::SetPreconfigurationFileName(const std::string& name)
 	{
 		_preconfiguration = name;
+		_hash = s_rebuildHash;
+	}
+
+	void ShaderPatchCollection::OverrideShader(ShaderStage shaderStage, const std::string& name)
+	{
+		assert(unsigned(shaderStage) < dimof(_overrideShaders));
+		if (unsigned(shaderStage) < dimof(_overrideShaders))
+			_overrideShaders[unsigned(shaderStage)] = name;
 		_hash = s_rebuildHash;
 	}
 
@@ -144,6 +155,8 @@ namespace RenderCore { namespace Assets
 			_hash = Hash64(_descriptorSet, _hash);
 		if (!_preconfiguration.empty())
 			_hash = Hash64(_preconfiguration, _hash);
+		for (const auto& s:_overrideShaders)
+			_hash = Hash64(s, _hash);
 	}
 
 	bool operator<(const ShaderPatchCollection& lhs, const ShaderPatchCollection& rhs) { return lhs.GetHash() < rhs.GetHash(); }
@@ -175,6 +188,12 @@ namespace RenderCore { namespace Assets
 			formatter.WriteKeyedValue("DescriptorSet", patchCollection.GetDescriptorSetFileName());
 		if (!patchCollection.GetPreconfigurationFileName().IsEmpty())
 			formatter.WriteKeyedValue("Preconfiguration", patchCollection.GetPreconfigurationFileName());
+		if (!patchCollection.GetOverrideShader(ShaderStage::Vertex).IsEmpty())
+			formatter.WriteKeyedValue("OverrideVS", patchCollection.GetOverrideShader(ShaderStage::Vertex));
+		if (!patchCollection.GetOverrideShader(ShaderStage::Pixel).IsEmpty())
+			formatter.WriteKeyedValue("OverridePS", patchCollection.GetOverrideShader(ShaderStage::Pixel));
+		if (!patchCollection.GetOverrideShader(ShaderStage::Geometry).IsEmpty())
+			formatter.WriteKeyedValue("OverrideGS", patchCollection.GetOverrideShader(ShaderStage::Geometry));
 	}
 
 	std::ostream& SerializationOperator(std::ostream& str, const ShaderPatchCollection& patchCollection)
@@ -224,6 +243,15 @@ namespace RenderCore { namespace Assets
 					continue;
 				} else if (XlEqString(name, "Preconfiguration")) {
 					_preconfiguration = RequireStringValue(formatter).AsString();
+					continue;
+				} else if (XlEqString(name, "OverrideVS")) {
+					_overrideShaders[0] = RequireStringValue(formatter).AsString();
+					continue;
+				} else if (XlEqString(name, "OverridePS")) {
+					_overrideShaders[1] = RequireStringValue(formatter).AsString();
+					continue;
+				} else if (XlEqString(name, "OverrideGS")) {
+					_overrideShaders[2] = RequireStringValue(formatter).AsString();
 					continue;
 				}
 				
