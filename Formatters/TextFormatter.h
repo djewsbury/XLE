@@ -45,6 +45,7 @@ namespace Formatters
 		bool TryCharacterData(StringSection<CharType>&);
 
 		StreamLocation GetLocation() const;
+		void SetFormatVersion(unsigned v) { _format = v; }
 
 		// Create a "child" formatter that acts as if the current element in the stream is the
 		// root. Otherwise the formatter will return the same sequence of blobs

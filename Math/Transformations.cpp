@@ -947,6 +947,15 @@ namespace XLEMath
         return result;
     }
 
+    Float2          TransformPoint(const Float2x3& transform, Float2 pt)
+    {
+        return transform * Expand(pt, 1.f);
+    }
+
+    Float2          TransformPoint(const Float3x3& transform, Float2 pt)
+    {
+        return Truncate(transform * Expand(pt, 1.f));
+    }
 
     bool IsOrthonormal(const Float3x3& rotationMatrix, float tolerance)
     {

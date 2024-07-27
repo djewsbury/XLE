@@ -154,6 +154,11 @@ namespace XLEMath
     {
         return secondTransform * firstTransform;
     }
+
+    inline Float3x3     Combine(const Float3x3& firstTransform, const Float3x3& secondTransform)
+    {
+        return secondTransform * firstTransform;
+    }
     
     void            Combine_IntoRHS(const Float3& translate, Float4x4& transform);
     void            Combine_IntoRHS(const UniformScale& scale, Float4x4& transform);
@@ -209,6 +214,8 @@ namespace XLEMath
     Float3          TransformPointByOrthonormalInverse(const Float3x4& transform, Float3 pt);
     Float3          TransformPointByOrthonormalInverse(const Float4x4& transform, Float3 pt);
     Float4          TransformPlane(const Float4x4& transform, Float4 plane);
+    Float2          TransformPoint(const Float2x3& transform, Float2 pt);
+    Float2          TransformPoint(const Float3x3& transform, Float2 pt);
 
         //
         //      Orthonormal matrices have special properties. Use the following, instead

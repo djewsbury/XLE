@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <memory>
 #include <cstring>
+#include <string_view>
 
 namespace Utility
 {

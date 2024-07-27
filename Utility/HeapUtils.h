@@ -603,8 +603,10 @@ namespace Utility
 
 		CircularBuffer();
 		~CircularBuffer();
-		CircularBuffer(CircularBuffer&& moveFrom) never_throws;
+		CircularBuffer(CircularBuffer&& moveFrom) never_throws;		// typically, never throws only if Type doesn't throw during it's move operator
 		CircularBuffer& operator=(CircularBuffer&& moveFrom) never_throws;
+		CircularBuffer(const CircularBuffer& copyFrom);
+		CircularBuffer& operator=(const CircularBuffer& copyFrom);
 	private:
 		uint8_t		_objects[sizeof(Type)*Count];
 		unsigned	_start, _count;
@@ -815,7 +817,7 @@ namespace Utility
 		#undef new
 		for (unsigned c=0; c<_count; ++c) {
 			auto& src = ((Type*)moveFrom._objects)[Internal::Modulo<Count>(moveFrom._start+c)];
-			new(_objects + sizeof(Type)*c) Type(std::move(src));
+			new(_objects + sizeof(Type)*c) Type{std::move(src)};
 			src.~Type();
 		}
 		#pragma pop_macro("new")
@@ -837,13 +839,53 @@ namespace Utility
 		#undef new
 		for (unsigned c=0; c<_count; ++c) {
 			auto& src = ((Type*)moveFrom._objects)[Internal::Modulo<Count>(moveFrom._start+c)];
-			new(_objects + sizeof(Type)*c) Type(std::move(src));
+			new(_objects + sizeof(Type)*c) Type{std::move(src)};
 			src.~Type();
 		}
 		#pragma pop_macro("new")
 
 		moveFrom._start = 0;
 		moveFrom._count = 0;
+		return *this;
+	}
+
+	template<typename Type, unsigned Count>
+		CircularBuffer<Type, Count>::CircularBuffer(const CircularBuffer& copyFrom)
+	{
+		_start = 0;
+		_count = copyFrom._count;
+
+		#pragma push_macro("new")
+		#undef new
+		for (unsigned c=0; c<_count; ++c) {
+			auto& src = ((const Type*)copyFrom._objects)[Internal::Modulo<Count>(copyFrom._start+c)];
+			new(_objects + sizeof(Type)*c) Type{src};
+		}
+		#pragma pop_macro("new")
+	}
+
+	template<typename Type, unsigned Count>
+		auto CircularBuffer<Type, Count>::operator=(const CircularBuffer& copyFrom) -> CircularBuffer&
+	{
+		// We can't provide a strong guarantee here, without extra copies. The array we're writing to
+		// is part of this object. Constructing into a could would not work
+		TRY {
+			for (unsigned c=0; c<_count; ++c)
+				(((Type*)_objects)[Internal::Modulo<Count>(_start+c)]).~Type();
+
+			_start = 0;
+
+			#pragma push_macro("new")
+			#undef new
+			for (unsigned _count=0; _count<copyFrom._count; ++_count) {
+				auto& src = ((const Type*)copyFrom._objects)[Internal::Modulo<Count>(copyFrom._start+c)];
+				new(_objects + sizeof(Type)*c) Type{src};
+			}
+			#pragma pop_macro("new")
+		} CATCH (...) {
+			// throw leaves only some of the elements cloned within this
+			throw;
+		} CATCH_END
 		return *this;
 	}
 
@@ -996,6 +1038,9 @@ namespace Utility
 		~CircularPagedHeap();
 		CircularPagedHeap(CircularPagedHeap&& moveFrom) never_throws = default;
 		CircularPagedHeap& operator=(CircularPagedHeap&& moveFrom) never_throws = default;
+		CircularPagedHeap(const CircularPagedHeap& copyFrom);
+		CircularPagedHeap& operator=(const CircularPagedHeap& copyFrom);
+		void swap(CircularPagedHeap& other);
 	};
 
 	template<typename Type, unsigned PageSize>
@@ -1213,6 +1258,31 @@ namespace Utility
 		CircularPagedHeap<Type, PageSize>::~CircularPagedHeap()
 	{}
 
+	template<typename Type, unsigned PageSize>
+		CircularPagedHeap<Type, PageSize>::CircularPagedHeap(const CircularPagedHeap& copyFrom)
+	: _indexLookups(copyFrom._indexLookups)
+	{
+		_pages.reserve(copyFrom._pages.size());
+		for (const auto& c:copyFrom._pages)
+			_pages.emplace_back(std::make_unique<Page>(*c));
+	}
+
+	template<typename Type, unsigned PageSize>
+		void CircularPagedHeap<Type, PageSize>::swap(CircularPagedHeap& other)
+	{
+		std::swap(_pages, other._pages);
+		std::swap(_indexLookups, other._indexLookups);
+	}
+
+	template<typename Type, unsigned PageSize>
+		auto CircularPagedHeap<Type, PageSize>::operator=(const CircularPagedHeap& copyFrom) -> CircularPagedHeap&
+	{
+		// CircularBuffer cannot provide a strong guarantee on exceptions. But we can do ok at this level
+		CircularPagedHeap clone { copyFrom };
+		swap(clone);
+		return *this;
+	}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	namespace Internal
@@ -1284,6 +1354,11 @@ namespace Utility
 		void clear();
 
 		RemappingBitHeap();
+		~RemappingBitHeap() = default;
+		RemappingBitHeap(RemappingBitHeap&&) never_throws = default;
+		RemappingBitHeap& operator=(RemappingBitHeap&&) never_throws = default;
+		RemappingBitHeap(const RemappingBitHeap&) = default;
+		RemappingBitHeap& operator=(const RemappingBitHeap&) = default;
 	private:
 		std::vector<Entry> _allocationsTable;
 
@@ -1306,7 +1381,6 @@ namespace Utility
 	template<typename T>
 		void RemappingBitHeap<T>::Iterator::operator++()
 	{
-		assert(_entry->_allocationFlags);
 		// note weirdness from compiler related to 1ull << 64ull (can be non-zero)
 		uint64_t maskBitOffsetAndLower = ((_sparseValueOffset < 63u) * (1ull << uint64_t(_sparseValueOffset+1))) - 1ull;
 		uint64_t remainingBits = _entry->_allocationFlags & ~maskBitOffsetAndLower;
@@ -1323,7 +1397,6 @@ namespace Utility
 	template<typename T>
 		void RemappingBitHeap<T>::Iterator::AdvanceDenseSequence(size_t offset)
 	{
-		assert(_entry->_allocationFlags);
 		assert(_sparseValueOffset != 64ull);	// compiler weird about 1ull << 64ull
 		// Advance forward the given number of entries in the dense sequence
 		// Ie, we're advancing an arbitrary number of sparse sequence values
@@ -1479,7 +1552,7 @@ namespace Utility
 			auto q = _allocationsTable.erase(_allocationsTable.begin() + (i._entry - AsPointer(_allocationsTable.begin())));
 			i._entry = AsPointer(q);
 			i._sparseValueOffset = xl_ctz8(q->_allocationFlags);
-			++q; while (q!=_allocationsTable.end()) { --q->_precedingDenseValues; ++q; }
+			while (q!=_allocationsTable.end()) { --q->_precedingDenseValues; ++q; }
 			return i;
 		}
 	}

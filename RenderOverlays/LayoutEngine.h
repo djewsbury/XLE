@@ -4,15 +4,14 @@
 
 #pragma once
 #include "OverlayPrimitives.h"
-#include "../PlatformRig/InputContext.h"		// for ProcessInputResult
-#include "../Math/Matrix.h"
+#include "Math/Matrix.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include <stack>
 #include <vector>
 #include <memory>
 
-namespace PlatformRig { class InputContext; }
+namespace PlatformRig { class InputContext; enum class ProcessInputResult; }
 namespace OSServices { class InputSnapshot; }
 
 struct YGNode;
