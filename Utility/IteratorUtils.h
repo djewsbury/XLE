@@ -136,12 +136,13 @@ namespace Utility
         {
             if (searchStart == searchEnd) return searchEnd;
             auto i = searchEnd-1;
-            while (i >= searchStart) {
+            for (;;) {
                 if (std::find(compareBegin, compareEnd, *i) != compareEnd)
                     return i;
+                if (i == searchStart)
+                    return searchEnd;
                 --i;
             }
-            return searchEnd;
         }
 
     template<typename SearchI, typename CompareI>
@@ -151,12 +152,13 @@ namespace Utility
         {
             if (searchStart == searchEnd) return searchEnd;
             auto i = searchEnd-1;
-            while (i >= searchStart) {
+            for (;;) {
                 if (*i == compare)
                     return i;
+                if (i == searchStart)
+                    return searchEnd;
                 --i;
             }
-            return searchEnd;
         }
 
 	namespace Internal

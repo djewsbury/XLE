@@ -15,6 +15,7 @@ namespace RenderOverlays
 {
 	class ShapesRenderingDelegate;
 	class FontRenderingManager;
+	class FTFontResources;
 
 	class OverlayApparatus
 	{
@@ -23,6 +24,7 @@ namespace RenderOverlays
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _overlayPipelineAccelerators;
 
+		ConsoleRig::AttachablePtr<FTFontResources> _fontResources;
 		std::shared_ptr<FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<ShapesRenderingDelegate> _shapeRenderingDelegate;
 

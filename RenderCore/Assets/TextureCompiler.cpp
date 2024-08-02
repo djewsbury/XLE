@@ -132,12 +132,10 @@ namespace RenderCore { namespace Assets
 			_srcTexture.dwSize     = sizeof(_srcTexture);
 			_srcTexture.dwWidth    = desc._textureDesc._width;
 			_srcTexture.dwHeight   = desc._textureDesc._height;
-			_srcTexture.dwPitch    = 0;		// interpretted as packed
+			_srcTexture.dwPitch    = 0;		// interpreted as packed
 			_srcTexture.format     = AsCompressonatorFormat(desc._textureDesc._format);
 			_srcTexture.dwDataSize = ByteCount(desc._textureDesc);
 			_srcTexture.pData = (CMP_BYTE*)XlMemAlign(_srcTexture.dwDataSize, 64);		// use a very large alignment, even if it's not specifically requested by compressonator
-
-			assert(_srcTexture.format != CMP_FORMAT_Unknown);
 
 			auto mipCount = desc._textureDesc._mipCount;
 			auto arrayLayerCount = ActualArrayLayerCount(desc._textureDesc);
@@ -192,6 +190,7 @@ namespace RenderCore { namespace Assets
 		else if (XlEqStringI(type, "ProjectToSphericalHarmonic")) result._operation = TextureCompilationRequest::Operation::ProjectToSphericalHarmonic;
 		else if (XlEqStringI(type, "EquirectFilterDiffuseReference")) result._operation = TextureCompilationRequest::Operation::EquirectFilterDiffuseReference;
 		else if (XlEqStringI(type, "ComputeShader")) result._operation = TextureCompilationRequest::Operation::ComputeShader;
+		else if (XlEqStringI(type, "ConversionComputeShader")) result._operation = TextureCompilationRequest::Operation::ConversionComputeShader;
 		else Throw(std::runtime_error("Unknown operation in texture compiler file: " + srcFN + ", (" + type.AsString() + ")"));
 
 		auto dstFormatName = operationElement.Attribute("Format");
@@ -231,6 +230,7 @@ namespace RenderCore { namespace Assets
 		case TextureCompilationRequest::Operation::EquirectFilterDiffuseReference: str << request._srcFile << "-refdiffuse-" << request._faceDim << "-" << AsString(request._format) << "-" << AsString(request._coordinateSystem); break;
 		case TextureCompilationRequest::Operation::ProjectToSphericalHarmonic: str << request._srcFile << "-sh-" << request._coefficientCount << "-" << AsString(request._coordinateSystem); break;
 		case TextureCompilationRequest::Operation::ComputeShader: str << request._shader << "-" << request._width << "x" << request._height << "x" << request._arrayLayerCount << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::ConversionComputeShader: str << request._shader << "-conversion-" << request._srcFile << "-" << request._width << "x" << request._height << "x" << request._arrayLayerCount << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::BalancedNoise: str << "balanced-noise-" << request._width << "x" << request._height << "-" << AsString(request._format); break;
 		default: UNREACHABLE();
 		}
@@ -490,6 +490,22 @@ namespace RenderCore { namespace Assets
 					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
 				srcPkt = LightingEngine::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount, request._commandListIntervalMS, request._maxSamplesPerCmdList);
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
+			} else if (request._operation == TextureCompilationRequest::Operation::ConversionComputeShader) {
+				if (opHelper) {
+					opHelper.SetDescription(Concatenate("Generating texture from {color:66d0a4}conversion compute shader{color:}: ", ColouriseFilename(request._shader), ", ", ColouriseFilename(request._srcFile)));
+					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
+				}
+
+				auto targetDesc = TextureDesc::Plain2D(
+					request._width,
+					request._height,
+					request._format,		// since we're not sampling, we can go directly to the output format
+					1, request._arrayLayerCount);
+				auto shader = request._shader;
+				if (shader.empty())
+					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
+				srcPkt = LightingEngine::ConversionComputeShader(shader, *srcPkt, targetDesc);
+				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::BalancedNoise) {
 				srcPkt = std::make_shared<BalancedNoiseTexture>(request._width, request._height);
 			}
@@ -504,56 +520,66 @@ namespace RenderCore { namespace Assets
 			size_t ddsHeaderOffset = 0;
 			auto destinationBlob = PrepareDDSBlob(dstDesc, ddsHeaderOffset);
 
-			CMP_CompressOptions options = {0};
-			options.dwSize       = sizeof(options);
-			options.fquality     = 0.05f;
-			// Compressonator seems to have an issue when dwnumThreads is set to 1 (other than running slow). It appears to spin up threads it can never close down
-			// let's just set it to "auto" to allow it to adapt to the processor (even if it squeezes our thread pool)
-			options.dwnumThreads = 0;
-			auto comprDstFormat = AsCompressonatorFormat(request._format);
-			if (comprDstFormat == CMP_FORMAT_Unknown)
-				Throw(std::runtime_error("Cannot write to the request texture pixel format because it is not supported by the compression library: " + srcFN));
+			if (input._srcDesc._format != dstDesc._format) {
+				if (input._srcTexture.format == CMP_FORMAT_Unknown)
+					Throw(std::runtime_error(Concatenate("Cannot initialize src texture for format conversion, because source format is not supported: ", AsString(input._srcDesc._format))));
 
-			// simple hack because we can't enter Compressonator while it's working
-			static Threading::Mutex s_compressonatorLock;
-			std::unique_lock l(s_compressonatorLock, std::defer_lock);
-			while (!l.try_lock())
-				YieldToPoolFor(std::chrono::milliseconds(10));
+				CMP_CompressOptions options = {0};
+				options.dwSize       = sizeof(options);
+				options.fquality     = 0.05f;
+				// Compressonator seems to have an issue when dwnumThreads is set to 1 (other than running slow). It appears to spin up threads it can never close down
+				// let's just set it to "auto" to allow it to adapt to the processor (even if it squeezes our thread pool)
+				options.dwnumThreads = 0;
+				auto comprDstFormat = AsCompressonatorFormat(request._format);
+				if (comprDstFormat == CMP_FORMAT_Unknown)
+					Throw(std::runtime_error("Cannot write to the request texture pixel format because it is not supported by the compression library: " + srcFN));
 
-			auto mipCount = dstDesc._mipCount;
-			auto arrayLayerCount = ActualArrayLayerCount(dstDesc);
-			for (unsigned a=0; a<arrayLayerCount; ++a)
-				for (unsigned m=0; m<mipCount; ++m) {
-					auto dstOffset = GetSubResourceOffset(dstDesc, m, a);
-					auto dstMipDesc = CalculateMipMapDesc(dstDesc, m);
-					auto srcMipDesc = CalculateMipMapDesc(input._srcDesc, m);
+				// simple hack because we can't enter Compressonator while it's working
+				static Threading::Mutex s_compressonatorLock;
+				std::unique_lock l(s_compressonatorLock, std::defer_lock);
+				while (!l.try_lock())
+					YieldToPoolFor(std::chrono::milliseconds(10));
 
-					CMP_Texture destTexture = {0};
-					destTexture.dwSize     = sizeof(destTexture);
-					destTexture.dwWidth    = std::max(1u, (unsigned)srcMipDesc._width);
-					destTexture.dwHeight   = std::max(1u, (unsigned)srcMipDesc._height);
-					destTexture.dwPitch    = 0;
-					destTexture.format     = comprDstFormat;
-					destTexture.dwDataSize = (CMP_DWORD)dstOffset._size;
-					auto calcSize = CMP_CalculateBufferSize(&destTexture);
-					assert(destTexture.dwDataSize == calcSize);
-					destTexture.pData = (CMP_BYTE*)PtrAdd(destinationBlob->data(), ddsHeaderOffset + dstOffset._offset);
-					assert(PtrAdd(destTexture.pData, destTexture.dwDataSize) <= AsPointer(destinationBlob->end()));
+				auto mipCount = dstDesc._mipCount;
+				auto arrayLayerCount = ActualArrayLayerCount(dstDesc);
+				for (unsigned a=0; a<arrayLayerCount; ++a)
+					for (unsigned m=0; m<mipCount; ++m) {
+						auto dstOffset = GetSubResourceOffset(dstDesc, m, a);
+						auto dstMipDesc = CalculateMipMapDesc(dstDesc, m);
+						auto srcMipDesc = CalculateMipMapDesc(input._srcDesc, m);
 
-					auto srcOffset = GetSubResourceOffset(input._srcDesc, m, a);
-					auto srcTexture = input._srcTexture;
-					srcTexture.dwWidth = destTexture.dwWidth;
-					srcTexture.dwHeight = destTexture.dwHeight;
-					srcTexture.dwDataSize = (CMP_DWORD)srcOffset._size;
-					srcTexture.pData = PtrAdd(srcTexture.pData, srcOffset._offset);
+						CMP_Texture destTexture = {0};
+						destTexture.dwSize     = sizeof(destTexture);
+						destTexture.dwWidth    = std::max(1u, (unsigned)srcMipDesc._width);
+						destTexture.dwHeight   = std::max(1u, (unsigned)srcMipDesc._height);
+						destTexture.dwPitch    = 0;
+						destTexture.format     = comprDstFormat;
+						destTexture.dwDataSize = (CMP_DWORD)dstOffset._size;
+						auto calcSize = CMP_CalculateBufferSize(&destTexture);
+						assert(destTexture.dwDataSize == calcSize);
+						destTexture.pData = (CMP_BYTE*)PtrAdd(destinationBlob->data(), ddsHeaderOffset + dstOffset._offset);
+						assert(PtrAdd(destTexture.pData, destTexture.dwDataSize) <= AsPointer(destinationBlob->end()));
 
-					CMP_ERROR cmp_status;
-					cmp_status = CMP_ConvertTexture(&srcTexture, &destTexture, &options, nullptr);
-					if (cmp_status != CMP_OK)
-						Throw(std::runtime_error("Compression library failed while processing texture compiler file: " + srcFN));
-				}
+						auto srcOffset = GetSubResourceOffset(input._srcDesc, m, a);
+						auto srcTexture = input._srcTexture;
+						srcTexture.dwWidth = destTexture.dwWidth;
+						srcTexture.dwHeight = destTexture.dwHeight;
+						srcTexture.dwDataSize = (CMP_DWORD)srcOffset._size;
+						srcTexture.pData = PtrAdd(srcTexture.pData, srcOffset._offset);
 
-			l.unlock();
+						CMP_ERROR cmp_status;
+						cmp_status = CMP_ConvertTexture(&srcTexture, &destTexture, &options, nullptr);
+						if (cmp_status != CMP_OK)
+							Throw(std::runtime_error("Compression library failed while processing texture compiler file: " + srcFN));
+					}
+
+				l.unlock();
+			} else {
+				// copy directly into the output dds
+				if (destinationBlob->size() != (ddsHeaderOffset + input._srcTexture.dwDataSize))
+					Throw(std::runtime_error("Texture conversion failed because of size mismatch"));
+				std::memcpy(PtrAdd(destinationBlob->data(), ddsHeaderOffset), input._srcTexture.pData, input._srcTexture.dwDataSize);
+			}
 
 			_serializedArtifacts = std::vector<::Assets::SerializedArtifact>{
 				{

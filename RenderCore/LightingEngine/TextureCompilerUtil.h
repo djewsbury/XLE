@@ -41,4 +41,9 @@ namespace RenderCore { namespace LightingEngine
 		unsigned totalSampleCount,
 		unsigned idealCmdListCostMS = 1500,
 		unsigned maxSamplesPerCmdList = ~0u);
+
+	std::shared_ptr<BufferUploads::IAsyncDataSource> ConversionComputeShader(
+		StringSection<> shader,
+		BufferUploads::IAsyncDataSource& dataSrc,
+		const TextureDesc& targetDesc);
 }}

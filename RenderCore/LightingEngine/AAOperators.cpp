@@ -303,7 +303,8 @@ namespace RenderCore { namespace LightingEngine
 		// Apply camera jitter for temporal anti-aliasing
 		// following common implementation of TAA, we'll jitter using a Halton sequence.
 		auto viewport = UInt2 { parsingContext.GetFrameBufferProperties()._width, parsingContext.GetFrameBufferProperties()._height };
-		unsigned jitteringIndex = f2fp._frameIdx % (32*27);		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
+		// unsigned jitteringIndex = f2fp._frameIdx % (32*27);		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
+		unsigned jitteringIndex = f2fp._frameIdx % (8*9);		// mod some arbitrary number, but small to avoid precision issues in CalculateHaltonNumber
 		float jitterX = (2.0f * CalculateHaltonNumber<2>(jitteringIndex) - 1.0f) / float(viewport[0]);
 		float jitterY = (2.0f * CalculateHaltonNumber<3>(jitteringIndex) - 1.0f) / float(viewport[1]);
 		auto& projDesc = parsingContext.GetProjectionDesc();

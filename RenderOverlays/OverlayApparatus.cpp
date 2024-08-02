@@ -11,6 +11,7 @@
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/PipelineCollection.h"
+#include "../xleres/FileList.h"
 
 namespace RenderOverlays
 {
@@ -26,6 +27,9 @@ namespace RenderOverlays
 		auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(_mainDrawingApparatus->_device);
 		_overlayPipelineAccelerators = RenderCore::Techniques::CreatePipelineAcceleratorPool(_mainDrawingApparatus->_device, nullptr, pipelineCollection, _shapeRenderingDelegate->GetPipelineLayoutDelegate(), 0);
 		
+		_fontResources = CreateFTFontResources();
+		RegisterFontLibraryFile(FONTS_DAT);
+
 		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_overlayPipelineAccelerators);
 		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
 

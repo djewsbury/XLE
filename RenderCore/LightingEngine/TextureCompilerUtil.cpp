@@ -576,4 +576,69 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
+	std::shared_ptr<BufferUploads::IAsyncDataSource> ConversionComputeShader(
+		StringSection<> shader,
+		BufferUploads::IAsyncDataSource& dataSrc,
+		const TextureDesc& targetDesc)
+	{
+		auto threadContext = Techniques::GetThreadContext();
+		
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, "Output"_h);
+		usi.BindResourceView(1, "Input"_h);
+		usi.BindImmediateData(0, "ControlUniforms"_h);
+
+ 		auto computeOpFuture = Techniques::CreateComputeOperator(
+			std::make_shared<Techniques::PipelineCollection>(threadContext->GetDevice()),
+			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain", usi);
+
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		auto inputRes = Techniques::CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
+		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
+		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
+		Metal::CompleteInitialization(metalContext, {outputRes.get()});
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
+			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
+
+		computeOpFuture->StallWhilePending();
+		auto computeOp = computeOpFuture->Actualize();
+
+		// run the actual compute shader once per output pixel
+		for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
+			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+			for (unsigned a=0; a<ActualArrayLayerCount(targetDesc); ++a) {
+				TextureViewDesc view;
+				view._mipRange = {mip, 1};
+				view._arrayLayerRange = {a, 1};
+				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+				IResourceView* resViews[] = { outputView.get(), inputView.get() };
+
+				struct ControlUniforms
+				{
+					unsigned _mipIndex, _mipCount, _arrayLayerIndex, _arrayLayerCount;
+				} controlUniforms {
+					mip, targetDesc._mipCount, a, ActualArrayLayerCount(targetDesc)
+				};
+				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(controlUniforms) };
+				UniformsStream us;
+				us._resourceViews = MakeIteratorRange(resViews);
+				us._immediateData = MakeIteratorRange(immData);
+				
+				computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
+			}
+		}
+
+		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
+		Metal::BarrierHelper{metalContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
+
+		auto result = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, computeOp->GetDependencyValidation());
+		// Release the command buffer pool, because Vulkan requires pumping the command buffer destroys regularly,
+		// and we may not be doing that in this thread for awhile
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>)) {
+			threadContext->CommitCommands();
+			threadContextVulkan->ReleaseCommandBufferPool();
+		}
+		return result;
+	}
+
 }}

@@ -29,6 +29,7 @@ namespace RenderCore { namespace Assets
 			EquirectFilterGlossySpecularReference,
 			EquirectFilterDiffuseReference,
 			ComputeShader,
+			ConversionComputeShader,
 			ProjectToSphericalHarmonic,
 			BalancedNoise
 		};

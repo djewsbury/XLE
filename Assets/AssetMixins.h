@@ -225,7 +225,10 @@ namespace Assets
 								std::string fullResolvedName = std::string(resolvedFile) + std::string(colon, name.end());
 								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
 							} else {
-								Throw(std::runtime_error("TODO -- not handling inherit references within the same file"));
+								if (searchRules.GetBaseFile().IsEmpty())
+									Throw(std::runtime_error("Cannot resolve reference within file because the base filename hasn't been recorded"));
+								std::string fullResolvedName = Concatenate(searchRules.GetBaseFile(), ":", name);
+								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
 							}
 						}
 					}
@@ -348,7 +351,10 @@ namespace Assets
 								std::string fullResolvedName = std::string(resolvedFile) + std::string(colon, name.end());
 								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
 							} else {
-								Throw(std::runtime_error("TODO -- not handling inherit references within the same file"));
+								if (searchRules.GetBaseFile().IsEmpty())
+									Throw(std::runtime_error("Cannot resolve reference within file because the base filename hasn't been recorded"));
+								std::string fullResolvedName = Concatenate(searchRules.GetBaseFile(), ":", name);
+								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
 							}
 						}
 					}

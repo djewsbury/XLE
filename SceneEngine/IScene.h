@@ -16,6 +16,7 @@
 #include "../RenderCore/LightingEngine/SSAOOperator.h"
 #include "../RenderCore/LightingEngine/AAOperators.h"
 #include "../RenderCore/LightingEngine/PostProcessOperators.h"
+#include <any>
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; } }
@@ -98,6 +99,9 @@ namespace SceneEngine
         void SetOperator(const RenderCore::LightingEngine::SharpenOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::FilmGrainDesc&);
 
+        template<typename T>
+            void SetOperator(const T&);
+
         IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> GetLightOperators() const { return _lightResolveOperators; }
         IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> GetShadowOperators() const { return _shadowResolveOperators; }
         const RenderCore::LightingEngine::ChainedOperatorDesc* GetChainedGlobalOperators() const { return _firstChainedOperator; }
@@ -124,9 +128,10 @@ namespace SceneEngine
         ChainingTemplate<RenderCore::LightingEngine::TAAOperatorDesc> _taaOperator;
         ChainingTemplate<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
         ChainingTemplate<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
+        std::vector<std::any> _typeErasedOperators;
         RenderCore::LightingEngine::ChainedOperatorDesc* _firstChainedOperator = nullptr;
 
-        template<typename T> void AddToOperatorList(T& op);
+        void AddToOperatorList(RenderCore::LightingEngine::ChainedOperatorDesc& op);
     };
 
 	class ILightingStateDelegate
@@ -147,4 +152,14 @@ namespace SceneEngine
 
 		virtual ~ILightingStateDelegate() = default;
     };
+
+    template<typename T>
+        void MergedLightingEngineCfg::SetOperator(const T& op)
+    {
+        using ChainedType = ChainingTemplate<T>;
+        _typeErasedOperators.emplace_back(ChainedType{});
+        auto& stored = std::any_cast<ChainedType&>(_typeErasedOperators.back());
+        stored._desc = op;
+        AddToOperatorList(stored);
+    }
 }

@@ -4,11 +4,16 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "FT_Font.h"
 #include "Font.h"
 #include "../Assets/IFileSystem.h"
 #include "../Assets/Assets.h"
 #include "../Assets/AssetsCore.h"
+#include "../Assets/AssetMixins.h"
+#include "../Assets/Marker.h"
+#include "../Assets/Continuation.h"
+#include "../Assets/ContinuationUtil.h"
+#include "../Assets/AssetMixins.h"
+#include "../Assets/ConfigFileContainer.h"
 #include "../ConsoleRig/ResourceBox.h"
 #include "../ConsoleRig/AttachablePtr.h"
 #include "../Utility/MemoryUtils.h"
@@ -21,9 +26,10 @@
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/FastParseValue.h"
-#include "../xleres/FileList.h"
+#include "../Utility/Threading/Mutex.h"
 #include <set>
 #include <algorithm>
+#include <unordered_map>
 #include <assert.h>
 #include <locale>
 
@@ -32,19 +38,42 @@
 
 namespace RenderOverlays
 {
+	struct FontLibraryFile
+	{
+		std::unordered_map<std::string, std::string> _nameMap;
+
+		FontLibraryFile(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal);
+		FontLibraryFile() = default;
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+	private:
+		::Assets::DependencyValidation _depVal;
+	};
+
 	class FTFontResources
 	{
 	public:
 		FT_Library _ftLib;
-		std::unordered_map<std::string, std::string> _nameMap;
-		::Assets::DependencyValidation _nameMapDepVal;
+
+		struct FontLibraryCollection
+		{
+			std::unordered_map<std::string, std::string> _nameMap;
+			::Assets::DependencyValidation _depVal;
+			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		};
+		::Assets::PtrToMarkerPtr<FontLibraryCollection> _fontLibraryCollection;
+		Threading::Mutex _mutex;
+
+		std::vector<std::string> _sourceFontLibraries;
 
 		FTFontResources();
 		~FTFontResources();
+
+		void RebuildFontLibraryCollectionAlreadyLocked();
 	};
 
-	Threading::Mutex s_mainFontResourcesInstanceLock;
-	ConsoleRig::AttachablePtr<FTFontResources> s_mainFontResourcesInstance;
+	static ConsoleRig::WeakAttachablePtr<FTFontResources> s_mainFontResourcesInstance;
+	static FTFontResources* GetFontResources() { return s_mainFontResourcesInstance.lock().get(); }
 
 	class FTFont : public Font 
 	{
@@ -62,10 +91,9 @@ namespace RenderOverlays
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		FTFont(StringSection<::Assets::ResChar> faceName, int faceSize);
+		FTFont(StringSection<::Assets::ResChar> faceName, int faceSize, FT_Library& library, const FTFontResources::FontLibraryCollection& fontLibraryCollection);
 		virtual ~FTFont();
 	protected:
-		FTFontResources* _resources;
 		int _ascend;
 		std::shared_ptr<FT_FaceRec_> _face;
 		::Assets::Blob _pBuffer;
@@ -78,20 +106,11 @@ namespace RenderOverlays
 
 	constexpr unsigned loadFlags = FT_LOAD_TARGET_LIGHT/* | FT_LOAD_NO_AUTOHINT*/;
 
-	FTFont::FTFont(StringSection<::Assets::ResChar> faceName, int faceSize)
+	FTFont::FTFont(StringSection<::Assets::ResChar> faceName, int faceSize, FT_Library& library, const FTFontResources::FontLibraryCollection& fontLibraryCollection)
 	{
-		{
-			ScopedLock(s_mainFontResourcesInstanceLock);
-			_resources = s_mainFontResourcesInstance.get();
-			if (!_resources) {
-				s_mainFontResourcesInstance = std::make_shared<FTFontResources>();
-				_resources = s_mainFontResourcesInstance.get();
-			}
-		}
-
 		std::string finalPath = faceName.AsString();
-		auto i = _resources->_nameMap.find(finalPath);
-		if (i != _resources->_nameMap.end())
+		auto i = fontLibraryCollection._nameMap.find(finalPath);
+		if (i != fontLibraryCollection._nameMap.end())
 			finalPath = i->second;
 
 		_hashCode = Hash64(finalPath, DefaultSeed64 + faceSize);
@@ -99,8 +118,8 @@ namespace RenderOverlays
 
 		auto& depValSys = ::Assets::GetDepValSys();
 		_depVal = depValSys.Make();
-		_depVal.RegisterDependency(depValSys.GetDependentFileState(finalPath));
-		_depVal.RegisterDependency(_resources->_nameMapDepVal);
+		depValSys.RegisterFileDependency(_depVal, depValSys.GetDependentFileState(finalPath));
+		depValSys.RegisterAssetDependency(_depVal, fontLibraryCollection._depVal);
 
 		if (!_pBuffer)
 			Throw(::Assets::Exceptions::ConstructionError(
@@ -109,7 +128,7 @@ namespace RenderOverlays
 				StringMeld<256>() << "Failed to load font (" << finalPath << ")"));
 
 		FT_Face face;
-		FT_New_Memory_Face(_resources->_ftLib, _pBuffer->data(), (FT_Long)_pBuffer->size(), 0, &face);
+		FT_New_Memory_Face(library, _pBuffer->data(), (FT_Long)_pBuffer->size(), 0, &face);
 		_face = std::shared_ptr<FT_FaceRec_>{
 			face,
 			[](FT_Face f) { FT_Done_Face(f); } };
@@ -316,7 +335,24 @@ namespace RenderOverlays
 
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size)
 	{
-		return std::reinterpret_pointer_cast<::Assets::MarkerPtr<Font>>(::Assets::GetAssetMarkerPtr<FTFont>(path, size));
+		auto res = s_mainFontResourcesInstance.lock();
+
+		::Assets::PtrToMarkerPtr<FTFontResources::FontLibraryCollection> futureFontLibraryCollection;
+		{
+			ScopedLock(res->_mutex);
+			assert(res->_fontLibraryCollection);
+			if (res->_fontLibraryCollection->GetDependencyValidation().GetValidationIndex() > 0)
+				res->RebuildFontLibraryCollectionAlreadyLocked();
+			futureFontLibraryCollection = res->_fontLibraryCollection;
+		}
+		auto result = std::make_shared<::Assets::MarkerPtr<FTFont>>();
+		::Assets::WhenAll(std::move(futureFontLibraryCollection)).ThenConstructToPromise(
+			result->AdoptPromise(),
+			[p=path.AsString(), size, res](auto libCollection) {
+				return std::make_shared<FTFont>(p, size, res->_ftLib, *libCollection);
+			});
+
+		return std::reinterpret_pointer_cast<::Assets::MarkerPtr<Font>>(std::move(result));
 	}
 
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> pathAndSize)
@@ -336,13 +372,15 @@ namespace RenderOverlays
 
 	////////////////////////////////////////////////////////////////////////////////////
 
-	static void LoadFontNameMapping(Formatters::TextInputFormatter<utf8>& formatter, std::unordered_map<std::string, std::string>& result)
+	static void LoadFontNameMapping(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, std::unordered_map<std::string, std::string>& result)
 	{
+		char buffer[MaxPath];
 		StringSection<> name;
 		while (formatter.TryKeyedItem(name)) {
-            switch (formatter.PeekNext()) {
-            case Formatters::FormatterBlob::Value:
-				result.insert({name.AsString(), RequireStringValue(formatter).AsString()});
+			switch (formatter.PeekNext()) {
+			case Formatters::FormatterBlob::Value:
+				searchRules.ResolveFile(buffer, RequireStringValue(formatter));
+				result.insert({name.AsString(), std::string(buffer)});
 				break;
 
 			case Formatters::FormatterBlob::BeginElement:
@@ -352,36 +390,28 @@ namespace RenderOverlays
 				break;
 
 			default:
-                Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
-            }
-        }
+				Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
+			}
+		}
 	}
 
-	static std::unordered_map<std::string, std::string> LoadFontConfigFile(StringSection<> cfgFile)
+	FontLibraryFile::FontLibraryFile(Formatters::TextInputFormatter<char>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	: _depVal(depVal)
 	{
-		std::unordered_map<std::string, std::string> result;
-
-		size_t blobSize = 0;
-		auto blob = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(cfgFile, &blobSize);
-
-		Formatters::TextInputFormatter<utf8> formatter(MakeStringSection((const char*)blob.get(), (const char*)PtrAdd(blob.get(), blobSize)));
-
 		auto locale = std::locale("").name();
 
 		StringSection<> name;
 		while (formatter.TryKeyedItem(name)) {
 			RequireBeginElement(formatter);
 			if (XlEqStringI(name, "*")) {
-				LoadFontNameMapping(formatter, result);
+				LoadFontNameMapping(formatter, searchRules, _nameMap);
 			} else if (XlEqStringI(name, locale)) {
-				LoadFontNameMapping(formatter, result);
+				LoadFontNameMapping(formatter, searchRules, _nameMap);
 			} else {
 				SkipElement(formatter);
 			}
 			RequireEndElement(formatter);
-        }
-
-		return result;
+		}
 	}
 
 	FTFontResources::FTFontResources()
@@ -389,9 +419,6 @@ namespace RenderOverlays
 		FT_Error error = FT_Init_FreeType(&_ftLib);
 		if (error)
 			Throw(::Exceptions::BasicLabel("Freetype font library failed to initialize (error code: %i)", error));
-
-		_nameMapDepVal = ::Assets::GetDepValSys().Make(FONTS_DAT);
-		_nameMap = LoadFontConfigFile(FONTS_DAT);
 	}
 
 	FTFontResources::~FTFontResources()
@@ -399,9 +426,54 @@ namespace RenderOverlays
 		FT_Done_FreeType(_ftLib);
 	}
 
-	std::shared_ptr<Font> CreateFTFont(StringSection<::Assets::ResChar> faceName, int faceSize)
+	void FTFontResources::RebuildFontLibraryCollectionAlreadyLocked()
 	{
-		return std::make_shared<FTFont>(faceName, faceSize);
+		std::vector<std::shared_ptr<::Assets::Marker<FontLibraryFile>>> futureFontLibraries;
+		futureFontLibraries.reserve(_sourceFontLibraries.size());
+		for (auto s:_sourceFontLibraries) futureFontLibraries.emplace_back(::Assets::GetAssetMarker<FontLibraryFile>(s));
+
+		_fontLibraryCollection = std::make_shared<::Assets::MarkerPtr<FontLibraryCollection>>();
+
+		::Assets::PollToPromise(
+			_fontLibraryCollection->AdoptPromise(),
+			[futureFontLibraries](auto timeout) {
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				for (auto& f:futureFontLibraries) {
+					auto remainingTime = timeoutTime - std::chrono::steady_clock::now();
+					if (remainingTime.count() <= 0) return ::Assets::PollStatus::Continue;
+					auto t = f->StallWhilePending(std::chrono::duration_cast<std::chrono::microseconds>(remainingTime));
+					if (t.value_or(::Assets::AssetState::Pending) == ::Assets::AssetState::Pending)
+						return ::Assets::PollStatus::Continue;
+				}
+				return ::Assets::PollStatus::Finish;
+			},
+			[futureFontLibraries]() mutable {
+				auto result = std::make_shared<FontLibraryCollection>();
+				std::vector<::Assets::DependencyValidationMarker> depVals;
+				depVals.reserve(futureFontLibraries.size());
+				for (auto& m:futureFontLibraries) {
+					auto q = m->Actualize()._nameMap;
+					result->_nameMap.insert(q.begin(), q.end());
+					depVals.emplace_back(m->GetDependencyValidation());
+				}
+				result->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+				return result;
+			});
+	}
+
+	std::shared_ptr<FTFontResources> CreateFTFontResources() { return std::make_shared<FTFontResources>(); }
+
+	void RegisterFontLibraryFile(StringSection<> path)
+	{
+		auto resources = s_mainFontResourcesInstance.lock();
+		assert(resources);
+
+		ScopedLock(resources->_mutex);
+		for (auto i:resources->_sourceFontLibraries) if (XlEqString(path, i)) return;	// already here
+		resources->_sourceFontLibraries.emplace_back(path.AsString());
+
+		// recreate the font library collection entirely
+		resources->RebuildFontLibraryCollectionAlreadyLocked();
 	}
 
 }

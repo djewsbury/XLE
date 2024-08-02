@@ -578,7 +578,7 @@ namespace SceneEngine
         return unsigned(_shadowHashes.size()-1);
     }
 
-    template<typename T> void MergedLightingEngineCfg::AddToOperatorList(T& op)
+    void MergedLightingEngineCfg::AddToOperatorList(RenderCore::LightingEngine::ChainedOperatorDesc& op)
     {
         if (_firstChainedOperator) {
             auto* o = _firstChainedOperator;
