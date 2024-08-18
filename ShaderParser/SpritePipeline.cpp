@@ -31,6 +31,11 @@ namespace ShaderSourceParser
 			return {{input.begin(), i}, idx};
 		}
 
+		static bool CompareSemantic(std::pair<StringSection<>, unsigned> lhs, std::pair<StringSection<>, unsigned> rhs)
+		{
+			return lhs.second == rhs.second && XlEqString(lhs.first, rhs.first);
+		}
+
 		static bool CompareSemantic(const WorkingAttribute& lhs, StringSection<> p)
 		{
 			auto s = SplitSemanticAndIdx(p);
@@ -264,6 +269,20 @@ namespace ShaderSourceParser
 			{"SV_VertexID", "uint"}
 		};
 
+		static constexpr std::pair<const char*, const char*> s_validGSInputSystemValues[] {
+			{"SV_ClipDistance", "float"},		// multiple indices
+			{"SV_CullDistance", "float"},		// multiple indices
+			{"SV_InstanceID", "uint"},
+			{"SV_PrimitiveID", "uint"}
+		};
+
+		static void AddPSInputSystemAttributes(std::vector<WorkingAttribute>& result)
+		{
+			constexpr const char* svPositionAttribute = "SV_Position";
+			if (std::find_if(result.begin(), result.end(), [svPositionAttribute](const auto& q) { return q._semantic == svPositionAttribute && q._semanticIdx == 0; }) == result.end())
+				result.emplace_back(Internal::WorkingAttribute{svPositionAttribute, 0, "float4"});
+		}
+
 		static bool TryWriteVSSystemInput(FragmentWriter& writer, StringSection<> semantic, unsigned semanticIdx)
 		{
 			if (!XlBeginsWith(semantic, "SV_")) return false;
@@ -275,37 +294,35 @@ namespace ShaderSourceParser
 			return false;
 		}
 
-		static void AddPSInputSystemAttributes(std::vector<WorkingAttribute>& result)
-		{
-			constexpr const char* svPositionAttribute = "SV_Position";
-			if (std::find_if(result.begin(), result.end(), [svPositionAttribute](const auto& q) { return q._semantic == svPositionAttribute && q._semanticIdx == 0; }) == result.end())
-				result.emplace_back(Internal::WorkingAttribute{svPositionAttribute, 0, "float4"});
-		}
-
-		static void AddGSInputSystemAttributes(std::vector<WorkingAttribute>& result)
-		{
-			constexpr const char* rotationAttribute = "ROTATION";
-			if (std::find_if(result.begin(), result.end(), [rotationAttribute](const auto& q) { return q._semantic == rotationAttribute && q._semanticIdx == 0; }) == result.end())
-				result.emplace_back(Internal::WorkingAttribute{rotationAttribute, 0, "float"});
-		}
-
-		static void RemoveVSInputSystemAttributes(std::vector<WorkingAttribute>& result)
+		static bool IsVSInputSystemAttributes(StringSection<> semantic, unsigned semanticIdx)
 		{
 			// SV_Position is always generated in the VS (and so can be removed from this point)
-			auto i = std::remove_if(result.begin(), result.end(),
-				[](const auto& q) {
-					if (!XlBeginsWith(MakeStringSection(q._semantic), "SV_")) return false;
-					for (const auto& s:s_validVSInputSystemValues)
-						if (XlEqString(q._semantic, s.first))
-							return true;
-					return false;
-				});
-			result.erase(i, result.end());
+			if (!XlBeginsWith(semantic, "SV_")) return false;
+			for (const auto& s:s_validVSInputSystemValues)
+				if (XlEqString(semantic, s.first))
+					return true;
+			return false;
 		}
 
-		static void WriteSystemVSFragments(FragmentWriter& writer, IteratorRange<const std::string*> isAttributes, IteratorRange<const WorkingAttribute*> gsEntryAttributes)
+		static bool TryWriteGSSystemInput(FragmentWriter& writer, StringSection<> semantic, unsigned semanticIdx)
 		{
-			
+			if (!XlBeginsWith(semantic, "SV_")) return false;
+			for (const auto& q:s_validGSInputSystemValues)
+				if (XlEqString(semantic, q.first)) {
+					writer.WriteInputParameter(semantic.AsString(), semanticIdx, q.second);
+					return true;
+				}
+			return false;
+		}
+
+		static bool IsGSInputSystemAttributes(StringSection<> semantic, unsigned semanticIdx)
+		{
+			// SV_Position is always generated in the VS (and so can be removed from this point)
+			if (!XlBeginsWith(semantic, "SV_")) return false;
+			for (const auto& s:s_validGSInputSystemValues)
+				if (XlEqString(semantic, s.first))
+					return true;
+			return false;
 		}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -338,6 +355,9 @@ namespace ShaderSourceParser
 
 		void FragmentArranger::AddFragmentOutput(const WorkingAttribute& a)
 		{
+			for (const auto& q:_fragmentOutput)
+				if (q._semantic == a._semantic && q._semanticIdx == a._semanticIdx)
+					return;	// suppress dupes
 			_fragmentOutput.emplace_back(a);
 		}
 
@@ -401,6 +421,90 @@ namespace ShaderSourceParser
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+		static void ConnectSystemPatches(
+			FragmentArranger& arranger,
+			const GraphLanguage::ShaderFragmentSignature& systemPatches,
+			std::function<bool(StringSection<>, unsigned)>&& isProvidedFn)
+		{
+			unsigned attemptCount = 0;
+			for (;;) {
+				// protect against infinite loops
+				if (attemptCount++ > 32u) Throw(std::runtime_error("Suspected infinite loop awhile attempting to construct sprite pipeline"));
+
+				auto unprovidedAttributes = arranger.RebuildInputAttributes();
+				{
+					auto i = std::remove_if(unprovidedAttributes.begin(), unprovidedAttributes.end(), [&isProvidedFn](const auto& q) { return isProvidedFn(q._semantic, q._semanticIdx); });
+					unprovidedAttributes.erase(i, unprovidedAttributes.end());
+				}
+
+				// We must attempt to get the attributes in unprovidedAttributes from system patches
+				// we should place the new step as late in the order as possible, just before the point
+				// it is required.
+				//
+				// However, the step we add might have new inputs it requires, as well -- and so we need to 
+				// be prepared to satisfy those as well
+				//
+				// We'll prioritize the list of system patches by the order they appear in the file
+				// We also need to prioritize based on the number of matched and unmatched inputs
+				struct ProspectivePatch
+				{
+					unsigned _matchedInputs = 0, _unmatchedInputs = 0;
+					unsigned _insertionPt = ~0u;
+					std::string _name;
+					const GraphLanguage::NodeGraphSignature* _signature = nullptr;
+				};
+				std::vector<ProspectivePatch> prospectivePatches;
+				for (const auto& e:systemPatches._functions) {
+					bool isUseful = false;
+					for (const auto&p:e.second.GetParameters()) {
+						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+						auto s = Internal::SplitSemanticAndIdx(p._semantic);
+						if (Internal::Find(unprovidedAttributes, s) != unprovidedAttributes.end()) {
+							// if the function both outputs and inputs the parameter, it's not considered a generator, and so is not useful
+							// this is particularly input for some gs system patches which expand an attribute into four
+							// without this check we can get infinite loops
+							auto i = std::find_if(e.second.GetParameters().begin(), e.second.GetParameters().end(),
+								[s](const auto& q) { return q._direction == GraphLanguage::ParameterDirection::In && CompareSemantic(Internal::SplitSemanticAndIdx(q._semantic), s); });
+							isUseful = i == e.second.GetParameters().end();
+						}
+					}
+					if (!isUseful) continue;
+
+					// we have to figure out where this step would be added in the order, and find the input attributes available there
+					// unfortunately, it's a lot of extra work to make these calculations
+					auto insertPt = arranger.CalculateInsertPosition(e.second);
+					auto availableInputs = arranger.CalculateAvailableInputsAtStep(insertPt);
+					unsigned matchedInputs = 0, unmatchedInputs = 0;
+					for (const auto& p:e.second.GetParameters()) {
+						if (p._direction != GraphLanguage::ParameterDirection::In) continue;
+						auto s = Internal::SplitSemanticAndIdx(p._semantic);
+						auto matched = (Internal::Find(availableInputs, s) != availableInputs.end()) || isProvidedFn(s.first, s.second);
+						matchedInputs += matched;
+						unmatchedInputs += !matched;
+					}
+
+					prospectivePatches.emplace_back(ProspectivePatch{matchedInputs, unmatchedInputs, insertPt, e.first, &e.second});
+				}
+
+				if (prospectivePatches.empty()) {
+					// finished -- system patches cannot improve things further
+					break;
+				}
+
+				std::stable_sort(
+					prospectivePatches.begin(), prospectivePatches.end(),
+					[](const auto& lhs, const auto& rhs) { 
+						if (lhs._matchedInputs > rhs._matchedInputs) return true;
+						if (lhs._matchedInputs < rhs._matchedInputs) return false;
+						return lhs._unmatchedInputs < rhs._unmatchedInputs;
+					});
+
+				// add the best patch into the list of steps
+				auto& winner = *prospectivePatches.begin();
+				arranger._steps.insert(arranger._steps.begin()+winner._insertionPt, Internal::FragmentArranger::Step{winner._name, winner._signature});
+			}
+		}
+
 	}
 
 	constexpr const char* s_vsSystemPatches = R"--(
@@ -430,10 +534,55 @@ void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : C
 
 )--";
 
+	constexpr const char* s_gsSystemPatches = R"--(
+
+void ExpandClipSpacePosition(
+	out float4 pos0 : SV_Position0,
+	out float4 pos1 : SV_Position1,
+	out float4 pos2 : SV_Position2,
+	out float4 pos3 : SV_Position3,
+	float4 inputPos : SV_Position,
+	float radius : RADIUS,
+	float rotation : ROTATION)
+{
+	const float hradius = radius;
+	const float vradius = hradius * (16.f/9.f);		// todo -- proper aspect & radius scaling
+	float2 sc; sincos(rotation, sc.x, sc.y);
+	float2 h = float2(sc.y, -sc.x);
+	float2 v = float2(sc.x, sc.y);
+	h.x *= hradius; h.y *= vradius;
+	v.x *= hradius; v.y *= vradius;
+
+	pos0 = float4(inputPos.xy + -h-v, inputPos.zw);
+	pos1 = float4(inputPos.xy + -h+v, inputPos.zw);
+	pos2 = float4(inputPos.xy +  h-v, inputPos.zw);
+	pos3 = float4(inputPos.xy +  h+v, inputPos.zw);
+}
+
+void ExpandClipSpacePosition(
+	out float4 pos0 : SV_Position0,
+	out float4 pos1 : SV_Position1,
+	out float4 pos2 : SV_Position2,
+	out float4 pos3 : SV_Position3,
+	float4 inputPos : SV_Position,
+	float radius : RADIUS)
+{
+	const float h = radius;
+	const float v = h * (16.f/9.f);		// todo -- proper radius values
+	pos0 = float4(inputPos.xy + float2(-h, -v), inputPos.zw);
+	pos1 = float4(inputPos.xy + float2(-h, +v), inputPos.zw);
+	pos2 = float4(inputPos.xy + float2( h, -v), inputPos.zw);
+	pos3 = float4(inputPos.xy + float2( h, +v), inputPos.zw);
+}
+
+	)--";
+
+
 	InstantiatedShader BuildSpritePipeline(const InstantiatedShader& patches, IteratorRange<const std::string*> iaAttributes)
 	{
 		std::vector<Internal::WorkingAttribute> psEntryAttributes, gsEntryAttributes, vsEntryAttributes;
 		auto vsSystemPatches = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
+		auto gsSystemPatches = ShaderSourceParser::ParseHLSL(s_gsSystemPatches);
 
 		std::vector<Internal::FragmentArranger::Step> psSteps, gsSteps, vsSteps;
 		{
@@ -457,14 +606,24 @@ void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : C
 
 			{
 				Internal::FragmentArranger arranger;
+				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 0, "float4"});
+				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 1, "float4"});
+				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 2, "float4"});
+				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 3, "float4"});
 				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
 
 				for (unsigned ep=0; ep<patches._entryPoints.size(); ++ep)
 					if (patches._entryPoints[ep]._implementsName == "SV_SpriteGS")
 						arranger.AddStep(patches._entryPoints[ep]);
 
+				Internal::ConnectSystemPatches(
+					arranger, gsSystemPatches,
+					[&iaAttributes](StringSection<> semantic, unsigned semanticIdx) {
+						return Internal::IsGSInputSystemAttributes(semantic, semanticIdx);
+					});
+
 				gsEntryAttributes = arranger.RebuildInputAttributes();
-				Internal::AddGSInputSystemAttributes(gsEntryAttributes);
+				// Internal::AddGSInputSystemAttributes(gsEntryAttributes);
 				gsSteps = std::move(arranger._steps);
 			}
 
@@ -476,83 +635,17 @@ void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : C
 					if (patches._entryPoints[ep]._implementsName == "SV_SpriteVS")
 						arranger.AddStep(patches._entryPoints[ep]);
 
-				unsigned attemptCount = 0;
-				for (;;) {
-					// protect against infinite loops
-					if (attemptCount++ > 32u) Throw(std::runtime_error("Suspected infinite loop awhile attempting to construct sprite pipeline"));
-
-					vsEntryAttributes = arranger.RebuildInputAttributes();
-					auto unprovidedAttributes = vsEntryAttributes;
-					Internal::RemoveVSInputSystemAttributes(unprovidedAttributes);
-					for (auto a:iaAttributes) {
-						auto s = Internal::SplitSemanticAndIdx(a);
-						Internal::RemoveActiveAttribute(unprovidedAttributes, s.first, s.second);
-					}
-
-					// We must attempt to get the attributes in unprovidedAttributes from system patches
-					// we should place the new step as late in the order as possible, just before the point
-					// it is required.
-					//
-					// However, the step we add might have new inputs it requires, as well -- and so we need to 
-					// be prepared to satisfy those as well
-					//
-					// We'll prioritize the list of system patches by the order they appear in the file
-					// We also need to prioritize based on the number of matched and unmatched inputs
-					struct ProspectivePatch
-					{
-						unsigned _matchedInputs = 0, _unmatchedInputs = 0;
-						unsigned _insertionPt = ~0u;
-						std::string _name;
-						const GraphLanguage::NodeGraphSignature* _signature = nullptr;
-					};
-					std::vector<ProspectivePatch> prospectivePatches;
-					for (const auto& e:vsSystemPatches._functions) {
-						bool isUseful = false;
-						for (const auto&p:e.second.GetParameters()) {
-							if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
-							isUseful |= Internal::Find(unprovidedAttributes, Internal::SplitSemanticAndIdx(p._semantic)) != unprovidedAttributes.end();
+				Internal::ConnectSystemPatches(
+					arranger, vsSystemPatches,
+					[&iaAttributes](StringSection<> semantic, unsigned semanticIdx) {
+						for (auto a:iaAttributes) {
+							auto s = Internal::SplitSemanticAndIdx(a);
+							if (s.second == semanticIdx && XlEqString(s.first, semantic)) return true;
 						}
-						if (!isUseful) continue;
-
-						// we have to figure out where this step would be added in the order, and find the input attributes available there
-						// unfortunately, it's a lot of extra work to make these calculations
-						auto insertPt = arranger.CalculateInsertPosition(e.second);
-						auto availableInputs = arranger.CalculateAvailableInputsAtStep(insertPt);
-						unsigned matchedInputs = 0, unmatchedInputs = 0;
-						for (const auto& p:e.second.GetParameters()) {
-							if (p._direction != GraphLanguage::ParameterDirection::In) continue;
-							auto s = Internal::SplitSemanticAndIdx(p._semantic);
-							auto matched = Internal::Find(availableInputs, s) != availableInputs.end();
-							if (!matched) {
-								auto i = std::find_if(iaAttributes.begin(), iaAttributes.end(),
-									[s](const auto& q) { auto s2 = Internal::SplitSemanticAndIdx(q); return s2.second == s.second && XlEqString(s2.first, s.first); });
-								matched = i!=iaAttributes.end();
-							}
-							matchedInputs += matched;
-							unmatchedInputs += !matched;
-						}
-
-						prospectivePatches.emplace_back(ProspectivePatch{matchedInputs, unmatchedInputs, insertPt, e.first, &e.second});
-					}
-
-					if (prospectivePatches.empty()) {
-						// finished -- system patches cannot improve things further
-						break;
-					}
-
-					std::stable_sort(
-						prospectivePatches.begin(), prospectivePatches.end(),
-						[](const auto& lhs, const auto& rhs) { 
-							if (lhs._matchedInputs > rhs._matchedInputs) return true;
-							if (lhs._matchedInputs < rhs._matchedInputs) return false;
-							return lhs._unmatchedInputs < rhs._unmatchedInputs;
-						});
-
-					// add the best patch into the list of steps
-					auto& winner = *prospectivePatches.begin();
-					arranger._steps.insert(arranger._steps.begin()+winner._insertionPt, Internal::FragmentArranger::Step{winner._name, winner._signature});
-				}
-
+						return Internal::IsVSInputSystemAttributes(semantic, semanticIdx);
+					});
+				
+				vsEntryAttributes = arranger.RebuildInputAttributes();
 				vsSteps = std::move(arranger._steps);
 			}
 		}
@@ -561,7 +654,8 @@ void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : C
 		// should perform all of the steps
 		//
 		// During this phase, we may also need to generate some custom patches for system values and required transformations
-		std::stringstream vs;
+		std::stringstream vs, gs;
+		GraphLanguage::NodeGraphSignature vsSignature;
 
 		{
 			Internal::FragmentWriter writerHelper;
@@ -579,8 +673,6 @@ void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : C
 				if (step._enabled)
 					writerHelper.WriteCall(step._name, *step._signature);
 
-			Internal::WriteSystemVSFragments(writerHelper, iaAttributes, gsEntryAttributes);
-
 			for (const auto& a:gsEntryAttributes) {
 				if (XlBeginsWith(MakeStringSection(a._semantic), "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
 
@@ -589,11 +681,38 @@ void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : C
 					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);	// early cast to type expected by gs
 			}
 
-			writerHelper.Complete(vs, "VSEntry");
+			vsSignature = writerHelper.Complete(vs, "VSEntry");
 		}
 
-		auto vsText = vs.str();
-		std::cout << vsText << std::endl;
+		{
+			Internal::FragmentWriter writerHelper;
+			for (const auto& a:gsEntryAttributes) {
+				auto gsin = std::find_if(vsSignature.GetParameters().begin(), vsSignature.GetParameters().end(),
+					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+				if (gsin != vsSignature.GetParameters().end()) {
+					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
+				} else {
+					TryWriteGSSystemInput(writerHelper, a._semantic, a._semanticIdx);
+				}
+			}
+
+			for (const auto& step:gsSteps)
+				if (step._enabled)
+					writerHelper.WriteCall(step._name, *step._signature);
+
+			for (const auto& a:psEntryAttributes) {
+				if (XlBeginsWith(MakeStringSection(a._semantic), "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
+
+				// If the writer helper never actually got anything for this semantic, it will not become an output
+				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
+					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);	// early cast to type expected by gs
+			}
+
+			writerHelper.Complete(gs, "GSEntry");
+		}
+
+		std::cout << vs.str() << std::endl;
+		std::cout << gs.str() << std::endl;
 
 		return {};
 	}
