@@ -47,7 +47,7 @@ namespace ShaderSourceParser
 			return CompareSemantic(lhs, p._semantic);
 		}
 
-		static std::vector<WorkingAttribute>::const_iterator Find(const std::vector<WorkingAttribute>& v, std::pair<StringSection<>, unsigned> s)
+		static std::vector<WorkingAttribute>::iterator Find(std::vector<WorkingAttribute>& v, std::pair<StringSection<>, unsigned> s)
 		{
 			return std::find_if(v.begin(), v.end(), [s](const auto& q) { return q._semanticIdx == s.second && XlEqString(s.first, q._semantic); });
 		}
@@ -58,17 +58,6 @@ namespace ShaderSourceParser
 			if (s.first.size() == p._semantic.size()) return { p._semantic, 0, p._type };
 			return { s.first.AsString(), s.second, p._type };
 		}
-
-		#if 0
-			static std::vector<WorkingAttribute> AttributesFromParameters(const ShaderEntryPoint& entryPoint, GraphLanguage::ParameterDirection direction)
-			{
-				std::vector<WorkingAttribute> result;
-				for (const auto& p:entryPoint._signature.GetParameters())
-					if (p._direction == direction)
-						result.emplace_back(MakeWorkingAttribute(p));
-				return result;
-			}
-		#endif
 
 		static bool UpdateActiveAttributesBackwards(
 			std::vector<WorkingAttribute>& result,
@@ -148,13 +137,11 @@ namespace ShaderSourceParser
 			void WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
 
 			GraphLanguage::NodeGraphSignature WriteFragment(std::stringstream& str, StringSection<> name);
-			void WriteGSFragment(std::stringstream& str, StringSection<> name);
+			GraphLanguage::NodeGraphSignature WriteGSFragment(std::stringstream& str, StringSection<> name);
 
 			bool HasAttributeFor(StringSection<> semantic, unsigned semanticIdx);
 
 			std::stringstream  _body;
-
-			std::vector<GraphLanguage::NodeGraphSignature::Parameter> _parameters;
 
 			struct WorkingAttributeWithName : public WorkingAttribute { std::string _name; };
 			std::vector<WorkingAttributeWithName> _workingAttributes;
@@ -172,7 +159,6 @@ namespace ShaderSourceParser
 
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate(semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-			_parameters.emplace_back(GraphLanguage::NodeGraphSignature::Parameter{type, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
 			_signature.AddParameter({type, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
 			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName});
 		}
@@ -183,7 +169,6 @@ namespace ShaderSourceParser
 
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate("out_", semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-			_parameters.emplace_back(GraphLanguage::NodeGraphSignature::Parameter{type, newName, GraphLanguage::ParameterDirection::Out, semanticAndIdx});
 			_signature.AddParameter({type, newName, GraphLanguage::ParameterDirection::Out, semanticAndIdx});
 		}
 
@@ -248,7 +233,7 @@ namespace ShaderSourceParser
 			str << "void " << name << "(";
 
 			bool pendingComma = false;
-			for (const auto& p:_parameters) {
+			for (const auto& p:_signature.GetParameters()) {
 				if (pendingComma) str << ", ";
 				if (p._direction == GraphLanguage::ParameterDirection::Out) str << "out ";
 				str << p._type << " " << p._name << ":" << p._semantic;
@@ -278,22 +263,22 @@ namespace ShaderSourceParser
 		static const char* s_VSToGS = "VS_TO_GS";
 		static const char* s_GSToPS = "GS_TO_PS";
 
-		void FragmentWriter::WriteGSFragment(std::stringstream& str, StringSection<> name)
+		GraphLanguage::NodeGraphSignature FragmentWriter::WriteGSFragment(std::stringstream& str, StringSection<> name)
 		{
 			// (note -- some SV_ values might still need to be direct function parameters?)
 			str << "struct " << name << "_" << s_VSToGS << std::endl << "{" << std::endl;
-			for (const auto& p:_parameters) {
+			for (const auto& p:_signature.GetParameters()) {
 				if (p._direction != GraphLanguage::ParameterDirection::In) continue;
 				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
 			}
-			str << ";" << std::endl << std::endl;
+			str << "};" << std::endl << std::endl;
 
 			str << "struct " << name << "_" << s_GSToPS << std::endl << "{" << std::endl;
-			for (const auto& p:_parameters) {
+			for (const auto& p:_signature.GetParameters()) {
 				if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
 				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
 			}
-			str << ";" << std::endl << std::endl;
+			str << "};" << std::endl << std::endl;
 
 			str << "[maxvertexcount(4)]" << std::endl;
 			str << "\tpoint " << name << "_" << s_VSToGS << " input[1], inout TriangleStream<" << name << "_" << s_GSToPS << "> outputStream)" << std::endl;
@@ -303,7 +288,7 @@ namespace ShaderSourceParser
 			// write the code that should move values from the working attributes into the output vertices
 			for (unsigned vIdx=0; vIdx<4; ++vIdx) {
 				str << "\t" << name << "_" << s_GSToPS << "output" << vIdx << ";" << std::endl;
-				for (const auto& p:_parameters) {
+				for (const auto& p:_signature.GetParameters()) {
 					if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
 					str << "\t" << "output" << vIdx << "." << p._name << " = ";
 					// look for the working parameter that matches the semantic (consider cases where we have separate values for each vertex
@@ -325,6 +310,7 @@ namespace ShaderSourceParser
 			}
 
 			str << "}" << std::endl;
+			return _signature;
 		}
 
 		bool FragmentWriter::HasAttributeFor(StringSection<> semantic, unsigned semanticIdx)
@@ -347,6 +333,22 @@ namespace ShaderSourceParser
 			{"SV_CullDistance", "float"},		// multiple indices
 			{"SV_InstanceID", "uint"},
 			{"SV_PrimitiveID", "uint"}
+		};
+
+		static constexpr std::pair<const char*, const char*> s_validPSInputSystemValues[] {
+			{"SV_ClipDistance", "float"},		// multiple indices
+			{"SV_CullDistance", "float"},		// multiple indices
+			{"SV_InstanceID", "uint"},
+			{"SV_PrimitiveID", "uint"},
+			{"SV_Coverage", "uint"},
+			{"SV_InnerCoverage", "uint"},
+			{"SV_IsFrontFace", "bool"},
+			{"SV_Position", "float4"},
+			{"SV_PrimitiveID", "uint"},
+			{"SV_RenderTargetArrayIndex", "uint"},
+			{"SV_SampleIndex", "uint"},
+			{"SV_ViewportArrayIndex", "uint"},
+			{"SV_ShadingRate", "uint"}
 		};
 
 		static void AddPSInputSystemAttributes(std::vector<WorkingAttribute>& result)
@@ -395,6 +397,29 @@ namespace ShaderSourceParser
 			for (const auto& s:s_validGSInputSystemValues)
 				if (XlEqString(semantic, s.first))
 					return true;
+			return false;
+		}
+
+		static bool VSCanProvideAttribute(const InstantiatedShader& patches, StringSection<> semantic, unsigned semanticIdx)
+		{
+			for (unsigned ep=0; ep<patches._entryPoints.size(); ++ep)
+				if (patches._entryPoints[ep]._implementsName == "SV_SpriteVS")
+					for (const auto&p:patches._entryPoints[ep]._signature.GetParameters()) {
+						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+						if (CompareSemantic({semantic, semanticIdx}, SplitSemanticAndIdx(p._semantic)))
+							return true;
+					}
+			return false;
+		}
+
+		static bool TryWritePSSystemInput(FragmentWriter& writer, StringSection<> semantic, unsigned semanticIdx)
+		{
+			if (!XlBeginsWith(semantic, "SV_")) return false;
+			for (const auto& q:s_validPSInputSystemValues)
+				if (XlEqString(semantic, q.first)) {
+					writer.WriteInputParameter(semantic.AsString(), semanticIdx, q.second);
+					return true;
+				}
 			return false;
 		}
 
@@ -691,8 +716,9 @@ void ExpandClipSpacePosition(
 
 				Internal::ConnectSystemPatches(
 					arranger, gsSystemPatches,
-					[&iaAttributes](StringSection<> semantic, unsigned semanticIdx) {
-						return Internal::IsGSInputSystemAttributes(semantic, semanticIdx);
+					[&patches](StringSection<> semantic, unsigned semanticIdx) {
+						return Internal::IsGSInputSystemAttributes(semantic, semanticIdx)
+							|| Internal::VSCanProvideAttribute(patches, semantic, semanticIdx);
 					});
 
 				gsEntryAttributes = arranger.RebuildInputAttributes();
@@ -710,10 +736,9 @@ void ExpandClipSpacePosition(
 				Internal::ConnectSystemPatches(
 					arranger, vsSystemPatches,
 					[&iaAttributes](StringSection<> semantic, unsigned semanticIdx) {
-						for (auto a:iaAttributes) {
-							auto s = Internal::SplitSemanticAndIdx(a);
-							if (s.second == semanticIdx && XlEqString(s.first, semantic)) return true;
-						}
+						for (auto a:iaAttributes)
+							if (Internal::CompareSemantic({semantic, semanticIdx}, Internal::SplitSemanticAndIdx(a)))
+								return true;
 						return Internal::IsVSInputSystemAttributes(semantic, semanticIdx);
 					});
 				
@@ -726,8 +751,8 @@ void ExpandClipSpacePosition(
 		// should perform all of the steps
 		//
 		// During this phase, we may also need to generate some custom patches for system values and required transformations
-		std::stringstream vs, gs;
-		GraphLanguage::NodeGraphSignature vsSignature;
+		std::stringstream vs, gs, ps;
+		GraphLanguage::NodeGraphSignature vsSignature, gsSignature, psSignature;
 
 		{
 			Internal::FragmentWriter writerHelper;
@@ -737,7 +762,7 @@ void ExpandClipSpacePosition(
 				if (ia != iaAttributes.end()) {
 					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
 				} else {
-					TryWriteVSSystemInput(writerHelper, a._semantic, a._semanticIdx);
+					Internal::TryWriteVSSystemInput(writerHelper, a._semantic, a._semanticIdx);
 				}
 			}
 
@@ -764,7 +789,7 @@ void ExpandClipSpacePosition(
 				if (gsin != vsSignature.GetParameters().end()) {
 					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
 				} else {
-					TryWriteGSSystemInput(writerHelper, a._semantic, a._semanticIdx);
+					Internal::TryWriteGSSystemInput(writerHelper, a._semantic, a._semanticIdx);
 				}
 			}
 
@@ -780,12 +805,60 @@ void ExpandClipSpacePosition(
 					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);	// early cast to type expected by gs
 			}
 
-			writerHelper.WriteGSFragment(gs, "GSEntry");
+			// GS signature isn't strictly the signature of a particular function, but contains the members of the
+			// vertex input and output structures
+			gsSignature = writerHelper.WriteGSFragment(gs, "GSEntry");
 		}
 
-		std::cout << vs.str() << std::endl;
-		std::cout << gs.str() << std::endl;
+		{
+			Internal::FragmentWriter writerHelper;
+			for (const auto& a:psEntryAttributes) {
+				auto gsin = std::find_if(gsSignature.GetParameters().begin(), gsSignature.GetParameters().end(),
+					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+				if (gsin != gsSignature.GetParameters().end()) {
+					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
+				} else {
+					Internal::TryWritePSSystemInput(writerHelper, a._semantic, a._semanticIdx);
+				}
+			}
 
-		return {};
+			std::vector<Internal::WorkingAttribute> psOutputAttributes;
+			for (const auto& step:psSteps)
+				if (step._enabled) {
+					writerHelper.WriteCall(step._name, *step._signature);
+
+					// any SV_ values that are actually written one of the patches are considered
+					// outputs of the final fragment shader
+					for (const auto& p:step._signature->GetParameters()) {
+						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+						if (!XlBeginsWith(MakeStringSection(p._semantic), "SV_")) continue;
+						auto existing = Internal::Find(psOutputAttributes, Internal::SplitSemanticAndIdx(p._semantic));
+						if (existing != psOutputAttributes.end()) {
+							existing->_type = p._type;
+						} else {
+							psOutputAttributes.emplace_back(Internal::MakeWorkingAttribute(p));
+						}
+					}
+				}
+
+			for (const auto& a:psOutputAttributes)
+				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
+					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);
+
+			psSignature = writerHelper.WriteFragment(ps, "PSEntry");
+		}
+
+		InstantiatedShader result;
+		result._sourceFragments.emplace_back(s_vsSystemPatches);
+		result._sourceFragments.emplace_back(s_gsSystemPatches);
+		result._sourceFragments.emplace_back(vs.str());
+		result._sourceFragments.emplace_back(gs.str());
+		result._sourceFragments.emplace_back(ps.str());
+
+		result._entryPoints.emplace_back(ShaderEntryPoint{"VSEntry", vsSignature, "vs"});
+		result._entryPoints.emplace_back(ShaderEntryPoint{"GSEntry", {}, "gs"});				// note that "gsSignature" does have the true signature information
+		result._entryPoints.emplace_back(ShaderEntryPoint{"PSEntry", psSignature, "ps"});
+
+		return result;
 	}
 }
