@@ -229,7 +229,7 @@ void ps(
 	out float4 emissive : SV_Target0,
 	float4 position : SV_Position,
 	float4 color : COLOR,
-	float4 texCoord : TEXCOORD)
+	float2 texCoord : TEXCOORD)
 {
 	float r = length(texCoord - 0.5.xx) * 2.f;
 	r += DitherPatternInt(position.xy) / 30.f;

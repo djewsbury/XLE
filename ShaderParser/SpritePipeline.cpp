@@ -147,16 +147,18 @@ namespace ShaderSourceParser
 
 			void WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
 
-			GraphLanguage::NodeGraphSignature Complete(std::stringstream& str, StringSection<> name);
+			GraphLanguage::NodeGraphSignature WriteFragment(std::stringstream& str, StringSection<> name);
+			void WriteGSFragment(std::stringstream& str, StringSection<> name);
 
 			bool HasAttributeFor(StringSection<> semantic, unsigned semanticIdx);
 
-			std::stringstream _parameterList, _body;
+			std::stringstream  _body;
+
+			std::vector<GraphLanguage::NodeGraphSignature::Parameter> _parameters;
 
 			struct WorkingAttributeWithName : public WorkingAttribute { std::string _name; };
 			std::vector<WorkingAttributeWithName> _workingAttributes;
 			GraphLanguage::NodeGraphSignature _signature;
-			bool _parameterListPendingComma = false;
 			unsigned _nextWorkingAttributeIdx = 0;
 		};
 
@@ -168,11 +170,9 @@ namespace ShaderSourceParser
 			if (i != _workingAttributes.end())
 				Throw(std::runtime_error("Input attribute " + semantic + " specified multiple times"));
 
-			if (_parameterListPendingComma) _parameterList << ", ";
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate(semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-			_parameterList << type << " " << newName << ":" << semanticAndIdx;
-			_parameterListPendingComma = true;
+			_parameters.emplace_back(GraphLanguage::NodeGraphSignature::Parameter{type, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
 			_signature.AddParameter({type, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
 			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName});
 		}
@@ -181,12 +181,29 @@ namespace ShaderSourceParser
 		{
 			assert(SplitSemanticAndIdx(semantic).first.size() == semantic.size());
 
-			if (_parameterListPendingComma) _parameterList << ", ";
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate("out_", semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-			_parameterList << "out " << type << " " << newName << ":" << semanticAndIdx;
-			_parameterListPendingComma = true;
+			_parameters.emplace_back(GraphLanguage::NodeGraphSignature::Parameter{type, newName, GraphLanguage::ParameterDirection::Out, semanticAndIdx});
 			_signature.AddParameter({type, newName, GraphLanguage::ParameterDirection::Out, semanticAndIdx});
+		}
+
+		static void WriteCastOrAssignExpression(
+			std::stringstream& str,
+			FragmentWriter::WorkingAttributeWithName& attribute,
+			const std::string& requiredType)
+		{
+			if (attribute._type == requiredType) {
+				str << attribute._name;
+			} else {
+				str << "Cast_" << attribute._type << "_to_" << requiredType << "(" << attribute._name << ")";
+			}
+		}
+
+		static void WriteDefaultValueExpression(
+			std::stringstream& str,
+			const std::string& requiredType)
+		{
+			str << "DefaultValue_" << requiredType << "()";
 		}
 
 		void FragmentWriter::WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig)
@@ -202,13 +219,9 @@ namespace ShaderSourceParser
 				auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(), [s](const auto& q) { return s.second == q._semanticIdx && XlEqString(s.first, q._semantic); });
 				if (p._direction == GraphLanguage::ParameterDirection::In) {
 					if (i != _workingAttributes.end()) {
-						if (i->_type == p._type) {
-							temp << i->_name;
-						} else {
-							temp << "Cast_" << i->_type << "_to_" << p._type << "(" << i->_name << ")";
-						}
+						WriteCastOrAssignExpression(temp, *i, p._type);
 					} else {
-						temp << "DefaultValue_" << p._type << "()";
+						WriteDefaultValueExpression(temp, p._type);
 					}
 				} else {
 					// we will attempt to reuse the existing working attribute if we can. Otherwise we just create a new one
@@ -230,10 +243,18 @@ namespace ShaderSourceParser
 			_body << temp.str() << ");" << std::endl;
 		}
 
-		GraphLanguage::NodeGraphSignature FragmentWriter::Complete(std::stringstream& str, StringSection<> name)
+		GraphLanguage::NodeGraphSignature FragmentWriter::WriteFragment(std::stringstream& str, StringSection<> name)
 		{
-			str << "void " << name << "(" << _parameterList.str() << ")" << std::endl;
-			str << "{" << std::endl;
+			str << "void " << name << "(";
+
+			bool pendingComma = false;
+			for (const auto& p:_parameters) {
+				if (pendingComma) str << ", ";
+				if (p._direction == GraphLanguage::ParameterDirection::Out) str << "out ";
+				str << p._type << " " << p._name << ":" << p._semantic;
+				pendingComma = true;
+			}
+			str << ")" << std::endl << "{" << std::endl;
 			str << _body.str() << std::endl;
 
 			// Write to the output parameters as they were declared in the signature
@@ -252,6 +273,58 @@ namespace ShaderSourceParser
 
 			str << "}" << std::endl;
 			return _signature;
+		}
+
+		static const char* s_VSToGS = "VS_TO_GS";
+		static const char* s_GSToPS = "GS_TO_PS";
+
+		void FragmentWriter::WriteGSFragment(std::stringstream& str, StringSection<> name)
+		{
+			// (note -- some SV_ values might still need to be direct function parameters?)
+			str << "struct " << name << "_" << s_VSToGS << std::endl << "{" << std::endl;
+			for (const auto& p:_parameters) {
+				if (p._direction != GraphLanguage::ParameterDirection::In) continue;
+				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
+			}
+			str << ";" << std::endl << std::endl;
+
+			str << "struct " << name << "_" << s_GSToPS << std::endl << "{" << std::endl;
+			for (const auto& p:_parameters) {
+				if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
+			}
+			str << ";" << std::endl << std::endl;
+
+			str << "[maxvertexcount(4)]" << std::endl;
+			str << "\tpoint " << name << "_" << s_VSToGS << " input[1], inout TriangleStream<" << name << "_" << s_GSToPS << "> outputStream)" << std::endl;
+			str << "{" << std::endl;
+			str << _body.str();
+
+			// write the code that should move values from the working attributes into the output vertices
+			for (unsigned vIdx=0; vIdx<4; ++vIdx) {
+				str << "\t" << name << "_" << s_GSToPS << "output" << vIdx << ";" << std::endl;
+				for (const auto& p:_parameters) {
+					if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+					str << "\t" << "output" << vIdx << "." << p._name << " = ";
+					// look for the working parameter that matches the semantic (consider cases where we have separate values for each vertex
+					auto s = SplitSemanticAndIdx(p._semantic);
+					assert(s.second == 0);		// funny things happen if this is not zero
+					auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
+						[s, vIdx](const auto& q) { return q._semanticIdx == vIdx && XlEqString(s.first, q._semantic); });
+					if (i == _workingAttributes.end() && vIdx != 0)
+						i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
+							[s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
+					if (i != _workingAttributes.end()) {
+						WriteCastOrAssignExpression(str, *i, p._type);
+					} else {
+						WriteDefaultValueExpression(str, p._type);
+					}
+					str << std::endl;
+				}
+				str << "\toutputStream.Append(output" << vIdx << ");" << std::endl;
+			}
+
+			str << "}" << std::endl;
 		}
 
 		bool FragmentWriter::HasAttributeFor(StringSection<> semantic, unsigned semanticIdx)
@@ -623,7 +696,6 @@ void ExpandClipSpacePosition(
 					});
 
 				gsEntryAttributes = arranger.RebuildInputAttributes();
-				// Internal::AddGSInputSystemAttributes(gsEntryAttributes);
 				gsSteps = std::move(arranger._steps);
 			}
 
@@ -681,7 +753,7 @@ void ExpandClipSpacePosition(
 					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);	// early cast to type expected by gs
 			}
 
-			vsSignature = writerHelper.Complete(vs, "VSEntry");
+			vsSignature = writerHelper.WriteFragment(vs, "VSEntry");
 		}
 
 		{
@@ -708,7 +780,7 @@ void ExpandClipSpacePosition(
 					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);	// early cast to type expected by gs
 			}
 
-			writerHelper.Complete(gs, "GSEntry");
+			writerHelper.WriteGSFragment(gs, "GSEntry");
 		}
 
 		std::cout << vs.str() << std::endl;
