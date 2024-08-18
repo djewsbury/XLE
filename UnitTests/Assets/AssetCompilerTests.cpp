@@ -341,7 +341,7 @@ namespace UnitTests
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
 		std::filesystem::create_directories(tempDirPath);
 
-		auto intermediateStore = ::Assets::CreateProgressiveIntermediatesStore(
+		auto intermediateStore = ::Assets::CreateTemporaryCacheIntermediatesStore(
 			::Assets::MainFileSystem::GetDefaultFileSystem(),
 			tempDirPath.string().c_str(),
 			ConsoleRig::GetLibVersionDesc()._versionString,
@@ -414,7 +414,7 @@ namespace UnitTests
 		std::filesystem::remove_all(tempDirPath);	// ensure we're starting from an empty temporary directory
 		std::filesystem::create_directories(tempDirPath);
 
-		auto intermediateStore = std::make_shared<::Assets::IntermediatesStore>(
+		auto intermediateStore = ::Assets::CreateTemporaryCacheIntermediatesStore(
 			::Assets::MainFileSystem::GetDefaultFileSystem(),
 			tempDirPath.string().c_str(),
 			ConsoleRig::GetLibVersionDesc()._versionString,

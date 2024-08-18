@@ -4,6 +4,7 @@
 
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../Math/Vector.h"
+#include "../../Math/Matrix.h"
 #include <random>
 
 namespace UnitTests

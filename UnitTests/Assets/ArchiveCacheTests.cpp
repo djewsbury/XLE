@@ -117,7 +117,7 @@ namespace UnitTests
 		OSServices::LibVersionDesc dummyVersionDesc { "unit-test-version-str", "unit-test-build-date-string" };
 		auto archiveFileName = (tempDirPath / "archive").string();
 		{
-			::Assets::ArchiveCacheSet cacheSet(::Assets::MainFileSystem::GetDefaultFileSystem(), dummyVersionDesc);
+			::Assets::ArchiveCacheSet cacheSet(::Assets::MainFileSystem::GetDefaultFileSystem(), dummyVersionDesc, true);
 			auto archive = cacheSet.GetArchive(archiveFileName);
 
 			constexpr uint64_t objectOneId = "ObjectOne"_h;
@@ -201,7 +201,7 @@ namespace UnitTests
 
 		{
 			// When we close and reopen the cache set, we should still be able to get out the same results
-			::Assets::ArchiveCacheSet cacheSet(::Assets::MainFileSystem::GetDefaultFileSystem(), dummyVersionDesc);
+			::Assets::ArchiveCacheSet cacheSet(::Assets::MainFileSystem::GetDefaultFileSystem(), dummyVersionDesc, true);
 			auto archive = cacheSet.GetArchive(archiveFileName);
 
 			auto artifactCollection = archive->TryOpenFromCache("ObjectOne"_h);

@@ -17,6 +17,7 @@
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
+#include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Assets/PredefinedDescriptorSetLayout.h"
 #include "../../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
@@ -107,7 +108,9 @@ namespace UnitTests
 			s_sequencerDescSetLayout, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 
 		auto shapeRenderingDelegates = std::make_shared<RenderOverlays::ShapesRenderingDelegate>();
-		auto immediateDrawables = Techniques::CreateImmediateDrawables(testHelper->_device, shapeRenderingDelegates->GetPipelineLayoutDelegate());
+		auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(testHelper->_device);
+		auto overlayPipelineAccelerators = RenderCore::Techniques::CreatePipelineAcceleratorPool(testHelper->_device, nullptr, pipelineCollection, shapeRenderingDelegates->GetPipelineLayoutDelegate(), 0);
+		auto immediateDrawables = Techniques::CreateImmediateDrawables(overlayPipelineAccelerators);
 
 		auto techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		techniqueContext->_commonResources = techniqueServices->GetCommonResources();
@@ -163,11 +166,12 @@ namespace UnitTests
 			UniformsStreamInterface inputTextureUSI;
 			inputTextureUSI.BindResourceView(0, "InputTexture"_h);
 			material._uniformStreamInterface = &inputTextureUSI;
-			material._uniforms._resourceViews.push_back(tex.get()->GetShaderResource());
+			Techniques::RetainedUniformsStream uniforms;
+			uniforms._resourceViews.push_back(tex.get()->GetShaderResource());
 			auto data = immediateDrawables->QueueDraw(
 				sphereGeo.size(),
 				ToolsRig::Vertex3D_MiniInputLayout,
-				material);
+				material, std::move(uniforms));
 			REQUIRE(data.size() == (sphereGeo.size() * sizeof(decltype(sphereGeo)::value_type)));
 			std::memcpy(data.data(), sphereGeo.data(), data.size());
 			

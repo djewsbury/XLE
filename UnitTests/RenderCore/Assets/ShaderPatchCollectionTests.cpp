@@ -19,6 +19,7 @@
 #include "../../../ShaderParser/DescriptorSetInstantiation.h"
 #include "../../../ShaderParser/ShaderAnalysis.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
+#include "../../../ShaderParser/SpritePipeline.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/OSFileSystem.h"
 #include "../../../Assets/MountingTree.h"
@@ -189,6 +190,55 @@ namespace UnitTests
 		std::make_pair("internalShaderFile.pixel.hlsl", ::Assets::AsBlob(s_internalShaderFile)),
 		std::make_pair("internalComplicatedGraph.graph", ::Assets::AsBlob(s_internalComplicatedGraph)),
 		std::make_pair("frameworkEntry.pixel.hlsl", ::Assets::AsBlob(s_basicFrameworkEntryPixel)),
+
+		std::make_pair(
+			"sprite-patch-test.hlsl",
+			::Assets::AsBlob(R"--(
+#include "xleres/TechniqueLibrary/Framework/CommonResources.hlsl"
+#include "xleres/TechniqueLibrary/Math/Misc.hlsl"
+
+void vs(
+	out float rotation : ROTATION,
+	float4 colorLinear : COLOR0,
+	uint vIdx : SV_VertexID)
+{
+	rotation = colorLinear.r * 3.14159f + vIdx * 0.1f;
+}
+
+void gs(
+	float gs_param : GSPARAM,
+	out float2 tc0 : TEXCOORD0,
+	out float2 tc1 : TEXCOORD1,
+	out float2 tc2 : TEXCOORD2,
+	out float2 tc3 : TEXCOORD3)
+{
+	tc0 = float2(0.f, 0.f);
+	tc1 = float2(0.f, 1.f);
+	tc2 = float2(1.f, 0.f);
+	tc3 = float2(1.f, 1.f);
+}
+
+Texture2D<float> ParticleTexture;
+
+cbuffer MaterialConstants
+{
+	float3 BlueBadge;
+};
+
+void ps(
+	out float4 emissive : SV_Target0,
+	float4 position : SV_Position,
+	float4 color : COLOR,
+	float4 texCoord : TEXCOORD)
+{
+	float r = length(texCoord - 0.5.xx) * 2.f;
+	r += DitherPatternInt(position.xy) / 30.f;
+	if (r < 1) discard;
+	float part = ParticleTexture.SampleLevel(PointClampSampler, texCoord, 0).r;
+	return float4(max(1, r)*BlueBadge, .75f * part);
+}
+		)--")),
+
 	};
 
 	static void FakeChange(StringSection<> fn)
@@ -444,6 +494,28 @@ namespace UnitTests
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt1);
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);
+	}
+
+	TEST_CASE( "ShaderParser-SpriteStyleLinking", "[shader_parser]" )
+	{
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
+		auto utDataMount = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
+
+		ShaderSourceParser::InstantiationRequest instRequests[] {
+			{ "ut-data/sprite-patch-test.hlsl::vs", "SV_SpriteVS" },
+			{ "ut-data/sprite-patch-test.hlsl::gs", "SV_SpriteGS" },
+			{ "ut-data/sprite-patch-test.hlsl::ps", "SV_SpritePS" }
+		};
+
+		ShaderSourceParser::GenerateFunctionOptions genOptions;
+		auto instShader = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instRequests), genOptions);
+		assert(!instShader._entryPoints.empty());
+
+		std::vector<std::string> iaAttributes;
+		iaAttributes.emplace_back("POSITION");
+		iaAttributes.emplace_back("COLOR");
+		auto spritePipelineInstantiation = ShaderSourceParser::BuildSpritePipeline(instShader, MakeIteratorRange(iaAttributes));
+		assert(!spritePipelineInstantiation._entryPoints.empty());
 	}
 
 }

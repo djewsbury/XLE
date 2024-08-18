@@ -206,7 +206,9 @@ namespace UnitTests
 				auto encoder = metalContext.BeginGraphicsEncoder(*shaderKit._pipelineLayout);
 				encoder.DrawInstances(*shaderKit._pipeline, 4, layerCount);
 			}
-			threadContext.Present(presentationChain);
+			std::string presentMsg;
+			threadContext.Present(presentationChain, presentMsg);
+			if (!presentMsg.empty()) Throw(std::runtime_error(presentMsg));
 
 			if (profiler) profiler->FrameBarrier();
 
@@ -253,7 +255,7 @@ namespace UnitTests
 		void LogEvents(std::ostream& str, const char evnt[])
 		{
 			auto freq = OSServices::GetPerformanceCounterFrequency();
-			double divisor = freq/1000;
+			double divisor = freq/1000.0;
 			bool pendingComma = false;
 			for (const auto& fd:_frames) {
 				if (pendingComma) str << ", ";

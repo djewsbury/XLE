@@ -37,7 +37,7 @@ namespace ShaderSourceParser
 
 		/// when "implements" is not provided by the instantiation itself (eg, in the case of
 		/// a HLSL patch) we can specify the patch that will be implemented explicitly:
-		std::string																_implementsArchiveName;	 
+		std::string																_implementsArchiveName;
 
 		uint64_t CalculateInstanceHash() const; ///< Calculate hash value for the parameter bindings (& curried parameters) in the request
 
@@ -125,6 +125,8 @@ namespace ShaderSourceParser
 	InstantiatedShader InstantiateShader(
 		IteratorRange<const InstantiationRequest*> request,
 		const GenerateFunctionOptions& generateOptions);
+
+	InstantiatedShader BuildSpritePipeline(const InstantiatedShader& patches);
 
         ///////////////////////////////////////////////////////////////
 

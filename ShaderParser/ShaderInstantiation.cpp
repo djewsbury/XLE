@@ -138,7 +138,7 @@ namespace ShaderSourceParser
 								sig = provider.FindSignature(dep._instantiation._archiveName).value();
 								_rawShaderFileIncludes.insert(sig._sourceFile);
 							}
-							if (!dep._instantiation._implementsArchiveName.empty()) {
+							if (!dep._instantiation._implementsArchiveName.empty() && !XlBeginsWith(MakeStringSection(dep._instantiation._implementsArchiveName), "SV_")) {
 								if (dep._instantiation._customProvider) {
 									implementsSig = dep._instantiation._customProvider->FindSignature(dep._instantiation._implementsArchiveName).value();
 								} else
@@ -151,7 +151,10 @@ namespace ShaderSourceParser
 								entryPoint._name = sig._name;
 								entryPoint._signature = sig._signature;
 
-								if (!dep._instantiation._implementsArchiveName.empty()) {
+								if (XlBeginsWith(MakeStringSection(dep._instantiation._implementsArchiveName), "SV_")) {
+									entryPoint._implementsName = dep._instantiation._implementsArchiveName;
+									entryPoint._implementsSignature = entryPoint._signature;
+								} else if (!dep._instantiation._implementsArchiveName.empty()) {
 									entryPoint._implementsName = implementsSig._name;
 									entryPoint._implementsSignature = implementsSig._signature;
 								} else {
@@ -383,6 +386,8 @@ namespace ShaderSourceParser
 		pendingInstHelper.QueueUp(MakeIteratorRange(pendingInst), defaultProvider, true);
 		return InstantiateShader(pendingInstHelper, generateOptions);
 	}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static uint64_t CalculateDepHash(const InstantiationRequest& dep, uint64_t seed = DefaultSeed64)
 	{
