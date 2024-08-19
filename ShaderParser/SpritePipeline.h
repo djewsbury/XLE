@@ -3,9 +3,18 @@
 #include "../Utility/IteratorUtils.h"
 #include <string>
 
+namespace GraphLanguage { class NodeGraphSignature; }
+
 namespace ShaderSourceParser
 {
 	class InstantiatedShader;
+
+	struct AvailablePatch
+	{
+		std::string _name;										// name of the function to call
+		const GraphLanguage::NodeGraphSignature* _signature;	// signature of the patch
+		uint64_t _implementsHash = ~0ull;
+	};
 
 	// If the given patches are part of a sprite pipeline, generate the structure
 	// that should go around it
@@ -17,7 +26,7 @@ namespace ShaderSourceParser
 	// -- in these cases, the patches are applied in the order they appear in "patches"
 	// 
 	InstantiatedShader BuildSpritePipeline(
-		const InstantiatedShader& patches,
+		IteratorRange<const AvailablePatch*> patches,
 		IteratorRange<const std::string*> iaAttributes);
 }
 

@@ -499,22 +499,40 @@ void ps(
 	TEST_CASE( "ShaderParser-SpriteStyleLinking", "[shader_parser]" )
 	{
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
+		auto xleresMount = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 		auto utDataMount = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
+		auto shaderFilteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(::Assets::Services::GetIntermediateCompilers());
 
-		ShaderSourceParser::InstantiationRequest instRequests[] {
-			{ "ut-data/sprite-patch-test.hlsl::vs", "SV_SpriteVS" },
-			{ "ut-data/sprite-patch-test.hlsl::gs", "SV_SpriteGS" },
-			{ "ut-data/sprite-patch-test.hlsl::ps", "SV_SpritePS" }
-		};
+		// auto metalTestHelper = MakeTestHelper();
+		// auto customShaderSource = RenderCore::CreateMinimalShaderSource(
+		// 	CreateDefaultShaderCompiler(*metalTestHelper->_device, *metalTestHelper->_defaultLegacyBindings),
+		// 	std::make_shared<ExpandIncludesPreprocessor>());
 
-		ShaderSourceParser::GenerateFunctionOptions genOptions;
-		auto instShader = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instRequests), genOptions);
-		assert(!instShader._entryPoints.empty());
+		// Create a CompiledShaderPatchCollection containing the patches we need
+		std::unique_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> compiledShaderPatchCollection;
+		{
+			ShaderSourceParser::InstantiationRequest instRequests[] {
+				{ "ut-data/sprite-patch-test.hlsl::vs", "SV_SpriteVS" },
+				{ "ut-data/sprite-patch-test.hlsl::gs", "SV_SpriteGS" },
+				{ "ut-data/sprite-patch-test.hlsl::ps", "SV_SpritePS" }
+			};
+			RenderCore::Assets::ShaderPatchCollection patchCollection;
+			unsigned idx=0;
+			for (const auto& p:instRequests)
+				patchCollection.AddPatch(std::to_string(idx++), p);
+			compiledShaderPatchCollection = std::make_unique<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, RenderCore::Techniques::DescriptorSetLayoutAndBinding{});
+		}
 
+		std::vector<ShaderSourceParser::AvailablePatch> patchesInterface;
+		unsigned idx=0; for (const auto& p:compiledShaderPatchCollection->GetInterface().GetPatches())
+			patchesInterface.emplace_back(ShaderSourceParser::AvailablePatch{"patch" + std::to_string(idx++), p._signature.get(), p._implementsHash});
+
+		// Generate the pipeline instantiation using the patches provided
 		std::vector<std::string> iaAttributes;
 		iaAttributes.emplace_back("POSITION");
 		iaAttributes.emplace_back("COLOR");
-		auto spritePipelineInstantiation = ShaderSourceParser::BuildSpritePipeline(instShader, MakeIteratorRange(iaAttributes));
+		auto spritePipelineInstantiation = ShaderSourceParser::BuildSpritePipeline(
+			patchesInterface, MakeIteratorRange(iaAttributes));
 		assert(!spritePipelineInstantiation._entryPoints.empty());
 	}
 

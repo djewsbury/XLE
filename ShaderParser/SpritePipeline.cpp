@@ -1,10 +1,12 @@
 #include "SpritePipeline.h"
 #include "ShaderInstantiation.h"
 #include "NodeGraphSignature.h"
-#include "Utility/MemoryUtils.h"
-#include "Utility/FastParseValue.h"
-#include "Utility/StringFormat.h"
+#include "../Utility/MemoryUtils.h"
+#include "../Utility/FastParseValue.h"
+#include "../Utility/StringFormat.h"
 #include <sstream>
+
+#include "../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 
 #include "ShaderSignatureParser.h"
 #include <iostream>
@@ -400,11 +402,11 @@ namespace ShaderSourceParser
 			return false;
 		}
 
-		static bool VSCanProvideAttribute(const InstantiatedShader& patches, StringSection<> semantic, unsigned semanticIdx)
+		static bool VSCanProvideAttribute(IteratorRange<const AvailablePatch*> patches, StringSection<> semantic, unsigned semanticIdx)
 		{
-			for (unsigned ep=0; ep<patches._entryPoints.size(); ++ep)
-				if (patches._entryPoints[ep]._implementsName == "SV_SpriteVS")
-					for (const auto&p:patches._entryPoints[ep]._signature.GetParameters()) {
+			for (unsigned ep=0; ep<patches.size(); ++ep)
+				if (patches[ep]._implementsHash == "SV_SpriteVS"_h)
+					for (const auto&p:patches[ep]._signature->GetParameters()) {
 						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
 						if (CompareSemantic({semantic, semanticIdx}, SplitSemanticAndIdx(p._semantic)))
 							return true;
@@ -428,7 +430,7 @@ namespace ShaderSourceParser
 		class FragmentArranger
 		{
 		public:
-			void AddStep(const ShaderEntryPoint& entryPoint);		// add in reverse order
+			void AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature);		// add in reverse order
 			void AddFragmentOutput(const WorkingAttribute& a);
 
 			std::vector<WorkingAttribute> RebuildInputAttributes();
@@ -446,9 +448,9 @@ namespace ShaderSourceParser
 			std::vector<WorkingAttribute> _fragmentOutput;
 		};
 
-		void FragmentArranger::AddStep(const ShaderEntryPoint& entryPoint)
+		void FragmentArranger::AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature)
 		{
-			_steps.emplace_back(Step{entryPoint._name, &entryPoint._signature});
+			_steps.emplace_back(Step{std::move(name), &signature});
 		}
 
 		void FragmentArranger::AddFragmentOutput(const WorkingAttribute& a)
@@ -676,7 +678,7 @@ void ExpandClipSpacePosition(
 	)--";
 
 
-	InstantiatedShader BuildSpritePipeline(const InstantiatedShader& patches, IteratorRange<const std::string*> iaAttributes)
+	InstantiatedShader BuildSpritePipeline(IteratorRange<const AvailablePatch*> patches, IteratorRange<const std::string*> iaAttributes)
 	{
 		std::vector<Internal::WorkingAttribute> psEntryAttributes, gsEntryAttributes, vsEntryAttributes;
 		auto vsSystemPatches = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
@@ -688,9 +690,9 @@ void ExpandClipSpacePosition(
 				Internal::FragmentArranger arranger;
 				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Target", 0, "float4"});		// todo -- typing on this
 				bool atLeastOnePSStep = false;
-				for (unsigned ep=0; ep<patches._entryPoints.size(); ++ep) {
-					if (patches._entryPoints[ep]._implementsName == "SV_SpritePS") {
-						arranger.AddStep(patches._entryPoints[ep]);
+				for (unsigned ep=0; ep<patches.size(); ++ep) {
+					if (patches[ep]._implementsHash == "SV_SpritePS"_h) {
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature);
 						atLeastOnePSStep = true;
 					}
 				}
@@ -710,13 +712,13 @@ void ExpandClipSpacePosition(
 				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 3, "float4"});
 				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
 
-				for (unsigned ep=0; ep<patches._entryPoints.size(); ++ep)
-					if (patches._entryPoints[ep]._implementsName == "SV_SpriteGS")
-						arranger.AddStep(patches._entryPoints[ep]);
+				for (unsigned ep=0; ep<patches.size(); ++ep)
+					if (patches[ep]._implementsHash == "SV_SpriteGS"_h)
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature);
 
 				Internal::ConnectSystemPatches(
 					arranger, gsSystemPatches,
-					[&patches](StringSection<> semantic, unsigned semanticIdx) {
+					[patches](StringSection<> semantic, unsigned semanticIdx) {
 						return Internal::IsGSInputSystemAttributes(semantic, semanticIdx)
 							|| Internal::VSCanProvideAttribute(patches, semantic, semanticIdx);
 					});
@@ -729,9 +731,9 @@ void ExpandClipSpacePosition(
 				Internal::FragmentArranger arranger;
 				for (auto& a:gsEntryAttributes) arranger.AddFragmentOutput(a);
 
-				for (unsigned ep=0; ep<patches._entryPoints.size(); ++ep)
-					if (patches._entryPoints[ep]._implementsName == "SV_SpriteVS")
-						arranger.AddStep(patches._entryPoints[ep]);
+				for (unsigned ep=0; ep<patches.size(); ++ep)
+					if (patches[ep]._implementsHash == "SV_SpriteVS"_h)
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature);
 
 				Internal::ConnectSystemPatches(
 					arranger, vsSystemPatches,
