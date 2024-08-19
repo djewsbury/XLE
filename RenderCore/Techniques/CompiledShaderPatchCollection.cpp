@@ -159,10 +159,12 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 
-			p._signature = std::make_shared<GraphLanguage::NodeGraphSignature>(patch._signature);
-			#if defined(_DEBUG)
-				p._entryPointName = patch._name;
-			#endif
+			p._originalEntryPointSignature = std::make_shared<GraphLanguage::NodeGraphSignature>(patch._signature);
+			p._originalEntryPointName = patch._name;
+
+			p._scaffoldSignature = std::make_shared<GraphLanguage::NodeGraphSignature>(patch._implementsSignature);
+			p._originalEntryPointName = patch._implementsName;
+
 			p._filteringRulesId = (unsigned)_interface._filteringRules.size();
 
 			_interface._patches.emplace_back(std::move(p));
@@ -204,10 +206,12 @@ namespace RenderCore { namespace Techniques
 		return _filteringRules[filteringRulesId];
 	}
 
-	std::pair<std::string, std::string> CompiledShaderPatchCollection::InstantiateShader(const ParameterBox& selectors, IteratorRange<const uint64_t*> patchExpansions) const
+	std::pair<std::string, std::string> CompiledShaderPatchCollection::InstantiateShader(
+		const ParameterBox& selectors,
+		IteratorRange<const uint64_t*> patchExpansions) const
 	{
 		if (_src.GetPatches().empty()) {
-			// If we'ved used  the constructor that takes a ShaderSourceParser::InstantiatedShader,
+			// If we've used  the constructor that takes a ShaderSourceParser::InstantiatedShader,
 			// we can't re-instantiate here. So our only choice is to just return the saved
 			// instantiation here. However, this means the selectors won't take effect, somewhat awkwardly
 			return {_savedInstantiationPrefix, _savedInstantiation};
@@ -221,6 +225,7 @@ namespace RenderCore { namespace Techniques
 			auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion; });
 			assert(i != _interface._patches.end());
 			if (i == _interface._patches.end()) continue;
+
 			auto srcPatchIdx = i->_filteringRulesId;		// this is actually the idx from the source patches array
 			if (std::find(srcPatchesToInclude.begin(), srcPatchesToInclude.end(), srcPatchIdx) == srcPatchesToInclude.end())
 				srcPatchesToInclude.push_back(srcPatchIdx);
@@ -241,6 +246,27 @@ namespace RenderCore { namespace Techniques
 		generateOptions._pipelineLayoutMaterialDescriptorSet = _matDescSetLayout.get();
 		generateOptions._materialDescriptorSetIndex = _matDescSetSlot;
 		auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(finalInstRequests), generateOptions);
+
+		// Also add in the generated scaffold functions for each of the expanded patches
+		{
+			std::stringstream scaffoldFns;
+			for (auto expansion:patchExpansions) {
+				auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion; });
+				assert(i!=_interface._patches.end());
+				if (i == _interface._patches.end()) continue;
+
+				// GenerateScaffoldFunction just creates a function with the name of the template
+				// that calls the specific implementation requested.
+				// This is important, because the entry point shader code will call the function
+				// using that template function name. The raw input source code won't have any implementation
+				// for that -- just the function signature.
+				// So we provide the implementation here, in the form of a scaffold function
+				if (!i->_scaffoldInFunction.empty())
+					scaffoldFns << i->_scaffoldInFunction;
+			}
+			inst._sourceFragments.emplace_back(scaffoldFns.str());
+		}
+
 		return {Merge(inst._instantiationPrefix), Merge(inst._sourceFragments)};
 	}
 
@@ -293,33 +319,13 @@ namespace RenderCore { namespace Techniques
 		//   -- in cases  (like GLSL) that don't have #include support, we would need another
 		//	changed preprocessor to handle the include expansions.
 		//
-		// Preappending might be better here, because when writing the entry point function itself,
+		// Pre-appending might be better here, because when writing the entry point function itself,
 		// it can be confusing if there is other code injected before the start of the file. Since
 		// the entry points should have signatures for the patch functions anyway, it should work
 		// fine
 		output << instantiated.first;
 		output << "#include \"" << mainSourceFile << "\"" << std::endl;
 		output << instantiated.second;
-
-		for (auto fn:patchExpansions) {
-			auto i = std::find_if(
-				patchCollection.GetInterface().GetPatches().begin(), patchCollection.GetInterface().GetPatches().end(),
-				[fn](const CompiledShaderPatchCollection::Interface::Patch& p) { return p._implementsHash == fn; });
-			assert(i!=patchCollection.GetInterface().GetPatches().end());
-			if (i == patchCollection.GetInterface().GetPatches().end()) {
-				Log(Warning) << "Could not find matching patch function for hash (" << fn << ")" << std::endl;
-				continue;
-			}
-
-			// GenerateScaffoldFunction just creates a function with the name of the template
-			// that calls the specific implementation requested.
-			// This is important, because the entry point shader code will call the function
-			// using that template function name. The raw input source code won't have any implementation
-			// for that -- just the function signature.
-			// So we provide the implementation here, in the form of a scaffold function
-			if (!i->_scaffoldInFunction.empty())
-				output << i->_scaffoldInFunction;
-		}
 
 		SourceCodeWithRemapping result;
 		result._processedSource = output.str();
@@ -351,7 +357,7 @@ namespace RenderCore { namespace Techniques
 
 	static auto InstantiateShaderGraph_CompileFromFile(
 		IShaderSource& internalShaderSource,
-		const ILowLevelCompiler::ResId& resId, 
+		const ShaderCompileResourceName& resId, 
 		StringSection<> definesTable,
 		const CompiledShaderPatchCollection& patchCollection,
 		IteratorRange<const uint64_t*> redirectedPatchFunctions) -> IShaderSource::ShaderByteCodeBlob
@@ -401,7 +407,7 @@ namespace RenderCore { namespace Techniques
 
 		ShaderGraphCompileOperation(
 			IShaderSource& shaderSource,
-			const ILowLevelCompiler::ResId& resId,
+			const ShaderCompileResourceName& resId,
 			StringSection<> definesTable,
 			const CompiledShaderPatchCollection& patchCollection,
 			IteratorRange<const uint64_t*> redirectedPatchFunctions)

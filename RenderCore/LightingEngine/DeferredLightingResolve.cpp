@@ -119,12 +119,12 @@ namespace RenderCore { namespace LightingEngine
 
 		if ((desc._flags & LightSourceOperatorDesc::Flags::NeverStencil) || desc._shape == LightSourceShape::Directional) {
 			inputStates._inputAssembly = {};
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector"};
 			inputStates._topology = Topology::TriangleStrip;
 		} else {
 			inputStates._miniInputAssembly = MakeIteratorRange(inputElements);
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":main";
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL, "main"};
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = ShaderCompileResourceName{BASIC_GEO_HLSL, "ClipToNear"};
 			inputStates._topology = Topology::TriangleList;
 			pipelineDesc->_depthStencil._depthBoundsTestEnable = true;
 			pipelineDesc->_manualSelectorFiltering.SetSelector("GS_FVF", 1);
@@ -132,7 +132,7 @@ namespace RenderCore { namespace LightingEngine
 
 		pipelineDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
 		pipelineDesc->_blend.push_back(Techniques::CommonResourceBox::s_abAdditive);
-		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL ":main";
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL, "main"};
 
 		const ParameterBox* selectorList[] { &selectors };
 		std::promise<Techniques::GraphicsPipelineAndLayout> promise;

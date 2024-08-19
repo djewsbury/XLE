@@ -68,7 +68,7 @@ namespace RenderCore { namespace Techniques
 		/*if (compiledPatchCollection && compiledPatchCollection->GetDependencyValidation())		should be included naturally
 			configurationDepVal.RegisterDependency(compiledPatchCollection->GetDependencyValidation());*/
 		for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-			if (!pipelineDesc->_shaders[c].empty() && pipelineDescWithFiltering._automaticFiltering[c])
+			if (pipelineDesc->_shaders[c].index() != 0 && pipelineDescWithFiltering._automaticFiltering[c])
 				dependencies.push_back(pipelineDescWithFiltering._automaticFiltering[c]->GetDependencyValidation());
 		if (pipelineDescWithFiltering._preconfiguration)
 			dependencies.push_back(pipelineDescWithFiltering._preconfiguration->GetDependencyValidation());

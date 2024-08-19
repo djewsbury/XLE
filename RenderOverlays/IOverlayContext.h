@@ -7,6 +7,7 @@
 #pragma once
 
 #include "OverlayPrimitives.h"
+#include "../RenderCore/StateDesc.h"        // for Topology
 #include "../Math/Vector.h"
 #include "../Utility/IteratorUtils.h"
 
@@ -75,7 +76,8 @@ namespace RenderOverlays
             unsigned vertexCount,
             IteratorRange<const RenderCore::MiniInputElementDesc*> inputLayout,
             const RenderCore::Techniques::ImmediateDrawableMaterial& material,
-            RenderCore::Techniques::RetainedUniformsStream&& uniforms) = 0;
+            RenderCore::Techniques::RetainedUniformsStream&& uniforms,
+            RenderCore::Topology topology = RenderCore::Topology::TriangleList) = 0;
 
         virtual void    DrawTexturedQuad(
             ProjectionMode proj,

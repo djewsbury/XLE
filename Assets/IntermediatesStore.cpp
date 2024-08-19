@@ -319,6 +319,8 @@ namespace Assets
 			bool enableArchiveCacheSet) override;
 		void DeregisterCompileProductsGroup(CompileProductsGroupId) override;
 
+		virtual std::string GetBaseDirectory() const override { return {}; }
+
 		std::string _filesystemMountPt;
 
 		ArchivedIntermediatesStore(std::shared_ptr<IFileSystem> intermediatesFilesystem, StringSection<> intermediatesFilesystemMountPt);
@@ -387,7 +389,7 @@ namespace Assets
 		mutable std::unique_ptr<IFileInterface> _markerFile;
 
 		void ResolveBaseDirectory() const;
-		std::string GetBaseDirectory();
+		std::string GetBaseDirectory() const override;
 
 		CompileProductsGroupId RegisterCompileProductsGroup(
 			StringSection<> name,
@@ -526,7 +528,7 @@ namespace Assets
 	}
 
 
-	std::string ProgressiveIntermediatesStore::GetBaseDirectory()
+	std::string ProgressiveIntermediatesStore::GetBaseDirectory() const
 	{
 		ResolveBaseDirectory();
 		return _resolvedBaseDirectory;

@@ -309,9 +309,9 @@ namespace RenderCore { namespace LightingEngine
 			[pipelinePool, config, plname=std::string(pipelineLayoutAssetName)](auto&& promise, auto pipelineLayout) {
 				TRY {
 					auto pipelineDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-					pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL ":PrepareMany";
-					pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = BASIC_GEO_HLSL ":ClipToNear";
-					pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = TILED_LIGHTING_PREPARE_HLSL ":main";
+					pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL, "PrepareMany"};
+					pipelineDesc->_shaders[(unsigned)ShaderStage::Geometry] = ShaderCompileResourceName{BASIC_GEO_HLSL, "ClipToNear"};
+					pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{TILED_LIGHTING_PREPARE_HLSL, "main"};
 					// pipelineDesc->_manualSelectorFiltering.SetSelector("LIGHT_SHAPE", 1);
 					pipelineDesc->_manualSelectorFiltering.SetSelector("GS_OBJECT_INDEX", 1);
 					// pipelineDesc->_depthStencil._depthBoundsTestEnable = true;

@@ -32,7 +32,7 @@ namespace RenderOverlays
 	unsigned  HardwareColor(ColorB input)
 	{
 		// see duplicate in FontRendering.cpp
-		return (uint32_t(input.a) << 24) | (uint32_t(input.b) << 16) | (uint32_t(input.g) << 8) | uint32_t(input.r);
+		return (uint32_t(input.a) << 24u) | (uint32_t(input.b) << 16u) | (uint32_t(input.g) << 8u) | uint32_t(input.r);
 	}
 
 	static RenderCore::MiniInputElementDesc Vertex_PCT_inputElements2D[] =
@@ -66,6 +66,27 @@ namespace RenderOverlays
 
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements2D = Vertex_PC_inputElements2D;
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements3D = Vertex_PC_inputElements3D;
+
+	static RenderCore::MiniInputElementDesc Vertex_PCCTT_inputElements2D[] =
+	{
+		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::COLOR+1, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD+1, RenderCore::Format::R32G32_FLOAT }
+	};
+
+	static RenderCore::MiniInputElementDesc Vertex_PCCTT_inputElements3D[] = 
+	{
+		{ RenderCore::Techniques::CommonSemantics::POSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::COLOR+1, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD+1, RenderCore::Format::R32G32_FLOAT }
+	};
+	
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PCCTT::s_inputElements2D = Vertex_PCCTT_inputElements2D;
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PCCTT::s_inputElements3D = Vertex_PCCTT_inputElements3D;
 
 	std::optional<TextAlignment> AsTextAlignment(StringSection<> str)
 	{

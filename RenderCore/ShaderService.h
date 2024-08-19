@@ -24,39 +24,38 @@ namespace Assets { class DependencyValidation; struct DependentFileState; }
 
 namespace RenderCore
 {
-	class ILowLevelCompiler
+    struct ShaderCompileResourceName
     {
-    public:
-        using Payload = ::Assets::Blob;
-		using ResChar = ::Assets::ResChar;
-
         struct CompilationFlags
         {
             enum Flags { DebugSymbols = 1<<0, DisableOptimizations = 1<<1, DynamicLinkageEnabled = 1<<2 };
             using BitField = unsigned;
         };
 
+        std::string     _filename;
+        std::string     _entryPoint;
+        std::string     _shaderModel;
+        CompilationFlags::BitField _compilationFlags = 0;
+
+        ShaderCompileResourceName() = default;
+        ShaderCompileResourceName(std::string filename, std::string entryPoint, std::string shaderModel = {});
+        ShaderCompileResourceName(std::string filename, std::string entryPoint, std::string shaderModel, CompilationFlags::BitField compilationFlags);
+
+        ShaderStage AsShaderStage() const;
+    };
+
+    ShaderCompileResourceName MakeShaderCompileResourceName(StringSection<>);
+    extern std::string s_SMVS, s_SMGS, s_SMPS;
+
+	class ILowLevelCompiler
+    {
+    public:
+        using Payload = ::Assets::Blob;
+
         struct CompilerCapability
         {
             enum Flags { Float16 = 1<<0, CompletionFunctionCompile = 1<<1 };
             using BitField = unsigned;
-        };
-
-		class ResId
-        {
-        public:
-            ResChar     _filename[MaxPath];
-            ResChar     _entryPoint[64];
-            ResChar     _shaderModel[32];
-            CompilationFlags::BitField _compilationFlags;
-
-            ResId(StringSection<ResChar> filename, StringSection<ResChar> entryPoint, StringSection<ResChar> shaderModel);
-            ResId();
-
-            ShaderStage AsShaderStage() const;
-
-        protected:
-            ResId(StringSection<ResChar> initializer);
         };
 
 		/* Represents source line number remapping (eg, during some preprocessing step) */
@@ -72,19 +71,19 @@ namespace RenderCore
             /*out*/ Payload& errors,
             /*out*/ std::vector<::Assets::DependentFileState>& dependencies,
             const void* sourceCode, size_t sourceCodeLength,
-            const ResId& shaderPath,
-            StringSection<::Assets::ResChar> definesTable,
+            const ShaderCompileResourceName& shaderPath,
+            StringSection<> definesTable,
             IteratorRange<const SourceLineMarker*> sourceLineMarkers = {}) const = 0;
 
         using CompletionFunction = std::function<void(bool success, const ::Assets::Blob& payload, const ::Assets::Blob& errors, const std::vector<::Assets::DependentFileState>& dependencies)>;
         virtual bool DoLowLevelCompile(
             CompletionFunction&& completionFunction,
             const void* sourceCode, size_t sourceCodeLength,
-            const ResId& shaderPath,
-            StringSection<::Assets::ResChar> definesTable,
+            const ShaderCompileResourceName& shaderPath,
+            StringSection<> definesTable,
             IteratorRange<const SourceLineMarker*> sourceLineMarkers = {}) const { return false; }
 
-        virtual void AdaptResId(ResId&) const = 0;
+        virtual void AdaptResId(ShaderCompileResourceName&) const = 0;
 
         virtual std::string MakeShaderMetricsString(
             const void* byteCode, size_t byteCodeSize) const = 0;
@@ -105,14 +104,14 @@ namespace RenderCore
         };
 
         virtual ShaderByteCodeBlob CompileFromFile(
-            const ILowLevelCompiler::ResId& resId, 
+            const ShaderCompileResourceName& resId, 
             StringSection<> definesTable) const = 0;
         
         virtual ShaderByteCodeBlob CompileFromMemory(
             StringSection<> shaderInMemory, StringSection<> entryPoint, 
             StringSection<> shaderModel, StringSection<> definesTable) const = 0;
 
-        virtual ILowLevelCompiler::ResId MakeResId(
+        virtual ShaderCompileResourceName MakeResId(
             StringSection<> initializer) const = 0;
 
         virtual std::string GenerateMetrics(
@@ -162,7 +161,7 @@ namespace RenderCore
 			ShaderHeader(StringSection<char> identifier, StringSection<char> shaderModel, StringSection<char> entryPoint, bool dynamicLinkageEnabled = false);
         };
 
-		CompiledShaderByteCode(const ::Assets::Blob&, const ::Assets::DependencyValidation&, StringSection<::Assets::ResChar>);
+		CompiledShaderByteCode(const ::Assets::Blob&, const ::Assets::DependencyValidation&, StringSection<>);
 		CompiledShaderByteCode();
         ~CompiledShaderByteCode();
 

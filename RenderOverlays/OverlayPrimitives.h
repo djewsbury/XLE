@@ -140,6 +140,15 @@ namespace RenderOverlays
         static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements3D;
     };
 
+    struct Vertex_PCCTT
+    {
+        Float3 _position;
+        unsigned _colour0, _colour1;
+        Float2 _texCoord0, _texCoord1;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements2D;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements3D;
+    };
+
 	///////////////////////////////////////////////////////////////////////////////////
     //          M I S C
 

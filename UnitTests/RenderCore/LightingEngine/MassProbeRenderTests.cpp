@@ -318,8 +318,8 @@ namespace UnitTests
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
-				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/simple.hlsl:vs_main";
-				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/simple.hlsl:ps_main";
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{"ut-data/simple.hlsl", "vs_main"};
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/simple.hlsl", "ps_main"};
 				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				return nascentDesc;
@@ -422,9 +422,9 @@ namespace UnitTests
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
-				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/amplifying_geo_shader.hlsl:vs_main";
-				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = "ut-data/amplifying_geo_shader.hlsl:gs_main";
-				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/amplifying_geo_shader.hlsl:ps_main";
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{"ut-data/amplifying_geo_shader.hlsl", "vs_main"};
+				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = ShaderCompileResourceName{"ut-data/amplifying_geo_shader.hlsl", "gs_main"};
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/amplifying_geo_shader.hlsl", "ps_main"};
 				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
@@ -536,8 +536,8 @@ namespace UnitTests
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
-				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/instancing_multiprobe_shader.hlsl:vs_main";
-				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/instancing_multiprobe_shader.hlsl:ps_main";
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{"ut-data/instancing_multiprobe_shader.hlsl", "vs_main"};
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/instancing_multiprobe_shader.hlsl", "ps_main"};
 				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
@@ -735,8 +735,8 @@ namespace UnitTests
 				auto nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
 				nascentDesc->_depthStencil = Techniques::CommonResourceBox::s_dsReadWriteCloserThan;
 				nascentDesc->_blend.push_back(Techniques::CommonResourceBox::s_abOpaque);
-				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = "ut-data/multiview_shader.hlsl:vs_main:vs_6_1";
-				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/multiview_shader.hlsl:ps_main:ps_6_1";
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{"ut-data/multiview_shader.hlsl", "vs_main", "vs_6_1"};
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/multiview_shader.hlsl", "ps_main", "ps_6_1"};
 				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 				return nascentDesc;

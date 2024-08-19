@@ -55,7 +55,7 @@ namespace UnitTests
 
     std::shared_ptr<RenderCore::ILowLevelCompiler> CreateDefaultShaderCompiler(RenderCore::IDevice& device, const RenderCore::LegacyRegisterBindingDesc& registerBindings);
 
-    RenderCore::ILowLevelCompiler::CompilationFlags::BitField GetDefaultShaderCompilationFlags(RenderCore::IDevice& device);
+    RenderCore::ShaderCompileResourceName::CompilationFlags::BitField GetDefaultShaderCompilationFlags(RenderCore::IDevice& device);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
             //    U N I T   T E S T   F B    H E L P E R

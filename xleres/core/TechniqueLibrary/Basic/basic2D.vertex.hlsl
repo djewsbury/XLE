@@ -100,6 +100,10 @@ VSOUT frameworkEntry(VSIN vsin)
 		#if VSOUT_HAS_LOCAL_POSITION
 			output.localPosition = vsin.position;
 		#endif
+
+		#if VSOUT_HAS_WORLD_POSITION
+			output.worldPosition = mul(SysUniform_GetLocalToWorld(), float4(vsin.position,1)).xyz;
+		#endif
 	#endif
 
 	// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision

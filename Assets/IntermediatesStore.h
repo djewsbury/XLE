@@ -75,6 +75,8 @@ namespace Assets
 			bool enableArchiveCacheSet = false) = 0;
 		virtual void DeregisterCompileProductsGroup(CompileProductsGroupId) = 0;
 
+		virtual std::string GetBaseDirectory() const = 0;
+
 		virtual bool AllowStore() = 0;
 		virtual void FlushToDisk() = 0;
 		virtual ~IIntermediatesStore();

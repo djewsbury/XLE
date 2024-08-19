@@ -72,8 +72,8 @@ namespace UnitTests
 		{
 			using namespace RenderCore;
 			auto templateDesc = std::make_shared<RenderCore::Techniques::GraphicsPipelineDesc>();
-			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = NO_PATCHES_VERTEX_HLSL ":main:vs_*";
-			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = "ut-data/local.pixel.hlsl:main:ps_*";
+			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{NO_PATCHES_VERTEX_HLSL, "main"};
+			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/local.pixel.hlsl", "main"};
 			templateDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
 			templateDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 

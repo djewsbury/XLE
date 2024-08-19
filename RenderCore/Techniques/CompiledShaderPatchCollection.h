@@ -45,19 +45,26 @@ namespace RenderCore { namespace Techniques
 		public:
 			struct Patch 
 			{
-				uint64_t		_implementsHash;
-				std::string		_scaffoldInFunction;		// scaffold function to use for patching in this particular implementation.
-				std::shared_ptr<GraphLanguage::NodeGraphSignature> _signature;
-				#if defined(_DEBUG)
-					std::string _entryPointName;
-				#endif
+				uint64_t		_implementsHash = 0;
+				std::string 	_originalEntryPointName, _scaffoldEntryPointName;
+
+				std::shared_ptr<GraphLanguage::NodeGraphSignature> _originalEntryPointSignature;
+				std::shared_ptr<GraphLanguage::NodeGraphSignature> _scaffoldSignature;
+
 				unsigned 		_filteringRulesId;
+
+				// Scaffold function to use for patching in this particular implementation
+				// The scaffold function always has the name of the function it implements
+				std::string		_scaffoldInFunction;
 			};
 			IteratorRange<const Patch*> GetPatches() const { return MakeIteratorRange(_patches); }
+
 			const RenderCore::Assets::PredefinedDescriptorSetLayout& GetMaterialDescriptorSet() const { return *_descriptorSet; }
 			std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> GetMaterialDescriptorSetPtr() const { return _descriptorSet; }
+
 			const ShaderSourceParser::SelectorFilteringRules& GetSelectorFilteringRules(unsigned filteringRulesId) const;
 			const std::string& GetPreconfigurationFileName() const { return _preconfiguration; }
+
 			StringSection<> GetOverrideShader(ShaderStage stage) const { return (unsigned(stage) < dimof(_overrideShaders)) ? MakeStringSection(_overrideShaders[unsigned(stage)]) : StringSection<>{}; }
 
 			bool HasPatchType(uint64_t implementing) const;

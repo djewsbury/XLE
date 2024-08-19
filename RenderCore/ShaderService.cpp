@@ -15,7 +15,7 @@ namespace RenderCore
 
         ////////////////////////////////////////////////////////////
 
-    static ShaderStage AsShaderStage(StringSection<::Assets::ResChar> shaderModel)
+    static ShaderStage AsShaderStage(StringSection<> shaderModel)
     {
 		assert(shaderModel.size() >= 1);
         switch (shaderModel[0]) {
@@ -29,9 +29,9 @@ namespace RenderCore
         }
     }
 
-    ShaderStage ILowLevelCompiler::ResId::AsShaderStage() const { return RenderCore::AsShaderStage(_shaderModel); }
+    ShaderStage ShaderCompileResourceName::AsShaderStage() const { return RenderCore::AsShaderStage(_shaderModel); }
 
-	CompiledShaderByteCode::CompiledShaderByteCode(const ::Assets::Blob& shader, const ::Assets::DependencyValidation& depVal, StringSection<Assets::ResChar>)
+	CompiledShaderByteCode::CompiledShaderByteCode(const ::Assets::Blob& shader, const ::Assets::DependencyValidation& depVal, StringSection<>)
 	: _shader(shader)
 	, _depVal(depVal)
 	{
@@ -100,32 +100,27 @@ namespace RenderCore
 
         ////////////////////////////////////////////////////////////
 
-    ILowLevelCompiler::ResId::ResId(StringSection<ResChar> filename, StringSection<ResChar> entryPoint, StringSection<ResChar> shaderModel)
+    ShaderCompileResourceName::ShaderCompileResourceName(std::string filename, std::string entryPoint, std::string shaderModel)
+	: _filename(std::move(filename)), _entryPoint(std::move(entryPoint)), _shaderModel(std::move(shaderModel))
     {
-        XlCopyString(_filename, filename);
-        XlCopyString(_entryPoint, entryPoint);
-
 		// Read prefixes from the shader model string
 		_compilationFlags = 0;
-		while (!shaderModel.IsEmpty()) {
-			if (shaderModel[0] == '!') {
+		while (!_shaderModel.empty()) {
+			if (_shaderModel[0] == '!') {
 				_compilationFlags |= CompilationFlags::DynamicLinkageEnabled;
-				++shaderModel._start;
-			} else if (shaderModel[0] == '$') {
+				_shaderModel.erase(_shaderModel.begin());
+			} else if (_shaderModel[0] == '$') {
 				_compilationFlags |= CompilationFlags::DebugSymbols | CompilationFlags::DisableOptimizations;
-				++shaderModel._start;
+				_shaderModel.erase(_shaderModel.begin());
 			} else
 				break;
 		}
-
-		XlCopyString(_shaderModel, shaderModel);
     }
 
-    ILowLevelCompiler::ResId::ResId()
-    {
-        _filename[0] = '\0'; _entryPoint[0] = '\0'; _shaderModel[0] = '\0';
-        _compilationFlags = 0;
-    }
+	ShaderCompileResourceName::ShaderCompileResourceName(std::string filename, std::string entryPoint, std::string shaderModel, CompilationFlags::BitField compilationFlags)
+	: _filename(std::move(filename)), _entryPoint(std::move(entryPoint)), _shaderModel(std::move(shaderModel)), _compilationFlags(compilationFlags)
+	{
+	}
 
     IShaderSource::~IShaderSource() {}
     ILowLevelCompiler::~ILowLevelCompiler() {}

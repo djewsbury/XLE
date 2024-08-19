@@ -60,9 +60,9 @@ namespace RenderCore { namespace Techniques
 		GraphicsPipelineDesc& nascentDesc,
 		const TechniqueEntry& entry)
 	{
-		nascentDesc._shaders[(unsigned)ShaderStage::Vertex] = entry._vertexShaderName;
-		nascentDesc._shaders[(unsigned)ShaderStage::Pixel] = entry._pixelShaderName;
-		nascentDesc._shaders[(unsigned)ShaderStage::Geometry] = entry._geometryShaderName;
+		nascentDesc._shaders[(unsigned)ShaderStage::Vertex] = MakeShaderCompileResourceName(entry._vertexShaderName);
+		nascentDesc._shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompileResourceName(entry._pixelShaderName);
+		nascentDesc._shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(entry._geometryShaderName);
 		nascentDesc._manualSelectorFiltering = entry._selectorFiltering;
 		nascentDesc._techniquePreconfigurationFile = entry._preconfigurationFileName;
 	}
@@ -877,9 +877,8 @@ namespace RenderCore { namespace Techniques
 
 			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
 
-			// HACK -- temp
 			if (!shaderPatches.GetOverrideShader(ShaderStage::Geometry).IsEmpty())
-				nascentDesc->_shaders[2] = shaderPatches.GetOverrideShader(ShaderStage::Geometry).AsString();
+				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = shaderPatches.GetOverrideShader(ShaderStage::Geometry).AsString();
 
 			return nascentDesc;
 		}

@@ -195,20 +195,18 @@ namespace RenderCore { namespace Metal_DX11
 	class DummyDXShaderCompiler : public ILowLevelCompiler
 	{
 	public:
-		virtual void AdaptResId(ResId& resId) const override
+		virtual void AdaptResId(ShaderCompileResourceName& resId) const override
 		{
-			assert(resId._shaderModel[0] != '\0');
-			if (resId._shaderModel[0] != '\0') {
-				size_t length = XlStringSize(resId._shaderModel);
+			if (!resId._shaderModel.empty()) {
 
 					//
 					//      Some shaders end with vs_*, gs_*, etc..
 					//      Change this to the highest shader model we can support
 					//      with the current device
 					//
-				if (resId._shaderModel[length-1] == '*') {
-					resId._shaderModel[length-1] = '\0';
-					XlCatString(resId._shaderModel, dimof(resId._shaderModel)-length, _defaultShaderModel.c_str());
+				if ((*resId._shaderModel.end()-1) == '*') {
+					resId._shaderModel.erase(resId._shaderModel.end()-1);
+					resId._shaderModel += _defaultShaderModel;
 				}
 			}
 		}
@@ -233,7 +231,7 @@ namespace RenderCore { namespace Metal_DX11
 			void Add(StringSection<> name, StringSection<> value);
 		};
 		static DefinesTable MakeDefinesTable(
-			StringSection<char> definesTable, const char shaderModel[],
+			StringSection<> definesTable, StringSection<> shaderModel,
 			IteratorRange<const FixedDefined*> fixedDefines);
 
 		virtual bool DoLowLevelCompile(
@@ -241,7 +239,7 @@ namespace RenderCore { namespace Metal_DX11
             /*out*/ Payload& errors,
             /*out*/ std::vector<::Assets::DependentFileState>& dependencies,
             const void* sourceCode, size_t sourceCodeLength,
-            const ResId& shaderPath,
+            const ShaderCompileResourceName& shaderPath,
             StringSection<::Assets::ResChar> definesTable,
             IteratorRange<const SourceLineMarker*> sourceLineMarkers = {}) const override
 		{
@@ -252,7 +250,7 @@ namespace RenderCore { namespace Metal_DX11
         virtual bool DoLowLevelCompile(
             CompletionFunction&& completionFunction,
             const void* sourceCode, size_t sourceCodeLength,
-            const ResId& shaderPath,
+            const ShaderCompileResourceName& shaderPath,
             StringSection<::Assets::ResChar> definesTable,
             IteratorRange<const SourceLineMarker*> sourceLineMarkers) const override
 		{ 
@@ -324,7 +322,7 @@ namespace RenderCore { namespace Metal_DX11
 			/*out*/ Payload& errors,
 			/*out*/ std::vector<::Assets::DependentFileState>& dependencies,
 			const void* sourceCode, size_t sourceCodeLength,
-			const ResId& shaderPathInit,
+			const ShaderCompileResourceName& shaderPathInit,
 			StringSection<::Assets::ResChar> definesTable,
 			IteratorRange<const SourceLineMarker*> sourceLineMarkers) const override
 		{
@@ -345,7 +343,7 @@ namespace RenderCore { namespace Metal_DX11
 			if (hresult == S_OK)
 				return true;*/
 
-			ResId shaderPath = shaderPathInit;
+			ShaderCompileResourceName shaderPath = shaderPathInit;
 			AdaptResId(shaderPath);
 
 			StringMeld<dimof(CompiledShaderByteCode::ShaderHeader::_identifier)> identifier;
@@ -370,7 +368,7 @@ namespace RenderCore { namespace Metal_DX11
 			if (_capabilities & CompilerCapability::Float16)
 				fixedArguments.push_back(L"-enable-16bit-types");
 
-			if (shaderPath._compilationFlags & CompilationFlags::DebugSymbols) {
+			if (shaderPath._compilationFlags & ShaderCompileResourceName::CompilationFlags::DebugSymbols) {
 				fixedArguments.push_back(L"-Qembed_debug");
 				fixedArguments.push_back(DXC_ARG_DEBUG);
 				fixedArguments.push_back(L"-fspv-debug=line");
@@ -380,7 +378,7 @@ namespace RenderCore { namespace Metal_DX11
 				fixedArguments.push_back(L"-Qstrip_debug");
 			}
 
-			if (shaderPath._compilationFlags & CompilationFlags::DisableOptimizations) {
+			if (shaderPath._compilationFlags & ShaderCompileResourceName::CompilationFlags::DisableOptimizations) {
 				// we always need to eliminate dead code, otherwise we'll end up with a massive uniforms interface for every shader
 				fixedArguments.push_back(L"-Oconfig=--eliminate-dead-branches,--eliminate-dead-code-aggressive,--eliminate-dead-functions");
 			} else {
@@ -537,7 +535,7 @@ namespace RenderCore { namespace Metal_DX11
 	}
 
 	auto DummyDXShaderCompiler::MakeDefinesTable(
-		StringSection<char> definesTable, const char shaderModel[],
+		StringSection<> definesTable, StringSection<> shaderModel,
 		IteratorRange<const FixedDefined*> fixedDefines) -> DefinesTable
 	{
 		DefinesTable result;

@@ -40,4 +40,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 	find_compressonator()
 	target_link_libraries(RenderCoreLightingEngine-${metal_name} PRIVATE compressonator)
 
+	# we need to use /ignore:4099 because compressonator includes a reference to vc140.pdb on a build drive
+	target_link_options(RenderCoreLightingEngine-${metal_name} PUBLIC -Xlinker /ignore:4099)
+
 endforeach()

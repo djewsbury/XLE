@@ -147,9 +147,10 @@ namespace RenderOverlays
 		unsigned vertexCount,
 		IteratorRange<const RenderCore::MiniInputElementDesc*> inputLayout,
 		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
-		RenderCore::Techniques::RetainedUniformsStream&& uniforms)
+		RenderCore::Techniques::RetainedUniformsStream&& uniforms,
+		RenderCore::Topology topology)
 	{
-		return _immediateDrawables->QueueDraw(vertexCount, inputLayout, material, std::move(uniforms), Topology::TriangleList);
+		return _immediateDrawables->QueueDraw(vertexCount, inputLayout, material, std::move(uniforms), topology);
 	}
 
 	void ImmediateOverlayContext::DrawTexturedQuad(

@@ -525,7 +525,7 @@ void ps(
 
 		std::vector<ShaderSourceParser::AvailablePatch> patchesInterface;
 		unsigned idx=0; for (const auto& p:compiledShaderPatchCollection->GetInterface().GetPatches())
-			patchesInterface.emplace_back(ShaderSourceParser::AvailablePatch{"patch" + std::to_string(idx++), p._signature.get(), p._implementsHash});
+			patchesInterface.emplace_back(ShaderSourceParser::AvailablePatch{"patch" + std::to_string(idx++), p._scaffoldSignature.get(), p._implementsHash});
 
 		// Generate the pipeline instantiation using the patches provided
 		std::vector<std::string> iaAttributes;

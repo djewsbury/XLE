@@ -175,12 +175,12 @@ namespace RenderCore { namespace Techniques
 	static std::shared_ptr<GraphicsPipelineDesc> CreatePipelineDesc(StringSection<> pixelShader, FullViewportOperatorSubType subType, const PixelOutputStates& po)
 	{
 		auto pipelineDesc = std::make_shared<GraphicsPipelineDesc>();
-		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = pixelShader.AsString();
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompileResourceName(pixelShader);
 		if (subType == FullViewportOperatorSubType::DisableDepth) {
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector";
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector"};
 		} else {
 			assert(subType == FullViewportOperatorSubType::MaxDepth);
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = BASIC2D_VERTEX_HLSL ":fullscreen_viewfrustumvector_deep";
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector_deep"};
 		}
 
 		pipelineDesc->_depthStencil = po._depthStencilState;

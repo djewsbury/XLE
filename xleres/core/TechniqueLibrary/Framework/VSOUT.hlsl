@@ -107,6 +107,10 @@ struct VSOUT /////////////////////////////////////////////////////
 	#if VSOUT_HAS_GEO_NORMAL && PS
 		float3 geoNormal : GEONORMAL;		// generated from triangle in geometry shader
 	#endif
+
+	#if VSOUT_HAS_RADIUS
+		float radius : RADIUS;
+	#endif
 }; //////////////////////////////////////////////////////////////////
 
 float2 VSOUT_GetTexCoord0(VSOUT geo)

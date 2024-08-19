@@ -103,4 +103,7 @@ float4 IFill_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 base
 
 float4 TwoLayersShader(float4 position, float4 color, float4 color1, float2 texCoord0, float2 texCoord1);
 
+float4 PC3D(float4 position, float4 color, float3 worldPosition);
+float4 PCT3D(float4 position, float4 color, float2 texCoord, float3 worldPosition);
+
 #endif

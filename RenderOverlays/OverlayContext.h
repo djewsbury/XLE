@@ -41,7 +41,8 @@ namespace RenderOverlays
             unsigned vertexCount,
             IteratorRange<const RenderCore::MiniInputElementDesc*> inputLayout,
             const RenderCore::Techniques::ImmediateDrawableMaterial& material,
-            RenderCore::Techniques::RetainedUniformsStream&& uniforms) override;
+            RenderCore::Techniques::RetainedUniformsStream&& uniforms,
+            RenderCore::Topology) override;
 
         void    DrawTexturedQuad(
             ProjectionMode proj, 

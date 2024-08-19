@@ -149,7 +149,7 @@ namespace UnitTests
 	{
 	public:
 		ShaderByteCodeBlob CompileFromFile(
-			const RenderCore::ILowLevelCompiler::ResId& resId, 
+			const RenderCore::ShaderCompileResourceName& resId, 
 			StringSection<> definesTable) const override
 		{
 			++_compileFromFileCount;
@@ -163,7 +163,7 @@ namespace UnitTests
 			return _chain->CompileFromMemory(shaderInMemory, entryPoint, shaderModel, definesTable);
 		}
 
-		RenderCore::ILowLevelCompiler::ResId MakeResId(
+		RenderCore::ShaderCompileResourceName MakeResId(
 			StringSection<> initializer) const override
 		{
 			return _chain->MakeResId(initializer);

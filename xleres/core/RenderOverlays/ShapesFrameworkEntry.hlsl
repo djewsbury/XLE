@@ -30,14 +30,12 @@ float4 frameworkEntry(
     float2 dhdp = ScreenSpaceDerivatives(coords, shapeDesc);
 
     ShapeResult shape = IShape2D_Calculate(coords, shapeDesc);
-    float4 fill = IFill_Calculate(coords, texCoord0, color0, dhdp); fill.a *= shape._fill;
-    float4 outline = IOutline_Calculate(coords, texCoord0, color1, dhdp); outline.a *= shape._border;
+    float4 fill = IFill_Calculate(coords, texCoord0, color0, dhdp);
+    float4 outline = IOutline_Calculate(coords, texCoord0, color1, dhdp);
 
-    float3 A = fill.rgb * fill.a;
-    float a = 1.f - fill.a;
-    A = A * (1.f - outline.a) + outline.rgb * outline.a;
-    a = a * (1.f - outline.a);
-    return float4(A, 1.f - a);
+    shape._border *= outline.a; // when outline alpha is zero, we want that space to be considered "fill"
+    float4 A = lerp(fill, outline, shape._border);
+    return float4(A.rgb, A.a * max(shape._fill, shape._border));
 }
 
 float4 frameworkEntryForTwoLayersShader(
@@ -62,3 +60,23 @@ float4 frameworkEntryJustFill(
 
     return IFill_Calculate(coords, texCoord0, color0, 1.0.xx);
 }
+
+float4 frameworkEntryPC3D(
+    float4 position	    : SV_Position,
+    float4 color0		: COLOR0,
+    float3 worldPosition : WORLDPOSITION) : SV_Target0
+{
+    return PC3D(position, color0, worldPosition);
+}
+
+
+float4 frameworkEntryPCT3D(
+    float4 position	    : SV_Position,
+    float4 color0		: COLOR0,
+    float2 texCoord0	: TEXCOORD0,
+    float3 worldPosition : WORLDPOSITION) : SV_Target0
+{
+    return PCT3D(position, color0, texCoord0, worldPosition);
+}
+
+

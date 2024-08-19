@@ -324,10 +324,10 @@ namespace UnitTests
 
 			auto desc = std::make_shared<RenderCore::Techniques::GraphicsPipelineDesc>();
 			if (hasDeformPosition) {
-				desc->_shaders[(unsigned)RenderCore::ShaderStage::Vertex] = "ut-data/framework-entry.vertex.hlsl:frameworkEntryWithDeform";
+				desc->_shaders[(unsigned)RenderCore::ShaderStage::Vertex] = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.vertex.hlsl", "frameworkEntryWithDeform"};
 			} else
-				desc->_shaders[(unsigned)RenderCore::ShaderStage::Vertex] = "ut-data/framework-entry.vertex.hlsl:frameworkEntry";
-			desc->_shaders[(unsigned)RenderCore::ShaderStage::Pixel] = "ut-data/framework-entry.pixel.hlsl:frameworkEntry";
+				desc->_shaders[(unsigned)RenderCore::ShaderStage::Vertex] = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.vertex.hlsl", "frameworkEntry"};
+			desc->_shaders[(unsigned)RenderCore::ShaderStage::Pixel] = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.pixel.hlsl", "frameworkEntry"};
 
 			desc->_blend.push_back(RenderCore::AttachmentBlendDesc{});
 			desc->_depthStencil = RenderCore::Techniques::CommonResourceBox::s_dsReadWrite;

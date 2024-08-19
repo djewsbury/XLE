@@ -10,8 +10,9 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/AssetsCore.h"
 #include <memory>
+#include <variant>
 
-namespace RenderCore { class StreamOutputInitializers; class IDevice; }
+namespace RenderCore { class StreamOutputInitializers; class IDevice; struct ShaderCompileResourceName; }
 namespace RenderCore { namespace Assets { class PredefinedPipelineLayout; class RenderStateSet; }}
 namespace ShaderSourceParser { class SelectorFilteringRules; }
 namespace std { template<typename T> class future; template<typename T> class shared_future; }
@@ -20,12 +21,22 @@ namespace RenderCore { namespace Techniques
 {
 	struct GraphicsPipelineDesc
 	{
-		std::string				_shaders[3];		// indexed by RenderCore::ShaderStage
+		struct ShaderPatchCompileResource
+		{
+			std::shared_ptr<CompiledShaderPatchCollection> _patchCollection;
+			std::vector<uint64_t> _patchCollectionExpansions;
+			std::vector<std::string> _additionalSourceFragments;
+
+			std::string _entryPointName;
+			std::string _shaderModel;
+			ShaderCompileResourceName::CompilationFlags::BitField _compilationFlags = 0;
+		};
+		using ShaderVariant = std::variant<std::monostate, ShaderCompileResourceName, ShaderPatchCompileResource>;
+		ShaderVariant			_shaders[3] { std::monostate{}, std::monostate{}, std::monostate{} };		// indexed by RenderCore::ShaderStage
+
 		ShaderSourceParser::ManualSelectorFiltering _manualSelectorFiltering;
 		std::string				_techniquePreconfigurationFile;
 		std::string				_materialPreconfigurationFile;
-
-		std::vector<std::pair<uint64_t, ShaderStage>>	_patchExpansions;
 
 		std::vector<AttachmentBlendDesc> 	_blend;
 		DepthStencilDesc					_depthStencil;

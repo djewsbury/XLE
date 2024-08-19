@@ -209,8 +209,8 @@ namespace RenderOverlays
 
 	struct FTFont::LoadedChar
 	{
-		FT_GlyphSlot _glyph = nullptr;
 		GlyphProperties _glyphProps;
+		std::vector<uint8_t> _renderedBits;
 		bool _hasBeenRendered = false;
 	};
 
@@ -221,14 +221,14 @@ namespace RenderOverlays
 			LoadedChar loadedChar;
 			FT_Error error = FT_Load_Char(_face.get(), ch, loadFlags);
 			if (!error) {
-				loadedChar._glyph = _face->glyph;
-				loadedChar._glyphProps._xAdvance = (float)loadedChar._glyph->advance.x / 64.0f;
-				loadedChar._glyphProps._lsbDelta = loadedChar._glyph->lsb_delta;
-				loadedChar._glyphProps._rsbDelta = loadedChar._glyph->rsb_delta;
-				loadedChar._glyphProps._bitmapOffsetX = loadedChar._glyph->bitmap_left;
-				loadedChar._glyphProps._bitmapOffsetY = -loadedChar._glyph->bitmap_top;
-				loadedChar._glyphProps._width = loadedChar._glyph->bitmap.width;
-				loadedChar._glyphProps._height = loadedChar._glyph->bitmap.rows;
+				auto glyph = _face->glyph;
+				loadedChar._glyphProps._xAdvance = (float)glyph->advance.x / 64.0f;
+				loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
+				loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+				loadedChar._glyphProps._bitmapOffsetX = glyph->bitmap_left;
+				loadedChar._glyphProps._bitmapOffsetY = -glyph->bitmap_top;
+				loadedChar._glyphProps._width = glyph->bitmap.width;
+				loadedChar._glyphProps._height = glyph->bitmap.rows;
 			}
 			i = _cachedLoadedChars.insert(i, std::make_pair(ch, loadedChar));
 		}
@@ -248,14 +248,14 @@ namespace RenderOverlays
 				LoadedChar loadedChar;
 				FT_Error error = FT_Load_Char(_face.get(), glyphs.front(), loadFlags);
 				if (!error) {
-					loadedChar._glyph = _face->glyph;
-					loadedChar._glyphProps._xAdvance = (float)loadedChar._glyph->advance.x / 64.0f;
-					loadedChar._glyphProps._lsbDelta = loadedChar._glyph->lsb_delta;
-					loadedChar._glyphProps._rsbDelta = loadedChar._glyph->rsb_delta;
-					loadedChar._glyphProps._bitmapOffsetX = loadedChar._glyph->bitmap_left;
-					loadedChar._glyphProps._bitmapOffsetY = -loadedChar._glyph->bitmap_top;
-					loadedChar._glyphProps._width = loadedChar._glyph->bitmap.width;
-					loadedChar._glyphProps._height = loadedChar._glyph->bitmap.rows;
+					auto glyph = _face->glyph;
+					loadedChar._glyphProps._xAdvance = (float)glyph->advance.x / 64.0f;
+					loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
+					loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+					loadedChar._glyphProps._bitmapOffsetX = glyph->bitmap_left;
+					loadedChar._glyphProps._bitmapOffsetY = -glyph->bitmap_top;
+					loadedChar._glyphProps._width = glyph->bitmap.width;
+					loadedChar._glyphProps._height = glyph->bitmap.rows;
 				}
 				i = _cachedLoadedChars.insert(i, std::make_pair(glyphs.front(), loadedChar));
 			}
@@ -274,14 +274,17 @@ namespace RenderOverlays
 			LoadedChar loadedChar;
 			FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER | loadFlags);
 			if (!error) {
-				loadedChar._glyph = _face->glyph;
-				loadedChar._glyphProps._xAdvance = (float)loadedChar._glyph->advance.x / 64.0f;
-				loadedChar._glyphProps._lsbDelta = loadedChar._glyph->lsb_delta;
-				loadedChar._glyphProps._rsbDelta = loadedChar._glyph->rsb_delta;
-				loadedChar._glyphProps._bitmapOffsetX = loadedChar._glyph->bitmap_left;
-				loadedChar._glyphProps._bitmapOffsetY = -loadedChar._glyph->bitmap_top;
-				loadedChar._glyphProps._width = loadedChar._glyph->bitmap.width;
-				loadedChar._glyphProps._height = loadedChar._glyph->bitmap.rows;
+				auto glyph = _face->glyph;
+				loadedChar._glyphProps._xAdvance = (float)glyph->advance.x / 64.0f;
+				loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
+				loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+				loadedChar._glyphProps._bitmapOffsetX = glyph->bitmap_left;
+				loadedChar._glyphProps._bitmapOffsetY = -glyph->bitmap_top;
+				loadedChar._glyphProps._width = glyph->bitmap.width;
+				loadedChar._glyphProps._height = glyph->bitmap.rows;
+
+				auto src = MakeIteratorRange(glyph->bitmap.buffer, PtrAdd(glyph->bitmap.buffer, glyph->bitmap.width*glyph->bitmap.rows));
+				loadedChar._renderedBits = std::vector<uint8_t>{src.begin(), src.end()};
 				loadedChar._hasBeenRendered = true;
 			}
 			i = _cachedLoadedChars.insert(i, std::make_pair(ch, loadedChar));
@@ -293,22 +296,22 @@ namespace RenderOverlays
 			FT_Error error = FT_Load_Char(_face.get(), ch, FT_LOAD_RENDER | loadFlags);
 			if (error)
 				return Bitmap {};		// i->second._hasBeenRendered not set; will always attempt to re-render
+
+			auto glyph = _face->glyph;
+			auto src = MakeIteratorRange(glyph->bitmap.buffer, PtrAdd(glyph->bitmap.buffer, glyph->bitmap.width*glyph->bitmap.rows));
+			i->second._renderedBits = std::vector<uint8_t>{src.begin(), src.end()};
 			i->second._hasBeenRendered = true;
-			assert(i->second._glyph == _face->glyph);
-			i->second._glyph = _face->glyph;
 		}
 
-		FT_GlyphSlot glyph = i->second._glyph;
-
 		Bitmap result;
-		result._xAdvance = (float)glyph->advance.x / 64.0f;
-		result._bitmapOffsetX = glyph->bitmap_left;
-		result._bitmapOffsetY = -glyph->bitmap_top;
-		result._width = glyph->bitmap.width;
-		result._height = glyph->bitmap.rows;
-		result._data = MakeIteratorRange(glyph->bitmap.buffer, PtrAdd(glyph->bitmap.buffer, glyph->bitmap.width*glyph->bitmap.rows));
-		result._lsbDelta = glyph->lsb_delta;
-		result._rsbDelta = glyph->rsb_delta;
+		result._xAdvance = i->second._glyphProps._xAdvance;
+		result._bitmapOffsetX = i->second._glyphProps._bitmapOffsetX;
+		result._bitmapOffsetY = i->second._glyphProps._bitmapOffsetY;
+		result._width = i->second._glyphProps._width;
+		result._height = i->second._glyphProps._height;
+		result._data = MakeIteratorRange(i->second._renderedBits);
+		result._lsbDelta = i->second._glyphProps._lsbDelta;
+		result._rsbDelta = i->second._glyphProps._rsbDelta;
 		return result;
 	}
 

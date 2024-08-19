@@ -22,7 +22,7 @@ namespace RenderCore
 	static const auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
 	static const auto ChunkType_CompiledShaderByteCode = ConstHash64Legacy<'Shdr', 'Byte', 'Code'>::Value;
 
-	static std::string AppendSystemDefines(StringSection<> definesTable, const ILowLevelCompiler::ResId& resId)
+	static std::string AppendSystemDefines(StringSection<> definesTable, const ShaderCompileResourceName& resId)
 	{
 		const char* additionalDefines[2];
 		unsigned additionalDefineCount = 0;
@@ -85,7 +85,7 @@ namespace RenderCore
 	{
 	public:
 		ShaderByteCodeBlob CompileFromFile(
-			const ILowLevelCompiler::ResId& resId,
+			const ShaderCompileResourceName& resId,
 			StringSection<> definesTable) const override
 		{
 			::Assets::FileSnapshot snapshot;
@@ -109,11 +109,11 @@ namespace RenderCore
 		{
 			return Compile(
 				shaderInMemory,
-				ILowLevelCompiler::ResId("", entryPoint, shaderModel),		// use an empty string for the filename here, because otherwise it tends to confuse the DX11 compiler (when generating error messages, it will treat the string as a filename from the current directory)
+				ShaderCompileResourceName({}, entryPoint.AsString(), shaderModel.AsString()),		// use an empty string for the filename here, because otherwise it tends to confuse the DX11 compiler (when generating error messages, it will treat the string as a filename from the current directory)
 				definesTable);
 		}
 
-		ILowLevelCompiler::ResId MakeResId(
+		ShaderCompileResourceName MakeResId(
             StringSection<> initializer) const override
 		{
 			StringSection<> filename, entryPoint, shaderModel;
@@ -133,10 +133,10 @@ namespace RenderCore
 				}
 			}
 
-			ILowLevelCompiler::ResId shaderId { filename, entryPoint, shaderModel };
+			ShaderCompileResourceName shaderId { filename.AsString(), entryPoint.AsString(), shaderModel.AsString() };
 
-			if (!shaderId._shaderModel[0])
-				XlCopyString(shaderId._shaderModel, PS_DefShaderModel);
+			if (shaderId._shaderModel.empty())
+				shaderId._shaderModel = PS_DefShaderModel;
 
 				//  we have to do the "AdaptShaderModel" shader model here to convert
 				//  the default shader model string (etc, "vs_*) to a resolved shader model
@@ -172,7 +172,7 @@ namespace RenderCore
 
 		ShaderByteCodeBlob Compile(
 			StringSection<> shaderInMemory,
-			const ILowLevelCompiler::ResId& resId,
+			const ShaderCompileResourceName& resId,
 			StringSection<::Assets::ResChar> definesTable) const
 		{
 			ShaderByteCodeBlob result;
@@ -261,7 +261,7 @@ namespace RenderCore
 
 		ShaderCompileOperation(
 			IShaderSource& shaderSource,
-			const ILowLevelCompiler::ResId& resId,
+			const ShaderCompileResourceName& resId,
 			StringSection<> definesTable)
 		: _byteCode { shaderSource.CompileFromFile(resId, definesTable) }
 		{
@@ -285,7 +285,7 @@ namespace RenderCore
 	::Assets::CompilerRegistration RegisterShaderCompiler(
 		const std::shared_ptr<IShaderSource>& shaderSource,
 		::Assets::IIntermediateCompilers& intermediateCompilers,
-		ILowLevelCompiler::CompilationFlags::BitField universalCompilationFlags)
+		ShaderCompileResourceName::CompilationFlags::BitField universalCompilationFlags)
 	{
 		::Assets::CompilerRegistration result{
 			intermediateCompilers,
