@@ -67,7 +67,7 @@ namespace UnitTests
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
 			using namespace RenderCore;
@@ -75,7 +75,8 @@ namespace UnitTests
 			templateDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{NO_PATCHES_VERTEX_HLSL, "main"};
 			templateDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/local.pixel.hlsl", "main"};
 			templateDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
-			templateDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+			if (shaderPatches)
+				templateDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 
 			templateDesc->_rasterization = Techniques::CommonResourceBox::s_rsDefault;
 			templateDesc->_blend.push_back(Techniques::CommonResourceBox::s_abStraightAlpha);

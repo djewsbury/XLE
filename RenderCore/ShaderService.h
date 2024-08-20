@@ -42,10 +42,11 @@ namespace RenderCore
         ShaderCompileResourceName(std::string filename, std::string entryPoint, std::string shaderModel, CompilationFlags::BitField compilationFlags);
 
         ShaderStage AsShaderStage() const;
+        uint64_t CalculateHash(uint64_t seed) const;
     };
 
     ShaderCompileResourceName MakeShaderCompileResourceName(StringSection<>);
-    extern std::string s_SMVS, s_SMGS, s_SMPS;
+    extern std::string s_SMVS, s_SMGS, s_SMPS, s_SMDS, s_SMHS, s_SMCS;
 
 	class ILowLevelCompiler
     {
@@ -83,7 +84,8 @@ namespace RenderCore
             StringSection<> definesTable,
             IteratorRange<const SourceLineMarker*> sourceLineMarkers = {}) const { return false; }
 
-        virtual void AdaptResId(ShaderCompileResourceName&) const = 0;
+        virtual void AdaptResId(
+            ShaderCompileResourceName&) const = 0;
 
         virtual std::string MakeShaderMetricsString(
             const void* byteCode, size_t byteCodeSize) const = 0;
@@ -111,8 +113,8 @@ namespace RenderCore
             StringSection<> shaderInMemory, StringSection<> entryPoint, 
             StringSection<> shaderModel, StringSection<> definesTable) const = 0;
 
-        virtual ShaderCompileResourceName MakeResId(
-            StringSection<> initializer) const = 0;
+        virtual void AdaptResId(
+            ShaderCompileResourceName& shaderId) const = 0;
 
         virtual std::string GenerateMetrics(
             IteratorRange<const void*> byteCodeBlob) const = 0;

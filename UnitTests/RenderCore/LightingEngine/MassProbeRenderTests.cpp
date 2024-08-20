@@ -311,7 +311,7 @@ namespace UnitTests
 		{
 		public:
 			std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+				std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates) override
 			{
 				using namespace RenderCore;
@@ -321,7 +321,8 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{"ut-data/simple.hlsl", "vs_main"};
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/simple.hlsl", "ps_main"};
 				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
-				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+				if (shaderPatches)
+					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 				return nascentDesc;
 			}
 
@@ -415,7 +416,7 @@ namespace UnitTests
 		{
 		public:
 			std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+				std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates) override
 			{
 				using namespace RenderCore;
@@ -426,7 +427,8 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = ShaderCompileResourceName{"ut-data/amplifying_geo_shader.hlsl", "gs_main"};
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/amplifying_geo_shader.hlsl", "ps_main"};
 				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
-				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+				if (shaderPatches)
+					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
 				return nascentDesc;
 			}
@@ -529,7 +531,7 @@ namespace UnitTests
 		{
 		public:
 			std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+				std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates) override
 			{
 				using namespace RenderCore;
@@ -539,7 +541,8 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{"ut-data/instancing_multiprobe_shader.hlsl", "vs_main"};
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/instancing_multiprobe_shader.hlsl", "ps_main"};
 				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
-				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+				if (shaderPatches)
+					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 				nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_RENDER_TARGET_INDEX", 1);
 				return nascentDesc;
 			}
@@ -728,7 +731,7 @@ namespace UnitTests
 		{
 		public:
 			std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-				const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+				std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
 				const RenderCore::Assets::RenderStateSet& renderStates) override
 			{
 				using namespace RenderCore;
@@ -738,7 +741,8 @@ namespace UnitTests
 				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{"ut-data/multiview_shader.hlsl", "vs_main", "vs_6_1"};
 				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = ShaderCompileResourceName{"ut-data/multiview_shader.hlsl", "ps_main", "ps_6_1"};
 				nascentDesc->_techniquePreconfigurationFile = "xleres/Config/Preconfiguration.hlsl";
-				nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+				if (shaderPatches)
+					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 				return nascentDesc;
 			}
 

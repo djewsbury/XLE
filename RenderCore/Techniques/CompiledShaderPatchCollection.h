@@ -120,6 +120,16 @@ namespace RenderCore { namespace Techniques
 		return iterator != _patches.end();
 	}
 
+	struct ShaderCompilePatchResource
+	{
+		std::shared_ptr<CompiledShaderPatchCollection> _patchCollection;
+		std::vector<uint64_t> _patchCollectionExpansions;
+		std::vector<std::string> _additionalSourceFragments;
+		ShaderCompileResourceName _entrypoint;		// _filename can be empty here, which means the entrypoint is within either _additionalSourceFragments or the patch expansions
+
+		uint64_t CalculateHash(uint64_t seed) const;
+	};
+
 	class CompiledShaderByteCode_InstantiateShaderGraph : public CompiledShaderByteCode
 	{
 	public:

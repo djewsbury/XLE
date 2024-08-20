@@ -184,9 +184,18 @@ namespace RenderCore { namespace Techniques
 		}
 
 		ShaderSourceParser::SelectorFilteringRules filteringRules = inst._selectorRelevance;
+		std::vector<::Assets::PtrToMarkerPtr<ShaderSourceParser::SelectorFilteringRules>> rawIncludeFiltering;
+		rawIncludeFiltering.reserve(inst._rawShaderFileIncludes.size());
 		for (const auto& rawShader:inst._rawShaderFileIncludes) {
-			filteringRules.MergeIn(*::Assets::ActualizeAssetPtr<ShaderSourceParser::SelectorFilteringRules>(rawShader));
+			assert(!rawShader.empty());
+			rawIncludeFiltering.emplace_back(::Assets::GetAssetMarkerPtr<ShaderSourceParser::SelectorFilteringRules>(rawShader));
 		}
+
+		for (const auto& rawShader:rawIncludeFiltering) {
+			rawShader->StallWhilePending();
+			filteringRules.MergeIn(*rawShader->Actualize());
+		}
+
 		_interface._filteringRules.push_back(filteringRules);
 		if (filteringRules.GetDependencyValidation())
 			_depVal.RegisterDependency(filteringRules.GetDependencyValidation());
@@ -357,22 +366,32 @@ namespace RenderCore { namespace Techniques
 
 	static auto InstantiateShaderGraph_CompileFromFile(
 		IShaderSource& internalShaderSource,
-		const ShaderCompileResourceName& resId, 
-		StringSection<> definesTable,
-		const CompiledShaderPatchCollection& patchCollection,
-		IteratorRange<const uint64_t*> redirectedPatchFunctions) -> IShaderSource::ShaderByteCodeBlob
+		const ShaderCompilePatchResource& res,
+		StringSection<> definesTable) -> IShaderSource::ShaderByteCodeBlob
 	{
-		if (patchCollection.GetInterface().GetPatches().empty())
-			return internalShaderSource.CompileFromFile(resId, definesTable);
+		if (!res._patchCollection || res._patchCollection->GetInterface().GetPatches().empty())
+			return internalShaderSource.CompileFromFile(res._entrypoint, definesTable);
 
-		auto assembledShader = AssembleShader(patchCollection, resId._filename, redirectedPatchFunctions, definesTable);
+		auto assembledShader = AssembleShader(*res._patchCollection, res._entrypoint._filename, res._patchCollectionExpansions, definesTable);
 		auto result = internalShaderSource.CompileFromMemory(
 			MakeStringSection(assembledShader._processedSource),
-			resId._entryPoint, resId._shaderModel,
+			res._entrypoint._entryPoint, res._entrypoint._shaderModel,
 			definesTable);
 
 		result._deps.insert(result._deps.end(), assembledShader._dependencies.begin(), assembledShader._dependencies.end());
 		return result;
+	}
+
+	uint64_t ShaderCompilePatchResource::CalculateHash(uint64_t seed) const
+	{
+		seed = _entrypoint.CalculateHash(seed);
+		if (!_patchCollectionExpansions.empty())
+			seed = Hash64(AsPointer(_patchCollectionExpansions.begin()), AsPointer(_patchCollectionExpansions.end()), seed);
+		if (_patchCollection)
+			seed = HashCombine(_patchCollection->GetGUID(), seed);
+		for (const auto& f:_additionalSourceFragments)
+			seed = Hash64(f, seed);
+		return seed;
 	}
 
 	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
@@ -407,12 +426,10 @@ namespace RenderCore { namespace Techniques
 
 		ShaderGraphCompileOperation(
 			IShaderSource& shaderSource,
-			const ShaderCompileResourceName& resId,
-			StringSection<> definesTable,
-			const CompiledShaderPatchCollection& patchCollection,
-			IteratorRange<const uint64_t*> redirectedPatchFunctions)
+			const ShaderCompilePatchResource& res,
+			StringSection<> definesTable)
 		: _byteCode { 
-			InstantiateShaderGraph_CompileFromFile(shaderSource, resId, definesTable, patchCollection, redirectedPatchFunctions) 
+			InstantiateShaderGraph_CompileFromFile(shaderSource, res, definesTable) 
 		}
 		{
 			_depVal = ::Assets::GetDepValSys().Make(_byteCode._deps);
@@ -437,26 +454,16 @@ namespace RenderCore { namespace Techniques
 			ConsoleRig::GetLibVersionDesc(),
 			{},
 			[shaderSource](const ::Assets::InitializerPack& initializers) {
-				return std::make_shared<ShaderGraphCompileOperation>(
-					*shaderSource,
-					shaderSource->MakeResId(initializers.GetInitializer<std::string>(0)),
-					initializers.GetInitializer<std::string>(1),
-					*initializers.GetInitializer<std::shared_ptr<CompiledShaderPatchCollection>>(2),
-					MakeIteratorRange(initializers.GetInitializer<std::vector<uint64_t>>(3))
-				);
+				const auto& res = initializers.GetInitializer<ShaderCompilePatchResource>(0);
+				return std::make_shared<ShaderGraphCompileOperation>(*shaderSource, res, initializers.GetInitializer<std::string>(1));
 			},
 			[shaderSource](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
-				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
+				const auto& res = initializers.GetInitializer<ShaderCompilePatchResource>(0);
 				auto definesTable = initializers.GetInitializer<std::string>(1);
-				auto& patchCollection = *initializers.GetInitializer<std::shared_ptr<CompiledShaderPatchCollection>>(2);
-				const auto& patchFunctions = initializers.GetInitializer<std::vector<uint64_t>>(3);
 
 				assert(targetCode == GetCompileProcessType((CompiledShaderByteCode_InstantiateShaderGraph*)nullptr));
-				auto splitFN = MakeFileNameSplitter(res._filename);
-				auto entryId = HashCombine(HashCombine(HashCombine(Hash64(res._entryPoint), Hash64(definesTable)), Hash64(res._shaderModel)), Hash64(splitFN.Extension()));
-				entryId = HashCombine(patchCollection.GetGUID(), entryId);
-				for (const auto&p:patchFunctions)
-					entryId = HashCombine(p, entryId);
+				auto entryId = Hash64(definesTable, res.CalculateHash(DefaultSeed64));
+				auto splitFN = MakeFileNameSplitter(res._entrypoint._filename);
 
 				StringMeld<MaxPath> archiveName;
 				StringMeld<MaxPath> descriptiveName;
@@ -464,10 +471,10 @@ namespace RenderCore { namespace Techniques
 				if (compressedFN) {
 					// shader model & extension already considered in entry id; we just need to look at the directory and filename here
 					archiveName << splitFN.File() << "-" << std::hex << HashFilenameAndPath(splitFN.StemAndPath());
-					descriptiveName << res._filename << ":" << res._entryPoint << "[" << definesTable << "]" << res._shaderModel;
+					descriptiveName << res._entrypoint._filename << ":" << res._entrypoint._entryPoint << "[" << definesTable << "]" << res._entrypoint._shaderModel;
 				} else {
-					archiveName << res._filename;
-					descriptiveName << res._entryPoint << "[" << definesTable << "]" << res._shaderModel;
+					archiveName << res._entrypoint._filename;
+					descriptiveName << res._entrypoint._entryPoint << "[" << definesTable << "]" << res._entrypoint._shaderModel;
 				}
 
 				return ::Assets::IIntermediateCompilers::SplitArchiveName { archiveName.AsString(), entryId, descriptiveName.AsString() };

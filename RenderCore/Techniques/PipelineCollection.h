@@ -87,8 +87,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			IteratorRange<const ParameterBox*const*> selectors,
 			const VertexInputStates& inputStates,
-			const FrameBufferTarget& fbTarget,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr);
+			const FrameBufferTarget& fbTarget);
 
 		void CreateGraphicsPipeline(
 			std::promise<GraphicsPipelineAndLayout>&& promise,
@@ -96,16 +95,19 @@ namespace RenderCore { namespace Techniques
 			std::shared_future<std::shared_ptr<GraphicsPipelineDesc>> pipelineDescFuture,
 			IteratorRange<const ParameterBox*const*> selectors,
 			const VertexInputStates& inputStates,
-			const FrameBufferTarget& fbTarget,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr);
+			const FrameBufferTarget& fbTarget);
 
 		void CreateComputePipeline(
 			std::promise<ComputePipelineAndLayout>&& promise,
 			PipelineLayoutOptions&& pipelineLayout,
-			StringSection<> shader,
-			IteratorRange<const ParameterBox*const*> selectors,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection = nullptr,
-			IteratorRange<const uint64_t*> patchExpansions = {});
+			const GraphicsPipelineDesc::ShaderVariant& shaderVariant,
+			IteratorRange<const ParameterBox*const*> selectors);
+
+		void CreateComputePipeline(
+			std::promise<ComputePipelineAndLayout>&& promise,
+			PipelineLayoutOptions&& pipelineLayout,
+			StringSection<> computeShader,
+			IteratorRange<const ParameterBox*const*> selectors);
 
 		// CreatePipelineLayout uses the internal pool to combine like layouts
 		std::shared_ptr<ICompiledPipelineLayout> CreatePipelineLayout(
@@ -135,9 +137,17 @@ namespace RenderCore { namespace Techniques
 			std::shared_future<std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>> pipelineDescWithFilteringFuture,
 			IteratorRange<const ParameterBox*const*> selectors,
 			const VertexInputStates& inputStates,
-			const FrameBufferTarget& fbTarget,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection);
+			const FrameBufferTarget& fbTarget);
 	};
+
+	inline void PipelineCollection::CreateComputePipeline(
+		std::promise<ComputePipelineAndLayout>&& promise,
+		PipelineLayoutOptions&& pipelineLayout,
+		StringSection<> computeShader,
+		IteratorRange<const ParameterBox*const*> selectors)
+	{
+		CreateComputePipeline(std::move(promise), std::move(pipelineLayout), MakeShaderCompileResourceName(computeShader), selectors);
+	}
 
 }}
 

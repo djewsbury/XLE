@@ -197,17 +197,15 @@ namespace RenderCore { namespace Metal_DX11
 	public:
 		virtual void AdaptResId(ShaderCompileResourceName& resId) const override
 		{
-			if (!resId._shaderModel.empty()) {
+				//
+				//      Some shaders end with vs_*, gs_*, etc..
+				//      Change this to the highest shader model we can support
+				//      with the current device
+				//
 
-					//
-					//      Some shaders end with vs_*, gs_*, etc..
-					//      Change this to the highest shader model we can support
-					//      with the current device
-					//
-				if ((*resId._shaderModel.end()-1) == '*') {
-					resId._shaderModel.erase(resId._shaderModel.end()-1);
-					resId._shaderModel += _defaultShaderModel;
-				}
+			if (!resId._shaderModel.empty() && *(resId._shaderModel.end()-1) == '*') {
+				resId._shaderModel.erase(resId._shaderModel.end()-1);
+				resId._shaderModel += _defaultShaderModel;
 			}
 		}
 

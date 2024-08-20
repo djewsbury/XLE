@@ -44,17 +44,31 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			InitializePromise(std::move(promise), pipelineDesc);
 		}
 
+		static std::shared_future<std::shared_ptr<ShaderSourceParser::SelectorFilteringRules>> BuildFutureFiltering(
+			const GraphicsPipelineDesc::ShaderVariant& variantShader)
+		{
+			if (std::holds_alternative<ShaderCompileResourceName>(variantShader)) {
+				auto& name = std::get<ShaderCompileResourceName>(variantShader);
+				assert(!name._filename.empty());
+				return ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorFilteringRules>(name._filename);
+			} else if (std::holds_alternative<ShaderCompilePatchResource>(variantShader)) {
+				// We can return filtering rules for anything that's not included with the CompileShaderPatchCollection
+				auto& name = std::get<ShaderCompilePatchResource>(variantShader);
+				if (!name._entrypoint._filename.empty())
+					return ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorFilteringRules>(name._entrypoint._filename);
+				return {};
+			}
+			return {};
+		}
+
 		static void InitializePromise(
 			std::promise<std::shared_ptr<GraphicsPipelineDescWithFilteringRules>>&& promise,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc)
 		{
 			TRY {
 				std::shared_future<std::shared_ptr<ShaderSourceParser::SelectorFilteringRules>> filteringFuture[3];
-				for (unsigned c=0; c<3; ++c) {
-					auto fn = MakeFileNameSplitter(pipelineDesc->_shaders[c]).AllExceptParameters();
-					if (!fn.IsEmpty())
-						filteringFuture[c] = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorFilteringRules>(fn);
-				}
+				for (unsigned c=0; c<3; ++c)
+					filteringFuture[c] = BuildFutureFiltering(pipelineDesc->_shaders[c]);
 
 				if (!filteringFuture[(unsigned)ShaderStage::Vertex].valid())
 					Throw(std::runtime_error("Missing vertex shader stage while building filtering rules"));
@@ -280,56 +294,44 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 		return str.str();
 	}
+	
+	static void AdjustForStage(ShaderCompileResourceName& result, ShaderStage stage)
+	{
+		if (!result._shaderModel.empty()) return;
+		switch (stage) {
+			case ShaderStage::Vertex: result._shaderModel = s_SMVS; break;
+			case ShaderStage::Geometry: result._shaderModel = s_SMGS; break;
+			case ShaderStage::Pixel: result._shaderModel = s_SMPS; break;
+			case ShaderStage::Domain: result._shaderModel = s_SMDS; break;
+			case ShaderStage::Hull: result._shaderModel = s_SMHS; break;
+			case ShaderStage::Compute: result._shaderModel = s_SMCS; break;
+			default: UNREACHABLE(); break;
+		}
+	}
 
 	static std::shared_future<CompiledShaderByteCode> MakeByteCodeFuture(
-		ShaderStage stage, StringSection<> initializer, const std::string& definesTable,
-		const std::shared_ptr<CompiledShaderPatchCollection>& patchCollection,
-		IteratorRange<const uint64_t*> patchExpansions,
+		ShaderStage stage, const GraphicsPipelineDesc::ShaderVariant& variant,
+		const std::string& definesTable,
 		StreamOutputInitializers so)
 	{
-		assert(!initializer.IsEmpty());
-
-		char temp[MaxPath];
-		auto meld = StringMeldInPlace(temp);
-		meld << initializer;
-
-		// shader profile
-		{
-			// Following MinimalShaderSource::MakeResId, the shader model comes after the second colon
-			const char* colon = XlFindChar(initializer, ':');
-			if (colon) colon = XlFindChar(MakeStringSection(colon+1, initializer.end()), ':');
-			if (!colon) {
-				char profileStr[] = "?s_*";
-				switch (stage) {
-				case ShaderStage::Vertex: profileStr[0] = 'v'; break;
-				case ShaderStage::Geometry: profileStr[0] = 'g'; break;
-				case ShaderStage::Pixel: profileStr[0] = 'p'; break;
-				case ShaderStage::Domain: profileStr[0] = 'd'; break;
-				case ShaderStage::Hull: profileStr[0] = 'h'; break;
-				case ShaderStage::Compute: profileStr[0] = 'c'; break;
-				default: UNREACHABLE(); break;
-				}
-				meld << ":" << profileStr;
-			} else {
-				auto profileSection = MakeStringSection(colon+1, initializer.end());
-				assert(profileSection.size() > 3 && profileSection[1] == 's' && profileSection[2] == '_');
-			}
-		}
-
 		auto adjustedDefinesTable = definesTable;
 		if (stage == ShaderStage::Geometry && !so._outputElements.empty()) {
 			if (!definesTable.empty()) adjustedDefinesTable += ";";
 			adjustedDefinesTable += BuildSODefinesString(so._outputElements);
 		}
 
-		if (patchCollection && !patchExpansions.empty()) {
-			std::vector<uint64_t> patchExpansionsCopy(patchExpansions.begin(), patchExpansions.end());
-			auto res = ::Assets::GetAssetFuture<CompiledShaderByteCode_InstantiateShaderGraph>(
-				MakeStringSection(temp), adjustedDefinesTable, patchCollection, patchExpansionsCopy);
-			return *reinterpret_cast<std::shared_future<CompiledShaderByteCode>*>(&res);
-		} else {
-			return ::Assets::GetAssetFuture<CompiledShaderByteCode>(MakeStringSection(temp), adjustedDefinesTable);
-		}
+		if (std::holds_alternative<ShaderCompileResourceName>(variant)) {
+			auto name = std::get<ShaderCompileResourceName>(variant);
+			AdjustForStage(name, stage);
+			return ::Assets::GetAssetFuture<CompiledShaderByteCode>(name, adjustedDefinesTable);
+		} else if (std::holds_alternative<ShaderCompilePatchResource>(variant)) {
+			auto res = std::get<ShaderCompilePatchResource>(variant);
+			AdjustForStage(res._entrypoint, stage);
+			auto result = ::Assets::GetAssetFuture<CompiledShaderByteCode_InstantiateShaderGraph>(res, adjustedDefinesTable);
+			return *reinterpret_cast<std::shared_future<CompiledShaderByteCode>*>(&result);
+
+		} else
+			return {};
 	}
 
 	struct GraphicsPipelineRetainedConstructionParams
@@ -650,23 +652,28 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	static std::string MakeShaderDescription(
 		ShaderStage stage,
 		const GraphicsPipelineDesc& pipelineDesc,
-		const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
  		const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors)
 	{
-		if (pipelineDesc._shaders[(unsigned)stage].empty())
-			return {};
-
 		std::stringstream str;
-		const char* stageName[] = { "vs", "ps", "gs" };
 		bool first = true;
-		if (!first) str << ", "; first = false;
-		str << stageName[(unsigned)stage] << ": ";
-		CompressFilename(str, pipelineDesc._shaders[(unsigned)stage]);
-		if (compiledPatchCollection)
-			for (const auto& patch:compiledPatchCollection->GetInterface().GetPatches()) {
-				if (!first) str << ", "; first = false;
-				str << "patch: " << patch._entryPointName;
-			}
+		auto& variantShader = pipelineDesc._shaders[(unsigned)stage];
+		if (std::holds_alternative<ShaderCompileResourceName>(variantShader)) {
+			auto& name = std::get<ShaderCompileResourceName>(variantShader);
+
+			const char* stageName[] = { "vs", "ps", "gs" };
+			if (!first) str << ", "; first = false;
+			str << stageName[(unsigned)stage] << ": ";
+			CompressFilename(str, name._filename);
+			str << ":" << name._entryPoint;
+		} else if (std::holds_alternative<ShaderCompilePatchResource>(variantShader)) {
+			const ShaderCompilePatchResource& r = std::get<ShaderCompilePatchResource>(variantShader);
+
+			if (r._patchCollection)
+				for (const auto& patch:r._patchCollection->GetInterface().GetPatches()) {
+					if (!first) str << ", "; first = false;
+					str << "patch: " << patch._originalEntryPointName;
+				}
+		}
 		str << "[" << filteredSelectors._selectors << "]";
 		return str.str();
 	}
@@ -700,13 +707,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			const VertexInputStates& ia,
 			const std::shared_ptr<Internal::GraphicsPipelineDescWithFilteringRules>& pipelineDescWithFiltering,
 			PipelineLayoutOptions&& pipelineLayout,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
 			IteratorRange<const UniqueShaderVariationSet::FilteredSelectorSet*> filteredSelectors,
 			const FrameBufferTarget& fbTarget)
 		{
 			uint64_t hash = pipelineLayout._hashCode;
-			if (compiledPatchCollection)
-			 	hash = HashCombine(compiledPatchCollection->GetGUID(), hash);
 			for (auto s:filteredSelectors)
 				if (s._hashValue)
 					hash = HashCombine(s._hashValue, hash);
@@ -772,11 +776,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			so._outputElements = MakeIteratorRange(pipelineDesc->_soElements);
 			so._outputBufferStrides = MakeIteratorRange(pipelineDesc->_soBufferStrides);
 			std::shared_future<CompiledShaderByteCode> byteCodeFutures[3];
-			for (unsigned c=0; c<3; ++c) {
-				if (pipelineDesc->_shaders[c].empty())
-					continue;
-				byteCodeFutures[c] = MakeByteCodeFuture((ShaderStage)c, pipelineDesc->_shaders[c], filteredSelectors[c], compiledPatchCollection, pipelineDesc->_patchExpansions, so);
-			}
+			for (unsigned c=0; c<3; ++c)
+				byteCodeFutures[c] = Internal::MakeByteCodeFuture((ShaderStage)c, pipelineDesc->_shaders[c], filteredSelectors[c]._selectors, so);
 
 			GraphicsPipelineRetainedConstructionParams constructionParams;
 			constructionParams._pipelineDesc = pipelineDescWithFiltering->_pipelineDesc;
@@ -787,9 +788,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			constructionParams._subpassIdx = fbTarget._subpassIdx;
 
 			#if defined(_DEBUG)
-				constructionParams._debugInfo._vsDescription = Internal::MakeShaderDescription(ShaderStage::Vertex, *pipelineDesc, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Vertex]);
-				constructionParams._debugInfo._psDescription = Internal::MakeShaderDescription(ShaderStage::Pixel, *pipelineDesc, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Pixel]);
-				constructionParams._debugInfo._gsDescription = Internal::MakeShaderDescription(ShaderStage::Geometry, *pipelineDesc, compiledPatchCollection, filteredSelectors[(unsigned)ShaderStage::Geometry]);
+				constructionParams._debugInfo._vsDescription = Internal::MakeShaderDescription(ShaderStage::Vertex, *pipelineDesc, filteredSelectors[(unsigned)ShaderStage::Vertex]);
+				constructionParams._debugInfo._psDescription = Internal::MakeShaderDescription(ShaderStage::Pixel, *pipelineDesc, filteredSelectors[(unsigned)ShaderStage::Pixel]);
+				constructionParams._debugInfo._gsDescription = Internal::MakeShaderDescription(ShaderStage::Geometry, *pipelineDesc, filteredSelectors[(unsigned)ShaderStage::Geometry]);
 			#endif
 
 			std::promise<GraphicsPipelineAndLayout> promise;
@@ -854,21 +855,12 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 		std::shared_future<ComputePipelineAndLayout> CreateComputePipelineAlreadyLocked(
-			StringSection<> shader,
+			const GraphicsPipelineDesc::ShaderVariant& shaderVariant,
 			PipelineLayoutOptions&& pipelineLayout,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
-			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions,
 			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors)
 		{
-			auto hash = Hash64(shader, filteredSelectors._hashValue);
+			auto hash = GraphicsPipelineDesc::HashShaderVariant(shaderVariant, filteredSelectors._hashValue);
 			hash = HashCombine(pipelineLayout._hashCode, hash);
-			if (compiledPatchCollection && !patchExpansions.empty()) {
-				hash = HashCombine(hash, compiledPatchCollection->GetGUID());
-				for (auto& p:patchExpansions) {
-					assert(p.second == ShaderStage::Compute);
-					hash = HashCombine(p.first, hash);
-				}
-			}
 
 			auto completedi = LowerBound(_completedComputePipelines, hash);
 			if (completedi != _completedComputePipelines.end() && completedi->first == hash) {
@@ -900,7 +892,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			}
 
 			// Make the futures and setup caching
-			auto byteCodeFuture = MakeByteCodeFuture(ShaderStage::Compute, shader, filteredSelectors, compiledPatchCollection, patchExpansions);
+			auto byteCodeFuture = MakeByteCodeFuture(ShaderStage::Compute, shaderVariant, filteredSelectors._selectors, {});
 			std::promise<ComputePipelineAndLayout> promise;
 			std::shared_future<ComputePipelineAndLayout> result = promise.get_future();
 			if (pipelineLayout._predefinedPipelineLayout) {
@@ -974,40 +966,48 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			const ShaderSourceParser::SelectorFilteringRules& automaticFiltering,
 			const ShaderSourceParser::ManualSelectorFiltering& manualFiltering,
 			const ShaderSourceParser::SelectorPreconfiguration* preconfiguration,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
-			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions)
+			const GraphicsPipelineDesc::ShaderVariant& shaderVariant)		// (ShaderVariant required for compiledShaderPatchCollection)
 		{
-			UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors;
+			if (std::holds_alternative<ShaderCompilePatchResource>(shaderVariant)) {
+				auto& res = std::get<ShaderCompilePatchResource>(shaderVariant);
+				auto patchExpansions = MakeIteratorRange(res._patchCollectionExpansions);
 
-			VLA(const ShaderSourceParser::SelectorFilteringRules*, autoFiltering, 1+patchExpansions.size());
-			VLA(unsigned, filteringRulesPulledIn, 1+patchExpansions.size());
-			unsigned autoFilteringCount = 0;
-			autoFiltering[autoFilteringCount++] = &automaticFiltering;
-			filteringRulesPulledIn[0] = ~0u;
+				VLA(const ShaderSourceParser::SelectorFilteringRules*, autoFiltering, 1+patchExpansions.size());
+				VLA(unsigned, filteringRulesPulledIn, 1+patchExpansions.size());
+				unsigned autoFilteringCount = 0;
+				autoFiltering[autoFilteringCount++] = &automaticFiltering;
+				filteringRulesPulledIn[0] = ~0u;
 
-			// Figure out which filtering rules we need from the compiled patch collection, and include them
-			// This is important because the filtering rules for different shader stages might be vastly different
-			if (compiledPatchCollection) {
-				for (auto exp:patchExpansions) {
-					if (exp.second != shaderStage) continue;
-					auto i = std::find_if(
-						compiledPatchCollection->GetInterface().GetPatches().begin(), compiledPatchCollection->GetInterface().GetPatches().end(),
-						[exp](const auto& c) { return c._implementsHash == exp.first; });
-					assert(i != compiledPatchCollection->GetInterface().GetPatches().end());
-					if (i == compiledPatchCollection->GetInterface().GetPatches().end()) continue;
-					if (std::find(filteringRulesPulledIn, &filteringRulesPulledIn[autoFilteringCount], i->_filteringRulesId) != &filteringRulesPulledIn[autoFilteringCount]) continue;
-					filteringRulesPulledIn[autoFilteringCount] = i->_filteringRulesId;
-					autoFiltering[autoFilteringCount++] = &compiledPatchCollection->GetInterface().GetSelectorFilteringRules(i->_filteringRulesId);
+				// Figure out which filtering rules we need from the compiled patch collection, and include them
+				// This is important because the filtering rules for different shader stages might be vastly different
+				if (res._patchCollection) {
+					for (auto exp:patchExpansions) {
+						auto i = std::find_if(
+							res._patchCollection->GetInterface().GetPatches().begin(), res._patchCollection->GetInterface().GetPatches().end(),
+							[exp](const auto& c) { return c._implementsHash == exp; });
+						assert(i != res._patchCollection->GetInterface().GetPatches().end());
+						if (i == res._patchCollection->GetInterface().GetPatches().end()) continue;
+						if (std::find(filteringRulesPulledIn, &filteringRulesPulledIn[autoFilteringCount], i->_filteringRulesId) != &filteringRulesPulledIn[autoFilteringCount]) continue;
+						filteringRulesPulledIn[autoFilteringCount] = i->_filteringRulesId;
+						autoFiltering[autoFilteringCount++] = &res._patchCollection->GetInterface().GetSelectorFilteringRules(i->_filteringRulesId);
+					}
+				} else {
+					assert(patchExpansions.empty());		// without a CompiledShaderPatchCollection we can't do anything with "patchExpansions"
 				}
-			} else {
-				assert(patchExpansions.empty());		// without a CompiledShaderPatchCollection we can't do anything with "patchExpansions"
-			}
 
-			return _selectorVariationsSet.FilterSelectors(
-				selectors,
-				manualFiltering, 
-				MakeIteratorRange(autoFiltering, &autoFiltering[autoFilteringCount]), 
-				preconfiguration);
+				return _selectorVariationsSet.FilterSelectors(
+					selectors,
+					manualFiltering, 
+					MakeIteratorRange(autoFiltering, &autoFiltering[autoFilteringCount]), 
+					preconfiguration);
+			} else {
+				const ShaderSourceParser::SelectorFilteringRules* autoFilteringArray[] { &automaticFiltering };
+				return _selectorVariationsSet.FilterSelectors(
+					selectors,
+					manualFiltering,
+					MakeIteratorRange(autoFilteringArray),
+					preconfiguration);
+			}
 		}
 
 		SharedPools(std::shared_ptr<IDevice> device)
@@ -1018,29 +1018,6 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 	private:
-		std::shared_future<CompiledShaderByteCode> MakeByteCodeFuture(
-			ShaderStage shaderStage,
-			StringSection<> shader,
-			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors,
-			const std::shared_ptr<CompiledShaderPatchCollection>& compiledPatchCollection,
-			IteratorRange<const std::pair<uint64_t, ShaderStage>*> patchExpansions,
-			StreamOutputInitializers so = {})
-		{
-			VLA(uint64_t, patchExpansionsBuffer, patchExpansions.size());
-			unsigned patchExpansionCount = 0;
-			for (auto p:patchExpansions)
-				if (p.second == shaderStage) 
-					patchExpansionsBuffer[patchExpansionCount++] = p.first;
-
-			return Internal::MakeByteCodeFuture(
-				shaderStage,
-				shader,
-				filteredSelectors._selectors,
-				compiledPatchCollection,
-				MakeIteratorRange(patchExpansionsBuffer, &patchExpansionsBuffer[patchExpansionCount]), 
-				so);
-		};
-
 		PendingUpdateId _nextPendingUpdateId = 1;
 	};
 

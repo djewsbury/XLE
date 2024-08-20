@@ -454,7 +454,7 @@ namespace RenderCore { namespace Techniques
 			assert(pool);
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
-			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), computeShader, MakeIteratorRange(selectorList));
+			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), MakeShaderCompileResourceName(computeShader), MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[usi=usi, pipelineLayout](auto pipelineAndLayout) {
@@ -503,7 +503,7 @@ namespace RenderCore { namespace Techniques
 			assert(pool);
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
-			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), computeShader, MakeIteratorRange(selectorList));
+			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), MakeShaderCompileResourceName(computeShader), MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[usi0=usi0, usi1=usi1, pipelineLayout](auto pipelineAndLayout) {

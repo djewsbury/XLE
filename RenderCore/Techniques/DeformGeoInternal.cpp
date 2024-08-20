@@ -102,13 +102,15 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		auto operatorMarker = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
 		::Assets::WhenAll(_preparedSharedResources.ShareFuture()).ThenConstructToPromise(
 			operatorMarker->AdoptPromise(),
-			[pipelineCollection=_pipelineCollection, selectors, patchExpansions=_patchExpansions](auto&& promise, const auto& preparedResources) {
+			[pipelineCollection=_pipelineCollection, selectors, patchExpansions=_patchExpansions](auto&& promise, const auto& preparedResources) mutable {
 				const ParameterBox* sel[] { &selectors };
+				ShaderCompilePatchResource shaderResource;
+				shaderResource._entrypoint = {DEFORM_ENTRY_HLSL, "frameworkEntry"};
+				shaderResource._patchCollection = preparedResources._patchCollection;
+				shaderResource._patchCollectionExpansions = std::move(patchExpansions);
 				pipelineCollection->CreateComputePipeline(
 					std::move(promise),
-					preparedResources._pipelineLayout,
-					DEFORM_ENTRY_HLSL ":frameworkEntry", MakeIteratorRange(sel),
-					preparedResources._patchCollection, MakeIteratorRange(patchExpansions));
+					preparedResources._pipelineLayout, shaderResource, MakeIteratorRange(sel));
 			});
 		_pipelines.push_back(operatorMarker);
 		_pipelineHashes.push_back(hash);
@@ -143,13 +145,15 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				auto operatorMarker = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
 				::Assets::WhenAll(_preparedSharedResources.ShareFuture()).ThenConstructToPromise(
 					operatorMarker->AdoptPromise(),
-					[pipelineCollection=_pipelineCollection, selectors=_pipelineSelectors[c], patchExpansions=_patchExpansions](auto&& promise, const auto& preparedResources) {
+					[pipelineCollection=_pipelineCollection, selectors=_pipelineSelectors[c], patchExpansions=_patchExpansions](auto&& promise, const auto& preparedResources) mutable {
 						const ParameterBox* sel[] { &selectors };
+						ShaderCompilePatchResource shaderResource;
+						shaderResource._entrypoint = {DEFORM_ENTRY_HLSL, "frameworkEntry"};
+						shaderResource._patchCollection = preparedResources._patchCollection;
+						shaderResource._patchCollectionExpansions = std::move(patchExpansions);
 						pipelineCollection->CreateComputePipeline(
 							std::move(promise),
-							preparedResources._pipelineLayout,
-							DEFORM_ENTRY_HLSL ":frameworkEntry", MakeIteratorRange(sel),
-							preparedResources._patchCollection, MakeIteratorRange(patchExpansions));
+							preparedResources._pipelineLayout, shaderResource, MakeIteratorRange(sel));
 					});
 				_pipelines[c] = std::move(operatorMarker);
 			}

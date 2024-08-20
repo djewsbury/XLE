@@ -285,6 +285,7 @@ namespace ShaderSourceParser
 		::Assets::PreprocessorIncludeHandler handler;
 		TRY {
 			auto fn = initializer.GetInitializer<std::string>(0);
+			assert(!fn.empty());
 			auto analysis = GeneratePreprocessorAnalysisFromFile(fn, &handler);
 
 			SelectorFilteringRules filteringRules;

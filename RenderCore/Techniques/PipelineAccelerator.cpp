@@ -173,7 +173,7 @@ namespace RenderCore { namespace Techniques
 		PipelineCollection& pipelineCollection, IPipelineLayoutDelegate& layoutDelegate,
 		const ParameterBox& globalSelectors, std::shared_ptr<InternalSequencerConfig> cfg)
 	{
-		auto pipelineDesc = cfg->_delegate->GetPipelineDesc(compiledPatchCollection->GetInterface(), _stateSet);
+		auto pipelineDesc = cfg->_delegate->GetPipelineDesc(compiledPatchCollection, _stateSet);
 		std::promise<Techniques::GraphicsPipelineAndLayout> metalPipelinePromise;
 		auto metalPipelineFuture = metalPipelinePromise.get_future();
 
@@ -191,7 +191,7 @@ namespace RenderCore { namespace Techniques
 			std::move(metalPipelinePromise),
 			std::move(patchedLayout), pipelineDesc,
 			MakeIteratorRange(paramBoxes), 
-			vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx}, compiledPatchCollection);
+			vis, FrameBufferTarget{&cfg->_fbDesc, cfg->_subpassIdx});
 
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
 		::Assets::WhenAll(std::move(metalPipelineFuture)).ThenConstructToPromise(

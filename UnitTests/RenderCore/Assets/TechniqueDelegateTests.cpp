@@ -306,35 +306,38 @@ namespace UnitTests
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{
 			const uint64_t perPixelPatchName = "PerPixel"_h;
 			const uint64_t deformPositionPatchName = "DeformPosition"_h;
+			assert(shaderPatches);
 
 			auto perPixelPatch = std::find_if(
-				shaderPatches.GetPatches().begin(), shaderPatches.GetPatches().end(),
+				shaderPatches->GetInterface().GetPatches().begin(), shaderPatches->GetInterface().GetPatches().end(),
 				[perPixelPatchName](const auto& c) { return c._implementsHash == perPixelPatchName; });
-			if (perPixelPatch == shaderPatches.GetPatches().end())
+			if (perPixelPatch == shaderPatches->GetInterface().GetPatches().end())
 				Throw(std::runtime_error("A patch implementing the PerPixel interface must be implemented"));
 
 			bool hasDeformPosition = std::find_if(
-				shaderPatches.GetPatches().begin(), shaderPatches.GetPatches().end(),
-				[deformPositionPatchName](const auto& c) { return c._implementsHash == deformPositionPatchName; }) != shaderPatches.GetPatches().end();
+				shaderPatches->GetInterface().GetPatches().begin(), shaderPatches->GetInterface().GetPatches().end(),
+				[deformPositionPatchName](const auto& c) { return c._implementsHash == deformPositionPatchName; }) != shaderPatches->GetInterface().GetPatches().end();
 
 			auto desc = std::make_shared<RenderCore::Techniques::GraphicsPipelineDesc>();
+			RenderCore::Techniques::ShaderCompilePatchResource vsRes, psRes;
+			vsRes._patchCollection = psRes._patchCollection = shaderPatches;
 			if (hasDeformPosition) {
-				desc->_shaders[(unsigned)RenderCore::ShaderStage::Vertex] = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.vertex.hlsl", "frameworkEntryWithDeform"};
+				vsRes._entrypoint = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.vertex.hlsl", "frameworkEntryWithDeform"};
+				vsRes._patchCollectionExpansions = { deformPositionPatchName };
 			} else
-				desc->_shaders[(unsigned)RenderCore::ShaderStage::Vertex] = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.vertex.hlsl", "frameworkEntry"};
-			desc->_shaders[(unsigned)RenderCore::ShaderStage::Pixel] = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.pixel.hlsl", "frameworkEntry"};
+				vsRes._entrypoint = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.vertex.hlsl", "frameworkEntry"};
+			psRes._entrypoint = RenderCore::ShaderCompileResourceName{"ut-data/framework-entry.pixel.hlsl", "frameworkEntry"};
+			psRes._patchCollectionExpansions = { perPixelPatchName };
 
+			desc->_shaders[(unsigned)RenderCore::ShaderStage::Vertex] = std::move(vsRes);
+			desc->_shaders[(unsigned)RenderCore::ShaderStage::Pixel] = std::move(psRes);
 			desc->_blend.push_back(RenderCore::AttachmentBlendDesc{});
 			desc->_depthStencil = RenderCore::Techniques::CommonResourceBox::s_dsReadWrite;
-
-			desc->_patchExpansions.emplace_back(perPixelPatchName, RenderCore::ShaderStage::Pixel);
-			if (hasDeformPosition)
-				desc->_patchExpansions.emplace_back(deformPositionPatchName, RenderCore::ShaderStage::Vertex);
 
 			return desc;
 		}
@@ -479,11 +482,8 @@ namespace UnitTests
 					RenderCore::Techniques::CommonResourceBox::s_dsReadWrite);
 
 				RenderCore::Assets::RenderStateSet stateSet;
-				auto pipelineDesc = futureTechDel.get()->GetPipelineDesc(
-					compiledPatchCollection->GetInterface(),
-					stateSet).get();
+				auto pipelineDesc = futureTechDel.get()->GetPipelineDesc(compiledPatchCollection, stateSet).get();
 				REQUIRE(pipelineDesc);
-				REQUIRE(!pipelineDesc->_shaders[0].empty());
 			}
 		}
 

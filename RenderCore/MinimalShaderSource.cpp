@@ -113,28 +113,8 @@ namespace RenderCore
 				definesTable);
 		}
 
-		ShaderCompileResourceName MakeResId(
-            StringSection<> initializer) const override
+		void AdaptResId(ShaderCompileResourceName& shaderId) const override
 		{
-			StringSection<> filename, entryPoint, shaderModel;
-			auto splitter = MakeFileNameSplitter(initializer);
-
-			filename = splitter.AllExceptParameters();
-
-			if (splitter.Parameters().IsEmpty()) {
-				entryPoint = "main";
-			} else {
-				auto startShaderModel = XlFindChar(splitter.Parameters().begin(), ':');
-				if (!startShaderModel) {
-					entryPoint = splitter.Parameters();
-				} else {
-					entryPoint = {splitter.Parameters().begin(), startShaderModel};
-					shaderModel = {startShaderModel+1, splitter.Parameters().end()};
-				}
-			}
-
-			ShaderCompileResourceName shaderId { filename.AsString(), entryPoint.AsString(), shaderModel.AsString() };
-
 			if (shaderId._shaderModel.empty())
 				shaderId._shaderModel = PS_DefShaderModel;
 
@@ -142,8 +122,6 @@ namespace RenderCore
 				//  the default shader model string (etc, "vs_*) to a resolved shader model
 				//  this is because we want the archive name to be correct
 			_compiler->AdaptResId(shaderId);
-
-			return shaderId;
 		}
 
 		std::string GenerateMetrics(
@@ -297,7 +275,12 @@ namespace RenderCore
 				std::string definesTable;
 				if (initializers.GetCount() > 1)
 					definesTable = initializers.GetInitializer<std::string>(1);
-				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
+				ShaderCompileResourceName res;
+				if (initializers.GetInitializerType(0).hash_code() == typeid(std::string).hash_code()) {
+					res = MakeShaderCompileResourceName(initializers.GetInitializer<std::string>(0));
+				} else
+					res = initializers.GetInitializer<ShaderCompileResourceName>(0);
+				shaderSource->AdaptResId(res);
 				res._compilationFlags |= universalCompilationFlags;
 				return std::make_shared<ShaderCompileOperation>(
 					*shaderSource,
@@ -306,8 +289,15 @@ namespace RenderCore
 				);
 			},
 			[shaderSource, universalCompilationFlags](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
-				auto res = shaderSource->MakeResId(initializers.GetInitializer<std::string>(0));
+				ShaderCompileResourceName res;
+				if (initializers.GetInitializerType(0).hash_code() == typeid(std::string).hash_code()) {
+					res = MakeShaderCompileResourceName(initializers.GetInitializer<std::string>(0));
+				} else {
+					res = initializers.GetInitializer<ShaderCompileResourceName>(0);
+				}
+				shaderSource->AdaptResId(res);
 				res._compilationFlags |= universalCompilationFlags;
+
 				std::string definesTable;
 				if (initializers.GetCount() > 1)
 					definesTable = initializers.GetInitializer<std::string>(1);

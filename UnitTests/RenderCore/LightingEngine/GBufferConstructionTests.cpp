@@ -86,7 +86,7 @@ namespace UnitTests
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-			const RenderCore::Techniques::CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
 			using namespace RenderCore;

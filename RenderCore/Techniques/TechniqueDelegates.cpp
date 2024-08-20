@@ -32,7 +32,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& input) override;
 
 		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override;
@@ -67,8 +67,36 @@ namespace RenderCore { namespace Techniques
 		nascentDesc._techniquePreconfigurationFile = entry._preconfigurationFileName;
 	}
 
+	static GraphicsPipelineDesc::ShaderVariant MakeShaderCompilePatchResource(StringSection<> shaderName, const std::shared_ptr<CompiledShaderPatchCollection>& shaderPatches, std::vector<uint64_t>&& patchExpansions)
+	{
+		if (!patchExpansions.empty()) {
+			assert(shaderPatches);
+			ShaderCompileResourceName entryPoint;
+			if (!shaderName.IsEmpty()) entryPoint = MakeShaderCompileResourceName(shaderName);
+			return ShaderCompilePatchResource {shaderPatches, std::move(patchExpansions), {}, std::move(entryPoint) };
+		} else if (!shaderName.IsEmpty()) {
+			return MakeShaderCompileResourceName(shaderName);
+		} else
+			return std::monostate{};
+	}
+
+	static void PrepareShadersFromTechniqueEntry(
+		GraphicsPipelineDesc& nascentDesc,
+		const TechniqueEntry& entry,
+		const std::shared_ptr<CompiledShaderPatchCollection>& shaderPatches,
+		std::vector<uint64_t>&& vsPatchExpansions,
+		std::vector<uint64_t>&& psPatchExpansions,
+		std::vector<uint64_t>&& gsPatchExpansions = {})
+	{
+		nascentDesc._shaders[(unsigned)ShaderStage::Vertex] = MakeShaderCompilePatchResource(entry._vertexShaderName, shaderPatches, std::move(vsPatchExpansions));
+		nascentDesc._shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompilePatchResource(entry._pixelShaderName, shaderPatches, std::move(psPatchExpansions));
+		nascentDesc._shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompilePatchResource(entry._geometryShaderName, shaderPatches, std::move(gsPatchExpansions));
+		nascentDesc._manualSelectorFiltering = entry._selectorFiltering;
+		nascentDesc._techniquePreconfigurationFile = entry._preconfigurationFileName;
+	}
+
 	auto TechniqueDelegate_Legacy::GetPipelineDesc(
-		const CompiledShaderPatchCollection::Interface& shaderPatches,
+		std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 		const RenderCore::Assets::RenderStateSet& input) -> std::shared_ptr<GraphicsPipelineDesc>
 	{
 		auto result = std::make_shared<GraphicsPipelineDesc>();
@@ -77,7 +105,8 @@ namespace RenderCore { namespace Techniques
 			result->_blend.push_back(_blend);
 		result->_rasterization = _rasterization;
 		result->_depthStencil = _depthStencil;
-		result->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
+		if (shaderPatches)
+			result->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 
 		result->_depVal = _technique->GetDependencyValidation();
 		auto& entry = _technique->GetEntry(_techniqueIndex);
@@ -180,11 +209,11 @@ namespace RenderCore { namespace Techniques
 	constexpr auto s_perPixelCustomLighting = "PerPixelCustomLighting"_h;
 	constexpr auto s_earlyRejectionTest = "EarlyRejectionTest"_h;
 	constexpr auto s_vertexPatch = "VertexPatch"_h;
-	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixelAndEarlyRejection[] = { {s_perPixel, ShaderStage::Pixel}, {s_earlyRejectionTest, ShaderStage::Pixel} };
-	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixel[] = { {s_perPixel, ShaderStage::Pixel} };
-	static std::pair<uint64_t, ShaderStage> s_patchExp_perPixelCustomLighting[] = { {s_perPixelCustomLighting, ShaderStage::Pixel} };
-	static std::pair<uint64_t, ShaderStage> s_patchExp_earlyRejection[] = { {s_earlyRejectionTest, ShaderStage::Pixel} };
-	static std::pair<uint64_t, ShaderStage> s_patchExp_deformVertex[] = { { s_vertexPatch, ShaderStage::Vertex } };
+	static uint64_t s_patchExp_perPixelAndEarlyRejection[] = { s_perPixel, s_earlyRejectionTest };
+	static uint64_t s_patchExp_perPixel[] = { s_perPixel };
+	static uint64_t s_patchExp_perPixelCustomLighting[] = { s_perPixelCustomLighting };
+	static uint64_t s_patchExp_earlyRejection[] = { s_earlyRejectionTest };
+	static uint64_t s_patchExp_deformVertex[] = { s_vertexPatch };
 
 	IllumType CalculateIllumType(const CompiledShaderPatchCollection::Interface& shaderPatches)
 	{
@@ -233,7 +262,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -251,39 +280,43 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depthStencil._frontFaceStencil._passOp = StencilOp::Replace;
 			if (stateSet._flag & RenderCore::Assets::RenderStateSet::Flag::DoubleSided && stateSet._doubleSided)
 				nascentDesc->_depthStencil._backFaceStencil._passOp = StencilOp::Replace;
-			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 			nascentDesc->_manualSelectorFiltering.SetSelector("GBUFFER_TYPE", _gbufferTypeCode);
 
-			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
-
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
-			switch (illumType) {
-			case IllumType::PerPixel:
-				psTechEntry = &_techniqueFileHelper._perPixel;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-				break;
-			case IllumType::PerPixelAndEarlyRejection:
-				psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-				break;
-			default:
-				break;
-			}
-
 			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			if (hasDeformVertex) {
-				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+			if (shaderPatches) {
+				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+
+				auto illumType = CalculateIllumType(shaderPatches->GetInterface());
+				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+				switch (illumType) {
+				case IllumType::PerPixel:
+					psTechEntry = &_techniqueFileHelper._perPixel;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+					break;
+				case IllumType::PerPixelAndEarlyRejection:
+					psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+					break;
+				default:
+					break;
+				}
+
+				if (hasDeformVertex) {
+					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+				}
 			}
 
-			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
-			
 			// note -- we could premerge all of the combinations in the constructor, to cut down on cost here
 			TechniqueEntry mergedTechEntry = *vsTechEntry;
 			mergedTechEntry.MergeIn(*psTechEntry);
 
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
+
 			return nascentDesc;
 		}
 
@@ -369,7 +402,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -383,32 +416,36 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
 			nascentDesc->_depthStencil = _depthStencil;
-			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-
-			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
-			switch (illumType) {
-			case IllumType::PerPixel:
-				psTechEntry = &_techniqueFileHelper._perPixel;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-				break;
-			case IllumType::PerPixelAndEarlyRejection:
-				psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-				break;
-			case IllumType::PerPixelCustomLighting:
-				psTechEntry = &_techniqueFileHelper._perPixelCustomLighting;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelCustomLighting, &s_patchExp_perPixelCustomLighting[dimof(s_patchExp_perPixelCustomLighting)]);
-			default:
-				break;
-			}
-
 			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			if (hasDeformVertex) {
-				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+			if (shaderPatches) {
+				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+
+				auto illumType = CalculateIllumType(shaderPatches->GetInterface());
+				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+				switch (illumType) {
+				case IllumType::PerPixel:
+					psTechEntry = &_techniqueFileHelper._perPixel;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+					break;
+				case IllumType::PerPixelAndEarlyRejection:
+					psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+					break;
+				case IllumType::PerPixelCustomLighting:
+					psTechEntry = &_techniqueFileHelper._perPixelCustomLighting;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelCustomLighting, &s_patchExp_perPixelCustomLighting[dimof(s_patchExp_perPixelCustomLighting)]);
+				default:
+					break;
+				}
+
+				if (hasDeformVertex) {
+					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+				}
 			}
 
 			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
@@ -416,7 +453,7 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry mergedTechEntry = *vsTechEntry;
 			mergedTechEntry.MergeIn(*psTechEntry);
 
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 			return nascentDesc;
 		}
 
@@ -519,7 +556,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -531,21 +568,25 @@ namespace RenderCore { namespace Techniques
 			// always use less than (not less than or equal) here, because writing equally deep pixels is redundant
 			// (and we can potentially skip a texture lookup for alpha test geo sometimes)
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
-			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-
-			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
-			if (hasEarlyRejectionTest) {
-				psTechEntry = &_techniqueFileHelper._earlyRejectionSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
-			}
-
 			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			if (hasDeformVertex) {
-				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+			if (shaderPatches) {
+				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+
+				bool hasEarlyRejectionTest = shaderPatches->GetInterface().HasPatchType(s_earlyRejectionTest);
+				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+				if (hasEarlyRejectionTest) {
+					psTechEntry = &_techniqueFileHelper._earlyRejectionSrc;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
+				}
+
+				if (hasDeformVertex) {
+					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+				}
 			}
 
 			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
@@ -553,7 +594,7 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry mergedTechEntry = *vsTechEntry;
 			mergedTechEntry.MergeIn(*psTechEntry);
 
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 			return nascentDesc;
 		}
 
@@ -669,7 +710,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -688,29 +729,33 @@ namespace RenderCore { namespace Techniques
 				if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
 					nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
-			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-
-			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
-			switch (illumType) {
-			case IllumType::PerPixel:
-				psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-				break;
-			case IllumType::PerPixelAndEarlyRejection:
-				psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-				break;
-			default:
-				break;
-			}
-
 			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			if (hasDeformVertex) {
-				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+			if (shaderPatches) {
+				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+
+				auto illumType = CalculateIllumType(shaderPatches->GetInterface());
+				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+				switch (illumType) {
+				case IllumType::PerPixel:
+					psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+					break;
+				case IllumType::PerPixelAndEarlyRejection:
+					psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+					break;
+				default:
+					break;
+				}
+
+				if (hasDeformVertex) {
+					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+				}
 			}
 
 			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
@@ -729,7 +774,7 @@ namespace RenderCore { namespace Techniques
 			if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
 				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
 
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 			return nascentDesc;
 		}
 
@@ -827,7 +872,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -844,29 +889,33 @@ namespace RenderCore { namespace Techniques
 			} else {
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
-			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-
-			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
-			switch (illumType) {
-			case IllumType::PerPixel:
-				psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-				break;
-			case IllumType::PerPixelAndEarlyRejection:
-				psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-				break;
-			default:
-				break;
-			}
-
 			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			if (hasDeformVertex) {
-				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+			if (shaderPatches) {
+				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+
+				auto illumType = CalculateIllumType(shaderPatches->GetInterface());
+				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+				switch (illumType) {
+				case IllumType::PerPixel:
+					psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+					break;
+				case IllumType::PerPixelAndEarlyRejection:
+					psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+					break;
+				default:
+					break;
+				}
+
+				if (hasDeformVertex) {
+					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+				}
 			}
 
 			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
@@ -875,10 +924,10 @@ namespace RenderCore { namespace Techniques
 			mergedTechEntry.MergeIn(*psTechEntry);
 			mergedTechEntry._selectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
 
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 
-			if (!shaderPatches.GetOverrideShader(ShaderStage::Geometry).IsEmpty())
-				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = shaderPatches.GetOverrideShader(ShaderStage::Geometry).AsString();
+			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry).IsEmpty())
+				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry));
 
 			return nascentDesc;
 		}
@@ -989,7 +1038,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -1003,29 +1052,33 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;		// note -- read and write from depth -- if we do a pre-depth pass for probes we could just set this to read
-			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
-
-			auto illumType = CalculateIllumType(shaderPatches);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
 
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
-			switch (illumType) {
-			case IllumType::PerPixel:
-				psTechEntry = &_techniqueFileHelper._perPixel;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-				break;
-			case IllumType::PerPixelAndEarlyRejection:
-				psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-				break;
-			default:
-				break;
-			}
-
 			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			if (hasDeformVertex) {
-				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+			if (shaderPatches) {
+				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+
+				auto illumType = CalculateIllumType(shaderPatches->GetInterface());
+				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+				switch (illumType) {
+				case IllumType::PerPixel:
+					psTechEntry = &_techniqueFileHelper._perPixel;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+					break;
+				case IllumType::PerPixelAndEarlyRejection:
+					psTechEntry = &_techniqueFileHelper._perPixelAndEarlyRejection;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+					break;
+				default:
+					break;
+				}
+
+				if (hasDeformVertex) {
+					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+				}
 			}
 
 			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
@@ -1033,7 +1086,7 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry mergedTechEntry = *vsTechEntry;
 			mergedTechEntry.MergeIn(*psTechEntry);
 
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 			return nascentDesc;
 		}
 
@@ -1113,29 +1166,33 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			const CompiledShaderPatchCollection::Interface& shaderPatches,
+			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsDisable;
-			nascentDesc->_materialPreconfigurationFile = shaderPatches.GetPreconfigurationFileName();
 
 			nascentDesc->_soElements = _soElements;
 			nascentDesc->_soBufferStrides = _soStrides;
 
-			bool hasEarlyRejectionTest = shaderPatches.HasPatchType(s_earlyRejectionTest);
-			bool hasDeformVertex = shaderPatches.HasPatchType(s_vertexPatch);
-
 			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
-			if (hasEarlyRejectionTest) {
-				psTechEntry = &_techniqueFileHelper._earlyRejectionSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
-			}
-
 			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			if (hasDeformVertex) {
-				vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-				nascentDesc->_patchExpansions.insert(nascentDesc->_patchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+			if (shaderPatches) {
+				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+
+				bool hasEarlyRejectionTest = shaderPatches->GetInterface().HasPatchType(s_earlyRejectionTest);
+				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+				if (hasEarlyRejectionTest) {
+					psTechEntry = &_techniqueFileHelper._earlyRejectionSrc;
+					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
+				}
+
+				if (hasDeformVertex) {
+					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+				}
 			}
 
 			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
@@ -1143,7 +1200,7 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry mergedTechEntry = *vsTechEntry;
 			mergedTechEntry.MergeIn(*psTechEntry);
 
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry);
+			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 			nascentDesc->_manualSelectorFiltering.SetSelector("INTERSECTION_TEST", _testTypeParameter);
 			return nascentDesc;
 		}
@@ -1207,6 +1264,16 @@ namespace RenderCore { namespace Techniques
 		TechniqueDelegate_RayTest::ConstructToPromise(std::move(promise), std::move(techniqueSet), testTypeParameter, soInit);
 	}
 
+	uint64_t GraphicsPipelineDesc::HashShaderVariant(const GraphicsPipelineDesc::ShaderVariant& var, uint64_t seed)
+	{
+		if (std::holds_alternative<ShaderCompileResourceName>(var)) {
+			return std::get<ShaderCompileResourceName>(var).CalculateHash(seed);
+		} else if (std::holds_alternative<ShaderCompilePatchResource>(var)) {
+			return std::get<ShaderCompilePatchResource>(var).CalculateHash(seed);
+		}
+		return seed;
+	}
+
 	uint64_t GraphicsPipelineDesc::GetHash() const
 	{
 		auto result = CalculateHashNoSelectors(_manualSelectorFiltering.GetHash());
@@ -1229,9 +1296,7 @@ namespace RenderCore { namespace Techniques
 			result = Hash64(AsPointer(_soBufferStrides.begin()), AsPointer(_soBufferStrides.end()), result);
 		}
 		for (unsigned c=0; c<dimof(_shaders); ++c)
-			if (!_shaders[c].empty()) result = Hash64(_shaders[c], result);
-		if (!_patchExpansions.empty())
-			result = Hash64(AsPointer(_patchExpansions.begin()), AsPointer(_patchExpansions.end()), result);
+			result = HashShaderVariant(_shaders[c], result);
 		return result;
 	}
 

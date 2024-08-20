@@ -31,6 +31,11 @@ namespace RenderCore
 
     ShaderStage ShaderCompileResourceName::AsShaderStage() const { return RenderCore::AsShaderStage(_shaderModel); }
 
+	uint64_t ShaderCompileResourceName::CalculateHash(uint64_t seed) const
+	{
+		return Hash64(_filename, Hash64(_entryPoint, Hash64(_shaderModel, seed)+_compilationFlags));
+	}
+
 	CompiledShaderByteCode::CompiledShaderByteCode(const ::Assets::Blob& shader, const ::Assets::DependencyValidation& depVal, StringSection<>)
 	: _shader(shader)
 	, _depVal(depVal)
@@ -136,5 +141,34 @@ namespace RenderCore
 	}
 
     const unsigned CompiledShaderByteCode::ShaderHeader::Version = 3u;
+
+	ShaderCompileResourceName MakeShaderCompileResourceName(StringSection<> initializer)
+	{
+		StringSection<> filename, entryPoint, shaderModel;
+		auto splitter = MakeFileNameSplitter(initializer);
+
+		filename = splitter.AllExceptParameters();
+
+		if (splitter.Parameters().IsEmpty()) {
+			entryPoint = "main";
+		} else {
+			auto startShaderModel = XlFindChar(splitter.Parameters().begin(), ':');
+			if (!startShaderModel) {
+				entryPoint = splitter.Parameters();
+			} else {
+				entryPoint = {splitter.Parameters().begin(), startShaderModel};
+				shaderModel = {startShaderModel+1, splitter.Parameters().end()};
+			}
+		}
+		assert(!filename.IsEmpty());
+		return { filename.AsString(), entryPoint.AsString(), shaderModel.AsString() };
+	}
+
+	std::string s_SMVS = "vs_*";
+	std::string s_SMGS = "gs_*";
+	std::string s_SMPS = "ps_*";
+	std::string s_SMDS = "ds_*";
+	std::string s_SMHS = "hs_*";
+	std::string s_SMCS = "cs_*";
 }
 
