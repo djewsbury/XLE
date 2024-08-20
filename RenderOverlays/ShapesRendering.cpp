@@ -13,6 +13,7 @@
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../RenderCore/Techniques/CommonResources.h"
+#include "../RenderCore/Techniques/SpriteTechnique.h"
 #include "../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../RenderCore/Assets/RawMaterial.h"
 #include "../RenderCore/Format.h"
@@ -1062,6 +1063,7 @@ namespace RenderOverlays
 	public:
 		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
+            IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
             using namespace RenderCore;
@@ -1148,6 +1150,21 @@ namespace RenderOverlays
                     nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = std::move(res);
                     nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
                     nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_WORLD_POSITION", 1);
+
+                } else if (shaderPatches->GetInterface().HasPatchType("SV_SpritePS"_h)) {
+                    // Prototype for integrating partially procedurally built sprite pipelines
+                    nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                    *nascentDesc = *_pipelineDesc[pipelineBase];
+
+                    std::vector<RenderCore::Techniques::PatchDelegateInput> patchesInterface;
+                    for (const auto& p:shaderPatches->GetInterface().GetPatches())
+                        patchesInterface.emplace_back(RenderCore::Techniques::PatchDelegateInput{p._originalEntryPointName, p._originalEntryPointSignature.get(), p._implementsHash});
+                    for (auto& out:RenderCore::Techniques::BuildSpritePipeline(patchesInterface, iaAttributes)) {
+                        if (unsigned(out._stage) >= dimof(nascentDesc->_shaders)) continue;
+                        if (!out._resource._patchCollectionExpansions.empty())
+                            out._resource._patchCollection = shaderPatches;
+                        nascentDesc->_shaders[unsigned(out._stage)] = std::move(out._resource);
+                    }
 
                 }
 

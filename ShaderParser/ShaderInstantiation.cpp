@@ -296,8 +296,10 @@ namespace ShaderSourceParser
 		{
 			std::stringstream str;
 			str << "#include \"" PREFIX_HLSL "\"" << std::endl;
-			for (const auto&i:pendingInst._rawShaderFileIncludes)
+			for (const auto&i:pendingInst._rawShaderFileIncludes) {
+				assert(!i.empty());
 				str << "#include \"" << i << "\"" << std::endl;
+			}
 			result._sourceFragments.insert(result._sourceFragments.begin(), str.str());
 		}
 

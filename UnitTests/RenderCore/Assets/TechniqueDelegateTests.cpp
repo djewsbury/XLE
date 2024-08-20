@@ -307,6 +307,7 @@ namespace UnitTests
 	public:
 		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{
 			const uint64_t perPixelPatchName = "PerPixel"_h;
@@ -482,7 +483,7 @@ namespace UnitTests
 					RenderCore::Techniques::CommonResourceBox::s_dsReadWrite);
 
 				RenderCore::Assets::RenderStateSet stateSet;
-				auto pipelineDesc = futureTechDel.get()->GetPipelineDesc(compiledPatchCollection, stateSet).get();
+				auto pipelineDesc = futureTechDel.get()->GetPipelineDesc(compiledPatchCollection, {}, stateSet).get();
 				REQUIRE(pipelineDesc);
 			}
 		}

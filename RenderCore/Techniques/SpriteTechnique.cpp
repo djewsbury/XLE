@@ -1,19 +1,17 @@
-#include "SpritePipeline.h"
-#include "ShaderInstantiation.h"
-#include "NodeGraphSignature.h"
-#include "../Utility/MemoryUtils.h"
-#include "../Utility/FastParseValue.h"
-#include "../Utility/StringFormat.h"
+#include "SpriteTechnique.h"
+#include "CompiledShaderPatchCollection.h"
+#include "../../ShaderParser/ShaderInstantiation.h"
+#include "../../ShaderParser/NodeGraphSignature.h"
+#include "../../ShaderParser/ShaderSignatureParser.h"
+#include "../../Utility/MemoryUtils.h"
+#include "../../Utility/FastParseValue.h"
+#include "../../Utility/StringFormat.h"
 #include <sstream>
 
-#include "../RenderCore/Techniques/CompiledShaderPatchCollection.h"
-
-#include "ShaderSignatureParser.h"
-#include <iostream>
 
 using namespace Utility::Literals;
 
-namespace ShaderSourceParser
+namespace RenderCore { namespace Techniques
 {
 	namespace Internal
 	{
@@ -133,7 +131,7 @@ namespace ShaderSourceParser
 		class FragmentWriter
 		{
 		public:
-			void WriteInputParameter(std::string semantic, unsigned semanticIdx, std::string type);
+			void WriteInputParameter(std::string semantic, unsigned semanticIdx, std::string type, bool gsInputParameter = false);
 			void WriteOutputParameter(std::string semantic, unsigned semanticIdx, std::string type);
 
 			void WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
@@ -145,13 +143,13 @@ namespace ShaderSourceParser
 
 			std::stringstream  _body;
 
-			struct WorkingAttributeWithName : public WorkingAttribute { std::string _name; };
+			struct WorkingAttributeWithName : public WorkingAttribute { std::string _name; bool _gsInputParameter; };
 			std::vector<WorkingAttributeWithName> _workingAttributes;
 			GraphLanguage::NodeGraphSignature _signature;
 			unsigned _nextWorkingAttributeIdx = 0;
 		};
 
-		void FragmentWriter::WriteInputParameter(std::string semantic, unsigned semanticIdx, std::string type)
+		void FragmentWriter::WriteInputParameter(std::string semantic, unsigned semanticIdx, std::string type, bool gsInputParameter)
 		{
 			assert(SplitSemanticAndIdx(semantic).first.size() == semantic.size());
 			auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
@@ -162,7 +160,7 @@ namespace ShaderSourceParser
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate(semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
 			_signature.AddParameter({type, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
-			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName});
+			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName, gsInputParameter});
 		}
 
 		void FragmentWriter::WriteOutputParameter(std::string semantic, unsigned semanticIdx, std::string type)
@@ -180,9 +178,13 @@ namespace ShaderSourceParser
 			const std::string& requiredType)
 		{
 			if (attribute._type == requiredType) {
+				if (attribute._gsInputParameter) str << "input[0].";
 				str << attribute._name;
 			} else {
-				str << "Cast_" << attribute._type << "_to_" << requiredType << "(" << attribute._name << ")";
+				str << "Cast_" << attribute._type << "_to_" << requiredType << "(";
+				if (attribute._gsInputParameter) str << "input[0].";
+				str << attribute._name;
+				str << ")";
 			}
 		}
 
@@ -221,6 +223,7 @@ namespace ShaderSourceParser
 						_body << "\t" << p._type << " " << newName << ";" << std::endl;
 						*i = WorkingAttributeWithName{s.first.AsString(), s.second, p._type, newName};
 					}
+					if (i->_gsInputParameter) temp << "input[0].";
 					temp << i->_name;
 				}
 
@@ -283,13 +286,13 @@ namespace ShaderSourceParser
 			str << "};" << std::endl << std::endl;
 
 			str << "[maxvertexcount(4)]" << std::endl;
-			str << "\tpoint " << name << "_" << s_VSToGS << " input[1], inout TriangleStream<" << name << "_" << s_GSToPS << "> outputStream)" << std::endl;
+			str << "\tvoid " << name << "(point " << name << "_" << s_VSToGS << " input[1], inout TriangleStream<" << name << "_" << s_GSToPS << "> outputStream)" << std::endl;
 			str << "{" << std::endl;
 			str << _body.str();
 
 			// write the code that should move values from the working attributes into the output vertices
 			for (unsigned vIdx=0; vIdx<4; ++vIdx) {
-				str << "\t" << name << "_" << s_GSToPS << "output" << vIdx << ";" << std::endl;
+				str << "\t" << name << "_" << s_GSToPS << " output" << vIdx << ";" << std::endl;
 				for (const auto& p:_signature.GetParameters()) {
 					if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
 					str << "\t" << "output" << vIdx << "." << p._name << " = ";
@@ -306,7 +309,7 @@ namespace ShaderSourceParser
 					} else {
 						WriteDefaultValueExpression(str, p._type);
 					}
-					str << std::endl;
+					str << ";" << std::endl;
 				}
 				str << "\toutputStream.Append(output" << vIdx << ");" << std::endl;
 			}
@@ -402,7 +405,7 @@ namespace ShaderSourceParser
 			return false;
 		}
 
-		static bool VSCanProvideAttribute(IteratorRange<const AvailablePatch*> patches, StringSection<> semantic, unsigned semanticIdx)
+		static bool VSCanProvideAttribute(IteratorRange<const PatchDelegateInput*> patches, StringSection<> semantic, unsigned semanticIdx)
 		{
 			for (unsigned ep=0; ep<patches.size(); ++ep)
 				if (patches[ep]._implementsHash == "SV_SpriteVS"_h)
@@ -430,7 +433,7 @@ namespace ShaderSourceParser
 		class FragmentArranger
 		{
 		public:
-			void AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature);		// add in reverse order
+			void AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature, uint64_t originalPatchCode=0);		// add in reverse order
 			void AddFragmentOutput(const WorkingAttribute& a);
 
 			std::vector<WorkingAttribute> RebuildInputAttributes();
@@ -442,15 +445,16 @@ namespace ShaderSourceParser
 				std::string _name;
 				const GraphLanguage::NodeGraphSignature* _signature;
 				bool _enabled = false;
+				uint64_t _originalPatchCode = 0;
 			};
 			std::vector<Step> _steps;
 
 			std::vector<WorkingAttribute> _fragmentOutput;
 		};
 
-		void FragmentArranger::AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature)
+		void FragmentArranger::AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature, uint64_t originalPatchCode)
 		{
-			_steps.emplace_back(Step{std::move(name), &signature});
+			_steps.emplace_back(Step{std::move(name), &signature, false, originalPatchCode});
 		}
 
 		void FragmentArranger::AddFragmentOutput(const WorkingAttribute& a)
@@ -678,7 +682,7 @@ void ExpandClipSpacePosition(
 	)--";
 
 
-	InstantiatedShader BuildSpritePipeline(IteratorRange<const AvailablePatch*> patches, IteratorRange<const std::string*> iaAttributes)
+	std::vector<PatchDelegateOutput> BuildSpritePipeline(IteratorRange<const PatchDelegateInput*> patches, IteratorRange<const uint64_t*> iaAttributes)
 	{
 		std::vector<Internal::WorkingAttribute> psEntryAttributes, gsEntryAttributes, vsEntryAttributes;
 		auto vsSystemPatches = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
@@ -692,7 +696,7 @@ void ExpandClipSpacePosition(
 				bool atLeastOnePSStep = false;
 				for (unsigned ep=0; ep<patches.size(); ++ep) {
 					if (patches[ep]._implementsHash == "SV_SpritePS"_h) {
-						arranger.AddStep(patches[ep]._name, *patches[ep]._signature);
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
 						atLeastOnePSStep = true;
 					}
 				}
@@ -714,7 +718,7 @@ void ExpandClipSpacePosition(
 
 				for (unsigned ep=0; ep<patches.size(); ++ep)
 					if (patches[ep]._implementsHash == "SV_SpriteGS"_h)
-						arranger.AddStep(patches[ep]._name, *patches[ep]._signature);
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
 
 				Internal::ConnectSystemPatches(
 					arranger, gsSystemPatches,
@@ -733,14 +737,13 @@ void ExpandClipSpacePosition(
 
 				for (unsigned ep=0; ep<patches.size(); ++ep)
 					if (patches[ep]._implementsHash == "SV_SpriteVS"_h)
-						arranger.AddStep(patches[ep]._name, *patches[ep]._signature);
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
 
 				Internal::ConnectSystemPatches(
 					arranger, vsSystemPatches,
 					[&iaAttributes](StringSection<> semantic, unsigned semanticIdx) {
-						for (auto a:iaAttributes)
-							if (Internal::CompareSemantic({semantic, semanticIdx}, Internal::SplitSemanticAndIdx(a)))
-								return true;
+						auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(semantic)+semanticIdx);
+						if (ia != iaAttributes.end()) return true;
 						return Internal::IsVSInputSystemAttributes(semantic, semanticIdx);
 					});
 				
@@ -759,8 +762,7 @@ void ExpandClipSpacePosition(
 		{
 			Internal::FragmentWriter writerHelper;
 			for (const auto& a:vsEntryAttributes) {
-				auto ia = std::find_if(iaAttributes.begin(), iaAttributes.end(),
-					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+				auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(a._semantic)+a._semanticIdx);
 				if (ia != iaAttributes.end()) {
 					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
 				} else {
@@ -789,7 +791,7 @@ void ExpandClipSpacePosition(
 				auto gsin = std::find_if(vsSignature.GetParameters().begin(), vsSignature.GetParameters().end(),
 					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
 				if (gsin != vsSignature.GetParameters().end()) {
-					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
+					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type, true);
 				} else {
 					Internal::TryWriteGSSystemInput(writerHelper, a._semantic, a._semanticIdx);
 				}
@@ -850,17 +852,33 @@ void ExpandClipSpacePosition(
 			psSignature = writerHelper.WriteFragment(ps, "PSEntry");
 		}
 
-		InstantiatedShader result;
-		result._sourceFragments.emplace_back(s_vsSystemPatches);
-		result._sourceFragments.emplace_back(s_gsSystemPatches);
-		result._sourceFragments.emplace_back(vs.str());
-		result._sourceFragments.emplace_back(gs.str());
-		result._sourceFragments.emplace_back(ps.str());
+		PatchDelegateOutput vsOutput, gsOutput, psOutput;
+		vsOutput._stage = ShaderStage::Vertex;
+		vsOutput._resource._additionalSourceFragments.emplace_back(s_vsSystemPatches);
+		vsOutput._resource._additionalSourceFragments.emplace_back(vs.str());
+		vsOutput._resource._entrypoint._entryPoint = "VSEntry";
+		vsOutput._resource._entrypoint._shaderModel = s_SMVS;
+		vsOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(vsSignature);
+		for (auto& s:vsSteps) if (s._enabled && s._originalPatchCode) vsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
 
-		result._entryPoints.emplace_back(ShaderEntryPoint{"VSEntry", vsSignature, "vs"});
-		result._entryPoints.emplace_back(ShaderEntryPoint{"GSEntry", {}, "gs"});				// note that "gsSignature" does have the true signature information
-		result._entryPoints.emplace_back(ShaderEntryPoint{"PSEntry", psSignature, "ps"});
+		gsOutput._stage = ShaderStage::Geometry;
+		gsOutput._resource._additionalSourceFragments.emplace_back(s_gsSystemPatches);
+		gsOutput._resource._additionalSourceFragments.emplace_back(gs.str());
+		gsOutput._resource._entrypoint._entryPoint = "GSEntry";
+		gsOutput._resource._entrypoint._shaderModel = s_SMGS;
+		for (auto& s:gsSteps) if (s._enabled && s._originalPatchCode) gsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
 
+		psOutput._stage = ShaderStage::Pixel;
+		psOutput._resource._additionalSourceFragments.emplace_back(ps.str());
+		psOutput._resource._entrypoint._entryPoint = "PSEntry";
+		psOutput._resource._entrypoint._shaderModel = s_SMPS;
+		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
+		for (auto& s:psSteps) if (s._enabled && s._originalPatchCode) psOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
+
+		std::vector<PatchDelegateOutput> result;
+		result.emplace_back(std::move(vsOutput));
+		result.emplace_back(std::move(psOutput));
+		result.emplace_back(std::move(gsOutput));
 		return result;
 	}
-}
+}}

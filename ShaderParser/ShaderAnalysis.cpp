@@ -397,8 +397,9 @@ namespace ShaderSourceParser
 			} else {
 				const ParameterBox* env[] = { &filteredBox };
 				for (const auto*f:automaticFiltering)
-					if ((relevant = f->IsRelevant(evaluating->Name(), evaluating->ValueAsString(), MakeIteratorRange(env))))
-						break;
+					if (f)
+						if ((relevant = f->IsRelevant(evaluating->Name(), evaluating->ValueAsString(), MakeIteratorRange(env))))
+							break;
 			}
 
 			if (!relevant)

@@ -163,10 +163,10 @@ namespace UnitTests
 			return _chain->CompileFromMemory(shaderInMemory, entryPoint, shaderModel, definesTable);
 		}
 
-		RenderCore::ShaderCompileResourceName MakeResId(
-			StringSection<> initializer) const override
+		void AdaptResId(
+			RenderCore::ShaderCompileResourceName& res) const override
 		{
-			return _chain->MakeResId(initializer);
+			return _chain->AdaptResId(res);
 		}
 
 		std::string GenerateMetrics(

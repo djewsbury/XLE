@@ -68,6 +68,7 @@ namespace UnitTests
 	public:
 		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
 			using namespace RenderCore;

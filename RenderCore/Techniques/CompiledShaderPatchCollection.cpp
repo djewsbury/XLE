@@ -163,7 +163,7 @@ namespace RenderCore { namespace Techniques
 			p._originalEntryPointName = patch._name;
 
 			p._scaffoldSignature = std::make_shared<GraphLanguage::NodeGraphSignature>(patch._implementsSignature);
-			p._originalEntryPointName = patch._implementsName;
+			p._scaffoldEntryPointName = patch._implementsName;
 
 			p._filteringRulesId = (unsigned)_interface._filteringRules.size();
 
@@ -285,8 +285,8 @@ namespace RenderCore { namespace Techniques
 		const CompiledShaderPatchCollection& patchCollection,
 		StringSection<> mainSourceFile,
 		IteratorRange<const uint64_t*> patchExpansions,
+		IteratorRange<const std::string*> additionalSourceFragments,
 		StringSection<> definesTable) -> SourceCodeWithRemapping
-
 	{
 		// We can assemble the final shader in 3 fragments:
 		//  1) the source code in CompiledShaderPatchCollection
@@ -333,8 +333,11 @@ namespace RenderCore { namespace Techniques
 		// the entry points should have signatures for the patch functions anyway, it should work
 		// fine
 		output << instantiated.first;
-		output << "#include \"" << mainSourceFile << "\"" << std::endl;
+		if (!mainSourceFile.IsEmpty())
+			output << "#include \"" << mainSourceFile << "\"" << std::endl;
 		output << instantiated.second;
+		for (const auto& s:additionalSourceFragments)
+			output << s << std::endl;
 
 		SourceCodeWithRemapping result;
 		result._processedSource = output.str();
@@ -345,6 +348,21 @@ namespace RenderCore { namespace Techniques
 
 		// We could fill in the _lineMarkers member with some line marker information
 		// from the original shader graph compile; but that might be overkill
+		return result;
+	}
+
+	static auto AssembleShader(
+		StringSection<> mainSourceFile,
+		IteratorRange<const std::string*> additionalSourceFragments) -> SourceCodeWithRemapping
+	{
+		std::stringstream output;
+		if (!mainSourceFile.IsEmpty())
+			output << "#include \"" << mainSourceFile << "\"" << std::endl;
+		for (const auto& s:additionalSourceFragments)
+			output << s << std::endl;
+
+		SourceCodeWithRemapping result;
+		result._processedSource = output.str();
 		return result;
 	}
 
@@ -369,10 +387,17 @@ namespace RenderCore { namespace Techniques
 		const ShaderCompilePatchResource& res,
 		StringSection<> definesTable) -> IShaderSource::ShaderByteCodeBlob
 	{
-		if (!res._patchCollection || res._patchCollection->GetInterface().GetPatches().empty())
+		if ((!res._patchCollection || res._patchCollection->GetInterface().GetPatches().empty()) && res._additionalSourceFragments.empty()) {
+			assert(!res._entrypoint._filename.empty());
 			return internalShaderSource.CompileFromFile(res._entrypoint, definesTable);
+		}
 
-		auto assembledShader = AssembleShader(*res._patchCollection, res._entrypoint._filename, res._patchCollectionExpansions, definesTable);
+		SourceCodeWithRemapping assembledShader;
+		if (res._patchCollection) {
+			assembledShader = AssembleShader(*res._patchCollection, res._entrypoint._filename, res._patchCollectionExpansions, res._additionalSourceFragments, definesTable);
+		} else {
+			assembledShader = AssembleShader(res._entrypoint._filename, res._additionalSourceFragments);
+		}
 		auto result = internalShaderSource.CompileFromMemory(
 			MakeStringSection(assembledShader._processedSource),
 			res._entrypoint._entryPoint, res._entrypoint._shaderModel,

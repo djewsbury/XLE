@@ -12,7 +12,6 @@ set(Src
 	ShaderInstantiation.cpp
 	ShaderPatcher.cpp
 	ShaderSignatureParser.cpp
-	SpritePipeline.cpp
 	StructureForPreview.cpp)
 	
 set(Headers

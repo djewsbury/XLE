@@ -48,6 +48,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;
 		virtual std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation();

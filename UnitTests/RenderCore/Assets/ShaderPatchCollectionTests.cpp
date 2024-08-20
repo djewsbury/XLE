@@ -13,13 +13,13 @@
 #include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
+#include "../../../RenderCore/Techniques/SpriteTechnique.h"
 #include "../../../RenderCore/MinimalShaderSource.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../ShaderParser/ShaderInstantiation.h"
 #include "../../../ShaderParser/DescriptorSetInstantiation.h"
 #include "../../../ShaderParser/ShaderAnalysis.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"
-#include "../../../ShaderParser/SpritePipeline.h"
 #include "../../../Assets/IFileSystem.h"
 #include "../../../Assets/OSFileSystem.h"
 #include "../../../Assets/MountingTree.h"
@@ -523,17 +523,15 @@ void ps(
 			compiledShaderPatchCollection = std::make_unique<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, RenderCore::Techniques::DescriptorSetLayoutAndBinding{});
 		}
 
-		std::vector<ShaderSourceParser::AvailablePatch> patchesInterface;
+		std::vector<RenderCore::Techniques::PatchDelegateInput> patchesInterface;
 		unsigned idx=0; for (const auto& p:compiledShaderPatchCollection->GetInterface().GetPatches())
-			patchesInterface.emplace_back(ShaderSourceParser::AvailablePatch{"patch" + std::to_string(idx++), p._scaffoldSignature.get(), p._implementsHash});
+			patchesInterface.emplace_back(RenderCore::Techniques::PatchDelegateInput{"patch" + std::to_string(idx++), p._scaffoldSignature.get(), p._implementsHash});
 
 		// Generate the pipeline instantiation using the patches provided
-		std::vector<std::string> iaAttributes;
-		iaAttributes.emplace_back("POSITION");
-		iaAttributes.emplace_back("COLOR");
-		auto spritePipelineInstantiation = ShaderSourceParser::BuildSpritePipeline(
+		std::vector<uint64_t> iaAttributes { "POSITION"_h, "COLOR"_h };
+		auto spritePipelineInstantiation = RenderCore::Techniques::BuildSpritePipeline(
 			patchesInterface, MakeIteratorRange(iaAttributes));
-		assert(!spritePipelineInstantiation._entryPoints.empty());
+		assert(!spritePipelineInstantiation.empty());
 	}
 
 }

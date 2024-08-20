@@ -167,13 +167,27 @@ namespace RenderCore { namespace Techniques
 		unsigned _ownerPoolId;
 	};
 
+	static std::vector<uint64_t> MakeIAAttributes(IteratorRange<const InputElementDesc*> inputAssembly, IteratorRange<const MiniInputElementDesc*> miniInputAssembly)
+	{
+		std::vector<uint64_t> result; 
+		if (inputAssembly.size() > miniInputAssembly.size()) {
+			result.reserve(inputAssembly.size());
+			for (const auto& q:inputAssembly) result.push_back(Hash64(q._semanticName)+q._semanticIndex);
+		} else {
+			result.reserve(miniInputAssembly.size());
+			for (const auto& q:miniInputAssembly) result.push_back(q._semanticHash);
+		}
+		return result;
+	}
+
 	void PipelineAccelerator::BeginPrepareForSequencerStateInternal(
 		std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
 		std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
 		PipelineCollection& pipelineCollection, IPipelineLayoutDelegate& layoutDelegate,
 		const ParameterBox& globalSelectors, std::shared_ptr<InternalSequencerConfig> cfg)
 	{
-		auto pipelineDesc = cfg->_delegate->GetPipelineDesc(compiledPatchCollection, _stateSet);
+		auto iaAttributes = MakeIAAttributes(_inputAssembly, _miniInputAssembly);
+		auto pipelineDesc = cfg->_delegate->GetPipelineDesc(compiledPatchCollection, iaAttributes, _stateSet);
 		std::promise<Techniques::GraphicsPipelineAndLayout> metalPipelinePromise;
 		auto metalPipelineFuture = metalPipelinePromise.get_future();
 

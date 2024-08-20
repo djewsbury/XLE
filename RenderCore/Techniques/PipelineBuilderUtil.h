@@ -70,8 +70,14 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				for (unsigned c=0; c<3; ++c)
 					filteringFuture[c] = BuildFutureFiltering(pipelineDesc->_shaders[c]);
 
-				if (!filteringFuture[(unsigned)ShaderStage::Vertex].valid())
-					Throw(std::runtime_error("Missing vertex shader stage while building filtering rules"));
+				if (!filteringFuture[(unsigned)ShaderStage::Vertex].valid()) {
+					assert(!filteringFuture[(unsigned)ShaderStage::Pixel].valid());
+					assert(!filteringFuture[(unsigned)ShaderStage::Geometry].valid());
+					auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
+					finalObject->_pipelineDesc = pipelineDesc;
+					promise.set_value(std::move(finalObject));
+					return;
+				}
 
 				if (filteringFuture[(unsigned)ShaderStage::Pixel].valid() && !filteringFuture[(unsigned)ShaderStage::Geometry].valid()) {
 

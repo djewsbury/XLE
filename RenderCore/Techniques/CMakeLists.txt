@@ -19,6 +19,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DeformerConstruction.cpp
         SimpleModelRenderer.cpp
         SkinDeformer.cpp
+        SpriteTechnique.cpp
         SystemUniformsDelegate.cpp
         TechniqueDelegates.cpp
         Techniques.cpp

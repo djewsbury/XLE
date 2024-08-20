@@ -88,6 +88,7 @@ namespace RenderCore
 			const ShaderCompileResourceName& resId,
 			StringSection<> definesTable) const override
 		{
+			assert(!resId._filename.empty());
 			::Assets::FileSnapshot snapshot;
 			size_t fileSize = 0;
 			auto fileData = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(resId._filename, &fileSize, &snapshot);

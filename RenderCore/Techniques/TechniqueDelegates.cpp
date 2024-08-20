@@ -33,6 +33,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& input) override;
 
 		std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() override;
@@ -97,6 +98,7 @@ namespace RenderCore { namespace Techniques
 
 	auto TechniqueDelegate_Legacy::GetPipelineDesc(
 		std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+		IteratorRange<const uint64_t*> iaAttributes,
 		const RenderCore::Assets::RenderStateSet& input) -> std::shared_ptr<GraphicsPipelineDesc>
 	{
 		auto result = std::make_shared<GraphicsPipelineDesc>();
@@ -263,6 +265,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -403,6 +406,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -557,6 +561,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -711,6 +716,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -873,6 +879,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -1039,6 +1046,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
@@ -1167,6 +1175,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
 			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();

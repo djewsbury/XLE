@@ -85,7 +85,8 @@ namespace RenderCore { namespace Techniques
 		assert(techniqueFiltering.GetHash() != 0);		// hash set to 0 when it hasn't been built
 		inputHash = HashCombine(techniqueFiltering.GetHash(), inputHash);
 		for (const auto*f:automaticFiltering)
-			inputHash = HashCombine(f->GetHash(), inputHash);
+			if (f)
+				inputHash = HashCombine(f->GetHash(), inputHash);
 		if (preconfiguration)
 			inputHash = HashCombine(preconfiguration->GetHash(), inputHash);
 
