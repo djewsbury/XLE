@@ -1091,10 +1091,24 @@ namespace RenderOverlays
                 pipelineBase += 3;
 
             std::shared_ptr<Techniques::GraphicsPipelineDesc> nascentDesc;
-            if (shaderPatches) {
-                if (shaderPatches->GetInterface().HasPatchType(s_patchShape)) {
+
+            if (renderStates._flag & RenderCore::Assets::RenderStateSet::Flag::ForwardBlend) {
+                if (!nascentDesc) {
                     nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
                     *nascentDesc = *_pipelineDesc[pipelineBase];
+                }
+
+				nascentDesc->_blend[0] = AttachmentBlendDesc {
+					renderStates._forwardBlendOp != BlendOp::NoBlending,
+					renderStates._forwardBlendSrc, renderStates._forwardBlendDst, renderStates._forwardBlendOp };
+			}
+
+            if (shaderPatches) {
+                if (shaderPatches->GetInterface().HasPatchType(s_patchShape)) {
+                    if (!nascentDesc) {
+                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                        *nascentDesc = *_pipelineDesc[pipelineBase];
+                    }
 
                     Techniques::ShaderCompilePatchResource res;
                     res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntry", s_SMPS};
@@ -1104,8 +1118,10 @@ namespace RenderOverlays
                     nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 
                 } else if (shaderPatches->GetInterface().HasPatchType(s_patchTwoLayersShader)) {
-                    nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                    *nascentDesc = *_pipelineDesc[pipelineBase];
+                    if (!nascentDesc) {
+                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                        *nascentDesc = *_pipelineDesc[pipelineBase];
+                    }
 
                     Techniques::ShaderCompilePatchResource res;
                     res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntryForTwoLayersShader", s_SMPS};
@@ -1115,8 +1131,10 @@ namespace RenderOverlays
                     nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 
                 } else if (shaderPatches->GetInterface().HasPatchType(s_patchFill)) {
-                    nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                    *nascentDesc = *_pipelineDesc[pipelineBase];
+                    if (!nascentDesc) {
+                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                        *nascentDesc = *_pipelineDesc[pipelineBase];
+                    }
 
                     Techniques::ShaderCompilePatchResource res;
                     res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntryJustFill", s_SMPS};
@@ -1128,8 +1146,10 @@ namespace RenderOverlays
                     nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_TEXCOORD1", 0);
 
                 } else if (shaderPatches->GetInterface().HasPatchType(s_patchPC3D)) {
-                    nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                    *nascentDesc = *_pipelineDesc[pipelineBase];
+                    if (!nascentDesc) {
+                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                        *nascentDesc = *_pipelineDesc[pipelineBase];
+                    }
 
                     Techniques::ShaderCompilePatchResource res;
                     res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntryPC3D", s_SMPS};
@@ -1140,8 +1160,10 @@ namespace RenderOverlays
                     nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_WORLD_POSITION", 1);
 
                 } else if (shaderPatches->GetInterface().HasPatchType(s_patchPCT3D)) {
-                    nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                    *nascentDesc = *_pipelineDesc[pipelineBase];
+                    if (!nascentDesc) {
+                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                        *nascentDesc = *_pipelineDesc[pipelineBase];
+                    }
 
                     Techniques::ShaderCompilePatchResource res;
                     res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntryPCT3D", s_SMPS};
@@ -1153,8 +1175,10 @@ namespace RenderOverlays
 
                 } else if (shaderPatches->GetInterface().HasPatchType("SV_SpritePS"_h)) {
                     // Prototype for integrating partially procedurally built sprite pipelines
-                    nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                    *nascentDesc = *_pipelineDesc[pipelineBase];
+                    if (!nascentDesc) {
+                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                        *nascentDesc = *_pipelineDesc[pipelineBase];
+                    }
 
                     std::vector<RenderCore::Techniques::PatchDelegateInput> patchesInterface;
                     for (const auto& p:shaderPatches->GetInterface().GetPatches())

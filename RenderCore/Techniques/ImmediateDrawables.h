@@ -23,6 +23,8 @@ namespace RenderCore { namespace Techniques
 	class ITechniqueDelegate;
 	class IPipelineLayoutDelegate;
 	class IPipelineAcceleratorPool;
+	class PipelineAccelerator;
+	class DescriptorSetAccelerator;
 
 	class RetainedUniformsStream
 	{
@@ -86,6 +88,7 @@ namespace RenderCore { namespace Techniques
 			const ImmediateDrawableMaterial& material = {},
 			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
+
 		virtual void QueueDraw(
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
 			std::shared_ptr<DrawableGeo> customGeo,
@@ -93,6 +96,7 @@ namespace RenderCore { namespace Techniques
 			const ImmediateDrawableMaterial& material = {},
 			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
+
 		virtual void QueueDraw(
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
 			std::shared_ptr<DrawableGeo> customGeo,
@@ -100,8 +104,18 @@ namespace RenderCore { namespace Techniques
 			const ImmediateDrawableMaterial& material = {},
 			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
+
+		virtual IteratorRange<void*> QueueDraw(
+			size_t vertexCount, size_t vertexStride,
+			PipelineAccelerator& pipelineAccelerator,
+			DescriptorSetAccelerator& prebuiltDescriptorSet,
+			const UniformsStreamInterface* uniformStreamInterface = nullptr,
+			RetainedUniformsStream&& uniforms = {},
+			Topology topology = Topology::TriangleList) = 0;
+
 		virtual void QueueEncoderState(const EncoderState&) = 0;
 		virtual IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) = 0;
+
 		virtual void ExecuteDraws(
 			ParsingContext& parserContext,
 			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
@@ -114,8 +128,11 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) = 0;
+
 		virtual DrawablesPacket* GetDrawablesPacket() = 0;
+		virtual std::shared_ptr<IPipelineAcceleratorPool> GetPipelineAcceleratorPool() = 0;
 		virtual void OnFrameBarrier() = 0;
+
 		virtual ~IImmediateDrawables();
 	};
 

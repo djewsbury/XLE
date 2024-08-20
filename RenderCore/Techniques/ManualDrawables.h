@@ -138,12 +138,16 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			RenderCore::Topology topology = RenderCore::Topology::TriangleList);
 
+		ManualDrawableWriter& ConfigurePipeline(
+			PipelineAccelerator& pipeline,
+			size_t vertexStride);
+
 		ManualDrawableWriter& ConfigureDescriptorSet(
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder);								// retained while we need access to materialMachine
 
 		ManualDrawableWriter& ConfigureDescriptorSet(
-			std::shared_ptr<DescriptorSetAccelerator> descSet);
+			DescriptorSetAccelerator& descSet);
 
 			//////
 
@@ -154,8 +158,8 @@ namespace RenderCore { namespace Techniques
 			ParameterBox&& materialSelectors);
 		~ManualDrawableWriter();
 	protected:
-		std::shared_ptr<PipelineAccelerator> _pipelineAccelerator;
-		std::shared_ptr<DescriptorSetAccelerator> _descriptorSetAccelerator;
+		PipelineAccelerator* _pipelineAccelerator;
+		DescriptorSetAccelerator* _descriptorSetAccelerator;
 		size_t _vertexStride;
 
 		std::shared_ptr<IPipelineAcceleratorPool> _pipelineAccelerators;

@@ -250,6 +250,43 @@ namespace RenderCore { namespace Techniques
 			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
 		}
 
+		IteratorRange<void*> QueueDraw(
+			size_t vertexCount, size_t vStride,
+			PipelineAccelerator& pipeline,
+			DescriptorSetAccelerator& prebuiltDescriptorSet,
+			const UniformsStreamInterface* uniformStreamInterface,
+			RetainedUniformsStream&& uniforms,
+			Topology topology) override
+		{
+			auto vertexDataSize = vertexCount * vStride;
+
+			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(&DrawableWithVertexCount::ExecuteFn);
+			auto* geo = _workingPkt.CreateTemporaryGeo();
+			DrawablesPacket::AllocateStorageResult vertexStorage;
+			if (vertexDataSize) {
+				vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
+				geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+				geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
+				geo->_vertexStreamCount = 1;
+			}
+			geo->_ibFormat = Format(0);
+			drawable->_geo = geo;
+			drawable->_pipeline = &pipeline;
+
+			drawable->_descriptorSet = &prebuiltDescriptorSet;
+			drawable->_vertexCount = (unsigned)vertexCount;
+			drawable->_vertexStride = vStride;
+			drawable->_bytesAllocated = (unsigned)vertexDataSize;
+			drawable->_matHash = 0;
+			if (uniformStreamInterface) {
+				drawable->_looseUniformsInterface = ProtectLifetime(*uniformStreamInterface);
+				drawable->_uniforms = std::move(uniforms);
+			}
+			_lastQueuedDrawable = nullptr;
+			_lastQueuedDrawVertexCountOffset = 0;
+			return vertexStorage._data;
+		}
+
 		void QueueEncoderState(const EncoderState& encoderState) override
 		{
 			_pendingEncoderState.MergeIn(encoderState);
@@ -342,6 +379,11 @@ namespace RenderCore { namespace Techniques
 		virtual DrawablesPacket* GetDrawablesPacket() override
 		{
 			return &_workingPkt;
+		}
+
+		virtual std::shared_ptr<IPipelineAcceleratorPool> GetPipelineAcceleratorPool() override
+		{
+			return _pipelineAcceleratorPool;
 		}
 
 		virtual void OnFrameBarrier() override

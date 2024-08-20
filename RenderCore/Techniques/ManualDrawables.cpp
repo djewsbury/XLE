@@ -653,8 +653,8 @@ namespace RenderCore { namespace Techniques
 
 		struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _vertexCount; };
 		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
-		drawables[0]._pipeline = _pipelineAccelerator.get();
-		drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
+		drawables[0]._pipeline = _pipelineAccelerator;
+		drawables[0]._descriptorSet = _descriptorSetAccelerator;
 		drawables[0]._geo = geo;
 		drawables[0]._vertexCount = (unsigned)vertexCount;
 		drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
@@ -685,8 +685,8 @@ namespace RenderCore { namespace Techniques
 
 		struct CustomDrawable : public RenderCore::Techniques::Drawable { Float4x4 _localToWorld; unsigned _vertexCount; };
 		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
-		drawables[0]._pipeline = _pipelineAccelerator.get();
-		drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
+		drawables[0]._pipeline = _pipelineAccelerator;
+		drawables[0]._descriptorSet = _descriptorSetAccelerator;
 		drawables[0]._geo = geo;
 		drawables[0]._vertexCount = (unsigned)vertexCount;
 		drawables[0]._looseUniformsInterface = &Internal::s_localTransformUSI;
@@ -727,8 +727,8 @@ namespace RenderCore { namespace Techniques
 
 		struct CustomDrawable : public RenderCore::Techniques::Drawable { unsigned _indexCount; };
 		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
-		drawables[0]._pipeline = _pipelineAccelerator.get();
-		drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
+		drawables[0]._pipeline = _pipelineAccelerator;
+		drawables[0]._descriptorSet = _descriptorSetAccelerator;
 		drawables[0]._geo = geo;
 		drawables[0]._indexCount = (unsigned)indexCount;
 		drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)
@@ -766,8 +766,8 @@ namespace RenderCore { namespace Techniques
 
 		struct CustomDrawable : public RenderCore::Techniques::Drawable { Float4x4 _localToWorld; unsigned _indexCount; };
 		auto* drawables = pkt._drawables.Allocate<CustomDrawable>(1);
-		drawables[0]._pipeline = _pipelineAccelerator.get();
-		drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
+		drawables[0]._pipeline = _pipelineAccelerator;
+		drawables[0]._descriptorSet = _descriptorSetAccelerator;
 		drawables[0]._geo = geo;
 		drawables[0]._indexCount = (unsigned)indexCount;
 		drawables[0]._looseUniformsInterface = &Internal::s_localTransformUSI;
@@ -791,8 +791,17 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Assets::RenderStateSet stateSet{};
 		_pipelineAccelerator = _pipelineAccelerators->CreatePipelineAccelerator(
 			_shaderPatches, _materialSelectors,
-			inputAssembly, topology, stateSet);
+			inputAssembly, topology, stateSet).get();
 		_vertexStride = CalculateVertexStride(inputAssembly);
+		return *this;
+	}
+
+	ManualDrawableWriter& ManualDrawableWriter::ConfigurePipeline(
+		PipelineAccelerator& pipeline,
+		size_t vertexStride)
+	{
+		_pipelineAccelerator = &pipeline;
+		_vertexStride = vertexStride;
 		return *this;
 	}
 
@@ -806,15 +815,15 @@ namespace RenderCore { namespace Techniques
 		_descriptorSetAccelerator = _pipelineAccelerators->CreateDescriptorSetAccelerator(
 			nullptr, _shaderPatches,
 			materialMachine, std::move(memoryHolder),
-			{});
+			{}).get();
 		return *this;
 	}
 
 	ManualDrawableWriter& ManualDrawableWriter::ConfigureDescriptorSet(
-		std::shared_ptr<DescriptorSetAccelerator> descSet)
+		DescriptorSetAccelerator& descSet)
 	{
 		assert(!_descriptorSetAccelerator);
-		_descriptorSetAccelerator = std::move(descSet);
+		_descriptorSetAccelerator = &descSet;
 		return *this;
 	}
 
