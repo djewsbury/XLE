@@ -854,22 +854,22 @@ void ExpandClipSpacePosition(
 
 		PatchDelegateOutput vsOutput, gsOutput, psOutput;
 		vsOutput._stage = ShaderStage::Vertex;
-		vsOutput._resource._additionalSourceFragments.emplace_back(s_vsSystemPatches);
-		vsOutput._resource._additionalSourceFragments.emplace_back(vs.str());
+		vsOutput._resource._postPatchesFragments.emplace_back(s_vsSystemPatches);
+		vsOutput._resource._postPatchesFragments.emplace_back(vs.str());
 		vsOutput._resource._entrypoint._entryPoint = "VSEntry";
 		vsOutput._resource._entrypoint._shaderModel = s_SMVS;
 		vsOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(vsSignature);
 		for (auto& s:vsSteps) if (s._enabled && s._originalPatchCode) vsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
 
 		gsOutput._stage = ShaderStage::Geometry;
-		gsOutput._resource._additionalSourceFragments.emplace_back(s_gsSystemPatches);
-		gsOutput._resource._additionalSourceFragments.emplace_back(gs.str());
+		gsOutput._resource._postPatchesFragments.emplace_back(s_gsSystemPatches);
+		gsOutput._resource._postPatchesFragments.emplace_back(gs.str());
 		gsOutput._resource._entrypoint._entryPoint = "GSEntry";
 		gsOutput._resource._entrypoint._shaderModel = s_SMGS;
 		for (auto& s:gsSteps) if (s._enabled && s._originalPatchCode) gsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
 
 		psOutput._stage = ShaderStage::Pixel;
-		psOutput._resource._additionalSourceFragments.emplace_back(ps.str());
+		psOutput._resource._postPatchesFragments.emplace_back(ps.str());
 		psOutput._resource._entrypoint._entryPoint = "PSEntry";
 		psOutput._resource._entrypoint._shaderModel = s_SMPS;
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);

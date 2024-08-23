@@ -49,7 +49,7 @@ ShapeResult RoundedRectShape_Calculate(
     uint cidxY = texCoord.y >= (maxCoords.y - minCoords.y) * .5f;
     uint cidx = cidxX + cidxY*2;
 
-    [branch] if ((CornerFlags & 1<<cidx) &&  r.x < roundedWidth && r.y < roundedHeight) {
+    [branch] if ((CornerFlags & 1u<<cidx) &&  r.x < roundedWidth && r.y < roundedHeight) {
         float2 centre = float2(roundedWidth, roundedHeight);
 
         ////////////////

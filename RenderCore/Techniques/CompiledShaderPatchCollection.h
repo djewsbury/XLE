@@ -124,8 +124,8 @@ namespace RenderCore { namespace Techniques
 	{
 		std::shared_ptr<CompiledShaderPatchCollection> _patchCollection;
 		std::vector<uint64_t> _patchCollectionExpansions;
-		std::vector<std::string> _additionalSourceFragments;
-		ShaderCompileResourceName _entrypoint;		// _filename can be empty here, which means the entrypoint is within either _additionalSourceFragments or the patch expansions
+		std::vector<std::string> _prePatchesFragments, _postPatchesFragments;
+		ShaderCompileResourceName _entrypoint;		// _filename can be empty here, which means the entrypoint is within either _prePatchesFragments, _postPatchesFragments or the patch expansions
 
 		uint64_t CalculateHash(uint64_t seed) const;
 	};

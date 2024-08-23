@@ -22,6 +22,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		if (binding == bindings._geoBindings.end())
 			Throw(std::runtime_error("Missing deformer binding for geoId (" + std::to_string(geoIdx) + ")"));
 
+		using ::Hash64;
 		unsigned inPositionsOffset = 0, inNormalsOffset = 0, inTangentsOffset = 0;
 		unsigned outPositionsOffset = 0, outNormalsOffset = 0, outTangentsOffset = 0;
 		unsigned bufferFlags = 0;

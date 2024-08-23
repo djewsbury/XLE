@@ -9,7 +9,7 @@
 #include "../Utility/FunctionUtils.h"		// SignalDelegateId
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class DrawingApparatus; class IImmediateDrawables; class Services; class ParsingContext; class RenderPassInstance; class IPipelineAcceleratorPool; }}
+namespace RenderCore { namespace Techniques { class DrawingApparatus; class IImmediateDrawables; class Services; class ParsingContext; class RenderPassInstance; class IPipelineAcceleratorPool; class PipelineCollection; }}
 
 namespace RenderOverlays
 {
@@ -23,6 +23,7 @@ namespace RenderOverlays
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _mainDrawingApparatus;
 		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _overlayPipelineAccelerators;
+		std::shared_ptr<RenderCore::Techniques::PipelineCollection> _overlayPipelineCollection;
 
 		ConsoleRig::AttachablePtr<FTFontResources> _fontResources;
 		std::shared_ptr<FontRenderingManager> _fontRenderingManager;

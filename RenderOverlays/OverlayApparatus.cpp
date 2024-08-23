@@ -24,8 +24,8 @@ namespace RenderOverlays
 
 		_shapeRenderingDelegate = std::make_shared<ShapesRenderingDelegate>();
 
-		auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(_mainDrawingApparatus->_device);
-		_overlayPipelineAccelerators = RenderCore::Techniques::CreatePipelineAcceleratorPool(_mainDrawingApparatus->_device, nullptr, pipelineCollection, _shapeRenderingDelegate->GetPipelineLayoutDelegate(), 0);
+		_overlayPipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(_mainDrawingApparatus->_device);
+		_overlayPipelineAccelerators = RenderCore::Techniques::CreatePipelineAcceleratorPool(_mainDrawingApparatus->_device, nullptr, _overlayPipelineCollection, _shapeRenderingDelegate->GetPipelineLayoutDelegate(), 0);
 		
 		_fontResources = CreateFTFontResources();
 		RegisterFontLibraryFile(FONTS_DAT);

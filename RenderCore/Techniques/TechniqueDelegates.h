@@ -19,10 +19,20 @@ namespace std { template<typename T> class future; template<typename T> class sh
 
 namespace RenderCore { namespace Techniques
 {
+	namespace Internal {
+		// we have to jump through some hoops to make sure Hash64() is visible viable argument dependant lookup
+		// (without hiding all other overrides of Hash64 to this namespace)
+		// Alternatively, we could use a "using" and have the override in the std namespace
+		struct ShaderVariant : public std::variant<std::monostate, ShaderCompileResourceName, ShaderCompilePatchResource>
+		{
+			using variant::variant;
+		};
+		uint64_t Hash64(const ShaderVariant& var, uint64_t seed = DefaultSeed64);
+	}
+
 	struct GraphicsPipelineDesc
 	{
-		using ShaderVariant = std::variant<std::monostate, ShaderCompileResourceName, ShaderCompilePatchResource>;
-		ShaderVariant			_shaders[3] { std::monostate{}, std::monostate{}, std::monostate{} };		// indexed by RenderCore::ShaderStage
+		Internal::ShaderVariant			_shaders[3] { std::monostate{}, std::monostate{}, std::monostate{} };		// indexed by RenderCore::ShaderStage
 
 		ShaderSourceParser::ManualSelectorFiltering _manualSelectorFiltering;
 		std::string				_techniquePreconfigurationFile;
@@ -39,8 +49,6 @@ namespace RenderCore { namespace Techniques
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		uint64_t GetHash() const;
 		uint64_t CalculateHashNoSelectors(uint64_t seed) const;
-
-		static uint64_t HashShaderVariant(const GraphicsPipelineDesc::ShaderVariant& var, uint64_t seed);
 	};
 
 	class ITechniqueDelegate

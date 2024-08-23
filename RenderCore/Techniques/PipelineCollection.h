@@ -100,7 +100,7 @@ namespace RenderCore { namespace Techniques
 		void CreateComputePipeline(
 			std::promise<ComputePipelineAndLayout>&& promise,
 			PipelineLayoutOptions&& pipelineLayout,
-			const GraphicsPipelineDesc::ShaderVariant& shaderVariant,
+			const Internal::ShaderVariant& shaderVariant,
 			IteratorRange<const ParameterBox*const*> selectors);
 
 		void CreateComputePipeline(

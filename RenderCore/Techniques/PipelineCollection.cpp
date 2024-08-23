@@ -26,30 +26,49 @@ namespace RenderCore { namespace Techniques
 	void PipelineCollection::CreateComputePipeline(
 		std::promise<ComputePipelineAndLayout>&& promise,
 		PipelineLayoutOptions&& pipelineLayout,
-		const GraphicsPipelineDesc::ShaderVariant& shaderVariant,
+		const Internal::ShaderVariant& shaderVariant,
 		IteratorRange<const ParameterBox*const*> selectors)
 	{
 		auto filteringFuture = Internal::GraphicsPipelineDescWithFilteringRules::BuildFutureFiltering(shaderVariant);
-		::Assets::WhenAll(filteringFuture).ThenConstructToPromise(
-			std::move(promise),
-			[selectorsCopy = RetainedSelectors{selectors}, shaderCopy=shaderVariant, sharedPools=_sharedPools, pipelineLayout=std::move(pipelineLayout)]( 
-				std::promise<ComputePipelineAndLayout>&& promise,
-				std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) mutable {
+		if (filteringFuture.valid()) {
+			::Assets::WhenAll(filteringFuture).ThenConstructToPromise(
+				std::move(promise),
+				[selectorsCopy = RetainedSelectors{selectors}, shaderCopy=shaderVariant, sharedPools=_sharedPools, pipelineLayout=std::move(pipelineLayout)]( 
+					std::promise<ComputePipelineAndLayout>&& promise,
+					std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> automaticFiltering) mutable {
 
-				TRY {
-					VLA(const ParameterBox*, selectorsList, selectorsCopy._selectors.size());
-					for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
-						selectorsList[c] = &selectorsCopy._selectors[c];
-					ScopedLock(sharedPools->_lock);
-					auto filteredSelectors = sharedPools->FilterSelectorsAlreadyLocked(
-						ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), *automaticFiltering, 
-						{}, nullptr, shaderCopy);
-					auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, std::move(pipelineLayout), filteredSelectors);
-					::Assets::WhenAll(chainedFuture).CheckImmediately().ThenConstructToPromise(std::move(promise));
-				} CATCH (...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
-			});
+					TRY {
+						VLA(const ParameterBox*, selectorsList, selectorsCopy._selectors.size());
+						for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
+							selectorsList[c] = &selectorsCopy._selectors[c];
+						ScopedLock(sharedPools->_lock);
+						auto filteredSelectors = sharedPools->FilterSelectorsAlreadyLocked(
+							ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), automaticFiltering.get(), 
+							{}, nullptr, shaderCopy);
+						auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, std::move(pipelineLayout), filteredSelectors);
+						::Assets::WhenAll(chainedFuture).CheckImmediately().ThenConstructToPromise(std::move(promise));
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		} else {
+			::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+				[promise=std::move(promise), selectorsCopy = RetainedSelectors{selectors}, shaderCopy=shaderVariant, sharedPools=_sharedPools, pipelineLayout=std::move(pipelineLayout)]() mutable {
+					TRY {
+						VLA(const ParameterBox*, selectorsList, selectorsCopy._selectors.size());
+						for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
+							selectorsList[c] = &selectorsCopy._selectors[c];
+						ScopedLock(sharedPools->_lock);
+						auto filteredSelectors = sharedPools->FilterSelectorsAlreadyLocked(
+							ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), nullptr,
+							{}, nullptr, shaderCopy);
+						auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, std::move(pipelineLayout), filteredSelectors);
+						::Assets::WhenAll(chainedFuture).CheckImmediately().ThenConstructToPromise(std::move(promise));
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
 	}
 
 	static ::Assets::DependencyValidation MakeConfigurationDepVal(const Internal::GraphicsPipelineDescWithFilteringRules& pipelineDescWithFiltering)
@@ -97,7 +116,7 @@ namespace RenderCore { namespace Techniques
 						filteredSelectors[c] = _sharedPools->FilterSelectorsAlreadyLocked(
 							(ShaderStage)c,
 							selectors,
-							*immediatePipelineDesc->_automaticFiltering[c],
+							immediatePipelineDesc->_automaticFiltering[c].get(),
 							pipelineDesc->_manualSelectorFiltering,
 							immediatePipelineDesc->_preconfiguration.get(),
 							pipelineDesc->_shaders[c]);
@@ -137,7 +156,7 @@ namespace RenderCore { namespace Techniques
 								filteredSelectors[c] = sharedPools->FilterSelectorsAlreadyLocked(
 									(ShaderStage)c,
 									MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]),
-									*pipelineDescWithFiltering->_automaticFiltering[c],
+									pipelineDescWithFiltering->_automaticFiltering[c].get(),
 									pipelineDesc->_manualSelectorFiltering,
 									pipelineDescWithFiltering->_preconfiguration.get(),
 									pipelineDesc->_shaders[c]);

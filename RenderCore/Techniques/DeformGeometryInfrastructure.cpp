@@ -415,6 +415,7 @@ namespace RenderCore { namespace Techniques
 				auto i = std::remove_if(
 					workingGeneratedElements.begin(), workingGeneratedElements.end(),
 					[&def](const auto& wge) {
+						using ::Hash64;
 						auto hash = Hash64(wge._semanticName) + wge._semanticIndex;
 						return std::find(def._suppressElements.begin(), def._suppressElements.end(), hash) != def._suppressElements.end();
 					});
@@ -470,6 +471,7 @@ namespace RenderCore { namespace Techniques
 			unsigned vbStrides[VB_Count] = {0};
 			unsigned vbOffsets[VB_Count] = {0};
 			unsigned vbSizes[VB_Count] = {0};
+			using ::Hash64;
 			{
 				vbStrides[VB_CPUStaticData] = CalculateVertexStrideForSlot(workingSourceDataElements_cpu, VB_CPUStaticData);
 				vbOffsets[VB_CPUStaticData] = bufferIterators._bufferIterators[VB_CPUStaticData];

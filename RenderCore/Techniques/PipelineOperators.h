@@ -152,6 +152,12 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& usi0,
 		const UniformsStreamInterface& usi1);
 
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		const Internal::ShaderVariant& computeShader,
+		const ParameterBox& selectors,
+		const UniformsStreamInterface& usi);
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 	inline void IComputeShaderOperator::DispatchGroupHelper::Dispatch(unsigned countX, unsigned countY, unsigned countZ, IteratorRange<const void*> pushConstants)

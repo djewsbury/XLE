@@ -68,13 +68,13 @@ namespace RenderCore { namespace Techniques
 		nascentDesc._techniquePreconfigurationFile = entry._preconfigurationFileName;
 	}
 
-	static GraphicsPipelineDesc::ShaderVariant MakeShaderCompilePatchResource(StringSection<> shaderName, const std::shared_ptr<CompiledShaderPatchCollection>& shaderPatches, std::vector<uint64_t>&& patchExpansions)
+	static Internal::ShaderVariant MakeShaderCompilePatchResource(StringSection<> shaderName, const std::shared_ptr<CompiledShaderPatchCollection>& shaderPatches, std::vector<uint64_t>&& patchExpansions)
 	{
 		if (!patchExpansions.empty()) {
 			assert(shaderPatches);
 			ShaderCompileResourceName entryPoint;
 			if (!shaderName.IsEmpty()) entryPoint = MakeShaderCompileResourceName(shaderName);
-			return ShaderCompilePatchResource {shaderPatches, std::move(patchExpansions), {}, std::move(entryPoint) };
+			return ShaderCompilePatchResource {shaderPatches, std::move(patchExpansions), {}, {}, std::move(entryPoint) };
 		} else if (!shaderName.IsEmpty()) {
 			return MakeShaderCompileResourceName(shaderName);
 		} else
@@ -1273,14 +1273,17 @@ namespace RenderCore { namespace Techniques
 		TechniqueDelegate_RayTest::ConstructToPromise(std::move(promise), std::move(techniqueSet), testTypeParameter, soInit);
 	}
 
-	uint64_t GraphicsPipelineDesc::HashShaderVariant(const GraphicsPipelineDesc::ShaderVariant& var, uint64_t seed)
+	namespace Internal
 	{
-		if (std::holds_alternative<ShaderCompileResourceName>(var)) {
-			return std::get<ShaderCompileResourceName>(var).CalculateHash(seed);
-		} else if (std::holds_alternative<ShaderCompilePatchResource>(var)) {
-			return std::get<ShaderCompilePatchResource>(var).CalculateHash(seed);
+		uint64_t Hash64(const ShaderVariant& var, uint64_t seed)
+		{
+			if (std::holds_alternative<ShaderCompileResourceName>(var)) {
+				return std::get<ShaderCompileResourceName>(var).CalculateHash(seed);
+			} else if (std::holds_alternative<ShaderCompilePatchResource>(var)) {
+				return std::get<ShaderCompilePatchResource>(var).CalculateHash(seed);
+			}
+			return seed;
 		}
-		return seed;
 	}
 
 	uint64_t GraphicsPipelineDesc::GetHash() const
@@ -1302,10 +1305,10 @@ namespace RenderCore { namespace Techniques
 			result = HashCombine(b.Hash(), result);
 		if (!_soElements.empty()) {
 			result = HashInputAssembly(MakeIteratorRange(_soElements), result);
-			result = Hash64(AsPointer(_soBufferStrides.begin()), AsPointer(_soBufferStrides.end()), result);
+			result = ::Hash64(AsPointer(_soBufferStrides.begin()), AsPointer(_soBufferStrides.end()), result);
 		}
 		for (unsigned c=0; c<dimof(_shaders); ++c)
-			result = HashShaderVariant(_shaders[c], result);
+			result = Hash64(_shaders[c], result);
 		return result;
 	}
 

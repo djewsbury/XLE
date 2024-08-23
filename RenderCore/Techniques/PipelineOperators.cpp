@@ -15,6 +15,7 @@
 #include "../Metal/InputLayout.h"
 #include "../Metal/Shader.h"
 #include "../Metal/ObjectFactory.h"
+#include "../ShaderService.h"		// for ShaderCompileResourceName::CalculateHash
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
@@ -447,14 +448,14 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			PipelineLayoutOptions&& pipelineLayout,
-			StringSection<> computeShader,
+			const Internal::ShaderVariant& computeShader,
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
 			assert(pool);
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
-			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), MakeShaderCompileResourceName(computeShader), MakeIteratorRange(selectorList));
+			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[usi=usi, pipelineLayout](auto pipelineAndLayout) {
@@ -473,7 +474,7 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			StringSection<> pipelineLayoutAssetName,
-			StringSection<> computeShader,
+			const Internal::ShaderVariant& computeShader,
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi)
 		{
@@ -481,7 +482,7 @@ namespace RenderCore { namespace Techniques
 			auto futurePipelineLayout = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
-				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), computeShader=computeShader.AsString(), usi](auto&& promise, auto pipelineLayout) mutable {
+				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), computeShader, usi](auto&& promise, auto pipelineLayout) mutable {
 					ConstructToPromise(
 						std::move(promise),
 						pool,
@@ -495,7 +496,7 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			PipelineLayoutOptions&& pipelineLayout,
-			StringSection<> computeShader,
+			const Internal::ShaderVariant& computeShader,
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi0,
 			const UniformsStreamInterface& usi1)
@@ -503,7 +504,7 @@ namespace RenderCore { namespace Techniques
 			assert(pool);
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
-			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), MakeShaderCompileResourceName(computeShader), MakeIteratorRange(selectorList));
+			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[usi0=usi0, usi1=usi1, pipelineLayout](auto pipelineAndLayout) {
@@ -523,7 +524,7 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			StringSection<> pipelineLayoutAssetName,
-			StringSection<> computeShader,
+			const Internal::ShaderVariant& computeShader,
 			const ParameterBox& selectors,
 			const UniformsStreamInterface& usi0,
 			const UniformsStreamInterface& usi1)
@@ -532,7 +533,7 @@ namespace RenderCore { namespace Techniques
 			auto futurePipelineLayout = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
-				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), computeShader=computeShader.AsString(), usi0, usi1](auto&& promise, auto pipelineLayout) mutable {
+				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), computeShader, usi0, usi1](auto&& promise, auto pipelineLayout) mutable {
 					ConstructToPromise(
 						std::move(promise),
 						pool,
@@ -556,7 +557,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(pipelineLayout);
 		assert(!computeShader.IsEmpty());
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayout, computeShader, selectors, usi);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayout, MakeShaderCompileResourceName(computeShader), selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
@@ -569,7 +570,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(
 			pool, pipelineLayoutAssetName,
-			computeShader, selectors, usi);
+			MakeShaderCompileResourceName(computeShader), selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
@@ -579,7 +580,7 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox& selectors,
 		const UniformsStreamInterface& usi)
 	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, computeShader, selectors, usi);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, MakeShaderCompileResourceName(computeShader), selectors, usi);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
@@ -593,7 +594,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(pipelineLayout);
 		assert(!computeShader.IsEmpty());
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayout, computeShader, selectors, usi0, usi1);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayout, MakeShaderCompileResourceName(computeShader), selectors, usi0, usi1);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
@@ -607,7 +608,7 @@ namespace RenderCore { namespace Techniques
 	{
 		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(
 			pool, pipelineLayoutAssetName,
-			computeShader, selectors, usi0, usi1);
+			MakeShaderCompileResourceName(computeShader), selectors, usi0, usi1);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
@@ -618,10 +619,19 @@ namespace RenderCore { namespace Techniques
 		const UniformsStreamInterface& usi0,
 		const UniformsStreamInterface& usi1)
 	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, computeShader, selectors, usi0, usi1);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, MakeShaderCompileResourceName(computeShader), selectors, usi0, usi1);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		const Internal::ShaderVariant& computeShader,
+		const ParameterBox& selectors,
+		const UniformsStreamInterface& usi)
+	{
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, computeShader, selectors, usi);
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
+	}
 
 	uint64_t PixelOutputStates::GetHash() const 
 	{

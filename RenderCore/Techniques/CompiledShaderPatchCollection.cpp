@@ -285,7 +285,8 @@ namespace RenderCore { namespace Techniques
 		const CompiledShaderPatchCollection& patchCollection,
 		StringSection<> mainSourceFile,
 		IteratorRange<const uint64_t*> patchExpansions,
-		IteratorRange<const std::string*> additionalSourceFragments,
+		IteratorRange<const std::string*> prePatchFragments,
+		IteratorRange<const std::string*> postPatchFragments,
 		StringSection<> definesTable) -> SourceCodeWithRemapping
 	{
 		// We can assemble the final shader in 3 fragments:
@@ -333,10 +334,12 @@ namespace RenderCore { namespace Techniques
 		// the entry points should have signatures for the patch functions anyway, it should work
 		// fine
 		output << instantiated.first;
+		for (const auto& s:prePatchFragments)
+			output << s << std::endl;
 		if (!mainSourceFile.IsEmpty())
 			output << "#include \"" << mainSourceFile << "\"" << std::endl;
 		output << instantiated.second;
-		for (const auto& s:additionalSourceFragments)
+		for (const auto& s:postPatchFragments)
 			output << s << std::endl;
 
 		SourceCodeWithRemapping result;
@@ -353,12 +356,15 @@ namespace RenderCore { namespace Techniques
 
 	static auto AssembleShader(
 		StringSection<> mainSourceFile,
-		IteratorRange<const std::string*> additionalSourceFragments) -> SourceCodeWithRemapping
+		IteratorRange<const std::string*> prePatchFragments,
+		IteratorRange<const std::string*> postPatchFragments) -> SourceCodeWithRemapping
 	{
 		std::stringstream output;
+		for (const auto& s:prePatchFragments)
+			output << s << std::endl;
 		if (!mainSourceFile.IsEmpty())
 			output << "#include \"" << mainSourceFile << "\"" << std::endl;
-		for (const auto& s:additionalSourceFragments)
+		for (const auto& s:postPatchFragments)
 			output << s << std::endl;
 
 		SourceCodeWithRemapping result;
@@ -387,16 +393,16 @@ namespace RenderCore { namespace Techniques
 		const ShaderCompilePatchResource& res,
 		StringSection<> definesTable) -> IShaderSource::ShaderByteCodeBlob
 	{
-		if ((!res._patchCollection || res._patchCollection->GetInterface().GetPatches().empty()) && res._additionalSourceFragments.empty()) {
+		if ((!res._patchCollection || res._patchCollection->GetInterface().GetPatches().empty()) && res._prePatchesFragments.empty() && res._postPatchesFragments.empty()) {
 			assert(!res._entrypoint._filename.empty());
 			return internalShaderSource.CompileFromFile(res._entrypoint, definesTable);
 		}
 
 		SourceCodeWithRemapping assembledShader;
 		if (res._patchCollection) {
-			assembledShader = AssembleShader(*res._patchCollection, res._entrypoint._filename, res._patchCollectionExpansions, res._additionalSourceFragments, definesTable);
+			assembledShader = AssembleShader(*res._patchCollection, res._entrypoint._filename, res._patchCollectionExpansions, res._prePatchesFragments, res._postPatchesFragments, definesTable);
 		} else {
-			assembledShader = AssembleShader(res._entrypoint._filename, res._additionalSourceFragments);
+			assembledShader = AssembleShader(res._entrypoint._filename, res._prePatchesFragments, res._postPatchesFragments);
 		}
 		auto result = internalShaderSource.CompileFromMemory(
 			MakeStringSection(assembledShader._processedSource),
@@ -414,7 +420,11 @@ namespace RenderCore { namespace Techniques
 			seed = Hash64(AsPointer(_patchCollectionExpansions.begin()), AsPointer(_patchCollectionExpansions.end()), seed);
 		if (_patchCollection)
 			seed = HashCombine(_patchCollection->GetGUID(), seed);
-		for (const auto& f:_additionalSourceFragments)
+		seed ^= (uint64_t)_postPatchesFragments.size();
+		for (const auto& f:_postPatchesFragments)
+			seed = Hash64(f, seed);
+		seed ^= (uint64_t)_prePatchesFragments.size();
+		for (const auto& f:_prePatchesFragments)
 			seed = Hash64(f, seed);
 		return seed;
 	}

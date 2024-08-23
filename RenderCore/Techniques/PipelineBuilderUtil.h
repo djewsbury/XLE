@@ -45,7 +45,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 		static std::shared_future<std::shared_ptr<ShaderSourceParser::SelectorFilteringRules>> BuildFutureFiltering(
-			const GraphicsPipelineDesc::ShaderVariant& variantShader)
+			const Internal::ShaderVariant& variantShader)
 		{
 			if (std::holds_alternative<ShaderCompileResourceName>(variantShader)) {
 				auto& name = std::get<ShaderCompileResourceName>(variantShader);
@@ -289,6 +289,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 	static std::string BuildSODefinesString(IteratorRange<const RenderCore::InputElementDesc*> desc)
 	{
+		using ::Hash64;
 		std::stringstream str;
 		str << "SO_OFFSETS=";
 		bool first = true;
@@ -316,7 +317,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 	}
 
 	static std::shared_future<CompiledShaderByteCode> MakeByteCodeFuture(
-		ShaderStage stage, const GraphicsPipelineDesc::ShaderVariant& variant,
+		ShaderStage stage, const Internal::ShaderVariant& variant,
 		const std::string& definesTable,
 		StreamOutputInitializers so)
 	{
@@ -861,11 +862,11 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		}
 
 		std::shared_future<ComputePipelineAndLayout> CreateComputePipelineAlreadyLocked(
-			const GraphicsPipelineDesc::ShaderVariant& shaderVariant,
+			const Internal::ShaderVariant& shaderVariant,
 			PipelineLayoutOptions&& pipelineLayout,
 			const UniqueShaderVariationSet::FilteredSelectorSet& filteredSelectors)
 		{
-			auto hash = GraphicsPipelineDesc::HashShaderVariant(shaderVariant, filteredSelectors._hashValue);
+			auto hash = Hash64(shaderVariant, filteredSelectors._hashValue);
 			hash = HashCombine(pipelineLayout._hashCode, hash);
 
 			auto completedi = LowerBound(_completedComputePipelines, hash);
@@ -969,10 +970,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		UniqueShaderVariationSet::FilteredSelectorSet FilterSelectorsAlreadyLocked(
 			ShaderStage shaderStage,
 			IteratorRange<const ParameterBox*const*> selectors,
-			const ShaderSourceParser::SelectorFilteringRules& automaticFiltering,
+			const ShaderSourceParser::SelectorFilteringRules* automaticFiltering,
 			const ShaderSourceParser::ManualSelectorFiltering& manualFiltering,
 			const ShaderSourceParser::SelectorPreconfiguration* preconfiguration,
-			const GraphicsPipelineDesc::ShaderVariant& shaderVariant)		// (ShaderVariant required for compiledShaderPatchCollection)
+			const Internal::ShaderVariant& shaderVariant)		// (ShaderVariant required for compiledShaderPatchCollection)
 		{
 			if (std::holds_alternative<ShaderCompilePatchResource>(shaderVariant)) {
 				auto& res = std::get<ShaderCompilePatchResource>(shaderVariant);
@@ -981,7 +982,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				VLA(const ShaderSourceParser::SelectorFilteringRules*, autoFiltering, 1+patchExpansions.size());
 				VLA(unsigned, filteringRulesPulledIn, 1+patchExpansions.size());
 				unsigned autoFilteringCount = 0;
-				autoFiltering[autoFilteringCount++] = &automaticFiltering;
+				if (automaticFiltering) autoFiltering[autoFilteringCount++] = automaticFiltering;
 				filteringRulesPulledIn[0] = ~0u;
 
 				// Figure out which filtering rules we need from the compiled patch collection, and include them
@@ -1007,7 +1008,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					MakeIteratorRange(autoFiltering, &autoFiltering[autoFilteringCount]), 
 					preconfiguration);
 			} else {
-				const ShaderSourceParser::SelectorFilteringRules* autoFilteringArray[] { &automaticFiltering };
+				assert(automaticFiltering);
+				const ShaderSourceParser::SelectorFilteringRules* autoFilteringArray[] { automaticFiltering };
 				return _selectorVariationsSet.FilterSelectors(
 					selectors,
 					manualFiltering,

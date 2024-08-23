@@ -193,15 +193,15 @@ namespace RenderCore { namespace Techniques
 
 		void QueueDraw(
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
-			std::shared_ptr<DrawableGeo> customGeo,
+			DrawableGeo& customGeo,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			const ImmediateDrawableMaterial& material,
 			RetainedUniformsStream&& uniforms,
 			Topology topology) override
 		{
-			bool indexed = customGeo->_ibFormat != Format(0);
+			bool indexed = customGeo._ibFormat != Format(0);
 			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn);
-			drawable->_geo = customGeo.get();
+			drawable->_geo = &customGeo;
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_vertexCount = (unsigned)indexOrVertexCount;
 			drawable->_descriptorSet = nullptr;
@@ -217,20 +217,19 @@ namespace RenderCore { namespace Techniques
 			}
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
-			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
 		}
 
 		void QueueDraw(
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
-			std::shared_ptr<DrawableGeo> customGeo,
+			DrawableGeo& customGeo,
 			IteratorRange<const InputElementDesc*> inputAssembly,
 			const ImmediateDrawableMaterial& material,
 			RetainedUniformsStream&& uniforms,
 			Topology topology) override
 		{
-			bool indexed = customGeo->_ibFormat != Format(0);
+			bool indexed = customGeo._ibFormat != Format(0);
 			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn);
-			drawable->_geo = customGeo.get();
+			drawable->_geo = &customGeo;
 			drawable->_pipeline = GetPipelineAccelerator(inputAssembly, material._stateSet, topology, material._shaderSelectors, material._patchCollection);
 			drawable->_descriptorSet = nullptr;
 			drawable->_vertexCount = (unsigned)indexOrVertexCount;
@@ -247,7 +246,31 @@ namespace RenderCore { namespace Techniques
 			drawable->_matHash = material._hash;
 			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
-			_customGeosInWorkingPkt.emplace_back(std::move(customGeo));
+		}
+
+		void QueueDraw(
+			size_t vertexCount,
+			DrawableGeo& customGeo,
+			PipelineAccelerator& pipeline,
+			DescriptorSetAccelerator& prebuiltDescriptorSet,
+			const UniformsStreamInterface* uniformStreamInterface,
+			RetainedUniformsStream&& uniforms,
+			Topology topology) override
+		{
+			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(&DrawableWithVertexCount::ExecuteFn);
+			drawable->_geo = &customGeo;
+			drawable->_pipeline = &pipeline;
+			drawable->_descriptorSet = &prebuiltDescriptorSet;
+			drawable->_vertexCount = (unsigned)vertexCount;
+			drawable->_vertexStride = drawable->_bytesAllocated = 0;
+			DEBUG_ONLY(drawable->_userGeo = true;)
+			drawable->_matHash = 0;
+			if (uniformStreamInterface) {
+				drawable->_looseUniformsInterface = ProtectLifetime(*uniformStreamInterface);
+				drawable->_uniforms = std::move(uniforms);
+			}
+			_lastQueuedDrawable = nullptr;
+			_lastQueuedDrawVertexCountOffset = 0;
 		}
 
 		IteratorRange<void*> QueueDraw(
@@ -325,7 +348,6 @@ namespace RenderCore { namespace Techniques
 		void AbandonDraws() override
 		{
 			_workingPkt.Reset();
-			_customGeosInWorkingPkt.clear();
 			_lastQueuedDrawable = nullptr;
 			_lastQueuedDrawVertexCountOffset = 0;
 		}
@@ -409,7 +431,6 @@ namespace RenderCore { namespace Techniques
 		unsigned _lastQueuedDrawVertexCountOffset = 0;
 		std::vector<std::pair<uint64_t, std::shared_ptr<SequencerConfig>>> _sequencerConfigs;
 		std::vector<std::pair<uint64_t, std::shared_ptr<UniformsStreamInterface>>> _usis;
-		std::vector<std::shared_ptr<DrawableGeo>> _customGeosInWorkingPkt;
 		VisibilityMarkerId _pipelineAcceleratorsVisibility = 0;
 		EncoderState _pendingEncoderState;
 

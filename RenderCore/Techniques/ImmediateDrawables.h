@@ -91,7 +91,7 @@ namespace RenderCore { namespace Techniques
 
 		virtual void QueueDraw(
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
-			std::shared_ptr<DrawableGeo> customGeo,
+			DrawableGeo& customGeo,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			const ImmediateDrawableMaterial& material = {},
 			RetainedUniformsStream&& uniforms = {},
@@ -99,12 +99,21 @@ namespace RenderCore { namespace Techniques
 
 		virtual void QueueDraw(
 			size_t indexOrVertexCount, size_t indexOrVertexStartLocation,
-			std::shared_ptr<DrawableGeo> customGeo,
+			DrawableGeo& customGeo,
 			IteratorRange<const InputElementDesc*> inputAssembly,
 			const ImmediateDrawableMaterial& material = {},
 			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
 
+		virtual void QueueDraw(
+			size_t vertexCount,
+			DrawableGeo& customGeo,
+			PipelineAccelerator& pipelineAccelerator,
+			DescriptorSetAccelerator& prebuiltDescriptorSet,
+			const UniformsStreamInterface* uniformStreamInterface = nullptr,
+			RetainedUniformsStream&& uniforms = {},
+			Topology topology = Topology::TriangleList) = 0;
+			
 		virtual IteratorRange<void*> QueueDraw(
 			size_t vertexCount, size_t vertexStride,
 			PipelineAccelerator& pipelineAccelerator,

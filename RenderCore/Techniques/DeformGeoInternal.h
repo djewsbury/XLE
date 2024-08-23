@@ -88,6 +88,7 @@ namespace RenderCore { namespace Techniques
 
 		static const RenderCore::Assets::VertexElement* FindElement(IteratorRange<const RenderCore::Assets::VertexElement*> ele, uint64_t semanticHash)
 		{
+			using ::Hash64;
 			return std::find_if(
 				ele.begin(), ele.end(),
 				[semanticHash](const RenderCore::Assets::VertexElement& ele) {
