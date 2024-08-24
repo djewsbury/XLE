@@ -135,6 +135,7 @@ namespace RenderCore { namespace Techniques
 			void WriteOutputParameter(std::string semantic, unsigned semanticIdx, std::string type);
 
 			void WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
+			void WriteGSPredicateCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
 
 			GraphLanguage::NodeGraphSignature WriteFragment(std::stringstream& str, StringSection<> name);
 			GraphLanguage::NodeGraphSignature WriteGSFragment(std::stringstream& str, StringSection<> name);
@@ -147,6 +148,9 @@ namespace RenderCore { namespace Techniques
 			std::vector<WorkingAttributeWithName> _workingAttributes;
 			GraphLanguage::NodeGraphSignature _signature;
 			unsigned _nextWorkingAttributeIdx = 0;
+
+		private:
+			void WriteCallParametersInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature& sig);
 		};
 
 		void FragmentWriter::WriteInputParameter(std::string semantic, unsigned semanticIdx, std::string type, bool gsInputParameter)
@@ -173,7 +177,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		static void WriteCastOrAssignExpression(
-			std::stringstream& str,
+			std::ostream& str,
 			FragmentWriter::WorkingAttributeWithName& attribute,
 			const std::string& requiredType)
 		{
@@ -189,17 +193,14 @@ namespace RenderCore { namespace Techniques
 		}
 
 		static void WriteDefaultValueExpression(
-			std::stringstream& str,
+			std::ostream& str,
 			const std::string& requiredType)
 		{
 			str << "DefaultValue_" << requiredType << "()";
 		}
 
-		void FragmentWriter::WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig)
+		void FragmentWriter::WriteCallParametersInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature& sig)
 		{
-			std::stringstream temp;
-			temp << "\t" << callName << "(";
-
 			bool pendingComma = false;
 			for (const auto&p:sig.GetParameters()) {
 				if (pendingComma) temp << ", ";
@@ -212,7 +213,8 @@ namespace RenderCore { namespace Techniques
 					} else {
 						WriteDefaultValueExpression(temp, p._type);
 					}
-				} else {
+					pendingComma = true;
+				} else if (!XlEqString(p._name, "result")) {
 					// we will attempt to reuse the existing working attribute if we can. Otherwise we just create a new one
 					if (i == _workingAttributes.end()) {
 						auto newName = Concatenate(s.first, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
@@ -225,12 +227,25 @@ namespace RenderCore { namespace Techniques
 					}
 					if (i->_gsInputParameter) temp << "input[0].";
 					temp << i->_name;
+					pendingComma = true;
 				}
-
-				pendingComma = true;
 			}
+		}
 
+		void FragmentWriter::WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig)
+		{
+			std::stringstream temp;
+			temp << "\t" << callName << "(";
+			WriteCallParametersInternal(temp, sig);
 			_body << temp.str() << ");" << std::endl;
+		}
+
+		void FragmentWriter::WriteGSPredicateCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig)
+		{
+			std::stringstream temp;
+			temp << "\tif (!" << callName << "(";
+			WriteCallParametersInternal(temp, sig);
+			_body << temp.str() << ")) return;" << std::endl;
 		}
 
 		GraphLanguage::NodeGraphSignature FragmentWriter::WriteFragment(std::stringstream& str, StringSection<> name)
@@ -717,6 +732,10 @@ void ExpandClipSpacePosition(
 				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
 
 				for (unsigned ep=0; ep<patches.size(); ++ep)
+					if (patches[ep]._implementsHash == "SV_SpriteGSPredicate"_h)
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
+
+				for (unsigned ep=0; ep<patches.size(); ++ep)
 					if (patches[ep]._implementsHash == "SV_SpriteGS"_h)
 						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
 
@@ -797,8 +816,11 @@ void ExpandClipSpacePosition(
 				}
 			}
 
-			for (const auto& step:gsSteps)
-				if (step._enabled)
+			for (auto& step:gsSteps)
+				if (step._originalPatchCode == "SV_SpriteGSPredicate"_h) {
+					step._enabled = true;		// force it on
+					writerHelper.WriteGSPredicateCall(step._name, *step._signature);
+				} else if (step._enabled)
 					writerHelper.WriteCall(step._name, *step._signature);
 
 			for (const auto& a:psEntryAttributes) {

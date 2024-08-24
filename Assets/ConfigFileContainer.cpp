@@ -10,7 +10,6 @@
 #include "IFileSystem.h"
 #include "../Utility/StringUtils.h"
 #include "../Formatters/FormatterUtils.h"
-#include <regex>
 
 namespace Assets
 {
@@ -126,21 +125,6 @@ namespace Assets
 
     static bool IsWhitespace_(char chr) { return chr == ' ' || chr == '\t'; }
 
-    static std::unique_ptr<std::regex> s_chunkHeader;
-    
-    static const std::regex& GetChunkHeaderRegex()
-    {
-        if (!s_chunkHeader) {
-            s_chunkHeader = std::make_unique<std::regex>(R"--(<<Chunk:(\w+):(\w+)>>(\S+)\()--");
-        }
-        return *s_chunkHeader;
-    }
-
-    void CleanupConfigFileGlobals()
-    {
-        s_chunkHeader.reset();
-    }
-
     template<typename CharType>
         std::vector<TextChunk<CharType>> ReadCompoundTextDocument(StringSection<CharType> doc)
     {
@@ -158,16 +142,16 @@ namespace Assets
                 i = (decltype(i))&t[3];
         }
 
-        if (i == doc.end() || *i != '/') return std::move(result);
+        if (i == doc.end() || *i != '/') return result;
         ++i;
-        if (i == doc.end() || *i != '/') return std::move(result);
+        if (i == doc.end() || *i != '/') return result;
         ++i;
         while (i != doc.end() && IsWhitespace_(*i)) ++i;     // (whitespace but not newline)
 
         char markerAscii[] = "CompoundDocument:";
         auto* m = markerAscii;
         while (*m) {
-            if (i == doc.end() || *i != *m) return std::move(result);
+            if (i == doc.end() || *i != *m) return result;
             ++i; ++m;
         }
 
@@ -179,42 +163,68 @@ namespace Assets
 
         // If we get here, then the result is a compound document that we can read
         // scan through to find the chunks.
-        std::regex_iterator<const CharType*> ri(i, doc.end(), GetChunkHeaderRegex());
-        while (ri != std::regex_iterator<const CharType*>()) {
-            const auto& match = *ri;
-            if (!match.empty() && match.size() >= 4) {
-                const auto& t = match[1];
-                const auto& n = match[2];
-                const auto& d = match[3];
-                auto* ci = match[0].second;
-
-                // We must scan forward to find a ')' followed by a duplicate of the 
-                // deliminator pattern
-                auto* contentStart = ci;
-                while (ci != doc.end()) {
-                    while (ci != doc.end() && *ci != ')') ++ci;
-                    if (ci == doc.end()) break;
-
-                    const auto* di = d.first;
-                    auto ci2 = ci+1;
-                    while (ci2 != doc.end() && di != d.second && *ci2 == *di) { ++ci2; ++di; }
-                    if (di == d.second) break; // matching deliminator means we terminate here
-                    ++ci;
-                }
-
-                if (ci == doc.end())
-                    Throw(::Exceptions::BasicLabel("Hit end of file while reading chunk in compound text document"));
-
-                result.push_back(
-                    TextChunk<CharType>(
-                        MakeStringSection(t.first, t.second),
-                        MakeStringSection(n.first, n.second),
-                        MakeStringSection(contentStart, ci)));
+        StringSection<> chunkHdr = "<<Chunk:";
+        auto docRemaining = doc;
+        while (!docRemaining.IsEmpty()) {
+            if (!XlBeginsWith(docRemaining, chunkHdr)) {
+                ++docRemaining._start;
+                continue;
             }
-            ++ri;
+            docRemaining._start += chunkHdr.size();
+
+            auto typeStart = docRemaining._start;
+            ++docRemaining._start;
+            while (docRemaining._start != docRemaining._end && *docRemaining._start != ':' && *docRemaining._start != '\r' && *docRemaining._start != '\n') ++docRemaining._start;
+            if (docRemaining._start == docRemaining._end || *docRemaining._start != ':')
+                Throw(std::runtime_error("Malformed chunk header found"));
+
+            ++docRemaining._start;
+            auto nameStart = docRemaining._start;
+            while (docRemaining._start != docRemaining._end && *docRemaining._start != '>' && *docRemaining._start != '\r' && *docRemaining._start != '\n') ++docRemaining._start;
+            if (docRemaining._start == docRemaining._end || *docRemaining._start != '>')
+                Throw(std::runtime_error("Malformed chunk header found"));
+            auto nameEnd = docRemaining._start;
+            ++docRemaining._start;
+            if (docRemaining._start == docRemaining._end || *docRemaining._start != '>')
+                Throw(std::runtime_error("Malformed chunk header found"));
+            ++docRemaining._start;
+
+            auto delimStart = docRemaining._start;
+            while (docRemaining._start != docRemaining._end && *docRemaining._start != '(' && *docRemaining._start != '\r' && *docRemaining._start != '\n') ++docRemaining._start;
+            if (docRemaining._start == docRemaining._end || *docRemaining._start != '(')
+                Throw(std::runtime_error("Malformed chunk header found"));
+            auto delimEnd = docRemaining._start;;
+            ++docRemaining._start;
+        
+            // We must scan forward to find a ')' followed by a duplicate of the 
+            // deliminator pattern
+            auto* contentStart = docRemaining._start, *contentEnd = docRemaining._start;
+            while (!docRemaining.IsEmpty()) {
+                while (!docRemaining.IsEmpty() && *docRemaining._start != ')') ++docRemaining._start;
+                if (docRemaining.IsEmpty()) break;
+
+                const auto* di = delimStart;
+                contentEnd = docRemaining._start;
+                auto ci2 = docRemaining._start+1;
+                while (ci2 != docRemaining.end() && di != delimEnd && *ci2 == *di) { ++ci2; ++di; }
+                if (di == delimEnd) {
+                    docRemaining._start = ci2;
+                    break; // matching deliminator means we terminate here
+                }
+                ++docRemaining._start;
+            }
+
+            if (docRemaining.IsEmpty())
+                Throw(::Exceptions::BasicLabel("Hit end of file while reading chunk in compound text document"));
+
+            result.push_back(
+                TextChunk<CharType>(
+                    MakeStringSection(typeStart, nameStart-1),
+                    MakeStringSection(nameStart, nameEnd),
+                    MakeStringSection(contentStart, contentEnd)));
         }
 
-        return std::move(result);
+        return result;
     }
 
     // Even though this is templated, it uses std::regex

@@ -281,6 +281,9 @@ namespace Assets
 		static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState);
 		static Blob TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName);
 		static Blob TryLoadFileAsBlob_TolerateSharingErrors(StringSection<char> sourceFileName, FileSnapshot* fileState);
+
+		static bool DoesFileExist(StringSection<utf8>);
+		static bool DoesFileExist(StringSection<utf16>);
 	};
 
 	T2(CharType, FileObject) IFileSystem::IOReason TryOpen(FileObject& result, IFileSystem& fs, StringSection<CharType> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode=FileShareMode_Default);
@@ -301,4 +304,7 @@ namespace Assets
 		if (lhs._modificationTime > rhs._modificationTime) return false;
 		return (int)lhs._state < (int)rhs._state;
 	}
+
+	inline bool MainFileSystem::DoesFileExist(StringSection<utf8> fn) { return TryGetDesc(fn)._snapshot._state != FileSnapshot::State::DoesNotExist; }
+	inline bool MainFileSystem::DoesFileExist(StringSection<utf16> fn) { return TryGetDesc(fn)._snapshot._state != FileSnapshot::State::DoesNotExist; }
 }

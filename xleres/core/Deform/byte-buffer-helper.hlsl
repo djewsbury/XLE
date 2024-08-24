@@ -26,18 +26,17 @@ void StoreFloat4(float4 value, RWByteAddressBuffer buffer, uint format, uint byt
 
 
 // For the SNorm formats here, we're assuming that both -1 and +1 can be represented -- in effect there are 2 representations of -1
-// UNorm is mapped onto -1 -> 1; since this just tends to be a more useful mapping than 0 -> 1
 int SignExtend8(uint byteValue) { return byteValue + (byteValue >> 7) * 0xffffff00; }
 int SignExtend16(uint shortValue) { return shortValue + (shortValue >> 15) * 0xffff0000; }
 
-float UNorm8ToFloat(uint x) { return x * (2.0 / float(0xff)) - 1.0; }
-uint FloatToUNorm8(float x) { return (uint)clamp((x + 1.0) * float(0xff) / 2.0, 0.0, float(0xff)); }
+float UNorm8ToFloat(uint x) { return x * (1.0 / float(0xff)); }
+uint FloatToUNorm8(float x) { return (uint)clamp(x * float(0xff), 0.0, float(0xff)); }
 
 float SNorm8ToFloat(uint x) { return clamp(SignExtend8(x) / float(0x7f), -1.0, 1.0); }
 uint FloatToSNorm8(float x) { return int(clamp(x, -1.0, 1.0) * float(0x7f)) & 0xff; }
 
-float UNorm10ToFloat(uint x) { return x * (2.0 / float(0x3ff)) - 1.0; }
-uint FloatToUNorm10(float x) { return (uint)clamp((x + 1.0) * float(0x3ff) / 2.0, 0.0, float(0x3ff)); }
+float UNorm10ToFloat(uint x) { return x * (1.0 / float(0x3ff)); }
+uint FloatToUNorm10(float x) { return (uint)clamp(x * float(0x3ff), 0.0, float(0x3ff)); }
 
 float SNorm16ToFloat(uint x) { return clamp(SignExtend16(x) / float(0x7fff), -1.0, 1.0); }
 uint FloatToSNorm16(float x) { return int(clamp(x, -1.0, 1.0) * float(0x7fff)) & 0xffff; }

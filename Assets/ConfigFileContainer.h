@@ -84,8 +84,6 @@ namespace Assets
     template<typename CharType>
         std::vector<TextChunk<CharType>> ReadCompoundTextDocument(StringSection<CharType> doc);
 
-    void CleanupConfigFileGlobals();
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     class DirectorySearchRules;

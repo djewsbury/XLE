@@ -83,4 +83,50 @@ int CountTrue(bool3 input)
 	return dot(float(true).xxx, input);
 }
 
+// xoshiro128+ generator. Intended for generating 32 bit floats (since the lowest four bits have low linear complexity)
+// From the authors: We suggest to use a sign test to extract a random Boolean value, and right shifts to extract subsets of bits.
+// See source: https://prng.di.unimi.it/xoshiro128plus.c
+// Note that the authors have placed the above source into the public domain
+// Ideally we should initialize using values produced from another rng (they should never all be zeroes)
+
+static inline uint rotl32(uint x, uint k) { return (x << k) | (x >> (32u - k)); }
+
+struct RNGState { uint s[4]; };
+
+uint RNGNext(inout RNGState state)
+{
+	const uint result = state.s[0] + state.s[3];
+	const uint t = state.s[1] << 9u;
+
+	state.s[2] ^= state.s[0];
+	state.s[3] ^= state.s[1];
+	state.s[1] ^= state.s[2];
+	state.s[0] ^= state.s[3];
+
+	state.s[2] ^= t;
+
+	state.s[3] = rotl32(state.s[3], 11u);
+
+	return result;
+}
+
+float RNGNextF(inout RNGState state)
+{
+	uint i = RNGNext(state);
+	// return i / float(0xffffffff);
+
+	// Below uses the simple principle described at the bottom of https://prng.di.unimi.it/
+	// Note that "float" must be a 32 bit type for this to work (and at least roughly ieee)
+	// If we don't know the precision of float, we must use another method
+	return asfloat((0x7fu << 23u) | (i>>9u)) - 1.0;
+}
+
+void RNGInitialize(out RNGState state, uint a, uint b, uint c, uint d)
+{
+	state.s[0] = a;
+	state.s[1] = b;
+	state.s[2] = c;
+	state.s[3] = d;
+}
+
 #endif
