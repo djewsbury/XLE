@@ -12,19 +12,39 @@
 #include "ContinuationUtil.h"
 #include "AssetUtils.h"
 #include "DepVal.h"
+#include "../Formatters/TextFormatter.h"
 
 namespace Assets
 {
+	namespace Internal
+	{
+		#define DOES_SUBST_MEMBER(Name, ...)																		\
+			template<typename T> static constexpr auto Name##_(int) -> decltype(__VA_ARGS__, std::true_type{});		\
+			template<typename...> static constexpr auto Name##_(...) -> std::false_type;							\
+			static constexpr bool Name = decltype(Name##_<Type>(0))::value;											\
+			/**/
+
+		template<typename Type>
+			struct FormatterAssetMixinTraits
+		{
+			DOES_SUBST_MEMBER(HasDeserializeKey, std::declval<T&>().TryDeserializeKey(
+				std::declval< Formatters::TextInputFormatter<char>& >(),
+				std::declval< StringSection<> >()
+				));
+		};
+
+		#undef DOES_SUBST_MEMBER
+	}
 
 	template<typename ObjectType>
-		class FormatterAssetMixin : public ObjectType
+		class FormatterAssetMixin_NoDeserializeKey : public ObjectType
 	{
 	public:
-		FormatterAssetMixin(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal);
-		FormatterAssetMixin(ObjectType&&, ::Assets::DirectorySearchRules&& = {}, ::Assets::DependencyValidation&& = {});
-		FormatterAssetMixin(const ObjectType&, const ::Assets::DirectorySearchRules& = {}, const ::Assets::DependencyValidation& = {});
-		FormatterAssetMixin(Blob&&, ::Assets::DependencyValidation&& = {}, StringSection<> = {});
-		FormatterAssetMixin() = default;
+		FormatterAssetMixin_NoDeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal);
+		FormatterAssetMixin_NoDeserializeKey(ObjectType&&, ::Assets::DirectorySearchRules&& = {}, ::Assets::DependencyValidation&& = {});
+		FormatterAssetMixin_NoDeserializeKey(const ObjectType&, const ::Assets::DirectorySearchRules& = {}, const ::Assets::DependencyValidation& = {});
+		FormatterAssetMixin_NoDeserializeKey(Blob&&, ::Assets::DependencyValidation&& = {}, StringSection<> = {});
+		FormatterAssetMixin_NoDeserializeKey() = default;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const { return _searchRules; }
@@ -35,6 +55,31 @@ namespace Assets
 
 		Formatters::TextInputFormatter<char> AsFormatter(const Blob&);
 	};
+
+	template<typename ObjectType>
+		class FormatterAssetMixin_DeserializeKey : public ObjectType
+	{
+	public:
+		FormatterAssetMixin_DeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal);
+		FormatterAssetMixin_DeserializeKey(ObjectType&&, ::Assets::DirectorySearchRules&& = {}, ::Assets::DependencyValidation&& = {});
+		FormatterAssetMixin_DeserializeKey(const ObjectType&, const ::Assets::DirectorySearchRules& = {}, const ::Assets::DependencyValidation& = {});
+		FormatterAssetMixin_DeserializeKey(Blob&&, ::Assets::DependencyValidation&& = {}, StringSection<> = {});
+		FormatterAssetMixin_DeserializeKey() = default;
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const { return _searchRules; }
+		IteratorRange<const std::string*> GetInherited() const { return _inherit; }
+
+	private:
+		::Assets::DirectorySearchRules _searchRules;
+		::Assets::DependencyValidation _depVal;
+		std::vector<std::string> _inherit;
+
+		Formatters::TextInputFormatter<char> AsFormatter(const Blob&);
+	};
+
+	template<typename ObjectType>
+		using FormatterAssetMixin = std::conditional_t<Internal::FormatterAssetMixinTraits<ObjectType>::HasDeserializeKey, FormatterAssetMixin_DeserializeKey<ObjectType>, FormatterAssetMixin_NoDeserializeKey<ObjectType>>;
 
 	template <typename ObjectType, typename BaseAssetType=FormatterAssetMixin<ObjectType>>
 		class ResolvedAssetMixin : public ObjectType
@@ -66,34 +111,83 @@ namespace Assets
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<typename ObjectType>
-		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	: ObjectType(fmttr)
 	, _searchRules(searchRules)
 	, _depVal(depVal)
 	{}
 
-	namespace Internal { inline Formatters::TextInputFormatter<char>& RemoveConst(const Formatters::TextInputFormatter<char>& f) { return const_cast<Formatters::TextInputFormatter<char>&>(f); }}
+	namespace Internal
+	{
+		inline Formatters::TextInputFormatter<char>& RemoveConst(const Formatters::TextInputFormatter<char>& f) { return const_cast<Formatters::TextInputFormatter<char>&>(f); }
+		inline std::vector<std::string> DeserializeInheritList(Formatters::TextInputFormatter<utf8>& formatter)
+		{
+			std::vector<std::string> result; StringSection<> value;
+			if (!formatter.TryBeginElement())
+				Throw(Formatters::FormatException("Malformed inherit list", formatter.GetLocation()));
+			while (formatter.TryStringValue(value)) result.push_back(value.AsString());
+			if (!formatter.TryEndElement())
+				Throw(Formatters::FormatException("Malformed inherit list", formatter.GetLocation()));
+			return result;
+		}
+		void SkipValueOrElement(Formatters::TextInputFormatter<utf8>&);
+	}
 
 	template<typename ObjectType>
-		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(Blob&& blob, ::Assets::DependencyValidation&& depVal, StringSection<>)
+		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(Blob&& blob, ::Assets::DependencyValidation&& depVal, StringSection<>)
 	: ObjectType(Internal::RemoveConst(AsFormatter(blob)))
 	, _depVal(std::move(depVal))
 	{}
 
 	template<typename ObjectType>
-		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(ObjectType&& moveFrom, ::Assets::DirectorySearchRules&& searchRules, ::Assets::DependencyValidation&& depVal)
+		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(ObjectType&& moveFrom, ::Assets::DirectorySearchRules&& searchRules, ::Assets::DependencyValidation&& depVal)
 	: ObjectType(std::move(moveFrom)), _searchRules(std::move(searchRules)), _depVal(std::move(depVal)) {}
 	template<typename ObjectType>
-		FormatterAssetMixin<ObjectType>::FormatterAssetMixin(const ObjectType& copyFrom, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(const ObjectType& copyFrom, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	: ObjectType(copyFrom), _searchRules(searchRules), _depVal(depVal) {}
 
 	template<typename ObjectType>
-		Formatters::TextInputFormatter<char> FormatterAssetMixin<ObjectType>::AsFormatter(const Blob& blob)
+		Formatters::TextInputFormatter<char> FormatterAssetMixin_NoDeserializeKey<ObjectType>::AsFormatter(const Blob& blob)
 	{
 		if (!blob)
 			return Formatters::TextInputFormatter<char>{};
 		return Formatters::TextInputFormatter<char>{ MakeIteratorRange(*blob).template Cast<const void*>() };
 	}
+
+	template<typename ObjectType>
+		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	: _searchRules(searchRules)
+	, _depVal(depVal)
+	{
+		StringSection<> keyname;
+		while (fmttr.TryKeyedItem(keyname))
+			if (XlEqString(keyname, "Inherit")) {
+				_inherit = Internal::DeserializeInheritList(fmttr);
+			} else if (!ObjectType::TryDeserializeKey(fmttr, keyname))
+				Internal::SkipValueOrElement(fmttr);
+	}
+
+	template<typename ObjectType>
+		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(Blob&& blob, ::Assets::DependencyValidation&& depVal, StringSection<>)
+	: _depVal(std::move(depVal))
+	{
+		if (blob) {
+			Formatters::TextInputFormatter<char> fmttr { MakeIteratorRange(*blob).template Cast<const void*>() };
+			StringSection<> keyname;
+			while (fmttr.TryKeyedItem(keyname))
+				if (XlEqString(keyname, "Inherit")) {
+					_inherit = Internal::DeserializeInheritList(fmttr);
+				} else if (!ObjectType::TryDeserializeKey(fmttr, keyname))
+					Internal::SkipValueOrElement(fmttr);
+		}
+	}
+
+	template<typename ObjectType>
+		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(ObjectType&& moveFrom, ::Assets::DirectorySearchRules&& searchRules, ::Assets::DependencyValidation&& depVal)
+	: ObjectType(std::move(moveFrom)), _searchRules(std::move(searchRules)), _depVal(std::move(depVal)) {}
+	template<typename ObjectType>
+		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(const ObjectType& copyFrom, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	: ObjectType(copyFrom), _searchRules(searchRules), _depVal(depVal) {}
 
 	template <typename ObjectType, typename BaseAssetType>
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(

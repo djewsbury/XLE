@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "ModelCompilationConfiguration.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/AssetMixins.h"
 #include "../../Math/Matrix.h"

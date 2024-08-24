@@ -161,10 +161,8 @@ namespace RenderCore { namespace Assets
         ParameterBox	_uniforms;
         RenderStateSet	_stateSet;
         std::vector<std::pair<std::string, SamplerDesc>> _samplers;
-        
-		ShaderPatchCollection _patchCollection;
 
-        std::vector<std::string> _inherit;
+		ShaderPatchCollection _patchCollection;
 
         template<typename Value>
             void BindResource(StringSection<>, const Value&);
@@ -173,15 +171,14 @@ namespace RenderCore { namespace Assets
         template<typename Value>
             void SetUniform(StringSection<>, const Value&);
         void BindSampler(const std::string&, const SamplerDesc&);
-        void AddInherited(const std::string&);
 
 		void MergeInWithFilenameResolve(const RawMaterial&, const ::Assets::DirectorySearchRules&);
-		IteratorRange<const std::string*> GetInherited() const { return _inherit; }
 
         void SerializeMethod(Formatters::TextOutputFormatter& formatter) const;
+        bool TryDeserializeKey(Formatters::TextInputFormatter<utf8>&, StringSection<>);
 
         uint64_t CalculateHash(uint64_t seed = DefaultSeed64) const;
-        
+
         RawMaterial();
         explicit RawMaterial(Formatters::TextInputFormatter<utf8>& formatter);
         ~RawMaterial();
@@ -207,7 +204,7 @@ namespace RenderCore { namespace Assets
         static void ConstructToPromise(
             std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
             StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
-            
+
         static void ConstructToPromise(
             std::promise<CompilableMaterialAssetMixin<ObjectType>>&& promise,
             StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);

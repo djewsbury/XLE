@@ -46,15 +46,14 @@ namespace RenderCore { namespace Assets
 
 		std::optional<bool> _autoProcessTextures;
 
-		std::vector<std::string> _inheritConfigurations;
-
 		RawGeoRules MatchRawGeoRules(StringSection<> name) const;
 		SkeletonRules MatchSkeletonRules(StringSection<> name) const;
 
-		IteratorRange<const std::string*> GetInherited() const { return _inheritConfigurations; }
 		void MergeInWithFilenameResolve(const ModelCompilationConfiguration&, const ::Assets::DirectorySearchRules&);
 
 		uint64_t CalculateHash(uint64_t) const;
+
+		bool TryDeserializeKey(Formatters::TextInputFormatter<char>&, StringSection<>);
 
 		explicit ModelCompilationConfiguration(Formatters::TextInputFormatter<char>& fmttr);
 		ModelCompilationConfiguration();

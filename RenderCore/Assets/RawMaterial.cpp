@@ -23,6 +23,8 @@
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Conversion.h"
 
+static_assert(::Assets::Internal::FormatterAssetMixinTraits<RenderCore::Assets::RawMaterial>::HasDeserializeKey);
+
 namespace RenderCore { namespace Assets
 {
 
@@ -348,56 +350,50 @@ namespace RenderCore { namespace Assets
 
     RawMaterial::RawMaterial() {}
 
-    std::vector<::Assets::rstring> 
-        DeserializeInheritList(Formatters::TextInputFormatter<utf8>& formatter)
+    bool RawMaterial::TryDeserializeKey(Formatters::TextInputFormatter<utf8>& formatter, StringSection<> eleName)
     {
-        std::vector<::Assets::rstring> result;
-        while (formatter.PeekNext() == Formatters::FormatterBlob::Value)
-            result.push_back(RequireStringValue(formatter).AsString());
-        return result;
+        if (XlEqString(eleName, "Selectors")) {
+            RequireBeginElement(formatter);
+            _selectors = ParameterBox(formatter);
+            RequireEndElement(formatter);
+            return true;
+        } else if (XlEqString(eleName, "Uniforms")) {
+            RequireBeginElement(formatter);
+            _uniforms = ParameterBox(formatter);
+            RequireEndElement(formatter);
+            return true;
+        } else if (XlEqString(eleName, "Resources")) {
+            RequireBeginElement(formatter);
+            _resources = ParameterBox(formatter);
+            RequireEndElement(formatter);
+            return true;
+        } else if (XlEqString(eleName, "States")) {
+            RequireBeginElement(formatter);
+            _stateSet = DeserializeStateSet(formatter);
+            RequireEndElement(formatter);
+            return true;
+        } else if (XlEqString(eleName, "Patches")) {
+            RequireBeginElement(formatter);
+            _patchCollection = ShaderPatchCollection(formatter);
+            RequireEndElement(formatter);
+            return true;
+        } else if (XlEqString(eleName, "Samplers")) {
+            RequireBeginElement(formatter);
+            _samplers = DeserializeSamplerStates(formatter);
+            RequireEndElement(formatter);
+            return true;
+        } else if (XlEqString(eleName, "Inherit")) {
+            Throw(std::runtime_error("Unexpected Inherit key"));
+        }
+        return false;
     }
 
     RawMaterial::RawMaterial(Formatters::TextInputFormatter<utf8>& formatter)
     {
-        while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
-            auto eleName = RequireKeyedItem(formatter);
-
-                // first, load inherited settings.
-            if (XlEqString(eleName, "Inherit")) {
-                RequireBeginElement(formatter);
-                _inherit = DeserializeInheritList(formatter);
-                RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "Selectors")) {
-                RequireBeginElement(formatter);
-                _selectors = ParameterBox(formatter);
-                RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "Uniforms")) {
-                RequireBeginElement(formatter);
-                _uniforms = ParameterBox(formatter);
-                RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "Resources")) {
-                RequireBeginElement(formatter);
-                _resources = ParameterBox(formatter);
-                RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "States")) {
-                RequireBeginElement(formatter);
-                _stateSet = DeserializeStateSet(formatter);
-                RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "Patches")) {
-                RequireBeginElement(formatter);
-                _patchCollection = ShaderPatchCollection(formatter);
-                RequireEndElement(formatter);
-            } else if (XlEqString(eleName, "Samplers")) {
-                RequireBeginElement(formatter);
-                _samplers = DeserializeSamplerStates(formatter);
-                RequireEndElement(formatter);
-            } else {
+        StringSection<> eleName;
+        while (formatter.TryKeyedItem(eleName))
+            if (!TryDeserializeKey(formatter, eleName))
                 SkipValueOrElement(formatter);
-            }
-        }
-
-        if (formatter.PeekNext() != Formatters::FormatterBlob::EndElement && formatter.PeekNext() != Formatters::FormatterBlob::None)
-			Throw(Formatters::FormatException("Unexpected data while deserializating RawMaterial", formatter.GetLocation()));
     }
 
     RawMaterial::~RawMaterial() {}
@@ -410,12 +406,12 @@ namespace RenderCore { namespace Assets
 			formatter.EndElement(ele);
 		}
 
-        if (!_inherit.empty()) {
+        /*if (!_inherit.empty()) {
             auto ele = formatter.BeginKeyedElement("Inherit");
             for (const auto& i:_inherit)
                 formatter.WriteSequencedValue(i);
             formatter.EndElement(ele);
-        }
+        }*/
 
         if (_selectors.GetCount() > 0) {
             auto ele = formatter.BeginKeyedElement("Selectors");
@@ -521,11 +517,11 @@ namespace RenderCore { namespace Assets
             _samplers.emplace_back(name, sampler);
     }
 
-    void RawMaterial::AddInherited(const std::string& value)
-    {
-        if (std::find(_inherit.begin(), _inherit.end(), value) == _inherit.end())
-            _inherit.emplace_back(value);
-    }
+    // void RawMaterial::AddInherited(const std::string& value)
+    // {
+    //     if (std::find(_inherit.begin(), _inherit.end(), value) == _inherit.end())
+    //         _inherit.emplace_back(value);
+    // }
 
     uint64_t RawMaterial::CalculateHash(uint64_t seed) const
     {
@@ -539,8 +535,8 @@ namespace RenderCore { namespace Assets
         auto result = Hash64(MakeIteratorRange(hashes), seed);
         for (auto& s:_samplers)
             result = Hash64(s.first, s.second.Hash() + result);
-        for (auto& i:_inherit)
-            result = Hash64(i, result);
+        // for (auto& i:_inherit)
+        //     result = Hash64(i, result);
         return result;
     }
 

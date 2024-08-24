@@ -138,7 +138,7 @@ namespace Assets
 			static constexpr bool IsHashable = IsNonIntegralHashable || std::is_integral_v<Type> || std::is_enum_v<Type> || std::is_same_v<nullptr_t, Type>;
 		};
 
-		#undef DOES_SUBST_PATTERN
+		#undef DOES_SUBST_MEMBER
 
 		template<typename T>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed)

@@ -87,8 +87,6 @@ namespace RenderCore { namespace Assets
 
 		if (src._autoProcessTextures)
 			_autoProcessTextures = src._autoProcessTextures;
-
-		_inheritConfigurations.insert(_inheritConfigurations.end(), src._inheritConfigurations.begin(), src._inheritConfigurations.end());
 	}
 
 	void ModelCompilationConfiguration::DeserializeRawGeoRules(Formatters::TextInputFormatter<>& fmttr)
@@ -272,8 +270,6 @@ namespace RenderCore { namespace Assets
 			result = q.second.CalculateHash(Hash64(q.first, result));
 		if (_autoProcessTextures)
 			result = HashCombine(_autoProcessTextures.value(), result);
-		for (const auto& q:_inheritConfigurations)
-			result = Hash64(q, result);
 		return result;
 	}
 
@@ -295,49 +291,43 @@ namespace RenderCore { namespace Assets
 		return rules;
 	}
 
+	bool ModelCompilationConfiguration::TryDeserializeKey(Formatters::TextInputFormatter<char>& fmttr, StringSection<> keyName)
+	{
+		if (XlEqString(keyName, "RawGeoRules")) {
+			RequireBeginElement(fmttr);
+			DeserializeRawGeoRules(fmttr);
+			RequireEndElement(fmttr);
+			return true;
+		} else if (XlEqString(keyName, "CommandStreams")) {
+			RequireBeginElement(fmttr);
+			DeserializeCommandStreams(fmttr);
+			RequireEndElement(fmttr);
+			return true;
+		} else if (XlEqString(keyName, "SkeletonRules")) {
+			RequireBeginElement(fmttr);
+			DeserializeSkeletonRules(fmttr);
+			RequireEndElement(fmttr);
+			return true;
+		} else if (XlEqString(keyName, "Material")) {
+			RequireBeginElement(fmttr);
+			while (TryKeyedItem(fmttr, keyName)) {
+				if (XlEqString(keyName, "AutoProcessTextures")) {
+					_autoProcessTextures = Formatters::RequireCastValue<bool>(fmttr);
+					break;
+				}
+			}
+			RequireEndElement(fmttr);
+			return true;
+		}
+		return false;
+	}
+
 	ModelCompilationConfiguration::ModelCompilationConfiguration(Formatters::TextInputFormatter<>& fmttr)
 	{
-		uint64_t keyName;
-		while (TryKeyedItem(fmttr, keyName)) {
-			switch (keyName) {
-			case "RawGeoRules"_h:
-				RequireBeginElement(fmttr);
-				DeserializeRawGeoRules(fmttr);
-				RequireEndElement(fmttr);
-				break;
-
-			case "CommandStreams"_h:
-				RequireBeginElement(fmttr);
-				DeserializeCommandStreams(fmttr);
-				RequireEndElement(fmttr);
-				break;
-
-			case "SkeletonRules"_h:
-				RequireBeginElement(fmttr);
-				DeserializeSkeletonRules(fmttr);
-				RequireEndElement(fmttr);
-				break;
-
-			case "Material"_h:
-				RequireBeginElement(fmttr);
-				while (TryKeyedItem(fmttr, keyName)) {
-					switch (keyName) {
-					case "AutoProcessTextures"_h:
-						_autoProcessTextures = Formatters::RequireCastValue<bool>(fmttr);
-						break;
-					}
-				}
-				RequireEndElement(fmttr);
-				break;
-			
-			case "Inherit"_h:
-				RequireBeginElement(fmttr);
-				while (fmttr.PeekNext() == Formatters::FormatterBlob::Value)
-					_inheritConfigurations.push_back(RequireStringValue(fmttr).AsString());
-				RequireEndElement(fmttr);
-				break;
-			}
-		}
+		StringSection<> keyName;
+		while (TryKeyedItem(fmttr, keyName))
+			if (!TryDeserializeKey(fmttr, keyName))
+				Formatters::SkipValueOrElement(fmttr);
 	}
 
 	ModelCompilationConfiguration::ModelCompilationConfiguration() {}

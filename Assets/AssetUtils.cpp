@@ -14,6 +14,7 @@
 #include "IntermediateCompilers.h"
 #include "IArtifact.h"
 #include "../OSServices/Log.h"
+#include "../Formatters/FormatterUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/MemoryUtils.h"
@@ -630,6 +631,11 @@ namespace Assets
         ThreadPool& GetLongTaskThreadPool()
         {
             return ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool();
+        }
+
+        void SkipValueOrElement(Formatters::TextInputFormatter<utf8>& fmttr)
+        {
+            Formatters::SkipValueOrElement(fmttr);
         }
     }
 
