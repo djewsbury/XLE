@@ -115,7 +115,7 @@ namespace Assets
 	namespace Internal
 	{
 
-		#define DOES_SUBST_MEMBER(Name, ...)																		\
+		#define TEST_SUBST_MEMBER(Name, ...)																		\
 			template<typename T> static constexpr auto Name##_(int) -> decltype(__VA_ARGS__, std::true_type{});		\
 			template<typename...> static constexpr auto Name##_(...) -> std::false_type;							\
 			static constexpr bool Name = decltype(Name##_<Type>(0))::value;											\
@@ -124,21 +124,21 @@ namespace Assets
 		template<typename Type>
 			struct AssetHashTraits
 		{
-			DOES_SUBST_MEMBER(HasHash64Override, Hash64(std::declval<const T&>(), std::declval<uint64_t>()));
+			TEST_SUBST_MEMBER(HasHash64Override, Hash64(std::declval<const T&>(), std::declval<uint64_t>()));
 
-			DOES_SUBST_MEMBER(HasGetHash, std::declval<const T&>().GetHash());
-			DOES_SUBST_MEMBER(HasGetGUID, std::declval<const T&>().GetGUID());
-			DOES_SUBST_MEMBER(HasCalculateHash, std::declval<const T&>().CalculateHash(uint64_t(0)));
+			TEST_SUBST_MEMBER(HasGetHash, std::declval<const T&>().GetHash());
+			TEST_SUBST_MEMBER(HasGetGUID, std::declval<const T&>().GetGUID());
+			TEST_SUBST_MEMBER(HasCalculateHash, std::declval<const T&>().CalculateHash(uint64_t(0)));
 
-			DOES_SUBST_MEMBER(IsDereferenceable, *std::declval<const T&>());
-			DOES_SUBST_MEMBER(HasBeginAndEnd, std::declval<const T&>().begin() != std::declval<const T&>().end());
-			DOES_SUBST_MEMBER(IsStreamable, std::declval<std::ostream&>() << std::declval<const T&>());
+			TEST_SUBST_MEMBER(IsDereferenceable, *std::declval<const T&>());
+			TEST_SUBST_MEMBER(HasBeginAndEnd, std::declval<const T&>().begin() != std::declval<const T&>().end());
+			TEST_SUBST_MEMBER(IsStreamable, std::declval<std::ostream&>() << std::declval<const T&>());
 
 			static constexpr bool IsNonIntegralHashable = HasHash64Override || HasGetHash || HasGetGUID || HasCalculateHash || IsDereferenceable || HasBeginAndEnd;
 			static constexpr bool IsHashable = IsNonIntegralHashable || std::is_integral_v<Type> || std::is_enum_v<Type> || std::is_same_v<nullptr_t, Type>;
 		};
 
-		#undef DOES_SUBST_MEMBER
+		#undef TEST_SUBST_MEMBER
 
 		template<typename T>
 			uint64_t HashParam_Chain(const T& p, uint64_t seed)

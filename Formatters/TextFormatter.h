@@ -53,6 +53,9 @@ namespace Formatters
 		// will return FormatterBlob::None instead of FormatterBlob::EndElement
 		TextInputFormatter<CharType> CreateChildFormatter();
 
+		// Scan forward until the EndElement or None that terminates the last begun element
+		void SkipElement();
+
 		using value_type = CharType;
 		using InteriorSection = StringSection<CharType>;
 		using Blob = FormatterBlob;
@@ -75,11 +78,11 @@ namespace Formatters
 		unsigned _baseLineStackPtr;
 		unsigned _terminatingBaseLineStackPtr;
 
-		bool _protectedStringMode;
-
 		unsigned _format;
 		unsigned _tabWidth;
 		bool _pendingHeader;
+		bool _protectedStringMode;
+		bool _elementExtendedBySemicolon;
 
 		void ReadHeader();
 		template<unsigned Format>

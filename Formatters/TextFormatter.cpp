@@ -333,29 +333,35 @@ namespace Formatters
         marker += Count;
     }
 
+    template<typename CharType>
+        const CharType* ReadToProtectedStringEnd(TextStreamMarker<CharType>& marker)
+    {
+        constexpr auto pattern = FormatterConstants<CharType>::ProtectedNamePostfix;
+        constexpr auto patternLength = dimof(FormatterConstants<CharType>::ProtectedNamePostfix);
+
+        const auto* end = marker.End() - patternLength;
+        while (marker.Pointer() <= end) {
+            for (unsigned c=0; c<patternLength; ++c)
+                if (marker[c] != pattern[c])
+                    goto advptr;
+
+            auto result = marker.Pointer();
+            marker.SetPointer(marker.Pointer() + patternLength);
+            return result;
+        advptr:
+            marker.AdvanceCheckNewLine();   // we must check for newlines as we do this, otherwise line tracking will just be thrown off
+        }
+
+        Throw(FormatException("String deliminator not found", marker.GetLocation()));
+        return nullptr;
+    }
+
     template<typename CharType, unsigned Format>
         const CharType* ReadToStringEnd(
             TextStreamMarker<CharType>& marker, bool protectedStringMode)
     {
-        const auto pattern = FormatterConstants<CharType>::ProtectedNamePostfix;
-        const auto patternLength = dimof(FormatterConstants<CharType>::ProtectedNamePostfix);
-
         if (protectedStringMode) {
-            const auto* end = marker.End() - patternLength;
-            while (marker.Pointer() <= end) {
-                for (unsigned c=0; c<patternLength; ++c)
-                    if (marker[c] != pattern[c])
-                        goto advptr;
-
-                auto result = marker.Pointer();
-                marker.SetPointer(marker.Pointer() + patternLength);
-                return result;
-            advptr:
-                marker.AdvanceCheckNewLine();   // we must check for newlines as we do this, otherwise line tracking will just be thrown off
-            }
-
-            Throw(FormatException("String deliminator not found", marker.GetLocation()));
-            return nullptr;
+            return ReadToProtectedStringEnd(marker);            
         } else {
                 // we must read forward until we hit a formatting character
                 // the end of the string will be the last non-whitespace before that formatting character
@@ -432,15 +438,17 @@ namespace Formatters
             case '\n':  // (independent new line. A following /r will be treated as another new line)
                 _marker.AdvanceCheckNewLine();
                 _activeLineSpaces = 0;
+                _elementExtendedBySemicolon = false;
                 break;
 
             case ';':
                     // deliminator is ignored here
                 ++_marker;
+                _elementExtendedBySemicolon = true;
                 break;
 
             case (Format==3?':':'='):
-                if (_activeLineSpaces <= _parentBaseLine) {
+                if (!_elementExtendedBySemicolon && _activeLineSpaces <= _parentBaseLine) {
                     _protectedStringMode = false;
                     return _primed = FormatterBlob::EndElement;
                 }
@@ -456,7 +464,7 @@ namespace Formatters
                 // This construction is effectively 2 tokens:
                 //    "+" and then either "~" or some value
                 // Even still, we don't accept a newline between the 2 tokens. That would lead to extra
-                // complications (such as, what happens if the identation increases or decreases at that
+                // complications (such as, what happens if the indentation increases or decreases at that
                 // point). Also, because there can't be any newlines, we also cannot support any comments
                 // in this space
                 //
@@ -505,7 +513,7 @@ namespace Formatters
             default:
                 // first, if our spacing has decreased, then we must consider it an "end element"
                 // caller must follow with "TryEndElement" until _expectedLineSpaces matches _activeLineSpaces
-                if (_activeLineSpaces <= _parentBaseLine) {
+                if (!_elementExtendedBySemicolon && _activeLineSpaces <= _parentBaseLine) {
                     _protectedStringMode = false;
                     if (_baseLineStackPtr == _terminatingBaseLineStackPtr)
                         return _primed = FormatterBlob::None;       // ending early because the baseline was set inside of the stream via ResetBaseLine
@@ -535,6 +543,60 @@ namespace Formatters
             // while there are elements on our stack, we need to end them
         if (_baseLineStackPtr > _terminatingBaseLineStackPtr) return _primed = FormatterBlob::EndElement;
         return FormatterBlob::None;
+    }
+
+    template<typename CharType>
+        void TextInputFormatter<CharType>::SkipElement()
+    {
+        _primed = FormatterBlob::None;
+        if (_pendingHeader) return;
+
+        if (_protectedStringMode)
+            Throw(std::runtime_error("Pending string must be processed before calling SkipElement()"));
+
+        using Consts = FormatterConstants<CharType>;
+        bool atLeastOneNewLine = false;
+
+        // note that there are fewer exceptions thrown by invalid characters in this path
+        while (_marker.Remaining()) {
+            switch (unsigned(*_marker.Pointer()))
+            {
+            case '\t':
+                ++_marker;
+                _activeLineSpaces = CeilToMultiple(_activeLineSpaces+1, _tabWidth);
+                break;
+            case ' ': 
+                ++_marker;
+                ++_activeLineSpaces; 
+                break;
+
+            case '\r':  // (could be an independent new line, or /r/n combo)
+            case '\n':  // (independent new line. A following /r will be treated as another new line)
+                _marker.AdvanceCheckNewLine();
+                _activeLineSpaces = 0;
+                _elementExtendedBySemicolon = false;
+                atLeastOneNewLine = true;
+                break;
+
+            case ';':
+                _elementExtendedBySemicolon = true;
+
+                // intentional fall-through
+            default:
+                if (!_elementExtendedBySemicolon && _activeLineSpaces <= _parentBaseLine)
+                    return;
+
+                for (;;) {
+                    if (TryEat(_marker, Consts::ProtectedNamePrefix))
+                        ReadToProtectedStringEnd<CharType>(_marker);
+                    else
+                        ++_marker;
+
+                    if (!_marker.Remaining() || *_marker.Pointer() == '\r' || *_marker.Pointer() == '\n' || *_marker.Pointer() == ';') break;
+                }
+                break;
+            }
+        }
     }
 
     template<typename CharType>
@@ -731,9 +793,11 @@ namespace Formatters
         _activeLineSpaces = 0;
         _parentBaseLine = -1;
         _terminatingBaseLineStackPtr = _baseLineStackPtr = 0;
-        _protectedStringMode = false;
+        _format = 2;
         _tabWidth = TabWidth;
         _pendingHeader = true;
+        _protectedStringMode = false;
+        _elementExtendedBySemicolon = false;
     }
 
     template<typename CharType>
@@ -749,9 +813,11 @@ namespace Formatters
 		for (signed& s:_baseLineStack) s = 0;
 		_terminatingBaseLineStackPtr = _baseLineStackPtr = 0u;
 
-		_protectedStringMode = false;
-		_format = _tabWidth = 0u;
+		_format = 2;
+        _tabWidth = 0u;
 		_pendingHeader = false;
+        _protectedStringMode = false;
+        _elementExtendedBySemicolon = false;
 	}
 
 	template<typename CharType>
@@ -762,10 +828,11 @@ namespace Formatters
 	, _parentBaseLine(cloneFrom._parentBaseLine)
 	, _baseLineStackPtr(cloneFrom._baseLineStackPtr)
     , _terminatingBaseLineStackPtr(cloneFrom._terminatingBaseLineStackPtr)
-	, _protectedStringMode(cloneFrom._protectedStringMode)
 	, _format(cloneFrom._format)
 	, _tabWidth(cloneFrom._tabWidth)
 	, _pendingHeader(cloneFrom._pendingHeader)
+    , _protectedStringMode(cloneFrom._protectedStringMode)
+    , _elementExtendedBySemicolon(cloneFrom._elementExtendedBySemicolon)
 	{
 		for (unsigned c=0; c<dimof(_baseLineStack); ++c)
 			_baseLineStack[c] = cloneFrom._baseLineStack[c];
@@ -782,10 +849,11 @@ namespace Formatters
         _terminatingBaseLineStackPtr = cloneFrom._terminatingBaseLineStackPtr;
 		for (unsigned c=0; c<dimof(_baseLineStack); ++c)
 			_baseLineStack[c] = cloneFrom._baseLineStack[c];
-		_protectedStringMode = cloneFrom._protectedStringMode;
 		_format = cloneFrom._format;
 		_tabWidth = cloneFrom._tabWidth;
 		_pendingHeader = cloneFrom._pendingHeader;
+        _protectedStringMode = cloneFrom._protectedStringMode;
+        _elementExtendedBySemicolon = cloneFrom._elementExtendedBySemicolon;
 		return *this;
 	}
 

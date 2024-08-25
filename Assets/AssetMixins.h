@@ -18,7 +18,7 @@ namespace Assets
 {
 	namespace Internal
 	{
-		#define DOES_SUBST_MEMBER(Name, ...)																		\
+		#define TEST_SUBST_MEMBER(Name, ...)																		\
 			template<typename T> static constexpr auto Name##_(int) -> decltype(__VA_ARGS__, std::true_type{});		\
 			template<typename...> static constexpr auto Name##_(...) -> std::false_type;							\
 			static constexpr bool Name = decltype(Name##_<Type>(0))::value;											\
@@ -27,13 +27,13 @@ namespace Assets
 		template<typename Type>
 			struct FormatterAssetMixinTraits
 		{
-			DOES_SUBST_MEMBER(HasDeserializeKey, std::declval<T&>().TryDeserializeKey(
+			TEST_SUBST_MEMBER(HasDeserializeKey, std::declval<T&>().TryDeserializeKey(
 				std::declval< Formatters::TextInputFormatter<char>& >(),
 				std::declval< StringSection<> >()
 				));
 		};
 
-		#undef DOES_SUBST_MEMBER
+		#undef TEST_SUBST_MEMBER
 	}
 
 	template<typename ObjectType>

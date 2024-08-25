@@ -70,10 +70,7 @@ namespace UnitTests
         }
     }
 
-    TEST_CASE( "StreamFormatter-InputSyntaxTests", "[utility]" )
-    {
-        SECTION("NestedElements") {
-            const std::basic_string<utf8> testStringWithNestedElements = R"(~~!Format=2; Tab=4
+    const std::basic_string<utf8> testStringWithNestedElements = R"(~~!Format=2; Tab=4
 Value0 = value0
 Value1 = value1
 Element =~
@@ -83,6 +80,52 @@ Element =~
         anotherThing = value
     AnotherValue = something
 Value2 = value2)";
+
+    const std::basic_string<utf8> testStringWithSequences = R"(~~!Format=2; Tab=4
+=~
+    Value0 = value
+    Value1 = value2
+=       ~           
+    SomeValue=one
+    SomeValue=two
+=~           ~~ This is comment at the start of an element
+    =!%one
+    =&*two
+    =(three)
+=~
+    =~
+        =~
+            =~
+)";
+
+    const std::basic_string<utf8> testStringWithCompressedElements = R"(~~!Format=2; Tab=4
+Value0 = value; Value1 = value2
+=one; =two;
+
+~~ Following is a sight detail in the syntax. In the following element, the second "=~" that appears
+~~ begins a nested element within the first
+~~ This is also the case if all of the elements begin on the same line. The syntax looks a little
+~~ ambiguous; but we interpret it as nesting
+
+=~; SomeValue=one;
+    SomeValue=two; =~
+
+~~ Following on from above; are examples where elements still nest within each other
+
+=~; mappedEle=~; =~;
+=~; value=1; =~; value=2; =~; value=3
+)";
+
+    const std::basic_string<utf8> testStringWithCompressedElements2 = R"(~~!Format=2; Tab=4
+=~;SomeValue=one;
+    SomeValue=two;=~
+=~;mappedEle=~;=~;
+=~;value=1;=~;value=2;=~;value=3
+)";
+
+    TEST_CASE( "StreamFormatter-InputSyntaxTests", "[utility]" )
+    {
+        SECTION("NestedElements") {
             Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithNestedElements));
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
             REQUIRE(RequireStringValue(formatter).AsString() == "value0");
@@ -113,22 +156,6 @@ Value2 = value2)";
         }
 
         SECTION("Sequences") {
-            const std::basic_string<utf8> testStringWithSequences = R"(~~!Format=2; Tab=4
-=~
-    Value0 = value
-    Value1 = value2
-=       ~           
-    SomeValue=one
-    SomeValue=two
-=~           ~~ This is comment at the start of an element
-    =!%one
-    =&*two
-    =(three)
-=~
-    =~
-        =~
-            =~
-)";
             Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithSequences));
             RequireBeginElement(formatter);
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
@@ -161,23 +188,6 @@ Value2 = value2)";
         }
 
         SECTION("CompressedElements") {
-            const std::basic_string<utf8> testStringWithCompressedElements = R"(~~!Format=2; Tab=4
-Value0 = value; Value1 = value2
-=one; =two;
-
-~~ Following is a sight detail in the syntax. In the following element, the second "=~" that appears
-~~ begins a nested element within the first
-~~ This is also the case if all of the elements begin on the same line. The syntax looks a little
-~~ ambigous; but we interpret it as nesting
-
-=~; SomeValue=one;
-    SomeValue=two; =~
-
-~~ Following on from above; are examples where elements still nest within each other
-
-=~; mappedEle=~; =~;
-=~; value=1; =~; value=2; =~; value=3
-)";
             Formatters::TextInputFormatter<utf8> formatter(MakeStringSection(testStringWithCompressedElements));
             REQUIRE(RequireKeyedItem(formatter).AsString() == "Value0");
             REQUIRE(RequireStringValue(formatter).AsString() == "value");
@@ -343,6 +353,110 @@ EnvSettings=~
 		ShadowResolveModel=0i; SpecularNonMetalBrightness=3.5f; DiffuseWideningMax=2.5f
 		Name=TertiaryLight; ShadowFrustumSettings=shadows; Visible=0u
 )--";
+
+    template<typename Formatter>
+        static void SkipElement_Slow(Formatter& formatter)
+    {
+        unsigned subtreeEle = 0;
+        typename Formatter::InteriorSection dummy0;
+        using namespace Formatters;
+        for (;;) {
+            switch(formatter.PeekNext()) {
+            case FormatterBlob::BeginElement:
+                if (!formatter.TryBeginElement())
+                    ThrowFormatException(formatter, "Malformed begin element while skipping forward");
+                ++subtreeEle;
+                break;
+
+            case FormatterBlob::EndElement:
+                if (!subtreeEle) return;    // end now, while the EndElement is primed
+
+                if (!formatter.TryEndElement())
+                    ThrowFormatException(formatter, "Malformed end element while skipping forward");
+                --subtreeEle;
+                break;
+
+            case FormatterBlob::KeyedItem:
+                if (!formatter.TryKeyedItem(dummy0))
+                    ThrowFormatException(formatter, "Malformed keyed item while skipping forward");
+                break;
+
+            case FormatterBlob::Value:
+                // we must have either TryStringValue or TryRawValue, because we don't want to use some arbitrary type with TryCastValue
+                if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+                    Utility::ImpliedTyping::TypeDesc type;
+                    IteratorRange<const void*> data;
+                    if (!formatter.TryRawValue(data, type))
+                        ThrowFormatException(formatter, "Malformed value while skipping forward");
+                } else {
+                    if (!formatter.TryStringValue(dummy0))
+                        ThrowFormatException(formatter, "Malformed value while skipping forward");
+                }
+                break;
+
+            case FormatterBlob::CharacterData:
+                if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
+                    if (!formatter.TryCharacterData(dummy0))
+                        ThrowFormatException(formatter, "Malformed value while skipping forward");
+                } else
+                    UNREACHABLE();
+                break;
+
+            case FormatterBlob::None:
+                return;
+
+            default:
+                ThrowFormatException(formatter, "Unexpected blob hit while skipping forward");
+            }
+        }
+    }
+
+    TEST_CASE( "StreamFormatter-FastSkipElement", "[utility]" )
+    {
+        // Ensure that TextInputFormatter::SkipElement method produces the expected results
+        // We'll do this by comparing it with a trivial implementation on every blob on from
+        // many different structures
+        std::string testStrings[] {
+            testStringWithNestedElements, testStringWithSequences, testStringWithCompressedElements, testStringWithCompressedElements2,
+            testString, testString2
+        };
+
+        for (auto str:testStrings) {
+            Formatters::TextInputFormatter<> fmttr0(MakeStringSection(str)), fmttr1(MakeStringSection(str));
+            while (fmttr0.PeekNext() != Formatters::FormatterBlob::None) {
+                StringSection<> str;
+                switch (fmttr0.PeekNext()) {
+                case Formatters::FormatterBlob::KeyedItem:
+                    assert(fmttr0.TryKeyedItem(str));
+                    assert(fmttr1.TryKeyedItem(str));
+                    break;
+                case Formatters::FormatterBlob::Value:
+                    assert(fmttr0.TryStringValue(str));
+                    assert(fmttr1.TryStringValue(str));
+                    break;
+                case Formatters::FormatterBlob::BeginElement:
+                    assert(fmttr0.TryBeginElement());
+                    assert(fmttr1.TryBeginElement());
+                    break;
+                case Formatters::FormatterBlob::EndElement:
+                    assert(fmttr0.TryEndElement());
+                    assert(fmttr1.TryEndElement());
+                    break;
+                default:
+                    Throw(std::runtime_error("Unexpected blob"));
+                }
+
+                auto copy0 = fmttr0, copy1 = fmttr1;
+                copy0.SkipElement(); SkipElement_Slow(copy1);
+                auto n0 = copy0.PeekNext(), n1 = copy1.PeekNext();
+                REQUIRE((n0 == Formatters::FormatterBlob::EndElement || n0 == Formatters::FormatterBlob::None));
+                REQUIRE((n1 == Formatters::FormatterBlob::EndElement || n1 == Formatters::FormatterBlob::None));
+                REQUIRE(copy0.GetLocation()._lineIndex == copy1.GetLocation()._lineIndex);
+                REQUIRE(copy0.GetLocation()._charIndex == copy1.GetLocation()._charIndex);
+            }
+            assert(fmttr1.PeekNext() == Formatters::FormatterBlob::None);
+        }
+    }
 
     struct ExampleSerializableObject
     {

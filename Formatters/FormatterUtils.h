@@ -15,70 +15,34 @@ namespace Formatters
 {
 	namespace Internal
 	{
-		template<typename Type> static auto HasTryCharacterData_Helper(int) -> decltype(std::declval<Type>().TryCharacterData(std::declval<StringSection<typename Type::value_type>&>()), std::true_type{});
-		template<typename...> static auto HasTryCharacterData_Helper(...) -> std::false_type;
-		template<typename Type> struct HasTryCharacterData : decltype(HasTryCharacterData_Helper<Type>(0)) {};
+		#define TEST_SUBST_MEMBER(Name, ...)																		\
+			template<typename T> static constexpr auto Name##_(int) -> decltype(__VA_ARGS__, std::true_type{});		\
+			template<typename...> static constexpr auto Name##_(...) -> std::false_type;							\
+			static constexpr bool Name = decltype(Name##_<Type>(0))::value;											\
+			/**/
 
-		template<typename Type> static auto HasSkipValueOrElement_Helper(int) -> decltype(std::declval<Type>().SkipValueOrElement(), std::true_type{});
-		template<typename...> static auto HasSkipValueOrElement_Helper(...) -> std::false_type;
-		template<typename Type> struct HasSkipValueOrElement : decltype(HasSkipValueOrElement_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasTryStringValue_Helper(int) -> decltype(std::declval<Type>().TryStringValue(std::declval<StringSection<typename Type::value_type>&>()), std::true_type{});
-		template<typename...> static auto HasTryStringValue_Helper(...) -> std::false_type;
-		template<typename Type> struct HasTryStringValue : decltype(HasTryStringValue_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasTryRawValue_Helper(int) -> decltype(std::declval<Type>().TryRawValue(std::declval<IteratorRange<const void*>&>(), std::declval<Utility::ImpliedTyping::TypeDesc&>()), std::true_type{});
-		template<typename...> static auto HasTryRawValue_Helper(...) -> std::false_type;
-		template<typename Type> struct HasTryRawValue : decltype(HasTryRawValue_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasTryCastValue_Helper(int) -> decltype(std::declval<Type>().TryCastValue(std::declval<IteratorRange<void*>>(), std::declval<const Utility::ImpliedTyping::TypeDesc&>()), std::true_type{});
-		template<typename...> static auto HasTryCastValue_Helper(...) -> std::false_type;
-		template<typename Type> struct HasTryCastValue : decltype(HasTryCastValue_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasTryKeyedItemHash_Helper(int) -> decltype(std::declval<Type>().TryKeyedItem(std::declval<uint64_t&>()), std::true_type{});
-		template<typename...> static auto HasTryKeyedItemHash_Helper(...) -> std::false_type;
-		template<typename Type> struct HasTryKeyedItemHash : decltype(HasTryKeyedItemHash_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasReversedEndian_Helper(int) -> decltype(std::declval<Type>().ReversedEndian(), std::true_type{});
-		template<typename...> static auto HasReversedEndian_Helper(...) -> std::false_type;
-		template<typename Type> struct HasReversedEndian : decltype(HasReversedEndian_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasGetLocation_Helper(int) -> decltype(std::declval<Type>().GetLocation(), std::true_type{});
-		template<typename...> static auto HasGetLocation_Helper(...) -> std::false_type;
-		template<typename Type> struct HasGetLocation : decltype(HasGetLocation_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasBeginBlock_Helper(int) -> decltype(std::declval<Type>().TryBeginBlock(std::declval<typename Type::EvaluatedTypeId&>()), std::true_type{});
-		template<typename...> static auto HasBeginBlock_Helper(...) -> std::false_type;
-		template<typename Type> struct HasBeginBlock : decltype(HasBeginBlock_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasBeginElement_Helper(int) -> decltype(std::declval<Type>().TryBeginElement(), std::true_type{});
-		template<typename...> static auto HasBeginElement_Helper(...) -> std::false_type;
-		template<typename Type> struct HasBeginElement : decltype(HasBeginElement_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasBeginArray_Helper(int) -> decltype(std::declval<Type>().TryBeginArray(std::declval<unsigned&>(), std::declval<typename Type::EvaluatedTypeId&>()), std::true_type{});
-		template<typename...> static auto HasBeginArray_Helper(...) -> std::false_type;
-		template<typename Type> struct HasBeginArray : decltype(HasBeginArray_Helper<Type>(0)) {};
-
-		template<typename Type> static auto HasBeginDictionary_Helper(int) -> decltype(std::declval<Type>().TryBeginDictionary(std::declval<typename Type::EvaluatedTypeId&>(), std::declval<typename Type::EvaluatedTypeId&>()), std::true_type{});
-		template<typename...> static auto HasBeginDictionary_Helper(...) -> std::false_type;
-		template<typename Type> struct HasBeginDictionary : decltype(HasBeginDictionary_Helper<Type>(0)) {};
-
-		template<typename Formatter>
+		template<typename Type>
 			struct FormatterTraits
 		{
-			static constexpr auto HasCharacterData = Internal::HasTryCharacterData<Formatter>::value;
-			static constexpr auto HasSkipValueOrElement = Internal::HasSkipValueOrElement<Formatter>::value;
-			static constexpr auto HasTryStringValue = Internal::HasTryStringValue<Formatter>::value;
-			static constexpr auto HasTryRawValue = Internal::HasTryRawValue<Formatter>::value;
-			static constexpr auto HasTryCastValue = Internal::HasTryCastValue<Formatter>::value;
-			static constexpr auto HasTryKeyedItemHash = Internal::HasTryKeyedItemHash<Formatter>::value;
-			static constexpr auto HasReversedEndian = Internal::HasReversedEndian<Formatter>::value;
-			static constexpr auto HasGetLocation = Internal::HasGetLocation<Formatter>::value;
-			static constexpr auto HasBeginBlock = Internal::HasBeginBlock<Formatter>::value;
-			static constexpr auto HasBeginElement = Internal::HasBeginElement<Formatter>::value;
-			static constexpr auto HasBeginArray = Internal::HasBeginArray<Formatter>::value;
-			static constexpr auto HasBeginDictionary = Internal::HasBeginDictionary<Formatter>::value;
+			TEST_SUBST_MEMBER(HasSkipValueOrElement, 	std::declval<T>().SkipValueOrElement());
+			TEST_SUBST_MEMBER(HasSkipElement, 			std::declval<T>().SkipElement());
+
+			TEST_SUBST_MEMBER(HasCharacterData, 		std::declval<T>().TryCharacterData(std::declval<StringSection<typename T::value_type>&>()))
+			TEST_SUBST_MEMBER(HasTryStringValue, 		std::declval<T>().TryStringValue(std::declval<StringSection<typename T::value_type>&>()))
+			TEST_SUBST_MEMBER(HasTryRawValue, 			std::declval<T>().TryRawValue(std::declval<IteratorRange<const void*>&>(), std::declval<Utility::ImpliedTyping::TypeDesc&>()))
+			TEST_SUBST_MEMBER(HasTryCastValue,			std::declval<T>().TryCastValue(std::declval<IteratorRange<void*>>(), std::declval<const Utility::ImpliedTyping::TypeDesc&>()))
+			TEST_SUBST_MEMBER(HasTryKeyedItemHash,		std::declval<T>().TryKeyedItem(std::declval<uint64_t&>()))
+
+			TEST_SUBST_MEMBER(HasGetLocation,			std::declval<T>().GetLocation())
+			
+			TEST_SUBST_MEMBER(HasReversedEndian,		std::declval<T>().ReversedEndian())
+			TEST_SUBST_MEMBER(HasBeginBlock,			std::declval<T>().TryBeginBlock(std::declval<typename T::EvaluatedTypeId&>()))
+			TEST_SUBST_MEMBER(HasBeginElement,			std::declval<T>().TryBeginElement())
+			TEST_SUBST_MEMBER(HasBeginArray,			std::declval<T>().TryBeginArray(std::declval<unsigned&>()))
+			TEST_SUBST_MEMBER(HasBeginDictionary,		std::declval<T>().TryBeginDictionary(std::declval<typename T::EvaluatedTypeId&>(), std::declval<typename T::EvaluatedTypeId&>()))
 		};
+
+		#undef TEST_SUBST_MEMBER
 	}
 
 	template<typename Formatter>
@@ -97,30 +61,68 @@ namespace Formatters
 	template<typename Formatter>
 		void SkipElement(Formatter& formatter)
 	{
-		unsigned subtreeEle = 0;
-		typename Formatter::InteriorSection dummy0;
-		for (;;) {
-			switch(formatter.PeekNext()) {
-			case FormatterBlob::BeginElement:
-				if (!formatter.TryBeginElement())
-					ThrowFormatException(formatter, "Malformed begin element while skipping forward");
-				++subtreeEle;
-				break;
+		if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasSkipElement) {
+			formatter.SkipElement();
+		} else {
+			unsigned subtreeEle = 0;
+			typename Formatter::InteriorSection dummy0;
+			for (;;) {
+				switch(formatter.PeekNext()) {
+				case FormatterBlob::BeginElement:
+					if (!formatter.TryBeginElement())
+						ThrowFormatException(formatter, "Malformed begin element while skipping forward");
+					++subtreeEle;
+					break;
 
-			case FormatterBlob::EndElement:
-				if (!subtreeEle) return;    // end now, while the EndElement is primed
+				case FormatterBlob::EndElement:
+					if (!subtreeEle) return;    // end now, while the EndElement is primed
 
-				if (!formatter.TryEndElement())
-					ThrowFormatException(formatter, "Malformed end element while skipping forward");
-				--subtreeEle;
-				break;
+					if (!formatter.TryEndElement())
+						ThrowFormatException(formatter, "Malformed end element while skipping forward");
+					--subtreeEle;
+					break;
 
-			case FormatterBlob::KeyedItem:
-				if (!formatter.TryKeyedItem(dummy0))
-					ThrowFormatException(formatter, "Malformed keyed item while skipping forward");
-				break;
+				case FormatterBlob::KeyedItem:
+					if (!formatter.TryKeyedItem(dummy0))
+						ThrowFormatException(formatter, "Malformed keyed item while skipping forward");
+					break;
 
-			case FormatterBlob::Value:
+				case FormatterBlob::Value:
+					// we must have either TryStringValue or TryRawValue, because we don't want to use some arbitrary type with TryCastValue
+					if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+						Utility::ImpliedTyping::TypeDesc type;
+						IteratorRange<const void*> data;
+						if (!formatter.TryRawValue(data, type))
+							ThrowFormatException(formatter, "Malformed value while skipping forward");
+					} else {
+						if (!formatter.TryStringValue(dummy0))
+							ThrowFormatException(formatter, "Malformed value while skipping forward");
+					}
+					break;
+
+				case FormatterBlob::CharacterData:
+					if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
+						if (!formatter.TryCharacterData(dummy0))
+							ThrowFormatException(formatter, "Malformed value while skipping forward");
+					} else
+						UNREACHABLE();
+					break;
+
+				default:
+					ThrowFormatException(formatter, "Unexpected blob or end of stream hit while skipping forward");
+				}
+			}
+		}
+	}
+
+	template<typename Formatter>
+		void SkipValueOrElement(Formatter& formatter)
+	{
+		if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasSkipValueOrElement) {
+			formatter.SkipValueOrElement();
+		} else {
+			typename Formatter::InteriorSection dummy0;
+			if (formatter.PeekNext() == FormatterBlob::Value) {
 				// we must have either TryStringValue or TryRawValue, because we don't want to use some arbitrary type with TryCastValue
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
 					Utility::ImpliedTyping::TypeDesc type;
@@ -131,52 +133,16 @@ namespace Formatters
 					if (!formatter.TryStringValue(dummy0))
 						ThrowFormatException(formatter, "Malformed value while skipping forward");
 				}
-				break;
-
-			case FormatterBlob::CharacterData:
-				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
-					if (!formatter.TryCharacterData(dummy0))
-						ThrowFormatException(formatter, "Malformed value while skipping forward");
-				} else
-					UNREACHABLE();
-				break;
-
-			default:
-				ThrowFormatException(formatter, "Unexpected blob or end of stream hit while skipping forward");
-			}
-		}
-	}
-
-	template<typename Formatter, typename std::enable_if<!Formatters::Internal::FormatterTraits<Formatter>::HasSkipValueOrElement>::type* =nullptr>
-		void SkipValueOrElement(Formatter& formatter)
-	{
-		typename Formatter::InteriorSection dummy0;
-		if (formatter.PeekNext() == FormatterBlob::Value) {
-			// we must have either TryStringValue or TryRawValue, because we don't want to use some arbitrary type with TryCastValue
-			if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
-				Utility::ImpliedTyping::TypeDesc type;
-				IteratorRange<const void*> data;
-				if (!formatter.TryRawValue(data, type))
-					ThrowFormatException(formatter, "Malformed value while skipping forward");
 			} else {
-				if (!formatter.TryStringValue(dummy0))
-					ThrowFormatException(formatter, "Malformed value while skipping forward");
-			}
-		} else {
-			if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasBeginElement) {
-				if (!formatter.TryBeginElement())
-					ThrowFormatException(formatter, "Expected begin element while skipping forward");
-				SkipElement(formatter);
-				if (!formatter.TryEndElement())
-					ThrowFormatException(formatter, "Malformed end element while skipping forward");
+				if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasBeginElement) {
+					if (!formatter.TryBeginElement())
+						ThrowFormatException(formatter, "Expected begin element while skipping forward");
+					SkipElement(formatter);
+					if (!formatter.TryEndElement())
+						ThrowFormatException(formatter, "Malformed end element while skipping forward");
+				}
 			}
 		}
-	}
-
-	template<typename Formatter, typename std::enable_if<Formatters::Internal::FormatterTraits<Formatter>::HasSkipValueOrElement>::type* =nullptr>
-		void SkipValueOrElement(Formatter& formatter)
-	{
-		formatter.SkipValueOrElement();
 	}
 
 	template<typename Formatter>
