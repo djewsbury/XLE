@@ -25,11 +25,16 @@ namespace Assets
 			/**/
 
 		template<typename Type>
-			struct FormatterAssetMixinTraits
+			struct AssetMixinTraits
 		{
 			TEST_SUBST_MEMBER(HasDeserializeKey, std::declval<T&>().TryDeserializeKey(
 				std::declval< Formatters::TextInputFormatter<char>& >(),
 				std::declval< StringSection<> >()
+				));
+
+			TEST_SUBST_MEMBER(HasMergeInWithFilenameResolve, std::declval<T&>().MergeInWithFilenameResolve(
+				std::declval< const T& >(),
+				std::declval< const ::Assets::DirectorySearchRules& >()
 				));
 		};
 
@@ -52,8 +57,6 @@ namespace Assets
 	private:
 		::Assets::DirectorySearchRules _searchRules;
 		::Assets::DependencyValidation _depVal;
-
-		Formatters::TextInputFormatter<char> AsFormatter(const Blob&);
 	};
 
 	template<typename ObjectType>
@@ -74,12 +77,25 @@ namespace Assets
 		::Assets::DirectorySearchRules _searchRules;
 		::Assets::DependencyValidation _depVal;
 		std::vector<std::string> _inherit;
-
-		Formatters::TextInputFormatter<char> AsFormatter(const Blob&);
 	};
 
 	template<typename ObjectType>
-		using FormatterAssetMixin = std::conditional_t<Internal::FormatterAssetMixinTraits<ObjectType>::HasDeserializeKey, FormatterAssetMixin_DeserializeKey<ObjectType>, FormatterAssetMixin_NoDeserializeKey<ObjectType>>;
+		using FormatterAssetMixin = std::conditional_t<Internal::AssetMixinTraits<ObjectType>::HasDeserializeKey, FormatterAssetMixin_DeserializeKey<ObjectType>, FormatterAssetMixin_NoDeserializeKey<ObjectType>>;
+
+	template<typename ObjectType, typename... PassThroughArgs>
+		class PassThroughAssetMixin : public ObjectType
+	{
+	public:
+		PassThroughAssetMixin(PassThroughArgs&&..., ::Assets::DirectorySearchRules&& = {}, ::Assets::DependencyValidation&& = {});
+		PassThroughAssetMixin() = default;
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const { return _searchRules; }
+
+	private:
+		::Assets::DirectorySearchRules _searchRules;
+		::Assets::DependencyValidation _depVal;
+	};
 
 	template <typename ObjectType, typename BaseAssetType=FormatterAssetMixin<ObjectType>>
 		class ResolvedAssetMixin : public ObjectType
@@ -131,11 +147,18 @@ namespace Assets
 			return result;
 		}
 		void SkipValueOrElement(Formatters::TextInputFormatter<utf8>&);
+
+		inline Formatters::TextInputFormatter<char> AsFormatter(const Blob& blob)
+		{
+			if (!blob)
+				return Formatters::TextInputFormatter<char>{};
+			return Formatters::TextInputFormatter<char>{ MakeIteratorRange(*blob).template Cast<const void*>() };
+		}
 	}
 
 	template<typename ObjectType>
 		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(Blob&& blob, ::Assets::DependencyValidation&& depVal, StringSection<>)
-	: ObjectType(Internal::RemoveConst(AsFormatter(blob)))
+	: ObjectType(Internal::RemoveConst(Internal::AsFormatter(blob)))
 	, _depVal(std::move(depVal))
 	{}
 
@@ -145,14 +168,6 @@ namespace Assets
 	template<typename ObjectType>
 		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(const ObjectType& copyFrom, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	: ObjectType(copyFrom), _searchRules(searchRules), _depVal(depVal) {}
-
-	template<typename ObjectType>
-		Formatters::TextInputFormatter<char> FormatterAssetMixin_NoDeserializeKey<ObjectType>::AsFormatter(const Blob& blob)
-	{
-		if (!blob)
-			return Formatters::TextInputFormatter<char>{};
-		return Formatters::TextInputFormatter<char>{ MakeIteratorRange(*blob).template Cast<const void*>() };
-	}
 
 	template<typename ObjectType>
 		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
@@ -188,6 +203,15 @@ namespace Assets
 	template<typename ObjectType>
 		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(const ObjectType& copyFrom, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
 	: ObjectType(copyFrom), _searchRules(searchRules), _depVal(depVal) {}
+
+	template<typename ObjectType, typename... PassThroughArgs>
+		PassThroughAssetMixin<ObjectType, PassThroughArgs...>::PassThroughAssetMixin(PassThroughArgs&&... args, ::Assets::DirectorySearchRules&& searchRules, ::Assets::DependencyValidation&& depVal)
+	: ObjectType(std::forward<PassThroughArgs>(args)...)
+	, _searchRules(searchRules)
+	, _depVal(depVal)
+	{}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <typename ObjectType, typename BaseAssetType>
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(

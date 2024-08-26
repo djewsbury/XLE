@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Drawables.h"
+#include "../Assets/RawMaterial.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/ParameterBox.h"
 #include <memory>
@@ -166,6 +167,14 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _shaderPatches;
 		ParameterBox _materialSelectors;
 	};
+
+	struct MatMachineDecompositionHelper
+	{
+		ParameterBox _matSelectors;
+		RenderCore::Assets::RenderStateSet _stateSet;
+		uint64_t _shaderPatchCollection = ~0u;
+	};
+	MatMachineDecompositionHelper DecomposeMaterialMachine(IteratorRange<RenderCore::Assets::ScaffoldCmdIterator>);
 
 }}
 

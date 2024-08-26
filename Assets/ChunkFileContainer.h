@@ -91,11 +91,11 @@ namespace Assets
 			template<typename...> static auto HasChunkRequestsHelper(...) -> std::false_type;
 
 		public:
-			static const bool Constructor_Blob = std::is_constructible<AssetType, ::Assets::Blob&&, DependencyValidation&&, StringSection<>>::value;
-			static const bool Constructor_ArtifactRequestResult = std::is_constructible<AssetType, IteratorRange<ArtifactRequestResult*>, DependencyValidation&&>::value;
+			static constexpr bool Constructor_Blob = std::is_constructible<AssetType, ::Assets::Blob&&, DependencyValidation&&, StringSection<>>::value;
+			static constexpr bool Constructor_ArtifactRequestResult = std::is_constructible<AssetType, IteratorRange<ArtifactRequestResult*>, DependencyValidation&&>::value;
 
-			static const bool HasCompileProcessType = decltype(HasCompileProcessTypeHelper<AssetType>(0))::value;
-			static const bool HasChunkRequests = decltype(HasChunkRequestsHelper<AssetType>(0))::value;
+			static constexpr bool HasCompileProcessType = decltype(HasCompileProcessTypeHelper<AssetType>(0))::value;
+			static constexpr bool HasChunkRequests = decltype(HasChunkRequestsHelper<AssetType>(0))::value;
 		};
 
 		template<typename AssetType>
@@ -126,7 +126,7 @@ namespace Assets
 	//		Auto construct to:
 	//			(const ArtifactChunkContainer&)
 	//
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer)>
+	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::Constructor_ChunkFileContainer)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		// See also AutoConstructToPromise<> variation of this function
@@ -140,7 +140,7 @@ namespace Assets
 		} CATCH_END
 	}
 
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_ChunkFileContainer)>
+	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::Constructor_ChunkFileContainer)>
 		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {

@@ -10,6 +10,7 @@
 #include "AssetsCore.h"
 #include "AssetTraits.h"
 #include "AssetUtils.h"		// for DirectorySearchRules
+#include "Continuation.h"
 #include "../Formatters/TextFormatter.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/StringUtils.h"
@@ -97,10 +98,10 @@ namespace Assets
 		std::shared_future<std::shared_ptr<ConfigFileContainer<Formatters::TextInputFormatter<>>>> GetConfigFileContainerFuture(StringSection<> identifier);
 
 		template<typename AssetType>
-            static const bool HasConstructor_Formatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&, const DirectorySearchRules&, const DependencyValidation&>::value;
+            static constexpr bool HasConstructor_Formatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&, const DirectorySearchRules&, const DependencyValidation&>::value;
 
 		template<typename AssetType>
-            static const bool HasConstructor_SimpleFormatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&>::value;
+            static constexpr bool HasConstructor_SimpleFormatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&>::value;
     }
 
     #define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
@@ -200,7 +201,7 @@ namespace Assets
 
 	template<
 		typename Promise,
-		ENABLE_IF(	Internal::AssetTraits<Internal::PromisedType<Promise>>::Constructor_Formatter
+		ENABLE_IF(	Internal::HasConstructor_Formatter<Internal::PromisedTypeRemPtr<Promise>>
 					&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>)>
 		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)
 	{
@@ -229,6 +230,34 @@ namespace Assets
 						fmttr, 
 						DefaultDirectorySearchRules(containerName),
 						container->GetDependencyValidation());
+				});
+		}
+	}
+
+	template<
+		typename Promise,
+		ENABLE_IF(	Internal::HasConstructor_SimpleFormatter<Internal::PromisedTypeRemPtr<Promise>> && !Internal::HasConstructor_Formatter<Internal::PromisedTypeRemPtr<Promise>>
+					&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>)>
+		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)
+	{
+		const char* p = XlFindChar(initializer, ':');
+		if (p) {
+			auto containerName = MakeStringSection(initializer.begin(), p).AsString();
+			std::string sectionName = MakeStringSection((const utf8*)(p+1), (const utf8*)initializer.end()).AsString();
+			auto containerFuture = Internal::GetConfigFileContainerFuture(containerName);
+			WhenAll(containerFuture).ThenConstructToPromise(
+				std::move(promise),
+				[sectionName](const std::shared_ptr<ConfigFileContainer<>>& container) {
+					auto fmttr = container->GetFormatter(sectionName);
+					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(fmttr);
+				});
+		} else {
+			auto containerFuture = Internal::GetConfigFileContainerFuture(initializer);
+			WhenAll(containerFuture).ThenConstructToPromise(
+				std::move(promise),
+				[](const std::shared_ptr<ConfigFileContainer<>>& container) {
+					auto fmttr = container->GetRootFormatter();
+					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(fmttr);
 				});
 		}
 	}

@@ -54,7 +54,7 @@ namespace Formatters
 		TextInputFormatter<CharType> CreateChildFormatter();
 
 		// Scan forward until the EndElement or None that terminates the last begun element
-		void SkipElement();
+		StringSection<CharType> SkipElement();
 
 		using value_type = CharType;
 		using InteriorSection = StringSection<CharType>;

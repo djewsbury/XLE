@@ -36,9 +36,9 @@ namespace Assets
 			class AssetTraits_
 		{
 		public:
-			static const bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>, DirectorySearchRules&&, DependencyValidation&&>::value;
-			static const bool Constructor_ChunkFileContainer = std::is_constructible<AssetType, const ArtifactChunkContainer&>::value && !std::is_same_v<AssetType, ArtifactChunkContainer>;
-			static const bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, DirectorySearchRules&&, DependencyValidation&&>::value;
+			static constexpr bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>, DirectorySearchRules&&, DependencyValidation&&>::value;
+			static constexpr bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, DirectorySearchRules&&, DependencyValidation&&>::value;
+			static constexpr bool Constructor_BlobFile = std::is_constructible<AssetType, Blob&&, DirectorySearchRules&&, DependencyValidation&&>::value;
 		};
 
 		template<typename AssetType> static auto RemoveSmartPtr_Helper(int) -> typename AssetType::element_type;
@@ -135,6 +135,28 @@ namespace Assets
 				MakeStringSection(block.get(), PtrAdd(block.get(), size)),
 				DefaultDirectorySearchRules(initializer),
 				::Assets::DependencyValidation(depVal));
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
+		} CATCH (const std::exception& e) {
+			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
+		} CATCH_END
+	}
+
+	//
+	//		Auto construct to:
+	//			(Blob&&, DirectorySearchRules&&, DependencyValidation&&)
+	//
+	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_BlobFile)>
+		AssetType AutoConstructAsset(StringSection<> initializer)
+	{
+		FileSnapshot snapshot;
+		auto blob = MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &snapshot);
+		auto depVal = GetDepValSys().Make(DependentFileState{initializer.AsString(), std::move(snapshot)});
+		TRY {
+			return Internal::InvokeAssetConstructor<AssetType>(
+				std::move(blob),
+				DefaultDirectorySearchRules(initializer),
+				std::move(depVal));
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH (const std::exception& e) {

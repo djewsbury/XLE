@@ -546,16 +546,18 @@ namespace Formatters
     }
 
     template<typename CharType>
-        void TextInputFormatter<CharType>::SkipElement()
+        StringSection<CharType> TextInputFormatter<CharType>::SkipElement()
     {
         _primed = FormatterBlob::None;
-        if (_pendingHeader) return;
+        if (_pendingHeader)
+            Throw(std::runtime_error("Pending header must be processed before calling SkipElement()"));
 
         if (_protectedStringMode)
             Throw(std::runtime_error("Pending string must be processed before calling SkipElement()"));
 
         using Consts = FormatterConstants<CharType>;
         bool atLeastOneNewLine = false;
+        auto start = _marker.Pointer();
 
         // note that there are fewer exceptions thrown by invalid characters in this path
         while (_marker.Remaining()) {
@@ -584,7 +586,7 @@ namespace Formatters
                 // intentional fall-through
             default:
                 if (!_elementExtendedBySemicolon && _activeLineSpaces <= _parentBaseLine)
-                    return;
+                    return { start, _marker.Pointer() };
 
                 for (;;) {
                     if (TryEat(_marker, Consts::ProtectedNamePrefix))
@@ -597,6 +599,8 @@ namespace Formatters
                 break;
             }
         }
+
+        return { start, _marker.Pointer() };
     }
 
     template<typename CharType>

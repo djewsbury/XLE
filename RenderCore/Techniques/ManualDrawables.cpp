@@ -843,4 +843,32 @@ namespace RenderCore { namespace Techniques
 	ManualDrawableWriter::~ManualDrawableWriter()
 	{}
 
+	MatMachineDecompositionHelper DecomposeMaterialMachine(IteratorRange<RenderCore::Assets::ScaffoldCmdIterator> matMachine)
+	{
+		MatMachineDecompositionHelper result;
+		ParameterBox resHasParameters;
+		for (auto cmd:matMachine) {
+			if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachPatchCollectionId) {
+				assert(result._shaderPatchCollection == ~0u);
+				result._shaderPatchCollection = *(const uint64_t*)cmd.RawData().begin();
+			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachShaderResourceBindings) {
+				assert(resHasParameters.GetCount() == 0);
+				assert(!cmd.RawData().empty());
+				auto& shaderResourceParameterBox = *(const ParameterBox*)cmd.RawData().begin();
+				// Append the "RES_HAS_" constants for each resource that is both in the descriptor set and that we have a binding for
+				for (const auto&r:shaderResourceParameterBox)
+					resHasParameters.SetParameter(std::string{"RES_HAS_"} + r.Name().AsString(), 1);
+			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachStateSet) {
+				assert(cmd.RawData().size() == sizeof(RenderCore::Assets::RenderStateSet));
+				result._stateSet = *(const RenderCore::Assets::RenderStateSet*)cmd.RawData().begin();
+			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachSelectors) {
+				assert(result._matSelectors.GetCount() == 0);
+				assert(!cmd.RawData().empty());
+				result._matSelectors = *(const ParameterBox*)cmd.RawData().begin();
+			}
+		}
+		result._matSelectors.MergeIn(resHasParameters);
+		return result;
+	}
+
 }}

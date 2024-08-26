@@ -23,8 +23,6 @@
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/Conversion.h"
 
-static_assert(::Assets::Internal::FormatterAssetMixinTraits<RenderCore::Assets::RawMaterial>::HasDeserializeKey);
-
 namespace RenderCore { namespace Assets
 {
 

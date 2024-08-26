@@ -11,6 +11,7 @@
 #include "CommonUtils.h"
 #include "ResourceConstructionContext.h"
 #include "Services.h"
+#include "ManualDrawables.h"		// for DecomposeMaterialMachine
 #include "../BufferUploads/BatchedResources.h"
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelMachine.h"
@@ -464,29 +465,11 @@ namespace RenderCore { namespace Techniques
 
 					// Fill in _selectors, _resourceBindings, _stateSet, etc
 					// We'll need to walk through the material machine to do this
-					ParameterBox resHasParameters;
-					for (auto cmd:materialMachine) {
-						if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachPatchCollectionId) {
-							assert(!i->_patchCollection);
-							auto id = *(const uint64_t*)cmd.RawData().begin();
-							i->_patchCollection = materialScaffold->GetShaderPatchCollection(id);
-						} else if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachShaderResourceBindings) {
-							assert(resHasParameters.GetCount() == 0);
-							assert(!cmd.RawData().empty());
-							auto& shaderResourceParameterBox = *(const ParameterBox*)cmd.RawData().begin();
-							// Append the "RES_HAS_" constants for each resource that is both in the descriptor set and that we have a binding for
-							for (const auto&r:shaderResourceParameterBox)
-								resHasParameters.SetParameter(std::string{"RES_HAS_"} + r.Name().AsString(), 1);
-						} else if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachStateSet) {
-							assert(cmd.RawData().size() == sizeof(Assets::RenderStateSet));
-							i->_stateSet = *(const Assets::RenderStateSet*)cmd.RawData().begin();
-						} else if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachSelectors) {
-							assert(i->_selectors.GetCount() == 0);
-							assert(!cmd.RawData().empty());
-							i->_selectors = *(const ParameterBox*)cmd.RawData().begin();
-						}
-					}
-					i->_selectors.MergeIn(resHasParameters);
+					auto decomposed = DecomposeMaterialMachine(materialMachine);
+					i->_stateSet = std::move(decomposed._stateSet);
+					i->_selectors = std::move(decomposed._matSelectors);
+					if (decomposed._shaderPatchCollection != ~0u)
+						i->_patchCollection = materialScaffold->GetShaderPatchCollection(decomposed._shaderPatchCollection);
 
 					// Descriptor set accelerator
 					auto descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
