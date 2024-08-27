@@ -63,6 +63,7 @@ namespace Sample
 	void NativeModelViewerOverlay::Configure(SampleConfiguration& cfg)
 	{
 		cfg._presentationChainBindFlags = RenderCore::BindFlag::UnorderedAccess;
+		cfg._presentationChainBindFlags |= RenderCore::BindFlag::ShaderResource;		// (required for blur effect used by the console)
 		cfg._windowTitle = "Native Model Viewer (XLE sample)";
 	}
 

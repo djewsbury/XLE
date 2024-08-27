@@ -184,8 +184,9 @@ namespace ToolsRig
 		return std::make_shared<DivergentAsset<AssetType>>(originalAsset);
 	}
 
-	template std::shared_ptr<DivergentAsset<::Assets::FormatterAssetMixin<RenderCore::Assets::RawMaterial>>> CreateDivergentAsset(StringSection<char>);
-	template std::shared_ptr<DivergentAsset<::Assets::FormatterAssetMixin<RenderCore::Assets::RawMaterial>>> DefaultConstructNewDivergentAsset();
+	// RawMaterial construction broken while working on ContextImbuedAsset
+	// template std::shared_ptr<DivergentAsset<::Assets::ContextImbuedAsset<RenderCore::Assets::RawMaterial>>> CreateDivergentAsset(StringSection<char>);
+	// template std::shared_ptr<DivergentAsset<::Assets::ContextImbuedAsset<RenderCore::Assets::RawMaterial>>> DefaultConstructNewDivergentAsset();
 
 }
 

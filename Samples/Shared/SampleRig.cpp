@@ -19,6 +19,8 @@
 
 #include "../../Assets/MountingTree.h"
 #include "../../Assets/OSFileSystem.h"
+#include "../../Formatters/CommandLineFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 
 #include "../../OSServices/Log.h"
 
@@ -33,8 +35,16 @@ namespace Sample
 		const RenderCore::FrameBufferProperties& fbProps,
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
 
+	struct CommandLineDigest
+	{
+		std::optional<unsigned> _deviceOverride;
+		StringSection<> _xleRes;
+		CommandLineDigest(Formatters::CommandLineFormatter<char> cmdLine);
+	};
+
 	void ExecuteSample(std::shared_ptr<ISampleOverlay>&& sampleOverlay, Formatters::CommandLineFormatter<char>& cmdLine)
 	{
+		CommandLineDigest cmdLineDigest{cmdLine};
 		SampleConfiguration config;
 		sampleOverlay->Configure(config);
 
@@ -45,6 +55,18 @@ namespace Sample
 			if (std::holds_alternative<PlatformRig::StartupLoop::ConfigureGlobalServices*>(msg)) {
 				auto& pkt = *std::get<PlatformRig::StartupLoop::ConfigureGlobalServices*>(msg);
 
+				pkt._startupCfg._applicationName = "native-model-viewer";
+				pkt._startupCfg._registerTemporaryIntermediates = true;
+
+				if (!cmdLineDigest._xleRes.IsEmpty()) {
+					pkt._xleResLocation = cmdLineDigest._xleRes.AsString();
+					if (XlEqStringI(MakeFileNameSplitter(cmdLineDigest._xleRes).Extension(), "pak")) {
+						pkt._xleResType = PlatformRig::StartupLoop::ConfigureGlobalServices::XLEResType::XPak;
+					} else
+						pkt._xleResType = PlatformRig::StartupLoop::ConfigureGlobalServices::XLEResType::OSFileSystem;
+				} else
+					pkt._xleResType = PlatformRig::StartupLoop::ConfigureGlobalServices::XLEResType::XPak;
+
 			}
 
 			if (std::holds_alternative<PlatformRig::StartupLoop::ConfigureRenderDevice*>(msg)) {
@@ -52,6 +74,14 @@ namespace Sample
 				
 				LogRenderAPIInstanceStartup(*pkt._apiInstance, pkt._window->GetUnderlyingHandle());
 				pkt._presentationChainBindFlags = config._presentationChainBindFlags;
+
+				if (cmdLineDigest._deviceOverride) {
+					if (*cmdLineDigest._deviceOverride > pkt._apiInstance->GetDeviceConfigurationCount())
+						Throw(std::runtime_error("Requested device idx: " + std::to_string(*cmdLineDigest._deviceOverride) + ", but no such device exists"));
+
+					pkt._configurationIdx = *cmdLineDigest._deviceOverride;
+					pkt._deviceFeatures = pkt._apiInstance->QueryFeatureCapability(*cmdLineDigest._deviceOverride);
+				}
 			}
 
 			else if (std::holds_alternative<PlatformRig::StartupLoop::ConfigureWindowInitialState*>(msg)) {
@@ -179,6 +209,22 @@ namespace Sample
 	void ISampleOverlay::OnStartup(const PlatformRig::AppRigGlobals&) {}
 	void ISampleOverlay::OnUpdate(float) {}
 	void ISampleOverlay::Configure(SampleConfiguration&) {}
+
+	CommandLineDigest::CommandLineDigest(Formatters::CommandLineFormatter<char> cmdLine)
+	{
+		for (;;) {
+			StringSection<> value;
+			if (cmdLine.TryKeyedItem(value)) {
+				if (XlEqStringI(value, "device")) {
+					_deviceOverride = Formatters::RequireCastValue<unsigned>(cmdLine);
+				} else if (XlEqStringI(value, "xleres")) {
+					_xleRes = Formatters::RequireStringValue(cmdLine);
+				}
+			} else if (cmdLine.TryStringValue(value)) {
+			} else
+				break;
+		}
+	}
 
 }
 

@@ -29,6 +29,7 @@
 #include "../Assets/Marker.h"
 #include "../Assets/Assets.h"
 #include "../Assets/AssetMixins.h"
+#include "../Assets/ConfigFileContainer.h"
 #include "../xleres/FileList.h"
 
 using namespace Utility::Literals;

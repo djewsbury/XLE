@@ -144,6 +144,8 @@ namespace RenderCore
 
 	ShaderCompileResourceName MakeShaderCompileResourceName(StringSection<> initializer)
 	{
+		assert(!initializer.IsEmpty());
+
 		StringSection<> filename, entryPoint, shaderModel;
 		auto splitter = MakeFileNameSplitter(initializer);
 

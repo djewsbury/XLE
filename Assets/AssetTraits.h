@@ -27,11 +27,24 @@ namespace Assets
 	class ArtifactRequest;
     class IArtifactCollection;
 	DirectorySearchRules DefaultDirectorySearchRules(StringSection<>);
+	using InheritList = std::vector<std::string>;
 
 	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
 
 	namespace Internal
 	{
+		template<typename AssetType,
+			typename = std::enable_if_t<
+				   std::is_same_v< std::decay_t<decltype( std::get<1>( std::declval<AssetType&>() ) )>, ::Assets::DirectorySearchRules >
+				&& std::is_same_v< std::decay_t<decltype( std::get<2>( std::declval<AssetType&>() ) )>, ::Assets::DependencyValidation >
+				&& std::is_same_v< std::decay_t<decltype( std::get<3>( std::declval<AssetType&>() ) )>, InheritList >>>
+			static auto IsContextImbue_Helper(int) -> std::true_type;
+		template<typename AssetType, typename...> static auto IsContextImbue_Helper(...) -> std::false_type;
+
+		template<typename AssetType, typename Result = std::decay_t<decltype(std::get<0>( std::declval<AssetType>() ))>>
+			static auto ContextImbueInternalType_Helper(int) -> Result;
+		template<typename AssetType, typename...> static auto ContextImbueInternalType_Helper(...) -> void;
+
 		template <typename AssetType>
 			class AssetTraits_
 		{
@@ -39,6 +52,9 @@ namespace Assets
 			static constexpr bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>, DirectorySearchRules&&, DependencyValidation&&>::value;
 			static constexpr bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, DirectorySearchRules&&, DependencyValidation&&>::value;
 			static constexpr bool Constructor_BlobFile = std::is_constructible<AssetType, Blob&&, DirectorySearchRules&&, DependencyValidation&&>::value;
+
+			static constexpr bool IsContextImbue = decltype(IsContextImbue_Helper<AssetType>(0))::value;
+			using ContextImbueInternalType = decltype(ContextImbueInternalType_Helper<AssetType>(0));
 		};
 
 		template<typename AssetType> static auto RemoveSmartPtr_Helper(int) -> typename AssetType::element_type;
@@ -101,8 +117,9 @@ namespace Assets
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_FileSystem)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
-		auto depVal = GetDepValSys().Make(initializer);
-		TRY { 
+		::Assets::DependencyValidation depVal;
+		TRY {
+			depVal = GetDepValSys().Make(initializer);
 			auto file = MainFileSystem::OpenFileInterface(initializer, "rb");
 			return Internal::InvokeAssetConstructor<AssetType>(
 				*file,
@@ -122,22 +139,20 @@ namespace Assets
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_TextFile)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
-		auto depVal = GetDepValSys().Make(initializer);
-		TRY { 
-			auto file = MainFileSystem::OpenFileInterface(initializer, "rb");
-			file->Seek(0, OSServices::FileSeekAnchor::End);
-			auto size = file->TellP();
-			auto block = std::make_unique<char[]>(size);
-			file->Seek(0);
-			auto readCount = file->Read(block.get(), size);
-			assert(readCount == 1); (void)readCount;
+		::Assets::DependencyValidation depVal;
+		TRY {
+			FileSnapshot snapshot;
+			size_t size = 0;
+			auto block = MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(initializer, &size, &snapshot);
 			return Internal::InvokeAssetConstructor<AssetType>(
-				MakeStringSection(block.get(), PtrAdd(block.get(), size)),
+				MakeStringSection((const char*)block.get(), (const char*)PtrAdd(block.get(), size)),
 				DefaultDirectorySearchRules(initializer),
 				::Assets::DependencyValidation(depVal));
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+			if (!depVal) depVal = GetDepValSys().Make(initializer);
 			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH (const std::exception& e) {
+			if (!depVal) depVal = GetDepValSys().Make(initializer);
 			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH_END
 	}
@@ -149,17 +164,20 @@ namespace Assets
 	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_BlobFile)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
-		FileSnapshot snapshot;
-		auto blob = MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &snapshot);
-		auto depVal = GetDepValSys().Make(DependentFileState{initializer.AsString(), std::move(snapshot)});
+		::Assets::DependencyValidation depVal;
 		TRY {
+			FileSnapshot snapshot;
+			auto blob = MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &snapshot);
+			depVal = GetDepValSys().Make(DependentFileState{initializer.AsString(), std::move(snapshot)});
 			return Internal::InvokeAssetConstructor<AssetType>(
 				std::move(blob),
 				DefaultDirectorySearchRules(initializer),
 				std::move(depVal));
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+			if (!depVal) depVal = GetDepValSys().Make(initializer);
 			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH (const std::exception& e) {
+			if (!depVal) depVal = GetDepValSys().Make(initializer);
 			Throw(Exceptions::ConstructionError(e, std::move(depVal)));
 		} CATCH_END
 	}
@@ -233,6 +251,17 @@ namespace Assets
 		template<typename AssetOrPtrType, typename... Params>
 			struct HasConstructToPromiseFreeOverride : decltype(HasConstructToPromiseFreeOverride_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
 
+		template<typename AssetOrPtrType, typename... Params>
+			static auto HasConstructToPromiseFreeOverride_0_Helper(int) -> decltype(
+				AutoConstructToPromiseOverride_0(std::declval<WrappedPromise<AssetOrPtrType>&&>(), std::declval<Params>()...),
+				std::true_type{});
+
+		template<typename...>
+			static auto HasConstructToPromiseFreeOverride_0_Helper(...) -> std::false_type;
+
+		template<typename AssetOrPtrType, typename... Params>
+			struct HasConstructToPromiseFreeOverride_0 : decltype(HasConstructToPromiseFreeOverride_0_Helper<AssetOrPtrType, Params&&...>(0)) {};		// outside of AssetTraits because the ptr type is important
+
 		ThreadPool& GetLongTaskThreadPool();
 	}
 
@@ -290,6 +319,15 @@ namespace Assets
 		} else if constexpr (Internal::HasConstructToPromiseFreeOverride<Internal::PromisedType<Promise>, Params&&...>::value) {
 			TRY {
 				AutoConstructToPromiseOverride(WrappedPromise<Internal::PromisedType<Promise>>{std::move(promise)}, std::forward<Params>(initialisers)...);
+			} CATCH(const std::exception& e) {
+				Log(Error) << "Suppressing exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
+				Log(Error) << e.what() << std::endl;
+			} CATCH(...) {
+				Log(Error) << "Suppressing unknown exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise." << std::endl;
+			} CATCH_END
+		} else if constexpr (Internal::HasConstructToPromiseFreeOverride_0<Internal::PromisedType<Promise>, Params&&...>::value) {
+			TRY {
+				AutoConstructToPromiseOverride_0(WrappedPromise<Internal::PromisedType<Promise>>{std::move(promise)}, std::forward<Params>(initialisers)...);
 			} CATCH(const std::exception& e) {
 				Log(Error) << "Suppressing exception thrown from AutoConstructToPromiseOverride override. Overrides should not throw exceptions, and instead store them in the promise. Details follow:" << std::endl;
 				Log(Error) << e.what() << std::endl;

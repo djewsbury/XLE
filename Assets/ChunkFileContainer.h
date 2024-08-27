@@ -8,6 +8,8 @@
 
 #include "AssetsCore.h"
 #include "AssetTraits.h"
+#include "AssetUtils.h"
+#include "../Formatters/TextFormatter.h"
 #include "../Utility/IteratorUtils.h"
 #include <functional>
 #include <memory>
@@ -93,6 +95,7 @@ namespace Assets
 		public:
 			static constexpr bool Constructor_Blob = std::is_constructible<AssetType, ::Assets::Blob&&, DependencyValidation&&, StringSection<>>::value;
 			static constexpr bool Constructor_ArtifactRequestResult = std::is_constructible<AssetType, IteratorRange<ArtifactRequestResult*>, DependencyValidation&&>::value;
+			static constexpr bool Constructor_SimpleFormatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&>::value;
 
 			static constexpr bool HasCompileProcessType = decltype(HasCompileProcessTypeHelper<AssetType>(0))::value;
 			static constexpr bool HasChunkRequests = decltype(HasChunkRequestsHelper<AssetType>(0))::value;
@@ -126,7 +129,11 @@ namespace Assets
 	//		Auto construct to:
 	//			(const ArtifactChunkContainer&)
 	//
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::Constructor_ChunkFileContainer)>
+	template<
+		typename AssetType,
+		ENABLE_IF(
+			Internal::AssetTraits2<AssetType>::Constructor_ChunkFileContainer
+		)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		// See also AutoConstructToPromise<> variation of this function
@@ -140,7 +147,11 @@ namespace Assets
 		} CATCH_END
 	}
 
-	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::Constructor_ChunkFileContainer)>
+	template<
+		typename AssetType,
+		ENABLE_IF(
+			Internal::AssetTraits2<AssetType>::Constructor_ChunkFileContainer
+		)>
 		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
@@ -153,9 +164,37 @@ namespace Assets
 	}
 
 	template<
+		typename AssetType,
+		ENABLE_IF(
+			Internal::AssetTraits2<AssetType>::Constructor_SimpleFormatter
+			|| (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::AssetTraits2<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>::Constructor_SimpleFormatter)
+		)>
+		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
+	{
+		TRY {
+			Formatters::TextInputFormatter<char> fmttr;
+			if (blob)
+				fmttr = Formatters::TextInputFormatter<char>{ MakeIteratorRange(*blob).template Cast<const void*>() };
+
+			if constexpr (Internal::AssetTraits<AssetType>::IsContextImbue) {
+				using InternalAssetType = typename Internal::AssetTraits<AssetType>::ContextImbueInternalType;
+				return { Internal::InvokeAssetConstructor<InternalAssetType>(fmttr), DirectorySearchRules{}, depVal, InheritList{} };
+			} else {
+				return Internal::InvokeAssetConstructor<AssetType>(fmttr);
+			}
+		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+			Throw(Exceptions::ConstructionError(e, depVal));
+		} CATCH (const std::exception& e) {
+			Throw(Exceptions::ConstructionError(e, depVal));
+		} CATCH_END
+	}
+
+	template<
 		typename Promise,
-		ENABLE_IF(	Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests 
-				&&  !Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType)>
+		ENABLE_IF(
+			Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasChunkRequests
+			&& !Internal::AssetTraits2<Internal::PromisedTypeRemPtr<Promise>>::HasCompileProcessType
+		)>
 		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)
 	{
 		auto containerFuture = Internal::GetChunkFileContainerFuture(initializer);

@@ -16,88 +16,12 @@
 
 namespace Assets
 {
-	namespace Internal
-	{
-		#define TEST_SUBST_MEMBER(Name, ...)																		\
-			template<typename T> static constexpr auto Name##_(int) -> decltype(__VA_ARGS__, std::true_type{});		\
-			template<typename...> static constexpr auto Name##_(...) -> std::false_type;							\
-			static constexpr bool Name = decltype(Name##_<Type>(0))::value;											\
-			/**/
 
-		template<typename Type>
-			struct AssetMixinTraits
-		{
-			TEST_SUBST_MEMBER(HasDeserializeKey, std::declval<T&>().TryDeserializeKey(
-				std::declval< Formatters::TextInputFormatter<char>& >(),
-				std::declval< StringSection<> >()
-				));
+	template<typename T> using ContextImbuedAsset = std::tuple<T, ::Assets::DirectorySearchRules, ::Assets::DependencyValidation, InheritList>;
 
-			TEST_SUBST_MEMBER(HasMergeInWithFilenameResolve, std::declval<T&>().MergeInWithFilenameResolve(
-				std::declval< const T& >(),
-				std::declval< const ::Assets::DirectorySearchRules& >()
-				));
-		};
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		#undef TEST_SUBST_MEMBER
-	}
-
-	template<typename ObjectType>
-		class FormatterAssetMixin_NoDeserializeKey : public ObjectType
-	{
-	public:
-		FormatterAssetMixin_NoDeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal);
-		FormatterAssetMixin_NoDeserializeKey(ObjectType&&, ::Assets::DirectorySearchRules&& = {}, ::Assets::DependencyValidation&& = {});
-		FormatterAssetMixin_NoDeserializeKey(const ObjectType&, const ::Assets::DirectorySearchRules& = {}, const ::Assets::DependencyValidation& = {});
-		FormatterAssetMixin_NoDeserializeKey(Blob&&, ::Assets::DependencyValidation&& = {}, StringSection<> = {});
-		FormatterAssetMixin_NoDeserializeKey() = default;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const { return _searchRules; }
-
-	private:
-		::Assets::DirectorySearchRules _searchRules;
-		::Assets::DependencyValidation _depVal;
-	};
-
-	template<typename ObjectType>
-		class FormatterAssetMixin_DeserializeKey : public ObjectType
-	{
-	public:
-		FormatterAssetMixin_DeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal);
-		FormatterAssetMixin_DeserializeKey(ObjectType&&, ::Assets::DirectorySearchRules&& = {}, ::Assets::DependencyValidation&& = {});
-		FormatterAssetMixin_DeserializeKey(const ObjectType&, const ::Assets::DirectorySearchRules& = {}, const ::Assets::DependencyValidation& = {});
-		FormatterAssetMixin_DeserializeKey(Blob&&, ::Assets::DependencyValidation&& = {}, StringSection<> = {});
-		FormatterAssetMixin_DeserializeKey() = default;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const { return _searchRules; }
-		IteratorRange<const std::string*> GetInherited() const { return _inherit; }
-
-	private:
-		::Assets::DirectorySearchRules _searchRules;
-		::Assets::DependencyValidation _depVal;
-		std::vector<std::string> _inherit;
-	};
-
-	template<typename ObjectType>
-		using FormatterAssetMixin = std::conditional_t<Internal::AssetMixinTraits<ObjectType>::HasDeserializeKey, FormatterAssetMixin_DeserializeKey<ObjectType>, FormatterAssetMixin_NoDeserializeKey<ObjectType>>;
-
-	template<typename ObjectType, typename... PassThroughArgs>
-		class PassThroughAssetMixin : public ObjectType
-	{
-	public:
-		PassThroughAssetMixin(PassThroughArgs&&..., ::Assets::DirectorySearchRules&& = {}, ::Assets::DependencyValidation&& = {});
-		PassThroughAssetMixin() = default;
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const { return _searchRules; }
-
-	private:
-		::Assets::DirectorySearchRules _searchRules;
-		::Assets::DependencyValidation _depVal;
-	};
-
-	template <typename ObjectType, typename BaseAssetType=FormatterAssetMixin<ObjectType>>
+	template <typename ObjectType, typename BaseAssetType=ContextImbuedAsset<std::shared_ptr<ObjectType>>>
 		class ResolvedAssetMixin : public ObjectType
 	{
 	public:
@@ -113,112 +37,25 @@ namespace Assets
 			std::promise<ResolvedAssetMixin<ObjectType, BaseAssetType>>&&,
 			StringSection<> initializer);
 
+		using PtrToBaseAssetMarker = std::shared_ptr<Marker<BaseAssetType>>;
+
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<ResolvedAssetMixin<ObjectType, BaseAssetType>>>&&,
-			IteratorRange<const ::Assets::PtrToMarkerPtr<BaseAssetType>*> initialBaseAssets);
+			IteratorRange<const PtrToBaseAssetMarker*> initialBaseAssets);
 
 		static void ConstructToPromise(
 			std::promise<ResolvedAssetMixin<ObjectType, BaseAssetType>>&&,
-			IteratorRange<const ::Assets::PtrToMarkerPtr<BaseAssetType>*> initialBaseAssets);
+			IteratorRange<const PtrToBaseAssetMarker*> initialBaseAssets);
 	private:
 		::Assets::DependencyValidation _depVal;
 	};
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<typename ObjectType>
-		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
-	: ObjectType(fmttr)
-	, _searchRules(searchRules)
-	, _depVal(depVal)
-	{}
-
-	namespace Internal
-	{
-		inline Formatters::TextInputFormatter<char>& RemoveConst(const Formatters::TextInputFormatter<char>& f) { return const_cast<Formatters::TextInputFormatter<char>&>(f); }
-		inline std::vector<std::string> DeserializeInheritList(Formatters::TextInputFormatter<utf8>& formatter)
-		{
-			std::vector<std::string> result; StringSection<> value;
-			if (!formatter.TryBeginElement())
-				Throw(Formatters::FormatException("Malformed inherit list", formatter.GetLocation()));
-			while (formatter.TryStringValue(value)) result.push_back(value.AsString());
-			if (!formatter.TryEndElement())
-				Throw(Formatters::FormatException("Malformed inherit list", formatter.GetLocation()));
-			return result;
-		}
-		void SkipValueOrElement(Formatters::TextInputFormatter<utf8>&);
-
-		inline Formatters::TextInputFormatter<char> AsFormatter(const Blob& blob)
-		{
-			if (!blob)
-				return Formatters::TextInputFormatter<char>{};
-			return Formatters::TextInputFormatter<char>{ MakeIteratorRange(*blob).template Cast<const void*>() };
-		}
-	}
-
-	template<typename ObjectType>
-		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(Blob&& blob, ::Assets::DependencyValidation&& depVal, StringSection<>)
-	: ObjectType(Internal::RemoveConst(Internal::AsFormatter(blob)))
-	, _depVal(std::move(depVal))
-	{}
-
-	template<typename ObjectType>
-		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(ObjectType&& moveFrom, ::Assets::DirectorySearchRules&& searchRules, ::Assets::DependencyValidation&& depVal)
-	: ObjectType(std::move(moveFrom)), _searchRules(std::move(searchRules)), _depVal(std::move(depVal)) {}
-	template<typename ObjectType>
-		FormatterAssetMixin_NoDeserializeKey<ObjectType>::FormatterAssetMixin_NoDeserializeKey(const ObjectType& copyFrom, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
-	: ObjectType(copyFrom), _searchRules(searchRules), _depVal(depVal) {}
-
-	template<typename ObjectType>
-		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(Formatters::TextInputFormatter<char>& fmttr, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
-	: _searchRules(searchRules)
-	, _depVal(depVal)
-	{
-		StringSection<> keyname;
-		while (fmttr.TryKeyedItem(keyname))
-			if (XlEqString(keyname, "Inherit")) {
-				_inherit = Internal::DeserializeInheritList(fmttr);
-			} else if (!ObjectType::TryDeserializeKey(fmttr, keyname))
-				Internal::SkipValueOrElement(fmttr);
-	}
-
-	template<typename ObjectType>
-		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(Blob&& blob, ::Assets::DependencyValidation&& depVal, StringSection<>)
-	: _depVal(std::move(depVal))
-	{
-		if (blob) {
-			Formatters::TextInputFormatter<char> fmttr { MakeIteratorRange(*blob).template Cast<const void*>() };
-			StringSection<> keyname;
-			while (fmttr.TryKeyedItem(keyname))
-				if (XlEqString(keyname, "Inherit")) {
-					_inherit = Internal::DeserializeInheritList(fmttr);
-				} else if (!ObjectType::TryDeserializeKey(fmttr, keyname))
-					Internal::SkipValueOrElement(fmttr);
-		}
-	}
-
-	template<typename ObjectType>
-		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(ObjectType&& moveFrom, ::Assets::DirectorySearchRules&& searchRules, ::Assets::DependencyValidation&& depVal)
-	: ObjectType(std::move(moveFrom)), _searchRules(std::move(searchRules)), _depVal(std::move(depVal)) {}
-	template<typename ObjectType>
-		FormatterAssetMixin_DeserializeKey<ObjectType>::FormatterAssetMixin_DeserializeKey(const ObjectType& copyFrom, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
-	: ObjectType(copyFrom), _searchRules(searchRules), _depVal(depVal) {}
-
-	template<typename ObjectType, typename... PassThroughArgs>
-		PassThroughAssetMixin<ObjectType, PassThroughArgs...>::PassThroughAssetMixin(PassThroughArgs&&... args, ::Assets::DirectorySearchRules&& searchRules, ::Assets::DependencyValidation&& depVal)
-	: ObjectType(std::forward<PassThroughArgs>(args)...)
-	, _searchRules(searchRules)
-	, _depVal(depVal)
-	{}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <typename ObjectType, typename BaseAssetType>
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(
 			std::promise<std::shared_ptr<ResolvedAssetMixin<ObjectType, BaseAssetType>>>&& promise,
 			StringSection<> initializer)
 	{
-		std::vector<::Assets::PtrToMarkerPtr<BaseAssetType>> initialFutures;
+		std::vector<PtrToBaseAssetMarker> initialFutures;
 		auto i = initializer.begin();
 		while (i != initializer.end()) {
 			while (i != initializer.end() && *i == ';') ++i;
@@ -226,7 +63,7 @@ namespace Assets
 			while (i2 != initializer.end() && *i2 != ';') ++i2;
 			if (i2==i) break;
 
-			initialFutures.emplace_back(::Assets::GetAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
+			initialFutures.emplace_back(::Assets::GetAssetMarker<BaseAssetType>(MakeStringSection(i, i2)));
 			i = i2;
 		}
 		assert(!initialFutures.empty());
@@ -238,7 +75,7 @@ namespace Assets
 			std::promise<ResolvedAssetMixin<ObjectType, BaseAssetType>>&& promise,
 			StringSection<> initializer)
 	{
-		std::vector<::Assets::PtrToMarkerPtr<BaseAssetType>> initialFutures;
+		std::vector<PtrToBaseAssetMarker> initialFutures;
 		auto i = initializer.begin();
 		while (i != initializer.end()) {
 			while (i != initializer.end() && *i == ';') ++i;
@@ -246,7 +83,7 @@ namespace Assets
 			while (i2 != initializer.end() && *i2 != ';') ++i2;
 			if (i2==i) break;
 
-			initialFutures.emplace_back(::Assets::GetAssetMarkerPtr<BaseAssetType>(MakeStringSection(i, i2)));
+			initialFutures.emplace_back(::Assets::GetAssetMarker<BaseAssetType>(MakeStringSection(i, i2)));
 			i = i2;
 		}
 		assert(!initialFutures.empty());
@@ -256,7 +93,7 @@ namespace Assets
 	template <typename ObjectType, typename BaseAssetType>
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(
 			std::promise<std::shared_ptr<ResolvedAssetMixin<ObjectType, BaseAssetType>>>&& promise,
-			IteratorRange<const ::Assets::PtrToMarkerPtr<BaseAssetType>*> initialBaseAssets)
+			IteratorRange<const PtrToBaseAssetMarker*> initialBaseAssets)
 	{
 		// We have to load an entire tree of AssetTypes and their inherited items.
 		// We'll do this all with one future in such a way that we create a linear
@@ -278,8 +115,8 @@ namespace Assets
 				unsigned _parentId;
 				unsigned _siblingIdx;
 			};
-			std::vector<std::pair<SubFutureIndexer, ::Assets::PtrToMarkerPtr<BaseAssetType>>> _subFutures;
-			std::vector<std::pair<LoadedSubMaterialsIndexer, std::shared_ptr<BaseAssetType>>> _loadedSubAssets;
+			std::vector<std::pair<SubFutureIndexer, PtrToBaseAssetMarker>> _subFutures;
+			std::vector<std::pair<LoadedSubMaterialsIndexer, BaseAssetType>> _loadedSubAssets;
 			std::vector<::Assets::DependencyValidation> _depVals;
 		};
 		auto pendingTree = std::make_shared<PendingAssetTree>();
@@ -293,12 +130,12 @@ namespace Assets
 			std::move(promise),
 			[pendingTree]() {
 				for (;;) {
-					std::vector<std::pair<typename PendingAssetTree::SubFutureIndexer, std::shared_ptr<BaseAssetType>>> subMaterials;
+					std::vector<std::pair<typename PendingAssetTree::SubFutureIndexer, BaseAssetType>> subMaterials;
 					std::vector<::Assets::DependencyValidation> subDepVals;
 					for (const auto& f:pendingTree->_subFutures) {
 						::Assets::Blob queriedLog;
 						::Assets::DependencyValidation queriedDepVal;
-						std::shared_ptr<BaseAssetType> subMat;
+						BaseAssetType subMat;
 						auto state = f.second->CheckStatusBkgrnd(subMat, queriedDepVal, queriedLog);
 						if (state == ::Assets::AssetState::Pending)
 							return ::Assets::PollStatus::Continue;
@@ -334,19 +171,19 @@ namespace Assets
 						}
 
 						unsigned siblingIdx = 0;
-						auto& searchRules = m.second->GetDirectorySearchRules();
-						for (auto name:m.second->GetInherited()) {
+						auto& searchRules = std::get<DirectorySearchRules>(m.second);
+						for (auto name:std::get<InheritList>(m.second)) {
 							auto colon = FindLastOf(name.begin(), name.end(), ':');
 							if (colon != name.end()) {
 								::Assets::ResChar resolvedFile[MaxPath];
 								searchRules.ResolveFile(resolvedFile, MakeStringSection(name.begin(), colon));
 								std::string fullResolvedName = std::string(resolvedFile) + std::string(colon, name.end());
-								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
+								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<BaseAssetType>(fullResolvedName));
 							} else {
 								if (searchRules.GetBaseFile().IsEmpty())
 									Throw(std::runtime_error("Cannot resolve reference within file because the base filename hasn't been recorded"));
 								std::string fullResolvedName = Concatenate(searchRules.GetBaseFile(), ":", name);
-								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
+								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<BaseAssetType>(fullResolvedName));
 							}
 						}
 					}
@@ -370,7 +207,7 @@ namespace Assets
 				auto finalAsset = std::make_shared<ResolvedAssetMixin<ObjectType, BaseAssetType>>();
 				// have to call "MergeInWithFilenameResolve" for all (even the first), because it may resolve internal filenames, etc
 				for (const auto& i:pendingTree->_loadedSubAssets)
-					finalAsset->MergeInWithFilenameResolve(*i.second, i.second->GetDirectorySearchRules());
+					finalAsset->MergeInWithFilenameResolve(*std::get<0>(i.second), std::get<DirectorySearchRules>(i.second));
 
 				VLA(::Assets::DependencyValidationMarker, depVals, pendingTree->_depVals.size());
 				for (unsigned c=0; c<pendingTree->_depVals.size(); c++) depVals[c] = pendingTree->_depVals[c];
@@ -382,7 +219,7 @@ namespace Assets
 	template <typename ObjectType, typename BaseAssetType>
 		void ResolvedAssetMixin<ObjectType, BaseAssetType>::ConstructToPromise(
 			std::promise<ResolvedAssetMixin<ObjectType, BaseAssetType>>&& promise,
-			IteratorRange<const ::Assets::PtrToMarkerPtr<BaseAssetType>*> initialBaseAssets)
+			IteratorRange<const PtrToBaseAssetMarker*> initialBaseAssets)
 	{
 		// We have to load an entire tree of AssetTypes and their inherited items.
 		// We'll do this all with one future in such a way that we create a linear
@@ -404,8 +241,8 @@ namespace Assets
 				unsigned _parentId;
 				unsigned _siblingIdx;
 			};
-			std::vector<std::pair<SubFutureIndexer, ::Assets::PtrToMarkerPtr<BaseAssetType>>> _subFutures;
-			std::vector<std::pair<LoadedSubMaterialsIndexer, std::shared_ptr<BaseAssetType>>> _loadedSubAssets;
+			std::vector<std::pair<SubFutureIndexer, std::shared_ptr<::Assets::Marker<BaseAssetType>>>> _subFutures;
+			std::vector<std::pair<LoadedSubMaterialsIndexer, BaseAssetType>> _loadedSubAssets;
 			std::vector<::Assets::DependencyValidation> _depVals;
 		};
 		auto pendingTree = std::make_shared<PendingAssetTree>();
@@ -419,12 +256,12 @@ namespace Assets
 			std::move(promise),
 			[pendingTree]() {
 				for (;;) {
-					std::vector<std::pair<typename PendingAssetTree::SubFutureIndexer, std::shared_ptr<BaseAssetType>>> subMaterials;
+					std::vector<std::pair<typename PendingAssetTree::SubFutureIndexer, BaseAssetType>> subMaterials;
 					std::vector<::Assets::DependencyValidation> subDepVals;
 					for (const auto& f:pendingTree->_subFutures) {
 						::Assets::Blob queriedLog;
 						::Assets::DependencyValidation queriedDepVal;
-						std::shared_ptr<BaseAssetType> subMat;
+						BaseAssetType subMat;
 						auto state = f.second->CheckStatusBkgrnd(subMat, queriedDepVal, queriedLog);
 						if (state == ::Assets::AssetState::Pending)
 							return ::Assets::PollStatus::Continue;
@@ -460,19 +297,19 @@ namespace Assets
 						}
 
 						unsigned siblingIdx = 0;
-						auto& searchRules = m.second->GetDirectorySearchRules();
-						for (auto name:m.second->GetInherited()) {
+						auto& searchRules = std::get<DirectorySearchRules>(m.second);
+						for (auto name:std::get<InheritList>(m.second)) {
 							auto colon = FindLastOf(name.begin(), name.end(), ':');
 							if (colon != name.end()) {
 								::Assets::ResChar resolvedFile[MaxPath];
 								searchRules.ResolveFile(resolvedFile, MakeStringSection(name.begin(), colon));
 								std::string fullResolvedName = std::string(resolvedFile) + std::string(colon, name.end());
-								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
+								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<BaseAssetType>(fullResolvedName));
 							} else {
 								if (searchRules.GetBaseFile().IsEmpty())
 									Throw(std::runtime_error("Cannot resolve reference within file because the base filename hasn't been recorded"));
 								std::string fullResolvedName = Concatenate(searchRules.GetBaseFile(), ":", name);
-								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<std::shared_ptr<BaseAssetType>>(fullResolvedName));
+								pendingTree->_subFutures.emplace_back(typename PendingAssetTree::SubFutureIndexer{newParentId, siblingIdx++}, ::Assets::GetAssetMarker<BaseAssetType>(fullResolvedName));
 							}
 						}
 					}
@@ -496,7 +333,7 @@ namespace Assets
 				ResolvedAssetMixin<ObjectType, BaseAssetType> finalAsset;
 				// have to call "MergeInWithFilenameResolve" for all (even the first), because it may resolve internal filenames, etc
 				for (const auto& i:pendingTree->_loadedSubAssets)
-					finalAsset.MergeInWithFilenameResolve(*i.second, i.second->GetDirectorySearchRules());
+					finalAsset.MergeInWithFilenameResolve(*std::get<0>(i.second), std::get<DirectorySearchRules>(i.second));
 
 				VLA(::Assets::DependencyValidationMarker, depVals, pendingTree->_depVals.size());
 				for (unsigned c=0; c<pendingTree->_depVals.size(); c++) depVals[c] = pendingTree->_depVals[c];

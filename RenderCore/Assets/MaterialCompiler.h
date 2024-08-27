@@ -15,9 +15,12 @@
 namespace RenderCore { namespace Assets
 {
 	class RawMaterial;
-	template<typename ObjectType> class CompilableMaterialAssetMixin;
+	// template<typename ObjectType> class CompilableMaterialAssetMixin;
 	class RawMaterialSet_Internal;
-	using RawMaterialSet = ::Assets::FormatterAssetMixin<RawMaterialSet_Internal>;
+	using RawMaterialSet = RawMaterialSet_Internal; // ::Assets::ContextImbuedAsset<RawMaterialSet_Internal>;
+
+	using PtrToMarkerToMaterial = std::shared_ptr<::Assets::Marker<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>>>;
+	using PtrToMarkerToMaterialSet = std::shared_ptr<::Assets::Marker<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>>>;
 
 	::Assets::CompilerRegistration RegisterMaterialCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers);
@@ -25,16 +28,16 @@ namespace RenderCore { namespace Assets
 	class MaterialScaffoldConstruction
 	{
 	public:
-		void SetBaseMaterials(::Assets::PtrToMarkerPtr<RawMaterialSet>&&);
+		void SetBaseMaterials(PtrToMarkerToMaterialSet&&);
 		void SetBaseMaterials(IteratorRange<const std::string*>);
 		void SetBaseMaterials(std::string modelFileIdentifier);
 
 		void AddOverride(StringSection<> application, RawMaterial&& mat);
-		void AddOverride(StringSection<> application, ::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>&&);
+		void AddOverride(StringSection<> application, PtrToMarkerToMaterial&&);
 		void AddOverride(StringSection<> application, std::string materialFileIdentifier);
 		void AddOverride(RawMaterial&& mat);
-		void AddOverride(::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>&&);
-		void AddOverride(::Assets::PtrToMarkerPtr<RawMaterialSet>&&);
+		void AddOverride(PtrToMarkerToMaterial&&);
+		void AddOverride(PtrToMarkerToMaterialSet&&);
 		void AddOverride(std::string materialFileIdentifier);
 
 		struct Override
@@ -44,11 +47,11 @@ namespace RenderCore { namespace Assets
 		};
 		std::vector<std::pair<Override, RawMaterial>> _inlineMaterialOverrides;
 		std::vector<std::pair<Override, std::string>> _materialFileOverrides;
-		std::vector<std::pair<Override, ::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>>> _futureMaterialOverrides;
-		std::vector<std::pair<Override, ::Assets::PtrToMarkerPtr<RawMaterialSet>>> _futureMaterialSetOverrides;
+		std::vector<std::pair<Override, PtrToMarkerToMaterial>> _futureMaterialOverrides;
+		std::vector<std::pair<Override, PtrToMarkerToMaterialSet>> _futureMaterialSetOverrides;
 		unsigned _nextOverrideIdx = 0;
 
-		std::variant<std::monostate, ::Assets::PtrToMarkerPtr<RawMaterialSet>, std::vector<std::string>, std::string> _baseMaterials = std::monostate{};
+		std::variant<std::monostate, PtrToMarkerToMaterialSet, std::vector<std::string>, std::string> _baseMaterials = std::monostate{};
 
 		bool CanBeHashed() const;
 		uint64_t GetHash() const;

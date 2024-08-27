@@ -187,11 +187,12 @@ namespace RenderCore { namespace Assets
     class ModelCompilationConfiguration;
 
 #if !defined(__CLR_VER)
+#if 0
     template<typename ObjectType>
-		class CompilableMaterialAssetMixin : public ::Assets::FormatterAssetMixin<ObjectType>
+		class CompilableMaterialAssetMixin : public ::Assets::UnresolvedAsset<ObjectType>
 	{
 	public:
-        using ::Assets::FormatterAssetMixin<ObjectType>::FormatterAssetMixin;
+        using ::Assets::UnresolvedAsset<ObjectType>::UnresolvedAsset;
 
         static void ConstructToPromise(
             std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
@@ -211,6 +212,17 @@ namespace RenderCore { namespace Assets
     };
 
     using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial, CompilableMaterialAssetMixin<RawMaterial>>;
+#else
+    using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial>;
+#endif
+
+    void AutoConstructToPromiseOverride(
+        std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>>&& promise,
+        StringSection<> initializer);
+
+    void AutoConstructToPromiseOverride(
+        std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>>&& promise,
+        StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
 
 	class RawMaterialSet_Internal
     {
@@ -221,9 +233,12 @@ namespace RenderCore { namespace Assets
         RawMaterialSet_Internal() = default;
     };
 
-    using RawMaterialSet = ::Assets::FormatterAssetMixin<RawMaterialSet_Internal>;
+    using RawMaterialSet = RawMaterialSet_Internal; // ::Assets::ContextImbuedAsset<RawMaterialSet_Internal>;
 
     constexpr auto GetCompileProcessType(RawMaterialSet*) { return ConstHash64Legacy<'RawM', 'at'>::Value; }
+
+        // avoid -- avoid the need for this!
+    constexpr auto GetCompileProcessType(::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>*) { return ConstHash64Legacy<'RawM', 'at'>::Value; }
 #endif
 
     template<typename Value> void RawMaterial::BindResource(StringSection<> name, const Value& value) { _resources.SetParameter(name, value); }

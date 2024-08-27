@@ -102,96 +102,145 @@ namespace Assets
 
 		template<typename AssetType>
             static constexpr bool HasConstructor_SimpleFormatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&>::value;
-    }
 
-    #define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
+		#define TEST_SUBST_MEMBER(Name, ...)																		\
+			template<typename T> static constexpr auto Name##_(int) -> decltype(__VA_ARGS__, std::true_type{});		\
+			template<typename...> static constexpr auto Name##_(...) -> std::false_type;							\
+			static constexpr bool Name = decltype(Name##_<Type>(0))::value;											\
+			/**/
+
+		template<typename Type>
+			struct AssetMixinTraits_
+		{
+			TEST_SUBST_MEMBER(HasDeserializeKey, std::declval<T&>().TryDeserializeKey(
+				std::declval< Formatters::TextInputFormatter<char>& >(),
+				std::declval< StringSection<> >()
+				));
+
+			TEST_SUBST_MEMBER(HasMergeInWithFilenameResolve, std::declval<T&>().MergeInWithFilenameResolve(
+				std::declval< const T& >(),
+				std::declval< const ::Assets::DirectorySearchRules& >()
+				));
+		};
+
+		template<typename AssetType>
+			using AssetMixinTraits = AssetMixinTraits_<std::decay_t<RemoveSmartPtrType<AssetType>>>;
+
+		#undef TEST_SUBST_MEMBER
+
+		inline std::vector<std::string> DeserializeInheritList(Formatters::TextInputFormatter<utf8>& formatter)
+		{
+			std::vector<std::string> result; StringSection<> value;
+			if (!formatter.TryBeginElement())
+				Throw(Formatters::FormatException("Malformed inherit list", formatter.GetLocation()));
+			while (formatter.TryStringValue(value)) result.push_back(value.AsString());
+			if (!formatter.TryEndElement())
+				Throw(Formatters::FormatException("Malformed inherit list", formatter.GetLocation()));
+			return result;
+		}
+		void SkipValueOrElement(Formatters::TextInputFormatter<utf8>&);
+
+		template<typename AssetType>
+			AssetType ConstructFromFormatterSyncHelper(
+				const ConfigFileContainer<Formatters::TextInputFormatter<>>& container, StringSection<> internalSection,
+				DirectorySearchRules&& searchRules, const DependencyValidation& depVal)
+		{
+			TRY {
+
+				auto fmttr = internalSection.IsEmpty() ? container.GetRootFormatter() : container.GetFormatter(internalSection);
+
+				if constexpr (
+					Internal::AssetTraits<AssetType>::IsContextImbue
+					&& Internal::HasConstructor_SimpleFormatter<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>) {
+
+					using InternalAssetType = typename Internal::AssetTraits<AssetType>::ContextImbueInternalType;
+
+					if constexpr (Internal::AssetMixinTraits<InternalAssetType>::HasDeserializeKey) {
+
+						InternalAssetType asset = ::Assets::Internal::InvokeAssetConstructor<InternalAssetType>();
+						InheritList inheritList;
+						StringSection<> keyname;
+						while (fmttr.TryKeyedItem(keyname))
+							if (XlEqString(keyname, "Inherit")) {
+								inheritList = Internal::DeserializeInheritList(fmttr);
+							} else if (!asset->TryDeserializeKey(fmttr, keyname))		// todo: handle pointers/non-pointers!
+								Internal::SkipValueOrElement(fmttr);
+
+						return { std::move(asset), std::move(searchRules), depVal, InheritList{} };
+
+					} else {
+
+						return { Internal::InvokeAssetConstructor<InternalAssetType>(fmttr), std::move(searchRules), depVal, InheritList{} };
+
+					}
+
+				} else if constexpr (Internal::HasConstructor_Formatter<AssetType>) {
+
+					return Internal::InvokeAssetConstructor<AssetType>( fmttr, std::move(searchRules), depVal);
+
+				} else if constexpr (Internal::HasConstructor_SimpleFormatter<AssetType>) {
+
+					return Internal::InvokeAssetConstructor<AssetType>(fmttr);
+
+				} else {
+
+					UNREACHABLE()
+
+				}
+
+			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+				Throw(Exceptions::ConstructionError(e, depVal));
+			} CATCH (const std::exception& e) {
+				Throw(Exceptions::ConstructionError(e, depVal));
+			} CATCH_END
+		}
+
+		template <typename AssetType>
+			static constexpr bool ValidForConstructFromFormatterSyncHelper
+				=  Internal::HasConstructor_Formatter<AssetType>
+				|| Internal::HasConstructor_SimpleFormatter<AssetType>
+				|| (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::HasConstructor_SimpleFormatter<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>);
+	}
+
+	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
 
 	//
 	//		Auto construct to:
 	//			(Formatters::TextInputFormatter<>&, const DirectorySearchRules&, const DependencyValidation&)
-	//
-	template<typename AssetType, ENABLE_IF(Internal::HasConstructor_Formatter<AssetType>)>
-		AssetType AutoConstructAsset(StringSection<char> initializer)
-	{
-		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)
-		// See also AutoConstructToPromise<> variation of this function
-		const char* p = XlFindChar(initializer, ':');
-		if (p) {
-			char buffer[256];
-			XlCopyString(buffer, MakeStringSection(initializer.begin(), p));
-			const auto& container = Internal::GetConfigFileContainer(buffer);
-			TRY {
-				auto fmttr = container.GetFormatter(MakeStringSection(p+1, initializer.end()));
-				return Internal::InvokeAssetConstructor<AssetType>(
-					fmttr,
-					DefaultDirectorySearchRules(buffer),
-					container.GetDependencyValidation());
-			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH (const std::exception& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH_END
-		} else {
-			const auto& container = Internal::GetConfigFileContainer(initializer);
-			TRY { 
-				auto fmttr = container.GetRootFormatter();
-				return Internal::InvokeAssetConstructor<AssetType>(
-					fmttr,
-					DefaultDirectorySearchRules(initializer),
-					container.GetDependencyValidation());
-			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH (const std::exception& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH_END
-		}
-	}
-
-	//
-	//		Auto construct to:
 	//			(Formatters::TextInputFormatter<>&)
+	//			(Formatters::TextInputFormatter<>&) (with imbued context)
 	//
-	template<typename AssetType, ENABLE_IF(Internal::HasConstructor_SimpleFormatter<AssetType> && !Internal::HasConstructor_Formatter<AssetType>)>
+	template<
+		typename AssetType,
+		ENABLE_IF(
+			Internal::ValidForConstructFromFormatterSyncHelper<AssetType>
+		)>
 		AssetType AutoConstructAsset(StringSection<char> initializer)
 	{
 		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)
 		// See also AutoConstructToPromise<> variation of this function
-		const char* p = XlFindChar(initializer, ':');
-		if (p) {
-			char buffer[256];
-			XlCopyString(buffer, MakeStringSection(initializer.begin(), p));
-			const auto& container = Internal::GetConfigFileContainer(buffer);
-			TRY {
-				auto fmttr = container.GetFormatter(MakeStringSection(p+1, initializer.end()));
-				return Internal::InvokeAssetConstructor<AssetType>(fmttr);
-			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH (const std::exception& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH_END
-		} else {
-			const auto& container = Internal::GetConfigFileContainer(initializer);
-			TRY { 
-				auto fmttr = container.GetRootFormatter();
-				return Internal::InvokeAssetConstructor<AssetType>(fmttr);
-			} CATCH (const Exceptions::ExceptionWithDepVal& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH (const std::exception& e) {
-				Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
-			} CATCH_END
-		}
+		StringSection<> containerName, internalSection;
+		if (const char* p = XlFindChar(initializer, ':')) {
+			containerName = MakeStringSection(initializer.begin(), p);
+			internalSection = MakeStringSection(p+1, initializer.end());
+		} else
+			containerName = initializer;
+		
+		const auto& container = Internal::GetConfigFileContainer(containerName);
+		return Internal::ConstructFromFormatterSyncHelper<AssetType>(container, internalSection, DefaultDirectorySearchRules(containerName), container.GetDependencyValidation());
 	}
 
-	template<typename AssetType, ENABLE_IF(Internal::HasConstructor_Formatter<AssetType>)>
+	template<
+		typename AssetType,
+		ENABLE_IF(
+			Internal::ValidForConstructFromFormatterSyncHelper<AssetType>
+		)>
 		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
 			auto container = ConfigFileContainer<>(blob, depVal);
 			auto fmttr = requestParameters.IsEmpty() ? container.GetRootFormatter() : container.GetFormatter(requestParameters);
-			return Internal::InvokeAssetConstructor<AssetType>(
-				fmttr,
-				DirectorySearchRules{},
-				container.GetDependencyValidation());
+			return Internal::ConstructFromFormatterSyncHelper<AssetType>(container, requestParameters, DirectorySearchRules{}, container.GetDependencyValidation());
 		} CATCH(const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH(const std::exception& e) {
@@ -201,82 +250,26 @@ namespace Assets
 
 	template<
 		typename Promise,
-		ENABLE_IF(	Internal::HasConstructor_Formatter<Internal::PromisedTypeRemPtr<Promise>>
-					&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>)>
-		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)
+		ENABLE_IF(
+			Internal::ValidForConstructFromFormatterSyncHelper<Internal::PromisedType<Promise>>
+		)>
+		void AutoConstructToPromiseOverride_0(Promise&& promise, StringSection<> initializer)
 	{
-		const char* p = XlFindChar(initializer, ':');
-		if (p) {
-			std::string containerName = MakeStringSection(initializer.begin(), p).AsString();
-			std::string sectionName = MakeStringSection((const utf8*)(p+1), (const utf8*)initializer.end()).AsString();
-			auto containerFuture = Internal::GetConfigFileContainerFuture(MakeStringSection(containerName));
-			WhenAll(containerFuture).ThenConstructToPromise(
-				std::move(promise),
-				[containerName, sectionName](const std::shared_ptr<ConfigFileContainer<>>& container) {
-					auto fmttr = container->GetFormatter(sectionName);
-					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(
-						fmttr, 
-						DefaultDirectorySearchRules(containerName),
-						container->GetDependencyValidation());
-				});
-		} else {
-			std::string containerName = initializer.AsString();
-			auto containerFuture = Internal::GetConfigFileContainerFuture(MakeStringSection(containerName));
-			WhenAll(containerFuture).ThenConstructToPromise(
-				std::move(promise),
-				[containerName](const std::shared_ptr<ConfigFileContainer<>>& container) {
-					auto fmttr = container->GetRootFormatter();
-					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(
-						fmttr, 
-						DefaultDirectorySearchRules(containerName),
-						container->GetDependencyValidation());
-				});
-		}
-	}
+		// Note that this free function has to have a lower priority, or it just catches everything
+		// In particular, it can hide the mechanism for invoking compiles
 
-	template<
-		typename Promise,
-		ENABLE_IF(	Internal::HasConstructor_SimpleFormatter<Internal::PromisedTypeRemPtr<Promise>> && !Internal::HasConstructor_Formatter<Internal::PromisedTypeRemPtr<Promise>>
-					&& !std::is_same_v<std::decay_t<Internal::PromisedTypeRemPtr<Promise>>, ConfigFileContainer<>>)>
-		void AutoConstructToPromiseOverride(Promise&& promise, StringSection<> initializer)
-	{
-		const char* p = XlFindChar(initializer, ':');
-		if (p) {
-			auto containerName = MakeStringSection(initializer.begin(), p).AsString();
-			std::string sectionName = MakeStringSection((const utf8*)(p+1), (const utf8*)initializer.end()).AsString();
-			auto containerFuture = Internal::GetConfigFileContainerFuture(containerName);
-			WhenAll(containerFuture).ThenConstructToPromise(
-				std::move(promise),
-				[sectionName](const std::shared_ptr<ConfigFileContainer<>>& container) {
-					auto fmttr = container->GetFormatter(sectionName);
-					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(fmttr);
-				});
-		} else {
-			auto containerFuture = Internal::GetConfigFileContainerFuture(initializer);
-			WhenAll(containerFuture).ThenConstructToPromise(
-				std::move(promise),
-				[](const std::shared_ptr<ConfigFileContainer<>>& container) {
-					auto fmttr = container->GetRootFormatter();
-					return Internal::InvokeAssetConstructor<Internal::PromisedType<Promise>>(fmttr);
-				});
-		}
-	}
+		std::string containerName, internalSection;
+		if (const char* p = XlFindChar(initializer, ':')) {
+			containerName = MakeStringSection(initializer.begin(), p).AsString();
+			internalSection = MakeStringSection(p+1, initializer.end()).AsString();
+		} else
+			containerName = initializer.AsString();
 
-	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_Formatter)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
-	{
-		TRY {
-			auto container = ConfigFileContainer<>(blob, depVal);
-			auto fmttr = requestParameters.IsEmpty() ? container.GetRootFormatter() : container.GetFormatter(requestParameters.Cast<utf8>());
-			return Internal::InvokeAssetConstructor<AssetType>(
-				fmttr,
-				DirectorySearchRules{},
-				container.GetDependencyValidation());
-		} CATCH(const Exceptions::ExceptionWithDepVal& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH(const std::exception& e) {
-			Throw(Exceptions::ConstructionError(e, depVal));
-		} CATCH_END
+		WhenAll(Internal::GetConfigFileContainerFuture(containerName)).ThenConstructToPromise(
+			std::move(promise),
+			[containerName, internalSection](const auto& container) {
+				return Internal::ConstructFromFormatterSyncHelper<Internal::PromisedType<Promise>>(*container, internalSection, DefaultDirectorySearchRules(containerName), container->GetDependencyValidation());
+			});
 	}
 
 	#undef ENABLE_IF

@@ -61,9 +61,12 @@ namespace RenderCore { namespace Techniques
 		GraphicsPipelineDesc& nascentDesc,
 		const TechniqueEntry& entry)
 	{
-		nascentDesc._shaders[(unsigned)ShaderStage::Vertex] = MakeShaderCompileResourceName(entry._vertexShaderName);
-		nascentDesc._shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompileResourceName(entry._pixelShaderName);
-		nascentDesc._shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(entry._geometryShaderName);
+		if (!entry._vertexShaderName.empty())
+			nascentDesc._shaders[(unsigned)ShaderStage::Vertex] = MakeShaderCompileResourceName(entry._vertexShaderName);
+		if (!entry._pixelShaderName.empty())
+			nascentDesc._shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompileResourceName(entry._pixelShaderName);
+		if (!entry._geometryShaderName.empty())
+			nascentDesc._shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(entry._geometryShaderName);
 		nascentDesc._manualSelectorFiltering = entry._selectorFiltering;
 		nascentDesc._techniquePreconfigurationFile = entry._preconfigurationFileName;
 	}
