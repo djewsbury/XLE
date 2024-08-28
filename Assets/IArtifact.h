@@ -29,9 +29,10 @@ namespace Assets
 	{
 	public:
 		virtual std::vector<ArtifactRequestResult> ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const = 0;
-		virtual DependencyValidation 	GetDependencyValidation() const = 0;
-		virtual StringSection<ResChar>	GetRequestParameters() const = 0;		// these are parameters that should be passed through to the asset when it's actually loaded from the blob
-		virtual AssetState				GetAssetState() const = 0;
+		virtual DependencyValidation 		GetDependencyValidation() const = 0;
+		virtual const DirectorySearchRules& GetDirectorySearchRules() const = 0;
+		virtual StringSection<ResChar>		GetRequestParameters() const = 0;		// these are parameters that should be passed through to the asset when it's actually loaded from the blob
+		virtual AssetState					GetAssetState() const = 0;
 		virtual ~IArtifactCollection();
 	};
 
@@ -56,6 +57,7 @@ namespace Assets
     public:
 		const IArtifactCollection& GetArtifactCollection() const;
 		std::shared_ptr<IArtifactCollection> GetArtifactCollectionPtr() const;
+		const DirectorySearchRules& GetDirectorySearchRules() const;
 
 		using ArtifactCollectionSet = std::vector<std::pair<ArtifactTargetCode, std::shared_ptr<IArtifactCollection>>>;
 		bool Valid() const { return _rootSharedFuture != nullptr; }
@@ -112,6 +114,7 @@ namespace Assets
 	public:
 		std::vector<ArtifactRequestResult> ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const override;
 		DependencyValidation GetDependencyValidation() const override;
+		const DirectorySearchRules& GetDirectorySearchRules() const override;
 		StringSection<ResChar> GetRequestParameters() const override;
 		AssetState GetAssetState() const override;
 		ChunkFileArtifactCollection(
@@ -123,6 +126,7 @@ namespace Assets
 		std::shared_ptr<IFileInterface> _file;
 		DependencyValidation _depVal;
 		std::string _requestParameters;
+		mutable std::optional<DirectorySearchRules> _cachedDirectorySearchRules;
 	};
 
 	struct SerializedArtifact;
@@ -132,6 +136,7 @@ namespace Assets
 	public:
 		std::vector<ArtifactRequestResult> ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const override;
 		DependencyValidation GetDependencyValidation() const override;
+		const DirectorySearchRules& GetDirectorySearchRules() const override;
 		StringSection<ResChar> GetRequestParameters() const override;
 		AssetState GetAssetState() const override;
 		BlobArtifactCollection(
@@ -147,6 +152,7 @@ namespace Assets
 		DependencyValidation _depVal;
 		std::string _collectionName;
 		std::string _requestParams;
+		mutable std::optional<DirectorySearchRules> _cachedDirectorySearchRules;
 	};
 
 	class CompilerExceptionArtifact : public ::Assets::IArtifactCollection
@@ -203,18 +209,16 @@ namespace Assets
 	}
 
 	template<typename AssetType, typename... Params, ENABLE_IF(Internal::AssetTraits2<AssetType>::Constructor_ArtifactRequestResult)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
+		AssetType AutoConstructAsset(const Blob& blob, DirectorySearchRules&& searchRules, DependencyValidation&& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
-			auto chunks = ArtifactChunkContainer{blob, depVal, requestParameters}.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
-
 			std::vector<ArtifactRequestResult> chunks;
 			if constexpr (Internal::AssetTraits2<AssetType>::HasChunkRequests) {
-				chunks = ArtifactChunkContainer{blob, depVal, requestParameters}.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
+				chunks = ArtifactChunkContainer{blob, std::move(searchRules), depVal, requestParameters}.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			} else {
 				auto defaultChunkRequestCode = GetCompileProcessType((Internal::RemoveSmartPtrType<AssetType>*)nullptr);
 				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
-				chunks = ArtifactChunkContainer{blob, depVal, requestParameters}.ResolveRequests(MakeIteratorRange(&request, &request+1));
+				chunks = ArtifactChunkContainer{blob, std::move(searchRules), depVal, requestParameters}.ResolveRequests(MakeIteratorRange(&request, &request+1));
 			}
 
 			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), depVal);
@@ -251,6 +255,8 @@ namespace Assets
 	//
 	//		Auto construct to:
 	//			(::Assets::Blob&&, DependencyValidation&&, StringSection<>)
+	//					or forward to AutoConstructAsset with
+	//			(::Assets::Blob&&, DirectorySearchRules&&, DependencyValidation&&, StringSection<>)
 	//
 	template<typename AssetType, typename... Params, ENABLE_IF(!Internal::AssetTraits2<AssetType>::Constructor_ArtifactRequestResult)>
 		AssetType AutoConstructAsset(const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = 0)
@@ -259,9 +265,26 @@ namespace Assets
 			Throw(Exceptions::InvalidAsset{{}, artifactCollection.GetDependencyValidation(), GetErrorMessage(artifactCollection)});
 
 		TRY {
-			ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
-			auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
-			return AutoConstructAsset<AssetType>(std::move(chunks[0]._sharedBlob), artifactCollection.GetDependencyValidation(), StringSection<>{});
+			// if we have a blob constructor, go directly there (otherwise forward to the next AutoConstructAsset
+			if constexpr (Internal::AssetTraits2<AssetType>::Constructor_Blob) {
+
+				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
+				auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
+				return Internal::InvokeAssetConstructor<AssetType>(std::move(chunks[0]._sharedBlob), artifactCollection.GetDependencyValidation(), StringSection<>{});
+
+			} else {
+
+				ArtifactRequest requests[] {
+					{ "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob },
+					{ "dir-search-rules", Utility::ConstHash64("DirectorySearchRules"), ~0u, ArtifactRequest::DataType::OptionalSharedBlob }
+				};
+				auto chunks = artifactCollection.ResolveRequests(requests);
+				DirectorySearchRules dirSearchRules;
+				if (chunks[1]._sharedBlob) dirSearchRules = DirectorySearchRules::Deserialize(*chunks[1]._sharedBlob);
+				return AutoConstructAsset<AssetType>(std::move(chunks[0]._sharedBlob), std::move(dirSearchRules), artifactCollection.GetDependencyValidation(), StringSection<>{});
+
+			}
+
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, artifactCollection.GetDependencyValidation()));
 		} CATCH (const std::exception& e) {

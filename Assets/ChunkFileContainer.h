@@ -30,7 +30,7 @@ namespace Assets
         {
             ReopenFunction, 
 			Raw, BlockSerializer,
-			SharedBlob,
+			SharedBlob, OptionalSharedBlob,
 			Filename
         };
         DataType        _dataType;
@@ -55,6 +55,7 @@ namespace Assets
     public:
         const std::string& Filename() const						{ return _filename; }
 		const DependencyValidation& GetDependencyValidation() const	{ return _validationCallback; }
+		const DirectorySearchRules& GetDirectorySearchRules(IFileInterface& file) const;
 
 		std::vector<ArtifactRequestResult> ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const;
         std::vector<ArtifactRequestResult> ResolveRequests(IFileInterface& file, IteratorRange<const ArtifactRequest*> requests) const;
@@ -62,7 +63,7 @@ namespace Assets
 		std::shared_ptr<IFileInterface> OpenFile() const;
 
         ArtifactChunkContainer(std::shared_ptr<IFileSystem> fs, std::string assetTypeName, DependencyValidation depVal);
-		ArtifactChunkContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<>);
+		ArtifactChunkContainer(const Blob& blob, const DirectorySearchRules&, const DependencyValidation& depVal, StringSection<>);
 		ArtifactChunkContainer(std::shared_ptr<IFileSystem> fs, StringSection<> assetTypeName);      // note -- avoid using, because this will query the depVal for the given file
 		ArtifactChunkContainer();
         ~ArtifactChunkContainer();
@@ -76,6 +77,7 @@ namespace Assets
 		std::shared_ptr<IFileSystem> _fs;
 		Blob			_blob;
 		DependencyValidation		_validationCallback;
+		mutable std::optional<DirectorySearchRules> _cachedDirectorySearchRules;
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,9 +95,11 @@ namespace Assets
 			template<typename...> static auto HasChunkRequestsHelper(...) -> std::false_type;
 
 		public:
-			static constexpr bool Constructor_Blob = std::is_constructible<AssetType, ::Assets::Blob&&, DependencyValidation&&, StringSection<>>::value;
+			static constexpr bool Constructor_Blob = std::is_constructible<AssetType, Blob&&, DependencyValidation&&, StringSection<>>::value;
+			static constexpr bool Constructor_Blob2 = std::is_constructible<AssetType, Blob&&, DirectorySearchRules&&, DependencyValidation&&, StringSection<>>::value;
 			static constexpr bool Constructor_ArtifactRequestResult = std::is_constructible<AssetType, IteratorRange<ArtifactRequestResult*>, DependencyValidation&&>::value;
 			static constexpr bool Constructor_SimpleFormatter = std::is_constructible<RemoveSmartPtrType<AssetType>, Formatters::TextInputFormatter<>&>::value;
+			static constexpr bool Constructor_ChunkFileContainer = std::is_constructible<RemoveSmartPtrType<AssetType>, const ArtifactChunkContainer&>::value;
 
 			static constexpr bool HasCompileProcessType = decltype(HasCompileProcessTypeHelper<AssetType>(0))::value;
 			static constexpr bool HasChunkRequests = decltype(HasChunkRequestsHelper<AssetType>(0))::value;
@@ -152,10 +156,10 @@ namespace Assets
 		ENABLE_IF(
 			Internal::AssetTraits2<AssetType>::Constructor_ChunkFileContainer
 		)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
+		AssetType AutoConstructAsset(const Blob& blob, DirectorySearchRules&& searchRules, DependencyValidation&& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
-			return Internal::InvokeAssetConstructor<AssetType>(ArtifactChunkContainer(blob, depVal, requestParameters));
+			return Internal::InvokeAssetConstructor<AssetType>(ArtifactChunkContainer(blob, std::move(searchRules), depVal, requestParameters));
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {
@@ -169,7 +173,7 @@ namespace Assets
 			Internal::AssetTraits2<AssetType>::Constructor_SimpleFormatter
 			|| (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::AssetTraits2<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>::Constructor_SimpleFormatter)
 		)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
+		AssetType AutoConstructAsset(const Blob& blob, const DirectorySearchRules& searchRules, const DependencyValidation& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
 			Formatters::TextInputFormatter<char> fmttr;
@@ -178,7 +182,7 @@ namespace Assets
 
 			if constexpr (Internal::AssetTraits<AssetType>::IsContextImbue) {
 				using InternalAssetType = typename Internal::AssetTraits<AssetType>::ContextImbueInternalType;
-				return { Internal::InvokeAssetConstructor<InternalAssetType>(fmttr), DirectorySearchRules{}, depVal, InheritList{} };
+				return { Internal::InvokeAssetConstructor<InternalAssetType>(fmttr), std::move(searchRules), depVal, InheritList{} };
 			} else {
 				return Internal::InvokeAssetConstructor<AssetType>(fmttr);
 			}

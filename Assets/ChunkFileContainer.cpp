@@ -13,6 +13,8 @@
 #include "../Utility/StringFormat.h"
 #include "../Core/Exceptions.h"
 
+using namespace Utility::Literals;
+
 namespace Assets
 {
     std::vector<ArtifactRequestResult> ArtifactChunkContainer::ResolveRequests(
@@ -131,7 +133,7 @@ namespace Assets
                         } CATCH_END
                     };
                 }
-			} else if (r._dataType == ArtifactRequest::DataType::SharedBlob) {
+			} else if (r._dataType == ArtifactRequest::DataType::SharedBlob || r._dataType == ArtifactRequest::DataType::OptionalSharedBlob) {
                 chunkResult._sharedBlob = std::make_shared<std::vector<uint8_t>>();
                 chunkResult._sharedBlob->resize(i->_size);
                 file.Seek(initialOffset + i->_fileOffset);
@@ -143,7 +145,34 @@ namespace Assets
             result.emplace_back(std::move(chunkResult));
         }
 
+        file.Seek(initialOffset);
+
         return result;
+    }
+
+    const DirectorySearchRules& ArtifactChunkContainer::GetDirectorySearchRules(IFileInterface& file) const
+    {
+        if (!_cachedDirectorySearchRules) {
+            auto initialOffset = file.TellP();
+            auto chunks = LoadChunkTable(file);
+
+            auto i = std::find_if(
+                chunks.begin(), chunks.end(), 
+                [](const ChunkHeader& c) { return c._chunkTypeCode == "DirectorySearchRules"_h; });
+            if (i!=chunks.end()) {
+                uint8* mem = (uint8*)XlMemAlign(i->_size, sizeof(uint64_t));
+                auto buffer = std::unique_ptr<uint8[], PODAlignedDeletor>(mem);
+                file.Seek(initialOffset + i->_fileOffset);
+                file.Read(buffer.get(), i->_size);
+                *_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), i->_size)));
+            } else {
+                *_cachedDirectorySearchRules = {};
+            }
+
+            file.Seek(initialOffset);
+        }
+
+        return *_cachedDirectorySearchRules;
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,9 +189,10 @@ namespace Assets
 		_validationCallback = GetDepValSys().Make(_filename);
     }
 
-	ArtifactChunkContainer::ArtifactChunkContainer(const Blob& blob, const DependencyValidation& depVal, StringSection<ResChar>)
+	ArtifactChunkContainer::ArtifactChunkContainer(const Blob& blob, const DirectorySearchRules& searchRules, const DependencyValidation& depVal, StringSection<ResChar>)
 	: _filename("<<in memory>>")
 	, _blob(blob), _validationCallback(depVal)
+    , _cachedDirectorySearchRules(searchRules)
 	{			
 	}
 

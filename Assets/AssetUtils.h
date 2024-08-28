@@ -41,6 +41,9 @@ namespace Assets
         DirectorySearchRules& operator=(const DirectorySearchRules&);
 		DirectorySearchRules(DirectorySearchRules&&) never_throws;
         DirectorySearchRules& operator=(DirectorySearchRules&&) never_throws;
+
+        static DirectorySearchRules Deserialize(IteratorRange<const void*>);
+        Blob Serialize() const;
     protected:
         ResChar _buffer[256];
         std::vector<ResChar> _bufferOverflow;

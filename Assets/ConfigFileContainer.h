@@ -235,12 +235,12 @@ namespace Assets
 		ENABLE_IF(
 			Internal::ValidForConstructFromFormatterSyncHelper<AssetType>
 		)>
-		AssetType AutoConstructAsset(const Blob& blob, const DependencyValidation& depVal, StringSection<> requestParameters = {})
+		AssetType AutoConstructAsset(const Blob& blob, DirectorySearchRules&& searchRules, DependencyValidation&& depVal, StringSection<> requestParameters = {})
 	{
 		TRY {
 			auto container = ConfigFileContainer<>(blob, depVal);
 			auto fmttr = requestParameters.IsEmpty() ? container.GetRootFormatter() : container.GetFormatter(requestParameters);
-			return Internal::ConstructFromFormatterSyncHelper<AssetType>(container, requestParameters, DirectorySearchRules{}, container.GetDependencyValidation());
+			return Internal::ConstructFromFormatterSyncHelper<AssetType>(container, requestParameters, std::move(searchRules), container.GetDependencyValidation());
 		} CATCH(const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH(const std::exception& e) {

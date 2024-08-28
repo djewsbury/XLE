@@ -28,6 +28,8 @@
 #include <unordered_map>
 #include <atomic>
 
+using namespace Utility::Literals;
+
 namespace Assets 
 {
 	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;

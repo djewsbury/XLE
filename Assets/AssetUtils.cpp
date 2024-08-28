@@ -344,6 +344,59 @@ namespace Assets
         return searchRules;
     }
 
+    namespace Internal
+    {
+        struct DirectorySearchRules_SerializedHeader
+        {
+            unsigned _version;
+            unsigned _startOffsets[8];
+            unsigned _startPointCount;
+            unsigned _baseFileOffset;
+            unsigned _bufferUsed;
+        };
+    }
+
+    DirectorySearchRules DirectorySearchRules::Deserialize(IteratorRange<const void*> data)
+    {
+        if (data.size() < sizeof(Internal::DirectorySearchRules_SerializedHeader))
+            Throw(std::runtime_error("Invalid serialized DirectorySearchRules"));
+        auto& hdr = *(const Internal::DirectorySearchRules_SerializedHeader*)data.begin();
+        if (hdr._version != 1 || hdr._startPointCount > dimof(hdr._startOffsets))
+            Throw(std::runtime_error("Invalid serialized DirectorySearchRules"));
+        DirectorySearchRules result;
+        std::copy(hdr._startOffsets, &hdr._startOffsets[dimof(result._startOffsets)], result._startOffsets);
+        result._startPointCount = hdr._startPointCount;
+        result._baseFileOffset = hdr._baseFileOffset;
+        result._bufferUsed = hdr._bufferUsed;
+        auto buffer = MakeIteratorRange(PtrAdd(data.begin(), sizeof(Internal::DirectorySearchRules_SerializedHeader)), data.end());
+        if (buffer.size() != result._bufferUsed)
+            Throw(std::runtime_error("Invalid serialized DirectorySearchRules"));
+        if (hdr._bufferUsed <= sizeof(result._buffer)) {
+            std::copy((const uint8_t*)buffer.begin(), (const uint8_t*)PtrAdd(buffer.begin(), hdr._bufferUsed), result._buffer);
+        } else {
+            result._bufferOverflow.insert(result._bufferOverflow.end(), (const ResChar*)buffer.begin(), (const ResChar*)PtrAdd(buffer.begin(), hdr._bufferUsed));
+        }
+        return result;
+    }
+
+    Blob DirectorySearchRules::Serialize() const
+    {
+        auto result = std::make_shared<std::vector<uint8_t>>();
+        Internal::DirectorySearchRules_SerializedHeader hdr;
+        hdr._version = 1;
+        std::copy(_startOffsets, &_startOffsets[dimof(_startOffsets)], hdr._startOffsets);
+        hdr._startPointCount = _startPointCount;
+        hdr._baseFileOffset = _baseFileOffset;
+        hdr._bufferUsed = _bufferUsed;
+        result->insert(result->end(), (const uint8_t*)&hdr, (const uint8_t*)PtrAdd(&hdr, sizeof(hdr)));
+        if (_bufferUsed <= sizeof(_buffer)) {
+            result->insert(result->end(), _buffer, PtrAdd(_buffer, _bufferUsed));
+        } else {
+            result->insert(result->end(), _bufferOverflow.data(), PtrAdd(_bufferOverflow.data(), _bufferUsed));
+        }
+        return result;
+    }
+
     namespace Exceptions
     {
 		RetrievalError::RetrievalError(StringSection<ResChar> initializer) never_throws

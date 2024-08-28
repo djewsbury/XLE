@@ -46,6 +46,7 @@
 #pragma warning(disable:4505) // unreferenced local function has been removed
 
 using namespace RenderCore::Assets::GeoProc;
+using namespace Utility::Literals;
 
 namespace ColladaConversion
 {
@@ -523,7 +524,12 @@ namespace ColladaConversion
 			{
 				::Assets::SerializedArtifact{
 					Type_RawMat, 0, model._name,
-					::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))}
+					::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))
+				},
+				::Assets::SerializedArtifact{
+					"DirectorySearchRules"_h, 0, model._name,
+					::Assets::DefaultDirectorySearchRules(model._name).Serialize()
+				}
 			},
 			model.GetDependencyValidation()
 		};
@@ -620,7 +626,7 @@ namespace ColladaConversion
 			auto cfgBlob = ::Assets::MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(s_cfgName, &snapshot);
 			::Assets::DependentFileState depFileState { s_cfgName, snapshot };
 			auto cfgDepVal = ::Assets::GetDepValSys().Make(MakeIteratorRange(&depFileState, &depFileState+1));
-			result->_cfg = ::Assets::AutoConstructAsset<ImportConfiguration>(cfgBlob, std::move(cfgDepVal));
+			result->_cfg = ::Assets::AutoConstructAsset<ImportConfiguration>(cfgBlob, ::Assets::DefaultDirectorySearchRules(s_cfgName), std::move(cfgDepVal));
 		}
 
 		// Always load a .model file next to the input file -- this might contain addition configuration options

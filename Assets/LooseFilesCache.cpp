@@ -25,6 +25,8 @@
 #include "../Utility/StringFormat.h"
 #include <filesystem>
 
+using namespace Utility::Literals;
+
 namespace Assets
 {
 	static const auto ChunkType_Metrics = ConstHash64Legacy<'Metr', 'ics'>::Value;
@@ -424,7 +426,7 @@ namespace Assets
 			// files. Though we only do this with "sharedblob" types
 			for (size_t r=0; r<requests.size(); ++r) {
 				bool foundExactMatch = false;
-				if (requests[r]._dataType == ArtifactRequest::DataType::SharedBlob) {
+				if (requests[r]._dataType == ArtifactRequest::DataType::SharedBlob || requests[r]._dataType == ArtifactRequest::DataType::OptionalSharedBlob) {
 					for (const auto&prod:_productsFile._compileProducts)
 						if (prod._type == requests[r]._chunkTypeCode) {
 							auto fileData = TryLoadFileAsBlob(*_filesystem, prod._intermediateArtifact);
@@ -482,7 +484,7 @@ namespace Assets
 						foundMulti = true;
 						break;
 					}
-				if (!foundMulti)
+				if (!foundMulti && requestsForMulti[0]._dataType != ArtifactRequest::DataType::OptionalSharedBlob)
 					Throw(Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::MissingFile,
 						_depVal,
@@ -490,6 +492,25 @@ namespace Assets
 			}
 				
 			return result;
+		}
+
+		const DirectorySearchRules& GetDirectorySearchRules() const override
+		{
+			// the directory search rules are just a chunk in the file
+			if (!_cachedDirectorySearchRules) {
+				bool found = false;
+				for (const auto&prod:_productsFile._compileProducts)
+					if (prod._type == "DirectorySearchRules"_h) {
+						size_t size = 0;
+						auto fileData = TryLoadFileAsAlignedBuffer(*_filesystem, prod._intermediateArtifact, size);
+						*_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(fileData.get(), PtrAdd(fileData.get(), size)));
+						found = true;
+						break;
+					}
+				if (!found) *_cachedDirectorySearchRules = {};
+			}
+
+			return *_cachedDirectorySearchRules;
 		}
 
 		DependencyValidation GetDependencyValidation() const override { return _depVal; }
@@ -535,6 +556,7 @@ namespace Assets
 		uint64_t _refCountHashCode;
 		std::shared_ptr<IFileSystem> _filesystem;
 		std::string _fsMountPt;
+		mutable std::optional<DirectorySearchRules> _cachedDirectorySearchRules;
 	};
 
 	static std::shared_ptr<IArtifactCollection> MakeArtifactCollection(

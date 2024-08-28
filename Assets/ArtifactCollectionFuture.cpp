@@ -15,6 +15,8 @@
 #include "../Core/Exceptions.h"
 #include <future>
 
+using namespace Utility::Literals;
+
 namespace Assets 
 {
 	static const auto ChunkType_Log = ConstHash64Legacy<'Log'>::Value;
@@ -115,7 +117,14 @@ namespace Assets
 			////////////////////////////////////////////////////////////
 
 	DependencyValidation ChunkFileArtifactCollection::GetDependencyValidation() const { return _depVal; }
-	StringSection<ResChar>	ChunkFileArtifactCollection::GetRequestParameters() const { return MakeStringSection(_requestParameters); }
+	StringSection<ResChar> ChunkFileArtifactCollection::GetRequestParameters() const { return MakeStringSection(_requestParameters); }
+	const DirectorySearchRules& ChunkFileArtifactCollection::GetDirectorySearchRules() const
+	{
+		if (!_cachedDirectorySearchRules) {
+			*_cachedDirectorySearchRules = ArtifactChunkContainer{}.GetDirectorySearchRules(*_file);
+		}
+		return *_cachedDirectorySearchRules;
+	}
 	std::vector<ArtifactRequestResult> ChunkFileArtifactCollection::ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const
 	{
 		ArtifactChunkContainer chunkFile;
@@ -144,7 +153,7 @@ namespace Assets
 			chunkResult._reopenFunction = [blobCopy=blob]() -> std::shared_ptr<IFileInterface> {
 				return CreateMemoryFile(blobCopy);
 			};
-		} else if (dataType == ArtifactRequest::DataType::SharedBlob) {
+		} else if (dataType == ArtifactRequest::DataType::SharedBlob || dataType == ArtifactRequest::DataType::OptionalSharedBlob) {
 			chunkResult._sharedBlob = blob;
 		} else {
 			UNREACHABLE();
@@ -197,7 +206,21 @@ namespace Assets
 		return result;
 	}
 	DependencyValidation BlobArtifactCollection::GetDependencyValidation() const { return _depVal; }
-	StringSection<ResChar>	BlobArtifactCollection::GetRequestParameters() const { return MakeStringSection(_requestParams); }
+	StringSection<ResChar> BlobArtifactCollection::GetRequestParameters() const { return MakeStringSection(_requestParams); }
+	const DirectorySearchRules& BlobArtifactCollection::GetDirectorySearchRules() const
+	{
+		if (!_cachedDirectorySearchRules) {
+			auto i = std::find_if(
+				_chunks.begin(), _chunks.end(), 
+				[](const auto& c) { return c._chunkTypeCode == "DirectorySearchRules"_h; });
+			if (i != _chunks.end()) {
+				*_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(*i->_data);
+			} else {
+				*_cachedDirectorySearchRules = {};
+			}
+		}
+		return *_cachedDirectorySearchRules;
+	}
 	AssetState BlobArtifactCollection::GetAssetState() const 
 	{
 		return _state; 
@@ -211,7 +234,7 @@ namespace Assets
 
 	std::vector<ArtifactRequestResult> CompilerExceptionArtifact::ResolveRequests(IteratorRange<const ArtifactRequest*> requests) const
 	{
-		if (requests.size() == 1 && requests[0]._chunkTypeCode == ChunkType_Log && requests[0]._dataType == ArtifactRequest::DataType::SharedBlob) {
+		if (requests.size() == 1 && requests[0]._chunkTypeCode == ChunkType_Log && (requests[0]._dataType == ArtifactRequest::DataType::SharedBlob || requests[0]._dataType == ArtifactRequest::DataType::OptionalSharedBlob)) {
 			ArtifactRequestResult res;
 			res._sharedBlob = _log;
 			std::vector<ArtifactRequestResult> result;

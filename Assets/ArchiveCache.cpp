@@ -30,6 +30,8 @@
 #include "../Utility/StringFormat.h"
 #include <algorithm>
 
+using namespace Utility::Literals;
+
 #pragma GCC diagnostic ignored "-Wmultichar"
 namespace Assets
 {
@@ -833,7 +835,7 @@ namespace Assets
 					Throw(std::runtime_error("Type code is repeated multiple times in call to ResolveRequests"));
 
 				if (r->_chunkTypeCode == ChunkType_Log || r->_chunkTypeCode == ChunkType_Metrics) {
-					if (r->_dataType != ArtifactRequest::DataType::SharedBlob)
+					if (r->_dataType != ArtifactRequest::DataType::SharedBlob && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob)
 						Throw(std::runtime_error("Attempting to open a log or metrics chunk in non-shared-blob mode. This isn't supported"));
 					requiresLogOrMetrics = true;
 					continue;
@@ -845,13 +847,13 @@ namespace Assets
 				auto i = std::find_if(
 					range.first, range.second, 
 					[&r](const auto& c) { return c._chunkTypeCode == r->_chunkTypeCode; });
-				if (i == range.second)
+				if (i == range.second && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob)
 					Throw(Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::MissingFile,
 						GetDependencyValidation_AlreadyLocked().first,
 						StringMeld<128>() << "Missing chunk (" << r->_name << ")"));
 
-				if (r->_expectedVersion != ~0u && (i->_version != r->_expectedVersion))
+				if (i != range.second && r->_expectedVersion != ~0u && (i->_version != r->_expectedVersion))
 					Throw(::Assets::Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::UnsupportedVersion,
 						GetDependencyValidation_AlreadyLocked().first,
@@ -887,7 +889,7 @@ namespace Assets
 			for (const auto& r:requests) {
 				ArtifactRequestResult chunkResult;
 				if (r._chunkTypeCode == ChunkType_Log || r._chunkTypeCode == ChunkType_Metrics) {
-					assert(r._dataType == ArtifactRequest::DataType::SharedBlob);
+					assert(r._dataType == ArtifactRequest::DataType::SharedBlob || r._dataType == ArtifactRequest::DataType::OptionalSharedBlob);
 					std::string attachedStringName;
 					if (r._chunkTypeCode == ChunkType_Metrics) attachedStringName = attachedStringPrefix + "-metrics";
 					else if (r._chunkTypeCode == ChunkType_Log) attachedStringName = attachedStringPrefix + "-log";
@@ -924,7 +926,7 @@ namespace Assets
 							archiveFile->Seek(offset);
 							return archiveFile;
 						};
-					} else if (r._dataType == ArtifactRequest::DataType::SharedBlob) {
+					} else if (r._dataType == ArtifactRequest::DataType::SharedBlob || r._dataType == ArtifactRequest::DataType::OptionalSharedBlob) {
 						chunkResult._sharedBlob = std::make_shared<std::vector<uint8_t>>();
 						chunkResult._sharedBlob->resize(i->_size);
 						archiveFile->Seek(i->_start);
@@ -978,6 +980,55 @@ namespace Assets
 			return ConstructDepVal(fileStates, "ArchivedAsset");
 		}
 
+		const DirectorySearchRules& GetDirectorySearchRules() const override
+		{
+			if (!_cachedDirectorySearchRules) {
+
+				// The directory search rules is just an artifact in the block list. Let's check if one exists
+
+				ScopedLock(_archiveCache->_pendingCommitsLock);
+				VerifyChangeId_AlreadyLocked(*_archiveCache, _objectId, _changeId);
+
+				auto i = std::lower_bound(_archiveCache->_pendingCommits.begin(), _archiveCache->_pendingCommits.end(), _objectId, ComparePendingCommit());
+				if (i!=_archiveCache->_pendingCommits.end() && i->_objectId == _objectId) {
+					auto i2 = std::find_if(i->_data.begin(), i->_data.end(), [](const auto& q) { return q._chunkTypeCode == "DirectorySearchRules"_h; });
+					if (i2 != i->_data.end()) {
+						*_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(*i2->_data);
+					} else {
+						*_cachedDirectorySearchRules = {};
+					}
+				} else {
+
+					const auto* blocks = _archiveCache->GetArtifactBlockList();
+					if (!blocks)
+						Throw(std::runtime_error("Resolve failed because the archive block list could not be generated"));
+
+					auto range = std::equal_range(blocks->begin(), blocks->end(), _objectId, CompareArtifactDirectoryBlock{});
+					bool requiresLogOrMetrics = false;
+
+					auto i2 = std::find_if(range.first, range.second, [](const auto& q) { return q._chunkTypeCode == "DirectorySearchRules"_h; });
+					if (i2 != range.second && i2->_size) {
+
+						std::unique_ptr<IFileInterface> archiveFile;
+						TryOpen(archiveFile, *_archiveCache->_filesystem, MakeStringSection(_archiveCache->_mainFileName), "rb");
+						if (!archiveFile)
+							Throw(std::runtime_error("Failed while opening archive cache data file: " + _archiveCache->_mainFileName));
+
+						VLA(char, buffer, i2->_size);
+						archiveFile->Seek(i2->_start);
+						archiveFile->Read(buffer, i2->_size);
+						*_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(buffer, &buffer[i2->_size]));
+
+					} else {
+						*_cachedDirectorySearchRules = {};
+					}
+
+				}
+			}
+
+			return *_cachedDirectorySearchRules;
+		}
+
 		StringSection<ResChar>				GetRequestParameters() const override
 		{
 			return {};
@@ -1005,6 +1056,7 @@ namespace Assets
 		ArchiveCache* _archiveCache = nullptr;
 		uint64_t _objectId = 0;
 		unsigned _changeId = 0;
+		mutable std::optional<DirectorySearchRules> _cachedDirectorySearchRules;
 	};
 
 	auto ArchiveCache::TryOpenFromCache(uint64_t id) -> std::shared_ptr<IArtifactCollection>
