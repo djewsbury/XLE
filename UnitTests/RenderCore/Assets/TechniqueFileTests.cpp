@@ -147,9 +147,9 @@ namespace UnitTests
 
 				SkeletonRules=~
 					*=~
-						AnimatableBones=~
+						PreserveParameters=~
 							Bone0; Bone1; Bone2
-						OutputBones=~
+						PreserveOutputs=~
 							Bone3; Bone4; Bone5
 
 				Material=~
@@ -168,7 +168,7 @@ namespace UnitTests
 
 					SkeletonRules=~
 						*=~
-							AnimatableBones=~
+							PreserveParameters=~
 								ABone0; ABone1; ABone2
 			)--")),
 	};
@@ -180,7 +180,7 @@ namespace UnitTests
 
 		using namespace RenderCore::Assets;
 
-		auto marker = ::Assets::ActualizeAssetPtr<::Assets::ResolvedAssetMixin<ModelCompilationConfiguration>>("ut-data/one.model");
+		auto marker = ::Assets::ActualizeAssetFn<::Assets::ResolveAssetToPromise<ModelCompilationConfiguration>>("ut-data/one.model");
 		(void)marker;
 		
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);

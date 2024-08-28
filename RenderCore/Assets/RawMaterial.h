@@ -212,22 +212,34 @@ namespace RenderCore { namespace Assets
     };
 
     using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial, CompilableMaterialAssetMixin<RawMaterial>>;
-#else
-    using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial>;
 #endif
 
+    using ContextImbuedRawMaterialPtr = ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>;
+    using ContextImbuedRawMaterial = ::Assets::ContextImbuedAsset<RawMaterial>;
+
     void AutoConstructToPromiseOverride(
-        std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>>&& promise,
+        std::promise<ContextImbuedRawMaterialPtr>&& promise,
         StringSection<> initializer);
 
     void AutoConstructToPromiseOverride(
-        std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>>&& promise,
+        std::promise<ContextImbuedRawMaterial>&& promise,
+        StringSection<> initializer);
+
+    void AutoConstructToPromiseOverride(
+        std::promise<ContextImbuedRawMaterialPtr>&& promise,
         StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
+
+    void AutoConstructToPromiseOverride(
+        std::promise<ContextImbuedRawMaterial>&& promise,
+        StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
+
+    std::shared_future<::Assets::ResolvedAssetMixin<RawMaterial>> GetResolvedMaterialFuture(StringSection<>);
 
 	class RawMaterialSet_Internal
     {
     public:
-        std::vector<std::pair<std::string, RawMaterial>> _materials;
+        using Entry = std::tuple<RawMaterial, ::Assets::InheritList>;
+        std::vector<std::pair<std::string, Entry>> _materials;
 
 		RawMaterialSet_Internal(Formatters::TextInputFormatter<char>& fmttr);
         RawMaterialSet_Internal() = default;

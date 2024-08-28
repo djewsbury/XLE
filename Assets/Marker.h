@@ -126,32 +126,21 @@ namespace Assets
 
 		template<typename Type> static auto HasStdGetDependencyValidation_Helper(int) -> decltype(std::get<DependencyValidation>(std::declval<Type>()), std::true_type{});
 		template<typename...> static auto HasStdGetDependencyValidation_Helper(...) -> std::false_type;
-		template<typename Type> static constexpr bool HasStdGetDependencyValidation = decltype(HasDerefGetDependencyValidation_Helper<Type>(0))::value;
+		template<typename Type> static constexpr bool HasStdGetDependencyValidation = decltype(HasStdGetDependencyValidation_Helper<Type>(0))::value;
 
-		// template<typename Type, typename std::enable_if<HasGetDependencyValidation<Type>::value>::type* =nullptr>
-		// 	decltype(std::declval<Type>().GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset.GetDependencyValidation(); }
+		template<typename Type> static auto RequiresDeref_Helper(int) -> decltype(*std::declval<Type>(), std::true_type{});
+		template<typename...> static auto RequiresDeref_Helper(...) -> std::false_type;
+		template<typename Type> static constexpr bool RequiresDeref = decltype(RequiresDeref_Helper<Type>(0))::value;
 
-		// template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && HasDerefGetDependencyValidation<Type>::value>::type* =nullptr>
-		// 	DependencyValidation GetDependencyValidation(const Type& asset) { return asset ? (*asset).GetDependencyValidation() : DependencyValidation{}; }
+		template<typename Type> decltype(std::declval<const Type&>().GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset.GetDependencyValidation(); }
+		template<typename Type> decltype(std::declval<const Type&>()->GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset->GetDependencyValidation(); }
+		template<typename Type> decltype(std::get<DependencyValidation>(std::declval<const Type&>())) GetDependencyValidation(const Type& asset) { return std::get<DependencyValidation>(asset); }
 
-		// template<typename Type, typename std::enable_if<std::is_same_v<std::decay_t<Type>, DependencyValidation>>::type* =nullptr>
-		// 	DependencyValidation GetDependencyValidation(const Type& asset) { return asset; }
+		template<typename Type, typename =std::enable_if_t<!HasGetDependencyValidation<Type> && !HasDerefGetDependencyValidation<Type> && !HasStdGetDependencyValidation<Type>>>
+			::Assets::DependencyValidation GetDependencyValidation(const Type& asset) { return {}; }
 
-		// template<typename Type, typename std::enable_if<!HasGetDependencyValidation<Type>::value && !HasDerefGetDependencyValidation<Type>::value && !std::is_same_v<std::decay_t<Type>, DependencyValidation>>::type* =nullptr>
-		// 	inline const DependencyValidation& GetDependencyValidation(const Type&) { static DependencyValidation dummy; return dummy; }
-
-		template<typename Type>
-			::Assets::DependencyValidation GetDependencyValidation(const Type& asset)
-		{
-			if constexpr (HasGetDependencyValidation<Type>) {
-				return asset.GetDependencyValidation();
-			} else if constexpr (HasDerefGetDependencyValidation<Type>) {
-				return asset ? (*asset).GetDependencyValidation() : DependencyValidation{};
-			} else if constexpr (HasStdGetDependencyValidation<Type>) {
-				return std::get<DependencyValidation>(asset);
-			}
-			return {};
-		}
+		template<typename SrcType, typename DstType=decltype(*std::declval<SrcType>())> DstType& MaybeDeref(SrcType& src) { return *src; }
+		template<typename Type, typename =std::enable_if_t<!RequiresDeref<Type>>> Type& MaybeDeref(Type& src) { return src; }
 
 		unsigned RegisterFrameBarrierCallback(std::function<void()>&& fn);
 		void DeregisterFrameBarrierCallback(unsigned, uint64_t);

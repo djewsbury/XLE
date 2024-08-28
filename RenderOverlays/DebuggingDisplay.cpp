@@ -941,16 +941,16 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         static void ConstructToPromise(std::promise<std::shared_ptr<DebugDisplayResources>>&& promise)
         {
-            auto horizTweakerBarMaterial = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
-            auto tagShaderMaterial = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
-            auto gridBackgroundMaterial = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
+            auto horizTweakerBarMaterial = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
+            auto tagShaderMaterial = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
+            auto gridBackgroundMaterial = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
             ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial).ThenConstructToPromise(
                 std::move(promise),
                 [](const auto& horizTweakerBarMaterial, const auto& tagShaderMaterial, const auto& gridBackgroundMaterial) {
                     ::Assets::DependencyValidationMarker depVals[] {
-                        horizTweakerBarMaterial.GetDependencyValidation(),
-                        tagShaderMaterial.GetDependencyValidation(),
-                        gridBackgroundMaterial.GetDependencyValidation(),
+                        std::get<::Assets::DependencyValidation>(horizTweakerBarMaterial),
+                        std::get<::Assets::DependencyValidation>(tagShaderMaterial),
+                        std::get<::Assets::DependencyValidation>(gridBackgroundMaterial)
                     };
                     return std::make_shared<DebugDisplayResources>(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial, ::Assets::GetDepValSys().MakeOrReuse(depVals));
                 });

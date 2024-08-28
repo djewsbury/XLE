@@ -60,6 +60,9 @@ namespace Assets
 		template<typename... Params>
 			PtrToFuture Get(Params&&...);
 
+		template<auto ConstructToPromiseFn, typename... Params>
+			PtrToFuture GetFn(Params&&...);
+
 		template<typename... Params>
 			uint64_t SetShadowingAsset(AssetType&& newShadowingAsset, Params&&...);
 
@@ -133,6 +136,36 @@ namespace Assets
 		// in "pending" state, and Actualize() will through a PendingAsset exception, so this should be thread-safe, even if
 		// another thread grabs the future before AutoConstructToPromise is done
 		AutoConstructToPromise(newFuture->AdoptPromise(), std::forward<Params>(initialisers)...);
+		return newFuture;
+	}
+
+	template<typename AssetType>
+		template<auto ConstructToPromiseFn, typename... Params>
+			auto DefaultAssetHeap<AssetType>::GetFn(Params&&... initialisers) -> PtrToFuture
+	{
+		auto hash = Internal::BuildParamHash(initialisers...);
+		hash = HashCombine(hash, typeid(decltype(ConstructToPromiseFn)).hash_code());
+
+		PtrToFuture newFuture;
+		{
+			ScopedLock(_lock);
+			auto i = LowerBound(_assets, hash);
+			if (i != _assets.end() && i->first == hash)
+				if (!IsInvalidated(*i->second))
+					return i->second;
+
+			auto stringInitializer = Internal::AsString(initialisers...);	// (used for tracking/debugging purposes)
+			newFuture = std::make_shared<Marker<AssetType>>(stringInitializer);
+			if (i != _assets.end() && i->first == hash) {
+				i->second = newFuture;
+				_lastKnownAssetStates[std::distance(_assets.begin(), i)] = AssetState::Pending;
+			} else {
+				_lastKnownAssetStates.insert(_lastKnownAssetStates.begin() + std::distance(_assets.begin(), i), AssetState::Pending);
+				_assets.insert(i, std::make_pair(hash, newFuture));
+			}
+		}
+
+		ConstructToPromiseFn(newFuture->AdoptPromise(), std::forward<Params>(initialisers)...);
 		return newFuture;
 	}
 

@@ -22,6 +22,8 @@ namespace RenderCore { namespace Assets
 	class ModelCompilationConfiguration;
 	class MaterialScaffoldConstruction;
 
+	using ResolvedMCC = ::Assets::ResolvedAssetMixin<std::shared_ptr<ModelCompilationConfiguration>>;
+
 	class ModelRendererConstruction : public std::enable_shared_from_this<ModelRendererConstruction>
 	{
 	public:
@@ -41,8 +43,8 @@ namespace RenderCore { namespace Assets
 			ElementConstructor& SetMaterialScaffold(std::shared_ptr<MaterialScaffoldConstruction>, std::string initializer={});
 
 			ElementConstructor& SetCompilationConfiguration(StringSection<>);
-			ElementConstructor& SetCompilationConfiguration(std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<RenderCore::Assets::ModelCompilationConfiguration>>>, std::string initializer={});
-			ElementConstructor& SetCompilationConfiguration(std::shared_ptr<RenderCore::Assets::ModelCompilationConfiguration>, std::string initializer={});
+			ElementConstructor& SetCompilationConfiguration(std::shared_future<ResolvedMCC>, std::string initializer={});
+			ElementConstructor& SetCompilationConfiguration(std::shared_ptr<ModelCompilationConfiguration>, std::string initializer={});
 
 			ElementConstructor& SetElementToObject(const Float4x4&);
 			ElementConstructor& SetDeformerBindPoint(uint64_t);
@@ -122,7 +124,7 @@ namespace RenderCore { namespace Assets
 			using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>;
 			using MaterialScaffoldPtr = std::shared_ptr<Assets::MaterialScaffold>;
 			using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialScaffoldConstruction>;
-			using CompilationConfigurationMarker = std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>;
+			using CompilationConfigurationMarker = std::shared_future<ResolvedMCC>;
 			using CompilationConfigurationPtr = std::shared_ptr<Assets::ModelCompilationConfiguration>;
 			Iterator<ModelScaffoldMarker> _msmi;
 			Iterator<ModelScaffoldPtr> _mspi;

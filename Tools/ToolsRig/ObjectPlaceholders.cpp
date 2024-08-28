@@ -267,7 +267,7 @@ namespace ToolsRig
 
 	static std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> BuildPipelineAccelerator(
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
-		const RenderCore::Assets::ResolvedMaterial& mat)
+		const RenderCore::Assets::RawMaterial& mat)
 	{
 		return pipelineAcceleratorPool->CreatePipelineAccelerator(
 			std::make_shared<RenderCore::Assets::ShaderPatchCollection>(mat._patchCollection),
@@ -297,21 +297,21 @@ namespace ToolsRig
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads)
     {
-		auto sphereMatFuture = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":sphere");
-		auto tubeMatFuture = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":tube");
-		auto rectangleMatFuture = ::Assets::GetAssetFuture<RenderCore::Assets::ResolvedMaterial>(AREA_LIGHT_TECH":rectangle");
+		auto sphereMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(AREA_LIGHT_TECH":sphere");
+		auto tubeMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(AREA_LIGHT_TECH":tube");
+		auto rectangleMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(AREA_LIGHT_TECH":rectangle");
 
 		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToPromise(
 			std::move(promise),
 			[drawablesPool, pipelineAcceleratorPool, bufferUploads](
-				const RenderCore::Assets::ResolvedMaterial& sphereMat,
-				const RenderCore::Assets::ResolvedMaterial& tubeMat,
-				const RenderCore::Assets::ResolvedMaterial& rectangleMat) {
+				const auto& sphereMat,
+				const auto& tubeMat,
+				const auto& rectangleMat) {
 
 				VisGeoBox res;
-				res._genSphere = BuildPipelineAccelerator(pipelineAcceleratorPool, sphereMat);
-				res._genTube = BuildPipelineAccelerator(pipelineAcceleratorPool, tubeMat);
-				res._genRectangle = BuildPipelineAccelerator(pipelineAcceleratorPool, rectangleMat);
+				res._genSphere = BuildPipelineAccelerator(pipelineAcceleratorPool, std::get<0>(sphereMat));
+				res._genTube = BuildPipelineAccelerator(pipelineAcceleratorPool, std::get<0>(tubeMat));
+				res._genRectangle = BuildPipelineAccelerator(pipelineAcceleratorPool, std::get<0>(rectangleMat));
 				res._cubeGeo = CreateCubeDrawableGeo(drawablesPool, bufferUploads);
 				res._justPointsPipelineAccelerator = pipelineAcceleratorPool->CreatePipelineAccelerator(
 					nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});

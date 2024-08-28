@@ -19,7 +19,7 @@ namespace Assets
         void AddSearchDirectoryFromFilename(StringSection<ResChar> filename);
         std::string AnySearchDirectory() const;
 		void SetBaseFile(StringSection<ResChar> file);
-        StringSection<> GetBaseFile() const { return _baseFile; }
+        StringSection<> GetBaseFile() const;
 
         void ResolveFile(
             ResChar destination[], unsigned destinationCount, 
@@ -42,14 +42,16 @@ namespace Assets
 		DirectorySearchRules(DirectorySearchRules&&) never_throws;
         DirectorySearchRules& operator=(DirectorySearchRules&&) never_throws;
     protected:
-        ResChar _buffer[512];
+        ResChar _buffer[256];
         std::vector<ResChar> _bufferOverflow;
-        unsigned _startOffsets[8];
     
-        unsigned _bufferUsed;
+        unsigned _startOffsets[8];
         unsigned _startPointCount;
+        unsigned _baseFileOffset;
 
-		ResChar _baseFile[MaxPath];
+        unsigned _bufferUsed;
+
+        unsigned AddString(StringSection<ResChar>);
     };
 
     DirectorySearchRules DefaultDirectorySearchRules(StringSection<ResChar> baseFile);

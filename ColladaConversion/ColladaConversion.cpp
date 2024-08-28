@@ -598,6 +598,13 @@ namespace ColladaConversion
 	ColladaCompileOp::ColladaCompileOp() {}
 	ColladaCompileOp::~ColladaCompileOp() {}
 
+	static std::shared_ptr<::Assets::Marker<::Assets::ResolvedAssetMixin<std::shared_ptr<ModelCompilationConfiguration>>>> GetFutureResolvedMCC(StringSection<> cfg)
+	{
+		return ::Assets::GetAssetMarkerFn<
+			::Assets::ResolveAssetToPromise<std::shared_ptr<ModelCompilationConfiguration>>
+		>(cfg);
+	}
+
 	static std::shared_ptr<::Assets::ICompileOperation> CreateNormalCompileOperation(
 		StringSection<::Assets::ResChar> identifier,
 		std::shared_ptr<ModelCompilationConfiguration> configuration)
@@ -620,11 +627,11 @@ namespace ColladaConversion
 		::Assets::DependencyValidation modelCfgFileDepVal;
 		{
 			auto cfgFileName = split.StemPathAndFilename().AsString() + ".model";
-			auto cfgFile = ::Assets::GetAssetMarker<std::shared_ptr<::Assets::ResolvedAssetMixin<ModelCompilationConfiguration>>>(cfgFileName);
+			auto cfgFile = GetFutureResolvedMCC(cfgFileName);
 			cfgFile->StallWhilePending();
 			if (cfgFile->GetAssetState() == ::Assets::AssetState::Ready) {
 				auto newCfg = std::make_shared<ModelCompilationConfiguration>();
-				newCfg->MergeInWithFilenameResolve(*cfgFile->Actualize(), {});
+				newCfg->MergeInWithFilenameResolve(*std::get<0>(cfgFile->Actualize()), {});
 				if (configuration)
 					newCfg->MergeInWithFilenameResolve(*configuration, {});
 				configuration = std::move(newCfg);

@@ -161,8 +161,8 @@ namespace UnitTests
 
 			auto dehashedName0 = newScaffold->DehashMaterialName("Material0"_h).AsString();
 			auto dehashedName1 = newScaffold->DehashMaterialName("Material1"_h).AsString();
-			REQUIRE(dehashedName0 == "fake-model:Material0;ut-data/test.material:*;ut-data/test.material:Material0");
-			REQUIRE(dehashedName1 == "fake-model:Material1;ut-data/test.material:*;ut-data/test.material:Material1");
+			REQUIRE(dehashedName0 == "Material0");
+			REQUIRE(dehashedName1 == "Material1");
 		}
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt);
@@ -215,13 +215,13 @@ namespace UnitTests
 			REQUIRE(cfgs._materials[0].first == "Material0");
 			REQUIRE(cfgs._materials[1].first == "Material1");
 
-			auto material0 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::ResolvedMaterial>("fake-model:Material0");
-			REQUIRE(material0->_uniforms.GetParameter<float>("Brightness") == 50_a);
-			REQUIRE(Equivalent(material0->_uniforms.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
+			RenderCore::Assets::RawMaterial material0 = RenderCore::Assets::GetResolvedMaterialFuture("fake-model:Material0").get();
+			REQUIRE(material0._uniforms.GetParameter<float>("Brightness") == 50_a);
+			REQUIRE(Equivalent(material0._uniforms.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
 
-			auto material1 = ::Assets::ActualizeAssetPtr<RenderCore::Assets::ResolvedMaterial>("fake-model:Material1");
-			REQUIRE(material1->_uniforms.GetParameter<float>("Brightness") == 33_a);
-			REQUIRE(Equivalent(material1->_uniforms.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
+			RenderCore::Assets::RawMaterial material1 = RenderCore::Assets::GetResolvedMaterialFuture("fake-model:Material1").get();
+			REQUIRE(material1._uniforms.GetParameter<float>("Brightness") == 33_a);
+			REQUIRE(Equivalent(material1._uniforms.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
 		}
 	}
 

@@ -27,7 +27,7 @@ namespace RenderCore { namespace Assets
 		using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>;
 		using MaterialScaffoldPtr = std::shared_ptr<Assets::MaterialScaffold>;
 		using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialScaffoldConstruction>;
-		using CompilationConfigurationMarker = std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>;
+		using CompilationConfigurationMarker = std::shared_future<ResolvedMCC>;
 		using CompilationConfigurationPtr = std::shared_ptr<Assets::ModelCompilationConfiguration>;
 
 		std::vector<std::pair<ElementId, ModelScaffoldMarker>> _modelScaffoldMarkers;
@@ -61,14 +61,14 @@ namespace RenderCore { namespace Assets
 
 	static std::shared_future<std::shared_ptr<Assets::ModelScaffold>> CreateModelScaffoldFuture(
 		StringSection<> modelName,
-		std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>> futureCompilationConfiguration)
+		std::shared_future<ResolvedMCC> futureCompilationConfiguration)
 	{
 		std::promise<std::shared_ptr<Assets::ModelScaffold>> promise;
 		auto future = promise.get_future();
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString()](auto&& promise, auto q) {
-				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(model, std::get<0>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
@@ -84,14 +84,14 @@ namespace RenderCore { namespace Assets
 	static std::shared_future<std::shared_ptr<Assets::ModelScaffold>> CreateModelScaffoldFuture(
 		std::shared_ptr<::Assets::OperationContext> opContext,
 		StringSection<> modelName,
-		std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>> futureCompilationConfiguration)
+		std::shared_future<ResolvedMCC> futureCompilationConfiguration)
 	{
 		std::promise<std::shared_ptr<Assets::ModelScaffold>> promise;
 		auto future = promise.get_future();
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString(), opContext=std::move(opContext)](auto&& promise, auto q) {
-				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(std::move(opContext), model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(std::move(opContext), model, std::get<0>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
@@ -109,14 +109,14 @@ namespace RenderCore { namespace Assets
 
 	static std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> CreateMaterialScaffoldFuture(
 		StringSection<> materialName, StringSection<> modelName,
-		std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>> futureCompilationConfiguration)
+		std::shared_future<ResolvedMCC> futureCompilationConfiguration)
 	{
 		std::promise<std::shared_ptr<Assets::MaterialScaffold>> promise;
 		auto future = promise.get_future();
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString(), material=materialName.AsString()](auto&& promise, auto q) {
-				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(material, model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(material, model, std::get<0>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
@@ -132,14 +132,14 @@ namespace RenderCore { namespace Assets
 	static std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> CreateMaterialScaffoldFuture(
 		std::shared_ptr<::Assets::OperationContext> opContext,
 		StringSection<> materialName, StringSection<> modelName,
-		std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>> futureCompilationConfiguration)
+		std::shared_future<ResolvedMCC> futureCompilationConfiguration)
 	{
 		std::promise<std::shared_ptr<Assets::MaterialScaffold>> promise;
 		auto future = promise.get_future();
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString(), opContext=std::move(opContext), material=materialName.AsString()](auto&& promise, auto q) {
-				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(std::move(opContext), material, model, std::static_pointer_cast<Assets::ModelCompilationConfiguration>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(std::move(opContext), material, model, std::get<0>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
@@ -315,17 +315,25 @@ namespace RenderCore { namespace Assets
 		_internal->_hash = 0;
 		return *this;
 	}
+
+	static std::shared_future<ResolvedMCC> GetFutureResolvedMCC(StringSection<> cfg)
+	{
+		return ::Assets::GetAssetFutureFn<
+			::Assets::ResolveAssetToPromise<std::shared_ptr<ModelCompilationConfiguration>>
+		>(cfg);
+	}
+
 	auto ModelRendererConstruction::ElementConstructor::SetCompilationConfiguration(StringSection<> cfg) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
 		auto originalDisableHash = _internal->_disableHash;
-		SetCompilationConfiguration(::Assets::GetAssetFuture<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>(cfg), cfg.AsString());
+		SetCompilationConfiguration(GetFutureResolvedMCC(cfg), cfg.AsString());
 		_internal->_disableHash = originalDisableHash;
 		_internal->_hash = 0;
 		return *this;
 	}
 
-	auto ModelRendererConstruction::ElementConstructor::SetCompilationConfiguration(std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<RenderCore::Assets::ModelCompilationConfiguration>>> futureCfg, std::string initializer) -> ElementConstructor&
+	auto ModelRendererConstruction::ElementConstructor::SetCompilationConfiguration(std::shared_future<ResolvedMCC> futureCfg, std::string initializer) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
 		{
@@ -350,7 +358,7 @@ namespace RenderCore { namespace Assets
 		return *this;
 	}
 
-	auto ModelRendererConstruction::ElementConstructor::SetCompilationConfiguration(std::shared_ptr<RenderCore::Assets::ModelCompilationConfiguration> cfg, std::string initializer) -> ElementConstructor&
+	auto ModelRendererConstruction::ElementConstructor::SetCompilationConfiguration(std::shared_ptr<ModelCompilationConfiguration> cfg, std::string initializer) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_compilationConfigurationPtrs, _elementId);
@@ -549,7 +557,7 @@ namespace RenderCore { namespace Assets
 		static bool FutureInvalidated(Future& f)
 	{
 		TRY {
-			return f.valid() && f.get()->GetDependencyValidation().GetValidationIndex() != 0;
+			return f.valid() && ::Assets::Internal::GetDependencyValidation(f.get()).GetValidationIndex() != 0;
 		} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
 			return e.GetDependencyValidation().GetValidationIndex() != 0;
 		} CATCH(...) {
@@ -614,7 +622,7 @@ namespace RenderCore { namespace Assets
 		for (const auto& m:_internal->_compilationConfigurationMarkers) {
 			assert(m.second.wait_for(std::chrono::seconds(0)) == std::future_status::ready);
 			TRY {
-				markers.push_back(m.second.get()->GetDependencyValidation());
+				markers.push_back(std::get<::Assets::DependencyValidation>(m.second.get()));
 			} CATCH (::Assets::Exceptions::ExceptionWithDepVal& e) {
 				markers.push_back(e.GetDependencyValidation());
 			} CATCH(...) {
@@ -670,11 +678,11 @@ namespace RenderCore { namespace Assets
 			auto cfgMarker = LowerBound(src._internal->_compilationConfigurationMarkers, eleIdx);
 			auto cfgPtr = LowerBound(src._internal->_compilationConfigurationPtrs, eleIdx);
 
-			std::shared_future<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>> futureModelCompilationConfiguration;
+			std::shared_future<ResolvedMCC> futureModelCompilationConfiguration;
 			std::shared_ptr<Assets::ModelCompilationConfiguration> modelCompilationConfiguration;
 			if (cfgMarker != src._internal->_compilationConfigurationMarkers.end() && cfgMarker->first == eleIdx && cfgMarker->second.valid()) {
 				if (cfgName != src._internal->_compilationConfigurationInitializers.end() && cfgName->first == eleIdx) {
-					futureModelCompilationConfiguration = ::Assets::GetAssetFuture<std::shared_ptr<::Assets::ResolvedAssetMixin<Assets::ModelCompilationConfiguration>>>(cfgName->second);
+					futureModelCompilationConfiguration = GetFutureResolvedMCC(cfgName->second);
 					result->_internal->_compilationConfigurationMarkers.emplace_back(eleIdx, futureModelCompilationConfiguration);
 				} else {
 					futureModelCompilationConfiguration = cfgMarker->second;
@@ -911,7 +919,7 @@ namespace RenderCore { namespace Assets
 			return _ccpi->second;
 		if (_ccmi!=_internal->_compilationConfigurationMarkers.end() && _ccmi->first == _elementId) {
 			assert(_ccmi->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready);		// we should be ready, via ModelRendererConstruction::FulfillWhenNotPending before getting here
-			return _ccmi->second.get();
+			return std::get<0>(_ccmi->second.get());
 		}
 		return nullptr;
 	}

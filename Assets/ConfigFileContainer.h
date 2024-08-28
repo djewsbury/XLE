@@ -163,10 +163,10 @@ namespace Assets
 						while (fmttr.TryKeyedItem(keyname))
 							if (XlEqString(keyname, "Inherit")) {
 								inheritList = Internal::DeserializeInheritList(fmttr);
-							} else if (!asset->TryDeserializeKey(fmttr, keyname))		// todo: handle pointers/non-pointers!
+							} else if (!Internal::MaybeDeref(asset).TryDeserializeKey(fmttr, keyname))
 								Internal::SkipValueOrElement(fmttr);
 
-						return { std::move(asset), std::move(searchRules), depVal, InheritList{} };
+						return { std::move(asset), std::move(searchRules), depVal, std::move(inheritList) };
 
 					} else {
 

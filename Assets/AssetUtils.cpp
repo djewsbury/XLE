@@ -30,6 +30,30 @@
 
 namespace Assets
 {
+    unsigned DirectorySearchRules::AddString(StringSection<ResChar> dir)
+    {
+        unsigned allocationLength = (unsigned)(dir.Length() + 1);
+        if (_bufferOverflow.empty() && (_bufferUsed + allocationLength <= dimof(_buffer))) {
+                // just append this new string to our buffer, and add a new start offset
+            XlCopyMemory(&_buffer[_bufferUsed], dir.begin(), (allocationLength-1) * sizeof(ResChar));
+            _buffer[_bufferUsed+allocationLength-1] = '\0';
+        } else {
+            if (_bufferOverflow.empty()) {
+                _bufferOverflow.resize(_bufferUsed + allocationLength);
+                XlCopyMemory(AsPointer(_bufferOverflow.begin()), _buffer, _bufferUsed * sizeof(ResChar));
+                XlCopyMemory(PtrAdd(AsPointer(_bufferOverflow.begin()), _bufferUsed * sizeof(ResChar)), dir.begin(), (allocationLength-1) * sizeof(ResChar));
+                _bufferOverflow[_bufferUsed+allocationLength-1] = '\0';
+            } else {
+                assert(_bufferOverflow.size() == allocationLength);
+                auto i = _bufferOverflow.insert(_bufferOverflow.end(), dir.begin(), dir.end());
+                _bufferOverflow.insert(i + dir.Length(), 0);
+            }
+        }
+
+        auto result = _bufferUsed;
+        _bufferUsed += allocationLength;
+        return result;
+    }
 
     void DirectorySearchRules::AddSearchDirectory(StringSection<ResChar> dir)
     {
@@ -49,26 +73,7 @@ namespace Assets
             //  Duplicates are bad because they will increase the number of search operations
         if (HasDirectory(dir)) return;
 
-        unsigned allocationLength = (unsigned)(dir.Length() + 1);
-        if (_bufferOverflow.empty() && (_bufferUsed + allocationLength <= dimof(_buffer))) {
-                // just append this new string to our buffer, and add a new start offset
-            XlCopyMemory(&_buffer[_bufferUsed], dir.begin(), (allocationLength-1) * sizeof(ResChar));
-            _buffer[_bufferUsed+allocationLength-1] = '\0';
-        } else {
-            if (_bufferOverflow.empty()) {
-                _bufferOverflow.resize(_bufferUsed + allocationLength);
-                XlCopyMemory(AsPointer(_bufferOverflow.begin()), _buffer, _bufferUsed * sizeof(ResChar));
-                XlCopyMemory(PtrAdd(AsPointer(_bufferOverflow.begin()), _bufferUsed * sizeof(ResChar)), dir.begin(), (allocationLength-1) * sizeof(ResChar));
-                _bufferOverflow[_bufferUsed+allocationLength-1] = '\0';
-            } else {
-                assert(_bufferOverflow.size() == allocationLength);
-                auto i = _bufferOverflow.insert(_bufferOverflow.end(), dir.begin(), dir.end());
-                _bufferOverflow.insert(i + dir.Length(), 0);
-            }
-        }
-
-        _startOffsets[_startPointCount++] = _bufferUsed;
-        _bufferUsed += allocationLength;
+        _startOffsets[_startPointCount++] = AddString(dir);
     }
 
     void DirectorySearchRules::AddSearchDirectoryFromFilename(StringSection<ResChar> filename)
@@ -78,7 +83,8 @@ namespace Assets
 
 	void DirectorySearchRules::SetBaseFile(StringSection<ResChar> file)
 	{
-		XlCopyString(_baseFile, file);
+        assert(_baseFileOffset == ~0u);
+        _baseFileOffset = AddString(file);
 	}
 
     std::string DirectorySearchRules::AnySearchDirectory() const
@@ -133,13 +139,19 @@ namespace Assets
     void DirectorySearchRules::ResolveFile(ResChar destination[], unsigned destinationCount, StringSection<ResChar> baseName) const
     {
 		if (XlEqString(baseName, "<.>")) {
-			if (_baseFile[0]) {
-				XlCopyString(destination, destinationCount, _baseFile);
+			if (_baseFileOffset != ~0u) {
+                const ResChar* b = _bufferOverflow.empty() ? _buffer : _bufferOverflow.data();
+				XlCopyString(destination, destinationCount, &b[_baseFileOffset]);
 			} else {
 				XlCopyString(destination, destinationCount, baseName);
 			}
 			return;
 		}
+
+        if (!_startPointCount) {
+            XlCopyString(destination, destinationCount, baseName);
+            return;
+        }
 
         ResChar tempBuffer[MaxPath];
 
@@ -154,10 +166,7 @@ namespace Assets
 
             // by definition, we always check the unmodified file name first
         if (!baseFileExist) {
-            const ResChar* b = _buffer;
-            if (!_bufferOverflow.empty()) {
-                b = AsPointer(_bufferOverflow.begin());
-            }
+            const ResChar* b = _bufferOverflow.empty() ? _buffer : _bufferOverflow.data();
 
                 // We want to support the case were destination == baseName
                 // But that cases requires another temporary buffer, because we
@@ -206,10 +215,7 @@ namespace Assets
             (baseName[0] != '.' && OSServices::DoesDirectoryExist(baseName));
 
         if (!useBaseName) {
-            const ResChar* b = _buffer;
-            if (!_bufferOverflow.empty()) {
-                b = AsPointer(_bufferOverflow.begin());
-            }
+            const ResChar* b = _bufferOverflow.empty() ? _buffer : _bufferOverflow.data();
 
             ResChar tempBuffer[MaxPath];
             bool baseNameOverlapsDestination = !(baseName.end() <= destination || baseName.begin() >= &destination[destinationCount]);
@@ -246,10 +252,7 @@ namespace Assets
 
 	std::vector<std::basic_string<ResChar>> DirectorySearchRules::FindFiles(StringSection<char> wildcardSearch) const
 	{
-		const ResChar* b = _buffer;
-        if (!_bufferOverflow.empty()) {
-            b = AsPointer(_bufferOverflow.begin());
-        }
+		const ResChar* b = _bufferOverflow.empty() ? _buffer : _bufferOverflow.data();
 
 		ResChar workingBuffer[MaxPath];
 		std::vector<std::basic_string<ResChar>> result;
@@ -263,10 +266,17 @@ namespace Assets
 		return result;
 	}
 
+    StringSection<> DirectorySearchRules::GetBaseFile() const 
+    {
+        if (_baseFileOffset == ~0u) return {};
+        const ResChar* b = _bufferOverflow.empty() ? _buffer : _bufferOverflow.data();
+        return &b[_baseFileOffset];
+    }
+
     DirectorySearchRules::DirectorySearchRules()
     {
         _buffer[0] = '\0';
-		_baseFile[0] = '\0';
+		_baseFileOffset = ~0u;
         _startPointCount = 0;
         _bufferUsed = 0;
         std::fill(_startOffsets, &_startOffsets[dimof(_startOffsets)], 0);
@@ -279,7 +289,7 @@ namespace Assets
         std::copy(copyFrom._startOffsets, &copyFrom._startOffsets[dimof(_startOffsets)], _startOffsets);
         _bufferUsed = copyFrom._bufferUsed;
         _startPointCount = copyFrom._startPointCount;
-		XlCopyString(_baseFile, copyFrom._baseFile);
+		_baseFileOffset = copyFrom._baseFileOffset;
     }
 
     DirectorySearchRules& DirectorySearchRules::operator=(const DirectorySearchRules& copyFrom)
@@ -289,7 +299,7 @@ namespace Assets
         _bufferOverflow = copyFrom._bufferOverflow;
         _bufferUsed = copyFrom._bufferUsed;
         _startPointCount = copyFrom._startPointCount;
-		XlCopyString(_baseFile, copyFrom._baseFile);
+		_baseFileOffset = copyFrom._baseFileOffset;
         return *this;
     }
 
@@ -300,10 +310,10 @@ namespace Assets
         std::copy(moveFrom._startOffsets, &moveFrom._startOffsets[dimof(_startOffsets)], _startOffsets);
         _bufferUsed = moveFrom._bufferUsed;
         _startPointCount = moveFrom._startPointCount;
-		XlCopyString(_baseFile, moveFrom._baseFile);
+		_baseFileOffset = moveFrom._baseFileOffset;
 
 		moveFrom._buffer[0] = '\0';
-		moveFrom._baseFile[0] = '\0';
+		moveFrom._baseFileOffset = ~0u;
         moveFrom._startPointCount = 0;
         moveFrom._bufferUsed = 0;
         std::fill(moveFrom._startOffsets, &moveFrom._startOffsets[dimof(moveFrom._startOffsets)], 0);
@@ -316,10 +326,10 @@ namespace Assets
         _bufferOverflow = std::move(moveFrom._bufferOverflow);
         _bufferUsed = moveFrom._bufferUsed;
         _startPointCount = moveFrom._startPointCount;
-		XlCopyString(_baseFile, moveFrom._baseFile);
+		_baseFileOffset = moveFrom._baseFileOffset;
 
 		moveFrom._buffer[0] = '\0';
-		moveFrom._baseFile[0] = '\0';
+		moveFrom._baseFileOffset = ~0u;
         moveFrom._startPointCount = 0;
         moveFrom._bufferUsed = 0;
         std::fill(moveFrom._startOffsets, &moveFrom._startOffsets[dimof(moveFrom._startOffsets)], 0);

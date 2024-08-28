@@ -57,6 +57,8 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
+	using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial>;
+
 	namespace Internal
 	{
 		struct PendingAssets
@@ -101,7 +103,8 @@ namespace RenderCore { namespace Assets
 			for (const auto&m:pendingAssets._materials) {
 				auto state = m.second->StallWhilePending();
 				assert(state.value() == ::Assets::AssetState::Ready);
-				auto& resolvedMat = m.second->Actualize();
+				auto& actualized = m.second->Actualize();
+				auto& resolvedMat = std::get<0>(actualized);
 
 				::Assets::BlockSerializer tempBlock;
 
@@ -137,7 +140,7 @@ namespace RenderCore { namespace Assets
 				}
 
 				resolved.emplace_back(SerializedBlock2{m.first, std::move(tempBlock)});
-				depVals.emplace_back(resolvedMat.GetDependencyValidation());
+				depVals.emplace_back(std::get<::Assets::DependencyValidation>(actualized));
 			}
 
 			std::sort(resolved.begin(), resolved.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
@@ -183,7 +186,7 @@ namespace RenderCore { namespace Assets
 						// We can just grab the material directly from the RawMaterialSet -- but we have to convert it into a format
 						// ready for return from here
 						auto result = std::make_shared<::Assets::Marker<ContextImbuedMaterial>>();
-						result->SetAssetForeground({std::make_shared<RawMaterial>(i.second), std::get<::Assets::DirectorySearchRules>(_modelMat), std::get<::Assets::DependencyValidation>(_modelMat), ::Assets::InheritList{}});
+						result->SetAssetForeground({std::make_shared<RawMaterial>(std::get<0>(i.second)), std::get<::Assets::DirectorySearchRules>(_modelMat), std::get<::Assets::DependencyValidation>(_modelMat), std::get<::Assets::InheritList>(i.second)});
 						return result;
 					}
 				assert(0);	// didn't find the requested cfg
@@ -293,7 +296,8 @@ namespace RenderCore { namespace Assets
 			}
 
 			auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
-			ResolvedMaterial::ConstructToPromise(marker->AdoptPromise(), partialMaterials);
+			IteratorRange<const PtrToMarkerToMaterial*> initialBaseAssets = partialMaterials;
+			::Assets::ResolveAssetToPromise2<RawMaterial>(marker->AdoptPromise(), initialBaseAssets);
 
 			pendingAssets._materials.push_back(std::make_pair(guid, std::move(marker)));
 
@@ -412,7 +416,7 @@ namespace RenderCore { namespace Assets
 									[cfg](const auto& q) { return q.first == cfg; });
 								if (i == std::get<0>(rmSet)->_materials.end()) return {};
 								return {
-									std::make_shared<RawMaterial>(i->second), std::get<::Assets::DirectorySearchRules>(rmSet), std::get<::Assets::DependencyValidation>(rmSet), ::Assets::InheritList{}
+									std::make_shared<RawMaterial>(std::get<0>(i->second)), std::get<::Assets::DirectorySearchRules>(rmSet), std::get<::Assets::DependencyValidation>(rmSet), std::get<::Assets::InheritList>(i->second)
 								};
 							});
 					}
@@ -422,7 +426,8 @@ namespace RenderCore { namespace Assets
 			}
 
 			auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
-			ResolvedMaterial::ConstructToPromise(marker->AdoptPromise(), partialMaterials);
+			IteratorRange<const PtrToMarkerToMaterial*> initialBaseAssets = partialMaterials;
+			::Assets::ResolveAssetToPromise2(marker->AdoptPromise(), initialBaseAssets);
 
 			pendingAssets._materials.push_back(std::make_pair(guid, std::move(marker)));
 
