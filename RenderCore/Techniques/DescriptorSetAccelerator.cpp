@@ -152,7 +152,7 @@ namespace RenderCore { namespace Techniques
 		int maxSlotIdx = -1;
 		for (auto& slot:layout._slots)
 			maxSlotIdx = std::max(maxSlotIdx, int(slot._slotIdx));
-		assert(maxSlotIdx >= 0);
+		assert(maxSlotIdx >= 0);		// this happens when the descriptor set layout is empty
 		
 		if (!_working)
 			_working = std::make_shared<Internal::DescriptorSetInProgress>();

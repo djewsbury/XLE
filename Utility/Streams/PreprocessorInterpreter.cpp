@@ -997,9 +997,17 @@ namespace Utility
 			assert(tokenIdx < tokenCount);
 			auto idx = tokenIdx / 8;
 			auto bit = tokenIdx % 8;
+			bool prevInitialized = (evalBlock[idx] >> bit) & 1;
 			evalBlock[idx] |= 1<<bit;
 			auto valuesOffset = CeilToMultiplePow2(tokenCount, 8) / 8;
-			((EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx] = std::move(value);
+			if (prevInitialized) {
+				((EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx] = std::move(value);
+			} else {
+				#pragma macro_push("new")
+				#undef new
+				new(PtrAdd(evalBlock.begin(), valuesOffset+sizeof(EvaluatedValue)*tokenIdx)) EvaluatedValue(std::move(value));
+				#pragma macro_pop("new")
+			}
 		}
 
 		static const EvaluatedValue& EvalBlock_Get(IteratorRange<const uint8_t*> evalBlock, unsigned tokenIdx, unsigned tokenCount)
@@ -1017,6 +1025,19 @@ namespace Utility
 			result.resize(tokenCount * sizeof(EvaluatedValue) + valuesOffset);
 			for (unsigned c=0; c<valuesOffset; ++c) result[c] = 0;
 			return result;
+		}
+
+		void EvalBlock_Destroy(IteratorRange<uint8_t*> evalBlock, unsigned tokenCount)
+		{
+			auto valuesOffset = CeilToMultiplePow2(tokenCount, 8) / 8;
+			for (auto b=evalBlock.begin(); b!=&evalBlock[valuesOffset]; ++b) {
+				while (*b) {
+					auto idx = xl_ctz1(*b);
+					*b ^= 1<<idx;
+					idx += (b-evalBlock.begin())*8;
+					((EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[idx].~EvaluatedValue();
+				}
+			}
 		}
 		
 		static ImpliedTyping::VariantNonRetained UndefinedToZero(const EvaluatedValue& value)
@@ -1225,7 +1246,10 @@ namespace Utility
 			_evalBlock = EvalBlock_Initialize(_dictionary->_tokenDefinitions.size());
 		}
 
-		ExpressionEvaluator::~ExpressionEvaluator() {}
+		ExpressionEvaluator::~ExpressionEvaluator()
+		{
+			EvalBlock_Destroy(MakeIteratorRange(_evalBlock), _dictionary->_tokenDefinitions.size());
+		}
 
 		WorkingRelevanceTable CalculatePreprocessorExpressionRelevance(
 			TokenDictionary& tokenDictionary,

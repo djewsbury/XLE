@@ -198,14 +198,14 @@ namespace ToolsRig
 			RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAcceleratorPool)
 		{
 			_pipelineAccelerator = pipelineAcceleratorPool.CreatePipelineAccelerator(
-				nullptr,
+				nullptr, nullptr,
 				ParameterBox {},
 				ToolsRig::Vertex3D_InputLayout,
 				RenderCore::Topology::TriangleList,
 				RenderCore::Assets::RenderStateSet{});
 
 			_descriptorSetAccelerator = pipelineAcceleratorPool.CreateDescriptorSetAccelerator(
-				nullptr, nullptr,
+				nullptr, nullptr, nullptr,
 				{}, {}, {});
 		}
 	};
@@ -611,7 +611,7 @@ namespace ToolsRig
 	std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> CreateSimplePipelineAccelerator(RenderCore::Techniques::IPipelineAcceleratorPool& pool)
 	{
 		return pool.CreatePipelineAccelerator(
-			nullptr,
+			nullptr, nullptr,
 			ParameterBox {},
 			ToolsRig::Vertex3D_InputLayout,
 			RenderCore::Topology::TriangleList,

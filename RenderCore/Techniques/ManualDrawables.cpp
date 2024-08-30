@@ -588,8 +588,8 @@ namespace RenderCore { namespace Techniques
 			samplers[c] = {Hash64(material._samplers[c].first), material._samplers[c].second};
 
 		auto materialMachine = std::make_shared<Techniques::ManualMaterialMachine>(material._uniforms, material._resources, MakeIteratorRange(samplers, &samplers[material._samplers.size()]));
-		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, material._selectors, inputAssembly, topology, material._stateSet);
-		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(nullptr, patchCollectionPtr, materialMachine->GetMaterialMachine(), materialMachine, std::string{s_manualDrawables});
+		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, nullptr, material._selectors, inputAssembly, topology, material._stateSet);
+		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(nullptr, patchCollectionPtr, nullptr, materialMachine->GetMaterialMachine(), materialMachine, std::string{s_manualDrawables});
 		return {std::move(pipelineAccelerator), std::move(descriptorSetAccelerator)};
 	}
 
@@ -790,7 +790,7 @@ namespace RenderCore { namespace Techniques
 		assert(!_pipelineAccelerator);
 		RenderCore::Assets::RenderStateSet stateSet{};
 		_pipelineAccelerator = _pipelineAccelerators->CreatePipelineAccelerator(
-			_shaderPatches, _materialSelectors,
+			_shaderPatches, nullptr, _materialSelectors,
 			inputAssembly, topology, stateSet).get();
 		_vertexStride = CalculateVertexStride(inputAssembly);
 		return *this;
@@ -813,7 +813,7 @@ namespace RenderCore { namespace Techniques
 		assert(!_descriptorSetAccelerator);
 
 		_descriptorSetAccelerator = _pipelineAccelerators->CreateDescriptorSetAccelerator(
-			nullptr, _shaderPatches,
+			nullptr, _shaderPatches, nullptr,
 			materialMachine, std::move(memoryHolder),
 			{}).get();
 		return *this;

@@ -92,6 +92,7 @@ namespace RenderCore { namespace Techniques
 
 		CompiledShaderPatchCollection(
 			const RenderCore::Assets::ShaderPatchCollection& src,
+			const RenderCore::Assets::PredefinedDescriptorSetLayout* customDescSet,
 			const DescriptorSetLayoutAndBinding& materialDescSetLayout);
 		CompiledShaderPatchCollection(
 			const ShaderSourceParser::InstantiatedShader& instantiatedShader,

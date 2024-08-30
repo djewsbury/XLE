@@ -181,7 +181,7 @@ namespace UnitTests
 			pipelineAcceleratorPool->SetFrameBufferDesc(*cfgId, fbHelper.GetDesc());
 
 			auto pipelineWithTexCoord = pipelineAcceleratorPool->CreatePipelineAccelerator(
-				nullptr,
+				nullptr, nullptr,
 				ParameterBox {},
 				ToolsRig::Vertex3D_InputLayout,
 				Topology::TriangleList,

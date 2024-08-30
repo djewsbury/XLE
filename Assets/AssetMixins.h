@@ -181,7 +181,8 @@ namespace Assets
 
 				// have to call "MergeInWithFilenameResolve" for all (even the first), because it may resolve internal filenames, etc
 				for (const auto& i:pendingTree->_loadedSubAssets)
-					Internal::MaybeDeref(finalAsset).MergeInWithFilenameResolve(Internal::MaybeDeref(std::get<0>(i.second)), std::get<DirectorySearchRules>(i.second));
+					if (!Assets::Internal::IsNullPointer(std::get<0>(i.second)))
+						Internal::MaybeDeref(finalAsset).MergeInWithFilenameResolve(Internal::MaybeDeref(std::get<0>(i.second)), std::get<DirectorySearchRules>(i.second));
 
 				VLA(DependencyValidationMarker, depVals, pendingTree->_depVals.size());
 				for (unsigned c=0; c<pendingTree->_depVals.size(); c++) depVals[c] = pendingTree->_depVals[c];

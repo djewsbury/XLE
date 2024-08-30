@@ -140,7 +140,11 @@ namespace Assets
 			::Assets::DependencyValidation GetDependencyValidation(const Type& asset) { return {}; }
 
 		template<typename SrcType, typename DstType=decltype(*std::declval<SrcType>())> DstType& MaybeDeref(SrcType& src) { return *src; }
+		template<typename SrcType, typename DstType=decltype(*std::declval<SrcType>())> DstType& MaybeDeref(SrcType&& src) { return *src; }
 		template<typename Type, typename =std::enable_if_t<!RequiresDeref<Type>>> Type& MaybeDeref(Type& src) { return src; }
+		template<typename Type, typename =std::enable_if_t<!RequiresDeref<Type>>> Type&& MaybeDeref(Type&& src) { return std::move(src); }
+
+		template<typename Type> bool IsNullPointer(const Type& src) { if constexpr (RequiresDeref<Type>) return !src; else return false; }
 
 		unsigned RegisterFrameBarrierCallback(std::function<void()>&& fn);
 		void DeregisterFrameBarrierCallback(unsigned, uint64_t);
@@ -503,6 +507,7 @@ namespace Assets
 	template<typename Type>
 		std::optional<AssetState>   Marker<Type>::StallWhilePendingUntil(std::chrono::steady_clock::time_point timeoutTime) const
 	{
+		DEBUG_ONLY(auto startTime = std::chrono::steady_clock::now());
 		auto* that = const_cast<Marker<Type>*>(this);	// hack to defeat the "const" on this method
 		assert(!that->_pollingFunction);		// this version doesn't support pollingFunctions (btw, this check not thread safe check)
 

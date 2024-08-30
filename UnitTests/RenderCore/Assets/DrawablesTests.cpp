@@ -200,7 +200,7 @@ namespace UnitTests
 			auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(
 				constantBindings, resourceBindings, samplerBindings);
 			auto descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-				nullptr, patches,
+				nullptr, patches, nullptr,
 				matMachine->GetMaterialMachine(), matMachine,
 				"unittest");
 
@@ -215,7 +215,7 @@ namespace UnitTests
 			pipelineAcceleratorPool->SetFrameBufferDesc(*cfgId, fbHelper.GetDesc());
 
 			auto pipelineWithTexCoord = pipelineAcceleratorPool->CreatePipelineAccelerator(
-				patches,
+				patches, nullptr,
 				ParameterBox {},
 				ToolsRig::Vertex3D_InputLayout,
 				Topology::TriangleList,

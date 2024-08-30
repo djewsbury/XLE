@@ -104,6 +104,7 @@ namespace RenderCore { namespace Techniques
 		PipelineAccelerator(
 			unsigned ownerPoolId,
 			const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 			const ParameterBox& materialSelectors,
 			IteratorRange<const InputElementDesc*> inputAssembly,
 			Topology topology,
@@ -111,6 +112,7 @@ namespace RenderCore { namespace Techniques
 		PipelineAccelerator(
 			unsigned ownerPoolId,
 			const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 			const ParameterBox& materialSelectors,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			Topology topology,
@@ -157,6 +159,7 @@ namespace RenderCore { namespace Techniques
 		Pipeline* TryGetPipeline(InternalSequencerConfigId seqCfgId, VisibilityMarkerId visibilityMarker);
 	
 		std::shared_ptr<Assets::ShaderPatchCollection> _shaderPatches;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _matDescSet;
 		ParameterBox _materialSelectors;
 		ParameterBox _geoSelectors;
 		std::vector<InputElementDesc> _inputAssembly;
@@ -237,7 +240,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_future<Pipeline> futurePipeline = pipelinePromise.get_future();
 		ParameterBox copyGlobalSelectors = globalSelectors;
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
-		auto patchCollectionFuture = layoutDelegate->CompileShaderPatchCollection(_shaderPatches.get());
+		auto patchCollectionFuture = layoutDelegate->CompileShaderPatchCollection(_shaderPatches, _matDescSet);
 		unsigned sequencerIdx = unsigned(cfg->_cfgId);
 
 		// Note there may be an issue here in that if the shader compile fails, the dep val for the s
@@ -342,11 +345,13 @@ namespace RenderCore { namespace Techniques
 	PipelineAccelerator::PipelineAccelerator(
 		unsigned ownerPoolId,
 		const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 		const ParameterBox& materialSelectors,
 		IteratorRange<const InputElementDesc*> inputAssembly,
 		Topology topology,
 		const Assets::RenderStateSet& stateSet)
 	: _shaderPatches(shaderPatches)
+	, _matDescSet(matDescSet)
 	, _materialSelectors(materialSelectors)
 	, _topology(topology)
 	, _stateSet(stateSet)
@@ -381,11 +386,13 @@ namespace RenderCore { namespace Techniques
 	PipelineAccelerator::PipelineAccelerator(
 		unsigned ownerPoolId,
 		const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 		const ParameterBox& materialSelectors,
 		IteratorRange<const MiniInputElementDesc*> miniInputAssembly,
 		Topology topology,
 		const Assets::RenderStateSet& stateSet)
 	: _shaderPatches(shaderPatches)
+	, _matDescSet(matDescSet)
 	, _materialSelectors(materialSelectors)
 	, _topology(topology)
 	, _stateSet(stateSet)
@@ -457,6 +464,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		std::shared_ptr<PipelineAccelerator> CreatePipelineAccelerator(
 			const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 			const ParameterBox& materialSelectors,
 			IteratorRange<const InputElementDesc*> inputAssembly,
 			Topology topology,
@@ -464,6 +472,7 @@ namespace RenderCore { namespace Techniques
 
 		std::shared_ptr<PipelineAccelerator> CreatePipelineAccelerator(
 			const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 			const ParameterBox& materialSelectors,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			Topology topology,
@@ -472,6 +481,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
 			const std::shared_ptr<ResourceConstructionContext>& constructionContext,
 			const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder,
 			std::string&& name,
@@ -870,6 +880,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<PipelineAccelerator> PipelineAcceleratorPool::CreatePipelineAccelerator(
 		const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 		const ParameterBox& materialSelectors,
 		IteratorRange<const InputElementDesc*> inputAssembly,
 		Topology topology,
@@ -883,6 +894,8 @@ namespace RenderCore { namespace Techniques
 		hash = HashCombine(stateSet.GetHash(), hash);
 		if (shaderPatches)
 			hash = HashCombine(shaderPatches->GetHash(), hash);
+		if (matDescSet)
+			hash = matDescSet->CalculateHash(hash);
 
 		// If it already exists in the cache, just return it now
 		auto i = LowerBound(_pipelineAccelerators, hash);
@@ -896,13 +909,13 @@ namespace RenderCore { namespace Techniques
 		if (_drawablesPool) {
 			newAccelerator = _drawablesPool->MakeProtectedPtr<PipelineAccelerator>(
 				_guid,
-				shaderPatches, materialSelectors,
+				shaderPatches, matDescSet, materialSelectors,
 				inputAssembly, topology,
 				stateSet);
 		} else {
 			newAccelerator = std::make_shared<PipelineAccelerator>(
 				_guid,
-				shaderPatches, materialSelectors,
+				shaderPatches, matDescSet, materialSelectors,
 				inputAssembly, topology,
 				stateSet);
 		}
@@ -920,6 +933,7 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<PipelineAccelerator> PipelineAcceleratorPool::CreatePipelineAccelerator(
 		const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 		const ParameterBox& materialSelectors,
 		IteratorRange<const MiniInputElementDesc*> inputAssembly,
 		Topology topology,
@@ -933,6 +947,8 @@ namespace RenderCore { namespace Techniques
 		hash = HashCombine(stateSet.GetHash(), hash);
 		if (shaderPatches)
 			hash = HashCombine(shaderPatches->GetHash(), hash);
+		if (matDescSet)
+			hash = matDescSet->CalculateHash(hash);
 
 		// If it already exists in the cache, just return it now
 		auto i = LowerBound(_pipelineAccelerators, hash);
@@ -946,13 +962,13 @@ namespace RenderCore { namespace Techniques
 		if (_drawablesPool) {
 			newAccelerator = _drawablesPool->MakeProtectedPtr<PipelineAccelerator>(
 				_guid,
-				shaderPatches, materialSelectors,
+				shaderPatches, matDescSet, materialSelectors,
 				inputAssembly, topology,
 				stateSet);
 		} else {
 			newAccelerator = std::make_shared<PipelineAccelerator>(
 				_guid,
-				shaderPatches, materialSelectors,
+				shaderPatches, matDescSet, materialSelectors,
 				inputAssembly, topology,
 				stateSet);
 		}
@@ -971,6 +987,7 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<DescriptorSetAccelerator> PipelineAcceleratorPool::CreateDescriptorSetAccelerator(
 		const std::shared_ptr<ResourceConstructionContext>& constructionContext,
 		const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatches,
+		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 		std::shared_ptr<void> memoryHolder,
 		std::string&& name,
@@ -987,6 +1004,8 @@ namespace RenderCore { namespace Techniques
 				hash = HashCombine(shaderPatches->GetHash(), hash);
 			if (deformBinding)
 				hash = HashCombine(deformBinding->GetHash(), hash);
+			if (matDescSet)
+				hash = matDescSet->CalculateHash(hash);
 
 			// If it already exists in the cache, just return it now
 			auto cachei = LowerBound(_descriptorSetAccelerators, hash);
@@ -1040,7 +1059,7 @@ namespace RenderCore { namespace Techniques
 		// rest outside of the lock
 
 		bool generateBindingInfo = !!(_flags & PipelineAcceleratorPoolFlags::RecordDescriptorSetBindingInfo);
-		auto patchCollectionFuture = _layoutDelegate->CompileShaderPatchCollection(shaderPatches.get());
+		auto patchCollectionFuture = _layoutDelegate->CompileShaderPatchCollection(shaderPatches, matDescSet);
 
 		// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
 		// future continuation functions

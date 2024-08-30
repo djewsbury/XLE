@@ -52,6 +52,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		virtual std::shared_ptr<PipelineAccelerator> CreatePipelineAccelerator(
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 			const ParameterBox& materialSelectors,
 			IteratorRange<const InputElementDesc*> inputAssembly,
 			RenderCore::Topology topology,
@@ -59,6 +60,7 @@ namespace RenderCore { namespace Techniques
 
 		virtual std::shared_ptr<PipelineAccelerator> CreatePipelineAccelerator(
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 			const ParameterBox& materialSelectors,
 			IteratorRange<const MiniInputElementDesc*> inputAssembly,
 			RenderCore::Topology topology,
@@ -67,6 +69,7 @@ namespace RenderCore { namespace Techniques
 		virtual std::shared_ptr<DescriptorSetAccelerator> CreateDescriptorSetAccelerator(
 			const std::shared_ptr<ResourceConstructionContext>& constructionContext,
 			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& matDescSet,
 			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
 			std::shared_ptr<void> memoryHolder,								// retained while we need access to materialMachine
 			std::string&& name,

@@ -367,7 +367,7 @@ namespace RenderCore { namespace Techniques
 		}*/
 
 		auto pipelineAccelerator = pool.CreatePipelineAccelerator(
-			patchCollection,
+			patchCollection, nullptr,
 			materialSelectors,
 			inputLayout,
 			topology,

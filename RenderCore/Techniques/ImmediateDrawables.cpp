@@ -457,7 +457,7 @@ namespace RenderCore { namespace Techniques
 				return existing->second.get();
 
 			auto newAccelerator = _pipelineAcceleratorPool->CreatePipelineAccelerator(
-				patchCollection, 
+				patchCollection, nullptr,
 				shaderSelectors ? *shaderSelectors : ParameterBox{}, inputAssembly,
 				topology, stateSet);
 			// Note that we keep this pipeline accelerator alive indefinitely 

@@ -21,7 +21,9 @@ namespace RenderCore { namespace Techniques
 	class IPipelineLayoutDelegate
 	{
 	public:
-		virtual ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompileShaderPatchCollection(const Assets::ShaderPatchCollection*) = 0;
+		virtual ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompileShaderPatchCollection(
+			const std::shared_ptr<Assets::ShaderPatchCollection>&,
+			const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>&) = 0;
 
 		struct PatchInDescriptorSet
 		{

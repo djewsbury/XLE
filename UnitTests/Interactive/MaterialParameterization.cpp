@@ -80,7 +80,7 @@ namespace UnitTests
 			assert(idx < s_sphereSeriesCount);
 			auto matMachine = std::make_shared<Techniques::ManualMaterialMachine>(params, ParameterBox{});
 			_descriptorSets[idx] = _pipelineAccelerators->CreateDescriptorSetAccelerator(
-				nullptr, nullptr,
+				nullptr, nullptr, nullptr,
 				matMachine->GetMaterialMachine(),
 				matMachine,
 				"multi-sphere-series");
@@ -97,7 +97,7 @@ namespace UnitTests
 			std::tie(_drawableGeo, _vertexCount) = ToolsRig::CreateSphereGeo(bufferUploads, drawablesPool);
 
 			_pipeline = pipelineAccelerators.CreatePipelineAccelerator(
-				nullptr,
+				nullptr, nullptr,
 				ParameterBox {},
 				ToolsRig::Vertex3D_InputLayout,
 				RenderCore::Topology::TriangleList,

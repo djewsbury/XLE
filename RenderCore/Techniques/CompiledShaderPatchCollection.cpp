@@ -29,15 +29,20 @@ namespace RenderCore { namespace Techniques
 {
 	CompiledShaderPatchCollection::CompiledShaderPatchCollection(
 		const RenderCore::Assets::ShaderPatchCollection& src,
+		const RenderCore::Assets::PredefinedDescriptorSetLayout* customDescSet,
 		const DescriptorSetLayoutAndBinding& materialDescSetLayout)
 	: _src(src)
 	, _matDescSetLayout(materialDescSetLayout.GetLayout())
 	, _matDescSetSlot(materialDescSetLayout.GetSlotIndex())
 	{
 		_guid = src.GetHash();
+		if (customDescSet)
+			_guid = customDescSet->CalculateHash(_guid);
 		_depVal = ::Assets::GetDepValSys().Make();		// _depVal must be unique, because we call RegistryDependency on it in BuildFromInstantiatedShader
 		if (materialDescSetLayout.GetDependencyValidation())
 			_depVal.RegisterDependency(materialDescSetLayout.GetDependencyValidation());
+		if (customDescSet && customDescSet->GetDependencyValidation())
+			_depVal.RegisterDependency(customDescSet->GetDependencyValidation());
 
 		_interface._descriptorSet = materialDescSetLayout.GetLayout();
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
@@ -45,28 +50,8 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c=0; c<dimof(_interface._overrideShaders); ++c)
 			_interface._overrideShaders[c] = src.GetOverrideShader(ShaderStage(c));
 
-		if (!src.GetDescriptorSetFileName().IsEmpty()) {
-			::Assets::DependencyValidation additionalDepVal;
-			TRY {
-				auto layoutFileFuture = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(src.GetDescriptorSetFileName());
-				YieldToPool(layoutFileFuture);
-				auto actualLayoutFile = layoutFileFuture.get();
-				additionalDepVal = actualLayoutFile->GetDependencyValidation();
-				auto i = actualLayoutFile->_descriptorSets.find("Material");
-				if (i == actualLayoutFile->_descriptorSets.end())
-					Throw(std::runtime_error("Expecting to find a descriptor set layout called 'Material' in pipeline layout file (" + src.GetDescriptorSetFileName().AsString() + "), but it was not found"));
-
-				// Once we've finally got the descriptor set, we need to link it against the pipeline layout version to make sure it
-				// will agree. Don't allow rearrangement of the input slots here, because the shader is probably making assumptions
-				// about where they appear
-				_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*i->second, *_interface._descriptorSet);
-				_depVal.RegisterDependency(actualLayoutFile->GetDependencyValidation());
-			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
-				Throw(::Assets::Exceptions::ConstructionError(e, additionalDepVal));
-			} CATCH(const std::exception& e) {
-				Throw(::Assets::Exceptions::ConstructionError(e, additionalDepVal));
-			} CATCH_END
-		}
+		if (customDescSet)
+			_interface._descriptorSet = ShaderSourceParser::LinkToFixedLayout(*customDescSet, *_interface._descriptorSet);	
 
 		// With the given shader patch collection, build the source code and the 
 		// patching functions associated

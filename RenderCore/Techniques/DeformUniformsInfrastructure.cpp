@@ -198,7 +198,7 @@ namespace RenderCore { namespace Techniques
 				// PipelineAcceleratorPool will use when instantiating the main descriptor set. This
 				// includes any modifications made by the CompiledShaderPatchCollection...
 				std::vector<std::pair<unsigned, AnimatedUniformBufferHelper>> animBuffers;
-				auto patchCollectionFuture = compiledLayoutPool.CompileShaderPatchCollection(shaderPatchCollection.get());
+				auto patchCollectionFuture = compiledLayoutPool.CompileShaderPatchCollection(shaderPatchCollection, nullptr);
 				patchCollectionFuture->StallWhilePending();		// unfortunately we have to stall; but it should be ready immediately in many cases
 				auto compiledPatchCollection = patchCollectionFuture->Actualize();
 				animBuffers = FindAnimatedUniformsBuffers(

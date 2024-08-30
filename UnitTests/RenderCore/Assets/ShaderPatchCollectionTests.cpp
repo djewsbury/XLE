@@ -352,7 +352,7 @@ void ps(
 			
 			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
-			auto compiledCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, *matDescSetLayout);
+			auto compiledCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, nullptr, *matDescSetLayout);
 			std::vector<uint64_t> instantiations { "PerPixel"_h };
 
 			::Assets::InitializerPack initializers {
@@ -378,7 +378,7 @@ void ps(
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 			using RenderCore::Techniques::CompiledShaderPatchCollection;
-			CompiledShaderPatchCollection compiledCollection(patchCollection, *matDescSetLayout);
+			CompiledShaderPatchCollection compiledCollection(patchCollection, nullptr, *matDescSetLayout);
 
 			// Check for some of the expected interface elements
 			REQUIRE(compiledCollection.GetInterface().HasPatchType("CoordinatesToColor"_h));
@@ -400,7 +400,7 @@ void ps(
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 			using RenderCore::Techniques::CompiledShaderPatchCollection;
-			CompiledShaderPatchCollection compiledCollection(patchCollection, *matDescSetLayout);
+			CompiledShaderPatchCollection compiledCollection(patchCollection, nullptr, *matDescSetLayout);
 
 			// Check for some of the recognized properties, in particular look for shader selectors
 			// We're expecting the selectors "RES_HAS_TextureDif" and "RES_HAS_TextureNorm"
@@ -433,7 +433,7 @@ void ps(
 				RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 				for (unsigned c=0; c<std::max(dimof(dependenciesToCheck), dimof(nonDependencies)); ++c) {
-					RenderCore::Techniques::CompiledShaderPatchCollection compiledCollection(patchCollection, *matDescSetLayout);
+					RenderCore::Techniques::CompiledShaderPatchCollection compiledCollection(patchCollection, nullptr, *matDescSetLayout);
 					REQUIRE(compiledCollection._depVal.GetValidationIndex() == 0u);
 					
 					if (c < dimof(nonDependencies)) {
@@ -503,11 +503,6 @@ void ps(
 		auto utDataMount = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		auto shaderFilteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(::Assets::Services::GetIntermediateCompilers());
 
-		// auto metalTestHelper = MakeTestHelper();
-		// auto customShaderSource = RenderCore::CreateMinimalShaderSource(
-		// 	CreateDefaultShaderCompiler(*metalTestHelper->_device, *metalTestHelper->_defaultLegacyBindings),
-		// 	std::make_shared<ExpandIncludesPreprocessor>());
-
 		// Create a CompiledShaderPatchCollection containing the patches we need
 		std::unique_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> compiledShaderPatchCollection;
 		{
@@ -520,7 +515,7 @@ void ps(
 			unsigned idx=0;
 			for (const auto& p:instRequests)
 				patchCollection.AddPatch(std::to_string(idx++), p);
-			compiledShaderPatchCollection = std::make_unique<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, RenderCore::Techniques::DescriptorSetLayoutAndBinding{});
+			compiledShaderPatchCollection = std::make_unique<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, nullptr, RenderCore::Techniques::DescriptorSetLayoutAndBinding{});
 		}
 
 		std::vector<RenderCore::Techniques::PatchDelegateInput> patchesInterface;

@@ -467,8 +467,8 @@ namespace UnitTests
 				ut-data/minimal_perpixel.graph::Minimal_PerPixel
 			)--";
 			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
-			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
-			auto patchCollectionMarker = testApparatus._pipelineLayoutDelegate->CompileShaderPatchCollection(&patchCollection);
+			auto patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
+			auto patchCollectionMarker = testApparatus._pipelineLayoutDelegate->CompileShaderPatchCollection(patchCollection, nullptr);
 			patchCollectionMarker->StallWhilePending();
 			auto compiledPatchCollection = patchCollectionMarker->Actualize();
 
@@ -559,7 +559,7 @@ namespace UnitTests
 
 				{
 					auto pipelineAccelerator = pipelinePool->CreatePipelineAccelerator(
-						patchCollectionNoDeform,
+						patchCollectionNoDeform, nullptr,
 						ParameterBox{},
 						ToolsRig::Vertex3D_InputLayout, Topology::TriangleList,
 						RenderCore::Assets::RenderStateSet{});
@@ -572,7 +572,7 @@ namespace UnitTests
 
 				{
 					auto pipelineAccelerator = pipelinePool->CreatePipelineAccelerator(
-						patchCollectionNoDeform,
+						patchCollectionNoDeform, nullptr,
 						ParameterBox{},
 						simplifiedVertex3D, Topology::TriangleList,
 						RenderCore::Assets::RenderStateSet{});
@@ -585,7 +585,7 @@ namespace UnitTests
 
 				{
 					auto pipelineAccelerator = pipelinePool->CreatePipelineAccelerator(
-						patchCollectionWithDeform,
+						patchCollectionWithDeform, nullptr,
 						ParameterBox{},
 						ToolsRig::Vertex3D_InputLayout, Topology::TriangleList,
 						RenderCore::Assets::RenderStateSet{});
@@ -622,7 +622,7 @@ namespace UnitTests
 				pipelinePool->SetFrameBufferDesc(*cfg, fbHelper.GetDesc(), 0);
 
 				auto pipelineAccelerator = pipelinePool->CreatePipelineAccelerator(
-					patchCollection,
+					patchCollection, nullptr,
 					ParameterBox{},
 					simplifiedVertex3D, Topology::TriangleList,
 					RenderCore::Assets::RenderStateSet{});
@@ -636,7 +636,7 @@ namespace UnitTests
 				auto matMachine = std::make_shared<RenderCore::Techniques::ManualMaterialMachine>(
 					constantBindings, resourceBindings, samplerBindings);
 				auto descriptorSetAccelerator = pipelinePool->CreateDescriptorSetAccelerator(
-					nullptr, patchCollection,
+					nullptr, patchCollection, nullptr,
 					matMachine->GetMaterialMachine(), matMachine,
 					"unittest");
 

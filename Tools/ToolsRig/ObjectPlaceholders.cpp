@@ -218,7 +218,7 @@ namespace ToolsRig
 		for (const auto&i:geo._vb._ia._elements)
 			inputElements.push_back(InputElementDesc(i._semanticName, i._semanticIndex, i._format, 0, i._alignedByteOffset));
 
-		_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {}, "simple-model");
+		_descriptorSetAccelerator = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, nullptr, {}, {}, "simple-model");
 
 		// The topology must be the same for all draw calls
 		assert(!_drawCalls.empty());
@@ -227,7 +227,7 @@ namespace ToolsRig
 		}
 
 		_pipelineAccelerator = _pipelineAcceleratorPool->CreatePipelineAccelerator(
-			nullptr,
+			nullptr, nullptr,
 			ParameterBox {},	// material selectors
 			MakeIteratorRange(inputElements),
 			_drawCalls[0]._topology,
@@ -270,7 +270,7 @@ namespace ToolsRig
 		const RenderCore::Assets::RawMaterial& mat)
 	{
 		return pipelineAcceleratorPool->CreatePipelineAccelerator(
-			std::make_shared<RenderCore::Assets::ShaderPatchCollection>(mat._patchCollection),
+			std::make_shared<RenderCore::Assets::ShaderPatchCollection>(mat._patchCollection), nullptr,
 			mat._selectors,
 			IteratorRange<const InputElementDesc*>{},
 			Topology::TriangleList,
@@ -314,9 +314,9 @@ namespace ToolsRig
 				res._genRectangle = BuildPipelineAccelerator(pipelineAcceleratorPool, std::get<0>(rectangleMat));
 				res._cubeGeo = CreateCubeDrawableGeo(drawablesPool, bufferUploads);
 				res._justPointsPipelineAccelerator = pipelineAcceleratorPool->CreatePipelineAccelerator(
-					nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});
+					nullptr, nullptr, {}, GlobalInputLayouts::P, Topology::TriangleList, RenderCore::Assets::RenderStateSet{});
 
-				res._descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, {}, {}, "simple-model");
+				res._descriptorSetAccelerator = pipelineAcceleratorPool->CreateDescriptorSetAccelerator(nullptr, nullptr, nullptr, {}, {}, "simple-model");
 				return res;
 			});
     }

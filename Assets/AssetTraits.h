@@ -52,6 +52,7 @@ namespace Assets
 			static constexpr bool Constructor_TextFile = std::is_constructible<AssetType, StringSection<>, DirectorySearchRules&&, DependencyValidation&&>::value;
 			static constexpr bool Constructor_FileSystem = std::is_constructible<AssetType, IFileInterface&, DirectorySearchRules&&, DependencyValidation&&>::value;
 			static constexpr bool Constructor_BlobFile = std::is_constructible<AssetType, Blob&&, DirectorySearchRules&&, DependencyValidation&&>::value;
+			static constexpr bool Constructor_SimpleBlobFile = std::is_constructible<AssetType, Blob&&>::value;
 
 			static constexpr bool IsContextImbue = decltype(IsContextImbue_Helper<AssetType>(0))::value;
 			using ContextImbueInternalType = decltype(ContextImbueInternalType_Helper<AssetType>(0));
@@ -160,19 +161,48 @@ namespace Assets
 	//
 	//		Auto construct to:
 	//			(Blob&&, DirectorySearchRules&&, DependencyValidation&&)
+	//			(Blob&&)
+	//			(Blob&&) (with imbued context)
 	//
-	template<typename AssetType, ENABLE_IF(Internal::AssetTraits<AssetType>::Constructor_BlobFile)>
+	template<typename AssetType, ENABLE_IF(
+			Internal::AssetTraits<AssetType>::Constructor_BlobFile
+			|| Internal::AssetTraits<AssetType>::Constructor_SimpleBlobFile
+			|| (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::AssetTraits<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>::Constructor_SimpleBlobFile)
+		)>
 		AssetType AutoConstructAsset(StringSection<> initializer)
 	{
 		::Assets::DependencyValidation depVal;
 		TRY {
 			FileSnapshot snapshot;
 			auto blob = MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &snapshot);
-			depVal = GetDepValSys().Make(DependentFileState{initializer.AsString(), std::move(snapshot)});
-			return Internal::InvokeAssetConstructor<AssetType>(
-				std::move(blob),
-				DefaultDirectorySearchRules(initializer),
-				std::move(depVal));
+
+			if constexpr (Internal::AssetTraits<AssetType>::Constructor_BlobFile) {
+
+				depVal = GetDepValSys().Make(DependentFileState{initializer.AsString(), std::move(snapshot)});
+				return Internal::InvokeAssetConstructor<AssetType>(
+					std::move(blob),
+					DefaultDirectorySearchRules(initializer),
+					std::move(depVal));
+
+			} else if constexpr (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::AssetTraits<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>::Constructor_SimpleBlobFile) {
+
+				depVal = GetDepValSys().Make(DependentFileState{initializer.AsString(), std::move(snapshot)});
+				return {
+					Internal::InvokeAssetConstructor<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>(std::move(blob)),
+					DefaultDirectorySearchRules(initializer),
+					std::move(depVal),
+					InheritList{} };
+
+			} else if constexpr (Internal::AssetTraits<AssetType>::Constructor_SimpleBlobFile) {
+
+				return Internal::InvokeAssetConstructor<AssetType>(std::move(blob));
+
+			} else {
+
+				UNREACHABLE()
+
+			}
+
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			if (!depVal) depVal = GetDepValSys().Make(initializer);
 			Throw(Exceptions::ConstructionError(e, std::move(depVal)));

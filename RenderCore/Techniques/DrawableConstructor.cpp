@@ -474,7 +474,7 @@ namespace RenderCore { namespace Techniques
 					// Descriptor set accelerator
 					auto descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 						_constructionContext,
-						i->_patchCollection,
+						i->_patchCollection, nullptr,
 						materialMachine,
 						materialScaffold,
 						std::move(materialName),
@@ -531,7 +531,7 @@ namespace RenderCore { namespace Techniques
 				resultGeoCall._pipelineAcceleratorIdx =
 					AddPipelineAccelerator(
 						_pipelineAcceleratorPool->CreatePipelineAccelerator(
-							material._patchCollection,
+							material._patchCollection, nullptr,
 							material._selectors,
 							inputElements,
 							topology,
