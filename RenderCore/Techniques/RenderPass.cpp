@@ -1230,6 +1230,11 @@ namespace RenderCore { namespace Techniques
             AttachmentPool& attachmentPool,
             AttachmentReservation* parentReservation);
 
+        Result BuildFrameBuffer(
+            IThreadContext& threadContext,
+            const FrameBufferDesc& desc,
+            IteratorRange<IResource*const*const> resources);
+
         void Reset() override SEALED;
 
         FrameBufferPool();
@@ -1311,7 +1316,6 @@ namespace RenderCore { namespace Techniques
         DEBUG_ONLY(ScopedAssertExclusivity(_lock));
         auto poolAttachments = attachmentPool.Reserve(resolvedAttachmentDescs, parentReservation);
 		assert(poolAttachments.GetResourceCount() == desc.GetAttachments().size());
-        auto& factory = Metal::GetObjectFactory(*threadContext.GetDevice());
 
         // CompleteInitialization initialization will create any resources that haven't yet been created, as well as
         // calling acquiring any presentation chain images
@@ -1319,7 +1323,6 @@ namespace RenderCore { namespace Techniques
 
         std::vector<AttachmentDesc> adjustedAttachments;
         adjustedAttachments.reserve(desc.GetAttachments().size());
-        Result result;
 
         uint64_t hashValue = DefaultSeed64;
         for (unsigned c=0; c<desc.GetAttachments().size(); ++c) {
@@ -1406,13 +1409,79 @@ namespace RenderCore { namespace Techniques
         for (const auto& v:requiredViews) rtvs.emplace_back(poolAttachments.GetView(v._attachmentName, v._bindFlag, v._viewDesc));
 
         assert(adjustedDesc.GetSubpasses().size());
+        auto& factory = Metal::GetObjectFactory(*threadContext.GetDevice());
         _entries[earliestEntry]._fb = std::make_shared<Metal::FrameBuffer>(factory, adjustedDesc, MakeIteratorRange(rtvs));
         _entries[earliestEntry]._tickId = _currentTickId;
         _entries[earliestEntry]._hash = hashValue;
         _entries[earliestEntry]._completedDesc = std::move(adjustedDesc);
         IncreaseTickId();
+        Result result;
         result._frameBuffer = _entries[earliestEntry]._fb;
         result._poolReservation = std::move(poolAttachments);
+        result._completedDesc = &_entries[earliestEntry]._completedDesc;
+        return result;
+    }
+
+    auto FrameBufferPool::BuildFrameBuffer(
+        IThreadContext& threadContext,
+        const FrameBufferDesc& desc,
+        IteratorRange<IResource*const*const> resources) -> Result
+    {
+        DEBUG_ONLY(ScopedAssertExclusivity(_lock));
+
+        FrameBufferDesc adjustedDesc = desc;
+
+        for (auto& sp:adjustedDesc.GetSubpasses()) {
+            for (auto& o:sp.GetOutputs())
+                if (!HasExplicitAspect(o._window))
+                    o._window._format = ImpliedFormatFilter(desc.GetAttachments()[o._resourceName]._format);
+            if (sp.GetDepthStencil()._resourceName != ~0u && !HasExplicitAspect(sp.GetDepthStencil()._window))
+                sp.GetDepthStencil()._window._format = ImpliedFormatFilter(desc.GetAttachments()[sp.GetDepthStencil()._resourceName]._format);
+            for (auto& i:sp.GetInputs())
+                if (!HasExplicitAspect(i._window))
+                    i._window._format = ImpliedFormatFilter(desc.GetAttachments()[i._resourceName]._format);
+            assert(sp.GetResolveOutputs().empty());
+            assert(sp.GetResolveDepthStencil()._resourceName == ~0u);
+        }
+
+        uint64_t hashValue = DefaultSeed64;
+        for (unsigned c=0; c<std::min(desc.GetAttachments().size(), resources.size()); ++c)
+            hashValue = HashCombine(resources[c]->GetGUID(), hashValue);
+        hashValue = HashCombine(adjustedDesc.GetHash(), hashValue);
+        assert(hashValue != ~0ull);     // using ~0ull has a sentinel, so this will cause some problems
+
+        unsigned earliestEntry = 0;
+        unsigned tickIdOfEarliestEntry = ~0u;
+        for (unsigned c=0; c<dimof(_entries); ++c) {
+            if (_entries[c]._hash == hashValue) {
+                _entries[c]._tickId = _currentTickId;
+                IncreaseTickId();
+                assert(_entries[c]._fb != nullptr);
+                return {
+                    _entries[c]._fb,
+                    {},
+                    &_entries[c]._completedDesc
+                };
+            }
+            if (_entries[c]._tickId < tickIdOfEarliestEntry) {
+                tickIdOfEarliestEntry = _entries[c]._tickId;
+                earliestEntry = c;
+            }
+        }
+
+        auto requiredViews = Metal::FrameBuffer::CalculateRequiredViews(adjustedDesc);
+        std::vector<std::shared_ptr<IResourceView>> rtvs; rtvs.reserve(requiredViews.size());
+        for (const auto& v:requiredViews) rtvs.emplace_back(resources[v._attachmentName]->CreateTextureView(v._bindFlag, v._viewDesc));
+
+        assert(adjustedDesc.GetSubpasses().size());
+        auto& factory = Metal::GetObjectFactory(*threadContext.GetDevice());
+        _entries[earliestEntry]._fb = std::make_shared<Metal::FrameBuffer>(factory, adjustedDesc, MakeIteratorRange(rtvs));
+        _entries[earliestEntry]._tickId = _currentTickId;
+        _entries[earliestEntry]._hash = hashValue;
+        _entries[earliestEntry]._completedDesc = std::move(adjustedDesc);
+        IncreaseTickId();
+        Result result;
+        result._frameBuffer = _entries[earliestEntry]._fb;
         result._completedDesc = &_entries[earliestEntry]._completedDesc;
         return result;
     }
@@ -1600,6 +1669,29 @@ namespace RenderCore { namespace Techniques
         _attachedParsingContext = nullptr;
     }
 
+    RenderPassInstance::RenderPassInstance(
+        IThreadContext& threadContext,
+        const FrameBufferDesc& layout,
+        IteratorRange<IResource*const*const> resources,
+        IFrameBufferPool& frameBufferPool,
+        const RenderPassBeginDesc& beginInfo)
+    {
+        _attachedContext = Metal::DeviceContext::Get(threadContext).get();
+
+        auto fb = checked_cast<FrameBufferPool*>(&frameBufferPool)->BuildFrameBuffer(threadContext, layout, resources);
+
+        _frameBuffer = std::move(fb._frameBuffer);
+        _attachmentPoolReservation = std::move(fb._poolReservation);
+        _layout = fb._completedDesc;        // expecting this to be retained by the pool until at least the destruction of this
+        _trueRenderPass = true;
+
+        #if defined(_DEBUG)
+            _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
+        #endif
+        _attachedContext->BeginRenderPass(*_frameBuffer, beginInfo._clearValues);
+        _attachedParsingContext = nullptr;
+    }
+
     static bool operator==(const AttachmentTransform& lhs, const AttachmentTransform& rhs)
     {
         return (lhs._type == rhs._type) && (lhs._initialLayout == rhs._initialLayout) && (lhs._finalLayout == rhs._finalLayout);
@@ -1649,7 +1741,7 @@ namespace RenderCore { namespace Techniques
 
             _attachedContext = Metal::DeviceContext::Get(parsingContext.GetThreadContext()).get();
             #if defined(_DEBUG)
-                _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
+                _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed compute subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
             #endif
         }
 
@@ -1676,11 +1768,55 @@ namespace RenderCore { namespace Techniques
         _trueRenderPass = false;
         _attachedParsingContext = nullptr;
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
-        auto stitchResult = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1), parsingContext.GetFrameBufferProperties());
+        auto stitchedFragment = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1), parsingContext.GetFrameBufferProperties());
         // todo -- have to protect lifetime of stitchResult._fbDesc in this case
         // candidate for subframe heap
         // just copy stitchResult._fbDesc somewhere that will last to the end of the frame
-        *this = RenderPassInstance { parsingContext, stitchResult, beginInfo };
+        *this = RenderPassInstance { parsingContext, stitchedFragment, beginInfo };
+    }
+
+    RenderPassInstance::RenderPassInstance(
+        ParsingContext& parsingContext,
+        const FrameBufferDescFragment& layoutFragment,
+        IteratorRange<IResource*const*const> resources,
+        IFrameBufferPool& frameBufferPool,
+        const RenderPassBeginDesc& beginInfo)
+    {
+        _attachedContext = nullptr;
+        _attachedParsingContext = nullptr;
+
+        // automatically grab the fbProps from the attachment sizes
+        FrameBufferProperties fbProps;
+        for (const auto& r:resources)
+            if (auto d = r->GetDesc(); d._type == ResourceDesc::Type::Texture) {
+                fbProps._width = std::max(fbProps._width, d._textureDesc._width);
+                fbProps._height = std::max(fbProps._height, d._textureDesc._height);
+            }
+
+        auto stitchedFragment = SimpleStitch(layoutFragment, fbProps, resources);
+        if (stitchedFragment._pipelineType == PipelineType::Graphics) {
+            *this = RenderPassInstance {
+                parsingContext.GetThreadContext(), stitchedFragment._fbDesc, resources,
+                *parsingContext.GetTechniqueContext()._frameBufferPool,
+                beginInfo };
+            if (parsingContext.GetViewport()._width == 0.f && parsingContext.GetViewport()._height == 0.f)
+                parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
+        } else {
+            _layout = &stitchedFragment._fbDesc;
+            _attachedContext = Metal::DeviceContext::Get(parsingContext.GetThreadContext()).get();
+            #if defined(_DEBUG)
+                _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed compute subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
+            #endif
+        }
+
+        assert(!parsingContext._rpi);
+        parsingContext._rpi = this;
+        _attachedParsingContext = &parsingContext;
+
+        _nonFBAttachmentsMap = stitchedFragment._nonFBAttachmentsMap;
+        _nonFBAttachments.reserve(stitchedFragment._nonFBAttachments.size());
+        for (const auto&view:stitchedFragment._nonFBAttachments)
+            _nonFBAttachments.emplace_back(resources[view._resourceName]->CreateTextureView(view._usage, view._window), view._resourceName);
     }
 
 	RenderPassInstance::RenderPassInstance(
@@ -1803,6 +1939,40 @@ namespace RenderCore { namespace Techniques
         uint64_t result = HashCombine(fbProps.GetHashResolutionIndependent(), seed);
         for (const auto& a:attachments)
             result = HashCombine(a.CalculateHashResolutionIndependent(), result);
+        return result;
+    }
+
+    FragmentStitchingContext::StitchResult SimpleStitch(const FrameBufferDescFragment& input, const FrameBufferProperties& props, IteratorRange<IResource*const*const> resources)
+    {
+        FragmentStitchingContext::StitchResult result;
+
+        std::vector<SubpassDesc> subpasses; subpasses.reserve(input._subpasses.size());
+        for (const auto& sp:input._subpasses)
+            subpasses.push_back(sp);
+        std::vector<AttachmentDesc> attachments; attachments.reserve(input._attachments.size());
+        for (const auto& a:input._attachments) {
+            Format fmt{0};
+            if (resources.size() > (&a-AsPointer(input._attachments.begin()))) {
+                auto desc = resources[&a-AsPointer(input._attachments.begin())]->GetDesc();
+                assert(desc._type == ResourceDesc::Type::Texture);
+                fmt = desc._textureDesc._format;
+            }
+            attachments.push_back(
+                AttachmentDesc{
+                    fmt, 0,
+                    a._loadFromPreviousPhase, a._storeToNextPhase, 
+                    a._initialLayout.value(), a._finalLayout.value() });
+        }
+        result._fbDesc = FrameBufferDesc { std::move(attachments), std::move(subpasses), props };
+
+        for (const auto&sp:input._subpasses) {
+            result._nonFBAttachmentsMap.push_back((unsigned)result._nonFBAttachments.size());
+            for (const auto& nonfb:sp._nonfbViews)
+                result._nonFBAttachments.push_back(std::move(nonfb));
+        }
+
+        result._nonFBAttachmentsMap.push_back((unsigned)result._nonFBAttachments.size());
+        result._pipelineType = input._pipelineType;
         return result;
     }
 

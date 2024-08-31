@@ -96,6 +96,17 @@ namespace RenderCore { namespace Techniques
             IteratorRange<const NonFrameBufferAttachmentReference*> GetNonFrameBufferAttachmentViews() const { return MakeIteratorRange(_nonfbViews); }
             unsigned AppendNonFrameBufferAttachmentView(AttachmentName name, BindFlag::Enum usage = BindFlag::ShaderResource, TextureViewDesc window = {});
             std::vector<NonFrameBufferAttachmentReference> _nonfbViews;
+
+            SubpassDesc() = default;
+            SubpassDesc(const SubpassDesc&) = default;
+            SubpassDesc(SubpassDesc&&) = default;
+            SubpassDesc(const RenderCore::SubpassDesc& copyFrom) : RenderCore::SubpassDesc(copyFrom) {}
+            SubpassDesc(RenderCore::SubpassDesc&& moveFrom) : RenderCore::SubpassDesc(std::move(moveFrom)) {}
+
+            SubpassDesc& operator=(const SubpassDesc&) = default;
+            SubpassDesc& operator=(SubpassDesc&&) = default;
+            SubpassDesc& operator=(const RenderCore::SubpassDesc& copyFrom) { RenderCore::SubpassDesc::operator=(copyFrom); _nonfbViews.clear(); return *this; }
+            SubpassDesc& operator=(RenderCore::SubpassDesc&& moveFrom) { RenderCore::SubpassDesc::operator=(std::move(moveFrom)); _nonfbViews.clear(); return *this; }
         };
         void AddSubpass(SubpassDesc&& subpass);
         void AddSubpass(RenderCore::SubpassDesc&& subpass);
@@ -455,6 +466,13 @@ namespace RenderCore { namespace Techniques
             AttachmentReservation* parentReservation = nullptr,
             const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());
 
+        RenderPassInstance(
+            IThreadContext& threadContext,
+            const FrameBufferDesc& layout,
+            IteratorRange<IResource*const*const> resources,
+            IFrameBufferPool& frameBufferPool,
+            const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());
+
         // Construct from a fully FrameBufferDescFragment fragment. This will use the
         // stitching context in the ParsingContext to link the frame buffer to the current
         // environment
@@ -466,6 +484,13 @@ namespace RenderCore { namespace Techniques
         RenderPassInstance(
             ParsingContext& parsingContext,
             const FragmentStitchingContext::StitchResult& stitchedFragment,
+            const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());
+
+        RenderPassInstance(
+            ParsingContext& parsingContext,
+            const FrameBufferDescFragment& layoutFragment,
+            IteratorRange<IResource*const*const> resources,
+            IFrameBufferPool& frameBufferPool,
             const RenderPassBeginDesc& beginInfo = RenderPassBeginDesc());
 
         // Construct a "non-metal" RenderPassInstance (useful for compute shader work)
@@ -521,6 +546,11 @@ namespace RenderCore { namespace Techniques
     {
         return TryStitchFrameBufferDesc({&fragment, &fragment+1}, fbProps);
     }
+
+    FragmentStitchingContext::StitchResult SimpleStitch(
+        const FrameBufferDescFragment& input,
+        const FrameBufferProperties& props,
+        IteratorRange<IResource*const*const> resources);
 
 }}
 
