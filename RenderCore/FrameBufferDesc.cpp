@@ -45,8 +45,6 @@ namespace RenderCore
 
     FrameBufferDesc::~FrameBufferDesc() {}
 
-	INamedAttachments::~INamedAttachments() {}
-
     const char* AsString(LoadStore input)
     {
         switch (input) {

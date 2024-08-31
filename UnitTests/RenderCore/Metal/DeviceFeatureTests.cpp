@@ -85,24 +85,13 @@ namespace UnitTests
 			subpasses.push_back(SubpassDesc{}.AppendOutput(0).SetViewInstanceMask(~0u));
 
 			FrameBufferDesc fbDesc{std::move(attachments), std::move(subpasses)};
-			struct DummyNamedAttachments : public INamedAttachments
-			{
-				std::shared_ptr<IResourceView> GetResourceView(
-					AttachmentName,
-					BindFlag::Enum bindFlags, TextureViewDesc textureView,
-					const AttachmentDesc&, const FrameBufferProperties&) override
-				{
-					return _viewPool.GetTextureView(_mainTarget, bindFlags, textureView);
-				}
-				std::shared_ptr<RenderCore::IResource> _mainTarget;
-				RenderCore::ViewPool _viewPool;
-				DummyNamedAttachments(std::shared_ptr<RenderCore::IResource> t) : _mainTarget(std::move(t)) {}
-			} dummyNamedAttachments { simpleFBHelper.GetMainTarget() };
+			auto requiredViews = Metal::FrameBuffer::CalculateRequiredViews(fbDesc); REQUIRE(requiredViews.size() == 1);
+			std::vector<std::shared_ptr<IResourceView>> rtvs { simpleFBHelper.GetMainTarget()->CreateTextureView(requiredViews[0]._bindFlag, requiredViews[0]._viewDesc) };
 
 			if (factory.GetXLEFeatures()._viewInstancingRenderPasses) {
-				REQUIRE_NOTHROW(Metal::FrameBuffer{factory, fbDesc, dummyNamedAttachments});
+				REQUIRE_NOTHROW(Metal::FrameBuffer{factory, fbDesc, rtvs});
 			} else {
-				REQUIRE_THROWS(Metal::FrameBuffer{factory, fbDesc, dummyNamedAttachments});
+				REQUIRE_THROWS(Metal::FrameBuffer{factory, fbDesc, rtvs});
 			}
 		}
 

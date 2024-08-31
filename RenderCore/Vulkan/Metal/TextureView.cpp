@@ -279,6 +279,10 @@ namespace RenderCore { namespace Metal_Vulkan
         static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));
         ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
         _imageLayout = layout;
+
+        _arrayLayerCount = std::max(1u, window._arrayLayerRange._min+window._arrayLayerRange._count);
+        if (window._arrayLayerRange._count == TextureViewDesc::All._count)
+            _arrayLayerCount = 1u; // we don't know this, because we can't query it from the VkImage
     }
 
 	ResourceView::ResourceView(
@@ -329,6 +333,10 @@ namespace RenderCore { namespace Metal_Vulkan
             ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
             _imageLayout = CalculateImageLayout(formatUsage, createInfo.subresourceRange.aspectMask, window._flags);
 
+            _arrayLayerCount = std::max(1u, window._arrayLayerRange._min+window._arrayLayerRange._count);
+            if (window._arrayLayerRange._count == TextureViewDesc::All._count)
+                _arrayLayerCount = ActualArrayLayerCount(tDesc);
+
         } else {
             if (!(resDesc._bindFlags & BindFlag::TexelBuffer))
                 Throw(::Exceptions::BasicLabel("Attempting to create a texture view for a resource that is not a texture. Did you intend to use CreateBufferView?"));
@@ -342,6 +350,7 @@ namespace RenderCore { namespace Metal_Vulkan
             _bufferView = factory.CreateBufferView(createInfo);
             _type = Type::BufferView;
             _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            _arrayLayerCount = 1u;
         }
 
         _resource = std::static_pointer_cast<Resource>(image);
@@ -356,6 +365,7 @@ namespace RenderCore { namespace Metal_Vulkan
         auto createInfo = MakeBufferViewCreateInfo(texelBufferFormat, rangeOffset, rangeSize, buffer);
         _bufferView = factory.CreateBufferView(createInfo);
         _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        _arrayLayerCount = 1u;
     }
 
     ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, Format texelBufferFormat, unsigned rangeOffset, unsigned rangeSize)
@@ -381,6 +391,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         _resource = std::static_pointer_cast<Resource>(buffer);
         _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        _arrayLayerCount = 1u;
     }
 
     ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& buffer, unsigned rangeOffset, unsigned rangeSize)
@@ -407,6 +418,7 @@ namespace RenderCore { namespace Metal_Vulkan
 
         _resource = std::static_pointer_cast<Resource>(buffer);
         _imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        _arrayLayerCount = 1u;
     }
 
     ResourceView::ResourceView(ObjectFactory& factory, const std::shared_ptr<IResource>& resource)
@@ -430,7 +442,11 @@ namespace RenderCore { namespace Metal_Vulkan
         }
     }
 
-    ResourceView::ResourceView() {}
+    ResourceView::ResourceView()
+    : _type(Type::BufferView), _bufferRange(0,0), _imageLayout(VK_IMAGE_LAYOUT_UNDEFINED), _arrayLayerCount(1u)
+    {
+        XlZeroMemory(_imageSubresourceRange);
+    }
     ResourceView::~ResourceView() {}
 
 }}

@@ -150,7 +150,7 @@ namespace UnitTests
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-	class UnitTestFBHelper::Pimpl : public RenderCore::INamedAttachments
+	class UnitTestFBHelper::Pimpl
 	{
 	public:
 		std::vector<std::shared_ptr<RenderCore::IResource>> _targets;
@@ -161,14 +161,9 @@ namespace UnitTests
 
 		std::shared_ptr<RenderCore::IResourceView> GetResourceView(
 			RenderCore::AttachmentName resName, 
-			RenderCore::BindFlag::Enum bindFlag, RenderCore::TextureViewDesc viewDesc,
-			const RenderCore::AttachmentDesc& requestDesc,
-			const RenderCore::FrameBufferProperties& props) override
+			RenderCore::BindFlag::Enum bindFlag, RenderCore::TextureViewDesc viewDesc)
 		{
 			assert(resName <= _targets.size());
-			// the "requestDesc" is passed in here so that we can validate it. We're expecting
-			// it to match up to the desc that was provided in the FrameBufferDesc
-			assert(requestDesc._format == _targetDescs[resName]._textureDesc._format);
 			return _srvPool.GetTextureView(_targets[resName], bindFlag, viewDesc);
 		}
 	};
@@ -314,10 +309,11 @@ namespace UnitTests
 			std::vector<AttachmentDesc>{ mainAttachment },
 			std::vector<SubpassDesc>{ mainSubpass } };
 
-		_pimpl->_fb = std::make_shared<RenderCore::Metal::FrameBuffer>(
-			Metal::GetObjectFactory(device),
-			_pimpl->_fbDesc,
-			*_pimpl);
+		auto requiredViews = RenderCore::Metal::FrameBuffer::CalculateRequiredViews(_pimpl->_fbDesc);
+		std::vector<std::shared_ptr<RenderCore::IResourceView>> rtvs; rtvs.reserve(requiredViews.size());
+		for (auto v:requiredViews) rtvs.emplace_back(_pimpl->GetResourceView(v._attachmentName, v._bindFlag, v._viewDesc));
+
+		_pimpl->_fb = std::make_shared<RenderCore::Metal::FrameBuffer>(Metal::GetObjectFactory(device), _pimpl->_fbDesc, rtvs);
 
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {_pimpl->_targets[0].get()});
 	}
@@ -354,10 +350,11 @@ namespace UnitTests
 			std::move(attachments),
 			std::vector<SubpassDesc>{ mainSubpass } };
 
-		_pimpl->_fb = std::make_shared<RenderCore::Metal::FrameBuffer>(
-			Metal::GetObjectFactory(device),
-			_pimpl->_fbDesc,
-			*_pimpl);
+		auto requiredViews = RenderCore::Metal::FrameBuffer::CalculateRequiredViews(_pimpl->_fbDesc);
+		std::vector<std::shared_ptr<RenderCore::IResourceView>> rtvs; rtvs.reserve(requiredViews.size());
+		for (auto v:requiredViews) rtvs.emplace_back(_pimpl->GetResourceView(v._attachmentName, v._bindFlag, v._viewDesc));
+
+		_pimpl->_fb = std::make_shared<RenderCore::Metal::FrameBuffer>(Metal::GetObjectFactory(device), _pimpl->_fbDesc, rtvs);
 
 		Metal::CompleteInitialization(*Metal::DeviceContext::Get(threadContext), {_pimpl->_targets[0].get(), _pimpl->_targets[1].get(), _pimpl->_targets[2].get()});
 	}
@@ -374,10 +371,8 @@ namespace UnitTests
 		SubpassDesc mainSubpass;
 		mainSubpass.SetName("stream-output-subpass");
 		_pimpl->_fbDesc = FrameBufferDesc { {}, std::vector<SubpassDesc>{ mainSubpass } };
-		_pimpl->_fb = std::make_shared<RenderCore::Metal::FrameBuffer>(
-			Metal::GetObjectFactory(device),
-			_pimpl->_fbDesc,
-			*_pimpl);
+		assert(Metal::FrameBuffer::CalculateRequiredViews(_pimpl->_fbDesc).empty());
+		_pimpl->_fb = std::make_shared<RenderCore::Metal::FrameBuffer>(Metal::GetObjectFactory(device), _pimpl->_fbDesc, IteratorRange<const std::shared_ptr<IResourceView>*>{});
 	}
 
 	UnitTestFBHelper::~UnitTestFBHelper()

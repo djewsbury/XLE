@@ -32,10 +32,18 @@ namespace RenderCore { namespace Metal_Vulkan
         VectorPattern<int, 2> GetDefaultOffset() const { return _defaultOffset; };
         VectorPattern<unsigned, 2> GetDefaultExtent() const { return _defaultExtent; }
 
+        struct RequiredView
+        {
+            AttachmentName _attachmentName = ~0u;
+            BindFlag::Enum _bindFlag = BindFlag::RenderTarget;
+            TextureViewDesc _viewDesc;
+        };
+        static std::vector<RequiredView> CalculateRequiredViews(const FrameBufferDesc& desc);
+
 		FrameBuffer(
 			const ObjectFactory& factory,
             const FrameBufferDesc& desc,
-        	INamedAttachments& namedResources);
+        	IteratorRange<const std::shared_ptr<IResourceView>*> views);
 		FrameBuffer();
 		~FrameBuffer();
 

@@ -43,6 +43,7 @@ namespace RenderCore { namespace Metal_Vulkan
         std::pair<unsigned, unsigned>       GetBufferRangeOffsetAndSize() const { return _bufferRange; }
         const VkImageSubresourceRange&      GetImageSubresourceRange() const { return (VkImageSubresourceRange&)_imageSubresourceRange; }
         VkImageLayout                       GetImageLayout() const { return _imageLayout; }
+        unsigned                            GetArrayLayerCount() const { return _arrayLayerCount; }
 
         Resource* GetVulkanResource() const { return _resource.get(); }
 
@@ -57,6 +58,7 @@ namespace RenderCore { namespace Metal_Vulkan
         uint8_t                         _imageSubresourceRange[5*4];
 		std::shared_ptr<Resource>		_resource;
         VkImageLayout                   _imageLayout;
+        unsigned                        _arrayLayerCount;   // used in FrameBuffer constructor
     };
 }}
 

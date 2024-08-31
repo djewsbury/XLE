@@ -4,6 +4,7 @@
 
 #include "MetalTestHelper.h"
 #include "MetalTestShaders.h"
+#include "../../UnitTestHelper.h"
 #include "../../../RenderCore/Metal/Shader.h"
 #include "../../../RenderCore/Metal/InputLayout.h"
 #include "../../../RenderCore/Metal/State.h"
@@ -104,16 +105,17 @@ namespace UnitTests
 		// Attempt to use a subpass where the depth aspect of an attachment is bound as an input attachment
 		// while at the same time the stencil aspect is bound as a depth/stencil attachment
 		using namespace RenderCore;
+		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto testHelper = MakeTestHelper();
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
 		testHelper->BeginFrameCapture();
 
 		std::vector<SubpassDesc> subpasses;
-		std::vector<AttachmentDesc> attachments;
-		attachments.push_back({Format::R16G16B16A16_FLOAT, 0, LoadStore::DontCare});		// gbuffer
-		attachments.push_back({Format::D32_SFLOAT_S8_UINT, 0, LoadStore::Clear});			// main depth
-		attachments.push_back({Format::R8G8B8A8_UNORM, 0, LoadStore::Clear});				// light resolve texture
+		std::vector<AttachmentDesc> attachmentDescs;
+		attachmentDescs.push_back({Format::R16G16B16A16_FLOAT, 0, LoadStore::DontCare});		// gbuffer
+		attachmentDescs.push_back({Format::D32_SFLOAT_S8_UINT, 0, LoadStore::Clear});			// main depth
+		attachmentDescs.push_back({Format::R8G8B8A8_UNORM, 0, LoadStore::Clear});				// light resolve texture
 
 		subpasses.push_back(SubpassDesc{}.AppendOutput(0).SetDepthStencil(1));
 
@@ -135,34 +137,23 @@ namespace UnitTests
 				.AppendInput(1, justDepthWindow)
 				.SetDepthStencil(1, justStencilWindow));
 
-		FrameBufferDesc fbDesc{std::move(attachments), std::move(subpasses)};
+		FrameBufferDesc fbDesc{std::move(attachmentDescs), std::move(subpasses)};
 
-		struct NamedAttachmentsHelper : public INamedAttachments
-		{
-			std::shared_ptr<IResourceView> GetResourceView(
-				AttachmentName resName,
-				BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
-				const AttachmentDesc& requestDesc, const FrameBufferProperties& props) override
-			{
-				return _viewPool.GetTextureView(_attachments[resName], bindFlag, viewDesc);
-			}
+		std::shared_ptr<IResource> attachments[3];
+		attachments[0] = testHelper->_device->CreateResource(CreateDesc(BindFlag::RenderTarget|BindFlag::InputAttachment|BindFlag::TransferDst, TextureDesc::Plain2D(512, 512, Format::R16G16B16A16_FLOAT)), "attachment-0");
+		attachments[1] = testHelper->_device->CreateResource(CreateDesc(BindFlag::DepthStencil|BindFlag::InputAttachment|BindFlag::TransferDst, TextureDesc::Plain2D(512, 512, Format::D32_SFLOAT_S8_UINT)), "attachment-1");
+		attachments[2] = testHelper->_device->CreateResource(CreateDesc(BindFlag::RenderTarget|BindFlag::TransferDst|BindFlag::TransferSrc, TextureDesc::Plain2D(512, 512, Format::R8G8B8A8_UNORM)), "attachment-2");
 
-			std::shared_ptr<IResource> _attachments[3];
-			ViewPool _viewPool;
-			NamedAttachmentsHelper(IDevice& device)
-			{
-				_attachments[0] = device.CreateResource(CreateDesc(BindFlag::RenderTarget|BindFlag::InputAttachment|BindFlag::TransferDst, TextureDesc::Plain2D(512, 512, Format::R16G16B16A16_FLOAT)), "attachment-0");
-				_attachments[1] = device.CreateResource(CreateDesc(BindFlag::DepthStencil|BindFlag::InputAttachment|BindFlag::TransferDst, TextureDesc::Plain2D(512, 512, Format::D32_SFLOAT_S8_UINT)), "attachment-1");
-				_attachments[2] = device.CreateResource(CreateDesc(BindFlag::RenderTarget|BindFlag::TransferDst|BindFlag::TransferSrc, TextureDesc::Plain2D(512, 512, Format::R8G8B8A8_UNORM)), "attachment-2");
-			}
-		};
-		NamedAttachmentsHelper namedAttachmentsHelper(*testHelper->_device);
+		auto requiredViews = Metal::FrameBuffer::CalculateRequiredViews(fbDesc);
+		std::vector<std::shared_ptr<IResourceView>> rtvs; rtvs.reserve(requiredViews.size());
+		for (const auto& v:requiredViews)
+			rtvs.emplace_back(attachments[v._attachmentName]->CreateTextureView(v._bindFlag, v._viewDesc));
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-		IResource* toComplete[] { namedAttachmentsHelper._attachments[0].get(), namedAttachmentsHelper._attachments[1].get(), namedAttachmentsHelper._attachments[2].get() };
+		IResource* toComplete[] { attachments[0].get(), attachments[1].get(), attachments[2].get() };
 		Metal::CompleteInitialization(metalContext, toComplete);
 
-		auto fb = std::make_shared<Metal::FrameBuffer>(Metal::GetObjectFactory(*testHelper->_device), fbDesc, namedAttachmentsHelper);
+		auto fb = std::make_shared<Metal::FrameBuffer>(Metal::GetObjectFactory(*testHelper->_device), fbDesc, MakeIteratorRange(rtvs));
 		ClearValue clearValues[] { MakeClearValue(1.f, 0.f, 0.f, 1.f), MakeClearValue(0.f, 0), MakeClearValue(0.5f, 0.5f, 0.5f, 1.f) };
 		metalContext.BeginRenderPass(*fb, clearValues);
 		{
@@ -234,8 +225,8 @@ namespace UnitTests
 			encoder.SetStencilRef(0x80, 0x80);
 			encoder.SetDepthBounds(0.45f, 0.55f);
 
-			auto srv0 = namedAttachmentsHelper.GetResourceView(0, BindFlag::InputAttachment, {}, {}, {});
-			auto srv1 = namedAttachmentsHelper.GetResourceView(1, BindFlag::InputAttachment, justDepthWindow, {}, {});
+			auto srv0 = attachments[0]->CreateTextureView(BindFlag::InputAttachment);
+			auto srv1 = attachments[1]->CreateTextureView(BindFlag::InputAttachment, justDepthWindow);
 			ResourceViewStream srvs { *srv0, *srv1 };
 			UniformsStreamInterface usi;
 			usi.BindResourceView(0, "SubpassInputAttachment0"_h);
@@ -250,6 +241,8 @@ namespace UnitTests
 			encoder.Draw((unsigned)dimof(vertices_fullViewport));
 		}
 		metalContext.EndRenderPass();
+
+		testHelper->EndFrameCapture();
 
 		// In the second subpass, there were 3 input attachments that were important:
 		//
@@ -269,15 +262,13 @@ namespace UnitTests
 		//		- read depth as an input attachment
 		//		- depth bounds test
 
-		auto breakdown = GetFullColorBreakdown(*threadContext, *namedAttachmentsHelper._attachments[2]);
+		auto breakdown = GetFullColorBreakdown(*threadContext, *attachments[2]);
 		REQUIRE(breakdown.size() == 2);
 		const unsigned expectedColor0 = (0x80 << 24u) | (0x3f << 16u) | (0x80 << 8u) | (0x3f);		// half green color (from VB)
 		const unsigned expectedColor1 = (0xff << 24u) | (0x80 << 16u) | (0x80 << 8u) | (0x80);		// clear color
 		REQUIRE(breakdown.begin()->first == expectedColor0);
 		auto i = breakdown.begin(); ++i;
 		REQUIRE(i->first == expectedColor1);
-
-		testHelper->EndFrameCapture();
 	}
 }
 

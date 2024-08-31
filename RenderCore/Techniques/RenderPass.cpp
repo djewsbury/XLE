@@ -293,49 +293,6 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    class NamedAttachmentsAdapter : public INamedAttachments
-    {
-    public:
-		virtual std::shared_ptr<IResourceView> GetResourceView(
-            AttachmentName resName,
-            BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
-            const AttachmentDesc& requestDesc, const FrameBufferProperties& props) override;
-
-        NamedAttachmentsAdapter(
-            const AttachmentReservation&);
-        ~NamedAttachmentsAdapter();
-    private:
-        const AttachmentReservation* _reservation;
-    };
-
-    std::shared_ptr<IResourceView> NamedAttachmentsAdapter::GetResourceView(
-        AttachmentName resName,
-        BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
-        const AttachmentDesc& requestDesc, const FrameBufferProperties& props)
-    {
-        assert(resName < _reservation->GetResourceCount());
-        auto view = _reservation->GetView(resName, bindFlag, viewDesc);
-
-        #if defined(_DEBUG)
-            auto* resource = view->GetResource().get();
-            // Validate that the "desc" for the returned resource matches what the caller was requesting
-            auto resultDesc = resource->GetDesc();
-            assert(requestDesc._format == Format(0) || AsTypelessFormat(requestDesc._format) == AsTypelessFormat(resultDesc._textureDesc._format));
-            assert((requestDesc._finalLayout & resultDesc._bindFlags) == requestDesc._finalLayout);     // if you hit this it means that the final layout type was not one of the bind flags that the resource was initially created with
-            assert((requestDesc._initialLayout & resultDesc._bindFlags) == requestDesc._initialLayout);
-        #endif
-
-        return view;
-    }
-
-    NamedAttachmentsAdapter::NamedAttachmentsAdapter(
-        const AttachmentReservation& reservation)
-    : _reservation(&reservation) {}
-    NamedAttachmentsAdapter::~NamedAttachmentsAdapter() {}
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     class AttachmentPool : public IAttachmentPool
@@ -1444,11 +1401,12 @@ namespace RenderCore { namespace Techniques
         //      Log(Warning) << "Creating frame buffers frequently, consider increasing depth of framebuffer pool" << std::endl;
         // }
 
-        NamedAttachmentsAdapter namedAttachments{poolAttachments};
+        auto requiredViews = Metal::FrameBuffer::CalculateRequiredViews(adjustedDesc);
+        std::vector<std::shared_ptr<IResourceView>> rtvs; rtvs.reserve(requiredViews.size());
+        for (const auto& v:requiredViews) rtvs.emplace_back(poolAttachments.GetView(v._attachmentName, v._bindFlag, v._viewDesc));
+
         assert(adjustedDesc.GetSubpasses().size());
-        _entries[earliestEntry]._fb = std::make_shared<Metal::FrameBuffer>(
-            factory,
-            adjustedDesc, namedAttachments);
+        _entries[earliestEntry]._fb = std::make_shared<Metal::FrameBuffer>(factory, adjustedDesc, MakeIteratorRange(rtvs));
         _entries[earliestEntry]._tickId = _currentTickId;
         _entries[earliestEntry]._hash = hashValue;
         _entries[earliestEntry]._completedDesc = std::move(adjustedDesc);

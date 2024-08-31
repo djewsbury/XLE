@@ -908,39 +908,25 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned _layers = 0;
 	};
 
-	static void BuildMaxDims(MaxDims& result, const ResourceDesc& desc, const TextureViewDesc& view)
+	static void BuildMaxDims(MaxDims& result, const ResourceDesc& desc, const ResourceView& view)
 	{
 		assert(desc._type == ResourceDesc::Type::Texture);
 		result._width = std::max(result._width, desc._textureDesc._width);
 		result._height = std::max(result._height, desc._textureDesc._height);
-
-		unsigned layerCount = view._arrayLayerRange._count;
-		if (layerCount == TextureViewDesc::All._count)
-			layerCount = ActualArrayLayerCount(desc._textureDesc);
-		result._layers = std::max(result._layers, layerCount);
+		result._layers = std::max(result._layers, view.GetArrayLayerCount());
 	}
 
-    FrameBuffer::FrameBuffer(
-        const ObjectFactory& factory,
-        const FrameBufferDesc& fbDesc,
-        INamedAttachments& namedResources)
-    {
-		_layout = GetGlobalPools()._renderPassPool.CreateVulkanRenderPass(fbDesc);
-
-        // We must create the frame buffer, including all views required.
-        // We need to order the list of views in VkFramebufferCreateInfo in the
-		// same order as the attachments were defined in the VkRenderPass object.
+	static RenderPassHelper BuildRenderPassHelper(const FrameBufferDesc& fbDesc)
+	{
 		auto subpasses = fbDesc.GetSubpasses();
 
 		RenderPassHelper helper(fbDesc);
 		unsigned attachmentCount = (unsigned)fbDesc.GetAttachments().size();
-		bool isViewInstancingFrameBuffer = false;
 
 		// Duplicate the work from CreateRenderPass in order to prime RenderPassHelper
 		// This must create an identical array
 		for (unsigned spIdx=0; spIdx<subpasses.size(); ++spIdx) {
 			const auto& spDesc = subpasses[spIdx];
-			isViewInstancingFrameBuffer |= spDesc.GetViewInstanceMask() != 0;
 			VLA(Internal::AttachmentResourceUsageType::BitField, subpassAttachmentUsages, attachmentCount);
 			for (unsigned c=0; c<attachmentCount; ++c) subpassAttachmentUsages[c] = 0;
 
@@ -960,37 +946,73 @@ namespace RenderCore { namespace Metal_Vulkan
             for (auto& a:spDesc.GetInputs())
 				helper.CreateAttachmentReference_V2(a._resourceName, a._window, Internal::AttachmentResourceUsageType::Input, subpassAttachmentUsages[a._resourceName], spIdx, true);
         }
+		return helper;
+	}
+
+	auto FrameBuffer::CalculateRequiredViews(const FrameBufferDesc& fbDesc) -> std::vector<RequiredView>
+	{
+		std::vector<RequiredView> dst;
+		// We need to order the list of views in VkFramebufferCreateInfo in the
+		// same order as the attachments were defined in the VkRenderPass object.
+		RenderPassHelper helper = BuildRenderPassHelper(fbDesc);
+		dst.reserve(helper._workingViewedAttachments.size());
+		for (const auto&a:helper._workingViewedAttachments) {
+			auto& res = helper._workingAttachments[a._mappedAttachmentIdx];
+			dst.emplace_back(RequiredView{res.first, (BindFlag::Enum)AsBindFlags(res.second._attachmentUsage), a._view});
+		}
+		return dst;
+	}
+
+	static std::vector<FrameBuffer::ClearValueOrdering> CalculateClearValueOrdering(const FrameBufferDesc& fbDesc)
+	{
+		// unfortunately we have to calculate this yet again!
+		RenderPassHelper helper = BuildRenderPassHelper(fbDesc);
+
+		std::vector<FrameBuffer::ClearValueOrdering> result;
+		result.reserve(helper._workingViewedAttachments.size());
+		for (const auto&a:helper._workingViewedAttachments) {
+			auto& res = helper._workingAttachments[a._mappedAttachmentIdx];
+			ClearValue defaultClearValue = MakeClearValue(0.f, 0.f, 0.f, 1.f);
+			if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil)
+				defaultClearValue = MakeClearValue(0.0f, 0);
+			result.push_back({res.first, defaultClearValue});
+		}
+		return result;
+	}
+
+    FrameBuffer::FrameBuffer(
+        const ObjectFactory& factory,
+        const FrameBufferDesc& fbDesc,
+        IteratorRange<const std::shared_ptr<IResourceView>*> views)
+    {
+		_layout = GetGlobalPools()._renderPassPool.CreateVulkanRenderPass(fbDesc);
+
+        // We must create the frame buffer, including all views required.
+		bool isViewInstancingFrameBuffer = false;
+		for (const auto& sp:fbDesc.GetSubpasses()) isViewInstancingFrameBuffer |= sp.GetViewInstanceMask() != 0;
 
 		if (isViewInstancingFrameBuffer && !factory.GetXLEFeatures()._viewInstancingRenderPasses)
 			Throw(std::runtime_error("Attempting to create a view instancing frame buffer, but the view instancing feature is disabled"));
 
-        VLA(VkImageView, rawViews, helper._workingViewedAttachments.size());
+        VLA(VkImageView, rawViews, std::max(size_t(1), views.size()));
 		unsigned rawViewCount = 0;
-		_clearValuesOrdering.reserve(helper._workingViewedAttachments.size());
-        MaxDims maxDims;
+		MaxDims maxDims;
 
-        for (const auto&a:helper._workingViewedAttachments) {
+        for (const auto&v:views) {
 			// Note that we can't support TextureViewDesc properly here, because we don't support 
 			// the same resource being used with more than one view
 			// Note that bind flags/usages are not particular important for texture views in Vulkan
 			// so we don't create unique views for each usage type
-			auto& res = helper._workingAttachments[a._mappedAttachmentIdx];
-			auto rtv = namedResources.GetResourceView(
-				res.first, (BindFlag::Enum)AsBindFlags(res.second._attachmentUsage), a._view,
-				fbDesc.GetAttachments()[res.first], fbDesc.GetProperties());
-			rawViews[rawViewCount++] = checked_cast<ResourceView*>(rtv.get())->GetImageView();
+			rawViews[rawViewCount++] = checked_cast<ResourceView*>(v.get())->GetImageView();
+			_retainedViews.emplace_back(v);
 
 			// Even though the "rtv" has a _imageLayout built in, we will ignore it here. It will be superseded
 			// the image layout calculated when we built the render pass
 
-			ClearValue defaultClearValue = MakeClearValue(0.f, 0.f, 0.f, 1.f);
-			if (res.second._attachmentUsage & Internal::AttachmentResourceUsageType::DepthStencil)
-				defaultClearValue = MakeClearValue(0.0f, 0);
-			_clearValuesOrdering.push_back({res.first, defaultClearValue});
-
-			BuildMaxDims(maxDims, rtv->GetResource()->GetDesc(), a._view);
-			_retainedViews.push_back(std::move(rtv));
-        }
+			BuildMaxDims(maxDims, v->GetResource()->GetDesc(), *checked_cast<ResourceView*>(v.get()));
+		}
+		
+		_clearValuesOrdering = CalculateClearValueOrdering(fbDesc);
 
 		if (rawViewCount == 0 && maxDims._width == 0 && maxDims._height == 0) {
 			// It's valid to create a frame buffer with no attachments (eg, for stream output)

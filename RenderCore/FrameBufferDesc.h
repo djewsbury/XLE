@@ -179,19 +179,6 @@ namespace RenderCore
         DepthStencilValue _depthStencil;
     };
 
-	class INamedAttachments
-	{
-	public:
-		virtual std::shared_ptr<IResourceView> GetResourceView(
-            AttachmentName resName,
-            BindFlag::Enum bindFlag, TextureViewDesc viewDesc,
-            const AttachmentDesc& requestDesc, const FrameBufferProperties& props) = 0;
-		virtual ~INamedAttachments();
-
-        // note -- considering removing this. The Metal layer only needs it for MSAA configuration data
-        // virtual const FrameBufferProperties& GetFrameBufferProperties() const = 0;
-	};
-
 	FrameBufferDesc SeparateSingleSubpass(const FrameBufferDesc& input, unsigned subpassIdx);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
