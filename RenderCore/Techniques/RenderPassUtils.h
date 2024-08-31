@@ -46,21 +46,46 @@ namespace RenderCore { namespace Techniques
 		ClearValue clearValue = MakeClearValue(0.f, 0));
 
 	IResource* GetAttachmentResource(
-		Techniques::ParsingContext& parsingContext,
+		ParsingContext& parsingContext,
 		uint64_t semantic);
 
 	IResource* GetAttachmentResourceAndBarrierToLayout(
-		Techniques::ParsingContext& parsingContext,
+		ParsingContext& parsingContext,
 		uint64_t semantic,
 		BindFlag::BitField newLayout);
 
-	std::vector<Techniques::PreregisteredAttachment> InitializeColorLDR(
-		IteratorRange<const Techniques::PreregisteredAttachment*>);
+	std::vector<PreregisteredAttachment> InitializeColorLDR(
+		IteratorRange<const PreregisteredAttachment*>);
 
-	std::vector<Techniques::PreregisteredAttachment> ConfigureCommonOverlayAttachments(
-		IteratorRange<const Techniques::PreregisteredAttachment*> systemPreregs,
+	std::vector<PreregisteredAttachment> ConfigureCommonOverlayAttachments(
+		IteratorRange<const PreregisteredAttachment*> systemPreregs,
 		const FrameBufferProperties& fbProps,
 		IteratorRange<const Format*> systemAttachmentFormats);
+
+	struct AttachmentLoadStore
+	{
+		LoadStore _loadStore;
+		BindFlag::BitField _layout;
+
+		static AttachmentLoadStore NoState() { return AttachmentLoadStore{LoadStore::DontCare, 0}; };
+		static AttachmentLoadStore Discard() { return AttachmentLoadStore{LoadStore::DontCare, 0}; };
+		static AttachmentLoadStore Clear() { return AttachmentLoadStore{LoadStore::Clear, 0}; };
+		AttachmentLoadStore(BindFlag::BitField layout) : _loadStore(LoadStore::Retain), _layout(layout) {}
+		AttachmentLoadStore(LoadStore loadStore, BindFlag::BitField layout) : _loadStore(loadStore), _layout(layout) {}
+	};
+
+	struct SelfContainedRenderPassHelper
+	{
+		Techniques::FrameBufferDescFragment _workingFragment;
+		std::vector<IResource*> _attachments;
+
+		SelfContainedRenderPassHelper&& AppendOutput(IResource& resource, AttachmentLoadStore initialState, AttachmentLoadStore finalState, const TextureViewDesc& = {});
+		SelfContainedRenderPassHelper&& SetDepthStencil(IResource& resource, AttachmentLoadStore initialState, AttachmentLoadStore finalState, const TextureViewDesc& = {});
+		SelfContainedRenderPassHelper&& AppendNonFrameBufferAttachmentView(IResource& resource, BindFlag::Enum usage = BindFlag::ShaderResource, const TextureViewDesc& = {});
+
+		RenderPassInstance Complete(ParsingContext&, IFrameBufferPool&);
+		SelfContainedRenderPassHelper(std::string subpassName = {});
+	};
 
 
 }}

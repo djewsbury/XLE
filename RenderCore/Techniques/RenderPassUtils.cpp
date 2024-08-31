@@ -43,7 +43,7 @@ namespace RenderCore { namespace Techniques
 		auto preRegs = parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
 		auto q = std::find_if(
 			preRegs.begin(), preRegs.end(),
-			[](const auto&a) { return a._semantic == Techniques::AttachmentSemantics::ColorLDR; });
+			[](const auto&a) { return a._semantic == AttachmentSemantics::ColorLDR; });
 		if (q == preRegs.end())
 			return {};
 
@@ -130,7 +130,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	IResource* GetAttachmentResourceAndBarrierToLayout(
-		Techniques::ParsingContext& parsingContext,
+		ParsingContext& parsingContext,
 		uint64_t semantic,
 		BindFlag::BitField newLayout)
 	{
@@ -155,38 +155,75 @@ namespace RenderCore { namespace Techniques
 		parsingContext.GetAttachmentReservation().UpdateAttachments(newReservation, MakeIteratorRange(&transform, &transform+1));
 		auto newPrereg = *i;
 		newPrereg._layout = newLayout;
-		newPrereg._state = Techniques::PreregisteredAttachment::State::Initialized;
+		newPrereg._state = PreregisteredAttachment::State::Initialized;
 		parsingContext.GetFragmentStitchingContext().DefineAttachment(newPrereg);
 
 		return resource;
 	}
 
-	std::vector<Techniques::PreregisteredAttachment> InitializeColorLDR(
-		IteratorRange<const Techniques::PreregisteredAttachment*> input)
+	std::vector<PreregisteredAttachment> InitializeColorLDR(
+		IteratorRange<const PreregisteredAttachment*> input)
 	{
-		std::vector<Techniques::PreregisteredAttachment> result = {input.begin(), input.end()};
-		auto i = std::find_if(result.begin(), result.end(), [](const auto& q) { return q._semantic == Techniques::AttachmentSemantics::ColorLDR; });
+		std::vector<PreregisteredAttachment> result = {input.begin(), input.end()};
+		auto i = std::find_if(result.begin(), result.end(), [](const auto& q) { return q._semantic == AttachmentSemantics::ColorLDR; });
 		if (i != result.end()) {
-			i->_state = Techniques::PreregisteredAttachment::State::Initialized;
+			i->_state = PreregisteredAttachment::State::Initialized;
 			i->_layout = BindFlag::RenderTarget;
 		}
 		return result;
 	}
 
-	std::vector<Techniques::PreregisteredAttachment> ConfigureCommonOverlayAttachments(
-		IteratorRange<const Techniques::PreregisteredAttachment*> systemPreregs,
+	std::vector<PreregisteredAttachment> ConfigureCommonOverlayAttachments(
+		IteratorRange<const PreregisteredAttachment*> systemPreregs,
 		const FrameBufferProperties& fbProps,
 		IteratorRange<const Format*> systemAttachmentFormats)
 	{
 		// Return a reasonable set of preregistered attachments, as we'd expect to see them after a 3d scene has been rendered
 		auto result = InitializeColorLDR(systemPreregs);
 		result.push_back(
-			Techniques::PreregisteredAttachment
-			{	Techniques::AttachmentSemantics::MultisampleDepth,
-				CreateDesc(BindFlag::DepthStencil|BindFlag::ShaderResource, TextureDesc::Plain2D(fbProps._width, fbProps._height, systemAttachmentFormats[(unsigned)Techniques::SystemAttachmentFormat::MainDepthStencil])),
+			PreregisteredAttachment
+			{	AttachmentSemantics::MultisampleDepth,
+				CreateDesc(BindFlag::DepthStencil|BindFlag::ShaderResource, TextureDesc::Plain2D(fbProps._width, fbProps._height, systemAttachmentFormats[(unsigned)SystemAttachmentFormat::MainDepthStencil])),
 				{},
-				Techniques::PreregisteredAttachment::State::Initialized, BindFlag::DepthStencil });
+				PreregisteredAttachment::State::Initialized, BindFlag::DepthStencil });
 		return result;
+	}
+
+	SelfContainedRenderPassHelper&& SelfContainedRenderPassHelper::AppendOutput(IResource& resource, AttachmentLoadStore initialState, AttachmentLoadStore finalState, const TextureViewDesc& view)
+	{
+		assert(_attachments.size() == _workingFragment.GetAttachments().size());
+		_workingFragment.GetSubpasses()[0].AppendOutput((unsigned)_attachments.size(), view);
+		_workingFragment.DefineAttachment(0).InitialState(initialState._loadStore, initialState._layout).FinalState(finalState._loadStore, finalState._layout);
+		_attachments.push_back(&resource);
+		return std::move(*this);
+	}
+
+	SelfContainedRenderPassHelper&& SelfContainedRenderPassHelper::SetDepthStencil(IResource& resource, AttachmentLoadStore initialState, AttachmentLoadStore finalState, const TextureViewDesc& view)
+	{
+		assert(_attachments.size() == _workingFragment.GetAttachments().size());
+		_workingFragment.GetSubpasses()[0].SetDepthStencil((unsigned)_attachments.size(), view);
+		_workingFragment.DefineAttachment(0).InitialState(initialState._loadStore, initialState._layout).FinalState(finalState._loadStore, finalState._layout);
+		_attachments.push_back(&resource);
+		return std::move(*this);
+	}
+
+	SelfContainedRenderPassHelper&& SelfContainedRenderPassHelper::AppendNonFrameBufferAttachmentView(IResource& resource, BindFlag::Enum usage, const TextureViewDesc& view)
+	{
+		assert(_attachments.size() == _workingFragment.GetAttachments().size());
+		_workingFragment.GetSubpasses()[0].AppendNonFrameBufferAttachmentView((unsigned)_attachments.size(), usage, view);
+		_workingFragment.DefineAttachment(0);
+		_attachments.push_back(&resource);
+		return std::move(*this);
+	}
+
+	RenderPassInstance SelfContainedRenderPassHelper::Complete(ParsingContext& parsingContext, IFrameBufferPool& frameBufferPool)
+	{
+		return RenderPassInstance { parsingContext, std::move(_workingFragment), MakeIteratorRange(_attachments), frameBufferPool };
+	}
+
+	SelfContainedRenderPassHelper::SelfContainedRenderPassHelper(std::string subpassName)
+	{
+		_workingFragment.AddSubpass(SubpassDesc{}.SetName(std::move(subpassName)));
 	}
 
 }}
