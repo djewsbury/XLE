@@ -13,7 +13,7 @@
 
 namespace RenderCore { namespace BufferUploads { class IAsyncDataSource; }}
 namespace Assets { struct DependentFileState; }
-namespace RenderCore { class TextureDesc; }
+namespace RenderCore { class TextureDesc; class IThreadContext; class IResource; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -46,4 +46,9 @@ namespace RenderCore { namespace LightingEngine
 		StringSection<> shader,
 		BufferUploads::IAsyncDataSource& dataSrc,
 		const TextureDesc& targetDesc);
+
+	std::shared_ptr<BufferUploads::IAsyncDataSource> MakeAsyncDataSourceFromResource(
+		std::shared_ptr<IThreadContext> threadContext, 
+		std::shared_ptr<IResource> resource,
+		::Assets::DependencyValidation depVal = {});
 }}

@@ -137,6 +137,10 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) = 0;
+		virtual PreparedResourcesVisibility StallAndPrepareResources(
+			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
+			const FrameBufferDesc& fbDesc,
+			unsigned subpassIndex) = 0;
 
 		virtual DrawablesPacket* GetDrawablesPacket() = 0;
 		virtual std::shared_ptr<IPipelineAcceleratorPool> GetPipelineAcceleratorPool() = 0;

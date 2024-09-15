@@ -504,6 +504,50 @@ namespace Utility
             } else
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
+
+        template<>
+            inline VariantRetained::VariantRetained(StringSection<char> str)
+        {
+            _type = TypeOf<std::basic_string<char>>();
+            _type._arrayCount = (uint32_t)str.size();
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)str.begin(), (const uint8_t*)(str.begin()+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(StringSection<utf16> str)
+        {
+            _type = TypeOf<std::basic_string<utf16>>();
+            _type._arrayCount = (uint32_t)str.size();
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)str.begin(), (const uint8_t*)(str.begin()+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(StringSection<utf32> str)
+        {
+            _type = TypeOf<std::basic_string<utf32>>();
+            _type._arrayCount = (uint32_t)str.size();
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)str.begin(), (const uint8_t*)(str.begin()+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
+        }
+
+        template<>
+            inline VariantRetained::VariantRetained(StringSection<ucs4> str)
+        {
+            _type = TypeOf<std::basic_string<ucs4>>();
+            _type._arrayCount = (uint32_t)str.size();
+            if (_type.GetSize() <= sizeof(_smallBuffer)) {
+                std::copy((const uint8_t*)str.begin(), (const uint8_t*)(str.begin()+_type._arrayCount), _smallBuffer);
+            } else
+                _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
+        }
     }
 }
 

@@ -398,6 +398,20 @@ namespace RenderCore { namespace Techniques
 			Techniques::PrepareResources(std::move(promise), *_pipelineAcceleratorPool, sequencerConfig, _workingPkt);
 		}
 
+		PreparedResourcesVisibility StallAndPrepareResources(
+			const std::shared_ptr<ITechniqueDelegate>& techniqueDelegate,
+			const FrameBufferDesc& fbDesc,
+			unsigned subpassIndex) override
+		{
+			std::promise<Techniques::PreparedResourcesVisibility> promisedPrepare;
+				auto futurePrepare = promisedPrepare.get_future();
+			PrepareResources(std::move(promisedPrepare), techniqueDelegate, fbDesc, subpassIndex);
+			YieldToPool(futurePrepare);
+			auto prepare = futurePrepare.get();
+			_pipelineAcceleratorsVisibility = _pipelineAcceleratorPool->VisibilityBarrier(prepare._pipelineAcceleratorsVisibility);
+			return prepare;
+		}
+
 		virtual DrawablesPacket* GetDrawablesPacket() override
 		{
 			return &_workingPkt;

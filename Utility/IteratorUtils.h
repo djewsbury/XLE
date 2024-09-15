@@ -92,20 +92,6 @@ namespace Utility
             return std::upper_bound(v.cbegin(), v.cend(), compareToFirst, CompareFirst<First, Second>());
         }
 
-	template<typename FirstType, typename SecondType>
-		std::pair<typename std::vector<std::pair<FirstType, SecondType> >::iterator, typename std::vector<std::pair<FirstType, SecondType> >::iterator>
-			EqualRange(std::vector<std::pair<FirstType, SecondType> >& vector, FirstType searchKey)
-		{
-			return std::equal_range(vector.begin(), vector.end(), searchKey, CompareFirst<FirstType, SecondType>());
-		}
-
-    template<typename FirstType, typename SecondType>
-        std::pair<typename std::vector<std::pair<FirstType, SecondType> >::const_iterator, typename std::vector<std::pair<FirstType, SecondType> >::const_iterator>
-            EqualRange(const std::vector<std::pair<FirstType, SecondType> >& vector, FirstType searchKey)
-        {
-            return std::equal_range(vector.cbegin(), vector.cend(), searchKey, CompareFirst<FirstType, SecondType>());
-        }
-
     template <typename Vector, typename Pred>
         typename Vector::iterator FindIf(Vector& v, Pred&& predicate)
         {
@@ -415,8 +401,24 @@ namespace Utility
     template <typename Iterator>
         Iterator UpperBound2(IteratorRange<Iterator> v, decltype(std::declval<Iterator>()->first) compareToFirst)
         {
-            return std::upper_ound(v.begin(), v.end(), compareToFirst, 
+            return std::upper_bound(v.begin(), v.end(), compareToFirst, 
                 CompareFirst<decltype(std::declval<Iterator>()->first), decltype(std::declval<Iterator>()->second)>());
+        }
+
+	template<typename FirstType, typename SecondType>
+		IteratorRange<typename std::vector<std::pair<FirstType, SecondType> >::iterator>
+			EqualRange(std::vector<std::pair<FirstType, SecondType> >& vector, FirstType searchKey)
+		{
+			auto r = std::equal_range(vector.begin(), vector.end(), searchKey, CompareFirst<FirstType, SecondType>());
+            return { r.first, r.second };
+		}
+
+    template<typename FirstType, typename SecondType>
+        IteratorRange<typename std::vector<std::pair<FirstType, SecondType> >::const_iterator>
+            EqualRange(const std::vector<std::pair<FirstType, SecondType> >& vector, FirstType searchKey)
+        {
+            auto r = std::equal_range(vector.cbegin(), vector.cend(), searchKey, CompareFirst<FirstType, SecondType>());
+            return { r.first, r.second };
         }
 
     template<typename Iterator> Iterator begin(const IteratorRange<Iterator>& range) { return range.begin(); }

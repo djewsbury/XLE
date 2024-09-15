@@ -151,6 +151,7 @@ namespace RenderCore { namespace Techniques
 
 		private:
 			void WriteCallParametersInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature& sig);
+			void WriteCallParameterInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature::Parameter& p);
 		};
 
 		void FragmentWriter::WriteInputParameter(std::string semantic, unsigned semanticIdx, std::string type, bool gsInputParameter)
@@ -199,43 +200,55 @@ namespace RenderCore { namespace Techniques
 			str << "DefaultValue_" << requiredType << "()";
 		}
 
+		void FragmentWriter::WriteCallParameterInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature::Parameter& p)
+		{
+			auto s = SplitSemanticAndIdx(p._semantic);
+			auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(), [s](const auto& q) { return s.second == q._semanticIdx && XlEqString(s.first, q._semantic); });
+			if (p._direction == GraphLanguage::ParameterDirection::In) {
+				if (i != _workingAttributes.end()) {
+					WriteCastOrAssignExpression(temp, *i, p._type);
+				} else {
+					WriteDefaultValueExpression(temp, p._type);
+				}
+			} else {
+				// we will attempt to reuse the existing working attribute if we can. Otherwise we just create a new one
+				if (i == _workingAttributes.end()) {
+					auto newName = Concatenate(s.first, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
+					_body << "\t" << p._type << " " << newName << ";" << std::endl;
+					i = _workingAttributes.insert(_workingAttributes.end(), WorkingAttributeWithName{s.first.AsString(), s.second, p._type, newName});
+				} else if (i->_type != p._type) {
+					auto newName = Concatenate(s.first, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
+					_body << "\t" << p._type << " " << newName << ";" << std::endl;
+					*i = WorkingAttributeWithName{s.first.AsString(), s.second, p._type, newName};
+				}
+				if (i->_gsInputParameter) temp << "input[0].";
+				temp << i->_name;
+			}
+		}
+
 		void FragmentWriter::WriteCallParametersInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature& sig)
 		{
 			bool pendingComma = false;
 			for (const auto&p:sig.GetParameters()) {
 				if (pendingComma) temp << ", ";
-
-				auto s = SplitSemanticAndIdx(p._semantic);
-				auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(), [s](const auto& q) { return s.second == q._semanticIdx && XlEqString(s.first, q._semantic); });
-				if (p._direction == GraphLanguage::ParameterDirection::In) {
-					if (i != _workingAttributes.end()) {
-						WriteCastOrAssignExpression(temp, *i, p._type);
-					} else {
-						WriteDefaultValueExpression(temp, p._type);
-					}
-					pendingComma = true;
-				} else if (!XlEqString(p._name, "result")) {
-					// we will attempt to reuse the existing working attribute if we can. Otherwise we just create a new one
-					if (i == _workingAttributes.end()) {
-						auto newName = Concatenate(s.first, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-						_body << "\t" << p._type << " " << newName << ";" << std::endl;
-						i = _workingAttributes.insert(_workingAttributes.end(), WorkingAttributeWithName{s.first.AsString(), s.second, p._type, newName});
-					} else if (i->_type != p._type) {
-						auto newName = Concatenate(s.first, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-						_body << "\t" << p._type << " " << newName << ";" << std::endl;
-						*i = WorkingAttributeWithName{s.first.AsString(), s.second, p._type, newName};
-					}
-					if (i->_gsInputParameter) temp << "input[0].";
-					temp << i->_name;
-					pendingComma = true;
-				}
+				if (p._direction == GraphLanguage::ParameterDirection::Out && XlEqString(p._name, "result")) continue;
+				WriteCallParameterInternal(temp, p);
+				pendingComma = true;
 			}
 		}
 
 		void FragmentWriter::WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig)
 		{
 			std::stringstream temp;
-			temp << "\t" << callName << "(";
+			temp << "\t";
+
+			auto i = std::find_if(sig.GetParameters().begin(), sig.GetParameters().end(), [](const auto& p) { return p._direction == GraphLanguage::ParameterDirection::Out && XlEqString(p._name, "result"); });
+			if (i != sig.GetParameters().end()) {
+				WriteCallParameterInternal(temp, *i);
+				temp << " = ";
+			}
+
+			temp << callName << "(";
 			WriteCallParametersInternal(temp, sig);
 			_body << temp.str() << ");" << std::endl;
 		}
@@ -645,6 +658,36 @@ void WorldToClip3D(
 	clipPosition = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 }
 
+float4 PixelCoordToSVPosition(float2 pixelCoord)
+{
+	// This is a kind of viewport transform -- unfortunately it needs to
+	// be customized for vulkan because of the different NDC space
+#if (NDC == NDC_POSITIVE_RIGHT_HANDED)
+	return float4(	pixelCoord.x * SysUniform_ReciprocalViewportDimensions().x *  2.f - 1.f,
+					pixelCoord.y * SysUniform_ReciprocalViewportDimensions().y *  2.f - 1.f,
+					0.f, 1.f);
+#elif (NDC == NDC_POSITIVE_RIGHT_HANDED_REVERSEZ)
+	return float4(	pixelCoord.x * SysUniform_ReciprocalViewportDimensions().x *  2.f - 1.f,
+					pixelCoord.y * SysUniform_ReciprocalViewportDimensions().y *  2.f - 1.f,
+					1.f, 1.f);
+#elif (NDC == NDC_POSITIVE_REVERSEZ)
+	return float4(	pixelCoord.x * SysUniform_ReciprocalViewportDimensions().x *  2.f - 1.f,
+					pixelCoord.y * SysUniform_ReciprocalViewportDimensions().y * -2.f + 1.f,
+					1.f, 1.f);
+#else
+	return float4(	pixelCoord.x * SysUniform_ReciprocalViewportDimensions().x *  2.f - 1.f,
+					pixelCoord.y * SysUniform_ReciprocalViewportDimensions().y * -2.f + 1.f,
+					0.f, 1.f);
+#endif
+}
+
+void PixelPositionOutput(
+	out float4 clipPosition : SV_Position,
+	float2 pixelPosition : PIXELPOSITION)
+{
+	clipPosition = PixelCoordToSVPosition(pixelPosition);
+}
+
 void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : COLOR_SRGB)
 {
 	colorLinear.rgb = SRGBToLinear_Formal(colorSRGB.rgb);
@@ -653,7 +696,9 @@ void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : C
 
 )--";
 
-	constexpr const char* s_gsSystemPatches = R"--(
+	constexpr const char* s_gsSpriteSystemPatches = R"--(
+
+#include "xleres/TechniqueLibrary/Framework/SystemUniforms.hlsl"
 
 void ExpandClipSpacePosition(
 	out float4 pos0 : SV_Position0,
@@ -664,8 +709,8 @@ void ExpandClipSpacePosition(
 	float radius : RADIUS,
 	float rotation : ROTATION)
 {
-	const float hradius = radius;
-	const float vradius = hradius * (16.f/9.f);		// todo -- proper aspect & radius scaling
+	const float hradius = radius * SysUniform_GetMinimalProjection()[0];
+	const float vradius = radius * -SysUniform_GetMinimalProjection()[1];
 	float2 sc; sincos(rotation, sc.x, sc.y);
 	float2 h = float2(sc.y, -sc.x);
 	float2 v = float2(sc.x, sc.y);
@@ -686,8 +731,8 @@ void ExpandClipSpacePosition(
 	float4 inputPos : SV_Position,
 	float radius : RADIUS)
 {
-	const float h = radius;
-	const float v = h * (16.f/9.f);		// todo -- proper radius values
+	const float h = radius * SysUniform_GetMinimalProjection()[0];
+	const float v = radius * -SysUniform_GetMinimalProjection()[1];
 	pos0 = float4(inputPos.xy + float2(-h, -v), inputPos.zw);
 	pos1 = float4(inputPos.xy + float2(-h, +v), inputPos.zw);
 	pos2 = float4(inputPos.xy + float2( h, -v), inputPos.zw);
@@ -701,7 +746,7 @@ void ExpandClipSpacePosition(
 	{
 		std::vector<Internal::WorkingAttribute> psEntryAttributes, gsEntryAttributes, vsEntryAttributes;
 		auto vsSystemPatches = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
-		auto gsSystemPatches = ShaderSourceParser::ParseHLSL(s_gsSystemPatches);
+		auto gsSystemPatches = ShaderSourceParser::ParseHLSL(s_gsSpriteSystemPatches);
 
 		std::vector<Internal::FragmentArranger::Step> psSteps, gsSteps, vsSteps;
 		{
@@ -884,7 +929,7 @@ void ExpandClipSpacePosition(
 		for (auto& s:vsSteps) if (s._enabled && s._originalPatchCode) vsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
 
 		gsOutput._stage = ShaderStage::Geometry;
-		gsOutput._resource._postPatchesFragments.emplace_back(s_gsSystemPatches);
+		gsOutput._resource._postPatchesFragments.emplace_back(s_gsSpriteSystemPatches);
 		gsOutput._resource._postPatchesFragments.emplace_back(gs.str());
 		gsOutput._resource._entrypoint._entryPoint = "GSEntry";
 		gsOutput._resource._entrypoint._shaderModel = s_SMGS;
@@ -903,4 +948,147 @@ void ExpandClipSpacePosition(
 		result.emplace_back(std::move(gsOutput));
 		return result;
 	}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	std::vector<PatchDelegateOutput> BuildAutoPipeline(IteratorRange<const PatchDelegateInput*> patches, IteratorRange<const uint64_t*> iaAttributes)
+	{
+		std::vector<Internal::WorkingAttribute> psEntryAttributes, vsEntryAttributes;
+		auto vsSystemPatches = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
+
+		std::vector<Internal::FragmentArranger::Step> psSteps, gsSteps, vsSteps;
+		{
+			{
+				Internal::FragmentArranger arranger;
+				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Target", 0, "float4"});		// todo -- typing on this
+				bool atLeastOnePSStep = false;
+				for (unsigned ep=0; ep<patches.size(); ++ep) {
+					if (patches[ep]._implementsHash == "SV_AutoPS"_h) {
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
+						atLeastOnePSStep = true;
+					}
+				}
+				if (!atLeastOnePSStep)
+					Throw(std::runtime_error("Cannot generate auto pipeline because we must have at least one SV_AutoPS entrypoint"));
+
+				psEntryAttributes = arranger.RebuildInputAttributes();
+				Internal::AddPSInputSystemAttributes(psEntryAttributes);
+				psSteps = std::move(arranger._steps);
+			}
+
+			{
+				Internal::FragmentArranger arranger;
+				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
+
+				for (unsigned ep=0; ep<patches.size(); ++ep)
+					if (patches[ep]._implementsHash == "SV_AutoVS"_h)
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
+
+				Internal::ConnectSystemPatches(
+					arranger, vsSystemPatches,
+					[&iaAttributes](StringSection<> semantic, unsigned semanticIdx) {
+						auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(semantic)+semanticIdx);
+						if (ia != iaAttributes.end()) return true;
+						return Internal::IsVSInputSystemAttributes(semantic, semanticIdx);
+					});
+				
+				vsEntryAttributes = arranger.RebuildInputAttributes();
+				vsSteps = std::move(arranger._steps);
+			}
+		}
+
+		// Now we have the work through in the opposite direction. We will build the actual fragment function that
+		// should perform all of the steps
+		//
+		// During this phase, we may also need to generate some custom patches for system values and required transformations
+		std::stringstream vs, ps;
+		GraphLanguage::NodeGraphSignature vsSignature, psSignature;
+
+		{
+			Internal::FragmentWriter writerHelper;
+			for (const auto& a:vsEntryAttributes) {
+				auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(a._semantic)+a._semanticIdx);
+				if (ia != iaAttributes.end()) {
+					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
+				} else {
+					Internal::TryWriteVSSystemInput(writerHelper, a._semantic, a._semanticIdx);
+				}
+			}
+
+			for (const auto& step:vsSteps)
+				if (step._enabled)
+					writerHelper.WriteCall(step._name, *step._signature);
+
+			for (const auto& a:psEntryAttributes) {
+				if (XlBeginsWith(MakeStringSection(a._semantic), "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
+
+				// If the writer helper never actually got anything for this semantic, it will not become an output
+				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
+					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);	// early cast to type expected by gs
+			}
+
+			vsSignature = writerHelper.WriteFragment(vs, "VSEntry");
+		}
+
+		{
+			Internal::FragmentWriter writerHelper;
+			for (const auto& a:psEntryAttributes) {
+				auto gsin = std::find_if(vsSignature.GetParameters().begin(), vsSignature.GetParameters().end(),
+					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+				if (gsin != vsSignature.GetParameters().end()) {
+					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
+				} else {
+					Internal::TryWritePSSystemInput(writerHelper, a._semantic, a._semanticIdx);
+				}
+			}
+
+			std::vector<Internal::WorkingAttribute> psOutputAttributes;
+			for (const auto& step:psSteps)
+				if (step._enabled) {
+					writerHelper.WriteCall(step._name, *step._signature);
+
+					// any SV_ values that are actually written one of the patches are considered
+					// outputs of the final fragment shader
+					for (const auto& p:step._signature->GetParameters()) {
+						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+						if (!XlBeginsWith(MakeStringSection(p._semantic), "SV_")) continue;
+						auto existing = Internal::Find(psOutputAttributes, Internal::SplitSemanticAndIdx(p._semantic));
+						if (existing != psOutputAttributes.end()) {
+							existing->_type = p._type;
+						} else {
+							psOutputAttributes.emplace_back(Internal::MakeWorkingAttribute(p));
+						}
+					}
+				}
+
+			for (const auto& a:psOutputAttributes)
+				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
+					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);
+
+			psSignature = writerHelper.WriteFragment(ps, "PSEntry");
+		}
+
+		PatchDelegateOutput vsOutput, psOutput;
+		vsOutput._stage = ShaderStage::Vertex;
+		vsOutput._resource._postPatchesFragments.emplace_back(s_vsSystemPatches);
+		vsOutput._resource._postPatchesFragments.emplace_back(vs.str());
+		vsOutput._resource._entrypoint._entryPoint = "VSEntry";
+		vsOutput._resource._entrypoint._shaderModel = s_SMVS;
+		vsOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(vsSignature);
+		for (auto& s:vsSteps) if (s._enabled && s._originalPatchCode) vsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
+
+		psOutput._stage = ShaderStage::Pixel;
+		psOutput._resource._postPatchesFragments.emplace_back(ps.str());
+		psOutput._resource._entrypoint._entryPoint = "PSEntry";
+		psOutput._resource._entrypoint._shaderModel = s_SMPS;
+		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
+		for (auto& s:psSteps) if (s._enabled && s._originalPatchCode) psOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
+
+		std::vector<PatchDelegateOutput> result;
+		result.emplace_back(std::move(vsOutput));
+		result.emplace_back(std::move(psOutput));
+		return result;
+	}
+
 }}

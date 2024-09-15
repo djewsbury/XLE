@@ -9,7 +9,12 @@
 			"cacheVariables": {
 				"CMAKE_C_COMPILER": "clang",
 				"CMAKE_CXX_COMPILER": "clang++",
-				"CMAKE_EXPORT_COMPILE_COMMANDS": true
+				"CMAKE_EXPORT_COMPILE_COMMANDS": true,
+				"CMAKE_DISABLE_FIND_PACKAGE_ZLIB" : "TRUE",
+				"CMAKE_DISABLE_FIND_PACKAGE_BZip2" : "TRUE",
+				"CMAKE_DISABLE_FIND_PACKAGE_PNG" : "TRUE",
+				"CMAKE_DISABLE_FIND_PACKAGE_HarfBuzz" : "TRUE",
+				"CMAKE_DISABLE_FIND_PACKAGE_BrotliDec" : "TRUE"
 			},
 			"condition": {
 				"type": "equals",
@@ -29,7 +34,12 @@
 			"cacheVariables": {
 				"CMAKE_C_COMPILER": "cl.exe",
 				"CMAKE_CXX_COMPILER": "cl.exe",
-				"CMAKE_EXPORT_COMPILE_COMMANDS": true
+				"CMAKE_EXPORT_COMPILE_COMMANDS": true,
+				"CMAKE_DISABLE_FIND_PACKAGE_ZLIB" : "TRUE",
+				"CMAKE_DISABLE_FIND_PACKAGE_BZip2" : "TRUE",
+				"CMAKE_DISABLE_FIND_PACKAGE_PNG" : "TRUE",
+				"CMAKE_DISABLE_FIND_PACKAGE_HarfBuzz" : "TRUE",
+				"CMAKE_DISABLE_FIND_PACKAGE_BrotliDec" : "TRUE"
 			},
 			"condition": {
 				"type": "equals",

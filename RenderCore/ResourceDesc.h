@@ -217,7 +217,7 @@ namespace RenderCore
             Format      _explicitFormat;
 
             FormatFilter(Aspect aspect = UndefinedAspect)
-                : _aspect(aspect), _explicitFormat(Format(0)) {}
+                : _aspect(aspect), _explicitFormat(RenderCore::Format(0)) {}
             FormatFilter(Format explicitFormat) : _aspect(UndefinedAspect), _explicitFormat(explicitFormat) {}
         };
 
@@ -226,6 +226,13 @@ namespace RenderCore
         SubResourceRange            _arrayLayerRange = All;
         TextureDesc::Dimensionality _dimensionality = TextureDesc::Dimensionality::Undefined;
 		Flags::BitField				_flags = 0;
+
+        TextureViewDesc&& Aspect(Aspect a) { _format = a; return std::move(*this); }
+        TextureViewDesc&& Format(Format f) { _format = f; return std::move(*this); }
+        TextureViewDesc&& MipRange(unsigned min, unsigned count=1) { _mipRange = {min, count}; return std::move(*this); }
+        TextureViewDesc&& ArrayLayerRange(unsigned min, unsigned count=1) { _arrayLayerRange = {min, count}; return std::move(*this); }
+        TextureViewDesc&& Dimensionality(TextureDesc::Dimensionality dim) { _dimensionality = dim; return std::move(*this); }
+        TextureViewDesc&& Flags(Flags::BitField flags) { _flags = flags; return std::move(*this); }
 
         uint64_t GetHash() const;
     };

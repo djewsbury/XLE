@@ -36,4 +36,8 @@ namespace RenderCore { namespace Techniques
 	std::vector<PatchDelegateOutput> BuildSpritePipeline(
 		IteratorRange<const PatchDelegateInput*> patches,
 		IteratorRange<const uint64_t*> iaAttributes);
+
+	std::vector<PatchDelegateOutput> BuildAutoPipeline(
+		IteratorRange<const PatchDelegateInput*> patches,
+		IteratorRange<const uint64_t*> iaAttributes);
 }}

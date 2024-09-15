@@ -850,16 +850,16 @@ namespace RenderCore
             #include "Metal/Detail/DXGICompatibleFormats.h"
         #undef _EXP
 
-        if (!XlEqStringI(name, "D24_UNORM_S8_UINT")) return Format::D24_UNORM_S8_UINT;
-		if (!XlEqStringI(name, "R24_UNORM_X8_TYPELESS")) return Format::R24_UNORM_X8_TYPELESS;
-		if (!XlEqStringI(name, "X24_TYPELESS_G8_UINT")) return Format::X24_TYPELESS_G8_UINT;
-        if (!XlEqStringI(name, "D32_FLOAT_S8_UINT")) return Format::D32_SFLOAT_S8_UINT;
-        if (!XlEqStringI(name, "S8_UINT")) return Format::S8_UINT;
-        if (!XlEqStringI(name, "Matrix4x4")) return Format::Matrix4x4;
-        if (!XlEqStringI(name, "Matrix3x4")) return Format::Matrix3x4;
-		if (!XlEqStringI(name, "R10G10B10A10_SNORM")) return Format::R10G10B10A10_SNORM;
-		if (!XlEqStringI(name, "R12G12B12A4_SNORM")) return Format::R12G12B12A4_SNORM;
-        if (!XlEqStringI(name, "R10G10B10A2_SNORM")) return Format::R10G10B10A2_SNORM;
+        if (XlEqStringI(name, "D24_UNORM_S8_UINT")) return Format::D24_UNORM_S8_UINT;
+		if (XlEqStringI(name, "R24_UNORM_X8_TYPELESS")) return Format::R24_UNORM_X8_TYPELESS;
+		if (XlEqStringI(name, "X24_TYPELESS_G8_UINT")) return Format::X24_TYPELESS_G8_UINT;
+        if (XlEqStringI(name, "D32_FLOAT_S8_UINT")) return Format::D32_SFLOAT_S8_UINT;
+        if (XlEqStringI(name, "S8_UINT")) return Format::S8_UINT;
+        if (XlEqStringI(name, "Matrix4x4")) return Format::Matrix4x4;
+        if (XlEqStringI(name, "Matrix3x4")) return Format::Matrix3x4;
+		if (XlEqStringI(name, "R10G10B10A10_SNORM")) return Format::R10G10B10A10_SNORM;
+		if (XlEqStringI(name, "R12G12B12A4_SNORM")) return Format::R12G12B12A4_SNORM;
+        if (XlEqStringI(name, "R10G10B10A2_SNORM")) return Format::R10G10B10A2_SNORM;
         return {};
     }
 

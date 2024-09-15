@@ -51,6 +51,7 @@ BuildLog.htm
 *.orig
 .vscode/ipch/**
 Working/.vscode/**
+.cache/**
 
 /Foreign/freetype-2.5.0.1/objs/
 /ForeignNonDist/

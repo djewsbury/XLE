@@ -76,6 +76,10 @@ namespace RenderCore { namespace Assets
 	const char* AsString(TextureCompilationRequest::CoordinateSystem);
 	std::optional<TextureCompilationRequest::CoordinateSystem> AsCoordinateSystem(StringSection<> name);
 
+	::Assets::Blob ConvertAndPrepareDDSBlobSync(
+		BufferUploads::IAsyncDataSource& src,
+		Format dstFmt);
+
 	class TextureArtifact
 	{
 	public:

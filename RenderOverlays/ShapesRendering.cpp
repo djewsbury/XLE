@@ -1175,7 +1175,6 @@ namespace RenderOverlays
                     nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_WORLD_POSITION", 1);
 
                 } else if (shaderPatches->GetInterface().HasPatchType("SV_SpritePS"_h)) {
-                    // Prototype for integrating partially procedurally built sprite pipelines
                     if (!nascentDesc) {
                         nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
                         *nascentDesc = *_pipelineDesc[pipelineBase];
@@ -1185,6 +1184,22 @@ namespace RenderOverlays
                     for (const auto& p:shaderPatches->GetInterface().GetPatches())
                         patchesInterface.emplace_back(RenderCore::Techniques::PatchDelegateInput{p._originalEntryPointName, p._originalEntryPointSignature.get(), p._implementsHash});
                     for (auto& out:RenderCore::Techniques::BuildSpritePipeline(patchesInterface, iaAttributes)) {
+                        if (unsigned(out._stage) >= dimof(nascentDesc->_shaders)) continue;
+                        if (!out._resource._patchCollectionExpansions.empty())
+                            out._resource._patchCollection = shaderPatches;
+                        nascentDesc->_shaders[unsigned(out._stage)] = std::move(out._resource);
+                    }
+
+                } else if (shaderPatches->GetInterface().HasPatchType("SV_AutoPS"_h)) {
+                    if (!nascentDesc) {
+                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
+                        *nascentDesc = *_pipelineDesc[pipelineBase];
+                    }
+
+                    std::vector<RenderCore::Techniques::PatchDelegateInput> patchesInterface;
+                    for (const auto& p:shaderPatches->GetInterface().GetPatches())
+                        patchesInterface.emplace_back(RenderCore::Techniques::PatchDelegateInput{p._originalEntryPointName, p._originalEntryPointSignature.get(), p._implementsHash});
+                    for (auto& out:RenderCore::Techniques::BuildAutoPipeline(patchesInterface, iaAttributes)) {
                         if (unsigned(out._stage) >= dimof(nascentDesc->_shaders)) continue;
                         if (!out._resource._patchCollectionExpansions.empty())
                             out._resource._patchCollection = shaderPatches;

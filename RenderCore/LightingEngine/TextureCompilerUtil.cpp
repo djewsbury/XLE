@@ -69,6 +69,14 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::DependencyValidation _depVal;
 	};
 
+	std::shared_ptr<BufferUploads::IAsyncDataSource> MakeAsyncDataSourceFromResource(
+		std::shared_ptr<IThreadContext> threadContext, 
+		std::shared_ptr<IResource> resource,
+		::Assets::DependencyValidation depVal)
+	{
+		return std::make_shared<DataSourceFromResourceSynchronized>(std::move(threadContext), std::move(resource), std::move(depVal));
+	}
+
 	static std::string s_equRectFilterName { "texture-compiler (EquirectFilter)" };
 	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
 
