@@ -30,7 +30,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     TRY {
         std::shared_ptr<void> workingSpace;
-        auto cmdLine = Formatters::MakeCommandLineFormatterFromWin32String(MakeStringSection(lpCmdLine), workingSpace);
+        auto cmdLine = Formatters::MakeCommandLineFormatterFromWin32String(MakeStringSectionNullTerm(lpCmdLine), workingSpace);
         Sample::ExecuteSample(std::make_shared<Sample::NativeModelViewerOverlay>(), cmdLine);
     } CATCH (const std::exception& e) {
         Log(Error) << "Hit top level exception. Aborting program!" << std::endl;

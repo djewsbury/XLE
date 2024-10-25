@@ -572,7 +572,7 @@ namespace PlatformRig
                     if ((_subMenuOpen-1) == unsigned(c) || highlight) {
 
                             //  Draw the text name for this icon under the icon
-                        Coord nameWidth = (Coord)StringWidth(*res->_tabHeadingFont, MakeStringSection(categories[c]));
+                        Coord nameWidth = (Coord)StringWidth(*res->_tabHeadingFont, MakeStringSectionNullTerm(categories[c]));
                         rect = Rect(
                             pt - Coord2(std::max(iconSize[0], nameWidth), 0),
                             pt + Coord2(0, Coord(iconSize[1] + res->_tabHeadingFont->GetFontProperties()._lineHeight)));

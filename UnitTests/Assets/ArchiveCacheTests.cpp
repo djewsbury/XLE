@@ -90,19 +90,19 @@ namespace UnitTests
 
 	static ::Assets::DependentFileState s_depFileStatesObj1[] {
 		::Assets::DependentFileState {
-			MakeStringSection("imaginary-file-one"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
+			MakeStringSectionLiteral("imaginary-file-one"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
 		},
 		::Assets::DependentFileState {
-			MakeStringSection("imaginary-file-two"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
+			MakeStringSectionLiteral("imaginary-file-two"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
 		}
 	};
 
 	static ::Assets::DependentFileState s_depFileStatesObj2[] {
 		::Assets::DependentFileState {
-			MakeStringSection("imaginary-file-three"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
+			MakeStringSectionLiteral("imaginary-file-three"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
 		},
 		::Assets::DependentFileState {
-			MakeStringSection("imaginary-file-four"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
+			MakeStringSectionLiteral("imaginary-file-four"), 0ull, ::Assets::FileSnapshot::State::DoesNotExist
 		}
 	};
 

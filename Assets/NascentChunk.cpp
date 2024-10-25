@@ -31,7 +31,7 @@ namespace Assets
 
 	Blob AsBlob(const char* str)
 	{
-		return AsBlob(MakeStringSection(str));
+		return AsBlob(MakeStringSectionNullTerm(str));
 	}
 
 	std::string AsString(const Blob& blob)

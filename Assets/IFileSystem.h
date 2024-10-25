@@ -264,8 +264,8 @@ namespace Assets
 		static std::shared_ptr<IFileSystem> GetFileSystemPtr(FileSystemId id);
 		static std::basic_string<utf8> GetMountPoint(FileSystemId id);
 
-		static FileSystemWalker BeginWalk(StringSection<utf8> initialSubDirectory = "");
-		static FileSystemWalker BeginWalk(IteratorRange<const FileSystemId*> fileSystems, StringSection<utf8> initialSubDirectory = "");
+		static FileSystemWalker BeginWalk(StringSection<utf8> initialSubDirectory = {});
+		static FileSystemWalker BeginWalk(IteratorRange<const FileSystemId*> fileSystems, StringSection<utf8> initialSubDirectory = {});
 
 		static const std::shared_ptr<MountingTree>& GetMountingTree();
 		static const std::shared_ptr<IFileSystem>& GetDefaultFileSystem();
@@ -291,7 +291,7 @@ namespace Assets
 	T1(CharType) IFileSystem::IOReason TryMonitor(IFileSystem& fs, FileSnapshot&, StringSection<CharType> fn, const std::shared_ptr<IFileMonitor>& evnt);
 	T1(CharType) IFileSystem::IOReason TryFakeFileChange(IFileSystem& fs, StringSection<CharType> fn);
 	T1(CharType) FileDesc TryGetDesc(IFileSystem& fs, StringSection<CharType> fn);
-	FileSystemWalker BeginWalk(const std::shared_ptr<ISearchableFileSystem>& fs, StringSection<> initialSubDirectory = "");
+	FileSystemWalker BeginWalk(const std::shared_ptr<ISearchableFileSystem>& fs, StringSection<> initialSubDirectory = {});
 
 	inline bool operator==(const FileSnapshot& lhs, const FileSnapshot& rhs)
 	{

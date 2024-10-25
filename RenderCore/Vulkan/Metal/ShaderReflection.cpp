@@ -34,11 +34,11 @@ namespace RenderCore { namespace Metal_Vulkan
         // Our shader path prepends "in_" infront of the semantic name
         // when generating a variable name. Remove it before we make a hash.
         // Alternatively, the HLSL -> spirv compiler prepends "in.var.", and we should remove that
-        if (XlBeginsWith(name, MakeStringSection("in_")))
+        if (XlBeginsWith(name, MakeStringSectionLiteral("in_")))
             name._start += 3;
-        else if (XlBeginsWith(name, MakeStringSection("in.var.")))
+        else if (XlBeginsWith(name, MakeStringSectionLiteral("in.var.")))
             name._start += 7;
-        else if (XlBeginsWith(name, MakeStringSection("out.var.")))
+        else if (XlBeginsWith(name, MakeStringSectionLiteral("out.var.")))
             name._start += 8;
         while (!name.IsEmpty() && isdigit(*(name._end-1)))
             --name._end;
@@ -76,8 +76,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
             if (opCode == OpName) {
                 // Lookup the name in the list of vertex outputs we're expecting
-                if (XlBeginsWith(MakeStringSection((const char*)&paramStart[1]), "out.var.")) {
-                    auto sem = MakeShaderSemantic(MakeStringSection((const char*)&paramStart[1]));
+                if (XlBeginsWith(MakeStringSectionNullTerm((const char*)&paramStart[1]), "out.var.")) {
+                    auto sem = MakeShaderSemantic(MakeStringSectionNullTerm((const char*)&paramStart[1]));
                     for (auto e=elements.begin(); e!=elements.end(); ++e) {
                         if (XlEqString(sem._name, e->_semanticName) && sem._index == e->_semanticIndex) {
                             bindings.push_back({paramStart[0], AsPointer(e), false});
@@ -265,7 +265,7 @@ namespace RenderCore { namespace Metal_Vulkan
                         auto i = LowerBound(_memberNames, id);
                         if (i == _memberNames.end() || i->first != id)
                             i = _memberNames.insert(i, std::make_pair(id, Name()));
-                        i->second = MakeStringSection((const char*)&paramStart[2]);
+                        i->second = MakeStringSectionNullTerm((const char*)&paramStart[2]);
                     }
                     break;
                 }
@@ -278,7 +278,7 @@ namespace RenderCore { namespace Metal_Vulkan
                     auto i = LowerBound(_names, type);
                     if (i == _names.end() || i->first != type)
                         i = _names.insert(i, std::make_pair(type, Name()));
-                    i->second = MakeStringSection((const char*)&paramStart[1]);
+                    i->second = MakeStringSectionNullTerm((const char*)&paramStart[1]);
                     break;
                 }
 

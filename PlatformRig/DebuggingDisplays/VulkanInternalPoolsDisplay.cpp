@@ -38,7 +38,7 @@ namespace PlatformRig { namespace Overlays
 			if (auto* topBar = context.GetService<ITopBarManager>()) {
 				const char headingString[] = "Vulkan Internal Pools";
 				if (auto* headingFont = _screenHeadingFont->TryActualize()) {
-					auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+					auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSectionNullTerm(headingString)));
 					if (IsGood(rect) && headingFont)
 						DrawText()
 							.Font(**headingFont)

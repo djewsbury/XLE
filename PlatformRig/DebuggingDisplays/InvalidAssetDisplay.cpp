@@ -227,7 +227,7 @@ namespace PlatformRig { namespace Overlays
 		if (auto* topBar = context.GetService<ITopBarManager>()) {
 			const char headingString[] = "Active Compiles";
 			if (auto* headingFont = _headingFont->TryActualize()) {
-				auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+				auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSectionNullTerm(headingString)));
 				if (IsGood(rect) && headingFont)
 					RenderOverlays::DrawText()
 						.Font(**headingFont)
@@ -261,7 +261,7 @@ namespace PlatformRig { namespace Overlays
 			RenderOverlays::DrawText()
 				.Font(**fnt)
 				.Alignment(RenderOverlays::TextAlignment::Center)
-				.Draw(context, layout.Allocate(lineHeight), MakeStringSection(text));
+				.Draw(context, layout.Allocate(lineHeight), MakeStringSectionNullTerm(text));
 		}
 		
 		for (auto op=activeOperations.begin()+std::min(activeOperations.size(), (size_t)_offset); op!=activeOperations.end(); ++op) {

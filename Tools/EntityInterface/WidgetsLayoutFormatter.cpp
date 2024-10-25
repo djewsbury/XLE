@@ -79,7 +79,7 @@ namespace EntityInterface
 				if (width != _cachedWidth) {
 					_cachedWidth = width;
 					VLA(char, buffer, _originalLabel.size()+1);
-					_fitWidth = StringEllipsisDoubleEnded(buffer, _originalLabel.size()+1, fnt, MakeStringSection(_originalLabel), MakeStringSection("/\\"), (float)width);
+					_fitWidth = StringEllipsisDoubleEnded(buffer, _originalLabel.size()+1, fnt, MakeStringSection(_originalLabel), MakeStringSectionLiteral("/\\"), (float)width);
 					_fitLabel = buffer;
 				}
 			}

@@ -72,7 +72,7 @@ namespace Utility
 		void			RemoveParameter(ParameterName name);
 
         // avoid ambiguity
-        void            SetParameter(StringSection<utf8> name, const char* stringData) { SetParameter(name, MakeStringSection(stringData)); }
+        void            SetParameter(StringSection<utf8> name, const char* stringData) { SetParameter(name, MakeStringSectionNullTerm(stringData)); }
         
         ////////////////////////////////////////////////////////////////////////////////////////
             //      G E T                                                   //

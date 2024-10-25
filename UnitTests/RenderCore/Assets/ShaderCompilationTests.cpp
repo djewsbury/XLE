@@ -137,7 +137,7 @@ namespace UnitTests
 				REQUIRE(collection.first->GetAssetState() == ::Assets::AssetState::Invalid);
 				auto errorLog = ::Assets::AsString(::Assets::GetErrorMessage(*collection.first));
 				INFO(errorLog);
-				REQUIRE(XlFindString(errorLog, MakeStringSection("Intentional compilation error")));
+				REQUIRE(XlFindString(errorLog, MakeStringSectionLiteral("Intentional compilation error")));
 			}
 		}
 

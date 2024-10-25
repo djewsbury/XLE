@@ -68,7 +68,7 @@ namespace Utility
 	template<>
         void ParameterBox::SetParameter(StringSection<utf8> name, const utf8* value)
     {
-        SetParameter(name, MakeStringSection(value));
+        SetParameter(name, MakeStringSectionNullTerm(value));
     }
 
     uint8_t* ValueTableOffset(SerializableVector<uint8_t>& values, size_t offset)

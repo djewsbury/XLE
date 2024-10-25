@@ -101,7 +101,7 @@ namespace UnitTests
 			// We can declare a non-existant file as one of our dependencies. This is like saying that 
 			// the compile would be invalidated if this file appeared at a later time
 			std::vector<::Assets::DependentFileState> dependencies {
-				::Assets::DependentFileState{MakeStringSection("fake-file-state"), 0, ::Assets::FileSnapshot::State::DoesNotExist}
+				::Assets::DependentFileState{MakeStringSectionLiteral("fake-file-state"), 0, ::Assets::FileSnapshot::State::DoesNotExist}
 			};
 			return ::Assets::GetDepValSys().Make(dependencies);
 		}
@@ -617,7 +617,7 @@ namespace UnitTests
 		auto initializerPack = ::Assets::InitializerPack{
 			std::string{"SomeName"},
 			"String0",
-			MakeStringSection("String1"),
+			MakeStringSectionLiteral("String1"),
 			34,
 			complexInitializer};
 
@@ -626,7 +626,7 @@ namespace UnitTests
 		// auto initializerPack2 = ::Assets::InitializerPack{P};
 
 		Formatters::TextInputFormatter<> fmttr {
-			MakeStringSection(R"(
+			MakeStringSectionLiteral(R"(
 			Something=~
 				A=~
 					C;D;B

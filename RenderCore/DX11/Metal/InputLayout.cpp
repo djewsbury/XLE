@@ -36,7 +36,7 @@ namespace RenderCore { namespace Metal_DX11
 		auto hresult = reflection.GetDesc(&shaderDesc);
 		assert(SUCCEEDED(hresult));
 
-		auto systemValuePrefix = MakeStringSection("SV_");
+		auto systemValuePrefix = MakeStringSectionLiteral("SV_");
 
 		bool allAttributeBound = true;
 		for (unsigned c=0; c<shaderDesc.InputParameters; ++c) {
@@ -93,7 +93,7 @@ namespace RenderCore { namespace Metal_DX11
 		D3D11_SHADER_DESC shaderDesc;
 		auto hresult = reflection.GetDesc(&shaderDesc);
 		assert(SUCCEEDED(hresult));
-		auto systemValuePrefix = MakeStringSection("SV_");
+		auto systemValuePrefix = MakeStringSectionLiteral("SV_");
 		for (unsigned p=0;p<shaderDesc.InputParameters; ++p) {
 			D3D11_SIGNATURE_PARAMETER_DESC desc;
 			hresult = reflection.GetInputParameterDesc(p, &desc);

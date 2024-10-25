@@ -835,7 +835,7 @@ namespace Utility
 
                             if (expressionSubstitution) {
                                 #if defined(_DEBUG)
-                                    if (XlEqStringI(directive._value, "define") && XlEndsWith(symbol._value, MakeStringSection("_H"))) {
+                                    if (XlEqStringI(directive._value, "define") && XlEndsWith(symbol._value, MakeStringSectionLiteral("_H"))) {
                                         std::cout << "Suspicious define for variable " << symbol._value << " found" << std::endl;
                                     }
                                 #endif

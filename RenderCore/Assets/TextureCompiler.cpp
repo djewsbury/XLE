@@ -586,7 +586,7 @@ namespace RenderCore { namespace Assets
 			}
 
 			if (opHelper)
-				opHelper.SetMessage(Concatenate("Compressing to pixel format ", MakeStringSection(AsString(request._format))));
+				opHelper.SetMessage(Concatenate("Compressing to pixel format ", AsString(request._format)));
 
 			auto destinationBlob = ConvertAndPrepareDDSBlobSync(*srcPkt, request._format);
 

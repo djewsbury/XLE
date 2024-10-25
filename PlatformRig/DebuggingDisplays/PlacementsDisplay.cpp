@@ -391,7 +391,7 @@ namespace PlatformRig { namespace Overlays
 				if (content.Width() != attachedData->_cachedWidth) {
 					attachedData->_cachedWidth = content.Width();
 					char buffer[MaxPath];
-					auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), (float)content.Width());
+					auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(attachedData->_originalLabel), MakeStringSectionLiteral("/\\"), (float)content.Width());
 					attachedData->_fitLabel = buffer;
 				}
 				DrawText().Font(*font).Alignment(TextAlignment::Right).Draw(draw.GetContext(), content, attachedData->_fitLabel);
@@ -403,7 +403,7 @@ namespace PlatformRig { namespace Overlays
 						auto* defaultFonts = CommonWidgets::Styler::TryGetDefaultFontsBox();
 						assert(defaultFonts);
 						char buffer[MaxPath];
-						auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *defaultFonts->_buttonFont, MakeStringSection(attachedData->_originalLabel), MakeStringSection("/\\"), width);
+						auto fitWidth = StringEllipsisDoubleEnded(buffer, dimof(buffer), *defaultFonts->_buttonFont, MakeStringSection(attachedData->_originalLabel), MakeStringSectionLiteral("/\\"), width);
 						attachedData->_fitLabel = buffer;
 						return YGSize { fitWidth, defaultFonts->_buttonFont->GetFontProperties()._lineHeight };
 					} else {
@@ -581,7 +581,7 @@ namespace PlatformRig { namespace Overlays
 			_headingFont = ActualizeFont(_staticData->_headingFont);
 			_valueFont = ActualizeFont(_staticData->_valueFont);
 
-			_dotWidth = unsigned(StringWidth(*_valueFont, MakeStringSection("..")) - StringWidth(*_valueFont, MakeStringSection(".")));
+			_dotWidth = unsigned(StringWidth(*_valueFont, MakeStringSectionLiteral("..")) - StringWidth(*_valueFont, MakeStringSectionLiteral(".")));
 		}
 
 	private:
@@ -762,7 +762,7 @@ namespace PlatformRig { namespace Overlays
 			if (auto* topBar = context.GetService<ITopBarManager>()) {
 				const char headingString[] = "Placements Selector";
 				if (auto* headingFont = _headingFont->TryActualize()) {
-					auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+					auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSectionNullTerm(headingString)));
 					if (IsGood(rect) && headingFont)
 						DrawText()
 							.Font(**headingFont)

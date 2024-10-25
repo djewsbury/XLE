@@ -222,7 +222,7 @@ namespace RenderOverlays
 				CopyString(outText, outTextSize, {inText.begin(), inText.begin()+count});
 			}
 
-			return StringWidth(font, MakeStringSection(outText), spaceExtra, outline);
+			return StringWidth(font, MakeStringSectionNullTerm(outText), spaceExtra, outline);
 		} else {
 			CopyString(outText, outTextSize, inText);
 			return x;
@@ -285,7 +285,7 @@ namespace RenderOverlays
 		float leftx = 0.0f, rightx = 0.f;
 
 		// use 4 dots to estimate "..." + some kerning each side
-		auto ellipsisWidth = StringWidth(font, MakeStringSection("...."), spaceExtra, outline);
+		auto ellipsisWidth = StringWidth(font, MakeStringSectionLiteral("...."), spaceExtra, outline);
 
 		auto text = inText;
 		unsigned direction = 0;		// this will prioritize keeping the last token
@@ -425,7 +425,7 @@ namespace RenderOverlays
 		outTextIterator += inText.end() - text.end();
 		*outTextIterator = 0;
 
-		return StringWidth(font, MakeStringSection(outText), spaceExtra, outline);
+		return StringWidth(font, MakeStringSectionNullTerm(outText), spaceExtra, outline);
 	}
 
 	template<typename CharType>
@@ -700,8 +700,8 @@ namespace RenderOverlays
 
 		// divider chars hard coded for now
 		// vscode allows &()+,./;?[]| to break (note curious inconsistency here -- things like !*- don't break)
-		// const auto dividers = MakeStringSection("\t ");
-		constexpr auto dividers = MakeStringSection(U"\t &()+,./;?[]|\xffffffff");
+		// const auto dividers = MakeStringSectionLiteral("\t ");
+		constexpr auto dividers = MakeStringSectionLiteral(U"\t &()+,./;?[]|\xffffffff");
 		bool dividersBreakBefore[] = {true, true, true, true, true, true, false, false, true, false, false, true, true, true, true};
 		static_assert(dimof(dividersBreakBefore) == dividers.size());
 		VLA(bool, glyphDividesBefore, chrsToLookupCount);

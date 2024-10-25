@@ -188,7 +188,7 @@ static const int NonPreprocessorLine0 = 0;
 				&&  !XlEqStringI(splitter.Extension(), "h"))
 				continue;
 
-			auto memBlock = ::Assets::MainFileSystem::TryLoadFileAsBlob(MakeStringSection("xleres/" + i));
+			auto memBlock = ::Assets::MainFileSystem::TryLoadFileAsBlob(MakeStringSectionLiteral("xleres/" + i));
 			const char* flgId = "FunctionLinkingGraph";
 			if (XlFindString(MakeStringSection((const char*)AsPointer(memBlock->begin()), (const char*)AsPointer(memBlock->end())), flgId))
 				continue;

@@ -214,7 +214,7 @@ namespace Utility
 
             operator const CharType*() const    { return (const CharType*)_buffer.Begin(); }
             const CharType* get() const         { return (const CharType*)_buffer.Begin(); }
-            StringSection<CharType> AsStringSection() const { return MakeStringSection(get()); }
+            StringSection<CharType> AsStringSection() const { return MakeStringSectionNullTerm(get()); }
             std::basic_string<CharType> AsString() const { return AsStringSection().AsString(); }
             IteratorRange<CharType*> AsIteratorRange() { return MakeIteratorRange(get(), XlStringEnd(get())); }
             operator StringSection<CharType>() const { return AsStringSection(); }

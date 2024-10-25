@@ -198,7 +198,7 @@ namespace RenderCore { namespace Techniques
 
 	static void ReplaceSelfReference(TechniqueEntry& entry, StringSection<::Assets::ResChar> filename)
 	{
-		auto selfRef = MakeStringSection("<.>");
+		auto selfRef = MakeStringSectionLiteral("<.>");
 		ReplaceInString(entry._vertexShaderName, selfRef, filename);
 		ReplaceInString(entry._pixelShaderName, selfRef, filename);
 		ReplaceInString(entry._geometryShaderName, selfRef, filename);

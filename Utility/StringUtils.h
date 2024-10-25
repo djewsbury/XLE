@@ -207,10 +207,22 @@ namespace Utility
             return StringSection<CharType>(AsPointer(start), AsPointer(end));
         }
 
-    template<typename CharType>
-        constexpr StringSection<CharType> MakeStringSection(const CharType* nullTerm)
+    // There's an awkward ambiguity around char*
+    //  - either it to be a string literal, in a fixed buffer known at compile time
+    //  - or, it could be a null terminated string of unknown length (possibly in a fixed size buffer)
+    // This is made more complicated by limitations of constexpr in c++17
+    // Though it's less pleasant, it may make sense to require the caller to explicitly select between
+    // one or the other
+    template<typename CharType, int N>
+        constexpr StringSection<CharType> MakeStringSectionLiteral(const CharType (&literal)[N])
         {
-            return StringSection<CharType>(nullTerm);
+            return StringSection<CharType>(literal, literal+N-1);
+        }
+
+    template<typename CharType>
+        CLANG_ONLY(constexpr) StringSection<CharType> MakeStringSectionNullTerm(const CharType* nullTerm)
+        {
+            return StringSection<CharType>(nullTerm, XlStringEnd(nullTerm));
         }
 
     template<typename CharType, typename CT, typename A>

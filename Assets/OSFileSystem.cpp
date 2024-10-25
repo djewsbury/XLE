@@ -87,7 +87,7 @@ namespace Assets
 	{
         auto res = _file.TryOpen(filename, openMode, shareMode);
         if (res == OSServices::Exceptions::IOException::Reason::Success) {
-            _fn = Conversion::Convert<std::basic_string<utf8>>(MakeStringSection(filename));
+            _fn = Conversion::Convert<std::basic_string<utf8>>(MakeStringSectionNullTerm(filename));
         }
         return res;
 	}

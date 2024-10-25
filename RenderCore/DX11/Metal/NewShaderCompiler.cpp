@@ -79,7 +79,7 @@ namespace RenderCore { namespace Metal_DX11
 			std::string buffer;
 			buffer.reserve(MaxPath);
 
-			auto inputFilenameAsUtf8 = Conversion::Convert<std::string>(MakeStringSection(pFileName));
+			auto inputFilenameAsUtf8 = Conversion::Convert<std::string>(MakeStringSectionNullTerm(pFileName));
 
 			// We need to do some processing on the filenames here in order for dxcompiler to write reasonable filenames in the debugging info
 			// (ie, so that frame capture tools can do something with them)
@@ -132,7 +132,7 @@ namespace RenderCore { namespace Metal_DX11
 					auto existing = std::find_if(_includeFiles.cbegin(), _includeFiles.cend(),
 						[path](const ::Assets::DependentFileState& depState)
 						{
-							return !XlCompareStringI(MakeStringSection(depState._filename), MakeStringSection(path));
+							return !XlCompareStringI(MakeStringSection(depState._filename), MakeStringSectionNullTerm(path));
 						});
 
 					if (existing == _includeFiles.cend()) {

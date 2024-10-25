@@ -155,13 +155,13 @@ namespace RenderCore
 		if (XlEqStringI(type, "RWBuffer"))
 			return DescriptorType::UnorderedAccessTexelBuffer;
 
-		const char* bufferTypes[] {
-			"StructuredBuffer", "ByteAddressBuffer", "AppendStructuredBuffer",
-			"RWByteAddressBuffer", "RWStructuredBuffer"
+		StringSection<char> bufferTypes[] {
+			MakeStringSectionLiteral("StructuredBuffer"), MakeStringSectionLiteral("ByteAddressBuffer"), MakeStringSectionLiteral("AppendStructuredBuffer"),
+			MakeStringSectionLiteral("RWByteAddressBuffer"), MakeStringSectionLiteral("RWStructuredBuffer")
 		};
 
 		for (unsigned c=0; c<dimof(bufferTypes); ++c)
-			if (XlBeginsWithI(type, MakeStringSection(bufferTypes[c])))
+			if (XlBeginsWithI(type, bufferTypes[c]))
 				return DescriptorType::UnorderedAccessBuffer;
 		
 		if (XlBeginsWithI(type, "sampler"))

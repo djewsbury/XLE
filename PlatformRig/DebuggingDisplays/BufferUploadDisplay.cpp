@@ -225,7 +225,7 @@ namespace PlatformRig { namespace Overlays
         if (auto* topBar = context.GetService<ITopBarManager>()) {
 
             for (const auto& g:GraphTabs::Groups) {
-                auto rect = topBar->Menu(context, StringWidth(*fonts->_font, MakeStringSection(g.first)));
+                auto rect = topBar->Menu(context, StringWidth(*fonts->_font, MakeStringSectionNullTerm(g.first)));
                 if (IsGood(rect)) {
                     auto hash = Hash64(g.first);
                     bool droppedDown = interfaceState.HasMouseOver(hash);
@@ -825,7 +825,7 @@ namespace PlatformRig { namespace Overlays
                     const auto& retire = commandList.Retirement(i2);
                     Description(StringMeldInPlace(buffer), retire._desc);
                     auto name = ColouriseFilename(retire._name);
-                    StringEllipsisDoubleEnded(buffer2, dimof(buffer2), *tableValuesFont, MakeStringSection(name), MakeStringSection("/\\"), (float)headers[2].second);
+                    StringEllipsisDoubleEnded(buffer2, dimof(buffer2), *tableValuesFont, MakeStringSection(name), MakeStringSectionLiteral("/\\"), (float)headers[2].second);
                     bool success = DrawTableEntry(context, layout, MakeIteratorRange(headers),
                         {   std::make_pair("Name", buffer2),
                             std::make_pair("Latency (ms)", XlDynFormatString("%6.2f", float(double(retire._retirementTime-retire._requestTime)*_reciprocalTimerFrequency*1000.))),
@@ -886,7 +886,7 @@ namespace PlatformRig { namespace Overlays
         if (auto* topBar = context.GetService<ITopBarManager>()) {
 
             const char headingString[] = "Buffer Uploads";
-            auto rect = topBar->ScreenTitle(context, layout, StringWidth(*fonts->_font, MakeStringSection(headingString)));
+            auto rect = topBar->ScreenTitle(context, layout, StringWidth(*fonts->_font, MakeStringSectionNullTerm(headingString)));
             DrawText()
                 .Font(*fonts->_font)
                 .Color(ColorB::Black)

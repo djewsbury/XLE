@@ -90,7 +90,7 @@ namespace RenderCore
 		assert(_shader->size() >= sizeof(ShaderHeader));
 		auto& hdr = *(const ShaderHeader*)AsPointer(_shader->begin());
 		assert(hdr._version == ShaderHeader::Version);
-		return MakeStringSection(hdr._identifier);
+		return MakeStringSectionNullTerm(hdr._identifier);
     }
 
     StringSection<>             CompiledShaderByteCode::GetEntryPoint() const
@@ -100,7 +100,7 @@ namespace RenderCore
 		assert(_shader->size() >= sizeof(ShaderHeader));
 		auto& hdr = *(const ShaderHeader*)AsPointer(_shader->begin());
 		assert(hdr._version == ShaderHeader::Version);
-		return MakeStringSection(hdr._entryPoint);
+		return MakeStringSectionNullTerm(hdr._entryPoint);
     }
 
         ////////////////////////////////////////////////////////////

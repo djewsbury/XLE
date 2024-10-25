@@ -457,7 +457,7 @@ namespace RenderCore { namespace Assets
 			if (!unresolvedName.empty()) {
 				char resolvedName[MaxPath];
 				searchRules.ResolveFile(resolvedName, unresolvedName);
-				_resources.SetParameter(b.Name(), MakeStringSection(resolvedName));
+				_resources.SetParameter(b.Name(), MakeStringSectionNullTerm(resolvedName));
 			} else {
 				_resources.SetParameter(b.Name(), MakeStringSection(unresolvedName));
 			}

@@ -325,17 +325,17 @@ namespace UnitTests
             uint32_t parsed = 0;
 
             XlUI32toA(u32, buffer, dimof(buffer), 10);
-            REQUIRE(*FastParseValue(MakeStringSection(buffer), parsed) == '\0');
+            REQUIRE(*FastParseValue(MakeStringSectionNullTerm(buffer), parsed) == '\0');
             REQUIRE(parsed == u32);
-            REQUIRE(*FastParseValue(MakeStringSection(buffer), parsed, 10) == '\0');
+            REQUIRE(*FastParseValue(MakeStringSectionNullTerm(buffer), parsed, 10) == '\0');
             REQUIRE(parsed == u32);
 
             XlUI32toA(u32, buffer, dimof(buffer), 16);
-            REQUIRE(*FastParseValue(MakeStringSection(buffer), parsed, 16) == '\0');
+            REQUIRE(*FastParseValue(MakeStringSectionNullTerm(buffer), parsed, 16) == '\0');
             REQUIRE(parsed == u32);
 
             XlUI32toA(u32, buffer, dimof(buffer), 8);
-            REQUIRE(*FastParseValue(MakeStringSection(buffer), parsed, 8) == '\0');
+            REQUIRE(*FastParseValue(MakeStringSectionNullTerm(buffer), parsed, 8) == '\0');
             REQUIRE(parsed == u32);
         }
 
@@ -345,17 +345,17 @@ namespace UnitTests
             int64_t parsed = 0;
 
             XlI64toA(i64, buffer, dimof(buffer), 10);
-            REQUIRE(*FastParseValue(MakeStringSection(buffer), parsed) == '\0');
+            REQUIRE(*FastParseValue(MakeStringSectionNullTerm(buffer), parsed) == '\0');
             REQUIRE(parsed == i64);
-            REQUIRE(*FastParseValue(MakeStringSection(buffer), parsed, 10) == '\0');
+            REQUIRE(*FastParseValue(MakeStringSectionNullTerm(buffer), parsed, 10) == '\0');
             REQUIRE(parsed == i64);
 
             XlI64toA(i64, buffer, dimof(buffer), 16);
-            REQUIRE(*FastParseValue(MakeStringSection(buffer), parsed, 16) == '\0');
+            REQUIRE(*FastParseValue(MakeStringSectionNullTerm(buffer), parsed, 16) == '\0');
             REQUIRE(parsed == i64);
 
             XlI64toA(i64, buffer, dimof(buffer), 8);
-            REQUIRE(*FastParseValue(MakeStringSection(buffer), parsed, 8) == '\0');
+            REQUIRE(*FastParseValue(MakeStringSectionNullTerm(buffer), parsed, 8) == '\0');
             REQUIRE(parsed == i64);
         }
     }

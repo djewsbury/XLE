@@ -239,7 +239,7 @@ namespace ShaderSourceParser
 					_previewOptions->_variableRestrictions.cbegin(), _previewOptions->_variableRestrictions.cend(),
 					[&p](const std::pair<std::string, std::string>& v) { return XlEqStringI(v.first, p._name); });
 				if (r != _previewOptions->_variableRestrictions.cend()) {
-                     if (XlBeginsWith(MakeStringSection(r->second), MakeStringSection("Function:"))) {
+                     if (XlBeginsWith(MakeStringSection(r->second), MakeStringSectionLiteral("Function:"))) {
                             // This is actually a function name. It would be great if we could chose to
                             // run this function in the VS or PS, dependant on the parameters.
                         _buildSystemFunctions[index] = r->second.substr(9);

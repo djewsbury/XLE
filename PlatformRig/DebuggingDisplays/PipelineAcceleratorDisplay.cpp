@@ -174,7 +174,7 @@ namespace PlatformRig { namespace Overlays
 
 	static std::string WordWrapString(const RenderOverlays::Font& fnt, StringSection<> str, float maxWidth)
 	{
-		return StringSplitByWidth(fnt, str, maxWidth, MakeStringSection(" \t"), MakeStringSection("")).Concatenate();
+		return StringSplitByWidth(fnt, str, maxWidth, MakeStringSectionLiteral(" \t"), MakeStringSectionLiteral("")).Concatenate();
 	}
 
 	const char* s_tabNames[] = { "1. pipeline-accelerators", "2. sequencer-configs", "3. stats" };
@@ -189,7 +189,7 @@ namespace PlatformRig { namespace Overlays
 		if (auto* topBar = context.GetService<ITopBarManager>()) {
 			const char headingString[] = "Pipeline Accelerators";
 			if (auto* headingFont = _screenHeadingFont->TryActualize()) {
-				auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+				auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSectionNullTerm(headingString)));
 				if (IsGood(rect) && headingFont)
 					DrawText()
 						.Font(**headingFont)
@@ -228,7 +228,7 @@ namespace PlatformRig { namespace Overlays
 		if (auto* tabLabelsFont = _tabLabelsFont->TryActualize()) {
 			unsigned labelWidths[dimof(s_tabNames)];
 			for (unsigned c=0; c<dimof(s_tabNames); ++c)
-				labelWidths[c] = (unsigned)StringWidth(**tabLabelsFont, MakeStringSection(s_tabNames[c]));
+				labelWidths[c] = (unsigned)StringWidth(**tabLabelsFont, MakeStringSectionNullTerm(s_tabNames[c]));
 			Rect tabLabelRects[dimof(s_tabNames)];
 			ComboBar(MakeIteratorRange(tabLabelRects), context, layout.AllocateFullWidth(2*lineHeight), MakeIteratorRange(labelWidths), _tab);
 			for (unsigned c=0; c<dimof(s_tabNames); ++c)

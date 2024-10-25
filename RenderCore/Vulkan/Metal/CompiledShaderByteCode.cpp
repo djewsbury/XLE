@@ -407,7 +407,7 @@ namespace RenderCore { namespace Metal_Vulkan
 	EvaluateBindingData::EvaluateBindingData(const VulkanCompilerConfiguration& cfg, StringSection<> defines)
 	: _compilerCfg(&cfg)
 	{
-		auto starter = MakeStringSection("SO_OFFSETS=");
+		auto starter = MakeStringSectionLiteral("SO_OFFSETS=");
 		auto offsets = XlFindString(defines, starter);
 		if (offsets && offsets != defines.end()) {
 			offsets += starter.size();

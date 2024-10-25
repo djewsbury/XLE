@@ -144,7 +144,7 @@ namespace OSServices
 			targetName.header.size = sizeof(targetName);
 			auto hres = DisplayConfigGetDeviceInfo(&targetName.header);
 			if (SUCCEEDED(hres)) {
-				sourceDisplay._friendlyMonitorName = Conversion::Convert<std::string>(MakeStringSection(targetName.monitorFriendlyDeviceName));
+				sourceDisplay._friendlyMonitorName = Conversion::Convert<std::string>(MakeStringSectionNullTerm(targetName.monitorFriendlyDeviceName));
 				sourceDisplay._manufacturerAndProductCodes = {targetName.edidManufactureId, targetName.edidProductCodeId};
 				sourceDisplay._targetDeviceName = targetName.monitorDevicePath;
 			}
@@ -217,8 +217,8 @@ namespace OSServices
 			WindowsDisplay display;
 			display._deviceName = adapterInfo.DeviceName;
 			display._advancedColorSupported = false;		// can never query this via this path
-			display._friendlyMonitorName = Conversion::Convert<std::string>(MakeStringSection(monitorInfo.DeviceString));
-			display._friendlyAdapterName = Conversion::Convert<std::string>(MakeStringSection(adapterInfo.DeviceString));
+			display._friendlyMonitorName = Conversion::Convert<std::string>(MakeStringSectionNullTerm(monitorInfo.DeviceString));
+			display._friendlyAdapterName = Conversion::Convert<std::string>(MakeStringSectionNullTerm(adapterInfo.DeviceString));
 			// can't get _adapterDeviceName & _targetDeviceName that is compatible with the CCD path
 			// manifacturer & luid codes also missing
 

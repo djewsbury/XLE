@@ -111,7 +111,7 @@ namespace OSServices
                 Throw(Exceptions::IOException(Exceptions::IOException::Reason::Complex, "Text oriented file modes not supported"));
 
             case 'c':
-                if (XlBeginsWith(MakeStringSection(i), MakeStringSection("ccs=")))
+                if (XlBeginsWith(MakeStringSectionNullTerm(i), MakeStringSectionLiteral("ccs=")))
                     Throw(Exceptions::IOException(Exceptions::IOException::Reason::Complex, "Encoded text file modes supported"));
                 // else, fall through...
 
@@ -215,7 +215,7 @@ namespace OSServices
 			underlyingOpenMode._underlyingFlags, nullptr);
 	
 		if (handle == INVALID_HANDLE_VALUE)
-			ThrowFileOpenException(MakeStringSection(filename), openMode);
+			ThrowFileOpenException(MakeStringSectionNullTerm(filename), openMode);
 
 		_file = (void*)handle;
 	}
@@ -237,7 +237,7 @@ namespace OSServices
 			underlyingOpenMode._underlyingFlags, nullptr);
 
 		if (handle == INVALID_HANDLE_VALUE)
-			ThrowFileOpenException(MakeStringSection(filename), openMode);
+			ThrowFileOpenException(MakeStringSectionNullTerm(filename), openMode);
 
 		_file = (void*)handle;
 	}
@@ -527,7 +527,7 @@ namespace OSServices
 			do {
 				bool isDir = !!(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 				if (filter & (1<<unsigned(isDir)))
-					hashNames.push_back(HashFilename(MakeStringSection(findData.cFileName), hashingFnRules));
+					hashNames.push_back(HashFilename(MakeStringSectionNullTerm(findData.cFileName), hashingFnRules));
 			} while (FindNextFileA(findHandle, &findData));
 			FindClose(findHandle);
 		}
@@ -662,14 +662,14 @@ namespace OSServices
 			nullptr, underlyingOpenMode._creationDisposition, 
 			underlyingOpenMode._underlyingFlags, nullptr);
 		if (fileHandle == INVALID_HANDLE_VALUE)
-			ThrowFileOpenException(MakeStringSection(filename), openMode);
+			ThrowFileOpenException(MakeStringSectionNullTerm(filename), openMode);
 
 		unsigned pageAccessMode = (underlyingOpenMode._underlyingAccessMode & FILE_WRITE_DATA) ? PAGE_READWRITE : PAGE_READONLY;
 		auto mapping = CreateFileMappingA(
 			fileHandle, nullptr, pageAccessMode, DWORD(size>>32), DWORD(size), nullptr);
 		if (!mapping || mapping == INVALID_HANDLE_VALUE) {
 			CloseHandle(fileHandle);
-			ThrowFileOpenException(MakeStringSection(filename), openMode);
+			ThrowFileOpenException(MakeStringSectionNullTerm(filename), openMode);
 		}
 
 		unsigned mapAccess = (underlyingOpenMode._underlyingAccessMode & FILE_WRITE_DATA) ? FILE_MAP_WRITE : FILE_MAP_READ;
@@ -677,7 +677,7 @@ namespace OSServices
 		if (!mappingStart) {
 			CloseHandle(mapping);
 			CloseHandle(fileHandle);
-			ThrowFileOpenException(MakeStringSection(filename), openMode);
+			ThrowFileOpenException(MakeStringSectionNullTerm(filename), openMode);
 		}
 
 		_data = MakeIteratorRange(mappingStart, PtrAdd(mappingStart, GetFileSize(fileHandle)));
@@ -706,14 +706,14 @@ namespace OSServices
 			nullptr, underlyingOpenMode._creationDisposition, 
 			underlyingOpenMode._underlyingFlags, nullptr);
 		if (fileHandle == INVALID_HANDLE_VALUE)
-			ThrowFileOpenException(MakeStringSection(filename), openMode);
+			ThrowFileOpenException(MakeStringSectionNullTerm(filename), openMode);
 
 		unsigned pageAccessMode = (underlyingOpenMode._underlyingAccessMode & FILE_WRITE_DATA) ? PAGE_READWRITE : PAGE_READONLY;
 		auto mapping = CreateFileMappingA(
 			fileHandle, nullptr, pageAccessMode, DWORD(size>>32), DWORD(size), nullptr);
 		if (!mapping || mapping == INVALID_HANDLE_VALUE) {
 			CloseHandle(fileHandle);
-			ThrowFileOpenException(MakeStringSection(filename), openMode);
+			ThrowFileOpenException(MakeStringSectionNullTerm(filename), openMode);
 		}
 
 		unsigned mapAccess = (underlyingOpenMode._underlyingAccessMode & FILE_WRITE_DATA) ? FILE_MAP_WRITE : FILE_MAP_READ;
@@ -721,7 +721,7 @@ namespace OSServices
 		if (!mappingStart) {
 			CloseHandle(mapping);
 			CloseHandle(fileHandle);
-			ThrowFileOpenException(MakeStringSection(filename), openMode);
+			ThrowFileOpenException(MakeStringSectionNullTerm(filename), openMode);
 		}
 
 		_data = MakeIteratorRange(mappingStart, PtrAdd(mappingStart, GetFileSize(fileHandle)));

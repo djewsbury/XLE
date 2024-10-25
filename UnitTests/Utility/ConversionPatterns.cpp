@@ -112,7 +112,7 @@ namespace UnitTests
         REQUIRE_THROWS(ImpliedTyping::ConvertFullMatch<bool>("nothing").value());
         REQUIRE_THROWS(ImpliedTyping::ConvertFullMatch<bool>("truet").value());
         bool temp = false;
-        auto badConvert = ImpliedTyping::Parse(MakeStringSection("nothing"), MakeOpaqueIteratorRange(temp));
+        auto badConvert = ImpliedTyping::Parse(MakeStringSectionLiteral("nothing"), MakeOpaqueIteratorRange(temp));
         REQUIRE(badConvert._type._type == ImpliedTyping::TypeCat::Void);
 
         CompareConversionPaths("-45", unsigned(-45));

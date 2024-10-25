@@ -567,7 +567,7 @@ namespace Assets
 			if (!attachedStrings.empty()) {
 				TRY {
 					std::unique_ptr<IFileInterface> outputFile;
-					if (TryOpen(outputFile, *_filesystem, MakeStringSection(debugFilename), "wb") == MainFileSystem::IOReason::Success) {
+					if (TryOpen(outputFile, *_filesystem, MakeStringSectionNullTerm(debugFilename), "wb") == MainFileSystem::IOReason::Success) {
 						FileOutputStream stream(std::move(outputFile));
 						Formatters::TextOutputFormatter formatter(stream);
 						for (const auto&i:attachedStrings)
@@ -611,7 +611,7 @@ namespace Assets
 					// Write the new .deps file
 			TRY {
 				std::unique_ptr<IFileInterface> outputFile;
-				if (TryOpen(outputFile, *_filesystem, MakeStringSection(depsFilename), "wb") == MainFileSystem::IOReason::Success) {
+				if (TryOpen(outputFile, *_filesystem, MakeStringSectionNullTerm(depsFilename), "wb") == MainFileSystem::IOReason::Success) {
 					FileOutputStream stream(std::move(outputFile));
 					Formatters::TextOutputFormatter formatter(stream);
 					for (auto i=depsData.begin(); i!=depsData.end();) {
@@ -628,7 +628,7 @@ namespace Assets
 								formatter.WriteKeyedValue(MakeStringSection(i2->second._filename), "shadowed");*/
 							} else {
 								XlUI64toA(i2->second._snapshot._modificationTime, buffer, dimof(buffer), 16);
-								formatter.WriteKeyedValue(MakeStringSection(i2->second._filename), MakeStringSection(buffer));
+								formatter.WriteKeyedValue(MakeStringSection(i2->second._filename), MakeStringSectionNullTerm(buffer));
 							}
 						}
 						formatter.EndElement(ele);

@@ -352,7 +352,7 @@ namespace RenderCore { namespace Techniques
         assert(attach->_desc._textureDesc._width > 0);
         assert(attach->_desc._textureDesc._height > 0);
         assert(attach->_desc._textureDesc._depth > 0);
-        attach->_resource = _device->CreateResource(attach->_desc, attach->_name.empty() ? MakeStringSection("attachment-pool") : MakeStringSection(attach->_name));
+        attach->_resource = _device->CreateResource(attach->_desc, attach->_name.empty() ? MakeStringSectionLiteral("attachment-pool") : MakeStringSection(attach->_name));
         attach->_pendingCompleteInitialization = true;
         return attach->_resource != nullptr;
     }

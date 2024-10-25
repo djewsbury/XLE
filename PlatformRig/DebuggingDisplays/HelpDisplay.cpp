@@ -27,7 +27,7 @@ namespace PlatformRig { namespace Overlays
 			if (auto* topBar = context.GetService<ITopBarManager>()) {
 				const char headingString[] = "Key Binding Help";
 				if (auto* headingFont = _headingFont->TryActualize()) {
-					auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSection(headingString)));
+					auto rect = topBar->ScreenTitle(context, layout, StringWidth(**headingFont, MakeStringSectionNullTerm(headingString)));
 					if (IsGood(rect) && headingFont)
 						DrawText()
 							.Font(**headingFont)
@@ -176,7 +176,7 @@ namespace PlatformRig { namespace Overlays
 						// will typically go outside of it's parent area... so we're just working around it by artificially reducing the 
 						// max available width
 						const float graceWidth = 256;
-						auto split = StringSplitByWidth(*fnt, MakeStringSection(dynamicData->_baseString), std::max(0.f, width - graceWidth), MakeStringSection(" \t"), MakeStringSection(""));
+						auto split = StringSplitByWidth(*fnt, MakeStringSection(dynamicData->_baseString), std::max(0.f, width - graceWidth), MakeStringSectionLiteral(" \t"), MakeStringSectionLiteral(""));
 						dynamicData->_wordWrappedString = split.Concatenate();
 						return YGSize {
 							(float)split._maxLineWidth,

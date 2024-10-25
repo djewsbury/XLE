@@ -112,13 +112,13 @@ namespace Conversion
     template<> uint64_t Convert(const std::basic_string<utf8>& input)       { return Convert<uint64_t>(MakeStringSection(input)); }
     template<> bool Convert(const std::basic_string<utf8>& input)           { return Convert<bool>(MakeStringSection(input)); }
     
-    template<> float Convert(const char input[])        { return Convert<float>(MakeStringSection(input)); }
-	template<> double Convert(const char input[])       { return Convert<double>(MakeStringSection(input)); }
-    template<> uint32_t Convert(const char input[])     { return Convert<uint32_t>(MakeStringSection(input)); }
-    template<> int32_t Convert(const char input[])      { return Convert<int32_t>(MakeStringSection(input)); }
-    template<> int64_t Convert(const char input[])      { return Convert<int64_t>(MakeStringSection(input)); }
-    template<> uint64_t Convert(const char input[])     { return Convert<uint64_t>(MakeStringSection(input)); }
-    template<> bool Convert(const char input[])         { return Convert<bool>(MakeStringSection(input)); }
+    template<> float Convert(const char input[])        { return Convert<float>(MakeStringSectionNullTerm(input)); }
+	template<> double Convert(const char input[])       { return Convert<double>(MakeStringSectionNullTerm(input)); }
+    template<> uint32_t Convert(const char input[])     { return Convert<uint32_t>(MakeStringSectionNullTerm(input)); }
+    template<> int32_t Convert(const char input[])      { return Convert<int32_t>(MakeStringSectionNullTerm(input)); }
+    template<> int64_t Convert(const char input[])      { return Convert<int64_t>(MakeStringSectionNullTerm(input)); }
+    template<> uint64_t Convert(const char input[])     { return Convert<uint64_t>(MakeStringSectionNullTerm(input)); }
+    template<> bool Convert(const char input[])         { return Convert<bool>(MakeStringSectionNullTerm(input)); }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

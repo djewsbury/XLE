@@ -35,8 +35,8 @@ namespace ColladaConversion
         // for an indicator that it includes a LOD number.
         // We're looking for something like "$lod" or "_lod". This should be followed by an integer,
         // and with an underscore following.
-        if (    XlBeginsWithI(node.GetName(), MakeStringSection("_lod"))
-            ||  XlBeginsWithI(node.GetName(), MakeStringSection("$lod"))) {
+        if (    XlBeginsWithI(node.GetName(), MakeStringSectionLiteral("_lod"))
+            ||  XlBeginsWithI(node.GetName(), MakeStringSectionLiteral("$lod"))) {
 
             auto nextSection = MakeStringSection(node.GetName().begin()+4, node.GetName().end());
             uint32 lod = 0;

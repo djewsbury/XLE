@@ -89,7 +89,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				// is the name we use for binding
 				// By contrast, when using the DX HLSL compiler, the variable will have the name
 				// "<cbuffername>" and the type will be "<cbuffername>.type"
-				if (XlEndsWith(result._name, MakeStringSection("_inst"))) {
+				if (XlEndsWith(result._name, MakeStringSectionLiteral("_inst"))) {
 					auto n = LowerBound(reflection._names, typeToLookup);
 					if (n != reflection._names.end() && n->first == typeToLookup)
 						result._name = n->second;
