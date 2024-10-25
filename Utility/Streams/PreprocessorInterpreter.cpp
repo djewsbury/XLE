@@ -1003,10 +1003,10 @@ namespace Utility
 			if (prevInitialized) {
 				((EvaluatedValue*)PtrAdd(evalBlock.begin(), valuesOffset))[tokenIdx] = std::move(value);
 			} else {
-				#pragma macro_push("new")
+				#pragma push_macro("new")
 				#undef new
 				new(PtrAdd(evalBlock.begin(), valuesOffset+sizeof(EvaluatedValue)*tokenIdx)) EvaluatedValue(std::move(value));
-				#pragma macro_pop("new")
+				#pragma pop_macro("new")
 			}
 		}
 
