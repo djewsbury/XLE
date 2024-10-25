@@ -6,6 +6,7 @@
 
 #include "InputTranslator.h"
 #include "../../Utility/PtrUtils.h"
+#include <optional>
 
 #include "IncludeWindows.h"
 

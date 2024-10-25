@@ -11,6 +11,7 @@
 #include "StringUtils.h"
 #include "BitUtils.h"
 #include "Threading/Mutex.h"
+#include "../Core/Exceptions.h"
 #include <vector>
 #include <algorithm>
 #include <memory>
@@ -877,7 +878,7 @@ namespace Utility
 
 			#pragma push_macro("new")
 			#undef new
-			for (unsigned _count=0; _count<copyFrom._count; ++_count) {
+			for (unsigned c=0; c<copyFrom._count; ++c) {
 				auto& src = ((const Type*)copyFrom._objects)[Internal::Modulo<Count>(copyFrom._start+c)];
 				new(_objects + sizeof(Type)*c) Type{src};
 			}
@@ -1298,10 +1299,10 @@ namespace Utility
 			}
 		#endif
 
-		inline uint64_t nthset_pos_of_nth_bit2(uint64_t X, uint64_t bit)
+		inline unsigned nthset_pos_of_nth_bit2(uint64_t X, uint64_t bit)
 		{
 			// Requires that __builtin_popcountll(X) > bit.
-			assert(__builtin_popcountll(X) > bit);
+			assert(popcount(X) > bit);
 
 			// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
 			// relatively easy to understand solution: we binary search down to a 4 bit range
@@ -1318,25 +1319,25 @@ namespace Utility
 								{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3}};
 			bool test;
 			pos = 0;
-			pop = __builtin_popcount(X & 0xffffffffUL);
+			pop = popcount(X & 0xffffffffUL);
 			test = pop <= bit;
 			bit -= test*pop;
 			testx = test*32;
 			X >>= testx;
 			pos += testx;
-			pop = __builtin_popcount(X & 0xffffUL);
+			pop = popcount(X & 0xffffUL);
 			test = pop <= bit;
 			bit -= test*pop;
 			testx = test*16;
 			X >>= testx;
 			pos += testx;
-			pop = __builtin_popcount(X & 0xffUL);
+			pop = popcount(X & 0xffUL);
 			test = pop <= bit;
 			bit -= test*pop;
 			testx = test*8;
 			X >>= testx;
 			pos += testx;
-			pop = __builtin_popcount(X & 0xfUL);
+			pop = popcount(X & 0xfUL);
 			test = pop <= bit;
 			bit -= test*pop;
 			testx = test*4;
@@ -1460,7 +1461,7 @@ namespace Utility
 		// Ie, we're advancing an arbitrary number of sparse sequence values
 		uint64_t maskPriorBits = (1ull << uint64_t(_sparseValueOffset)) - 1ull;
 		uint64_t remainingBits = _entry->_allocationFlags & ~maskPriorBits;
-		auto remainingPopCount = __builtin_popcountll(remainingBits);
+		auto remainingPopCount = popcount(remainingBits);
 
 		if (offset < remainingPopCount) {
 			// we're advancing within the same range
@@ -1470,7 +1471,7 @@ namespace Utility
 			_sparseValueOffset = 64;
 			++_entry;
 			while (_entry->_allocationFlags) {
-				remainingPopCount = __builtin_popcountll(_entry->_allocationFlags);
+				remainingPopCount = popcount(_entry->_allocationFlags);
 				if (offset < remainingPopCount) {
 					_sparseValueOffset = Internal::nthset(_entry->_allocationFlags, offset);
 					assert(_sparseValueOffset < 64);

@@ -3,8 +3,11 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "OperationContext.h"
+#include "../Utility/PtrUtils.h"
 #include "../Core/Exceptions.h"
 #include <chrono>
+#include <optional>
+#include <cassert>
 
 namespace Assets
 {

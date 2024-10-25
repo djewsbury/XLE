@@ -22,7 +22,7 @@ namespace RenderCore
 }
 
 namespace Assets { class Services; }
-namespace RenderCore { namespace BufferUploads { class IManager; class ManagerDesc; }}
+namespace RenderCore { namespace BufferUploads { class IManager; struct ManagerDesc; }}
 namespace Utility { class HierarchicalCPUProfiler; }
 
 namespace RenderCore { namespace Techniques

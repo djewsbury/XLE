@@ -8,6 +8,7 @@
 
 #include "Metal/Detail/DXGIFormatValues.h"         // maintain format number compatibility with DXGI whenever possible
 #include "../Utility/StringUtils.h"
+#include <optional>
 
 namespace Utility { namespace ImpliedTyping { class TypeDesc; } }
 

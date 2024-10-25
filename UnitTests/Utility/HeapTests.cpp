@@ -306,10 +306,10 @@ namespace UnitTests
         }
     #endif
 
-    static uint64_t pos_of_nth_bit2(uint64_t X, uint64_t bit)
+    static unsigned pos_of_nth_bit2(uint64_t X, uint64_t bit)
     {
         // Requires that __builtin_popcountll(X) > bit.
-        if (__builtin_popcountll(X) <= bit) return 64u;
+        if (popcount(X) <= bit) return 64u;
 
         // https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
         // relatively easy to understand solution: we binary search down to a 4 bit range
@@ -324,25 +324,25 @@ namespace UnitTests
                             {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3}};
         bool test;
         pos = 0;
-        pop = __builtin_popcount(X & 0xffffffffUL);
+        pop = popcount(X & 0xffffffffUL);
         test = pop <= bit;
         bit -= test*pop;
         testx = test*32;
         X >>= testx;
         pos += testx;
-        pop = __builtin_popcount(X & 0xffffUL);
+        pop = popcount(X & 0xffffUL);
         test = pop <= bit;
         bit -= test*pop;
         testx = test*16;
         X >>= testx;
         pos += testx;
-        pop = __builtin_popcount(X & 0xffUL);
+        pop = popcount(X & 0xffUL);
         test = pop <= bit;
         bit -= test*pop;
         testx = test*8;
         X >>= testx;
         pos += testx;
-        pop = __builtin_popcount(X & 0xfUL);
+        pop = popcount(X & 0xfUL);
         test = pop <= bit;
         bit -= test*pop;
         testx = test*4;
@@ -353,7 +353,7 @@ namespace UnitTests
 
     static unsigned int nth_bit_set_parallelpopcount(uint64_t value, unsigned int n)
     {
-        auto t = __builtin_popcountll(value);
+        auto t = popcount(value);
 
         // Adapted for 64 bits from https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
         // Here, we're using an approach from Bit Twiddling Hacks to find population count in blocks
@@ -417,14 +417,14 @@ namespace UnitTests
 
 			if (mask == bit_isolate) return 8;
 
-			return __builtin_popcountll(mask);
+			return popcount(mask);
 		#else
 
 			int8_t lut[4][16] = {{0,0,1,0,2,0,1,0,3,0,1,0,2,0,1,0},
 								{0,0,0,1,0,2,2,1,0,3,3,1,3,2,2,1},
 								{0,0,0,0,0,0,0,2,0,0,0,3,0,3,3,2},
 								{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3}};
-			auto pop = __builtin_popcount(m & 0xfUL);
+			auto pop = popcount(uint32_t(m & 0xfUL));
 			auto test = pop <= n;
 			n -= test*pop;
 			m >>= test*4;
@@ -435,7 +435,7 @@ namespace UnitTests
 
     static unsigned nth_bit_set_SWAR(uint64_t m, unsigned int n)
     {
-		if (__builtin_popcountll(m) <= n) return 64u;
+		if (popcount(m) <= n) return 64u;
 
         // Adapted from Validark's solution in https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
         // this is a little more evolved and starting to get pretty complicated
@@ -453,7 +453,7 @@ namespace UnitTests
 
         if (mask == bit_isolate) return 64;
 
-        const uint64_t byte_index = __builtin_popcountll(mask) << 3;
+        const uint64_t byte_index = popcount(mask) << 3;
 
         const unsigned prefix_sum = (prefix_sums << 8 >> byte_index) & 0x3f;
         const unsigned target_byte = (m >> byte_index) & 0xff;

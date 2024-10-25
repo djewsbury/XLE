@@ -9,7 +9,6 @@
 #include "Detail/API.h"
 #include "UTFUtils.h"
 #include "PtrUtils.h"	// for AsPointer
-#include "Optional.h"
 #include <string>
 #include <cstring>
 #include <algorithm>

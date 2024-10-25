@@ -74,13 +74,19 @@ namespace RenderCore
 
 	unsigned CalculateSize(IteratorRange<const ConstantBufferElementDesc*> elements);
 
+	#if (__cpp_lib_constexpr_vector >= 201907L) || (COMPILER_ACTIVE == COMPILER_TYPE_CLANG)
+		#define XLE_CONSTEXPR_IN_20 constexpr
+	#else
+		#define XLE_CONSTEXPR_IN_20 inline
+	#endif
+
 	class UniformsStreamInterface
 	{
 	public:
-		constexpr UniformsStreamInterface& BindResourceView(unsigned slot, uint64_t hashName);
-		constexpr UniformsStreamInterface& BindImmediateData(unsigned slot, uint64_t hashName);
-		constexpr UniformsStreamInterface& BindSampler(unsigned slot, uint64_t hashName);
-		constexpr UniformsStreamInterface& BindFixedDescriptorSet(unsigned slot, uint64_t hashName);
+		XLE_CONSTEXPR_IN_20 UniformsStreamInterface& BindResourceView(unsigned slot, uint64_t hashName);
+		XLE_CONSTEXPR_IN_20 UniformsStreamInterface& BindImmediateData(unsigned slot, uint64_t hashName);
+		XLE_CONSTEXPR_IN_20 UniformsStreamInterface& BindSampler(unsigned slot, uint64_t hashName);
+		XLE_CONSTEXPR_IN_20 UniformsStreamInterface& BindFixedDescriptorSet(unsigned slot, uint64_t hashName);
 		
 		UniformsStreamInterface& BindResourceView(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*>);
 		UniformsStreamInterface& BindImmediateData(unsigned slot, uint64_t hashName, IteratorRange<const ConstantBufferElementDesc*>);
@@ -107,7 +113,7 @@ namespace RenderCore
 
 		void Reset();
 
-		UniformsStreamInterface();
+		XLE_CONSTEXPR_IN_20 UniformsStreamInterface();
 		~UniformsStreamInterface();
 
 	////////////////////////////////////////////////////////////////////////
@@ -260,7 +266,7 @@ namespace RenderCore
 	template<typename T0, typename T1, typename T2, typename T3> ImmediateDataStream::ImmediateDataStream(const T0& b0, const T1& b1, const T2& b2, const T3& b3) : ImmediateDataStream(MakeOpaqueIteratorRange(b0), MakeOpaqueIteratorRange(b1), MakeOpaqueIteratorRange(b2), MakeOpaqueIteratorRange(b3)) {}
 
 
-	inline constexpr UniformsStreamInterface& UniformsStreamInterface::BindResourceView(unsigned slot, uint64_t hashName)
+	XLE_CONSTEXPR_IN_20 UniformsStreamInterface& UniformsStreamInterface::BindResourceView(unsigned slot, uint64_t hashName)
 	{
 		if (_resourceViewBindings.size() <= slot)
 			_resourceViewBindings.resize(slot+1);
@@ -270,7 +276,7 @@ namespace RenderCore
 		return *this;
 	}
 
-	inline constexpr UniformsStreamInterface& UniformsStreamInterface::BindImmediateData(unsigned slot, uint64_t hashName)
+	XLE_CONSTEXPR_IN_20 UniformsStreamInterface& UniformsStreamInterface::BindImmediateData(unsigned slot, uint64_t hashName)
 	{
 		if (_immediateDataBindings.size() <= slot)
 			_immediateDataBindings.resize(slot+1);
@@ -280,7 +286,7 @@ namespace RenderCore
 		return *this;
 	}
 
-	inline constexpr UniformsStreamInterface& UniformsStreamInterface::BindSampler(unsigned slot, uint64_t hashName)
+	XLE_CONSTEXPR_IN_20 UniformsStreamInterface& UniformsStreamInterface::BindSampler(unsigned slot, uint64_t hashName)
 	{
 		if (_samplerBindings.size() <= slot)
 			_samplerBindings.resize(slot+1);
@@ -289,7 +295,7 @@ namespace RenderCore
 		return *this;
 	}
 
-	inline constexpr UniformsStreamInterface& UniformsStreamInterface::BindFixedDescriptorSet(unsigned slot, uint64_t hashName)
+	XLE_CONSTEXPR_IN_20 UniformsStreamInterface& UniformsStreamInterface::BindFixedDescriptorSet(unsigned slot, uint64_t hashName)
 	{
 		if (_fixedDescriptorSetBindings.size() <= slot)
 			_fixedDescriptorSetBindings.resize(slot+1);
@@ -299,6 +305,6 @@ namespace RenderCore
 		return *this;
 	}
 
-	inline UniformsStreamInterface::UniformsStreamInterface() : _hash(0) {}
+	XLE_CONSTEXPR_IN_20 UniformsStreamInterface::UniformsStreamInterface() : _hash(0) {}
 	inline UniformsStreamInterface::~UniformsStreamInterface() {}
 }

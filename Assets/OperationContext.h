@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include "../Utility/StringUtils.h"
 #include <cstdint>
 #include <chrono>
+#include <optional>
 
 #if !defined(__CLR_VER)
 	#include "../Utility/Threading/Mutex.h"

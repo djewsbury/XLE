@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "ArithmeticUtils.h"
 #include "../Core/Prefix.h"
 #include "../Core/Types.h"
 #include "Detail/API.h"

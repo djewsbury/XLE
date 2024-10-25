@@ -7,8 +7,6 @@
 #include "../Utility/UTFUtils.h"			// for utf8, utf16
 #include "../Utility/StringUtils.h"			// for StringSection
 #include "../OSServices/RawFS.h"
-#include "../Core/Types.h"
-#include "../Core/Exceptions.h"
 #include <string>
 #include <memory>
 
