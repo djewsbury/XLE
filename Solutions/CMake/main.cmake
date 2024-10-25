@@ -47,7 +47,9 @@ macro(xle_internal_configure_compiler TargetName)
     endif ()
 
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_compile_options(${TargetName} PRIVATE -msse4.1 -mbmi2)
+        target_compile_options(${TargetName} PRIVATE -march=x86-64-v3)
+        target_compile_options(${TargetName} PRIVATE -msse4.1)
+        target_compile_options(${TargetName} PRIVATE -mno-bmi2)     # BMI2 disabled because it's not supported on the Windows for Arm JIT interpreter
 
         # We must use -fPIC to enable relocation for any code that might be linked into a shared library
         # In theory, this might only need to be done for the code that ends up in a shared library. But in

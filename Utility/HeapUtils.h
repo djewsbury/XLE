@@ -1287,13 +1287,71 @@ namespace Utility
 
 	namespace Internal
 	{
+		#if __BMI2__
+			inline unsigned nthset_pdep(uint64_t x, unsigned n)
+			{
+				// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
+				// Note that _pdep_u64 uses BMI2 instruction set
+				// Intel: introduced in Haswell
+				// AMD: before Zen3, _pdep_u64 is microcode and so may not be optimal
+				return _tzcnt_u64(_pdep_u64(1ull << n, x));
+			}
+		#endif
+
+		inline uint64_t nthset_pos_of_nth_bit2(uint64_t X, uint64_t bit)
+		{
+			// Requires that __builtin_popcountll(X) > bit.
+			assert(__builtin_popcountll(X) > bit);
+
+			// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
+			// relatively easy to understand solution: we binary search down to a 4 bit range
+			// and then use a lookup table
+			// We could also use non-lookup table approaches such as binary searching down to
+			// 2 bits
+			// In performance testing, this approach was fastest on a zen4 processor.
+			// Furthermore, it has the benefit of being simple (but it relies on a fast processor implementation of popcount32)
+
+			int32_t testx, pos, pop;
+			int8_t lut[4][16] = {{0,0,1,0,2,0,1,0,3,0,1,0,2,0,1,0},
+								{0,0,0,1,0,2,2,1,0,3,3,1,3,2,2,1},
+								{0,0,0,0,0,0,0,2,0,0,0,3,0,3,3,2},
+								{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3}};
+			bool test;
+			pos = 0;
+			pop = __builtin_popcount(X & 0xffffffffUL);
+			test = pop <= bit;
+			bit -= test*pop;
+			testx = test*32;
+			X >>= testx;
+			pos += testx;
+			pop = __builtin_popcount(X & 0xffffUL);
+			test = pop <= bit;
+			bit -= test*pop;
+			testx = test*16;
+			X >>= testx;
+			pos += testx;
+			pop = __builtin_popcount(X & 0xffUL);
+			test = pop <= bit;
+			bit -= test*pop;
+			testx = test*8;
+			X >>= testx;
+			pos += testx;
+			pop = __builtin_popcount(X & 0xfUL);
+			test = pop <= bit;
+			bit -= test*pop;
+			testx = test*4;
+			X >>= testx;
+			pos += testx;
+			return pos + lut[bit][X & 0xf];
+		}
+
 		inline unsigned nthset(uint64_t x, unsigned n)
 		{
-			// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
-			// Note that _pdep_u64 uses BMI2 instruction set
-			// Intel: introduced in Haswell
-			// AMD: before Zen3, _pdep_u64 is microcode and so may not be optimal
-			return _tzcnt_u64(_pdep_u64(1ull << n, x));
+			#if __BMI2__
+				return nthset_pdep(x, n);
+			#else
+				return nthset_pos_of_nth_bit2(x, n);
+			#endif
 		}
 	}
 
@@ -1402,27 +1460,23 @@ namespace Utility
 		// Ie, we're advancing an arbitrary number of sparse sequence values
 		uint64_t maskPriorBits = (1ull << uint64_t(_sparseValueOffset)) - 1ull;
 		uint64_t remainingBits = _entry->_allocationFlags & ~maskPriorBits;
-		// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
-		if (auto q = _pdep_u64(1ull << uint64_t(offset), remainingBits)) {
+		auto remainingPopCount = __builtin_popcountll(remainingBits);
+
+		if (offset < remainingPopCount) {
 			// we're advancing within the same range
-			_sparseValueOffset = xl_ctz8(q);
+			_sparseValueOffset = Internal::nthset(remainingBits, offset);
 		} else {
-			offset -= popcount(remainingBits);
+			offset -= remainingPopCount;
 			_sparseValueOffset = 64;
 			++_entry;
 			while (_entry->_allocationFlags) {
-				if (offset < 64) {
-					auto q = _pdep_u64(1ull << uint64_t(offset), _entry->_allocationFlags);
-					if (q) {
-						_sparseValueOffset = xl_ctz8(q);
-						assert(_sparseValueOffset < 64);
-						return;
-					} else {
-						offset -= popcount(_entry->_allocationFlags);
-						++_entry;
-					}
+				remainingPopCount = __builtin_popcountll(_entry->_allocationFlags);
+				if (offset < remainingPopCount) {
+					_sparseValueOffset = Internal::nthset(_entry->_allocationFlags, offset);
+					assert(_sparseValueOffset < 64);
+					return;
 				} else {
-					offset -= popcount(_entry->_allocationFlags);
+					offset -= remainingPopCount;
 					++_entry;
 				}
 			}
@@ -1484,7 +1538,7 @@ namespace Utility
 	}
 
 	template<typename T>
-		auto RemappingBitHeap<T>::Remap(T, Iterator hint) const -> Iterator
+		auto RemappingBitHeap<T>::Remap(T t, Iterator hint) const -> Iterator
 	{
 		assert(t != std::numeric_limits<T>::max());	// using this value as a sentinel
 		auto i = std::upper_bound(hint._entry, AsPointer(_allocationsTable.end()), t, CompareUtil{});	// requires sentinel
