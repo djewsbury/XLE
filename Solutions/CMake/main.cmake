@@ -20,6 +20,8 @@ set(XLE_ADDRESS_SANITIZER OFF CACHE BOOL "Enable the address sanitizer when comp
 set(XLE_MEMORY_SANITIZER OFF CACHE BOOL "Enable the memory sanitizer when compiling with clang")
 set(XLE_THREAD_SANITIZER OFF CACHE BOOL "Enable the thread sanitizer when compiling with clang")
 
+set(XLE_MSVC_RUNTIME_STATIC OFF CACHE BOOL "When on, use the static version of the MSVC runtime library. Do not use compiler/plugin dlls when on. (default off)")
+
 # clang is quite lenient with shared libraries, and will allow symbols to be implicitly imported from shared libraries
 # This works both ways -- ie, an executable might resolve a symbol by importing it from a shared library it links it.
 # But also the also the shared library itself might import symbols from the loading executable.
@@ -37,7 +39,11 @@ macro(xle_internal_configure_compiler TargetName)
     target_compile_features(${TargetName} PUBLIC cxx_std_17)
     set_target_properties(${TargetName} PROPERTIES CXX_STANDARD 17)
     set_target_properties(${TargetName} PROPERTIES CXX_EXTENSIONS OFF)
-    set_target_properties(${TargetName} PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    if (XLE_MSVC_RUNTIME_STATIC)
+        set_target_properties(${TargetName} PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else ()
+        set_target_properties(${TargetName} PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif ()
 
     # Some CMake kits set _DEBUG and NDEBUG automatically, but others don't seem to
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
