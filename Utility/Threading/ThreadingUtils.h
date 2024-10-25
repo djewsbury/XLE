@@ -321,6 +321,8 @@ using namespace Utility;
 
 #endif
 
+#if 0
+
 #pragma warning(push)
 #pragma warning(disable:4834)
 #pragma warning(disable:4127)		// conditional expression is constant
@@ -338,6 +340,8 @@ namespace Utility { namespace Threading {
 	template <class T>
 		using ContinuationPromise = ::promise<T>;
 }}
+
+#endif
 
 #endif
 

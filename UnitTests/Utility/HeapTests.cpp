@@ -258,7 +258,7 @@ namespace UnitTests
 	}
 
 
-    #if 1
+    #if 0
 		// (this implementation does not function the same as the others)
 
         // carry-less multiplication; will compile to PCLMULQDQ on x86
@@ -466,12 +466,16 @@ namespace UnitTests
 
     static unsigned nthset_pdep(uint64_t x, unsigned n)
     {
-        // https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
-        // Note that _pdep_u64 uses BMI2 instruction set
-        // Intel: introduced in Haswell
-        // AMD: before Zen3, _pdep_u64 is microcode and so may not be optimal
-        // REQUIRE(n < 64);
-        return _tzcnt_u64(_pdep_u64(1ull << n, x));
+		#if __BMI2__
+			// https://stackoverflow.com/questions/7669057/find-nth-set-bit-in-an-int
+			// Note that _pdep_u64 uses BMI2 instruction set
+			// Intel: introduced in Haswell
+			// AMD: before Zen3, _pdep_u64 is microcode and so may not be optimal
+			// REQUIRE(n < 64);
+			return _tzcnt_u64(_pdep_u64(1ull << n, x));
+		#else
+			return pos_of_nth_bit2(x, n);
+		#endif
     }
 
     TEST_CASE( "Utilities-NthBitSet", "[utility]" )
@@ -599,16 +603,18 @@ namespace UnitTests
 				std::cout << "nth_bit_set_parallelpopcount: " << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << " micros" << "                      (" << counter << ")" << std::endl;
 			}
 
-			{
-				xoshiro::RNGState s; RNGInitialize(s, uint32_t(rngSeed), rngSeed>>32ull, uint32_t(rngSeed2), rngSeed2>>32ull);
-				auto start = std::chrono::steady_clock::now();
-				unsigned counter = 0;
-				for (unsigned c=0; c<testCount; ++c)
-					counter += nth_set_fast(xoshiro::RNGNext(s), c%32);
-				auto end = std::chrono::steady_clock::now();
+			#if 0
+				{
+					xoshiro::RNGState s; RNGInitialize(s, uint32_t(rngSeed), rngSeed>>32ull, uint32_t(rngSeed2), rngSeed2>>32ull);
+					auto start = std::chrono::steady_clock::now();
+					unsigned counter = 0;
+					for (unsigned c=0; c<testCount; ++c)
+						counter += nth_set_fast(xoshiro::RNGNext(s), c%32);
+					auto end = std::chrono::steady_clock::now();
 
-				std::cout << "nth_set_fast: " << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << " micros" << "                      (" << counter << ")" << std::endl;
-			}
+					std::cout << "nth_set_fast: " << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << " micros" << "                      (" << counter << ")" << std::endl;
+				}
+			#endif
 		}
 	}
 

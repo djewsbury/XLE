@@ -57,9 +57,9 @@ Some optional changes that make things a little bit nicer:
 Temporary fixup in some submodules:
 * in some submodules, there are some small changes I either haven't figured out entirely or just haven't got around to uploading to a fork:
 * in Foreign/freetype/CMakeLists.txt, remove the file "ftver.rc"
-* in Foreign/DirectXTex/DirectXTex/Shaders/CompileShaders.cmd, you may need to add a line that sets the MSVC environment variables, ie:
+* in Foreign/DirectXTex/DirectXTex/Shaders/CompileShaders.cmd, there are references to fxc.exe. This is part of the windows sdk and the batch file expects it to be in the path. Tou may need to add a line that sets the MSVC environment variables, ie:
     call "D:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\Tools\VsDevCmd.bat"
-    (this wouldn't be required if compiling via VSStudio, but is via cmdline, or vscode)
+    (this wouldn't be required if compiling via VSStudio, but is via cmdline, or vscode). Alternatively, add a line that points to the windows sdk bin (eg: set PATH=$PATH;C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64)
 
 To use the CMakePresets.json infrastructure
 * these just make screwing around with the cmake cache variables a little easier (should be supported in both vscode & Visual Studio)
@@ -69,3 +69,9 @@ To use the CMakePresets.json infrastructure
 * There's some options for configurability in the cmake cache variables (such as what GFXAPIs to compile in, etc). You can search for "XLE_" in the cmake cache variables UI in vscode to get a list of them. Recommended settings are just:
 * XLE_VULKAN_ENABLE ON
 * XLE_DXCOMPILER_DIR & XLE_COMPRESSONATOR_DIR set appropriately (see above)
+* once you've gotten CMakeUserPresets.json right, it's a good idea to completely delete your "build" output folder and start from complete scratch
+
+** Note that cmake can be extremely temperamental and issue prone! ** 
+    If you run into unexpected issues, they can sometimes be solved by completely deleting the "build" folder output
+    (ie, even a clean rebuild is not enough)
+
