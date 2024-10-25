@@ -16,15 +16,15 @@ macro(find_compressonator)
 
 	find_library(
 		INTERNAL_FOUND_COMPRESSONATOR_DEBUG_LIB
-		NAMES Compressonator_MDd.lib
+		NAMES Compressonator_MTd.lib
 		HINTS ${XLE_COMPRESSONATOR_DIR}
-		PATH_SUFFIXES lib/VS2017/x64)
+		PATH_SUFFIXES lib/bin/x64)
 
 	find_library(
 		INTERNAL_FOUND_COMPRESSONATOR_RELEASE_LIB
-		NAMES Compressonator_MD.lib
+		NAMES Compressonator_MT.lib
 		HINTS ${XLE_COMPRESSONATOR_DIR}
-		PATH_SUFFIXES lib/VS2017/x64)
+		PATH_SUFFIXES lib/bin/x64)
 
 	find_path(
 		INTERNAL_FOUND_COMPRESSONATOR_INCLUDE_DIR Compressonator.h

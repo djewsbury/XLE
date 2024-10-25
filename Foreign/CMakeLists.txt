@@ -1,9 +1,11 @@
 add_subdirectory(freetype freetype)
+xle_internal_configure_compiler(freetype)
 add_subdirectory(Catch2 catch2)
 add_subdirectory(wildcards wildcards)
 
 if (WIN32)
     add_subdirectory(DirectXTex DirectXTex)
+    xle_internal_configure_compiler(DirectXTex)
 endif ()
 
 #############################################################################################
@@ -56,17 +58,7 @@ endif()
 file(GLOB_RECURSE yogacore_SRC "yoga/yoga/*.cpp")
 add_library(yogacore STATIC ${yogacore_SRC})
 
-target_compile_options(
-    yogacore
-    PRIVATE
-    -fno-omit-frame-pointer
-    -fexceptions
-    -fvisibility=hidden
-    -ffunction-sections
-    -fdata-sections
-    -Wall
-    -std=c++11)
-
 target_include_directories(yogacore PUBLIC "yoga/")
 target_include_directories(yogacore SYSTEM PUBLIC "yoga/")
-set_target_properties(yogacore PROPERTIES CXX_STANDARD 11)
+xle_internal_configure_compiler(yogacore)
+

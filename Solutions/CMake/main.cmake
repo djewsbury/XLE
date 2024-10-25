@@ -35,7 +35,9 @@ set(XLE_IMPLICIT_SHARED_LIBRARIES OFF CACHE BOOL "Set to allow clang to implicit
 
 macro(xle_internal_configure_compiler TargetName)
     target_compile_features(${TargetName} PUBLIC cxx_std_17)
-    set_property(TARGET ${TargetName} PROPERTY CXX_EXTENSIONS OFF)
+    set_target_properties(${TargetName} PROPERTIES CXX_STANDARD 17)
+    set_target_properties(${TargetName} PROPERTIES CXX_EXTENSIONS OFF)
+    set_target_properties(${TargetName} PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
     # Some CMake kits set _DEBUG and NDEBUG automatically, but others don't seem to
     if (CMAKE_BUILD_TYPE STREQUAL "Debug")
