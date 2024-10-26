@@ -336,26 +336,34 @@ namespace RenderOverlays
 		}
 	};
 
+	namespace Internal
+	{
+		static void FTFont_ConstructToPromise(
+			std::promise<std::shared_ptr<Font>>&& promise,
+			StringSection<> path, int size)
+		{
+			auto res = s_mainFontResourcesInstance.lock();
+
+			::Assets::PtrToMarkerPtr<FTFontResources::FontLibraryCollection> futureFontLibraryCollection;
+			{
+				ScopedLock(res->_mutex);
+				assert(res->_fontLibraryCollection);
+				if (res->_fontLibraryCollection->GetDependencyValidation().GetValidationIndex() > 0)
+					res->RebuildFontLibraryCollectionAlreadyLocked();
+				futureFontLibraryCollection = res->_fontLibraryCollection;
+			}
+
+			::Assets::WhenAll(std::move(futureFontLibraryCollection)).ThenConstructToPromise(
+				std::move(promise),
+				[p=path.AsString(), size, res](auto libCollection) {
+					return std::make_shared<FTFont>(p, size, res->_ftLib, *libCollection);
+				});
+		}
+	}
+
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size)
 	{
-		auto res = s_mainFontResourcesInstance.lock();
-
-		::Assets::PtrToMarkerPtr<FTFontResources::FontLibraryCollection> futureFontLibraryCollection;
-		{
-			ScopedLock(res->_mutex);
-			assert(res->_fontLibraryCollection);
-			if (res->_fontLibraryCollection->GetDependencyValidation().GetValidationIndex() > 0)
-				res->RebuildFontLibraryCollectionAlreadyLocked();
-			futureFontLibraryCollection = res->_fontLibraryCollection;
-		}
-		auto result = std::make_shared<::Assets::MarkerPtr<FTFont>>();
-		::Assets::WhenAll(std::move(futureFontLibraryCollection)).ThenConstructToPromise(
-			result->AdoptPromise(),
-			[p=path.AsString(), size, res](auto libCollection) {
-				return std::make_shared<FTFont>(p, size, res->_ftLib, *libCollection);
-			});
-
-		return std::reinterpret_pointer_cast<::Assets::MarkerPtr<Font>>(std::move(result));
+		return ::Assets::GetAssetMarkerFn<Internal::FTFont_ConstructToPromise>(path, size);
 	}
 
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> pathAndSize)
