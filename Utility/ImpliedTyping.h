@@ -180,6 +180,19 @@ namespace Utility
             VariantRetained(TypeDesc, IteratorRange<const void*>, bool reverseEndian=false);
             VariantRetained(const VariantNonRetained&);
             VariantRetained() = default;
+
+            VariantRetained(const char s[]);
+            VariantRetained(const utf16 s[]);
+            VariantRetained(const utf32 s[]);
+            VariantRetained(const ucs4 s[]);
+            VariantRetained(std::basic_string<char> str);
+            VariantRetained(std::basic_string<utf16> str);
+            VariantRetained(std::basic_string<utf32> str);
+            VariantRetained(std::basic_string<ucs4> str);
+            VariantRetained(StringSection<char> str);
+            VariantRetained(StringSection<utf16> str);
+            VariantRetained(StringSection<utf32> str);
+            VariantRetained(StringSection<ucs4> str);            
         };
 
         //////////////////////////////////////////////////////////////////////////////////////
@@ -417,8 +430,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)&src, (const uint8_t*)(&src+1));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(const char s[])
+        inline VariantRetained::VariantRetained(const char s[])
         {
             _type = TypeOf<const char*>();
             _type._arrayCount = (uint32_t)XlStringSize(s);
@@ -428,8 +440,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(const utf16 s[])
+        inline VariantRetained::VariantRetained(const utf16 s[])
         {
             _type = TypeOf<const utf16*>();
             _type._arrayCount = (uint32_t)XlStringSize(s);
@@ -439,8 +450,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(const utf32 s[])
+        inline VariantRetained::VariantRetained(const utf32 s[])
         {
             _type = TypeOf<const utf32*>();
             _type._arrayCount = (uint32_t)XlStringSize(s);
@@ -450,8 +460,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(const ucs4 s[])
+        inline VariantRetained::VariantRetained(const ucs4 s[])
         {
             _type = TypeOf<const ucs4*>();
             _type._arrayCount = (uint32_t)XlStringSize(s);
@@ -461,8 +470,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)s, (const uint8_t*)(s+_type._arrayCount));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(std::basic_string<char> str)
+        inline VariantRetained::VariantRetained(std::basic_string<char> str)
         {
             _type = TypeOf<std::basic_string<char>>();
             _type._arrayCount = (uint32_t)str.size();
@@ -472,8 +480,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(std::basic_string<utf16> str)
+        inline VariantRetained::VariantRetained(std::basic_string<utf16> str)
         {
             _type = TypeOf<std::basic_string<utf16>>();
             _type._arrayCount = (uint32_t)str.size();
@@ -483,8 +490,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(std::basic_string<utf32> str)
+        inline VariantRetained::VariantRetained(std::basic_string<utf32> str)
         {
             _type = TypeOf<std::basic_string<utf32>>();
             _type._arrayCount = (uint32_t)str.size();
@@ -494,8 +500,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(std::basic_string<ucs4> str)
+        inline VariantRetained::VariantRetained(std::basic_string<ucs4> str)
         {
             _type = TypeOf<std::basic_string<ucs4>>();
             _type._arrayCount = (uint32_t)str.size();
@@ -505,8 +510,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(StringSection<char> str)
+        inline VariantRetained::VariantRetained(StringSection<char> str)
         {
             _type = TypeOf<std::basic_string<char>>();
             _type._arrayCount = (uint32_t)str.size();
@@ -516,8 +520,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(StringSection<utf16> str)
+        inline VariantRetained::VariantRetained(StringSection<utf16> str)
         {
             _type = TypeOf<std::basic_string<utf16>>();
             _type._arrayCount = (uint32_t)str.size();
@@ -527,8 +530,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(StringSection<utf32> str)
+        inline VariantRetained::VariantRetained(StringSection<utf32> str)
         {
             _type = TypeOf<std::basic_string<utf32>>();
             _type._arrayCount = (uint32_t)str.size();
@@ -538,8 +540,7 @@ namespace Utility
                 _largeBuffer.insert(_largeBuffer.begin(), (const uint8_t*)AsPointer(str.begin()), (const uint8_t*)AsPointer(str.end()));
         }
 
-        template<>
-            inline VariantRetained::VariantRetained(StringSection<ucs4> str)
+        inline VariantRetained::VariantRetained(StringSection<ucs4> str)
         {
             _type = TypeOf<std::basic_string<ucs4>>();
             _type._arrayCount = (uint32_t)str.size();

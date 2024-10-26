@@ -74,7 +74,7 @@ namespace RenderCore
 
 	unsigned CalculateSize(IteratorRange<const ConstantBufferElementDesc*> elements);
 
-	#if (__cpp_lib_constexpr_vector >= 201907L) || (COMPILER_ACTIVE == COMPILER_TYPE_CLANG)
+	#if (__cpp_lib_constexpr_vector >= 201907L)
 		#define XLE_CONSTEXPR_IN_20 constexpr
 	#else
 		#define XLE_CONSTEXPR_IN_20 inline
@@ -106,10 +106,10 @@ namespace RenderCore
 
 		uint64_t GetHash() const;		// returns zero for an empty object
 
-		IteratorRange<const uint64_t*> GetResourceViewBindings() const { return _resourceViewBindings; };
-		IteratorRange<const uint64_t*> GetImmediateDataBindings() const { return _immediateDataBindings; }
-		IteratorRange<const uint64_t*> GetSamplerBindings() const { return _samplerBindings; }
-		IteratorRange<const uint64_t*> GetFixedDescriptorSetBindings() const { return _fixedDescriptorSetBindings; }
+		XLE_CONSTEXPR_IN_20 IteratorRange<const uint64_t*> GetResourceViewBindings() const { return _resourceViewBindings; };
+		XLE_CONSTEXPR_IN_20 IteratorRange<const uint64_t*> GetImmediateDataBindings() const { return _immediateDataBindings; }
+		XLE_CONSTEXPR_IN_20 IteratorRange<const uint64_t*> GetSamplerBindings() const { return _samplerBindings; }
+		XLE_CONSTEXPR_IN_20 IteratorRange<const uint64_t*> GetFixedDescriptorSetBindings() const { return _fixedDescriptorSetBindings; }
 
 		void Reset();
 
