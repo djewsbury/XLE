@@ -327,11 +327,16 @@ namespace ConsoleRig
     {
         if (_pimpl->_continuationExecutor)
             _pimpl->_continuationExecutor->stop();
-        _pimpl->_shortTaskPool->StallAndDrainQueue();
-        _pimpl->_longTaskPool->StallAndDrainQueue();
-        _pimpl->_intermediatesStore->FlushToDisk();
-        _pimpl->_cachedBoxManager->Clear();
-        _pimpl->_assetsSetsManager->Clear();
+        if (_pimpl->_shortTaskPool)
+            _pimpl->_shortTaskPool->StallAndDrainQueue();
+        if (_pimpl->_longTaskPool)
+            _pimpl->_longTaskPool->StallAndDrainQueue();
+        if (_pimpl->_intermediatesStore)
+            _pimpl->_intermediatesStore->FlushToDisk();
+        if (_pimpl->_cachedBoxManager)
+            _pimpl->_cachedBoxManager->Clear();
+        if (_pimpl->_assetsSetsManager)
+            _pimpl->_assetsSetsManager->Clear();
         UnloadDefaultPlugins();
     }
 
