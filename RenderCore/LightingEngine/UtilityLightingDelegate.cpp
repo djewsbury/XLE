@@ -268,6 +268,8 @@ namespace RenderCore { namespace LightingEngine
 					// lightingTechnique->_depVal.RegisterDependency(captures->_lightScene->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(techniqueDelegate->GetDependencyValidation());
 
+					lightingTechnique->_queryInterfaceHelper = [](uint64_t) { return nullptr; };
+
 					// main sequence & setup second stage construction
 					FrameBufferProperties fbProps { resolution[0], resolution[1], msaaSamples };
 					auto secondStageHelper = captures->ConstructMainSequence(

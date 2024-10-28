@@ -149,7 +149,7 @@ namespace ShaderSourceParser
 		for (const auto& slot:input._slots) maxSlotIdxInput = std::max(maxSlotIdxInput, int(slot._slotIdx));
 		for (const auto& slot:pipelineLayoutVersion._slots) maxSlotIdxPipelineLayout = std::max(maxSlotIdxPipelineLayout, int(slot._slotIdx));
 		if (flags & LinkToFixedLayoutFlags::AllowSlotTypeModification)
-			maxSlotIdxPipelineLayout = maxSlotIdxPipelineLayout + maxSlotIdxInput;		// reserve the absolute maximum we could need
+			maxSlotIdxPipelineLayout = std::max(maxSlotIdxPipelineLayout, maxSlotIdxInput) + input._slots.size();		// reserve the absolute maximum we could need
 
 		VLA(bool, assignedSlots_final, maxSlotIdxPipelineLayout+1);
 		VLA(bool, processedSlots_input, input._slots.size());
@@ -157,7 +157,7 @@ namespace ShaderSourceParser
 		for (unsigned c=0; c<input._slots.size(); ++c) processedSlots_input[c] = false;
 		result->_slots.reserve(maxSlotIdxPipelineLayout+1);
 
-		for (auto& s:pipelineLayoutVersion._slots) assert(s._slotIdx != ~0u);		// all entries in the pipeline layout version must have explict slot indeices
+		for (auto& s:pipelineLayoutVersion._slots) assert(s._slotIdx != ~0u);		// all entries in the pipeline layout version must have explict slot indices
 
 		// Where slot indices are explicitly provided in the input, we must use those directly
 		for (unsigned c=0; c<input._slots.size(); c++) {
@@ -186,6 +186,7 @@ namespace ShaderSourceParser
 				}
 			}
 
+			assert(input._slots[c]._slotIdx < (maxSlotIdxPipelineLayout+1));
 			assignedSlots_final[input._slots[c]._slotIdx] = true;
 			processedSlots_input[c] = true;
 			result->_slots.push_back(input._slots[c]);
@@ -211,6 +212,7 @@ namespace ShaderSourceParser
 				
 					if (assignedSlots_final[i->_slotIdx])
 						Throw(std::runtime_error("Multiple descriptor set slots with the same name discovered"));
+					assert(i->_slotIdx < (maxSlotIdxPipelineLayout+1));
 					assignedSlots_final[i->_slotIdx] = true;
 					processedSlots_input[c] = true;
 					auto finalSlot = input._slots[c];
@@ -239,6 +241,7 @@ namespace ShaderSourceParser
 			if (q == pipelineLayoutVersion._slots.size())
 				continue;		// we'll get to this one after all of the easier slots are handled
 
+			assert(pipelineLayoutVersion._slots[q]._slotIdx < (maxSlotIdxPipelineLayout+1));
 			assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx] = true;
 			auto finalSlot = input._slots[c];
 			finalSlot._slotIdx = pipelineLayoutVersion._slots[q]._slotIdx;
@@ -257,6 +260,7 @@ namespace ShaderSourceParser
 					if (!assignedSlots_final[firstUnusedOutputSlot])
 						break;
 
+				assert(firstUnusedOutputSlot < (maxSlotIdxPipelineLayout+1));
 				assignedSlots_final[firstUnusedOutputSlot] = true;
 				auto finalSlot = input._slots[c];
 				finalSlot._slotIdx = firstUnusedOutputSlot;
