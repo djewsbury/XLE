@@ -14,6 +14,7 @@
 
 #include "../../../OSServices/WinAPI/WinAPIWrapper.h"
 #include "../../../OSServices/WinAPI/IncludeWindows.h"
+#include "Utility/Streams/PathUtils.h"
 #include <winapifamily.h>
 #include <unknwnbase.h>
 #include <dxcapi.h>
@@ -88,28 +89,52 @@ namespace RenderCore { namespace Metal_DX11
 			// So -- the filename manipulation here replaces the os filename prefix with the xle filesystem prefix to try to make sure
 			// we're always using xle filenames with MainFileSystem::TryOpen(). Tools will then be able to find the file in the os
 			// filesystem, so long as the filename can be made to be relative to the original file.
+			//
+			// Note that the dx compiler can change slashes internally. We use PathBeginsWith() to try to deal with this
 			auto postPrefixFilename = inputFilenameAsUtf8.begin();
-			if (!_expectedSearchPrefix.empty() && XlBeginsWith(MakeStringSection(inputFilenameAsUtf8), MakeStringSection(_expectedSearchPrefix))) {
-				if (_replacementSearchPrefix.size() <= _expectedSearchPrefix.size()) {
-					inputFilenameAsUtf8.erase(inputFilenameAsUtf8.begin()+_replacementSearchPrefix.size(), inputFilenameAsUtf8.begin()+_expectedSearchPrefix.size());
-					std::copy(_replacementSearchPrefix.begin(), _replacementSearchPrefix.end(), inputFilenameAsUtf8.begin());
-				} else {
-					std::copy(_replacementSearchPrefix.begin(), _replacementSearchPrefix.begin()+_expectedSearchPrefix.size(), inputFilenameAsUtf8.begin());
-					inputFilenameAsUtf8.insert(inputFilenameAsUtf8.begin()+_expectedSearchPrefix.size(), _replacementSearchPrefix.begin()+_expectedSearchPrefix.size(), _replacementSearchPrefix.end());
-				}
-				postPrefixFilename = inputFilenameAsUtf8.begin()+_replacementSearchPrefix.size();
+			if (!_expectedSearchPrefix.empty()) {
+				if (auto* matchEnd = PathBeginsWith(MakeStringSection(inputFilenameAsUtf8), MakeStringSection(_expectedSearchPrefix))) {
+					auto chrsRemoved = matchEnd -  inputFilenameAsUtf8.data();
+					if (_replacementSearchPrefix.size() <= chrsRemoved) {
+						inputFilenameAsUtf8.erase(inputFilenameAsUtf8.begin()+_replacementSearchPrefix.size(), inputFilenameAsUtf8.begin()+chrsRemoved);
+						std::copy(_replacementSearchPrefix.begin(), _replacementSearchPrefix.end(), inputFilenameAsUtf8.begin());
+					} else {
+						std::copy(_replacementSearchPrefix.begin(), _replacementSearchPrefix.begin()+chrsRemoved, inputFilenameAsUtf8.begin());
+						inputFilenameAsUtf8.insert(inputFilenameAsUtf8.begin()+chrsRemoved, _replacementSearchPrefix.begin()+chrsRemoved, _replacementSearchPrefix.end());
+					}
+					postPrefixFilename = inputFilenameAsUtf8.begin() + _replacementSearchPrefix.size();
+				} else
+					postPrefixFilename = inputFilenameAsUtf8.begin();
 			}
 
-			for (auto i2=_searchDirectories.cbegin(); i2!=_searchDirectories.cend(); ++i2) {
-				buffer.clear();
-				buffer.insert(buffer.end(), MakeStringSection(*i2).begin(), MakeStringSection(*i2).end());
-				if (!i2->empty()) buffer += "/";
-				buffer += inputFilenameAsUtf8;
-				MakeSplitPath(buffer).Simplify().Rebuild(path);
+			std::unique_ptr<uint8[]> file;
+			::Assets::DependentFileState timeMarker;
 
-				std::unique_ptr<uint8[]> file;
-				::Assets::DependentFileState timeMarker;
-				{
+			if (postPrefixFilename != inputFilenameAsUtf8.begin()) {
+				std::unique_ptr<::Assets::IFileInterface> fileInterface;
+				auto ioResult = ::Assets::MainFileSystem::TryOpen(fileInterface, inputFilenameAsUtf8, "rb", OSServices::FileShareMode::Read | OSServices::FileShareMode::Write);
+				if (ioResult == ::Assets::IFileSystem::IOReason::Success && fileInterface) {
+					size = fileInterface->GetSize();
+					timeMarker._snapshot = fileInterface->GetSnapshot();
+
+					file = std::make_unique<uint8[]>(size);
+					if (size) {
+						auto blocksRead = fileInterface->Read(file.get(), size);
+						assert(blocksRead == 1); (void)blocksRead;
+					}
+
+					MakeSplitPath(inputFilenameAsUtf8).Simplify().Rebuild(path);
+				}
+			}
+
+			if (!file) {
+				for (auto i2=_searchDirectories.cbegin(); i2!=_searchDirectories.cend(); ++i2) {
+					buffer.clear();
+					buffer.insert(buffer.end(), MakeStringSection(*i2).begin(), MakeStringSection(*i2).end());
+					if (!i2->empty()) buffer += "/";
+					buffer.insert(buffer.end(), postPrefixFilename, inputFilenameAsUtf8.end());
+					MakeSplitPath(buffer).Simplify().Rebuild(path);
+					
 					std::unique_ptr<::Assets::IFileInterface> fileInterface;
 					auto ioResult = ::Assets::MainFileSystem::TryOpen(fileInterface, path, "rb", OSServices::FileShareMode::Read | OSServices::FileShareMode::Write);
 					if (ioResult == ::Assets::IFileSystem::IOReason::Success && fileInterface) {
@@ -121,50 +146,44 @@ namespace RenderCore { namespace Metal_DX11
 							auto blocksRead = fileInterface->Read(file.get(), size);
 							assert(blocksRead == 1); (void)blocksRead;
 						}
+						break;
 					}
-				}
-
-				if (file) {
-						// only add this to the list of include file, if it doesn't
-						// already exist there. We will get repeats and when headers
-						// are included multiple times (#pragma once isn't supported by
-						// the HLSL compiler)
-					auto existing = std::find_if(_includeFiles.cbegin(), _includeFiles.cend(),
-						[path](const ::Assets::DependentFileState& depState)
-						{
-							return !XlCompareStringI(MakeStringSection(depState._filename), MakeStringSectionNullTerm(path));
-						});
-
-					if (existing == _includeFiles.cend()) {
-						timeMarker._filename = path;
-						_includeFiles.push_back(timeMarker);
-						
-						auto newDirectory = MakeFileNameSplitter(path).StemAndPath().AsString();
-						auto i = std::find(_searchDirectories.cbegin(), _searchDirectories.cend(), newDirectory);
-						if (i==_searchDirectories.cend()) {
-							_searchDirectories.push_back(newDirectory);
-						}
-					}
-
-					IDxcBlobEncoding *pSource;
-					assert(size > 0 && file[0] != 0xff);
-					auto hresult = _library->CreateBlobFromPinned((LPBYTE)file.get(), (UINT32)size, CP_UTF8, &pSource);
-					if (hresult != S_OK) {
-						return hresult;	
-					}			
-					
-					// we must retain the file memory, CreateBlobFromPinned assumes we're going to manage the lifetime 
-					_readFiles.push_back(std::move(file));
-					*ppIncludeSource = pSource;
-					return S_OK;
 				}
 			}
 
-			// dxcompiler will prepend the base directory name on every lookup, as if all lookups are relative. 
-			// We ideally want absolute includes to work (as in xleres/...). We can try to handle this by just
-			// removing the expected search prefix, if it exists
-			if (postPrefixFilename != inputFilenameAsUtf8.begin())
-				return LoadSource(Conversion::Convert<std::wstring>(MakeStringSection(postPrefixFilename, inputFilenameAsUtf8.end())).c_str(), ppIncludeSource);
+			if (file) {
+					// only add this to the list of include file, if it doesn't
+					// already exist there. We will get repeats and when headers
+					// are included multiple times (#pragma once isn't supported by
+					// the HLSL compiler)
+				auto existing = std::find_if(_includeFiles.cbegin(), _includeFiles.cend(),
+					[path](const ::Assets::DependentFileState& depState)
+					{
+						return !XlCompareStringI(MakeStringSection(depState._filename), MakeStringSectionNullTerm(path));
+					});
+
+				if (existing == _includeFiles.cend()) {
+					timeMarker._filename = path;
+					_includeFiles.push_back(timeMarker);
+					
+					auto newDirectory = MakeFileNameSplitter(path).StemAndPath().AsString();
+					auto i = std::find(_searchDirectories.cbegin(), _searchDirectories.cend(), newDirectory);
+					if (i==_searchDirectories.cend()) {
+						_searchDirectories.push_back(newDirectory);
+					}
+				}
+
+				IDxcBlobEncoding *pSource;
+				assert(size > 0 && file[0] != 0xff);
+				auto hresult = _library->CreateBlobFromPinned((LPBYTE)file.get(), (UINT32)size, CP_UTF8, &pSource);
+				if (hresult != S_OK)
+					return hresult;	
+				
+				// we must retain the file memory, CreateBlobFromPinned assumes we're going to manage the lifetime 
+				_readFiles.push_back(std::move(file));
+				*ppIncludeSource = pSource;
+				return S_OK;
+			}
 
 			*ppIncludeSource = nullptr;
 			return ERROR_FILE_NOT_FOUND;
