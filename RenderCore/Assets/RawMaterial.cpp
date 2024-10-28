@@ -11,7 +11,6 @@
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/Continuation.h"
-#include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/AssetMixins.h"
 #include "../../Formatters/TextFormatter.h"
@@ -555,7 +554,7 @@ namespace RenderCore { namespace Assets
         return *this;
     }
 
-	RawMaterialSet_Internal::RawMaterialSet_Internal(Formatters::TextInputFormatter<char>& fmttr)
+	RawMaterialSet::RawMaterialSet(Formatters::TextInputFormatter<char>& fmttr)
     {
         StringSection<> keyName;
         while (fmttr.TryKeyedItem(keyName)) {
@@ -564,12 +563,32 @@ namespace RenderCore { namespace Assets
             StringSection<> keyname;
             while (fmttr.TryKeyedItem(keyname))
                 if (XlEqString(keyname, "Inherit")) {
-                    std::get<1>(e).push_back(Formatters::RequireStringValue(fmttr).AsString());
+                    std::get<1>(e) = ::Assets::Internal::DeserializeInheritList(fmttr);
                 } else if (!std::get<0>(e).TryDeserializeKey(fmttr, keyname))
                     Formatters::SkipValueOrElement(fmttr);
             _materials.emplace_back(keyName.AsString(), std::move(e));
             Formatters::RequireEndElement(fmttr);
         }
+    }
+
+    void SerializationOperator(Formatters::TextOutputFormatter& fmttr, const std::tuple<RawMaterial, ::Assets::InheritList>& e)
+    {
+        auto& inheritList = std::get<::Assets::InheritList>(e);
+        if (!inheritList.empty()) {
+            auto e = fmttr.BeginKeyedElement("Inherit");
+            for (auto i:inheritList) fmttr.WriteSequencedValue(i);
+            fmttr.EndElement(e);
+        }
+        fmttr << std::get<RawMaterial>(e);
+    }
+
+    void SerializationOperator(Formatters::TextOutputFormatter& fmttr, const RawMaterialSet& matSet)
+    {
+		for (const auto& m:matSet._materials) {
+			auto ele = fmttr.BeginKeyedElement(m.first);
+            fmttr << m.second;
+			fmttr.EndElement(ele);
+		}
     }
 
     static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "material"); }

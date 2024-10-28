@@ -187,33 +187,6 @@ namespace RenderCore { namespace Assets
     class ModelCompilationConfiguration;
 
 #if !defined(__CLR_VER)
-#if 0
-    template<typename ObjectType>
-		class CompilableMaterialAssetMixin : public ::Assets::UnresolvedAsset<ObjectType>
-	{
-	public:
-        using ::Assets::UnresolvedAsset<ObjectType>::UnresolvedAsset;
-
-        static void ConstructToPromise(
-            std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
-            StringSection<> initializer);
-
-        static void ConstructToPromise(
-            std::promise<CompilableMaterialAssetMixin<ObjectType>>&& promise,
-            StringSection<> initializer);
-
-        static void ConstructToPromise(
-            std::promise<std::shared_ptr<CompilableMaterialAssetMixin<ObjectType>>>&& promise,
-            StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
-
-        static void ConstructToPromise(
-            std::promise<CompilableMaterialAssetMixin<ObjectType>>&& promise,
-            StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
-    };
-
-    using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial, CompilableMaterialAssetMixin<RawMaterial>>;
-#endif
-
     using ContextImbuedRawMaterialPtr = ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>;
     using ContextImbuedRawMaterial = ::Assets::ContextImbuedAsset<RawMaterial>;
 
@@ -235,22 +208,26 @@ namespace RenderCore { namespace Assets
 
     std::shared_future<::Assets::ResolvedAssetMixin<RawMaterial>> GetResolvedMaterialFuture(StringSection<>);
 
-	class RawMaterialSet_Internal
+	class RawMaterialSet
     {
     public:
         using Entry = std::tuple<RawMaterial, ::Assets::InheritList>;
         std::vector<std::pair<std::string, Entry>> _materials;
 
-		RawMaterialSet_Internal(Formatters::TextInputFormatter<char>& fmttr);
-        RawMaterialSet_Internal() = default;
-    };
+        void AddMaterial(std::string s, RawMaterial&& mat) { _materials.emplace_back(std::move(s), std::make_tuple(std::move(mat), ::Assets::InheritList{})); }
+        void AddMaterial(std::string s, RawMaterial&& mat, ::Assets::InheritList&& inherit) { _materials.emplace_back(std::move(s), std::make_tuple(std::move(mat), std::move(inherit))); }
 
-    using RawMaterialSet = RawMaterialSet_Internal; // ::Assets::ContextImbuedAsset<RawMaterialSet_Internal>;
+		RawMaterialSet(Formatters::TextInputFormatter<char>& fmttr);
+        RawMaterialSet() = default;
+    };
 
     constexpr auto GetCompileProcessType(RawMaterialSet*) { return ConstHash64Legacy<'RawM', 'at'>::Value; }
 
-        // avoid -- avoid the need for this!
+        // todo -- avoid the need for this!
     constexpr auto GetCompileProcessType(::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>*) { return ConstHash64Legacy<'RawM', 'at'>::Value; }
+
+    void SerializationOperator(Formatters::TextOutputFormatter&, const RawMaterialSet&);
+    void SerializationOperator(Formatters::TextOutputFormatter&, const std::tuple<RawMaterial, ::Assets::InheritList>&);
 #endif
 
     template<typename Value> void RawMaterial::BindResource(StringSection<> name, const Value& value) { _resources.SetParameter(name, value); }

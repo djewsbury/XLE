@@ -902,7 +902,13 @@ namespace Assets
 					}
 				}  else {
 					auto i = std::find_if(range.first, range.second, [&r](const auto& c) { return c._chunkTypeCode == r._chunkTypeCode; });
+
+					if (r._dataType == ArtifactRequest::DataType::OptionalSharedBlob && i == range.second) {
+						result.emplace_back();
+						continue;
+					}
 					assert(i != range.second);
+
 					if (	r._dataType == ArtifactRequest::DataType::BlockSerializer
 							||	r._dataType == ArtifactRequest::DataType::Raw) {
 						uint8* mem = (uint8*)XlMemAlign(i->_size, sizeof(uint64_t));

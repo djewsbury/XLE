@@ -179,13 +179,13 @@ namespace Assets
 			auto i = std::find_if(
 				_chunks.begin(), _chunks.end(), 
 				[&r](const auto& c) { return c._chunkTypeCode == r->_chunkTypeCode; });
-			if (i == _chunks.end())
+			if (i == _chunks.end() && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob)
 				Throw(Exceptions::ConstructionError(
 					Exceptions::ConstructionError::Reason::MissingFile,
 					_depVal,
 					StringMeld<128>() << "Missing chunk (" << r->_name << ") in collection " << _collectionName));
 
-			if (r->_expectedVersion != ~0u && (i->_version != r->_expectedVersion))
+			if (i != _chunks.end() && r->_expectedVersion != ~0u && (i->_version != r->_expectedVersion))
 				Throw(::Assets::Exceptions::ConstructionError(
 					Exceptions::ConstructionError::Reason::UnsupportedVersion,
 					_depVal,
@@ -199,7 +199,13 @@ namespace Assets
 			auto i = std::find_if(
 				_chunks.begin(), _chunks.end(), 
 				[&r](const auto& c) { return c._chunkTypeCode == r._chunkTypeCode; });
+			
+			if (r._dataType == ArtifactRequest::DataType::OptionalSharedBlob && i == _chunks.end()) {
+				result.emplace_back();
+				continue;
+			}
 			assert(i != _chunks.end());
+
 			result.emplace_back(MakeArtifactRequestResult(r._dataType, i->_data));
 		}
 

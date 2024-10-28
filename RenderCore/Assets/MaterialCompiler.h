@@ -15,10 +15,7 @@
 namespace RenderCore { namespace Assets
 {
 	class RawMaterial;
-	// template<typename ObjectType> class CompilableMaterialAssetMixin;
-	class RawMaterialSet_Internal;
-	using RawMaterialSet = RawMaterialSet_Internal; // ::Assets::ContextImbuedAsset<RawMaterialSet_Internal>;
-
+	class RawMaterialSet;
 	using PtrToMarkerToMaterial = std::shared_ptr<::Assets::Marker<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>>>;
 	using PtrToMarkerToMaterialSet = std::shared_ptr<::Assets::Marker<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>>>;
 
