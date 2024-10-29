@@ -33,7 +33,7 @@ float CalculatePixelHistoryConfidence(
 {
 	int2 loadPos = int2(todayCoord.xy+motion.xy);
 	// Note that we consider the texture size here, not the viewport
-	if (any(loadPos < 0 || loadPos >= depthBufferDims))
+	if (any(loadPos < 0) || any(loadPos >= depthBufferDims))
 		return 0;
 
 	float yesterdayDepth = LoadDepthPrev(loadPos);
@@ -57,7 +57,7 @@ float CalculatePixelHistoryConfidence_NoDepth(
 {
 	int2 loadPos = int2(todayCoord.xy+motion.xy);
 	// Note that we consider the texture size here, not the viewport
-	if (any(loadPos < 0 || loadPos >= depthBufferDims))
+	if (any(loadPos < 0) || any(loadPos >= depthBufferDims))
 		return 0;
 
 	float4 yesterdayNormalAndRoughness = LoadNormalAndRoughnessPrev(loadPos);

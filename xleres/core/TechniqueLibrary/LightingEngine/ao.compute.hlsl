@@ -150,7 +150,7 @@ float TraverseRay_HierachicalDepths_1(uint2 pixelId, float cosPhi, float sinPhi,
 	float stepsAtMostDetailedRes = initialStepSize;
 	float lastCosTheta = 1;
 	while (c--) {
-		if (any(xy < 0 || xy >= mostDetailedMipDims)) break;
+		if (any(xy < 0) || any(xy >= mostDetailedMipDims)) break;
 		float d = LoadHierarchicalDepth(xy/currentMipLevelScale, currentMipLevel);
 
 		#if ORTHO_CAMERA
