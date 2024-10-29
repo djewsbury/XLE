@@ -128,16 +128,39 @@ namespace Assets
 		template<typename...> static auto HasStdGetDependencyValidation_Helper(...) -> std::false_type;
 		template<typename Type> static constexpr bool HasStdGetDependencyValidation = decltype(HasStdGetDependencyValidation_Helper<Type>(0))::value;
 
-		template<typename Type> static auto RequiresDeref_Helper(int) -> decltype(*std::declval<Type>(), std::true_type{});
-		template<typename...> static auto RequiresDeref_Helper(...) -> std::false_type;
-		template<typename Type> static constexpr bool RequiresDeref = decltype(RequiresDeref_Helper<Type>(0))::value;
-
 		template<typename Type> decltype(std::declval<const Type&>().GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset.GetDependencyValidation(); }
 		template<typename Type> decltype(std::declval<const Type&>()->GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset->GetDependencyValidation(); }
 		template<typename Type> decltype(std::get<DependencyValidation>(std::declval<const Type&>())) GetDependencyValidation(const Type& asset) { return std::get<DependencyValidation>(asset); }
 
 		template<typename Type, typename =std::enable_if_t<!HasGetDependencyValidation<Type> && !HasDerefGetDependencyValidation<Type> && !HasStdGetDependencyValidation<Type>>>
-			::Assets::DependencyValidation GetDependencyValidation(const Type& asset) { return {}; }
+			DependencyValidation GetDependencyValidation(const Type& asset) { return {}; }
+
+			///////
+
+		template<typename Type> static auto HasGetActualizationLog_Helper(int) -> decltype(std::declval<Type>().GetActualizationLog(), std::true_type{});
+		template<typename...> static auto HasGetActualizationLog_Helper(...) -> std::false_type;
+		template<typename Type> static constexpr bool HasGetActualizationLog = decltype(HasGetActualizationLog_Helper<Type>(0))::value;
+
+		template<typename Type> static auto HasDerefGetActualizationLog_Helper(int) -> decltype((*std::declval<Type>()).GetActualizationLog(), std::true_type{});
+		template<typename...> static auto HasDerefGetActualizationLog_Helper(...) -> std::false_type;
+		template<typename Type> static constexpr bool HasDerefGetActualizationLog = decltype(HasDerefGetActualizationLog_Helper<Type>(0))::value;
+
+		template<typename Type> static auto HasStdGetActualizationLog_Helper(int) -> decltype(std::get<Blob>(std::declval<Type>()), std::true_type{});
+		template<typename...> static auto HasStdGetActualizationLog_Helper(...) -> std::false_type;
+		template<typename Type> static constexpr bool HasStdGetActualizationLog = decltype(HasStdGetActualizationLog_Helper<Type>(0))::value;
+
+		template<typename Type> decltype(std::declval<const Type&>().GetActualizationLog()) GetActualizationLog(const Type& asset) { return asset.GetActualizationLog(); }
+		template<typename Type> decltype(std::declval<const Type&>()->GetActualizationLog()) GetActualizationLog(const Type& asset) { return asset->GetActualizationLog(); }
+		template<typename Type> decltype(std::get<Blob>(std::declval<const Type&>())) GetActualizationLog(const Type& asset) { return std::get<Blob>(asset); }
+
+		template<typename Type, typename =std::enable_if_t<!HasGetActualizationLog<Type> && !HasDerefGetActualizationLog<Type> && !HasStdGetActualizationLog<Type>>>
+			Blob GetActualizationLog(const Type& asset) { return {}; }
+
+			/////// 
+
+		template<typename Type> static auto RequiresDeref_Helper(int) -> decltype(*std::declval<Type>(), std::true_type{});
+		template<typename...> static auto RequiresDeref_Helper(...) -> std::false_type;
+		template<typename Type> static constexpr bool RequiresDeref = decltype(RequiresDeref_Helper<Type>(0))::value;
 
 		template<typename SrcType, typename DstType=decltype(*std::declval<SrcType>())> DstType& MaybeDeref(SrcType& src) { return *src; }
 		template<typename SrcType, typename DstType=decltype(*std::declval<SrcType>())> DstType& MaybeDeref(SrcType&& src) { return *src; }
