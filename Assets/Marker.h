@@ -16,6 +16,7 @@
 #include <functional>
 #include <assert.h>
 #include <utility>
+#include <type_traits>
 
 namespace Assets
 {
@@ -116,6 +117,11 @@ namespace Assets
 
 	namespace Internal
 	{
+		template<typename Expected, typename... Types> static constexpr bool PackHasType = (std::is_same_v<Expected, Types> + ...) == 1;
+		template<typename Expected, typename... Types> static std::conditional_t<PackHasType<Expected, Types...>, std::true_type, std::false_type> TupleHasType_Helper(const std::tuple<Types...>&);
+		template<typename Expected> static std::false_type TupleHasType_Helper(...);
+		template<typename Expected, typename Tuple> static constexpr bool TupleHasType = decltype(TupleHasType_Helper<Expected>(std::declval<const Tuple&>()))::value;
+
 		template<typename Type> static auto HasGetDependencyValidation_Helper(int) -> decltype(std::declval<Type>().GetDependencyValidation(), std::true_type{});
 		template<typename...> static auto HasGetDependencyValidation_Helper(...) -> std::false_type;
 		template<typename Type> static constexpr bool HasGetDependencyValidation = decltype(HasGetDependencyValidation_Helper<Type>(0))::value;
@@ -123,14 +129,12 @@ namespace Assets
 		template<typename Type> static auto HasDerefGetDependencyValidation_Helper(int) -> decltype((*std::declval<Type>()).GetDependencyValidation(), std::true_type{});
 		template<typename...> static auto HasDerefGetDependencyValidation_Helper(...) -> std::false_type;
 		template<typename Type> static constexpr bool HasDerefGetDependencyValidation = decltype(HasDerefGetDependencyValidation_Helper<Type>(0))::value;
-
-		template<typename Type> static auto HasStdGetDependencyValidation_Helper(int) -> decltype(std::get<DependencyValidation>(std::declval<Type>()), std::true_type{});
-		template<typename...> static auto HasStdGetDependencyValidation_Helper(...) -> std::false_type;
-		template<typename Type> static constexpr bool HasStdGetDependencyValidation = decltype(HasStdGetDependencyValidation_Helper<Type>(0))::value;
+	
+		template<typename Type> static constexpr bool HasStdGetDependencyValidation = TupleHasType<DependencyValidation, Type>;
 
 		template<typename Type> decltype(std::declval<const Type&>().GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset.GetDependencyValidation(); }
 		template<typename Type> decltype(std::declval<const Type&>()->GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset->GetDependencyValidation(); }
-		template<typename Type> decltype(std::get<DependencyValidation>(std::declval<const Type&>())) GetDependencyValidation(const Type& asset) { return std::get<DependencyValidation>(asset); }
+		template<typename Type> std::enable_if_t<HasStdGetDependencyValidation<Type>, const DependencyValidation&> GetDependencyValidation(const Type& asset) { return std::get<DependencyValidation>(asset); }
 
 		template<typename Type, typename =std::enable_if_t<!HasGetDependencyValidation<Type> && !HasDerefGetDependencyValidation<Type> && !HasStdGetDependencyValidation<Type>>>
 			DependencyValidation GetDependencyValidation(const Type& asset) { return {}; }
@@ -145,13 +149,11 @@ namespace Assets
 		template<typename...> static auto HasDerefGetActualizationLog_Helper(...) -> std::false_type;
 		template<typename Type> static constexpr bool HasDerefGetActualizationLog = decltype(HasDerefGetActualizationLog_Helper<Type>(0))::value;
 
-		template<typename Type> static auto HasStdGetActualizationLog_Helper(int) -> decltype(std::get<Blob>(std::declval<Type>()), std::true_type{});
-		template<typename...> static auto HasStdGetActualizationLog_Helper(...) -> std::false_type;
-		template<typename Type> static constexpr bool HasStdGetActualizationLog = decltype(HasStdGetActualizationLog_Helper<Type>(0))::value;
+		template<typename Type> static constexpr bool HasStdGetActualizationLog = TupleHasType<Blob, Type>;
 
 		template<typename Type> decltype(std::declval<const Type&>().GetActualizationLog()) GetActualizationLog(const Type& asset) { return asset.GetActualizationLog(); }
 		template<typename Type> decltype(std::declval<const Type&>()->GetActualizationLog()) GetActualizationLog(const Type& asset) { return asset->GetActualizationLog(); }
-		template<typename Type> decltype(std::get<Blob>(std::declval<const Type&>())) GetActualizationLog(const Type& asset) { return std::get<Blob>(asset); }
+		template<typename Type> std::enable_if_t<HasStdGetActualizationLog<Type>, const Blob&> GetActualizationLog(const Type& asset) { return std::get<Blob>(asset); }
 
 		template<typename Type, typename =std::enable_if_t<!HasGetActualizationLog<Type> && !HasDerefGetActualizationLog<Type> && !HasStdGetActualizationLog<Type>>>
 			Blob GetActualizationLog(const Type& asset) { return {}; }
