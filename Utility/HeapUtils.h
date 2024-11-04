@@ -571,9 +571,13 @@ namespace Utility
 	namespace Internal
 	{
 		template<unsigned X, typename std::enable_if<(X & (X - 1)) == 0>::type* = nullptr>
-			unsigned Modulo(unsigned value) { return value & (X-1); }
+			uint32_t Modulo(uint32_t value) { return value & (X-1); }
 		template<unsigned X, typename std::enable_if<(X & (X - 1)) != 0>::type* = nullptr>
-			unsigned Modulo(unsigned value) { return value % X; }
+			uint32_t Modulo(uint32_t value) { return value % X; }
+		template<unsigned X, typename std::enable_if<(X & (X - 1)) == 0>::type* = nullptr>
+			uint64_t Modulo(uint64_t value) { return value & (X-1); }
+		template<unsigned X, typename std::enable_if<(X & (X - 1)) != 0>::type* = nullptr>
+			uint64_t Modulo(uint32_t value) { return value % X; }
 	}
 
 	/// <summary>Fixed sized circular buffer of objects</summary>
@@ -977,7 +981,7 @@ namespace Utility
 	public:
 		using Page = CircularBuffer<Type, PageSize>;
 		std::vector<std::unique_ptr<Page>> _pages;
-		std::vector<size_t> _indexLookups;
+		std::vector<unsigned> _indexLookups;
 
 		struct Iterator
 		{
@@ -1048,7 +1052,7 @@ namespace Utility
 		void CircularPagedHeap<Type, PageSize>::Iterator::CheckMovePage()
 	{
 		if (_idxWithinPage >= _srcHeap->_pages[_pageIdx]->size()) {
-			_countInPriorPages += _srcHeap->_pages[_pageIdx]->size();
+			_countInPriorPages += (unsigned)_srcHeap->_pages[_pageIdx]->size();
 			_pageIdx++;
 			_idxWithinPage = 0;
 			if (_pageIdx < _srcHeap->_pages.size()) _pageIterator = _srcHeap->_pages[_pageIdx].get();
@@ -1067,16 +1071,16 @@ namespace Utility
 		void CircularPagedHeap<Type, PageSize>::Iterator::operator+=(ptrdiff_t offset)
 	{
 		if (!offset) return;
-		if ((_idxWithinPage+offset) < _pageIterator->size() && (_idxWithinPage+offset) >= 0) {
-			_idxWithinPage += offset;
+		if (size_t(_idxWithinPage+offset) < _pageIterator->size() && (_idxWithinPage+offset) >= 0) {
+			_idxWithinPage += (int)offset;
 		} else {
 			// Use the lookup table "_srcHeap->_indexLookups" to accelerate the search for the page we need
 			// We use this for all random lookups
-			auto newIdx = _countInPriorPages + _idxWithinPage + offset;
+			auto newIdx = unsigned(_countInPriorPages + _idxWithinPage + offset);
 			auto i = std::upper_bound(_srcHeap->_indexLookups.begin()+_pageIdx+1, _srcHeap->_indexLookups.end(), newIdx);
 			assert(i != _srcHeap->_indexLookups.begin());
 			--i;
-			_pageIdx = i - _srcHeap->_indexLookups.begin();
+			_pageIdx = unsigned(i - _srcHeap->_indexLookups.begin());
 			_countInPriorPages = *i;
 			if (_pageIdx < _srcHeap->_pages.size()) {
 				_pageIterator = _srcHeap->_pages[_pageIdx].get();
@@ -1155,8 +1159,8 @@ namespace Utility
 
 		Iterator result;
 		result._srcHeap = this;
-		result._pageIdx = _pages.size()-1;
-		result._idxWithinPage = _pages.back()->size()-1;
+		result._pageIdx = unsigned(_pages.size()-1);
+		result._idxWithinPage = unsigned(_pages.back()->size()-1);
 		result._pageIterator = _pages.back().get();
 		result._countInPriorPages = _indexLookups[result._pageIdx];
 		return result;
@@ -1576,8 +1580,8 @@ namespace Utility
 			i->_allocationFlags |= 1ull << uint64_t(offset);				// mark allocated
 		} else {
 			// we have to insert a new entry into the _allocationsTable table
-			auto alignedT = t & ~(64ull - 1ull);
-			i = _allocationsTable.insert(i+1, Entry{(T)alignedT, 0, (i+1)->_precedingDenseValues});
+			T alignedT = t & ~(64ull - 1ull);
+			i = _allocationsTable.insert(i+1, Entry{alignedT, 0, (i+1)->_precedingDenseValues});
 			offset = t - alignedT;
 			assert(offset < 64);
 			i->_allocationFlags |= 1ull << uint64_t(offset);				// mark allocated

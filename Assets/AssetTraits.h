@@ -175,6 +175,7 @@ namespace Assets
 		TRY {
 			FileSnapshot snapshot;
 			auto blob = MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &snapshot);
+			assert(blob);
 
 			if constexpr (Internal::AssetTraits<AssetType>::Constructor_BlobFile) {
 
