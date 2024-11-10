@@ -1385,7 +1385,6 @@ namespace Utility
 
 			void AdvanceDenseSequence(size_t);
 			void AdvanceSparseSequence(T);
-			void RegressSparseSequence(T);
 			
 			void operator++();
 			void operator+=(ptrdiff_t offset) { assert(offset >= 0); return AdvanceDenseSequence(offset); }
@@ -1493,32 +1492,19 @@ namespace Utility
 		void RemappingBitHeap<T>::Iterator::AdvanceSparseSequence(T offset)
 	{
 		assert(offset >= 0 && offset < 0xffffff00);		// sanity check
-		/*if ((_sparseValueOffset + offset) < 64) {
-			_sparseValueOffset += offset;
-		} else {*/
-			// We have to find the new page. Note that since we don't know the end of the Entry
-			// array, we can't do a binary search
+		// We have to find the new page. Note that since we don't know the end of the Entry
+		// array, we can't do a binary search
+		//
+		// Note that we have to do a check here, because we support calling AdvanceSparseSequence()
+		// on an iterator that is already off the end of the a valid range
+		//
+		// When we get to the end of the valid range, the iterator is set to the end sentinel,
+		// and SparseSequenceValue() will not return valid results.
+		//
+		if (_entry->_firstSparseValue != std::numeric_limits<T>::max()) {
 			auto sparseSequenceValue = SparseSequenceValue() + offset;
-			while (sparseSequenceValue >= (_entry+1)->_firstSparseValue) ++_entry;		// requires sentinel
-			_sparseValueOffset = sparseSequenceValue - _entry->_firstSparseValue;
-			_sparseValueOffset = std::min(_sparseValueOffset, 64u);						// not entirely essential, but means the iterator retains equality with end()
-		// }
-	}
-
-	template<typename T>
-		void RemappingBitHeap<T>::Iterator::RegressSparseSequence(T offset)
-	{
-		assert(offset >= 0);
-		if ((_sparseValueOffset + offset) >= 0) {
-			_sparseValueOffset += offset;
-			assert(_sparseValueOffset < 64);
-		} else {
-			// We have to find the new page. Note that since we don't know the end of the Entry
-			// array, we can't do a binary search
-			auto sparseSequenceValue = SparseSequenceValue() + offset;
-			assert(0);
-			while (_entry->_firstSparseValue > sparseSequenceValue) --_entry;		// requires sentinel
-			_sparseValueOffset = sparseSequenceValue - _entry->_firstSparseValue;
+			while (expect_evaluation(sparseSequenceValue >= (_entry+1)->_firstSparseValue, false)) { assert((_entry+1)->_firstSparseValue > _entry->_firstSparseValue); ++_entry; }		// requires sentinel
+			_sparseValueOffset = (_entry->_firstSparseValue != std::numeric_limits<T>::max()) ? (sparseSequenceValue - _entry->_firstSparseValue) : 64u;
 		}
 	}
 
