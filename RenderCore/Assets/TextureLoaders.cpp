@@ -141,6 +141,37 @@ namespace RenderCore { namespace Assets
 		DDSBreakdown result;
 		result._textureDesc = BuildTextureDesc(texMetadata);
 
+		auto* pHeader = reinterpret_cast<const DirectX::DDS_HEADER*>(PtrAdd(data.begin(), sizeof(uint32_t)));
+
+		// Work around an issue in the DirectXTex library that doesn't handle the FOURCC pixel formats in a smart
+		// way. It will return a non-SRGB format in these case (except when there's an custom nvidia flag present)
+		// We work around this by overriding the format value coming out of the library
+		//
+		// For non-FourCC format codes, we assume the given code is intentional
+		if (pHeader->ddspf.flags & DDS_FOURCC && GetComponentType(result._textureDesc._format) == FormatComponentType::UNorm && HasLinearAndSRGBFormats(result._textureDesc._format)) {
+			switch (pHeader->ddspf.fourCC) {
+			case MAKEFOURCC('D', 'X', 'T', '1'):
+				assert(result._textureDesc._format == Format::BC1_UNORM);
+				result._textureDesc._format = Format::BC1_UNORM_SRGB;
+				break;
+
+			case MAKEFOURCC('D', 'X', 'T', '2'):
+				assert(result._textureDesc._format == Format::BC2_UNORM);
+				result._textureDesc._format = Format::BC2_UNORM_SRGB;
+				break;
+
+			case MAKEFOURCC('D', 'X', 'T', '3'):
+				assert(result._textureDesc._format == Format::BC3_UNORM);
+				result._textureDesc._format = Format::BC3_UNORM_SRGB;
+				break;
+
+			case MAKEFOURCC('D', 'X', 'T', '7'):
+				assert(result._textureDesc._format == Format::BC7_UNORM);
+				result._textureDesc._format = Format::BC7_UNORM_SRGB;
+				break;
+			}
+		}
+
 		// We need to get the image data from the file and copy it into the locations requested
 		// The normal usage of the DirectXTex library is to use LoadFromDDSMemory() and 
 		// construct a series of DirectX::ScatchImage objects. However, that would result in an
@@ -155,7 +186,6 @@ namespace RenderCore { namespace Assets
 			Throw(std::runtime_error("Could not determine image offsets when loading DDS file (" + filename.AsString() + "). This file may be truncated?"));
 
 		size_t offset = sizeof(uint32_t) + sizeof(DirectX::DDS_HEADER);
-		auto* pHeader = reinterpret_cast<const DirectX::DDS_HEADER*>(PtrAdd(data.begin(), sizeof(uint32_t)));
 		if ((pHeader->ddspf.flags & DDS_FOURCC) && (MAKEFOURCC('D', 'X', '1', '0') == pHeader->ddspf.fourCC))
 			offset += sizeof(DirectX::DDS_HEADER_DXT10);
 		auto* pixels = PtrAdd(data.begin(), offset);
