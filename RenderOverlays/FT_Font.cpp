@@ -104,7 +104,10 @@ namespace RenderOverlays
 		FontProperties _fontProperties;
 	};
 
-	constexpr unsigned loadFlags = FT_LOAD_TARGET_LIGHT/* | FT_LOAD_NO_AUTOHINT*/;
+	// NOTE -- AUTOHINT creates problems with fixed width fonts
+	//			It can give values in the lsbDelta & rsbDelta members for fractional gylph width
+	//			-- however, that may be calculated differently for each glyph
+	constexpr unsigned loadFlags = FT_LOAD_TARGET_LIGHT | ((XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS) ? 0 : (FT_LOAD_NO_AUTOHINT));
 
 	FTFont::FTFont(StringSection<::Assets::ResChar> faceName, int faceSize, FT_Library& library, const FTFontResources::FontLibraryCollection& fontLibraryCollection)
 	{
@@ -223,8 +226,10 @@ namespace RenderOverlays
 			if (!error) {
 				auto glyph = _face->glyph;
 				loadedChar._glyphProps._xAdvance = (float)glyph->advance.x / 64.0f;
-				loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
-				loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+				#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+					loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
+					loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+				#endif
 				loadedChar._glyphProps._bitmapOffsetX = glyph->bitmap_left;
 				loadedChar._glyphProps._bitmapOffsetY = -glyph->bitmap_top;
 				loadedChar._glyphProps._width = glyph->bitmap.width;
@@ -250,8 +255,10 @@ namespace RenderOverlays
 				if (!error) {
 					auto glyph = _face->glyph;
 					loadedChar._glyphProps._xAdvance = (float)glyph->advance.x / 64.0f;
-					loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
-					loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+					#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+						loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
+						loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+					#endif
 					loadedChar._glyphProps._bitmapOffsetX = glyph->bitmap_left;
 					loadedChar._glyphProps._bitmapOffsetY = -glyph->bitmap_top;
 					loadedChar._glyphProps._width = glyph->bitmap.width;
@@ -276,8 +283,10 @@ namespace RenderOverlays
 			if (!error) {
 				auto glyph = _face->glyph;
 				loadedChar._glyphProps._xAdvance = (float)glyph->advance.x / 64.0f;
-				loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
-				loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+				#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+					loadedChar._glyphProps._lsbDelta = glyph->lsb_delta;
+					loadedChar._glyphProps._rsbDelta = glyph->rsb_delta;
+				#endif
 				loadedChar._glyphProps._bitmapOffsetX = glyph->bitmap_left;
 				loadedChar._glyphProps._bitmapOffsetY = -glyph->bitmap_top;
 				loadedChar._glyphProps._width = glyph->bitmap.width;
@@ -310,8 +319,10 @@ namespace RenderOverlays
 		result._width = i->second._glyphProps._width;
 		result._height = i->second._glyphProps._height;
 		result._data = MakeIteratorRange(i->second._renderedBits);
-		result._lsbDelta = i->second._glyphProps._lsbDelta;
-		result._rsbDelta = i->second._glyphProps._rsbDelta;
+		#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+			result._lsbDelta = i->second._glyphProps._lsbDelta;
+			result._rsbDelta = i->second._glyphProps._rsbDelta;
+		#endif
 		return result;
 	}
 

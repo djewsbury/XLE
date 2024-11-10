@@ -95,7 +95,9 @@ namespace RenderOverlays
 			unsigned _width = 0, _height = 0;
 			Float2 _tcTopLeft = Float2{0.f, 0.f};
 			Float2 _tcBottomRight = Float2{0.f, 0.f};
-			signed _lsbDelta = 0, _rsbDelta = 0;
+			#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+				signed _lsbDelta = 0, _rsbDelta = 0;
+			#endif
 			unsigned _lastAccessFrame = 0;
 			uint32_t _encodingOffset = 0;
 		};

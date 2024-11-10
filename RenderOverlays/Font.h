@@ -12,10 +12,12 @@
 #include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/IteratorUtils.h"
-#include "../Core/Prefix.h"
-#include "../Core/Types.h"
 #include <memory>
 #include <utility>
+
+#if !defined(XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS)
+	#define XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS 0
+#endif
 
 namespace RenderOverlays
 {
@@ -38,7 +40,9 @@ namespace RenderOverlays
 
 			float _xAdvance = 0.f;
 			signed _bitmapOffsetX = 0, _bitmapOffsetY = 0;
-			signed _lsbDelta = 0, _rsbDelta = 0;
+			#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+				signed _lsbDelta = 0, _rsbDelta = 0;
+			#endif
 		};
 
 		struct GlyphProperties
@@ -46,7 +50,9 @@ namespace RenderOverlays
 			float _xAdvance = 0.f;
 			unsigned _width = 0, _height = 0;
 			signed _bitmapOffsetX = 0, _bitmapOffsetY = 0;
-			signed _lsbDelta = 0, _rsbDelta = 0;
+			#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+				signed _lsbDelta = 0, _rsbDelta = 0;
+			#endif
 		};
 
 		virtual FontProperties		GetFontProperties() const = 0;

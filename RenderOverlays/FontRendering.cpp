@@ -654,7 +654,9 @@ namespace RenderOverlays
 				inst._xy[0] += xIterator;
 
 				xIterator += bitmap._xAdvance * xScale;
-				xIterator += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
+				#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+					xIterator += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
+				#endif
 				if (flags & DrawTextFlags::Outline) {
 					xIterator += 2 * xScale;
 				}
@@ -1047,7 +1049,9 @@ namespace RenderOverlays
 
 					inst._xy[0] += xIterator;
 					xIterator += bitmap._xAdvance * xScale;
-					xIterator += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
+					#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+						xIterator += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
+					#endif
 				}
 			}
 
@@ -1513,8 +1517,10 @@ namespace RenderOverlays
 		result._tcTopLeft[1] = rect.first[1] / float(_pimpl->_texHeight);
 		result._tcBottomRight[0] = (rect.first[0] + newData._width) / float(_pimpl->_texWidth);
 		result._tcBottomRight[1] = (rect.first[1] + newData._height) / float(_pimpl->_texHeight);
-		result._lsbDelta = newData._lsbDelta;
-		result._rsbDelta = newData._rsbDelta;
+		#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+			result._lsbDelta = newData._lsbDelta;
+			result._rsbDelta = newData._rsbDelta;
+		#endif
 		result._lastAccessFrame = _currentFrameIdx;
 
 		auto i = _glyphs.insert(insertPoint, std::make_pair(code, result));
@@ -1585,8 +1591,10 @@ namespace RenderOverlays
 			result._xAdvance = bitmaps[c]._xAdvance;
 			result._bitmapOffsetX = bitmaps[c]._bitmapOffsetX;
 			result._bitmapOffsetY = bitmaps[c]._bitmapOffsetY;
-			result._lsbDelta = bitmaps[c]._lsbDelta;
-			result._rsbDelta = bitmaps[c]._rsbDelta;
+			#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+				result._lsbDelta = bitmaps[c]._lsbDelta;
+				result._rsbDelta = bitmaps[c]._rsbDelta;
+			#endif
 			result._lastAccessFrame = _currentFrameIdx;
 			result._encodingOffset = encodingOffsetBase + (size_t)bitmaps[c]._data.begin();
 			result._width = bitmaps[c]._width;

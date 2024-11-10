@@ -744,7 +744,9 @@ namespace RenderOverlays
 					// Simplified version for the common case of just hitting a whitespace character (don't increase word index for the spaces)
 					auto& glyph = glyphProps[starti->_glyphIdx];
 					xIterator += glyph._xAdvance * xScale;
-					xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
+					#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+						xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
+					#endif
 					continue;
 				}
 
@@ -780,7 +782,9 @@ namespace RenderOverlays
 					inst->_wordIdx = ctrlBlock._nextWordIndex;
 
 					xIterator += glyph._xAdvance * xScale;
-					xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
+					#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+						xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
+					#endif
 				}
 
 				// attempt to prevent increasing the world index if we come across a word split between multiple spans
