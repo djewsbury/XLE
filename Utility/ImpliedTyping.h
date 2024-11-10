@@ -415,7 +415,7 @@ namespace Utility
             inline DestType VariantRetained::RequireCastValue() const { return operator VariantNonRetained().RequireCastValue<DestType>(); }
 
         template<typename DestType>
-            inline std::optional<DestType> VariantRetained::TryCastValue() const { return operator VariantNonRetained().TryCastValue(); }
+            inline std::optional<DestType> VariantRetained::TryCastValue() const { return operator VariantNonRetained().TryCastValue<DestType>(); }
 
         template<typename SrcType>
             VariantRetained::VariantRetained(SrcType src)

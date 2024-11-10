@@ -62,7 +62,7 @@ namespace PlatformRig
 		struct InputEvent
 		{
 			OSServices::InputSnapshot _evnt;
-			InputContext _content;
+			InputContext _context;
 		};
 
 		struct OnRenderTargetUpdate
