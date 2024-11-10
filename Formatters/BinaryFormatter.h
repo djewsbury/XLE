@@ -37,7 +37,8 @@ namespace Formatters
 
 		IteratorRange<const void*> SkipArrayElements(unsigned count);
 		IteratorRange<const void*> SkipNextBlob();
-		void SkipBytes(unsigned byteCount);
+		IteratorRange<const void*> SkipBytes(ptrdiff_t byteCount);
+		const void* SkipBytesFast(ptrdiff_t byteCount);
 
 		void PushPattern(std::shared_ptr<BinarySchemata> schemata, BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams = {}, uint32_t templateParamsTypeField = 0u);
 
@@ -48,6 +49,7 @@ namespace Formatters
 		IteratorRange<const void*> GetRemainingData() const { return _dataIterator; }
 		IteratorRange<const unsigned*> GetPassedConditionSymbols() const { return _passedConditionSymbols; }
 		const BinarySchemata& GetSchemata() const { return *_blockStack.front()._schemata; }
+		std::shared_ptr<BinarySchemata> GetSchemataPtr() const { return _blockStack.front()._schemata; }
 
 		explicit BinaryInputFormatter(IteratorRange<const void*> data, std::shared_ptr<EvaluationContext> evalContext = std::make_shared<EvaluationContext>());
 		BinaryInputFormatter() = default;
@@ -374,6 +376,13 @@ namespace Formatters
 	{
 		unsigned evaluatedTypeId;
 		return TryRawValue(data, typeDesc, evaluatedTypeId);
+	}
+
+	inline const void* BinaryInputFormatter::SkipBytesFast(ptrdiff_t byteCount)
+	{
+		auto* result = _dataIterator.first;
+		_dataIterator.first = PtrAdd(_dataIterator.first, byteCount);
+		return result;
 	}
 
 	template<typename Type>

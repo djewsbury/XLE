@@ -948,11 +948,13 @@ namespace Formatters
 			Throw(std::runtime_error("Expecting array, block or member while skipping binary blob"));
 	}
 
-	void BinaryInputFormatter::SkipBytes(unsigned byteCount)
+	IteratorRange<const void*> BinaryInputFormatter::SkipBytes(ptrdiff_t byteCount)
 	{
 		if (byteCount > _dataIterator.size())
 			Throw(std::runtime_error("Attempting to skip pass more bytes than are remaining in BinaryInputFormatter"));
+		auto* result = _dataIterator.first;
 		_dataIterator.first = PtrAdd(_dataIterator.first, byteCount);
+		return { result, _dataIterator.first };
 	}
 
 	std::optional<size_t> BinaryInputFormatter::TryCalculateFixedSize(unsigned evalTypeId)
