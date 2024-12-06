@@ -41,6 +41,7 @@ namespace Formatters
 		const void* SkipBytesFast(ptrdiff_t byteCount);
 
 		void PushPattern(std::shared_ptr<BinarySchemata> schemata, BinarySchemata::BlockDefinitionId blockDefId, IteratorRange<const int64_t*> templateParams = {}, uint32_t templateParamsTypeField = 0u);
+		void SetLocalVariable(uint64_t, ImpliedTyping::VariantNonRetained value);
 
 		bool ReversedEndian() const { return _reversedEndian; }
 		void SetReversedEndian(bool newState) { _reversedEndian = newState; }

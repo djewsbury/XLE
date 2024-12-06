@@ -145,6 +145,7 @@ namespace Assets
 			FileSnapshot snapshot;
 			size_t size = 0;
 			auto block = MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(initializer, &size, &snapshot);
+			depVal = GetDepValSys().Make(DependentFileState{initializer.AsString(), std::move(snapshot)});
 			return Internal::InvokeAssetConstructor<AssetType>(
 				MakeStringSection((const char*)block.get(), (const char*)PtrAdd(block.get(), size)),
 				DefaultDirectorySearchRules(initializer),

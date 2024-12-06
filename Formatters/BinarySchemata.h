@@ -35,6 +35,8 @@ namespace Formatters
 		std::vector<BitRange> _bitRanges;
 	};
 
+	enum class TemplateParameterType { Typename, Expression };
+
 	class BinarySchemata
 	{
 	public:
@@ -73,18 +75,23 @@ namespace Formatters
 		struct ConditionSymbol { unsigned _lineIdx; };
 		ConditionSymbol GetConditionSymbol(unsigned idx) const;
 		unsigned GetConditionSymbolCount() const { return (unsigned)_conditionSymbolLines.size(); }
+
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		
 	private:
-		void ParseBlock(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
-		void ParseLiterals(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
-		void ParseAlias(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
-		void ParseBitField(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
-		std::string ParseTypeBaseName(ConditionalProcessingTokenizer& tokenizer);
+		std::string ParseBlock(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
+		std::string ParseLiterals(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
+		std::string ParseAlias(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
+		std::string ParseBitField(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
+		std::string ParseTypeBaseName(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope);
 		std::string ParseExpressionStr(ConditionalProcessingTokenizer& tokenizer);
+		void ParseDecoder(ConditionalProcessingTokenizer& tokenizer, Alias& workingDefinition, BlockDefinitionId scope);
 		void PushExpression(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer);
-		void PushComplexType(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer);
+		void PushComplexType(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope, std::string baseName);
 		void Parse(ConditionalProcessingTokenizer& tokenizer);
-		bool TryDeclaration(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope, const ConditionalProcessingTokenizer::Token& peekNext);
+		std::string TryDeclaration(ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope, const ConditionalProcessingTokenizer::Token& peekNext);
+		bool TryCommand(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer, BlockDefinitionId scope, const ConditionalProcessingTokenizer::Token& peekNext);
+		size_t WriteJumpBlock(BlockDefinition& workingDefinition, ConditionalProcessingTokenizer& tokenizer, unsigned lineIdx);
 
 		template<typename T> struct Def { std::string _name; BlockDefinitionId _scope = BlockDefinitionId_Invalid; T _def; };
 		std::vector<Def<Alias>> _aliases;
@@ -92,6 +99,8 @@ namespace Formatters
 		std::vector<Def<ParameterBox>> _literals;
 		std::vector<Def<BitFieldDefinition>> _bitFields;
 		std::vector<unsigned> _conditionSymbolLines;
+		::Assets::DependencyValidation _depVal;
+		unsigned _nextUnnamedSymbolIdx = 0;
 	};
 
     enum class Cmd
@@ -101,9 +110,8 @@ namespace Formatters
 		EvaluateExpression,
 		InlineIndividualMember,
 		InlineArrayMember,
-		IfFalseThenJump
+		IfFalseThenJump,
+		Throw
 	};
-
-    enum class TemplateParameterType { Typename, Expression };
 }
 

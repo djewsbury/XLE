@@ -207,9 +207,10 @@ namespace Formatters
 					auto paramTypeCodes = MakeIteratorRange(cmds.first, cmds.first+paramCount);
 					cmds.first += paramCount;
 
+					auto schemata = _evaluatedTypes[evalTypeId]._schemata;
 					typeStack.push(
 						GetEvaluatedType(
-							_evaluatedTypes[evalTypeId]._schemata, &cachedEvals,
+							schemata, &cachedEvals,
 							baseNameToken, scope, paramTypeCodes, def, 
 							typeStack, valueStack, _evaluatedTypes[evalTypeId]._params, _evaluatedTypes[evalTypeId]._paramTypeField));
 				}
@@ -235,7 +236,7 @@ namespace Formatters
 							uint64_t hash = def._tokenDictionary._tokenDefinitions[nextStep._nameTokenIndex].AsHashValue();
 
 							// ------------------------- system variables --------------------
-							if (hash == "align2"_h || hash == "align4"_h || hash == "align8"_h || hash == "nullterm"_h) {
+							if (hash == "align2"_h || hash == "align4"_h || hash == "align8"_h || hash == "nullterm"_h || hash == "remainingbytes"_h) {
 								usingDynamicVariable = true;
 								nextStep.Return(1);	// we use 1 as a default stand-in
 								continue;
@@ -325,6 +326,18 @@ namespace Formatters
 					break;
 				}
 
+			case Cmd::Throw:
+				{
+					// skip the throw without actually throwing
+					++cmds.first;
+					for (;;) {
+						auto next = *cmds.first++;
+						if (!next) break;
+						if (int(next) > 0) cmds.first += next;
+					}
+					break;
+				}
+
 			default:
 				Throw(std::runtime_error("Unexpected token in command stream"));
 			}
@@ -404,6 +417,11 @@ namespace Formatters
 		_blockStack.emplace_back(std::move(newContext));
 	}
 
+	void BinaryInputFormatter::SetLocalVariable(uint64_t name, ImpliedTyping::VariantNonRetained value)
+	{
+		_blockStack.back()._localEvalContext.emplace_back(name, value);
+	}
+
 	int64_t BinaryInputFormatter::EvaluateExpression(IteratorRange<const Utility::Internal::Token*> expressionCommands, const Utility::Internal::TokenDictionary& tokenDictionary)
 	{
 		TRY {
@@ -442,6 +460,9 @@ namespace Formatters
 					auto systemVarBuffer = 0;
 					while (systemVarBuffer < _dataIterator.size() && ((const uint8_t*)_dataIterator.begin())[systemVarBuffer] != 0) ++systemVarBuffer;
 					nextStep.Return(systemVarBuffer);
+					gotValue = true;
+				} else if (hash == "remainingbytes"_h) {
+					nextStep.Return(_dataIterator.size());
 					gotValue = true;
 				}
 
@@ -485,6 +506,7 @@ namespace Formatters
 							for (unsigned p=0; p<(unsigned)block->_definition->_templateParameterNames.size(); ++p)
 								if (block->_definition->_templateParameterNames[p] == nextStep._nameTokenIndex) {
 									assert(!(block->_parsingTemplateParamsTypeField & (1<<p)));		// assert value, not type parameter
+									assert(block->_parsingTemplateParams.size() > p);
 									nextStep.ReturnNonRetained(block->_parsingTemplateParams[p]);
 									gotValue = true;
 									break;
@@ -586,6 +608,36 @@ namespace Formatters
 						cmds.first = AsPointer(def._cmdList.begin() + jumpPt);
 					} else
 						_passedConditionSymbols.push_back(*cmds.first++);
+					break;
+				}
+
+			case Cmd::Throw:
+				{
+					// handle throw
+					cmds.first++;
+					unsigned expressionCnt = *cmds.first++;
+					VLA(int64_t, evaled, expressionCnt);
+					for (unsigned c=0; c<expressionCnt; ++c) {
+						evaled[c] = workingBlock._valueStack.top();
+						workingBlock._valueStack.pop();
+					}
+
+					std::stringstream str;
+					for (;;) {
+						assert(cmds.first < cmds.second);
+						auto next = *cmds.first++;
+						if (!next) break;
+						if (int(next) < 0) {
+							int item = -int(next)-1;
+							assert(item < expressionCnt);
+							str << evaled[item];
+						} else {
+							str << (const char*)cmds.first;
+							cmds.first += next;
+						}
+					}
+
+					Throw(std::runtime_error(str.str()));
 					break;
 				}
 
