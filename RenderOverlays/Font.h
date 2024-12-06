@@ -92,6 +92,9 @@ namespace RenderOverlays
 								bool outline         = false);
 
 	template<typename CharType>
+		std::pair<float, unsigned> StringWidthAndNewLineCount(const Font& font, StringSection<CharType> text, float spaceExtra=0.f, bool outline=false);
+
+	template<typename CharType>
 		int CharCountFromWidth( const Font& font,
 								StringSection<CharType> text, 
 								float width, 

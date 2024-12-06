@@ -60,7 +60,7 @@ namespace RenderOverlays
 	}
 
 	template<typename CharType>
-		std::pair<float, unsigned> StringWidthAndNewLineCount(const Font& font, StringSection<CharType> text, float spaceExtra=0.f, bool outline=false)
+		std::pair<float, unsigned> StringWidthAndNewLineCount(const Font& font, StringSection<CharType> text, float spaceExtra, bool outline)
 	{
 		int prevGlyph = 0;
 		float x = 0.0f, prevMaxX = 0.0f;
