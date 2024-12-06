@@ -374,7 +374,6 @@ namespace Utility { namespace ImpliedTyping
         assert(srcType._typeHint != ImpliedTyping::TypeHint::String || destType._typeHint == ImpliedTyping::TypeHint::String);
 
         if (srcType._type <= TypeCat::UInt8) {
-            UNREACHABLE();  // no need to call this variation
             return Cast(dest, destType, rawSrc, srcType);
         }
 

@@ -740,16 +740,6 @@ namespace RenderOverlays
 				++i;
 				while (i != &instances[instanceCountPostClip] && i->_lineIdx == starti->_lineIdx && !glyphDividesBefore[i->_glyphIdx] && (!glyphDividesAfter[(i-1)->_glyphIdx] || glyphSuppressDivideAfter[i->_glyphIdx])) ++i;
 
-				if ((i-starti) == 1 && !(glyphProps[starti->_glyphIdx]._width * glyphProps[starti->_glyphIdx]._height)) {
-					// Simplified version for the common case of just hitting a whitespace character (don't increase word index for the spaces)
-					auto& glyph = glyphProps[starti->_glyphIdx];
-					xIterator += glyph._xAdvance * xScale;
-					#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
-						xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
-					#endif
-					continue;
-				}
-
 				// first, check if we need to reset the xIterator
 				if (starti->_lineIdx != lineIdx) {
 					if ((starti->_xy[1] + yIterator + scaledLineHeight) > maxY) {
@@ -761,6 +751,16 @@ namespace RenderOverlays
 
 					lineIdx = starti->_lineIdx;
 					xIterator = 0;		// reset because we just had a line break
+				}
+
+				if ((i-starti) == 1 && !(glyphProps[starti->_glyphIdx]._width * glyphProps[starti->_glyphIdx]._height)) {
+					// Simplified version for the common case of just hitting a whitespace character (don't increase word index for the spaces)
+					auto& glyph = glyphProps[starti->_glyphIdx];
+					xIterator += glyph._xAdvance * xScale;
+					#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
+						xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
+					#endif
+					continue;
 				}
 
 				// whole word does fit, let's commit it

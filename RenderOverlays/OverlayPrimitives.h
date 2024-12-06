@@ -52,6 +52,7 @@ namespace RenderOverlays
 
         static inline Rect Invalid() { return Rect { {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}, {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}}; }
         static inline Rect Zero() { return Rect { 0, 0, 0, 0 }; }
+        static inline Rect Max() { return Rect { {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}, {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}}; }
 
         inline Rect& operator-=(const Coord2& rhs) { _topLeft -= rhs; _bottomRight -= rhs; return *this; }
         inline Rect& operator+=(const Coord2& rhs) { _topLeft += rhs; _bottomRight += rhs; return *this; }

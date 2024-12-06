@@ -149,6 +149,8 @@ namespace Utility
 
             template<typename DestType>
                 std::optional<DestType> TryCastValue() const;
+
+            std::string AsString(bool strongTyping = false) const;
         };
         TypeDesc TryBinaryOperator(
             IteratorRange<void*> dst,
@@ -278,25 +280,20 @@ namespace Utility
             SerializationOperator(serializer, *(uint64_t*)this);
         }
 
-        struct ReversedEndianHelper
-        {
-            IteratorRange<void*> _reversedData;
-            ReversedEndianHelper(IteratorRange<const void*> srcData, const TypeDesc& type)
-            {
-                const unsigned stackSizeLimit = 1024;
-                if (type.GetSize() <= stackSizeLimit) {
-                    _reversedData.first = _alloca(type.GetSize());
-                    _reversedData.second = PtrAdd(_reversedData.first, type.GetSize());
-                } else {
-                    _buffer.resize(type.GetSize());
-                    _reversedData = MakeIteratorRange(_buffer);
-                }
-                assert(type.GetSize() == srcData.size());
-                FlipEndian(_reversedData, srcData.begin(), type);
-            }
-        private:
-            std::vector<uint8_t> _buffer;
-        };
+        #define ReversedEndianHelper(srcData, type)                                     \
+            IteratorRange<void*> _reversedData;                                         \
+            std::vector<uint8_t> _buffer;                                               \
+            const unsigned stackSizeLimit = 1024;                                       \
+            if (type.GetSize() <= stackSizeLimit) {                                     \
+                _reversedData.first = _alloca(type.GetSize());                          \
+                _reversedData.second = PtrAdd(_reversedData.first, type.GetSize());     \
+            } else {                                                                    \
+                _buffer.resize(type.GetSize());                                         \
+                _reversedData = MakeIteratorRange(_buffer);                             \
+            }                                                                           \
+            assert(type.GetSize() == srcData.size());                                   \
+            FlipEndian(_reversedData, srcData.begin(), type);                           \
+            /**/
 
         template<typename DestType>
             DestType VariantNonRetained::RequireCastValue() const
@@ -311,10 +308,10 @@ namespace Utility
                 } else {
                     // note that void just becomes an empty string
                     if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
-                        ReversedEndianHelper helper { _data, _type };
-                        return AsString(helper._reversedData, _type);
+                        ReversedEndianHelper(_data, _type);
+                        return ImpliedTyping::AsString(_reversedData, _type);
                     } else
-                        return AsString(_data, _type);
+                        return ImpliedTyping::AsString(_data, _type);
                 }
             } else {
                 if (srcIsString) {
@@ -328,9 +325,9 @@ namespace Utility
                         Throw(std::runtime_error("Attempting to read void value in VariantNonRetained"));
 
                     if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
-                        ReversedEndianHelper helper { _data, _type };
+                        ReversedEndianHelper(_data, _type);
                         DestType result;
-                        if (!Cast(MakeOpaqueIteratorRange(result), TypeOf<DestType>(), helper._reversedData, _type))
+                        if (!Cast(MakeOpaqueIteratorRange(result), TypeOf<DestType>(), _reversedData, _type))
                             Throw(std::runtime_error(std::string{"Failed casting to "} + typeid(DestType).name()));
                         return result;
                     } else {
@@ -358,10 +355,10 @@ namespace Utility
                     return result;
                 } else {
                     if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
-                        ReversedEndianHelper helper { _data, _type };
-                        return AsString(helper._reversedData, _type);
+                        ReversedEndianHelper(_data, _type);
+                        return ImpliedTyping::AsString(_reversedData, _type);
                     } else
-                        return AsString(_data, _type);
+                        return ImpliedTyping::AsString(_data, _type);
                 }
             } else {
                 if (srcIsString) {
@@ -372,9 +369,9 @@ namespace Utility
                     return {};
                 } else {
                     if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
-                        ReversedEndianHelper helper { _data, _type };
+                        ReversedEndianHelper(_data, _type);
                         DestType result;
-                        if (!Cast(MakeOpaqueIteratorRange(result), TypeOf<DestType>(), helper._reversedData, _type))
+                        if (!Cast(MakeOpaqueIteratorRange(result), TypeOf<DestType>(), _reversedData, _type))
                             return {};
                         return result;
                     } else {
@@ -384,6 +381,23 @@ namespace Utility
                         return result;
                     }
                 }
+            }
+        }
+
+        inline std::string VariantNonRetained::AsString(bool strongTyping) const
+        {
+            bool srcIsString = ((_type._type == TypeCat::Int8) || (_type._type == TypeCat::UInt8)) && _type._typeHint == TypeHint::String;
+            if (srcIsString) {
+                std::string result;
+                result.resize(std::min((size_t)_type._arrayCount, _data.size()));
+                std::memcpy(result.data(), _data.begin(), result.size());
+                return result;
+            } else {
+                if (_reversedEndian && _type._type > ImpliedTyping::TypeCat::UInt8) {
+                    ReversedEndianHelper(_data, _type);
+                    return ImpliedTyping::AsString(_reversedData, _type, strongTyping);
+                } else
+                    return ImpliedTyping::AsString(_data, _type, strongTyping);
             }
         }
 

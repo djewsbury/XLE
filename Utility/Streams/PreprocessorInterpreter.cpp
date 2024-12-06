@@ -384,7 +384,7 @@ namespace Utility
 			return TokenDictionary::TokenType::Operation;
 		}
 
-		static bool operator==(const TokenDictionary::TokenDefinition& lhs, const TokenDictionary::TokenDefinition& rhs)
+		bool operator==(const TokenDictionary::TokenDefinition& lhs, const TokenDictionary::TokenDefinition& rhs)
 		{
 			return lhs._type == rhs._type && lhs._value == rhs._value;
 		}

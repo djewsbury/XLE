@@ -43,6 +43,7 @@ namespace Utility
 				StringSection<> AsStringSection() const;
 				uint64_t AsHashValue() const;
 				std::string CastToString() const;
+				friend bool operator==(const TokenDefinition& lhs, const TokenDefinition& rhs);
 			};
 			std::vector<TokenDefinition> _tokenDefinitions;
 
