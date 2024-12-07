@@ -209,8 +209,14 @@ namespace RenderCore { namespace Techniques
 				} 
 				if (matDescSet) {
 					unsigned dynamicOffset = 0;
-					if (drawable._geo) dynamicOffset = Internal::GetMaterialDescSetDynamicOffset(*drawable._geo->_deformAccelerator, *matDescSet, drawable._deformInstanceIdx);
-					currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, MakeIteratorRange(&dynamicOffset, &dynamicOffset+1));
+					IteratorRange<const unsigned*> dynamicOffsets {};
+					if (matDescSet->_dynamicOffsetSlotCount && drawable._geo) {
+						assert(!matDescSet->ApplyDeformAcceleratorOffset() || drawable._geo->_deformAccelerator);
+						assert(matDescSet->_dynamicOffsetSlotCount == 1);		// only support a single dynamic offset per material desc set
+						dynamicOffset = Internal::GetMaterialDescSetDynamicOffset(*drawable._geo->_deformAccelerator, *matDescSet, drawable._deformInstanceIdx);
+						dynamicOffsets = MakeIteratorRange(&dynamicOffset, &dynamicOffset+1);
+					}
+					currentBoundUniforms->ApplyDescriptorSet(metalContext, encoder, *matDescSet->GetDescriptorSet(), s_uniformGroupMaterial, 0, dynamicOffsets);
 					++justMatDescSetCount;
 				}
 

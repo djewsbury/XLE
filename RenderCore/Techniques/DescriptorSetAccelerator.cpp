@@ -60,6 +60,7 @@ namespace RenderCore { namespace Techniques
 				DescriptorSetSignature _signature;
 				DescriptorSetBindingInfo _bindingInfo;
 				std::shared_ptr<AnimatedUniformBufferHelper> _animHelper;
+				unsigned _dynamicOffsetSlotCount = 0;
 				bool _applyDeformAcceleratorOffset = false;
 			};
 			std::vector<DescriptorSet> _descriptorSets;
@@ -167,6 +168,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<uint8_t> cbUploadBuffer;
 		const auto cbAlignmentRules = _device->GetDeviceLimits()._constantBufferOffsetAlignment;
 		std::optional<StringSection<>> cbName;
+		unsigned dynamicOffsetSlotCount = 0;
 
 		char stringMeldBuffer[512];
 		for (const auto& s:layout._slots) {
@@ -179,6 +181,8 @@ namespace RenderCore { namespace Techniques
 			slotBindingInfo._layoutSlotType = s._type;
 
 			for (unsigned a=0; a<std::max(s._arrayElementCount, 1u); ++a) {
+
+				dynamicOffsetSlotCount += s._type == DescriptorType::UniformBufferDynamicOffset;
 
 				bool gotBinding = false;
 				auto hashName = s._nameHash + a;
@@ -238,6 +242,7 @@ namespace RenderCore { namespace Techniques
 							cbName = cbName.has_value() ? MakeStringSection(s_multipleDescSetCBs) : MakeStringSection(s._name);
 						}
 					} else {
+						assert(s._type == DescriptorType::UniformBufferDynamicOffset);
 						applyDeformAcceleratorOffset = true;
 						slotInProgress._bindType = DescriptorSetInitializer::BindType::ResourceView;
 						slotInProgress._resourceIdx = (unsigned)_working->_resources.size();
@@ -287,6 +292,7 @@ namespace RenderCore { namespace Techniques
 
 		ds._signature = layout.MakeDescriptorSetSignature(_samplerPool);
 		ds._applyDeformAcceleratorOffset = applyDeformAcceleratorOffset;
+		ds._dynamicOffsetSlotCount = dynamicOffsetSlotCount;
 
 		if (!cbUploadBuffer.empty()) {
 			auto& bu = Services::GetBufferUploads();
@@ -388,6 +394,7 @@ namespace RenderCore { namespace Techniques
 					actualized._depVal = std::move(depVal);
 					actualized._bindingInfo = std::move(ds._bindingInfo);
 					actualized._completionCommandList = completionCommandList;
+					actualized._dynamicOffsetSlotCount = ds._dynamicOffsetSlotCount;
 					actualized._applyDeformAcceleratorOffset = ds._applyDeformAcceleratorOffset;
 					finalDescriptorSets.emplace_back(actualized);
 				}

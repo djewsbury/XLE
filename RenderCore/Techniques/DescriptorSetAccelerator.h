@@ -49,6 +49,7 @@ namespace RenderCore { namespace Techniques
 		DescriptorSetBindingInfo _bindingInfo;
 		BufferUploads::CommandListID _completionCommandList = 0;
 		::Assets::DependencyValidation _depVal;
+		unsigned _dynamicOffsetSlotCount = 0;
 		bool _applyDeformAcceleratorOffset = false;
 
 		ActualizedDescriptorSet();
