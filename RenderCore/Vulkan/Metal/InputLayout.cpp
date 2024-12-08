@@ -383,15 +383,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		case DescriptorType::UnorderedAccessTexture:
 			if (reflectionVariable._basicType)
 				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && (*reflectionVariable._basicType == SPIRVReflection::BasicType::SampledImage || *reflectionVariable._basicType == SPIRVReflection::BasicType::Image);
-			if (reflectionVariable._resourceType)
+			if (reflectionVariable._resourceType) {
+				assert(reflectionVariable._resourceType->_readWriteVariation == (slotType == DescriptorType::UnorderedAccessTexture));
 				return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && ((reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Image1D) || (reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Image2D) || (reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Image3D) || (reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::ImageCube));
+			}
 			return false;
 		case DescriptorType::UniformBuffer:
 		case DescriptorType::UniformBufferDynamicOffset:
+			assert(!reflectionVariable._resourceType || !reflectionVariable._resourceType->_readWriteVariation);
 			return reflectionVariable._isStructType || (reflectionVariable._basicType && (*reflectionVariable._basicType != SPIRVReflection::BasicType::Image && *reflectionVariable._basicType != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._basicType != SPIRVReflection::BasicType::Sampler));
 		case DescriptorType::UnorderedAccessBuffer:
 		case DescriptorType::UnorderedAccessBufferDynamicOffset:
-			return reflectionVariable._isStructType || reflectionVariable._isRuntimeArrayStructType || (reflectionVariable._basicType && (*reflectionVariable._basicType != SPIRVReflection::BasicType::Image && *reflectionVariable._basicType != SPIRVReflection::BasicType::SampledImage && *reflectionVariable._basicType != SPIRVReflection::BasicType::Sampler));
+			return reflectionVariable._isStructType || reflectionVariable._isRuntimeArrayStructType || (reflectionVariable._resourceType && reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Buffer && reflectionVariable._resourceType->_readWriteVariation);
 		case DescriptorType::UniformTexelBuffer:
 			return !reflectionVariable._isStructType && !reflectionVariable._isRuntimeArrayStructType && reflectionVariable._resourceType && reflectionVariable._resourceType->_category == SPIRVReflection::ResourceCategory::Buffer && !reflectionVariable._resourceType->_readWriteVariation;
 		case DescriptorType::UnorderedAccessTexelBuffer:
@@ -830,6 +833,12 @@ namespace RenderCore { namespace Metal_Vulkan
 							if (std::get<0>(looseBinding) != UniformStreamType::None)
 								Log(Verbose) << "Shader variable is explicitly bound as a loose uniform, but also falls into a fixed descriptor set. The loose uniform binding will be ignored in this case (variable: " << reflectionVariable._name << ")" << std::endl;
 						#endif
+
+						// ensure that we've recorded this group in the "_groupsThatWriteHere" array
+						if (_descSetInfos.size() <= reflectionVariable._binding._descriptorSet)
+							_descSetInfos.resize(reflectionVariable._binding._descriptorSet+1);
+						auto& groupsWr = _descSetInfos[reflectionVariable._binding._descriptorSet]._groupsThatWriteHere;
+						if (std::find(groupsWr.begin(), groupsWr.end(), groupIdx) == groupsWr.end()) groupsWr.push_back(groupIdx);
 
 					}
 				} else if (reflectionVariable._storageClass == SPIRVReflection::StorageClass::PushConstant) {

@@ -143,16 +143,16 @@ namespace UnitTests
 
 		const char longFileName[] = "c:/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/12345678901234567890/filename.txt";
 		{
-			auto baseWidth = RenderOverlays::StringWidth(*font, MakeStringSection(longFileName));
+			auto baseWidth = RenderOverlays::StringWidth(*font, MakeStringSectionLiteral(longFileName));
 			const float restrictedWidth = 512;
 			REQUIRE(baseWidth > restrictedWidth);
 			char buffer[1024];
 
-			float ellipsisWidth = RenderOverlays::StringEllipsis(buffer, dimof(buffer), *font, MakeStringSection(longFileName), restrictedWidth);
+			float ellipsisWidth = RenderOverlays::StringEllipsis(buffer, dimof(buffer), *font, MakeStringSectionLiteral(longFileName), restrictedWidth);
 			REQUIRE(ellipsisWidth < baseWidth);
 			REQUIRE(ellipsisWidth <= restrictedWidth);
 
-			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(longFileName), MakeStringSectionLiteral("/\\"), restrictedWidth);
+			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSectionLiteral(longFileName), MakeStringSectionLiteral("/\\"), restrictedWidth);
 			REQUIRE(ellipsisWidth < baseWidth);
 			REQUIRE(ellipsisWidth <= restrictedWidth);
 			REQUIRE(XlEqString(buffer, "c:/.../12345678901234567890/filename.txt"));
@@ -165,33 +165,33 @@ namespace UnitTests
 
 			// limit by buffer size, rather than rendering width
 			char limitedOutputBuffer[32];
-			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(limitedOutputBuffer, dimof(limitedOutputBuffer), *font, MakeStringSection(longFileName), MakeStringSectionLiteral("/\\"), restrictedWidth);
+			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(limitedOutputBuffer, dimof(limitedOutputBuffer), *font, MakeStringSectionLiteral(longFileName), MakeStringSectionLiteral("/\\"), restrictedWidth);
 			REQUIRE(ellipsisWidth < baseWidth);
 			REQUIRE(ellipsisWidth <= restrictedWidth);
 			REQUIRE(limitedOutputBuffer[dimof(limitedOutputBuffer)-1] == '\0');
 			REQUIRE(XlEqString(limitedOutputBuffer, "c:/.../filename.txt"));
 
-			ellipsisWidth = RenderOverlays::StringEllipsis(limitedOutputBuffer, dimof(limitedOutputBuffer), *font, MakeStringSection(longFileName), restrictedWidth);
+			ellipsisWidth = RenderOverlays::StringEllipsis(limitedOutputBuffer, dimof(limitedOutputBuffer), *font, MakeStringSectionLiteral(longFileName), restrictedWidth);
 			REQUIRE(ellipsisWidth < baseWidth);
 			REQUIRE(ellipsisWidth <= restrictedWidth);
 			REQUIRE(limitedOutputBuffer[dimof(limitedOutputBuffer)-1] == '\0');
 
 			// limit by buffer size again, but this time with very large values for the allowed width
-			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(limitedOutputBuffer, dimof(limitedOutputBuffer), *font, MakeStringSection(longFileName), MakeStringSectionLiteral("/\\"), 1e6f);
+			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(limitedOutputBuffer, dimof(limitedOutputBuffer), *font, MakeStringSectionLiteral(longFileName), MakeStringSectionLiteral("/\\"), 1e6f);
 			REQUIRE(limitedOutputBuffer[dimof(limitedOutputBuffer)-1] == '\0');
 			REQUIRE(XlEqString(limitedOutputBuffer, "c:/.../filename.txt"));
 
-			ellipsisWidth = RenderOverlays::StringEllipsis(limitedOutputBuffer, dimof(limitedOutputBuffer), *font, MakeStringSection(longFileName), 1e6f);
+			ellipsisWidth = RenderOverlays::StringEllipsis(limitedOutputBuffer, dimof(limitedOutputBuffer), *font, MakeStringSectionLiteral(longFileName), 1e6f);
 			REQUIRE(limitedOutputBuffer[dimof(limitedOutputBuffer)-1] == '\0');
 
 			// so limited, there's no enough room for the ellipsis
-			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(limitedOutputBuffer, 4, *font, MakeStringSection(longFileName), MakeStringSectionLiteral("/\\"), 1e6f);
+			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(limitedOutputBuffer, 4, *font, MakeStringSectionLiteral(longFileName), MakeStringSectionLiteral("/\\"), 1e6f);
 			REQUIRE(std::strlen(limitedOutputBuffer) == 3);
-			ellipsisWidth = RenderOverlays::StringEllipsis(limitedOutputBuffer, 4, *font, MakeStringSection(longFileName), 1e6f);
+			ellipsisWidth = RenderOverlays::StringEllipsis(limitedOutputBuffer, 4, *font, MakeStringSectionLiteral(longFileName), 1e6f);
 			REQUIRE(std::strlen(limitedOutputBuffer) == 3);
 
 			// very long string with no separators
-			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(longFileName), MakeStringSectionLiteral("---"), restrictedWidth);
+			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSectionLiteral(longFileName), MakeStringSectionLiteral("---"), restrictedWidth);
 			REQUIRE(ellipsisWidth < baseWidth);
 			REQUIRE(ellipsisWidth <= restrictedWidth);
 		}
@@ -203,7 +203,7 @@ namespace UnitTests
 			const char input[] = u8"Οὐχὶ ταὐτὰ παρίσταταί μοι γιγνώσκειν, ὦ ἄνδρες ᾿Αθηναῖοι, ὅταν τ᾿ εἰς τὰ πράγματα ἀποβλέψω καὶ ὅταν πρὸς τοὺς";
 			char buffer[1024];
 			const float restrictedWidth = 512;
-			auto ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSection(input), MakeStringSectionLiteral(" "), restrictedWidth);
+			auto ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(buffer, dimof(buffer), *font, MakeStringSectionLiteral(input), MakeStringSectionLiteral(" "), restrictedWidth);
 			REQUIRE(ellipsisWidth <= restrictedWidth);
 		}
 
@@ -252,10 +252,10 @@ namespace UnitTests
 			REQUIRE(ellipsisWidth == normalWidth);
 			REQUIRE(XlEqString(largeBuffer, "filename.txt"));
 
-			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(largeBuffer, dimof(largeBuffer), *font, MakeStringSection(longFileName), MakeStringSectionLiteral("---"), 1024.f);
-			normalWidth = RenderOverlays::StringWidth(*font, MakeStringSection(longFileName));
+			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(largeBuffer, dimof(largeBuffer), *font, MakeStringSectionLiteral(longFileName), MakeStringSectionLiteral("---"), 1024.f);
+			normalWidth = RenderOverlays::StringWidth(*font, MakeStringSectionLiteral(longFileName));
 			REQUIRE(ellipsisWidth == normalWidth);
-			REQUIRE(XlEqString(MakeStringSection(longFileName), largeBuffer));
+			REQUIRE(XlEqString(MakeStringSectionLiteral(longFileName), largeBuffer));
 		}
 
 		::Assets::MainFileSystem::GetMountingTree()->Unmount(mnt0);
@@ -274,13 +274,13 @@ namespace UnitTests
 		const char longString2[] = "\r\rabcdefghijklmnopqrstuvwxyz ABCDEFGHI\r\n\r\nJKLMNOPQRSTUVWXYZ 12345678901234567890\n";
 
 		{
-			auto split0 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection(longString), 64.f, MakeStringSectionLiteral(" \t"), {});
+			auto split0 = RenderOverlays::StringSplitByWidth(*font, MakeStringSectionLiteral(longString), 64.f, MakeStringSectionLiteral(" \t"), {});
 			REQUIRE(split0._sections.size() == 3);
 
-			auto split1 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection(longString2), 64.f, MakeStringSectionLiteral(" \t"), {});
+			auto split1 = RenderOverlays::StringSplitByWidth(*font, MakeStringSectionLiteral(longString2), 64.f, MakeStringSectionLiteral(" \t"), {});
 			REQUIRE(split1._sections.size() == 7);
 
-			auto split2 = RenderOverlays::StringSplitByWidth(*font, MakeStringSection(longString2), FLT_MAX, MakeStringSectionLiteral(" \t"), {});
+			auto split2 = RenderOverlays::StringSplitByWidth(*font, MakeStringSectionLiteral(longString2), FLT_MAX, MakeStringSectionLiteral(" \t"), {});
 			// the splitting here is very specific:
 			// note that the final \n has no effect on the result
 			REQUIRE(split2._sections.size() == 5);

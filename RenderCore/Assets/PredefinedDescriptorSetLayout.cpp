@@ -128,10 +128,10 @@ namespace RenderCore { namespace Assets
 	// HLSL object types:
 	//		* StructuredBuffer			-> UnorderedAccessBuffer
 	//		* AppendStructuredBuffer	-> UnorderedAccessBuffer
-	//		* Buffer					-> UnorderedAccessBuffer
+	//		* Buffer<>					-> UniformTexelBuffer
 	//		* ByteAddressBuffer			-> UnorderedAccessBuffer
 	//		* ConsumeStructuredBuffer	-> UnorderedAccessBuffer
-	//		* RWBuffer					-> UnorderedAccessBuffer
+	//		* RWBuffer<>				-> UnorderedAccessTexelBuffer
 	//		* RWByteAddressBuffer		-> UnorderedAccessBuffer
 	//		* RWTexture1D				-> UnorderedAccessTexture
 	//		* RWTexture1DArray			-> UnorderedAccessTexture

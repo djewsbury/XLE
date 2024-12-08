@@ -466,7 +466,7 @@ namespace UnitTests
 			main=~
 				ut-data/minimal_perpixel.graph::Minimal_PerPixel
 			)--";
-			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(simplePatchCollectionFragments) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(simplePatchCollectionFragments) };
 			auto patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
 			auto patchCollectionMarker = testApparatus._pipelineLayoutDelegate->CompileShaderPatchCollection(patchCollection, nullptr);
 			patchCollectionMarker->StallWhilePending();
@@ -519,7 +519,7 @@ namespace UnitTests
 						normalGenerator=~
 							ut-data/spherical_generators.hlsl::MainSphericalToNormal
 					)--";
-					Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragmentsNoDeform) };
+					Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(sphericalCollectionFragmentsNoDeform) };
 					patchCollectionNoDeform = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
 				}
 
@@ -534,7 +534,7 @@ namespace UnitTests
 					deform=~
 						ut-data/spherical.graph::DeformPositionImplementation
 					)--";
-					Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragmentsWithDeform) };
+					Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(sphericalCollectionFragmentsWithDeform) };
 					patchCollectionWithDeform = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
 				}
 
@@ -613,7 +613,7 @@ namespace UnitTests
 					normalGenerator=~
 						ut-data/spherical_generators.hlsl::MainSphericalToNormal
 				)--";
-				Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(sphericalCollectionFragments) };
+				Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(sphericalCollectionFragments) };
 				auto patchCollection = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(formattr);
 				
 				auto techniqueDelegate = std::make_shared<UnitTestTechniqueDelegate>();

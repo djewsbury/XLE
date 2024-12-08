@@ -4,12 +4,13 @@
 
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../Assets/AssetsCore.h"
+#include "../../Math/Matrix.h"
 #include <memory>
 #include <vector>
 #include <functional>
 
 namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class Sequence; class SequenceIterator; class ILightScene; }}
-namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; struct DoubleBufferAttachment; }}
+namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; struct DoubleBufferAttachment; class DrawablesPacket; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace RenderOverlays { class OverlayApparatus; }
@@ -51,11 +52,22 @@ namespace ToolsRig
 			virtual ~IResource() = default;
 		};
 
+		class IBuildDrawablesResource
+		{
+		public:
+			virtual void BuildDrawables(
+				RenderCore::Techniques::ParsingContext& parsingContext,
+				IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+				const Float4x4& localToWorld,
+				uint32_t viewMask=1,
+				uint64_t cmdStream=0) = 0;
+			virtual ~IBuildDrawablesResource() = default;
+		};
+
 		class ResourceSet
 		{
 		public:
 			std::shared_ptr<IResource> TryGetResource(uint64_t) const;
-		private:
 			std::vector<std::pair<uint64_t, std::shared_ptr<IResource>>> _constructedResources;
 			friend class ShaderLab;
 		};

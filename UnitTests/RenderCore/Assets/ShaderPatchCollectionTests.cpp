@@ -273,7 +273,7 @@ void ps(
 		{
 			// Normally a ShaderPatchCollection is deserialized from a material file
 			// We'll test the serialization and deserialization code here, and ensure
-			Formatters::TextInputFormatter<> formattr { MakeStringSection(s_exampleTechniqueFragments) };
+			Formatters::TextInputFormatter<> formattr { MakeStringSectionLiteral(s_exampleTechniqueFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 			// Verify that a few things got deserialized correctly
@@ -307,7 +307,7 @@ void ps(
 		{
 			// Ensure that we can correctly compile the shader graph in the test data
 			// (otherwise the following tests won't work)
-			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_exampleTechniqueFragments) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_exampleTechniqueFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 			std::vector<ShaderSourceParser::InstantiationRequest> instantiations;
@@ -322,7 +322,7 @@ void ps(
 
 		SECTION( "ShaderSourceParser::InstantiateShader with rename" )
 		{
-			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithRename) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_fragmentsWithRename) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 			std::vector<ShaderSourceParser::InstantiationRequest> instantiations;
@@ -350,7 +350,7 @@ void ps(
 
 			const uint64_t CompileProcess_InstantiateShaderGraph = ConstHash64Legacy<'Inst', 'shdr'>::Value;
 			
-			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 			auto compiledCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, nullptr, *matDescSetLayout);
 			std::vector<uint64_t> instantiations { "PerPixel"_h };
@@ -374,7 +374,7 @@ void ps(
 
 		SECTION( "CompileShaderPatchCollection1" )
 		{
-			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_exampleTechniqueFragments) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_exampleTechniqueFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 			using RenderCore::Techniques::CompiledShaderPatchCollection;
@@ -396,7 +396,7 @@ void ps(
 
 		SECTION( "CompileShaderPatchCollection2" )
 		{
-			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 			using RenderCore::Techniques::CompiledShaderPatchCollection;
@@ -429,7 +429,7 @@ void ps(
 					"shader_with_selectors_adapter.graph"	// incorrect path
 				};
 
-				Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(s_fragmentsWithSelectors) };
+				Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_fragmentsWithSelectors) };
 				RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 				for (unsigned c=0; c<std::max(dimof(dependenciesToCheck), dimof(nonDependencies)); ++c) {

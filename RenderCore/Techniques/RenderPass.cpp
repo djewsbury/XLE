@@ -2641,7 +2641,7 @@ namespace RenderCore { namespace Techniques
     void FragmentStitchingContext::DefineAttachment(
         const PreregisteredAttachment& attachment)
 	{
-        assert(attachment._desc._textureDesc._format != Format::Unknown);
+        assert(attachment._desc._type != ResourceDesc::Type::Texture || attachment._desc._textureDesc._format != Format::Unknown);
 		auto i = std::find_if(
 			_workingAttachments.begin(), _workingAttachments.end(),
 			[semantic=attachment._semantic](const auto& c) { return c._semantic == semantic; });

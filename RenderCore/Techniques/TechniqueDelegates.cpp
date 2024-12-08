@@ -57,7 +57,7 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depVal;
 	};
 
-	static void PrepareShadersFromTechniqueEntry(
+	void PrepareShadersFromTechniqueEntry(
 		GraphicsPipelineDesc& nascentDesc,
 		const TechniqueEntry& entry)
 	{
@@ -84,13 +84,13 @@ namespace RenderCore { namespace Techniques
 			return std::monostate{};
 	}
 
-	static void PrepareShadersFromTechniqueEntry(
+	void PrepareShadersFromTechniqueEntry(
 		GraphicsPipelineDesc& nascentDesc,
 		const TechniqueEntry& entry,
 		const std::shared_ptr<CompiledShaderPatchCollection>& shaderPatches,
 		std::vector<uint64_t>&& vsPatchExpansions,
 		std::vector<uint64_t>&& psPatchExpansions,
-		std::vector<uint64_t>&& gsPatchExpansions = {})
+		std::vector<uint64_t>&& gsPatchExpansions)
 	{
 		nascentDesc._shaders[(unsigned)ShaderStage::Vertex] = MakeShaderCompilePatchResource(entry._vertexShaderName, shaderPatches, std::move(vsPatchExpansions));
 		nascentDesc._shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompilePatchResource(entry._pixelShaderName, shaderPatches, std::move(psPatchExpansions));
@@ -887,9 +887,6 @@ namespace RenderCore { namespace Techniques
 		{
 			auto nascentDesc = std::make_shared<GraphicsPipelineDesc>();
 
-			unsigned cullDisable = 0;
-			if (stateSet._flag & Assets::RenderStateSet::Flag::DoubleSided)
-				cullDisable = !!stateSet._doubleSided;
 			nascentDesc->_rasterization = BuildDefaultRasterizationDesc(stateSet);
 			nascentDesc->_depthStencil = _dss[(stateSet._flag & Assets::RenderStateSet::Flag::WriteMask) ? (stateSet._writeMask & 3) : 3];
 			if (_allowBlending && stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend) {

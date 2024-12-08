@@ -175,7 +175,7 @@ namespace UnitTests
 		for (unsigned c=0; c<dimof(texturesToTry); ++c) {
 			INFO("Loading: " + std::string{texturesToTry[c]});
 			std::shared_ptr<BufferUploads::IAsyncDataSource> asyncSource;
-			if (XlEndsWithI(MakeStringSection(texturesToTry[c]), MakeStringSectionLiteral(".dds"))) {
+			if (XlEndsWithI(MakeStringSectionNullTerm(texturesToTry[c]), MakeStringSectionLiteral(".dds"))) {
 				asyncSource = ddsLoader(texturesToTry[c], 0);
 			} else {
 				asyncSource = wicLoader(texturesToTry[c], RenderCore::Assets::TextureLoaderFlags::GenerateMipmaps);

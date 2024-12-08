@@ -7,7 +7,6 @@
 #include "PipelineCollection.h"
 #include "DescriptorSetAccelerator.h"
 #include "CompiledShaderPatchCollection.h"
-#include "CommonResources.h"
 #include "ShaderVariationSet.h"
 #include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset & DescriptorSetLayoutAndBinding
 #include "DeformAccelerator.h"		// for UniformDeformerToRendererBinding
@@ -16,19 +15,13 @@
 #include "ResourceConstructionContext.h"
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
-#include "../Metal/DeviceContext.h"
-#include "../Metal/InputLayout.h"
-#include "../Metal/ObjectFactory.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/ScaffoldCmdStream.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/AssetHeapLRU.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
-#include "../../Utility/Streams/PathUtils.h"
-#include <cctype>
 #include <sstream>
 #include <iomanip>
 

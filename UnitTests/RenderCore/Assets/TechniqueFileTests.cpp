@@ -58,7 +58,7 @@ namespace UnitTests
 						SELECTOR_0=1
 			)--";
 
-			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(techniqueFile) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionNullTerm(techniqueFile) };
 			RenderCore::Techniques::TechniqueSetFile techniqueSetFile(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			(void)techniqueSetFile;
 
@@ -89,7 +89,7 @@ namespace UnitTests
 
 		SECTION("file2")
 		{
-			const char* techniqueFile = R"--(
+			const char techniqueFile[] = R"--(
 				Shared=~
 					Selectors=~
 						SELECTOR_0=~; relevance=<:(value!=0):>
@@ -104,7 +104,7 @@ namespace UnitTests
 						SELECTOR_2=4
 			)--";
 
-			Formatters::TextInputFormatter<utf8> formattr { MakeStringSection(techniqueFile) };
+			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(techniqueFile) };
 			RenderCore::Techniques::TechniqueSetFile techniqueSetFile(formattr, ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{});
 			(void)techniqueSetFile;
 

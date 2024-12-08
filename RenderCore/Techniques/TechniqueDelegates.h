@@ -20,13 +20,10 @@ namespace std { template<typename T> class future; template<typename T> class sh
 namespace RenderCore { namespace Techniques
 {
 	namespace Internal {
-		// we have to jump through some hoops to make sure Hash64() is visible viable argument dependant lookup
+		// we have to jump through some hoops to make sure Hash64() is visible via argument dependant lookup
 		// (without hiding all other overrides of Hash64 to this namespace)
 		// Alternatively, we could use a "using" and have the override in the std namespace
-		struct ShaderVariant : public std::variant<std::monostate, ShaderCompileResourceName, ShaderCompilePatchResource>
-		{
-			using variant::variant;
-		};
+		struct ShaderVariant : public std::variant<std::monostate, ShaderCompileResourceName, ShaderCompilePatchResource> { using variant::variant; };
 		uint64_t Hash64(const ShaderVariant& var, uint64_t seed = DefaultSeed64);
 	}
 

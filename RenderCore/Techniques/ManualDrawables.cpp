@@ -829,7 +829,10 @@ namespace RenderCore { namespace Techniques
 
 	ManualDrawableWriter::ManualDrawableWriter(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
 	: _pipelineAccelerators(std::move(pipelineAccelerators))
-	{}
+	{
+		_pipelineAccelerator = nullptr; _descriptorSetAccelerator = nullptr;
+		_vertexStride = 0;
+	}
 
 	ManualDrawableWriter::ManualDrawableWriter(
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
@@ -838,7 +841,10 @@ namespace RenderCore { namespace Techniques
 	: _shaderPatches(std::move(shaderPatches))
 	, _materialSelectors(std::move(materialSelectors))
 	, _pipelineAccelerators(std::move(pipelineAccelerators))
-	{}
+	{
+		_pipelineAccelerator = nullptr; _descriptorSetAccelerator = nullptr;
+		_vertexStride = 0;
+	}
 
 	ManualDrawableWriter::~ManualDrawableWriter()
 	{}
