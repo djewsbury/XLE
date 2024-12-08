@@ -263,7 +263,7 @@ namespace RenderCore { namespace LightingEngine
 
 					auto techniqueDelegate = helper->_techniqueDelegate.get();
 
-					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(captures->_lightScene);
+					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>();
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
 					// lightingTechnique->_depVal.RegisterDependency(captures->_lightScene->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(techniqueDelegate->GetDependencyValidation());

@@ -8,6 +8,7 @@
 #include "SequenceIterator.h"
 #include "RenderStepFragments.h"
 #include "../Techniques/RenderPass.h"
+#include "../Techniques/TechniqueUtils.h"
 #include "../../Assets/DepVal.h"
 #include <variant>
 #include <memory>
@@ -51,6 +52,13 @@ namespace RenderCore { namespace LightingEngine
 		// Ensure that we retain attachment data for the given semantic. This is typically used for debugging
 		//		-- ie, keeping an intermediate attachment that would otherwise be discarded after usage
 		void ForceRetainAttachment(uint64_t semantic, BindFlag::BitField layout);
+
+		template<typename Type> void AddInterface(std::shared_ptr<Type> interf) { AddInterface(TypeHashCode<Type>, std::move(interf)); }
+		template<typename Type> Type* QueryInterface() { return (Type*)QueryInterface(TypeHashCode<Type>); }
+
+		void AddInterface(uint64_t typeCode, std::shared_ptr<void>);
+		void* QueryInterface(uint64_t);
+		std::vector<std::pair<uint64_t, std::shared_ptr<void>>> _interfaces;
 
 		void ResolvePendingCreateFragmentSteps();
 		void CompleteAndSeal(
@@ -149,8 +157,6 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::FragmentStitchingContext& stitchingContext,
 			const FrameBufferProperties& fbProps);
 
-		ILightScene& GetLightScene();
-
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		::Assets::DependencyValidation _depVal;
@@ -158,12 +164,11 @@ namespace RenderCore { namespace LightingEngine
 
 		IteratorRange<const Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments() const { return _doubleBufferAttachments; }
 
-		CompiledLightingTechnique(const std::shared_ptr<ILightScene>& lightScene = nullptr);
+		CompiledLightingTechnique();
 		~CompiledLightingTechnique();
 
 		std::function<void*(uint64_t)> _queryInterfaceHelper;
 
-		std::shared_ptr<ILightScene> _lightScene;
 		bool _isConstructionCompleted = false;
 
 		std::vector<std::shared_ptr<Sequence>> _sequences;

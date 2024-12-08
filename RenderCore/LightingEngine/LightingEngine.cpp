@@ -18,7 +18,6 @@
 #include "../FrameBufferDesc.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
-#include "../../Assets/AsyncMarkerGroup.h"
 #include "../../OSServices/Log.h"
 
 namespace RenderCore { namespace LightingEngine
@@ -194,6 +193,24 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(!_frozen);
 		_forceRetainSemantics.emplace_back(semantic, layout);
+	}
+
+	void Sequence::AddInterface(uint64_t typeCode, std::shared_ptr<void> interf)
+	{
+		assert(!_frozen);
+		auto i = LowerBound(_interfaces, typeCode);
+		if (i != _interfaces.end() && i->first == typeCode) {
+			i->second = std::move(interf);
+		} else
+			_interfaces.emplace(i, typeCode, std::move(interf));
+	}
+
+	void* Sequence::QueryInterface(uint64_t typeCode)
+	{
+		auto i = LowerBound(_interfaces, typeCode);
+		if (i != _interfaces.end() && i->first == typeCode)
+			return i->second.get();
+		return nullptr;
 	}
 
 	static const std::string s_defaultSequencerCfgName = "lighting-technique";
@@ -463,14 +480,11 @@ namespace RenderCore { namespace LightingEngine
 		_sequences.emplace_back(std::move(newSequence));
 	}
 
-	ILightScene& CompiledLightingTechnique::GetLightScene()
-	{
-		return *_lightScene;
-	}
-
 	ILightScene& GetLightScene(CompiledLightingTechnique& technique)
 	{
-		return technique.GetLightScene();
+		auto* interf = (ILightScene*)technique._queryInterfaceHelper(TypeHashCode<ILightScene>);
+		assert(interf);
+		return *interf;
 	}
 
 	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique& technique)
@@ -492,8 +506,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
-	CompiledLightingTechnique::CompiledLightingTechnique(const std::shared_ptr<ILightScene>& lightScene)
-	: _lightScene(lightScene)
+	CompiledLightingTechnique::CompiledLightingTechnique()
 	{}
 
 	CompiledLightingTechnique::~CompiledLightingTechnique() {}
@@ -516,7 +529,8 @@ namespace RenderCore { namespace LightingEngine
 		template<typename T>
 			const Sequence::ParseStep* AdvanceParseStep(T& iterator);
 
-		LightingTechniqueStepper(IteratorRange<Sequence** const> sequences);
+		template<typename T>
+			LightingTechniqueStepper(IteratorRange<Sequence** const> sequences, T& iterator);
 		LightingTechniqueStepper() = default;
 	};
 
@@ -531,6 +545,7 @@ namespace RenderCore { namespace LightingEngine
 			if (_remainingSequences.empty()) return nullptr;
 			_stepIterator = _remainingSequences.front()->_steps.begin();
 			_stepEnd = _remainingSequences.front()->_steps.end();
+			iterator._interfaces = _remainingSequences.front()->_interfaces;
 		}
 		auto* result = AsPointer(_stepIterator);
 		++_stepIterator;
@@ -548,20 +563,24 @@ namespace RenderCore { namespace LightingEngine
 			if (_remainingSequences.empty()) return nullptr;
 			_parseStepIterator = _remainingSequences.front()->_parseSteps.begin();
 			_parseStepEnd = _remainingSequences.front()->_parseSteps.end();
+			iterator._interfaces = _remainingSequences.front()->_interfaces;
 		}
 		auto* result = AsPointer(_parseStepIterator);
 		++_parseStepIterator;
 		return result;
 	}
 
-	LightingTechniqueStepper::LightingTechniqueStepper(IteratorRange<Sequence**const> sequences)
+	template<typename T>
+		LightingTechniqueStepper::LightingTechniqueStepper(IteratorRange<Sequence**const> sequences, T& iterator)
 	: _remainingSequences { sequences.begin(), sequences.end() }
 	{
 		if (!_remainingSequences.empty()) {
+			iterator._drawablePktIdxOffset = 0;
 			_stepIterator = _remainingSequences.front()->_steps.begin();
 			_stepEnd = _remainingSequences.front()->_steps.end();
 			_parseStepIterator = _remainingSequences.front()->_parseSteps.begin();
 			_parseStepEnd = _remainingSequences.front()->_parseSteps.end();
+			iterator._interfaces = _remainingSequences.front()->_interfaces;
 		} else {
 			_stepIterator = _stepEnd = {};
 			_parseStepIterator = _parseStepEnd = {};
@@ -793,6 +812,7 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::IPipelineAcceleratorPool* _pipelineAcceleratorPool = nullptr;
 		unsigned _drawablePktIdxOffset = 0;
+		IteratorRange<const std::pair<uint64_t, std::shared_ptr<void>>*> _interfaces;
 
 		BufferUploads::CommandListID _baseCommandList = 0;
 
@@ -936,8 +956,8 @@ namespace RenderCore { namespace LightingEngine
 
 	void SequencePlayback::ResetIteration(Phase newPhase)
 	{
-		*_stepper = LightingTechniqueStepper{MakeIteratorRange(_sequences)};
-		if (_iterator) _iterator->_drawablePktIdxOffset = 0;
+		assert(_iterator);
+		*_stepper = LightingTechniqueStepper{MakeIteratorRange(_sequences), *_iterator};
 		if (_prepareResourcesIterator) _prepareResourcesIterator->_drawablePktIdxOffset = 0;
 		_currentPhase = newPhase;
 	}

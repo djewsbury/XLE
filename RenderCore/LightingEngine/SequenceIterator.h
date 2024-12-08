@@ -5,10 +5,9 @@
 #pragma once
 
 #include "../Techniques/RenderPass.h"
-#include "../Techniques/TechniqueUtils.h"
+#include "../../Utility/IteratorUtils.h"
 #include <vector>
 #include <memory>
-#include <variant>
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ParsingContext; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class IShaderResourceDelegate; class SequencerConfig; struct PreparedResourcesVisibility; } }
@@ -37,6 +36,9 @@ namespace RenderCore { namespace LightingEngine
 		void GetPkts(IteratorRange<Techniques::DrawablesPacket**> result, SequenceParseId parse);
 		const FrameToFrameProperties& GetFrameToFrameProperties() const { return *_frameToFrameProps; }
 
+		template<typename Type> Type* QueryInterface() { return (Type*)QueryInterface(TypeHashCode<Type>); }
+		void* QueryInterface(uint64_t);
+
 		SequenceIterator(
 			Techniques::ParsingContext& parsingContext,
 			FrameToFrameProperties& frameToFrameProps);
@@ -46,11 +48,20 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<Techniques::IShaderResourceDelegate*> _delegatesPendingUnbind;
 		unsigned _drawablePktIdxOffset = 0;
 		FrameToFrameProperties* _frameToFrameProps = nullptr;
+		IteratorRange<const std::pair<uint64_t, std::shared_ptr<void>>*> _interfaces;
 
 		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, SequenceParseId parse, Techniques::BatchFlags::BitField batches);
 
 		friend class SequencePlayback;
 		friend class LightingTechniqueStepper;
 	};
+
+	inline void* SequenceIterator::QueryInterface(uint64_t typeCode)
+	{
+		auto i = LowerBound2(_interfaces, typeCode);
+		if (i != _interfaces.end() && i->first == typeCode)
+			return i->second.get();
+		return nullptr;
+	}
 
 }}

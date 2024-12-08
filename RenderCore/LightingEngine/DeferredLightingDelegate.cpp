@@ -480,7 +480,7 @@ namespace RenderCore { namespace LightingEngine
 				auto&& thatPromise, auto buildGbuffer, auto lightScene) {
 
 				TRY {
-					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(lightScene);
+					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>();
 					auto captures = std::make_shared<DeferredLightingCaptures>();
 					captures->_lightScene = lightScene;
 					captures->_lightingOperatorLayout = lightingOperatorLayout;
@@ -513,6 +513,8 @@ namespace RenderCore { namespace LightingEngine
 								return (IExposure*)captures->_acesOperator.get();
 							case TypeHashCode<ISkyTextureProcessor>:
 								return (ISkyTextureProcessor*)captures->_skyTextureProcessor.get();
+							case TypeHashCode<ILightScene>:
+								return (ILightScene*)captures->_lightScene.get();
 							}
 							return nullptr;
 						};

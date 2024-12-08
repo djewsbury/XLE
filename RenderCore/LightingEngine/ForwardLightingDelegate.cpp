@@ -707,7 +707,7 @@ namespace RenderCore { namespace LightingEngine
 					auto forwardIllumDelegate_DisableDepthWrite = helper->_forwardIllumDelegate.get();
 					auto balancedNoiseTexture = helper->_balancedNoiseTexture.get();
 
-					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>(captures->_lightScene);
+					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>();
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
 					lightingTechnique->_depVal.RegisterDependency(captures->_lightScene->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionNormalRoughnessDelegate->GetDependencyValidation());
@@ -725,6 +725,8 @@ namespace RenderCore { namespace LightingEngine
 								return (ISkyTextureProcessor*)captures->_skyTextureProcessor.get();
 							case TypeHashCode<ISSAmbientOcclusion>:
 								return (ISSAmbientOcclusion*)captures->_ssaoOperator.get();
+							case TypeHashCode<ILightScene>:
+								return (ILightScene*)captures->_lightScene.get();
 							}
 							return nullptr;
 						};
