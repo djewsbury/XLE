@@ -12,7 +12,6 @@
 #include "../../SceneEngine/BasicLightingStateDelegate.h"
 #include "../../SceneEngine/ExecuteScene.h"
 #include "../../OSServices/OverlappedWindow.h"	// (for GetOSRunLoop())
-#include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/OverlayContext.h"
 #include "../../RenderOverlays/HighlightEffects.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
@@ -38,17 +37,12 @@
 #include "../../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
-#include "../../Assets/ConfigFileContainer.h"
-#include "../../Assets/AssetUtils.h"
+#include "../../PlatformRig/InputContext.h"
 #include "../../Assets/Assets.h"
-#include "../../Assets/ContinuationUtil.h"
-#include "../../Tools/EntityInterface/FormatterAdapters.h"
 #include "../../Math/Transformations.h"
-#include "../../ConsoleRig/Console.h"
-#include "../../OSServices/Log.h"
 #include "../../Utility/FunctionUtils.h"
-#include <iomanip>
 #include <chrono>
+#include <iomanip>
 
 #pragma warning(disable:4505) // unreferenced local function has been removed
 using namespace Utility::Literals;
@@ -60,7 +54,7 @@ namespace ToolsRig
         RenderCore::Techniques::CameraDesc result;
         result._cameraToWorld = MakeCameraToWorld(
             Normalize(camSettings._focus - camSettings._position),
-            Float3(0.f, 0.f, 1.f), camSettings._position);
+            camSettings._calibrationUp, camSettings._position);
         result._farClip = camSettings._farClip;
         result._nearClip = camSettings._nearClip;
         result._verticalFieldOfView = camSettings._verticalFieldOfView;
@@ -336,7 +330,6 @@ namespace ToolsRig
 					RenderOverlays::DrawBottomOfScreenErrorMsg(parserContext, *_immediateDrawables, *_fontRenderingManager, *_debugShapesDelegate, "SimpleSceneOverlay failed with: " + log);
 				} else if (_preparedSceneFuture || _showingLoadingIndicator) {
 					// Draw a loading indicator,
-					using namespace RenderOverlays::DebuggingDisplay;
 					using namespace RenderOverlays;
 					RenderOverlays::ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderingManager.get());
 					overlays.CaptureState();
@@ -932,7 +925,6 @@ namespace ToolsRig
 		const ToolsRig::ContinuousSceneQuery& mouseOver, 
 		const SceneEngine::IScene& scene)
     {
-        using namespace RenderOverlays::DebuggingDisplay;
 		using namespace RenderOverlays;
 
         const auto textHeight = 20u;
@@ -1111,7 +1103,6 @@ namespace ToolsRig
 
 			CATCH_ASSETS_BEGIN
 
-				using namespace RenderOverlays::DebuggingDisplay;
 				using namespace RenderOverlays;
 				ImmediateOverlayContext overlays(parserContext.GetThreadContext(), *_pimpl->_immediateDrawables, _pimpl->_fontRenderingManager.get());
 				overlays.CaptureState();

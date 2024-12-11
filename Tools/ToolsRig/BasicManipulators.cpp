@@ -51,6 +51,19 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    static Float3x3 ToUpNormalized(Float3 calibrationUp)
+    {
+        Float3 forward = Cross(Float3{1,0,0}, calibrationUp);
+        if (!Normalize_Checked(&forward, forward))
+            forward = Normalize(Cross(Float3{0,1,0}, calibrationUp));
+
+        Float3 right = Normalize(Cross(forward, calibrationUp));
+        return Float3x3(
+			right[0], forward[0], calibrationUp[0],
+			right[1], forward[1], calibrationUp[1],
+			right[2], forward[2], calibrationUp[2]);
+    }
+
     bool CameraMovementManipulator::OnInputEvent(
         const OSServices::InputSnapshot& evnt, 
         const SceneEngine::IntersectionTestContext& hitTestContext,
@@ -90,7 +103,7 @@ namespace ToolsRig
 
         auto cameraToWorld = MakeCameraToWorld(
 			Normalize(_visCameraSettings->_focus -_visCameraSettings->_position),
-			Float3(0.f, 0.f, 1.f), _visCameraSettings->_position);
+			_visCameraSettings->_calibrationUp, _visCameraSettings->_position);
 		auto up = ExtractUp_Cam(cameraToWorld);
 		auto right = ExtractRight_Cam(cameraToWorld);
 		auto forward = ExtractForward_Cam(cameraToWorld);
@@ -144,11 +157,12 @@ namespace ToolsRig
 					// float t = RayVsPlane(_visCameraSettings->_position, _visCameraSettings->_focus, plane);
 
 					Float3 orbitCenter = _visCameraSettings->_focus; // _visCameraSettings->_position + t * (_visCameraSettings->_focus - _visCameraSettings->_position);
-					auto spherical = CartesianToSpherical(orbitCenter - _visCameraSettings->_position);
+                    auto normalizer = ToUpNormalized(_visCameraSettings->_calibrationUp);
+					auto spherical = CartesianToSpherical(normalizer * (orbitCenter - _visCameraSettings->_position));
 					spherical[0] += evnt._mouseDelta[1] * _orbitRotationSpeed;
 					spherical[0] = Clamp(spherical[0], gPI * 0.02f, gPI * 0.98f);
 					spherical[1] -= evnt._mouseDelta[0] * _orbitRotationSpeed;
-					_visCameraSettings->_position = orbitCenter - SphericalToCartesian(spherical);
+					_visCameraSettings->_position = orbitCenter - Transpose(normalizer) * SphericalToCartesian(spherical);
 					_visCameraSettings->_focus = orbitCenter;
 
 				}

@@ -49,6 +49,7 @@ namespace ToolsRig
         Float3      _position;
         Float3      _focus;
         float       _nearClip, _farClip;
+        Float3      _calibrationUp;
 
         enum class Projection { Perspective, Orthogonal };
         Projection  _projection;
@@ -287,6 +288,7 @@ namespace ToolsRig
         _verticalFieldOfView = Deg2Rad(40.f);
         _left = _bottom = -1.f;
         _right = _top = 1.f;
+        _calibrationUp = Float3{0.f, 0.f, 1.f};
     }
 }
 
