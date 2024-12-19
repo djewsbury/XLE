@@ -532,6 +532,7 @@ namespace Utility
             mutable Threading::RecursiveMutex _delegatesLock;
             mutable bool _preventChangesToDelegates = false;
             mutable std::atomic<bool> _atLeastOneBind;
+            void CommitPendingChangesToDelegatesAlreadyLocked();
         };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -541,12 +542,14 @@ namespace Utility
             void Signal<Args...>::operator()(A&&... args) const
         {
             ScopedLock(_delegatesLock);
+            assert(!_preventChangesToDelegates);
             _preventChangesToDelegates = true;
             try
             {
-                for (const auto&d:_delegates) {
-                    (d._function)(std::forward<A>(args)...);
-                }
+                for (const auto&d:_delegates)
+                    if (d._function)        // can be set null by a delayed removal
+                        (d._function)(std::forward<A>(args)...);
+
                 // Call each delegate in _independentDelegates, but erase them when they return
                 // SignalDelegateResult::Unbind. Note that we can't call std::remove_if, because
                 // we want to maintain a stable order (it will be confusing if the relative order of
@@ -568,10 +571,10 @@ namespace Utility
             }
             catch (...)
             {
-                _preventChangesToDelegates = false;
+                const_cast<Signal<Args...>*>(this)->CommitPendingChangesToDelegatesAlreadyLocked();
                 throw;
             }
-            _preventChangesToDelegates = false;
+            const_cast<Signal<Args...>*>(this)->CommitPendingChangesToDelegatesAlreadyLocked();
         }
 
     template<typename... Args>
@@ -579,6 +582,7 @@ namespace Utility
         {
             ScopedLock(_delegatesLock);
             assert(!_preventChangesToDelegates);
+            assert(fn);
             auto delegateId = _nextDelegateId++;
             _delegates.emplace_back(AttachedDelegate{std::move(fn), delegateId});
             _atLeastOneBind = true;
@@ -590,6 +594,7 @@ namespace Utility
         {
             ScopedLock(_delegatesLock);
             assert(!_preventChangesToDelegates);
+            assert(fn);
             _independentDelegates.emplace_back(std::move(fn));
             _atLeastOneBind = true;
         }
@@ -598,17 +603,33 @@ namespace Utility
         std::function<void(Args...)> Signal<Args...>::Unbind(SignalDelegateId delegateId)
         {
             ScopedLock(_delegatesLock);
-            assert(!_preventChangesToDelegates);
-            if (_delegates.empty()) {
+            if (_delegates.empty())
                 return nullptr;
-            }
             auto i = std::find_if(_delegates.begin(), _delegates.end(),
                 [delegateId](const AttachedDelegate& ad) { return ad._id == delegateId; });
-            assert(i!=_delegates.end());
+            assert(i!=_delegates.end() && i->_function);
             auto result = std::move(i->_function);
-            _delegates.erase(i);
-            _atLeastOneBind = !_independentDelegates.empty() || !_delegates.empty();
+            if (!_preventChangesToDelegates) {        // when true, will be properly removed in CommitPendingChangesToDelegatesAlreadyLocked
+                _delegates.erase(i);
+                _atLeastOneBind = !_independentDelegates.empty() || !_delegates.empty();
+            } else {
+                bool atob = false;
+                for (const auto& d:_delegates) atob |= !!d._function;
+                _atLeastOneBind = atob;
+            }
             return result;
+        }
+
+    template<typename... Args>
+        void Signal<Args...>::CommitPendingChangesToDelegatesAlreadyLocked()
+        {
+            // note that std::remove_if() si stable -- ie, the relative order of elements not removed stays the same
+            auto i = std::remove_if(
+                _delegates.begin(), _delegates.end(),
+                [](const auto& q) { return !q._function; });
+            _delegates.erase(i, _delegates.end());
+            _atLeastOneBind = !_independentDelegates.empty() || !_delegates.empty();
+            _preventChangesToDelegates = false;
         }
 
 #endif
