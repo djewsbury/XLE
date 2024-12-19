@@ -421,6 +421,15 @@ namespace Utility
             return { r.first, r.second };
         }
 
+    template<typename Iterator>
+		IteratorRange<Iterator>
+			EqualRange2(IteratorRange<Iterator> range, decltype(std::declval<Iterator>()->first) searchKey)
+		{
+			auto r = std::equal_range(range.begin(), range.end(), searchKey,
+                CompareFirst<decltype(std::declval<Iterator>()->first), decltype(std::declval<Iterator>()->second)>());
+            return { r.first, r.second };
+		}
+
     template<typename Iterator> Iterator begin(const IteratorRange<Iterator>& range) { return range.begin(); }
     template<typename Iterator> Iterator end(const IteratorRange<Iterator>& range) { return range.end(); }
 }

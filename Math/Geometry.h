@@ -99,6 +99,7 @@ namespace XLEMath
         unsigned PlaneAABBIntersection(Vector3T<Primitive> dst[], Vector4T<Primitive> planeEquation, Vector3T<Primitive> aabbMins, Vector3T<Primitive> aabbMaxs);
 
     int TriangleSign(Float2 p1, Float2 p2, Float2 p3);
+	float TriangleSignNoEpsilon(Float2 p1, Float2 p2, Float2 p3);
     bool PointInTriangle(Float2 pt, Float2 v0, Float2 v1, Float2 v2);
 
     template<typename Primitive>
@@ -135,6 +136,8 @@ namespace XLEMath
                                 -std::numeric_limits<Float3::value_type>::max());
         return std::make_pair(mins, maxs);
     }
+
+	inline float TriangleSignNoEpsilon(Float2 p1, Float2 p2, Float2 p3) { return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1]); }
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
             //      I N C R E A S E D   P R E C I S I O N   C A L C U L A T I O N S			//
