@@ -206,16 +206,17 @@ namespace XLEMath
         //
         //      Basic transformations
         //
+    Float2          TransformPoint(const Float2x3& transform, Float2 pt);
+    Float2          TransformPoint(const Float3x3& transform, Float2 pt);
     Float3          TransformPoint(const Float3x4& transform, Float3 pt);
     Float3          TransformPoint(const Float4x4& transform, Float3 pt);
     Float3          TransformDirectionVector(const Float3x3& transform, Float3 pt);
     Float3          TransformDirectionVector(const Float3x4& transform, Float3 pt);
     Float3          TransformDirectionVector(const Float4x4& transform, Float3 pt);
+    Float2          TransformPointByOrthonormalInverse(const Float3x3& transform, Float2 pt);
     Float3          TransformPointByOrthonormalInverse(const Float3x4& transform, Float3 pt);
     Float3          TransformPointByOrthonormalInverse(const Float4x4& transform, Float3 pt);
     Float4          TransformPlane(const Float4x4& transform, Float4 plane);
-    Float2          TransformPoint(const Float2x3& transform, Float2 pt);
-    Float2          TransformPoint(const Float3x3& transform, Float2 pt);
 
         //
         //      Orthonormal matrices have special properties. Use the following, instead

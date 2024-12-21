@@ -137,6 +137,27 @@ namespace XLEMath
         return std::make_pair(mins, maxs);
     }
 
+	inline bool LineLineIntersectionExists(Float2 a1, Float2 b1, Float2 a2, Float2 b2)
+	{
+		// Returns true iff a1b1 intersections with a2b2
+		int o0 = TriangleSign(a1, b1, a2);
+		int o1 = TriangleSign(a1, b1, b2);
+		int o2 = TriangleSign(a2, b2, a1);
+		int o3 = TriangleSign(a2, b2, b1);
+		if (o0 != o1 && o2 != o3) return true;
+
+		auto WithinBox = [](Float2 pt, Float2 A, Float2 B) {
+			return pt[0] >= std::min(A[0], B[0]) && pt[0] <= std::max(A[0], B[0])
+				&& pt[1] >= std::min(A[1], B[1]) && pt[1] <= std::max(A[1], B[1]);
+		};
+
+		if (o0 == 0 && WithinBox(a2, a1, b1)) return true;
+		if (o1 == 0 && WithinBox(b2, a1, b1)) return true;
+		if (o2 == 0 && WithinBox(a1, a2, b2)) return true;
+		if (o3 == 0 && WithinBox(b1, a2, b2)) return true;
+		return false;
+	}
+
 	inline float TriangleSignNoEpsilon(Float2 p1, Float2 p2, Float2 p3) { return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1]); }
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
