@@ -1824,7 +1824,7 @@ namespace XLEMath
 
 		auto result = (unsigned)skeleton._steinerVertices.size();
 		skeleton._steinerVertices.push_back(vertex);
-		return skeleton._boundaryPointCount + result;
+		return unsigned(skeleton._boundaryPointCount + result);
 	}
 
 	T1(EdgeType) static void AddUnique(std::vector<EdgeType>& dst, const EdgeType& edge)
@@ -2018,7 +2018,7 @@ namespace XLEMath
 		_graph->_boundaryPointCount += vertices.size();
 	}
 
-	T1(Primitive) void StraightSkeletonCalculator<Primitive>::AddLoop(size_t count, Primitive xComponents[], Primitive yComponents[], size_t stride)
+	T1(Primitive) void StraightSkeletonCalculator<Primitive>::AddLoop(size_t count, const Primitive xComponents[], const Primitive yComponents[], size_t stride)
 	{
 		assert(count >= 2);
 		WavefrontLoop<Primitive> loop;
@@ -2094,6 +2094,46 @@ namespace XLEMath
 		return result;
 	}
 
+	static std::vector<std::vector<unsigned>> AsVertexLoopsAllowReverse(IteratorRange<const std::pair<unsigned, unsigned>*> segments)
+	{
+		// From a line segment soup, generate vertex loops. This requires searching
+		// for segments that join end-to-end, and following them around until we
+		// make a loop.
+		// Let's assume for the moment there are no 3-or-more way junctions (this would
+		// require using some extra math to determine which is the correct path)
+		std::vector<std::pair<unsigned, unsigned>> pool(segments.begin(), segments.end());
+		std::vector<std::vector<unsigned>> result;
+		while (!pool.empty()) {
+			std::vector<unsigned> workingLoop;
+			{
+				auto i = pool.end()-1;
+				workingLoop.push_back(i->first);
+				workingLoop.push_back(i->second);
+				pool.erase(i);
+			}
+			for (;;) {
+				assert(!pool.empty());	// if we hit this, we have open segments
+				auto searching = *(workingLoop.end()-1);
+				auto hit = pool.end(); 
+				for (auto i=pool.begin(); i!=pool.end(); ++i) {
+					if (i->first == searching || i->second == searching) {
+						assert(hit == pool.end());
+						hit = i;
+					}
+				}
+				assert(hit != pool.end());
+				auto newVert = (hit->first == searching) ? hit->second : hit->first;
+				pool.erase(hit);
+				if (std::find(workingLoop.begin(), workingLoop.end(), newVert) != workingLoop.end())
+					break;	// closed the loop
+				workingLoop.push_back(newVert);
+			}
+			result.push_back(std::move(workingLoop));
+		}
+
+		return result;
+	}
+
 	T1(Primitive) std::vector<std::vector<unsigned>> StraightSkeleton<Primitive>::WavefrontAsVertexLoops() const
 	{
 		std::vector<std::pair<unsigned, unsigned>> segmentSoup;
@@ -2103,6 +2143,24 @@ namespace XLEMath
 		// We shouldn't need the edges in _unplacedEdges, so long as each edge has been correctly
 		// assigned to it's source face
 		return AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
+	}
+
+	T1(Primitive) std::vector<unsigned> StraightSkeleton<Primitive>::VertexLoopForFace(unsigned faceIdx) const
+	{
+		if (_edgesByFace[faceIdx].empty()) return {};
+
+		// note that we pick up the ordering from first segment -- ideally it should be a Wavefront or OriginalBoundary edge
+		std::vector<std::pair<unsigned, unsigned>> segmentSoup;
+		segmentSoup.reserve(_edgesByFace[faceIdx].size());
+		size_t offset = 0;
+		while (offset < _edgesByFace[faceIdx].size() && _edgesByFace[faceIdx][offset]._type != EdgeType::Wavefront && _edgesByFace[faceIdx][offset]._type != EdgeType::OriginalBoundary) ++offset;
+		for (size_t c=0; c<_edgesByFace[faceIdx].size(); ++c) {
+			auto& e = _edgesByFace[faceIdx][(c+offset)%_edgesByFace[faceIdx].size()];
+			segmentSoup.emplace_back(e._head, e._tail);
+		}
+		auto loops = AsVertexLoopsAllowReverse(MakeIteratorRange(segmentSoup));
+		assert(loops.size() == 1);
+		return std::move(loops[0]);
 	}
 
 	T1(Primitive) Primitive StraightSkeleton<Primitive>::LastEventTime() const

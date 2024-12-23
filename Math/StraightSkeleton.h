@@ -25,6 +25,7 @@ namespace XLEMath
 		std::vector<EdgeSet> _edgesByFace;
 
 		std::vector<std::vector<unsigned>> WavefrontAsVertexLoops() const;
+		std::vector<unsigned> VertexLoopForFace(unsigned) const;
 		Primitive LastEventTime() const;
 	};
 
@@ -34,7 +35,7 @@ namespace XLEMath
 	{
 	public:
 		void AddLoop(IteratorRange<const Vector2T<Primitive>*> vertices);
-		void AddLoop(size_t count, Primitive xComponents[], Primitive yComponents[], size_t byteStride);
+		void AddLoop(size_t count, const Primitive xComponents[], const Primitive yComponents[], size_t byteStride);
 
 		StraightSkeleton<Primitive> Calculate(Primitive maxInset = std::numeric_limits<Primitive>::max());
 
