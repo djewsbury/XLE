@@ -1450,6 +1450,14 @@ namespace XLEMath
             0.f, 0.f, 1.f, translation[2]);
     }
 
+    Float3x3    AsFloat3x3(const Float2& translation)
+    {
+        return MakeFloat3x3(
+            1.f, 0.f, translation[0],
+            0.f, 1.f, translation[1],
+            0.f, 0.f, 1.f);
+    }
+
 	Float4x4    AsFloat4x4(const Quaternion& input)
 	{
 			// todo -- better implementation possible

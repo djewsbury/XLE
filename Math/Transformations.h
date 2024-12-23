@@ -298,6 +298,7 @@ namespace XLEMath
 	Float4x4    AsFloat4x4(const Quaternion& input);
 	Float4x4    AsFloat4x4(const Float3x4& orthonormalTransform);
 
+    Float3x3    AsFloat3x3(const Float2& translation);
     Float3x3    AsFloat3x3(const Quaternion& input);
     Float3x4    AsFloat3x4(const Float4x4& orthonormalTransform);
     Float3x4    AsFloat3x4(const UniformScaleYRotTranslation& input);
