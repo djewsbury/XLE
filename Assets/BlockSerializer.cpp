@@ -19,7 +19,7 @@ namespace Assets
         uint64_t	_pointerOffset;
         uint64_t	_subBlockOffset;
         uint64_t	_subBlockSize;
-        uint64_t	_specialBuffer;     // (this is SpecialBuffer::Enum. Made uint64_t to make alignment consistant across all platforms)
+        uint64_t	_specialBuffer;     // (this is SpecialBuffer. Made uint64_t to make alignment consistant across all platforms)
     };
 
     struct BlockSerializer::Recall
@@ -42,7 +42,7 @@ namespace Assets
         PushBack(_memory, value);
     }
 
-    void    BlockSerializer::PushBackPlaceholder(SpecialBuffer::Enum specialBuffer)
+    void    BlockSerializer::PushBackPlaceholder(SpecialBuffer specialBuffer)
     {
         if (specialBuffer == SpecialBuffer::Vector) {
             _memory.insert(_memory.end(), sizeof(SerializableVector<unsigned>), 0);
@@ -54,26 +54,38 @@ namespace Assets
             _memory.insert(_memory.end(), sizeof(std::unique_ptr<void, BlockSerializerDeleter<void>>), 0);
         } else if (specialBuffer == SpecialBuffer::Unknown) {
             PushBackPointer(0);
+        } else {
+            assert(0);      // SpecialBuffer::StringSection & SpecialBuffer::IteratorRange require special handling
         }
     }
 
     void    BlockSerializer::SerializeSpecialBuffer( 
-                    SpecialBuffer::Enum specialBuffer, 
+                    SpecialBuffer specialBuffer, 
                     IteratorRange<const void*> range)
     {
-        InternalPointer newPointer;
-        newPointer._pointerOffset    = _memory.size();
-        newPointer._subBlockOffset   = _trailingSubBlocks.size();
-        newPointer._subBlockSize     = ptrdiff_t(range.end()) - ptrdiff_t(range.begin());
-        newPointer._specialBuffer    = specialBuffer;
-        _internalPointers.push_back(newPointer);
+        InternalPointer beginPointer;
+        beginPointer._pointerOffset    = _memory.size();
+        beginPointer._subBlockOffset   = _trailingSubBlocks.size();
+        beginPointer._subBlockSize     = ptrdiff_t(range.end()) - ptrdiff_t(range.begin());
+        beginPointer._specialBuffer    = (uint64_t)specialBuffer;
+        _internalPointers.push_back(beginPointer);
 
         _trailingSubBlocks.insert(_trailingSubBlocks.end(), (const uint8_t*)range.begin(), (const uint8_t*)range.end());
 
-            //
-            //      =<>=    Write blank space for this special buffer   =<>=
-            //
-        PushBackPlaceholder(specialBuffer);
+        if (specialBuffer == SpecialBuffer::StringSection || specialBuffer == SpecialBuffer::IteratorRange) {
+            PushBackPointer(0);         // begin pointer
+
+            InternalPointer endPointer;
+            endPointer._pointerOffset    = _memory.size();
+            endPointer._subBlockOffset   = _trailingSubBlocks.size();
+            endPointer._subBlockSize     = 0;
+            endPointer._specialBuffer    = (uint64_t)BlockSerializer::SpecialBuffer::Unknown;
+            _internalPointers.push_back(endPointer);
+
+            PushBackPointer(0);         // end pointer
+        } else {
+            PushBackPlaceholder(specialBuffer);
+        }
     }
 
     void    BlockSerializer::SerializeValue(uint8_t     value)
@@ -159,7 +171,7 @@ namespace Assets
         _internalPointers.push_back(ptr);
     }
 
-    void    BlockSerializer::SerializeSubBlock(const BlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer)
+    void    BlockSerializer::SerializeSubBlock(const BlockSerializer& subBlock, SpecialBuffer specialBuffer)
     {
         assert(subBlock._pendingRecalls.empty());
 
@@ -168,14 +180,29 @@ namespace Assets
             //      an internal pointer record for it.
             //
 
-        InternalPointer ptr;
-        ptr._pointerOffset   = _memory.size();
-        ptr._subBlockOffset  = _trailingSubBlocks.size();
-        ptr._subBlockSize    = subBlock._memory.size();
-        ptr._specialBuffer   = specialBuffer;
-        RegisterInternalPointer(ptr);
+        InternalPointer beginPointer;
+        beginPointer._pointerOffset   = _memory.size();
+        beginPointer._subBlockOffset  = _trailingSubBlocks.size();
+        beginPointer._subBlockSize    = subBlock._memory.size();
+        beginPointer._specialBuffer   = (uint64_t)specialBuffer;
+        RegisterInternalPointer(beginPointer);
 
-        PushBackPlaceholder(specialBuffer);
+        _trailingSubBlocks.insert(_trailingSubBlocks.end(), subBlock._memory.begin(), subBlock._memory.end());
+
+        if (specialBuffer == SpecialBuffer::StringSection || specialBuffer == SpecialBuffer::IteratorRange) {
+            PushBackPointer(0);         // begin pointer
+
+            InternalPointer endPointer;
+            endPointer._pointerOffset    = _memory.size();
+            endPointer._subBlockOffset   = _trailingSubBlocks.size();
+            endPointer._subBlockSize     = 0;
+            endPointer._specialBuffer    = (uint64_t)BlockSerializer::SpecialBuffer::Unknown;
+            _internalPointers.push_back(endPointer);
+
+            PushBackPointer(0);         // end pointer
+        } else {
+            PushBackPlaceholder(specialBuffer);
+        }
 
             //
             //      All of the internal pointer records should be merged in
@@ -187,7 +214,7 @@ namespace Assets
             if (p._pointerOffset & PtrFlagBit) {
                 p._pointerOffset     = (p._pointerOffset&PtrMask) + subBlock._memory.size();
             }
-            p._pointerOffset    +=  ptr._subBlockOffset;
+            p._pointerOffset    +=  beginPointer._subBlockOffset;
 
                 //
                 //      Because the pointer itself is in the "subblock" part, we
@@ -195,15 +222,14 @@ namespace Assets
                 //      in the "memory" part. Let's just set it negative.
                 //
             p._pointerOffset     |= PtrFlagBit;
-            p._subBlockOffset    +=  ptr._subBlockOffset + subBlock._memory.size();
+            p._subBlockOffset    +=  beginPointer._subBlockOffset + subBlock._memory.size();
             RegisterInternalPointer(p);
         }
-
-        PushBackRaw_SubBlock(AsPointer(subBlock._memory.begin()), subBlock._memory.size());
-        PushBackRaw_SubBlock(AsPointer(subBlock._trailingSubBlocks.begin()), subBlock._trailingSubBlocks.size());
+    
+        _trailingSubBlocks.insert(_trailingSubBlocks.end(), subBlock._trailingSubBlocks.begin(), subBlock._trailingSubBlocks.end());
     }
 
-    void BlockSerializer::SerializeRawSubBlock(IteratorRange<const void*> range, SpecialBuffer::Enum specialBuffer)
+    void BlockSerializer::SerializeRawSubBlock(IteratorRange<const void*> range, SpecialBuffer specialBuffer)
     {
         auto size = size_t(range.end()) - size_t(range.begin());
 
@@ -211,7 +237,7 @@ namespace Assets
         ptr._pointerOffset   = _memory.size();
         ptr._subBlockOffset  = _trailingSubBlocks.size();
         ptr._subBlockSize    = size;
-        ptr._specialBuffer   = specialBuffer;
+        ptr._specialBuffer   = (uint64_t)specialBuffer;
         RegisterInternalPointer(ptr);
 
         PushBackPlaceholder(specialBuffer);
@@ -299,16 +325,18 @@ namespace Assets
              BlockSerializer::InternalPointer ptr;
              // Use memcpy to avoid SIGBUS errors if the data isn't aligned
              memcpy(&ptr, (void*)(ptrTable + (sizeof(ptr) * c)), sizeof(ptr));
-            if (ptr._specialBuffer == BlockSerializer::SpecialBuffer::Unknown) {
+            if (    ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::Unknown
+                ||  ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::IteratorRange
+                ||  ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::StringSection) {
                 SetPtr(PtrAdd(block, ptrdiff_t(sizeof(Header)+ptr._pointerOffset)),
                        ptr._subBlockOffset + size_t(base) + sizeof(Header));
-            } else if (ptr._specialBuffer == BlockSerializer::SpecialBuffer::Vector) {
+            } else if (ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::Vector) {
                 uint64_t* o = (uint64_t*)PtrAdd(block, ptrdiff_t(sizeof(Header)+ptr._pointerOffset));
                 SetPtr(&o[0], ptr._subBlockOffset + size_t(base) + sizeof(Header));
                 SetPtr(&o[1], ptr._subBlockOffset + ptr._subBlockSize + size_t(base) + sizeof(Header));
                 SetPtr(&o[2], 0);
-            } else if (     ptr._specialBuffer == BlockSerializer::SpecialBuffer::UniquePtr
-                       ||   ptr._specialBuffer == BlockSerializer::SpecialBuffer::String) {
+            } else if (     ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::UniquePtr
+                       ||   ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::String) {
                 // these are deprecated types -- they need a stronger cross-platform implementation to work reliably
                 assert(false);
             }

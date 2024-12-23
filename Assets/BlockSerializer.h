@@ -28,21 +28,18 @@ namespace Assets
 	class BlockSerializer
 	{
 	public:
-		struct SpecialBuffer
-		{
-			enum Enum { Unknown, String, Vector, UniquePtr };
-		};
+		enum class SpecialBuffer { Unknown, String, Vector, UniquePtr, IteratorRange, StringSection };
 		
 		template<typename Type, typename std::enable_if_t<Internal::IsPodIterator<Type>>* = nullptr>
-			void    SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
+			void    SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer specialBuffer = SpecialBuffer::Unknown);
 
 		template<typename Type, typename std::enable_if_t<!Internal::IsPodIterator<Type>>* = nullptr>
-			void    SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
+			void    SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer specialBuffer = SpecialBuffer::Unknown);
 
-		void    SerializeSubBlock(const BlockSerializer& subBlock, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
-		void    SerializeRawSubBlock(IteratorRange<const void*> range, SpecialBuffer::Enum specialBuffer = SpecialBuffer::Unknown);
+		void    SerializeSubBlock(const BlockSerializer& subBlock, SpecialBuffer specialBuffer = SpecialBuffer::Unknown);
+		void    SerializeRawSubBlock(IteratorRange<const void*> range, SpecialBuffer specialBuffer = SpecialBuffer::Unknown);
 
-		void    SerializeSpecialBuffer(SpecialBuffer::Enum specialBuffer, IteratorRange<const void*> range);
+		void    SerializeSpecialBuffer(SpecialBuffer specialBuffer, IteratorRange<const void*> range);
 		
 		void    SerializeValue  ( uint8_t value );
 		void    SerializeValue  ( uint16_t value );
@@ -85,7 +82,7 @@ namespace Assets
 		void PushBackRaw(const void* data, size_t size);
 		void PushBackRaw_SubBlock(const void* data, size_t size);
 		void RegisterInternalPointer(const InternalPointer& ptr);
-		void PushBackPlaceholder(SpecialBuffer::Enum specialBuffer);
+		void PushBackPlaceholder(SpecialBuffer specialBuffer);
 	};
 
 	void            Block_Initialize(void* block, const void* base=nullptr);
@@ -157,7 +154,7 @@ namespace Assets
 		////////////////////////////////////////////////////
 
 	template<typename Type, typename std::enable_if_t<!Internal::IsPodIterator<Type>>*>
-		void    BlockSerializer::SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer)
+		void    BlockSerializer::SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer specialBuffer)
 	{
 		BlockSerializer temporaryBlock;
 		for (const auto& i:range) SerializationOperator(temporaryBlock, i);
@@ -165,7 +162,7 @@ namespace Assets
 	}
 
 	template<typename Type, typename std::enable_if_t<Internal::IsPodIterator<Type>>*>
-		void    BlockSerializer::SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer::Enum specialBuffer)
+		void    BlockSerializer::SerializeSubBlock(IteratorRange<Type> range, SpecialBuffer specialBuffer)
 	{
 		SerializeRawSubBlock(range.template Cast<const void*>(), specialBuffer);
 	}
