@@ -314,7 +314,7 @@ namespace Formatters
 				return false;
 			data = { str.begin(), str.end() };
 			typeDesc = ImpliedTyping::TypeOf<char>();
-			typeDesc._arrayCount = str.size();
+			typeDesc._arrayCount = (uint32_t)str.size();
 			typeDesc._typeHint = ImpliedTyping::TypeHint::String;
 			return true;
 		}

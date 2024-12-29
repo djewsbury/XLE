@@ -329,6 +329,11 @@ namespace Conversion
         return utf8towide(input.AsString());
     }
 
+    template<> std::basic_string<utf8> Convert(StringSection<utf8> input)
+    {
+        return input.AsString();
+    }
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     template<> ptrdiff_t Convert(

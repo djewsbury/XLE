@@ -109,7 +109,7 @@ namespace Formatters
 				assert(parsingTemplateParamsTypeField & (1<<c));
 				if (paramTypeCodes.size() != 0)
 					Throw(std::runtime_error("Using partial templates as template parameters is unsupported"));
-				return parsingTemplateParams[c];
+				return (EvaluationContext::EvaluatedTypeToken)parsingTemplateParams[c];
 			}
 
 		auto paramCount = paramTypeCodes.size();
@@ -629,7 +629,7 @@ namespace Formatters
 						if (!next) break;
 						if (int(next) < 0) {
 							int item = -int(next)-1;
-							assert(item < expressionCnt);
+							assert(item < int(expressionCnt));
 							str << evaled[item];
 						} else {
 							str << (const char*)cmds.first;
@@ -888,7 +888,7 @@ namespace Formatters
 		if (*cmds.first != (unsigned)Cmd::InlineArrayMember) return false;
 
 		evaluatedTypeId = workingBlock._typeStack.top();
-		count = workingBlock._valueStack.top();
+		count = (unsigned)workingBlock._valueStack.top();
 
 		workingBlock._pendingArrayMembers = count;
 		workingBlock._pendingArrayType = evaluatedTypeId;
@@ -1002,7 +1002,7 @@ namespace Formatters
 
 	IteratorRange<const void*> BinaryInputFormatter::SkipBytes(ptrdiff_t byteCount)
 	{
-		if (byteCount > _dataIterator.size())
+		if (byteCount > (ptrdiff_t)_dataIterator.size())
 			Throw(std::runtime_error("Attempting to skip pass more bytes than are remaining in BinaryInputFormatter"));
 		auto* result = _dataIterator.first;
 		_dataIterator.first = PtrAdd(_dataIterator.first, byteCount);

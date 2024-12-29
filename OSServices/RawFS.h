@@ -9,15 +9,14 @@
 #include "../Core/Exceptions.h"
 #include "../Core/Types.h"
 #include "../Utility/StringUtils.h" // for StringSection
-#include "../Utility/Optional.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/Streams/PathUtils.h"       // for s_defaultFilenameRules
-#include <memory>       // for std::unique_ptr
 
 #include <vector>
 #include <string>
 #include <functional>
 #include <iosfwd>
+#include <optional>
 
 namespace OSServices 
 {

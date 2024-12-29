@@ -6,7 +6,6 @@
 #include "AsyncTracker.h"
 #include "Pools.h"
 #include "IncludeVulkan.h"
-#include "../../../OSServices/Log.h"
 #include <assert.h>
 
 // #define SUBMISSION_LOG_SPAM 1
@@ -462,8 +461,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			cmdList->_asyncTracker = nullptr;
 			rawCmdBuffers[c++] = cmdList->_underlying.get();
 			capturedCmdBuffers.emplace_back(std::move(cmdList->_underlying));
-			waitBeforeBeginInCmdListCount += cmdList->_waitBeforeBegin.size();
-			signalOnCompletionInCmdListCount += cmdList->_signalOnCompletion.size();
+			waitBeforeBeginInCmdListCount += (uint32_t)cmdList->_waitBeforeBegin.size();
+			signalOnCompletionInCmdListCount += (uint32_t)cmdList->_signalOnCompletion.size();
 		}
 
 		////////////////////////////////////////
@@ -558,7 +557,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			submitInfo.pNext = &timelineSemaphoreSubmitInfo;
 		}
 
-		submitInfo.commandBufferCount = cmdLists.size();
+		submitInfo.commandBufferCount = (uint32_t)cmdLists.size();
 		submitInfo.pCommandBuffers = rawCmdBuffers;
 
 		#if defined(SUBMISSION_LOG_SPAM)
@@ -597,7 +596,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		present.pSwapchains = swapChains;
 		present.pImageIndices = imageIndices;
 		present.pWaitSemaphores = waitBeforePresent.begin();
-		present.waitSemaphoreCount = waitBeforePresent.size();
+		present.waitSemaphoreCount = (uint32_t)waitBeforePresent.size();
 		present.pResults = NULL;
 
 		ScopedLock(_queueLock);
@@ -608,10 +607,16 @@ namespace RenderCore { namespace Metal_Vulkan
 
 	void SubmissionQueue::WaitIdle()
 	{
+		ScopedLock(_queueLock);
 		auto res = vkQueueWaitIdle(_underlying);
 		if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure while waiting for idle"));
 	}
+
+	#if defined(_DEBUG)
+		static std::vector<VkQueue> s_claimedVkQueues;
+		static Threading::Mutex s_claimedVKQueuesLock;
+	#endif
 
 	SubmissionQueue::SubmissionQueue(
 		ObjectFactory& factory,
@@ -627,10 +632,22 @@ namespace RenderCore { namespace Metal_Vulkan
 			_gpuTracker = std::make_shared<Metal_Vulkan::SemaphoreBasedTracker>(*_factory);
 		} else
 			_gpuTracker = std::make_shared<Metal_Vulkan::FenceBasedTracker>(*_factory, 32);
+
+		#if defined(_DEBUG)
+			ScopedLock(s_claimedVKQueuesLock);
+			assert(std::find(s_claimedVkQueues.begin(), s_claimedVkQueues.end(), _underlying) == s_claimedVkQueues.end());
+			s_claimedVkQueues.push_back(_underlying);
+		#endif
 	}
 
 	SubmissionQueue::~SubmissionQueue()
 	{
+		#if defined(_DEBUG)
+			ScopedLock(s_claimedVKQueuesLock);
+			auto i = std::find(s_claimedVkQueues.begin(), s_claimedVkQueues.end(), _underlying);
+			assert(i!=s_claimedVkQueues.end());
+			s_claimedVkQueues.erase(i);
+		#endif
 	}
 
 }}

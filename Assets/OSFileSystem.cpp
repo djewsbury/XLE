@@ -11,9 +11,7 @@
 #include "../Utility/Streams/PathUtils.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/Threading/Mutex.h"
-#include "../Core/Exceptions.h"
-#include "wildcards.hpp"
-#include <sstream>
+#include "wildcards/matcher.hpp"
 #include <vector>
 
 namespace Assets

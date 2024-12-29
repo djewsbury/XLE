@@ -598,7 +598,7 @@ namespace Assets
 					if (!r->second.owner_before(evnt) && !evnt.owner_before(r->second))
 						return IOReason::Invalid;
 
-				_staticAttachedMonitors.insert(range.second, std::make_pair(idx, evnt));
+				_staticAttachedMonitors.emplace(range.second, (unsigned)idx, evnt);
 			}
 
 			snapshot._state = FileSnapshot::State::Normal;

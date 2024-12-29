@@ -116,7 +116,7 @@ namespace Formatters
 		if (tokenList.empty())
 			Throw(FormatException("Expecting expression", tokenizer.GetLocation()));
 		workingDefinition._cmdList.push_back((unsigned)Cmd::EvaluateExpression);
-		workingDefinition._cmdList.push_back(tokenList.size());
+		workingDefinition._cmdList.push_back((unsigned)tokenList.size());
 		workingDefinition._cmdList.insert(workingDefinition._cmdList.end(), tokenList.begin(), tokenList.end());
 	}
 
@@ -149,7 +149,7 @@ namespace Formatters
 		workingDefinition._cmdList.push_back((unsigned)Cmd::LookupType);
 		auto baseNameAsToken = workingDefinition._tokenDictionary.GetOrAddToken(Utility::Internal::TokenDictionary::TokenType::Variable, std::make_pair(baseName, Hash64(baseName)));
 		workingDefinition._cmdList.push_back(baseNameAsToken);
-		workingDefinition._cmdList.push_back(templateParams.size());
+		workingDefinition._cmdList.push_back((unsigned)templateParams.size());
 		for (auto t=templateParams.rbegin(); t!=templateParams.rend(); ++t)
 			workingDefinition._cmdList.push_back((unsigned)*t);
 	}
@@ -188,7 +188,7 @@ namespace Formatters
 			if (tokenList.empty())
 				Throw(FormatException("Could not parse condition as expression", tokenizer.GetLocation()));
 			workingDefinition._cmdList.push_back((unsigned)Cmd::EvaluateExpression);
-			workingDefinition._cmdList.push_back(tokenList.size());
+			workingDefinition._cmdList.push_back((unsigned)tokenList.size());
 			workingDefinition._cmdList.insert(workingDefinition._cmdList.end(), tokenList.begin(), tokenList.end());
 			workingDefinition._cmdList.push_back((unsigned)Cmd::IfFalseThenJump);
 			writeJumpHere = workingDefinition._cmdList.size();
@@ -452,14 +452,14 @@ namespace Formatters
 
 			BitFieldDefinition::BitRange range;
 			if (openBrace == "{") {
-				range._min = firstLimit;
+				range._min = (unsigned)firstLimit;
 				range._count = 1;
 			} else {
-				range._min = (openBrace == "[") ? firstLimit : firstLimit+1;
+				range._min = unsigned((openBrace == "[") ? firstLimit : firstLimit+1);
 				auto lastPlusOne = (next == "]") ? secondLimit.value() : secondLimit.value()-1;
 				if (lastPlusOne <= range._min)
 					Throw(FormatException("Bit range specified does not include any bits, or is inverted", next._start));
-				range._count = lastPlusOne - range._min;
+				range._count = unsigned(lastPlusOne - range._min);
 			}
 
 			Require(tokenizer, ":");
@@ -530,7 +530,7 @@ namespace Formatters
 					}
 					if (!string.IsEmpty()) {
 						auto alignedSize = (string.size()+4-1+1)/4;		// note additional +1 for the null terminator
-						pendingCmds.push_back(alignedSize);
+						pendingCmds.push_back((unsigned)alignedSize);
 						pendingCmds.insert(pendingCmds.end(), alignedSize, 0);
 						std::copy(string._start, string._end, (char*)AsPointer(pendingCmds.end()-alignedSize));
 					}

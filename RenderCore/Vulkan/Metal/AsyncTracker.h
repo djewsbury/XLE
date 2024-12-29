@@ -94,8 +94,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	class SemaphoreBasedTracker : public IAsyncTrackerVulkan
 	{
 	public:
-		virtual Marker GetConsumerMarker() const override { return _lastCompletedConsumerFrameMarker; }
-		virtual Marker GetProducerMarker() const override { return _currentProducerFrameMarker; }
+		virtual Marker GetConsumerMarker() const override { return (Marker)_lastCompletedConsumerFrameMarker; }
+		virtual Marker GetProducerMarker() const override { return (Marker)_currentProducerFrameMarker; }
 		virtual MarkerStatus GetSpecificMarkerStatus(Marker) const override;
 
 		Marker AllocateMarkerForNewCmdList() override;

@@ -20,6 +20,7 @@ namespace OSServices
 		XlHandle _interruptPollEvent;
 		std::atomic<bool> _pendingShutdown;
 		std::thread _backgroundThread;
+		std::thread::id _constructionThread;
 
 		std::mutex _interfaceLock;
 
@@ -62,7 +63,7 @@ namespace OSServices
 			// therefore, we must keep a strong pointer to it for as long as the event is
 			// active
 			// The consumer can still be a weak pointer, though -- any events are cancelled
-			// if the consumer is released by the cllient
+			// if the consumer is released by the client
 			uint64_t _id = ~0ull;
 			std::shared_ptr<IConduitProducer> _producer;
 			std::weak_ptr<IConduitConsumer> _consumer;
@@ -154,6 +155,7 @@ namespace OSServices
 
 		Pimpl() : _pendingShutdown(false)
 		{
+			_constructionThread = std::this_thread::get_id();
 			_interruptPollEvent = XlCreateEvent(false);
 			_backgroundThread = std::thread(
 				[this]() {
@@ -171,6 +173,11 @@ namespace OSServices
 
 		~Pimpl()
 		{
+			// Better to destruct this object in the same thread we created it. Ideally we don't want to destroy
+			// it from within CompletionRoutineFunction (which can happen due to the ref counting) because that
+			// would create a complex web of interleaved Win32 calls
+			assert(std::this_thread::get_id() != _backgroundThread.get_id());		// problem, because _backgroundThread.join() must fail
+			assert(std::this_thread::get_id() == _constructionThread);
 			_pendingShutdown.store(true);
 			InterruptBackgroundThread();
 			_backgroundThread.join();
@@ -329,7 +336,7 @@ namespace OSServices
 				
 				assert(handlesToWaitOn.size() < XL_MAX_WAIT_OBJECTS);
 				auto res = XlWaitForMultipleSyncObjects(
-					handlesToWaitOn.size(), handlesToWaitOn.data(),
+					(uint32_t)handlesToWaitOn.size(), handlesToWaitOn.data(),
 					false, timeoutInMilliseconds, true);
 
 				if (res == XL_WAIT_FAILED) {

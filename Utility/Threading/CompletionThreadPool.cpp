@@ -85,9 +85,9 @@ namespace Utility
                     // If we have too many workers at this point, we should shutdown this thread
                     // This occurs when recovering from a freezing and unfreezing a thread
                     // Note the double-check here, and notify_one() to wake up another thread
-                    if (_workersNonFrozenCount.load() > _requestedWorkerCount) {
+                    if (_workersNonFrozenCount.load() > int(_requestedWorkerCount)) {
                         auto prevValue = _workersNonFrozenCount.fetch_add(-1);
-                        if (prevValue > _requestedWorkerCount) {
+                        if (prevValue > int(_requestedWorkerCount)) {
                             _pendingTaskVariable.notify_one();
                             break;
                         } else {
@@ -165,7 +165,7 @@ namespace Utility
 
         std::unique_lock<decltype(this->_pendingTaskLock)> autoLock(this->_pendingTaskLock);
         static_assert(sizeof(std::function<void()>) <= PageSize);
-        auto size = sizeof(std::function<void()>);
+        auto size = (unsigned)sizeof(std::function<void()>);
 
         bool foundAllocation = false;
         StoredFunction storedFunction;
@@ -208,7 +208,7 @@ namespace Utility
     {
         StoredFunction* fn;
         while (_pendingRelease.try_front(fn)) {
-            _pages[fn->_pageIdx]._heap.Deallocate(fn->_offset, fn->_size);
+            _pages[fn->_pageIdx]._heap.Deallocate(fn->_offset, unsigned(fn->_size));
             _pendingRelease.pop();
         }
     }
@@ -278,7 +278,7 @@ namespace Utility
         // set this thread into frozen state and spin up a replacement thread
         ++_pool->_workersFrozenCount;
         auto prevWorkersNonFrozenCount = _pool->_workersNonFrozenCount.fetch_add(-1);
-        if ((prevWorkersNonFrozenCount-1) < _pool->_requestedWorkerCount) {
+        if ((prevWorkersNonFrozenCount-1) < int(_pool->_requestedWorkerCount)) {
             ScopedLock(_pool->_pendingTaskLock);
             _pool->_workerThreads.emplace_back([pool=_pool] { pool->RunBlocks(); });
         }

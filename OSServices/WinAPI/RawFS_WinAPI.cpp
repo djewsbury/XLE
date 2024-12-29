@@ -153,10 +153,12 @@ namespace OSServices
 			}
 		}
 
+		auto convertedFilename = Conversion::Convert<std::string>(filename);
+
 		Exceptions::IOException except(
 			AsExceptionReason(dw),
 			"Failure during file open. Probably missing file or bad privileges: (%s), openMode: (%s), error string: (%s)", 
-			std::string(filename.begin(), filename.end()).c_str(), openMode, (const char*)lpMsgBuf);
+			convertedFilename.c_str(), openMode, (const char*)lpMsgBuf);
 		LocalFree(lpMsgBuf);
 
 		Throw(except);
