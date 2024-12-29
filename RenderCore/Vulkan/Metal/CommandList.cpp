@@ -466,9 +466,6 @@ namespace RenderCore { namespace Metal_Vulkan
 			signalOnCompletionInCmdListCount += cmdList->_signalOnCompletion.size();
 		}
 
-		// Tell the tracker we're submitting the markers
-		auto trackerSubmitInfo = checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->OnSubmitToQueue(asyncTrackerMarkers);
-
 		////////////////////////////////////////
 		VLA(VkSemaphore, waitBeforeBeginSemaphores, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
 		VLA(VkPipelineStageFlags, waitBeforeBeginStages, waitBeforeBegin.size()+waitBeforeBeginInCmdListCount);
@@ -517,9 +514,15 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		ScopedLock(_queueLock);
 
+		// Tell the tracker we're submitting the markers
+		// Note that we have to do this within _queueLock, because if we call OnSubmitToQueue in 2 separate threads, and then
+		// actually submit the results with vkQueueSubmit in the reversed order, we can end up advancing the GPU marker
+		// incorrectly (due to the reversed queue submission)
+		auto trackerSubmitInfo = checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->OnSubmitToQueue(asyncTrackerMarkers);
+
 		// Note that we have to ignore timeline semaphore values that are the same as previously submitted cmd lists (otherwise it triggers errors inside of Vulkan)
 		// This happens when there are out-of-order markers queued up (ie, the current semaphore value is actually out of date)
-		assert(!trackerSubmitInfo._maxInorderMarker || trackerSubmitInfo._maxInorderMarker >= _maxInorderActuallySubmitted);
+		assert(trackerSubmitInfo._maxInorderMarker >= _maxInorderActuallySubmitted);
 		if (trackerSubmitInfo._maxInorderMarker > _maxInorderActuallySubmitted) {
 			signalOnCompletionSemaphores[signalOnCompletionCount] = checked_cast<SemaphoreBasedTracker*>(_gpuTracker.get())->GetSemaphore();
 			signalOnCompletionValues[signalOnCompletionCount] = trackerSubmitInfo._maxInorderMarker;
