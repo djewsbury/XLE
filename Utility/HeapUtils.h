@@ -1586,7 +1586,7 @@ namespace Utility
 		assert(i._sparseValueOffset != 64ull);	// compiler weird about 1ull << 64ull
 		assert(i._entry->_allocationFlags & (1ull << uint64_t(i._sparseValueOffset)));
 		auto newBits = i._entry->_allocationFlags & ~(1ull << uint64_t(i._sparseValueOffset));
-		if (newBits && i._entry->_firstSparseValue != std::numeric_limits<T>::min()) {		// never remove the "min" sentinel
+		if (newBits || i._entry->_firstSparseValue == std::numeric_limits<T>::min()) {		// never remove the "min" sentinel
 			auto q = const_cast<Entry*>(i._entry);
 			++i;
 			q->_allocationFlags = newBits;
