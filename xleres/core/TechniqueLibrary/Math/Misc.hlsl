@@ -21,24 +21,6 @@
 
 float Sq(float x) { return x*x; }
 
-uint DitherPatternInt(uint2 pixelCoords)
-{
-	uint ditherArray[16] =
-	{
-		4, 12,  0,  8,
-		10,  2, 14,  6,
-		15,  7, 11,  3,
-		1,  9,  5, 13
-	};
-	uint2 t = pixelCoords.xy & 0x3;
-	return ditherArray[t.x+t.y*4];
-}
-
-float DitherPatternValue(uint2 pixelCoords)
-{
-	return float(DitherPatternInt(pixelCoords)) / 16.f;
-}
-
 uint IntegerHash(uint seed)
 {
 		// From http://www.concentric.net/~Ttwang/tech/inthash.htm
@@ -123,9 +105,66 @@ uint InterleaveNibbles(uint2 xy)
 	return xy.x | (xy.y << 4u);
 }
 
+uint InterleaveBits(uint2 xy)
+{
+	xy.x = (xy.x | (xy.x << 8u)) & 0x00FF00FFu;
+	xy.x = (xy.x | (xy.x << 4u)) & 0x0F0F0F0Fu;
+	xy.x = (xy.x | (xy.x << 2u)) & 0x33333333u;
+	xy.x = (xy.x | (xy.x << 1u)) & 0x55555555u;
+
+	xy.y = (xy.y | (xy.y << 8u)) & 0x00FF00FFu;
+	xy.y = (xy.y | (xy.y << 4u)) & 0x0F0F0F0Fu;
+	xy.y = (xy.y | (xy.y << 2u)) & 0x33333333u;
+	xy.y = (xy.y | (xy.y << 1u)) & 0x55555555u;
+
+	return xy.x | (xy.y << 1u);
+}
+
 int CountTrue(bool3 input)
 {
 	return dot(float(true).xxx, input);
+}
+
+uint DitherPatternInt(uint2 pixelCoords)
+{
+	// 
+	// This is a custom dithering matrix (no error diffusion) that I arranged by scrambling the numbers
+	// until I got a nice visual result.
+	//
+	// For reference, a commonly used matrix is the Bayer matrix:
+	// uint ditherArray[16] =
+	// {
+	// 	0, 8, 2, 10,
+	// 	12, 4, 14, 6,
+	// 	3, 11, 1, 9,
+	// 	15, 7, 13, 5
+	// };
+	// (see also BayerDitherPatternInt below)
+	// 
+	uint ditherArray[16] =
+	{
+		4, 12,  0,  8,
+		10,  2, 14,  6,
+		15,  7, 11,  3,
+		1,  9,  5, 13
+	};
+	uint2 t = pixelCoords.xy & 0x3;
+	return ditherArray[t.x+t.y*4];
+}
+
+uint BayerDitherPatternInt(uint2 pixelCoords, uint log2n)
+{
+	// Elegant way to calculate the bayer matrix in bit math
+	// However, there's quite a bit of bit twiddling, so performance may not be ideal
+	// (unless you already had interleaved pixelCoords.xy, perhaps)
+	// "BayerDitherPatternInt(xy, 4u) / 256.f" gives you a 16x16 matrix with values between 0.f and 1.f
+	pixelCoords.xy = pixelCoords.xy & ((1u<<log2n)-1u);
+	return reversebits(InterleaveBits(uint2(pixelCoords.x^pixelCoords.y, pixelCoords.x))) >> (32u-log2n-log2n);
+}
+
+float DitherPatternValue(uint2 pixelCoords)
+{
+	return float(DitherPatternInt(pixelCoords)) / 16.f;
 }
 
 // xoshiro128+ generator. Intended for generating 32 bit floats (since the lowest four bits have low linear complexity)
