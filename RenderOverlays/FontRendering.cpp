@@ -1267,19 +1267,19 @@ namespace RenderOverlays
 								RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 								FontRenderingManager& textureMan,
 								const Font& font, const FontSpan& span,
-								ColorB color, float outlineWidth)
+								ColorB color, Float2 offset, float outlineWidth)
 	{
 		const float depth = 0.f;
 
 		if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true };
+			WorkingVertexSetFontResource workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true, offset };
 			bool success = DrawSpanOutlineInternal(
 				threadContext, workingSet, textureMan,
 				font, span, color, outlineWidth);
 			if (!success) return false;
 			workingSet.Complete();
 		} else {
-			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true };
+			WorkingVertexSetPCT workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true, offset };
 			bool success = DrawSpanOutlineInternal(
 				threadContext, workingSet, textureMan,
 				font, span, color, outlineWidth);

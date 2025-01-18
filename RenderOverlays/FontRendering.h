@@ -69,7 +69,7 @@ namespace RenderOverlays
 								RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
 								FontRenderingManager& textureMan,
 								const Font& font, const FontSpan& span,
-								ColorB color, float outlineWidth = 1.f);
+								ColorB color, Float2 offset = Float2{0,0}, float outlineWidth = 1.f);
 
 	///////////////////////////////////////////////////////////////////////////////////
 

@@ -31,12 +31,13 @@ namespace cml
 		for (unsigned j=0; j<Dimen; ++j)
 			SerializationOperator(serializer, vec[j]);
 	}
-	
-	inline void SerializationOperator(::Assets::BlockSerializer& serializer, const XLEMath::Float4x4& float4x4)
+
+	template<int Dimen0, int Dimen1, typename Primitive>
+		inline void SerializationOperator(::Assets::BlockSerializer& serializer, const cml::matrix< Primitive, cml::fixed<Dimen0, Dimen1>, cml::col_basis>& mat)
 	{
-		for (unsigned i=0; i<4; ++i)
-			for (unsigned j=0; j<4; ++j)
-				SerializationOperator(serializer, float4x4(i,j));
+		for (unsigned i=0; i<Dimen0; ++i)
+			for (unsigned j=0; j<Dimen1; ++j)
+				SerializationOperator(serializer, mat(i,j));
 	}
 }
 
