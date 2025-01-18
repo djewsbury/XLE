@@ -42,6 +42,7 @@ namespace ConsoleRig
         int             PCall(int argumentCount, int returnValueCount);
     
         LuaState();
+        LuaState(lua_State& existing);
         ~LuaState();
 
     private:
@@ -50,6 +51,7 @@ namespace ConsoleRig
         static int      ErrorHandler(lua_State* L);
         static void*    GetTracebackKey();
         static int      Print(lua_State* L);
+        bool _closeOnExit = true;
     };
 
 
@@ -101,6 +103,7 @@ namespace ConsoleRig
         std::vector<std::basic_string<ucs2>> _lines;
         bool _lastLineComplete;
         std::unique_ptr<LuaState> _lua;
+        std::unique_ptr<LuaState> _customLua;
         std::unique_ptr<ConsoleVariableStorage> _cvars;
 
         int _dummyValue;
@@ -113,9 +116,12 @@ namespace ConsoleRig
     {
         Print("{Color:af3f7f}Executing string -- {Color:7F7F7F}" + str + "\n");
 
-        auto L = LockLuaState();
+        auto L = LockLuaState(true);
         luaL_loadstring(L.GetLuaState(), str.c_str());
-        int errorCode = _pimpl->_lua->PCall(0, 0);
+
+        // note that the custom lua might not be configured for the error handling we use here
+        auto* luaWrapper = _pimpl->_customLua ? _pimpl->_customLua.get() : _pimpl->_lua.get();
+        int errorCode = luaWrapper->PCall(0, 0);
         if (errorCode != LUA_OK) {
             const char* msg = lua_tostring(L.GetLuaState(), -1);
             if (msg) {
@@ -172,7 +178,7 @@ namespace ConsoleRig
 
     std::vector<std::string>    Console::AutoComplete(const std::string& input)
     {
-        auto lockedLua = LockLuaState();
+        auto lockedLua = LockLuaState(true);
         auto* L = lockedLua.GetLuaState();
 
             //
@@ -315,11 +321,16 @@ namespace ConsoleRig
         return unsigned(_pimpl->_lines.size());
     }
 
-    LockedLuaState  Console::LockLuaState()
+    LockedLuaState  Console::LockLuaState(bool allowCustom)
     {
         LockedLuaState result;
-        result._lock = std::unique_lock<Threading::Mutex>{_pimpl->_lua->_mutex};
-        result._luaState = _pimpl->_lua->GetUnderlying();
+        if (allowCustom && _pimpl->_customLua) {
+            result._lock = std::unique_lock<Threading::Mutex>{_pimpl->_customLua->_mutex};
+            result._luaState = _pimpl->_customLua->GetUnderlying();
+        } else {
+            result._lock = std::unique_lock<Threading::Mutex>{_pimpl->_lua->_mutex};
+            result._luaState = _pimpl->_lua->GetUnderlying();
+        }
         return result;
     }
 
@@ -332,6 +343,17 @@ namespace ConsoleRig
     {
         assert(!s_instance || !newInstance);
         s_instance = newInstance;
+    }
+
+    void Console::SetLua(lua_State& state)
+    {
+        _pimpl->_customLua = nullptr;
+        _pimpl->_customLua = std::make_unique<LuaState>(state);
+    }
+
+    void Console::ResetLua()
+    {
+        _pimpl->_customLua.reset();
     }
 
     Console::Console()  
@@ -471,6 +493,7 @@ namespace ConsoleRig
 
     LuaState::LuaState()
     {
+        _closeOnExit = true;
         L = lua_newstate(&AllocationBridge, nullptr);
         luaL_openlibs(L);
         lua_atpanic(L, &PanicBridge);
@@ -496,9 +519,16 @@ namespace ConsoleRig
         luabridge::getGlobalNamespace(L).beginNamespace("cv").endNamespace();
     }
 
+    LuaState::LuaState(lua_State& existing)
+    {
+        _closeOnExit = false;
+        L = &existing;
+    }
+
     LuaState::~LuaState()
     {
-        lua_close(L);
+        if (_closeOnExit)
+            lua_close(L);
     }
 
     namespace Detail

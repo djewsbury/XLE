@@ -49,8 +49,10 @@ namespace ConsoleRig
         static void         SetInstance(Console* newInstance);
 
         #if !defined(__CLR_VER)
-            LockedLuaState      LockLuaState();
+            LockedLuaState      LockLuaState(bool allowCustom=false);
         #endif
+        void SetLua(lua_State&);
+        void ResetLua();
         ConsoleVariableStorage& GetCVars();
 
         Console();
