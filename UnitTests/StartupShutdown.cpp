@@ -44,7 +44,6 @@ namespace UnitTests
 
 				{
 					auto renderDevice = RenderCore::CreateDevice(RenderCore::UnderlyingAPI::DX11);
-                    auto asyncMan = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
                     auto renderAssetsServices = ConsoleRig::MakeAttachablePtr<RenderCore::Assets::Services>(renderDevice);
 					auto techniquesServices = ConsoleRig::MakeAttachablePtr<RenderCore::Techniques::Services>(renderDevice);
 

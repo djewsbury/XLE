@@ -288,8 +288,6 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto testHelper = MakeTestHelper();
-		ConsoleRig::AttachablePtr<::Assets::Services> assetServices;
-		if (!assetServices) assetServices = std::make_shared<::Assets::Services>();
 		auto threadContext = testHelper->_device->GetImmediateContext();
 
 		const UInt2 outputSize { 1920, 1080 };

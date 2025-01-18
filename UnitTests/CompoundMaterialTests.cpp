@@ -105,7 +105,6 @@ namespace UnitTests
 		}
 
 		ConsoleRig::AttachablePtr<ConsoleRig::GlobalServices> _globalServices;
-		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
 
 		std::shared_ptr<RenderCore::IDevice> _device;
 		ConsoleRig::AttachablePtr<RenderCore::Assets::Services> _renderCoreAssetServices;
@@ -116,7 +115,6 @@ namespace UnitTests
 			_globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 			::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("Game/xleres"));
 			::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData));
-			_assetServices = ConsoleRig::MakeAttachablePtr<::Assets::Services>(0);
 
 			#if GFXAPI_TARGET == GFXAPI_APPLEMETAL
 				auto api = RenderCore::UnderlyingAPI::AppleMetal;
@@ -137,7 +135,6 @@ namespace UnitTests
 			_techniquesServices.reset();
 			_renderCoreAssetServices.reset();
 			_device.reset();
-			_assetServices.reset();
 			_globalServices.reset();
 		}
 	};

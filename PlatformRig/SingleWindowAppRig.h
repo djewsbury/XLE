@@ -182,7 +182,6 @@ namespace PlatformRig
 		ConsoleRig::AttachablePtr<ConsoleRig::GlobalServices> _globalServices;
 		struct MountRegistrationToken;
 		std::unique_ptr<MountRegistrationToken> _xleResMountID;
-		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
 		ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniqueServices;
 		ConsoleRig::AttachablePtr<ToolsRig::IPreviewSceneRegistry> _previewSceneRegistry;
 		ConsoleRig::AttachablePtr<EntityInterface::IEntityMountingTree> _entityMountingTree;

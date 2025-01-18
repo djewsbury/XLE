@@ -307,6 +307,12 @@ namespace XLEMath
 		return loop._edges.size() <= 2 || tripwire;
 	}
 
+	T1(Primitive) static bool ConsiderStationary_Tripwire(const WavefrontLoop<Primitive>& loop)
+	{
+		// note -- the following tripwire should be used with caution, because it can prevent looking for simplification (that might be possible)
+		return std::abs(loop._signedAreaAtLatestEvent) < GetEpsilon<Primitive>();
+	}
+
 	T1(Primitive) static bool CheckForMotorcycles(const WavefrontLoop<Primitive>& loop0, const WavefrontLoop<Primitive>& loop1)
 	{
 		if (loop0._loopId == loop1._loopId) {
@@ -516,7 +522,7 @@ namespace XLEMath
 		#else
 			for (const auto&e:loop._edges) {
 				auto collapseTime = e._collapsePt[2];
-				assert(collapseTime >= loop._lastEventBatchEarliest || loop._lastEventBatchEarliest > loop._lastEventBatchLatest);
+				// assert(collapseTime >= loop._lastEventBatchEarliest || loop._lastEventBatchEarliest > loop._lastEventBatchLatest);
 				if (collapseTime < (earliestTime + maxEventChain * GetTimeEpsilon<Primitive>())) {
 					events.push_back(Event<Primitive>::Collapse(loop._loopId, e._collapsePt, e._head, e._tail));
 					earliestTime = std::min(collapseTime, earliestTime);
@@ -1952,7 +1958,7 @@ namespace XLEMath
 				GetVertex<Primitive>(_vertices, e._vertex)._insideFace, GetVertex<Primitive>(_vertices, e._vertex)._outsideFace,
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		for (const auto&l:_loops)
-			WriteFinalEdges(result, l, ConsiderStationary(l) ? l._lastEventBatchLatest : maxTime);
+			WriteFinalEdges(result, l, ((ConsiderStationary(l) || ConsiderStationary_Tripwire(l)) && l._lastEventBatchLatest != -std::numeric_limits<Primitive>::max()) ? l._lastEventBatchLatest : maxTime);
 		std::sort(_mergedFaces.begin(), _mergedFaces.end(), [](const auto&lhs, const auto&rhs) { return lhs.second > rhs.second; });
 		for (auto mergedFace:_mergedFaces) {
 			assert(mergedFace.first < mergedFace.second);
@@ -2054,13 +2060,11 @@ namespace XLEMath
 	T1(Primitive) StraightSkeletonCalculator<Primitive>::~StraightSkeletonCalculator()
 	{}
 
-	std::vector<std::vector<unsigned>> AsVertexLoopsOrdered(IteratorRange<const std::pair<unsigned, unsigned>*> segments)
+	static std::vector<std::vector<unsigned>> AsVertexLoopsOrdered(IteratorRange<const std::pair<unsigned, unsigned>*> segments)
 	{
 		// From a line segment soup, generate vertex loops. This requires searching
 		// for segments that join end-to-end, and following them around until we
 		// make a loop.
-		// Let's assume for the moment there are no 3-or-more way junctions (this would
-		// require using some extra math to determine which is the correct path)
 		std::vector<std::pair<unsigned, unsigned>> pool(segments.begin(), segments.end());
 		std::vector<std::vector<unsigned>> result;
 		while (!pool.empty()) {
@@ -2077,15 +2081,21 @@ namespace XLEMath
 				auto hit = pool.end(); 
 				for (auto i=pool.begin(); i!=pool.end(); ++i) {
 					if (i->first == searching /*|| i->second == searching*/) {
-						assert(hit == pool.end());
 						hit = i;
 					}
 				}
 				assert(hit != pool.end());
 				auto newVert = hit->second; // (hit->first == searching) ? hit->second : hit->first;
 				pool.erase(hit);
-				if (std::find(workingLoop.begin(), workingLoop.end(), newVert) != workingLoop.end())
-					break;	// closed the loop
+				auto meet = std::find(workingLoop.begin(), workingLoop.end(), newVert);
+				if (meet != workingLoop.end()) {
+					// closed the loop.. But all of the vertices before "meet" have been cut off from the
+					// loop and have to be added back into the pool
+					for (auto i=workingLoop.begin(); i!=meet; ++i)
+						pool.emplace_back(*i, *(i+1));
+					workingLoop.erase(workingLoop.begin(), meet);
+					break;	
+				}
 				workingLoop.push_back(newVert);
 			}
 			result.push_back(std::move(workingLoop));
@@ -2099,8 +2109,6 @@ namespace XLEMath
 		// From a line segment soup, generate vertex loops. This requires searching
 		// for segments that join end-to-end, and following them around until we
 		// make a loop.
-		// Let's assume for the moment there are no 3-or-more way junctions (this would
-		// require using some extra math to determine which is the correct path)
 		std::vector<std::pair<unsigned, unsigned>> pool(segments.begin(), segments.end());
 		std::vector<std::vector<unsigned>> result;
 		while (!pool.empty()) {
@@ -2124,8 +2132,15 @@ namespace XLEMath
 				assert(hit != pool.end());
 				auto newVert = (hit->first == searching) ? hit->second : hit->first;
 				pool.erase(hit);
-				if (std::find(workingLoop.begin(), workingLoop.end(), newVert) != workingLoop.end())
-					break;	// closed the loop
+				auto meet = std::find(workingLoop.begin(), workingLoop.end(), newVert);
+				if (meet != workingLoop.end()) {
+					// closed the loop.. But all of the vertices before "meet" have been cut off from the
+					// loop and have to be added back into the pool
+					for (auto i=workingLoop.begin(); i!=meet; ++i)
+						pool.emplace_back(*i, *(i+1));
+					workingLoop.erase(workingLoop.begin(), meet);
+					break;	
+				}
 				workingLoop.push_back(newVert);
 			}
 			result.push_back(std::move(workingLoop));

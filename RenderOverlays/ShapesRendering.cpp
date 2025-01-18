@@ -427,11 +427,11 @@ namespace RenderOverlays
         Float3 v[] {
             AsPixelCoords(Coord2(rect._topLeft[0], rect._topLeft[1])),
             AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])),
-            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])),
+            AsPixelCoords(Coord2(rect._bottomRight[0], rect._topLeft[1])),
 
-            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._topLeft[1])),
+            AsPixelCoords(Coord2(rect._bottomRight[0], rect._topLeft[1])),
             AsPixelCoords(Coord2(rect._topLeft[0], rect._bottomRight[1])),
-            AsPixelCoords(Coord2(rect._bottomRight[0]-1, rect._bottomRight[1]))
+            AsPixelCoords(Coord2(rect._bottomRight[0], rect._bottomRight[1]))
         };
 
         context.DrawTriangles(ProjectionMode::P2D, v, dimof(v), colour);

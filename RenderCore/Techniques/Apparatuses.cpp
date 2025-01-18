@@ -100,8 +100,6 @@ namespace RenderCore { namespace Techniques
 				if (l) l->CompleteInitialization(threadContext);
 			});
 
-		assert(_assetServices != nullptr);
-
 		// setup default semi-constant desc set layout for the sequencer desc set
 		{
 			auto descSetLayoutContainer = ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(SEQUENCER_DS);
@@ -183,8 +181,6 @@ namespace RenderCore { namespace Techniques
 			[]() {
 				::Assets::Services::GetAssetSets().OnFrameBarrier();
 			});
-
-		assert(_assetServices != nullptr);
 	}
 
 	PrimaryResourcesApparatus::~PrimaryResourcesApparatus()

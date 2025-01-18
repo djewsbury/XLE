@@ -80,7 +80,6 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depValPtr;
 
 		ConsoleRig::AttachablePtr<Services> _techniqueServices;
-		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
 
 		DrawingApparatus(std::shared_ptr<IDevice> device);
 		~DrawingApparatus();
@@ -106,7 +105,6 @@ namespace RenderCore { namespace Techniques
 		::Assets::DependencyValidation _depValPtr;
 
 		ConsoleRig::AttachablePtr<Services> _techniqueServices;
-		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
 		unsigned _skinDeformerSystemRegistration = ~0u;
 
 		PrimaryResourcesApparatus(std::shared_ptr<IDevice> device, const BufferUploads::ManagerDesc& bufferUploadsConfiguration);

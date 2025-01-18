@@ -34,7 +34,6 @@ namespace GUILayer
     {
     public:
         const std::shared_ptr<RenderCore::IDevice>&        GetRenderDevice() { return _renderDevice; }
-        ::Assets::Services*         GetAssetServices() { return _assetServices.get(); }
         RenderCore::IThreadContext* GetImmediateContext();
         ConsoleRig::GlobalServices* GetGlobalServices() { return _services.get(); }
         int                         GetCreationThreadId() { return _creationThreadId; }
@@ -57,7 +56,6 @@ namespace GUILayer
 
     protected:
         ConsoleRig::AttachablePtr<ConsoleRig::GlobalServices> _services;
-		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
         ConsoleRig::AttachablePtr<RenderCore::Techniques::Services> _techniquesServices;
         std::shared_ptr<RenderCore::IDevice> _renderDevice;
         std::shared_ptr<RenderCore::IThreadContext> _immediateContext;

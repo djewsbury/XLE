@@ -155,7 +155,9 @@ namespace UnitTests
 
 		InteractiveTestHelper(EnabledComponents::BitField enabledComponents)
 		{
-			if (!_globalServices) _globalServices = std::make_shared<ConsoleRig::GlobalServices>();
+			ConsoleRig::StartupConfig startupConfig;
+			startupConfig._registerTemporaryIntermediates = true;
+			if (!_globalServices) _globalServices = std::make_shared<ConsoleRig::GlobalServices>(startupConfig);
 			#if !defined(NO_EMBEDDED_RES)
 				_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 			#else
@@ -168,7 +170,6 @@ namespace UnitTests
 			auto renderAPI = RenderCore::CreateAPIInstance(RenderCore::Techniques::GetTargetAPI());
 
 			_device = renderAPI->CreateDevice(0, renderAPI->QueryFeatureCapability(0));
-			if (!_assetServices) _assetServices = std::make_shared<::Assets::Services>();
 
 			_primaryResourcesApparatus = std::make_shared<RenderCore::Techniques::PrimaryResourcesApparatus>(_device, RenderCore::BufferUploads::ManagerDesc{});
 			_frameRenderingApparatus = std::make_shared<RenderCore::Techniques::FrameRenderingApparatus>(_device);
@@ -201,7 +202,6 @@ namespace UnitTests
 		}
 	private:
 		ConsoleRig::AttachablePtr<ConsoleRig::GlobalServices> _globalServices;
-		ConsoleRig::AttachablePtr<::Assets::Services> _assetServices;
 		std::shared_ptr<RenderCore::IDevice> _device;
 
 		std::shared_ptr<PlatformRig::WindowApparatus> _windowApparatus;

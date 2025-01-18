@@ -314,7 +314,6 @@ namespace PlatformRig
 					LogAPIInstance(*_appLogFile, *_renderAPIInstance);
 				}
 
-				_assetServices = std::make_shared<::Assets::Services>();
 				_osWindow = std::make_unique<OSServices::Window>();
 
 				if (_appLogFile) {
