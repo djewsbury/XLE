@@ -785,6 +785,18 @@ namespace RenderOverlays
         }
     }
 
+    unsigned    WriteInLineVertexCount(unsigned linePts)
+    {
+        const unsigned joinsVertices = 9*2;
+        return (linePts-1)*3*4 + ((linePts-2)*joinsVertices);
+    }
+
+    unsigned    WriteInLineInsetVertexCount(unsigned linePts)
+    {
+        const unsigned joinsVertices = 6*2;
+        return (linePts-1)*3*2 + ((linePts-2)*joinsVertices);
+    }
+
     void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width)
     {
         if (linePts.size() < 2) return;
@@ -796,8 +808,7 @@ namespace RenderOverlays
         mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
         mat._hash = ~mat._hash;
 
-        const unsigned joinsVertices = 9*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(WriteInLineVertexCount(linePts.size()), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVertices(data, linePts, colour, width);
@@ -814,8 +825,7 @@ namespace RenderOverlays
         mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
         mat._hash = ~mat._hash;
 
-        const unsigned joinsVertices = 9*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*4 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(WriteInLineVertexCount(linePts.size()), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVertices(data, linePts, colour, width);
@@ -828,8 +838,7 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        const unsigned joinsVertices = 6*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*2 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, res->_dashLine, {}).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(WriteInLineInsetVertexCount(unsigned(linePts.size())), Internal::Vertex_PCT::inputElements2D, res->_dashLine, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVerticesInset(data, linePts, colour, width);
@@ -842,8 +851,7 @@ namespace RenderOverlays
         auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
         if (!res) return;
 
-        const unsigned joinsVertices = 6*2;
-        auto data = context.DrawGeometry(unsigned((linePts.size()-1)*3*2 + ((linePts.size()-2)*joinsVertices)), Internal::Vertex_PCT::inputElements2D, res->_solidNoBorder, {}).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(WriteInLineInsetVertexCount(unsigned(linePts.size())), Internal::Vertex_PCT::inputElements2D, res->_solidNoBorder, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVerticesInset(data, linePts, colour, width);
