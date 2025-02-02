@@ -34,8 +34,8 @@ float4 CrossHatchFill_Calculate(
 Texture2D RefractionsBuffer : register(t12);
 
 static const float SqrtHalf = 0.70710678f;
-static const float3 BasicShapesLightDirection = normalize(float3(4.f*SqrtHalf, SqrtHalf, -1.25f));
-static const float3 BasicShapesReverseLightDirection = normalize(float3(-4.f*SqrtHalf, -SqrtHalf, -1.25f));
+static const float3 BasicShapesLightDirection = normalize(float3(4.f*SqrtHalf, 2.*SqrtHalf, -1.25f));
+static const float3 BasicShapesReverseLightDirection = normalize(float3(-4.f*SqrtHalf, -2.*SqrtHalf, -1.25f));
 
 float3 NormalToSurface(float2 dhdp)
 {
