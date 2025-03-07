@@ -516,6 +516,7 @@ namespace RenderCore { namespace Techniques
 
         std::vector<std::pair<std::shared_ptr<IResourceView>, unsigned>> _nonFBAttachments;         // good candidate for subframe heap
         std::vector<unsigned> _nonFBAttachmentsMap;                            // good candidate for subframe heap
+        std::unique_ptr<FrameBufferDesc> _retainedLayoutCopy;
     };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

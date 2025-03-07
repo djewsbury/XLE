@@ -1769,10 +1769,14 @@ namespace RenderCore { namespace Techniques
         _attachedParsingContext = nullptr;
         auto& stitchContext = parsingContext.GetFragmentStitchingContext();
         auto stitchedFragment = stitchContext.TryStitchFrameBufferDesc(MakeIteratorRange(&layout, &layout+1), parsingContext.GetFrameBufferProperties());
-        // todo -- have to protect lifetime of stitchResult._fbDesc in this case
-        // candidate for subframe heap
-        // just copy stitchResult._fbDesc somewhere that will last to the end of the frame
         *this = RenderPassInstance { parsingContext, stitchedFragment, beginInfo };
+
+        // have to protect lifetime of stitchResult._fbDesc in this case
+        // candidate for subframe heap
+        if (_layout) {
+            _retainedLayoutCopy = std::make_unique<FrameBufferDesc>(*_layout);
+            _layout = _retainedLayoutCopy.get();
+        }
     }
 
     RenderPassInstance::RenderPassInstance(
@@ -1802,7 +1806,8 @@ namespace RenderCore { namespace Techniques
             if (parsingContext.GetViewport()._width == 0.f && parsingContext.GetViewport()._height == 0.f)
                 parsingContext.GetViewport() = _frameBuffer->GetDefaultViewport();
         } else {
-            _layout = &stitchedFragment._fbDesc;
+            _retainedLayoutCopy = std::make_unique<FrameBufferDesc>(stitchedFragment._fbDesc);
+            _layout = _retainedLayoutCopy.get();
             _attachedContext = Metal::DeviceContext::Get(parsingContext.GetThreadContext()).get();
             #if defined(_DEBUG)
                 _attachedContext->BeginLabel(_layout->GetSubpasses()[0]._name.empty() ? "<<unnnamed compute subpass>>" : _layout->GetSubpasses()[0]._name.c_str());
@@ -1851,6 +1856,7 @@ namespace RenderCore { namespace Techniques
     , _nonFBAttachmentsMap(std::move(moveFrom._nonFBAttachmentsMap))
     , _currentSubpassIndex(moveFrom._currentSubpassIndex)
     , _trueRenderPass(moveFrom._trueRenderPass)
+    , _retainedLayoutCopy(std::move(moveFrom._retainedLayoutCopy))
     {
         moveFrom._attachedContext = nullptr;
         moveFrom._currentSubpassIndex = 0;
@@ -1880,6 +1886,7 @@ namespace RenderCore { namespace Techniques
         moveFrom._currentSubpassIndex = 0;
         _trueRenderPass = moveFrom._trueRenderPass;
         moveFrom._trueRenderPass = false;
+        _retainedLayoutCopy = std::move(moveFrom._retainedLayoutCopy);
 
         if (moveFrom._attachedParsingContext) {
             assert(moveFrom._attachedParsingContext->_rpi == &moveFrom);
