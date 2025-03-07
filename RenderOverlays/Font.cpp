@@ -977,7 +977,8 @@ namespace RenderOverlays
 		StringSection<> text,
 		unsigned maxLines)
 	{
-		ctrlBlock._iterator[1] += font.GetFontProperties()._ascenderExcludingAccent;		// drop down to where the first line should start
+		auto tempOffset = font.GetFontProperties()._ascenderExcludingAccent; 		// drop down to where the first line should start
+		ctrlBlock._iterator[1] += tempOffset;
 		float maxY = ctrlBlock._iterator[1] + font.GetFontProperties()._lineHeight * maxLines;
 		while (!text.IsEmpty()) {
 			result.emplace_back();
@@ -990,6 +991,7 @@ namespace RenderOverlays
 			if (text._start == adv) break;
 			text._start = adv;
 		}
+		ctrlBlock._iterator[1] -= tempOffset;
 		return text._start;
 	}
 
