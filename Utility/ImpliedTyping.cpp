@@ -640,7 +640,7 @@ namespace Utility { namespace ImpliedTyping
     // test -- widening element at different locations within an array
 
     template<typename CharType>
-        bool IsTokenBreak(CharType c) { return !( (c>='0' && c<='9') || (c>='A' && c<='Z') || (c>='a' && c<'z') ); };
+        bool IsTokenBreak(CharType c) { return !( (c>='0' && c<='9') || (c>='A' && c<='Z') || (c>='a' && c<='z') ); };
 
     template<typename CharType>
         ParseResult<CharType> Parse(
