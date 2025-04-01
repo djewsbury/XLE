@@ -275,6 +275,8 @@ namespace Formatters
         DoNewLine();
     }
 
+    void TextOutputFormatter::SuppressHeader() { _pendingHeader = false; }
+
     TextOutputFormatter::TextOutputFormatter(OutputStream& stream) 
     : _stream(&stream)
     {

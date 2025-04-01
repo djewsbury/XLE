@@ -68,13 +68,13 @@ namespace Formatters
 			typename Formatter::InteriorSection dummy0;
 			for (;;) {
 				switch(formatter.PeekNext()) {
-				case FormatterBlob::BeginElement:
+				case Formatter::Blob::BeginElement:
 					if (!formatter.TryBeginElement())
 						ThrowFormatException(formatter, "Malformed begin element while skipping forward");
 					++subtreeEle;
 					break;
 
-				case FormatterBlob::EndElement:
+				case Formatter::Blob::EndElement:
 					if (!subtreeEle) return;    // end now, while the EndElement is primed
 
 					if (!formatter.TryEndElement())
@@ -82,12 +82,12 @@ namespace Formatters
 					--subtreeEle;
 					break;
 
-				case FormatterBlob::KeyedItem:
+				case Formatter::Blob::KeyedItem:
 					if (!formatter.TryKeyedItem(dummy0))
 						ThrowFormatException(formatter, "Malformed keyed item while skipping forward");
 					break;
 
-				case FormatterBlob::Value:
+				case Formatter::Blob::Value:
 					// we must have either TryStringValue or TryRawValue, because we don't want to use some arbitrary type with TryCastValue
 					if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
 						Utility::ImpliedTyping::TypeDesc type;
@@ -100,7 +100,7 @@ namespace Formatters
 					}
 					break;
 
-				case FormatterBlob::CharacterData:
+				case Formatter::Blob::CharacterData:
 					if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
 						if (!formatter.TryCharacterData(dummy0))
 							ThrowFormatException(formatter, "Malformed value while skipping forward");
@@ -122,7 +122,7 @@ namespace Formatters
 			formatter.SkipValueOrElement();
 		} else {
 			typename Formatter::InteriorSection dummy0;
-			if (formatter.PeekNext() == FormatterBlob::Value) {
+			if (formatter.PeekNext() == Formatter::Blob::Value) {
 				// we must have either TryStringValue or TryRawValue, because we don't want to use some arbitrary type with TryCastValue
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
 					Utility::ImpliedTyping::TypeDesc type;
@@ -303,6 +303,25 @@ namespace Formatters
 	}
 
 	template<typename Formatter>
+		void RequireCastValue(Formatter& formatter, IteratorRange<void*> result, const ImpliedTyping::TypeDesc& typeDesc)
+	{
+		if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryCastValue) {
+			if (!formatter.TryCastValue(result, typeDesc))
+				ThrowFormatException(formatter, "Expecting value");
+		} else if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
+			IteratorRange<const void*> srcData;
+			Utility::ImpliedTyping::TypeDesc srcType;
+			if (!formatter.TryRawValue(srcData, srcType) || ImpliedTyping::Cast(result, typeDesc, srcData, srcType))
+				ThrowFormatException(formatter, "Expecting value");
+		} else {
+			typename Formatter::InteriorSection value;
+			if (	!formatter.TryStringValue(value)
+				|| 	!Utility::ImpliedTyping::ConvertFullMatch(value, result, typeDesc))
+				ThrowFormatException(formatter, "Expecting value");
+		}
+	}
+
+	template<typename Formatter>
 		bool TryRawValue(Formatter& formatter, IteratorRange<const void*>& data, ImpliedTyping::TypeDesc& typeDesc)
 	{
 		if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasTryRawValue) {
@@ -389,11 +408,11 @@ namespace Formatters
 		bool pendingIndent = true;
 		for (;;) {
 			switch (formatter.PeekNext()) {
-			case FormatterBlob::KeyedItem:
+			case Formatter::Blob::KeyedItem:
 				if (pendingIndent) { str << StreamIndent(indent); pendingIndent = false; }
 				str << "[" << RequireKeyedItem(formatter) << "]: ";
 				break;
-			case FormatterBlob::Value:
+			case Formatter::Blob::Value:
 				if constexpr (Formatters::Internal::FormatterTraits<Formatter>::HasTryStringValue) {
 					typename Formatter::InteriorSection value;
 					if (formatter.TryStringValue(value)) {
@@ -414,18 +433,18 @@ namespace Formatters
 				str << "<<unserializable value>>" << std::endl;
 				pendingIndent = true;
 				break;
-			case FormatterBlob::BeginElement:
+			case Formatter::Blob::BeginElement:
 				RequireBeginElement(formatter);
 				if (pendingIndent) { str << StreamIndent(indent); pendingIndent = false; }
 				str << "~" << std::endl;
 				pendingIndent = true;
 				indent += 4;
 				break;
-			case FormatterBlob::EndElement:
+			case Formatter::Blob::EndElement:
 				RequireEndElement(formatter);
 				indent -= 4;
 				break;
-			case FormatterBlob::BeginArray:
+			case Formatter::Blob::BeginArray:
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasBeginArray) {
 					typename Formatter::EvaluatedTypeId typeId;
 					unsigned count;
@@ -436,14 +455,14 @@ namespace Formatters
 				} else
 					UNREACHABLE();
 				break;
-			case FormatterBlob::EndArray:
+			case Formatter::Blob::EndArray:
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasBeginArray) {
 					RequireEndArray(formatter);
 					indent -= 4;
 				} else
 					UNREACHABLE();
 				break;
-			case FormatterBlob::BeginDictionary:
+			case Formatter::Blob::BeginDictionary:
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasBeginDictionary) {
 					typename Formatter::EvaluatedTypeId keyTypeId, valueTypeId;
 					RequireBeginDictionary(formatter, keyTypeId, valueTypeId);
@@ -453,21 +472,21 @@ namespace Formatters
 				} else
 					UNREACHABLE();
 				break;
-			case FormatterBlob::EndDictionary:
+			case Formatter::Blob::EndDictionary:
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasBeginDictionary) {
 					RequireEndDictionary(formatter);
 					indent -= 4;
 				} else
 					UNREACHABLE();
 				break;
-			case FormatterBlob::CharacterData:
+			case Formatter::Blob::CharacterData:
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
 					if (pendingIndent) { str << StreamIndent(indent); pendingIndent = false; }
 					str << "<<" << RequireCharacterData(formatter) << ">>";
 				} else
 					UNREACHABLE();
 				break;
-			case FormatterBlob::None:
+			case Formatter::Blob::None:
 				return;
 			}
 		}
@@ -481,28 +500,28 @@ namespace Formatters
 			if (!first) str << ", ";
 			first = false;
 			switch (formatter.PeekNext()) {
-			case FormatterBlob::KeyedItem:
+			case Formatter::Blob::KeyedItem:
 				str << "KeyedItem[" << RequireKeyedItem(formatter) << "]";
 				break;
-			case FormatterBlob::Value:
+			case Formatter::Blob::Value:
 				str << "Value[" << RequireStringValue(formatter) << "]";
 				break;
-			case FormatterBlob::BeginElement:
+			case Formatter::Blob::BeginElement:
 				RequireBeginElement(formatter);
 				str << "BeginElement";
 				break;
-			case FormatterBlob::EndElement:
+			case Formatter::Blob::EndElement:
 				RequireEndElement(formatter);
 				str << "EndElement" << std::endl;
 				first = true;
 				break;
-			case FormatterBlob::CharacterData:
+			case Formatter::Blob::CharacterData:
 				if constexpr(Formatters::Internal::FormatterTraits<Formatter>::HasCharacterData) {
 					str << "CharacterData[" << RequireCharacterData(formatter) << "]";
 				} else
 					UNREACHABLE();
 				break;
-			case FormatterBlob::None:
+			case Formatter::Blob::None:
 				return;
 			}
 		}

@@ -31,6 +31,7 @@ namespace Formatters
 		void WriteValue(StringSection<> value);
 		
 		void NewLine();
+		void SuppressHeader();
 
 		TextOutputFormatter(Utility::OutputStream& stream);
 		~TextOutputFormatter();

@@ -16,7 +16,8 @@ namespace Formatters
     {
     public:
         using InteriorSection = StringSection<>;
-        virtual FormatterBlob PeekNext() = 0;
+        using Blob = FormatterBlob;
+        virtual Blob PeekNext() = 0;
 
         virtual bool TryBeginElement() = 0;
 		virtual bool TryEndElement() = 0;
