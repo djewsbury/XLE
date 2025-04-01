@@ -48,7 +48,13 @@ namespace Assets
 			auto* page = _nextPage.load();
 
 			{
+				// There's an awkward race condition between the background thread realizing the waitables_ queue is empty, and
+				// updating isPollerRunning_ to indicate the thread is shutting down. We use a spinlock to prevent issues, but it's
+				// not the most elegant of solutions
+				page->TakeIsPollerRunningSpinLock();
 				while (!page->waitables_.push(std::move(w))) {
+					page->ReleaseIsPollerRunningSpinLock();
+
 					std::unique_lock<std::mutex> l2{pageManagementMutex_};
 					if (_nextPage == page) {	// another thread may have done this already
 						// find a page that is draining, or create a new one
@@ -65,9 +71,12 @@ namespace Assets
 					} else {
 						page = _nextPage;
 					}
+
+					page->TakeIsPollerRunningSpinLock();
 				}
 
 				bool startPoller = !page->isPollerRunning_.exchange(true);
+				page->ReleaseIsPollerRunningSpinLock();
 
 				auto queueSize = page->waitables_.size();
 				if (queueSize >= (2 * s_leaveToDrainThreshold) && (queueSize % 32) == 31) {
@@ -96,11 +105,14 @@ namespace Assets
 				while (true) {
 					std::unique_ptr<thousandeyes::futures::Waitable> w;
 					{
+						page->TakeIsPollerRunningSpinLock();
 						std::unique_ptr<thousandeyes::futures::Waitable>* ptr;
 						if (!active_ || !page->waitables_.try_front(ptr)) {
 							page->isPollerRunning_.store(false);
+							page->ReleaseIsPollerRunningSpinLock();
 							break;
 						}
+						page->ReleaseIsPollerRunningSpinLock();
 
 						w = std::move(*ptr);
 						page->waitables_.pop();	// pop now, because we push onto the end
@@ -189,6 +201,10 @@ namespace Assets
 		{
 			LockFreeFixedSizeQueue<std::unique_ptr<thousandeyes::futures::Waitable>, s_waitablesPerPage> waitables_;
 			std::atomic<bool> isPollerRunning_{ false };
+			std::atomic<bool> isPollerRunningSpinLock_{ false };
+
+			void TakeIsPollerRunningSpinLock() { while (isPollerRunningSpinLock_.exchange(true)); }
+			void ReleaseIsPollerRunningSpinLock() { isPollerRunningSpinLock_.store(false); }
 		};
 
 		std::mutex pageManagementMutex_;
