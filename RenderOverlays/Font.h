@@ -209,6 +209,16 @@ namespace RenderOverlays
 		IteratorRange<FontSpan*> spans,
 		const Font& font, float maxX);
 
+	// "SingleLine" variations allow for selecting the maxX on a line by line basis (at the cost of some efficiency)
+	bool WordWrapping_SingleLine(
+		IteratorRange<FontSpan*> spans,
+		const Font& font, unsigned line, float maxX,
+		unsigned additionLineSpacing);
+
+	void WordJustification_SingleLine(
+		IteratorRange<FontSpan*> spans,
+		const Font& font, unsigned line, float maxX);
+
 	class Quad
 	{
 	public:
