@@ -264,12 +264,12 @@ namespace RenderCore { namespace Techniques
 			drawable->_vertexCount = (unsigned)vertexCount;
 			drawable->_vertexStride = drawable->_bytesAllocated = 0;
 			DEBUG_ONLY(drawable->_userGeo = true;)
-			drawable->_matHash = 0;
+			drawable->_matHash = "do-not-combine"_h;
 			if (uniformStreamInterface) {
 				drawable->_looseUniformsInterface = ProtectLifetime(*uniformStreamInterface);
 				drawable->_uniforms = std::move(uniforms);
 			}
-			_lastQueuedDrawable = nullptr;
+			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
 			_lastQueuedDrawVertexCountOffset = 0;
 		}
 
@@ -300,12 +300,12 @@ namespace RenderCore { namespace Techniques
 			drawable->_vertexCount = (unsigned)vertexCount;
 			drawable->_vertexStride = vStride;
 			drawable->_bytesAllocated = (unsigned)vertexDataSize;
-			drawable->_matHash = 0;
+			drawable->_matHash = "do-not-combine"_h;
 			if (uniformStreamInterface) {
 				drawable->_looseUniformsInterface = ProtectLifetime(*uniformStreamInterface);
 				drawable->_uniforms = std::move(uniforms);
 			}
-			_lastQueuedDrawable = nullptr;
+			_lastQueuedDrawable = drawable;		// we must set this to ensure that we can call UpdateLastDrawCallVertexCount later
 			_lastQueuedDrawVertexCountOffset = 0;
 			return vertexStorage._data;
 		}
