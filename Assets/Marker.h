@@ -558,7 +558,7 @@ namespace Assets
 		DependencyValidation newDepVal;
 		Internal::TryGetAssetFromFuture(that->_pendingFuture, newState, newActualized, newActualizationLog, newDepVal);
 		
-		lock = std::unique_lock<Threading::Mutex>(that->_lock);
+		auto lock = std::unique_lock<Threading::Mutex>(that->_lock);
 		if (that->_state == AssetState::Pending) {
 			that->_actualized = std::move(newActualized);
 			that->_actualizationLog = std::move(newActualizationLog);
