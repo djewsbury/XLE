@@ -6,7 +6,7 @@
 #include "../TechniqueLibrary/Utility/Colour.hlsl"
 
 RWTexture2D<float4> OutputTexture : register(u1, space0);
-Texture2D<float3> InputTexture : register(t3, space0);
+Texture2D<float4> InputTexture : register(t3, space0);
 
 // TAP_COUNT must be odd
 #if !defined(TAP_COUNT)
@@ -31,7 +31,6 @@ cbuffer ControlUniforms : register(b5, space0)
 #define BLOCK_DIMS (BLOCK_CENTER+BLOCK_BORDER+BLOCK_BORDER)
 
 #define F16 min16float			// float16_t
-#define F16_3 min16float3		// float16_t3
 
 groupshared F16 Intermediate0[BLOCK_DIMS][BLOCK_DIMS];
 groupshared F16 Intermediate1[BLOCK_CENTER][BLOCK_DIMS];
@@ -54,7 +53,7 @@ void Gaussian(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID
 	uint threadX = groupThreadId.x;
 	uint threadY = groupThreadId.y;
 
-	uint2 inputTextureDims;
+	int2 inputTextureDims;		// must be int2 for clamp() call below
 	InputTexture.GetDimensions(inputTextureDims.x, inputTextureDims.y);
 
 	const uint threadGroupWidth = 8;		// width & height must be the same
@@ -100,12 +99,12 @@ void Gaussian(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID
 		w[c] = Weight[c];
 
 	for (uint y=threadY; y<BLOCK_DIMS; y+=8) {
-		for (cx=0; cx<BLOCK_CENTER; cx+=8) {
-			uint x = threadX + cx + BLOCK_BORDER;
+		for (cx=threadX; cx<BLOCK_CENTER; cx+=8) {
+			uint x = cx + BLOCK_BORDER;
 
 			F16 v;
 			v = Intermediate0[x  ][y] * w[0];
-			[unroll] for (uint c=1; c<WING_COUNT; ++c) {
+			[unroll] for (uint c=1; c<WING_COUNT+1; ++c) {
 				v += Intermediate0[x-c][y] * w[c];
 				v += Intermediate0[x+c][y] * w[c];
 			}
@@ -118,25 +117,24 @@ void Gaussian(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID
 	// vertical part
 	GroupMemoryBarrierWithGroupSync();
 
-	for (cy=0; cy<BLOCK_CENTER; cy+=8) {
-		for (cx=0; cx<BLOCK_CENTER; cx+=8) {
-			uint x = threadX + cx;
-			uint y = threadY + cy + BLOCK_BORDER;
+	for (cy=threadY; cy<BLOCK_CENTER; cy+=8) {
+		for (cx=threadX; cx<BLOCK_CENTER; cx+=8) {
+			uint x = cx;
+			uint y = cy + BLOCK_BORDER;
 
 			F16 v;
 			v = Intermediate1[x][y  ] * w[0];
-			[unroll] for (uint c=1; c<WING_COUNT; ++c) {
+			[unroll] for (uint c=1; c<WING_COUNT+1; ++c) {
 				v += Intermediate1[x][y-c] * w[c];
 				v += Intermediate1[x][y+c] * w[c];
 			}
 
-			if (SRGBConversionOnOutput)
-				v = LinearToSRGB_Formal(v);
+			if (SRGBConversionOnOutput) v = LinearToSRGB_Formal(v);
 
 			// vertical & horizontal parts done -- just write out
 			float4 t = OutputTexture[srcTextureOffset + uint2(x+BLOCK_BORDER, y)];
-			t[pixelElement] = v;
 			t[3] = 1;
+			t[pixelElement] = v;
 			OutputTexture[srcTextureOffset + uint2(x+BLOCK_BORDER, y)] = t;
 		}
 	}
@@ -151,3 +149,16 @@ void Gaussian(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID
 	GroupMemoryBarrierWithGroupSync();
 	Gaussian(groupThreadId, groupId, 2);
 }
+
+[numthreads(8, 8, 1)]
+	void GaussianRGBA(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+	Gaussian(groupThreadId, groupId, 0);
+	GroupMemoryBarrierWithGroupSync();
+	Gaussian(groupThreadId, groupId, 1);
+	GroupMemoryBarrierWithGroupSync();
+	Gaussian(groupThreadId, groupId, 2);
+	GroupMemoryBarrierWithGroupSync();
+	Gaussian(groupThreadId, groupId, 3);
+}
+
