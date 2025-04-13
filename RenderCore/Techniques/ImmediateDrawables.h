@@ -151,6 +151,15 @@ namespace RenderCore { namespace Techniques
 
 	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool>);
 
+	IteratorRange<void*> QueueDraw(
+		DrawablesPacket& pkt,
+		size_t vertexCount, size_t vertexStride,
+		PipelineAccelerator& pipelineAccelerator,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface = nullptr,
+		RetainedUniformsStream&& uniforms = {},
+		Topology topology = Topology::TriangleList);
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	inline EncoderState& EncoderState::SetScissor(const Rect2D& scissor) { _states |= States::Scissor; _states &= ~States::NoScissor; _scissor = scissor; return *this; }

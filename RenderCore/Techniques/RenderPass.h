@@ -319,6 +319,7 @@ namespace RenderCore { namespace Techniques
         void AutoBarrier(IThreadContext&, IteratorRange<const AttachmentBarrier*>);
 
         void Absorb(AttachmentReservation&&);
+        AttachmentReservation Separate(IteratorRange<const uint64_t*> yesterdaySemantics);
 
         void DefineDoubleBufferAttachments(IteratorRange<const DoubleBufferAttachment*>);
         void DefineDoubleBufferAttachment(

@@ -955,6 +955,23 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
+    AttachmentReservation AttachmentReservation::Separate(IteratorRange<const uint64_t*> yesterdaySemantics)
+    {
+        AttachmentReservation result;
+        result._pool = _pool;
+        result._reservationFlags = _reservationFlags;
+        for (auto s:yesterdaySemantics) {
+
+            auto e = std::find_if(_entries.begin(), _entries.end(), [s](const auto& q) { return q._semantic == s; });
+            if (e == _entries.end()) { continue; }
+
+            Entry newEntry = *e;
+            result._entries.emplace_back(std::move(newEntry));
+            _entries.erase(e);
+        }
+        return result;
+    }
+
     void AttachmentReservation::Absorb(AttachmentReservation&& src)
     {
         if (src._entries.empty()) return;

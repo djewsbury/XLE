@@ -128,7 +128,7 @@ namespace SceneEngine
         ChainingTemplate<RenderCore::LightingEngine::TAAOperatorDesc> _taaOperator;
         ChainingTemplate<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
         ChainingTemplate<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
-        std::vector<std::any> _typeErasedOperators;
+        std::vector<std::shared_ptr<void>> _typeErasedOperators;
         RenderCore::LightingEngine::ChainedOperatorDesc* _firstChainedOperator = nullptr;
 
         void AddToOperatorList(RenderCore::LightingEngine::ChainedOperatorDesc& op);
@@ -157,9 +157,9 @@ namespace SceneEngine
         void MergedLightingEngineCfg::SetOperator(const T& op)
     {
         using ChainedType = ChainingTemplate<T>;
-        _typeErasedOperators.emplace_back(ChainedType{});
-        auto& stored = std::any_cast<ChainedType&>(_typeErasedOperators.back());
-        stored._desc = op;
-        AddToOperatorList(stored);
+        auto copied = std::make_shared<ChainedType>();
+        _typeErasedOperators.emplace_back(copied);
+        copied->_desc = op;
+        AddToOperatorList(*copied);
     }
 }

@@ -1029,7 +1029,7 @@ namespace RenderOverlays
 					++i;
 					while (i != chrsToLookupCount && chrsFontsToLookup[i] == chrsFontsToLookup[starti]) ++i;
 
-					bool queryResult = textureMan.GetBitmaps(bitmaps, threadContext, *chrsFontsToLookup[starti], MakeIteratorRange(chrsToLookup+starti, chrsToLookup+i));
+					bool queryResult = textureMan.GetBitmaps(bitmaps+starti, threadContext, *chrsFontsToLookup[starti], MakeIteratorRange(chrsToLookup+starti, chrsToLookup+i));
 					if (!queryResult)
 						return;
 				}
@@ -1040,6 +1040,7 @@ namespace RenderOverlays
 				float xIterator = 0;
 				unsigned lineIdx = 0;
 				for (auto& inst:MakeIteratorRange(instances, &instances[instanceCount])) {
+					assert(bitmaps[inst._glyphIdx]);
 					auto& bitmap = *bitmaps[inst._glyphIdx];
 
 					if (inst._lineIdx != lineIdx) {

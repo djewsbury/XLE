@@ -42,6 +42,8 @@ namespace Formatters
         virtual StreamLocation GetLocation() const = 0;
         virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 
+        using Blob = FormatterBlob;
+
         virtual ~IDynamicInputFormatter() = default;
     };
 }

@@ -6,7 +6,6 @@
 #include "PipelineAccelerator.h"
 #include "DrawableDelegates.h"
 #include "TechniqueDelegates.h"
-#include "CommonResources.h"
 #include "CompiledShaderPatchCollection.h"
 #include "Drawables.h"
 #include "RenderPass.h"
@@ -14,20 +13,14 @@
 #include "PipelineOperators.h"
 #include "PipelineLayoutDelegate.h"
 #include "../Assets/RawMaterial.h"
-#include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/ShaderPatchCollection.h"
-#include "../Metal/DeviceContext.h"		// for CalculateFrameBufferRelevance
 #include "../Format.h"
 #include "../FrameBufferDesc.h"
-#include "../RenderUtils.h"
-#include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
-#include "../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/ParameterBox.h"
-#include "../../Utility/Streams/PathUtils.h"
-#include "../../xleres/FileList.h"
-#include <deque>
+
+#include "../Metal/DeviceContext.h"		// for GraphicsPipelineBuilder
 
 using namespace Utility::Literals;
 
@@ -500,6 +493,43 @@ namespace RenderCore { namespace Techniques
 	void IImmediateDrawables::ExecuteDraws(ParsingContext& parsingContext, const std::shared_ptr<ITechniqueDelegate>& techDel, const RenderPassInstance& rpi)
 	{
 		ExecuteDraws(parsingContext, techDel, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
+	}
+
+	IteratorRange<void*> QueueDraw(
+		DrawablesPacket& pkt,
+		size_t vertexCount, size_t vStride,
+		PipelineAccelerator& pipeline,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface,
+		RetainedUniformsStream&& uniforms,
+		Topology topology)
+	{
+		auto vertexDataSize = vertexCount * vStride;
+
+		auto* drawable = pkt._drawables.Allocate<DrawableWithVertexCount>();
+		drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
+		auto* geo = pkt.CreateTemporaryGeo();
+		DrawablesPacket::AllocateStorageResult vertexStorage;
+		if (vertexDataSize) {
+			vertexStorage = pkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
+			geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+			geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
+			geo->_vertexStreamCount = 1;
+		}
+		geo->_ibFormat = Format(0);
+		drawable->_geo = geo;
+		drawable->_pipeline = &pipeline;
+
+		drawable->_descriptorSet = &prebuiltDescriptorSet;
+		drawable->_vertexCount = (unsigned)vertexCount;
+		drawable->_vertexStride = vStride;
+		drawable->_bytesAllocated = (unsigned)vertexDataSize;
+		drawable->_matHash = "do-not-combine"_h;
+		if (uniformStreamInterface) {
+			drawable->_looseUniformsInterface = uniformStreamInterface;		// note lifetime must be preserved by the caller
+			drawable->_uniforms = std::move(uniforms);
+		}
+		return vertexStorage._data;
 	}
 
 	IImmediateDrawables::~IImmediateDrawables() {}

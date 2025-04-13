@@ -442,26 +442,17 @@ namespace Formatters
 
         cdata._start = _marker.Pointer();
 
-        bool gotEnd = false;
-        while (_marker.Remaining() >= 64 && !gotEnd) {
-            for (unsigned c=0; c<64; ++c) {
-                if (*_marker == '<') { gotEnd = true; break; }
-                _marker.AdvanceCheckNewLine();
-            }
-        }
-
-        if (!gotEnd) {
-            for (;;) {
-                if (_marker.Remaining() < 1) { 
-                        // reached end of tile
-                    if (_scopeStack.top()._type != Scope::Type::None) {
-                        Throw(FormatException("Unexpected end of file in element", _marker.GetLocation()));
-                        break;
-                    }
+        for (;;) {
+            if (expect_evaluation(_marker.Remaining() <= 0, false)) { 
+                    // reached end of file
+                if (_scopeStack.top()._type != Scope::Type::None) {
+                    Throw(FormatException("Unexpected end of file in element", _marker.GetLocation()));
+                    break;
                 }
-                if (*_marker == '<') break;
-                _marker.AdvanceCheckNewLine();
+                break;
             }
+            if (*_marker == '<') break;
+            _marker.AdvanceCheckNewLine();
         }
 
         cdata._end = _marker.Pointer();

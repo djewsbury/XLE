@@ -109,7 +109,7 @@ namespace Utility
                 // ideally we should do it completely on the CPU.
             uint64_t rawMantissaT;
             if (idealBias < bias) {
-                auto multiplier = uint64_t(std::exp2(std::get<2>(ExponentTable[afterPointPrec]) + bias));
+                auto multiplier = uint64_t(std::exp2(std::get<2>(ExponentTable[afterPointPrec]) + idealBias));
                 rawMantissaT = afterPoint * multiplier;
                 bias = idealBias;
             } else {
