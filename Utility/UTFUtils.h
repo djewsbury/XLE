@@ -51,9 +51,9 @@ namespace Utility
     XL_UTILITY_API int ucs4_2_utf8(ucs4 ch, utf8* dst);
 
     // find byte offset of n-th character
-    XL_UTILITY_API int utf8_ord_offset(const utf8* s, int N);
+    XL_UTILITY_API size_t utf8_nth_offset(const utf8* s, size_t N);
     // find ordinal at the given byte offset
-    XL_UTILITY_API int utf8_offset_ord(const utf8* s, int offset);
+    XL_UTILITY_API size_t utf8_offset_ord(const utf8* s, size_t offset);
 
 
     // return next character, updating an index variable
