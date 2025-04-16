@@ -988,6 +988,7 @@ namespace RenderOverlays
 
 					auto* font = fontTable[fontSelector].first;
 					auto flags = fontTable[fontSelector].second;
+					assert(font);
 					if (!font) continue;
 
 					int curGlyph;
@@ -1001,7 +1002,7 @@ namespace RenderOverlays
 				}
 			}
 
-			if (!instanceCount) return;
+			if (!instanceCount) continue;
 
 			VLA(Instance*, sortedInstances, instanceCount);
 			for (unsigned c=0; c<instanceCount; ++c) sortedInstances[c] = &instances[c];
@@ -1023,16 +1024,23 @@ namespace RenderOverlays
 			assert(chrsToLookupCount);
 			VLA(const FontRenderingManager::Bitmap*, bitmaps, chrsToLookupCount);
 			{
-				unsigned i = 0;
-				while (i != chrsToLookupCount) {
-					auto starti = i;
-					++i;
-					while (i != chrsToLookupCount && chrsFontsToLookup[i] == chrsFontsToLookup[starti]) ++i;
+				bool allBitmapsSucceeded = true;
+				unsigned invalidationStart;
+				for (unsigned pass=2; pass; --pass) {
+					invalidationStart = textureMan._getBitmapsInvalidationIdx;
+					unsigned i = 0;
+					while (i != chrsToLookupCount) {
+						auto starti = i;
+						++i;
+						while (i != chrsToLookupCount && chrsFontsToLookup[i] == chrsFontsToLookup[starti]) ++i;
 
-					bool queryResult = textureMan.GetBitmaps(bitmaps+starti, threadContext, *chrsFontsToLookup[starti], MakeIteratorRange(chrsToLookup+starti, chrsToLookup+i));
-					if (!queryResult)
-						return;
+						// Note that GetBitmaps() can invalidate the bitmaps we retrieved from a previous call (if new glyphs are initialized)
+						// We use the _getBitmapsInvalidationIdx to try to handle this case
+						allBitmapsSucceeded &= textureMan.GetBitmaps(bitmaps+starti, threadContext, *chrsFontsToLookup[starti], MakeIteratorRange(chrsToLookup+starti, chrsToLookup+i));
+					}
+					if (textureMan._getBitmapsInvalidationIdx == invalidationStart) break;
 				}
+				if (!allBitmapsSucceeded || textureMan._getBitmapsInvalidationIdx != invalidationStart) break;
 			}
 
 			// update the x values for each instance, now we know the set of bitmaps
@@ -1042,6 +1050,7 @@ namespace RenderOverlays
 				for (auto& inst:MakeIteratorRange(instances, &instances[instanceCount])) {
 					assert(bitmaps[inst._glyphIdx]);
 					auto& bitmap = *bitmaps[inst._glyphIdx];
+					assert(bitmap._xAdvance > 0);
 
 					if (inst._lineIdx != lineIdx) {
 						lineIdx = inst._lineIdx;
@@ -1058,7 +1067,7 @@ namespace RenderOverlays
 
 			unsigned firstRenderInstance = FindFirstRenderInstance<false, false>(sortedInstances, instanceCount, bitmaps, xScale, yScale, std::numeric_limits<float>::max());
 			if (firstRenderInstance == instanceCount)
-				return;
+				break;
 
 			auto estimatedQuadCount = instanceCount - firstRenderInstance;
 			if (!begun)
@@ -1525,6 +1534,7 @@ namespace RenderOverlays
 		result._lastAccessFrame = _currentFrameIdx;
 
 		auto i = _glyphs.insert(insertPoint, std::make_pair(code, result));
+		++_getBitmapsInvalidationIdx;
 		return i->second;
 	}
 
@@ -1606,6 +1616,7 @@ namespace RenderOverlays
 			i = _glyphs.insert(i, std::make_pair(fontHash | chrs[c], result));
 		}
 
+		++_getBitmapsInvalidationIdx;
 		return true;
 	}
 
@@ -1960,6 +1971,8 @@ namespace RenderOverlays
 		}
 		for (; chrIterator != chrs.end(); ++chrIterator) missingGlyphs[missingGlyphCount++] = *chrIterator;
 
+		// Note that InitializeNewGlyphs changes the _glyphs vector, thereby invalidating everything returned from GetBitmaps()
+		// from this call, and all previous calls.
 		if (missingGlyphCount) {
 			if (_pimpl->_mode == Mode::LinearBuffer) {
 				if (!InitializeNewGlyphs(threadContext, font, MakeIteratorRange(missingGlyphs, &missingGlyphs[missingGlyphCount]), false))
@@ -1973,6 +1986,8 @@ namespace RenderOverlays
 					InitializeNewGlyph(threadContext, font, ch, i, code, false);
 				}
 			}
+
+			// We have to redo everything from scratch after calling InitializeNewGlyphs
 			return GetBitmaps(bitmaps, threadContext, font, chrs);
 		}
 		return true;

@@ -127,6 +127,8 @@ namespace RenderOverlays
 		enum class Mode { Texture2D, LinearBuffer };
 		Mode GetMode() const;
 
+		unsigned _getBitmapsInvalidationIdx = 0;
+
 		FontRenderingManager(RenderCore::IDevice& device, Mode mode = Mode::LinearBuffer);
 		~FontRenderingManager();
 
