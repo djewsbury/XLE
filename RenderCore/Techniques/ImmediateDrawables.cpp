@@ -291,7 +291,7 @@ namespace RenderCore { namespace Techniques
 
 			drawable->_descriptorSet = &prebuiltDescriptorSet;
 			drawable->_vertexCount = (unsigned)vertexCount;
-			drawable->_vertexStride = vStride;
+			drawable->_vertexStride = (unsigned)vStride;
 			drawable->_bytesAllocated = (unsigned)vertexDataSize;
 			drawable->_matHash = "do-not-combine"_h;
 			if (uniformStreamInterface) {
@@ -324,6 +324,7 @@ namespace RenderCore { namespace Techniques
 					_lastQueuedDrawable->_vertexCount = (unsigned)offsetPlusNewCount;
 				} else {
 					auto extraStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, allocationRequired-_lastQueuedDrawable->_bytesAllocated);
+					if (!_lastQueuedDrawable->_bytesAllocated) const_cast<DrawableGeo*>(_lastQueuedDrawable->_geo)->_vertexStreams[0]._vbOffset = extraStorage._startOffset;
 					assert(_lastQueuedDrawable->_geo->_vertexStreams[0]._vbOffset + _lastQueuedDrawable->_bytesAllocated == extraStorage._startOffset);
 					_lastQueuedDrawable->_bytesAllocated = (unsigned)allocationRequired;
 					_lastQueuedDrawable->_vertexCount = (unsigned)offsetPlusNewCount;
@@ -522,7 +523,7 @@ namespace RenderCore { namespace Techniques
 
 		drawable->_descriptorSet = &prebuiltDescriptorSet;
 		drawable->_vertexCount = (unsigned)vertexCount;
-		drawable->_vertexStride = vStride;
+		drawable->_vertexStride = (unsigned)vStride;
 		drawable->_bytesAllocated = (unsigned)vertexDataSize;
 		drawable->_matHash = "do-not-combine"_h;
 		if (uniformStreamInterface) {
