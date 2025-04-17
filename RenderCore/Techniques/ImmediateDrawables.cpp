@@ -324,7 +324,11 @@ namespace RenderCore { namespace Techniques
 					_lastQueuedDrawable->_vertexCount = (unsigned)offsetPlusNewCount;
 				} else {
 					auto extraStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, allocationRequired-_lastQueuedDrawable->_bytesAllocated);
-					if (!_lastQueuedDrawable->_bytesAllocated) const_cast<DrawableGeo*>(_lastQueuedDrawable->_geo)->_vertexStreams[0]._vbOffset = extraStorage._startOffset;
+					if (_lastQueuedDrawable->_geo->_vertexStreamCount == 0) {
+						const_cast<DrawableGeo*>(_lastQueuedDrawable->_geo)->_vertexStreams[0]._vbOffset = extraStorage._startOffset;
+						const_cast<DrawableGeo*>(_lastQueuedDrawable->_geo)->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+						const_cast<DrawableGeo*>(_lastQueuedDrawable->_geo)->_vertexStreamCount = 1;
+					}
 					assert(_lastQueuedDrawable->_geo->_vertexStreams[0]._vbOffset + _lastQueuedDrawable->_bytesAllocated == extraStorage._startOffset);
 					_lastQueuedDrawable->_bytesAllocated = (unsigned)allocationRequired;
 					_lastQueuedDrawable->_vertexCount = (unsigned)offsetPlusNewCount;
