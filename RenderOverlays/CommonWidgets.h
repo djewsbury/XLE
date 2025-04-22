@@ -45,6 +45,38 @@ namespace RenderOverlays
 		IOContext(PlatformRig::InputContext& inputContext, const OSServices::InputSnapshot& evnt)
 		: _inputContext(&inputContext), _event(&evnt) {}
 	};
+
+	struct AnimateContext
+	{
+		template<typename Type>
+			Type* GetService() { return (Type*)GetService(typeid(std::decay_t<Type>).hash_code()); }
+		template<typename Type>
+			void AttachService2(Type& type) { AttachService(typeid(std::decay_t<Type>).hash_code(), &type); }
+
+		void* GetService(uint64_t id);
+		void AttachService(uint64_t id, void* ptr);
+
+	private:
+		std::vector<std::pair<uint64_t, void*>> _services;
+	};
+
+	inline void* AnimateContext::GetService(uint64_t id)
+	{
+		auto i = LowerBound(_services, id);
+		if (i != _services.end() && i->first == id)
+			return i->second;
+		return nullptr;
+	}
+
+	inline void AnimateContext::AttachService(uint64_t id, void* ptr)
+	{
+		auto i = LowerBound(_services, id);
+		if (i != _services.end() && i->first == id) {
+			i->second = ptr;
+		} else {
+			_services.insert(i, std::make_pair(id, ptr));
+		}
+	}
 }
 
 namespace RenderOverlays { namespace CommonWidgets

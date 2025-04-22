@@ -454,7 +454,7 @@ namespace XLEMath
         /// The ray must start and end on integer boundaries. All of the math is done using integer math,
         /// with an algorithm similiar to Bresenham's 
     template<typename Operator>
-        void GridEdgeIterator(Int2 start, Int2 end, Operator& opr)
+        void GridEdgeIterator(Int2 start, Int2 end, const Operator& opr)
         {
             Int2 s = start;
             Int2 e = end;
