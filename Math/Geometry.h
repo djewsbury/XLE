@@ -554,7 +554,7 @@ namespace XLEMath
     {
             // The input number is always positive (and never nan/infinite and never
             // near the limit of floating point precision)
-            // std::trunc may have a simplier implementation than std::ceil,
+            // std::trunc may have a simpler implementation than std::ceil,
             // meaning that using trunc may give us better performance
         assert(input >= 0.f);
         return std::trunc(input) + 1.f;
@@ -575,16 +575,14 @@ namespace XLEMath
                 
             dx = XlAbs(dx); dy = XlAbs(dy);
                 // x and y values must be kept positive (because of the implementation of GridEdgeCeil)... So offset everything here
-            const float xoffset = 10.f - std::min(xsign * start[0], xsign * end[0]), 
-                        yoffset = 10.f - std::min(ysign * start[1], ysign * end[1]);
+            const float xoffset = std::round(10.f - std::min(xsign * start[0], xsign * end[0])), 
+                        yoffset = std::round(10.f - std::min(ysign * start[1], ysign * end[1]));
             float x = xsign * start[0] + xoffset, y = ysign * start[1] + yoffset;
 
-            // const float epsilon = 1e-2f;    // hack! ceil(x) will sometimes return x... We need to prevent this!
             if (dx >= dy) {
                 float r = dy / dx;
                 float endx = xsign * end[0] + xoffset;
                 for (;;) {
-                    // float ceilx = XlCeil(x + epsilon), ceily = XlCeil(y + epsilon);
                     float ceilx = GridEdgeCeil(x), ceily = GridEdgeCeil(y);
                     float sx = ceilx - x;
                     float sy = ceily - y;
@@ -608,7 +606,6 @@ namespace XLEMath
                 float r = dx / dy;
                 float endy = ysign * end[1] + yoffset;
                 for (;;) {
-                    // float ceilx = XlCeil(x + epsilon), ceily = XlCeil(y + epsilon);
                     float ceilx = GridEdgeCeil(x), ceily = GridEdgeCeil(y);
                     float sx = ceilx - x;
                     float sy = ceily - y;
@@ -627,6 +624,65 @@ namespace XLEMath
                                 Float2(xsign*(ceilx - xoffset),         ysign*(y - yoffset)), 
                                 x - (ceilx - 1.f));
                     }
+                }
+            }
+        }
+
+		// in this variation, we split the input line by the integer grid, and return every fragment
+    template<typename Operator>
+        void GridEdgeIterator3(Float2 start, Float2 end, Operator& opr)
+        {
+            float dx = end[0] - start[0];
+            float dy = end[1] - start[1];
+
+            float xsign = (dx < 0.f) ? -1.f : 1.f;
+            float ysign = (dy < 0.f) ? -1.f : 1.f;
+                
+            dx = XlAbs(dx); dy = XlAbs(dy);
+                // x and y values must be kept positive (because of the implementation of GridEdgeCeil)... So offset everything here
+            const float xoffset = std::round(10.f - std::min(xsign * start[0], xsign * end[0])), 
+                        yoffset = std::round(10.f - std::min(ysign * start[1], ysign * end[1]));
+            float x = xsign * start[0] + xoffset, y = ysign * start[1] + yoffset;
+
+            if (dx >= dy) {
+                float r = dy / dx;
+                float endx = xsign * end[0] + xoffset;
+                for (;;) {
+                    float ceilx = GridEdgeCeil(x), ceily = GridEdgeCeil(y);
+                    float sx = ceilx - x;
+                    float sy = ceily - y;
+                    if (sy < sx * r) {
+                        opr(    Float2(xsign*(x - xoffset), 			ysign*(y - yoffset)), 
+                                Float2(xsign*(x + sy / r - xoffset),	ysign*(y + sy - yoffset)));
+                        x += sy / r;
+                        y += sy;
+                    } else {
+						opr(    Float2(xsign*(x - xoffset), 			ysign*(y - yoffset)), 
+                                Float2(xsign*(x + sx - xoffset),		ysign*(y + sx * r - yoffset)));
+                        x += sx;
+                        y += sx * r;
+                    }
+					if (x > endx) break;
+                }
+            } else {
+                float r = dx / dy;
+                float endy = ysign * end[1] + yoffset;
+                for (;;) {
+                    float ceilx = GridEdgeCeil(x), ceily = GridEdgeCeil(y);
+                    float sx = ceilx - x;
+                    float sy = ceily - y;
+                    if (sx < sy * r) {
+                        opr(    Float2(xsign*(x - xoffset), 			ysign*(y - yoffset)), 
+                                Float2(xsign*(x + sx - xoffset),		ysign*(y + sx / r - yoffset)));
+                        x += sx;
+                        y += sx / r;
+                    } else {
+						opr(    Float2(xsign*(x - xoffset), 			ysign*(y - yoffset)), 
+                                Float2(xsign*(x + sy * r - xoffset),	ysign*(y + sy - yoffset)));
+                        x += sy * r;
+                        y += sy;
+                    }
+					if (y > endy) break;
                 }
             }
         }
