@@ -194,15 +194,18 @@ uint RNGNext(inout RNGState state)
 	return result;
 }
 
-float RNGNextF(inout RNGState state)
+float zeroToOneFromBits(uint i)
 {
-	uint i = RNGNext(state);
-	// return i / float(0xffffffff);
-
 	// Below uses the simple principle described at the bottom of https://prng.di.unimi.it/
 	// Note that "float" must be a 32 bit type for this to work (and at least roughly ieee)
 	// If we don't know the precision of float, we must use another method
 	return asfloat((0x7fu << 23u) | (i>>9u)) - 1.0;
+}
+
+float RNGNextF(inout RNGState state)
+{
+	uint i = RNGNext(state);
+	return zeroToOneFromBits(i);
 }
 
 void RNGInitialize(out RNGState state, uint a, uint b, uint c, uint d)

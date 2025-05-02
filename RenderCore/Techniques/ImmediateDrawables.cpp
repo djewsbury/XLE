@@ -524,7 +524,6 @@ namespace RenderCore { namespace Techniques
 		geo->_ibFormat = Format(0);
 		drawable->_geo = geo;
 		drawable->_pipeline = &pipeline;
-
 		drawable->_descriptorSet = &prebuiltDescriptorSet;
 		drawable->_vertexCount = (unsigned)vertexCount;
 		drawable->_vertexStride = (unsigned)vStride;
@@ -535,6 +534,31 @@ namespace RenderCore { namespace Techniques
 			drawable->_uniforms = std::move(uniforms);
 		}
 		return vertexStorage._data;
+	}
+
+	void QueueDraw(
+		DrawablesPacket& pkt,
+		size_t vertexCount,
+		DrawableGeo& customGeo,
+		PipelineAccelerator& pipeline,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface,
+		RetainedUniformsStream&& uniforms,
+		Topology topology)
+	{
+		auto* drawable = pkt._drawables.Allocate<DrawableWithVertexCount>();
+		drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
+		drawable->_geo = &customGeo;
+		drawable->_pipeline = &pipeline;
+		drawable->_descriptorSet = &prebuiltDescriptorSet;
+		drawable->_vertexCount = (unsigned)vertexCount;
+		drawable->_vertexStride = drawable->_bytesAllocated = 0;
+		DEBUG_ONLY(drawable->_userGeo = true;)
+		drawable->_matHash = "do-not-combine"_h;
+		if (uniformStreamInterface) {
+			drawable->_looseUniformsInterface = uniformStreamInterface;		// note lifetime must be preserved by the caller
+			drawable->_uniforms = std::move(uniforms);
+		}
 	}
 
 	IImmediateDrawables::~IImmediateDrawables() {}
