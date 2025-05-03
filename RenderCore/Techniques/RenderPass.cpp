@@ -1814,7 +1814,7 @@ namespace RenderCore { namespace Techniques
                 fbProps._height = std::max(fbProps._height, d._textureDesc._height);
             }
 
-        auto stitchedFragment = SimpleStitch(layoutFragment, fbProps, resources);
+        auto stitchedFragment = SimpleStitch(layoutFragment, fbProps, resources, parsingContext.GetFragmentStitchingContext());
         if (stitchedFragment._pipelineType == PipelineType::Graphics) {
             *this = RenderPassInstance {
                 parsingContext.GetThreadContext(), stitchedFragment._fbDesc, resources,
@@ -1966,7 +1966,7 @@ namespace RenderCore { namespace Techniques
         return result;
     }
 
-    FragmentStitchingContext::StitchResult SimpleStitch(const FrameBufferDescFragment& input, const FrameBufferProperties& props, IteratorRange<IResource*const*const> resources)
+    FragmentStitchingContext::StitchResult SimpleStitch(const FrameBufferDescFragment& input, const FrameBufferProperties& props, IteratorRange<IResource*const*const> resources, const FragmentStitchingContext& context)
     {
         FragmentStitchingContext::StitchResult result;
 
@@ -1980,6 +1980,16 @@ namespace RenderCore { namespace Techniques
                 auto desc = resources[&a-AsPointer(input._attachments.begin())]->GetDesc();
                 assert(desc._type == ResourceDesc::Type::Texture);
                 fmt = desc._textureDesc._format;
+            } else if (a._matchingRules._flagsSet & uint32_t(AttachmentMatchingRules::Flags::SystemFormat)) {
+                fmt = context.GetSystemAttachmentFormat(a._matchingRules._systemFormat);
+            } else if (a._matchingRules._flagsSet & uint32_t(AttachmentMatchingRules::Flags::CopyFormatFromSemantic)) {
+                for (const auto& a2:context.GetPreregisteredAttachments())
+                    if (a2._semantic == a._matchingRules._copyFormatSrc) { fmt = a2._desc._textureDesc._format; break; }
+                assert(fmt != Format{0});
+            } else if (a._matchingRules._flagsSet & uint32_t(AttachmentMatchingRules::Flags::FixedFormat)) {
+                fmt = a._matchingRules._fixedFormat;
+            } else {
+                assert(0);      // no way to get fmt for this attachment
             }
             attachments.push_back(
                 AttachmentDesc{

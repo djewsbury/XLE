@@ -552,7 +552,8 @@ namespace RenderCore { namespace Techniques
     FragmentStitchingContext::StitchResult SimpleStitch(
         const FrameBufferDescFragment& input,
         const FrameBufferProperties& props,
-        IteratorRange<IResource*const*const> resources);
+        IteratorRange<IResource*const*const> resources,
+        const FragmentStitchingContext&);
 
 }}
 
