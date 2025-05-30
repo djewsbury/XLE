@@ -23,6 +23,7 @@ namespace RenderOverlays
 
 	Float3 AsPixelCoords(Coord2 input)              { return Float3(float(input[0]), float(input[1]), RenderCore::Techniques::g_NDCDepthAtNearClip); }
 	Float3 AsPixelCoords(Coord2 input, float depth) { return Float3(float(input[0]), float(input[1]), depth); }
+	Float3 AsPixelCoords(Coord x, Coord y)			{ return Float3(float(x), float(y), RenderCore::Techniques::g_NDCDepthAtNearClip); }
 	Float3 AsPixelCoords(Float2 input)              { return Expand(input, RenderCore::Techniques::g_NDCDepthAtNearClip); }
 	Float3 AsPixelCoords(Float3 input)              { return input; }
 	std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect)
@@ -66,6 +67,21 @@ namespace RenderOverlays
 
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements2D = Vertex_PC_inputElements2D;
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements3D = Vertex_PC_inputElements3D;
+
+	static RenderCore::MiniInputElementDesc Vertex_PT_inputElements2D[] =
+	{
+		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
+	};
+
+	static RenderCore::MiniInputElementDesc Vertex_PT_inputElements3D[] = 
+	{
+		{ RenderCore::Techniques::CommonSemantics::POSITION, RenderCore::Format::R32G32B32_FLOAT },
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
+	};
+
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PT::s_inputElements2D = Vertex_PT_inputElements2D;
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PT::s_inputElements3D = Vertex_PT_inputElements3D;
 
 	static RenderCore::MiniInputElementDesc Vertex_PCCTT_inputElements2D[] =
 	{

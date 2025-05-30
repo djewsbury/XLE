@@ -141,6 +141,14 @@ namespace RenderOverlays
         static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements3D;
     };
 
+    struct Vertex_PT
+    {
+        Float3 _position;
+        Float2 _texCoord;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements2D;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements3D;
+    };
+
     struct Vertex_PCCTT
     {
         Float3 _position;
@@ -158,6 +166,7 @@ namespace RenderOverlays
     Float3      AsPixelCoords(Float2 input);
     Float3      AsPixelCoords(Float3 input);
     std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect);
+    Float3      AsPixelCoords(Coord x, Coord y);
     unsigned    HardwareColor(ColorB input);
 
     constexpr ColorB::ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_) : a(a_), r(r_), g(g_), b(b_) {}
@@ -184,6 +193,8 @@ namespace RenderOverlays
             return std::pow((input+0.055f)/1.055f, 2.4f);
     }
 
-    inline Float4 LinearToSRGB_Formal(Float4 input) { return { LinearToSRGB_Formal(input[0]), LinearToSRGB_Formal(input[1]), LinearToSRGB_Formal(input[2]), LinearToSRGB_Formal(input[3]) }; }
-    inline Float4 SRGBToLinear_Formal(Float4 input) { return { SRGBToLinear_Formal(input[0]), SRGBToLinear_Formal(input[1]), SRGBToLinear_Formal(input[2]), SRGBToLinear_Formal(input[3]) }; }
+    inline Float3 LinearToSRGB_Formal(Float3 input) { return { LinearToSRGB_Formal(input[0]), LinearToSRGB_Formal(input[1]), LinearToSRGB_Formal(input[2]) }; }
+    inline Float3 SRGBToLinear_Formal(Float3 input) { return { SRGBToLinear_Formal(input[0]), SRGBToLinear_Formal(input[1]), SRGBToLinear_Formal(input[2]) }; }
+    inline Float4 LinearToSRGB_Formal(Float4 input) { return { LinearToSRGB_Formal(input[0]), LinearToSRGB_Formal(input[1]), LinearToSRGB_Formal(input[2]), input[3] }; }
+    inline Float4 SRGBToLinear_Formal(Float4 input) { return { SRGBToLinear_Formal(input[0]), SRGBToLinear_Formal(input[1]), SRGBToLinear_Formal(input[2]), input[3] }; }
 }
