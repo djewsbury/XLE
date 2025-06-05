@@ -179,6 +179,8 @@ namespace RenderOverlays
     }
     constexpr ColorB ColorB::FromNormalized(const Float4& v) { return FromNormalized(v[0], v[1], v[2], v[3]); }
     inline Float4 ColorB::AsNormalized() const { return { r/255.f, g/255.f, b/255.f, a/255.f }; }
+    constexpr bool operator==(const ColorB& lhs, const ColorB& rhs) { return lhs.AsUInt32() == rhs.AsUInt32(); }
+    constexpr bool operator!=(const ColorB& lhs, const ColorB& rhs) { return lhs.AsUInt32() != rhs.AsUInt32(); }
 
     constexpr float LinearToSRGB_Formal(float input)
     {

@@ -31,7 +31,8 @@ namespace RenderCore { namespace Assets
 			ComputeShader,
 			ConversionComputeShader,
 			ProjectToSphericalHarmonic,
-			BalancedNoise
+			BalancedNoise,
+			HaltonSampler
 		};
 		Operation _operation = Operation::Convert;
 		Format _format = Format::Unknown;

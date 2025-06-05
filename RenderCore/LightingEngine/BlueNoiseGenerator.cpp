@@ -104,24 +104,9 @@ namespace RenderCore { namespace LightingEngine
 		// Though, we're not going to use a mathematically sophisticated method for this,
 		// instead something pretty rudimentary
 
-		float j = std::ceil(std::log2(float(width)));
-		float log3Height = std::log(float(height))/std::log(3.0f);
-		float k = std::ceil(log3Height);
-		float scaledWidth = std::pow(2.f, j), scaledHeight = std::pow(3.f, k);
-
 		auto data = std::make_unique<unsigned[]>(width*height);
 		std::memset(data.get(), 0, sizeof(unsigned)*width*height);
-
-		// We can do this in a smarter way by using the inverse-radical-inverse, and solving some simultaneous
-		// equations with modular arithmetic. But since we're building a lookup table anyway, that doesn't seem
-		// of any practical purpose
-		unsigned repeatingStride = (unsigned)(scaledWidth*scaledHeight);
-		for (unsigned sampleIdx=0; sampleIdx<repeatingStride; ++sampleIdx) {
-			auto x = unsigned(scaledWidth * RadicalInverseSpecialized<2>(sampleIdx)), 
-				y = unsigned(scaledHeight * RadicalInverseSpecialized<3>(sampleIdx));
-			if (x >= width || y >= height) continue;
-			data[x+y*width] = sampleIdx;
-		}
+		auto repeatingStride = WriteHaltonSamplerIndices(MakeIteratorRange(data.get(), PtrAdd(data.get(), width*height*sizeof(uint32_t))), width, height);
 
 		auto texture = threadContext.GetDevice()->CreateResource(
 			CreateDesc(BindFlag::ShaderResource|BindFlag::TransferDst, TextureDesc::Plain2D(width, height, Format::R32_UINT)),
@@ -139,6 +124,9 @@ namespace RenderCore { namespace LightingEngine
 
 		_pixelToSampleIndex = texture->CreateTextureView();
 
+		float j = std::ceil(std::log2(float(width)));					// must match WriteHaltonSamplerIndices
+		float log3Height = std::log(float(height))/std::log(3.0f);		// must match WriteHaltonSamplerIndices
+		float k = std::ceil(log3Height);								// must match WriteHaltonSamplerIndices
 		struct Uniforms
 		{
 			float _j, _k;
@@ -155,6 +143,27 @@ namespace RenderCore { namespace LightingEngine
 			*cbuffer, MakeOpaqueIteratorRange(uniforms));
 		_pixelToSampleIndexParams = cbuffer->CreateBufferView();
 		_repeatingStride = repeatingStride;
+	}
+
+	uint32_t HaltonSamplerHelper::WriteHaltonSamplerIndices(IteratorRange<uint32_t*> dst, uint32_t width, uint32_t height)
+	{
+		assert(dst.size() == width*height);
+		float j = std::ceil(std::log2(float(width)));
+		float log3Height = std::log(float(height))/std::log(3.0f);
+		float k = std::ceil(log3Height);
+		float scaledWidth = std::pow(2.f, j), scaledHeight = std::pow(3.f, k);
+
+		// We can do this in a smarter way by using the inverse-radical-inverse, and solving some simultaneous
+		// equations with modular arithmetic. But since we're building a lookup table anyway, that doesn't seem
+		// of any practical purpose
+		unsigned repeatingStride = (unsigned)(scaledWidth*scaledHeight);
+		for (unsigned sampleIdx=0; sampleIdx<repeatingStride; ++sampleIdx) {
+			auto x = unsigned(scaledWidth * RadicalInverseSpecialized<2>(sampleIdx)), 
+				y = unsigned(scaledHeight * RadicalInverseSpecialized<3>(sampleIdx));
+			if (x >= width || y >= height) continue;
+			dst[x+y*width] = sampleIdx;
+		}
+		return repeatingStride;
 	}
 
 }}

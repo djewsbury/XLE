@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "Utility/IteratorUtils.h"
 #include <memory>
 
 namespace RenderCore { class IResourceView; class IDevice; class IThreadContext; }
@@ -37,6 +38,8 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _repeatingStride = 0;
 
 		HaltonSamplerHelper(IThreadContext& threadContext, unsigned width, unsigned height);
+
+		static uint32_t WriteHaltonSamplerIndices(IteratorRange<uint32_t*> dst, uint32_t width, uint32_t height);
 	};
 }}
 

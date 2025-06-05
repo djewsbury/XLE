@@ -5,6 +5,7 @@
 #include "TextureCompiler.h"
 #include "../Techniques/Services.h"
 #include "../LightingEngine/TextureCompilerUtil.h"
+#include "../LightingEngine/BlueNoiseGenerator.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/IFileSystem.h"
@@ -266,6 +267,8 @@ namespace RenderCore { namespace Assets
 		else if (XlEqStringI(type, "EquirectFilterDiffuseReference")) result._operation = TextureCompilationRequest::Operation::EquirectFilterDiffuseReference;
 		else if (XlEqStringI(type, "ComputeShader")) result._operation = TextureCompilationRequest::Operation::ComputeShader;
 		else if (XlEqStringI(type, "ConversionComputeShader")) result._operation = TextureCompilationRequest::Operation::ConversionComputeShader;
+		else if (XlEqStringI(type, "BalancedNoise")) result._operation = TextureCompilationRequest::Operation::BalancedNoise;
+		else if (XlEqStringI(type, "HaltonSampler")) result._operation = TextureCompilationRequest::Operation::HaltonSampler;
 		else Throw(std::runtime_error("Unknown operation in texture compiler file: " + srcFN + ", (" + type.AsString() + ")"));
 
 		auto dstFormatName = operationElement.Attribute("Format");
@@ -307,6 +310,7 @@ namespace RenderCore { namespace Assets
 		case TextureCompilationRequest::Operation::ComputeShader: str << request._shader << "-" << request._width << "x" << request._height << "x" << request._arrayLayerCount << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::ConversionComputeShader: str << request._shader << "-conversion-" << request._srcFile << "-" << request._width << "x" << request._height << "x" << request._arrayLayerCount << "-" << AsString(request._format); break;
 		case TextureCompilationRequest::Operation::BalancedNoise: str << "balanced-noise-" << request._width << "x" << request._height << "-" << AsString(request._format); break;
+		case TextureCompilationRequest::Operation::HaltonSampler: str << "halton-sampler-" << request._width << "x" << request._height << "-" << AsString(request._format); break;
 		default: UNREACHABLE();
 		}
 		return str;
@@ -414,6 +418,42 @@ namespace RenderCore { namespace Assets
 		BalancedNoiseTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
 	};
 
+	class HaltonSamplerTexture : public BufferUploads::IAsyncDataSource
+	{
+	public:
+		virtual std::future<ResourceDesc> GetDesc() override
+		{
+			std::promise<ResourceDesc> promise;
+			promise.set_value(CreateDesc(0, TextureDesc::Plain2D(_width, _height, Format::R32_UINT)));
+			return promise.get_future();
+		}
+
+		virtual StringSection<> GetName() const override { return "halton-sampler"; }
+
+		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
+		{
+			assert(subResources.size() == 1);
+			assert(subResources[0]._destination.size() == sizeof(uint32_t)*_width*_height);
+			uint32_t* dst = (uint32_t*)subResources[0]._destination.begin();
+			std::memset(dst, 0, subResources[0]._destination.size());
+
+			uint32_t repeatingStride = LightingEngine::HaltonSamplerHelper::WriteHaltonSamplerIndices(MakeIteratorRange(subResources[0]._destination).Cast<uint32_t*>(), _width, _height);
+			(void)repeatingStride;
+
+			std::promise<void> promise;
+			promise.set_value();
+			return promise.get_future();
+		}
+
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
+		{
+			return {};
+		}
+
+		unsigned _width, _height;
+		HaltonSamplerTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
+	};
+
 	class TextureCompileOperation : public ::Assets::ICompileOperation
 	{
 	public:
@@ -440,7 +480,8 @@ namespace RenderCore { namespace Assets
 		{
 			std::shared_ptr<BufferUploads::IAsyncDataSource> srcPkt;
 			if (request._operation != TextureCompilationRequest::Operation::ComputeShader
-				&& request._operation != TextureCompilationRequest::Operation::BalancedNoise) {
+				&& request._operation != TextureCompilationRequest::Operation::BalancedNoise
+				&& request._operation != TextureCompilationRequest::Operation::HaltonSampler) {
 				if (request._srcFile.empty())
 					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'SourceFile' fields in texture compiler file: " + srcFN));
 				srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(request._srcFile, 0);
@@ -583,6 +624,8 @@ namespace RenderCore { namespace Assets
 				_dependencies.push_back(srcPkt->GetDependencyValidation());
 			} else if (request._operation == TextureCompilationRequest::Operation::BalancedNoise) {
 				srcPkt = std::make_shared<BalancedNoiseTexture>(request._width, request._height);
+			} else if (request._operation == TextureCompilationRequest::Operation::HaltonSampler) {
+				srcPkt = std::make_shared<HaltonSamplerTexture>(request._width, request._height);
 			}
 
 			if (opHelper)
