@@ -232,7 +232,7 @@ namespace RenderCore { namespace LightingEngine
 
 		helper->_lightSceneFuture = ::Assets::ConstructToFuturePtr<Internal::StandardLightScene>();
 
-		auto resolution = Internal::ExtractOutputResolution(outputTarget._preregisteredAttachments);
+		auto resolution = Internal::ExtractOutputResolution(outputTarget._preregisteredAttachments, digest._globalTechniqueDesc._outputAttachment);
 		std::vector<Techniques::PreregisteredAttachment> preregisteredAttachments { outputTarget._preregisteredAttachments.begin(), outputTarget._preregisteredAttachments.end() };
 
 		::Assets::PollToPromise(

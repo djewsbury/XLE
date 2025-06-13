@@ -454,7 +454,7 @@ namespace XLEMath
         /// The ray must start and end on integer boundaries. All of the math is done using integer math,
         /// with an algorithm similiar to Bresenham's 
     template<typename Operator>
-        void GridEdgeIterator(Int2 start, Int2 end, const Operator& opr)
+        void GridEdgeIterator(Int2 start, Int2 end, Operator&& opr)
         {
             Int2 s = start;
             Int2 e = end;
@@ -565,7 +565,7 @@ namespace XLEMath
         /// non integers (but edges are still found in integer values).
         /// "GridEdgeIterator" uses integer-only math. 
     template<typename Operator>
-        void GridEdgeIterator2(Float2 start, Float2 end, Operator& opr)
+        void GridEdgeIterator2(Float2 start, Float2 end, Operator&& opr)
         {
             float dx = end[0] - start[0];
             float dy = end[1] - start[1];
@@ -630,7 +630,7 @@ namespace XLEMath
 
 		// in this variation, we split the input line by the integer grid, and return every fragment
     template<typename Operator>
-        void GridEdgeIterator3(Float2 start, Float2 end, Operator& opr)
+        void GridEdgeIterator3(Float2 start, Float2 end, Operator&& opr)
         {
             float dx = end[0] - start[0];
             float dy = end[1] - start[1];

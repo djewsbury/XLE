@@ -257,17 +257,20 @@ namespace RenderCore { namespace Techniques
 						
 					gotBinding = true;
 					
-				} else if (s._type == DescriptorType::Sampler && _samplerPool) {
-					auto i = std::find_if(machineHelper._samplerBindings.begin(), machineHelper._samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
-					if (i != machineHelper._samplerBindings.end()) {
-						slotInProgress._bindType = DescriptorSetInitializer::BindType::Sampler;
-						slotInProgress._resourceIdx = (unsigned)_working->_samplers.size();
-						auto metalSampler = _samplerPool->GetSampler(i->second);
-						_working->_samplers.push_back(metalSampler);
-						gotBinding = true;
+				} else if (s._type == DescriptorType::Sampler) {
+					assert(_samplerPool);
+					if (s._fixedSamplerIdx == ~0u) {
+						auto i = std::find_if(machineHelper._samplerBindings.begin(), machineHelper._samplerBindings.end(), [hashName](const auto& c) { return c.first == hashName; });
+						if (i != machineHelper._samplerBindings.end()) {
+							slotInProgress._bindType = DescriptorSetInitializer::BindType::Sampler;
+							slotInProgress._resourceIdx = (unsigned)_working->_samplers.size();
+							auto metalSampler = _samplerPool->GetSampler(i->second);
+							_working->_samplers.push_back(metalSampler);
+							gotBinding = true;
 
-						if (_generateBindingInfo)
-							slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "Sampler: " << metalSampler->GetDesc()).AsString();
+							if (_generateBindingInfo)
+								slotBindingInfo._binding = (StringMeldInPlace(stringMeldBuffer) << "Sampler: " << metalSampler->GetDesc()).AsString();
+						}
 					}
 				}
 			

@@ -298,6 +298,7 @@ namespace RenderCore { namespace Techniques
         AttachmentName Bind(uint64_t semantic, std::shared_ptr<IPresentationChain> presentationChain, const ResourceDesc& resourceDesc, BindFlag::BitField currentLayout);
         void Unbind(const IResource& resource);
         void UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms);
+        void UnmapSemantic(uint64_t);
 
         // Bind(uint64_t semantic, IPresentationChain...)   ?
 

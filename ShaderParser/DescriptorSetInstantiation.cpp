@@ -189,7 +189,12 @@ namespace ShaderSourceParser
 			assert(input._slots[c]._slotIdx < (maxSlotIdxPipelineLayout+1));
 			assignedSlots_final[input._slots[c]._slotIdx] = true;
 			processedSlots_input[c] = true;
-			result->_slots.push_back(input._slots[c]);
+			auto finalSlot = input._slots[c];
+			if (finalSlot._fixedSamplerIdx != ~0u) {
+				result->_fixedSamplers.push_back(input._fixedSamplers[finalSlot._fixedSamplerIdx]);
+				finalSlot._fixedSamplerIdx = unsigned(result->_fixedSamplers.size()-1);
+			}
+			result->_slots.push_back(std::move(finalSlot));
 		}
 
 		// Look for cases where names match, and prioritize matching those
@@ -218,6 +223,10 @@ namespace ShaderSourceParser
 					auto finalSlot = input._slots[c];
 					finalSlot._slotIdx = i->_slotIdx;
 					finalSlot._type = i->_type;
+					if (finalSlot._fixedSamplerIdx != ~0u) {
+						result->_fixedSamplers.push_back(input._fixedSamplers[finalSlot._fixedSamplerIdx]);
+						finalSlot._fixedSamplerIdx = unsigned(result->_fixedSamplers.size()-1);
+					}
 					result->_slots.push_back(finalSlot);
 
 					// We could try to align up the CB layout in some way, to try to encourage consistency there, as well
@@ -246,6 +255,10 @@ namespace ShaderSourceParser
 			auto finalSlot = input._slots[c];
 			finalSlot._slotIdx = pipelineLayoutVersion._slots[q]._slotIdx;
 			finalSlot._type = pipelineLayoutVersion._slots[q]._type;
+			if (finalSlot._fixedSamplerIdx != ~0u) {
+				result->_fixedSamplers.push_back(input._fixedSamplers[finalSlot._fixedSamplerIdx]);
+				finalSlot._fixedSamplerIdx = unsigned(result->_fixedSamplers.size()-1);
+			}
 			result->_slots.push_back(finalSlot);
 			processedSlots_input[c] = true;
 		}
@@ -264,6 +277,10 @@ namespace ShaderSourceParser
 				assignedSlots_final[firstUnusedOutputSlot] = true;
 				auto finalSlot = input._slots[c];
 				finalSlot._slotIdx = firstUnusedOutputSlot;
+				if (finalSlot._fixedSamplerIdx != ~0u) {
+					result->_fixedSamplers.push_back(input._fixedSamplers[finalSlot._fixedSamplerIdx]);
+					finalSlot._fixedSamplerIdx = unsigned(result->_fixedSamplers.size()-1);
+				}
 				result->_slots.push_back(finalSlot);
 				processedSlots_input[c] = true;
 			}
@@ -304,6 +321,8 @@ namespace ShaderSourceParser
 		std::sort(
 			result->_slots.begin(), result->_slots.end(),
 			[](const auto& lhs, const auto& rhs) { return lhs._slotIdx < rhs._slotIdx; });
+
+		for (const auto& slot:result->_slots) if (slot._fixedSamplerIdx != ~0u) assert(slot._fixedSamplerIdx < result->_fixedSamplers.size());
 
 		return result;
 	}

@@ -659,7 +659,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		auto i = std::find_if(preregs.begin(), preregs.end(), [](const auto& q) { return q._semantic == Techniques::AttachmentSemantics::ColorLDR; });
 		if (i == preregs.end())
-			Throw(std::runtime_error("Missing ColorLDR attachment in input interface"));
+			Throw(std::runtime_error("Missing output attachment in input interface"));
+		return { i->_desc._textureDesc._width, i->_desc._textureDesc._height };
+	}
+
+	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*> preregs, uint64_t outputSemantic)
+	{
+		auto i = std::find_if(preregs.begin(), preregs.end(), [outputSemantic](const auto& q) { return q._semantic == outputSemantic; });
+		if (i == preregs.end())
+			Throw(std::runtime_error("Missing output attachment in input interface"));
 		return { i->_desc._textureDesc._width, i->_desc._textureDesc._height };
 	}
 

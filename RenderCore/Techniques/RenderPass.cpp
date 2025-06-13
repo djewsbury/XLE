@@ -690,6 +690,13 @@ namespace RenderCore { namespace Techniques
         }
     }
 
+    void AttachmentReservation::UnmapSemantic(uint64_t semantic)
+    {
+        for (unsigned c=0; c<_entries.size(); ++c)
+            if (_entries[c]._semantic == semantic)
+                _entries[c]._semantic = ~0ull;
+    }
+
     void AttachmentReservation::UpdateAttachments(AttachmentReservation& childReservation, IteratorRange<const AttachmentTransform*> transforms)
     {
         assert(transforms.size() == childReservation._entries.size());
@@ -1357,6 +1364,8 @@ namespace RenderCore { namespace Techniques
             AttachmentDesc completeAttachmentDesc = desc.GetAttachments()[c];
             completeAttachmentDesc._format = AsTypelessFormat(resDesc._textureDesc._format);
             adjustedAttachments.push_back({completeAttachmentDesc});
+
+            assert(matchedAttachment->GetDesc()._textureDesc._width == desc.GetProperties()._width && matchedAttachment->GetDesc()._textureDesc._height == desc.GetProperties()._height);
         }
 
         FrameBufferDesc adjustedDesc(
