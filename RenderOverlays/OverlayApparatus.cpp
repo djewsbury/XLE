@@ -35,9 +35,9 @@ namespace RenderOverlays
 
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
-			[im=std::weak_ptr<RenderCore::Techniques::IImmediateDrawables>{_immediateDrawables}]() {
-				auto l = im.lock();
-				if (l) l->OnFrameBarrier();
+			[im=std::weak_ptr<RenderCore::Techniques::IImmediateDrawables>{_immediateDrawables}, fr=std::weak_ptr<RenderOverlays::FontRenderingManager>(_fontRenderingManager)]() {
+				if (auto l = im.lock(); l) l->OnFrameBarrier();
+				if (auto l2 = fr.lock(); l2) l2->OnFrameBarrier();
 			});
 	}
 	
