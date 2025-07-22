@@ -593,6 +593,28 @@ namespace RenderCore { namespace Techniques
 		return {std::move(pipelineAccelerator), std::move(descriptorSetAccelerator)};
 	}
 
+	std::pair<std::shared_ptr<Techniques::PipelineAccelerator>, std::shared_ptr<Techniques::DescriptorSetAccelerator>> CreateAccelerators(
+		Techniques::IPipelineAcceleratorPool& pool,
+		const RenderCore::Assets::RawMaterial& material,
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> matDescSet,
+		IteratorRange<const InputElementDesc*> inputAssembly,
+		Topology topology)
+	{
+		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> patchCollectionPtr;
+		if (material._patchCollection.GetHash())
+		 	patchCollectionPtr = std::make_shared<RenderCore::Assets::ShaderPatchCollection>(material._patchCollection);
+		
+		using Pair = std::pair<uint64_t, SamplerDesc>;
+		VLA_UNSAFE_FORCE(Pair, samplers, material._samplers.size());
+		for (unsigned c=0; c<material._samplers.size(); ++c)
+			samplers[c] = {Hash64(material._samplers[c].first), material._samplers[c].second};
+
+		auto materialMachine = std::make_shared<Techniques::ManualMaterialMachine>(material._uniforms, material._resources, MakeIteratorRange(samplers, &samplers[material._samplers.size()]));
+		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, matDescSet, material._selectors, inputAssembly, topology, material._stateSet);
+		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(nullptr, patchCollectionPtr, matDescSet, materialMachine->GetMaterialMachine(), materialMachine, std::string{s_manualDrawables});
+		return {std::move(pipelineAccelerator), std::move(descriptorSetAccelerator)};
+	}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	IteratorRange<RenderCore::Assets::ScaffoldCmdIterator> ManualMaterialMachine::GetMaterialMachine() const

@@ -91,6 +91,13 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const InputElementDesc*> inputAssembly,
 		Topology topology = Topology::TriangleList);
 
+	std::pair<std::shared_ptr<PipelineAccelerator>, std::shared_ptr<DescriptorSetAccelerator>> CreateAccelerators(
+		IPipelineAcceleratorPool& pool,
+		const RenderCore::Assets::RawMaterial& material,
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> matDescSet,
+		IteratorRange<const InputElementDesc*> inputAssembly,
+		Topology topology = Topology::TriangleList);
+
 	// Create a material machine that can be passed to ConstructDescriptorSetHelper::Construct
 	class ManualMaterialMachine
 	{
