@@ -2121,6 +2121,7 @@ namespace XLEMath
 			}
 			for (;;) {
 				assert(!pool.empty());	// if we hit this, we have open segments
+				if (pool.empty()) break;
 				auto searching = *(workingLoop.end()-1);
 				auto hit = pool.end(); 
 				for (auto i=pool.begin(); i!=pool.end(); ++i) {

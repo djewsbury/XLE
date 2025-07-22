@@ -254,7 +254,7 @@ namespace RenderCore { namespace Assets
 				if (!addressMode)
 					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown address mode (" << value << ")", formatter.GetLocation()));
 				if (XlEqString(keyname, "AddressU")) result._addressU = addressMode.value();
-				if (XlEqString(keyname, "AddressV")) result._addressV = addressMode.value();
+				else if (XlEqString(keyname, "AddressV")) result._addressV = addressMode.value();
 				else result._addressW = addressMode.value();
 			} else if (XlEqString(keyname, "Comparison")) {
 				auto value = RequireStringValue(formatter);

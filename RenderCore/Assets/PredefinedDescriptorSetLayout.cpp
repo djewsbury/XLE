@@ -286,12 +286,14 @@ namespace RenderCore { namespace Assets
 		uint64_t result = seed;
 		for (const auto& slot:_slots) {
 			result = HashCombine(slot._nameHash, result);
-			result = HashCombine(result, slot._slotIdx);
+			result = HashCombine(result, slot._slotIdx|(uint64_t(slot._type) << 16ull));
 			if (!slot._conditions.empty())
 				result = Hash64(slot._conditions, result);
 			result = HashCombine(uint64_t(slot._type) | (uint64_t(slot._arrayElementCount) << 16ull), result);
 			if (slot._cbIdx != ~0u)
 				result = HashCombine(_constantBuffers[slot._cbIdx]->CalculateHash(), result);
+			if (slot._fixedSamplerIdx != ~0u)
+				result = HashCombine(_fixedSamplers[slot._fixedSamplerIdx].Hash(), result);
 		}
 		return result;
 	}
@@ -364,7 +366,7 @@ namespace RenderCore { namespace Assets
 				if (!addressMode)
 					Throw(Formatters::FormatException(StringMeldInPlace(exceptionBuffer) << "Unknown address mode (" << next._value << ")", iterator.GetLocation()));
 				if (XlEqString(prop, "AddressU")) result._addressU = addressMode.value();
-				if (XlEqString(prop, "AddressV")) result._addressV = addressMode.value();
+				else if (XlEqString(prop, "AddressV")) result._addressV = addressMode.value();
 				else result._addressW = addressMode.value();
 			} else if (XlEqString(next._value, "Comparison")) {
 				if (!XlEqString(iterator.GetNextToken()._value, "="))

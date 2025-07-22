@@ -200,7 +200,7 @@ namespace Assets
 				chunks = container.ResolveRequests(MakeIteratorRange(&request, &request+1));
 			}
 
-			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), container.GetDependencyValidation());
+			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), DependencyValidation{container.GetDependencyValidation()});
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, container.GetDependencyValidation()));
 		} CATCH (const std::exception& e) {
@@ -221,7 +221,7 @@ namespace Assets
 				chunks = ArtifactChunkContainer{blob, std::move(searchRules), depVal, requestParameters}.ResolveRequests(MakeIteratorRange(&request, &request+1));
 			}
 
-			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), depVal);
+			return Internal::InvokeAssetConstructor<AssetType>(MakeIteratorRange(chunks), DependencyValidation{depVal});
 		} CATCH (const Exceptions::ExceptionWithDepVal& e) {
 			Throw(Exceptions::ConstructionError(e, depVal));
 		} CATCH (const std::exception& e) {

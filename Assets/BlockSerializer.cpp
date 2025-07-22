@@ -240,13 +240,27 @@ namespace Assets
         ptr._specialBuffer   = (uint64_t)specialBuffer;
         RegisterInternalPointer(ptr);
 
-        PushBackPlaceholder(specialBuffer);
-        PushBackRaw_SubBlock(range.begin(), range.size());
+        _trailingSubBlocks.insert(_trailingSubBlocks.end(), (const uint8_t*)range.begin(), (const uint8_t*)range.end());
+
+        if (specialBuffer == SpecialBuffer::StringSection || specialBuffer == SpecialBuffer::IteratorRange) {
+            PushBackPointer(0);         // begin pointer
+
+            InternalPointer endPointer;
+            endPointer._pointerOffset    = _memory.size();
+            endPointer._subBlockOffset   = _trailingSubBlocks.size();
+            endPointer._subBlockSize     = 0;
+            endPointer._specialBuffer    = (uint64_t)BlockSerializer::SpecialBuffer::Unknown;
+            _internalPointers.push_back(endPointer);
+
+            PushBackPointer(0);         // end pointer
+        } else {
+            PushBackPlaceholder(specialBuffer);
+        }
     }
 
     void BlockSerializer::SerializeValue(const std::string& value)
     {
-        SerializeSpecialBuffer(SpecialBuffer::String, MakeIteratorRange(value));
+        SerializeSpecialBuffer(SpecialBuffer::StringSection, MakeIteratorRange(value));
     }
 
     class Header

@@ -217,7 +217,7 @@ namespace RenderCore { namespace Techniques
 		srcPatchesToInclude.reserve(patchExpansions.size());
 		for (auto expansion:patchExpansions) {
 			auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion; });
-			assert(i != _interface._patches.end());
+			// assert(i != _interface._patches.end());
 			if (i == _interface._patches.end()) continue;
 
 			auto srcPatchIdx = i->_filteringRulesId;		// this is actually the idx from the source patches array
@@ -246,7 +246,7 @@ namespace RenderCore { namespace Techniques
 			std::stringstream scaffoldFns;
 			for (auto expansion:patchExpansions) {
 				auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion; });
-				assert(i!=_interface._patches.end());
+				// assert(i!=_interface._patches.end());
 				if (i == _interface._patches.end()) continue;
 
 				// GenerateScaffoldFunction just creates a function with the name of the template

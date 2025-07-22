@@ -150,12 +150,12 @@ namespace RenderCore { namespace Techniques
 			auto futurePipelineLayout = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
-				[pool, selectors, usi, plname=pipelineLayoutAssetName.AsString(), pipelineDesc, fbTarget](auto&& promise, const auto& predefinedPipelineLayout) {
+				[pool, selectors, usi, plname=pipelineLayoutAssetName.AsString(), pipelineDesc, fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](auto&& promise, const auto& predefinedPipelineLayout) {
 					
 					auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
 					const ParameterBox* selectorList[] { &selectors };
 					VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
-					pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {predefinedPipelineLayout, Hash64(plname), std::string{plname}}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
+					pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {predefinedPipelineLayout, Hash64(plname), std::string{plname}}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, FrameBufferTarget{&fbDesc, spIdx});
 
 					::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 						std::move(promise),
