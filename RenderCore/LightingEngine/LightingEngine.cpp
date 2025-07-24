@@ -467,6 +467,14 @@ namespace RenderCore { namespace LightingEngine
 		_isConstructionCompleted = true;
 	}
 
+	void CompiledLightingTechnique::Seal(Techniques::FragmentStitchingContext& stitchingContext)
+	{
+		assert(!_isConstructionCompleted);
+		_doubleBufferAttachments = { stitchingContext.GetDoubleBufferAttachments().begin(), stitchingContext.GetDoubleBufferAttachments().end() };
+		for (auto&s:_sequences) assert(s->IsFrozen());
+		_isConstructionCompleted = true;
+	}
+
 	Sequence& CompiledLightingTechnique::CreateSequence()
 	{
 		auto newSequence = std::make_shared<Sequence>();

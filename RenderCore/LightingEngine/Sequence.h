@@ -68,6 +68,7 @@ namespace RenderCore { namespace LightingEngine
 		void Reset();
 		void TryDynamicInitialization(SequenceIterator&);
 		unsigned DrawablePktsToReserve() const { return _nextParseId; }
+		bool IsFrozen() const { return _frozen; }
 
 		std::pair<const FrameBufferDesc*, unsigned> GetResolvedFrameBufferDesc(FragmentInterfaceRegistration) const;
 
@@ -156,6 +157,7 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
 			Techniques::FragmentStitchingContext& stitchingContext,
 			const FrameBufferProperties& fbProps);
+		void Seal(Techniques::FragmentStitchingContext& stitchingContext);
 
 		BufferUploads::CommandListID GetCompletionCommandList() const { return _completionCommandList; }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
