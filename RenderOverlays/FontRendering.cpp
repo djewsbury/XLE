@@ -1551,12 +1551,20 @@ namespace RenderOverlays
 
 		VLA_UNSAFE_FORCE(RenderOverlays::Font::Bitmap, bitmaps, chrs.size());
 		std::vector<uint8_t> storageBuffer;
-		storageBuffer.reserve(32*1024);
+		std::vector<ucs4> overflowChrs;
+		unsigned maxPageSize = _pimpl->_pageWidth;
+		storageBuffer.reserve(maxPageSize);
 		unsigned cnt=0;
 		for (auto chr:chrs) {
 			bitmaps[cnt] = font.GetBitmap(chr);
 			auto start = storageBuffer.size();
 			assert(!bitmaps[cnt]._data.empty() || (bitmaps[cnt]._width == 0 && bitmaps[cnt]._height == 0));
+			if (start+bitmaps[cnt]._data.size() > maxPageSize) {
+				bitmaps[cnt]._data = MakeIteratorRange((const void*)1, (const void*)0);
+				++cnt;
+				if (bitmaps[cnt]._data.size() <= maxPageSize) overflowChrs.emplace_back(chr);
+				continue;
+			}
 			storageBuffer.insert(storageBuffer.end(), (const uint8_t*)bitmaps[cnt]._data.begin(), (const uint8_t*)bitmaps[cnt]._data.end());
 			bitmaps[cnt]._data = MakeIteratorRange((const void*)start, (const void*)(start+bitmaps[cnt]._data.size()));
 			++cnt;
@@ -1598,6 +1606,8 @@ namespace RenderOverlays
 		uint64_t fontHash = (font.GetHash() & 0xffffffffull) << 32ull;
 		auto i = _glyphs.begin();
 		for (unsigned c=0; c<chrs.size(); ++c) {
+			if (bitmaps[c]._data.begin() > bitmaps[c]._data.end()) continue;		// skipped chr
+
 			Bitmap result;
 			result._xAdvance = bitmaps[c]._xAdvance;
 			result._bitmapOffsetX = bitmaps[c]._bitmapOffsetX;
@@ -1617,6 +1627,11 @@ namespace RenderOverlays
 		}
 
 		++_getBitmapsInvalidationIdx;
+
+		// If the allocation exceeded a page size, we might need to come back for some new characters
+		if (!overflowChrs.empty())
+			return InitializeNewGlyphs(threadContext,font, overflowChrs, alreadyAttemptedFree);
+
 		return true;
 	}
 
