@@ -92,19 +92,20 @@ namespace UnitTests
 				}
 			} else if (_mode == Mode::ScrollInfiniteText) {
 				// stress out the system by continuously rendering full screens of random text with different fonts
+				std::mt19937_64 frameRng{_frameSeed};
 				for (;;) {
-					auto& font = _fonts[std::uniform_int_distribution<>(0, _fonts.size()-1)(_rng)];
+					auto& font = _fonts[std::uniform_int_distribution<>(0, _fonts.size()-1)(frameRng)];
 					auto fontProps = font->GetFontProperties();
 					auto rect = layout.AllocateFullWidth(fontProps._lineHeight);
 					if (rect.Height() <= 0) break;
 					const auto chrCount = 64;
 					ucs4 chrs[chrCount];
-					for (auto& c:chrs) c = std::uniform_int_distribution<>(33, 126)(_rng);
+					for (auto& c:chrs) c = std::uniform_int_distribution<>(33, 126)(frameRng);
 					DrawTextFlags::BitField flags = 0;
 					RenderOverlays::Draw(
 						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables,
 						*_renderingManager, *font, flags,
-						rect._topLeft[0], rect._topLeft[1] + fontProps._ascender, rect._bottomRight[0], rect._bottomRight[1],
+						rect._topLeft[0], rect._topLeft[1], 0.f, 0.f, // rect._bottomRight[0], rect._bottomRight[1],
 						MakeStringSection(chrs, &chrs[chrCount]),
 						1.0f, 1.0f, ColorB::White);
 				}
@@ -120,7 +121,7 @@ namespace UnitTests
 
 		void Update(RenderCore::IThreadContext& threadContext)
 		{
-			if (_pause) return;
+			if (!_pause) _frameSeed = _rng();
 			
 			if (_mode == Mode::ShowFontTexture) {
 				if (_renderingManager->GetMode() == RenderOverlays::FontRenderingManager::Mode::Texture2D) {
@@ -169,6 +170,16 @@ namespace UnitTests
 				std::make_pair("Petra", 38),
 				std::make_pair("Petra", 46),
 
+				std::make_pair("PetraItalic", 8),
+				std::make_pair("PetraItalic", 10),
+				std::make_pair("PetraItalic", 12),
+				std::make_pair("PetraItalic", 14),
+				std::make_pair("PetraItalic", 16),
+				std::make_pair("PetraItalic", 20),
+				std::make_pair("PetraItalic", 32),
+				std::make_pair("PetraItalic", 38),
+				std::make_pair("PetraItalic", 46),
+
 				std::make_pair("Anka", 8),
 				std::make_pair("Anka", 10),
 				std::make_pair("Anka", 12),
@@ -184,7 +195,21 @@ namespace UnitTests
 				std::make_pair("DosisExtraBold", 20),
 				std::make_pair("DosisExtraBold", 32),
 				std::make_pair("DosisExtraBold", 38),
-				std::make_pair("DosisExtraBold", 46)
+				std::make_pair("DosisExtraBold", 46),
+
+				std::make_pair("Raleway", 12),
+				std::make_pair("Raleway", 16),
+				std::make_pair("Raleway", 20),
+				std::make_pair("Raleway", 32),
+				std::make_pair("Raleway", 38),
+				std::make_pair("Raleway", 46),
+
+				std::make_pair("Vera", 12),
+				std::make_pair("Vera", 16),
+				std::make_pair("Vera", 20),
+				std::make_pair("Vera", 32),
+				std::make_pair("Vera", 38),
+				std::make_pair("Vera", 46)
 			};
 			_fonts.reserve(dimof(fonts));
 			for (auto f:fonts) {
@@ -198,6 +223,7 @@ namespace UnitTests
 		}
 
 		std::mt19937_64 _rng;
+		uint64_t _frameSeed = 0;
 		bool _pause = false;
 		std::vector<std::shared_ptr<RenderOverlays::Font>> _fonts;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _renderingManager;
