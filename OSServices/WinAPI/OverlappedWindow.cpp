@@ -116,14 +116,19 @@ namespace OSServices
                     pimpl->_systemMessages.emplace_back(SystemDisplayChange{});
 
                     // If we are capturing a monitor, we should realign the window with the new desktop geometry
+                    // However, our "captured" monitor may have begun invalidated -- in which case we need to release that capture
                     if (pimpl->_displaySettingsManager && pimpl->_capturedMonitorId != ~0u) {
-                        auto geometry = pimpl->_displaySettingsManager->GetDesktopGeometryForMonitor(pimpl->_capturedMonitorId);
-                        BOOL hres2 = ::SetWindowPos(
-                            pimpl->_hwnd,
-                            HWND_TOPMOST,
-                            geometry._x, geometry._y, geometry._width, geometry._height,
-                            SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS | (pimpl->_shown ? SWP_SHOWWINDOW : 0));
-                        assert(hres2);
+                        if (pimpl->_displaySettingsManager->IsValidMonitor(pimpl->_capturedMonitorId)) {
+                            auto geometry = pimpl->_displaySettingsManager->GetDesktopGeometryForMonitor(pimpl->_capturedMonitorId);
+                            BOOL hres2 = ::SetWindowPos(
+                                pimpl->_hwnd,
+                                HWND_TOPMOST,
+                                geometry._x, geometry._y, geometry._width, geometry._height,
+                                SWP_FRAMECHANGED | SWP_NOREDRAW | SWP_NOCOPYBITS | (pimpl->_shown ? SWP_SHOWWINDOW : 0));
+                            assert(hres2);
+                        } else {
+                            pimpl->_capturedMonitorId = ~0u;
+                        }
                     }
                 }
             }
@@ -295,7 +300,7 @@ namespace OSServices
         unsigned monitorId)
     {
         assert(displaySettings);
-        assert(monitorId < displaySettings->GetMonitors().size());
+        assert(displaySettings->IsValidMonitor(monitorId));
         assert(!_pimpl->_displaySettingsManager && _pimpl->_capturedMonitorId == ~0u);      // attempting to capture multiple times
         _pimpl->_displaySettingsManager = std::move(displaySettings);
         _pimpl->_capturedMonitorId = monitorId;

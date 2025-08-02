@@ -52,6 +52,7 @@ namespace OSServices
 			int _width, _height;
 		};
 		DesktopGeometry GetDesktopGeometryForMonitor(MonitorId);
+		bool IsValidMonitor(MonitorId monitorId);
 
 		bool TryChangeMode(MonitorId, const ModeDesc&);
 		void ReleaseMode(MonitorId);

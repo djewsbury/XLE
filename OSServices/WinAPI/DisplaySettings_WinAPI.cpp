@@ -487,6 +487,13 @@ namespace OSServices
 		return GetDesktopGeometryForMonitorDevice(_pimpl->_monitorsInternal[monitorId]._deviceName.c_str());
 	}
 
+	bool DisplaySettingsManager::IsValidMonitor(MonitorId monitorId)
+	{
+		if (!_pimpl->_initialized)
+			_pimpl->QueryFromOS();
+		return monitorId < _pimpl->_monitors.size();
+	}
+
 	auto DisplaySettingsManager::GetCurrentMode(MonitorId monitorId) -> ModeDesc
 	{
 		if (!_pimpl->_initialized)
