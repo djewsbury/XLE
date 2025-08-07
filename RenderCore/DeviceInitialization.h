@@ -72,6 +72,7 @@ namespace RenderCore
         bool _independentBlend = false;
         bool _multiViewport = false;
         bool _separateDepthStencilLayouts = false;
+        bool _mutableSwapchainFormat = false;
 
         // Resource types
         bool _cubemapArrays = false;

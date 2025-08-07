@@ -1448,7 +1448,8 @@ namespace RenderCore { namespace ImplVulkan
 		if (xleFeatures._timelineSemaphore)
 			deviceExtensions[deviceExtensionCount++] = VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME;	// because it's used internally, it's always required (promoted into Vulkan 1.2)
 		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-		deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME; 
+		if (xleFeatures._mutableSwapchainFormat)
+			deviceExtensions[deviceExtensionCount++] = VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME; 
 		deviceExtensions[deviceExtensionCount++] = VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME;		// promoted to Vulkan 1.2 core. Require to enable mutable format bit for swapchain images
 		if (xleFeatures._viewInstancingRenderPasses)
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME; 	// promoted to Vulkan 1.2, HLSL compiler likes to require it
@@ -1693,6 +1694,7 @@ namespace RenderCore { namespace ImplVulkan
 		bool hasShaderViewportIndex = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasLineRasterizationExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_LINE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasRenderPass2Ext = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasMutableSwapchainFormat = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME); }) != ext._extensions.end();
 
 		DeviceFeatures result;
 
@@ -1714,6 +1716,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._multiViewport = features.features.multiViewport;
 		result._independentBlend = features.features.independentBlend;
 		result._separateDepthStencilLayouts = VkPhysicalDeviceVulkan12Features_inst.separateDepthStencilLayouts;
+		result._mutableSwapchainFormat = hasMutableSwapchainFormat;
 
 		// Resource types
 		result._cubemapArrays = features.features.imageCubeArray;
