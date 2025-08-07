@@ -787,6 +787,8 @@ namespace ToolsRig
 			const PlatformRig::InputContext& context,
 			PlatformRig::Coord2 mousePosition)
 		{
+			return;
+			
             auto worldSpaceRay = SceneEngine::CalculateWorldSpaceRay(
 				AsCameraDesc(*_camera), mousePosition, context._view._viewMins, context._view._viewMaxs);
 

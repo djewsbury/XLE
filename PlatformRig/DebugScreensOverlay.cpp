@@ -61,8 +61,8 @@ namespace PlatformRig
 
                 auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderer.get());
 
-                RenderOverlays::BlurryBackgroundEffect blurryBackground { parserContext };
-                overlayContext->AttachService2(blurryBackground);
+                // RenderOverlays::BlurryBackgroundEffect blurryBackground { parserContext };
+                // overlayContext->AttachService2(blurryBackground);
                 overlayContext->AttachService2(parserContext);
 
                 auto topBarManager = CreateTopBarManager({{0,0}, viewportDims});

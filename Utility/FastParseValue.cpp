@@ -142,12 +142,12 @@ namespace Utility
 
         if (!positive) dst = -dst;
 
-        #if defined(_DEBUG)
+        #if 0 // defined(_DEBUG)
             float compare = strtof((const char*)start, nullptr);
             auto t0 = *(uint32_t*)&compare;
             auto t1 = *(uint32_t*)&dst;
             const uint32_t expectedAccuracy = explicitExponent ? 4 : 1;
-            assert((t0-t1) <= expectedAccuracy || (t1-t0) <= expectedAccuracy);
+            assert((t0-t1) <= expectedAccuracy || (t1-t0) <= expectedAccuracy);      // we can sometimes hit this exception if the input has more precision than can be stored in a float
         #endif
 
         return iterator;

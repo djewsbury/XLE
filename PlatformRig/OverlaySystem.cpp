@@ -251,8 +251,8 @@ namespace PlatformRig
     {
 		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderer.get());
 
-        RenderOverlays::BlurryBackgroundEffect blurryBackground { parserContext };
-        overlayContext->AttachService2(blurryBackground);
+        // RenderOverlays::BlurryBackgroundEffect blurryBackground { parserContext };
+        // overlayContext->AttachService2(blurryBackground);
 
         Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
         assert(viewportDims[0] * viewportDims[1]);
