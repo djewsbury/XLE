@@ -2542,6 +2542,9 @@ namespace RenderCore { namespace ImplVulkan
 			assert(props._desiredNumberOfImages <= dimof(_presentImageAttachedSyncs));
 		}
 
+		// wait for idle before we delete the old swap chain
+		vkDeviceWaitIdle(_underlyingDevice);
+
         // We can't delete the old swap chain while the device is using it. The easiest
         // way to get around this is to just synchronize with the GPU here.
         // Since a resize is uncommon, this should not be a issue. It might be better to wait for
