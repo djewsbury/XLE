@@ -815,9 +815,9 @@ namespace RenderCore { namespace Metal_Vulkan
     template<int Index, typename Type>
         inline void DeferredDestruction::DoDestroy(Type obj)
     {
-		auto marker = _gpuTracker->GetProducerMarker();
         auto& q = std::get<Index>(_queues);
         ScopedLock(q._lock);
+        auto marker = _gpuTracker->GetProducerMarker();     // we must query this inside of the lock, because it's possible that another thread may act between us querying the tracker, and taking the lock
 		if (q._markerCounts.empty()) {
 			assert(q._objects.empty());
 			q._markerCounts.emplace_back(std::make_pair(marker, 1u));
