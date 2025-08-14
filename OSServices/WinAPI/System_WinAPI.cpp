@@ -280,6 +280,9 @@ void GetModulePath(utf8 dst[], size_t bufferCount, const utf8 moduleFilename[])
 
 FileTime GetModuleFileTime()
 {
+    #if !defined(_DEBUG)
+        return 0;
+    #endif
     char path[MaxPath];
     GetModuleFileNameA(NULL, path, MaxPath);
 
@@ -300,6 +303,9 @@ FileTime GetModuleFileTime()
 
 FileTime GetModuleFileTime(const utf8 moduleFilename[])
 {
+    #if !defined(_DEBUG)
+        return 0;
+    #endif
     char path[MaxPath];
     GetModulePath(path, dimof(path), moduleFilename);
 
