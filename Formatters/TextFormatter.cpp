@@ -533,7 +533,7 @@ namespace Formatters
                 ReadToStringEnd<CharType, Format>(readForwardMarker, _protectedStringMode);
                 EatWhitespace<CharType>(readForwardMarker);
 
-                if (*readForwardMarker == (Format==3?':':'=')) {
+                if (readForwardMarker.Remaining() && *readForwardMarker == (Format==3?':':'=')) {
                     return _primed = FormatterBlob::KeyedItem;
                 } else {
                     return _primed = FormatterBlob::Value;
