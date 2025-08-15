@@ -104,7 +104,7 @@ namespace GUILayer
 
     struct CommandLineArgsDigest
     {
-        StringSection<> _xleres = "xleres.pak";
+        StringSection<> _xleres = "base.pak";
         CommandLineArgsDigest(Formatters::CommandLineFormatter<char>&& fmttr)
         {
             StringSection<> keyname;

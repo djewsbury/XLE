@@ -234,7 +234,7 @@ namespace PlatformRig
 
 	struct CommandLineArgsDigest
 	{
-		StringSection<> _xleres = "xleres.pak";
+		StringSection<> _xleres = "base.pak";
 		CommandLineArgsDigest(Formatters::CommandLineFormatter<>& fmttr)
 		{
 			StringSection<> keyname;

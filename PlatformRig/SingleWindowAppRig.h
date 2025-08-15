@@ -142,7 +142,7 @@ namespace PlatformRig
 		struct ConfigureGlobalServices
 		{
 			ConsoleRig::StartupConfig _startupCfg;
-			std::string _xleResLocation = "xleres.pak";
+			std::string _xleResLocation = "base.pak";
 			enum class XLEResType { XPak, OSFileSystem, EmbeddedXPak, None };
 			XLEResType _xleResType = XLEResType::XPak;
 			IteratorRange<const void*> _xleResEmbeddedData;
