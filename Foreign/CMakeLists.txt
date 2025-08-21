@@ -7,8 +7,19 @@ endif()
 add_subdirectory(wildcards wildcards)
 
 if (WIN32)
-    add_subdirectory(DirectXTex DirectXTex)
-    xle_internal_configure_compiler(DirectXTex)
+
+    add_library(
+        DirectXTexMinimal STATIC
+        DirectXTex/DirectXTex/DirectXTexDDS.cpp
+        DirectXTex/DirectXTex/DirectXTexImage.cpp
+        DirectXTex/DirectXTex/DirectXTexMipmaps.cpp
+        DirectXTex/DirectXTex/DirectXTexConvert.cpp
+        DirectXTex/DirectXTex/DirectXTexUtil.cpp
+        DirectXTex/DirectXTex/DirectXTexTGA.cpp
+        DirectXTex/DirectXTex/DirectXTexWIC.cpp
+        DirectXTexStubs.cpp)
+    xle_configure_library(DirectXTexMinimal)
+
 endif ()
 
 #############################################################################################

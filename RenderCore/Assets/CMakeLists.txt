@@ -37,7 +37,7 @@ xle_configure_library(RenderCoreAssets)
 target_link_libraries(RenderCoreAssets PUBLIC BufferUploads-Shared ShaderParser RenderCore ConsoleRig Assets Math OSServices Utility ForeignMisc)
 
 if (WIN32)
-    target_link_libraries(RenderCoreAssets PRIVATE DirectXTex)
+    target_link_libraries(RenderCoreAssets PRIVATE DirectXTexMinimal)
     target_compile_definitions(RenderCoreAssets PRIVATE ENABLE_DXTEX=1)
 endif ()
 
