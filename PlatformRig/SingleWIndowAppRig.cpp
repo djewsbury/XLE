@@ -293,9 +293,9 @@ namespace PlatformRig
 					_fileCache = ::Assets::CreateFileCache(4 * 1024 * 1024);
 					// by default, search next to the executable if we don't have a fully qualified name
 					if (::Assets::MainFileSystem::TryGetDesc(_configGlobalServices._xleResLocation)._snapshot._state == ::Assets::FileSnapshot::State::DoesNotExist) {
-						char buffer[MaxPath];
-						OSServices::GetProcessPath(buffer, dimof(buffer));
-						_configGlobalServices._xleResLocation = Concatenate(MakeFileNameSplitter(buffer).StemAndPath(), "/", _configGlobalServices._xleResLocation);
+						char pakPath[MaxPath];
+						OSServices::GetCurrentDirectory(dimof(pakPath), pakPath);
+						_configGlobalServices._xleResLocation = Concatenate(pakPath, "/", _configGlobalServices._xleResLocation);
 					}
 					_xleResMountID->_mountId = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateXPakFileSystem(_configGlobalServices._xleResLocation, _fileCache));
 				} else if (_configGlobalServices._xleResType == ConfigureGlobalServices::XLEResType::EmbeddedXPak) {
