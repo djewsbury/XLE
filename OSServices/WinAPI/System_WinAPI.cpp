@@ -448,7 +448,7 @@ bool CopyToSystemClipboard(StringSection<> text)
 
 bool OpenExternalBrowser(StringSection<> link)
 {
-#if 0
+#if 1
     if (link.IsEmpty()) return false;
 
     // refuse anything that looks like it might be file -- we're begin quite conservative here, and will 
