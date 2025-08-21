@@ -92,9 +92,9 @@ namespace Assets
 	namespace Literals
 	{
 		#if __cplusplus >= 202002L		// if ConstHash64 is consteval, then this must be also
-			consteval inline Initializer<char> operator"" _initializer(const char* str, const size_t len) never_throws { return Initializer{str, len, ConstHash64(str, len)}; }
+			consteval inline Initializer<char> operator""_initializer(const char* str, const size_t len) never_throws { return Initializer{str, len, ConstHash64(str, len)}; }
 		#else
-			CLANG_ONLY(constexpr) inline Initializer<char> operator"" _initializer(const char* str, const size_t len) never_throws { return Initializer{str, len, ConstHash64(str, len)}; }
+			CLANG_ONLY(constexpr) inline Initializer<char> operator""_initializer(const char* str, const size_t len) never_throws { return Initializer{str, len, ConstHash64(str, len)}; }
 		#endif
 	}
 

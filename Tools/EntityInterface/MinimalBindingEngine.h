@@ -187,7 +187,7 @@ namespace EntityInterface
 
 	namespace Literals
 	{
-		XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _mv(const char* str, const size_t len) never_throws { return MinimalBindingEngine::ValueId(str, len); }
+		XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_mv(const char* str, const size_t len) never_throws { return MinimalBindingEngine::ValueId(str, len); }
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -464,19 +464,19 @@ namespace Utility
             #pragma GCC diagnostic push
             #pragma GCC diagnostic ignored "-Wgnu-string-literal-operator-template"
                 template <typename T, T... chars>
-                    XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h() never_throws
+                    XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_h() never_throws
                 { 
                     return Internal::ConstHash64_2<DefaultSeed64, chars...>();
                 }
 
                 template <typename T, T... chars>
-                    XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h64() never_throws
+                    XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_h64() never_throws
                 {
                     return Internal::ConstHash64_2<DefaultSeed64, chars...>();
                 }
 
                 template <typename T, T... chars>
-                    XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _h32() never_throws
+                    XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator""_h32() never_throws
                 {
                     return Internal::ConstHash32_2<DefaultSeed32, chars...>();
                 }
@@ -484,15 +484,15 @@ namespace Utility
 
         #else
 
-            XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h(const char* str, const size_t len) never_throws { return Internal::ConstHash64_1(str, len); }
-            XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _h32(const char* str, const size_t len) never_throws { return Internal::ConstHash32_1(str, len); }
-            XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h64(const char* str, const size_t len) never_throws { return Internal::ConstHash64_1(str, len); }
+            XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_h(const char* str, const size_t len) never_throws { return Internal::ConstHash64_1(str, len); }
+            XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator""_h32(const char* str, const size_t len) never_throws { return Internal::ConstHash32_1(str, len); }
+            XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_h64(const char* str, const size_t len) never_throws { return Internal::ConstHash64_1(str, len); }
 
         #endif
 
-        XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h_compatible(const char* str, const size_t len) never_throws { return Internal::ConstHash64_1(str, len); }
-        XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator"" _h32_compatible(const char* str, const size_t len) never_throws { return Internal::ConstHash32_1(str, len); }
-        XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator"" _h64_compatible(const char* str, const size_t len) never_throws { return Internal::ConstHash64_1(str, len); }
+        XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_h_compatible(const char* str, const size_t len) never_throws { return Internal::ConstHash64_1(str, len); }
+        XLE_CONSTEVAL_OR_CONSTEXPR uint32_t operator""_h32_compatible(const char* str, const size_t len) never_throws { return Internal::ConstHash32_1(str, len); }
+        XLE_CONSTEVAL_OR_CONSTEXPR uint64_t operator""_h64_compatible(const char* str, const size_t len) never_throws { return Internal::ConstHash64_1(str, len); }
     }
 
     ///

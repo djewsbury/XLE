@@ -503,7 +503,7 @@ namespace UnitTests
         }
     }
 
-    static uint64_t operator"" _hnonconstexpr(const char* str, const size_t len) never_throws { return Hash64(MakeStringSection(str, str+len)); }
+    static uint64_t operator""_hnonconstexpr(const char* str, const size_t len) never_throws { return Hash64(MakeStringSection(str, str+len)); }
 
     #define CONCAT2(X, Y) X##Y
     #define CONCAT(X, Y) CONCAT2(X, Y)
