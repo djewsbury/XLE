@@ -53,7 +53,6 @@ xle_configure_library(Utility)
 target_link_libraries(Utility PUBLIC ForeignMisc)
 
 if (WIN32)
-    target_link_libraries(Utility PRIVATE wsock32.lib ws2_32.lib)
 elseif (NOT APPLE)
     target_link_libraries(Utility PRIVATE pthread)
 endif ()

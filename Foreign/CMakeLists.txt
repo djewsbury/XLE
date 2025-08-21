@@ -25,13 +25,48 @@ endif ()
 #############################################################################################
 
 if(NOT CLIENT_HAS_LUA)
-    file(GLOB LuaSrc "Lua/src/*.c" "Lua/src/*.h")
+    set(LuaSrc 
+        Lua/src/lapi.c
+        Lua/src/lauxlib.c
+        Lua/src/lbaselib.c
+        Lua/src/lbitlib.c
+        Lua/src/lcode.c
+        # Lua/src/lcorolib.c
+        Lua/src/lctype.c
+        # Lua/src/ldblib.c
+        Lua/src/ldebug.c
+        Lua/src/ldo.c
+        Lua/src/ldump.c
+        Lua/src/lfunc.c
+        Lua/src/lgc.c
+        Lua/src/linit.c
+        # Lua/src/liolib.c
+        Lua/src/llex.c
+        Lua/src/lmathlib.c
+        Lua/src/lmem.c
+        # Lua/src/loadlib.c
+        Lua/src/lobject.c
+        Lua/src/lopcodes.c
+        # Lua/src/loslib.c
+        Lua/src/lparser.c
+        Lua/src/lstate.c
+        Lua/src/lstring.c
+        Lua/src/lstrlib.c
+        Lua/src/ltable.c
+        Lua/src/ltablib.c
+        Lua/src/ltm.c
+        Lua/src/lundump.c
+        Lua/src/lutf8lib.c
+        Lua/src/lvm.c
+        Lua/src/lzio.c
+        Lua/lstub.c
+        )
 endif()
-file(GLOB HashSrc "Hash/*.cpp" "Hash/*.h")
+file(GLOB HashSrc Hash/MurmurHash2.cpp Hash/MurmurHash3.cpp)
 if (XLE_ANTLR_ENABLE)
     file(GLOB AntlrSrc "Antlr-3.4/libantlr3c-3.4/src/*.c")
 endif()
-file(GLOB FmtSrc "fmt/*.cc")
+# file(GLOB FmtSrc "fmt/*.cc")
 # if (WIN32)
 # 	file(GLOB StackWalkerSrc "StackWalker/*.cpp")
 # endif()
@@ -42,10 +77,6 @@ set(CUTFSource cutf/cutf.cpp)
 
 add_library(ForeignMisc STATIC ${LuaSrc} ${HashSrc} ${FmtSrc} ${StackWalkerSrc} ${PlustacheSrc} ${StamSimpleFluidSrc} ${ZLibSrc} ${AntlrSrc} ${CParseSource} ${CUTFSource})
 xle_configure_library(ForeignMisc)
-
-if (APPLE)
-    target_link_libraries(ForeignMisc PUBLIC z)
-endif ()
 
 # Ensure we export the necessary include folders from this target
 # Most other targets list this target as a dependency, so they should inherit these include folders

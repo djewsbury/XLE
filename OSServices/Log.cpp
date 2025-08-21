@@ -12,7 +12,7 @@
 #include "../Formatters/TextFormatter.h"
 #include "../Formatters/StreamDOM.h"
 #include "../Utility/Threading/Mutex.h"
-#include "../Foreign/fmt/format.h"
+// #include "../Foreign/fmt/format.h"
 #include <iostream>
 
 namespace OSServices
@@ -23,6 +23,7 @@ namespace OSServices
             const std::string& fmtTemplate,
             const SourceLocation& sourceLocation)
     {
+#if OSSERVICES_ENABLE_LOG
         auto outputFn = _externalMessageHandler;
         if (outputFn == nullptr) {
             outputFn = [](const CharType* s, std::streamsize count) -> std::streamsize {
@@ -39,6 +40,9 @@ namespace OSServices
             outputFn(" ", 1); // always append one extra space since the format string can't
         }
         return outputFn(msg.begin(), msg.size());       // (note; don't include the length of the formatted section; because it will confuse the caller when it is a basic_ostream
+#else
+    return 0;
+#endif
     }
 
     template<typename CharType, typename CharTraits>
@@ -59,6 +63,7 @@ namespace OSServices
     template<typename CharType, typename CharTraits>
         auto MessageTarget<CharType, CharTraits>::overflow(int_type ch) -> int_type
     {
+#if OSSERVICES_ENABLE_LOG
         if (std::basic_streambuf<CharType, CharTraits>::traits_type::not_eof(ch)) {
             if (_cfg._enabledSinks & MessageTargetConfiguration::Sink::Console) {
                 std::cout.rdbuf()->sputc((CharType)ch);
@@ -67,6 +72,7 @@ namespace OSServices
                 return 0;   // (anything other than traits_type::eof() signifies success)
             }
         }
+#endif
 
         return std::basic_streambuf<CharType, CharTraits>::overflow(ch);
     }

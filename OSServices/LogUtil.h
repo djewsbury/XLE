@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Log.h"
-#include "../Foreign/fmt/format.h"
-#include "../Foreign/fmt/ostream.h"
+// #include "../Foreign/fmt/format.h"
+// #include "../Foreign/fmt/ostream.h"
 
 #if defined(__OBJC__)
     #include <Foundation/NSObject.h>
@@ -23,13 +23,13 @@
     }
 #endif
 
-using namespace fmt::literals;
+// using namespace fmt::literals;
 
 #if defined(OSSERVICES_ENABLE_LOG)
-    inline void LogLine(OSServices::MessageTarget<>& target, const char *format, fmt::ArgList args)
-    {
-        Log(target) << fmt::format(format, args) << std::endl;
-    }
+    // inline void LogLine(OSServices::MessageTarget<>& target, const char *format, fmt::ArgList args)
+    // {
+    //     Log(target) << fmt::format(format, args) << std::endl;
+    // }
 
     FMT_VARIADIC(void, LogLine, OSServices::MessageTarget<>&, const char *);
 #else
