@@ -39,8 +39,6 @@ typedef struct IdentifierAndScopeTag
 
 namespace GraphLanguage
 {
-	using namespace ShaderSourceParser::AntlrHelper;
-
 	class WorkingGraphSyntaxFile
 	{
 	public:
@@ -64,6 +62,9 @@ namespace GraphLanguage
 
 		std::vector<std::pair<std::string, AttributeTable>> _attributeTables;
 	};
+
+#if XLE_ANTLR_ENABLE
+	using namespace ShaderSourceParser::AntlrHelper;
 
 	static pANTLR3_BASE_TREE BuildAST(struct GraphSyntaxParser_Ctx_struct& parser)
     {
@@ -115,6 +116,17 @@ namespace GraphLanguage
 			result._attributeTables.insert({at.first, std::move(at.second)});
 		return result;
     }
+
+	static std::string MakeArchiveName(const IdentifierAndScope& identifierAndScope)
+	{
+		if (identifierAndScope._scope)
+			return ShaderSourceParser::AntlrHelper::AsString<>(identifierAndScope._scope) + "::" + ShaderSourceParser::AntlrHelper::AsString<>(identifierAndScope._identifier);
+		return ShaderSourceParser::AntlrHelper::AsString<>(identifierAndScope._identifier);
+	}
+
+#else
+	GraphSyntaxFile ParseGraphSyntax(StringSection<char> sourceCode) { return {}; }
+#endif
 	
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -254,13 +266,6 @@ namespace GraphLanguage
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static std::string MakeArchiveName(const IdentifierAndScope& identifierAndScope)
-	{
-		if (identifierAndScope._scope)
-			return ShaderSourceParser::AntlrHelper::AsString<>(identifierAndScope._scope) + "::" + ShaderSourceParser::AntlrHelper::AsString<>(identifierAndScope._identifier);
-		return ShaderSourceParser::AntlrHelper::AsString<>(identifierAndScope._identifier);
-	}
-
 	WorkingGraphSyntaxFile& GetFileContext(const void* ctx) { return *(WorkingGraphSyntaxFile*)((GraphSyntaxEval_Ctx_struct*)ctx)->_userData; }
 	WorkingGraphSyntaxFile::Graph& GetGraphContext(const void* ctx, GraphId gid) 
 	{
@@ -270,6 +275,7 @@ namespace GraphLanguage
 
 }
 
+#if XLE_ANTLR_ENABLE
 extern "C" GraphId Graph_Register(const void* ctx, const char name[], GraphSignatureId signatureId)
 {
 	auto& f = GraphLanguage::GetFileContext(ctx);
@@ -470,3 +476,4 @@ extern "C" void AttributeTable_AddValue(const void* ctx, AttributeTableId tableI
 	assert(tableId < f._attributeTables.size());
 	f._attributeTables[tableId].second[key] = value;
 }
+#endif

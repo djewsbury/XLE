@@ -712,6 +712,7 @@ namespace Assets
 	{
 		std::vector<CompilerRegistration> result;
 
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 		auto candidateCompilers = searchRules.FindFiles(librarySearch);
 		for (auto& c : candidateCompilers) {
 			TRY {
@@ -754,6 +755,7 @@ namespace Assets
 				Log(Warning) << "Failed while attempt to attach library: " << e.what() << std::endl;
 			} CATCH_END
 		}
+#endif
 
 		return result;
 	}

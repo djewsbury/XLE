@@ -13,7 +13,6 @@ namespace Utility { class OutputStream; }
 namespace ConsoleRig
 {
     Utility::OutputStream&      GetWarningStream();
-    Utility::OutputStream&      GetDebuggerWarningStream();
 
     void        xleWarning(const char format[], ...);
     void        xleWarning(const char format[], va_list args);

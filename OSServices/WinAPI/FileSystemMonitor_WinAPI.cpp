@@ -31,6 +31,7 @@
 
 namespace OSServices
 {
+#if XLE_FILE_SYSTEM_MONITORING_ENABLE
 	class MonitorDirectoryConduit : public IConduitProducer_CompletionRoutine
 	{
 	public:
@@ -331,5 +332,19 @@ namespace OSServices
 		for (const auto& wait:futuresToWaitOn)
 			wait.wait();
 	}
+#else
+
+	void    RawFSMonitor::Attach(StringSection<utf8>, std::shared_ptr<OnChangeCallback>) {}
+	void    RawFSMonitor::Attach(StringSection<utf16>, std::shared_ptr<OnChangeCallback>) {}
+
+	void    RawFSMonitor::FakeFileChange(StringSection<utf8>) {}
+	void    RawFSMonitor::FakeFileChange(StringSection<utf16>) {}
+
+	class RawFSMonitor::Pimpl {};
+
+	RawFSMonitor::RawFSMonitor(const std::shared_ptr<PollingThread>&) {}
+	RawFSMonitor::~RawFSMonitor() {}
+
+#endif
 }
 

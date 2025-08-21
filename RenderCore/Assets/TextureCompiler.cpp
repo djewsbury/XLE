@@ -23,7 +23,10 @@
 #include "../../Core/Exceptions.h"
 
 #include "thousandeyes/futures/then.h"
-#include "Compressonator.h"
+
+#if XLE_COMPRESSONATOR_ENABLE
+	#include "Compressonator.h"
+#endif
 
 #include <random>
 
@@ -31,6 +34,7 @@ namespace RenderCore { namespace Assets
 {
 	::Assets::Blob PrepareDDSBlob(const TextureDesc& tDesc, size_t& headerSize);
 
+#if XLE_COMPRESSONATOR_ENABLE
 	static CMP_FORMAT AsCompressonatorFormat(Format fmt)
 	{
 		switch (fmt) {
@@ -253,6 +257,49 @@ namespace RenderCore { namespace Assets
 
 		return destinationBlob;
 	}
+#else
+
+	::Assets::Blob ConvertAndPrepareDDSBlobSync(
+		BufferUploads::IAsyncDataSource& srcPkt,
+		Format dstFmt)
+	{
+		assert(0);
+		auto descFuture = srcPkt.GetDesc();
+		descFuture.wait();
+		auto desc = descFuture.get();
+		assert(desc._type == ResourceDesc::Type::Texture && desc._textureDesc._width >= 1 && desc._textureDesc._height >= 1);
+		auto srcSize = ByteCount(desc);
+		auto dstDesc = desc._textureDesc;
+
+		AlignedUniquePtr<uint8_t> data { (uint8_t*)XlMemAlign(srcSize, 64) };
+
+		auto mipCount = desc._textureDesc._mipCount;
+		auto arrayLayerCount = ActualArrayLayerCount(desc._textureDesc);
+		VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, subres, mipCount*arrayLayerCount);
+		for (unsigned a=0; a<arrayLayerCount; ++a)
+				for (unsigned m=0; m<mipCount; ++m) {
+					auto& sr = subres[m+a*mipCount];
+					auto srcOffset = GetSubResourceOffset(desc._textureDesc, m, a);
+					sr._id = SubResourceId{m, a};
+					sr._destination = {PtrAdd(data.get(), srcOffset._offset), PtrAdd(data.get(), srcOffset._offset+srcOffset._size)};
+					sr._pitches = srcOffset._pitches;
+				}
+
+		auto dataFuture = srcPkt.PrepareData(MakeIteratorRange(subres, &subres[mipCount*arrayLayerCount]));
+		dataFuture.wait();
+
+		size_t ddsHeaderOffset = 0;
+		auto destinationBlob = PrepareDDSBlob(dstDesc, ddsHeaderOffset);
+
+		// copy directly into the output dds
+		if (destinationBlob->size() != (ddsHeaderOffset + srcSize))
+			Throw(std::runtime_error("Texture conversion failed because of size mismatch"));
+		std::memcpy(PtrAdd(destinationBlob->data(), ddsHeaderOffset), data.get(), srcSize);
+
+		return destinationBlob;
+	}
+
+#endif
 
 	TextureCompilationRequest MakeTextureCompilationRequest(Formatters::StreamDOMElement<Formatters::TextInputFormatter<>>& operationElement, std::string srcFN)
 	{

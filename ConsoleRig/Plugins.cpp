@@ -18,13 +18,16 @@ namespace ConsoleRig
 	class PluginSet::Pimpl
 	{
 	public:
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 		std::unordered_map<std::string, std::shared_ptr<OSServices::AttachableLibrary>> _pluginLibraries;
 		std::unordered_map<std::string, std::string> _failedPlugins;
 		std::vector<std::shared_ptr<IStartupShutdownPlugin>> _plugins;
+#endif
 	};
 
 	std::shared_ptr<OSServices::AttachableLibrary> PluginSet::LoadLibrary(std::string name)
 	{
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 		auto simplified = MakeSplitPath(name).Rebuild();
 
 		auto i2 = _pimpl->_failedPlugins.find(simplified);
@@ -45,10 +48,14 @@ namespace ConsoleRig
 			_pimpl->_failedPlugins.insert(std::make_pair(simplified, msg));
 			Throw(std::runtime_error(msg));
 		}
+#else
+		return nullptr;
+#endif
 	}
 	
 	void PluginSet::LoadDefaultPlugins()
 	{
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 		char processPath[MaxPath], cwd[MaxPath];
 		OSServices::GetProcessPath((utf8*)processPath, dimof(processPath));
     	OSServices::GetCurrentDirectory(dimof(cwd), cwd);
@@ -89,10 +96,12 @@ namespace ConsoleRig
 				_pimpl->_failedPlugins.insert(std::make_pair(c, msg));
 			}
 		}
+#endif
 	}
 
 	void PluginSet::DeinitializePlugins()
 	{
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 		// This is called either explicitly via the global services, or during an atexit() function
 		// it should attempt to unload all plugins before we start running other atexit() functions
 		// (as a way to try to make the destruction process feel more predictable, and avoid destroying
@@ -107,19 +116,23 @@ namespace ConsoleRig
 				a.second->Detach();
 			_pimpl->_pluginLibraries.clear();
 		}
+#endif
 	}
 
 	void* PluginSet::FindPluginFunction(const char* name)
 	{
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 		// scan all plugin libraries for something that will match this function name
 		for (auto& p:_pimpl->_pluginLibraries)
 			if (auto* res = p.second->GetFunctionAddress(name))
 				return res;
+#endif
 		return nullptr;
 	}
 
 	void PluginSet::LogStatus(std::ostream& out)
 	{
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 		out << "> Plugin status" << std::endl;
 		for (auto& p:_pimpl->_pluginLibraries) {
 			OSServices::LibVersionDesc v;
@@ -133,6 +146,7 @@ namespace ConsoleRig
 		for (auto& p:_pimpl->_failedPlugins)
 			out << "    Failed: " << p.first << " (With msg: " << p.second << ")" << std::endl;
 		out << "    " << _pimpl->_plugins.size() << " startup/shutdown plugins registered" << std::endl;
+#endif
 	}
 
 	PluginSet::PluginSet()
@@ -142,8 +156,10 @@ namespace ConsoleRig
 
 	PluginSet::~PluginSet()
 	{
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 		_pimpl->_plugins.clear();
 		for (auto&a:_pimpl->_pluginLibraries)
 			a.second->Detach();
+#endif
 	}
 }

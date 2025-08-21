@@ -19,7 +19,7 @@
 
 #include "../../Foreign/RenderDoc/renderdoc_app.h"
 
-#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+#if (PLATFORMOS_TARGET == PLATFORMOS_WINDOWS) && defined(_DEBUG)
 	#include "../../OSServices/WinAPI/IncludeWindows.h"
 #endif
 
@@ -257,7 +257,7 @@ namespace RenderCore { namespace ImplVulkan
 			_listeners.erase(i);
 	}
 
-#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+#if (PLATFORMOS_TARGET == PLATFORMOS_WINDOWS) && defined(_DEBUG)
 	static RENDERDOC_API_1_1_2 *s_rdoc_api = nullptr;
 	static bool s_attemptedRenderDocAttach = false;
 

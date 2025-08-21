@@ -124,7 +124,9 @@ namespace Assets
 		std::basic_string<utf8> _rootUTF8;
 		std::basic_string<utf16> _rootUTF16;
 		OSFileSystemFlags::BitField _flags;
-		std::shared_ptr<OSServices::RawFSMonitor> _fileSystemMonitor;
+		#if XLE_FILE_SYSTEM_MONITORING_ENABLE
+			std::shared_ptr<OSServices::RawFSMonitor> _fileSystemMonitor;
+		#endif
 
 		Threading::Mutex _cacheLock;
 		struct CachedDirectory { unsigned _start, _end; };
@@ -346,52 +348,60 @@ namespace Assets
 	{
 		snapshot._state = FileSnapshot::State::DoesNotExist;
 
-		if (!_fileSystemMonitor)
-			return IOReason::Complex;
+		#if XLE_FILE_SYSTEM_MONITORING_ENABLE
+			if (!_fileSystemMonitor)
+				return IOReason::Complex;
 
-		// note -- we can install monitors even for files and directories that don't exist
-		//			when they are created, the monitor should start to take effect.
-		auto type = *(uint16*)AsPointer(marker.cbegin());
-		if (type == 1) {
-			auto fn = MakeStringSection(
-				(const utf8*)PtrAdd(AsPointer(marker.cbegin()), 2),
-				(const utf8*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf8)));
-			snapshot = GetCurrentSnapshot(fn);
-			_fileSystemMonitor->Attach(fn, evnt);
-			return IOReason::Success;
-		} else if (type == 2) {
-			auto fn = MakeStringSection(
-				(const utf16*)PtrAdd(AsPointer(marker.cbegin()), 2),
-				(const utf16*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf16)));
-			snapshot = GetCurrentSnapshot(fn);
-			_fileSystemMonitor->Attach(fn, evnt);
-			return IOReason::Success;
-		}
-		return IOReason::Complex;
+			// note -- we can install monitors even for files and directories that don't exist
+			//			when they are created, the monitor should start to take effect.
+			auto type = *(uint16*)AsPointer(marker.cbegin());
+			if (type == 1) {
+				auto fn = MakeStringSection(
+					(const utf8*)PtrAdd(AsPointer(marker.cbegin()), 2),
+					(const utf8*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf8)));
+				snapshot = GetCurrentSnapshot(fn);
+				_fileSystemMonitor->Attach(fn, evnt);
+				return IOReason::Success;
+			} else if (type == 2) {
+				auto fn = MakeStringSection(
+					(const utf16*)PtrAdd(AsPointer(marker.cbegin()), 2),
+					(const utf16*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf16)));
+				snapshot = GetCurrentSnapshot(fn);
+				_fileSystemMonitor->Attach(fn, evnt);
+				return IOReason::Success;
+			}
+			return IOReason::Complex;
+		#else
+			return IOReason::Complex;
+		#endif
 	}
 
 	auto FileSystem_OS::TryFakeFileChange(const Marker& marker) -> IOReason
 	{
-		if (!_fileSystemMonitor)
-			return IOReason::Complex;
+		#if XLE_FILE_SYSTEM_MONITORING_ENABLE
+			if (!_fileSystemMonitor)
+				return IOReason::Complex;
 
-		// note -- we can install monitors even for files and directories that don't exist
-		//			when they are created, the monitor should start to take effect.
-		auto type = *(uint16*)AsPointer(marker.cbegin());
-		if (type == 1) {
-			auto fn = MakeStringSection(
-				(const utf8*)PtrAdd(AsPointer(marker.cbegin()), 2),
-				(const utf8*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf8)));
-			_fileSystemMonitor->FakeFileChange(fn);
-			return IOReason::Success;
-		} else if (type == 2) {
-			auto fn = MakeStringSection(
-				(const utf16*)PtrAdd(AsPointer(marker.cbegin()), 2),
-				(const utf16*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf16)));
-			_fileSystemMonitor->FakeFileChange(fn);
-			return IOReason::Success;
-		}
-		return IOReason::Complex;
+			// note -- we can install monitors even for files and directories that don't exist
+			//			when they are created, the monitor should start to take effect.
+			auto type = *(uint16*)AsPointer(marker.cbegin());
+			if (type == 1) {
+				auto fn = MakeStringSection(
+					(const utf8*)PtrAdd(AsPointer(marker.cbegin()), 2),
+					(const utf8*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf8)));
+				_fileSystemMonitor->FakeFileChange(fn);
+				return IOReason::Success;
+			} else if (type == 2) {
+				auto fn = MakeStringSection(
+					(const utf16*)PtrAdd(AsPointer(marker.cbegin()), 2),
+					(const utf16*)PtrAdd(AsPointer(marker.cend()), -(ptrdiff_t)sizeof(utf16)));
+				_fileSystemMonitor->FakeFileChange(fn);
+				return IOReason::Success;
+			}
+			return IOReason::Complex;
+		#else
+			return IOReason::Complex;
+		#endif
 	}
 
 	FileDesc FileSystem_OS::TryGetDesc(const Marker& marker)
@@ -531,8 +541,10 @@ namespace Assets
 			_rootUTF16.push_back((utf16)'/');
 		}
 
-		if (pollingThread)
-			_fileSystemMonitor = std::make_shared<OSServices::RawFSMonitor>(pollingThread);
+		#if XLE_FILE_SYSTEM_MONITORING_ENABLE
+			if (pollingThread)
+				_fileSystemMonitor = std::make_shared<OSServices::RawFSMonitor>(pollingThread);
+		#endif
 	}
 
 	FileSystem_OS::~FileSystem_OS() {}

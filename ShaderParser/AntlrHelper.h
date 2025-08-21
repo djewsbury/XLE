@@ -13,6 +13,9 @@
     // Antlr includes windows.h; so get in before it can
     #include "../OSServices/WinAPI/IncludeWindows.h"
 #endif
+
+#if XLE_ANTLR_ENABLE
+
 #include <antlr3defs.h>
 #include <antlr3interfaces.h>
 #include <antlr3basetree.h>
@@ -110,3 +113,6 @@ namespace ShaderSourceParser { namespace AntlrHelper
 		ExceptionHandlerAndUserData _previousExceptionHandler;
 	};
 }}
+
+#endif
+

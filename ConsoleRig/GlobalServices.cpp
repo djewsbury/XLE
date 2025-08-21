@@ -248,10 +248,19 @@ namespace ConsoleRig
         _pimpl->_defaultFilesystem = ::Assets::CreateFileSystem_OS({}, _pimpl->_pollingThread, ::Assets::OSFileSystemFlags::AllowAbsolute);
         _pimpl->_mountingTree = std::make_shared<::Assets::MountingTree>(s_defaultFilenameRules);
 
-        if ((cfg._registerTemporaryIntermediates || cfg._inMemoryOnlyIntermediates) && !_pimpl->_intermediatesStore) {
-            auto store = Internal::CreateIntermediatesStore(cfg._inMemoryOnlyIntermediates ? nullptr : _pimpl->_defaultFilesystem, cfg._applicationName);
+        if (cfg._inMemoryOnlyIntermediates && !_pimpl->_intermediatesStore) {
+            auto store = ::Assets::CreateMemoryOnlyIntermediatesStore();
             _pimpl->_intermediatesStore = store;
             _pimpl->_intermediatesCompilers = ::Assets::CreateIntermediateCompilers(store);
+        } else if (cfg._registerTemporaryIntermediates && !_pimpl->_intermediatesStore) {
+            #if XLE_TEMPORARY_INTERMEDIATES_ENABLE
+                assert(_pimpl->_defaultFilesystem);
+                auto store = Internal::CreateIntermediatesStore(_pimpl->_defaultFilesystem, cfg._applicationName);
+                _pimpl->_intermediatesStore = store;
+                _pimpl->_intermediatesCompilers = ::Assets::CreateIntermediateCompilers(store);
+            #else
+                assert(0);
+            #endif
         }
 
         if (!_pimpl->_assetsSetsManager)
@@ -301,6 +310,7 @@ namespace ConsoleRig
         CrossModule::GetInstance().Shutdown();
     }
 
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
     static std::weak_ptr<PluginSet> s_pluginSetDoDeinit;
     static void DeinitPluginSet()
     {
@@ -322,6 +332,13 @@ namespace ConsoleRig
 	{
         _pimpl->_pluginSet->DeinitializePlugins();
 	}
+#else
+    void GlobalServices::LoadDefaultPlugins()
+	{}
+
+    void GlobalServices::UnloadDefaultPlugins()
+	{}
+#endif
 
     void GlobalServices::PrepareForDestruction()
     {
@@ -508,6 +525,7 @@ namespace ConsoleRig
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if XLE_TEMPORARY_INTERMEDIATES_ENABLE
     namespace Internal
     {
         std::shared_ptr<::Assets::IIntermediatesStore> CreateIntermediatesStore(std::shared_ptr<::Assets::IFileSystem> intermediatesFilesystem, std::string applicationName)
@@ -528,12 +546,10 @@ namespace ConsoleRig
             #endif
 
             auto tempDirPath = std::filesystem::temp_directory_path() / applicationName;
-            if (intermediatesFilesystem) {
-                return ::Assets::CreateTemporaryCacheIntermediatesStore(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString);
-            } else {
-                return ::Assets::CreateMemoryOnlyIntermediatesStore();
-            }
+            assert(intermediatesFilesystem);
+            return ::Assets::CreateTemporaryCacheIntermediatesStore(intermediatesFilesystem, tempDirPath.string(), storeVersionString, storeConfigString);
         }
     }
+#endif
 
 }

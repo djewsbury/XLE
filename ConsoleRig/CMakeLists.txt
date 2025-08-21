@@ -1,4 +1,7 @@
 
+option(XLE_STACK_WALKER_ENABLE "Write a log message with callstack when throwing certain exceptions" OFF)
+option(XLE_TEMPORARY_INTERMEDIATES_ENABLE "Enables support for temporary intermediates, if GlobalServices is initialized with it enabled" ON)
+
 set(Src
     Console.cpp
     DebugUtil.cpp
@@ -18,6 +21,16 @@ target_link_libraries(ConsoleRig PRIVATE Assets)    # todo -- this creates a dep
 if (NOT WIN32)
   target_link_libraries(ConsoleRig PRIVATE dl)
 endif ()
+
+if (XLE_STACK_WALKER_ENABLE)
+    target_compile_definitions(ConsoleRig PRIVATE -DXLE_STACK_WALKER_ENABLE=1)
+endif()
+if (XLE_ATTACHABLE_LIBRARIES_ENABLE)
+    target_compile_definitions(ConsoleRig PRIVATE -DXLE_ATTACHABLE_LIBRARIES_ENABLE=1)
+endif()
+if (XLE_TEMPORARY_INTERMEDIATES_ENABLE)
+    target_compile_definitions(ConsoleRig PRIVATE -DXLE_TEMPORARY_INTERMEDIATES_ENABLE=1)
+endif()
 
 ##################################################################################################################################
 

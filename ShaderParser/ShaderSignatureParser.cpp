@@ -52,6 +52,7 @@ namespace ShaderSourceParser
 		std::string GetString(StringId id) const { return id != ~0u ? _stringTable[id] : std::string(); }
 	};
 
+#if XLE_ANTLR_ENABLE
 	static pANTLR3_BASE_TREE BuildAST(struct ShaderParser_Ctx_struct& parser)
     {
 		using namespace ShaderSourceParser::AntlrHelper;
@@ -100,8 +101,12 @@ namespace ShaderSourceParser
 		
 		return sig._signature;
     }
+#else
+	GraphLanguage::ShaderFragmentSignature ParseHLSL(StringSection<char> sourceCode) { return {}; }
+#endif
 }
 
+#if XLE_ANTLR_ENABLE
 extern "C" StringId String_Register(const void* ctx, const pANTLR3_BASE_TREE str) 
 {
 	auto* w = (ShaderSourceParser::WorkingInterfaceStructure*)((ShaderTreeWalk_Ctx_struct*)ctx)->_userData;
@@ -179,3 +184,4 @@ extern "C" ParameterStructId ParameterStruct_Register(const void* ctx, struct SS
 	w->_signature._uniformBuffers.emplace_back(std::make_pair(name, std::move(result)));
 	return (ParameterStructId)(w->_signature._uniformBuffers.size()-1);
 }
+#endif

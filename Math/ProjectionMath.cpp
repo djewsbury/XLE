@@ -18,7 +18,7 @@
 #include <cfloat>
 #include <limits>
 
-#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__) 
+#if (defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)) && defined(__SSE4_1__)
     #include <immintrin.h>
     #define HAS_SSE_INSTRUCTIONS
 #endif

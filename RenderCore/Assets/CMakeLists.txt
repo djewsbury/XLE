@@ -40,3 +40,8 @@ if (WIN32)
     target_link_libraries(RenderCoreAssets PRIVATE DirectXTex)
     target_compile_definitions(RenderCoreAssets PRIVATE ENABLE_DXTEX=1)
 endif ()
+
+if (XLE_COMPRESSONATOR_ENABLE)
+    target_compile_definitions(RenderCoreAssets PRIVATE -DXLE_COMPRESSONATOR_ENABLE=1)
+endif()
+

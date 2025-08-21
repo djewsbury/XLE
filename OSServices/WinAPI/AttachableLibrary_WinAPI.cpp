@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../AttachableLibrary.h"
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../RawFS.h"
@@ -15,9 +16,11 @@
 #include "IncludeWindows.h"
 #include "System_WinAPI.h"
 #include "WinAPIWrapper.h"
+#endif
 
 namespace OSServices
 {
+#if XLE_ATTACHABLE_LIBRARIES_ENABLE
     typedef HMODULE LibraryHandle;
     static const LibraryHandle LibraryHandle_Invalid = (LibraryHandle)INVALID_HANDLE_VALUE;
 
@@ -137,10 +140,27 @@ namespace OSServices
 	: _pimpl(std::move(moveFrom._pimpl))
 	{}
 
-	AttachableLibrary& AttachableLibrary::operator=(AttachableLibrary&& moveFrom) never_throws
+    AttachableLibrary& AttachableLibrary::operator=(AttachableLibrary&& moveFrom) never_throws
 	{
 		_pimpl = std::move(moveFrom._pimpl);
 		return *this;
 	}
+
+#else
+
+    class AttachableLibrary::Pimpl {};
+
+    bool AttachableLibrary::TryAttach(std::string& errorMsg) { errorMsg = "<<disabled>>"; return false; }
+    void AttachableLibrary::Detach() {}
+    bool AttachableLibrary::TryGetVersion(LibVersionDesc& result) { result = {nullptr, nullptr}; return false; }
+    void* AttachableLibrary::GetFunctionAddress(const char name[]) { return nullptr; }
+
+    AttachableLibrary::AttachableLibrary(StringSection<CharType> filename) {}
+    AttachableLibrary::~AttachableLibrary() {}
+    AttachableLibrary::AttachableLibrary(AttachableLibrary&&) never_throws = default;
+    AttachableLibrary& AttachableLibrary::operator=(AttachableLibrary&&) never_throws = default;
+
+#endif
+
 }
 

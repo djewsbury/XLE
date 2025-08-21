@@ -16,7 +16,7 @@
 #include <assert.h>
 #include <algorithm>
 
-#if PLATFORMOS_ACTIVE == PLATFORMOS_WINDOWS
+#if PLATFORMOS_ACTIVE == PLATFORMOS_WINDOWS && defined(_DEBUG)
     extern "C" dll_import void __stdcall OutputDebugStringA(const char lpOutputString[]);
     extern "C" dll_import void __stdcall OutputDebugStringW(const wchar_t lpOutputString[]);
 #endif
@@ -187,7 +187,7 @@ namespace ConsoleRig
     {}
 
 
-    #if PLATFORMOS_ACTIVE == PLATFORMOS_WINDOWS
+    #if PLATFORMOS_ACTIVE == PLATFORMOS_WINDOWS && defined(_DEBUG)
 
             ////    D E B U G   C O N S O L E   O U T P U T   ////
 
@@ -248,65 +248,75 @@ namespace ConsoleRig
         DebuggerConsoleOutput::DebuggerConsoleOutput()  {}
         DebuggerConsoleOutput::~DebuggerConsoleOutput() {}
 
-    #endif
+        std::shared_ptr<Utility::OutputStream>      GetSharedDebuggerWarningStream()
+        {
+            #if PLATFORMOS_ACTIVE == PLATFORMOS_WINDOWS && defined(_DEBUG)
+                static auto result = std::make_shared<BufferedOutputStream>(std::make_shared<DebuggerConsoleOutput>());
+                return result;
+            #else
+                return nullptr;
+            #endif
+        }
 
+        Utility::OutputStream&      GetWarningStream()
+        {
+            static ForkOutputStream stream(
+                GetSharedDebuggerWarningStream(),
+                std::make_shared<ConsoleOutputStream>());
+            return stream;
+        }
 
+        static Utility::OutputStream&      GetDebuggerWarningStream()
+        {
+            return *GetSharedDebuggerWarningStream();
+        }
 
-    std::shared_ptr<Utility::OutputStream>      GetSharedDebuggerWarningStream()
-    {
-        #if PLATFORMOS_ACTIVE == PLATFORMOS_WINDOWS
-            static auto result = std::make_shared<BufferedOutputStream>(std::make_shared<DebuggerConsoleOutput>());
-            return result;
-        #else
-            return nullptr;
-        #endif
-    }
+        void xleWarning(const char format[], va_list args)
+        {
+            ConsoleRig::GetWarningStream().Write((utf8*)"{Color:ff7f7f}");
+            PrintFormatV(&ConsoleRig::GetWarningStream(), format, args);
+            ConsoleRig::GetDebuggerWarningStream().Flush();
+        }
 
-    Utility::OutputStream&      GetWarningStream()
-    {
-        static ForkOutputStream stream(
-            GetSharedDebuggerWarningStream(),
-            std::make_shared<ConsoleOutputStream>());
-        return stream;
-    }
-
-    Utility::OutputStream&      GetDebuggerWarningStream()
-    {
-        return *GetSharedDebuggerWarningStream();
-    }
-
-    void xleWarning(const char format[], va_list args)
-    {
-        ConsoleRig::GetWarningStream().Write((utf8*)"{Color:ff7f7f}");
-        PrintFormatV(&ConsoleRig::GetWarningStream(), format, args);
-        ConsoleRig::GetDebuggerWarningStream().Flush();
-    }
-
-    void xleWarning(const char format[], ...)
-    {
-        va_list args;
-        va_start(args, format);
-        xleWarning(format, args);
-        va_end(args);
-    }
-    
-    #if defined(_DEBUG)
-        void xleWarningDebugOnly(const char format[], ...)
+        void xleWarning(const char format[], ...)
         {
             va_list args;
             va_start(args, format);
             xleWarning(format, args);
             va_end(args);
         }
+
+        #if defined(_DEBUG)
+            void xleWarningDebugOnly(const char format[], ...)
+            {
+                va_list args;
+                va_start(args, format);
+                xleWarning(format, args);
+                va_end(args);
+            }
+        #endif
+
+
+        void DebuggerOnlyWarning(const char format[], ...)
+        {
+            va_list args;
+            va_start(args, format);
+            PrintFormatV(&ConsoleRig::GetDebuggerWarningStream(), format, args);
+            va_end(args);
+        }
+
+    #else
+        Utility::OutputStream&      GetWarningStream()
+        {
+            static auto stream = std::make_shared<ConsoleOutputStream>();
+            return *stream;
+        }
+
+        void xleWarning(const char format[], va_list args) {}
+        void xleWarning(const char format[], ...) {}
+        void DebuggerOnlyWarning(const char format[], ...) {}
     #endif
 
-
-    void DebuggerOnlyWarning(const char format[], ...)
-    {
-        va_list args;
-        va_start(args, format);
-        PrintFormatV(&ConsoleRig::GetDebuggerWarningStream(), format, args);
-        va_end(args);
-    }
+    
 
 }

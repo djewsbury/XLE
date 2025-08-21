@@ -4,6 +4,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#if XLE_ANTLR_ENABLE
+
 #include "../Core/Exceptions.h"
 #include "Exceptions.h"
 #include "AntlrHelper.h"
@@ -230,3 +232,5 @@ namespace ShaderSourceParser
         }
     }
 }
+
+#endif

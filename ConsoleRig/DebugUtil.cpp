@@ -13,7 +13,7 @@
 
 #include <iostream>
 
-#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS && !defined(__MINGW32__)
+#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS && !defined(__MINGW32__) && XLE_STACK_WALKER_ENABLE
     #include "../OSServices/WinAPI/IncludeWindows.h"
     #include "../Foreign/StackWalker/StackWalker.h"
 #endif
@@ -152,59 +152,67 @@ namespace ConsoleRig
         #endif
     }
 
-    #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS && !defined(__MINGW32__)
-        class StackWalkerToLog : public StackWalker
-        {
-        protected:
-            virtual void OnOutput(LPCSTR) {}
+    #if XLE_STACK_WALKER_ENABLE
 
-            void OnCallstackEntry(CallstackEntryType eType, int frameNumber, CallstackEntry &entry)
+        #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS && !defined(__MINGW32__)
+            class StackWalkerToLog : public StackWalker
             {
-                    // We should normally have 3 entries on the callstack ahead of what we want:
-                    //  StackWalker::ShowCallstack
-                    //  ConsoleRig::SendExceptionToLogger
-                    //  Utility::Throw
-                if ((frameNumber >= 3) && (eType != lastEntry) && (entry.offset != 0)) {
-                    if (entry.lineFileName[0] == 0) {
-                        Log(Error) 
-                            << std::hex << entry.offset << std::dec
-                            << " (" << entry.moduleName << "): "
-                            << entry.name
-							<< std::endl;
-                    } else {
-                        Log(Error)
-                            << entry.lineFileName << " (" << entry.lineNumber << "): "
-                            << ((entry.undFullName[0] != 0) ? entry.undFullName : ((entry.undName[0] != 0) ? entry.undName : entry.name))
-							<< std::endl;
+            protected:
+                virtual void OnOutput(LPCSTR) {}
+
+                void OnCallstackEntry(CallstackEntryType eType, int frameNumber, CallstackEntry &entry)
+                {
+                        // We should normally have 3 entries on the callstack ahead of what we want:
+                        //  StackWalker::ShowCallstack
+                        //  ConsoleRig::SendExceptionToLogger
+                        //  Utility::Throw
+                    if ((frameNumber >= 3) && (eType != lastEntry) && (entry.offset != 0)) {
+                        if (entry.lineFileName[0] == 0) {
+                            Log(Error) 
+                                << std::hex << entry.offset << std::dec
+                                << " (" << entry.moduleName << "): "
+                                << entry.name
+                                << std::endl;
+                        } else {
+                            Log(Error)
+                                << entry.lineFileName << " (" << entry.lineNumber << "): "
+                                << ((entry.undFullName[0] != 0) ? entry.undFullName : ((entry.undName[0] != 0) ? entry.undName : entry.name))
+                                << std::endl;
+                        }
                     }
                 }
-            }
-        };
-    #endif
+            };
+        #endif
 
-    static void SendExceptionToLogger(const ::Exceptions::CustomReportableException& e)
-    {
-        TRY
+        static void SendExceptionToLogger(const ::Exceptions::CustomReportableException& e)
         {
-            if (!e.CustomReport()) {
-                #if FEATURE_RTTI
-                    Log(Error) << "Throwing Exception -- " << typeid(e).name() << ". Extra information follows:" << std::endl;
-                #else
-                    Log(Error) << "Throwing Exception. Extra information follows:" << std::endl;
-                #endif
-                Log(Error) << e.what() << std::endl;
+            TRY
+            {
+                if (!e.CustomReport()) {
+                    #if FEATURE_RTTI
+                        Log(Error) << "Throwing Exception -- " << typeid(e).name() << ". Extra information follows:" << std::endl;
+                    #else
+                        Log(Error) << "Throwing Exception. Extra information follows:" << std::endl;
+                    #endif
+                    Log(Error) << e.what() << std::endl;
 
-                    // report this exception to the logger (including callstack information)
-                #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS && !defined(__MINGW32__)
-                    static StackWalkerToLog walker;
-                    walker.ShowCallstack(7);
-                #endif
-            }
-        } CATCH (...) {
-            // Encountering another exception at this point would be trouble.
-            // We have to suppress any exception that happen during reporting,
-            // and allow the exception, 'e' to be handled
-        } CATCH_END
-    }
+                        // report this exception to the logger (including callstack information)
+                    #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS && !defined(__MINGW32__)
+                        static StackWalkerToLog walker;
+                        walker.ShowCallstack(7);
+                    #endif
+                }
+            } CATCH (...) {
+                // Encountering another exception at this point would be trouble.
+                // We have to suppress any exception that happen during reporting,
+                // and allow the exception, 'e' to be handled
+            } CATCH_END
+        }
+
+    #else
+
+        static void SendExceptionToLogger(const ::Exceptions::CustomReportableException& e) {}
+
+    #endif
 }
 

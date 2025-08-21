@@ -1,4 +1,6 @@
 
+option (XLE_FREETYPE_ENABLE "Enables font handling via FreeType" ON)
+
 foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
     set(Src
@@ -27,8 +29,13 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
     add_library(RenderOverlays-${metal_name} STATIC ${Src} ${OverlaysSrc})
     xle_configure_library(RenderOverlays-${metal_name})
-    target_link_libraries(RenderOverlays-${metal_name} PRIVATE RenderCoreTechniques-${metal_name} ForeignMisc freetype)
+    target_link_libraries(RenderOverlays-${metal_name} PRIVATE RenderCoreTechniques-${metal_name} ForeignMisc)
     target_link_libraries(RenderOverlays-${metal_name} PRIVATE BufferUploads-${metal_name})
     target_link_libraries(RenderOverlays-${metal_name} PRIVATE yogacore)
+
+    if (XLE_FREETYPE_ENABLE)
+        target_link_libraries(RenderOverlays-${metal_name} PRIVATE freetype)
+        target_compile_definitions(RenderOverlays-${metal_name} PRIVATE -DXLE_FREETYPE_ENABLE=1)
+    endif()
 
 endforeach()

@@ -33,8 +33,10 @@
 #include <assert.h>
 #include <locale>
 
-#include "ft2build.h"
-#include FT_FREETYPE_H
+#if XLE_FREETYPE_ENABLE
+	#include "ft2build.h"
+	#include FT_FREETYPE_H
+#endif
 
 namespace RenderOverlays
 {
@@ -49,6 +51,8 @@ namespace RenderOverlays
 	private:
 		::Assets::DependencyValidation _depVal;
 	};
+
+#if XLE_FREETYPE_ENABLE
 
 	class FTFontResources
 	{
@@ -394,48 +398,6 @@ namespace RenderOverlays
 
 	////////////////////////////////////////////////////////////////////////////////////
 
-	static void LoadFontNameMapping(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, std::unordered_map<std::string, std::string>& result)
-	{
-		char buffer[MaxPath];
-		StringSection<> name;
-		while (formatter.TryKeyedItem(name)) {
-			switch (formatter.PeekNext()) {
-			case Formatters::FormatterBlob::Value:
-				searchRules.ResolveFile(buffer, RequireStringValue(formatter));
-				result.insert({name.AsString(), std::string(buffer)});
-				break;
-
-			case Formatters::FormatterBlob::BeginElement:
-				RequireBeginElement(formatter);
-				SkipElement(formatter);
-				RequireEndElement(formatter);
-				break;
-
-			default:
-				Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
-			}
-		}
-	}
-
-	FontLibraryFile::FontLibraryFile(Formatters::TextInputFormatter<char>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
-	: _depVal(depVal)
-	{
-		auto locale = std::locale("").name();
-
-		StringSection<> name;
-		while (formatter.TryKeyedItem(name)) {
-			RequireBeginElement(formatter);
-			if (XlEqStringI(name, "*")) {
-				LoadFontNameMapping(formatter, searchRules, _nameMap);
-			} else if (XlEqStringI(name, locale)) {
-				LoadFontNameMapping(formatter, searchRules, _nameMap);
-			} else {
-				SkipElement(formatter);
-			}
-			RequireEndElement(formatter);
-		}
-	}
-
 	FTFontResources::FTFontResources()
 	{
 		FT_Error error = FT_Init_FreeType(&_ftLib);
@@ -498,5 +460,129 @@ namespace RenderOverlays
 		resources->RebuildFontLibraryCollectionAlreadyLocked();
 	}
 
-}
+#else
 
+	class FTFont : public Font 
+	{
+	public:
+		virtual FontProperties GetFontProperties() const;
+		virtual Bitmap GetBitmap(ucs4 ch) const;
+		virtual GlyphProperties GetGlyphProperties(ucs4 ch) const;
+		virtual void GetGlyphPropertiesSorted(
+			IteratorRange<GlyphProperties*> result,
+			IteratorRange<const ucs4*> glyphs) const;
+
+		virtual Float2 GetKerning(int prevGlyph, ucs4 ch, int* curGlyph) const;
+		virtual Float2 GetKerningReverse(int prevGlyph, ucs4 ch, int* curGlyph) const;
+		virtual float GetKerning(ucs4 prev, ucs4 ch) const;
+
+		::Assets::DependencyValidation _depVal;
+		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+
+		FTFont();
+		virtual ~FTFont();
+	};
+
+	FTFont::FTFont()
+	{
+	}
+
+	FTFont::~FTFont()
+	{
+	}
+
+	auto FTFont::GetFontProperties() const -> FontProperties { return {}; }
+
+	Float2 FTFont::GetKerning(int prevGlyph, ucs4 ch, int* curGlyph) const
+	{
+		return Float2(0.0f, 0.0f);
+	}
+
+	Float2 FTFont::GetKerningReverse(int prevGlyph, ucs4 ch, int* curGlyph) const
+	{
+		return Float2(0.0f, 0.0f);
+	}
+
+	float FTFont::GetKerning(ucs4 prev, ucs4 ch) const
+	{
+		return 0.0f;
+	}
+
+	auto FTFont::GetGlyphProperties(ucs4 ch) const -> GlyphProperties
+	{
+		return {};
+	}
+
+	void FTFont::GetGlyphPropertiesSorted(
+		IteratorRange<GlyphProperties*> result,
+		IteratorRange<const ucs4*> glyphs) const
+	{
+	}
+
+	auto FTFont::GetBitmap(ucs4 ch) const -> Bitmap
+	{
+		return {};
+	}
+
+	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size)
+	{
+		return nullptr;
+	}
+
+	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> pathAndSize)
+	{
+		return nullptr;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////
+
+	std::shared_ptr<FTFontResources> CreateFTFontResources() { return nullptr; }
+
+	void RegisterFontLibraryFile(StringSection<> path) {}
+
+#endif
+
+	static void LoadFontNameMapping(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules& searchRules, std::unordered_map<std::string, std::string>& result)
+	{
+		char buffer[MaxPath];
+		StringSection<> name;
+		while (formatter.TryKeyedItem(name)) {
+			switch (formatter.PeekNext()) {
+			case Formatters::FormatterBlob::Value:
+				searchRules.ResolveFile(buffer, RequireStringValue(formatter));
+				result.insert({name.AsString(), std::string(buffer)});
+				break;
+
+			case Formatters::FormatterBlob::BeginElement:
+				RequireBeginElement(formatter);
+				SkipElement(formatter);
+				RequireEndElement(formatter);
+				break;
+
+			default:
+				Throw(Formatters::FormatException("Unexpected blob", formatter.GetLocation()));
+			}
+		}
+	}
+
+	FontLibraryFile::FontLibraryFile(Formatters::TextInputFormatter<char>& formatter, const ::Assets::DirectorySearchRules& searchRules, const ::Assets::DependencyValidation& depVal)
+	: _depVal(depVal)
+	{
+		auto locale = std::locale("").name();
+
+		StringSection<> name;
+		while (formatter.TryKeyedItem(name)) {
+			RequireBeginElement(formatter);
+			if (XlEqStringI(name, "*")) {
+				LoadFontNameMapping(formatter, searchRules, _nameMap);
+			} else if (XlEqStringI(name, locale)) {
+				LoadFontNameMapping(formatter, searchRules, _nameMap);
+			} else {
+				SkipElement(formatter);
+			}
+			RequireEndElement(formatter);
+		}
+	}
+
+
+}

@@ -208,6 +208,10 @@ if (APPLE AND XLE_APPLEMETAL_ENABLE)
     list(APPEND MetalSelectName AppleMetal)
 endif()
 
+option(XLE_FILE_SYSTEM_MONITORING_ENABLE "Enable file system monitoring support" ON)
+option(XLE_ATTACHABLE_LIBRARIES_ENABLE "Enable support for attachable plugins and libraries" ON)
+option(XLE_COMPRESSONATOR_ENABLE "Enables texture compression during processing using Compressonator" ON)
+
 if (MSVC)
     if ("${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
         set (VS_CONFIGURATION "x64")

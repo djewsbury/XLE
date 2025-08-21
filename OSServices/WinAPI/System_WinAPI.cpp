@@ -31,6 +31,10 @@
 #include <objbase.h>
 #include <shobjidl.h>
 
+#if !defined(XLE_GET_MODULE_PATH_ENABLE)
+    #define XLE_GET_MODULE_PATH_ENABLE 1
+#endif
+
 namespace OSServices
 {
 
@@ -262,9 +266,12 @@ uint32_t XlWaitForMultipleSyncObjects(uint32_t waitCount, XlHandle waitObjects[]
     return FromWinWaitResult(WaitForMultipleObjectsEx(waitCount, waitObjects, waitAll ? TRUE : FALSE, waitTime, alterable));
 }
 
-void GetProcessPath(utf8 dst[], size_t bufferCount)    { GetModuleFileNameA(NULL, (char*)dst, (DWORD)bufferCount); }
 void ChDir(const utf8 path[])                          { SetCurrentDirectoryA((const char*)path); }
 void DeleteFile(const utf8 path[]) { auto result = ::DeleteFileA((char*)path); (void)result; }
+
+#if XLE_GET_MODULE_PATH_ENABLE
+
+void GetProcessPath(utf8 dst[], size_t bufferCount)    { GetModuleFileNameA(NULL, (char*)dst, (DWORD)bufferCount); }
 
 void GetModulePath(utf8 dst[], size_t bufferCount, const utf8 moduleFilename[])
 {
@@ -278,11 +285,17 @@ void GetModulePath(utf8 dst[], size_t bufferCount, const utf8 moduleFilename[])
     GetModuleFileNameA(moduleHandle, (char*)dst, (DWORD)bufferCount);
 }
 
+#else
+
+void GetProcessPath(utf8 dst[], size_t bufferCount) { dst[0] = '\0'; }
+void GetModulePath(utf8 dst[], size_t bufferCount, const utf8 moduleFilename[]) { dst[0] = '\0'; }
+
+#endif
+
+#if XLE_GET_MODULE_FILE_TIME_ENABLE
+
 FileTime GetModuleFileTime()
 {
-    #if !defined(_DEBUG)
-        return 0;
-    #endif
     char path[MaxPath];
     GetModuleFileNameA(NULL, path, MaxPath);
 
@@ -303,9 +316,6 @@ FileTime GetModuleFileTime()
 
 FileTime GetModuleFileTime(const utf8 moduleFilename[])
 {
-    #if !defined(_DEBUG)
-        return 0;
-    #endif
     char path[MaxPath];
     GetModulePath(path, dimof(path), moduleFilename);
 
@@ -323,6 +333,13 @@ FileTime GetModuleFileTime(const utf8 moduleFilename[])
 
     return result;
 }
+
+#else
+
+FileTime GetModuleFileTime() { return 0; }
+FileTime GetModuleFileTime(const utf8 moduleFilename[]) { return 0; }
+
+#endif
 
 std::string GetAppDataPath()
 {
@@ -390,6 +407,7 @@ void MessageUser(StringSection<> text, StringSection<> title)
 
 bool CopyToSystemClipboard(StringSection<> text)
 {
+#if 0
     // See https://learn.microsoft.com/en-us/windows/win32/dataxchg/using-the-clipboard
     if (!OpenClipboard(nullptr))
         return false; 
@@ -415,10 +433,14 @@ bool CopyToSystemClipboard(StringSection<> text)
 
     CloseClipboard();
     return true;
+#else
+    return false;
+#endif
 }
 
 bool OpenExternalBrowser(StringSection<> link)
 {
+#if 0
     if (link.IsEmpty()) return false;
 
     // refuse anything that looks like it might be file -- we're begin quite conservative here, and will 
@@ -444,10 +466,13 @@ bool OpenExternalBrowser(StringSection<> link)
 
     HINSTANCE res = ShellExecuteA(nullptr, "open", finalLink.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     return ((size_t)res) > 32;        // as per msvc docs, only numbers greater than 32 are success
+#endif
+    return false;
 }
 
 bool OpenAppDataFolder(StringSection<> subFolder)
 {
+#if 0
     if (subFolder.IsEmpty()) return false;
     if (std::find(subFolder.begin(), subFolder.end(), '.') != subFolder.end()) return false;
 
@@ -456,11 +481,15 @@ bool OpenAppDataFolder(StringSection<> subFolder)
     auto finalLink = Concatenate(GetAppDataPath(), "\\", subFolder);
     HINSTANCE res = ShellExecuteA(nullptr, "open", finalLink.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     return ((size_t)res) > 32;        // as per msvc docs, only numbers greater than 32 are success
+#endif
+    return false;
 }
 
 void SetThreadName(StringSection<> text)
 {
+#if 0
     SetThreadDescription(GetCurrentThread(), Conversion::Convert<std::wstring>(text).c_str());
+#endif
 }
 
 // void GetProcessPath(ucs2 dst[], size_t bufferCount)    { GetModuleFileNameW(NULL, (wchar_t*)dst, (DWORD)bufferCount); }
@@ -588,6 +617,7 @@ void ConfigureDPIAwareness()
 
 std::fstream CreateAppDataFile(StringSection<> appName, StringSection<> fileName, std::ios_base::openmode openMode)
 {
+#if 1
     std::string santizedAppName = appName.AsString();
     const char badCharacters[] { '#', '%', '&', '{', '}', '\\', '<', '>', '*', '?', '/', ' ', '$', '!', '\'', '\"', ':', '@', '+', '`', '|', '=' };
     for (auto& c:santizedAppName)
@@ -613,6 +643,9 @@ std::fstream CreateAppDataFile(StringSection<> appName, StringSection<> fileName
         }
     }
     return std::fstream { fullfname.c_str(), openMode };
+#else
+    return std::fstream { fileName.AsString().c_str(), openMode };
+#endif
 }
 
 #if 0
