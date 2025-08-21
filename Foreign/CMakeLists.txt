@@ -78,7 +78,11 @@ set(CUTFSource cutf/cutf.cpp)
 add_library(ForeignMisc STATIC ${LuaSrc} ${HashSrc} ${FmtSrc} ${StackWalkerSrc} ${PlustacheSrc} ${StamSimpleFluidSrc} ${ZLibSrc} ${AntlrSrc} ${CParseSource} ${CUTFSource})
 xle_configure_library(ForeignMisc)
 
-target_compile_options(ForeignMisc PRIVATE -include "ForeignPrefix.h")
+if (MSVC)
+    target_compile_options(ForeignMisc PRIVATE /FI ${CMAKE_CURRENT_LIST_DIR}/ForeignPrefix.h)
+else()
+    target_compile_options(ForeignMisc PRIVATE -include "ForeignPrefix.h")
+endif()
 
 # Ensure we export the necessary include folders from this target
 # Most other targets list this target as a dependency, so they should inherit these include folders
