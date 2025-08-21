@@ -1,6 +1,7 @@
 
 option(XLE_STACK_WALKER_ENABLE "Write a log message with callstack when throwing certain exceptions" OFF)
 option(XLE_TEMPORARY_INTERMEDIATES_ENABLE "Enables support for temporary intermediates, if GlobalServices is initialized with it enabled" ON)
+option(XLE_CONSOLE_LUA_ENABLE "Enables the lua VM for the console" OFF)
 
 set(Src
     Console.cpp
@@ -30,6 +31,9 @@ if (XLE_ATTACHABLE_LIBRARIES_ENABLE)
 endif()
 if (XLE_TEMPORARY_INTERMEDIATES_ENABLE)
     target_compile_definitions(ConsoleRig PRIVATE -DXLE_TEMPORARY_INTERMEDIATES_ENABLE=1)
+endif()
+if (XLE_CONSOLE_LUA_ENABLE)
+    target_compile_definitions(ConsoleRig PRIVATE -DXLE_CONSOLE_LUA_ENABLE=1)
 endif()
 
 ##################################################################################################################################

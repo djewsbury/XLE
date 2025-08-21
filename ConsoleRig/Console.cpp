@@ -16,6 +16,7 @@
 #include <iterator>
 #include <algorithm>
 
+#if XLE_CONSOLE_LUA_ENABLE
 #define _SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS		// LuaBridge uses hash_map, which creates a compile error in Visual Studio 2015. We should use the standard unordered_map, instead
 #undef new
 
@@ -24,6 +25,7 @@
 
 #if defined(DEBUG_NEW)
     #define new DEBUG_NEW
+#endif
 #endif
 
 #pragma GCC diagnostic ignored "-Wundefined-bool-conversion"
@@ -114,6 +116,7 @@ namespace ConsoleRig
 
     void            Console::Execute(const std::string& str)
     {
+#if XLE_CONSOLE_LUA_ENABLE
         Print("{Color:af3f7f}Executing string -- {Color:7F7F7F}" + str + "\n");
 
         auto L = LockLuaState(true);
@@ -129,11 +132,13 @@ namespace ConsoleRig
             }
             lua_pop(L.GetLuaState(), 1);
         }
+#endif
     }
 
     std::vector<std::string>    CollectAutoCompleteList(lua_State*L, const std::string& input, size_t iterateStart)
     {
         std::vector<std::string> result;
+#if XLE_CONSOLE_LUA_ENABLE
         size_t compareLength = input.size() - iterateStart;
         if (compareLength) {
             DEBUG_ONLY(int stackSizeStart2 = lua_gettop(L));
@@ -172,12 +177,13 @@ namespace ConsoleRig
             DEBUG_ONLY(int stackSizeEnd2 = lua_gettop(L));
             assert(stackSizeEnd2 == stackSizeStart2);
         }
-
+#endif
         return result;
     }
 
     std::vector<std::string>    Console::AutoComplete(const std::string& input)
     {
+#if XLE_CONSOLE_LUA_ENABLE
         auto lockedLua = LockLuaState(true);
         auto* L = lockedLua.GetLuaState();
 
@@ -227,6 +233,9 @@ namespace ConsoleRig
         lua_pop(L, tablesPushed);
         assert(lua_gettop(L) == stackSizeStart2);
         return result;
+#else
+        return {};
+#endif
     }
 
     static std::basic_string<ucs2>      AsUTF16(const std::string& input)
@@ -391,6 +400,7 @@ namespace ConsoleRig
 
             //////   B A S I C   L U A   B E H A V I O U R   //////
 
+#if XLE_CONSOLE_LUA_ENABLE
     void * LuaState::AllocationBridge(void *userData, void *ptr, size_t osize, size_t nsize)
     {
         (void)userData;  (void)osize;  /* not used */
@@ -495,7 +505,7 @@ namespace ConsoleRig
     {
         _closeOnExit = true;
         L = lua_newstate(&AllocationBridge, nullptr);
-        luaL_openlibs(L);
+        luaL_openlibs(L);       // (maybe crash now that some standard libraries are disabled)
         lua_atpanic(L, &PanicBridge);
 
         lua_pushlightuserdata(L, this);
@@ -766,6 +776,24 @@ namespace ConsoleRig
             lua_pop(L, 2);      // pop _G & cv namespace
         }
     }
+
+#else
+
+    int LuaState::PCall(int argumentCount, int returnValueCount) { return 0; }
+
+    LuaState::LuaState() {}
+    LuaState::LuaState(lua_State& existing) {}
+    LuaState::~LuaState() {}
+
+    template<typename T> ConsoleVariable<T>::ConsoleVariable(const std::string& name, T& attachedValue, const char cvarNamespace[]) {}
+    template<typename T> ConsoleVariable<T>::ConsoleVariable() {}
+    template<typename T> ConsoleVariable<T>::~ConsoleVariable() {}
+
+    template<typename T> ConsoleVariable<T>::ConsoleVariable(ConsoleVariable&& moveFrom) {}
+    template<typename T> ConsoleVariable<T>& ConsoleVariable<T>::operator=(ConsoleVariable&& moveFrom) { return *this; }
+    
+#endif
+
 
 
     template class ConsoleVariable<int>;
