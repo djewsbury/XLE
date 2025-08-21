@@ -6,9 +6,17 @@
 #include "NodeGraphSignature.h"
 #include "NodeGraph.h"		// (just required for s_resultName)
 #include "AntlrHelper.h"
-#include "Grammar/ShaderLexer.h"
-#include "Grammar/ShaderParser.h"
-#include "Grammar/ShaderTreeWalk.h"
+#if XLE_ANTLR_ENABLE
+	#include "Grammar/ShaderLexer.h"
+	#include "Grammar/ShaderParser.h"
+	#include "Grammar/ShaderTreeWalk.h"
+#else
+	typedef unsigned StringId;
+	typedef unsigned FormalArgId;
+	typedef unsigned VariableId;
+	typedef unsigned FunctionId;
+	typedef unsigned ParameterStructId;
+#endif
 #include "../OSServices/Log.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"

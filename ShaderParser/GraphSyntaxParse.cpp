@@ -10,9 +10,11 @@
 #include "NodeGraphProvider.h"
 #include "NodeGraphSignature.h"
 #include "AntlrHelper.h"
+#if XLE_ANTLR_ENABLE
 #include "Grammar/GraphSyntaxLexer.h"
 #include "Grammar/GraphSyntaxParser.h"
 #include "Grammar/GraphSyntaxEval.h"
+#endif
 #include "../Assets/RawFileAsset.h"
 #include "../Assets/Assets.h"
 #include "../Utility/FunctionUtils.h"
@@ -31,11 +33,13 @@ typedef unsigned ConnectionId;
 typedef unsigned GraphSignatureId;
 typedef unsigned AttributeTableId;
 
+#if XLE_ANTLR_ENABLE
 typedef struct IdentifierAndScopeTag
 {
 	pANTLR3_COMMON_TOKEN _scope;
 	pANTLR3_COMMON_TOKEN _identifier;
 } IdentifierAndScope;
+#endif
 
 namespace GraphLanguage
 {
@@ -266,12 +270,14 @@ namespace GraphLanguage
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if XLE_ANTLR_ENABLE
 	WorkingGraphSyntaxFile& GetFileContext(const void* ctx) { return *(WorkingGraphSyntaxFile*)((GraphSyntaxEval_Ctx_struct*)ctx)->_userData; }
 	WorkingGraphSyntaxFile::Graph& GetGraphContext(const void* ctx, GraphId gid) 
 	{
 		auto& file = GetFileContext(ctx);
 		return file._graphs[gid];
 	}
+#endif
 
 }
 
