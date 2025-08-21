@@ -23,7 +23,7 @@ namespace OSServices
             const std::string& fmtTemplate,
             const SourceLocation& sourceLocation)
     {
-#if OSSERVICES_ENABLE_LOG
+#if defined(OSSERVICES_ENABLE_LOG)
         auto outputFn = _externalMessageHandler;
         if (outputFn == nullptr) {
             outputFn = [](const CharType* s, std::streamsize count) -> std::streamsize {
@@ -31,14 +31,14 @@ namespace OSServices
             };
         }
 
-		if (!fmtTemplate.empty()) {
-            auto fmt = fmt::format(
-                fmtTemplate,
-                fmt::arg("file", sourceLocation._file),
-                fmt::arg("line", sourceLocation._line));
-            outputFn(fmt.data(), fmt.size());
-            outputFn(" ", 1); // always append one extra space since the format string can't
-        }
+		// if (!fmtTemplate.empty()) {
+        //     auto fmt = fmt::format(
+        //         fmtTemplate,
+        //         fmt::arg("file", sourceLocation._file),
+        //         fmt::arg("line", sourceLocation._line));
+        //     outputFn(fmt.data(), fmt.size());
+        //     outputFn(" ", 1); // always append one extra space since the format string can't
+        // }
         return outputFn(msg.begin(), msg.size());       // (note; don't include the length of the formatted section; because it will confuse the caller when it is a basic_ostream
 #else
     return 0;
@@ -63,7 +63,7 @@ namespace OSServices
     template<typename CharType, typename CharTraits>
         auto MessageTarget<CharType, CharTraits>::overflow(int_type ch) -> int_type
     {
-#if OSSERVICES_ENABLE_LOG
+#if defined(OSSERVICES_ENABLE_LOG)
         if (std::basic_streambuf<CharType, CharTraits>::traits_type::not_eof(ch)) {
             if (_cfg._enabledSinks & MessageTargetConfiguration::Sink::Console) {
                 std::cout.rdbuf()->sputc((CharType)ch);

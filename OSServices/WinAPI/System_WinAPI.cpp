@@ -31,9 +31,9 @@
 #include <objbase.h>
 #include <shobjidl.h>
 
-// #if !defined(XLE_GET_MODULE_PATH_ENABLE)
-//     #define XLE_GET_MODULE_PATH_ENABLE 1
-// #endif
+#if defined(_DEBUG)
+    #define XLE_GET_MODULE_PATH_ENABLE 1
+#endif
 
 namespace OSServices
 {
