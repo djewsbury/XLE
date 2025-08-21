@@ -47,18 +47,6 @@ namespace ConsoleRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static std::basic_string<utf8> GetAssetRoot()
-    {
-            //
-            //      For convenience, set the working directory to be ../Working 
-            //              (relative to the application path)
-            //
-        utf8 appPath[MaxPath];
-        OSServices::GetProcessPath(appPath, dimof(appPath));
-		auto splitter = MakeFileNameSplitter(appPath);
-        return splitter.StemAndPath().AsString() + "/../Working";
-    }
-
     /// <summary>Manages configuration settings for logging</summary>
     /// Can be shared between multiple different modules.
     class LogCentralConfiguration
@@ -90,7 +78,6 @@ namespace ConsoleRig
     static auto Fn_GetAppName = ConstHash64Legacy<'appn', 'ame'>::Value;
     static auto Fn_GuidGen = ConstHash64Legacy<'guid', 'gen'>::Value;
     static auto Fn_RedirectCout = ConstHash64Legacy<'redi', 'rect', 'cout'>::Value;
-	static auto Fn_GetAssetRoot = ConstHash64Legacy<'asse', 'troo', 't'>::Value;
 
 	void DebugUtil_Startup();
 	void DebugUtil_Shutdown();
@@ -109,12 +96,6 @@ namespace ConsoleRig
         auto guidGen = std::make_shared<std::mt19937_64>(std::random_device().operator()());
         serv.Add<uint64()>(
             Fn_GuidGen, [guidGen](){ return (*guidGen)(); });
-
-		auto assetRoot = GetAssetRoot();
-        if (cfg._setWorkingDir)
-			OSServices::ChDir(assetRoot.c_str());
-
-		serv.Add<std::basic_string<utf8>()>(Fn_GetAssetRoot, [assetRoot](){ return assetRoot; });
 
         // Some OSs may require us to configure settings for the process as a whole
         // On Windows, for example, this is requred to ensure that system callbacks are as responsive as possible
@@ -411,7 +392,6 @@ namespace ConsoleRig
     {
         _applicationName = "XLEApp";
         _logConfigFile = "log.dat";
-        _setWorkingDir = false;
         _redirectCout = false;
         _inMemoryOnlyIntermediates = false;
         _enableDPIAwareness = true;

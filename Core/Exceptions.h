@@ -152,8 +152,8 @@ namespace Utility
             template <class E, typename std::enable_if<std::is_base_of<::Exceptions::CustomReportableException, E>::value>::type*>
                 inline NO_RETURN_PREFIX void Throw(const E& e)
             {
-                auto* callback = GlobalOnThrowCallback();
-                if (callback) (*callback)(e);
+                // auto* callback = GlobalOnThrowCallback();
+                // if (callback) (*callback)(e);
                 throw e;
             }
 

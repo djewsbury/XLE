@@ -22,7 +22,6 @@ namespace ConsoleRig
     public:
         std::string _applicationName;
         std::string _logConfigFile;
-        bool _setWorkingDir;
         bool _redirectCout;
         bool _inMemoryOnlyIntermediates;
         bool _enableDPIAwareness;

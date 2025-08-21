@@ -21,11 +21,86 @@
 #include <tuple>
 #include <set>
 
-#include "plustache/template.hpp"
+#if XLE_STRUCTURE_FOR_PREVIEW_ENABLE
+    #include "plustache/template.hpp"
+#endif
 
 namespace ShaderSourceParser
 {
 	using namespace GraphLanguage;
+
+	std::string GenerateDescriptorVariables(
+		const RenderCore::Assets::PredefinedDescriptorSetLayout& descriptorSet,
+        unsigned descriptorSetSlotIdx,
+		IteratorRange<const GraphLanguage::NodeGraphSignature::Parameter*> captures)
+	{
+		std::stringstream result;
+
+		for (auto i=descriptorSet._slots.begin(); i!=descriptorSet._slots.end(); ++i) {
+            if (i->_type != RenderCore::DescriptorType::SampledTexture || i->_name.empty())
+                continue;
+			auto descriptorIdx = i->_slotIdx;
+			auto cap = std::find_if(
+				captures.begin(), captures.end(),
+				[i](const GraphLanguage::NodeGraphSignature::Parameter&p) 
+				{ 
+					auto dot = p._name.find_first_of('.');
+					if (dot != std::string::npos) {	// we must ignore the captures name before the dot, if it exists
+						return XlEqString(MakeStringSection(p._name.begin()+dot+1, p._name.end()), i->_name);
+					} else {
+						return p._name == i->_name; 
+					}
+				});
+			if (cap != captures.end()) {
+    			result << cap->_type << " " << i->_name << " : register(t" << descriptorIdx << ", space" << descriptorSetSlotIdx << ");" << std::endl;
+            }
+		}
+
+		for (auto i=descriptorSet._slots.begin(); i!=descriptorSet._slots.end(); ++i) {
+            if (i->_type != RenderCore::DescriptorType::Sampler || i->_name.empty())
+                continue;
+
+			auto descriptorIdx = i->_slotIdx;
+			auto cap = std::find_if(
+				captures.begin(), captures.end(),
+				[i](const GraphLanguage::NodeGraphSignature::Parameter&p)
+				{ 
+					auto dot = p._name.find_first_of('.');	// we must ignore the captures name before the dot, if it exists
+					if (dot != std::string::npos) {
+						return XlEqString(MakeStringSection(p._name.begin()+dot+1, p._name.end()), i->_name);
+					} else {
+						return p._name == i->_name; 
+					}
+				});
+			if (cap != captures.end()) {
+                result << cap->_type << " " << i->_name << " : register(s" << descriptorIdx << ", space" << descriptorSetSlotIdx << ");" << std::endl;
+            }
+		}
+
+		for (auto cb=descriptorSet._slots.begin(); cb!=descriptorSet._slots.end(); ++cb) {
+            if ((cb->_type != RenderCore::DescriptorType::UniformBuffer && cb->_type != RenderCore::DescriptorType::UniformBufferDynamicOffset) || cb->_name.empty())
+                continue;
+
+			result << "cbuffer " << cb->_name << " : register (b" << cb->_slotIdx  << ", space" << descriptorSetSlotIdx << ")" << std::endl;
+            result << "{" << std::endl;
+
+            if (cb->_cbIdx != ~0u) {
+                const auto& layout = *descriptorSet._constantBuffers[cb->_cbIdx];
+                for (auto ele=layout._elements.begin(); ele!=layout._elements.end(); ++ele) {
+                    auto idx = std::distance(layout._elements.begin(), ele);
+                    result << "\t" << RenderCore::AsShaderLangTypeName(ele->_type, RenderCore::ShaderLanguage::HLSL) << " " << layout._elements[idx]._name << ";" << std::endl;
+                }
+            }
+
+			result << "}" << std::endl;
+		}
+
+		return result.str();
+	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if XLE_STRUCTURE_FOR_PREVIEW_ENABLE
 
 	class TemplateItem
     {
@@ -484,77 +559,6 @@ namespace ShaderSourceParser
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	std::string GenerateDescriptorVariables(
-		const RenderCore::Assets::PredefinedDescriptorSetLayout& descriptorSet,
-        unsigned descriptorSetSlotIdx,
-		IteratorRange<const GraphLanguage::NodeGraphSignature::Parameter*> captures)
-	{
-		std::stringstream result;
-
-		for (auto i=descriptorSet._slots.begin(); i!=descriptorSet._slots.end(); ++i) {
-            if (i->_type != RenderCore::DescriptorType::SampledTexture || i->_name.empty())
-                continue;
-			auto descriptorIdx = i->_slotIdx;
-			auto cap = std::find_if(
-				captures.begin(), captures.end(),
-				[i](const GraphLanguage::NodeGraphSignature::Parameter&p) 
-				{ 
-					auto dot = p._name.find_first_of('.');
-					if (dot != std::string::npos) {	// we must ignore the captures name before the dot, if it exists
-						return XlEqString(MakeStringSection(p._name.begin()+dot+1, p._name.end()), i->_name);
-					} else {
-						return p._name == i->_name; 
-					}
-				});
-			if (cap != captures.end()) {
-    			result << cap->_type << " " << i->_name << " : register(t" << descriptorIdx << ", space" << descriptorSetSlotIdx << ");" << std::endl;
-            }
-		}
-
-		for (auto i=descriptorSet._slots.begin(); i!=descriptorSet._slots.end(); ++i) {
-            if (i->_type != RenderCore::DescriptorType::Sampler || i->_name.empty())
-                continue;
-
-			auto descriptorIdx = i->_slotIdx;
-			auto cap = std::find_if(
-				captures.begin(), captures.end(),
-				[i](const GraphLanguage::NodeGraphSignature::Parameter&p)
-				{ 
-					auto dot = p._name.find_first_of('.');	// we must ignore the captures name before the dot, if it exists
-					if (dot != std::string::npos) {
-						return XlEqString(MakeStringSection(p._name.begin()+dot+1, p._name.end()), i->_name);
-					} else {
-						return p._name == i->_name; 
-					}
-				});
-			if (cap != captures.end()) {
-                result << cap->_type << " " << i->_name << " : register(s" << descriptorIdx << ", space" << descriptorSetSlotIdx << ");" << std::endl;
-            }
-		}
-
-		for (auto cb=descriptorSet._slots.begin(); cb!=descriptorSet._slots.end(); ++cb) {
-            if ((cb->_type != RenderCore::DescriptorType::UniformBuffer && cb->_type != RenderCore::DescriptorType::UniformBufferDynamicOffset) || cb->_name.empty())
-                continue;
-
-			result << "cbuffer " << cb->_name << " : register (b" << cb->_slotIdx  << ", space" << descriptorSetSlotIdx << ")" << std::endl;
-            result << "{" << std::endl;
-
-            if (cb->_cbIdx != ~0u) {
-                const auto& layout = *descriptorSet._constantBuffers[cb->_cbIdx];
-                for (auto ele=layout._elements.begin(); ele!=layout._elements.end(); ++ele) {
-                    auto idx = std::distance(layout._elements.begin(), ele);
-                    result << "\t" << RenderCore::AsShaderLangTypeName(ele->_type, RenderCore::ShaderLanguage::HLSL) << " " << layout._elements[idx]._name << ";" << std::endl;
-                }
-            }
-
-			result << "}" << std::endl;
-		}
-
-		return result.str();
-	}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
 	static std::string GetTechniqueTemplate(const char templateName[])
     {
         StringMeld<MaxPath, Assets::ResChar> str;
@@ -592,4 +596,5 @@ namespace ShaderSourceParser
         result << preprocessor.render(GetTechniqueTemplate("depthonly_main"), context);
 		return result.str();
 	}
+#endif
 }

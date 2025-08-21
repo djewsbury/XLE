@@ -31,9 +31,9 @@
 #include <objbase.h>
 #include <shobjidl.h>
 
-#if !defined(XLE_GET_MODULE_PATH_ENABLE)
-    #define XLE_GET_MODULE_PATH_ENABLE 1
-#endif
+// #if !defined(XLE_GET_MODULE_PATH_ENABLE)
+//     #define XLE_GET_MODULE_PATH_ENABLE 1
+// #endif
 
 namespace OSServices
 {
@@ -144,11 +144,13 @@ ModuleId GetCurrentModuleId()
 
 
 //////////////////////////////////////////////////////////////////////////
+#if 0
 bool XlIsCriticalSectionLocked(void* cs) 
 {
     CRITICAL_SECTION* csPtr = reinterpret_cast<CRITICAL_SECTION*>(cs);
     return csPtr->RecursionCount > 0 && csPtr->OwningThread == (HANDLE)(size_t)GetCurrentThreadId();
 }
+#endif
 
 static uint32_t FromWinWaitResult(uint32_t winResult)
 {
@@ -174,6 +176,7 @@ static uint32_t FromWinWaitResult(uint32_t winResult)
 }
 
 
+#if 0
 void XlGetNumCPUs(int* physical, int* logical, int* avail)
 {
     SYSTEM_INFO sys_info;
@@ -192,6 +195,7 @@ void XlGetNumCPUs(int* physical, int* logical, int* avail)
     }
 
 }
+#endif
 
 uint32_t XlGetCurrentProcessId()
 {
@@ -245,20 +249,24 @@ XlHandle XlCreateEvent(bool manualReset)
     return h;
 }
 
+#if 0
 bool XlResetEvent(XlHandle h)
 {
     return ResetEvent(h) != FALSE;
 }
+#endif
 
 bool XlSetEvent(XlHandle h)
 {
     return SetEvent(h) != FALSE;
 }
 
+#if 0
 bool XlPulseEvent(XlHandle h)
 {
     return PulseEvent(h) != FALSE;
 }
+#endif
 
 uint32_t XlWaitForMultipleSyncObjects(uint32_t waitCount, XlHandle waitObjects[], bool waitAll, uint32_t waitTime, bool alterable)
 {
