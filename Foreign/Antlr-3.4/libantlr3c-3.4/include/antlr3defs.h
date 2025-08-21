@@ -143,7 +143,9 @@
 #include    <sys/stat.h>
 #include    <stdarg.h>
 
-#define	ANTLR3_API      __declspec(dllexport)
+#if !defined(ANTLR3_API)
+    #define	ANTLR3_API      __declspec(dllexport)
+#endif
 #define	ANTLR3_CDECL    __cdecl
 #define ANTLR3_FASTCALL __fastcall
 
