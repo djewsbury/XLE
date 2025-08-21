@@ -78,6 +78,8 @@ set(CUTFSource cutf/cutf.cpp)
 add_library(ForeignMisc STATIC ${LuaSrc} ${HashSrc} ${FmtSrc} ${StackWalkerSrc} ${PlustacheSrc} ${StamSimpleFluidSrc} ${ZLibSrc} ${AntlrSrc} ${CParseSource} ${CUTFSource})
 xle_configure_library(ForeignMisc)
 
+target_compile_options(ForeignMisc PRIVATE -include "ForeignPrefix.h")
+
 # Ensure we export the necessary include folders from this target
 # Most other targets list this target as a dependency, so they should inherit these include folders
 target_include_directories(ForeignMisc PUBLIC Antlr-3.4/libantlr3c-3.4 Antlr-3.4/libantlr3c-3.4/include)

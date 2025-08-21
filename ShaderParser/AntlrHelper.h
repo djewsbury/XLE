@@ -16,6 +16,7 @@
 
 #if XLE_ANTLR_ENABLE
 
+#define	ANTLR3_STRDUP(instr)		(pANTLR3_UINT8)(_strdup  ((const char *)(instr)))
 #include <antlr3defs.h>
 #include <antlr3interfaces.h>
 #include <antlr3basetree.h>
