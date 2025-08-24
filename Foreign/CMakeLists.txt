@@ -3,7 +3,7 @@ if (XLE_FREETYPE_ENABLE)
     xle_internal_configure_compiler(freetype)
 endif()
 
-#add_subdirectory(Catch2 catch2)
+add_subdirectory(Catch2 catch2)
 add_subdirectory(wildcards wildcards)
 
 if (WIN32)

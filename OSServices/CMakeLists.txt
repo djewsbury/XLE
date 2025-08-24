@@ -1,4 +1,6 @@
 
+option(XLE_GET_MODULE_FILE_TIME_ENABLE "Enables OS calls that query the filetime of the current module" ON)
+
 set(Src
     Socket.cpp
     RawFS.cpp
