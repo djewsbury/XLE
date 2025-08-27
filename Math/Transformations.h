@@ -210,9 +210,10 @@ namespace XLEMath
     Float2          TransformPoint(const Float3x3& transform, Float2 pt);
     Float3          TransformPoint(const Float3x4& transform, Float3 pt);
     Float3          TransformPoint(const Float4x4& transform, Float3 pt);
-    Float3          TransformDirectionVector(const Float3x3& transform, Float3 pt);
+    Float3          TransformDirectionVector(const Float3x3& transform, Float3 pt);     // note 3d input -- this is transformation through a 3x3 rotation matrix
     Float3          TransformDirectionVector(const Float3x4& transform, Float3 pt);
     Float3          TransformDirectionVector(const Float4x4& transform, Float3 pt);
+    Float2          TransformPointByOrthonormalInverse(const Float2x3& transform, Float2 pt);
     Float2          TransformPointByOrthonormalInverse(const Float3x3& transform, Float2 pt);
     Float3          TransformPointByOrthonormalInverse(const Float3x4& transform, Float3 pt);
     Float3          TransformPointByOrthonormalInverse(const Float4x4& transform, Float3 pt);

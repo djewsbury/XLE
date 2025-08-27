@@ -917,6 +917,18 @@ namespace XLEMath
         return Truncate(transform * Expand(pt, 0.f));
     }
 
+    Float2          TransformPointByOrthonormalInverse(const Float2x3& transform, Float2 pt)
+    {
+        float t[2];
+        t[0] = transform(0,0) * -transform(0,2) + transform(1,0) * -transform(1,2);
+        t[1] = transform(0,1) * -transform(0,2) + transform(1,1) * -transform(1,2);
+
+        Float2 result;
+        result[0] = transform(0,0) * pt[0] + transform(1,0) * pt[1] + t[0];
+        result[1] = transform(0,1) * pt[0] + transform(1,1) * pt[1] + t[1];
+        return result;
+    }
+    
     Float2          TransformPointByOrthonormalInverse(const Float3x3& transform, Float2 pt)
     {
         float t[2];
