@@ -126,7 +126,8 @@ namespace Utility
     public:
         EventId     BeginEvent(const char eventLiteral[]);
         void        EndEvent(EventId eventId);
-        void        FrameBarrier();
+        void            FrameBarrier();
+        RawEventData    EndProfiling();
 
         uint64_t    GetAverageFrameInterval(unsigned windowFrameCount = ~0u);
 

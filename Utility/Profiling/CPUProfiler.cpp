@@ -286,8 +286,9 @@ namespace Utility
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void HierarchicalCPUProfiler::FrameBarrier()
+    auto HierarchicalCPUProfiler::EndProfiling() -> RawEventData
     {
+        // very similar to FrameBarrier(), we just return the final event data
         assert(Threading::CurrentThreadId() == _threadId);
         assert(_aeStackI==0);
         static_assert(s_bufferCount > 1, "Expecting at least 2 buffers");
@@ -305,8 +306,13 @@ namespace Utility
         _events[0].push_back(_idAtEventsStart[0]);
         assert(_aeStackI == 0);
 
+        return MakeIteratorRange(_events[1]);
+    }
+
+    void HierarchicalCPUProfiler::FrameBarrier()
+    {
         // publish the results to the listeners
-        Publish(MakeIteratorRange(_events[1]));
+        Publish(EndProfiling());
     }
 
     uint64_t HierarchicalCPUProfiler::GetAverageFrameInterval(unsigned windowFrameCount)
