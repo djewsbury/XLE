@@ -1,5 +1,6 @@
 
 option(XLE_GET_MODULE_FILE_TIME_ENABLE "Enables OS calls that query the filetime of the current module" ON)
+option(XLE_GET_MODULE_PATH_ENABLE "Enables use of GetModuleFileNameA to get the module path name" ON) 
 
 set(Src
     Socket.cpp
@@ -36,4 +37,8 @@ endif()
 if (XLE_GET_MODULE_FILE_TIME_ENABLE)
     target_link_libraries(OSServices PRIVATE imagehlp.lib)
     target_compile_definitions(OSServices PRIVATE -DXLE_GET_MODULE_FILE_TIME_ENABLE=1)
+endif()
+if (XLE_GET_MODULE_PATH_ENABLE)
+    target_link_libraries(OSServices PRIVATE imagehlp.lib)
+    target_compile_definitions(OSServices PRIVATE -DXLE_GET_MODULE_PATH_ENABLE=1)
 endif()
