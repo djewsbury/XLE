@@ -35,8 +35,8 @@ namespace SceneEngine
 		SceneEngine::ILightingStateDelegate& lightingState,
 		RenderCore::LightingEngine::CompiledLightingTechnique& compiledTechnique)
 	{
-		auto& lightScene = RenderCore::LightingEngine::GetLightScene(compiledTechnique);
-		lightingState.PreRender(parsingContext.GetProjectionDesc(), lightScene);
+		if (auto* lightScene = RenderCore::LightingEngine::QueryInterface<RenderCore::LightingEngine::ILightScene>(compiledTechnique))
+			lightingState.PreRender(parsingContext.GetProjectionDesc(), *lightScene);
 		return RenderCore::LightingEngine::BeginLightingTechniquePlayback( parsingContext, compiledTechnique );
 	}
 
