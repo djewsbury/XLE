@@ -111,7 +111,7 @@ namespace ConsoleRig
     //                               in the code.
     //
 
-#if !defined(_DEBUG) || !XLE_CONSOLE_LUA_ENABLE
+#if !defined(_DEBUG)
 
     #define Tweakable(name, defaultValue)   defaultValue
 

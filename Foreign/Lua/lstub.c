@@ -6,25 +6,25 @@
 
 LUAMOD_API int luaopen_package (lua_State *L)
 {
-	exit(-1);
+	return 0;
 }
 
 LUAMOD_API int luaopen_coroutine (lua_State *L)
 {
-	exit(-1);
+	return 0;
 }
 
 LUAMOD_API int luaopen_io (lua_State *L)
 {
-	exit(-1);
+	return 0;
 }
 
 LUAMOD_API int luaopen_os (lua_State *L)
 {
-	exit(-1);
+	return 0;
 }
 
 LUAMOD_API int luaopen_debug (lua_State *L)
 {
-	exit(-1);
+	return 0;
 }

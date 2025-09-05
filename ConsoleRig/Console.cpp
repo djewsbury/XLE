@@ -791,6 +791,30 @@ namespace ConsoleRig
 
     template<typename T> ConsoleVariable<T>::ConsoleVariable(ConsoleVariable&& moveFrom) {}
     template<typename T> ConsoleVariable<T>& ConsoleVariable<T>::operator=(ConsoleVariable&& moveFrom) { return *this; }
+
+    namespace Detail
+    {
+        template <typename Type>
+            Type&       FindTweakable(const char name[], Type defaultValue)
+        {
+            // note -- very non-ideal implementation. Debug only!
+            static thread_local std::unordered_map<std::string, Type> s_map;
+            std::string n = name;
+            if (auto i = s_map.find(n); i != s_map.end()) return i->second;
+            s_map.emplace(n, defaultValue);
+            return s_map[n];
+        }
+
+        template <typename Type>
+            Type*       FindTweakable(const char name[]) { return nullptr; }
+
+        template int&           FindTweakable<int>(const char name[], int defaultValue);
+        template float&         FindTweakable<float>(const char name[], float defaultValue);
+        template std::string&   FindTweakable<std::string>(const char name[], std::string defaultValue);
+        template bool&          FindTweakable<bool>(const char name[], bool defaultValue);
+        template Float3&        FindTweakable<Float3>(const char name[], Float3 defaultValue);
+        template Float4&        FindTweakable<Float4>(const char name[], Float4 defaultValue);
+    }
     
 #endif
 

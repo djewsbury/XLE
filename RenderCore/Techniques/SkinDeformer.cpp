@@ -384,7 +384,7 @@ namespace RenderCore { namespace Techniques
 			}
 
 			for (; c<destination.size(); ++c)
-				destination[c] = Identity<Float3x4>();
+				destination[c] = Truncate(section._bindShapeMatrix);
 		}
 	}
 
