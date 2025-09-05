@@ -96,7 +96,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			std::vector<float>			_weights;
 			std::vector<unsigned>		_jointIndices;
 		};
-		std::vector<AttachmentGroup>	_attachmentGroups;
+		std::vector<AttachmentGroup>	_attachmentGroups;      // these attachment groups allow us to have varying numbers of influences per vertex, and grow more easily when we don't know the max influence count at the start
 		std::vector<unsigned>			_influenceCount;
 
 		friend class BuckettedSkinController;

@@ -52,63 +52,67 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		void RemapJoints(IteratorRange<const unsigned*> newIndices);
 
 		BuckettedSkinController(const UnboundSkinController& src);
+
+	private:
+		template<typename JointIndexPrimitive>
+			void ConstructUtil(const UnboundSkinController& src, unsigned maxJointIndex);
 	};
 
-	template <unsigned WeightCount>
+#pragma pack(push)
+#pragma pack(1)
+	template <unsigned WeightCount, typename JointIndexPrimitive>
         class VertexWeightAttachment
     {
     public:
-        uint8_t       _weights[WeightCount];            // go straight to compressed 8 bit value
-        uint8_t       _jointIndex[WeightCount];
+        uint8_t					_weights[WeightCount];            // go straight to compressed 8 bit value
+        JointIndexPrimitive		_jointIndex[WeightCount];
     };
 
-    template <>
-        class VertexWeightAttachment<0>
+    template <typename JointIndexPrimitive>
+        class VertexWeightAttachment<0, JointIndexPrimitive>
     {
     };
+#pragma pack(pop)
 
-    template <unsigned WeightCount>
+    template <unsigned WeightCount, typename JointIndexPrimitive>
         class VertexWeightAttachmentBucket
     {
     public:
 		unsigned _vertexCount = 0;
-        std::vector<VertexWeightAttachment<WeightCount>>    _weightAttachments;
+        std::vector<VertexWeightAttachment<WeightCount, JointIndexPrimitive>>    _weightAttachments;
     };
 
 #pragma warning(push)
 #pragma warning(disable:4701)		// MSVC incorrectly things that "attachment" is not fully initialized
 
-    template<unsigned WeightCount> 
-        VertexWeightAttachment<WeightCount> BuildWeightAttachment(const uint8_t weights[], const unsigned joints[], unsigned jointCount)
+    template<unsigned WeightCount, typename JointIndexPrimitive>
+        VertexWeightAttachment<WeightCount, JointIndexPrimitive> BuildWeightAttachment(const uint8_t weights[], const unsigned joints[], unsigned jointCount)
     {
-        VertexWeightAttachment<WeightCount> attachment;
-		unsigned c=0;
-		for (; c<std::min(WeightCount, jointCount); ++c) {
-			attachment._weights[c] = weights[c];
-            assert(joints[c] <= 0xff);
-			attachment._jointIndex[c] = (uint8_t)joints[c];
-		}
-		for (; c<WeightCount; ++c) {
-			attachment._weights[c] = 0;
-			attachment._jointIndex[c] = 0;
+        VertexWeightAttachment<WeightCount, JointIndexPrimitive> attachment;
+		if constexpr (WeightCount != 0) {
+			unsigned c=0;
+			for (; c<std::min(WeightCount, jointCount); ++c) {
+				attachment._weights[c] = weights[c];
+				assert(joints[c] <= std::numeric_limits<JointIndexPrimitive>::max());
+				attachment._jointIndex[c] = (JointIndexPrimitive)joints[c];
+			}
+			for (; c<WeightCount; ++c) {
+				attachment._weights[c] = 0;
+				attachment._jointIndex[c] = 0;
+			}
 		}
         return attachment;
     }
 
 #pragma warning(pop)
 
-    template<> VertexWeightAttachment<0> BuildWeightAttachment(const uint8_t weights[], const unsigned joints[], unsigned jointCount)
-    {
-        return VertexWeightAttachment<0>();
-    }
-
-	template<unsigned WeightCount>
+	template<unsigned WeightCount, typename JointIndexPrimitive>
 		void AccumulateJointUsage(
-			const VertexWeightAttachmentBucket<WeightCount>& bucket,
-			std::vector<unsigned>& accumulator);
-	template<unsigned WeightCount>
+			const VertexWeightAttachmentBucket<WeightCount, JointIndexPrimitive>& bucket,
+			IteratorRange<unsigned*> accumulator);
+	template<unsigned WeightCount, typename JointIndexPrimitive>
 		void RemapJointIndices(
-			VertexWeightAttachmentBucket<WeightCount>& bucket,
+			VertexWeightAttachmentBucket<WeightCount, JointIndexPrimitive>& bucket,
 			IteratorRange<const unsigned*> remapping);
 
     template<typename T> T CompressWeightToUNorm(float input);
@@ -119,7 +123,16 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return (uint8_t)std::floor(std::min(255.f, input * 256.f)); 
     }
 
-	BuckettedSkinController::BuckettedSkinController(const UnboundSkinController& src)
+	template<typename T, unsigned C> static constexpr RenderCore::Format s_formatForJointIndices = RenderCore::Format::Unknown;
+	template<> constexpr RenderCore::Format s_formatForJointIndices<uint8_t, 4> = RenderCore::Format::R8G8B8A8_UINT;
+	template<> constexpr RenderCore::Format s_formatForJointIndices<uint8_t, 2> = RenderCore::Format::R8G8_UINT;
+	template<> constexpr RenderCore::Format s_formatForJointIndices<uint8_t, 1> = RenderCore::Format::R8_UINT;
+	template<> constexpr RenderCore::Format s_formatForJointIndices<uint16_t, 4> = RenderCore::Format::R16G16B16A16_UINT;
+	template<> constexpr RenderCore::Format s_formatForJointIndices<uint16_t, 2> = RenderCore::Format::R16G16_UINT;
+	template<> constexpr RenderCore::Format s_formatForJointIndices<uint16_t, 1> = RenderCore::Format::R16_UINT;
+
+	template<typename JointIndexPrimitive>
+		void BuckettedSkinController::ConstructUtil(const UnboundSkinController& src, unsigned maxJointIndex)
 	{
 			//
             //      If we have a mesh where there are many vertices with only 1 or 2
@@ -156,12 +169,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             //      and few in the high buckets.
             //
 
-        VertexWeightAttachmentBucket<16> bucket16;
-		VertexWeightAttachmentBucket<8> bucket8;
-		VertexWeightAttachmentBucket<4> bucket4;
-        VertexWeightAttachmentBucket<2> bucket2;
-        VertexWeightAttachmentBucket<1> bucket1;
-        VertexWeightAttachmentBucket<0> bucket0;
+        VertexWeightAttachmentBucket<16, JointIndexPrimitive> bucket16;
+		VertexWeightAttachmentBucket<8, JointIndexPrimitive> bucket8;
+		VertexWeightAttachmentBucket<4, JointIndexPrimitive> bucket4;
+        VertexWeightAttachmentBucket<2, JointIndexPrimitive> bucket2;
+        VertexWeightAttachmentBucket<1, JointIndexPrimitive> bucket1;
+        VertexWeightAttachmentBucket<0, JointIndexPrimitive> bucket0;
 
         _originalIndexToBucketIndex.reserve(src._influenceCount.size());
 
@@ -305,27 +318,27 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				}
 				_originalIndexToBucketIndex[vertexIndex] = (5<<16) | (uint32_t(bucket16._vertexCount)&0xffff);
                 ++bucket16._vertexCount;
-                bucket16._weightAttachments.push_back(BuildWeightAttachment<16>(normalizedWeights, jointIndices, (unsigned)influenceCount));
+                bucket16._weightAttachments.push_back(BuildWeightAttachment<16, JointIndexPrimitive>(normalizedWeights, jointIndices, (unsigned)influenceCount));
 			} else if (influenceCount > 4) {
 				_originalIndexToBucketIndex[vertexIndex] = (4<<16) | (uint32_t(bucket8._vertexCount)&0xffff);
                 ++bucket8._vertexCount;
-                bucket8._weightAttachments.push_back(BuildWeightAttachment<8>(normalizedWeights, jointIndices, (unsigned)influenceCount));
+                bucket8._weightAttachments.push_back(BuildWeightAttachment<8, JointIndexPrimitive>(normalizedWeights, jointIndices, (unsigned)influenceCount));
 			} else if (influenceCount > 2) {
                 _originalIndexToBucketIndex[vertexIndex] = (3<<16) | (uint32_t(bucket4._vertexCount)&0xffff);
                 ++bucket4._vertexCount;
-                bucket4._weightAttachments.push_back(BuildWeightAttachment<4>(normalizedWeights, jointIndices, (unsigned)influenceCount));
+                bucket4._weightAttachments.push_back(BuildWeightAttachment<4, JointIndexPrimitive>(normalizedWeights, jointIndices, (unsigned)influenceCount));
             } else if (influenceCount == 2) {
                 _originalIndexToBucketIndex[vertexIndex] = (2<<16) | (uint32_t(bucket2._vertexCount)&0xffff);
                 ++bucket2._vertexCount;
-                bucket2._weightAttachments.push_back(BuildWeightAttachment<2>(normalizedWeights, jointIndices, (unsigned)influenceCount));
+                bucket2._weightAttachments.push_back(BuildWeightAttachment<2, JointIndexPrimitive>(normalizedWeights, jointIndices, (unsigned)influenceCount));
             } else if (influenceCount == 1) {
                 _originalIndexToBucketIndex[vertexIndex] = (1<<16) | (uint32_t(bucket1._vertexCount)&0xffff);
                 ++bucket1._vertexCount;
-                bucket1._weightAttachments.push_back(BuildWeightAttachment<1>(normalizedWeights, jointIndices, (unsigned)influenceCount));
+                bucket1._weightAttachments.push_back(BuildWeightAttachment<1, JointIndexPrimitive>(normalizedWeights, jointIndices, (unsigned)influenceCount));
             } else {
                 _originalIndexToBucketIndex[vertexIndex] = (0<<16) | (uint32_t(bucket0._vertexCount)&0xffff);
                 ++bucket0._vertexCount;
-                bucket0._weightAttachments.push_back(BuildWeightAttachment<0>(normalizedWeights, jointIndices, (unsigned)influenceCount));
+                bucket0._weightAttachments.push_back(BuildWeightAttachment<0, JointIndexPrimitive>(normalizedWeights, jointIndices, (unsigned)influenceCount));
             }
         }
 
@@ -334,12 +347,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		const bool doJointUsageCompression = true;
 		if (doJointUsageCompression) {
 			std::vector<unsigned> jointUsage;
-			jointUsage.resize(256);
-			AccumulateJointUsage(bucket1, jointUsage);
-			AccumulateJointUsage(bucket2, jointUsage);
-			AccumulateJointUsage(bucket4, jointUsage);
-			AccumulateJointUsage(bucket8, jointUsage);
-			AccumulateJointUsage(bucket16, jointUsage);
+			jointUsage.resize(maxJointIndex+1);
+			AccumulateJointUsage(bucket1, MakeIteratorRange(jointUsage));
+			AccumulateJointUsage(bucket2, MakeIteratorRange(jointUsage));
+			AccumulateJointUsage(bucket4, MakeIteratorRange(jointUsage));
+			AccumulateJointUsage(bucket8, MakeIteratorRange(jointUsage));
+			AccumulateJointUsage(bucket16, MakeIteratorRange(jointUsage));
 
 			unsigned finalJointIndexCount = 0;
 			for (unsigned c=0; c<jointUsage.size(); ++c) {
@@ -359,7 +372,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             
         Bucket b16;
         b16._weightCount = 16;
-        b16._vertexBufferSize = bucket16._weightAttachments.size() * sizeof(VertexWeightAttachment<16>);
+        b16._vertexBufferSize = bucket16._weightAttachments.size() * sizeof(VertexWeightAttachment<16, JointIndexPrimitive>);
         if (b16._vertexBufferSize) {
             b16._vertexBufferData = std::make_unique<uint8_t[]>(b16._vertexBufferSize);
             XlCopyMemory(b16._vertexBufferData.get(), AsPointer(bucket16._weightAttachments.begin()), b16._vertexBufferSize);
@@ -368,56 +381,56 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 1, Format::R8G8B8A8_UNORM, 1, 4));
 		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 2, Format::R8G8B8A8_UNORM, 1, 8));
 		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 3, Format::R8G8B8A8_UNORM, 1, 12));
-        b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8G8B8A8_UINT, 1, 16));
-		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 1, Format::R8G8B8A8_UINT, 1, 20));
-		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 2, Format::R8G8B8A8_UINT, 1, 24));
-		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 3, Format::R8G8B8A8_UINT, 1, 28));
+        b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, s_formatForJointIndices<JointIndexPrimitive, 4>, 1, 16));
+		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 1, s_formatForJointIndices<JointIndexPrimitive, 4>, 1, 16+sizeof(JointIndexPrimitive)*4));
+		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 2, s_formatForJointIndices<JointIndexPrimitive, 4>, 1, 16+sizeof(JointIndexPrimitive)*8));
+		b16._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 3, s_formatForJointIndices<JointIndexPrimitive, 4>, 1, 16+sizeof(JointIndexPrimitive)*12));
 		
 		Bucket b8;
         b8._weightCount = 8;
-        b8._vertexBufferSize = bucket8._weightAttachments.size() * sizeof(VertexWeightAttachment<8>);
+        b8._vertexBufferSize = bucket8._weightAttachments.size() * sizeof(VertexWeightAttachment<8, JointIndexPrimitive>);
         if (b8._vertexBufferSize) {
             b8._vertexBufferData = std::make_unique<uint8_t[]>(b8._vertexBufferSize);
             XlCopyMemory(b8._vertexBufferData.get(), AsPointer(bucket8._weightAttachments.begin()), b8._vertexBufferSize);
         }
         b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8G8B8A8_UNORM, 1, 0));
 		b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 1, Format::R8G8B8A8_UNORM, 1, 4));
-        b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8G8B8A8_UINT, 1, 8));
-		b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 1, Format::R8G8B8A8_UINT, 1, 12));
+        b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, s_formatForJointIndices<JointIndexPrimitive, 4>, 1, 8));
+		b8._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 1, s_formatForJointIndices<JointIndexPrimitive, 4>, 1, 8+sizeof(JointIndexPrimitive)*4));
 		
 		Bucket b4;
         b4._weightCount = 4;
-        b4._vertexBufferSize = bucket4._weightAttachments.size() * sizeof(VertexWeightAttachment<4>);
+        b4._vertexBufferSize = bucket4._weightAttachments.size() * sizeof(VertexWeightAttachment<4, JointIndexPrimitive>);
         if (b4._vertexBufferSize) {
             b4._vertexBufferData = std::make_unique<uint8_t[]>(b4._vertexBufferSize);
             XlCopyMemory(b4._vertexBufferData.get(), AsPointer(bucket4._weightAttachments.begin()), b4._vertexBufferSize);
         }
         b4._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8G8B8A8_UNORM, 1, 0));
-        b4._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8G8B8A8_UINT, 1, 4));
+        b4._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, s_formatForJointIndices<JointIndexPrimitive, 4>, 1, 4));
 
         Bucket b2;
         b2._weightCount = 2;
-        b2._vertexBufferSize = bucket2._weightAttachments.size() * sizeof(VertexWeightAttachment<2>);
+        b2._vertexBufferSize = bucket2._weightAttachments.size() * sizeof(VertexWeightAttachment<2, JointIndexPrimitive>);
         if (b2._vertexBufferSize) {
             b2._vertexBufferData = std::make_unique<uint8_t[]>(b2._vertexBufferSize);
             XlCopyMemory(b2._vertexBufferData.get(), AsPointer(bucket2._weightAttachments.begin()), b2._vertexBufferSize);
         }
         b2._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8G8_UNORM, 1, 0));
-        b2._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8G8_UINT, 1, 2));
+        b2._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, s_formatForJointIndices<JointIndexPrimitive, 2>, 1, 2));
 
         Bucket b1;
         b1._weightCount = 1;
-        b1._vertexBufferSize = bucket1._weightAttachments.size() * sizeof(VertexWeightAttachment<1>);
+        b1._vertexBufferSize = bucket1._weightAttachments.size() * sizeof(VertexWeightAttachment<1, JointIndexPrimitive>);
         if (b1._vertexBufferSize) {
             b1._vertexBufferData = std::make_unique<uint8_t[]>(b1._vertexBufferSize);
             XlCopyMemory(b1._vertexBufferData.get(), AsPointer(bucket1._weightAttachments.begin()), b1._vertexBufferSize);
         }
         b1._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_Weights, 0, Format::R8_UNORM, 1, 0));
-        b1._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, Format::R8_UINT, 1, 1));
+        b1._vertexInputLayout.push_back(InputElementDesc(DefaultSemantic_JointIndices, 0, s_formatForJointIndices<JointIndexPrimitive, 1>, 1, 1));
 
         Bucket b0;
         b0._weightCount = 0;
-        b0._vertexBufferSize = bucket0._weightAttachments.size() * sizeof(VertexWeightAttachment<0>);
+        b0._vertexBufferSize = bucket0._weightAttachments.size() * sizeof(VertexWeightAttachment<0, JointIndexPrimitive>);
         assert(b0._vertexBufferSize == 0);
 
 		_bucket[0] = std::move(b0);
@@ -445,11 +458,38 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				CalculateVertexStrideForSlot(MakeIteratorRange(bucket._vertexInputLayout), ele->_inputSlot),
 				ele->_nativeFormat);
 			auto componentCount = GetComponentCount(RenderCore::GetComponents(ele->_nativeFormat));
-			for (auto i=range.begin(); i<range.end(); ++i) {
-				auto data = (uint8_t*)(*i)._data.begin();
-				for (unsigned c=0; c<componentCount; ++c)
-					data[c] = (uint8_t)newJointIndices[data[c]];
+			auto prec = GetComponentPrecision(ele->_nativeFormat);
+			if (prec == 8) {
+				for (auto i=range.begin(); i<range.end(); ++i) {
+					auto data = (uint8_t*)(*i)._data.begin();
+					for (unsigned c=0; c<componentCount; ++c) {
+						assert(newJointIndices[data[c]] <= 0xff);
+						data[c] = (uint8_t)newJointIndices[data[c]];
+					}
+				}
+			} else {
+				assert(prec == 16);		// only 8 bit and 16 bit supported
+				for (auto i=range.begin(); i<range.end(); ++i) {
+					auto data = (uint16_t*)(*i)._data.begin();
+					for (unsigned c=0; c<componentCount; ++c) {
+						assert(newJointIndices[data[c]] <= 0xffff);
+						data[c] = (uint16_t)newJointIndices[data[c]];
+					}
+				}
 			}
+		}
+	}
+
+	BuckettedSkinController::BuckettedSkinController(const UnboundSkinController& src)
+	{
+		unsigned maxJointIdx = 0;
+		for (const auto& g:src._attachmentGroups)
+			for (auto i:g._jointIndices) maxJointIdx = std::max(maxJointIdx, i);
+
+		if (maxJointIdx > 0xff) {
+			ConstructUtil<uint16_t>(src, maxJointIdx);
+		} else {
+			ConstructUtil<uint8_t>(src, maxJointIdx);
 		}
 	}
 
@@ -827,17 +867,35 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 							const void* p = PtrAdd(skeletonBindingVertices.data(), v*stride+indicesOffset);
 							if (indicesFormat == Format::R8G8_UINT) {
 								for (unsigned c=0; c<unifiedVertexCount; ++c) {
-									unsigned char zero   = ((unsigned char*)p)[0];
-									unsigned char one    = ((unsigned char*)p)[1];
+									auto zero   = ((uint8_t*)p)[0];
+									auto one    = ((uint8_t*)p)[1];
 									assert(zero < jointIndexMax);
 									assert(one < jointIndexMax);
 								}
 							} else if (indicesFormat == Format::R8G8B8A8_UINT) {
 								for (unsigned c=0; c<unifiedVertexCount; ++c) {
-									unsigned char zero   = ((unsigned char*)p)[0];
-									unsigned char one    = ((unsigned char*)p)[1];
-									unsigned char two    = ((unsigned char*)p)[2];
-									unsigned char three  = ((unsigned char*)p)[3];
+									auto zero   = ((uint8_t*)p)[0];
+									auto one    = ((uint8_t*)p)[1];
+									auto two    = ((uint8_t*)p)[2];
+									auto three  = ((uint8_t*)p)[3];
+									assert(zero < jointIndexMax);
+									assert(one < jointIndexMax);
+									assert(two < jointIndexMax);
+									assert(three < jointIndexMax);
+								}
+							} else if (indicesFormat == Format::R16G16_UINT) {
+								for (unsigned c=0; c<unifiedVertexCount; ++c) {
+									auto zero   = ((uint8_t*)p)[0];
+									auto one    = ((uint8_t*)p)[1];
+									assert(zero < jointIndexMax);
+									assert(one < jointIndexMax);
+								}
+							} else if (indicesFormat == Format::R16G16B16A16_UINT) {
+								for (unsigned c=0; c<unifiedVertexCount; ++c) {
+									auto zero   = ((uint16_t*)p)[0];
+									auto one    = ((uint16_t*)p)[1];
+									auto two    = ((uint16_t*)p)[2];
+									auto three  = ((uint16_t*)p)[3];
 									assert(zero < jointIndexMax);
 									assert(one < jointIndexMax);
 									assert(two < jointIndexMax);
@@ -1103,39 +1161,42 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     {
     }
 
-	template<unsigned WeightCount>
+	template<unsigned WeightCount, typename JointIndexPrimitive>
 		void AccumulateJointUsage(
-			const VertexWeightAttachmentBucket<WeightCount>& bucket,
-			std::vector<unsigned>& accumulator)
+			const VertexWeightAttachmentBucket<WeightCount, JointIndexPrimitive>& bucket,
+			IteratorRange<unsigned*> accumulator)
 	{
-		assert(accumulator.size() >= 256);
-		for (const auto&w:bucket._weightAttachments) {
-			for (unsigned c=0; c<WeightCount; ++c) {
-                assert(w._jointIndex[c] <= 0xff);
+		for (const auto&w:bucket._weightAttachments)
+			for (unsigned c=0; c<WeightCount; ++c)
 				++accumulator[w._jointIndex[c]];
-			}
-		}
 	}
 
-	template<unsigned WeightCount>
+	template<unsigned WeightCount, typename JointIndexPrimitive>
 		void RemapJointIndices(
-			VertexWeightAttachmentBucket<WeightCount>& bucket,
+			VertexWeightAttachmentBucket<WeightCount, JointIndexPrimitive>& bucket,
 			IteratorRange<const unsigned*> remapping)
 	{
 		for (auto&w:bucket._weightAttachments) {
 			for (unsigned c=0; c<WeightCount; ++c) {
 				assert(w._jointIndex[c] < remapping.size());
-				w._jointIndex[c] = (uint8_t)remapping[w._jointIndex[c]];
+                assert(remapping[w._jointIndex[c]] <= std::numeric_limits<JointIndexPrimitive>::max());
+				w._jointIndex[c] = remapping[w._jointIndex[c]];
 			}
 		}
 	}
 
-	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<1>&, std::vector<unsigned>&);
-	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<2>&, std::vector<unsigned>&);
-	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<4>&, std::vector<unsigned>&);
-	template void RemapJointIndices(VertexWeightAttachmentBucket<1>&, IteratorRange<const unsigned*>);
-	template void RemapJointIndices(VertexWeightAttachmentBucket<2>&, IteratorRange<const unsigned*>);
-	template void RemapJointIndices(VertexWeightAttachmentBucket<4>&, IteratorRange<const unsigned*>);
+	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<1, uint8_t>&, IteratorRange<unsigned*>);
+	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<2, uint8_t>&, IteratorRange<unsigned*>);
+	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<4, uint8_t>&, IteratorRange<unsigned*>);
+	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<1, uint16_t>&, IteratorRange<unsigned*>);
+	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<2, uint16_t>&, IteratorRange<unsigned*>);
+	template void AccumulateJointUsage(const VertexWeightAttachmentBucket<4, uint16_t>&, IteratorRange<unsigned*>);
+	template void RemapJointIndices(VertexWeightAttachmentBucket<1, uint8_t>&, IteratorRange<const unsigned*>);
+	template void RemapJointIndices(VertexWeightAttachmentBucket<2, uint8_t>&, IteratorRange<const unsigned*>);
+	template void RemapJointIndices(VertexWeightAttachmentBucket<4, uint8_t>&, IteratorRange<const unsigned*>);
+	template void RemapJointIndices(VertexWeightAttachmentBucket<1, uint16_t>&, IteratorRange<const unsigned*>);
+	template void RemapJointIndices(VertexWeightAttachmentBucket<2, uint16_t>&, IteratorRange<const unsigned*>);
+	template void RemapJointIndices(VertexWeightAttachmentBucket<4, uint16_t>&, IteratorRange<const unsigned*>);
 
 
     UnboundMorphController::UnboundMorphController()
