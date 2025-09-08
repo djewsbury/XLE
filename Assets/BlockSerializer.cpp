@@ -68,7 +68,7 @@ namespace Assets
         beginPointer._subBlockOffset   = _trailingSubBlocks.size();
         beginPointer._subBlockSize     = ptrdiff_t(range.end()) - ptrdiff_t(range.begin());
         beginPointer._specialBuffer    = (uint64_t)specialBuffer;
-        _internalPointers.push_back(beginPointer);
+        RegisterInternalPointer(beginPointer);
 
         _trailingSubBlocks.insert(_trailingSubBlocks.end(), (const uint8_t*)range.begin(), (const uint8_t*)range.end());
 
@@ -80,7 +80,7 @@ namespace Assets
             endPointer._subBlockOffset   = _trailingSubBlocks.size();
             endPointer._subBlockSize     = 0;
             endPointer._specialBuffer    = (uint64_t)BlockSerializer::SpecialBuffer::Unknown;
-            _internalPointers.push_back(endPointer);
+            RegisterInternalPointer(endPointer);
 
             PushBackPointer(0);         // end pointer
         } else {
@@ -197,7 +197,7 @@ namespace Assets
             endPointer._subBlockOffset   = _trailingSubBlocks.size();
             endPointer._subBlockSize     = 0;
             endPointer._specialBuffer    = (uint64_t)BlockSerializer::SpecialBuffer::Unknown;
-            _internalPointers.push_back(endPointer);
+            RegisterInternalPointer(endPointer);
 
             PushBackPointer(0);         // end pointer
         } else {
@@ -211,9 +211,8 @@ namespace Assets
 
         for (auto i=subBlock._internalPointers.cbegin(); i!=subBlock._internalPointers.cend(); ++i) {
             InternalPointer p = *i;
-            if (p._pointerOffset & PtrFlagBit) {
+            if (p._pointerOffset & PtrFlagBit)
                 p._pointerOffset     = (p._pointerOffset&PtrMask) + subBlock._memory.size();
-            }
             p._pointerOffset    +=  beginPointer._subBlockOffset;
 
                 //
@@ -250,7 +249,7 @@ namespace Assets
             endPointer._subBlockOffset   = _trailingSubBlocks.size();
             endPointer._subBlockSize     = 0;
             endPointer._specialBuffer    = (uint64_t)BlockSerializer::SpecialBuffer::Unknown;
-            _internalPointers.push_back(endPointer);
+            RegisterInternalPointer(endPointer);
 
             PushBackPointer(0);         // end pointer
         } else {

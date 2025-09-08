@@ -142,10 +142,6 @@ namespace Assets
 			{ 
 				SerializationOperator(serializer, value.first);
 				SerializationOperator(serializer, value.second);
-				const auto padding = sizeof(typename std::pair<TypeLHS, TypeRHS>) - sizeof(TypeLHS) - sizeof(TypeRHS);
-				if (constant_expression<(padding > 0)>::result()) {
-					serializer.AddPadding(padding);
-				}
 			}
 
 		// the following has no implementation. Objects that don't match will attempt to use this implementation
