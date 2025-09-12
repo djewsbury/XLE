@@ -300,8 +300,7 @@ namespace ToolsRig
     public:
         virtual bool    OnInputEvent(
             const OSServices::InputSnapshot& evnt, 
-            const SceneEngine::IntersectionTestContext& hitTestContext,
-            const SceneEngine::IIntersectionScene* hitTestScene);
+            const SceneEngine::IntersectionTestContext& hitTestContext) override;
         virtual void    Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext);
 
         virtual const char* GetName() const { return "Fine Tune"; }
@@ -326,9 +325,9 @@ namespace ToolsRig
 
     bool FineTuneManipulator::OnInputEvent(
         const OSServices::InputSnapshot& evnt, 
-        const SceneEngine::IntersectionTestContext& hitTestContext,
-        const SceneEngine::IIntersectionScene* hitTestScene)
+        const SceneEngine::IntersectionTestContext& hitTestContext)
     {
+        auto hitTestScene = hitTestContext.GetService<SceneEngine::IIntersectionScene>();
 		if (!hitTestScene) return false;
 
         if (evnt._wheelDelta) {

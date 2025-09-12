@@ -115,10 +115,9 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    bool    CommonManipulator::OnInputEvent(
+    PlatformRig::ProcessInputResult CommonManipulator::OnInputEvent(
         const OSServices::InputSnapshot& evnt, 
-        const SceneEngine::IntersectionTestContext& hitTestContext,
-        const SceneEngine::IIntersectionScene* hitTestScene)
+        const SceneEngine::IntersectionTestContext& hitTestContext)
     {
         const bool shiftHeld = evnt.IsHeld("shift"_key);
         if (evnt._wheelDelta) {
@@ -134,6 +133,7 @@ namespace ToolsRig
             //  new device and lighting parser contexts. We need to know the viewport -- and the only way 
             //  to do that is to get it from the windows HWND!
         Int2 newMouseCoords(evnt._mousePosition[0], evnt._mousePosition[1]);
+        auto hitTestScene = hitTestContext.GetService<SceneEngine::IIntersectionScene>();
             // only do the terrain test if we get some kind of movement
         if ((((XlAbs(_mouseCoords[0] - newMouseCoords[0]) > 1 || XlAbs(_mouseCoords[1] - newMouseCoords[1]) > 1)
             && (FrameRenderCount > _lastRenderCount0)) || evnt.IsPress_LButton()) && hitTestScene) {
@@ -157,9 +157,9 @@ namespace ToolsRig
                 _lastPerform = std::chrono::steady_clock::now();
                 _lastRenderCount1 = FrameRenderCount;
             }
-            return true;
+            return PlatformRig::ProcessInputResult::Consumed;
         }
-        return false;
+        return PlatformRig::ProcessInputResult::Passthrough;
     }
 
     void    CommonManipulator::Render(
@@ -193,12 +193,12 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    bool    RectangleManipulator::OnInputEvent(
+    PlatformRig::ProcessInputResult RectangleManipulator::OnInputEvent(
         const OSServices::InputSnapshot& evnt, 
-        const SceneEngine::IntersectionTestContext& hitTestContext,
-        const SceneEngine::IIntersectionScene* hitTestScene)
+        const SceneEngine::IntersectionTestContext& hitTestContext)
     {
         Int2 mousePosition(evnt._mousePosition[0], evnt._mousePosition[1]);
+        auto hitTestScene = hitTestContext.GetService<SceneEngine::IIntersectionScene>();
 
         if (evnt.IsPress_LButton() && hitTestScene) {
                 // on lbutton press, we should place a new anchor
@@ -237,7 +237,7 @@ namespace ToolsRig
 
         }
 
-        return false;
+        return PlatformRig::ProcessInputResult::Passthrough;
     }
 
     void    RectangleManipulator::Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext)

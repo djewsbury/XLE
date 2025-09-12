@@ -15,6 +15,7 @@
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
 #include "../../RenderOverlays/LayoutEngine.h"
+#include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../Assets/Continuation.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Utility/IntrusivePtr.h"
@@ -45,12 +46,12 @@ namespace ToolsRig
         if (p) {
             SceneEngine::IntersectionTestContext intersectionContext {
                 AsCameraDesc(*p->_camera),
-                context._view._viewMins, context._view._viewMaxs,
-                p->_drawingApparatus };
+                context._view._viewMins, context._view._viewMaxs };
+            intersectionContext.AttachService2(*p->_drawingApparatus);
+            if (p->_intersectionTestScene) intersectionContext.AttachService2(*p->_intersectionTestScene);
 
-            if (auto a = p->GetActiveManipulator()) {
-                return a->OnInputEvent(evnt, intersectionContext, p->_intersectionTestScene.get()) ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
-            }
+            if (auto a = p->GetActiveManipulator())
+                return a->OnInputEvent(evnt, intersectionContext);
         }
         return ProcessInputResult::Passthrough;
     }
@@ -59,11 +60,11 @@ namespace ToolsRig
         : _parent(std::move(parent))
     {}
 
-    void    ManipulatorsInterface::Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext, const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
+    void    ManipulatorsInterface::Render(RenderOverlays::IOverlayContext& context)
     {
 		auto a = GetActiveManipulator();
         if (a)
-            a->Render(context, parserContext, pipelineAccelerators);
+            a->Render(context);
     }
 
     void    ManipulatorsInterface::Update()

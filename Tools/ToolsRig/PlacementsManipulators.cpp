@@ -26,6 +26,7 @@
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
+#include "../../RenderCore/Techniques/ParsingContext.h"
 
 #include "../../Assets/Assets.h"
 #include "../../Assets/IArtifact.h"
@@ -68,9 +69,7 @@ namespace ToolsRig
     public:
         void    Render(         RenderOverlays::IOverlayContext& context, Layout& layout, 
                                 Interactables& interactables, InterfaceState& interfaceState);
-        void    RenderToScene(  RenderCore::IThreadContext& context, 
-                                RenderCore::Techniques::ParsingContext& parserContext,
-                                const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
+        void    RenderToScene(  RenderOverlays::IOverlayContext& context);
         ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input);
 
         PlacementsWidgets(
@@ -110,22 +109,18 @@ namespace ToolsRig
     class SelectAndEdit : public IManipulator
     {
     public:
-        bool OnInputEvent(
+        PlatformRig::ProcessInputResult OnInputEvent(
             const OSServices::InputSnapshot& evnt,
-            const SceneEngine::IntersectionTestContext& hitTestContext,
-            const SceneEngine::IIntersectionScene* hitTestScene);
-        void Render(
-            RenderCore::IThreadContext& context,
-            RenderCore::Techniques::ParsingContext& parserContext,
-            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
+            const SceneEngine::IntersectionTestContext& hitTestContext) override;
+        void Render(RenderOverlays::IOverlayContext& overlayContext) override;
 
-        const char* GetName() const;
-        std::string GetStatusText() const;
+        const char* GetName() const override;
+        std::string GetStatusText() const override;
 
-        IteratorRange<const FloatParameter*>  GetFloatParameters() const;
-        IteratorRange<const BoolParameter*>   GetBoolParameters() const;
-		IteratorRange<const IntParameter*>   GetIntParameters() const { return {}; }
-        void SetActivationState(bool);
+        IteratorRange<const FloatParameter*>  GetFloatParameters() const override;
+        IteratorRange<const BoolParameter*>   GetBoolParameters() const override;
+		IteratorRange<const IntParameter*>   GetIntParameters() const override { return {}; }
+        void SetActivationState(bool) override;
 
         SelectAndEdit(
             IPlacementManipulatorSettings* manInterface,
@@ -219,12 +214,12 @@ namespace ToolsRig
         }
     }
 
-    bool SelectAndEdit::OnInputEvent(
+    PlatformRig::ProcessInputResult SelectAndEdit::OnInputEvent(
         const OSServices::InputSnapshot& evnt,
-        const SceneEngine::IntersectionTestContext& hitTestContext,
-        const SceneEngine::IIntersectionScene* hitTestScene)
+        const SceneEngine::IntersectionTestContext& hitTestContext)
     {
-		if (!hitTestScene) return false;
+        auto hitTestScene = hitTestContext.GetService<SceneEngine::IIntersectionScene>();
+		if (!hitTestScene) return PlatformRig::ProcessInputResult::Passthrough;
 
         bool consume = false;
         if (_transaction) {
@@ -483,7 +478,7 @@ namespace ToolsRig
                 }
             }
 
-            return true;
+            return PlatformRig::ProcessInputResult::Consumed;
         }
 
         if (evnt.IsDblClk_LButton()) {
@@ -509,7 +504,7 @@ namespace ToolsRig
                 }
             }
 
-            return true;
+            return PlatformRig::ProcessInputResult::Consumed;
         }
 
         if (evnt.IsPress("delete"_key)) {
@@ -518,17 +513,23 @@ namespace ToolsRig
                 for (unsigned c=0; c<count; ++c) { _transaction->Delete(c); }
                 _activeSubop = SubOperation();
             }
-            return true;
+            return PlatformRig::ProcessInputResult::Consumed;
         }
 
-        return consume;
+        return consume ? PlatformRig::ProcessInputResult::Consumed : PlatformRig::ProcessInputResult::Passthrough;
     }
 
-    void SelectAndEdit::Render(
-        RenderCore::IThreadContext& context,
-        RenderCore::Techniques::ParsingContext& parserContext,
-        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
+    void SelectAndEdit::Render(RenderOverlays::IOverlayContext& overlayContext)
     {
+        auto parserContext = overlayContext.GetService<RenderCore::Techniques::ParsingContext>();
+        std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators;
+        if (!parserContext || !pipelineAccelerators) {
+            // can no longer get the pipeline accelerators in this way.
+            // We can get a non-shared-ptr reference directly from ParsingContext
+            assert(0);
+            return;
+        }
+
         std::vector<std::pair<uint64_t, uint64_t>> activeSelection;
 
         if (_transaction) {
@@ -548,7 +549,7 @@ namespace ToolsRig
                 //  likely get the most efficient results by rendering
                 //  all of objects that require highlights in one go.
             Placements_RenderHighlight(
-                parserContext, pipelineAccelerators, *_renderer, _editor->GetCellSet(),
+                *parserContext, pipelineAccelerators, *_renderer, _editor->GetCellSet(),
                 AsPointer(activeSelection.begin()), AsPointer(activeSelection.end()));
         }
     }
@@ -631,21 +632,17 @@ namespace ToolsRig
     class PlaceSingle : public IManipulator
     {
     public:
-        bool OnInputEvent(
+        PlatformRig::ProcessInputResult OnInputEvent(
             const OSServices::InputSnapshot& evnt,
-            const SceneEngine::IntersectionTestContext& hitTestContext,
-            const SceneEngine::IIntersectionScene* hitTestScene);
-        void Render(
-            RenderCore::IThreadContext& context,
-            RenderCore::Techniques::ParsingContext& parserContext,
-            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
+            const SceneEngine::IntersectionTestContext& hitTestContext) override;
+        void Render(RenderOverlays::IOverlayContext& overlayContext) override;
 
-        const char* GetName() const;
-        IteratorRange<const FloatParameter*>  GetFloatParameters() const;
-        IteratorRange<const BoolParameter*>   GetBoolParameters() const;
-		IteratorRange<const IntParameter*>   GetIntParameters() const { return {}; }
-        void SetActivationState(bool);
-        std::string GetStatusText() const { return std::string(); }
+        const char* GetName() const override;
+        IteratorRange<const FloatParameter*>  GetFloatParameters() const override;
+        IteratorRange<const BoolParameter*>   GetBoolParameters() const override;
+		IteratorRange<const IntParameter*>   GetIntParameters() const override { return {}; }
+        void SetActivationState(bool) override;
+        std::string GetStatusText() const override { return std::string(); }
 
         PlaceSingle(
             IPlacementManipulatorSettings* manInterface,
@@ -707,10 +704,9 @@ namespace ToolsRig
         } CATCH_END
     }
 
-    bool PlaceSingle::OnInputEvent(
+    PlatformRig::ProcessInputResult PlaceSingle::OnInputEvent(
         const OSServices::InputSnapshot& evnt,
-        const SceneEngine::IntersectionTestContext& hitTestContext,
-        const SceneEngine::IIntersectionScene* hitTestScene)
+        const SceneEngine::IntersectionTestContext& hitTestContext)
     {
         //  If we get a click on the terrain, then we should perform 
             //  whatever placement operation is required (eg, creating new placements)
@@ -720,9 +716,10 @@ namespace ToolsRig
                 _transaction->Cancel();
                 _transaction.reset();
             }
-            return false;
+            return PlatformRig::ProcessInputResult::Passthrough;
         }
 
+        auto hitTestScene = hitTestContext.GetService<SceneEngine::IIntersectionScene>();
         if (_rendersSinceHitTest > 0 && hitTestScene) {
             _rendersSinceHitTest = 0;
 
@@ -751,14 +748,20 @@ namespace ToolsRig
             }
         }
 
-        return false;
+        return PlatformRig::ProcessInputResult::Passthrough;
     }
 
-    void PlaceSingle::Render(
-        RenderCore::IThreadContext& context,
-        RenderCore::Techniques::ParsingContext& parserContext,
-        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
+    void PlaceSingle::Render(RenderOverlays::IOverlayContext& overlayContext)
     {
+        auto parserContext = overlayContext.GetService<RenderCore::Techniques::ParsingContext>();
+        std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators;
+        if (!parserContext || !pipelineAccelerators) {
+            // can no longer get the pipeline accelerators in this way.
+            // We can get a non-shared-ptr reference directly from ParsingContext
+            assert(0);
+            return;
+        }
+
         ++_rendersSinceHitTest;
         if (_transaction && _transaction->GetObjectCount()) {
             std::vector<SceneEngine::PlacementGUID> objects;
@@ -768,7 +771,7 @@ namespace ToolsRig
             }
 
             Placements_RenderHighlight(
-                parserContext, pipelineAccelerators, *_renderer, _editor->GetCellSet(),
+                *parserContext, pipelineAccelerators, *_renderer, _editor->GetCellSet(),
                 AsPointer(objects.begin()), AsPointer(objects.end()));
         }
     }
@@ -817,21 +820,17 @@ namespace ToolsRig
     class ScatterPlacements : public IManipulator
     {
     public:
-        bool OnInputEvent(
+        PlatformRig::ProcessInputResult OnInputEvent(
             const OSServices::InputSnapshot& evnt,
-            const SceneEngine::IntersectionTestContext& hitTestContext,
-            const SceneEngine::IIntersectionScene* hitTestScene);
-        void Render(
-            RenderCore::IThreadContext& context,
-            RenderCore::Techniques::ParsingContext& parserContext,
-            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
+            const SceneEngine::IntersectionTestContext& hitTestContext) override;
+        void Render(RenderOverlays::IOverlayContext& overlayContext) override;
 
-        const char* GetName() const;
-        IteratorRange<const FloatParameter*>  GetFloatParameters() const;
-        IteratorRange<const BoolParameter*>   GetBoolParameters() const;
-		IteratorRange<const IntParameter*>   GetIntParameters() const { return {}; }
-        void SetActivationState(bool);
-        std::string GetStatusText() const { return std::string(); }
+        const char* GetName() const override;
+        IteratorRange<const FloatParameter*>  GetFloatParameters() const override;
+        IteratorRange<const BoolParameter*>   GetBoolParameters() const override;
+		IteratorRange<const IntParameter*>   GetIntParameters() const override { return {}; }
+        void SetActivationState(bool) override;
+        std::string GetStatusText() const override { return std::string(); }
 
         ScatterPlacements(
             IPlacementManipulatorSettings* manInterface,
@@ -854,10 +853,9 @@ namespace ToolsRig
             const Float3& centre, const char modelName[], const char materialName[]);
     };
 
-    bool ScatterPlacements::OnInputEvent(
+    PlatformRig::ProcessInputResult ScatterPlacements::OnInputEvent(
         const OSServices::InputSnapshot& evnt,
-        const SceneEngine::IntersectionTestContext& hitTestContext,
-        const SceneEngine::IIntersectionScene* hitTestScene)
+        const SceneEngine::IntersectionTestContext& hitTestContext)
     {
             //  If we get a click on the terrain, then we should perform 
             //  whatever placement operation is required (eg, creating new placements)
@@ -865,7 +863,8 @@ namespace ToolsRig
             //  However, we need to do terrain collisions every time (because we want to
             //  move the highlight/preview position
 
-		if (!hitTestScene) return false;
+        auto hitTestScene = hitTestContext.GetService<SceneEngine::IIntersectionScene>();
+		if (!hitTestScene) return PlatformRig::ProcessInputResult::Passthrough;
 
         auto test = hitTestScene->FirstRayIntersection(hitTestContext, hitTestContext.CalculateWorldSpaceRay(AsInt2(evnt._mousePosition)), SceneEngine::IntersectionTestResult::Type::Terrain);
         _hoverPoint = test._worldSpaceIntersectionPt;
@@ -881,7 +880,7 @@ namespace ToolsRig
                     PerformScatter(*hitTestScene, test._worldSpaceIntersectionPt, selectedModel.c_str(), selectedMaterial.c_str());
                     _spawnTimer = now;
                 }
-                return true;
+                return PlatformRig::ProcessInputResult::Consumed;
             }
         } else { _spawnTimer = {}; }
 
@@ -896,7 +895,7 @@ namespace ToolsRig
             }
         }
 
-        return false;
+        return PlatformRig::ProcessInputResult::Passthrough;
     }
 
     static float TriangleSignedArea(const Float2& pt1, const Float2& pt2, const Float2& pt3)
@@ -1294,13 +1293,11 @@ namespace ToolsRig
         trans->Commit();
     }
 
-    void ScatterPlacements::Render(
-        RenderCore::IThreadContext& context,
-        RenderCore::Techniques::ParsingContext& parserContext,
-        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
+    void ScatterPlacements::Render(RenderOverlays::IOverlayContext& overlayContext)
     {
-        if (_hasHoverPoint)
-            RenderCylinderHighlight(parserContext, *pipelineAccelerators, _hoverPoint, _radius);
+        auto parserContext = overlayContext.GetService<RenderCore::Techniques::ParsingContext>();
+        if (_hasHoverPoint && parserContext)
+            RenderCylinderHighlight(*parserContext, parserContext->GetPipelineAccelerators(), _hoverPoint, _radius);
     }
 
     const char* ScatterPlacements::GetName() const  { return "ScatterPlace"; }
@@ -1554,10 +1551,12 @@ namespace ToolsRig
             if (view._viewMaxs[0] > view._viewMins[0] && view._viewMaxs[1] > view._viewMins[1]) {
                 SceneEngine::IntersectionTestContext intersectionContext {
                     AsCameraDesc(*_camera),
-                    view._viewMins, view._viewMaxs,
-                    _drawingApparatus };
+                    view._viewMins, view._viewMaxs };
+                intersectionContext.AttachService2(*_drawingApparatus);
+                if (_intersectionTestScene)
+                    intersectionContext.AttachService2(*_intersectionTestScene);
 
-                if (_manipulators[_activeManipulatorIndex]->OnInputEvent(input, intersectionContext, _intersectionTestScene.get()))
+                if (_manipulators[_activeManipulatorIndex]->OnInputEvent(input, intersectionContext) == PlatformRig::ProcessInputResult::Consumed)
                     return ProcessInputResult::Consumed;
             }
         }
@@ -1565,12 +1564,9 @@ namespace ToolsRig
         return ProcessInputResult::Passthrough;
     }
 
-    void PlacementsWidgets::RenderToScene(
-        RenderCore::IThreadContext& context, 
-		RenderCore::Techniques::ParsingContext& parserContext,
-        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
+    void PlacementsWidgets::RenderToScene(RenderOverlays::IOverlayContext& context)
     {
-        _manipulators[_activeManipulatorIndex]->Render(context, parserContext, pipelineAccelerators);
+        _manipulators[_activeManipulatorIndex]->Render(context);
     }
 
     std::string PlacementsWidgets::GetSelectedModel() const { return _selectedModel; }
@@ -1656,11 +1652,9 @@ namespace ToolsRig
     }
 
     void PlacementsManipulatorsManager::RenderToScene(
-        RenderCore::IThreadContext& device, 
-		RenderCore::Techniques::ParsingContext& parserContext,
-        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators)
+        RenderOverlays::IOverlayContext& context)
     {
-        _pimpl->_placementsDispl->RenderToScene(device, parserContext, pipelineAccelerators);
+        _pimpl->_placementsDispl->RenderToScene(context);
     }
 
     auto PlacementsManipulatorsManager::GetInputLister() -> std::shared_ptr<PlatformRig::IInputListener>

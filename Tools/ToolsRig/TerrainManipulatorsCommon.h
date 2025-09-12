@@ -31,7 +31,7 @@ namespace ToolsRig
         Float2 WorldSpaceToCoverage(unsigned layerId, const Float2& input) const;
         float WorldSpaceToCoverageDistance(unsigned layerId, float input) const;
 
-		virtual void    Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext);
+		virtual void    Render(RenderOverlays::IOverlayContext& overlayContext) override;
 
         TerrainManipulatorBase(
             std::shared_ptr<SceneEngine::TerrainManager> terrainManager,
@@ -42,15 +42,14 @@ namespace ToolsRig
     {
     public:
             // IManipulator interface
-        virtual bool    OnInputEvent(
+        virtual PlatformRig::ProcessInputResult OnInputEvent(
             const OSServices::InputSnapshot& evnt, 
-            const SceneEngine::IntersectionTestContext& hitTestContext,
-            const SceneEngine::IIntersectionScene* hitTestScene);
-        virtual void    Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext);
+            const SceneEngine::IntersectionTestContext& hitTestContext) override;
+        virtual void    Render(RenderOverlays::IOverlayContext& overlayContext) override;
 
         virtual void    PerformAction(const Float3& worldSpacePosition, float size, float strength) = 0;
-        virtual void    SetActivationState(bool) {}
-        virtual std::string GetStatusText() const { return std::string(); }
+        virtual void    SetActivationState(bool) override {}
+        virtual std::string GetStatusText() const override { return std::string(); }
 
         CommonManipulator(
             std::shared_ptr<SceneEngine::TerrainManager> terrainManager,
@@ -70,18 +69,17 @@ namespace ToolsRig
     {
     public:
             // IManipulator interface
-        virtual bool    OnInputEvent(
+        virtual PlatformRig::ProcessInputResult    OnInputEvent(
             const OSServices::InputSnapshot& evnt, 
-            const SceneEngine::IntersectionTestContext& hitTestContext,
-            const SceneEngine::IIntersectionScene* hitTestScene);
-        virtual void    Render(RenderCore::IThreadContext& context, RenderCore::Techniques::ParsingContext& parserContext);
+            const SceneEngine::IntersectionTestContext& hitTestContext) override;
+        virtual void    Render(RenderOverlays::IOverlayContext& overlayContext) override;
 
         virtual void    PerformAction(const Float3& anchor0, const Float3& anchor1) = 0;
         
-		virtual IteratorRange<const FloatParameter*>  GetFloatParameters() const { return {}; }
-		virtual IteratorRange<const BoolParameter*>   GetBoolParameters() const { return {}; }
-        virtual void SetActivationState(bool) {}
-        virtual std::string GetStatusText() const { return std::string(); }
+		virtual IteratorRange<const FloatParameter*>  GetFloatParameters() const override { return {}; }
+		virtual IteratorRange<const BoolParameter*>   GetBoolParameters() const override { return {}; }
+        virtual void SetActivationState(bool) override {}
+        virtual std::string GetStatusText() const override { return std::string(); }
 
         RectangleManipulator(
             std::shared_ptr<SceneEngine::TerrainManager> terrainManager,

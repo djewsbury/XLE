@@ -9,6 +9,7 @@
 #include "ModelVisualisation.h"
 #include "VisualisationUtils.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
+#include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../SceneEngine/IntersectionTest.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/Geometry.h"
@@ -21,22 +22,18 @@ namespace ToolsRig
     class CameraMovementManipulator : public IManipulator
     {
     public:
-        bool OnInputEvent(
+        PlatformRig::ProcessInputResult OnInputEvent(
             const OSServices::InputSnapshot& evnt, 
-            const SceneEngine::IntersectionTestContext& hitTestContext,
-            const SceneEngine::IIntersectionScene* hitTestScene);
-        void Render(
-            RenderCore::IThreadContext& context, 
-            RenderCore::Techniques::ParsingContext& parserContext,
-            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
+            const SceneEngine::IntersectionTestContext& hitTestContext) override;
+        void Render(RenderOverlays::IOverlayContext& overlayContext) override;
 
-        const char* GetName() const;
-        std::string GetStatusText() const;
+        const char* GetName() const override;
+        std::string GetStatusText() const override;
 
-        IteratorRange<const FloatParameter*>  GetFloatParameters() const { return {}; }
-        IteratorRange<const BoolParameter*>   GetBoolParameters() const { return {}; }
-		IteratorRange<const IntParameter*>   GetIntParameters() const { return {}; }
-		void SetActivationState(bool newState) {}
+        IteratorRange<const FloatParameter*>  GetFloatParameters() const override { return {}; }
+        IteratorRange<const BoolParameter*>   GetBoolParameters() const override { return {}; }
+		IteratorRange<const IntParameter*>   GetIntParameters() const override { return {}; }
+		void SetActivationState(bool newState) override {}
 
         CameraMovementManipulator(
             const std::shared_ptr<VisCameraSettings>& visCameraSettings,
@@ -64,10 +61,9 @@ namespace ToolsRig
 			right[2], forward[2], calibrationUp[2]);
     }
 
-    bool CameraMovementManipulator::OnInputEvent(
+    PlatformRig::ProcessInputResult CameraMovementManipulator::OnInputEvent(
         const OSServices::InputSnapshot& evnt, 
-        const SceneEngine::IntersectionTestContext& hitTestContext,
-        const SceneEngine::IIntersectionScene* hitTestScene)
+        const SceneEngine::IntersectionTestContext& hitTestContext)
     {
             //  This is a simple camera manipulator
             //  It should operate when the middle mouse button is down.
@@ -87,7 +83,9 @@ namespace ToolsRig
             //  because it tends to conflict with other key-binds.
             //  However, we could make a rule that keyboard input is 
             //  directed to the camera when the middle mouse button is down.
-        if (!_visCameraSettings) { return false; }
+        if (!_visCameraSettings) { return PlatformRig::ProcessInputResult::Passthrough; }
+
+        auto hitTestScene = hitTestContext.GetService<SceneEngine::IIntersectionScene>();
 
 		bool gotSomething = false;
         constexpr auto ctrl = "control"_key;
@@ -181,13 +179,10 @@ namespace ToolsRig
 			gotSomething = true;
         }
 
-        return gotSomething;
+        return gotSomething ? PlatformRig::ProcessInputResult::Consumed : PlatformRig::ProcessInputResult::Passthrough;
     }
 
-    void CameraMovementManipulator::Render(
-        RenderCore::IThreadContext&, 
-        RenderCore::Techniques::ParsingContext&,
-        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>&)
+    void CameraMovementManipulator::Render(RenderOverlays::IOverlayContext& overlayContext)
     {
         // we could draw some movement widgets here
     }
@@ -226,18 +221,19 @@ namespace ToolsRig
     {
 		SceneEngine::IntersectionTestContext intersectionContext {
 			AsCameraDesc(*_camera),
-			context._view._viewMins, context._view._viewMaxs,
-			_drawingApparatus };
+			context._view._viewMins, context._view._viewMaxs };
+        intersectionContext.AttachService2(*_drawingApparatus);
+        if (_intersectionScene)
+            intersectionContext.AttachService2(*_intersectionScene);
 
         if (!_activeManipulators.empty()) {
-            bool r = _activeManipulators[_activeManipulators.size()-1]->OnInputEvent(
-                evnt, intersectionContext, _intersectionScene.get());
-            if (!r)
+            auto r = _activeManipulators[_activeManipulators.size()-1]->OnInputEvent(evnt, intersectionContext);
+            if (r == PlatformRig::ProcessInputResult::Passthrough)
                 _activeManipulators.erase(_activeManipulators.begin() + (_activeManipulators.size()-1));
         } else {
 			auto i = LowerBound(_registeredManipulators, CameraManipulator);
 			if (i!=_registeredManipulators.end() && i->first == CameraManipulator)
-				i->second->OnInputEvent(evnt, intersectionContext, _intersectionScene.get());
+				i->second->OnInputEvent(evnt, intersectionContext);
 		}
 
         return ProcessInputResult::Consumed;
@@ -266,6 +262,12 @@ namespace ToolsRig
     {}
     ManipulatorStack::~ManipulatorStack()
     {}
-    
+
+    auto IManipulator::GetFloatParameters() const -> IteratorRange<const FloatParameter*> { return {}; }
+    auto IManipulator::GetBoolParameters() const -> IteratorRange<const BoolParameter*> { return {}; }
+    auto IManipulator::GetIntParameters() const -> IteratorRange<const IntParameter*> { return {}; }
+    void IManipulator::SetActivationState(bool newState) {}
+    bool IManipulator::GetActivationState() const { return true; }
+    IManipulator::~IManipulator() = default;
 }
 

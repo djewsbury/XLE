@@ -27,6 +27,7 @@ namespace SceneEngine
             {
                 Terrain = 1<<0, 
                 Placement = 1<<1,
+                Brush = 1<<2,
 
                 Extra = 1<<6
             };
@@ -76,7 +77,23 @@ namespace SceneEngine
 
 		RenderCore::Techniques::CameraDesc _cameraDesc;
 		Int2 _viewportMins, _viewportMaxs;
-		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
+
+		void* GetService(uint64_t) const;
+        void AttachService(uint64_t, void*);
+
+        template<typename Type>
+            Type* GetService() const { return (Type*)GetService(typeid(std::decay_t<Type>).hash_code()); }
+        template<typename Type>
+            void AttachService2(Type& type) { AttachService(typeid(std::decay_t<Type>).hash_code(), &type); }
+
+        IntersectionTestContext(const RenderCore::Techniques::CameraDesc&, Int2 viewportMins, Int2 viewportMaxs);
+        ~IntersectionTestContext();
+        IntersectionTestContext(IntersectionTestContext&&);
+        IntersectionTestContext& operator=(IntersectionTestContext&&);
+        IntersectionTestContext(const IntersectionTestContext&);
+        IntersectionTestContext& operator=(const IntersectionTestContext&);
+    private:
+        std::vector<std::pair<uint64_t, void*>> _services;
     };
 
     class TerrainManager;

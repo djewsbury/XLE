@@ -26,9 +26,7 @@ namespace ToolsRig
     class ManipulatorsInterface : public std::enable_shared_from_this<ManipulatorsInterface>
     {
     public:
-        void    Render( RenderCore::IThreadContext& context, 
-                        RenderCore::Techniques::ParsingContext& parserContext,
-                        const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
+        void    Render(RenderOverlays::IOverlayContext&);
         void    Update();
 
         void SelectManipulator(signed relativeIndex);

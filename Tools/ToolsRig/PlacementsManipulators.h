@@ -14,7 +14,7 @@
 namespace PlatformRig { class IInputListener; }
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class ParsingContext; class IPipelineAcceleratorPool; } }
-namespace RenderOverlays { class OverlayApparatus; }
+namespace RenderOverlays { class OverlayApparatus; class IOverlayContext; }
 
 namespace SceneEngine
 {
@@ -44,10 +44,7 @@ namespace ToolsRig
             RenderCore::IThreadContext& device, 
             RenderCore::Techniques::ParsingContext& projectionDesc,
             const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
-        void RenderToScene(
-            RenderCore::IThreadContext& context, 
-            RenderCore::Techniques::ParsingContext& parserContext,
-            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators);
+        void RenderToScene(RenderOverlays::IOverlayContext& context);
 
         std::shared_ptr<PlatformRig::IInputListener> GetInputLister();
 

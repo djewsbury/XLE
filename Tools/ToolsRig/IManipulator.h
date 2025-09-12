@@ -18,21 +18,18 @@ namespace SceneEngine
 
 namespace OSServices { class InputSnapshot; }
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class IPipelineAcceleratorPool; }}
+namespace RenderOverlays { class IOverlayContext; }
+namespace PlatformRig { enum class ProcessInputResult; }
 
 namespace ToolsRig
 {
     class IManipulator
     {
     public:
-        virtual bool OnInputEvent(
+        virtual PlatformRig::ProcessInputResult OnInputEvent(
             const OSServices::InputSnapshot& evnt, 
-			const SceneEngine::IntersectionTestContext& hitTestContext,
-            const SceneEngine::IIntersectionScene* hitTestScene) = 0;
-        virtual void Render(
-            RenderCore::IThreadContext& context, 
-            RenderCore::Techniques::ParsingContext& parserContext,
-            const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators) = 0;
+			const SceneEngine::IntersectionTestContext& hitTestContext) = 0;
+        virtual void Render(RenderOverlays::IOverlayContext& overlayContext) = 0;
 
         virtual const char* GetName() const = 0;
         virtual std::string GetStatusText() const = 0;
@@ -57,12 +54,13 @@ namespace ToolsRig
         };
 
             // (warning -- result will probably contain pointers to internal memory within this manipulator)
-        virtual IteratorRange<const FloatParameter*> GetFloatParameters() const = 0;     
-        virtual IteratorRange<const BoolParameter*> GetBoolParameters() const = 0;
-        virtual IteratorRange<const IntParameter*> GetIntParameters() const = 0;
-        virtual void SetActivationState(bool newState) = 0;
+        virtual IteratorRange<const FloatParameter*> GetFloatParameters() const;
+        virtual IteratorRange<const BoolParameter*> GetBoolParameters() const;
+        virtual IteratorRange<const IntParameter*> GetIntParameters() const;
+        virtual void SetActivationState(bool newState);
+        virtual bool GetActivationState() const;
 
-        virtual ~IManipulator() = default;
+        virtual ~IManipulator();
     };
 }
 

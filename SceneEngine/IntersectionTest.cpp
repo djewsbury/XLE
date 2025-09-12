@@ -215,8 +215,11 @@ namespace SceneEngine
         IntersectionTestResult result;
         using Type = IntersectionTestResult::Type;
 
+        auto* drawingApparatus = context.GetService<RenderCore::Techniques::DrawingApparatus>();
+        if (!drawingApparatus) return {};
+
 		auto threadContext = RenderCore::Techniques::GetThreadContext();
-        auto techniqueContext = MakeIntersectionsTechniqueContext(*context._drawingApparatus);
+        auto techniqueContext = MakeIntersectionsTechniqueContext(*drawingApparatus);
 		RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, *threadContext};
         parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
         auto viewportDims = context._viewportMaxs - context._viewportMins;
@@ -281,7 +284,8 @@ namespace SceneEngine
                 // we can improve the intersection by doing ray-vs-triangle tests
                 // on the roughIntersection geometry
 
-            if (!roughIntersection.empty()) {
+            auto drawingApparatus = context.GetService<RenderCore::Techniques::DrawingApparatus>();
+            if (!roughIntersection.empty() && drawingApparatus) {
                     //  we need to create a temporary transaction to get
                     //  at the information for these objects.
                 auto trans = _placementsEditor->Transaction_Begin(
@@ -289,7 +293,7 @@ namespace SceneEngine
 
                 TRY
                 {
-                    auto techniqueContext = MakeIntersectionsTechniqueContext(*context._drawingApparatus);
+                    auto techniqueContext = MakeIntersectionsTechniqueContext(*drawingApparatus);
 					RenderCore::Techniques::ParsingContext parsingContext{techniqueContext, *threadContext};
                     parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
@@ -338,10 +342,11 @@ namespace SceneEngine
                             _placementsEditor->GetCellSet(), triangleBaseTestGuids, &triangleBaseTestGuids[triangleBasedTestCount]);
 
                         std::vector<ModelIntersectionStateContext::ResultEntry> modelIntersectionResults;
+
                         {
                             ModelIntersectionStateContext intersectionContext{
                                 ModelIntersectionStateContext::FrustumTest,
-                                *threadContext, context._drawingApparatus->_pipelineAccelerators,
+                                *threadContext, drawingApparatus->_pipelineAccelerators,
                                 parsingContext.GetPipelineAcceleratorsVisibility()};
                             intersectionContext.SetFrustum(worldToProjection);
                             parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
@@ -451,6 +456,32 @@ namespace SceneEngine
             _viewportMins[0] + (projCoords[0] / projCoords[3] * 0.5f + 0.5f) * float(viewport[0]),
             _viewportMins[1] + (projCoords[1] / projCoords[3] * -0.5f + 0.5f) * float(viewport[1]));
     }
+
+    void* IntersectionTestContext::GetService(uint64_t id) const
+    {
+        auto i = LowerBound(_services, id);
+		if (i != _services.end() && i->first == id)
+			return i->second;
+		return nullptr;
+    }
+
+    void IntersectionTestContext::AttachService(uint64_t id, void* ptr)
+    {
+        auto i = LowerBound(_services, id);
+		if (i != _services.end() && i->first == id) {
+			i->second = ptr;
+		} else {
+			_services.insert(i, std::make_pair(id, ptr));
+		}
+    }
+
+    IntersectionTestContext::IntersectionTestContext(const RenderCore::Techniques::CameraDesc& cameraDesc, Int2 viewportMins, Int2 viewportMaxs)
+    : _cameraDesc(cameraDesc), _viewportMins(viewportMins), _viewportMaxs(viewportMaxs) {}
+    IntersectionTestContext::~IntersectionTestContext() = default;
+    IntersectionTestContext::IntersectionTestContext(IntersectionTestContext&&) = default;
+    IntersectionTestContext& IntersectionTestContext::operator=(IntersectionTestContext&&) = default;
+    IntersectionTestContext::IntersectionTestContext(const IntersectionTestContext&) = default;
+    IntersectionTestContext& IntersectionTestContext::operator=(const IntersectionTestContext&) = default;
 
     namespace Stubs
     {
