@@ -10,7 +10,7 @@
 #include <memory>
 #include <future>
 
-namespace RenderCore { namespace Techniques { class ImmediateDrawableMaterial; }}
+namespace RenderCore { namespace Techniques { class ImmediateDrawableMaterial; class RetainedUniformsStream; }}
 namespace RenderOverlays { class IOverlayContext; class Font; }
 
 namespace RenderOverlays { namespace Internal

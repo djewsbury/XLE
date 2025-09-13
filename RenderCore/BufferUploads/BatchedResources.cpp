@@ -218,7 +218,7 @@ namespace RenderCore { namespace BufferUploads
 	}
 
 	bool BatchedResources::Release(
-		IResource& resource, 
+		IResource& resource,
 		size_t offset, size_t size)
 	{
 		ScopedLock(_lock);
@@ -232,7 +232,17 @@ namespace RenderCore { namespace BufferUploads
 
 		if (!heap) return false;
 
-		std::pair<signed,signed> newRefCounts = heap->_refCounts.Release(offset, size);
+		// note -- we're not synchronizing the delete here, because we're assuming any overwrite
+		// operations will be synchronized to the next command list.
+		//
+		// However if the client directly maps the resource after Allocate(), it would break that 
+		// assumption, we would require some GPU tracking to know when it's safe to deallocate from
+		// the heap.
+		//
+		// That might cause some issues with the defrag stuff, however, since the defragger might attempt
+		// to move a block during that phase after Release() but before the actual Deallocate from the heap
+
+		auto newRefCounts = heap->_refCounts.Release(offset, size);
 		assert(newRefCounts.first >= 0 && newRefCounts.second >= 0);
 		if (newRefCounts.first == 0) {
 			if (newRefCounts.second == 0) {
