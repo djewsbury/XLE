@@ -446,6 +446,10 @@ namespace XLEMath
 		return Magnitude_Accurate(cross) / Primitive(2);
 	}
 
+	void ConvexPolygonToTriangles(
+		IteratorRange<unsigned*> triListOutput,
+		unsigned polygonLoopCount);
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /// <summary>Iterator through a grid, finding that edges that intersect with a line segment</summary>

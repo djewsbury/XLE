@@ -670,6 +670,24 @@ namespace XLEMath
         return ((b1 == b2) && (b2 == b3));
     }
 
+    void ConvexPolygonToTriangles(
+		IteratorRange<unsigned*> triListOutput,
+		unsigned polygonLoopCount)
+	{
+		assert(triListOutput.size() == (polygonLoopCount-2)*3);
+		for (unsigned tri=0; tri<polygonLoopCount-2; ++tri) {
+			if (!(tri&1)) {
+				triListOutput[tri*3+0] = tri/2;
+				triListOutput[tri*3+1] = tri/2+1;
+				triListOutput[tri*3+2] = polygonLoopCount-tri/2-1;
+			} else {
+				triListOutput[tri*3+0] = polygonLoopCount-tri/2-1;
+				triListOutput[tri*3+1] = tri/2+1;
+				triListOutput[tri*3+2] = polygonLoopCount-tri/2-2;
+			}
+		}
+	}
+
     template
         std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
 			unsigned[], unsigned[],
