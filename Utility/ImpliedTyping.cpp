@@ -5,6 +5,7 @@
 #include "ImpliedTyping.h"
 #include "Conversion.h"
 #include "FastParseValue.h"
+#include "StringFormat.h"       // for StringSection<> stream operator
 #include "../Core/Types.h"
 #include <sstream>
 #include <charconv>
@@ -1329,19 +1330,18 @@ namespace Utility { namespace ImpliedTyping
         return parse._successfulConvert && (parse._end == expression.end());
     }
 
-    std::string AsString(IteratorRange<const void*> data, const TypeDesc& desc, bool strongTyping)
+    std::ostream& SerializationOperator(std::ostream& result, IteratorRange<const void*> data, const TypeDesc& desc, bool strongTyping)
     {
         if (desc._typeHint == TypeHint::String) {
             if (desc._type == TypeCat::UInt8 || desc._type == TypeCat::Int8) {
-                return std::string((const char*)data.begin(), (const char*)PtrAdd(data.begin(), desc._arrayCount * sizeof(char)));
+                result << MakeStringSection((const char*)data.begin(), (const char*)PtrAdd(data.begin(), desc._arrayCount * sizeof(char)));
+            } else if (desc._type == TypeCat::UInt16 || desc._type == TypeCat::Int16) {
+                result << Conversion::Convert<std::string>(MakeStringSection((const utf16*)data.begin(), (const utf16*)PtrAdd(data.begin(), desc._arrayCount * sizeof(utf16))));
             }
-            if (desc._type == TypeCat::UInt16 || desc._type == TypeCat::Int16) {
-                return Conversion::Convert<std::string>(std::basic_string<utf16>((const utf16*)data.begin(), (const utf16*)PtrAdd(data.begin(), desc._arrayCount * sizeof(utf16))));
-            }
+            return result;
         } else if (desc._type == TypeCat::Void)
-            return {};
+            return result;
 
-        std::stringstream result;
         assert(data.size() >= desc.GetSize());
         auto arrayCount = unsigned(desc._arrayCount);
         if (arrayCount > 1) result << "{";
@@ -1396,6 +1396,13 @@ namespace Utility { namespace ImpliedTyping
             }
         }
 
+        return result;
+    }
+
+    std::string AsString(IteratorRange<const void*> data, const TypeDesc& desc, bool strongTyping)
+    {
+        std::stringstream result;
+        SerializationOperator(result, data, desc, strongTyping);
         return result.str();
     }
 

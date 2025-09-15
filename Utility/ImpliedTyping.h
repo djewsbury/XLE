@@ -111,6 +111,7 @@ namespace Utility
 
 
         std::string AsString(IteratorRange<const void*> data, const TypeDesc&, bool strongTyping = false);
+        std::ostream& SerializationOperator(std::ostream&, IteratorRange<const void*> data, const TypeDesc&, bool strongTyping = false);
 
         template<typename Type>
             inline std::string AsString(const Type& type, bool strongTyping = false);
@@ -161,6 +162,18 @@ namespace Utility
             IteratorRange<void*> dst,
             StringSection<> op,
             const VariantNonRetained& operand);
+
+        template<typename Type>
+            inline VariantNonRetained AsVariantNonRetained(const Type& t)
+        {
+            return VariantNonRetained { TypeOf<Type>(), MakeOpaqueIteratorRange(t) };
+        }
+
+        inline std::ostream& SerializationOperator(std::ostream& str, const VariantNonRetained& variant)
+        {
+            assert(!variant._reversedEndian);
+            return SerializationOperator(str, variant._data, variant._type);
+        }
 
         struct VariantRetained
         {
