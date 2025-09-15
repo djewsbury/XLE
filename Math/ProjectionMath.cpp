@@ -448,12 +448,12 @@ namespace XLEMath
     constexpr unsigned ToFaceBitField(unsigned faceOne, unsigned faceTwo) { return (1<<faceOne) | (1<<faceTwo); }
     constexpr unsigned ToFaceBitField(unsigned faceOne, unsigned faceTwo, unsigned faceThree) { return (1<<faceOne) | (1<<faceTwo) | (1<<faceThree); }
 
-    CullTestResult AccurateFrustumTester::TestSphere(Float3 centerPoint, float radius)
+    CullTestResult AccurateFrustumTester::TestSphere(Float3 centerPoint, float radius) const
     {
         // This actually tests an axially aligned bounding box that just contains the sphere against the 
         // frustum. It's quick, but not completely accurate. But many cases can accurately be found to be
         // completely within, or completely without, by using this method
-        auto quickTest = TestAABB(
+        auto quickTest = XLEMath::TestAABB(
             _localToProjection, 
             centerPoint - Float3{radius, radius, radius},
             centerPoint + Float3{radius, radius, radius},
@@ -570,6 +570,51 @@ namespace XLEMath
         //      . the sphere does not intersect with any edges
         //      . the sphere does not contain any corners
         // Therefore, we'll conclude that this sphere is outside of the frustum
+        return CullTestResult::Culled;
+    }
+
+    CullTestResult AccurateFrustumTester::TestRay(const Float3& start, const Float3& end) const
+    {
+        bool fullyInside = true;
+
+        float startDots[6];
+        float endDots[6];
+        float * startDot = startDots;
+        float * endDot = endDots;
+
+        /* want to get to the early outs as soon as possible, the no-collision case has to be very optimal */
+        for (auto i = _frustumPlanes; i < &_frustumPlanes[6]; i++, startDot++, endDot++ ) {
+            *startDot = SignedDistance(start, *i);
+            *endDot = SignedDistance(end, *i);
+            
+            if ((*startDot) > 0.f) {
+                fullyInside = false;
+                if ((*endDot) > 0.f)
+                    return CullTestResult::Culled;
+            } else if ((*endDot) > 0.f)
+                fullyInside = false;
+        }
+
+        if (fullyInside) return CullTestResult::Within;
+
+        startDot = startDots;
+        endDot = endDots;
+        for (auto i = _frustumPlanes; i < &_frustumPlanes[6]; i++, startDot++, endDot++ ) {
+            if ( ((*startDot) * (*endDot)) < 0.0f )	{	/* ie, signs are different, there is a collision here */
+                float distance = (*startDot) / ( (*startDot) - (*endDot) );
+                Float3 collisionPoint = LinearInterpolate( start, end, distance );
+
+                // is the collision point truly on the brush? Check every other face
+                bool outside = false;
+                for (auto i2 = _frustumPlanes; i2 < &_frustumPlanes[6]; ++i2)
+                    if (i2 != i && SignedDistance(collisionPoint, *i2) > 0.f)
+                        { outside = true; break; }
+
+                if (!outside)
+                    return CullTestResult::Boundary;
+            }
+        }
+
         return CullTestResult::Culled;
     }
 

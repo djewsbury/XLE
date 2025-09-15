@@ -557,7 +557,7 @@ namespace ToolsRig
         void FrustumIntersection(
             std::vector<SceneEngine::IntersectionTestResult>& results,
             const SceneEngine::IntersectionTestContext& context,
-            const Float4x4& worldToProjection,
+            const AccurateFrustumTester&,
 			SceneEngine::IntersectionTestResult::Type::BitField filter) const override;
 
         IntersectionTester(std::shared_ptr<ObjectPlaceholders> placeHolders);
@@ -652,7 +652,7 @@ namespace ToolsRig
     void ObjectPlaceholders::IntersectionTester::FrustumIntersection(
         std::vector<SceneEngine::IntersectionTestResult>& results,
         const SceneEngine::IntersectionTestContext& context,
-        const Float4x4& worldToProjection,
+        const AccurateFrustumTester&,
 		SceneEngine::IntersectionTestResult::Type::BitField filter) const
     {}
 

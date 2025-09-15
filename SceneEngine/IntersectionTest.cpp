@@ -48,7 +48,7 @@ namespace SceneEngine
         void FrustumIntersection(
             std::vector<IntersectionTestResult>& result,
             const IntersectionTestContext& context,
-            const Float4x4& worldToProjection,
+            const AccurateFrustumTester&,
             IntersectionTestResult::Type::BitField filter = ~IntersectionTestResult::Type::BitField(0)) const override;
 
         const std::shared_ptr<TerrainManager>& GetTerrain() const { return _terrainManager; }
@@ -269,7 +269,7 @@ namespace SceneEngine
     void IntersectionTestScene::FrustumIntersection(
         std::vector<IntersectionTestResult>& result,
         const IntersectionTestContext& context,
-        const Float4x4& worldToProjection,
+        const AccurateFrustumTester& frustum,
         IntersectionTestResult::Type::BitField filter) const
     {
         using Type = IntersectionTestResult::Type;
@@ -279,7 +279,7 @@ namespace SceneEngine
         if ((filter & Type::Placement) && _placementsEditor) {
             auto intersections = _placementsEditor->GetManager()->GetIntersections();
             auto roughIntersection = 
-                intersections->Find_FrustumIntersection(_placementsEditor->GetCellSet(), worldToProjection, nullptr);
+                intersections->Find_FrustumIntersection(_placementsEditor->GetCellSet(), frustum.GetLocalToProjection(), nullptr);
 
                 // we can improve the intersection by doing ray-vs-triangle tests
                 // on the roughIntersection geometry
@@ -315,7 +315,7 @@ namespace SceneEngine
                             //  box is within the frustum, then we must have a hit
                         auto boundary = trans->GetLocalBoundingBox(c);
                         auto boundaryTest = TestAABB(
-                            Combine(trans->GetObject(c)._localToWorld, worldToProjection),
+                            Combine(trans->GetObject(c)._localToWorld, frustum.GetLocalToProjection()),
                             boundary.first, boundary.second, RenderCore::Techniques::GetDefaultClipSpaceType());
                         if (boundaryTest == CullTestResult::Culled) {
                             continue; // (could happen because earlier tests were on the world space bounding box)
@@ -348,7 +348,7 @@ namespace SceneEngine
                                 ModelIntersectionStateContext::FrustumTest,
                                 *threadContext, drawingApparatus->_pipelineAccelerators,
                                 parsingContext.GetPipelineAcceleratorsVisibility()};
-                            intersectionContext.SetFrustum(worldToProjection);
+                            intersectionContext.SetFrustum(frustum.GetLocalToProjection());
                             parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
                             for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
                                 intersectionContext.ExecuteDrawables(parsingContext, pkt[c], c, &context._cameraDesc);
@@ -389,7 +389,7 @@ namespace SceneEngine
         unsigned firstExtraBit = IntegerLog2(uint32(Type::Extra));
         for (size_t c=0; c<_extraTesters.size(); ++c) {
             if (!(filter & 1<<uint32(c+firstExtraBit))) continue;
-            _extraTesters[c]->FrustumIntersection(result, context, worldToProjection);
+            _extraTesters[c]->FrustumIntersection(result, context, frustum);
         }
     }
 

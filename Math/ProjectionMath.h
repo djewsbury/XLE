@@ -50,11 +50,12 @@ namespace XLEMath
             == CullTestResult::Culled;
     }
 
-    class AccurateFrustumTester
+    class alignas(16) AccurateFrustumTester
     {
     public:
-        CullTestResult TestSphere(Float3 centerPoint, float radius);
-        CullTestResult TestAABB(const Float3& mins, const Float3& maxs) const { return XLEMath::TestAABB(_localToProjection, mins, maxs, _clipSpaceType); }
+        CullTestResult TestSphere(Float3 centerPoint, float radius) const;
+        CullTestResult TestAABB(const Float3& mins, const Float3& maxs) const { return XLEMath::TestAABB_Aligned(_localToProjection, mins, maxs, _clipSpaceType); }
+        CullTestResult TestRay(const Float3& start, const Float3& end) const;
 
         const Float4* GetFrustumPlanes() const { return _frustumPlanes; }
         const Float3* GetFrustumCorners() const { return _frustumCorners; }
@@ -66,7 +67,7 @@ namespace XLEMath
     private:
         Float4 _frustumPlanes[6];
         Float3 _frustumCorners[8];
-        Float4x4 _localToProjection;
+        alignas(16) Float4x4 _localToProjection;
         ClipSpaceType _clipSpaceType;
     };
 
