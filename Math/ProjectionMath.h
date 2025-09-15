@@ -54,9 +54,12 @@ namespace XLEMath
     {
     public:
         CullTestResult TestSphere(Float3 centerPoint, float radius);
+        CullTestResult TestAABB(const Float3& mins, const Float3& maxs) const { return XLEMath::TestAABB(_localToProjection, mins, maxs, _clipSpaceType); }
 
         const Float4* GetFrustumPlanes() const { return _frustumPlanes; }
         const Float3* GetFrustumCorners() const { return _frustumCorners; }
+        const Float4x4& GetLocalToProjection() const { return _localToProjection; }
+        ClipSpaceType GetClipSpaceType() const { return _clipSpaceType; }
 
         AccurateFrustumTester(const Float4x4& localToProjection, ClipSpaceType clipSpaceType);
         ~AccurateFrustumTester();

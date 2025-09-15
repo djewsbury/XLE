@@ -11,7 +11,7 @@
 #include <utility>
 #include <memory>
 
-namespace RenderCore { class IThreadContext; class IResourceView; }
+namespace RenderCore { class IThreadContext; class IResourceView; class FrameBufferDesc; }
 namespace RenderCore { namespace Techniques { class ParsingContext; class IPipelineAcceleratorPool; class SequencerConfig; }}
 namespace SceneEngine 
 { 
@@ -74,6 +74,10 @@ namespace ToolsRig
         RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
         const Float3& mins, const Float3& maxs,
 		RectangleHighlightType type = RectangleHighlightType::Tool);
+
+    const RenderCore::Techniques::SequencerConfig* GetRenderHighlightSequencerConfig(
+        std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+        const RenderCore::FrameBufferDesc& fbDesc);
 
     /*void DrawQuadDirect(
         RenderCore::IThreadContext& threadContext, 

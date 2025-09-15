@@ -6,8 +6,6 @@
 
 #include "DrawableMetadataLookup.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"        // for CameraDesc
-#include "../Assets/AssetsCore.h"   // for rstring
-#include "../Core/Types.h"
 #include "../Math/Vector.h"
 #include <memory>
 #include <optional>
@@ -52,7 +50,7 @@ namespace SceneEngine
         virtual void FrustumIntersection(
             std::vector<IntersectionTestResult>& results,
             const IntersectionTestContext& context,
-            const Float4x4& worldToProjection,
+            const AccurateFrustumTester&,
             IntersectionTestResult::Type::BitField filter = ~IntersectionTestResult::Type::BitField(0)) const = 0;
 
         virtual ~IIntersectionScene() = default;

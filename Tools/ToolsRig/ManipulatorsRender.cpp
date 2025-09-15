@@ -398,6 +398,14 @@ namespace ToolsRig
 #endif
     }
 
+    const RenderCore::Techniques::SequencerConfig* GetRenderHighlightSequencerConfig(
+        std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+        const RenderCore::FrameBufferDesc& fbDesc)
+    {
+        // note -- stall for construction
+        return ::Assets::ActualizeAsset<TechniqueBox>(std::move(pipelineAccelerators), fbDesc)._renderHighlightCfg.get();
+    }
+
 /*
     void DrawQuadDirect(
         RenderCore::IThreadContext& threadContext, const RenderCore::Metal::ShaderResourceView& srv, 
