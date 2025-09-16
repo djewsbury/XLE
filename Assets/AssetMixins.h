@@ -16,32 +16,9 @@
 
 namespace Assets
 {
-
-	template <typename ObjectType>
-		class ContextImbuedAsset : public std::tuple<ObjectType, DirectorySearchRules, DependencyValidation, InheritList>
-	{
-	public:
-		using std::tuple<ObjectType, DirectorySearchRules, DependencyValidation, InheritList>::tuple;
-
-		operator ObjectType&() { return std::get<ObjectType>(*this); }
-		operator const ObjectType&() const { return std::get<ObjectType>(*this); }
-	};
-
-	template <typename ObjectType>
-		class ResolvedAssetMixin : public std::tuple<ObjectType, DependencyValidation>
-	{
-	public:
-		using std::tuple<ObjectType, DependencyValidation>::tuple;
-
-		operator ObjectType&() { return std::get<ObjectType>(*this); }
-		operator const ObjectType&() const { return std::get<ObjectType>(*this); }
-	};
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 	template <typename DstType, typename UnresolvedType = ContextImbuedAsset<DstType>>
 		void ResolveAssetToPromise(
-			std::promise<ResolvedAssetMixin<DstType>>&& promise,
+			std::promise<AssetWrapper<DstType>>&& promise,
 			StringSection<> initializer)
 	{
 		using PtrToBaseAssetMarker = std::shared_ptr<Marker<UnresolvedType>>;
@@ -62,7 +39,7 @@ namespace Assets
 
 	template <typename DstType, typename UnresolvedType = ContextImbuedAsset<DstType>>
 		void ResolveAssetToPromise2(
-			std::promise<ResolvedAssetMixin<DstType>>&& promise,
+			std::promise<AssetWrapper<DstType>>&& promise,
 			IteratorRange<const std::shared_ptr<Marker<UnresolvedType>>*> initialBaseAssets)
 	{
 		using PtrToBaseAssetMarker = std::shared_ptr<Marker<UnresolvedType>>;
@@ -187,7 +164,7 @@ namespace Assets
 				VLA(DependencyValidationMarker, depVals, pendingTree->_depVals.size());
 				for (unsigned c=0; c<pendingTree->_depVals.size(); c++) depVals[c] = pendingTree->_depVals[c];
 				auto finalDepVal = GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals, &depVals[pendingTree->_depVals.size()]));
-				return ResolvedAssetMixin<DstType> { std::move(finalAsset), std::move(finalDepVal) };
+				return AssetWrapper<DstType> { std::move(finalAsset), std::move(finalDepVal) };
 			});
 	}
 }

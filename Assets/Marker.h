@@ -134,7 +134,7 @@ namespace Assets
 
 		template<typename Type> decltype(std::declval<const Type&>().GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset.GetDependencyValidation(); }
 		template<typename Type> decltype(std::declval<const Type&>()->GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset->GetDependencyValidation(); }
-		template<typename Type> std::enable_if_t<HasStdGetDependencyValidation<Type>, const DependencyValidation&> GetDependencyValidation(const Type& asset) { return std::get<DependencyValidation>(asset); }
+		template<typename Type> std::enable_if_t<HasStdGetDependencyValidation<Type> && !HasGetDependencyValidation<Type> && !HasDerefGetDependencyValidation<Type>, const DependencyValidation&> GetDependencyValidation(const Type& asset) { return std::get<DependencyValidation>(asset); }
 
 		template<typename Type, typename =std::enable_if_t<!HasGetDependencyValidation<Type> && !HasDerefGetDependencyValidation<Type> && !HasStdGetDependencyValidation<Type>>>
 			DependencyValidation GetDependencyValidation(const Type& asset) { return {}; }

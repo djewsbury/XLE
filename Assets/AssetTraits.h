@@ -27,7 +27,6 @@ namespace Assets
 	class ArtifactRequest;
     class IArtifactCollection;
 	DirectorySearchRules DefaultDirectorySearchRules(StringSection<>);
-	using InheritList = std::vector<std::string>;
 
 	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr
 

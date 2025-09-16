@@ -22,7 +22,7 @@ namespace RenderCore { namespace Assets
 	class ModelCompilationConfiguration;
 	class MaterialSetConstruction;
 
-	using ResolvedMCC = ::Assets::ResolvedAssetMixin<std::shared_ptr<ModelCompilationConfiguration>>;
+	using ResolvedMCC = ::Assets::AssetWrapper<std::shared_ptr<ModelCompilationConfiguration>>;
 
 	class ModelRendererConstruction : public std::enable_shared_from_this<ModelRendererConstruction>
 	{

@@ -604,7 +604,7 @@ namespace ColladaConversion
 	ColladaCompileOp::ColladaCompileOp() {}
 	ColladaCompileOp::~ColladaCompileOp() {}
 
-	static std::shared_ptr<::Assets::Marker<::Assets::ResolvedAssetMixin<std::shared_ptr<ModelCompilationConfiguration>>>> GetFutureResolvedMCC(StringSection<> cfg)
+	static std::shared_ptr<::Assets::Marker<::Assets::AssetWrapper<std::shared_ptr<ModelCompilationConfiguration>>>> GetFutureResolvedMCC(StringSection<> cfg)
 	{
 		return ::Assets::GetAssetMarkerFn<
 			::Assets::ResolveAssetToPromise<std::shared_ptr<ModelCompilationConfiguration>>

@@ -206,7 +206,7 @@ namespace RenderCore { namespace Assets
         std::promise<ContextImbuedRawMaterial>&& promise,
         StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
 
-    std::shared_future<::Assets::ResolvedAssetMixin<RawMaterial>> GetResolvedMaterialFuture(StringSection<>);
+    std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(StringSection<>);
 
 	class RawMaterialSet
     {

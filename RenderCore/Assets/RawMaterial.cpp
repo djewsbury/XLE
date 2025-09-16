@@ -747,7 +747,7 @@ namespace RenderCore { namespace Assets
             });
     }
 
-    std::shared_future<::Assets::ResolvedAssetMixin<RawMaterial>> GetResolvedMaterialFuture(StringSection<> initializer)
+    std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(StringSection<> initializer)
     {
         return ::Assets::GetAssetFutureFn< ::Assets::ResolveAssetToPromise<RawMaterial> > (initializer);
     }

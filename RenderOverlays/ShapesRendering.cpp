@@ -62,20 +62,20 @@ namespace RenderOverlays
         ::Assets::DependencyValidation _depVal;
 
         StandardResources(
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& fillRoundedRect,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& fillAndOutlineRoundedRect,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& outlineRoundedRect,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& fillRaisedRect,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& fillRaisedRoundedRect,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& fillReverseRaisedRoundedRect,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& fillAndOutlineRect,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& fillEllipse,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& outlineEllipse,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& softShadowRect,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& dashLine,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& solidNoBorder,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& fillColorAdjust,
-            const ::Assets::ResolvedAssetMixin<RenderCore::Assets::RawMaterial>& colorAdjustAndOutlineRoundedRect)
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& fillRoundedRect,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& fillAndOutlineRoundedRect,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& outlineRoundedRect,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& fillRaisedRect,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& fillRaisedRoundedRect,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& fillReverseRaisedRoundedRect,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& fillAndOutlineRect,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& fillEllipse,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& outlineEllipse,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& softShadowRect,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& dashLine,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& solidNoBorder,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& fillColorAdjust,
+            const ::Assets::AssetWrapper<RenderCore::Assets::RawMaterial>& colorAdjustAndOutlineRoundedRect)
         {
             _fillRoundedRect = BuildImmediateDrawableMaterial(fillRoundedRect);
             _fillAndOutlineRoundedRect = BuildImmediateDrawableMaterial(fillAndOutlineRoundedRect);

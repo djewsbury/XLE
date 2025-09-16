@@ -19,17 +19,17 @@ namespace std { template<typename T> class promise; }
 
 namespace Assets
 {
-    using ResChar = char;
+	using ResChar = char;
 	using rstring = std::basic_string<ResChar>;
 	using Blob = std::shared_ptr<std::vector<uint8_t>>;
 	using CompileRequestCode = uint64_t;
 	using ArtifactTargetCode = uint64_t;
 
-    enum class AssetState { Pending, Ready, Invalid };
-    class DependencyValidation;
+	enum class AssetState { Pending, Ready, Invalid };
+	class DependencyValidation;
 
 	template<typename AssetType> class Marker;
-    template<typename AssetType>
+	template<typename AssetType>
 		using MarkerPtr = Marker<std::shared_ptr<AssetType>>;
 	template<typename AssetType>
 		using PtrToMarkerPtr = std::shared_ptr<MarkerPtr<AssetType>>;
@@ -41,14 +41,63 @@ namespace Assets
 	Blob AsBlob(const char* str);
 	std::string AsString(const Blob& blob);
 
-    /// <summary>Exceptions related to rendering</summary>
-    namespace Exceptions
-    {
-        class ExceptionWithDepVal : public ::Exceptions::CustomReportableException
-        {
-        public:
-            virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
-        };
+	using InheritList = std::vector<std::string>;
+	class DirectorySearchRules;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template <typename ObjectType>
+		class AssetWrapper : public std::tuple<ObjectType, DependencyValidation>
+	{
+	public:
+		using std::tuple<ObjectType, DependencyValidation>::tuple;
+
+		operator ObjectType&() { return std::get<ObjectType>(*this); }
+		operator const ObjectType&() const { return std::get<ObjectType>(*this); }
+
+		ObjectType& get() { return std::get<ObjectType>(*this); }
+		const ObjectType& get() const { return std::get<ObjectType>(*this); }
+
+		const DependencyValidation& GetDependencyValidation() const { return std::get<DependencyValidation>(*this); }
+	};
+
+	template<typename Type>
+		inline Type& Get(AssetWrapper<Type>& wrapper) { return std::get<Type>(wrapper); }
+	template<typename Type>
+		inline const Type& Get(const AssetWrapper<Type>& wrapper) { return std::get<Type>(wrapper); }
+
+	template <typename ObjectType>
+		class ContextImbuedAsset : public std::tuple<ObjectType, DirectorySearchRules, DependencyValidation, InheritList>
+	{
+	public:
+		using std::tuple<ObjectType, DirectorySearchRules, DependencyValidation, InheritList>::tuple;
+
+		operator ObjectType&() { return std::get<ObjectType>(*this); }
+		operator const ObjectType&() const { return std::get<ObjectType>(*this); }
+
+		ObjectType& get() { return std::get<ObjectType>(*this); }
+		const ObjectType& get() const { return std::get<ObjectType>(*this); }
+
+		const DependencyValidation& GetDependencyValidation() const { return std::get<DependencyValidation>(*this); }
+		const DirectorySearchRules& GetDirectorySearchRules() const { return std::get<DirectorySearchRules>(*this); }
+		const InheritList& GetInheritList() const { return std::get<InheritList>(*this); }
+	};
+
+	template<typename Type>
+		inline Type& Get(ContextImbuedAsset<Type>& wrapper) { return std::get<Type>(wrapper); }
+	template<typename Type>
+		inline const Type& Get(const ContextImbuedAsset<Type>& wrapper) { return std::get<Type>(wrapper); }
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	/// <summary>Exceptions related to rendering</summary>
+	namespace Exceptions
+	{
+		class ExceptionWithDepVal : public ::Exceptions::CustomReportableException
+		{
+		public:
+			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const = 0;
+		};
 
 		/// <summary>An error occurred while attempting to retreive and assert from an asset heap</summary>
 		/// This is usually caused by either an invalid asset, or an asset that is still pending.
@@ -56,63 +105,63 @@ namespace Assets
 		/// This type of exception (including InvalidAsset and PendingAsset) should only be thrown
 		/// from an asset heap implementation. Asset types can use standard exceptions, or ConstructionError
 		/// to signal errors during asset construction.
-        class RetrievalError : public ExceptionWithDepVal
-        {
-        public:
-            const ResChar* Initializer() const { return _initializer; }
-            virtual AssetState State() const = 0;
+		class RetrievalError : public ExceptionWithDepVal
+		{
+		public:
+			const ResChar* Initializer() const { return _initializer; }
+			virtual AssetState State() const = 0;
 
 			RetrievalError(StringSection<ResChar> initializer) never_throws;
-            RetrievalError(const RetrievalError&);
-            RetrievalError& operator=(const RetrievalError&);
-        private:
-            ResChar _initializer[512];
-        };
+			RetrievalError(const RetrievalError&);
+			RetrievalError& operator=(const RetrievalError&);
+		private:
+			ResChar _initializer[512];
+		};
 
-        /// <summary>An asset can't be loaded</summary>
-        /// This exception means a asset failed during loading, and can
-        /// never be loaded. It might mean that the resource is corrupted on
-        /// disk, or maybe using an unsupported file format (or bad version).
-        /// The most common cause is due to a compile error in a shader. 
-        /// If we attempt to use a shader with a compile error, it will throw
-        /// a InvalidAsset exception.
-        class InvalidAsset : public RetrievalError
-        {
-        public: 
-            virtual bool CustomReport() const override;
-            virtual AssetState State() const override;
+		/// <summary>An asset can't be loaded</summary>
+		/// This exception means a asset failed during loading, and can
+		/// never be loaded. It might mean that the resource is corrupted on
+		/// disk, or maybe using an unsupported file format (or bad version).
+		/// The most common cause is due to a compile error in a shader. 
+		/// If we attempt to use a shader with a compile error, it will throw
+		/// a InvalidAsset exception.
+		class InvalidAsset : public RetrievalError
+		{
+		public: 
+			virtual bool CustomReport() const override;
+			virtual AssetState State() const override;
 			const DependencyValidation& GetDependencyValidation() const override { return _depVal; }
 			const Blob& GetActualizationLog() const { return _actualizationLog; }
 			virtual const char* what() const noexcept override;
 
-            InvalidAsset(StringSection<ResChar> initializer, const DependencyValidation&, const Blob& actualizationLog) never_throws;
-            InvalidAsset(InvalidAsset&&) = default;
-            InvalidAsset& operator=(InvalidAsset&&) = default;
-            InvalidAsset(const InvalidAsset&);
-            InvalidAsset& operator=(const InvalidAsset&);
+			InvalidAsset(StringSection<ResChar> initializer, const DependencyValidation&, const Blob& actualizationLog) never_throws;
+			InvalidAsset(InvalidAsset&&) = default;
+			InvalidAsset& operator=(InvalidAsset&&) = default;
+			InvalidAsset(const InvalidAsset&);
+			InvalidAsset& operator=(const InvalidAsset&);
 		private:
 			DependencyValidation _depVal;
 			Blob _actualizationLog;
 			std::string _whatString;
-        };
+		};
 
-        /// <summary>An asset is still being loaded</summary>
-        /// This is common exception. It occurs if we attempt to use an asset that
-        /// is still being prepared. Usually this means that the resource is being
-        /// loaded from disk, or compiled in a background thread.
-        /// For example, shader resources can take some time to compile. If we attempt
-        /// to use the shader while it's still compiling, we'll get a PendingAsset
-        /// exception.
-        class PendingAsset : public RetrievalError
-        {
-        public: 
-            virtual bool CustomReport() const override;
-            virtual AssetState State() const override;
+		/// <summary>An asset is still being loaded</summary>
+		/// This is common exception. It occurs if we attempt to use an asset that
+		/// is still being prepared. Usually this means that the resource is being
+		/// loaded from disk, or compiled in a background thread.
+		/// For example, shader resources can take some time to compile. If we attempt
+		/// to use the shader while it's still compiling, we'll get a PendingAsset
+		/// exception.
+		class PendingAsset : public RetrievalError
+		{
+		public: 
+			virtual bool CustomReport() const override;
+			virtual AssetState State() const override;
 			virtual const char* what() const noexcept override;
-            const DependencyValidation& GetDependencyValidation() const override;
+			const DependencyValidation& GetDependencyValidation() const override;
 
-            PendingAsset(StringSection<ResChar> initializer) never_throws;
-        };
+			PendingAsset(StringSection<ResChar> initializer) never_throws;
+		};
 
 		/// <summary>An error occurred during the construction of an asset<summary>
 		/// This exception type includes some extra properties that are used by the asset system to
@@ -122,56 +171,56 @@ namespace Assets
 		/// changes, and reattempt if those files change.
 		///
 		/// Furthermore, on UnsupportedVersion errors, the system can attempt a recompile of the asset.
-        class ConstructionError : public ExceptionWithDepVal
-        {
-        public:
-            enum class Reason
-            {
+		class ConstructionError : public ExceptionWithDepVal
+		{
+		public:
+			enum class Reason
+			{
 				Unknown,
-                UnsupportedVersion,
-                FormatNotUnderstood,
+				UnsupportedVersion,
+				FormatNotUnderstood,
 				MissingFile
-            };
+			};
 
-            Reason				GetReason() const { return _reason; }
+			Reason				GetReason() const { return _reason; }
 			const DependencyValidation&	GetDependencyValidation() const override { return _depVal; }
 			const Blob&			GetActualizationLog() const { return _actualizationLog; }
 
 			virtual bool CustomReport() const override;
-            virtual const char* what() const noexcept override;
+			virtual const char* what() const noexcept override;
 
 			ConstructionError(Reason reason, const DependencyValidation&, const Blob& actualizationLog) never_throws;
-            ConstructionError(Reason reason, const DependencyValidation&, StringSection<>) never_throws;
-            ConstructionError(const DependencyValidation&, const Blob& actualizationLog) never_throws;
-            ConstructionError(const DependencyValidation&, StringSection<>) never_throws;
+			ConstructionError(Reason reason, const DependencyValidation&, StringSection<>) never_throws;
+			ConstructionError(const DependencyValidation&, const Blob& actualizationLog) never_throws;
+			ConstructionError(const DependencyValidation&, StringSection<>) never_throws;
 			ConstructionError(const std::exception&, const DependencyValidation&) never_throws;
 			ConstructionError(const ConstructionError&, const DependencyValidation&) never_throws;
-            ConstructionError(const ExceptionWithDepVal&, const DependencyValidation&) never_throws;
-            ConstructionError(ConstructionError&&) = default;
-            ConstructionError& operator=(ConstructionError&&) = default;
-            ConstructionError(const ConstructionError&);
-            ConstructionError& operator=(const ConstructionError&);
+			ConstructionError(const ExceptionWithDepVal&, const DependencyValidation&) never_throws;
+			ConstructionError(ConstructionError&&) = default;
+			ConstructionError& operator=(ConstructionError&&) = default;
+			ConstructionError(const ConstructionError&);
+			ConstructionError& operator=(const ConstructionError&);
 
-        private:
+		private:
 			Reason _reason;
 			DependencyValidation _depVal;
 			Blob _actualizationLog;
-        };
+		};
 
-        class IOResourceError : public ExceptionWithDepVal
-        {
-        public:
-            using IOReason = unsigned; // OSServices::Exceptions::IOException::Reason;
-            IOReason GetIOReason() const;
-            virtual const char* what() const noexcept override;
-            virtual const ::Assets::DependencyValidation& GetDependencyValidation() const override;
+		class IOResourceError : public ExceptionWithDepVal
+		{
+		public:
+			using IOReason = unsigned; // OSServices::Exceptions::IOException::Reason;
+			IOReason GetIOReason() const;
+			virtual const char* what() const noexcept override;
+			virtual const ::Assets::DependencyValidation& GetDependencyValidation() const override;
 
-            IOResourceError(IOReason reason, const DependencyValidation&, const char format[], ...) never_throws;
-        private:
-            std::string _what;
-            ::Assets::DependencyValidation _depVal;
-            IOReason _reason;
-        };
-    }
+			IOResourceError(IOReason reason, const DependencyValidation&, const char format[], ...) never_throws;
+		private:
+			std::string _what;
+			::Assets::DependencyValidation _depVal;
+			IOReason _reason;
+		};
+	}
 }
 

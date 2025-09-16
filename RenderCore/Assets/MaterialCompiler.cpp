@@ -57,7 +57,7 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	using ResolvedMaterial = ::Assets::ResolvedAssetMixin<RawMaterial>;
+	using ResolvedMaterial = ::Assets::AssetWrapper<RawMaterial>;
 
 	namespace Internal
 	{
