@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "MaterialScaffold.h"
+#include "CompiledMaterialSet.h"
 #include "ShaderPatchCollection.h"
 #include "MaterialMachine.h"
 #include "../../Formatters/TextFormatter.h"
@@ -15,7 +15,7 @@
 
 namespace RenderCore { namespace Assets
 {
-	const ::Assets::ArtifactRequest MaterialScaffold::ChunkRequests[]
+	const ::Assets::ArtifactRequest CompiledMaterialSet::ChunkRequests[]
 	{
 		::Assets::ArtifactRequest{
 			"Scaffold", ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
@@ -23,7 +23,7 @@ namespace RenderCore { namespace Assets
 		}
 	};
 
-	auto				MaterialScaffold::GetMaterialMachine(MaterialGuid guid) const -> Machine
+	auto				CompiledMaterialSet::GetMaterialMachine(MaterialGuid guid) const -> Machine
 	{
 		auto i = LowerBound(_materialMachines, guid);
 		if (i != _materialMachines.end() && i->first == guid)
@@ -31,7 +31,7 @@ namespace RenderCore { namespace Assets
 		return {};
 	}
 
-	std::vector<uint64_t> MaterialScaffold::GetMaterials() const
+	std::vector<uint64_t> CompiledMaterialSet::GetMaterials() const
 	{
 		std::vector<uint64_t> result;
 		result.reserve(_materialMachines.size());
@@ -39,7 +39,7 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	StringSection<>		MaterialScaffold::DehashMaterialName(MaterialGuid guid) const
+	StringSection<>		CompiledMaterialSet::DehashMaterialName(MaterialGuid guid) const
 	{
 		if (_resolvedNamesBlock.empty()) return {};
 
@@ -50,7 +50,7 @@ namespace RenderCore { namespace Assets
 		return {};
 	}
 
-	std::shared_ptr<ShaderPatchCollection> MaterialScaffold::GetShaderPatchCollection(uint64_t hash) const
+	std::shared_ptr<ShaderPatchCollection> CompiledMaterialSet::GetShaderPatchCollection(uint64_t hash) const
 	{
 		auto i = std::lower_bound(_patchCollections.begin(), _patchCollections.end(), hash, [](const auto& q, auto lhs) { return q->GetHash() < lhs; });
 		if (i != _patchCollections.end() && (*i)->GetHash() == hash)
@@ -58,7 +58,7 @@ namespace RenderCore { namespace Assets
 		return nullptr;
 	}
 
-	IteratorRange<ScaffoldCmdIterator> MaterialScaffold::GetOuterCommandStream() const
+	IteratorRange<ScaffoldCmdIterator> CompiledMaterialSet::GetOuterCommandStream() const
 	{
 		if (_rawMemoryBlockSize <= sizeof(uint32_t)) return {};
 		auto* firstObject = ::Assets::Block_GetFirstObject(_rawMemoryBlock.get());
@@ -71,16 +71,16 @@ namespace RenderCore { namespace Assets
 			ScaffoldCmdIterator{MakeIteratorRange(end, end)}};
 	}
 
-	MaterialScaffold::MaterialScaffold()
+	CompiledMaterialSet::CompiledMaterialSet()
 	{}
 
-	MaterialScaffold::MaterialScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
-	: MaterialScaffold(std::move(chunks[0]._buffer), chunks[0]._bufferSize, depVal)
+	CompiledMaterialSet::CompiledMaterialSet(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
+	: CompiledMaterialSet(std::move(chunks[0]._buffer), chunks[0]._bufferSize, depVal)
 	{
 		assert(chunks.size() == 1);
 	}
 
-	MaterialScaffold::MaterialScaffold(
+	CompiledMaterialSet::CompiledMaterialSet(
 		std::unique_ptr<uint8[], PODAlignedDeletor>	rawMemoryBlock,
 		size_t rawMemoryBlockSize, const ::Assets::DependencyValidation& depVal)
 	: _rawMemoryBlock(std::move(rawMemoryBlock)), _rawMemoryBlockSize(rawMemoryBlockSize)
@@ -121,7 +121,7 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-	MaterialScaffold::~MaterialScaffold()
+	CompiledMaterialSet::~CompiledMaterialSet()
 	{}
 
 }}

@@ -25,7 +25,7 @@ namespace RenderCore { namespace Assets
     /// This is the equivalent of other scaffold objects (like ModelScaffold
     /// and AnimationSetScaffold). It contains the processed and ready-to-use
     /// material information.
-	class MaterialScaffold
+	class CompiledMaterialSet
 	{
 	public:
 		using Machine = IteratorRange<Assets::ScaffoldCmdIterator>;
@@ -36,12 +36,12 @@ namespace RenderCore { namespace Assets
 		std::shared_ptr<ShaderPatchCollection> GetShaderPatchCollection(uint64_t hash) const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		MaterialScaffold();
-		MaterialScaffold(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
-		MaterialScaffold(
+		CompiledMaterialSet();
+		CompiledMaterialSet(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
+		CompiledMaterialSet(
 			std::unique_ptr<uint8[], PODAlignedDeletor>	rawMemoryBlock,
 			size_t rawMemoryBlockSize, const ::Assets::DependencyValidation& depVal);
-		~MaterialScaffold();
+		~CompiledMaterialSet();
 
 		static const ::Assets::ArtifactRequest ChunkRequests[1];
 	protected:
@@ -59,7 +59,7 @@ namespace RenderCore { namespace Assets
 	static constexpr uint64 ChunkType_PatchCollections = ConstHash64Legacy<'Patc', 'hCol'>::Value;
 	static constexpr unsigned ResolvedMat_ExpectedVersion = 1;
 
-	constexpr auto GetCompileProcessType(MaterialScaffold*) { return ConstHash64Legacy<'ResM', 'at'>::Value; }
+	constexpr auto GetCompileProcessType(CompiledMaterialSet*) { return ConstHash64Legacy<'ResM', 'at'>::Value; }
 
 }}
 

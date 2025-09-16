@@ -6,7 +6,7 @@
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
-#include "../../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
 #include "../../../RenderCore/Assets/MaterialMachine.h"
@@ -77,7 +77,7 @@ namespace UnitTests
 
 		SECTION("Compile material scaffold")
 		{
-			auto targetCode = GetCompileProcessType((RenderCore::Assets::MaterialScaffold*)nullptr);
+			auto targetCode = GetCompileProcessType((RenderCore::Assets::CompiledMaterialSet*)nullptr);
 			auto marker = compilers.Prepare(
 				targetCode, 
 				::Assets::InitializerPack { "ut-data/test.material", "fake-model" });
@@ -91,7 +91,7 @@ namespace UnitTests
 			compile.StallWhilePending();
 			REQUIRE(compile.GetAssetState() == ::Assets::AssetState::Ready);
 
-			auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
+			auto newScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::CompiledMaterialSet>>(
 				compile.GetArtifactCollection());
 			auto material0 = newScaffold->GetMaterialMachine("Material0"_h);
 			REQUIRE(!material0.empty());
@@ -247,7 +247,7 @@ namespace UnitTests
 			REQUIRE(scaffold->GetGeoCount() != 0);
 			REQUIRE(!scaffold->CommandStream().empty());
 
-			auto matScaffoldFuture = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(testModelFile, testModelFile);
+			auto matScaffoldFuture = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::CompiledMaterialSet>(testModelFile, testModelFile);
 			matScaffoldFuture->StallWhilePending();
 			INFO(::Assets::AsString(matScaffoldFuture->GetActualizationLog()));
 			REQUIRE(matScaffoldFuture->GetAssetState() == ::Assets::AssetState::Ready);

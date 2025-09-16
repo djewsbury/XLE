@@ -61,24 +61,24 @@ namespace RenderCore { namespace Assets
 		mutable uint64_t _hash = 0;
 	};
 
-	class MaterialScaffold;
+	class CompiledMaterialSet;
 	void ConstructMaterialScaffold(
-		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialScaffoldConstruction> construction);
 
 #if 0
 	void ConstructMaterialScaffold(
-		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialScaffoldConstruction> construction,
 		std::shared_ptr<RawMaterialSet> baseMaterials);
 
 	void ConstructMaterialScaffold(
-		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialScaffoldConstruction> construction,
 		std::shared_future<std::shared_ptr<RawMaterialSet>> baseMaterials);
 
 	void ConstructMaterialScaffold(
-		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialScaffoldConstruction> construction,
 		IteratorRange<const std::string*> materialsToInstantiate);
 #endif

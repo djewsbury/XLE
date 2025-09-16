@@ -16,7 +16,7 @@
 #include "../../RenderCore/GeoProc/MeshDatabase.h"
 #include "../../RenderCore/Assets/ModelImmutableData.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
-#include "../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../RenderCore/Assets/Services.h"
 #include "../../RenderCore/Metal/TextureView.h"
 #include "../../RenderCore/Metal/DeviceContext.h"
@@ -85,7 +85,7 @@ namespace ToolsRig
 {
     using namespace RenderCore;
     using ModelScaffold = RenderCore::Assets::ModelScaffold;
-    using MaterialScaffold = RenderCore::Assets::MaterialScaffold;
+    using CompiledMaterialSet = RenderCore::Assets::CompiledMaterialSet;
     using ModelRenderer = FixedFunctionModel::ModelRenderer;
     using SharedStateSet = FixedFunctionModel::SharedStateSet;
     using namespace RenderCore::Assets::GeoProc;
@@ -378,7 +378,7 @@ namespace ToolsRig
         StringSection<::Assets::ResChar> destinationFile,
         AoGen& gen,
         const RenderCore::Assets::ModelScaffold& model,
-        const RenderCore::Assets::MaterialScaffold& material,
+        const RenderCore::Assets::CompiledMaterialSet& material,
         const ::Assets::DirectorySearchRules* searchRules)
     {
         //
@@ -743,7 +743,7 @@ namespace ToolsRig
         XlCopyString(modelFilenameNoParam, MakeFileNameSplitter(modelFilename).AllExceptParameters());
 
         const auto& model    = ::Assets::Legacy::GetAssetComp<ModelScaffold>(modelFilename);
-        const auto& material = ::Assets::Legacy::GetAssetComp<MaterialScaffold>(materialFilename, MakeStringSection(modelFilenameNoParam));
+        const auto& material = ::Assets::Legacy::GetAssetComp<CompiledMaterialSet>(materialFilename, MakeStringSection(modelFilenameNoParam));
         auto searchRules     = ::Assets::DefaultDirectorySearchRules(modelFilename);
 
         CalculateVertexAO(

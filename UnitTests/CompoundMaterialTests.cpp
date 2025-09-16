@@ -17,7 +17,7 @@
 #include "../RenderCore/Metal/State.h"
 #include "../RenderCore/Metal/PipelineLayout.h"
 #include "../RenderCore/Assets/Services.h"
-#include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../RenderCore/ResourceDesc.h"
 #include "../RenderCore/FrameBufferDesc.h"
 #include "../BufferUploads/BufferUploads_Manager.h"

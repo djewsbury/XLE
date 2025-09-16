@@ -24,7 +24,7 @@
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderCore/Metal/Shader.h" // (for CreateLowLevelShaderCompiler)
 #include "../../RenderCore/Assets/ShaderPatchCollection.h"
-#include "../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../RenderCore/Assets/PredefinedDescriptorSetLayout.h"
 #include "../../RenderCore/MinimalShaderSource.h"
 

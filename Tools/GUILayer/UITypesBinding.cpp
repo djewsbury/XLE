@@ -12,7 +12,7 @@
 #include "../ToolsRig/DivergentAsset.h"
 #include "../../PlatformRig/DebuggingDisplays/InvalidAssetDisplay.h"        // for ITrackedAssetList
 #include "../../SceneEngine/IScene.h"
-#include "../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/AssetServices.h"

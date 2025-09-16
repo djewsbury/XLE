@@ -3,7 +3,7 @@ add_library(
     STATIC
     AssetUtils.cpp  
     MaterialCompiler.cpp
-    MaterialScaffold.cpp
+    CompiledMaterialSet.cpp
     ModelScaffold.cpp
     PredefinedCBLayout.cpp
     PredefinedDescriptorSetLayout.cpp

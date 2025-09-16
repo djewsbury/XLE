@@ -6,7 +6,7 @@
 
 #include "MaterialCompiler.h"
 #include "RawMaterial.h"
-#include "MaterialScaffold.h"
+#include "CompiledMaterialSet.h"
 #include "MaterialMachine.h"
 #include "AssetUtils.h"
 #include "ModelCompilationConfiguration.h"
@@ -319,7 +319,7 @@ namespace RenderCore { namespace Assets
 				}
 			},
 			::Assets::GetDepValSys().MakeOrReuse(depVals),
-			GetCompileProcessType((MaterialScaffold*)nullptr)
+			GetCompileProcessType((CompiledMaterialSet*)nullptr)
 		};
 	}
 
@@ -327,7 +327,7 @@ namespace RenderCore { namespace Assets
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
 		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "material-scaffold-compiler", "material-scaffold-compiler", MaterialCompileOperation);
-		uint64_t outputAssetTypes[] = { GetCompileProcessType((MaterialScaffold*)nullptr) };
+		uint64_t outputAssetTypes[] = { GetCompileProcessType((CompiledMaterialSet*)nullptr) };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),
 			MakeIteratorRange(outputAssetTypes));
@@ -336,7 +336,7 @@ namespace RenderCore { namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static std::shared_ptr<MaterialScaffold> ConstructMaterialScaffoldSync(
+	static std::shared_ptr<CompiledMaterialSet> ConstructMaterialScaffoldSync(
 		std::shared_ptr<MaterialScaffoldConstruction> construction,
 		const ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>& baseMaterials,
 		std::vector<std::string> materialsToInstantiate)
@@ -440,13 +440,13 @@ namespace RenderCore { namespace Assets
 		auto memBlock = blockSerializer.AsMemoryBlock();
 		::Assets::Block_Initialize(memBlock.get());
 
-		return std::make_shared<MaterialScaffold>(
+		return std::make_shared<CompiledMaterialSet>(
 			std::move(memBlock), blockSerializer.Size(),
 			::Assets::GetDepValSys().MakeOrReuse(depVals));
 	}
 
 	void ConstructMaterialScaffold(
-		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialScaffoldConstruction> construction)
 	{
 		if (auto* marker = std::get_if<PtrToMarkerToMaterialSet>(&construction->_baseMaterials)) {
@@ -483,7 +483,7 @@ namespace RenderCore { namespace Assets
 
 #if 0
 	void ConstructMaterialScaffold(
-		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialScaffoldConstruction> construction,
 		std::shared_ptr<RawMaterialSet> baseMaterials)
 	{
@@ -498,7 +498,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	void ConstructMaterialScaffold(
-		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialScaffoldConstruction> construction,
 		std::shared_future<std::shared_ptr<RawMaterialSet>> baseMaterials)
 	{
@@ -510,7 +510,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	void ConstructMaterialScaffold(
-		std::promise<std::shared_ptr<MaterialScaffold>>&& promise,
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialScaffoldConstruction> construction,
 		IteratorRange<const std::string*> materialsToInstantiate)
 	{

@@ -8,7 +8,6 @@
 #include "DescriptorSetAccelerator.h"
 #include "ResourceConstructionContext.h"
 #include "Services.h"
-#include "../Assets/MaterialScaffold.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/ModelScaffold.h"
 #include "../IDevice.h"

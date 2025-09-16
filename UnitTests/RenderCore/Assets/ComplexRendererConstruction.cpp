@@ -6,7 +6,7 @@
 #include "../../UnitTestHelper.h"
 #include "FakeModelCompiler.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
-#include "../../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../../RenderCore/Assets/MaterialCompiler.h"
 #include "../../../RenderCore/Techniques/DrawableConstructor.h"
 #include "../../../RenderCore/Assets/ModelRendererConstruction.h"
@@ -49,11 +49,11 @@ namespace UnitTests
 			REQUIRE(modelCompile.Valid());
 		}
 		{
-			auto targetCode = GetCompileProcessType((RenderCore::Assets::MaterialScaffold*)nullptr);
+			auto targetCode = GetCompileProcessType((RenderCore::Assets::CompiledMaterialSet*)nullptr);
 			auto marker = compilers.Prepare(targetCode, ::Assets::InitializerPack { "fake-model", "fake-model" });
 			REQUIRE(marker != nullptr);
 
-			materialCompile = marker->InvokeCompile(GetCompileProcessType((RenderCore::Assets::MaterialScaffold*)nullptr));
+			materialCompile = marker->InvokeCompile(GetCompileProcessType((RenderCore::Assets::CompiledMaterialSet*)nullptr));
 			REQUIRE(materialCompile.Valid());
 		}
 
@@ -73,7 +73,7 @@ namespace UnitTests
 				Log(Warning) << "Data: " << cmd.BlockSize() << std::endl;
 			}
 
-			auto materialScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::MaterialScaffold>>(
+			auto materialScaffold = ::Assets::AutoConstructAsset<std::shared_ptr<RenderCore::Assets::CompiledMaterialSet>>(
 				materialCompile.GetArtifactCollection());
 
 			SECTION("Create ModelRendererConstruction")

@@ -14,7 +14,7 @@
 namespace RenderCore { namespace Assets
 {
 	class ModelScaffold;
-	class MaterialScaffold;
+	class CompiledMaterialSet;
 	class ModelRendererConstruction;
 }}
 

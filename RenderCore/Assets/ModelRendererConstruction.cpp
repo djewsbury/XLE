@@ -6,7 +6,7 @@
 #include "ModelMachine.h"
 #include "AssetUtils.h"
 #include "ModelScaffold.h"
-#include "MaterialScaffold.h"
+#include "CompiledMaterialSet.h"
 #include "ModelCompilationConfiguration.h"
 #include "MaterialCompiler.h"
 #include "RawMaterial.h"
@@ -24,8 +24,8 @@ namespace RenderCore { namespace Assets
 		using ElementId = unsigned;
 		using ModelScaffoldMarker = std::shared_future<std::shared_ptr<Assets::ModelScaffold>>;
 		using ModelScaffoldPtr = std::shared_ptr<Assets::ModelScaffold>;
-		using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::MaterialScaffold>>;
-		using MaterialScaffoldPtr = std::shared_ptr<Assets::MaterialScaffold>;
+		using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>>;
+		using MaterialScaffoldPtr = std::shared_ptr<Assets::CompiledMaterialSet>;
 		using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialScaffoldConstruction>;
 		using CompilationConfigurationMarker = std::shared_future<ResolvedMCC>;
 		using CompilationConfigurationPtr = std::shared_ptr<Assets::ModelCompilationConfiguration>;
@@ -107,50 +107,50 @@ namespace RenderCore { namespace Assets
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> CreateMaterialScaffoldFuture(
+	static std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>> CreateMaterialScaffoldFuture(
 		StringSection<> materialName, StringSection<> modelName,
 		std::shared_future<ResolvedMCC> futureCompilationConfiguration)
 	{
-		std::promise<std::shared_ptr<Assets::MaterialScaffold>> promise;
+		std::promise<std::shared_ptr<Assets::CompiledMaterialSet>> promise;
 		auto future = promise.get_future();
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString(), material=materialName.AsString()](auto&& promise, auto q) {
-				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(material, model, std::get<0>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::CompiledMaterialSet>>(material, model, std::get<0>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
 	}
 
-	static std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> CreateMaterialScaffoldFuture(
+	static std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>> CreateMaterialScaffoldFuture(
 		StringSection<> materialName, StringSection<> modelName,
 		std::shared_ptr<Assets::ModelCompilationConfiguration> compilationConfig)
 	{
-		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(materialName, modelName, std::move(compilationConfig));
+		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::CompiledMaterialSet>>(materialName, modelName, std::move(compilationConfig));
 	}
 
-	static std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> CreateMaterialScaffoldFuture(
+	static std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>> CreateMaterialScaffoldFuture(
 		std::shared_ptr<::Assets::OperationContext> opContext,
 		StringSection<> materialName, StringSection<> modelName,
 		std::shared_future<ResolvedMCC> futureCompilationConfiguration)
 	{
-		std::promise<std::shared_ptr<Assets::MaterialScaffold>> promise;
+		std::promise<std::shared_ptr<Assets::CompiledMaterialSet>> promise;
 		auto future = promise.get_future();
 		::Assets::WhenAll(futureCompilationConfiguration).ThenConstructToPromise(
 			std::move(promise),
 			[model=modelName.AsString(), opContext=std::move(opContext), material=materialName.AsString()](auto&& promise, auto q) {
-				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(std::move(opContext), material, model, std::get<0>(q));
+				auto chain = ::Assets::GetAssetFuture<std::shared_ptr<Assets::CompiledMaterialSet>>(std::move(opContext), material, model, std::get<0>(q));
 				::Assets::WhenAll(std::move(chain)).ThenConstructToPromise(std::move(promise));
 			});
 		return future;
 	}
 
-	static std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> CreateMaterialScaffoldFuture(
+	static std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>> CreateMaterialScaffoldFuture(
 		std::shared_ptr<::Assets::OperationContext> opContext,
 		StringSection<> materialName, StringSection<> modelName,
 		std::shared_ptr<Assets::ModelCompilationConfiguration> compilationConfig)
 	{
-		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::MaterialScaffold>>(std::move(opContext), materialName, modelName, std::move(compilationConfig));
+		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::CompiledMaterialSet>>(std::move(opContext), materialName, modelName, std::move(compilationConfig));
 	}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -257,7 +257,7 @@ namespace RenderCore { namespace Assets
 		_internal->_disableHash = true;
 		return *this; 
 	}
-	auto ModelRendererConstruction::ElementConstructor::SetMaterialScaffold(std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> scaffoldMarker, std::string initializer) -> ElementConstructor&
+	auto ModelRendererConstruction::ElementConstructor::SetMaterialScaffold(std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>> scaffoldMarker, std::string initializer) -> ElementConstructor&
 	{ 
 		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_materialScaffoldMarkers, _elementId);
@@ -273,7 +273,7 @@ namespace RenderCore { namespace Assets
 		_internal->_disableHash = true;
 		return *this;
 	}
-	auto ModelRendererConstruction::ElementConstructor::SetMaterialScaffold(std::shared_ptr<Assets::MaterialScaffold> scaffoldPtr, std::string initializer) -> ElementConstructor&
+	auto ModelRendererConstruction::ElementConstructor::SetMaterialScaffold(std::shared_ptr<Assets::CompiledMaterialSet> scaffoldPtr, std::string initializer) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
 		auto i = LowerBound(_internal->_materialScaffoldPtrs, _elementId);
@@ -300,7 +300,7 @@ namespace RenderCore { namespace Assets
 		else i4 = _internal->_materialScaffoldConstructionPtrs.insert(i4, {_elementId, scaffold});
 
 		// Create and set a material scaffold -- but this requires finding the model 
-		std::promise<std::shared_ptr<MaterialScaffold>> promisedScaffold;
+		std::promise<std::shared_ptr<CompiledMaterialSet>> promisedScaffold;
 		auto futureScaffold = promisedScaffold.get_future();
 		ConstructMaterialScaffold(std::move(promisedScaffold), i4->second);
 		SetMaterialScaffold(std::move(futureScaffold));
@@ -412,7 +412,7 @@ namespace RenderCore { namespace Assets
 		return {};
 	}
 
-	std::shared_future<std::shared_ptr<Assets::MaterialScaffold>> ModelRendererConstruction::ElementConstructor::GetFutureMaterialScaffold()
+	std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>> ModelRendererConstruction::ElementConstructor::GetFutureMaterialScaffold()
 	{
 		auto i = LowerBound(_internal->_materialScaffoldMarkers, _elementId);
 		if (i != _internal->_materialScaffoldMarkers.end() && i->first == _elementId)
@@ -711,7 +711,7 @@ namespace RenderCore { namespace Assets
 			bool foundMaterial = false;
 			if (materialConstruction != src._internal->_materialScaffoldConstructionPtrs.end() && materialConstruction->first == eleIdx) {
 				if (modelName != src._internal->_modelScaffoldInitializers.end() && modelName->first == eleIdx) {
-					std::promise<std::shared_ptr<MaterialScaffold>> promisedScaffold;
+					std::promise<std::shared_ptr<CompiledMaterialSet>> promisedScaffold;
 					auto futureScaffold = promisedScaffold.get_future();
 
 					auto modelStr = modelName->second;
@@ -892,7 +892,7 @@ namespace RenderCore { namespace Assets
 		return nullptr;
 	}
 
-	std::shared_ptr<Assets::MaterialScaffold> ModelRendererConstruction::ElementIterator::Value::GetMaterialScaffold() const
+	std::shared_ptr<Assets::CompiledMaterialSet> ModelRendererConstruction::ElementIterator::Value::GetMaterialScaffold() const
 	{
 		assert(_internal);
 		if (_matspi!=_internal->_materialScaffoldPtrs.end() && _matspi->first == _elementId)

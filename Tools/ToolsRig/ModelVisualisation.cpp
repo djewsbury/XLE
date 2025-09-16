@@ -7,7 +7,7 @@
 #include "ModelVisualisation.h"
 #include "VisualisationUtils.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
-#include "../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../RenderCore/Assets/AnimationScaffoldInternal.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
@@ -30,7 +30,7 @@
 namespace ToolsRig
 {
 	using RenderCore::Assets::ModelScaffold;
-	using RenderCore::Assets::MaterialScaffold;
+	using RenderCore::Assets::CompiledMaterialSet;
 	using RenderCore::Assets::AnimationSetScaffold;
 	using RenderCore::Assets::SkeletonScaffold;
 	using RenderCore::Assets::SkeletonMachine;

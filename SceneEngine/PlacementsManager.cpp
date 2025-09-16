@@ -14,7 +14,7 @@
 
 #include "../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../RenderCore/Assets/ModelScaffold.h"
-#include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/LightWeightBuildDrawables.h"
 #include "../RenderCore/Assets/ModelRendererConstruction.h"
@@ -2470,11 +2470,11 @@ namespace SceneEngine
 
     std::string Transaction::GetMaterialName(unsigned objectIndex, uint64_t materialGuid) const
     {
-        const std::shared_ptr<RenderCore::Assets::MaterialScaffold>* attemptedActualize = nullptr;
+        const std::shared_ptr<RenderCore::Assets::CompiledMaterialSet>* attemptedActualize = nullptr;
         if (!_objects[objectIndex]._material.empty()) {
-            attemptedActualize = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(_objects[objectIndex]._material, _objects[objectIndex]._model)->TryActualize();
+            attemptedActualize = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::CompiledMaterialSet>(_objects[objectIndex]._material, _objects[objectIndex]._model)->TryActualize();
         } else {
-            attemptedActualize = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::MaterialScaffold>(_objects[objectIndex]._model, _objects[objectIndex]._model)->TryActualize();
+            attemptedActualize = ::Assets::GetAssetMarkerPtr<RenderCore::Assets::CompiledMaterialSet>(_objects[objectIndex]._model, _objects[objectIndex]._model)->TryActualize();
         }
 
         if (!attemptedActualize) return {};

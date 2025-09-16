@@ -20,7 +20,7 @@
 #include "../RenderCore/BufferUploads/BatchedResources.h"
 #include "../RenderCore/Assets/ModelRendererConstruction.h"
 #include "../RenderCore/Assets/ModelScaffold.h"
-#include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../RenderCore/Assets/AnimationScaffoldInternal.h"
 #include "../RenderCore/Assets/CompoundObject.h"
 #include "../Assets/AssetTraits.h"

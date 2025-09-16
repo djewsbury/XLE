@@ -17,7 +17,6 @@
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
-#include "../Assets/MaterialScaffold.h"		// for metadata query
 #include "../Assets/AnimationBindings.h"
 #include "../Assets/CompoundObject.h"
 #include "../Assets/IArtifact.h"

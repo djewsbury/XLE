@@ -9,7 +9,7 @@
 #include "../../SceneEngine/IScene.h"
 #include "../../RenderCore/Assets/ModelScaffold.h"
 #include "../../RenderCore/Assets/PredefinedCBLayout.h"
-#include "../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../RenderCore/Assets/ModelMachine.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"

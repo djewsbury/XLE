@@ -10,7 +10,7 @@
 #include "../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../RenderCore/Techniques/Services.h"
-#include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../SceneEngine/IScene.h"
 #include "../SceneEngine/LightingParser.h"
 #include "../SceneEngine/LightingParserContext.h"

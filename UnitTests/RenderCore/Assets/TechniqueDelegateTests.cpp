@@ -11,7 +11,7 @@
 #include "../../../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../RenderCore/Assets/ShaderPatchCollection.h"
-#include "../../../RenderCore/Assets/MaterialScaffold.h"
+#include "../../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
 #include "../../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"

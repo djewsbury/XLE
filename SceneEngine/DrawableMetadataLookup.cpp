@@ -6,7 +6,7 @@
 #include "../RenderCore/Techniques/DrawableConstructor.h"
 #include "../RenderCore/Assets/ModelMachine.h"
 #include "../RenderCore/Assets/ModelRendererConstruction.h"
-#include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../Core/Exceptions.h"
@@ -81,7 +81,7 @@ namespace SceneEngine
 										if (auto l = rendererConstruction.lock())
 											return MakeFileNameSplitter(l->GetElement(elementIdx)->GetMaterialScaffold()->DehashMaterialName(matGuid)).Parameters().AsString();
 										return {};
-									case "MaterialScaffold"_h:
+									case "CompiledMaterialSet"_h:
 										if (auto l = rendererConstruction.lock())
 											return l->GetElement(elementIdx)->GetMaterialScaffoldName();
 										return {};

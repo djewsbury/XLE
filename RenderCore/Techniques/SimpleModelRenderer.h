@@ -12,7 +12,7 @@
 #include <vector>
 #include <memory>
 
-namespace RenderCore { namespace Assets { class ModelScaffold; class MaterialScaffold; class SkeletonScaffold; }} // todo -- remove
+namespace RenderCore { namespace Assets { class ModelScaffold; class CompiledMaterialSet; class SkeletonScaffold; }} // todo -- remove
 
 namespace RenderCore { namespace Assets { struct DrawCallDesc; class ModelRendererConstruction; }}
 namespace RenderCore { class UniformsStreamInterface; }

@@ -9,7 +9,7 @@
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
-#include "../Assets/MaterialScaffold.h"
+#include "../Assets/CompiledMaterialSet.h"
 #include "../Assets/MaterialMachine.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Assets.h"

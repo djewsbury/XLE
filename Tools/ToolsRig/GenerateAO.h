@@ -22,7 +22,7 @@ namespace FixedFunctionModel
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Assets
 { 
-	class ModelScaffold; class MaterialScaffold;
+	class ModelScaffold; class CompiledMaterialSet;
 }}
 
 namespace Assets { class DependencyValidation; class DirectorySearchRules; }
@@ -80,7 +80,7 @@ namespace ToolsRig
         StringSection<::Assets::ResChar> destinationFile,
         AoGen& gen,
         const RenderCore::Assets::ModelScaffold& model,
-        const RenderCore::Assets::MaterialScaffold& material,
+        const RenderCore::Assets::CompiledMaterialSet& material,
         const ::Assets::DirectorySearchRules* searchRules);
 
     /// <summary>Compiler type for generating per-vertex AO supplement</summary>

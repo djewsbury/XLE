@@ -17,7 +17,7 @@
 #include "../RenderCore/Techniques/LightWeightBuildDrawables.h"
 #include "../RenderCore/BufferUploads/BatchedResources.h"
 #include "../RenderCore/Assets/ModelScaffold.h"
-#include "../RenderCore/Assets/MaterialScaffold.h"
+#include "../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../Math/ProjectionMath.h"
 #include "../Assets/AssetHeapLRU.h"
 #include "../Assets/Continuation.h"
@@ -125,7 +125,7 @@ namespace SceneEngine
 			if (materialRecord._initializer.empty())
 				materialRecord._initializer = ele->GetModelScaffoldName();
 			materialRecord._state = ::Assets::AssetState::Ready;		// we can't check the status without querying the future -- which would be a little too inefficient
-			materialRecord._typeCode = RenderCore::Assets::MaterialScaffold::CompileProcessType;
+			materialRecord._typeCode = RenderCore::Assets::CompiledMaterialSet::CompileProcessType;
 			records.emplace_back(Hash64(materialRecord._initializer), std::move(materialRecord));
 
 			::Assets::AssetHeapRecord modelRecord;

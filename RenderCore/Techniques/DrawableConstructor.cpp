@@ -17,7 +17,7 @@
 #include "../Assets/ModelMachine.h"
 #include "../Assets/MaterialMachine.h"
 #include "../Assets/ModelScaffold.h"
-#include "../Assets/MaterialScaffold.h"
+#include "../Assets/CompiledMaterialSet.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/SkeletonMachine.h"
 #include "../Assets/AnimationBindings.h"		// required for extracting base transforms
@@ -436,7 +436,7 @@ namespace RenderCore { namespace Techniques
 
 			const WorkingMaterial* AddMaterial(
 				IteratorRange<Assets::ScaffoldCmdIterator> materialMachine,
-				const std::shared_ptr<Assets::MaterialScaffold>& materialScaffold,
+				const std::shared_ptr<Assets::CompiledMaterialSet>& materialScaffold,
 				unsigned elementIdx, uint64_t materialGuid, std::string&& materialName,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
 				const IDeformUniformsAttachment* parametersDeformInfrastructure)
@@ -576,7 +576,7 @@ namespace RenderCore { namespace Techniques
 
 		void AddModel(
 			const std::shared_ptr<Assets::ModelScaffold>& modelScaffold,
-			const std::shared_ptr<Assets::MaterialScaffold>& materialScaffold,
+			const std::shared_ptr<Assets::CompiledMaterialSet>& materialScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 			unsigned elementIdx, const std::string& modelScaffoldName)
