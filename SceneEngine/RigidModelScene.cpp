@@ -143,7 +143,7 @@ namespace SceneEngine
 		if (construction.GetElementCount() != 1)
 			result << "(Multi-element)";
 		result << construction.GetElement(0)->GetModelScaffoldName();
-		auto matName = construction.GetElement(0)->GetMaterialScaffoldName();
+		auto matName = construction.GetElement(0)->GetMaterialSetName();
 		if (!matName.empty())
 			result << "[" << matName << "]";
 		return result.str();
@@ -152,7 +152,7 @@ namespace SceneEngine
 	static std::pair<Float3, Float3> GetBoundingBox(const RenderCore::Assets::ModelRendererConstruction& modelRendererConstruction)
 	{
 		assert(modelRendererConstruction.GetElementCount() == 1);
-		return modelRendererConstruction.GetElement(0)->GetModelScaffold()->GetStaticBoundingBox();
+		return modelRendererConstruction.GetElement(0)->GetModel()->GetStaticBoundingBox();
 	}
 
 	class RigidModelScene : public IRigidModelScene, public std::enable_shared_from_this<RigidModelScene>
@@ -300,7 +300,7 @@ namespace SceneEngine
 										renderer._deformAccelerator = deformAccelerator;
 										renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 										if (completedConstruction->GetElementCount() != 0) {
-											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
 											if (renderer._firstModelScaffold)
 												renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 										}
@@ -315,7 +315,7 @@ namespace SceneEngine
 										renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
 										renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 										if (completedConstruction->GetElementCount() != 0) {
-											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+											renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
 											if (renderer._firstModelScaffold)
 												renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 										}
@@ -348,7 +348,7 @@ namespace SceneEngine
 									renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
 									renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 									if (completedConstruction->GetElementCount() != 0) {
-										renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+										renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
 										if (renderer._firstModelScaffold)
 											renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 									}

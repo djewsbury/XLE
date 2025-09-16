@@ -32,7 +32,7 @@ namespace RenderCore { namespace Assets
 					auto newElement = result.AddElement();
 					if (modelCommand._model.empty())
 						Throw(std::runtime_error("Missing model name in DrawModel command"));
-					newElement.SetModelAndMaterialScaffolds(modelCommand._model, modelCommand._material);
+					newElement.SetModelAndMaterials(modelCommand._model, modelCommand._material);
 					if (modelCommand._scale || modelCommand._translation) {
 						auto modelToObject = AsFloat4x4(
 							ScaleRotationTranslationM{

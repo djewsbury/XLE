@@ -17,6 +17,7 @@
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
+#include "../Assets/CompiledMaterialSet.h"
 #include "../Assets/AnimationBindings.h"
 #include "../Assets/CompoundObject.h"
 #include "../Assets/IArtifact.h"
@@ -553,11 +554,11 @@ namespace RenderCore { namespace Techniques
 									case "ElementIndex"_h: return elementIdx;
 									case "MaterialName"_h: 
 										if (auto l = rendererConstruction.lock())
-											return l->GetElement(elementIdx)->GetMaterialScaffold()->DehashMaterialName(matGuid).AsString();
+											return l->GetElement(elementIdx)->GetMaterials()->DehashMaterialName(matGuid).AsString();
 										Throw(std::runtime_error("Expired ModelRendererConstruction"));
-									case "MaterialScaffold"_h:
+									case "MaterialSet"_h:
 										if (auto l = rendererConstruction.lock())
-											return l->GetElement(elementIdx)->GetMaterialScaffoldName();
+											return l->GetElement(elementIdx)->GetMaterialSetName();
 										Throw(std::runtime_error("Expired ModelRendererConstruction"));
 									case "ModelScaffold"_h:
 										if (auto l = rendererConstruction.lock())
@@ -651,7 +652,7 @@ namespace RenderCore { namespace Techniques
 					{
 						auto transformMarker = cmd.As<unsigned>();
 						if (!_skeletonBinding.ModelJointIsBound(elementIdx, transformMarker)) {
-							auto cmdStreamInput = _rendererConstruction->GetElement(elementIdx)->GetModelScaffold()->FindCommandStreamInputInterface();
+							auto cmdStreamInput = _rendererConstruction->GetElement(elementIdx)->GetModel()->FindCommandStreamInputInterface();
 							Throw(std::runtime_error(StringMeld<256>() << "Command stream input interface unbound in skeleton binding. Hash binding: " << std::hex << cmdStreamInput[transformMarker]));
 						}
 					}
@@ -814,7 +815,7 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const UniformBufferBinding*> uniformBufferDelegates)
 	{
 		auto construction = std::make_shared<Assets::ModelRendererConstruction>();
-		construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName, materialScaffoldName);
+		construction->AddElement().SetModelAndMaterials(modelScaffoldName, materialScaffoldName);
 		return ConstructToPromise(
 			std::move(promise),
 			std::move(drawablesPool), std::move(pipelineAcceleratorPool), nullptr, std::move(construction),
@@ -850,7 +851,7 @@ namespace RenderCore { namespace Techniques
 				});
 		} else {
 			auto construction = std::make_shared<Assets::ModelRendererConstruction>();
-			construction->AddElement().SetModelAndMaterialScaffolds(modelScaffoldName);
+			construction->AddElement().SetModelAndMaterials(modelScaffoldName);
 			ConstructToPromise(
 				std::move(promise),
 				std::move(drawablesPool), std::move(pipelineAcceleratorPool), nullptr, std::move(construction),
@@ -874,7 +875,7 @@ namespace RenderCore { namespace Techniques
 
 			_elementToObject.push_back(AsFloat3x4(ele.GetElementToObject().value_or(Identity<Float4x4>())));
 			
-			auto modelScaffold = ele.GetModelScaffold();
+			auto modelScaffold = ele.GetModel();
 			if (modelScaffold) {
 				const auto* primarySkeleton = externalSkeletonScaffold ? &externalSkeletonScaffold->GetSkeletonMachine() : nullptr;
 				const auto* secondarySkeleton = modelScaffold->EmbeddedSkeleton();
@@ -1015,10 +1016,10 @@ namespace RenderCore { namespace Techniques
 					depVal = completedConstruction->GetSkeletonScaffold()->GetDependencyValidation();
 				}
 				if (!skeleton) {
-					if (completedConstruction->GetElementCount() != 1 || completedConstruction->GetElement(0)->GetModelScaffold())
+					if (completedConstruction->GetElementCount() != 1 || completedConstruction->GetElement(0)->GetModel())
 						Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because there are multiple separate skeletons within the one construction"));
-					skeleton = completedConstruction->GetElement(0)->GetModelScaffold()->EmbeddedSkeleton();
-					depVal = completedConstruction->GetElement(0)->GetModelScaffold()->GetDependencyValidation();
+					skeleton = completedConstruction->GetElement(0)->GetModel()->EmbeddedSkeleton();
+					depVal = completedConstruction->GetElement(0)->GetModel()->GetDependencyValidation();
 				}
 				if (!skeleton)
 					Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because no skeleton with provided either as an embedded skeleton, or as an external skeleton"));

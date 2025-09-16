@@ -15,7 +15,7 @@
 #include "../../ShaderParser/NodeGraphProvider.h"
 #include "../../ShaderParser/ShaderInstantiation.h"
 #include "../../ShaderParser/DescriptorSetInstantiation.h"
-#include "../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Utility/Streams/PathUtils.h"

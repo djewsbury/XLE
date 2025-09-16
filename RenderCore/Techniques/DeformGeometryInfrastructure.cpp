@@ -182,7 +182,7 @@ namespace RenderCore { namespace Techniques
 				MakeIteratorRange(instantiations),
 				bufferIterators, isCPUDeformer.value(),
 				start->_geoIdx,
-				element->GetModelScaffold());
+				element->GetModel());
 			uniqueScaffoldNames.insert(element->GetModelScaffoldName());
 
 			result->_rendererGeoInterface._geoBindings.emplace_back(std::make_pair(start->_elementIdx, start->_geoIdx), std::move(rendererBinding));

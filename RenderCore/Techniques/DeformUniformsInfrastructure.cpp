@@ -172,7 +172,7 @@ namespace RenderCore { namespace Techniques
 
 		unsigned elementIdx = 0;
 		for (auto ele:rendererConstruction) {
-			auto materialScaffold = ele.GetMaterialScaffold();
+			auto materialScaffold = ele.GetMaterials();
 			if (!materialScaffold) {
 				++elementIdx;
 				continue;

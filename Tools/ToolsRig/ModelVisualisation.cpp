@@ -126,7 +126,7 @@ namespace ToolsRig
 			auto ele = construction->AddElement();
 			if (!settings._compilationConfigurationName.empty())
 				ele.SetCompilationConfiguration(settings._compilationConfigurationName);
-			ele.SetModelAndMaterialScaffolds(settings._modelName, settings._materialName);
+			ele.SetModelAndMaterials(settings._modelName, settings._materialName);
 			if (!settings._skeletonFileName.empty())
 				construction->SetSkeletonScaffold(settings._skeletonFileName);
 
@@ -183,7 +183,7 @@ namespace ToolsRig
 						if (result->_skeletonScaffold) {
 							skeleMachine = &result->_skeletonScaffold->GetSkeletonMachine();
 						} else if (result->_rendererConstruction->GetElementCount() > 0) {
-							result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModelScaffold();
+							result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModel();
 							skeleMachine = result->_modelScaffoldForEmbeddedSkeleton->EmbeddedSkeleton();
 						}
 						assert(skeleMachine);
@@ -207,7 +207,7 @@ namespace ToolsRig
 						result->_renderer = std::move(renderer);
 						result->_rendererConstruction = std::move(construction);
 						if (result->_rendererConstruction->GetElementCount() > 0)
-							result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModelScaffold();
+							result->_modelScaffoldForEmbeddedSkeleton = result->_rendererConstruction->GetElement(0)->GetModel();
 						result->_depVal = result->_renderer->GetDependencyValidation();
 						return result;
 					});
@@ -244,7 +244,7 @@ namespace ToolsRig
 		std::pair<Float3, Float3> GetBoundingBox() const override
 		{
 			assert(_actualized->_rendererConstruction->GetElementCount() >= 1);
-			return _actualized->_rendererConstruction->GetElement(0)->GetModelScaffold()->GetStaticBoundingBox(); 
+			return _actualized->_rendererConstruction->GetElement(0)->GetModel()->GetStaticBoundingBox(); 
 		}
 
 		std::shared_ptr<ICustomDrawDelegate> SetCustomDrawDelegate(const std::shared_ptr<ICustomDrawDelegate>& delegate) override

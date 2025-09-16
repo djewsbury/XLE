@@ -336,7 +336,7 @@ namespace RenderCore { namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static std::shared_ptr<CompiledMaterialSet> ConstructMaterialScaffoldSync(
+	static std::shared_ptr<CompiledMaterialSet> ConstructMaterialSetSync(
 		std::shared_ptr<MaterialSetConstruction> construction,
 		const ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>& baseMaterials,
 		std::vector<std::string> materialsToInstantiate)
@@ -453,7 +453,7 @@ namespace RenderCore { namespace Assets
 			::Assets::WhenAll(*marker).ThenConstructToPromise(
 				std::move(promise),
 				[construction=std::move(construction)](const auto& sourceModelConfiguration) {
-					return ConstructMaterialScaffoldSync(construction, sourceModelConfiguration, {});
+					return ConstructMaterialSetSync(construction, sourceModelConfiguration, {});
 				});
 		} else if (auto* strs = std::get_if<std::vector<std::string>>(&construction->_baseMaterials)) {
 			if (strs->empty()) {
@@ -464,7 +464,7 @@ namespace RenderCore { namespace Assets
 			::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 				[promise=std::move(promise), construction=std::move(construction), cfgs=*strs]() mutable {
 					TRY {
-						promise.set_value(ConstructMaterialScaffoldSync(construction, {}, std::move(cfgs)));
+						promise.set_value(ConstructMaterialSetSync(construction, {}, std::move(cfgs)));
 					} CATCH(...) {
 						promise.set_exception(std::current_exception());
 					} CATCH_END
@@ -474,7 +474,7 @@ namespace RenderCore { namespace Assets
 			::Assets::WhenAll(std::move(marker)).ThenConstructToPromise(
 				std::move(promise),
 				[construction=std::move(construction)](const auto& sourceModelConfiguration) {
-					return ConstructMaterialScaffoldSync(construction, sourceModelConfiguration, {});
+					return ConstructMaterialSetSync(construction, sourceModelConfiguration, {});
 				});
 		} else {
 			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialSet call because base materials have not been set")));
@@ -490,7 +490,7 @@ namespace RenderCore { namespace Assets
 		::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[promise=std::move(promise), construction=std::move(construction), baseMaterials=std::move(baseMaterials)]() mutable {
 				TRY {
-					promise.set_value(ConstructMaterialScaffoldSync(construction, std::move(baseMaterials), {}));
+					promise.set_value(ConstructMaterialSetSync(construction, std::move(baseMaterials), {}));
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -505,7 +505,7 @@ namespace RenderCore { namespace Assets
 		::Assets::WhenAll(std::move(baseMaterials)).ThenConstructToPromise(
 			std::move(promise),
 			[construction=std::move(construction)](auto&& sourceModelConfiguration) {
-				return ConstructMaterialScaffoldSync(construction, std::move(sourceModelConfiguration), {});
+				return ConstructMaterialSetSync(construction, std::move(sourceModelConfiguration), {});
 			});
 	}
 
@@ -514,7 +514,7 @@ namespace RenderCore { namespace Assets
 		std::shared_ptr<MaterialSetConstruction> construction,
 		IteratorRange<const std::string*> materialsToInstantiate)
 	{
-		assert(!materialsToInstantiate.empty());	// confuses ConstructMaterialScaffoldSync if we call it with an empty materialsToInstantiate
+		assert(!materialsToInstantiate.empty());	// confuses ConstructMaterialSetSync if we call it with an empty materialsToInstantiate
 		if (materialsToInstantiate.empty()) {
 			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialSet call because there are no materials to instantiate specified")));
 			return;
@@ -523,7 +523,7 @@ namespace RenderCore { namespace Assets
 		::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[promise=std::move(promise), construction=std::move(construction), cfgs=std::vector<std::string>(materialsToInstantiate.begin(), materialsToInstantiate.end())]() mutable {
 				TRY {
-					promise.set_value(ConstructMaterialScaffoldSync(construction, nullptr, std::move(cfgs)));
+					promise.set_value(ConstructMaterialSetSync(construction, nullptr, std::move(cfgs)));
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END

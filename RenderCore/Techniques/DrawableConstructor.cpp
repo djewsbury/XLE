@@ -873,8 +873,8 @@ namespace RenderCore { namespace Techniques
 		_pimpl->_pendingDepVals.emplace_back(construction.MakeScaffoldsDependencyValidation());			// required in order to catch invalidations on the compilation configuration files
 		unsigned elementIdx = 0;
 		for (auto e:construction) {
-			auto modelScaffold = e.GetModelScaffold();
-			auto materialScaffold = e.GetMaterialScaffold();
+			auto modelScaffold = e.GetModel();
+			auto materialScaffold = e.GetMaterials();
 			if (modelScaffold && materialScaffold)
 				_pimpl->AddModel(
 					modelScaffold, materialScaffold,

@@ -79,8 +79,8 @@ namespace UnitTests
 			SECTION("Create ModelRendererConstruction")
 			{
 				auto rendererConstruction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
-				auto& ele = rendererConstruction->AddElement().SetModelScaffold(modelScaffold).SetName("test-element");
-				ele.SetMaterialScaffold(materialScaffold);
+				auto& ele = rendererConstruction->AddElement().SetModel(modelScaffold).SetName("test-element");
+				ele.SetMaterials(materialScaffold);
 				
 				std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promise;
 				auto future = promise.get_future();

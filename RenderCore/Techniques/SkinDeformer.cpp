@@ -288,7 +288,7 @@ namespace RenderCore { namespace Techniques
 			// within that one element
 			unsigned elementIdx = 0;
 			for (auto ele:deformerConstruction.GetModelRendererConstruction()) {
-				auto modelScaffold = ele.GetModelScaffold();
+				auto modelScaffold = ele.GetModel();
 				if (!modelScaffold) { ++elementIdx; continue; }
 
 				std::vector<std::pair<unsigned, DeformOperationInstantiation>> instantiations;
@@ -796,7 +796,7 @@ namespace RenderCore { namespace Techniques
 			// within that one element
 			unsigned elementIdx = 0;
 			for (auto ele:deformerConstruction.GetModelRendererConstruction()) {
-				auto modelScaffold = ele.GetModelScaffold();
+				auto modelScaffold = ele.GetModel();
 				if (!modelScaffold) { ++elementIdx; continue; }
 
 				std::vector<std::pair<unsigned, DeformOperationInstantiation>> instantiations;

@@ -75,15 +75,15 @@ namespace SceneEngine
 									case "ElementIndex"_h: return elementIdx;
 									case "MaterialName"_h: 
 										if (auto l = rendererConstruction.lock())
-											return l->GetElement(elementIdx)->GetMaterialScaffold()->DehashMaterialName(matGuid).AsString();
+											return l->GetElement(elementIdx)->GetMaterials()->DehashMaterialName(matGuid).AsString();
 										return {};
 									case "ShortMaterialName"_h: 
 										if (auto l = rendererConstruction.lock())
-											return MakeFileNameSplitter(l->GetElement(elementIdx)->GetMaterialScaffold()->DehashMaterialName(matGuid)).Parameters().AsString();
+											return MakeFileNameSplitter(l->GetElement(elementIdx)->GetMaterials()->DehashMaterialName(matGuid)).Parameters().AsString();
 										return {};
-									case "CompiledMaterialSet"_h:
+									case "MaterialSet"_h:
 										if (auto l = rendererConstruction.lock())
-											return l->GetElement(elementIdx)->GetMaterialScaffoldName();
+											return l->GetElement(elementIdx)->GetMaterialSetName();
 										return {};
 									case "ModelScaffold"_h:
 										if (auto l = rendererConstruction.lock())

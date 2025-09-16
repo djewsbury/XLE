@@ -336,7 +336,7 @@ namespace SceneEngine
 
             auto model = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
             model->SetOperationContext(cache.GetLoadingContext());
-            model->AddElement().SetModelAndMaterialScaffolds(
+            model->AddElement().SetModelAndMaterials(
                 (const char*)PtrAdd(filenamesBuffer, (*i)->_modelFilenameOffset + sizeof(uint64_t)),
                 (const char*)PtrAdd(filenamesBuffer, (*i)->_materialFilenameOffset + sizeof(uint64_t)));
             auto modelPtr = cache.CreateModel(model);
@@ -1786,7 +1786,7 @@ namespace SceneEngine
         if (r == _rendererRegistrations.end() || !r->_referenceCount) {
             auto model = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
             model->SetOperationContext(cache.GetLoadingContext());
-            model->AddElement().SetModelAndMaterialScaffolds(
+            model->AddElement().SetModelAndMaterials(
                 (const char*)PtrAdd(_filenamesBuffer.data(), obj._modelFilenameOffset + sizeof(uint64_t)),
                 (const char*)PtrAdd(_filenamesBuffer.data(), obj._materialFilenameOffset + sizeof(uint64_t)));
             auto modelPtr = cache.CreateModel(model);

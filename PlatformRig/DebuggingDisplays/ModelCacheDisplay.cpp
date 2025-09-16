@@ -49,7 +49,7 @@ namespace PlatformRig { namespace Overlays
         interactables.Register(buttonRect, id);
     }
 
-    static const char* s_tabNames[] = { "ModelRenderers", "ModelScaffolds", "MaterialScaffolds" };
+    static const char* s_tabNames[] = { "ModelRenderers", "Models", "Materials" };
 
 	void    ModelCacheDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
 	{

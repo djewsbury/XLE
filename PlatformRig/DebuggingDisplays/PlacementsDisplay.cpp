@@ -606,7 +606,7 @@ namespace PlatformRig { namespace Overlays
 
 		auto& metadataQuery = testResult._metadataQuery;
 		std::string selectedMaterialName, selectedModelName;
-		selectedMaterialName = TryAnyCast(metadataQuery("MaterialScaffold"_h), selectedMaterialName);
+		selectedMaterialName = TryAnyCast(metadataQuery("MaterialSet"_h), selectedMaterialName);
 		selectedModelName = TryAnyCast(metadataQuery("ModelScaffold"_h), selectedModelName);
 		auto drawCallIndex = TryAnyCast<unsigned>(metadataQuery("DrawCallIndex"_h));
 		auto drawCallCount = TryAnyCast<unsigned>(metadataQuery("DrawCallCount"_h));

@@ -378,7 +378,7 @@ namespace SceneEngine
 							renderer._deformAccelerator = deformAccelerator;
 							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 							if (completedConstruction->GetElementCount() != 0) {
-								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
 								renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 							} else {
 								renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
@@ -394,7 +394,7 @@ namespace SceneEngine
 							renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
 							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 							if (completedConstruction->GetElementCount() != 0)
-								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModelScaffold();
+								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
 							return renderer;
 						});
 				}
