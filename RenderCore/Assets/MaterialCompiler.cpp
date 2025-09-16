@@ -337,7 +337,7 @@ namespace RenderCore { namespace Assets
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static std::shared_ptr<CompiledMaterialSet> ConstructMaterialScaffoldSync(
-		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::shared_ptr<MaterialSetConstruction> construction,
 		const ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>& baseMaterials,
 		std::vector<std::string> materialsToInstantiate)
 	{
@@ -445,9 +445,9 @@ namespace RenderCore { namespace Assets
 			::Assets::GetDepValSys().MakeOrReuse(depVals));
 	}
 
-	void ConstructMaterialScaffold(
+	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialScaffoldConstruction> construction)
+		std::shared_ptr<MaterialSetConstruction> construction)
 	{
 		if (auto* marker = std::get_if<PtrToMarkerToMaterialSet>(&construction->_baseMaterials)) {
 			::Assets::WhenAll(*marker).ThenConstructToPromise(
@@ -457,7 +457,7 @@ namespace RenderCore { namespace Assets
 				});
 		} else if (auto* strs = std::get_if<std::vector<std::string>>(&construction->_baseMaterials)) {
 			if (strs->empty()) {
-				promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialScaffold call because there are no materials to instantiate specified")));
+				promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialSet call because there are no materials to instantiate specified")));
 				return;
 			}
 
@@ -477,14 +477,14 @@ namespace RenderCore { namespace Assets
 					return ConstructMaterialScaffoldSync(construction, sourceModelConfiguration, {});
 				});
 		} else {
-			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialScaffold call because base materials have not been set")));
+			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialSet call because base materials have not been set")));
 		}
 	}
 
 #if 0
-	void ConstructMaterialScaffold(
+	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::shared_ptr<MaterialSetConstruction> construction,
 		std::shared_ptr<RawMaterialSet> baseMaterials)
 	{
 		::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
@@ -497,9 +497,9 @@ namespace RenderCore { namespace Assets
 			});
 	}
 
-	void ConstructMaterialScaffold(
+	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::shared_ptr<MaterialSetConstruction> construction,
 		std::shared_future<std::shared_ptr<RawMaterialSet>> baseMaterials)
 	{
 		::Assets::WhenAll(std::move(baseMaterials)).ThenConstructToPromise(
@@ -509,14 +509,14 @@ namespace RenderCore { namespace Assets
 			});
 	}
 
-	void ConstructMaterialScaffold(
+	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::shared_ptr<MaterialSetConstruction> construction,
 		IteratorRange<const std::string*> materialsToInstantiate)
 	{
 		assert(!materialsToInstantiate.empty());	// confuses ConstructMaterialScaffoldSync if we call it with an empty materialsToInstantiate
 		if (materialsToInstantiate.empty()) {
-			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialScaffold call because there are no materials to instantiate specified")));
+			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialSet call because there are no materials to instantiate specified")));
 			return;
 		}
 
@@ -533,70 +533,70 @@ namespace RenderCore { namespace Assets
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void MaterialScaffoldConstruction::SetBaseMaterials(PtrToMarkerToMaterialSet&& futureBaseMaterials)
+	void MaterialSetConstruction::SetBaseMaterials(PtrToMarkerToMaterialSet&& futureBaseMaterials)
 	{
 		_baseMaterials = std::move(futureBaseMaterials);
 		_disableHash = true;
 		_hash = 0;
 	}
-	void MaterialScaffoldConstruction::SetBaseMaterials(IteratorRange<const std::string*> cfgs)
+	void MaterialSetConstruction::SetBaseMaterials(IteratorRange<const std::string*> cfgs)
 	{
 		_baseMaterials = std::vector<std::string>{cfgs.begin(), cfgs.end()};
 		_hash = 0;
 	}
-	void MaterialScaffoldConstruction::SetBaseMaterials(std::string modelFileIdentifier)
+	void MaterialSetConstruction::SetBaseMaterials(std::string modelFileIdentifier)
 	{
 		_baseMaterials = std::move(modelFileIdentifier);
 		_hash = 0;
 	}
 
-	void MaterialScaffoldConstruction::AddOverride(StringSection<> application, RawMaterial&& mat)
+	void MaterialSetConstruction::AddOverride(StringSection<> application, RawMaterial&& mat)
 	{
 		_inlineMaterialOverrides.emplace_back(Override{MakeMaterialGuid(application), _nextOverrideIdx++}, std::move(mat));
 		_hash = 0;
 	}
 
-	void MaterialScaffoldConstruction::AddOverride(StringSection<> application, PtrToMarkerToMaterial&& mat)
+	void MaterialSetConstruction::AddOverride(StringSection<> application, PtrToMarkerToMaterial&& mat)
 	{
 		_futureMaterialOverrides.emplace_back(Override{MakeMaterialGuid(application), _nextOverrideIdx++}, std::move(mat));
 		_disableHash = true;
 		_hash = 0;
 	}
 
-	void MaterialScaffoldConstruction::AddOverride(StringSection<> application, std::string materialFileIdentifier)
+	void MaterialSetConstruction::AddOverride(StringSection<> application, std::string materialFileIdentifier)
 	{
 		_materialFileOverrides.emplace_back(Override{MakeMaterialGuid(application), _nextOverrideIdx++}, std::move(materialFileIdentifier));
 		_hash = 0;
 	}
 
-	void MaterialScaffoldConstruction::AddOverride(RawMaterial&& mat)
+	void MaterialSetConstruction::AddOverride(RawMaterial&& mat)
 	{
 		_inlineMaterialOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
 		_hash = 0;
 	}
 
-	void MaterialScaffoldConstruction::AddOverride(PtrToMarkerToMaterial&& mat)
+	void MaterialSetConstruction::AddOverride(PtrToMarkerToMaterial&& mat)
 	{
 		_futureMaterialOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
 		_disableHash = true;
 		_hash = 0;
 	}
 
-	void MaterialScaffoldConstruction::AddOverride(PtrToMarkerToMaterialSet&& mat)
+	void MaterialSetConstruction::AddOverride(PtrToMarkerToMaterialSet&& mat)
 	{
 		_futureMaterialSetOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
 		_disableHash = true;
 		_hash = 0;
 	}
 
-	void MaterialScaffoldConstruction::AddOverride(std::string materialFileIdentifier)
+	void MaterialSetConstruction::AddOverride(std::string materialFileIdentifier)
 	{
 		_materialFileOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(materialFileIdentifier));
 		_hash = 0;
 	}
 
-	bool MaterialScaffoldConstruction::CanBeHashed() const { return !_disableHash; }
-	uint64_t MaterialScaffoldConstruction::GetHash() const
+	bool MaterialSetConstruction::CanBeHashed() const { return !_disableHash; }
+	uint64_t MaterialSetConstruction::GetHash() const
 	{
 		assert(CanBeHashed());
 		if (_hash == 0) {
@@ -612,7 +612,7 @@ namespace RenderCore { namespace Assets
 					_hash = Hash64(i2->second, _hash) + i->first._application;
 					++i2;
 				} else 
-					Throw(std::runtime_error("Attempting to create a hash for a MaterialScaffoldConstruction which cannot be hashed"));
+					Throw(std::runtime_error("Attempting to create a hash for a MaterialSetConstruction which cannot be hashed"));
 			}
 			if (auto* str = std::get_if<std::string>(&_baseMaterials)) {
 				_hash = Hash64(*str, _hash);
@@ -626,8 +626,8 @@ namespace RenderCore { namespace Assets
 		return _hash;
 	}
 
-	MaterialScaffoldConstruction::MaterialScaffoldConstruction() = default;
-	MaterialScaffoldConstruction::~MaterialScaffoldConstruction() = default;
+	MaterialSetConstruction::MaterialSetConstruction() = default;
+	MaterialSetConstruction::~MaterialSetConstruction() = default;
 
 }}
 

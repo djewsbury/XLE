@@ -22,7 +22,7 @@ namespace RenderCore { namespace Assets
 	::Assets::CompilerRegistration RegisterMaterialCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers);
 
-	class MaterialScaffoldConstruction
+	class MaterialSetConstruction
 	{
 	public:
 		void SetBaseMaterials(PtrToMarkerToMaterialSet&&);
@@ -53,8 +53,8 @@ namespace RenderCore { namespace Assets
 		bool CanBeHashed() const;
 		uint64_t GetHash() const;
 
-		MaterialScaffoldConstruction();
-		~MaterialScaffoldConstruction();
+		MaterialSetConstruction();
+		~MaterialSetConstruction();
 
 	private:
 		bool _disableHash = false;
@@ -62,24 +62,24 @@ namespace RenderCore { namespace Assets
 	};
 
 	class CompiledMaterialSet;
-	void ConstructMaterialScaffold(
+	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialScaffoldConstruction> construction);
+		std::shared_ptr<MaterialSetConstruction> construction);
 
 #if 0
-	void ConstructMaterialScaffold(
+	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::shared_ptr<MaterialSetConstruction> construction,
 		std::shared_ptr<RawMaterialSet> baseMaterials);
 
-	void ConstructMaterialScaffold(
+	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::shared_ptr<MaterialSetConstruction> construction,
 		std::shared_future<std::shared_ptr<RawMaterialSet>> baseMaterials);
 
-	void ConstructMaterialScaffold(
+	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialScaffoldConstruction> construction,
+		std::shared_ptr<MaterialSetConstruction> construction,
 		IteratorRange<const std::string*> materialsToInstantiate);
 #endif
 

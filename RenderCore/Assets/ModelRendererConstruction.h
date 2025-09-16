@@ -20,7 +20,7 @@ namespace RenderCore { namespace Assets
 	class CompiledMaterialSet;
 	class SkeletonScaffold;
 	class ModelCompilationConfiguration;
-	class MaterialScaffoldConstruction;
+	class MaterialSetConstruction;
 
 	using ResolvedMCC = ::Assets::ResolvedAssetMixin<std::shared_ptr<ModelCompilationConfiguration>>;
 
@@ -40,7 +40,7 @@ namespace RenderCore { namespace Assets
 			
 			ElementConstructor& SetMaterialScaffold(std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>>, std::string initializer={});
 			ElementConstructor& SetMaterialScaffold(std::shared_ptr<Assets::CompiledMaterialSet>, std::string initializer={});
-			ElementConstructor& SetMaterialScaffold(std::shared_ptr<MaterialScaffoldConstruction>, std::string initializer={});
+			ElementConstructor& SetMaterialScaffold(std::shared_ptr<MaterialSetConstruction>, std::string initializer={});
 
 			ElementConstructor& SetCompilationConfiguration(StringSection<>);
 			ElementConstructor& SetCompilationConfiguration(std::shared_future<ResolvedMCC>, std::string initializer={});
@@ -106,7 +106,7 @@ namespace RenderCore { namespace Assets
 		public:
 			std::shared_ptr<Assets::ModelScaffold> GetModelScaffold() const;
 			std::shared_ptr<Assets::CompiledMaterialSet> GetMaterialScaffold() const;
-			std::shared_ptr<Assets::MaterialScaffoldConstruction> GetMaterialScaffoldConstruction() const;
+			std::shared_ptr<Assets::MaterialSetConstruction> GetMaterialScaffoldConstruction() const;
 			std::shared_ptr<Assets::ModelCompilationConfiguration> GetCompilationConfiguration() const;
 			std::optional<Float4x4> GetElementToObject() const;
 			std::string GetModelScaffoldName() const;
@@ -123,7 +123,7 @@ namespace RenderCore { namespace Assets
 			using ModelScaffoldPtr = std::shared_ptr<Assets::ModelScaffold>;
 			using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>>;
 			using MaterialScaffoldPtr = std::shared_ptr<Assets::CompiledMaterialSet>;
-			using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialScaffoldConstruction>;
+			using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialSetConstruction>;
 			using CompilationConfigurationMarker = std::shared_future<ResolvedMCC>;
 			using CompilationConfigurationPtr = std::shared_ptr<Assets::ModelCompilationConfiguration>;
 			Iterator<ModelScaffoldMarker> _msmi;

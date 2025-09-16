@@ -26,7 +26,7 @@ namespace RenderCore { namespace Assets
 		using ModelScaffoldPtr = std::shared_ptr<Assets::ModelScaffold>;
 		using MaterialScaffoldMarker = std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>>;
 		using MaterialScaffoldPtr = std::shared_ptr<Assets::CompiledMaterialSet>;
-		using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialScaffoldConstruction>;
+		using MaterialScaffoldConstructionPtr = std::shared_ptr<Assets::MaterialSetConstruction>;
 		using CompilationConfigurationMarker = std::shared_future<ResolvedMCC>;
 		using CompilationConfigurationPtr = std::shared_ptr<Assets::ModelCompilationConfiguration>;
 
@@ -289,7 +289,7 @@ namespace RenderCore { namespace Assets
 		_internal->_disableHash = true;
 		return *this;
 	}
-	auto ModelRendererConstruction::ElementConstructor::SetMaterialScaffold(std::shared_ptr<MaterialScaffoldConstruction> scaffold, std::string initializer) -> ElementConstructor&
+	auto ModelRendererConstruction::ElementConstructor::SetMaterialScaffold(std::shared_ptr<MaterialSetConstruction> scaffold, std::string initializer) -> ElementConstructor&
 	{
 		assert(_internal && !_internal->_sealed);
 		assert(scaffold);
@@ -302,7 +302,7 @@ namespace RenderCore { namespace Assets
 		// Create and set a material scaffold -- but this requires finding the model 
 		std::promise<std::shared_ptr<CompiledMaterialSet>> promisedScaffold;
 		auto futureScaffold = promisedScaffold.get_future();
-		ConstructMaterialScaffold(std::move(promisedScaffold), i4->second);
+		ConstructMaterialSet(std::move(promisedScaffold), i4->second);
 		SetMaterialScaffold(std::move(futureScaffold));
 
 		if (!initializer.empty()) {
@@ -716,11 +716,11 @@ namespace RenderCore { namespace Assets
 
 					auto modelStr = modelName->second;
 					if (futureModelCompilationConfiguration.valid()) {
-						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second);
+						ConstructMaterialSet(std::move(promisedScaffold), materialConstruction->second);
 					} else if (modelCompilationConfiguration) {
-						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second);
+						ConstructMaterialSet(std::move(promisedScaffold), materialConstruction->second);
 					} else {
-						ConstructMaterialScaffold(std::move(promisedScaffold), materialConstruction->second);
+						ConstructMaterialSet(std::move(promisedScaffold), materialConstruction->second);
 					}
 
 					result->_internal->_materialScaffoldMarkers.emplace_back(eleIdx, std::move(futureScaffold));
@@ -904,7 +904,7 @@ namespace RenderCore { namespace Assets
 		return nullptr;
 	}
 
-	std::shared_ptr<Assets::MaterialScaffoldConstruction> ModelRendererConstruction::ElementIterator::Value::GetMaterialScaffoldConstruction() const
+	std::shared_ptr<Assets::MaterialSetConstruction> ModelRendererConstruction::ElementIterator::Value::GetMaterialScaffoldConstruction() const
 	{
 		assert(_internal);
 		if (_matscpi!=_internal->_materialScaffoldConstructionPtrs.end() && _matscpi->first == _elementId)
