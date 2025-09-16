@@ -11,7 +11,7 @@
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/Services.h"
-#include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"

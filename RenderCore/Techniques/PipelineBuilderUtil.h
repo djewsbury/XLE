@@ -998,7 +998,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 						autoFiltering[autoFilteringCount++] = &res._patchCollection->GetInterface().GetSelectorFilteringRules(i->_filteringRulesId);
 					}
 				} else {
-					assert(patchExpansions.empty());		// without a CompiledShaderPatchCollection we can't do anything with "patchExpansions"
+					assert(patchExpansions.empty());		// without a ShaderPatchInstantiationUtil we can't do anything with "patchExpansions"
 				}
 
 				return _selectorVariationsSet.FilterSelectors(

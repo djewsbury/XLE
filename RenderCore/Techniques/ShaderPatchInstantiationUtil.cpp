@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "TechniqueUtils.h"
 #include "PipelineLayoutDelegate.h"
 #include "../Assets/ShaderPatchCollection.h"
@@ -27,7 +27,7 @@
 
 namespace RenderCore { namespace Techniques
 {
-	CompiledShaderPatchCollection::CompiledShaderPatchCollection(
+	ShaderPatchInstantiationUtil::ShaderPatchInstantiationUtil(
 		const RenderCore::Assets::ShaderPatchCollection& src,
 		const RenderCore::Assets::PredefinedDescriptorSetLayout* customDescSet,
 		const DescriptorSetLayoutAndBinding& materialDescSetLayout)
@@ -74,7 +74,7 @@ namespace RenderCore { namespace Techniques
 		// } CATCH_END
 	}
 
-	CompiledShaderPatchCollection::CompiledShaderPatchCollection(
+	ShaderPatchInstantiationUtil::ShaderPatchInstantiationUtil(
 		const ShaderSourceParser::InstantiatedShader& inst,
 		const DescriptorSetLayoutAndBinding& materialDescSetLayout)
 	: _matDescSetLayout(materialDescSetLayout.GetLayout())
@@ -89,7 +89,7 @@ namespace RenderCore { namespace Techniques
 		_interface._materialDescriptorSetSlotIndex = materialDescSetLayout.GetSlotIndex();
 	}
 
-	CompiledShaderPatchCollection::CompiledShaderPatchCollection(
+	ShaderPatchInstantiationUtil::ShaderPatchInstantiationUtil(
 		const DescriptorSetLayoutAndBinding& materialDescSetLayout)
 	{
 		_depVal = materialDescSetLayout.GetDependencyValidation();
@@ -124,7 +124,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	void CompiledShaderPatchCollection::BuildFromInstantiatedShader(const ShaderSourceParser::InstantiatedShader& inst)
+	void ShaderPatchInstantiationUtil::BuildFromInstantiatedShader(const ShaderSourceParser::InstantiatedShader& inst)
 	{
 			// Note -- we can build the patches interface here, because we assume that this will not
 			//		even change with selectors
@@ -188,19 +188,19 @@ namespace RenderCore { namespace Techniques
 		_savedInstantiationPrefix = Merge(inst._instantiationPrefix);
 	}
 
-	CompiledShaderPatchCollection::CompiledShaderPatchCollection() 
+	ShaderPatchInstantiationUtil::ShaderPatchInstantiationUtil() 
 	{
 	}
 
-	CompiledShaderPatchCollection::~CompiledShaderPatchCollection() {}
+	ShaderPatchInstantiationUtil::~ShaderPatchInstantiationUtil() {}
 
-	const ShaderSourceParser::SelectorFilteringRules& CompiledShaderPatchCollection::Interface::GetSelectorFilteringRules(unsigned filteringRulesId) const
+	const ShaderSourceParser::SelectorFilteringRules& ShaderPatchInstantiationUtil::Interface::GetSelectorFilteringRules(unsigned filteringRulesId) const
 	{
 		assert(filteringRulesId < _filteringRules.size());
 		return _filteringRules[filteringRulesId];
 	}
 
-	std::pair<std::string, std::string> CompiledShaderPatchCollection::InstantiateShader(
+	std::pair<std::string, std::string> ShaderPatchInstantiationUtil::InstantiateShader(
 		const ParameterBox& selectors,
 		IteratorRange<const uint64_t*> patchExpansions) const
 	{
@@ -267,7 +267,7 @@ namespace RenderCore { namespace Techniques
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static auto AssembleShader(
-		const CompiledShaderPatchCollection& patchCollection,
+		const ShaderPatchInstantiationUtil& patchCollection,
 		StringSection<> mainSourceFile,
 		IteratorRange<const uint64_t*> patchExpansions,
 		IteratorRange<const std::string*> prePatchFragments,
@@ -275,7 +275,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> definesTable) -> SourceCodeWithRemapping
 	{
 		// We can assemble the final shader in 3 fragments:
-		//  1) the source code in CompiledShaderPatchCollection
+		//  1) the source code in ShaderPatchInstantiationUtil
 		//  2) redirection functions (which redirect from the template function names to the concrete instantiations we want to tie in)
 		//  3) include the entry point function itself
 

@@ -4,7 +4,7 @@
 
 #include "CommonUtils.h"
 #include "PipelineAccelerator.h"
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "DescriptorSetAccelerator.h"
 #include "ResourceConstructionContext.h"
 #include "Services.h"

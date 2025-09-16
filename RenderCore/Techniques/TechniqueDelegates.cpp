@@ -4,7 +4,7 @@
 
 #include "TechniqueDelegates.h"
 #include "CommonResources.h"
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "Techniques.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
@@ -32,7 +32,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& input) override;
 
@@ -71,7 +71,7 @@ namespace RenderCore { namespace Techniques
 		nascentDesc._techniquePreconfigurationFile = entry._preconfigurationFileName;
 	}
 
-	static Internal::ShaderVariant MakeShaderCompilePatchResource(StringSection<> shaderName, const std::shared_ptr<CompiledShaderPatchCollection>& shaderPatches, std::vector<uint64_t>&& patchExpansions)
+	static Internal::ShaderVariant MakeShaderCompilePatchResource(StringSection<> shaderName, const std::shared_ptr<ShaderPatchInstantiationUtil>& shaderPatches, std::vector<uint64_t>&& patchExpansions)
 	{
 		if (!patchExpansions.empty()) {
 			assert(shaderPatches);
@@ -87,7 +87,7 @@ namespace RenderCore { namespace Techniques
 	void PrepareShadersFromTechniqueEntry(
 		GraphicsPipelineDesc& nascentDesc,
 		const TechniqueEntry& entry,
-		const std::shared_ptr<CompiledShaderPatchCollection>& shaderPatches,
+		const std::shared_ptr<ShaderPatchInstantiationUtil>& shaderPatches,
 		std::vector<uint64_t>&& vsPatchExpansions,
 		std::vector<uint64_t>&& psPatchExpansions,
 		std::vector<uint64_t>&& gsPatchExpansions)
@@ -100,7 +100,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	auto TechniqueDelegate_Legacy::GetPipelineDesc(
-		std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+		std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 		IteratorRange<const uint64_t*> iaAttributes,
 		const RenderCore::Assets::RenderStateSet& input) -> std::shared_ptr<GraphicsPipelineDesc>
 	{
@@ -220,7 +220,7 @@ namespace RenderCore { namespace Techniques
 	static uint64_t s_patchExp_earlyRejection[] = { s_earlyRejectionTest };
 	static uint64_t s_patchExp_deformVertex[] = { s_vertexPatch };
 
-	IllumType CalculateIllumType(const CompiledShaderPatchCollection::Interface& shaderPatches)
+	IllumType CalculateIllumType(const ShaderPatchInstantiationUtil::Interface& shaderPatches)
 	{
 		if (shaderPatches.HasPatchType(s_perPixel)) {
 			if (shaderPatches.HasPatchType(s_earlyRejectionTest)) {
@@ -267,7 +267,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -408,7 +408,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -563,7 +563,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -718,7 +718,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -881,7 +881,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -1045,7 +1045,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -1174,7 +1174,7 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{

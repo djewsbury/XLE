@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "TechniqueUtils.h"						// (for RSDepthBias)
 #include "../../ShaderParser/ShaderAnalysis.h"	// (for ManualSelectorFiltering)
 #include "../../Assets/DepVal.h"
@@ -52,7 +52,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		virtual std::shared_ptr<GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& renderStates) = 0;
 		virtual std::shared_ptr<Assets::PredefinedPipelineLayout> GetPipelineLayout() = 0;
@@ -68,7 +68,7 @@ namespace RenderCore { namespace Techniques
 	};
 
 	class TechniqueSetFile;
-	class CompiledShaderPatchCollection;
+	class ShaderPatchInstantiationUtil;
 	using TechniqueSetFileFuture = std::shared_future<std::shared_ptr<TechniqueSetFile>>;
 
 	void CreateTechniqueDelegate_Deferred(
@@ -143,7 +143,7 @@ namespace RenderCore { namespace Techniques
 	RasterizationDesc BuildDefaultRasterizationDesc(const Assets::RenderStateSet& states);
 
 	enum class IllumType { NoPerPixel, PerPixel, PerPixelAndEarlyRejection, PerPixelCustomLighting };
-	IllumType CalculateIllumType(const CompiledShaderPatchCollection& patchCollection);
+	IllumType CalculateIllumType(const ShaderPatchInstantiationUtil& patchCollection);
 
 	TechniqueSetFileFuture GetDefaultTechniqueSetFileFuture();
 

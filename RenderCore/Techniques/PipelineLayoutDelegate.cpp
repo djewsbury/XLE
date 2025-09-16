@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PipelineLayoutDelegate.h"
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "PipelineOperators.h"
 #include "Services.h"
 #include "CommonResources.h"
@@ -24,7 +24,7 @@ namespace RenderCore { namespace Techniques
 	class PipelineLayoutDelegate : public IPipelineLayoutDelegate, public std::enable_shared_from_this<PipelineLayoutDelegate>
 	{
 	public:
-		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompileShaderPatchCollection(
+		::Assets::PtrToMarkerPtr<ShaderPatchInstantiationUtil> CompileShaderPatchCollection(
 			const std::shared_ptr<Assets::ShaderPatchCollection>&,
 			const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>&) override;
 
@@ -40,23 +40,23 @@ namespace RenderCore { namespace Techniques
 	
 	private:
 		std::shared_ptr<DescriptorSetLayoutAndBinding> _matDescSetLayout;
-		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _fallbackPatchCollection;
+		::Assets::PtrToMarkerPtr<ShaderPatchInstantiationUtil> _fallbackPatchCollection;
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<PipelineCollection> _pipelineCollection;
 
-		std::vector<std::pair<uint64_t, ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection>>> _compiledPatchCollections;
-		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> _defaultCompiledPatchCollection;
+		std::vector<std::pair<uint64_t, ::Assets::PtrToMarkerPtr<ShaderPatchInstantiationUtil>>> _compiledPatchCollections;
+		::Assets::PtrToMarkerPtr<ShaderPatchInstantiationUtil> _defaultCompiledPatchCollection;
 
 		Threading::Mutex _lock;
 	};
 
-	::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> PipelineLayoutDelegate::CompileShaderPatchCollection(
+	::Assets::PtrToMarkerPtr<ShaderPatchInstantiationUtil> PipelineLayoutDelegate::CompileShaderPatchCollection(
 		const std::shared_ptr<Assets::ShaderPatchCollection>& shaderPatchCollection,
 		const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>& matDescSet)
 	{
 		if (!shaderPatchCollection) return _fallbackPatchCollection;
 
-		::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> result;
+		::Assets::PtrToMarkerPtr<ShaderPatchInstantiationUtil> result;
 		{
 			ScopedLock(_lock);
 			auto hash = shaderPatchCollection->GetHash();
@@ -70,7 +70,7 @@ namespace RenderCore { namespace Techniques
 				i = _compiledPatchCollections.insert(i, std::make_pair(hash, nullptr));
 			}
 
-			result = i->second = std::make_shared<::Assets::MarkerPtr<CompiledShaderPatchCollection>>();
+			result = i->second = std::make_shared<::Assets::MarkerPtr<ShaderPatchInstantiationUtil>>();
 		}
 
 		// Call AutoConstructToPromise outside of the lock. Note that this opens the door to other threads
@@ -89,7 +89,7 @@ namespace RenderCore { namespace Techniques
 					if (i == layoutFile->_descriptorSets.end())
 						Throw(std::runtime_error("Expecting to find a descriptor set layout called 'Material' in pipeline layout file (" + fn + "), but it was not found"));
 
-					return std::make_shared<CompiledShaderPatchCollection>(*shaderPatchCollection, i->second.get(), *l->_matDescSetLayout);
+					return std::make_shared<ShaderPatchInstantiationUtil>(*shaderPatchCollection, i->second.get(), *l->_matDescSetLayout);
 				});
 		} else {
 			::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
@@ -97,7 +97,7 @@ namespace RenderCore { namespace Techniques
 					TRY {
 						auto l = weakThis.lock();
 						if (!l) Throw(std::runtime_error("expired"));
-						promise.set_value(std::make_shared<CompiledShaderPatchCollection>(*shaderPatchCollection, matDescSet.get(), *l->_matDescSetLayout));
+						promise.set_value(std::make_shared<ShaderPatchInstantiationUtil>(*shaderPatchCollection, matDescSet.get(), *l->_matDescSetLayout));
 					} CATCH (...) {
 						promise.set_exception(std::current_exception());
 					} CATCH_END
@@ -134,8 +134,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DescriptorSetLayoutAndBinding> matDescSetLayout)
 	: _matDescSetLayout(std::move(matDescSetLayout))
 	{
-		_fallbackPatchCollection = std::make_shared<::Assets::MarkerPtr<CompiledShaderPatchCollection>>("empty-patch-collection");
-		_fallbackPatchCollection->SetAsset(std::make_shared<CompiledShaderPatchCollection>(*_matDescSetLayout));
+		_fallbackPatchCollection = std::make_shared<::Assets::MarkerPtr<ShaderPatchInstantiationUtil>>("empty-patch-collection");
+		_fallbackPatchCollection->SetAsset(std::make_shared<ShaderPatchInstantiationUtil>(*_matDescSetLayout));
 	}
 
 	PipelineLayoutDelegate::~PipelineLayoutDelegate() {}

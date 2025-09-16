@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "../Types.h"
 #include "../../Utility/IteratorUtils.h"
 #include <string>

@@ -1,5 +1,5 @@
 #include "SpriteTechnique.h"
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "../../ShaderParser/ShaderInstantiation.h"
 #include "../../ShaderParser/NodeGraphSignature.h"
 #include "../../ShaderParser/ShaderSignatureParser.h"

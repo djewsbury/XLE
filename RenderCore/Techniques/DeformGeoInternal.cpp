@@ -191,7 +191,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				generateOptions._shaderLanguage = Techniques::GetDefaultShaderLanguage();
 				ShaderSourceParser::InstantiationRequest instRequests[] { std::move(instRequest) };
 				auto inst = ShaderSourceParser::InstantiateShader(MakeIteratorRange(instRequests), generateOptions);
-				result._patchCollection = std::make_shared<Techniques::CompiledShaderPatchCollection>(inst, Techniques::DescriptorSetLayoutAndBinding{});
+				result._patchCollection = std::make_shared<Techniques::ShaderPatchInstantiationUtil>(inst, Techniques::DescriptorSetLayoutAndBinding{});
 
 				::Assets::DependencyValidationMarker depVals[] { predefinedPipelineLayoutActual->GetDependencyValidation(), result._patchCollection->GetDependencyValidation() };
 				result._depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);

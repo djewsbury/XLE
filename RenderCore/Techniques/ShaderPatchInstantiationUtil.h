@@ -30,8 +30,8 @@ namespace RenderCore { namespace Techniques
 	/// and outputs before we can use it directly.
 	/// 
 	/// That's too expensive to do during the frame; so we do that during initialization phases and generate
-	/// this object, the CompiledShaderPatchCollection
-	class CompiledShaderPatchCollection
+	/// this object, the ShaderPatchInstantiationUtil
+	class ShaderPatchInstantiationUtil
 	{
 	public:
 
@@ -77,7 +77,7 @@ namespace RenderCore { namespace Techniques
 			std::string _preconfiguration;
 			std::string _overrideShaders[3];
 
-			friend class CompiledShaderPatchCollection;
+			friend class ShaderPatchInstantiationUtil;
 		};
 
 		const Interface& GetInterface() const { return _interface; }
@@ -90,17 +90,17 @@ namespace RenderCore { namespace Techniques
 
 		uint64_t GetGUID() const { return _guid; }
 
-		CompiledShaderPatchCollection(
+		ShaderPatchInstantiationUtil(
 			const RenderCore::Assets::ShaderPatchCollection& src,
 			const RenderCore::Assets::PredefinedDescriptorSetLayout* customDescSet,
 			const DescriptorSetLayoutAndBinding& materialDescSetLayout);
-		CompiledShaderPatchCollection(
+		ShaderPatchInstantiationUtil(
 			const ShaderSourceParser::InstantiatedShader& instantiatedShader,
 			const DescriptorSetLayoutAndBinding& materialDescSetLayout);
-		CompiledShaderPatchCollection(
+		ShaderPatchInstantiationUtil(
 			const DescriptorSetLayoutAndBinding& materialDescSetLayout);
-		CompiledShaderPatchCollection();
-		~CompiledShaderPatchCollection();
+		ShaderPatchInstantiationUtil();
+		~ShaderPatchInstantiationUtil();
 	private:
 		uint64_t _guid = 0;
 		Interface _interface;
@@ -113,7 +113,7 @@ namespace RenderCore { namespace Techniques
 		void BuildFromInstantiatedShader(const ShaderSourceParser::InstantiatedShader& inst);
 	};
 
-	inline bool CompiledShaderPatchCollection::Interface::HasPatchType(uint64_t implementing) const
+	inline bool ShaderPatchInstantiationUtil::Interface::HasPatchType(uint64_t implementing) const
 	{
 		auto iterator = std::find_if(
 			_patches.begin(), _patches.end(),
@@ -123,7 +123,7 @@ namespace RenderCore { namespace Techniques
 
 	struct ShaderCompilePatchResource
 	{
-		std::shared_ptr<CompiledShaderPatchCollection> _patchCollection;
+		std::shared_ptr<ShaderPatchInstantiationUtil> _patchCollection;
 		std::vector<uint64_t> _patchCollectionExpansions;
 		std::vector<std::string> _prePatchesFragments, _postPatchesFragments;
 		ShaderCompileResourceName _entrypoint;		// _filename can be empty here, which means the entrypoint is within either _prePatchesFragments, _postPatchesFragments or the patch expansions

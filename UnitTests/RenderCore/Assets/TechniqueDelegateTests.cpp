@@ -14,7 +14,7 @@
 #include "../../../RenderCore/Assets/MaterialScaffold.h"
 #include "../../../RenderCore/Assets/RawMaterial.h"
 #include "../../../RenderCore/Assets/ScaffoldCmdStream.h"
-#include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/PipelineAcceleratorInternal.h"
@@ -306,7 +306,7 @@ namespace UnitTests
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil> shaderPatches,
 			IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& input) override
 		{

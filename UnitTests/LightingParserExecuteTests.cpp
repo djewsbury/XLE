@@ -8,7 +8,7 @@
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/DrawableDelegates.h"
 #include "../RenderCore/Techniques/TechniqueDelegates.h"
-#include "../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Assets/MaterialScaffold.h"
 #include "../SceneEngine/IScene.h"
@@ -101,13 +101,13 @@ namespace UnitTests
 		return FrameBufferDesc { std::move(attachments), std::move(subpasses) };
 	}
 
-	static std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> GetCompiledPatchCollectionFromText(StringSection<> techniqueText)
+	static std::shared_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil> GetCompiledPatchCollectionFromText(StringSection<> techniqueText)
 	{
 		using namespace RenderCore;
 
 		Formatters::TextInputFormatter<utf8> formattr { techniqueText.Cast<utf8>() };
 		RenderCore::Assets::ShaderPatchCollection patchCollection(formattr, {}, {});
-		return ::Assets::ActualizePtr<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection);
+		return ::Assets::ActualizePtr<RenderCore::Techniques::ShaderPatchInstantiationUtil>(patchCollection);
 	}
 
 	class BasicScene : public SceneEngine::IScene

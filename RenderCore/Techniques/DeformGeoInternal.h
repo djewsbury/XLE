@@ -26,7 +26,7 @@ namespace RenderCore { class IDevice; class ICompiledPipelineLayout; class Unifo
 namespace RenderCore { namespace Techniques 
 {
 	struct ComputePipelineAndLayout;
-	class CompiledShaderPatchCollection;
+	class ShaderPatchInstantiationUtil;
 	class PipelineCollection;
 	class SubFrameEvents;
 	struct DeformOperationInstantiation;
@@ -176,7 +176,7 @@ namespace RenderCore { namespace Techniques
 			{
 				std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 				Metal::BoundUniforms _boundUniforms;
-				std::shared_ptr<Techniques::CompiledShaderPatchCollection> _patchCollection;
+				std::shared_ptr<Techniques::ShaderPatchInstantiationUtil> _patchCollection;
 				::Assets::DependencyValidation _depVal;
 				const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; };
 			};

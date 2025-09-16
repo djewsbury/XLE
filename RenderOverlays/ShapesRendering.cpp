@@ -1078,7 +1078,7 @@ namespace RenderOverlays
 	{
 	public:
 		std::shared_ptr<RenderCore::Techniques::GraphicsPipelineDesc> GetPipelineDesc(
-			std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> shaderPatches,
+			std::shared_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil> shaderPatches,
             IteratorRange<const uint64_t*> iaAttributes,
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{

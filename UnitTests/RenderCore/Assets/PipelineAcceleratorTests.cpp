@@ -11,7 +11,7 @@
 #include "../../../RenderCore/Techniques/PipelineAcceleratorInternal.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
-#include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Techniques/Services.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
@@ -388,7 +388,7 @@ namespace UnitTests
 
 		SECTION("FindShaderUniformBindings")
 		{
-			// Create a CompiledShaderPatchCollection from a typical input, and get the 
+			// Create a ShaderPatchInstantiationUtil from a typical input, and get the 
 			// descriptor set layout from that.
 			// Construct a DestructorSetAccelerator from it
 			auto patches = GetPatchCollectionFromText(s_exampleTechniqueFragments);

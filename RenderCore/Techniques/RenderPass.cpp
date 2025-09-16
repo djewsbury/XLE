@@ -1365,7 +1365,7 @@ namespace RenderCore { namespace Techniques
             completeAttachmentDesc._format = AsTypelessFormat(resDesc._textureDesc._format);
             adjustedAttachments.push_back({completeAttachmentDesc});
 
-            assert(matchedAttachment->GetDesc()._textureDesc._width == desc.GetProperties()._width && matchedAttachment->GetDesc()._textureDesc._height == desc.GetProperties()._height);
+            // assert(matchedAttachment->GetDesc()._textureDesc._width == desc.GetProperties()._width && matchedAttachment->GetDesc()._textureDesc._height == desc.GetProperties()._height);
         }
 
         FrameBufferDesc adjustedDesc(

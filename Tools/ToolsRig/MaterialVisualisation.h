@@ -14,7 +14,7 @@
 namespace std { template<typename R> class future; }
 
 namespace SceneEngine { class IScene; }
-namespace RenderCore { namespace Techniques { class IDrawablesPool; class IPipelineAcceleratorPool; class CompiledShaderPatchCollection; }}
+namespace RenderCore { namespace Techniques { class IDrawablesPool; class IPipelineAcceleratorPool; class ShaderPatchInstantiationUtil; }}
 namespace RenderCore { namespace Assets { class RawMaterial; }}
 namespace GraphLanguage { class INodeGraphProvider; class NodeGraph; class NodeGraphSignature; }
 namespace ShaderSourceParser { class PreviewOptions; }
@@ -34,17 +34,17 @@ namespace ToolsRig
 		const MaterialVisSettings& visObject, 
 		const std::shared_ptr<RenderCore::Assets::RawMaterial>& material = nullptr);
 
-	using PatchCollectionFuture = ::Assets::PtrToMarkerPtr<RenderCore::Techniques::CompiledShaderPatchCollection>;
+	using PatchCollectionFuture = ::Assets::PtrToMarkerPtr<RenderCore::Techniques::ShaderPatchInstantiationUtil>;
 
 #if 0
 	std::unique_ptr<RenderCore::Techniques::ITechniqueDelegate> MakeShaderPatchAnalysisDelegate(
 		const ShaderSourceParser::PreviewOptions& previewOptions);
 
-	std::unique_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> MakeCompiledShaderPatchCollection(
+	std::unique_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil> MakeCompiledShaderPatchCollection(
 		const std::shared_ptr<GraphLanguage::INodeGraphProvider>& provider,
 		const std::shared_ptr<MessageRelay>& logMessages);
 
-	std::unique_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> MakeCompiledShaderPatchCollection(
+	std::unique_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil> MakeCompiledShaderPatchCollection(
 		const GraphLanguage::NodeGraph& nodeGraph,
 		const GraphLanguage::NodeGraphSignature& nodeGraphSignature,
 		uint32_t previewNodeId,

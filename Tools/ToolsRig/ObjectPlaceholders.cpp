@@ -21,7 +21,6 @@
 #include "../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderCore/Techniques/ManualDrawables.h"
-#include "../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
 #include "../../RenderCore/ResourceList.h"
 #include "../../RenderCore/Format.h"
 #include "../../RenderCore/Types.h"

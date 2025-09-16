@@ -4,7 +4,7 @@
 
 #include "Apparatuses.h"
 #include "Services.h"
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "Techniques.h"
 #include "TechniqueDelegates.h"
 #include "PipelineAccelerator.h"

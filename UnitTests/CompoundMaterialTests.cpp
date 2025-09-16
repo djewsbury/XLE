@@ -8,7 +8,7 @@
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/DrawableDelegates.h"
 #include "../RenderCore/Techniques/TechniqueDelegates.h"
-#include "../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Assets/RawMaterial.h"
@@ -91,7 +91,7 @@ namespace UnitTests
 			// Ensure that we can load it and access the material properties 
 			auto sphereMat = *::Assets::AutoConstructAsset<RenderCore::Assets::RawMaterial>("ut-data/compoundmaterial.hlsl:sphere");
 
-			auto compiledPatchCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(sphereMat._patchCollection);
+			auto compiledPatchCollection = std::make_shared<RenderCore::Techniques::ShaderPatchInstantiationUtil>(sphereMat._patchCollection);
 			auto accelerator = mainPool->CreatePipelineAccelerator(
 				compiledPatchCollection,
 				sphereMat._matParamBox,

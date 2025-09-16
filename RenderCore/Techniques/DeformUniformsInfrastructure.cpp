@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DeformUniformsInfrastructure.h"
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "PipelineLayoutDelegate.h"
 #include "DeformerConstruction.h"
 #include "../Assets/ModelRendererConstruction.h"
@@ -196,7 +196,7 @@ namespace RenderCore { namespace Techniques
 				// Match our animatable uniforms to the uniforms in the layout from the final 
 				// material descriptor set. We need to use the same material desc set layout that
 				// PipelineAcceleratorPool will use when instantiating the main descriptor set. This
-				// includes any modifications made by the CompiledShaderPatchCollection...
+				// includes any modifications made by the ShaderPatchInstantiationUtil...
 				std::vector<std::pair<unsigned, AnimatedUniformBufferHelper>> animBuffers;
 				auto patchCollectionFuture = compiledLayoutPool.CompileShaderPatchCollection(shaderPatchCollection, nullptr);
 				patchCollectionFuture->StallWhilePending();		// unfortunately we have to stall; but it should be ready immediately in many cases

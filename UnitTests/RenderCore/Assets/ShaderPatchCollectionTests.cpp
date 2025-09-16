@@ -10,7 +10,7 @@
 #include "../../../RenderCore/Assets/ShaderPatchCollection.h"
 #include "../../../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
-#include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
 #include "../../../RenderCore/Techniques/SpriteTechnique.h"
@@ -352,7 +352,7 @@ void ps(
 			
 			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
-			auto compiledCollection = std::make_shared<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, nullptr, *matDescSetLayout);
+			auto compiledCollection = std::make_shared<RenderCore::Techniques::ShaderPatchInstantiationUtil>(patchCollection, nullptr, *matDescSetLayout);
 			std::vector<uint64_t> instantiations { "PerPixel"_h };
 
 			::Assets::InitializerPack initializers {
@@ -377,8 +377,8 @@ void ps(
 			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_exampleTechniqueFragments) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
-			using RenderCore::Techniques::CompiledShaderPatchCollection;
-			CompiledShaderPatchCollection compiledCollection(patchCollection, nullptr, *matDescSetLayout);
+			using RenderCore::Techniques::ShaderPatchInstantiationUtil;
+			ShaderPatchInstantiationUtil compiledCollection(patchCollection, nullptr, *matDescSetLayout);
 
 			// Check for some of the expected interface elements
 			REQUIRE(compiledCollection.GetInterface().HasPatchType("CoordinatesToColor"_h));
@@ -399,8 +399,8 @@ void ps(
 			Formatters::TextInputFormatter<utf8> formattr { MakeStringSectionLiteral(s_fragmentsWithSelectors) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
-			using RenderCore::Techniques::CompiledShaderPatchCollection;
-			CompiledShaderPatchCollection compiledCollection(patchCollection, nullptr, *matDescSetLayout);
+			using RenderCore::Techniques::ShaderPatchInstantiationUtil;
+			ShaderPatchInstantiationUtil compiledCollection(patchCollection, nullptr, *matDescSetLayout);
 
 			// Check for some of the recognized properties, in particular look for shader selectors
 			// We're expecting the selectors "RES_HAS_TextureDif" and "RES_HAS_TextureNorm"
@@ -412,7 +412,7 @@ void ps(
 
 		SECTION( "TestCompiledShaderDependencyChecking" )
 		{
-			// Let's make sure that the CompiledShaderPatchCollection recognizes when it has become 
+			// Let's make sure that the ShaderPatchInstantiationUtil recognizes when it has become 
 			// out-of-date due to a source file change
 			{
 				const char* dependenciesToCheck[] = {
@@ -433,7 +433,7 @@ void ps(
 				RenderCore::Assets::ShaderPatchCollection patchCollection(formattr);
 
 				for (unsigned c=0; c<std::max(dimof(dependenciesToCheck), dimof(nonDependencies)); ++c) {
-					RenderCore::Techniques::CompiledShaderPatchCollection compiledCollection(patchCollection, nullptr, *matDescSetLayout);
+					RenderCore::Techniques::ShaderPatchInstantiationUtil compiledCollection(patchCollection, nullptr, *matDescSetLayout);
 					REQUIRE(compiledCollection._depVal.GetValidationIndex() == 0u);
 					
 					if (c < dimof(nonDependencies)) {
@@ -503,8 +503,8 @@ void ps(
 		auto utDataMount = ::Assets::MainFileSystem::GetMountingTree()->Mount("ut-data", ::Assets::CreateFileSystem_Memory(s_utData, s_defaultFilenameRules, ::Assets::FileSystemMemoryFlags::UseModuleModificationTime));
 		auto shaderFilteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(::Assets::Services::GetIntermediateCompilers());
 
-		// Create a CompiledShaderPatchCollection containing the patches we need
-		std::unique_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> compiledShaderPatchCollection;
+		// Create a ShaderPatchInstantiationUtil containing the patches we need
+		std::unique_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil> compiledShaderPatchCollection;
 		{
 			ShaderSourceParser::InstantiationRequest instRequests[] {
 				{ "ut-data/sprite-patch-test.hlsl::vs", "SV_SpriteVS" },
@@ -515,7 +515,7 @@ void ps(
 			unsigned idx=0;
 			for (const auto& p:instRequests)
 				patchCollection.AddPatch(std::to_string(idx++), p);
-			compiledShaderPatchCollection = std::make_unique<RenderCore::Techniques::CompiledShaderPatchCollection>(patchCollection, nullptr, RenderCore::Techniques::DescriptorSetLayoutAndBinding{});
+			compiledShaderPatchCollection = std::make_unique<RenderCore::Techniques::ShaderPatchInstantiationUtil>(patchCollection, nullptr, RenderCore::Techniques::DescriptorSetLayoutAndBinding{});
 		}
 
 		std::vector<RenderCore::Techniques::PatchDelegateInput> patchesInterface;

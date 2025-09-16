@@ -7,7 +7,7 @@
 #include "../../EmbeddedRes.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
-#include "../../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"

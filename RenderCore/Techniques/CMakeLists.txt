@@ -5,7 +5,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         Apparatuses.cpp
         CommonResources.cpp
         CommonUtils.cpp
-        CompiledShaderPatchCollection.cpp
+        ShaderPatchInstantiationUtil.cpp
         DeferredShaderResource.cpp
         DescriptorSetAccelerator.cpp
         Drawables.cpp

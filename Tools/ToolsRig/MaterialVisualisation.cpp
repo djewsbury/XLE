@@ -17,7 +17,7 @@
 #include "../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
-#include "../../RenderCore/Techniques/CompiledShaderPatchCollection.h"
+#include "../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../RenderCore/Techniques/CommonUtils.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/DescriptorSetAccelerator.h"
@@ -208,7 +208,7 @@ namespace ToolsRig
 			_pipelineFuture = std::make_shared<::Assets::MarkerPtr<PendingPipeline>>("MaterialVisualizationScene pipeline");
 			::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
 				_pipelineFuture->AdoptPromise(),
-				[weakPipelineAcceleratorPool, mat](const std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection>& patchCollection) {
+				[weakPipelineAcceleratorPool, mat](const std::shared_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil>& patchCollection) {
 
 					auto strongPipelineAcceleratorPool = weakPipelineAcceleratorPool.lock();
 					if (!strongPipelineAcceleratorPool)
@@ -312,7 +312,7 @@ namespace ToolsRig
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if 0
-	std::unique_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> MakeCompiledShaderPatchCollection(
+	std::unique_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil> MakeCompiledShaderPatchCollection(
 		const std::shared_ptr<GraphLanguage::INodeGraphProvider>& provider,
 		const RenderCore::Techniques::DescriptorSetLayoutAndBinding& materialDescSetLayout,
 		const std::shared_ptr<MessageRelay>& logMessages)
@@ -321,7 +321,7 @@ namespace ToolsRig
 		instRequest._customProvider = provider;
 		ShaderSourceParser::GenerateFunctionOptions generateOptions;
 		generateOptions._shaderLanguage = RenderCore::Techniques::GetDefaultShaderLanguage();
-		return std::make_unique<RenderCore::Techniques::CompiledShaderPatchCollection>(
+		return std::make_unique<RenderCore::Techniques::ShaderPatchInstantiationUtil>(
 			ShaderSourceParser::InstantiateShader(
 				MakeIteratorRange(&instRequest, &instRequest+1),
 				generateOptions),
@@ -368,14 +368,14 @@ namespace ToolsRig
 			return CreateShaderProgramFromByteCode(pipelineLayout, vsCode, psCode, "ShaderPatchFactory");
 		}
 
-		const RenderCore::Techniques::CompiledShaderPatchCollection* _patchCollection;
+		const RenderCore::Techniques::ShaderPatchInstantiationUtil* _patchCollection;
 		IteratorRange<const uint64_t*> _patchExpansions;
 		std::shared_ptr<RenderCore::IShaderSource> _shaderSource;
 		std::string _vsTechniqueCode;
 		std::string _psTechniqueCode;
 
 		static std::string InstantiatePreviewStructure(
-			const RenderCore::Techniques::CompiledShaderPatchCollection& mainInstantiation,
+			const RenderCore::Techniques::ShaderPatchInstantiationUtil& mainInstantiation,
 			const ShaderSourceParser::PreviewOptions& previewOptions)
 		{
 			assert(mainInstantiation.GetInterface().GetPatches().size() == 1);	// only tested with a single entry point
@@ -389,7 +389,7 @@ namespace ToolsRig
 	{
 	public:
 		::Assets::PtrToMarkerPtr<RenderCore::Metal::ShaderProgram> ResolveVariation(
-			const RenderCore::Techniques::CompiledShaderPatchCollection& shaderPatches,
+			const RenderCore::Techniques::ShaderPatchInstantiationUtil& shaderPatches,
 			IteratorRange<const ParameterBox*const*> selectors)
 		{
 			using namespace RenderCore::Techniques;
@@ -411,7 +411,7 @@ namespace ToolsRig
 		}
 
 		ResolvedTechnique Resolve(
-			const std::shared_ptr<RenderCore::Techniques::CompiledShaderPatchCollection>& shaderPatches,
+			const std::shared_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil>& shaderPatches,
 			IteratorRange<const ParameterBox*const*> selectors,
 			const RenderCore::Assets::RenderStateSet& stateSet) override
 		{
@@ -457,7 +457,7 @@ namespace ToolsRig
 	}
 
 #if 0
-	std::unique_ptr<RenderCore::Techniques::CompiledShaderPatchCollection> MakeCompiledShaderPatchCollection(
+	std::unique_ptr<RenderCore::Techniques::ShaderPatchInstantiationUtil> MakeCompiledShaderPatchCollection(
 		const GraphLanguage::NodeGraph& nodeGraph,
 		const GraphLanguage::NodeGraphSignature& nodeGraphSignature,
 		uint32_t previewNodeId,
@@ -476,7 +476,7 @@ namespace ToolsRig
 			instantiationReq,
 			generateOptions);
 
-		return std::make_unique<RenderCore::Techniques::CompiledShaderPatchCollection>(mainInstantiation);
+		return std::make_unique<RenderCore::Techniques::ShaderPatchInstantiationUtil>(mainInstantiation);
 	}
 
 	template<typename Function, typename... Args>
@@ -534,7 +534,7 @@ namespace ToolsRig
 		uint32_t previewNodeId,
 		const std::shared_ptr<GraphLanguage::INodeGraphProvider>& subProvider)
 	{
-		auto future = std::make_shared<::Assets::MarkerPtr<RenderCore::Techniques::CompiledShaderPatchCollection>>("MakeCompiledShaderPatchCollectionAsync");
+		auto future = std::make_shared<::Assets::MarkerPtr<RenderCore::Techniques::ShaderPatchInstantiationUtil>>("MakeCompiledShaderPatchCollectionAsync");
 		AsyncConstructToPromise(
 			future->AdoptPromise(),
 			[nodeGraph{std::move(nodeGraph)}, nodeGraphSignature{std::move(nodeGraphSignature)}, previewNodeId, subProvider]() {

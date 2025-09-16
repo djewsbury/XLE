@@ -126,7 +126,7 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<IThreadContext> GetThreadContext();
 	std::weak_ptr<IThreadContext> SetThreadContext(std::weak_ptr<IThreadContext>);
 
-	struct GraphicsPipelineDesc; class CompiledShaderPatchCollection;
+	struct GraphicsPipelineDesc; class ShaderPatchInstantiationUtil;
 	void PrepareShadersFromTechniqueEntry(
 		GraphicsPipelineDesc& nascentDesc,
 		const TechniqueEntry& entry);
@@ -134,7 +134,7 @@ namespace RenderCore { namespace Techniques
 	void PrepareShadersFromTechniqueEntry(
 		GraphicsPipelineDesc& nascentDesc,
 		const TechniqueEntry& entry,
-		const std::shared_ptr<CompiledShaderPatchCollection>& shaderPatches,
+		const std::shared_ptr<ShaderPatchInstantiationUtil>& shaderPatches,
 		std::vector<uint64_t>&& vsPatchExpansions,
 		std::vector<uint64_t>&& psPatchExpansions,
 		std::vector<uint64_t>&& gsPatchExpansions = {});

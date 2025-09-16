@@ -6,7 +6,7 @@
 #include "PipelineAccelerator.h"
 #include "DrawableDelegates.h"
 #include "TechniqueDelegates.h"
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "Drawables.h"
 #include "RenderPass.h"
 #include "ParsingContext.h"

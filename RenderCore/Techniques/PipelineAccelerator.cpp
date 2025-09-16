@@ -6,7 +6,7 @@
 #include "PipelineAcceleratorInternal.h"
 #include "PipelineCollection.h"
 #include "DescriptorSetAccelerator.h"
-#include "CompiledShaderPatchCollection.h"
+#include "ShaderPatchInstantiationUtil.h"
 #include "ShaderVariationSet.h"
 #include "PipelineOperators.h"		// for CompiledPipelineLayoutAsset & DescriptorSetLayoutAndBinding
 #include "DeformAccelerator.h"		// for UniformDeformerToRendererBinding
@@ -139,7 +139,7 @@ namespace RenderCore { namespace Techniques
 
 		void BeginPrepareForSequencerStateInternal(
 			std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
-			std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
+			std::shared_ptr<ShaderPatchInstantiationUtil> compiledPatchCollection,
 			PipelineCollection& pipelineCollection, IPipelineLayoutDelegate& layoutDelegate,
 			const ParameterBox& globalSelectors, std::shared_ptr<InternalSequencerConfig> cfg);
 
@@ -178,7 +178,7 @@ namespace RenderCore { namespace Techniques
 
 	void PipelineAccelerator::BeginPrepareForSequencerStateInternal(
 		std::promise<IPipelineAcceleratorPool::Pipeline>&& resultPromise,
-		std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection,
+		std::shared_ptr<ShaderPatchInstantiationUtil> compiledPatchCollection,
 		PipelineCollection& pipelineCollection, IPipelineLayoutDelegate& layoutDelegate,
 		const ParameterBox& globalSelectors, std::shared_ptr<InternalSequencerConfig> cfg)
 	{
@@ -239,7 +239,7 @@ namespace RenderCore { namespace Techniques
 		// Note there may be an issue here in that if the shader compile fails, the dep val for the s
 		// final pipeline will only contain the dependencies for the shader. So if the root problem
 		// is actually something about the configuration, we won't get the proper recompile functionality 
-		std::shared_ptr<CompiledShaderPatchCollection> immediatePatchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
+		std::shared_ptr<ShaderPatchInstantiationUtil> immediatePatchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
 		if (patchCollectionFuture->CheckStatusBkgrnd(immediatePatchCollection, patchCollectionDepVal, patchCollectionLog) == ::Assets::AssetState::Ready) {
 			TRY {
 				BeginPrepareForSequencerStateInternal(
@@ -253,7 +253,7 @@ namespace RenderCore { namespace Techniques
 				std::move(pipelinePromise),
 				[pipelineCollection, layoutDelegate, copyGlobalSelectors, cfg=std::move(cfg), weakThis](
 					auto&& resultPromise,
-					std::shared_ptr<CompiledShaderPatchCollection> compiledPatchCollection) mutable {
+					std::shared_ptr<ShaderPatchInstantiationUtil> compiledPatchCollection) mutable {
 
 					TRY {
 						auto containingPipelineAccelerator = weakThis.lock();
@@ -1056,7 +1056,7 @@ namespace RenderCore { namespace Techniques
 
 		// Most of the time, it will be ready immediately, and we can avoid some of the overhead of the
 		// future continuation functions
-		std::shared_ptr<CompiledShaderPatchCollection> patchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
+		std::shared_ptr<ShaderPatchInstantiationUtil> patchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
 		if (patchCollectionFuture->CheckStatusBkgrnd(patchCollection, patchCollectionDepVal, patchCollectionLog) == ::Assets::AssetState::Ready) {
 			ConstructDescriptorSetHelper helper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo};
 			helper.Construct(
@@ -1070,7 +1070,7 @@ namespace RenderCore { namespace Techniques
 				std::move(promise),
 				[materialMachine, memoryHolder, weakDevice, generateBindingInfo, samplerPool=std::weak_ptr<SamplerPool>(_samplerPool), deformBinding, result, constructionContext, name=std::move(name)](
 					std::promise<std::vector<ActualizedDescriptorSet>>&& promise,
-					std::shared_ptr<CompiledShaderPatchCollection> patchCollection) mutable {
+					std::shared_ptr<ShaderPatchInstantiationUtil> patchCollection) mutable {
 
 					auto d = weakDevice.lock();
 					if (!d)

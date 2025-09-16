@@ -14,14 +14,14 @@ namespace RenderCore { class IDevice; class ICompiledPipelineLayout; }
 
 namespace RenderCore { namespace Techniques
 {
-	class CompiledShaderPatchCollection;
+	class ShaderPatchInstantiationUtil;
 	class DescriptorSetLayoutAndBinding;
 	class PipelineCollection;
 
 	class IPipelineLayoutDelegate
 	{
 	public:
-		virtual ::Assets::PtrToMarkerPtr<CompiledShaderPatchCollection> CompileShaderPatchCollection(
+		virtual ::Assets::PtrToMarkerPtr<ShaderPatchInstantiationUtil> CompileShaderPatchCollection(
 			const std::shared_ptr<Assets::ShaderPatchCollection>&,
 			const std::shared_ptr<Assets::PredefinedDescriptorSetLayout>&) = 0;
 

@@ -12,7 +12,7 @@
 #include "DeformAccelerator.h"
 #include "CommonUtils.h"
 #include "CommonResources.h"
-#include "CompiledShaderPatchCollection.h"		// for DescriptorSetLayoutAndBinding
+#include "ShaderPatchInstantiationUtil.h"		// for DescriptorSetLayoutAndBinding
 #include "Services.h"
 #include "SubFrameEvents.h"
 #include "../UniformsStream.h"
