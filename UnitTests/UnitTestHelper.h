@@ -17,7 +17,6 @@ namespace UnitTests
         ConsoleRig::StartupConfig cfg = "xle-unit-tests";
             // we can't set the working in this way when run from the 
             // visual studio test explorer
-        cfg._setWorkingDir = false;
         cfg._registerTemporaryIntermediates = true;
         return cfg;
     }

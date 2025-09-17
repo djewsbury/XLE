@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "Core/Prefix.h"
 #include "Detail/API.h"
 #include <vector>
 #include <assert.h>
