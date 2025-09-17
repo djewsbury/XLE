@@ -8,6 +8,7 @@
 
 #include "../Core/SelectConfiguration.h"
 #include "../Core/Prefix.h"
+#include "../Core/Aliases.h"
 #include "Detail/API.h"
 #include "ctti/type_id.hpp"
 #include <string>
@@ -436,12 +437,6 @@ namespace Utility
             }
         }
     }
-
-    #if __cplusplus >= 202002L
-        #define XLE_CONSTEVAL_OR_CONSTEXPR consteval
-    #else
-        #define XLE_CONSTEVAL_OR_CONSTEXPR constexpr
-    #endif
 
     XLE_CONSTEVAL_OR_CONSTEXPR uint64_t ConstHash64(const char* str, const size_t len, uint64_t seed=DefaultSeed64) never_throws { return Internal::ConstHash64_1(str, len, seed); }
     XLE_CONSTEVAL_OR_CONSTEXPR uint32_t ConstHash32(const char* str, const size_t len, uint32_t seed=DefaultSeed32) never_throws { return Internal::ConstHash32_1(str, len, seed); }
