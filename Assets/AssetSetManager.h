@@ -7,10 +7,7 @@
 #pragma once
 
 #include "AssetHeap.h"
-#include "../Core/Types.h"
 #include <memory>
-#include <string>
-#include <vector>
 #include <functional>
 
 namespace Utility { template<typename T> class IteratorRange; }

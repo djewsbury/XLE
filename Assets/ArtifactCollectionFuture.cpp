@@ -141,7 +141,7 @@ namespace Assets
 		ArtifactRequestResult chunkResult;
 		if (	dataType == ArtifactRequest::DataType::BlockSerializer
 			||	dataType == ArtifactRequest::DataType::Raw) {
-			uint8_t* mem = (uint8*)XlMemAlign(blob->size(), sizeof(uint64_t));
+			uint8_t* mem = (uint8_t*)XlMemAlign(blob->size(), sizeof(uint64_t));
 			chunkResult._buffer = std::unique_ptr<uint8_t[], PODAlignedDeletor>(mem);
 			chunkResult._bufferSize = blob->size();
 			std::memcpy(mem, blob->data(), blob->size());

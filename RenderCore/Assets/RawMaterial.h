@@ -135,7 +135,7 @@ namespace RenderCore { namespace Assets
         RenderStateSet& SetDepthBias(int);
         RenderStateSet& SetLineWeight(float);
 
-        uint64 GetHash() const;
+        uint64_t GetHash() const;
         RenderStateSet();
     };
 
@@ -251,7 +251,7 @@ namespace RenderCore { namespace Assets
     }
     
     static_assert(sizeof(RenderStateSet) == sizeof(uint64_t), "expecting StateSet to be 64 bits long");
-    inline uint64 RenderStateSet::GetHash() const
+    inline uint64_t RenderStateSet::GetHash() const
     {
         return *(const uint64_t*)this;
     }

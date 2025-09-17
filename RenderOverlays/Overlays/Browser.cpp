@@ -491,7 +491,7 @@ namespace Overlays
         RenderCore::Metal::ShaderResourceView   _srv;
 
         std::unique_ptr<ModelCache> _cache;
-        std::vector<std::pair<uint64, std::string>> _modelNames;
+        std::vector<std::pair<uint64_t, std::string>> _modelNames;
     };
 
     static void RenderModel(
@@ -519,7 +519,7 @@ namespace Overlays
 
     static const unsigned ModelBrowserItemDimensions = 196;
 
-    std::pair<const RenderCore::Metal::ShaderResourceView*, uint64> ModelBrowser::GetSRV(
+    std::pair<const RenderCore::Metal::ShaderResourceView*, uint64_t> ModelBrowser::GetSRV(
         RenderCore::IThreadContext& context, 
         const std::basic_string<ucs2>& filename)
     {
@@ -529,7 +529,7 @@ namespace Overlays
         utf8 utf8Filename[MaxPath];
         ucs2_2_utf8(AsPointer(filename.cbegin()), filename.size(), utf8Filename, dimof(utf8Filename));
 
-        uint64 hashedName = Hash64((const char*)utf8Filename);
+        uint64_t hashedName = Hash64((const char*)utf8Filename);
         auto ni = LowerBound(_pimpl->_modelNames, hashedName);
         if (ni == _pimpl->_modelNames.end() || ni->first != hashedName) {
             _pimpl->_modelNames.insert(ni, std::make_pair(hashedName, std::string((const char*)utf8Filename)));
@@ -631,9 +631,9 @@ namespace Overlays
 
     TextureBrowser::~TextureBrowser() {}
 
-    std::pair<const RenderCore::Metal::ShaderResourceView*, uint64> TextureBrowser::GetSRV(RenderCore::IThreadContext& devContext, const std::basic_string<ucs2>& filename)
+    std::pair<const RenderCore::Metal::ShaderResourceView*, uint64_t> TextureBrowser::GetSRV(RenderCore::IThreadContext& devContext, const std::basic_string<ucs2>& filename)
     {
-        uint64 hashedName = Hash64(AsPointer(filename.cbegin()), AsPointer(filename.cend()));
+        uint64_t hashedName = Hash64(AsPointer(filename.cbegin()), AsPointer(filename.cend()));
         auto res = _pimpl->_resources.Get(hashedName);
         if (!res) {
             utf8 utf8Filename[MaxPath];

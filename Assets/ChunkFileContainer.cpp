@@ -86,8 +86,8 @@ namespace Assets
             ArtifactRequestResult chunkResult;
             if (	r._dataType == ArtifactRequest::DataType::BlockSerializer
 				||	r._dataType == ArtifactRequest::DataType::Raw) {
-                uint8* mem = (uint8*)XlMemAlign(i->_size, sizeof(uint64_t));
-                chunkResult._buffer = std::unique_ptr<uint8[], PODAlignedDeletor>(mem);
+                uint8_t* mem = (uint8_t*)XlMemAlign(i->_size, sizeof(uint64_t));
+                chunkResult._buffer = std::unique_ptr<uint8_t[], PODAlignedDeletor>(mem);
                 chunkResult._bufferSize = i->_size;
                 file.Seek(initialOffset + i->_fileOffset);
                 file.Read(chunkResult._buffer.get(), i->_size);
@@ -160,8 +160,8 @@ namespace Assets
                 chunks.begin(), chunks.end(), 
                 [](const ChunkHeader& c) { return c._chunkTypeCode == "DirectorySearchRules"_h; });
             if (i!=chunks.end()) {
-                uint8* mem = (uint8*)XlMemAlign(i->_size, sizeof(uint64_t));
-                auto buffer = std::unique_ptr<uint8[], PODAlignedDeletor>(mem);
+                uint8_t* mem = (uint8_t*)XlMemAlign(i->_size, sizeof(uint64_t));
+                auto buffer = std::unique_ptr<uint8_t[], PODAlignedDeletor>(mem);
                 file.Seek(initialOffset + i->_fileOffset);
                 file.Read(buffer.get(), i->_size);
                 *_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), i->_size)));

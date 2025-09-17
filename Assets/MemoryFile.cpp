@@ -547,7 +547,7 @@ namespace Assets
 		return IOReason::Invalid;
 	}
 
-	auto FileSystem_Memory::TryOpen(OSServices::MemoryMappedFile& result, const Marker& marker, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
+	auto FileSystem_Memory::TryOpen(OSServices::MemoryMappedFile& result, const Marker& marker, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
 	{
 		if (marker.size() < sizeof(MarkerStruct)) return IOReason::FileNotFound;
 

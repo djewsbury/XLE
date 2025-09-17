@@ -8,7 +8,6 @@
 #include "../IAnnotator.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Core/SelectConfiguration.h"
-#include "../Core/Types.h"
 #include <vector>
 #include <deque>
 #include <assert.h>
@@ -172,25 +171,25 @@ namespace RenderCore { namespace ImplVulkan
 			auto results = _queryPool.GetFrameResults(context, frameInFlight._queryFrameId);
 			if (!results._resultsReady) return;
 
-			uint64 evntBuffer[2048 / sizeof(uint64)];
-			byte* eventBufferPtr = (byte*)evntBuffer;
-			const byte* eventBufferEnd = (const byte*)&evntBuffer[dimof(evntBuffer)];
+			uint64_t evntBuffer[2048 / sizeof(uint64_t)];
+			uint8_t* eventBufferPtr = (uint8_t*)evntBuffer;
+			const uint8_t* eventBufferEnd = (const uint8_t*)&evntBuffer[dimof(evntBuffer)];
 
 			{
 				ScopedLock(_listeners_Mutex);
 				//      Write an event to set the frequency. We should expect the frequency should be constant
 				//      in a single play through, but it doesn't hurt to keep recording it...
-				const size_t entrySize = sizeof(size_t) * 2 + sizeof(uint64);
+				const size_t entrySize = sizeof(size_t) * 2 + sizeof(uint64_t);
 				if (size_t(eventBufferPtr) + entrySize > size_t(eventBufferEnd)) {
 					for (auto i = _listeners.begin(); i != _listeners.end(); ++i) {
 						(i->second)(evntBuffer, eventBufferPtr);
 					}
-					eventBufferPtr = (byte*)evntBuffer;
+					eventBufferPtr = (uint8_t*)evntBuffer;
 				}
 
 				*((size_t*)eventBufferPtr) = ~size_t(0x0);                  eventBufferPtr += sizeof(size_t);
 				*((size_t*)eventBufferPtr) = frameInFlight._renderFrameId;  eventBufferPtr += sizeof(size_t);
-				*((uint64*)eventBufferPtr) = results._frequency;			eventBufferPtr += sizeof(uint64);
+				*((uint64_t*)eventBufferPtr) = results._frequency;			eventBufferPtr += sizeof(uint64_t);
 			}
 
 			//
@@ -209,17 +208,17 @@ namespace RenderCore { namespace ImplVulkan
 					//      occurrence. If we can't fit it in; we need to flush it out 
 					//      and continue on.
 					//
-					const size_t entrySize = sizeof(size_t) * 2 + sizeof(uint64);
+					const size_t entrySize = sizeof(size_t) * 2 + sizeof(uint64_t);
 					if (size_t(eventBufferPtr) + entrySize > size_t(eventBufferEnd)) {
 						for (auto i = _listeners.begin(); i != _listeners.end(); ++i) {
 							(i->second)(evntBuffer, eventBufferPtr);
 						}
-						eventBufferPtr = (byte*)evntBuffer;
+						eventBufferPtr = (uint8_t*)evntBuffer;
 					}
 					*((size_t*)eventBufferPtr) = AsListenerType(evnt._type); eventBufferPtr += sizeof(size_t);
 					*((size_t*)eventBufferPtr) = size_t(evnt._name); eventBufferPtr += sizeof(size_t);
-					// assert(size_t(eventBufferPtr)%sizeof(uint64)==0);
-					*((uint64*)eventBufferPtr) = uint64(timeResult); eventBufferPtr += sizeof(uint64);
+					// assert(size_t(eventBufferPtr)%sizeof(uint64_t)==0);
+					*((uint64_t*)eventBufferPtr) = uint64_t(timeResult); eventBufferPtr += sizeof(uint64_t);
 				}
 
 				_eventsInFlight.pop_front();
@@ -231,7 +230,7 @@ namespace RenderCore { namespace ImplVulkan
 			//  Note, this will insure that event if 2 frames worth of events
 			//  complete in the single FlushFinishedQueries() call, we will never
 			//  fill the event listener with a mixture of events from multiple frames.
-			if (eventBufferPtr != (byte*)evntBuffer) {
+			if (eventBufferPtr != (uint8_t*)evntBuffer) {
 				ScopedLock(_listeners_Mutex);
 				for (auto i = _listeners.begin(); i != _listeners.end(); ++i) {
 					(i->second)(evntBuffer, eventBufferPtr);

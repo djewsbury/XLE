@@ -374,7 +374,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             const IVertexSourceData& src,
             const TransformFn& transform)
         {
-            std::vector<uint8> tempBuffer;
+            std::vector<uint8_t> tempBuffer;
             tempBuffer.resize(src.GetCount() * sizeof(PivotType));
             auto* dst = (PivotType*)AsPointer(tempBuffer.begin());
             for (unsigned c=0; c<src.GetCount(); ++c)
@@ -545,17 +545,17 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         IteratorRange<const Assets::VertexElement*> sourceLayout,
         IteratorRange<const uint32_t*> reordering)
     {
-        uint32      elementReordering[32];
+        uint32_t      elementReordering[32];
         signed      maxSourceLayout = -1;
         for (auto source=sourceLayout.begin(); source!=sourceLayout.end(); ++source) {
-                //      look for the same element in the destination layout (or put ~uint32(0x0) if it's not there)
-            elementReordering[source-sourceLayout.begin()] = ~uint32(0x0);
+                //      look for the same element in the destination layout (or put ~uint32_t(0x0) if it's not there)
+            elementReordering[source-sourceLayout.begin()] = ~uint32_t(0x0);
             for (auto destination=destinationLayout.begin(); destination!=destinationLayout.end(); ++destination) {
                 if (    !XlCompareString(destination->_semanticName, source->_semanticName)
                     &&  destination->_semanticIndex  == source->_semanticIndex
                     &&  destination->_format   == source->_format) {
 
-                    elementReordering[source-sourceLayout.begin()] = uint32(destination-destinationLayout.begin());
+                    elementReordering[source-sourceLayout.begin()] = uint32_t(destination-destinationLayout.begin());
                     maxSourceLayout = std::max(maxSourceLayout, signed(source-sourceLayout.begin()));
                     break;
                 }
@@ -577,7 +577,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             void* destinationVertexStart     = PtrAdd(destinationBuffer.begin(), destinationIndex*destinationVertexStride);
             const void* sourceVertexStart    = PtrAdd(sourceBuffer.begin(), sourceIndex*sourceVertexStride);
             for (unsigned c=0; c<=(unsigned)maxSourceLayout; ++c) {
-                if (elementReordering[c] != ~uint32(0x0)) {
+                if (elementReordering[c] != ~uint32_t(0x0)) {
                     const auto& destinationElement = destinationLayout[elementReordering[c]]; assert(&destinationElement < destinationLayout.end());
                     const auto& sourceElement = sourceLayout[c]; assert(&sourceElement < sourceLayout.end());
                     size_t elementSize = BitsPerPixel(destinationElement._format)/8;

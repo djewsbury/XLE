@@ -1046,8 +1046,8 @@ namespace PlatformRig { namespace Overlays
     {
         const void * evnt = eventsBufferStart;
         while (evnt < eventsBufferEnd) {
-            uint32 eventType = (uint32)*((const size_t*)evnt); evnt = PtrAdd(evnt, sizeof(size_t));
-            if (eventType == ~uint32(0x0)) {
+            uint32_t eventType = (uint32_t)*((const size_t*)evnt); evnt = PtrAdd(evnt, sizeof(size_t));
+            if (eventType == ~uint32_t(0x0)) {
                 size_t frameId = *((const size_t*)evnt); evnt = PtrAdd(evnt, sizeof(size_t));
                 GPUTime frequency = *((const uint64_t*)evnt); evnt = PtrAdd(evnt, sizeof(uint64_t));
                 _mostRecentGPUFrequency = frequency;
@@ -1176,7 +1176,7 @@ namespace PlatformRig { namespace Overlays
                 }
 
             if (!lines.empty()) {
-                context.DrawLines(ProjectionMode::P2D, AsPointer(lines.begin()), (uint32)lines.size(), AsPointer(lineColors.begin()));
+                context.DrawLines(ProjectionMode::P2D, AsPointer(lines.begin()), (uint32_t)lines.size(), AsPointer(lineColors.begin()));
             }
         }
 

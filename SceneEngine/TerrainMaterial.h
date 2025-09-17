@@ -9,8 +9,6 @@
 #include "../Assets/AssetsCore.h"
 #include "../Assets/AssetUtils.h"
 #include "../Math/Vector.h"
-#include "../Core/Types.h"
-#include "../Utility/UTFUtils.h"
 #include <vector>
 
 namespace Formatters

@@ -79,7 +79,7 @@ namespace Assets
         return scaffoldChunk;
     }
 
-    std::unique_ptr<uint8[]> RawChunkAsMemoryBlock(
+    std::unique_ptr<uint8_t[]> RawChunkAsMemoryBlock(
         const utf8 filename[],
         ChunkHeader::TypeIdentifier chunkType,
         unsigned expectedVersion)
@@ -88,7 +88,7 @@ namespace Assets
         auto chunks = LoadChunkTable(*file);
 
         auto scaffoldChunk = FindChunk(filename, chunks, chunkType, expectedVersion);
-        auto rawMemoryBlock = std::make_unique<uint8[]>(scaffoldChunk._size);
+        auto rawMemoryBlock = std::make_unique<uint8_t[]>(scaffoldChunk._size);
         file->Seek(scaffoldChunk._fileOffset);
         file->Read(rawMemoryBlock.get(), 1, scaffoldChunk._size);
         return rawMemoryBlock;

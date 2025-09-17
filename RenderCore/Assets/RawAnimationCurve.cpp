@@ -234,7 +234,7 @@ namespace RenderCore { namespace Assets
 		const CurveDequantizationBlock* dequantBlock; const void* data;
 		std::tie(dequantBlock, data) = FindKey(idx, timeMarkerValue);
 		float result = dequantBlock->_mins[0];
-		auto* v = (const uint16*)data;
+		auto* v = (const uint16_t*)data;
 		if (dequantBlock->_elementFlags & (1<<0)) result = LinearInterpolate(dequantBlock->_mins[0], dequantBlock->_maxs[0], float(*v++)/float(0xffff));
 		return result;
 	}
@@ -247,7 +247,7 @@ namespace RenderCore { namespace Assets
 		const CurveDequantizationBlock* dequantBlock; const void* data;
 		std::tie(dequantBlock, data) = FindKey(idx, timeMarkerValue);
 		Float3 result { dequantBlock->_mins[0], dequantBlock->_mins[1], dequantBlock->_mins[2] };
-		auto* v = (const uint16*)data;
+		auto* v = (const uint16_t*)data;
 		// Dequantize each element separately
 		if (dequantBlock->_elementFlags & (1<<0)) result[0] = LinearInterpolate(dequantBlock->_mins[0], dequantBlock->_maxs[0], float(*v++)/float(0xffff));
 		if (dequantBlock->_elementFlags & (1<<1)) result[1] = LinearInterpolate(dequantBlock->_mins[1], dequantBlock->_maxs[1], float(*v++)/float(0xffff));
@@ -266,7 +266,7 @@ namespace RenderCore { namespace Assets
 		const CurveDequantizationBlock* dequantBlock; const void* data;
 		std::tie(dequantBlock, data) = FindKey(idx, timeMarkerValue);
 		Float4 result = dequantBlock->_mins;
-		auto* v = (const uint16*)data;
+		auto* v = (const uint16_t*)data;
 		// Dequantize each element separately
 		if (dequantBlock->_elementFlags & (1<<0)) result[0] = LinearInterpolate(dequantBlock->_mins[0], dequantBlock->_maxs[0], float(*v++)/float(0xffff));
 		if (dequantBlock->_elementFlags & (1<<1)) result[1] = LinearInterpolate(dequantBlock->_mins[1], dequantBlock->_maxs[1], float(*v++)/float(0xffff));
@@ -539,7 +539,7 @@ namespace RenderCore { namespace Assets
 	template Quaternion RawAnimationCurve::Calculate(float, CurveInterpolationType) const never_throws;
 
     RawAnimationCurve::RawAnimationCurve(   SerializableVector<uint16_t>&& timeMarkers, 
-											SerializableVector<uint8>&& keyData,
+											SerializableVector<uint8_t>&& keyData,
 											const CurveDesc& curveDesc)
     :       _timeMarkers(std::move(timeMarkers))
     ,       _keyData(std::move(keyData))

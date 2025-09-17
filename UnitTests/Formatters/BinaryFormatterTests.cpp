@@ -46,7 +46,7 @@ namespace UnitTests
 
 		struct templ
 		{
-			uint32 SomeValue;
+			uint32_t SomeValue;
 			float AnotherValue;
 		};
 

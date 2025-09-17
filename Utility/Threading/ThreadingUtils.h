@@ -8,8 +8,8 @@
 
 #include "ThreadLibrary.h"
 #include "../../Core/Prefix.h"
-#include "../../Core/Types.h"
 #include "../../Core/SelectConfiguration.h"
+#include <cstdint>
 
 /// \namespace Utility::Interlocked
 ///
@@ -107,7 +107,7 @@
         namespace Utility { namespace Interlocked 
         {
             typedef long Value;
-            typedef int64 Value64;
+            typedef int64_t Value64;
 			template<typename Type> using Pointer = Type* volatile;
 
             force_inline Value Exchange(Value volatile* target, Value newValue)           { return _InterlockedExchange(target, newValue); }
@@ -313,7 +313,7 @@ using namespace Utility;
 
     namespace Utility { namespace Threading {
         inline void YieldTimeSlice()			{ std::this_thread::yield(); }
-        inline void Sleep(uint32 milliseconds)	{ std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds)); }
+        inline void Sleep(uint32_t milliseconds) { std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds)); }
         using ThreadId = std::thread::id;
         inline ThreadId CurrentThreadId()		{ return std::this_thread::get_id(); }
         inline void Pause()                     { std::this_thread::yield(); }

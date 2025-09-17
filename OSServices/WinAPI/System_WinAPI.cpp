@@ -10,7 +10,6 @@
 #include "../TimeUtils.h"
 #include "../Log.h"
 #include "../../Core/Prefix.h"
-#include "../../Core/Types.h"
 #include "../../Utility/Threading/LockFree.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
@@ -40,14 +39,14 @@ namespace OSServices
 
 //////////////////////////////////////////////////////////////////////////
 
-uint64 GetPerformanceCounter()
+uint64_t GetPerformanceCounter()
 {
     LARGE_INTEGER i;
     QueryPerformanceCounter(&i);
     return i.QuadPart;
 }
 
-uint64 GetPerformanceCounterFrequency()
+uint64_t GetPerformanceCounterFrequency()
 {
     LARGE_INTEGER i;
     QueryPerformanceFrequency(&i);
@@ -105,18 +104,18 @@ void ConfigureProcessSettings()
 
 //////////////////////////////////////////////////////////////////////////
 
-void XlGetLocalTime(uint64 time, struct tm* local)
+void XlGetLocalTime(uint64_t time, struct tm* local)
 {
     __time64_t fileTime = time;
     _localtime64_s(local, &fileTime);
 }
 
-uint64 XlMakeFileTime(struct tm* local)
+uint64_t XlMakeFileTime(struct tm* local)
 {
     return _mktime64(local);
 }
 
-double XlDiffTime(uint64 endTime, uint64 beginTime)
+double XlDiffTime(uint64_t endTime, uint64_t beginTime)
 {
     return _difftime64(endTime, beginTime);
 }

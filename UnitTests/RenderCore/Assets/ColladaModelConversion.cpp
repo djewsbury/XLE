@@ -28,9 +28,9 @@
 
 namespace UnitTests
 {
-    __declspec(noinline) static void StreamDomPerformanceTest(const utf8*start, const utf8*end, uint64 iterationCount)
+    __declspec(noinline) static void StreamDomPerformanceTest(const utf8*start, const utf8*end, uint64_t iterationCount)
     {
-        for (uint64 c=0; c<iterationCount; ++c) {
+        for (uint64_t c=0; c<iterationCount; ++c) {
             Formatters::XmlInputFormatter<utf8> formatter(MakeStringSection(start, end));
             Formatters::StreamDOM<Formatters::XmlInputFormatter<utf8>> doc(formatter);
             (void) doc;
@@ -39,16 +39,16 @@ namespace UnitTests
 
     size_t GlobalHack = 0;
 
-    __declspec(noinline) static void StrLenPerformanceTest(const utf8*start, uint64 iterationCount)
+    __declspec(noinline) static void StrLenPerformanceTest(const utf8*start, uint64_t iterationCount)
     {
-        for (uint64 c=0; c<iterationCount; ++c) {
+        for (uint64_t c=0; c<iterationCount; ++c) {
             GlobalHack += std::strlen((const char*)start);
         }
     }
 
-    __declspec(noinline) static void XlStrLenPerformanceTest(const utf8*start, uint64 iterationCount)
+    __declspec(noinline) static void XlStrLenPerformanceTest(const utf8*start, uint64_t iterationCount)
     {
-        for (uint64 c=0; c<iterationCount; ++c) {
+        for (uint64_t c=0; c<iterationCount; ++c) {
             GlobalHack += XlGlyphCount(start);
         }
     }
@@ -73,15 +73,15 @@ namespace UnitTests
             auto fileDesc = ::Assets::MainFileSystem::TryGetDesc(sampleAsset);
 
             auto start = __rdtsc();
-            const auto iterationCount = (uint64_t)std::max(100ull, 10000000000ull / uint64(fileDesc._size));
-            for (uint64 c=0; c<iterationCount; ++c) {
+            const auto iterationCount = (uint64_t)std::max(100ull, 10000000000ull / uint64_t(fileDesc._size));
+            for (uint64_t c=0; c<iterationCount; ++c) {
                 auto mdl = (*createScaffold)(sampleAsset);
                 mdl.reset();    // (incur the cost of deletion here)
             }
             auto end = __rdtsc();
 
             Log(Warning) << "New path: " << (end-start) / iterationCount << " cycles per collada file." << std::endl;
-            Log(Warning) << "That's about " << (end-start) / (uint64(fileDesc._size)*iterationCount) << " cycles per byte in the input file." << std::endl;
+            Log(Warning) << "That's about " << (end-start) / (uint64_t(fileDesc._size)*iterationCount) << " cycles per byte in the input file." << std::endl;
         }
 
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);
@@ -101,7 +101,7 @@ namespace UnitTests
             std::memcpy(charsWithNullTerminator.data(), chars.get(), size);
             charsWithNullTerminator[size] = 0;
 
-            const uint64 iterationCount = (uint64)std::max(100ull, 10000000000ull / uint64(size));
+            const uint64_t iterationCount = (uint64_t)std::max(100ull, 10000000000ull / uint64_t(size));
             
             auto startXML = __rdtsc();
             StreamDomPerformanceTest(charsWithNullTerminator.data(), PtrAdd(charsWithNullTerminator.data(), size), iterationCount);
@@ -112,9 +112,9 @@ namespace UnitTests
             auto endStrLen = __rdtsc();
 
             Log(Warning) << "Ran " << iterationCount << " iterations." << std::endl;
-            Log(Warning) << "XML parser: " << (middleSample-startXML) / (iterationCount*uint64(size)) << " cycles per byte. (" << (middleSample-startXML) << ") total" << std::endl;
-            Log(Warning) << "std::strlen: " << (middleSample2-middleSample) / (iterationCount*uint64(size)) << " cycles per byte. (" << (middleSample2-middleSample) << ") total" << std::endl;
-            Log(Warning) << "XlGlyphCount: " << (endStrLen-middleSample2) / (iterationCount*uint64(size)) << " cycles per byte. (" << (endStrLen-middleSample2) << ") total" << std::endl;
+            Log(Warning) << "XML parser: " << (middleSample-startXML) / (iterationCount*uint64_t(size)) << " cycles per byte. (" << (middleSample-startXML) << ") total" << std::endl;
+            Log(Warning) << "std::strlen: " << (middleSample2-middleSample) / (iterationCount*uint64_t(size)) << " cycles per byte. (" << (middleSample2-middleSample) << ") total" << std::endl;
+            Log(Warning) << "XlGlyphCount: " << (endStrLen-middleSample2) / (iterationCount*uint64_t(size)) << " cycles per byte. (" << (endStrLen-middleSample2) << ") total" << std::endl;
         }
 
         ::Assets::MainFileSystem::GetMountingTree()->Unmount(xlresmnt);

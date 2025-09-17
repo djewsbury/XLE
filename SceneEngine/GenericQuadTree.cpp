@@ -978,7 +978,7 @@ namespace SceneEngine
         return str;
     }
 
-	constexpr uint64 ChunkType_QuadTree = ConstHash64Legacy<'Quad', 'Tree'>::Value;
+	constexpr uint64_t ChunkType_QuadTree = ConstHash64Legacy<'Quad', 'Tree'>::Value;
 	constexpr unsigned QuadTreeDataVersion = 0;
 
 	constexpr ::Assets::ArtifactRequest QuadTreeChunkRequests[]
@@ -1006,7 +1006,7 @@ namespace SceneEngine
 		_dataBlock = std::move(chunks[0]._buffer);
 	}
 
-	GenericQuadTree::GenericQuadTree(std::unique_ptr<uint8[], PODAlignedDeletor>&& dataBlock)
+	GenericQuadTree::GenericQuadTree(std::unique_ptr<uint8_t[], PODAlignedDeletor>&& dataBlock)
 	: _dataBlock(std::move(dataBlock))
 	{
 	}

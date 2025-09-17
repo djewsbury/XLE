@@ -545,7 +545,7 @@ namespace EntityInterface
                 
                 if (type._type == ImpliedTyping::TypeCat::Void) {
                     type._type = ImpliedTyping::TypeCat::UInt8;
-                    type._arrayCount = uint16(value._end - value._start);
+                    type._arrayCount = uint16_t(value._end - value._start);
                     type._typeHint = ImpliedTyping::TypeHint::String;
                     initsBuffer.insert(initsBuffer.end(), value._start, value._end);
                 } else {

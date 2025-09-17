@@ -1446,7 +1446,7 @@ namespace ColladaConversion
     {
     public:
         Type _type;
-        uint8 _buffer[sizeof(Float4x4)];
+        uint8_t _buffer[sizeof(Float4x4)];
         Section _sid;
         unsigned _next;
 
@@ -2162,7 +2162,7 @@ namespace ColladaConversion
         _samplers.insert(i, std::make_pair(hashedId, std::move(sampler)));
     }
 
-    const DataFlow::Source* DocumentScaffold::FindSource(uint64 id) const
+    const DataFlow::Source* DocumentScaffold::FindSource(uint64_t id) const
     {
         auto i = LowerBound(_sources, id);
         if (i!=_sources.cend() && i->first == id) 
@@ -2170,7 +2170,7 @@ namespace ColladaConversion
         return nullptr;
     }
 
-    const InputsCollection* DocumentScaffold::FindVertexInputs(uint64 id) const
+    const InputsCollection* DocumentScaffold::FindVertexInputs(uint64_t id) const
     {
         auto i = LowerBound(_vertexInputs, id);
         if (i!=_vertexInputs.cend() && i->first == id) 
@@ -2178,7 +2178,7 @@ namespace ColladaConversion
         return nullptr;
     }
 
-    const MeshGeometry* DocumentScaffold::FindMeshGeometry(uint64 guid) const
+    const MeshGeometry* DocumentScaffold::FindMeshGeometry(uint64_t guid) const
     {
         for (const auto& m:_geometries)
             if (m.GetId().GetHash() == guid)
@@ -2186,7 +2186,7 @@ namespace ColladaConversion
         return nullptr;
     }
 
-    const Material* DocumentScaffold::FindMaterial(uint64 guid) const
+    const Material* DocumentScaffold::FindMaterial(uint64_t guid) const
     {
         for (const auto& m:_materials)
             if (m.GetId().GetHash() == guid)
@@ -2194,7 +2194,7 @@ namespace ColladaConversion
         return nullptr;
     }
 
-    const VisualScene* DocumentScaffold::FindVisualScene(uint64 guid) const
+    const VisualScene* DocumentScaffold::FindVisualScene(uint64_t guid) const
     {
         for (const auto& s:_visualScenes)
             if (s.GetId().GetHash() == guid)
@@ -2202,7 +2202,7 @@ namespace ColladaConversion
         return nullptr;
     }
 
-    const Image* DocumentScaffold::FindImage(uint64 guid) const
+    const Image* DocumentScaffold::FindImage(uint64_t guid) const
     {
         for (const auto& i:_images)
             if (i.GetId().GetHash() == guid)
@@ -2210,7 +2210,7 @@ namespace ColladaConversion
         return nullptr;
     }
 
-    const SkinController*   DocumentScaffold::FindSkinController(uint64 guid) const
+    const SkinController*   DocumentScaffold::FindSkinController(uint64_t guid) const
     {
         for (const auto& i:_skinControllers)
             if (i.GetId().GetHash() == guid)
@@ -2218,7 +2218,7 @@ namespace ColladaConversion
         return nullptr;
     }
 
-    static Node SearchForNode(Node n, uint64 guid)
+    static Node SearchForNode(Node n, uint64_t guid)
     {
         if (n.GetId().GetHash() == guid) return n;
 
@@ -2230,7 +2230,7 @@ namespace ColladaConversion
 		return Node {};
     }
 
-    Node                    DocumentScaffold::FindNode(uint64 guid) const
+    Node                    DocumentScaffold::FindNode(uint64_t guid) const
     {
             // We need to look in every visual scene to find the node with
             // the given id. Unfortunately we don't have a global map of
@@ -2242,7 +2242,7 @@ namespace ColladaConversion
 		return Node {};
     }
 
-	static Node SearchForNodeBySid(Node n, uint64 guid)
+	static Node SearchForNodeBySid(Node n, uint64_t guid)
     {
         if (n.GetSid().GetHash() == guid) return n;
 
@@ -2254,7 +2254,7 @@ namespace ColladaConversion
 		return Node {};
     }
 
-	Node                    DocumentScaffold::FindNodeBySid(uint64 guid) const
+	Node                    DocumentScaffold::FindNodeBySid(uint64_t guid) const
 	{
 		for (const auto& vs:_visualScenes) {
             auto r = SearchForNodeBySid(vs.GetRootNode(), guid);
@@ -2263,7 +2263,7 @@ namespace ColladaConversion
 		return Node {};
 	}
 
-    const Sampler*          DocumentScaffold::FindSampler(uint64 guid) const
+    const Sampler*          DocumentScaffold::FindSampler(uint64_t guid) const
     {
         auto i = LowerBound(_samplers, guid);
         if (i!=_samplers.cend() && i->first == guid) 
@@ -2307,7 +2307,7 @@ namespace ColladaConversion
 
     IDocScopeIdResolver::~IDocScopeIdResolver() {}
 
-    const IDocScopeIdResolver* URIResolveContext::FindFile(uint64 fileId) const
+    const IDocScopeIdResolver* URIResolveContext::FindFile(uint64_t fileId) const
     {
         if (!fileId) {
                 // local file is always the first

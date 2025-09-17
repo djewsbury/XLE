@@ -8,7 +8,6 @@
 
 #include "../OSServices/RawFS.h"
 #include "../Utility/StringUtils.h"
-#include "../Core/Types.h"
 #include "../Core/SelectConfiguration.h"
 #include <algorithm>
 #include <vector>
@@ -82,7 +81,7 @@ namespace Assets
         const utf8 filename[], std::vector<ChunkHeader>& hdrs,
         ChunkHeader::TypeIdentifier chunkType, unsigned expectedVersion);
 
-    std::unique_ptr<uint8[]> RawChunkAsMemoryBlock(
+    std::unique_ptr<uint8_t[]> RawChunkAsMemoryBlock(
         const utf8 filename[], ChunkHeader::TypeIdentifier chunkType, unsigned expectedVersion);
 
     struct SerializedArtifact;

@@ -12,7 +12,6 @@
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/StringUtils.h"
-#include "../../Core/Types.h"
 
 namespace RenderCore { namespace Assets 
 {

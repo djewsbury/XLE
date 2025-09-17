@@ -94,7 +94,7 @@ namespace ConsoleRig
         srand(std::random_device().operator()());
 
         auto guidGen = std::make_shared<std::mt19937_64>(std::random_device().operator()());
-        serv.Add<uint64()>(
+        serv.Add<uint64_t()>(
             Fn_GuidGen, [guidGen](){ return (*guidGen)(); });
 
         // Some OSs may require us to configure settings for the process as a whole

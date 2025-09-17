@@ -419,7 +419,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				auto i3 = i2+1;
 				while (*i3 != ',' && i3!=defines.end()) i3++;
 
-				auto h = Conversion::Convert<uint64>(MakeStringSection(i, i2));
+				auto h = Conversion::Convert<uint64_t>(MakeStringSection(i, i2));
 				auto o = Conversion::Convert<unsigned>(MakeStringSection(i2+1, i3));
 				_soOffsets.push_back({h, o});
 

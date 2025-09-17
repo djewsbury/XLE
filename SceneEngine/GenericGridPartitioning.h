@@ -6,7 +6,6 @@
 #include "../Utility/PtrUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/MemoryUtils.h"
-#include "../Core/Types.h"
 #include <utility>
 #include <memory>
 

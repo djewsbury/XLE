@@ -42,7 +42,7 @@ namespace RenderCore
 					assert(endCount0 == matrixMarker && endCount1 == hlslTypeName.end());
 
 					TypeDesc result;
-					result._arrayCount = (uint16)std::max(1u, count0 * count1);
+					result._arrayCount = (uint16_t)std::max(1u, count0 * count1);
 					result._type = s_baseTypes[c].second;
 					result._typeHint = TypeHint::Matrix;
 					return result;
@@ -52,7 +52,7 @@ namespace RenderCore
 					assert(endCountOpt == hlslTypeName.end());
 					if (count == 0 || count > 4) count = 1;
 					TypeDesc result;
-					result._arrayCount = (uint16)count;
+					result._arrayCount = (uint16_t)count;
 					result._type = s_baseTypes[c].second;
 					result._typeHint = (count > 1) ? TypeHint::Vector : TypeHint::None;
 					return result;

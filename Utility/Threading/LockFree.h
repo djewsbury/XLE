@@ -53,7 +53,7 @@ namespace Utility
         ~LockFreeFixedSizeQueue();
 
     private:
-        uint8 _buffer[sizeof(Type)*Count];
+        uint8_t _buffer[sizeof(Type)*Count];
 
             //      if _pushPtr==_popPtr it means the queue is empty
             //      But that means we can't fill the queue completely.

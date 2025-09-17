@@ -73,7 +73,7 @@ namespace RenderCore
             int nPitch = ByteCount(mipMapDesc._width, 1, 1, 1, mipMapDesc._format);
             assert(srcData._data.size() % nPitch == 0); (void)nPitch;
             assert(srcData._data.size() <= destinationDataSize);
-            XlCopyMemory/*Align16*/((uint8*)destination, srcData._data.begin(), srcData._data.size());
+            XlCopyMemory/*Align16*/((uint8_t*)destination, srcData._data.begin(), srcData._data.size());
             copiedBytes = (unsigned)srcData._data.size();
         }
 
@@ -154,7 +154,7 @@ namespace RenderCore
         result._width    = std::max(result._width  >> mipMapIndex, 1u);
         result._height   = std::max(result._height >> mipMapIndex, 1u);
         result._depth    = std::max(result._depth  >> mipMapIndex, 1u);
-        result._mipCount -= uint8(mipMapIndex);
+        result._mipCount -= uint8_t(mipMapIndex);
         return result;
     }
     
@@ -393,7 +393,7 @@ namespace RenderCore
 		_views.erase(
 			std::remove_if(
 				_views.begin(), _views.end(),
-				[rawRes](const std::pair<uint64, Entry>& p) { return p.second._resource.get() == rawRes; }),
+				[rawRes](const std::pair<uint64_t, Entry>& p) { return p.second._resource.get() == rawRes; }),
 			_views.end());
 	}
 

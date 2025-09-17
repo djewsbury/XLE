@@ -1166,7 +1166,7 @@ namespace ToolsRig
     {
         if (!modelCount) return;
 
-        std::vector<uint64> modelGuids;
+        std::vector<uint64_t> modelGuids;
         for (unsigned c=0; c<modelCount; ++c)
             modelGuids.push_back(Hash64(modelName[c]));
         std::sort(modelGuids.begin(), modelGuids.end());

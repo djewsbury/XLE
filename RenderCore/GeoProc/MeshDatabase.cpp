@@ -43,7 +43,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	inline void GetVertDataF16(
         float* dst, 
-        const uint16* src, unsigned srcComponentCount,
+        const uint16_t* src, unsigned srcComponentCount,
         ProcessingFlags::BitField processingFlags)
     {
 		RenderCore::Internal::GetVertDataF16(dst, src, srcComponentCount);
@@ -66,7 +66,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	inline void GetVertDataUNorm16(
 		float* dst,
-		const uint16* src, unsigned srcComponentCount,
+		const uint16_t* src, unsigned srcComponentCount,
 		ProcessingFlags::BitField processingFlags)
 	{
 		RenderCore::Internal::GetVertDataUNorm16(dst, src, srcComponentCount);
@@ -91,7 +91,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	inline void GetVertDataSNorm16(
 		float* dst,
-		const int16* src, unsigned srcComponentCount,
+		const int16_t* src, unsigned srcComponentCount,
 		ProcessingFlags::BitField processingFlags)
 	{
 		RenderCore::Internal::GetVertDataSNorm16(dst, src, srcComponentCount);
@@ -124,13 +124,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             GetVertDataF32(dst, (const float*)src, fmt._componentCount, processingFlags);
             break;
         case VertexUtilComponentType::Float16:
-            GetVertDataF16(dst, (const uint16*)src, fmt._componentCount, processingFlags);
+            GetVertDataF16(dst, (const uint16_t*)src, fmt._componentCount, processingFlags);
             break;
 		case VertexUtilComponentType::UNorm16:
-			GetVertDataUNorm16(dst, (const uint16*)src, fmt._componentCount, processingFlags);
+			GetVertDataUNorm16(dst, (const uint16_t*)src, fmt._componentCount, processingFlags);
 			break;
 		case VertexUtilComponentType::SNorm16:
-			GetVertDataSNorm16(dst, (const int16*)src, fmt._componentCount, processingFlags);
+			GetVertDataSNorm16(dst, (const int16_t*)src, fmt._componentCount, processingFlags);
 			break;
         default:
             UNREACHABLE();
@@ -425,24 +425,24 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     template Float3 MeshDatabase::GetUnifiedElement(size_t vertexIndex, unsigned elementIndex) const;
     template Float2 MeshDatabase::GetUnifiedElement(size_t vertexIndex, unsigned elementIndex) const;
 
-    std::unique_ptr<uint32[]> MeshDatabase::BuildUnifiedVertexIndexToPositionIndex() const
+    std::unique_ptr<uint32_t[]> MeshDatabase::BuildUnifiedVertexIndexToPositionIndex() const
     {
             //      Collada has this idea of "vertex index"; which is used to map
             //      on the vertex weight information. But that seems to be lost in OpenCollada.
             //      All we can do is use the position index as a subtitute.
 
-        auto unifiedVertexIndexToPositionIndex = std::make_unique<uint32[]>(_unifiedVertexCount);
+        auto unifiedVertexIndexToPositionIndex = std::make_unique<uint32_t[]>(_unifiedVertexCount);
         
         if (!_streams[0].GetVertexMap().empty()) {
             for (size_t v=0; v<_unifiedVertexCount; ++v) {
                 // assuming the first element is the position
                 auto attributeIndex = _streams[0].GetVertexMap()[v];
                 // assert(!_streams[0]._sourceData.IsValid() || attributeIndex < _mesh->getPositions().getValuesCount());
-                unifiedVertexIndexToPositionIndex[v] = (uint32)attributeIndex;
+                unifiedVertexIndexToPositionIndex[v] = (uint32_t)attributeIndex;
             }
         } else {
             for (size_t v=0; v<_unifiedVertexCount; ++v) {
-                unifiedVertexIndexToPositionIndex[v] = (uint32)v;
+                unifiedVertexIndexToPositionIndex[v] = (uint32_t)v;
             }
         }
 

@@ -42,13 +42,13 @@ namespace GUILayer
         EntityInterface::EntityId _object;
         Vector3 _worldSpaceCollision;
         float _distance;
-        uint64 _materialGuid;
+        uint64_t _materialGuid;
         String^ _materialName;
         String^ _modelName;
         unsigned _drawCallIndex;
     };
 
-    void ObjectSet::Add(System::Tuple<uint64, uint64>^ nativeHighlightableId)
+    void ObjectSet::Add(System::Tuple<uint64_t, uint64_t>^ nativeHighlightableId)
     {
         _nativePlacements->push_back(std::make_pair(nativeHighlightableId->Item1, nativeHighlightableId->Item2));
     }
@@ -225,7 +225,7 @@ namespace GUILayer
         ref class ScatterPlaceOperation
         {
         public:
-            List<Tuple<uint64, uint64>^>^ _toBeDeleted;
+            List<Tuple<uint64_t, uint64_t>^>^ _toBeDeleted;
             List<Vector3>^ _creationPositions;
         };
 
@@ -253,7 +253,7 @@ namespace GUILayer
                 AsFloat3(centre), radius, density);
 
             auto result = gcnew ScatterPlaceOperation();
-            result->_toBeDeleted = gcnew List<Tuple<uint64, uint64>^>();
+            result->_toBeDeleted = gcnew List<Tuple<uint64_t, uint64_t>^>();
             result->_creationPositions = gcnew List<Vector3>();
             for (const auto& d:toBeDeleted) result->_toBeDeleted->Add(Tuple::Create(d.first, d.second & 0xffffffffull));
             for (const auto& p:spawnPositions) result->_creationPositions->Add(Vector3(p[0], p[1], p[2]));

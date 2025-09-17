@@ -43,10 +43,10 @@ namespace GUILayer
     class SavedRenderResourcesPimpl
     {
     public:
-        std::vector<std::pair<uint64, RenderCore::IResourcePtr>> _vertexBuffers;
-        std::vector<std::pair<uint64, unsigned>> _vbFormat;
-        std::vector<std::pair<uint64, RenderCore::IResourcePtr>> _indexBuffers;
-        uint64 _nextBufferID;
+        std::vector<std::pair<uint64_t, RenderCore::IResourcePtr>> _vertexBuffers;
+        std::vector<std::pair<uint64_t, unsigned>> _vbFormat;
+        std::vector<std::pair<uint64_t, RenderCore::IResourcePtr>> _indexBuffers;
+        uint64_t _nextBufferID;
         RenderCore::IDevice* _device;
 
         VertexFormatRecord _vfRecord[8];
@@ -82,13 +82,13 @@ namespace GUILayer
     public ref class RetainedRenderResources
     {
     public:
-        uint64  CreateVertexBuffer(void* data, size_t size, unsigned format);
-        uint64  CreateIndexBuffer(void* data, size_t size);
-        bool    DeleteBuffer(uint64 id);
+        uint64_t  CreateVertexBuffer(void* data, size_t size, unsigned format);
+        uint64_t  CreateIndexBuffer(void* data, size_t size);
+        bool    DeleteBuffer(uint64_t id);
 
-        std::shared_ptr<RenderCore::IResource> GetVertexBuffer(uint64 id);
-        std::shared_ptr<RenderCore::IResource> GetIndexBuffer(uint64 id);
-        const VertexFormatRecord* GetVertexBufferFormat(uint64 id);
+        std::shared_ptr<RenderCore::IResource> GetVertexBuffer(uint64_t id);
+        std::shared_ptr<RenderCore::IResource> GetIndexBuffer(uint64_t id);
+        const VertexFormatRecord* GetVertexBufferFormat(uint64_t id);
 
         RetainedRenderResources(EngineDevice^ engineDevice);
         ~RetainedRenderResources();
@@ -143,7 +143,7 @@ namespace GUILayer
 
     void SimpleRenderingContext::DrawPrimitive(
         unsigned primitiveType,
-        uint64 vb,
+        uint64_t vb,
         unsigned startVertex,
         unsigned vertexCount,
         const float color[], const float xform[])
@@ -183,7 +183,7 @@ namespace GUILayer
 
     void SimpleRenderingContext::DrawIndexedPrimitive(
         unsigned primitiveType,
-        uint64 vb, uint64 ib,
+        uint64_t vb, uint64_t ib,
         unsigned startIndex,
         unsigned indexCount,
         unsigned startVertex,
@@ -234,7 +234,7 @@ namespace GUILayer
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    uint64  RetainedRenderResources::CreateVertexBuffer(void* data, size_t size, unsigned format)
+    uint64_t  RetainedRenderResources::CreateVertexBuffer(void* data, size_t size, unsigned format)
     {
         using namespace RenderCore;
         auto desc = CreateDesc(BindFlag::VertexBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create((unsigned)size));
@@ -247,7 +247,7 @@ namespace GUILayer
         return _pimpl->_nextBufferID++;
     }
 
-    uint64  RetainedRenderResources::CreateIndexBuffer(void* data, size_t size)
+    uint64_t  RetainedRenderResources::CreateIndexBuffer(void* data, size_t size)
     {
 		using namespace RenderCore;
         auto desc = CreateDesc(BindFlag::IndexBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create((unsigned)size));
@@ -259,14 +259,14 @@ namespace GUILayer
         return _pimpl->_nextBufferID++;
     }
 
-    std::shared_ptr<RenderCore::IResource> RetainedRenderResources::GetVertexBuffer(uint64 id)
+    std::shared_ptr<RenderCore::IResource> RetainedRenderResources::GetVertexBuffer(uint64_t id)
     {
         for (auto i = _pimpl->_vertexBuffers.cbegin(); i != _pimpl->_vertexBuffers.cend(); ++i)
             if (i->first == id) return i->second;
         return nullptr;
     }
 
-    const VertexFormatRecord* RetainedRenderResources::GetVertexBufferFormat(uint64 id)
+    const VertexFormatRecord* RetainedRenderResources::GetVertexBufferFormat(uint64_t id)
     {
         for (auto i = _pimpl->_vbFormat.cbegin(); i != _pimpl->_vbFormat.cend(); ++i)
             if (i->first == id && i->second < dimof(_pimpl->_vfRecord)) {
@@ -275,14 +275,14 @@ namespace GUILayer
         return nullptr;
     }
 
-    std::shared_ptr<RenderCore::IResource> RetainedRenderResources::GetIndexBuffer(uint64 id)
+    std::shared_ptr<RenderCore::IResource> RetainedRenderResources::GetIndexBuffer(uint64_t id)
     {
         for (auto i = _pimpl->_indexBuffers.cbegin(); i != _pimpl->_indexBuffers.cend(); ++i)
             if (i->first == id) return i->second;
         return nullptr;
     }
 
-    bool RetainedRenderResources::DeleteBuffer(uint64 id)
+    bool RetainedRenderResources::DeleteBuffer(uint64_t id)
     {
         auto vi = LowerBound(_pimpl->_vertexBuffers, id);
         if (vi != _pimpl->_vertexBuffers.end() && vi->first == id) {
@@ -347,7 +347,7 @@ namespace GUILayer
             SimpleRenderingContext^ context,
             PlacementsEditorWrapper^ placements,
             PlacementsRendererWrapper^ renderer,
-            ObjectSet^ highlight, uint64 materialGuid)
+            ObjectSet^ highlight, uint64_t materialGuid)
         {
             if (highlight == nullptr) {
 

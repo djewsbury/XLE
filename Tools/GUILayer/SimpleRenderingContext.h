@@ -6,7 +6,6 @@
 
 #include "CLIXAutoPtr.h"
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
-#include "../../Core/Types.h"
 #include <memory>
 
 namespace RenderCore { class IThreadContext; }
@@ -30,14 +29,14 @@ namespace GUILayer
     public:
         void DrawPrimitive(
             unsigned primitiveType,
-            uint64 vb,
+            uint64_t vb,
             unsigned startVertex,
             unsigned vertexCount,
             const float color[], const float xform[]);
 
         void DrawIndexedPrimitive(
             unsigned primitiveType,
-            uint64 vb, uint64 ib,
+            uint64_t vb, uint64_t ib,
             unsigned startIndex,
             unsigned indexCount,
             unsigned startVertex,

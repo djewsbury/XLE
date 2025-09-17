@@ -88,7 +88,7 @@ namespace ToolsRig
     {
     public:
         std::shared_ptr<::Assets::IIntermediateCompileMarker> Prepare(
-            uint64 typeCode, 
+            uint64_t typeCode, 
             const StringSection<::Assets::ResChar> initializers[], unsigned initializerCount);
 		std::vector<uint64_t> GetTypesForAsset(const StringSection<::Assets::ResChar> initializers[], unsigned initializerCount);
 		std::vector<std::pair<std::string, std::string>> GetExtensionsForType(uint64_t typeCode);
@@ -97,7 +97,7 @@ namespace ToolsRig
             // When using with placements, this hash value is referenced by the
             // "supplements" string in data. If the hash value changes, the data
             // must also change.
-        static const uint64 CompilerType = ConstHash64<'PER_', 'VERT', 'EX_A', 'O'>::Value;
+        static const uint64_t CompilerType = ConstHash64<'PER_', 'VERT', 'EX_A', 'O'>::Value;
 
         AOSupplementCompiler(std::shared_ptr<RenderCore::IThreadContext> threadContext);
         ~AOSupplementCompiler();

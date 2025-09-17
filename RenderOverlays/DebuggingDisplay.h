@@ -14,7 +14,6 @@
 #include "../Utility/UTFUtils.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringUtils.h"     // for StringSection
-#include "../Core/Types.h"
 #include <functional>
 #include <vector>
 #include <map>
@@ -27,7 +26,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     typedef uint64_t InteractableId;
     InteractableId InteractableId_Make(StringSection<char> name);
-    typedef uint32 KeyId;
+    typedef uint32_t KeyId;
 
     class InterfaceState;
 

@@ -8,7 +8,6 @@
 #include "../Assets/AssetHeap.h"		// for IAssetTracking
 #include "../Math/Matrix.h"
 #include "../Utility/IteratorUtils.h"
-#include "../Core/Types.h"
 #include <utility>
 
 namespace RenderCore { namespace Assets

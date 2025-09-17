@@ -45,9 +45,9 @@ namespace SceneEngine
 
     //////////////////////////////////////////////////////////////////////////////////////////
 
-    uint64      TerrainCellId::BuildHash() const
+    uint64_t      TerrainCellId::BuildHash() const
     {
-        uint64 result = Hash64(_heightMapFilename);
+        uint64_t result = Hash64(_heightMapFilename);
         for (unsigned c=0; c<dimof(_coverageFilename); ++c)
             if (_coverageFilename[c] && _coverageFilename[c][0])
                 result = HashCombine(Hash64(_coverageFilename[c], XlStringEnd(_coverageFilename[c])), result);
@@ -497,7 +497,7 @@ namespace SceneEngine
 		return newEnd;
 	}
 
-	std::vector<std::pair<uint64, uint32>> TerrainCellRenderer::CompletePendingUploads_Bridge()
+	std::vector<std::pair<uint64_t, uint32>> TerrainCellRenderer::CompletePendingUploads_Bridge()
     {
             // note; ideally we want an erase/remove that will reorder the vector here... That is on erase,
             // just do a std::swap between the erased item and the last item.
@@ -509,7 +509,7 @@ namespace SceneEngine
             // Each of the uploads between i and _pendingUploads.end() are completed this frame. 
             // We can search through them to see if any need to be touched by a short-circuit 
             // from the uber surface.
-		std::vector<std::pair<uint64, uint32>> result;
+		std::vector<std::pair<uint64_t, uint32>> result;
 		result.reserve(std::distance(i, _pendingUploads.end()));
         for (auto i2=i; i2!=_pendingUploads.end(); ++i2) {
 			auto ri = std::find_if(_renderInfos.begin(), _renderInfos.end(), [i2](const CRIPair& p) { return p.second.get() == i2->first; });

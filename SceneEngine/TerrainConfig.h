@@ -11,7 +11,6 @@
 #include "../Math/Matrix.h"
 #include "../Assets/AssetsCore.h"
 #include "../Utility/UTFUtils.h"
-#include "../Core/Types.h"
 
 namespace Formatters
 {

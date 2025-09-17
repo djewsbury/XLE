@@ -12,7 +12,7 @@ namespace Utility
 
     void printbits(const void* blob, int len)
     {
-        const uint8* data = (const uint8*)blob;
+        const uint8_t* data = (const uint8_t*)blob;
 
         printf("[");
 
@@ -31,15 +31,15 @@ namespace Utility
         printf("]");
     }
 
-    void printbits2(const uint8* k, int nbytes)
+    void printbits2(const uint8_t* k, int nbytes)
     {
         printf("[");
 
         for (int i = nbytes - 1; i >= 0; i--) {
-            uint8 b = k[i];
+            uint8_t b = k[i];
 
             for (int j = 7; j >= 0; j--) {
-                uint8 c = (b & (1 << j)) ? '#' : ' ';
+                uint8_t c = (b & (1 << j)) ? '#' : ' ';
 
                 putc(c, stdout);
             }
@@ -51,7 +51,7 @@ namespace Utility
     {
         assert((len & 3) == 0);
 
-        uint32* d = (uint32*)blob;
+        uint32_t* d = (uint32_t*)blob;
 
         printf("{ ");
 
@@ -64,7 +64,7 @@ namespace Utility
 
     void printbytes(const void* blob, int len)
     {
-        uint8* d = (uint8*)blob;
+        uint8_t* d = (uint8_t*)blob;
 
         printf("{ ");
 
@@ -77,7 +77,7 @@ namespace Utility
 
     void printbytes2(const void* blob, int len)
     {
-        uint8* d = (uint8*)blob;
+        uint8_t* d = (uint8_t*)blob;
 
         for (int i = 0; i < len; i++) {
             printf("%02x ", d[i]);
@@ -96,7 +96,7 @@ namespace Utility
 
     void lshift8(void* blob, int nbytes, int c)
     {
-        uint8* k = (uint8*)blob;
+        uint8_t* k = (uint8_t*)blob;
 
         if (c == 0) {return;}
 
@@ -114,8 +114,8 @@ namespace Utility
         if (c == 0) {return;}
 
         for (int i = nbytes - 1; i >= 0; i--) {
-            uint8 a = k[i];
-            uint8 b = (i == 0) ? 0 : k[i - 1];
+            uint8_t a = k[i];
+            uint8_t b = (i == 0) ? 0 : k[i - 1];
 
             k[i] = (a << c) | (b >> (8 - c));
         }
@@ -128,7 +128,7 @@ namespace Utility
         int nbytes = len;
         int ndwords = nbytes / 4;
 
-        uint32* k = reinterpret_cast<uint32*>(blob);
+        uint32_t* k = reinterpret_cast<uint32_t*>(blob);
 
         if (c == 0) {return;}
 
@@ -148,8 +148,8 @@ namespace Utility
         if (c == 0) {return;}
 
         for (int i = ndwords - 1; i >= 0; i--) {
-            uint32 a = k[i];
-            uint32 b = (i == 0) ? 0 : k[i - 1];
+            uint32_t a = k[i];
+            uint32_t b = (i == 0) ? 0 : k[i - 1];
 
             k[i] = (a << c) | (b >> (32 - c));
         }
@@ -168,7 +168,7 @@ namespace Utility
 
     void rshift8(void* blob, int nbytes, int c)
     {
-        uint8* k = (uint8*)blob;
+        uint8_t* k = (uint8_t*)blob;
 
         if (c == 0) {return;}
 
@@ -186,8 +186,8 @@ namespace Utility
         if (c == 0) {return;}
 
         for (int i = 0; i < nbytes; i++) {
-            uint8 a = (i == nbytes - 1) ? 0 : k[i + 1];
-            uint8 b = k[i];
+            uint8_t a = (i == nbytes - 1) ? 0 : k[i + 1];
+            uint8_t b = k[i];
 
             k[i] = (a << (8 - c)) | (b >> c);
         }
@@ -200,7 +200,7 @@ namespace Utility
         int nbytes = len;
         int ndwords = nbytes / 4;
 
-        uint32* k = (uint32*)blob;
+        uint32_t* k = (uint32_t*)blob;
 
         //----------
 
@@ -220,8 +220,8 @@ namespace Utility
         if (c == 0) {return;}
 
         for (int i = 0; i < ndwords; i++) {
-            uint32 a = (i == ndwords - 1) ? 0 : k[i + 1];
-            uint32 b = k[i];
+            uint32_t a = (i == ndwords - 1) ? 0 : k[i + 1];
+            uint32_t b = k[i];
 
             k[i] = (a << (32 - c)) | (b >> c);
         }
@@ -234,7 +234,7 @@ namespace Utility
         int nbits = len * 8;
 
         for (int i = 0; i < c; i++) {
-            uint32 bit = getbit(blob, len, nbits - 1);
+            uint32_t bit = getbit(blob, len, nbits - 1);
 
             lshift1(blob, len, 1);
 
@@ -246,7 +246,7 @@ namespace Utility
     {
         int nbytes = len;
 
-        uint8* k = (uint8*)blob;
+        uint8_t* k = (uint8_t*)blob;
 
         if (c == 0) {return;}
 
@@ -256,7 +256,7 @@ namespace Utility
         c &= (8 - 1);
 
         for (int j = 0; j < b2; j++) {
-            uint8 t = k[nbytes - 1];
+            uint8_t t = k[nbytes - 1];
 
             for (int i = nbytes - 1; i > 0; i--) {
                 k[i] = k[i - 1];
@@ -265,13 +265,13 @@ namespace Utility
             k[0] = t;
         }
 
-        uint8 t = k[nbytes - 1];
+        uint8_t t = k[nbytes - 1];
 
         if (c == 0) {return;}
 
         for (int i = nbytes - 1; i >= 0; i--) {
-            uint8 a = k[i];
-            uint8 b = (i == 0) ? t : k[i - 1];
+            uint8_t a = k[i];
+            uint8_t b = (i == 0) ? t : k[i - 1];
 
             k[i] = (a << c) | (b >> (8 - c));
         }
@@ -284,7 +284,7 @@ namespace Utility
         int nbytes = len;
         int ndwords = nbytes / 4;
 
-        uint32* k = (uint32*)blob;
+        uint32_t* k = (uint32_t*)blob;
 
         if (c == 0) {return;}
 
@@ -294,7 +294,7 @@ namespace Utility
         c &= (32 - 1);
 
         for (int j = 0; j < b2; j++) {
-            uint32 t = k[ndwords - 1];
+            uint32_t t = k[ndwords - 1];
 
             for (int i = ndwords - 1; i > 0; i--) {
                 k[i] = k[i - 1];
@@ -303,13 +303,13 @@ namespace Utility
             k[0] = t;
         }
 
-        uint32 t = k[ndwords - 1];
+        uint32_t t = k[ndwords - 1];
 
         if (c == 0) {return;}
 
         for (int i = ndwords - 1; i >= 0; i--) {
-            uint32 a = k[i];
-            uint32 b = (i == 0) ? t : k[i - 1];
+            uint32_t a = k[i];
+            uint32_t b = (i == 0) ? t : k[i - 1];
 
             k[i] = (a << c) | (b >> (32 - c));
         }
@@ -322,7 +322,7 @@ namespace Utility
         int nbits = len * 8;
 
         for (int i = 0; i < c; i++) {
-            uint32 bit = getbit(blob, len, 0);
+            uint32_t bit = getbit(blob, len, 0);
 
             rshift1(blob, len, 1);
 
@@ -334,7 +334,7 @@ namespace Utility
     {
         int nbytes = len;
 
-        uint8* k = (uint8*)blob;
+        uint8_t* k = (uint8_t*)blob;
 
         if (c == 0) {return;}
 
@@ -344,7 +344,7 @@ namespace Utility
         c &= (8 - 1);
 
         for (int j = 0; j < b2; j++) {
-            uint8 t = k[0];
+            uint8_t t = k[0];
 
             for (int i = 0; i < nbytes - 1; i++) {
                 k[i] = k[i + 1];
@@ -357,11 +357,11 @@ namespace Utility
 
         //----------
 
-        uint8 t = k[0];
+        uint8_t t = k[0];
 
         for (int i = 0; i < nbytes; i++) {
-            uint8 a = (i == nbytes - 1) ? t : k[i + 1];
-            uint8 b = k[i];
+            uint8_t a = (i == nbytes - 1) ? t : k[i + 1];
+            uint8_t b = k[i];
 
             k[i] = (a << (8 - c)) | (b >> c);
         }
@@ -374,7 +374,7 @@ namespace Utility
         int nbytes = len;
         int ndwords = nbytes / 4;
 
-        uint32* k = (uint32*)blob;
+        uint32_t* k = (uint32_t*)blob;
 
         if (c == 0) {return;}
 
@@ -384,7 +384,7 @@ namespace Utility
         c &= (32 - 1);
 
         for (int j = 0; j < b2; j++) {
-            uint32 t = k[0];
+            uint32_t t = k[0];
 
             for (int i = 0; i < ndwords - 1; i++) {
                 k[i] = k[i + 1];
@@ -397,22 +397,22 @@ namespace Utility
 
         //----------
 
-        uint32 t = k[0];
+        uint32_t t = k[0];
 
         for (int i = 0; i < ndwords; i++) {
-            uint32 a = (i == ndwords - 1) ? t : k[i + 1];
-            uint32 b = k[i];
+            uint32_t a = (i == ndwords - 1) ? t : k[i + 1];
+            uint32_t b = k[i];
 
             k[i] = (a << (32 - c)) | (b >> c);
         }
     }
 
-    uint32 window1(void* blob, int len, int start, int count)
+    uint32_t window1(void* blob, int len, int start, int count)
     {
         int nbits = len * 8;
         start %= nbits;
 
-        uint32 t = 0;
+        uint32_t t = 0;
 
         for (int i = 0; i < count; i++) {
             xl_setbit(&t, sizeof(t), i, getbit_wrap(blob, len, start + i));
@@ -421,13 +421,13 @@ namespace Utility
         return t;
     }
 
-    uint32 window8(void* blob, int len, int start, int count)
+    uint32_t window8(void* blob, int len, int start, int count)
     {
         int nbits = len * 8;
         start %= nbits;
 
-        uint32 t = 0;
-        uint8* k = (uint8*)blob;
+        uint32_t t = 0;
+        uint8_t* k = (uint8_t*)blob;
 
         if (count == 0) {return 0;}
 
@@ -438,10 +438,10 @@ namespace Utility
             int ia = (i + d + 1) % len;
             int ib = (i + d + 0) % len;
 
-            uint32 a = k[ia];
-            uint32 b = k[ib];
+            uint32_t a = k[ia];
+            uint32_t b = k[ib];
 
-            uint32 m = (a << (8 - c)) | (b >> c);
+            uint32_t m = (a << (8 - c)) | (b >> c);
 
             t |= (m << (8 * i));
 
@@ -452,7 +452,7 @@ namespace Utility
         return t;
     }
 
-    uint32 window32(void* blob, int len, int start, int count)
+    uint32_t window32(void* blob, int len, int start, int count)
     {
         int nbits = len * 8;
         start %= nbits;
@@ -461,7 +461,7 @@ namespace Utility
 
         int ndwords = len / 4;
 
-        uint32* k = (uint32*)blob;
+        uint32_t* k = (uint32_t*)blob;
 
         if (count == 0) {return 0;}
 
@@ -473,10 +473,10 @@ namespace Utility
         int ia = (d + 1) % ndwords;
         int ib = (d + 0) % ndwords;
 
-        uint32 a = k[ia];
-        uint32 b = k[ib];
+        uint32_t a = k[ia];
+        uint32_t b = k[ib];
 
-        uint32 t = (a << (32 - c)) | (b >> c);
+        uint32_t t = (a << (32 - c)) | (b >> c);
 
         t &= ((1 << count) - 1);
 

@@ -193,7 +193,7 @@ namespace RenderCore { namespace BufferUploads
             std::weak_ptr<FileDataSource>   _returnPointer;
         };
         SpecialOverlapped _overlappedStatus;
-        std::unique_ptr<byte[], PODAlignedDeletor> _pkt;
+        std::unique_ptr<uint8_t[], PODAlignedDeletor> _pkt;
         std::shared_ptr<Marker> _marker;
 
         std::string _name;
@@ -258,7 +258,7 @@ namespace RenderCore { namespace BufferUploads
                 if (!pkt) Throw(std::runtime_error("FileDataSource has expired"));
 
                     // We allocate the buffer here, to remove malloc costs from the caller thread
-                pkt->_pkt.reset((byte*)XlMemAlign(pkt->_dataSize, 16));
+                pkt->_pkt.reset((uint8_t*)XlMemAlign(pkt->_dataSize, 16));
 
                 auto result = ReadFileEx(
                     pkt->_fileHandle, pkt->_pkt.get(), (DWORD)pkt->_dataSize, 

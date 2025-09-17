@@ -11,7 +11,6 @@
 #include "StringUtils.h"
 #include "IteratorUtils.h"
 #include "Streams/SerializationUtils.h"
-#include "../Core/Types.h"
 #include <string>
 #include <vector>
 

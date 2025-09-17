@@ -7,7 +7,6 @@
 #pragma once
 
 #include "TerrainOp.h"
-#include "../../Core/Types.h"
 #include <vector>
 
 namespace ToolsRig

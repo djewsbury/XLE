@@ -35,7 +35,7 @@ namespace PlatformRig { namespace Overlays
 
     private:
         typedef float GPUDuration;
-        typedef uint64 GPUTime;
+        typedef uint64_t GPUTime;
         typedef unsigned FrameId;
 
         static const unsigned DurationHistoryLength = 1024;
@@ -112,7 +112,7 @@ namespace PlatformRig { namespace Overlays
             size_t eventType = *((const size_t*)evnt); evnt = PtrAdd(evnt, sizeof(size_t));
             if (eventType == ~size_t(0x0)) {
                 FrameId frameId = (FrameId)*((const size_t*)evnt); evnt = PtrAdd(evnt, sizeof(size_t));
-                GPUTime frequency = *((const uint64*)evnt); evnt = PtrAdd(evnt, sizeof(uint64));
+                GPUTime frequency = *((const uint64_t*)evnt); evnt = PtrAdd(evnt, sizeof(uint64_t));
 
                 ///////////////////////////////////////////////////
                 //      if this is the start of the next frame, we need to return,
@@ -125,8 +125,8 @@ namespace PlatformRig { namespace Overlays
                 _currentFrequency = frequency;
             } else {
                 const char* eventName = *((const char**)evnt); evnt = PtrAdd(evnt, sizeof(const char*));
-                //assert((size_t(evnt)%sizeof(uint64))==0);
-                uint64 timeValue = *((const uint64*)evnt); evnt = PtrAdd(evnt, sizeof(uint64));
+                //assert((size_t(evnt)%sizeof(uint64_t))==0);
+                uint64_t timeValue = *((const uint64_t*)evnt); evnt = PtrAdd(evnt, sizeof(uint64_t));
                 _earliestTime = std::min(_earliestTime, timeValue);
                 _latestTime = std::max(_latestTime, timeValue);
 
@@ -222,7 +222,7 @@ namespace PlatformRig { namespace Overlays
         for (unsigned c=0; c<dimof(_sections); ++c) {
             if (_sections[c]._id) {
                 float smoothedCost = 0.f;
-                float minValue = MAX_FLOAT32, maxValue = -MAX_FLOAT32;
+                float minValue = std::numeric_limits<float>::max(), maxValue = std::numeric_limits<float>::lowest();
                 for (unsigned f=0; f<_sections[c]._durationHistoryLength; ++f) {
                     smoothedCost += _sections[c]._durationHistory[f];
                     minValue = std::min(minValue, _sections[c]._durationHistory[f]);

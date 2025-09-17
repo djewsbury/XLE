@@ -7,9 +7,10 @@
 #pragma once
 
 #include "../../RenderCore/IDevice_Forward.h"
-#include "../../Math/Matrix.h"
-#include "../../Core/Types.h"
+#include "../../Math/Vector.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace PlatformRig { class IInputListener; }
 namespace RenderCore { class IThreadContext; }

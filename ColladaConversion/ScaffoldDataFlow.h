@@ -18,14 +18,14 @@ namespace ColladaConversion
     class DocScopeId
     {
     public:
-        uint64 GetHash() const          { return _hash; }
+        uint64_t GetHash() const          { return _hash; }
         Section GetOriginal() const     { return _section; }
         bool IsEmpty() const            { return _section.IsEmpty(); }
 
         DocScopeId(Section section);
         DocScopeId() : _hash(0) {}
     protected:
-        uint64 _hash;
+        uint64_t _hash;
         Section _section;
     };
 }

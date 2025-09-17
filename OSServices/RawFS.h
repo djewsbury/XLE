@@ -7,7 +7,6 @@
 #pragma once
 
 #include "../Core/Exceptions.h"
-#include "../Core/Types.h"
 #include "../Utility/StringUtils.h" // for StringSection
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/Streams/PathUtils.h"       // for s_defaultFilenameRules
@@ -58,7 +57,7 @@ namespace OSServices
 		typedef unsigned BitField;
 	};
 
-	using FileTime = uint64;
+	using FileTime = uint64_t;
 
 	enum class FileSeekAnchor { Start = SEEK_SET, Current = SEEK_CUR, End = SEEK_END };
 
@@ -80,7 +79,7 @@ namespace OSServices
         void        Flush() const never_throws;
         void        SetEndOfFile() const never_throws;
 
-        uint64      GetSize() const never_throws;
+        uint64_t    GetSize() const never_throws;
 		bool		IsGood() const never_throws;
 		FileTime	GetFileTime() const never_throws;
 
@@ -110,14 +109,14 @@ namespace OSServices
 
 		using CloseFn = std::function<void(IteratorRange<const void*>)>;
 
-		Exceptions::IOException::Reason TryOpen(const utf8 filename[], uint64 size, const char openMode[], FileShareMode::BitField shareMode) never_throws;
-		Exceptions::IOException::Reason TryOpen(const utf16 filename[], uint64 size, const char openMode[], FileShareMode::BitField shareMode) never_throws;
+		Exceptions::IOException::Reason TryOpen(const utf8 filename[], uint64_t size, const char openMode[], FileShareMode::BitField shareMode) never_throws;
+		Exceptions::IOException::Reason TryOpen(const utf16 filename[], uint64_t size, const char openMode[], FileShareMode::BitField shareMode) never_throws;
 		MemoryMappedFile(
-			const utf8 filename[], uint64 size, 
+			const utf8 filename[], uint64_t size, 
 			const char openMode[],
 			FileShareMode::BitField shareMode);
 		MemoryMappedFile(
-			const utf16 filename[], uint64 size, 
+			const utf16 filename[], uint64_t size, 
 			const char openMode[],
 			FileShareMode::BitField shareMode);
 

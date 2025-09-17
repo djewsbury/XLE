@@ -275,13 +275,13 @@ namespace Assets
 		return result;
 	}
 
-	static std::unique_ptr<uint8[]> TryLoadFileAsMemoryBlock(IFileSystem& fs, StringSection<char> sourceFileName, size_t* sizeResult)
+	static std::unique_ptr<uint8_t[]> TryLoadFileAsMemoryBlock(IFileSystem& fs, StringSection<char> sourceFileName, size_t* sizeResult)
 	{
 		std::unique_ptr<IFileInterface> file;
 		if (TryOpen(file, fs, sourceFileName, "rb", OSServices::FileShareMode::Read) == IFileSystem::IOReason::Success) {
 			size_t size = file->GetSize();
 			if (size) {
-				auto result = std::make_unique<uint8[]>(size);
+				auto result = std::make_unique<uint8_t[]>(size);
 				file->Read(result.get(), 1, size);
 				if (sizeResult) {
 					*sizeResult = size;
@@ -339,7 +339,7 @@ namespace Assets
 			DirectoryChunk dirHdr;
 			std::vector<CollectionDirectoryBlock> collections;
 			std::vector<ArtifactDirectoryBlock> blocks;
-			std::unique_ptr<uint8[]> flattenedSpanningHeap;
+			std::unique_ptr<uint8_t[]> flattenedSpanningHeap;
 		
 			std::unique_ptr<IFileInterface> directoryFile;
 			bool directoryFileOpened = false;
@@ -357,7 +357,7 @@ namespace Assets
 					directoryFile->Read(collections.data(), sizeof(CollectionDirectoryBlock), dirHdr._collectionCount);
 					blocks.resize(dirHdr._blockCount);
 					directoryFile->Read(blocks.data(), sizeof(ArtifactDirectoryBlock), dirHdr._blockCount);
-					flattenedSpanningHeap = std::make_unique<uint8[]>(dirHdr._spanningHeapSize);
+					flattenedSpanningHeap = std::make_unique<uint8_t[]>(dirHdr._spanningHeapSize);
 					directoryFile->Read(flattenedSpanningHeap.get(), 1, dirHdr._spanningHeapSize);
 					directoryFileOpened = true;
 				} CATCH (...) {
@@ -395,7 +395,7 @@ namespace Assets
 				}
 			}
 
-			SpanningHeap<uint32> spanningHeap(flattenedSpanningHeap.get(), dirHdr._spanningHeapSize);
+			SpanningHeap<uint32_t> spanningHeap(flattenedSpanningHeap.get(), dirHdr._spanningHeapSize);
 			for (auto i=_pendingCommits.begin(); i!=_pendingCommits.end(); ++i) {
 				i->_pendingCommitPtr = ~unsigned(0x0);
 
@@ -911,8 +911,8 @@ namespace Assets
 
 					if (	r._dataType == ArtifactRequest::DataType::BlockSerializer
 							||	r._dataType == ArtifactRequest::DataType::Raw) {
-						uint8* mem = (uint8*)XlMemAlign(i->_size, sizeof(uint64_t));
-						chunkResult._buffer = std::unique_ptr<uint8[], PODAlignedDeletor>(mem);
+						uint8_t* mem = (uint8_t*)XlMemAlign(i->_size, sizeof(uint64_t));
+						chunkResult._buffer = std::unique_ptr<uint8_t[], PODAlignedDeletor>(mem);
 						chunkResult._bufferSize = i->_size;
 						archiveFile->Seek(i->_start);
 						archiveFile->Read(chunkResult._buffer.get(), i->_size);

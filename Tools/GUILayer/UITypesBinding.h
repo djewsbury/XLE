@@ -213,7 +213,7 @@ namespace GUILayer
 
         [Browsable(false)] property bool HasMouseOver { bool get(); }
         [Browsable(false)] property System::String^ FullMaterialName { System::String^ get(); }
-        [Browsable(false)] property uint64 MaterialBindingGuid { uint64 get(); }
+        [Browsable(false)] property uint64_t MaterialBindingGuid { uint64_t get(); }
 
         void AttachCallback(System::Windows::Forms::PropertyGrid^ callback);
         const std::shared_ptr<ToolsRig::VisMouseOver>& GetUnderlying() { return _object.GetNativePtr(); }

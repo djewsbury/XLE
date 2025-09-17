@@ -35,7 +35,7 @@ namespace Utility
     public:
         BitHeap                                 _allocationStatus;
         std::unique_ptr<Interlocked::Value[]>   _refCounts;
-        std::vector<uint8>                      _pageMemory;
+        std::vector<uint8_t>                    _pageMemory;
 
         unsigned            Allocate();
 
@@ -88,7 +88,7 @@ namespace Utility
     class FreePage
     {
     public:
-        std::vector<uint8>  _pageMemory;
+        std::vector<uint8_t>  _pageMemory;
         SimpleSpanningHeap  _spanningHeap;
 
         class Block
@@ -182,7 +182,7 @@ namespace Utility
     };
 
     struct SplitMarker { unsigned _pageCat, _pageIndex, _blockIndex; };
-    static SplitMarker Split(uint32 marker)
+    static SplitMarker Split(uint32_t marker)
     {
         //  Our "marker" object should tell us some information about the allocation,
         //  ... particularly which page it belongs to, and which block within that page
@@ -201,14 +201,14 @@ namespace Utility
         return result;
     }
 
-    static uint32 MakeMarker(unsigned pageCat, unsigned pageIndex, unsigned blockIndex)
+    static uint32_t MakeMarker(unsigned pageCat, unsigned pageIndex, unsigned blockIndex)
     {
         assert(pageIndex <= 0x3FFFF);
         assert(blockIndex <= 0x3FF);
         return (pageCat & 0xf) | ((pageIndex & 0x3FFFF) << 4) | ((blockIndex & 0x3ff) << 22);
     }
 
-    static uint32 MainHeapMarker = 0xf;     // (category 15)
+    static uint32_t MainHeapMarker = 0xf;     // (category 15)
 
     class MainHeapExtraData
     {
@@ -340,7 +340,7 @@ namespace Utility
                         //  Free it directly, ignoring current status of reference count
                     auto offset = ptrdiff_t(ptr) - ptrdiff_t(AsPointer(i->_pageMemory.cbegin()));
                     assert((offset % blockSize) == 0);
-                    i->_allocationStatus.Deallocate(uint32(offset / blockSize));
+                    i->_allocationStatus.Deallocate(uint32_t(offset / blockSize));
                     return;
                 }
             }

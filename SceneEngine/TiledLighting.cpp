@@ -415,7 +415,7 @@ namespace SceneEngine
                 Metal::BoundUniforms uniforms(debuggingShader, usi);
                 
                 const unsigned TileWidth = 8, TileHeight = 8;
-                uint32 globals[4] = {   (mainViewportWidth + TileWidth - 1) / TileWidth, 
+                uint32_t globals[4] = { (mainViewportWidth + TileWidth - 1) / TileWidth, 
                                         (mainViewportHeight + TileHeight + 1) / TileHeight, 
                                         0, 0 };
                 auto currentGlobalTransform = Techniques::BuildGlobalTransformConstants(parsingContext.GetProjectionDesc());

@@ -84,7 +84,7 @@ namespace RenderCore { namespace Assets
 		const ModelRootData*	_rootData = nullptr;
 		const SkeletonMachine*	_embeddedSkeleton = nullptr;
 
-		std::unique_ptr<uint8[], PODAlignedDeletor>		_rawMemoryBlock;
+		std::unique_ptr<uint8_t[], PODAlignedDeletor>	_rawMemoryBlock;
 		size_t											_rawMemoryBlockSize = 0;
 		::Assets::ArtifactReopenFunction				_largeBlocksReopen;
 		::Assets::DependencyValidation					_depVal;
@@ -138,7 +138,7 @@ namespace RenderCore { namespace Assets
 		static const ::Assets::ArtifactRequest ChunkRequests[2];
 
 	private:
-		std::unique_ptr<uint8[], PODAlignedDeletor>	_rawMemoryBlock;
+		std::unique_ptr<uint8_t[], PODAlignedDeletor>	_rawMemoryBlock;
 		::Assets::ArtifactReopenFunction			_largeBlocksReopen;
 		::Assets::DependencyValidation							_depVal;
 	};
@@ -189,7 +189,7 @@ namespace RenderCore { namespace Assets
 		~SkeletonScaffold();
 
 	private:
-		std::unique_ptr<uint8[], PODAlignedDeletor>    _rawMemoryBlock;
+		std::unique_ptr<uint8_t[], PODAlignedDeletor>    _rawMemoryBlock;
 		::Assets::DependencyValidation _depVal;
 	};
 
@@ -218,7 +218,7 @@ namespace RenderCore { namespace Assets
 		~AnimationSetScaffold();
 
 	private:
-		std::unique_ptr<uint8[], PODAlignedDeletor>    _rawMemoryBlock;
+		std::unique_ptr<uint8_t[], PODAlignedDeletor>    _rawMemoryBlock;
 		::Assets::DependencyValidation _depVal;
 	};
 

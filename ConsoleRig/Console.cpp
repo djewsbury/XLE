@@ -93,7 +93,7 @@ namespace ConsoleRig
         }
 
     private:
-        std::vector<std::pair<uint64, std::unique_ptr<ICVarTable>>> _tables;
+        std::vector<std::pair<uint64_t, std::unique_ptr<ICVarTable>>> _tables;
     };
 
 

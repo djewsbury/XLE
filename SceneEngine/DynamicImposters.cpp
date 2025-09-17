@@ -173,7 +173,7 @@ namespace SceneEngine
     public:
         Config _config;
 
-        using SpriteHash = uint64;
+        using SpriteHash = uint64_t;
 
         class QueuedObject
         {
@@ -294,7 +294,7 @@ namespace SceneEngine
 
         auto preparedSpritesI = _preparedSpritesLookup.begin();
         for (const auto& o:_queuedObjects) {
-            uint64 hash = o.first;
+            uint64_t hash = o.first;
             preparedSpritesI = std::lower_bound(preparedSpritesI, _preparedSpritesLookup.end(), hash, CompareFirst<Pimpl::SpriteHash, unsigned>());
             if (preparedSpritesI != _preparedSpritesLookup.end() && preparedSpritesI->first == hash) {
             } else {
@@ -443,11 +443,11 @@ namespace SceneEngine
             // In some cases we might want to sort the sprites back-to-front
             // (since they are close to camera facing, we should get correct
             // sorting when sorting on a per-sprite basis)
-        std::sort(_pimpl->_queuedInstances.begin(), _pimpl->_queuedInstances.end(), CompareFirst<uint64, Float4>());
+        std::sort(_pimpl->_queuedInstances.begin(), _pimpl->_queuedInstances.end(), CompareFirst<uint64_t, Float4>());
 
         auto preparedSpritesI = _pimpl->_preparedSpritesLookup.begin();
         for (auto i=_pimpl->_queuedInstances.cbegin(); i!=_pimpl->_queuedInstances.cend();) {
-            uint64 hash = i->first;
+            uint64_t hash = i->first;
             auto start = i++;
             while (i < _pimpl->_queuedInstances.cend() && i->first == hash) ++i;
 
@@ -741,7 +741,7 @@ namespace SceneEngine
 				Techniques::BuildDefaultRastizerState(states)};
         }
 
-        virtual uint64 GetHash() { return typeid(CustomStateResolver).hash_code(); }
+        virtual uint64_t GetHash() { return typeid(CustomStateResolver).hash_code(); }
 
         CustomStateResolver()
         {

@@ -819,90 +819,6 @@ char* XlStrTok(char* token, const char* delimit, char** context)
     #endif
 }
 
-int XlExtractInt(const char* buf, int* arr, size_t length)
-{
-    assert(length > 1);
-
-    size_t index = 0;
-    const char* s = buf;
-
-    while (*s && index < length) {
-        bool hasDigit = false;
-        int negative = 1;
-        int result = 0;
-        if (*s == '-') {
-            negative = -1;
-            ++s;
-        }
-        while (XlIsDigit(*s)) {
-            result = (result * 10) + (*s - '0');
-            ++s;
-            hasDigit = true;
-        }
-
-        if (hasDigit) {
-            arr[index++] = negative * result;
-        } else {
-            ++s;
-        }
-    }
-
-    return int(index);
-}
-
-bool XlSafeAtoi(const char* str, int* n)
-{
-    errno = 0;
-    #if CLIBRARIES_ACTIVE == CLIBRARIES_MSVC
-        *n = atoi(str);
-        if (*n == MAX_INT32 || *n == MIN_INT32) {
-            if (errno == ERANGE) {
-                return false;
-            }
-        }
-    #else
-        char* end = const_cast<char*>(XlStringEnd(str));
-        long result = strtol(str, &end, 10);   // GCC atoi doesn't handle ERANGE as expected... But! Sometimes strtol returns a 64 bit number, not a 32 bit number... trouble...?
-        if (result == LONG_MAX || result == LONG_MIN) {
-            if (errno == ERANGE) {
-                return false;
-            }
-        }
-        if (result > std::numeric_limits<int>::max() || result < std::numeric_limits<int>::min()) {
-            return false;
-        }
-        if (!end || *end != '\0') {
-            return false;
-        }
-        *n = int(result);
-    #endif
-
-    if ((*n) == 0 && errno != 0) {
-        return false;
-    }
-    return true;
-}
-
-bool XlSafeAtoi64(const char* str, int64* n)
-{
-    errno = 0;
-    #if CLIBRARIES_ACTIVE == CLIBRARIES_MSVC
-        *n = _atoi64(str);
-    #else
-        char* end = const_cast<char*>(XlStringEnd(str));
-        *n = strtoll(str, &end, 10);
-    #endif
-    if (*n == std::numeric_limits<int64>::max() || *n == std::numeric_limits<int64>::min()) {
-        if (errno == ERANGE) {
-            return false;
-        }
-    }
-    if (*n == 0 && errno != 0) {
-        return false;
-    }
-    return true;
-}
-
 const char* XlReplaceString(char* dst, size_t size, const char* src, const char* strOld, const char* strNew)
 {
     assert(size > 0);
@@ -1513,22 +1429,22 @@ template std::optional<int64_t> ParseInteger(StringSection<> input, int radix);
 
 int XlAtoI32(const char* str, const char** end_ptr, int radix)
 {
-	return tpl_atoi<int32>(str, end_ptr, radix);
+	return tpl_atoi<int32_t>(str, end_ptr, radix);
 }
 
-int64 XlAtoI64(const char* str, const char** end_ptr, int radix)
+int64_t XlAtoI64(const char* str, const char** end_ptr, int radix)
 {
-	return tpl_atoi<int64>(str, end_ptr, radix);
+	return tpl_atoi<int64_t>(str, end_ptr, radix);
 }
 
 uint32_t XlAtoUI32(const char* str, const char** end_ptr, int radix)
 {
-	return (uint32_t)tpl_atoi<int32>(str, end_ptr, radix);
+	return (uint32_t)tpl_atoi<int32_t>(str, end_ptr, radix);
 }
 
 uint64_t XlAtoUI64(const char* str, const char** end_ptr, int radix)
 {
-	return (uint64_t)tpl_atoi<int64>(str, end_ptr, radix);
+	return (uint64_t)tpl_atoi<int64_t>(str, end_ptr, radix);
 }
 
 float XlAtoF32(const char* str, const char** end_ptr)
@@ -1670,7 +1586,7 @@ static inline char* tpl_itoa(T value, char* buf, int radix)
 	return buf;
 }
 
-char* XlI32toA(int32 value, char* buffer, size_t dim, int radix)
+char* XlI32toA(int32_t value, char* buffer, size_t dim, int radix)
 {
 	if (!IsValidDimForI32(dim, radix)) {
 		return 0;
@@ -1685,7 +1601,7 @@ char* XlI32toA(int32 value, char* buffer, size_t dim, int radix)
 	return tpl_itoa<uint32_t>((uint32_t)value, buffer, radix);	
 }
 
-char* XlI64toA(int64 value, char* buffer, size_t dim, int radix)
+char* XlI64toA(int64_t value, char* buffer, size_t dim, int radix)
 {
 	if (!IsValidDimForI64(dim, radix)) {
 		return 0;
@@ -1718,7 +1634,7 @@ char* XlUI64toA(uint64_t value, char* buffer, size_t dim, int radix)
     return tpl_itoa<uint64_t>(value, buffer, radix);
 }
 
-int XlI32toA_s(int32 value, char* buffer, size_t dim, int radix)
+int XlI32toA_s(int32_t value, char* buffer, size_t dim, int radix)
 {
 	if (!IsValidDimForI32(dim, radix)) {
 		return EINVAL;
@@ -1734,7 +1650,7 @@ int XlI32toA_s(int32 value, char* buffer, size_t dim, int radix)
 	return 0;
 }
 
-int XlI64toA_s(int64 value, char* buffer, size_t dim, int radix)
+int XlI64toA_s(int64_t value, char* buffer, size_t dim, int radix)
 {
 	if (!IsValidDimForI64(dim, radix)) {
 		return EINVAL;
@@ -1770,7 +1686,7 @@ int XlUI64toA_s(uint64_t value, char* buffer, size_t dim, int radix)
 	return 0;
 }
 
-char* XlI32toA_ns(int32 value, char* buffer, int radix)
+char* XlI32toA_ns(int32_t value, char* buffer, int radix)
 {
 	if (radix == 10 && value < 0) {
 		*buffer = '-';
@@ -1781,7 +1697,7 @@ char* XlI32toA_ns(int32 value, char* buffer, int radix)
 	return tpl_itoa<uint32_t>((uint32_t)value, buffer, radix);	
 }
 
-char* XlI64toA_ns(int64 value, char* buffer, int radix)
+char* XlI64toA_ns(int64_t value, char* buffer, int radix)
 {
 	if (radix == 10 && value < 0) {
 		*buffer = '-';

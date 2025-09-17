@@ -636,14 +636,14 @@ namespace Assets
         //      YieldToPool rather than stalling the thread entirely, if we're
         //      careful about all of the extra complexity YieldToPool can bring along
         volatile AssetState* state = const_cast<AssetState*>(&_state);
-		uint32 waitCount = 0u;
+		uint32_t waitCount = 0u;
         while (*state == AssetState::Pending) {
 			float sleepValue = float(waitCount);
 			sleepValue -= 64.f;
 			sleepValue /= 16.f;
             ++waitCount;
             if (timeout.count() != 0 && std::chrono::steady_clock::now() >= timeToCancel) return {};
-            auto timeoutMS = uint32(std::min(100.0f, std::max(0.0f, sleepValue)));
+            auto timeoutMS = uint32_t(std::min(100.0f, std::max(0.0f, sleepValue)));
             YieldToPoolFor(std::chrono::milliseconds(timeoutMS));
 		}
 

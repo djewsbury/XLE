@@ -554,7 +554,7 @@ namespace ToolsRig
         OSServices::CreateDirectoryRecursive(outputDir);
 
         auto dstSampleSize = ImpliedTyping::TypeDesc{dstType}.GetSize();
-        uint64 resultSize = 
+        uint64_t resultSize = 
             sizeof(TerrainUberHeader)
             + finalDims[0] * finalDims[1] * dstSampleSize
             ;
@@ -835,7 +835,7 @@ namespace ToolsRig
             cellCountX * destNodeDims * (1<<(destCellTreeDepth-1)),
             cellCountY * destNodeDims * (1<<(destCellTreeDepth-1)));
 
-        uint64 resultSize = 
+        uint64_t resultSize = 
             sizeof(TerrainUberHeader)
             + finalDims[0] * finalDims[1] * sizeof(float)
             ;
@@ -968,7 +968,7 @@ namespace ToolsRig
 
         size_t stride = nodeDimsInElements[0] * cellDimsInNodes[0] * xDims * sizeof(float);
 
-        uint64 resultSize = 
+        uint64_t resultSize = 
             sizeof(TerrainUberHeader)
             + cellCount * nodesPerCell * heightsPerNode * sizeof(float)
             ;

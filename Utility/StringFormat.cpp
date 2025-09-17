@@ -5,10 +5,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "StringFormat.h"
-#include "../Core/Types.h"
 #include "Streams/Stream.h"
 #include "Streams/StreamTypes.h"
-#include "PtrUtils.h"
 #include "StringUtils.h"
 #include <stdio.h>
 #include <wchar.h>
@@ -119,9 +117,9 @@ union FormatVal {
     bool f_bool;
     ucs4 f_unichar;
     int f_int;
-    uint32 f_uint;
-    int64 f_int64;
-    uint64 f_uint64;
+    uint32_t f_uint;
+    int64_t f_int64;
+    uint64_t f_uint64;
     double f_double;
     const utf8* f_string;
     const ucs2* f_wstring;
@@ -505,14 +503,14 @@ template<typename T>
                     break;
                 case 'd':
                 case 'i':
-                    val.f_int64 = va_arg(args, int64);
+                    val.f_int64 = va_arg(args, int64_t);
                     xl_snprintf(buf, dimof(buf), fmt2, val.f_int64);
                     break;
                 case 'o':
                 case 'u':
                 case 'x':
                 case 'X':
-                    val.f_uint64 = va_arg(args, uint64);
+                    val.f_uint64 = va_arg(args, uint64_t);
                     xl_snprintf(buf, dimof(buf), fmt2, val.f_uint64);
                     break;
                 }
@@ -545,7 +543,7 @@ template<typename T>
                 case 'u':
                 case 'x':
                 case 'X':
-                    val.f_uint = va_arg(args, uint32);
+                    val.f_uint = va_arg(args, uint32_t);
                     xl_snprintf(buf, dimof(buf), fmt2, val.f_uint);
                     break;
                 case 'e':

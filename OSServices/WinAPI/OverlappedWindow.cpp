@@ -44,17 +44,17 @@ namespace OSServices
         CurrentModule();
         ~CurrentModule();
 
-        uint64      HashId();
+        uint64_t    HashId();
         ::HMODULE   Handle();
         ::HINSTANCE HInstance();
 
         static CurrentModule& GetInstance();
 
     protected:
-        uint64 _moduleHash;
+        uint64_t _moduleHash;
     };
 
-    inline uint64       CurrentModule::HashId()       { return _moduleHash; }
+    inline uint64_t     CurrentModule::HashId()       { return _moduleHash; }
     inline ::HMODULE    CurrentModule::Handle()       { return ::GetModuleHandle(0); }
     inline ::HINSTANCE  CurrentModule::HInstance()    { return (::HINSTANCE)(::GetModuleHandle(0)); }
 

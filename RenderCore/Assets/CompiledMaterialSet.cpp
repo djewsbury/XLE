@@ -81,7 +81,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	CompiledMaterialSet::CompiledMaterialSet(
-		std::unique_ptr<uint8[], PODAlignedDeletor>	rawMemoryBlock,
+		std::unique_ptr<uint8_t[], PODAlignedDeletor>	rawMemoryBlock,
 		size_t rawMemoryBlockSize, const ::Assets::DependencyValidation& depVal)
 	: _rawMemoryBlock(std::move(rawMemoryBlock)), _rawMemoryBlockSize(rawMemoryBlockSize)
 	, _depVal(depVal)

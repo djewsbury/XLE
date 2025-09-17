@@ -116,7 +116,7 @@ namespace SceneEngine
         
         auto i = std::lower_bound(
             _terrainRenderer->_renderInfos.begin(), _terrainRenderer->_renderInfos.end(), 
-            hash, CompareFirst<uint64, std::unique_ptr<TerrainCellRenderer::CellRenderInfo>>());
+            hash, CompareFirst<uint64_t, std::unique_ptr<TerrainCellRenderer::CellRenderInfo>>());
         if (i!=_terrainRenderer->_renderInfos.end() && i->first == hash) {
 
                 //  We found the correct cell...
@@ -288,7 +288,7 @@ namespace SceneEngine
         void BuildUberSurface(const ::Assets::ResChar uberSurfaceDir[], const TerrainConfig& cfg);
 
         void FlushShortCircuitQueue(Metal::DeviceContext& context);
-		void ShortCircuitFinishedUploads(Metal::DeviceContext& context, IteratorRange<std::pair<uint64, uint32>*> updated);
+		void ShortCircuitFinishedUploads(Metal::DeviceContext& context, IteratorRange<std::pair<uint64_t, uint32>*> updated);
     };
 
 
@@ -636,7 +636,7 @@ namespace SceneEngine
 
 	void TerrainManager::Pimpl::ShortCircuitFinishedUploads(
 		Metal::DeviceContext& context, 
-		IteratorRange<std::pair<uint64, uint32>*> updated)
+		IteratorRange<std::pair<uint64_t, uint32>*> updated)
 	{
         if (!_uberSurfaceBridge) return;
 		for (const auto& u:updated) {

@@ -10,7 +10,6 @@
 #include "../Utility/MiniHeap.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Core/Exceptions.h"
-#include "../Core/Types.h"
 #include <type_traits>      // (for is_integral)
 
 namespace RenderCore
@@ -140,7 +139,7 @@ namespace RenderCore
     inline SharedPkt::SharedPkt(SharedPkt&& moveFrom) never_throws
     {
         _allocation = nullptr;
-        _marker = ~uint32(0x0);
+        _marker = ~uint32_t(0x0);
         _size = 0;
         _calculatedHash = 0;
         #if defined(_DEBUG)
@@ -152,7 +151,7 @@ namespace RenderCore
     inline SharedPkt::SharedPkt() never_throws
     {
         _allocation = nullptr;
-        _marker = ~uint32(0x0);
+        _marker = ~uint32_t(0x0);
         _size = 0;
         _calculatedHash = 0;
         #if defined(_DEBUG)

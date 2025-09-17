@@ -228,7 +228,7 @@ namespace Utility
 		struct Result 
 		{ 
 			std::string _filename; 
-			std::unique_ptr<uint8[]> _fileContents;
+			std::unique_ptr<uint8_t[]> _fileContents;
 			size_t _fileContentsSize;
 		};
 

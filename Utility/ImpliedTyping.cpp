@@ -6,7 +6,6 @@
 #include "Conversion.h"
 #include "FastParseValue.h"
 #include "StringFormat.h"       // for StringSection<> stream operator
-#include "../Core/Types.h"
 #include <sstream>
 #include <charconv>
 
@@ -754,15 +753,15 @@ namespace Utility { namespace ImpliedTyping
                     // Note that we reset back to the start of expression for the FastParseValue() below -- potentially meaning
                     // parsing over the same ground again
                     if (precision == 32) {
-                        assert(dest.size() >= sizeof(f32));
-                        auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(f32*)dest.begin());
+                        assert(dest.size() >= sizeof(float));
+                        auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(float*)dest.begin());
                         if (a != endOfNumber)
                             return { expression.begin() }; // we didn't actually parse over everything we expected to read
                         return { parseEnd, TypeDesc{TypeCat::Float} };
                     } else {
                         assert(precision == 64);
-                        assert(dest.size() >= sizeof(f64));
-                        auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(f64*)dest.begin());
+                        assert(dest.size() >= sizeof(double));
+                        auto a = FastParseValue(MakeStringSection(expression.begin(), endOfNumber), *(double*)dest.begin());
                         if (a != endOfNumber)
                             return { expression.begin() }; // we didn't actually parse over everything we expected to read
                         return { parseEnd, TypeDesc{TypeCat::Double} };

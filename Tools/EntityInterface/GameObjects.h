@@ -6,8 +6,6 @@
 
 #pragma once
 
-#include "../../Core/Types.h"
-
 namespace Formatters { class TextOutputFormatter; }
 
 namespace EntityInterface

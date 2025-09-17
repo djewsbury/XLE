@@ -103,7 +103,7 @@ namespace Assets
 
 		virtual IOReason	TryOpen(std::unique_ptr<IFileInterface>& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 		virtual IOReason	TryOpen(OSServices::BasicFile& result, const Marker& uri, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& uri, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
+		virtual IOReason	TryOpen(OSServices::MemoryMappedFile& result, const Marker& uri, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 		virtual IOReason	TryMonitor(FileSnapshot&, const Marker& marker, const std::shared_ptr<IFileMonitor>& evnt);
 		virtual IOReason	TryFakeFileChange(const Marker& marker);
 		virtual	FileDesc	TryGetDesc(const Marker& marker);
@@ -235,8 +235,8 @@ namespace Assets
 
 		result.resize(2 + (_rootUTF8.size() + name.Length() + 1) * sizeof(utf8));
 		auto* out = AsPointer(result.begin());
-		*(uint16*)out = 1;
-		uint8* dst = (uint8*)PtrAdd(out, 2);
+		*(uint16_t*)out = 1;
+		uint8_t* dst = (uint8_t*)PtrAdd(out, 2);
 		std::copy(_rootUTF8.begin(), _rootUTF8.end(), dst);
 		std::copy(name.begin(), name.end(), &dst[_rootUTF8.size()]);
 		dst[_rootUTF8.size() + name.Length()] = 0;
@@ -262,8 +262,8 @@ namespace Assets
 
 		result.resize(2 + (_rootUTF16.size() + name.Length() + 1) * sizeof(utf16));
 		auto* out = AsPointer(result.begin());
-		*(uint16*)out = 2;
-		uint16* dst = (uint16*)PtrAdd(out, 2);
+		*(uint16_t*)out = 2;
+		uint16_t* dst = (uint16_t*)PtrAdd(out, 2);
 		std::copy(_rootUTF16.begin(), _rootUTF16.end(), dst);
 		std::copy(name.begin(), name.end(), &dst[_rootUTF16.size()]);
 		dst[_rootUTF16.size() + name.Length()] = 0;
@@ -276,7 +276,7 @@ namespace Assets
 
 		// "marker" always contains a null terminated string (important, because the underlying API requires
 		// a null terminated string, not a begin/end pair)
-		auto type = *(uint16*)AsPointer(marker.cbegin());
+		auto type = *(uint16_t*)AsPointer(marker.cbegin());
 		if (type == 1) {
 			auto r = std::make_unique<File_OS>();
 			auto reason = r->TryOpen((const utf8*)PtrAdd(AsPointer(marker.begin()), 2), openMode, shareMode);
@@ -299,7 +299,7 @@ namespace Assets
 
 		// "marker" always contains a null terminated string (important, because the underlying API requires
 		// a null terminated string, not a begin/end pair)
-		auto type = *(uint16*)AsPointer(marker.cbegin());
+		auto type = *(uint16_t*)AsPointer(marker.cbegin());
 		if (type == 1) {
 			return ((OSServices::BasicFile&)result).TryOpen((const utf8*)PtrAdd(AsPointer(marker.begin()), 2), openMode, shareMode);
 		} else if (type == 2) {
@@ -309,12 +309,12 @@ namespace Assets
 		return IOReason::FileNotFound;
 	}
 
-	auto FileSystem_OS::TryOpen(OSServices::MemoryMappedFile& result, const Marker& marker, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
+	auto FileSystem_OS::TryOpen(OSServices::MemoryMappedFile& result, const Marker& marker, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
 	{
 		result = OSServices::MemoryMappedFile();
 		if (marker.size() <= 2) return IOReason::FileNotFound;
 
-		auto type = *(uint16*)AsPointer(marker.cbegin());
+		auto type = *(uint16_t*)AsPointer(marker.cbegin());
 		if (type == 1) {
 			return ((OSServices::MemoryMappedFile&)result).TryOpen((const utf8*)PtrAdd(AsPointer(marker.begin()), 2), size, openMode, shareMode);
 		} else if (type == 2) {
@@ -354,7 +354,7 @@ namespace Assets
 
 			// note -- we can install monitors even for files and directories that don't exist
 			//			when they are created, the monitor should start to take effect.
-			auto type = *(uint16*)AsPointer(marker.cbegin());
+			auto type = *(uint16_t*)AsPointer(marker.cbegin());
 			if (type == 1) {
 				auto fn = MakeStringSection(
 					(const utf8*)PtrAdd(AsPointer(marker.cbegin()), 2),
@@ -384,7 +384,7 @@ namespace Assets
 
 			// note -- we can install monitors even for files and directories that don't exist
 			//			when they are created, the monitor should start to take effect.
-			auto type = *(uint16*)AsPointer(marker.cbegin());
+			auto type = *(uint16_t*)AsPointer(marker.cbegin());
 			if (type == 1) {
 				auto fn = MakeStringSection(
 					(const utf8*)PtrAdd(AsPointer(marker.cbegin()), 2),
@@ -409,7 +409,7 @@ namespace Assets
 		// Given the filename in the "marker", try to find some basic information about the file.
 		// In this version, we're not going to open the file. We'll just query the information from 
 		// the filesystem directory table.
-		auto type = *(uint16*)AsPointer(marker.cbegin());
+		auto type = *(uint16_t*)AsPointer(marker.cbegin());
 		if (type == 1) {
 			std::basic_string<utf8> str((const utf8*)PtrAdd(AsPointer(marker.begin()), 2));
 			auto attrib = OSServices::TryGetFileAttributes(str.c_str());
@@ -470,8 +470,8 @@ namespace Assets
 					Marker marker;
 					marker.resize(2 + ((dir.size()-1) + (t.size()+ 1)) * sizeof(utf8));
 					auto* out = AsPointer(marker.begin());
-					*(uint16*)out = 1;
-					uint8* dst = (uint8*)PtrAdd(out, 2);
+					*(uint16_t*)out = 1;
+					uint8_t* dst = (uint8_t*)PtrAdd(out, 2);
 					std::copy(dir.begin(), dir.end()-1, dst);		// without the '*'
 					dst += dir.size()-1;
 					std::copy(t.begin(), t.end(), dst);
@@ -486,8 +486,8 @@ namespace Assets
 				Marker marker;
 				marker.resize(2 + ((dir.size()-1) + (t.size()+ 1)) * sizeof(utf8));
 				auto* out = AsPointer(marker.begin());
-				*(uint16*)out = 1;
-				uint8* dst = (uint8*)PtrAdd(out, 2);
+				*(uint16_t*)out = 1;
+				uint8_t* dst = (uint8_t*)PtrAdd(out, 2);
 				std::copy(dir.begin(), dir.end()-1, dst);		// without the '*'
 				dst += dir.size()-1;
 				std::copy(t.begin(), t.end(), dst);

@@ -58,7 +58,7 @@ namespace RenderCore { namespace Assets
         ShaderCacheSet(const DeviceDesc& devDesc, const std::shared_ptr<::Assets::IIntermediatesStore>& intermediateStore);
         ~ShaderCacheSet();
     protected:
-        typedef std::pair<uint64, std::shared_ptr<::Assets::ArchiveCache>> Archive;
+        typedef std::pair<uint64_t, std::shared_ptr<::Assets::ArchiveCache>> Archive;
         std::vector<Archive>    _archives;
         Threading::Mutex        _archivesLock;
         std::string             _baseFolderName;
@@ -137,8 +137,8 @@ namespace RenderCore { namespace Assets
     void ShaderCacheSet::LogStats()
     {
             // log statistics information for all shaders in all archive caches
-        uint64 totalShaderSize = 0; // in bytes
-        uint64 totalAllocationSpace = 0;
+        uint64_t totalShaderSize = 0; // in bytes
+        uint64_t totalAllocationSpace = 0;
 
         char baseDir[MaxPath];
         _intermediateStore->MakeIntermediateName(baseDir, dimof(baseDir), MakeStringSection(_baseFolderName));
@@ -280,12 +280,12 @@ namespace RenderCore { namespace Assets
 		::Assets::DependencyValidation GetDependencyValidation() const;
 		StringSection<Assets::ResChar> GetRequestParameters() const { return {}; }
 		ArchivedFileArtifact(
-			const std::shared_ptr<::Assets::ArchiveCache>& archive, uint64 fileID, const ::Assets::DependencyValidation& depVal,
+			const std::shared_ptr<::Assets::ArchiveCache>& archive, uint64_t fileID, const ::Assets::DependencyValidation& depVal,
 			const Blob& blob, const Blob& errors);
 		~ArchivedFileArtifact();
 	private:
 		std::shared_ptr<::Assets::ArchiveCache> _archive;
-		uint64 _fileID;
+		uint64_t _fileID;
 		::Assets::DependencyValidation _depVal;
 		Blob _blob, _errors;
 	};
@@ -300,7 +300,7 @@ namespace RenderCore { namespace Assets
 	::Assets::DependencyValidation ArchivedFileArtifact::GetDependencyValidation() const { return _depVal; }
 
 	ArchivedFileArtifact::ArchivedFileArtifact(
-		const std::shared_ptr<::Assets::ArchiveCache>& archive, uint64 fileID, const ::Assets::DependencyValidation& depVal,
+		const std::shared_ptr<::Assets::ArchiveCache>& archive, uint64_t fileID, const ::Assets::DependencyValidation& depVal,
 		const Blob& blob, const Blob& errors)
 	: _archive(archive), _fileID(fileID), _depVal(depVal)
 	, _blob(blob), _errors(errors) {}
@@ -327,7 +327,7 @@ namespace RenderCore { namespace Assets
         std::weak_ptr<LocalCompiledShaderSource> _compiler;
     };
 
-    static uint64 GetTarget(
+    static uint64_t GetTarget(
 		const ILowLevelCompiler::ResId& res, const ::Assets::rstring& definesTable,
         /*out*/ ::Assets::ResChar archiveName[], size_t archiveNameCount,
         /*out*/ ::Assets::ResChar depName[], size_t depNameCount,
@@ -508,7 +508,7 @@ namespace RenderCore { namespace Assets
     LocalCompiledShaderSource::Marker::~Marker() {}
     
     std::shared_ptr<::Assets::IIntermediateCompileMarker> LocalCompiledShaderSource::Prepare(
-        uint64 typeCode, const StringSection<ResChar> initializers[], unsigned initializerCount)
+        uint64_t typeCode, const StringSection<ResChar> initializers[], unsigned initializerCount)
     {
             //  Execute an offline compile. This should happen in the background
             //  When it's complete, we'll write the result into the appropriate

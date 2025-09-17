@@ -258,11 +258,6 @@ namespace Utility
     XL_UTILITY_API bool     XlMatchWildcard     (const char* str, const char* pat, bool nocase = true);
 
         ////////////   C O N V E R S I O N S   ////////////
-    XL_UTILITY_API int      XlExtractInt        (const char* buf, int* arr, int length);
-    XL_UTILITY_API bool     XlSafeAtoi          (const char* str, int* n);
-    XL_UTILITY_API bool     XlSafeAtoi64        (const char* str, int64* n);
-    XL_UTILITY_API bool     XlSafeAtoui64       (const char* str, uint64_t* n);
-
     XL_UTILITY_API void     XlCompactString     (char* dst, size_t size, const char* src);
     XL_UTILITY_API const char*  XlLowerCase     (char* str);
     XL_UTILITY_API const char*  XlUpperCase     (char* str);
@@ -332,27 +327,27 @@ namespace Utility
 
     // <string <==> numeric> conversion
     XL_UTILITY_API bool     XlAtoBool(const char* str, const char** end_ptr = 0);
-    XL_UTILITY_API int32    XlAtoI32 (const char* str, const char** end_ptr = 0, int radix = 10);
-    XL_UTILITY_API int64    XlAtoI64 (const char* str, const char** end_ptr = 0, int radix = 10);
-    XL_UTILITY_API uint32_t   XlAtoUI32(const char* str, const char** end_ptr = 0, int radix = 10);
-    XL_UTILITY_API uint64_t   XlAtoUI64(const char* str, const char** end_ptr = 0, int radix = 10);
-    XL_UTILITY_API f32      XlAtoF32 (const char* str, const char** end_ptr = 0);
-    XL_UTILITY_API f64      XlAtoF64 (const char* str, const char** end_ptr = 0);
+    XL_UTILITY_API int32_t  XlAtoI32 (const char* str, const char** end_ptr = 0, int radix = 10);
+    XL_UTILITY_API int64_t  XlAtoI64 (const char* str, const char** end_ptr = 0, int radix = 10);
+    XL_UTILITY_API uint32_t XlAtoUI32(const char* str, const char** end_ptr = 0, int radix = 10);
+    XL_UTILITY_API uint64_t XlAtoUI64(const char* str, const char** end_ptr = 0, int radix = 10);
+    XL_UTILITY_API float    XlAtoF32 (const char* str, const char** end_ptr = 0);
+    XL_UTILITY_API double   XlAtoF64 (const char* str, const char** end_ptr = 0);
 
-    XL_UTILITY_API char*    XlI32toA(int32 value, char* buffer, size_t dim, int radix);
-    XL_UTILITY_API char*    XlI64toA(int64 value, char* buffer, size_t dim, int radix);
+    XL_UTILITY_API char*    XlI32toA(int32_t value, char* buffer, size_t dim, int radix);
+    XL_UTILITY_API char*    XlI64toA(int64_t value, char* buffer, size_t dim, int radix);
     XL_UTILITY_API char*    XlUI32toA(uint32_t value, char* buffer, size_t dim, int radix);
     XL_UTILITY_API char*    XlUI64toA(uint64_t value, char* buffer, size_t dim, int radix);
 
 	    // ms secure version compatible
-    XL_UTILITY_API int      XlI32toA_s(int32 value, char* buffer, size_t dim, int radix);
-    XL_UTILITY_API int      XlI64toA_s(int64 value, char* buffer, size_t dim, int radix);
+    XL_UTILITY_API int      XlI32toA_s(int32_t value, char* buffer, size_t dim, int radix);
+    XL_UTILITY_API int      XlI64toA_s(int64_t value, char* buffer, size_t dim, int radix);
     XL_UTILITY_API int      XlUI32toA_s(uint32_t value, char* buffer, size_t dim, int radix);
     XL_UTILITY_API int      XlUI64toA_s(uint64_t value, char* buffer, size_t dim, int radix);
 
 	    // non-secure version
-    XL_UTILITY_API char*    XlI32toA_ns(int32 value, char* buffer, int radix);
-    XL_UTILITY_API char*    XlI64toA_ns(int64 value, char* buffer, int radix);
+    XL_UTILITY_API char*    XlI32toA_ns(int32_t value, char* buffer, int radix);
+    XL_UTILITY_API char*    XlI64toA_ns(int64_t value, char* buffer, int radix);
     XL_UTILITY_API char*    XlUI32toA_ns(uint32_t value, char* buffer, int radix);
     XL_UTILITY_API char*    XlUI64toA_ns(uint64_t value, char* buffer, int radix);
 
@@ -736,8 +731,8 @@ namespace Utility
         #undef _ui64toa_s
         #undef _atoi64
 
-        #define  itoa(v, b, r)    XlI32toA_ns((int32)v, b, r)
-        #define  ltoa(v, b, r)    XlI32toA_ns((int32)v, b, r)
+        #define  itoa(v, b, r)    XlI32toA_ns((int32_t)v, b, r)
+        #define  ltoa(v, b, r)    XlI32toA_ns((int32_t)v, b, r)
         #define ultoa(v, b, r)    XlUI32toA_ns((uint32_t)v, b, r)
         #define _ui64toa(v, b, r) XlUI64toA_ns(v, b, r)
         #define _i64toa(v, b, r)  XlI64toA_ns(v, b, r)

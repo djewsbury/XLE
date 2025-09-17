@@ -8,7 +8,6 @@
 
 #include "../Math/Vector.h"
 #include "../Math/Matrix.h"
-#include "../Core/Types.h"
 #include <vector>
 #include <memory>
 

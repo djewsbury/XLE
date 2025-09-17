@@ -8,7 +8,6 @@
 
 #include "CLIXAutoPtr.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"     // for CameraDesc destructor
-#include "../../Core/Types.h"
 #include <vector>
 #include <utility>
 
@@ -22,11 +21,11 @@ namespace GUILayer
     public ref class ObjectSet
     {
     public:
-        void Add(System::Tuple<uint64, uint64>^ nativeHighlightableId);
+        void Add(System::Tuple<uint64_t, uint64_t>^ nativeHighlightableId);
         void Clear();
         bool IsEmpty();
 
-        typedef std::vector<std::pair<uint64, uint64>> NativePlacementSet;
+        typedef std::vector<std::pair<uint64_t, uint64_t>> NativePlacementSet;
 		clix::auto_ptr<NativePlacementSet> _nativePlacements;
 
         ObjectSet();

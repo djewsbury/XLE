@@ -106,7 +106,7 @@ namespace PlatformRig { namespace Overlays
         static DurationStats CalculateDurationStats(IteratorRange<const Duration*> durations)
         {
             float smoothedCost = 0.f;
-            float minValue = MAX_FLOAT32, maxValue = -MAX_FLOAT32;
+            float minValue = std::numeric_limits<float>::max(), maxValue = std::numeric_limits<float>::lowest();
             for (unsigned f=0; f<durations.size(); ++f) {
                 auto millis = durations[f];
                 smoothedCost += millis;

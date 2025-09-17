@@ -34,7 +34,7 @@ namespace PlatformRig
     class TableOfKeys
     {
     public:
-        const std::vector<std::pair<uint32, std::string>>& GetTable() const { return _table; }
+        const std::vector<std::pair<uint32_t, std::string>>& GetTable() const { return _table; }
         const ::Assets::DependencyValidation& GetDependencyValidation() const { return _validationCallback; }
 
         TableOfKeys(
@@ -45,7 +45,7 @@ namespace PlatformRig
         ~TableOfKeys();
     private:
         ::Assets::DependencyValidation                             _validationCallback;
-        std::vector<std::pair<uint32, std::string>>     _table;
+        std::vector<std::pair<uint32_t, std::string>>     _table;
     };
 
     TableOfKeys::TableOfKeys(

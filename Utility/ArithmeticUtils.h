@@ -6,9 +6,6 @@
 
 #pragma once
 
-#include "ArithmeticUtils.h"
-#include "../Core/Prefix.h"
-#include "../Core/Types.h"
 #include "Detail/API.h"
 #include <vector>
 #include <assert.h>
@@ -28,20 +25,20 @@ namespace Utility
     // [caveats] in intel architecture, bsr & bsf are coressponds to
     //           machine instruction. so the following implementations are inefficient!
 
-    uint32      xl_clz1(uint8 x);
-    uint32      xl_ctz1(uint8 x);
-    uint32      xl_clz2(uint16 x);
-    uint32      xl_ctz2(uint16 x);
-    uint32      xl_ctz4(uint32 x);
-    uint32      xl_clz4(uint32 x);
-    uint32      xl_ctz8(uint64 x);
-    uint32      xl_clz8(uint64 x);
+    uint32_t      xl_clz1(uint8_t x);
+    uint32_t      xl_ctz1(uint8_t x);
+    uint32_t      xl_clz2(uint16_t x);
+    uint32_t      xl_ctz2(uint16_t x);
+    uint32_t      xl_ctz4(uint32_t x);
+    uint32_t      xl_clz4(uint32_t x);
+    uint32_t      xl_ctz8(uint64_t x);
+    uint32_t      xl_clz8(uint64_t x);
 
-    uint32      xl_bsr1(uint16 x);
-    uint32      xl_bsr2(uint16 x);
-    uint32      xl_bsr4(uint32 x);
-    uint32      xl_bsr8(uint64 x);
-    uint32      xl_lg(size_t x);
+    uint32_t      xl_bsr1(uint16_t x);
+    uint32_t      xl_bsr2(uint16_t x);
+    uint32_t      xl_bsr4(uint32_t x);
+    uint32_t      xl_bsr8(uint64_t x);
+    uint32_t      xl_lg(size_t x);
 
     XL_UTILITY_API void  printbits(const void* blob, int len);
     XL_UTILITY_API void  printhex32(const void* blob, int len);
@@ -50,25 +47,25 @@ namespace Utility
 
     int         popcount(uint32_t v);
     int         popcount(uint64_t v);
-    uint32      parity(uint32 v);
+    uint32_t      parity(uint32_t v);
     int         countbits(uint32_t v);
     int         countbits(uint64_t v);
-    int         countbits(std::vector<uint32>& v);
+    int         countbits(std::vector<uint32_t>& v);
     int         countbits(const void* blob, int len);
-    void        invert(std::vector<uint32>& v);
+    void        invert(std::vector<uint32_t>& v);
 
-    uint32      getbit(const void* block, int len, uint32 bit);
-    uint32      getbit_wrap(const void* block, int len, uint32 bit);
-    template < typename T > inline uint32 getbit(T& blob, uint32 bit);
+    uint32_t      getbit(const void* block, int len, uint32_t bit);
+    uint32_t      getbit_wrap(const void* block, int len, uint32_t bit);
+    template < typename T > inline uint32_t getbit(T& blob, uint32_t bit);
 
-    void        xl_setbit(void* block, int len, uint32 bit);
-    void        xl_setbit(void* block, int len, uint32 bit, uint32 val);
-    template < typename T > inline void xl_setbit(T& blob, uint32 bit);
+    void        xl_setbit(void* block, int len, uint32_t bit);
+    void        xl_setbit(void* block, int len, uint32_t bit, uint32_t val);
+    template < typename T > inline void xl_setbit(T& blob, uint32_t bit);
 
-    void        xl_clearbit(void* block, int len, uint32 bit);
+    void        xl_clearbit(void* block, int len, uint32_t bit);
 
-    void        flipbit(void* block, int len, uint32 bit);
-    template < typename T > inline void flipbit(T& blob, uint32 bit);
+    void        flipbit(void* block, int len, uint32_t bit);
+    template < typename T > inline void flipbit(T& blob, uint32_t bit);
 
     //-----------------------------------------------------------------------------
     // Left and right shift of blobs. The shift(N) versions work on chunks of N
@@ -105,54 +102,54 @@ namespace Utility
     //-----------------------------------------------------------------------------
     // Bit-windowing functions - select some N-bit subset of the input blob
 
-    XL_UTILITY_API uint32    window1(void* blob, int len, int start, int count);
-    XL_UTILITY_API uint32    window8(void* blob, int len, int start, int count);
-    XL_UTILITY_API uint32    window32(void* blob, int len, int start, int count);
-    uint32                  window(void* blob, int len, int start, int count);
-    template < typename T > inline uint32 window(T& blob, int start, int count);
+    XL_UTILITY_API uint32_t    window1(void* blob, int len, int start, int count);
+    XL_UTILITY_API uint32_t    window8(void* blob, int len, int start, int count);
+    XL_UTILITY_API uint32_t    window32(void* blob, int len, int start, int count);
+    uint32_t                  window(void* blob, int len, int start, int count);
+    template < typename T > inline uint32_t window(T& blob, int start, int count);
 
     // bit-scan
     #if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
 
         #pragma intrinsic(_BitScanForward, _BitScanReverse)
 
-        inline uint32 xl_ctz4(uint32 x)
+        inline uint32_t xl_ctz4(uint32_t x)
         {
             unsigned long i = 0;
             if (!_BitScanForward(&i, (unsigned long)x)) {
                 return 32;
             }
-            return (uint32)i;
+            return (uint32_t)i;
         }
 
-        inline uint32 xl_clz4(uint32 x)
+        inline uint32_t xl_clz4(uint32_t x)
         {
             unsigned long i = 0;
             if (!_BitScanReverse(&i, (unsigned long)x)) {
                 return 32;
             }
-            return (uint32)(31 - i);
+            return (uint32_t)(31 - i);
         }
 
         #if SIZEOF_PTR == 8
 
             #pragma intrinsic(_BitScanForward64, _BitScanReverse64)
-            inline uint32 xl_ctz8(uint64 x)
+            inline uint32_t xl_ctz8(uint64_t x)
             {
                 unsigned long i = 0;
                 if (!_BitScanForward64(&i, x)) {
                     return 64;
                 }
-                return (uint32)i;
+                return (uint32_t)i;
             }
 
-            inline uint32 xl_clz8(uint64 x)
+            inline uint32_t xl_clz8(uint64_t x)
             {
                 unsigned long i = 0;
                 if (!_BitScanReverse64(&i, x)) {
                     return 64;
                 }
-                return (uint32)(63 - i);
+                return (uint32_t)(63 - i);
             }
 
         #else
@@ -163,43 +160,43 @@ namespace Utility
                 {
                     struct Comp
                     {
-                        uint32 LowPart;
-                        uint32 HighPart;
+                        uint32_t LowPart;
+                        uint32_t HighPart;
                     } comp;
-                    uint64 QuadPart;
+                    uint64_t QuadPart;
                 };
             }
 
-            inline uint32 xl_ctz8(uint64 x)
+            inline uint32_t xl_ctz8(uint64_t x)
             {
                 Internal::Int64U li;
-                li.QuadPart = (uint64)x;
-                uint32 i = xl_ctz4((uint32)li.comp.LowPart);
+                li.QuadPart = (uint64_t)x;
+                uint32_t i = xl_ctz4((uint32_t)li.comp.LowPart);
                 if (i < 32) {
                     return i;
                 }
-                return xl_ctz4((uint32)li.comp.HighPart) + 32;
+                return xl_ctz4((uint32_t)li.comp.HighPart) + 32;
             }
 
-            inline uint32 xl_clz8(uint64 x)
+            inline uint32_t xl_clz8(uint64_t x)
             {
                 Internal::Int64U li;
-                li.QuadPart = (uint64)x;
-                uint32 i = xl_clz4((uint32)li.comp.HighPart);
+                li.QuadPart = (uint64_t)x;
+                uint32_t i = xl_clz4((uint32_t)li.comp.HighPart);
                 if (i < 32) {
                     return i;
                 }
-                return xl_clz4((uint32)li.comp.LowPart) + 32;
+                return xl_clz4((uint32_t)li.comp.LowPart) + 32;
             }
 
         #endif
 
     #elif (COMPILER_ACTIVE == COMPILER_TYPE_GCC) || (COMPILER_ACTIVE == COMPILER_TYPE_CLANG)
 
-        inline uint32 xl_ctz4(uint32 x) { return __builtin_ctz(x); }
-        inline uint32 xl_clz4(uint32 x) { return __builtin_clz(x); }
-        inline uint32 xl_ctz8(uint64 x) { return __builtin_ctzll(x); }
-        inline uint32 xl_clz8(uint64 x) { return __builtin_clzll(x); }
+        inline uint32_t xl_ctz4(uint32_t x) { return __builtin_ctz(x); }
+        inline uint32_t xl_clz4(uint32_t x) { return __builtin_clz(x); }
+        inline uint32_t xl_ctz8(uint64_t x) { return __builtin_ctzll(x); }
+        inline uint32_t xl_clz8(uint64_t x) { return __builtin_clzll(x); }
 
     #else
 
@@ -207,9 +204,9 @@ namespace Utility
 
     #endif
 
-    inline uint32 xl_clz2(uint16 x)
+    inline uint32_t xl_clz2(uint16_t x)
     {
-        uint32 i = xl_clz4(x);
+        uint32_t i = xl_clz4(x);
         if (i == 32) {
             return 16;
         }
@@ -217,9 +214,9 @@ namespace Utility
         return (i - 16);
     }
 
-    inline uint32 xl_ctz2(uint16 x)
+    inline uint32_t xl_ctz2(uint16_t x)
     {
-        uint32 i = xl_ctz4(x);
+        uint32_t i = xl_ctz4(x);
         if (i == 32) {
             return 16;
         }
@@ -228,9 +225,9 @@ namespace Utility
     }
 
 
-    inline uint32 xl_clz1(uint8 x)
+    inline uint32_t xl_clz1(uint8_t x)
     {
-        uint32 i = xl_clz4(x);
+        uint32_t i = xl_clz4(x);
         if (i == 32) {
             return 8;
         }
@@ -238,9 +235,9 @@ namespace Utility
         return (i - 24);
     }
 
-    inline uint32 xl_ctz1(uint8 x)
+    inline uint32_t xl_ctz1(uint8_t x)
     {
-        uint32 i = xl_ctz4(x);
+        uint32_t i = xl_ctz4(x);
         if (i == 32) {
             return 8;
         }
@@ -253,43 +250,43 @@ namespace Utility
     #define xl_bsf4 xl_ctz4
     #define xl_bsf8 xl_ctz8
 
-    inline uint32 xl_bsr1(uint16 x)
+    inline uint32_t xl_bsr1(uint16_t x)
     {
-        uint32 i = (uint32)xl_clz2(x);
+        uint32_t i = (uint32_t)xl_clz2(x);
         if (i == 8) {
             return 8;
         }
         return 7 - i;
     }
 
-    inline uint32 xl_bsr2(uint16 x)
+    inline uint32_t xl_bsr2(uint16_t x)
     {
-        uint32 i = xl_clz2(x);
+        uint32_t i = xl_clz2(x);
         if (i == 16) {
             return 16;
         }
         return 15 - i;
     }
 
-    inline uint32 xl_bsr4(uint32 x)
+    inline uint32_t xl_bsr4(uint32_t x)
     {
-        uint32 i = xl_clz4(x);
+        uint32_t i = xl_clz4(x);
         if (i == 32) {
             return 32;
         }
         return 31 - i;
     }
 
-    inline uint32 xl_bsr8(uint64 x)
+    inline uint32_t xl_bsr8(uint64_t x)
     {
-        uint32 i = xl_clz8(x);
+        uint32_t i = xl_clz8(x);
         if (i == 64) {
             return 64;
         }
         return 63 - i;
     }
 
-    inline uint32 xl_lg(size_t x)
+    inline uint32_t xl_lg(size_t x)
     {
         #if SIZEOF_PTR == 8
             return xl_bsr8(x);
@@ -315,7 +312,7 @@ namespace Utility
         {
             /*v = v - ((v >> 1) & 0x55555555);                    // reuse input as temporary
             v = (v & 0x33333333) + ((v >> 2) & 0x33333333);     // temp
-            uint32 c = ((v + ((v >> 4) & 0xF0F0F0F)) * 0x1010101) >> 24; // count
+            uint32_t c = ((v + ((v >> 4) & 0xF0F0F0F)) * 0x1010101) >> 24; // count
 
             return c;*/
             return (int)_mm_popcnt_u32(v);       // requires SSE4
@@ -326,7 +323,7 @@ namespace Utility
         }
     #endif
 
-    inline uint32 parity(uint32 v)
+    inline uint32_t parity(uint32_t v)
     {
         v ^= v >> 1;
         v ^= v >> 2;
@@ -334,9 +331,9 @@ namespace Utility
         return (v >> 28) & 1;
     }
 
-    inline uint32 getbit(const void* block, int len, uint32 bit)
+    inline uint32_t getbit(const void* block, int len, uint32_t bit)
     {
-        uint8* b = (uint8*)block;
+        uint8_t* b = (uint8_t*)block;
 
         int byte = bit >> 3;
         bit = bit & 0x7;
@@ -346,9 +343,9 @@ namespace Utility
         return 0;
     }
 
-    inline uint32 getbit_wrap(const void* block, int len, uint32 bit)
+    inline uint32_t getbit_wrap(const void* block, int len, uint32_t bit)
     {
-        uint8* b = (uint8*)block;
+        uint8_t* b = (uint8_t*)block;
 
         int byte = bit >> 3;
         bit = bit & 0x7;
@@ -359,7 +356,7 @@ namespace Utility
     }
 
 
-    inline void xl_setbit(void* block, int len, uint32 bit)
+    inline void xl_setbit(void* block, int len, uint32_t bit)
     {
         unsigned char* b = (unsigned char*)block;
 
@@ -369,9 +366,9 @@ namespace Utility
         if (byte < len) {b[byte] |= (1 << bit);}
     }
 
-    inline void xl_clearbit(void* block, int len, uint32 bit)
+    inline void xl_clearbit(void* block, int len, uint32_t bit)
     {
-        uint8* b = (uint8*)block;
+        uint8_t* b = (uint8_t*)block;
 
         int byte = bit >> 3;
         bit = bit & 0x7;
@@ -379,15 +376,15 @@ namespace Utility
         if (byte < len) {b[byte] &= ~(1 << bit);}
     }
 
-    inline void xl_setbit(void* block, int len, uint32 bit, uint32 val)
+    inline void xl_setbit(void* block, int len, uint32_t bit, uint32_t val)
     {
         val ? xl_setbit(block, len, bit) : xl_clearbit(block, len, bit);
     }
 
 
-    inline void flipbit(void* block, int len, uint32 bit)
+    inline void flipbit(void* block, int len, uint32_t bit)
     {
-        uint8* b = (uint8*)block;
+        uint8_t* b = (uint8_t*)block;
 
         int byte = bit >> 3;
         bit = bit & 0x7;
@@ -400,40 +397,40 @@ namespace Utility
 
     //----------
 
-    template < typename T > inline uint32 getbit(T& blob, uint32 bit)
+    template < typename T > inline uint32_t getbit(T& blob, uint32_t bit)
     {
         return getbit(&blob, sizeof(blob), bit);
     }
 
-    template <> inline uint32 getbit(uint32& blob, uint32 bit) { return (blob >> (bit & 31)) & 1; }
-    template <> inline uint32 getbit(uint64& blob, uint32 bit) { return (blob >> (bit & 63)) & 1; }
+    template <> inline uint32_t getbit(uint32_t& blob, uint32_t bit) { return (blob >> (bit & 31)) & 1; }
+    template <> inline uint32_t getbit(uint64_t& blob, uint32_t bit) { return (blob >> (bit & 63)) & 1; }
 
     //----------
 
-    template < typename T > inline void xl_setbit(T& blob, uint32 bit)
+    template < typename T > inline void xl_setbit(T& blob, uint32_t bit)
     {
         return xl_setbit(&blob, sizeof(blob), bit);
     }
 
-    template <> inline void xl_setbit(uint32& blob, uint32 bit) { blob |= uint32(1) << (bit & 31); }
-    template <> inline void xl_setbit(uint64& blob, uint32 bit) { blob |= uint64(1) << (bit & 63); }
+    template <> inline void xl_setbit(uint32_t& blob, uint32_t bit) { blob |= uint32_t(1) << (bit & 31); }
+    template <> inline void xl_setbit(uint64_t& blob, uint32_t bit) { blob |= uint64_t(1) << (bit & 63); }
 
     //----------
 
-    template < typename T > inline void flipbit(T& blob, uint32 bit)
+    template < typename T > inline void flipbit(T& blob, uint32_t bit)
     {
         flipbit(&blob, sizeof(blob), bit);
     }
 
-    template <> inline void flipbit(uint32& blob, uint32 bit)
+    template <> inline void flipbit(uint32_t& blob, uint32_t bit)
     {
         bit &= 31;
-        blob ^= (uint32(1) << bit);
+        blob ^= (uint32_t(1) << bit);
     }
-    template <> inline void flipbit(uint64& blob, uint32 bit)
+    template <> inline void flipbit(uint64_t& blob, uint32_t bit)
     {
         bit &= 63;
-        blob ^= (uint64(1) << bit);
+        blob ^= (uint64_t(1) << bit);
     }
 
     // shift left and right
@@ -474,10 +471,10 @@ namespace Utility
         }
     }
 
-    template <> inline void lshift(uint32& blob, int c) { blob <<= c; }
-    template <> inline void lshift(uint64& blob, int c) { blob <<= c; }
-    template <> inline void rshift(uint32& blob, int c) { blob >>= c; }
-    template <> inline void rshift(uint64& blob, int c) { blob >>= c; }
+    template <> inline void lshift(uint32_t& blob, int c) { blob <<= c; }
+    template <> inline void lshift(uint64_t& blob, int c) { blob <<= c; }
+    template <> inline void rshift(uint32_t& blob, int c) { blob >>= c; }
+    template <> inline void rshift(uint64_t& blob, int c) { blob >>= c; }
 
     // Left and right rotate of blobs
 
@@ -519,10 +516,10 @@ namespace Utility
 
     #if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
 
-        inline uint32 rotl32(uint32 x, int8_t r) { return _rotl(x, r); }
-        inline uint64 rotl64(uint64 x, int8_t r) { return _rotl64(x, r); }
-        inline uint32 rotr32(uint32 x, int8_t r) { return _rotr(x, r); }
-        inline uint64 rotr64(uint64 x, int8_t r) { return _rotr64(x, r); }
+        inline uint32_t rotl32(uint32_t x, int8_t r) { return _rotl(x, r); }
+        inline uint64_t rotl64(uint64_t x, int8_t r) { return _rotl64(x, r); }
+        inline uint32_t rotr32(uint32_t x, int8_t r) { return _rotr(x, r); }
+        inline uint64_t rotr64(uint64_t x, int8_t r) { return _rotr64(x, r); }
 
         #define ROTL32(x, y) _rotl(x, y)
         #define ROTL64(x, y) _rotl64(x, y)
@@ -533,24 +530,24 @@ namespace Utility
 
     #else
 
-        inline uint32 rotl32(uint32 x, int8_t r)
+        inline uint32_t rotl32(uint32_t x, int8_t r)
         {
-            return (x << uint32(r)) | (x >> uint32(32 - r));
+            return (x << uint32_t(r)) | (x >> uint32_t(32 - r));
         }
 
-        inline uint64 rotl64(uint64 x, int8_t r)
+        inline uint64_t rotl64(uint64_t x, int8_t r)
         {
-            return (x << uint64(r)) | (x >> uint64(64 - r));
+            return (x << uint64_t(r)) | (x >> uint64_t(64 - r));
         }
 
-        inline uint32 rotr32(uint32 x, int8_t r)
+        inline uint32_t rotr32(uint32_t x, int8_t r)
         {
-            return (x >> uint32(r)) | (x << uint32(32 - r));
+            return (x >> uint32_t(r)) | (x << uint32_t(32 - r));
         }
 
-        inline uint64 rotr64(uint64 x, int8_t r)
+        inline uint64_t rotr64(uint64_t x, int8_t r)
         {
-            return (x >> uint64(r)) | (x << uint64(64 - r));
+            return (x >> uint64_t(r)) | (x << uint64_t(64 - r));
         }
 
         #define ROTL32(x, y) rotl32(x, y)
@@ -563,16 +560,16 @@ namespace Utility
     #endif
 
 
-    template <> inline void lrot(uint32& blob, int c) { blob = ROTL32(blob, c); }
-    template <> inline void lrot(uint64& blob, int c) { blob = ROTL64(blob, c); }
-    template <> inline void rrot(uint32& blob, int c) { blob = ROTR32(blob, c); }
-    template <> inline void rrot(uint64& blob, int c) { blob = ROTR64(blob, c); }
+    template <> inline void lrot(uint32_t& blob, int c) { blob = ROTL32(blob, c); }
+    template <> inline void lrot(uint64_t& blob, int c) { blob = ROTL64(blob, c); }
+    template <> inline void rrot(uint32_t& blob, int c) { blob = ROTR32(blob, c); }
+    template <> inline void rrot(uint64_t& blob, int c) { blob = ROTR64(blob, c); }
 
 
     //-----------------------------------------------------------------------------
     // Bit-windowing functions - select some N-bit subset of the input blob
 
-    inline uint32 window(void* blob, int len, int start, int count)
+    inline uint32_t window(void* blob, int len, int start, int count)
     {
         if (len & 3) {
             return window8(blob, len, start, count);
@@ -581,7 +578,7 @@ namespace Utility
         }
     }
 
-    template < typename T > inline uint32 window(T& blob, int start, int count)
+    template < typename T > inline uint32_t window(T& blob, int start, int count)
     {
         if ((sizeof(T) & 3) == 0) {
             return window32(&blob, sizeof(T), start, count);
@@ -590,14 +587,14 @@ namespace Utility
         }
     }
 
-    template <> inline uint32 window(uint32& blob, int start, int count)
+    template <> inline uint32_t window(uint32_t& blob, int start, int count)
     {
         return ROTR32(blob, start) & ((1 << count) - 1);
     }
 
-    template <> inline uint32 window(uint64& blob, int start, int count)
+    template <> inline uint32_t window(uint64_t& blob, int start, int count)
     {
-        return (uint32)ROTR64(blob, start) & ((1 << count) - 1);
+        return (uint32_t)ROTR64(blob, start) & ((1 << count) - 1);
     }
 
 }

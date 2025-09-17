@@ -51,7 +51,7 @@ namespace OSServices
 	}
 
 	void MonitoredDirectory::AttachCallback(
-		uint64 filenameHash,
+		uint64_t filenameHash,
 		std::shared_ptr<OnChangeCallback> callback)
 	{
 		ScopedLock(_callbacksLock);
@@ -66,7 +66,7 @@ namespace OSServices
 		ScopedLock(_callbacksLock);
 		auto range = std::equal_range(
 			_callbacks.begin(), _callbacks.end(),
-			hash, CompareFirst<uint64, std::weak_ptr<OnChangeCallback>>());
+			hash, CompareFirst<uint64_t, std::weak_ptr<OnChangeCallback>>());
 
 		bool foundExpired = false;
 		for (auto i2=range.first; i2!=range.second; ++i2) {
@@ -82,7 +82,7 @@ namespace OSServices
 				// that have expired are untouched)
 			_callbacks.erase(
 				std::remove_if(range.first, range.second,
-					[](std::pair<uint64, std::weak_ptr<OnChangeCallback>>& i)
+					[](std::pair<uint64_t, std::weak_ptr<OnChangeCallback>>& i)
 					{ return i.second.expired(); }),
 				range.second);
 		}
@@ -194,7 +194,7 @@ namespace OSServices
 			ScopedLock(_pimpl->_conduitConsumer->_monitoredDirectoriesLock);			
 			auto i = std::lower_bound(
 				_pimpl->_conduitConsumer->_monitoredDirectories.cbegin(), _pimpl->_conduitConsumer->_monitoredDirectories.cend(),
-				hash, CompareFirst<uint64, std::unique_ptr<MonitoredDirectory>>());
+				hash, CompareFirst<uint64_t, std::unique_ptr<MonitoredDirectory>>());
 			if (i != _pimpl->_conduitConsumer->_monitoredDirectories.cend() && i->first == hash) {
 				i->second->AttachCallback(HashFilename(split.FileAndExtension()), std::move(callback));
 				return;
@@ -235,7 +235,7 @@ namespace OSServices
 			auto hash = HashFilenameAndPath(MakeStringSection(directoryName));
 			auto i = std::lower_bound(
 				_pimpl->_conduitConsumer->_monitoredDirectories.cbegin(), _pimpl->_conduitConsumer->_monitoredDirectories.cend(),
-				hash, CompareFirst<uint64, std::unique_ptr<MonitoredDirectory>>());
+				hash, CompareFirst<uint64_t, std::unique_ptr<MonitoredDirectory>>());
 			if (i != _pimpl->_conduitConsumer->_monitoredDirectories.cend() && i->first == hash) {
 				i->second->OnChange(split.FileAndExtension());
 				return;

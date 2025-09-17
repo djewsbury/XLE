@@ -8,9 +8,9 @@
 
 #include "Detail/API.h"
 #include "../Core/Prefix.h"
-#include "../Core/Types.h"
 #include <cstdarg>
 #include <cstddef>
+#include <cstdint>
 
 namespace Utility
 {
@@ -32,7 +32,7 @@ namespace Utility
 	// For Chinese projects, this may be an issue (?), but maybe it won't effect other projects.
 	using utf16 = char16_t;		// char16_t is intended by the standard's body to hold UTF-16 type strings	
     using ucs2 = uint16_t;
-    using ucs4 = uint32;
+    using ucs4 = uint32_t;
 
     // convert UTF-8 data to ucs4
     // return value := >= 0 if valid or 
@@ -72,9 +72,9 @@ namespace Utility
     // next utf-8 sequence length
     XL_UTILITY_API int utf8_seqlen(const utf8* s);
 
-    XL_UTILITY_API int utf8_read_escape_sequence(char* src, uint32* dst);
+    XL_UTILITY_API int utf8_read_escape_sequence(char* src, uint32_t* dst);
 
-    XL_UTILITY_API size_t utf8_escape_wchar(utf8* buf, size_t dim, uint32 ch);
+    XL_UTILITY_API size_t utf8_escape_wchar(utf8* buf, size_t dim, uint32_t ch);
 
     // ASCII <--> UTF8 escaping
     XL_UTILITY_API size_t utf8_unescape(utf8* buf, size_t dim, char *src);

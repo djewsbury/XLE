@@ -14,7 +14,6 @@
 #include "../Math/Matrix.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/IteratorUtils.h"
-#include "../Core/Types.h"
 
 #define TERRAIN_ENABLE_EDITING
 
@@ -43,7 +42,7 @@ namespace SceneEngine
         UberSurfaceAddress  _heightsToUber;
         UberSurfaceAddress  _coverageToUber[MaxCoverageCount];
 
-        uint64      BuildHash() const;
+        uint64_t      BuildHash() const;
         
         TerrainCellId()
         {
@@ -92,7 +91,7 @@ namespace SceneEngine
                         const TerrainCellId& cell);
         void WriteQueuedNodes(TerrainRenderingContext& renderingContext, TerrainCollapseContext& collapseContext);
 		void CompletePendingUploads(); 
-		std::vector<std::pair<uint64, uint32>> CompletePendingUploads_Bridge();
+		std::vector<std::pair<uint64_t, uint32>> CompletePendingUploads_Bridge();
         void QueueUploads(TerrainRenderingContext& terrainContext);
         void Render(RenderCore::Metal::DeviceContext& context, RenderCore::Techniques::ParsingContext& parserContext, TerrainRenderingContext& terrainContext);
 
@@ -105,14 +104,14 @@ namespace SceneEngine
         void ShortCircuit(
             RenderCore::Metal::DeviceContext& metalContext, 
 			ShortCircuitBridge& bridge, 
-			uint64 cellHash, TerrainCoverageId layerId,
+			uint64_t cellHash, TerrainCoverageId layerId,
             Float2 cellCoordMins, Float2 cellCoordMaxs);
 		void ShortCircuit(
 			RenderCore::Metal::DeviceContext& metalContext,
 			ShortCircuitBridge& bridge,
-			uint64 cellHash, TerrainCoverageId layerId,
+			uint64_t cellHash, TerrainCoverageId layerId,
 			uint32 nodeIndex);
-		void AbandonShortCircuitData(uint64 cellHash, TerrainCoverageId layerId, Float2 cellCoordMins, Float2 cellCoordMaxs);
+		void AbandonShortCircuitData(uint64_t cellHash, TerrainCoverageId layerId, Float2 cellCoordMins, Float2 cellCoordMaxs);
 
         const bool IsShortCircuitAllowed() const { return _shortCircuitAllowed; }
         void SetShortCircuitSettings(const GradientFlagsSettings& gradientFlagsSettings);
@@ -189,7 +188,7 @@ namespace SceneEngine
             CellRenderInfo& operator=(const CellRenderInfo& ) = delete;
         };
 
-        typedef std::pair<uint64, std::unique_ptr<CellRenderInfo>> CRIPair;
+        typedef std::pair<uint64_t, std::unique_ptr<CellRenderInfo>> CRIPair;
 
         std::unique_ptr<TextureTileSet> _heightMapTileSet;
         std::vector<std::unique_ptr<TextureTileSet>> _coverageTileSet;
@@ -230,7 +229,7 @@ namespace SceneEngine
 
 		struct FoundNode { NodeCoverageInfo* _node; unsigned _fieldIndex; Float2 _cellCoordMin; Float2 _cellCoordMax; };
         std::vector<FoundNode> FindIntersectingNodes(
-			uint64 cellHash, TerrainCoverageId layerId,
+			uint64_t cellHash, TerrainCoverageId layerId,
 			Float2 cellCoordMin, Float2 cellCoordMax);
 
         TerrainCellRenderer(const TerrainCellRenderer&);

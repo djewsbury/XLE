@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "../../Core/Types.h"
 #include "../IteratorUtils.h"
 #include "Stream.h"
 #include <streambuf>

@@ -12,7 +12,7 @@
 
 namespace Assets
 {
-	using HashValue = uint64;
+	using HashValue = uint64_t;
 
 	class MountingTree::Pimpl
 	{
@@ -368,7 +368,7 @@ namespace Assets
 		auto mountPoint = SimplifyMountPoint(mountPointInput, _pimpl->_rules);
 		auto split = MakeSplitPath(mountPoint);
 
-		uint64 hash = s_FNV_init64;
+		uint64_t hash = s_FNV_init64;
 		for (auto i:split.GetSections())
 			hash = HashFilename(i, _pimpl->_rules, hash);
 		

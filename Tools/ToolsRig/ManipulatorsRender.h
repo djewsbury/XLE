@@ -7,7 +7,6 @@
 #pragma once
 
 #include "../../Math/Vector.h"
-#include "../../Core/Types.h"
 #include <utility>
 #include <memory>
 
@@ -29,7 +28,7 @@ namespace ToolsRig
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin = nullptr,
         const SceneEngine::PlacementGUID* filterEnd = nullptr,
-        uint64 materialGuid = ~0ull);
+        uint64_t materialGuid = ~0ull);
 
 	void Placements_RenderHighlightWithOutlineAndOverlay(
         RenderCore::Techniques::ParsingContext& parserContext,
@@ -38,7 +37,7 @@ namespace ToolsRig
         const SceneEngine::PlacementCellSet& cellSet,
 		const SceneEngine::PlacementGUID* filterBegin = nullptr,
         const SceneEngine::PlacementGUID* filterEnd = nullptr,
-        uint64 materialGuid = ~0ull);
+        uint64_t materialGuid = ~0ull);
 
     void Placements_RenderFiltered(
         RenderCore::Techniques::ParsingContext& parserContext,
@@ -48,7 +47,7 @@ namespace ToolsRig
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin = nullptr,
         const SceneEngine::PlacementGUID* filterEnd = nullptr,
-        uint64 materialGuid = ~0ull);
+        uint64_t materialGuid = ~0ull);
 
     void Placements_RenderShadow(
         RenderCore::Techniques::ParsingContext& parserContext,
@@ -57,7 +56,7 @@ namespace ToolsRig
         const SceneEngine::PlacementCellSet& cellSet,
         const SceneEngine::PlacementGUID* filterBegin = nullptr,
         const SceneEngine::PlacementGUID* filterEnd = nullptr,
-        uint64 materialGuid = ~0ull);
+        uint64_t materialGuid = ~0ull);
 
     void RenderCylinderHighlight(
         RenderCore::Techniques::ParsingContext& parserContext,

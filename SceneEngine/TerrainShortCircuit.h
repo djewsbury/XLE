@@ -8,7 +8,6 @@
 
 #include "../RenderCore/Metal/Forward.h"
 #include "../Math/Vector.h"
-#include "../Core/Types.h"
 #include <vector>
 #include <memory>
 #include <functional>
@@ -46,20 +45,20 @@ namespace SceneEngine
         class CellRegion 
         { 
         public:
-            uint64 _cellHash;
+            uint64_t _cellHash;
             Float2 _cellMins, _cellMaxs;
         };
         std::vector<CellRegion>		GetPendingUpdates();
         std::vector<CellRegion>		GetPendingAbandons();
 
-        ShortCircuitUpdate GetShortCircuit(uint64 cellHash, Float2 cellMins, Float2 cellMaxs);
+        ShortCircuitUpdate GetShortCircuit(uint64_t cellHash, Float2 cellMins, Float2 cellMaxs);
 
         void QueueShortCircuit(UInt2 uberMins, UInt2 uberMaxs);
         void QueueAbandon(UInt2 uberMins, UInt2 uberMaxs);
         void WriteCells(UInt2 uberMins, UInt2 uberMaxs, ConsoleRig::IProgress* progress);
 
         using WriteCellsFn = std::function<void()>;
-        void RegisterCell(uint64 cellHash, UInt2 uberMins, UInt2 uberMaxs, WriteCellsFn&& writeCells);
+        void RegisterCell(uint64_t cellHash, UInt2 uberMins, UInt2 uberMaxs, WriteCellsFn&& writeCells);
 
         ShortCircuitBridge(const std::shared_ptr<IShortCircuitSource>& source);
         ~ShortCircuitBridge();
@@ -72,7 +71,7 @@ namespace SceneEngine
             UInt2 _uberMins, _uberMaxs;
             WriteCellsFn _writeCells;
         };
-        std::vector<std::pair<uint64, RegisteredCell>> _cells;
+        std::vector<std::pair<uint64_t, RegisteredCell>> _cells;
 
         std::vector<CellRegion> _pendingAbandons;
         std::vector<CellRegion> _pendingUpdates;

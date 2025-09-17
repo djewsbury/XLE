@@ -3,10 +3,7 @@
 #include "../Math/Vector.h"
 #include "../Math/Matrix.h"
 #include "../Assets/AssetsCore.h"
-#include "../Utility/PtrUtils.h"
-#include "../Utility/StringUtils.h"
 #include "../Utility/MemoryUtils.h"
-#include "../Core/Types.h"
 #include <utility>
 #include <memory>
 #include <iosfwd>
@@ -83,7 +80,7 @@ namespace SceneEngine
 
 		enum class Orientation { YUp, ZUp };
 
-        using DataBlock = std::unique_ptr<uint8[], PODAlignedDeletor>;
+        using DataBlock = std::unique_ptr<uint8_t[], PODAlignedDeletor>;
 
 		static std::pair<DataBlock, size_t> BuildQuadTree(
             const BoundingBox objCellSpaceBoundingBoxes[], size_t objStride,

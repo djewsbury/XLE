@@ -107,7 +107,7 @@ namespace RenderCore { namespace Metal_DX11
 					postPrefixFilename = inputFilenameAsUtf8.begin();
 			}
 
-			std::unique_ptr<uint8[]> file;
+			std::unique_ptr<uint8_t[]> file;
 			::Assets::DependentFileState timeMarker;
 
 			if (postPrefixFilename != inputFilenameAsUtf8.begin()) {
@@ -117,7 +117,7 @@ namespace RenderCore { namespace Metal_DX11
 					size = fileInterface->GetSize();
 					timeMarker._snapshot = fileInterface->GetSnapshot();
 
-					file = std::make_unique<uint8[]>(size);
+					file = std::make_unique<uint8_t[]>(size);
 					if (size) {
 						auto blocksRead = fileInterface->Read(file.get(), size);
 						assert(blocksRead == 1); (void)blocksRead;
@@ -141,7 +141,7 @@ namespace RenderCore { namespace Metal_DX11
 						size = fileInterface->GetSize();
 						timeMarker._snapshot = fileInterface->GetSnapshot();
 
-						file = std::make_unique<uint8[]>(size);
+						file = std::make_unique<uint8_t[]>(size);
 						if (size) {
 							auto blocksRead = fileInterface->Read(file.get(), size);
 							assert(blocksRead == 1); (void)blocksRead;
@@ -196,7 +196,7 @@ namespace RenderCore { namespace Metal_DX11
 		IDxcUtils* _library = nullptr;
 		std::vector<::Assets::DependentFileState> _includeFiles;
 		std::vector<std::string> _searchDirectories;
-		std::vector<std::unique_ptr<uint8[]>> _readFiles;
+		std::vector<std::unique_ptr<uint8_t[]>> _readFiles;
 		std::string _expectedSearchPrefix;
 		std::string _replacementSearchPrefix;
 	};

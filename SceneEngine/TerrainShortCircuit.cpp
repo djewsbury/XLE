@@ -305,7 +305,7 @@ namespace SceneEngine
 	};
 
     auto TerrainCellRenderer::FindIntersectingNodes(
-		uint64 filenameHash, TerrainCoverageId layerId,
+		uint64_t filenameHash, TerrainCoverageId layerId,
 		Float2 cellCoordMin, Float2 cellCoordMax) -> std::vector<FoundNode>
 	{
 		std::vector<FoundNode> result;
@@ -340,7 +340,7 @@ namespace SceneEngine
     void    TerrainCellRenderer::ShortCircuit(
         RenderCore::Metal::DeviceContext& metalContext,
 		ShortCircuitBridge& bridge,
-		uint64 cellHash, TerrainCoverageId layerId, 
+		uint64_t cellHash, TerrainCoverageId layerId, 
 		Float2 cellCoordMins, Float2 cellCoordMaxs)
     {
     	auto nodes = FindIntersectingNodes(cellHash, layerId, cellCoordMins, cellCoordMaxs);
@@ -357,7 +357,7 @@ namespace SceneEngine
 	void TerrainCellRenderer::ShortCircuit(
 		RenderCore::Metal::DeviceContext& metalContext,
 		ShortCircuitBridge& bridge,
-		uint64 cellHash, TerrainCoverageId layerId,
+		uint64_t cellHash, TerrainCoverageId layerId,
 		uint32 nodeIndex)
 	{
 		auto i = LowerBound(_renderInfos, cellHash);
@@ -385,7 +385,7 @@ namespace SceneEngine
 	}
 
 	void    TerrainCellRenderer::AbandonShortCircuitData(
-		uint64 cellHash, TerrainCoverageId layerId, 
+		uint64_t cellHash, TerrainCoverageId layerId, 
 		Float2 cellAbandonMins, Float2 cellAbandonMaxs)
     {
 		// Find the tiles that would have been effected by short circuit operations in this area.
@@ -414,7 +414,7 @@ namespace SceneEngine
         return lhs._cellHash < rhs._cellHash;
     }
 
-    ShortCircuitUpdate ShortCircuitBridge::GetShortCircuit(uint64 cellHash, Float2 cellMins, Float2 cellMaxs)
+    ShortCircuitUpdate ShortCircuitBridge::GetShortCircuit(uint64_t cellHash, Float2 cellMins, Float2 cellMaxs)
     {
         auto l = _source.lock();
         if (!l) return ShortCircuitUpdate {};
@@ -549,7 +549,7 @@ namespace SceneEngine
         }
     }
 
-    void ShortCircuitBridge::RegisterCell(uint64 cellHash, UInt2 uberMins, UInt2 uberMaxs, WriteCellsFn&& writeCells)
+    void ShortCircuitBridge::RegisterCell(uint64_t cellHash, UInt2 uberMins, UInt2 uberMaxs, WriteCellsFn&& writeCells)
     {
         auto i = LowerBound(_cells, cellHash);
         if (i != _cells.end() && i->first == cellHash)

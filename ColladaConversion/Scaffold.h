@@ -626,27 +626,27 @@ namespace ColladaConversion
     class IDocScopeIdResolver
     {
     public:
-        virtual const DataFlow::Source* FindSource(uint64 guid) const = 0;
-        virtual const InputsCollection* FindVertexInputs(uint64 guid) const = 0;
-        virtual const MeshGeometry*     FindMeshGeometry(uint64 guid) const = 0;
-        virtual const Material*         FindMaterial(uint64 guid) const = 0;
-        virtual const VisualScene*      FindVisualScene(uint64 guid) const = 0;
-        virtual const Image*            FindImage(uint64 guid) const = 0;
-        virtual const SkinController*   FindSkinController(uint64 guid) const = 0;
-        virtual Node                    FindNode(uint64 guid) const = 0;
-		virtual Node                    FindNodeBySid(uint64 guid) const = 0;
-        virtual const Sampler*          FindSampler(uint64 guid) const = 0;
+        virtual const DataFlow::Source* FindSource(uint64_t guid) const = 0;
+        virtual const InputsCollection* FindVertexInputs(uint64_t guid) const = 0;
+        virtual const MeshGeometry*     FindMeshGeometry(uint64_t guid) const = 0;
+        virtual const Material*         FindMaterial(uint64_t guid) const = 0;
+        virtual const VisualScene*      FindVisualScene(uint64_t guid) const = 0;
+        virtual const Image*            FindImage(uint64_t guid) const = 0;
+        virtual const SkinController*   FindSkinController(uint64_t guid) const = 0;
+        virtual Node                    FindNode(uint64_t guid) const = 0;
+		virtual Node                    FindNodeBySid(uint64_t guid) const = 0;
+        virtual const Sampler*          FindSampler(uint64_t guid) const = 0;
         virtual ~IDocScopeIdResolver();
     };
 
     class GuidReference
     {
     public:
-        uint64 _id;
-        uint64 _fileHash;
+        uint64_t _id;
+        uint64_t _fileHash;
 
         GuidReference(Section uri);
-        GuidReference(uint64 id, uint64 fileHash) : _id(id), _fileHash(fileHash) {}
+        GuidReference(uint64_t id, uint64_t fileHash) : _id(id), _fileHash(fileHash) {}
 
         friend bool operator==(const GuidReference& lhs, const GuidReference& rhs)
         {
@@ -657,13 +657,13 @@ namespace ColladaConversion
     class URIResolveContext
     {
     public:
-        const IDocScopeIdResolver* FindFile(uint64) const;
+        const IDocScopeIdResolver* FindFile(uint64_t) const;
 
         URIResolveContext(std::shared_ptr<IDocScopeIdResolver> localDoc);
         URIResolveContext();
         ~URIResolveContext();
     protected:
-        std::vector<std::pair<uint64, std::shared_ptr<IDocScopeIdResolver>>> _files;
+        std::vector<std::pair<uint64_t, std::shared_ptr<IDocScopeIdResolver>>> _files;
     };
 
     class DocumentScaffold : public IDocScopeIdResolver
@@ -695,16 +695,16 @@ namespace ColladaConversion
         void Add(InputsCollection&& vertexInputs);
         void Add(Sampler&& sampler);
 
-        const DataFlow::Source* FindSource(uint64 guid) const;
-        const InputsCollection* FindVertexInputs(uint64 guid) const;
-        const MeshGeometry*     FindMeshGeometry(uint64 guid) const;
-        const Material*         FindMaterial(uint64 guid) const;
-        const VisualScene*      FindVisualScene(uint64 guid) const;
-        const Image*            FindImage(uint64 guid) const;
-        const SkinController*   FindSkinController(uint64 guid) const;
-        Node                    FindNode(uint64 guid) const;
-		Node                    FindNodeBySid(uint64 guid) const;
-        const Sampler*          FindSampler(uint64 guid) const;
+        const DataFlow::Source* FindSource(uint64_t guid) const;
+        const InputsCollection* FindVertexInputs(uint64_t guid) const;
+        const MeshGeometry*     FindMeshGeometry(uint64_t guid) const;
+        const Material*         FindMaterial(uint64_t guid) const;
+        const VisualScene*      FindVisualScene(uint64_t guid) const;
+        const Image*            FindImage(uint64_t guid) const;
+        const SkinController*   FindSkinController(uint64_t guid) const;
+        Node                    FindNode(uint64_t guid) const;
+		Node                    FindNodeBySid(uint64_t guid) const;
+        const Sampler*          FindSampler(uint64_t guid) const;
 
         Section GetMainVisualScene() const { return _visualScene; }
         const AssetDesc& GetAssetDesc() const { return _rootAsset; }
@@ -724,9 +724,9 @@ namespace ColladaConversion
         Section _physicsScene;
         Section _kinematicsScene;
 
-        std::vector<std::pair<uint64, DataFlow::Source>> _sources;
-        std::vector<std::pair<uint64, InputsCollection>> _vertexInputs;
-        std::vector<std::pair<uint64, Sampler>> _samplers;
+        std::vector<std::pair<uint64_t, DataFlow::Source>> _sources;
+        std::vector<std::pair<uint64_t, InputsCollection>> _vertexInputs;
+        std::vector<std::pair<uint64_t, Sampler>> _samplers;
     };
     
 
@@ -734,7 +734,7 @@ namespace ColladaConversion
         Element FindElement(
             const GuidReference& ref,
             const URIResolveContext& resolveContext,
-            Element (IDocScopeIdResolver::*fn)(uint64) const)
+            Element (IDocScopeIdResolver::*fn)(uint64_t) const)
     {
         auto* file = resolveContext.FindFile(ref._fileHash);
         if (!file) return nullptr;

@@ -105,7 +105,7 @@ namespace OSServices
         fflush((FILE*)_file);
     }
 
-    uint64      BasicFile::GetSize() const never_throws
+    uint64_t      BasicFile::GetSize() const never_throws
     {
         if (!_file) return 0;
 
@@ -114,7 +114,7 @@ namespace OSServices
         size_t size = TellP();
         fseek((FILE*)_file, originalPosition, SEEK_SET);
 
-        return uint64(size);
+        return uint64_t(size);
     }
 
     bool        BasicFile::IsGood() const never_throws { return _file != nullptr; }
@@ -128,13 +128,13 @@ namespace OSServices
         return 0;
     }
 
-    Exceptions::IOException::Reason MemoryMappedFile::TryOpen(const utf8 filename[], uint64 size, const char openMode[], FileShareMode::BitField shareMode) never_throws
+    Exceptions::IOException::Reason MemoryMappedFile::TryOpen(const utf8 filename[], uint64_t size, const char openMode[], FileShareMode::BitField shareMode) never_throws
     {
         assert(0);      // not implemented yet
         return Exceptions::IOException::Reason::Complex;
     }
     
-    Exceptions::IOException::Reason MemoryMappedFile::TryOpen(const utf16 filename[], uint64 size, const char openMode[], FileShareMode::BitField shareMode) never_throws
+    Exceptions::IOException::Reason MemoryMappedFile::TryOpen(const utf16 filename[], uint64_t size, const char openMode[], FileShareMode::BitField shareMode) never_throws
     {
         utf8 buffer[MaxPath];
         Conversion::ConvertNullTerminated(buffer, dimof(buffer), filename);
@@ -142,7 +142,7 @@ namespace OSServices
     }
     
     MemoryMappedFile::MemoryMappedFile(
-                        const utf8 filename[], uint64 size,
+                        const utf8 filename[], uint64_t size,
                         const char openMode[],
                         FileShareMode::BitField shareMode)
     {
@@ -150,7 +150,7 @@ namespace OSServices
     }
     
     MemoryMappedFile::MemoryMappedFile(
-                        const utf16 filename[], uint64 size,
+                        const utf16 filename[], uint64_t size,
                         const char openMode[],
                         FileShareMode::BitField shareMode)
     {

@@ -71,8 +71,8 @@ namespace Utility
 
         if (iterator == start) return iterator;
 
-        auto sigBits = 64ll - (int32)xl_clz8(beforePoint);
-        auto shift = (int32)sigBits - 24ll;
+        auto sigBits = 64ll - (int32_t)xl_clz8(beforePoint);
+        auto shift = (int32_t)sigBits - 24ll;
         auto mantissa = SignedRShift(beforePoint, shift);
         auto exponent = shift+23;
         
@@ -82,9 +82,9 @@ namespace Utility
         } else result = 0;
 
         if (afterPoint) {
-            static std::tuple<int32, uint64_t, double> ExponentTable[32];
+            static std::tuple<int32_t, uint64_t, double> ExponentTable[32];
             static bool ExponentTableBuilt = false;
-            int32 bias = 40;
+            int32_t bias = 40;
             if (!ExponentTableBuilt) {
                 for (unsigned c=0; c<dimof(ExponentTable); ++c) {
                     auto temp = std::log2(10.);
@@ -94,12 +94,12 @@ namespace Utility
                     assert(fractBase2Exp <= 0.f);   // (std::powf(2.f, fractBase2Exp) must be smaller than 1 for precision reasons)
                     auto multiplier = uint64_t(std::exp2(fractBase2Exp + bias));
 
-                    ExponentTable[c] = std::make_tuple(int32(integerBase2Exp), multiplier, fractBase2Exp);
+                    ExponentTable[c] = std::make_tuple(int32_t(integerBase2Exp), multiplier, fractBase2Exp);
                 }
                 ExponentTableBuilt = true;
             }
 
-            const int32 idealBias = (int32)xl_clz8(afterPoint);
+            const int32_t idealBias = (int32_t)xl_clz8(afterPoint);
 
                 // We must factor the fractional part of the exponent
                 // into the mantissa (since the exponent must be an integer)
@@ -115,10 +115,10 @@ namespace Utility
             } else {
                 rawMantissaT = afterPoint * std::get<1>(ExponentTable[afterPointPrec]);
             }
-            auto sigBitsT = 64ll - (int32)xl_clz8(rawMantissaT);
-            auto shiftT = (int32)sigBitsT - 24ll;
+            auto sigBitsT = 64ll - (int32_t)xl_clz8(rawMantissaT);
+            auto shiftT = (int32_t)sigBitsT - 24ll;
 
-            auto expForFractionalPart = int32(std::get<0>(ExponentTable[afterPointPrec])+23+shiftT-bias);
+            auto expForFractionalPart = int32_t(std::get<0>(ExponentTable[afterPointPrec])+23+shiftT-bias);
 
                 // note --  No rounding performed! Just truncating the part of the number that
                 //          doesn't fit into our precision.

@@ -16,13 +16,13 @@ namespace Utility
 {
     struct ParentAndChildLink
     {
-        const uint64* _parent;
-        const uint64* _child;
+        const uint64_t* _parent;
+        const uint64_t* _child;
         const char* _label;
         unsigned _id;
 
-        uint64 _resolvedInclusiveTime;
-        uint64 _resolvedChildrenTime;
+        uint64_t _resolvedInclusiveTime;
+        uint64_t _resolvedChildrenTime;
     };
 
     static bool CompareParentAndChildLink(const ParentAndChildLink& lhs, const ParentAndChildLink& rhs)
@@ -43,8 +43,8 @@ namespace Utility
 
     struct CompareParent
     {
-        bool operator()(const ParentAndChildLink& lhs, const uint64* rhs) { return lhs._parent < rhs; }
-        bool operator()(const uint64* lhs, const ParentAndChildLink& rhs) { return lhs < rhs._parent; }
+        bool operator()(const ParentAndChildLink& lhs, const uint64_t* rhs) { return lhs._parent < rhs; }
+        bool operator()(const uint64_t* lhs, const ParentAndChildLink& rhs) { return lhs < rhs._parent; }
         bool operator()(const ParentAndChildLink& lhs, const ParentAndChildLink& rhs) { return lhs._parent < rhs._parent; }
     };
 
@@ -76,7 +76,7 @@ namespace Utility
         auto workingId = *i++;
 
         for (; i!=events.cend(); ++i) {
-            uint64 time = *i;
+            uint64_t time = *i;
             if (time & (1ull << 63ull)) {
 
                     //  This is an "end" event. We can resolve the last
@@ -91,9 +91,9 @@ namespace Utility
                     assert(entryIndex < parentsAndChildren.size());
                     auto& entry = parentsAndChildren[entryIndex];
 
-                    uint64 startTime = *entry._child;
+                    uint64_t startTime = *entry._child;
                     assert(time >= startTime);
-                    uint64 inclusiveTime = time - startTime;
+                    uint64_t inclusiveTime = time - startTime;
                     entry._resolvedInclusiveTime = inclusiveTime;
                     --_workingStackDepth;
 
@@ -143,7 +143,7 @@ namespace Utility
         {
         public:
             ResolvedEvent::Id _parentOutput;
-            const uint64* _parentLinkSearch;
+            const uint64_t* _parentLinkSearch;
         };
 
         std::queue<PreResolveEvent> finalResolveQueue;

@@ -40,7 +40,7 @@ namespace ConsoleRig
         virtual ~BufferedOutputStream();
 
     private:
-        uint8       _buffer[4096];
+        uint8_t     _buffer[4096];
         size_type   _bufferPosition;
         std::shared_ptr<Utility::OutputStream>      _nextStream;
     };
@@ -213,7 +213,7 @@ namespace ConsoleRig
                 //              Input is treated as UTF-8. If we're using BufferedOutputStream, we may
                 //              have forgotten the input type on the way through...
                 //
-            uint8 buffer[4096];
+            uint8_t buffer[4096];
             while (len) {
 
                     //

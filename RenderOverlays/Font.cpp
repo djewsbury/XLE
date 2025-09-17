@@ -1287,7 +1287,7 @@ namespace RenderOverlays
 	// Quad
 	// --------------------------------------------------------------------------
 
-	inline float FloatBits(uint32 i) { return *(float*)&i; }
+	inline float FloatBits(uint32_t i) { return *(float*)&i; }
 	static const float FP_INFINITY = FloatBits(0x7F800000);
 	static const float FP_NEG_INFINITY = FloatBits(0xFF800000);
 

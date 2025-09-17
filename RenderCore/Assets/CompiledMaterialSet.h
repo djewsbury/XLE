@@ -39,7 +39,7 @@ namespace RenderCore { namespace Assets
 		CompiledMaterialSet();
 		CompiledMaterialSet(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
 		CompiledMaterialSet(
-			std::unique_ptr<uint8[], PODAlignedDeletor>	rawMemoryBlock,
+			std::unique_ptr<uint8_t[], PODAlignedDeletor>	rawMemoryBlock,
 			size_t rawMemoryBlockSize, const ::Assets::DependencyValidation& depVal);
 		~CompiledMaterialSet();
 
@@ -48,15 +48,15 @@ namespace RenderCore { namespace Assets
 		std::vector<std::pair<uint64_t, Machine>> _materialMachines;
 		std::vector<std::shared_ptr<ShaderPatchCollection>> _patchCollections;
 		IteratorRange<const void*> _resolvedNamesBlock;
-		std::unique_ptr<uint8[], PODAlignedDeletor>		_rawMemoryBlock;
+		std::unique_ptr<uint8_t[], PODAlignedDeletor>		_rawMemoryBlock;
 		size_t											_rawMemoryBlockSize = 0;
 		::Assets::DependencyValidation					_depVal;
 
 		IteratorRange<ScaffoldCmdIterator> GetOuterCommandStream() const;
 	};
 
-	static constexpr uint64 ChunkType_ResolvedMat = ConstHash64Legacy<'ResM', 'at'>::Value;
-	static constexpr uint64 ChunkType_PatchCollections = ConstHash64Legacy<'Patc', 'hCol'>::Value;
+	static constexpr uint64_t ChunkType_ResolvedMat = ConstHash64Legacy<'ResM', 'at'>::Value;
+	static constexpr uint64_t ChunkType_PatchCollections = ConstHash64Legacy<'Patc', 'hCol'>::Value;
 	static constexpr unsigned ResolvedMat_ExpectedVersion = 1;
 
 	constexpr auto GetCompileProcessType(CompiledMaterialSet*) { return ConstHash64Legacy<'ResM', 'at'>::Value; }

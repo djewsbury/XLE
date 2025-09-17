@@ -11,7 +11,6 @@
 #include "../../DeviceInitialization.h"     // for DeviceFeatures
 #include "../../ResourceDesc.h"     // for AllocationRules
 #include "../../../Utility/IteratorUtils.h"
-#include "../../../Core/Types.h"
 #include <memory>
 #include "IncludeVulkan.h"
 #include "Foreign/VulkanMemoryAllocator/include/vk_mem_alloc.h"

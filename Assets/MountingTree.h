@@ -105,7 +105,7 @@ namespace Assets
 		mutable uint32_t		_changeId;
 		MountingTree::Pimpl *	_pimpl;			// raw pointer; client must be careful
 
-		mutable uint64			_cachedHashValues[8] = { 0,0,0,0,0,0,0,0 };
+		mutable uint64_t			_cachedHashValues[8] = { 0,0,0,0,0,0,0,0 };
 		mutable IteratorRange<const uint8_t*> _segments[8];		// contains internal pointers into the input data
 		unsigned 				_segmentCount;
 		mutable unsigned		_nextHashValueToBuild;

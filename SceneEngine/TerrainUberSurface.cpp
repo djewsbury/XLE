@@ -414,7 +414,7 @@ namespace SceneEngine
 		{
 		public:
 			const ::Assets::ResChar* _shaderName;
-			using Pkt = std::tuple<uint64, void*, size_t>;
+			using Pkt = std::tuple<uint64_t, void*, size_t>;
 			IteratorRange<Pkt*> _extraPackets; 
 
 			Desc(const ::Assets::ResChar shaderName[], IteratorRange<Pkt*> extraPackets)
@@ -436,7 +436,7 @@ namespace SceneEngine
 
 namespace ConsoleRig
 {
-	template <> uint64 CalculateCachedBoxHash(const SceneEngine::ApplyToolResources::Desc& desc)
+	template <> uint64_t CalculateCachedBoxHash(const SceneEngine::ApplyToolResources::Desc& desc)
 	{
 		auto h = Hash64(desc._shaderName);
 		for (const auto& p:desc._extraPackets)
@@ -477,7 +477,7 @@ namespace SceneEngine
         RenderCore::IThreadContext& threadContext,
         UInt2 adjMins, UInt2 adjMaxs, const char shaderName[],
         Float2 center, float radius, float adjustment, 
-        std::tuple<uint64, void*, size_t> extraPackets[], unsigned extraPacketCount) -> TerrainToolResult
+        std::tuple<uint64_t, void*, size_t> extraPackets[], unsigned extraPacketCount) -> TerrainToolResult
     {
         CancelActiveOperations();
         TRY 
@@ -653,7 +653,7 @@ namespace SceneEngine
             float dummy[3];
         } raiseLowerParameters = { powerValue, 0.f, 0.f, 0.f };
 
-        std::tuple<uint64, void*, size_t> extraPackets[] = 
+        std::tuple<uint64_t, void*, size_t> extraPackets[] = 
         {
             std::make_tuple(Hash64("RaiseLowerParameters"), &raiseLowerParameters, sizeof(RaiseLowerParameters))
         };
@@ -700,7 +700,7 @@ namespace SceneEngine
             unsigned _flags;
         } copyHeightParameters = { source, powerValue, flags };
 
-        std::tuple<uint64, void*, size_t> extraPackets[] = 
+        std::tuple<uint64_t, void*, size_t> extraPackets[] = 
         {
             std::make_tuple(Hash64("CopyHeightParameters"), &copyHeightParameters, sizeof(CopyHeightParameters))
         };
@@ -751,7 +751,7 @@ namespace SceneEngine
             float _dummy;
         } rotateParameters = { Truncate(rotationAxis), rotationAngle, 0.f };
 
-        std::tuple<uint64, void*, size_t> extraPackets[] = 
+        std::tuple<uint64_t, void*, size_t> extraPackets[] = 
         {
             std::make_tuple(Hash64("RotateParameters"), &rotateParameters, sizeof(RotateParamaters))
         };
@@ -795,7 +795,7 @@ namespace SceneEngine
         for (unsigned c=0; c<filterSize; ++c)
             blurParameters._weights[c] = Float4(temp[c], temp[c], temp[c], temp[c]);
     
-        std::tuple<uint64, void*, size_t> extraPackets[] = 
+        std::tuple<uint64_t, void*, size_t> extraPackets[] = 
         {
             std::make_tuple(Hash64("GaussianParameters"), &blurParameters, sizeof(BlurParameters))
         };
@@ -822,7 +822,7 @@ namespace SceneEngine
             float _baseHeight, _noiseHeight, _roughness, _fractalDetail;
         } fillWithNoiseParameters = { mins, maxs, baseHeight, noiseHeight, roughness, fractalDetail };
     
-        std::tuple<uint64, void*, size_t> extraPackets[] = 
+        std::tuple<uint64_t, void*, size_t> extraPackets[] = 
         {
             std::make_tuple(Hash64("FillWithNoiseParameters"), &fillWithNoiseParameters, sizeof(FillWithNoiseParameters))
         };
@@ -977,7 +977,7 @@ namespace SceneEngine
             float dummy[3];
         } params = { paintValue, 0.f, 0.f, 0.f };
 
-        std::tuple<uint64, void*, size_t> extraPackets[] = 
+        std::tuple<uint64_t, void*, size_t> extraPackets[] = 
         {
             std::make_tuple(Hash64("PaintParameters"), &params, sizeof(params))
         };

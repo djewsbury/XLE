@@ -28,7 +28,7 @@ namespace PlatformRig
     public:
         struct TechniqueContextBinder
         {
-            void SetInteger(const char name[], uint32 value)
+            void SetInteger(const char name[], uint32_t value)
             {
                 auto l = _real.lock();
                 if (!l)

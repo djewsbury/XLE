@@ -12,11 +12,7 @@
 #include "../Assets/DepVal.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/IteratorUtils.h"
-#include "../Core/Prefix.h"
-#include "../Core/Types.h"
-#include <memory>
 #include <vector>
-#include <utility>
 #include <assert.h>
 #include <functional>
 

@@ -247,15 +247,15 @@ namespace SceneEngine
                 result = *placementsIntersection;
         }
 
-        unsigned firstExtraBit = IntegerLog2(uint32(Type::Extra));
+        unsigned firstExtraBit = IntegerLog2(uint32_t(Type::Extra));
         for (size_t c=0; c<_extraTesters.size(); ++c) {
-            if (!(filter & 1<<uint32(c+firstExtraBit))) continue;
+            if (!(filter & 1<<uint32_t(c+firstExtraBit))) continue;
             TRY
             {
                 auto res = _extraTesters[c]->FirstRayIntersection(context, worldSpaceRay);
                 if (res._distance >= 0.f && res._distance <result._distance) {
                     result = res;
-                    result._type = (Type::Enum)(1<<uint32(c+firstExtraBit));
+                    result._type = (Type::Enum)(1<<uint32_t(c+firstExtraBit));
                 }
             } 
             CATCH(const ::Assets::Exceptions::RetrievalError&) {}
@@ -386,9 +386,9 @@ namespace SceneEngine
             }
         }
 
-        unsigned firstExtraBit = IntegerLog2(uint32(Type::Extra));
+        unsigned firstExtraBit = IntegerLog2(uint32_t(Type::Extra));
         for (size_t c=0; c<_extraTesters.size(); ++c) {
-            if (!(filter & 1<<uint32(c+firstExtraBit))) continue;
+            if (!(filter & 1<<uint32_t(c+firstExtraBit))) continue;
             _extraTesters[c]->FrustumIntersection(result, context, frustum);
         }
     }

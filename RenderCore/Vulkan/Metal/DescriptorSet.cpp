@@ -697,7 +697,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned maxBit = std::min(64u - xl_clz8(dummyDescWriteMask), (unsigned)_signature.size()-1);
 
 		for (unsigned bIndex=minBit; bIndex<=maxBit; ++bIndex) {
-			if (!(dummyDescWriteMask & (1ull<<uint64(bIndex)))) continue;
+			if (!(dummyDescWriteMask & (1ull<<uint64_t(bIndex)))) continue;
 
 			auto b = _signature[bIndex]._type;
 			if (_signature[bIndex]._count == 1) {
@@ -776,7 +776,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					continue;
 				}
 			}
-			bindingsWrittenTo |= 1ull << uint64(bIndex);
+			bindingsWrittenTo |= 1ull << uint64_t(bIndex);
 		}
 
 		return bindingsWrittenTo;

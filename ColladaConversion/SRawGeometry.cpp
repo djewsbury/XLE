@@ -119,9 +119,9 @@ namespace ColladaConversion
         if ((p0Name._end > p0Name._start) && tolower(*(const char*)p0Name._start) == 'r')
             _formatHint |= FormatHint::IsColor;
 
-        _rawData = std::make_shared<std::vector<uint8>>(source.GetCount() * parsedTypeSize);
+        _rawData = std::make_shared<std::vector<uint8_t>>(source.GetCount() * parsedTypeSize);
         if (sourceType == DataFlow::ArrayType::Int) {
-            ParseXMLList((uint32*)AsPointer(_rawData->begin()), (unsigned)source.GetCount(), source.GetArrayData());
+            ParseXMLList((uint32_t*)AsPointer(_rawData->begin()), (unsigned)source.GetCount(), source.GetArrayData());
         } else if (sourceType == DataFlow::ArrayType::Float) {
             ParseXMLList((float*)AsPointer(_rawData->begin()), (unsigned)source.GetCount(), source.GetArrayData());
         }
@@ -157,7 +157,7 @@ namespace ColladaConversion
             std::basic_string<utf8> _semantic;
             unsigned _semanticIndex;
             std::shared_ptr<IVertexSourceData> _sourceData;
-            uint64 _sourceId;
+            uint64_t _sourceId;
         };
         std::vector<Element> _finalVertexElements;
         const ImportConfiguration* _cfg;
@@ -232,9 +232,9 @@ namespace ColladaConversion
             // this data structure. And it grows to a very last size.
             // So, this is a case where a std::map is likely to be best.
         #if defined(UNIFIED_VERTS_USE_MAP)
-            std::map<uint64, size_t> _hashValues;
+            std::map<uint64_t, size_t> _hashValues;
         #else
-            std::vector<std::pair<uint64, size_t>>    _hashValues;
+            std::vector<std::pair<uint64_t, size_t>>    _hashValues;
         #endif
         
         size_t BuildUnifiedVertex(const size_t attributeIndices[]);
@@ -248,7 +248,7 @@ namespace ColladaConversion
 
     size_t ComposingUnifiedVertices::BuildUnifiedVertex(const size_t attributeIndices[])
     {
-        uint64 hashValue = 0;
+        uint64_t hashValue = 0;
         for (unsigned c=0; c<_attributesPerVertex; ++c)
             hashValue = HashCombine(attributeIndices[c], hashValue);
 
@@ -716,7 +716,7 @@ namespace ColladaConversion
                 size_t count = i->_indexBuffer.size();
                 std::copy(
                     i->_indexBuffer.begin(), i->_indexBuffer.end(),
-                    &((uint16*)finalIndexBuffer.data())[accumulatingIndexCount]);
+                    &((uint16_t*)finalIndexBuffer.data())[accumulatingIndexCount]);
                 accumulatingIndexCount += count;
             }
             assert(accumulatingIndexCount==finalIndexCount);
@@ -730,7 +730,7 @@ namespace ColladaConversion
                 size_t count = i->_indexBuffer.size();
                 std::copy(
                     i->_indexBuffer.begin(), i->_indexBuffer.end(),
-                    &((uint32*)finalIndexBuffer.data())[accumulatingIndexCount]);
+                    &((uint32_t*)finalIndexBuffer.data())[accumulatingIndexCount]);
                 accumulatingIndexCount += count;
             }
             assert(accumulatingIndexCount==finalIndexCount);
@@ -1106,7 +1106,7 @@ namespace ColladaConversion
         ParseXMLList(&bindShapeMatrix(0,0), 16, controller.GetBindShapeMatrix());
 
         size_t vertexCount = controller.GetVerticesWithWeightsCount();
-        if (vertexCount >= std::numeric_limits<uint16>::max()) {
+        if (vertexCount >= std::numeric_limits<uint16_t>::max()) {
             Throw(Formatters::FormatException(
                 "Exceeded maximum number of vertices supported by skinning controller", controller.GetLocation()));
         }

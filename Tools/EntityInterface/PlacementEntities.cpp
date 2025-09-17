@@ -37,7 +37,7 @@ namespace EntityInterface
 		for (unsigned c = 0; c < initializers.size(); ++c) {
 			if (initializers[c]._prop.second == Property_Visible && !initializers[c]._data.empty()) {
 				assert(!initializers[c]._data.empty());
-				bool flagValue = (*(const uint8*)initializers[c]._data.begin()) != 0;
+				bool flagValue = (*(const uint8_t*)initializers[c]._data.begin()) != 0;
 				visChange = flagValue ? MakeVisible : MakeHidden;
 			}
 		}

@@ -8,7 +8,6 @@
 
 #include "ArithmeticUtils.h"
 #include "IteratorUtils.h"
-#include "../Core/Types.h"
 
 namespace Utility
 {
@@ -32,7 +31,7 @@ namespace Utility
     //      bit twiddling web site:
     //          https://graphics.stanford.edu/~seander/bithacks.html
 
-    inline uint32_t IntegerLog2(uint8 x)
+    inline uint32_t IntegerLog2(uint8_t x)
     {
         return xl_bsr1(x);
     }

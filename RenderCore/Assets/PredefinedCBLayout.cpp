@@ -249,7 +249,7 @@ namespace RenderCore { namespace Assets
                 value.insert(value.end(), nextToken._value.begin(), nextToken._value.end());
             }
 
-            uint8 buffer0[256], buffer1[256];
+            uint8_t buffer0[256], buffer1[256];
             auto defaultType = ImpliedTyping::ParseFullMatch(
                 MakeStringSection(value),
                 MakeIteratorRange(buffer0));
@@ -339,10 +339,10 @@ namespace RenderCore { namespace Assets
         }
     }
 
-    std::vector<uint8> PredefinedCBLayout::BuildCBDataAsVector(const ParameterBox& parameters, ShaderLanguage lang) const
+    std::vector<uint8_t> PredefinedCBLayout::BuildCBDataAsVector(const ParameterBox& parameters, ShaderLanguage lang) const
     {
         unsigned alignmentRules = AlignmentRulesForLanguage(lang);
-        std::vector<uint8> cbData(_cbSizeByLanguage[alignmentRules], uint8(0));
+        std::vector<uint8_t> cbData(_cbSizeByLanguage[alignmentRules], uint8_t(0));
         BuildCB(MakeIteratorRange(cbData), parameters, lang);
         return cbData;
     }

@@ -168,12 +168,12 @@ namespace GUILayer
 		return nullptr;
     }
 
-    uint64 VisMouseOver::MaterialBindingGuid::get()
+    uint64_t VisMouseOver::MaterialBindingGuid::get()
     {
         if (_object->_hasMouseOver) {
             return _object->_materialGuid;
         } else {
-            return ~uint64(0x0);
+            return ~uint64_t(0x0);
         }
     }
 

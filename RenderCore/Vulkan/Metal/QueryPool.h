@@ -6,7 +6,6 @@
 
 #include "VulkanCore.h"
 #include "../../Types.h"
-#include "../../../Core/Types.h"
 #include "../../../Utility/IteratorUtils.h"
 #include <memory>
 

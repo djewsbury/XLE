@@ -42,7 +42,7 @@ namespace RenderCore { namespace Assets
     {
     public:
         std::shared_ptr<::Assets::IIntermediateCompileMarker> Prepare(
-            uint64 typeCode, const StringSection<::Assets::ResChar> initializers[], unsigned initializerCount);
+            uint64_t typeCode, const StringSection<::Assets::ResChar> initializers[], unsigned initializerCount);
 		std::vector<uint64_t> GetTypesForAsset(const StringSection<::Assets::ResChar> initializers[], unsigned initializerCount);
 		std::vector<std::pair<std::string, std::string>> GetExtensionsForType(uint64_t typeCode);
 

@@ -78,9 +78,9 @@ namespace Utility
 
 		template<typename CharType> struct DemoteCharType { using Value = CharType; };
 		template<> struct DemoteCharType<uint8_t> { using Value = char; };
-		template<> struct DemoteCharType<uint16> { using Value = wchar_t; };
+		template<> struct DemoteCharType<uint16_t> { using Value = wchar_t; };
 		template<> struct DemoteCharType<char16_t> { using Value = wchar_t; };
-		template<> struct DemoteCharType<uint32> { using Value = char; }; 
+		template<> struct DemoteCharType<uint32_t> { using Value = char; }; 
 		template<> struct DemoteCharType<char32_t> { using Value = wchar_t; };
     }
 

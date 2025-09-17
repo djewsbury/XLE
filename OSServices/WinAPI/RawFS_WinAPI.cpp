@@ -399,12 +399,12 @@ namespace OSServices
         FlushFileBuffers(_file);
     }
 
-    uint64      BasicFile::GetSize() const never_throws
+    uint64_t      BasicFile::GetSize() const never_throws
     {
         if (_file == INVALID_HANDLE_VALUE) return 0;
         DWORD highWord = 0;
         auto lowWord = ::GetFileSize(_file, &highWord);
-        return (uint64(highWord)<<32ull) | uint64(lowWord);
+        return (uint64_t(highWord)<<32ull) | uint64_t(lowWord);
     }
 
 	bool		BasicFile::IsGood() const never_throws
@@ -412,7 +412,7 @@ namespace OSServices
 		return _file != INVALID_HANDLE_VALUE;
 	}
 
-	static uint64 AsUInt64(FILETIME ft) { return (uint64(ft.dwHighDateTime) << 32ull) | uint64(ft.dwLowDateTime); }
+	static uint64_t AsUInt64(FILETIME ft) { return (uint64_t(ft.dwHighDateTime) << 32ull) | uint64_t(ft.dwLowDateTime); }
 
 	FileTime	BasicFile::GetFileTime() const never_throws
 	{
@@ -475,7 +475,7 @@ namespace OSServices
 
 	static FileAttributes AsFileAttributes(const WIN32_FILE_ATTRIBUTE_DATA& attribs)
 	{
-		return { uint64(attribs.nFileSizeHigh) << 32 | uint64(attribs.nFileSizeLow), AsUInt64(attribs.ftLastWriteTime), AsUInt64(attribs.ftLastAccessTime) };
+		return { uint64_t(attribs.nFileSizeHigh) << 32 | uint64_t(attribs.nFileSizeLow), AsUInt64(attribs.ftLastWriteTime), AsUInt64(attribs.ftLastAccessTime) };
 	}
 
 	std::optional<FileAttributes> TryGetFileAttributes(const utf8 filename[])
@@ -543,7 +543,7 @@ namespace OSServices
 	}
 
 	Exceptions::IOException::Reason MemoryMappedFile::TryOpen(
-		const utf8 filename[], uint64 size, const char openMode[], 
+		const utf8 filename[], uint64_t size, const char openMode[], 
 		FileShareMode::BitField shareMode) never_throws
 	{
 		assert(_data.empty() && !_closeFn);
@@ -596,7 +596,7 @@ namespace OSServices
 	}
 
 	Exceptions::IOException::Reason MemoryMappedFile::TryOpen(
-		const utf16 filename[], uint64 size, const char openMode[],
+		const utf16 filename[], uint64_t size, const char openMode[],
 		FileShareMode::BitField shareMode) never_throws
 	{
 		assert(_data.empty() && !_closeFn);
@@ -649,7 +649,7 @@ namespace OSServices
 	}
 
 	MemoryMappedFile::MemoryMappedFile(
-		const utf8 filename[], uint64 size, const char openMode[], 
+		const utf8 filename[], uint64_t size, const char openMode[], 
 		FileShareMode::BitField shareMode)
 	{
 		auto underlyingOpenMode = AsUnderlyingOpenMode(openMode);
@@ -693,7 +693,7 @@ namespace OSServices
 	}
 
 	MemoryMappedFile::MemoryMappedFile(
-		const utf16 filename[], uint64 size, const char openMode[],
+		const utf16 filename[], uint64_t size, const char openMode[],
 		FileShareMode::BitField shareMode)
 	{
 		auto underlyingOpenMode = AsUnderlyingOpenMode(openMode);

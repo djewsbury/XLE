@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "../Core/Types.h"
 #include <memory>
 
 namespace Utility
@@ -49,14 +48,14 @@ namespace Utility
         class Allocation
         {
         public:
-            void*   _allocation;
-            uint32  _marker;
+            void*       _allocation;
+            uint32_t    _marker;
 
             operator void*()    { return _allocation; }
             operator bool()     { return _allocation != nullptr; }
 
-            Allocation() : _allocation(nullptr), _marker(~uint32(0x0)) {}
-            Allocation(void* a, uint32 marker) : _allocation(a), _marker(marker) {}
+            Allocation() : _allocation(nullptr), _marker(~uint32_t(0x0)) {}
+            Allocation(void* a, uint32_t marker) : _allocation(a), _marker(marker) {}
         };
 
         Allocation  Allocate(unsigned size);

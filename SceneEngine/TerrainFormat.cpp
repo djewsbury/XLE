@@ -14,7 +14,6 @@
 #include "../ConsoleRig/GlobalServices.h"
 #include "../OSServices/RawFS.h"
 #include "../Utility/PtrUtils.h"
-#include "../Core/Types.h"
 
 #include <stack>
 #include <assert.h>
@@ -113,8 +112,8 @@ namespace SceneEngine
             return result;
         }
 
-        static const uint64 ChunkType_CoverageScaffold = ConstHash64<'Cove','rage','Scaf','fold'>::Value;
-        static const uint64 ChunkType_CoverageData = ConstHash64<'Cove','rage','Data'>::Value;
+        static const uint64_t ChunkType_CoverageScaffold = ConstHash64<'Cove','rage','Scaf','fold'>::Value;
+        static const uint64_t ChunkType_CoverageData = ConstHash64<'Cove','rage','Data'>::Value;
 
         //////////////////////////////////////////////////////////////////////////////////////////
 

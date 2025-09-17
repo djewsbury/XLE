@@ -15,7 +15,6 @@
 #include "../Assets/AssetsCore.h"
 #include "../Math/Vector.h"
 #include "../Utility/IntrusivePtr.h"
-#include "../Core/Types.h"
 #include <memory>
 #include <assert.h>
 
@@ -124,7 +123,7 @@ namespace SceneEngine
             RenderCore::IThreadContext& threadContext,
             UInt2 adjMins, UInt2 adjMaxs, const char shaderName[],
             Float2 center, float radius, float adjustment, 
-            std::tuple<uint64, void*, size_t> extraPackets[], unsigned extraPacketCount);
+            std::tuple<uint64_t, void*, size_t> extraPackets[], unsigned extraPacketCount);
         void    QueueShortCircuitUpdate(UInt2 adjMins, UInt2 adjMaxs);
 
         virtual void CancelActiveOperations();

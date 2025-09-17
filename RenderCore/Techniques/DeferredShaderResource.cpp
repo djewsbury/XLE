@@ -444,7 +444,7 @@ namespace RenderCore { namespace Techniques
         CachedTextureFormats(const Desc&);
         ~CachedTextureFormats();
 
-        typedef std::pair<uint64, Format> Entry;
+        typedef std::pair<uint64_t, Format> Entry;
         OSServices::MemoryMappedFile _cache;
 
         class Header
@@ -514,7 +514,7 @@ namespace RenderCore { namespace Techniques
         auto* end = (Entry*)PtrAdd(data, sizeof(Hdr) + sizeof(Entry) * hdr._count);
 
         auto hashName = Hash64(textureName);
-        auto* i = std::lower_bound(start, end, hashName, CompareFirst<uint64, Format>());
+        auto* i = std::lower_bound(start, end, hashName, CompareFirst<uint64_t, Format>());
         if (i == end || i->first != hashName) {
             if ((hdr._count+1) > CachedTextureFormats::MaxCachedTextures) {
                 assert(0);  // cache has gotten too big

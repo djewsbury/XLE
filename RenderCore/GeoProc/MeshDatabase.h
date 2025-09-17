@@ -9,7 +9,6 @@
 #include "../Format.h"
 #include "../VertexUtil.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../Core/Types.h"
 #include <utility>
 #include <memory>
 #include <vector>
@@ -51,7 +50,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         size_t GetUnifiedVertexCount() const { return _unifiedVertexCount; }
 
         auto    BuildNativeVertexBuffer(const NativeVBLayout& outputLayout) const   -> std::vector<uint8_t>;
-        auto    BuildUnifiedVertexIndexToPositionIndex() const                      -> std::unique_ptr<uint32[]>;
+        auto    BuildUnifiedVertexIndexToPositionIndex() const                      -> std::unique_ptr<uint32_t[]>;
 
         unsigned    AddStream(
             std::shared_ptr<IVertexSourceData> dataSource,

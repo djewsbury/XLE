@@ -144,7 +144,7 @@ namespace PlatformRig { namespace Overlays
     }
 
     static const char g_InteractableIdTopPartStr[] = "Hierchical Profiler";
-    static const uint32 g_InteractableIdTopPart = Hash32(
+    static const uint32_t g_InteractableIdTopPart = Hash32(
         g_InteractableIdTopPartStr, &g_InteractableIdTopPartStr[dimof(g_InteractableIdTopPartStr)]);
 
     static void DrawProfilerTable(

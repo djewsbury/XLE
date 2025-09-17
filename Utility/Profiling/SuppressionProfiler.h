@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../Threading/ThreadingUtils.h"
-#include "../../Core/Types.h"
 #include "../IteratorUtils.h"
 #include <vector>
 #include <assert.h>
@@ -35,7 +34,7 @@ namespace Utility
         ~SuppressionProfiler();
     private:
         std::vector<EventLiteral> _suppressedEvents;
-        uint32 _workingId;
+        uint32_t _workingId;
 
         std::vector<EventLiteral> _knownEvents;
         bool _isRecordingKnownEvents;
@@ -43,8 +42,8 @@ namespace Utility
         #if !defined(NDEBUG)
             Threading::ThreadId _threadId;
             static const unsigned s_maxStackDepth = 16;
-            uint32 _aeStack[s_maxStackDepth];
-            uint32 _aeStackI;
+            uint32_t _aeStack[s_maxStackDepth];
+            uint32_t _aeStackI;
         #endif
     };
     

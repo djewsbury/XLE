@@ -11,7 +11,6 @@
 #include "../OSServices/AttachableLibrary.h"		// for LibVersionDesc
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/UTFUtils.h"
-#include "../Core/Types.h"
 
 #include <memory>
 #include <vector>
@@ -105,7 +104,7 @@ namespace Assets
 		ArchiveCacheSet(std::shared_ptr<IFileSystem> filesystem, const OSServices::LibVersionDesc&, bool checkDepVals);
 		~ArchiveCacheSet();
 	protected:
-		typedef std::pair<uint64, std::shared_ptr<::Assets::ArchiveCache>> Archive;
+		typedef std::pair<uint64_t, std::shared_ptr<::Assets::ArchiveCache>> Archive;
 		std::vector<Archive>    _archives;
 		Threading::Mutex        _archivesLock;
 		std::shared_ptr<IFileSystem> _filesystem;

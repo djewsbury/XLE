@@ -50,7 +50,7 @@ static inline int octal_digit(utf8 c)
 }
 
 // offsets from utf8
-static const uint32 _offsets_magic[6] = 
+static const uint32_t _offsets_magic[6] = 
 {
     0x00000000UL, 0x00003080UL, 0x000E2080UL,
     0x03C82080UL, 0xFA082080UL, 0x82082080UL
@@ -643,13 +643,13 @@ void utf8_dec(const utf8* s, size_t*i)
            isutf(s[--(*i)]) || --(*i));
 }
 
-int utf8_read_escape_sequence(char* str, uint32* dst)
+int utf8_read_escape_sequence(char* str, uint32_t* dst)
 {
-    uint32 ch;
+    uint32_t ch;
     char digs[9]="\0\0\0\0\0\0\0\0";
     int dno=0, i=1;
 
-    ch = (uint32)str[0];    // take literal character
+    ch = (uint32_t)str[0];    // take literal character
     if (str[0] == 'n')
         ch = L'\n';
     else if (str[0] == 't')
@@ -669,28 +669,28 @@ int utf8_read_escape_sequence(char* str, uint32* dst)
         do {
             digs[dno++] = str[i++];
         } while (octal_digit(str[i]) && dno < 3);
-        ch = (uint32)strtol(digs, NULL, 8);
+        ch = (uint32_t)strtol(digs, NULL, 8);
     }
     else if (str[0] == 'x') {
         while (XlIsHex(str[i]) && dno < 2) {
             digs[dno++] = str[i++];
         }
         if (dno > 0)
-            ch = (uint32)strtol(digs, NULL, 16);
+            ch = (uint32_t)strtol(digs, NULL, 16);
     }
     else if (str[0] == 'u') {
         while (XlIsHex(str[i]) && dno < 4) {
             digs[dno++] = str[i++];
         }
         if (dno > 0)
-            ch = (uint32)strtol(digs, NULL, 16);
+            ch = (uint32_t)strtol(digs, NULL, 16);
     }
     else if (str[0] == 'U') {
         while (XlIsHex(str[i]) && dno < 8) {
             digs[dno++] = str[i++];
         }
         if (dno > 0)
-            ch = (uint32)strtol(digs, NULL, 16);
+            ch = (uint32_t)strtol(digs, NULL, 16);
     }
     *dst = ch;
 
@@ -701,7 +701,7 @@ int utf8_read_escape_sequence(char* str, uint32* dst)
 size_t utf8_unescape(utf8* buf, size_t dim, char *src)
 {
     size_t c=0, amt;
-    uint32 ch;
+    uint32_t ch;
 
     utf8 temp[4];
 
@@ -711,7 +711,7 @@ size_t utf8_unescape(utf8* buf, size_t dim, char *src)
             amt = utf8_read_escape_sequence(src, &ch);
         }
         else {
-            ch = (uint32)*src;
+            ch = (uint32_t)*src;
             amt = 1;
         }
         src += amt;
@@ -727,7 +727,7 @@ size_t utf8_unescape(utf8* buf, size_t dim, char *src)
     return c;
 }
 
-size_t utf8_escape_wchar(utf8* buf, size_t dim, uint32 ch)
+size_t utf8_escape_wchar(utf8* buf, size_t dim, uint32_t ch)
 {
     if (ch == L'\n')
         return (size_t)xl_snprintf((char*)buf, (int)dim, "\\n");
@@ -748,9 +748,9 @@ size_t utf8_escape_wchar(utf8* buf, size_t dim, uint32 ch)
     else if (ch < 32 || ch == 0x7f)
         return (size_t)xl_snprintf((char*)buf, (int)dim, "\\x%hhX", (uint8_t)ch);
     else if (ch > 0xFFFF)
-        return (size_t)xl_snprintf((char*)buf, (int)dim, "\\U%.8X", (uint32)ch);
+        return (size_t)xl_snprintf((char*)buf, (int)dim, "\\U%.8X", (uint32_t)ch);
     else if (ch >= 0x80 && ch <= 0xFFFF)
-        return (size_t)xl_snprintf((char*)buf, (int)dim, "\\u%.4hX", (uint16)ch);
+        return (size_t)xl_snprintf((char*)buf, (int)dim, "\\u%.4hX", (uint16_t)ch);
 
     return (size_t)xl_snprintf((char*)buf, (int)dim, "%c", (char)ch);
 }

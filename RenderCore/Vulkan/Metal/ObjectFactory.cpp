@@ -258,7 +258,7 @@ namespace RenderCore { namespace Metal_Vulkan
         createInfo.sType =
             VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         createInfo.pNext = nullptr;
-        createInfo.bindingCount = (uint32)bindings.size();
+        createInfo.bindingCount = (uint32_t)bindings.size();
         createInfo.pBindings = bindings.begin();
 
         auto d = _destruction.get();

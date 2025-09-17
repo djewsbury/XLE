@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "../Core/Types.h"
 #include "UTFUtils.h"
 #include "StringUtils.h"
 #include <string>

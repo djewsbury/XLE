@@ -6,17 +6,16 @@
 
 #pragma once
 
-#include "../Core/Types.h"
 #include "../Utility/MiniHeap.h"
 #include "../Utility/IteratorUtils.h"
-#include <memory>
+#include <vector>
 
 namespace SceneEngine
 {
     class PreparedScene
     {
     public:
-        using Id = uint64;
+        using Id = uint64_t;
 
         template<typename Type, typename... Args> Type* Allocate(Id id, Args... args);
         template<typename Type> Type* Get(Id id = 0);

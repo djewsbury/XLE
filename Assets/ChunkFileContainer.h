@@ -39,7 +39,7 @@ namespace Assets
     class ArtifactRequestResult
     {
     public:
-        std::unique_ptr<uint8[], PODAlignedDeletor> _buffer;
+        std::unique_ptr<uint8_t[], PODAlignedDeletor> _buffer;
         size_t                                      _bufferSize = 0;
 		Blob										_sharedBlob;
 		ArtifactReopenFunction						_reopenFunction;

@@ -77,7 +77,7 @@ namespace Assets
 		}
 
 		template<typename FileType, typename CharType>
-			static IFileSystem::IOReason TryOpen(FileType& result, StringSection<CharType> filename, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode)
+			static IFileSystem::IOReason TryOpen(FileType& result, StringSection<CharType> filename, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode)
 		{
 			result = FileType();
 
@@ -249,7 +249,7 @@ namespace Assets
 		return Internal::TryOpen(result, filename, openMode, shareMode);
 	}
 
-	auto MainFileSystem::TryOpen(OSServices::MemoryMappedFile& result, StringSection<utf8> filename, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
+	auto MainFileSystem::TryOpen(OSServices::MemoryMappedFile& result, StringSection<utf8> filename, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
 	{
 		return Internal::TryOpen(result, filename, size, openMode, shareMode);
 	}
@@ -284,7 +284,7 @@ namespace Assets
 		return Internal::TryOpen(result, filename, openMode, shareMode);
 	}
 
-	auto MainFileSystem::TryOpen(OSServices::MemoryMappedFile& result, StringSection<utf16> filename, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
+	auto MainFileSystem::TryOpen(OSServices::MemoryMappedFile& result, StringSection<utf16> filename, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode) -> IOReason
 	{
 		return Internal::TryOpen(result, filename, size, openMode, shareMode);
 	}
@@ -323,7 +323,7 @@ namespace Assets
 		return result;
 	}
 
-	OSServices::MemoryMappedFile MainFileSystem::OpenMemoryMappedFile(StringSection<utf8> filename, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode)
+	OSServices::MemoryMappedFile MainFileSystem::OpenMemoryMappedFile(StringSection<utf8> filename, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode)
 	{
 		OSServices::MemoryMappedFile result;
 		auto ioRes = TryOpen(result, filename, size, openMode, shareMode);
@@ -433,7 +433,7 @@ namespace Assets
 		return AsIOReason(transResult);
 	}
 
-	T2(CharType, FileObject) IFileSystem::IOReason TryOpen(FileObject& result, IFileSystem& fs, StringSection<CharType> fn, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode)
+	T2(CharType, FileObject) IFileSystem::IOReason TryOpen(FileObject& result, IFileSystem& fs, StringSection<CharType> fn, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode)
 	{
 		result = FileObject();
 
@@ -474,21 +474,21 @@ namespace Assets
 
 	template IFileSystem::IOReason TryOpen<utf8, std::unique_ptr<IFileInterface>>(std::unique_ptr<IFileInterface>& result, IFileSystem& fs, StringSection<utf8> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 	template IFileSystem::IOReason TryOpen<utf8, OSServices::BasicFile>(OSServices::BasicFile& result, IFileSystem& fs, StringSection<utf8> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-	template IFileSystem::IOReason TryOpen<utf8, OSServices::MemoryMappedFile>(OSServices::MemoryMappedFile& result, IFileSystem& fs, StringSection<utf8> fn, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
+	template IFileSystem::IOReason TryOpen<utf8, OSServices::MemoryMappedFile>(OSServices::MemoryMappedFile& result, IFileSystem& fs, StringSection<utf8> fn, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 	template IFileSystem::IOReason TryMonitor<utf8>(IFileSystem& fs, FileSnapshot&, StringSection<utf8> fn, const std::shared_ptr<IFileMonitor>& evnt);
 	template FileDesc TryGetDesc<utf8>(IFileSystem& fs, StringSection<utf8> fn);
 	template IFileSystem::IOReason TryOpen<utf16, std::unique_ptr<IFileInterface>>(std::unique_ptr<IFileInterface>& result, IFileSystem& fs, StringSection<utf16> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 	template IFileSystem::IOReason TryOpen<utf16, OSServices::BasicFile>(OSServices::BasicFile& result, IFileSystem& fs, StringSection<utf16> fn, const char openMode[], OSServices::FileShareMode::BitField shareMode);
-	template IFileSystem::IOReason TryOpen<utf16, OSServices::MemoryMappedFile>(OSServices::MemoryMappedFile& result, IFileSystem& fs, StringSection<utf16> fn, uint64 size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
+	template IFileSystem::IOReason TryOpen<utf16, OSServices::MemoryMappedFile>(OSServices::MemoryMappedFile& result, IFileSystem& fs, StringSection<utf16> fn, uint64_t size, const char openMode[], OSServices::FileShareMode::BitField shareMode);
 	template IFileSystem::IOReason TryMonitor<utf16>(IFileSystem& fs, FileSnapshot&, StringSection<utf16> fn, const std::shared_ptr<IFileMonitor>& evnt);
 	template FileDesc TryGetDesc<utf16>(IFileSystem& fs, StringSection<utf16> fn);
 
-	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult)
+	std::unique_ptr<uint8_t[]> MainFileSystem::TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult)
 	{
 		return MainFileSystem::TryLoadFileAsMemoryBlock(sourceFileName, sizeResult, nullptr);
 	}
 
-	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState)
+	std::unique_ptr<uint8_t[]> MainFileSystem::TryLoadFileAsMemoryBlock(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState)
 	{
 		std::unique_ptr<IFileInterface> file;
 		if (MainFileSystem::TryOpen(file, sourceFileName, "rb", OSServices::FileShareMode::Read) == IFileSystem::IOReason::Success) {
@@ -498,7 +498,7 @@ namespace Assets
 
 			size_t size = file->GetSize();
 			if (size) {
-				auto result = std::make_unique<uint8[]>(size);
+				auto result = std::make_unique<uint8_t[]>(size);
 				file->Read(result.get(), 1, size);
 				if (sizeResult) {
 					*sizeResult = size;
@@ -880,12 +880,12 @@ namespace Assets
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult)
+	std::unique_ptr<uint8_t[]> MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult)
 	{
 		return MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(sourceFileName, sizeResult, nullptr);
 	}
 
-	std::unique_ptr<uint8[]> MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState)
+	std::unique_ptr<uint8_t[]> MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(StringSection<char> sourceFileName, size_t* sizeResult, FileSnapshot* fileState)
 	{
 		std::unique_ptr<::Assets::IFileInterface> file;
 
@@ -902,7 +902,7 @@ namespace Assets
                     *sizeResult = size;
                 }
                 if (size) {
-                    auto result = std::make_unique<uint8[]>(size);
+                    auto result = std::make_unique<uint8_t[]>(size);
                     file->Read(result.get(), 1, size);
                     return result;
                 } else {

@@ -10,7 +10,6 @@
 #include "../../Utility/ImpliedTyping.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Formatters/TextFormatter.h"
-#include "../../Core/Types.h"
 #include <memory>
 #include <vector>
 #include <string>

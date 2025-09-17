@@ -165,9 +165,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		vi.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vi.pNext = nullptr;
 		vi.flags = 0;
-		vi.vertexBindingDescriptionCount = (uint32)_iaVBBindings.size();
+		vi.vertexBindingDescriptionCount = (uint32_t)_iaVBBindings.size();
 		vi.pVertexBindingDescriptions = AsPointer(_iaVBBindings.begin());
-		vi.vertexAttributeDescriptionCount = (uint32)_iaAttributes.size();
+		vi.vertexAttributeDescriptionCount = (uint32_t)_iaAttributes.size();
 		vi.pVertexAttributeDescriptions = AsPointer(_iaAttributes.begin());
 
 		VkPipelineInputAssemblyStateCreateInfo ia = {};

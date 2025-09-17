@@ -66,7 +66,7 @@ namespace fmt
 {
 int skip_atoi(const char **s);
 char *number(char *str, long num, int base, int size, int precision, int type);
-char *number64(char *str, uint64 num, int base, int size, int precision, int type);
+char *number64(char *str, uint64_t num, int base, int size, int precision, int type);
 char *eaddr(char *str, unsigned char *addr, int size, int precision, int type);
 char *ecvtbuf(double arg, int ndigits, int *decpt, int *sign, char *buf);
 char *fcvtbuf(double arg, int ndigits, int *decpt, int *sign, char *buf);
@@ -165,7 +165,7 @@ char *number(char *str, long num, int base, int size, int precision, int type)
     return str;
 }
 
-char *number64(char *str, uint64 num, int base, int size, int precision, int type)
+char *number64(char *str, uint64_t num, int base, int size, int precision, int type)
 {
     char c, sign, tmp[66];
     const char *dig = digits;
@@ -179,7 +179,7 @@ char *number64(char *str, uint64 num, int base, int size, int precision, int typ
     sign = 0;
     if (type & SIGN)
     {
-        int64 n0 = (int64)num;
+        int64_t n0 = (int64_t)num;
         if (n0 < 0)
         {
             sign = '-';
@@ -214,8 +214,8 @@ char *number64(char *str, uint64 num, int base, int size, int precision, int typ
     {
         while (num != 0)
         {
-            tmp[i++] = dig[((uint64) num) % (unsigned) base];
-            num = ((uint64) num) / (unsigned) base;
+            tmp[i++] = dig[((uint64_t) num) % (unsigned) base];
+            num = ((uint64_t) num) / (unsigned) base;
         }
     }
 
@@ -455,10 +455,10 @@ void cropzeros(char *buffer)
 #define EXPAND(x) {x, (int)sizeof(x) }
 
 #if !defined(DoubleU64)
-#define DoubleU64(x)                (*( (uint64*) &(x) ))
-#define DoubleU64ExpMask            ((uint64)0x7FF << 52)
-#define DoubleU64FracMask           (((uint64)1 << 52) - (uint64)1)
-#define DoubleU64SignMask           ((uint64)1 << 63)
+#define DoubleU64(x)                (*( (uint64_t*) &(x) ))
+#define DoubleU64ExpMask            ((uint64_t)0x7FF << 52)
+#define DoubleU64FracMask           (((uint64_t)1 << 52) - (uint64_t)1)
+#define DoubleU64SignMask           ((uint64_t)1 << 63)
 #endif
 
 namespace ScalarType
@@ -476,8 +476,8 @@ namespace ScalarType
 
 inline ScalarType::Enum GetScalarType(double v)
 {
-    uint64 u = DoubleU64(v);
-    uint64 me = (u & DoubleU64ExpMask);
+    uint64_t u = DoubleU64(v);
+    uint64_t me = (u & DoubleU64ExpMask);
 
     if (me == DoubleU64ExpMask) {
         if ((u & DoubleU64FracMask) == 0) {
@@ -893,7 +893,7 @@ repeat:
             else
                 num = va_arg(args, unsigned int);
         } /*else if (qualifier == 'll') {
-            uint64 num64 = va_arg(args, uint64);
+            uint64_t num64 = va_arg(args, uint64_t);
             s = number64(str, num64, base, field_width, precision, flags);
             *s = '\0';
 
@@ -928,7 +928,7 @@ int xl_vsnprintf(char* buf, int count, const char* fmt, va_list args)
 {
     int len;
     unsigned long num;
-    // uint64 num64;
+    // uint64_t num64;
     int i, base;
     char *s;
 
@@ -1115,7 +1115,7 @@ repeat:
             else
                 num = va_arg(args, unsigned int);
         } /*else if (qualifier == 'll') {
-            num64 = va_arg(args, uint64);
+            num64 = va_arg(args, uint64_t);
             s = number64(numbuf, num64, base, field_width, precision, flags);
             *s = '\0';
             stream.Write((const utf8*)numbuf); 

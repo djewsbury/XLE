@@ -547,7 +547,7 @@ namespace RenderCore { namespace BufferUploads
     TransactionID AssemblyLine::TransactionRefHolder::GetID() const
     {
         assert(_transaction && _transaction->_heapIndex != ~0u);
-        return uint64_t(_transaction->_heapIndex) | uint64(_transaction->_idTopPart) << 32ull;
+        return uint64_t(_transaction->_heapIndex) | uint64_t(_transaction->_idTopPart) << 32ull;
     }
 
     void AssemblyLine::TransactionRefHolder::SuccessfulRetirement(CommandListID cmdList)

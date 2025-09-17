@@ -940,7 +940,7 @@ namespace RenderCore
         return ~0u;
     }
 
-	bool HasElement(IteratorRange<const MiniInputElementDesc*> elements, uint64 semanticHash)
+	bool HasElement(IteratorRange<const MiniInputElementDesc*> elements, uint64_t semanticHash)
 	{
 		for (const auto&e:elements)
 			if (e._semanticHash == semanticHash)

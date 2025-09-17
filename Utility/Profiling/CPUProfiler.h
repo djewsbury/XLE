@@ -10,7 +10,6 @@
 #include "../IteratorUtils.h"
 #include "../Threading/Mutex.h"
 #include "../Threading/ThreadingUtils.h"
-#include "../../Core/Types.h"
 #include <vector>
 #include <assert.h>
 #include <functional>
@@ -37,8 +36,8 @@ namespace Utility
         {
         public:
             const char* _label;
-            uint64      _inclusiveTime;
-            uint64      _exclusiveTime;
+            uint64_t      _inclusiveTime;
+            uint64_t      _exclusiveTime;
             unsigned    _eventCount;
 
             typedef unsigned Id;
@@ -135,10 +134,10 @@ namespace Utility
         ~HierarchicalCPUProfiler();
     private:
         static const unsigned s_bufferCount = 2;
-        std::vector<uint64> _events[s_bufferCount];
+        std::vector<uint64_t> _events[s_bufferCount];
 
-        uint32 _workingId;
-        uint32 _idAtEventsStart[s_bufferCount];
+        uint32_t _workingId;
+        uint32_t _idAtEventsStart[s_bufferCount];
 
         uint64_t _frameMarkers[64];
         unsigned _frameMarkerNext, _frameMarkerCount;
@@ -146,15 +145,15 @@ namespace Utility
         #if !defined(NDEBUG)
             Threading::ThreadId _threadId;
             static const unsigned s_maxStackDepth = 16;
-            uint32 _aeStack[s_maxStackDepth];
-            uint32 _aeStackI;
+            uint32_t _aeStack[s_maxStackDepth];
+            uint32_t _aeStackI;
         #endif
     };
 
     inline unsigned HierarchicalCPUProfiler::BeginEvent(const char eventLiteral[])
     {
         assert(Threading::CurrentThreadId() == _threadId);
-        uint64 time;
+        uint64_t time;
         #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
                 // special case inlined version for Windows API platforms
                 // provides a little more performance, by avoiding one unnecessary
@@ -167,7 +166,7 @@ namespace Utility
             //  This means the results will not be correct if the profile event straddles a time
             //  when the top bit changes. But that seems extremely unlikely.
         _events[0].push_back(~(1ull << 63ull) & time);
-        _events[0].push_back(uint64(eventLiteral));     // should be ok for 32 or 64bit modes (but not 128bit+)!
+        _events[0].push_back(uint64_t(eventLiteral));     // should be ok for 32 or 64bit modes (but not 128bit+)!
         auto result = _workingId++;
         #if !defined(NDEBUG)
             assert(_aeStackI < dimof(_aeStack));
@@ -179,7 +178,7 @@ namespace Utility
     inline void HierarchicalCPUProfiler::EndEvent(unsigned eventId)
     {
         assert(Threading::CurrentThreadId() == _threadId);
-        uint64 time;
+        uint64_t time;
         #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
             QueryPerformanceCounter((LARGE_INTEGER*)&time);
         #else

@@ -223,7 +223,7 @@ namespace SceneEngine
             float nodeY = XlFloor(cellFrac[1] * float(cellDimsInNodes[1]));
             unsigned nodeIndex = 85 + unsigned(nodeY) * cellDimsInNodes[0] + unsigned(nodeX);
 
-            uint64 cellHash = (uint64(nodeIndex) << 32ull) | (uint64(cellIndex[1]) << 6ull) | uint64(cellIndex[0]);
+            uint64_t cellHash = (uint64_t(nodeIndex) << 32ull) | (uint64_t(cellIndex[1]) << 6ull) | uint64_t(cellIndex[0]);
 
                 // (simple cache for recently used terrain files -- so we don't have to continually re-load every frame)
                 //      -- \todo -- this cache should be in a manager object! todo many statics in functions!
@@ -284,7 +284,7 @@ namespace SceneEngine
             float nodeY = XlFloor(cellFrac[1] * float(cellDimsInNodes[1]));
             unsigned nodeIndex = 85 + unsigned(nodeY) * cellDimsInNodes[0] + unsigned(nodeX);
 
-            uint64 cellHash = (uint64(nodeIndex) << 32ull) | (uint64(cellIndex[1]) << 6ull) | uint64(cellIndex[0]);
+            uint64_t cellHash = (uint64_t(nodeIndex) << 32ull) | (uint64_t(cellIndex[1]) << 6ull) | uint64_t(cellIndex[0]);
 
                 // (simple cache for recently used terrain files -- so we don't have to continually re-load every frame)
                 //      -- \todo -- this cache should be in a manager object! todo many statics in functions!

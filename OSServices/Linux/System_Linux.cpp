@@ -1,7 +1,6 @@
 
 #include "../RawFS.h"
 #include "../../Core/SelectConfiguration.h"
-#include "../../Core/Types.h"
 #include <sys/time.h>
 
 #ifdef ANDROID
@@ -12,14 +11,14 @@ namespace OSServices
 {
     static const auto NSEC_PER_SEC = 1000000000ull;
 
-    uint64 GetPerformanceCounter()
+    uint64_t GetPerformanceCounter()
     {
         struct timespec t;
 	    clock_gettime(CLOCK_REALTIME, &t);
-        return (uint64)(t.tv_sec) * NSEC_PER_SEC + (uint64)(t.tv_nsec);
+        return (uint64_t)(t.tv_sec) * NSEC_PER_SEC + (uint64_t)(t.tv_nsec);
     }
 
-    uint64 GetPerformanceCounterFrequency()
+    uint64_t GetPerformanceCounterFrequency()
     {
         return NSEC_PER_SEC;
     }

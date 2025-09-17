@@ -843,7 +843,7 @@ namespace ToolsRig
         Marker(
             StringSection<::Assets::ResChar> modelFilename,
             StringSection<::Assets::ResChar> materialFilename,
-            uint64 typeCode,
+            uint64_t typeCode,
             const ::Assets::IntermediatesStore& store,
             std::shared_ptr<AOSupplementCompiler> compiler);
         ~Marker();
@@ -851,7 +851,7 @@ namespace ToolsRig
         ::Assets::rstring _modelFilename, _materialFilename;
         ::Assets::rstring _initializer;
         std::weak_ptr<AOSupplementCompiler> _compiler;
-        uint64 _typeCode;
+        uint64_t _typeCode;
         const ::Assets::IntermediatesStore* _store;
         void MakeIntermediateName(::Assets::ResChar destination[], size_t destinationCount) const;
     };
@@ -901,7 +901,7 @@ namespace ToolsRig
     AOSupplementCompiler::Marker::Marker(
         StringSection<::Assets::ResChar> modelFilename,
         StringSection<::Assets::ResChar> materialFilename,
-        uint64 typeCode,
+        uint64_t typeCode,
         const ::Assets::IntermediatesStore& store,
         std::shared_ptr<AOSupplementCompiler> compiler)
     : _modelFilename(modelFilename.AsString()), _materialFilename(materialFilename.AsString())
@@ -914,7 +914,7 @@ namespace ToolsRig
     
     std::shared_ptr<::Assets::IIntermediateCompileMarker> 
         AOSupplementCompiler::Prepare(
-            uint64 typeCode, 
+            uint64_t typeCode, 
             const StringSection<::Assets::ResChar> initializers[], unsigned initializerCount)
     {
 		if (typeCode != ToolsRig::AOSupplementCompiler::CompilerType) return nullptr;

@@ -10,7 +10,6 @@
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Core/SelectConfiguration.h"
-#include "../../Core/Types.h"
 
 #include <cstdio>
 #include <mach/mach_time.h>
@@ -32,12 +31,12 @@
 
 namespace OSServices
 {
-	uint64 GetPerformanceCounter()
+	uint64_t GetPerformanceCounter()
 	{
 		return mach_absolute_time();
 	}
 	
-	uint64 GetPerformanceCounterFrequency()
+	uint64_t GetPerformanceCounterFrequency()
 	{
 		mach_timebase_info_data_t tbInfo;
 		mach_timebase_info(&tbInfo);
@@ -171,7 +170,7 @@ namespace OSServices
 				ScopedLock(_callbacksLock);
 				auto range = std::equal_range(
 					_callbacks.begin(), _callbacks.end(),
-					hash, CompareFirst<uint64, std::weak_ptr<OnChangeCallback>>());
+					hash, CompareFirst<uint64_t, std::weak_ptr<OnChangeCallback>>());
 
 				bool foundExpired = false;
 				for (auto i2=range.first; i2!=range.second; ++i2) {
@@ -187,7 +186,7 @@ namespace OSServices
 						// that have expired are untouched)
 					_callbacks.erase(
 						std::remove_if(range.first, range.second,
-							[](std::pair<uint64, std::weak_ptr<OnChangeCallback>>& i)
+							[](std::pair<uint64_t, std::weak_ptr<OnChangeCallback>>& i)
 							{ return i.second.expired(); }),
 						range.second);
 				}

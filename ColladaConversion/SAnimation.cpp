@@ -364,7 +364,7 @@ namespace ColladaConversion
             const auto inTangentBytes = BitsPerPixel(inTangentFormat)/8;
             const auto elementBytes = positionBytes + inTangentBytes+ BitsPerPixel(outTangentFormat)/8;
 
-            SerializableVector<uint8> keyBlock;
+            SerializableVector<uint8_t> keyBlock;
 			keyBlock.resize(elementBytes * keyCount);
             auto inTangentsOffsetBytes = positionBytes;
             auto outTangentsOffsetBytes = inTangentsOffsetBytes + inTangentBytes;

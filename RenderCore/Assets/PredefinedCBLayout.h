@@ -50,7 +50,7 @@ namespace RenderCore { namespace Assets
         std::vector<Element> _elements;
         ParameterBox _defaults;
 
-        std::vector<uint8> BuildCBDataAsVector(const ParameterBox& parameters, ShaderLanguage lang) const;
+        std::vector<uint8_t> BuildCBDataAsVector(const ParameterBox& parameters, ShaderLanguage lang) const;
         SharedPkt BuildCBDataAsPkt(const ParameterBox& parameters, ShaderLanguage lang) const;
         void BuildCB(IteratorRange<void*> dst, const ParameterBox& parameters, ShaderLanguage lang) const;
 

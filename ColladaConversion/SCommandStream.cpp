@@ -39,7 +39,7 @@ namespace ColladaConversion
             ||  XlBeginsWithI(node.GetName(), MakeStringSectionLiteral("$lod"))) {
 
             auto nextSection = MakeStringSection(node.GetName().begin()+4, node.GetName().end());
-            uint32 lod = 0;
+            uint32_t lod = 0;
             auto* parseEnd = FastParseValue(nextSection, lod);
             if (parseEnd < nextSection.end() && *parseEnd == '_')
                 return LODDesc { lod, true, MakeStringSection(parseEnd+1, node.GetName().end()) };
@@ -285,7 +285,7 @@ namespace ColladaConversion
 
 	auto BuildMaterialTableStrings(
         IteratorRange<const InstanceGeometry::MaterialBinding*> bindings,
-        const std::vector<uint64>& rawGeoBindingSymbols,
+        const std::vector<uint64_t>& rawGeoBindingSymbols,
         const URIResolveContext& resolveContext)
 
         -> std::vector<std::string>
