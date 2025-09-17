@@ -9,7 +9,6 @@ set(Src
 	NodeGraph.cpp
 	NodeGraphProvider.cpp
 	NodeGraphSignature.cpp
-	ParameterSignature.cpp
 	ShaderAnalysis.cpp
 	ShaderInstantiation.cpp
 	ShaderPatcher.cpp
@@ -25,7 +24,6 @@ set(Headers
 	NodeGraph.h
 	NodeGraphProvider.h
 	NodeGraphSignature.h
-	ParameterSignature.h
 	ShaderAnalysis.h
 	ShaderInstantiation.h
 	ShaderPatcher_Internal.h

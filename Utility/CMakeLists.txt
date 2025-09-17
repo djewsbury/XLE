@@ -39,8 +39,6 @@ set(Headers
     VariantUtils.h)
 set(StreamsSrc 
     Streams/ConditionalPreprocessingTokenizer.cpp
-    Streams/Data.cpp
-    Streams/DataSerialize.cpp
     Streams/PathUtils.cpp
     Streams/PreprocessorInterpreter.cpp
     Streams/Stream.cpp)
