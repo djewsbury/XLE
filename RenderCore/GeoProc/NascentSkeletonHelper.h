@@ -4,12 +4,9 @@
 
 #pragma once
 
-#include "../../Math/Vector.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../OSServices/Log.h"
-#include "../../Core/Types.h"
 #include <vector>
 
 namespace RenderCore { namespace Assets

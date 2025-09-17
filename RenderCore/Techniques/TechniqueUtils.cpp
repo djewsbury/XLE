@@ -7,8 +7,8 @@
 #include "TechniqueUtils.h"
 #include "DrawableDelegates.h"
 #include "CommonBindings.h"
-#include "../../RenderCore/Types.h"
-#include "../../RenderCore/Metal/Metal.h"       // for GFXAPI_TARGET define used below
+#include "../Types.h"
+#include "../Metal/Metal.h"       // for GFXAPI_TARGET define used below
 #include "../../Math/Transformations.h"
 #include "../../Math/ProjectionMath.h"
 #include "../../Utility/ParameterBox.h"

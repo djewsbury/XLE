@@ -9,11 +9,8 @@
 #include "NodeGraphSignature.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/StringUtils.h"
-#include "../Core/Types.h"
 #include <string>
 #include <vector>
-#include <unordered_map>
-#include <iosfwd>
 
 namespace GraphLanguage { class NodeGraph; class NodeGraphSignature; }
 namespace RenderCore { namespace Assets { class PredefinedCBLayout; class PredefinedDescriptorSetLayout; } }

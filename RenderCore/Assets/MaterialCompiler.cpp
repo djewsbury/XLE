@@ -481,56 +481,6 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-#if 0
-	void ConstructMaterialSet(
-		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialSetConstruction> construction,
-		std::shared_ptr<RawMaterialSet> baseMaterials)
-	{
-		::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[promise=std::move(promise), construction=std::move(construction), baseMaterials=std::move(baseMaterials)]() mutable {
-				TRY {
-					promise.set_value(ConstructMaterialSetSync(construction, std::move(baseMaterials), {}));
-				} CATCH(...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
-			});
-	}
-
-	void ConstructMaterialSet(
-		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialSetConstruction> construction,
-		std::shared_future<std::shared_ptr<RawMaterialSet>> baseMaterials)
-	{
-		::Assets::WhenAll(std::move(baseMaterials)).ThenConstructToPromise(
-			std::move(promise),
-			[construction=std::move(construction)](auto&& sourceModelConfiguration) {
-				return ConstructMaterialSetSync(construction, std::move(sourceModelConfiguration), {});
-			});
-	}
-
-	void ConstructMaterialSet(
-		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialSetConstruction> construction,
-		IteratorRange<const std::string*> materialsToInstantiate)
-	{
-		assert(!materialsToInstantiate.empty());	// confuses ConstructMaterialSetSync if we call it with an empty materialsToInstantiate
-		if (materialsToInstantiate.empty()) {
-			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialSet call because there are no materials to instantiate specified")));
-			return;
-		}
-
-		::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[promise=std::move(promise), construction=std::move(construction), cfgs=std::vector<std::string>(materialsToInstantiate.begin(), materialsToInstantiate.end())]() mutable {
-				TRY {
-					promise.set_value(ConstructMaterialSetSync(construction, nullptr, std::move(cfgs)));
-				} CATCH(...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
-			});
-	}
-#endif
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	void MaterialSetConstruction::SetBaseMaterials(PtrToMarkerToMaterialSet&& futureBaseMaterials)

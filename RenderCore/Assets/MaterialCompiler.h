@@ -66,22 +66,5 @@ namespace RenderCore { namespace Assets
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialSetConstruction> construction);
 
-#if 0
-	void ConstructMaterialSet(
-		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialSetConstruction> construction,
-		std::shared_ptr<RawMaterialSet> baseMaterials);
-
-	void ConstructMaterialSet(
-		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialSetConstruction> construction,
-		std::shared_future<std::shared_ptr<RawMaterialSet>> baseMaterials);
-
-	void ConstructMaterialSet(
-		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialSetConstruction> construction,
-		IteratorRange<const std::string*> materialsToInstantiate);
-#endif
-
 }}
 
