@@ -46,7 +46,7 @@ namespace Assets
 		void    SerializeValue  ( uint32_t value );
 		void    SerializeValue  ( uint64_t value );
 		void    SerializeValue  ( float value );
-		void    SerializeValue  ( const std::string& value );
+		void    SerializeValue  ( const std::string& value );				// NOTE -- becomes a StringSection<>! Not a SerializableString
 		void    AddPadding      ( unsigned sizeInBytes );
 			
 		void    SerializeRawRange	( IteratorRange<const void*> data );
@@ -129,6 +129,12 @@ namespace Assets
 		void    SerializationOperator  ( BlockSerializer& serializer, const SerializableVector<Type>& value )
 	{
 		serializer.SerializeSubBlock(MakeIteratorRange(value), BlockSerializer::SpecialBuffer::Vector);
+	}
+
+	template<typename Type>
+		void    SerializationOperator  ( BlockSerializer& serializer, const SerializableBasicString<Type>& value )
+	{
+		serializer.SerializeSubBlock(MakeIteratorRange(value), BlockSerializer::SpecialBuffer::String);
 	}
 
 	template<typename Type, typename Deletor>

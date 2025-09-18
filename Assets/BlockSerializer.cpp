@@ -47,8 +47,7 @@ namespace Assets
         if (specialBuffer == SpecialBuffer::Vector) {
             _memory.insert(_memory.end(), sizeof(SerializableVector<unsigned>), 0);
         } else if (specialBuffer == SpecialBuffer::String) {
-			assert(0);
-            _memory.insert(_memory.end(), sizeof(std::string), 0);
+            _memory.insert(_memory.end(), sizeof(SerializableBasicString<char>), 0);
         } else if (specialBuffer == SpecialBuffer::UniquePtr) {
 			assert(0);
             _memory.insert(_memory.end(), sizeof(std::unique_ptr<void, BlockSerializerDeleter<void>>), 0);
@@ -343,13 +342,13 @@ namespace Assets
                 ||  ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::StringSection) {
                 SetPtr(PtrAdd(block, ptrdiff_t(sizeof(Header)+ptr._pointerOffset)),
                        ptr._subBlockOffset + size_t(base) + sizeof(Header));
-            } else if (ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::Vector) {
+            } else if ( ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::Vector
+                    ||  ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::String) {
                 uint64_t* o = (uint64_t*)PtrAdd(block, ptrdiff_t(sizeof(Header)+ptr._pointerOffset));
                 SetPtr(&o[0], ptr._subBlockOffset + size_t(base) + sizeof(Header));
                 SetPtr(&o[1], ptr._subBlockOffset + ptr._subBlockSize + size_t(base) + sizeof(Header));
                 SetPtr(&o[2], 0);
-            } else if (     ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::UniquePtr
-                       ||   ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::String) {
+            } else if (     ptr._specialBuffer == (uint64_t)BlockSerializer::SpecialBuffer::UniquePtr) {
                 // these are deprecated types -- they need a stronger cross-platform implementation to work reliably
                 assert(false);
             }

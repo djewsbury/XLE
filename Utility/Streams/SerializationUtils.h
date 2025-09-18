@@ -4,10 +4,10 @@
 
 #pragma once
 
+#include "../StringUtils.h"
 #include "../../Core/Exceptions.h"
 #include <memory>
 #include <stdexcept>
-#include <vector>
 #include <cstdint>
 #include <algorithm>		// (for std::max)
 #include <type_traits>
@@ -102,8 +102,10 @@ namespace Utility
         explicit BlockSerializerDeleter(unsigned fromFixedStorage)              : _fromFixedStorage(fromFixedStorage) {}
         BlockSerializerDeleter(const std::default_delete<Type>& copyFrom)       : _fromFixedStorage(0) {}
         BlockSerializerDeleter(std::default_delete<Type>&& moveFrom)            : _fromFixedStorage(0) {}
-        BlockSerializerDeleter(const BlockSerializerDeleter<Type>& copyFrom)    : _fromFixedStorage(copyFrom._fromFixedStorage) {}
+        BlockSerializerDeleter(const BlockSerializerDeleter<Type>& copyFrom)    : _fromFixedStorage(0) {}
         BlockSerializerDeleter(BlockSerializerDeleter<Type>&& moveFrom)         : _fromFixedStorage(moveFrom._fromFixedStorage) {}
+		BlockSerializerDeleter& operator=(const BlockSerializerDeleter<Type>& copyFrom) { _fromFixedStorage = 0; return *this; }
+		BlockSerializerDeleter& operator=(BlockSerializerDeleter<Type>&& moveFrom) { _fromFixedStorage = moveFrom._fromFixedStorage; return *this; }
     private:
         unsigned    _fromFixedStorage;
     };
@@ -125,9 +127,9 @@ namespace Utility
         explicit BlockSerializerDeleter(unsigned fromFixedStorage)              : _fromFixedStorage(fromFixedStorage) {}
         BlockSerializerDeleter(const std::default_delete<Type[]>& copyFrom)     : _fromFixedStorage(0) {}
         BlockSerializerDeleter(std::default_delete<Type[]>&& moveFrom)          : _fromFixedStorage(0) {}
-        BlockSerializerDeleter(const BlockSerializerDeleter<Type[]>& copyFrom)  : _fromFixedStorage(copyFrom._fromFixedStorage) {}
+        BlockSerializerDeleter(const BlockSerializerDeleter<Type[]>& copyFrom)  : _fromFixedStorage(0) {}
         BlockSerializerDeleter(BlockSerializerDeleter<Type[]>&& moveFrom)       : _fromFixedStorage(moveFrom._fromFixedStorage) {}
-		BlockSerializerDeleter& operator=(const BlockSerializerDeleter<Type[]>& copyFrom) { copyFrom._fromFixedStorage = 0; return *this; }
+		BlockSerializerDeleter& operator=(const BlockSerializerDeleter<Type[]>& copyFrom) { _fromFixedStorage = 0; return *this; }
 		BlockSerializerDeleter& operator=(BlockSerializerDeleter<Type[]>&& moveFrom) { _fromFixedStorage = moveFrom._fromFixedStorage; return *this; }
     private:
         unsigned    _fromFixedStorage;
@@ -379,6 +381,103 @@ namespace Utility
 			_capacity = &_begin[newCapacity];
 		}
 	};
+
+	template <typename CharType>
+		class SerializableBasicString : public SerializableVector<CharType>
+	{
+	public:
+		static constexpr size_t npos = size_t(-1);
+
+		constexpr operator std::basic_string_view<CharType>() const { return std::basic_string_view<CharType>{ SerializableVector<CharType>::data(), SerializableVector<CharType>::size() }; }
+		constexpr operator StringSection<CharType>() const { return StringSection<CharType>{ SerializableVector<CharType>::begin(), SerializableVector<CharType>::end() }; }
+
+		std::basic_string<CharType> AsString() const                    { return std::basic_string<CharType>{ SerializableVector<CharType>::begin(), SerializableVector<CharType>::end() }; }
+		constexpr std::basic_string_view<CharType> AsStringView() const { return std::basic_string_view<CharType>{ SerializableVector<CharType>::data(), SerializableVector<CharType>::size() }; }
+		constexpr StringSection<CharType> AsStringSection() const 		{ return StringSection<CharType>{ SerializableVector<CharType>::begin(), SerializableVector<CharType>::end() }; }
+
+		SerializableBasicString& operator=(StringSection<CharType> str)
+		{
+			return *this = SerializableBasicString<CharType>(str.begin(), str.end());
+		}
+		SerializableBasicString& operator=(std::basic_string<CharType> str)
+		{
+			return *this = SerializableBasicString<CharType>(str.begin(), str.end());
+		}
+		SerializableBasicString& operator+=(StringSection<CharType> str)
+		{
+			insert(end(), str.begin(), str.end());
+			return *this;
+		}
+		SerializableBasicString& append(StringSection<CharType> str)
+		{
+			insert(end(), str.begin(), str.end());
+			return *this;
+		}
+
+		SerializableBasicString substr(size_t pos = 0, size_t count=npos) const
+		{
+			assert(pos < size());
+			if ((size() - pos) <= count) {
+				return SerializableBasicString{begin()+pos, end()};
+			} else
+				return SerializableBasicString{begin()+pos, begin()+pos+count};
+		}
+
+		friend SerializableBasicString operator+(const SerializableBasicString& lhs, StringSection<CharType> rhs)
+		{
+			SerializableBasicString result;
+			result.reserve(lhs.size()+rhs.size());
+			result.insert(result.end(), lhs.begin(), lhs.end());
+			result.insert(result.end(), rhs.begin(), rhs.end());
+			return result;
+		}
+
+		friend SerializableBasicString operator+(StringSection<CharType> lhs, const SerializableBasicString& rhs)
+		{
+			SerializableBasicString result;
+			result.reserve(lhs.size()+rhs.size());
+			result.insert(result.end(), lhs.begin(), lhs.end());
+			result.insert(result.end(), rhs.begin(), rhs.end());
+			return result;
+		}
+
+		// friend bool operator==, etc, is difficult to implement, because we get ambiguous conversions after making StringSection<> a parameter option
+
+		friend std::ostream& operator<<(std::ostream& str, const SerializableBasicString& strng) { return str << StringSection<CharType>{strng.begin(), strng.end()}; }
+
+		// note -- we don't provide all std::string members and utilities
+		// For example:
+		//		std::string::assign()
+		//		std::string::assign_range()
+		//		std::string::c_str()
+		//		std::string::insert_range()
+		//		std::string::append_range()
+		//		std::string::replace()
+		//		std::string::replace_with_range()
+		//		std::string::copy()
+		//		std::string::resize_and_overwrite()
+		//		std::string::swap()
+		//		std::string::find, rfind, find_first_of, find_first_not_of, find_last_of, find_last_not_of
+		//		std::string::compare()
+		//		std::string::starts_with, std::string::ends_with, std::string::contains
+		//		operator""s
+		//		std::hash<>
+
+		SerializableBasicString() = default;
+		template< class InputIt >
+			SerializableBasicString(InputIt begin, InputIt end) : SerializableVector<CharType>(begin, end) {}
+		SerializableBasicString(std::basic_string_view<CharType> sv) : SerializableVector<CharType>(sv.begin(), sv.end()) {}
+		SerializableBasicString(const std::basic_string<CharType> sv) : SerializableVector<CharType>(sv.begin(), sv.end()) {}
+		SerializableBasicString(const char s[]) : SerializableBasicString(std::basic_string<CharType>{s}) {}
+		~SerializableBasicString() = default;
+
+		SerializableBasicString(SerializableBasicString&& moveFrom) never_throws = default;
+		SerializableBasicString& operator=(SerializableBasicString&& moveFrom) never_throws = default;
+		SerializableBasicString(const SerializableBasicString& copyFrom) = default;
+		SerializableBasicString& operator=(const SerializableBasicString& copyFrom) = default;
+	};
+
+	using SerializableString = SerializableBasicString<char>;
 
 	#pragma pop_macro("new")
 }
