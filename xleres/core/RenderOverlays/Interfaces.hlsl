@@ -87,6 +87,14 @@ DebuggingShapesCoords DebuggingShapesCoords_Make(float2 shapeRelativeCoords)
 	return result;
 }
 
+DebuggingShapesCoords DefaultValue_DebuggingShapesCoords()
+{
+	DebuggingShapesCoords result;
+	result.shapeRelativeCoords = 0.0.xx;
+	result.udds = result.vdds = 0.0.xx;
+	return result;
+}
+
 float CalculateAspectRatio(DebuggingShapesCoords coords)
 {
 		//  We can calculate the aspect ratio of tex coordinate mapping
@@ -94,5 +102,7 @@ float CalculateAspectRatio(DebuggingShapesCoords coords)
 	float a = length(GetVDDS(coords));
 	return (a == 0.f) ? 1.f : (length(GetUDDS(coords)) / a);
 }
+
+ShapeResult IShape2D_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc, float aspectRatio);
 
 #endif

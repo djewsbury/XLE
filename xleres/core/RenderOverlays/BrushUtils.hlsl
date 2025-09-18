@@ -35,7 +35,9 @@ float2 ScreenSpaceDerivatives(DebuggingShapesCoords coords, ShapeDesc shapeDesc,
         //			http://www.hlevkin.com/articles/SobelScharrGradients5x5.pdf
         //
     float2 dhdp = 0.0.xx;
-    ScreenSpaceDerivatives_Template(IShape2D_Calculate, coords, shapeDesc, aspectRatio);
+    #if HAS_INSTANTIATION_IShape2D_Calculate
+        ScreenSpaceDerivatives_Template(IShape2D_Calculate, coords, shapeDesc, aspectRatio);
+    #endif
     return dhdp;
 }
 

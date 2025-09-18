@@ -14,7 +14,7 @@ cbuffer ShapesFramework  // : register(b0, space0)
 }
 
 float4 ResolveShapeFramework_ShapeFillAndOutline(
-	ShapeDesc shape : ShapeDesc,
+	ShapeResult shape : ShapeResult,
 	float4 fill : Fill,
 	float4 outline : Outline) : SV_Target0
 {
@@ -25,7 +25,7 @@ float4 ResolveShapeFramework_ShapeFillAndOutline(
 }
 
 float4 ResolveShapeFramework_ShapeAndFill(
-	ShapeDesc shape : ShapeDesc,
+	ShapeResult shape : ShapeResult,
 	float4 fill : Fill) : SV_Target0
 {
 	// Just fill
@@ -40,7 +40,7 @@ float4 ResolveShapeFramework_Fill(
 }
 
 float4 ResolveShapeFramework_ShapeAndOutline(
-	ShapeDesc shape : ShapeDesc,
+	ShapeResult shape : ShapeResult,
 	float4 outline : Outline) : SV_Target0
 {
 	// Just outline
@@ -51,13 +51,34 @@ void BuildShapeFrameworkInputs(
 	float2 shapeRelativeCoords : TEXCOORD1,		// todo -- use a more specific semantic for this?
 	out float2 outputDimensions : OutputDimensions,
 	out float aspectRatio : AspectRatio,
-	out float2 DHDP : DHDP,
-	out DebuggingShapesCoords shapeCoords : DebuggingShapesCoords)
+	out DebuggingShapesCoords shapeCoords : DebuggingShapesCoords,
+	out ShapeDesc shapeDesc : ShapeDesc)
 {
 	outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
 	shapeCoords = DebuggingShapesCoords_Make(shapeRelativeCoords);
 	aspectRatio = CalculateAspectRatio(shapeCoords);
+	shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, BorderSizePix);
+}
 
-	ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, BorderSizePix);
-	dhdp = ScreenSpaceDerivatives(coords, shapeDesc, aspectRatio);		// note -- calculated before the true ShapeDesc is made
+void BuildShapeDHDP(
+	out float2 dhdp : DHDP, 
+	DebuggingShapesCoords coords : DebuggingShapesCoords,
+	ShapeDesc shapeDesc : ShapeDesc,
+	float aspectRatio : AspectRatio)
+{
+	dhdp = ScreenSpaceDerivatives(coords, shapeDesc, aspectRatio);
+}
+
+void BuildShapeFromInterface(
+	out ShapeResult shape : ShapeResult,
+	DebuggingShapesCoords coords : DebuggingShapesCoords,
+	ShapeDesc shapeDesc : ShapeDesc,
+	float aspectRatio : AspectRatio)
+{
+	#if HAS_INSTANTIATION_IShape2D_Calculate
+		shape = IShape2D_Calculate(coords, shapeDesc, aspectRatio);
+	#else
+		shape._border = 0.f;
+		shape._fill = 1.f;
+	#endif
 }

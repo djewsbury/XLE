@@ -15,6 +15,12 @@ Shared=~
 		ShapeSystem4=~
 			ShapesFrameworkEntry.hlsl::BuildShapeFrameworkInputs
 			Implements=SV_AutoPS
+		ShapeSystem5=~
+			ShapesFrameworkEntry.hlsl::BuildShapeDHDP
+			Implements=SV_AutoPS
+		ShapeSystem6=~
+			ShapesFrameworkEntry.hlsl::BuildShapeFromInterface
+			Implements=SV_AutoPS
 
 HorizTweakerBar=~
 	Inherit=~; Shared
@@ -90,63 +96,63 @@ FillRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 FillAndOutlineRoundedRect=~
 	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 OutlineRoundedRect=~
 	Inherit=~; <.>:EmptySolidBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 FillRaisedRect=~
 	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 FillRaisedRoundedRect=~
 	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 FillReverseRaisedRoundedRect=~
 	Inherit=~; <.>:ReverseRaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 FillAndOutlineRect=~
 	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 FillEllipse=~
 	Inherit=~; <.>:SolidNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 OutlineEllipse=~
 	Inherit=~; <.>:EmptySolidBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 
 SoftShadowRect=~
 	Inherit=~; Shared
@@ -174,7 +180,7 @@ ColorAdjustAndOutlineRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=SV_AutoPS
+			Implements=IShape2D_Calculate
 		=~
 			CommonBrushes.hlsl::SolidOutline_Calculate
 			Implements=SV_AutoPS

@@ -485,7 +485,8 @@ namespace RenderCore { namespace Techniques
 
 		void FragmentArranger::AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature, uint64_t implementsHash)
 		{
-			_steps.emplace_back(Step{std::move(name), &signature, false, implementsHash, Hash64(name)});
+			auto nameHash = Hash64(name);
+			_steps.emplace_back(Step{std::move(name), &signature, false, implementsHash, nameHash});
 		}
 
 		void FragmentArranger::AddFragmentOutput(const WorkingAttribute& a)
