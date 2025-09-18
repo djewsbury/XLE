@@ -1008,45 +1008,30 @@ namespace RenderOverlays
 		void DefaultFontsBox::ConstructToPromise(std::promise<std::shared_ptr<DefaultFontsBox>>&& promise)
 		{
             auto marker = ::Assets::GetAssetMarker<EntityInterface::MountedData<DefaultFontsStaticData>>("cfg/displays/font");
-            #if 0
-                ::Assets::WhenAll(marker).ThenConstructToPromise(
-                    std::move(promise),
-                    [](auto&& promise, auto staticData) {
+            ::Assets::WhenAll(marker).Then(
+                [promise=std::move(promise)](auto futureStaticData) mutable {
+                    DefaultFontsStaticData staticData;
+                    ::Assets::DependencyValidation depVal;
+                    TRY {
+                        auto sd = futureStaticData.get();
+                        staticData = sd.get();
+                        depVal = sd.GetDependencyValidation();
+                    } CATCH(...) {
+                    } CATCH_END
+
+                    TRY {
                         ::Assets::WhenAll(
-                            RenderOverlays::MakeFont(staticData.get()._defaultFont),
-                            RenderOverlays::MakeFont(staticData.get()._tableHeaderFont),
-                            RenderOverlays::MakeFont(staticData.get()._tableValuesFont)).ThenConstructToPromise(
+                            RenderOverlays::MakeFont(staticData._defaultFont),
+                            RenderOverlays::MakeFont(staticData._tableHeaderFont),
+                            RenderOverlays::MakeFont(staticData._tableValuesFont)).ThenConstructToPromise(
                                 std::move(promise),
-                                [depVal = staticData.GetDependencyValidation()](auto f0, auto f1, auto f2) mutable {
+                                [depVal = std::move(depVal)](auto f0, auto f1, auto f2) mutable {
                                     return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(depVal));
                                 });
-                    });
-            #else
-                ::Assets::WhenAll(marker).Then(
-                    [promise=std::move(promise)](auto futureStaticData) mutable {
-                        DefaultFontsStaticData staticData;
-                        ::Assets::DependencyValidation depVal;
-                        TRY {
-                            auto sd = futureStaticData.get();
-                            staticData = sd.get();
-                            depVal = sd.GetDependencyValidation();
-                        } CATCH(...) {
-                        } CATCH_END
-
-                        TRY {
-                            ::Assets::WhenAll(
-                                RenderOverlays::MakeFont(staticData._defaultFont),
-                                RenderOverlays::MakeFont(staticData._tableHeaderFont),
-                                RenderOverlays::MakeFont(staticData._tableValuesFont)).ThenConstructToPromise(
-                                    std::move(promise),
-                                    [depVal = std::move(depVal)](auto f0, auto f1, auto f2) mutable {
-                                        return std::make_shared<DefaultFontsBox>(std::move(f0), std::move(f1), std::move(f2), std::move(depVal));
-                                    });
-                        } CATCH (...) {
-                            promise.set_exception(std::current_exception());
-                        } CATCH_END
-                    });
-            #endif
+                    } CATCH (...) {
+                        promise.set_exception(std::current_exception());
+                    } CATCH_END
+                });
 		}
 
         DefaultFontsBox::DefaultFontsBox()
@@ -1083,12 +1068,6 @@ namespace RenderOverlays
 			const RenderCore::Assets::RenderStateSet& renderStates) override
 		{
             using namespace RenderCore;
-			constexpr uint64_t s_patchShape = "IShape2D_Calculate"_h;
-			constexpr uint64_t s_patchFill = "IFill_Calculate"_h;
-			constexpr uint64_t s_patchOutline = "IOutline_Calculate"_h;
-			constexpr uint64_t s_patchTwoLayersShader = "TwoLayersShader"_h;
-            constexpr uint64_t s_patchPC3D = "PC3D"_h;
-            constexpr uint64_t s_patchPCT3D = "PCT3D"_h;
 
 			unsigned pipelineBase = 0;
 			// We're re-purposing the _writeMask flag for depth test and write
@@ -1120,76 +1099,7 @@ namespace RenderOverlays
 			}
 
             if (shaderPatches) {
-                if (shaderPatches->GetInterface().HasPatchType(s_patchShape)) {
-                    if (!nascentDesc) {
-                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                        *nascentDesc = *_pipelineDesc[pipelineBase];
-                    }
-
-                    Techniques::ShaderCompilePatchResource res;
-                    res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntry", s_SMPS};
-                    res._patchCollection = shaderPatches;
-                    res._patchCollectionExpansions = { s_patchShape, s_patchFill, s_patchOutline };
-                    nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = std::move(res);
-                    nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
-
-                } else if (shaderPatches->GetInterface().HasPatchType(s_patchTwoLayersShader)) {
-                    if (!nascentDesc) {
-                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                        *nascentDesc = *_pipelineDesc[pipelineBase];
-                    }
-
-                    Techniques::ShaderCompilePatchResource res;
-                    res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntryForTwoLayersShader", s_SMPS};
-                    res._patchCollection = shaderPatches;
-                    res._patchCollectionExpansions = { s_patchTwoLayersShader };
-                    nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = std::move(res);
-                    nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
-
-                } else if (shaderPatches->GetInterface().HasPatchType(s_patchFill)) {
-                    if (!nascentDesc) {
-                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                        *nascentDesc = *_pipelineDesc[pipelineBase];
-                    }
-
-                    Techniques::ShaderCompilePatchResource res;
-                    res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntryJustFill", s_SMPS};
-                    res._patchCollection = shaderPatches;
-                    res._patchCollectionExpansions = { s_patchFill };
-                    nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = std::move(res);
-                    nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
-                    nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_COLOR_LINEAR1", 0);
-                    nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_TEXCOORD1", 0);
-
-                } else if (shaderPatches->GetInterface().HasPatchType(s_patchPC3D)) {
-                    if (!nascentDesc) {
-                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                        *nascentDesc = *_pipelineDesc[pipelineBase];
-                    }
-
-                    Techniques::ShaderCompilePatchResource res;
-                    res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntryPC3D", s_SMPS};
-                    res._patchCollection = shaderPatches;
-                    res._patchCollectionExpansions = { s_patchPC3D };
-                    nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = std::move(res);
-                    nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
-                    nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_WORLD_POSITION", 1);
-
-                } else if (shaderPatches->GetInterface().HasPatchType(s_patchPCT3D)) {
-                    if (!nascentDesc) {
-                        nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
-                        *nascentDesc = *_pipelineDesc[pipelineBase];
-                    }
-
-                    Techniques::ShaderCompilePatchResource res;
-                    res._entrypoint = ShaderCompileResourceName{RENDEROVERLAYS_SHAPES_HLSL, "frameworkEntryPCT3D", s_SMPS};
-                    res._patchCollection = shaderPatches;
-                    res._patchCollectionExpansions = { s_patchPCT3D };
-                    nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = std::move(res);
-                    nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
-                    nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_WORLD_POSITION", 1);
-
-                } else if (shaderPatches->GetInterface().HasPatchType("SV_SpritePS"_h)) {
+                if (shaderPatches->GetInterface().HasPatchType("SV_SpritePS"_h)) {
                     if (!nascentDesc) {
                         nascentDesc = std::make_shared<Techniques::GraphicsPipelineDesc>();
                         *nascentDesc = *_pipelineDesc[pipelineBase];

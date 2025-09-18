@@ -13,11 +13,10 @@
 #include "CommonBrushes.hlsl"
 #include "BrushUtils.hlsl"
 
-ShapeResult TagShape_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc)
+ShapeResult TagShape_Calculate(DebuggingShapesCoords coords : DebuggingShapesCoords, ShapeDesc shapeDesc : ShapeDesc, float aspectRatio : AspectRatio) : ShapeResult
 {
-	float2 texCoord = DebuggingShapesCoords_GetShapeRelativeCoords(coords);
+	float2 texCoord = GetShapeRelativeCoords(coords);
 	float2 minCoords = shapeDesc._minCoords, maxCoords = shapeDesc._maxCoords;
-	float aspectRatio = GetAspectRatio(coords);
 
 	const float roundedProportion = 0.2f;
 	float roundedHeight = (maxCoords.y - minCoords.y) * roundedProportion;
@@ -60,7 +59,7 @@ ShapeResult TagShape_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc
 	return ShapeResult_Empty();
 }
 
-float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coords)
+float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coords, float aspectRatio)
 {
     const float border = 2.f;
     float2 tagMin = minCoords + border * GetUDDS(coords) + border * GetVDDS(coords);
@@ -69,9 +68,9 @@ float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coord
 	ShapeDesc shapeDesc = MakeShapeDesc(tagMin, tagMax, 0.f);
 	float2 dhdp = 0.0.xx;
 	float accentuate = 8.f;
-	ScreenSpaceDerivatives_Template(TagShape_Calculate, coords, shapeDesc);
+	ScreenSpaceDerivatives_Template(TagShape_Calculate, coords, shapeDesc, aspectRatio);
 
-	float t = TagShape_Calculate(coords, shapeDesc)._fill;
+	float t = TagShape_Calculate(coords, shapeDesc, aspectRatio)._fill;
 	if (t > 0.f) {
 		const float3 baseColor = float3(0.333f, 0.333f, 0.333f);
 		return RaisedFill_Calculate(coords, float2(0,0), float4(baseColor, 1.f), accentuate*dhdp);
@@ -83,14 +82,14 @@ float4 RenderTag(float2 minCoords, float2 maxCoords, DebuggingShapesCoords coord
 }
 
 void RenderHorizTweakerBarShader(   float2 minCoords, float2 maxCoords, float thumbPosition,
-                        DebuggingShapesCoords coords, inout float4 result)
+                        DebuggingShapesCoords coords, float aspectRatio, inout float4 result)
 {
 	ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, 0.f);
 	float2 dhdp = 0.0.xx;
 	float accentuate = 8.f;
-	ScreenSpaceDerivatives_Template(ScrollBarShape_Calculate, coords, shapeDesc);
+	ScreenSpaceDerivatives_Template(ScrollBarShape_Calculate, coords, shapeDesc, aspectRatio);
 
-	float t = ScrollBarShape_Calculate(coords, shapeDesc)._fill;
+	float t = ScrollBarShape_Calculate(coords, shapeDesc, aspectRatio)._fill;
 	if (t > 0.f) {
 		float3 normal = NormalToSurface(accentuate*dhdp);
 		float A = saturate(-dot(BasicShapesLightDirection, normal));

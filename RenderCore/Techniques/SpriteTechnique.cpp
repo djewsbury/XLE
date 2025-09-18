@@ -7,6 +7,7 @@
 #include "../../Utility/FastParseValue.h"
 #include "../../Utility/StringFormat.h"
 #include <sstream>
+#include <iostream>
 
 using namespace Utility::Literals;
 
@@ -474,16 +475,17 @@ namespace RenderCore { namespace Techniques
 				std::string _name;
 				const GraphLanguage::NodeGraphSignature* _signature;
 				bool _enabled = false;
-				uint64_t _originalPatchCode = 0;
+				uint64_t _implementsHash = 0;
+				uint64_t _patchCodeForExpansions = 0;
 			};
 			std::vector<Step> _steps;
 
 			std::vector<WorkingAttribute> _fragmentOutput;
 		};
 
-		void FragmentArranger::AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature, uint64_t originalPatchCode)
+		void FragmentArranger::AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature, uint64_t implementsHash)
 		{
-			_steps.emplace_back(Step{std::move(name), &signature, false, originalPatchCode});
+			_steps.emplace_back(Step{std::move(name), &signature, false, implementsHash, Hash64(name)});
 		}
 
 		void FragmentArranger::AddFragmentOutput(const WorkingAttribute& a)
@@ -863,7 +865,7 @@ void ExpandClipSpacePosition(
 			}
 
 			for (auto& step:gsSteps)
-				if (step._originalPatchCode == "SV_SpriteGSPredicate"_h) {
+				if (step._implementsHash == "SV_SpriteGSPredicate"_h) {
 					step._enabled = true;		// force it on
 					writerHelper.WriteGSPredicateCall(step._name, *step._signature);
 				} else if (step._enabled)
@@ -927,21 +929,21 @@ void ExpandClipSpacePosition(
 		vsOutput._resource._entrypoint._entryPoint = "VSEntry";
 		vsOutput._resource._entrypoint._shaderModel = s_SMVS;
 		vsOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(vsSignature);
-		for (auto& s:vsSteps) if (s._enabled && s._originalPatchCode) vsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
+		for (auto& s:vsSteps) if (s._enabled && s._patchCodeForExpansions) vsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		gsOutput._stage = ShaderStage::Geometry;
 		gsOutput._resource._postPatchesFragments.emplace_back(s_gsSpriteSystemPatches);
 		gsOutput._resource._postPatchesFragments.emplace_back(gs.str());
 		gsOutput._resource._entrypoint._entryPoint = "GSEntry";
 		gsOutput._resource._entrypoint._shaderModel = s_SMGS;
-		for (auto& s:gsSteps) if (s._enabled && s._originalPatchCode) gsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
+		for (auto& s:gsSteps) if (s._enabled && s._patchCodeForExpansions) gsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		psOutput._stage = ShaderStage::Pixel;
 		psOutput._resource._postPatchesFragments.emplace_back(ps.str());
 		psOutput._resource._entrypoint._entryPoint = "PSEntry";
 		psOutput._resource._entrypoint._shaderModel = s_SMPS;
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
-		for (auto& s:psSteps) if (s._enabled && s._originalPatchCode) psOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
+		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));
@@ -1077,14 +1079,19 @@ void ExpandClipSpacePosition(
 		vsOutput._resource._entrypoint._entryPoint = "VSEntry";
 		vsOutput._resource._entrypoint._shaderModel = s_SMVS;
 		vsOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(vsSignature);
-		for (auto& s:vsSteps) if (s._enabled && s._originalPatchCode) vsOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
+		for (auto& s:vsSteps) if (s._enabled && s._patchCodeForExpansions) vsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		psOutput._stage = ShaderStage::Pixel;
 		psOutput._resource._postPatchesFragments.emplace_back(ps.str());
 		psOutput._resource._entrypoint._entryPoint = "PSEntry";
 		psOutput._resource._entrypoint._shaderModel = s_SMPS;
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
-		for (auto& s:psSteps) if (s._enabled && s._originalPatchCode) psOutput._resource._patchCollectionExpansions.emplace_back(s._originalPatchCode);
+		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+
+		#if defined(_DEBUG)
+			std::cout << "-------------------- PS Gen: --------------------" << std::endl;
+			std::cout << psOutput._resource._postPatchesFragments.back() << std::endl;
+		#endif
 
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));

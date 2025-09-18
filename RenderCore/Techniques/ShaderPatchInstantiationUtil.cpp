@@ -134,21 +134,27 @@ namespace RenderCore { namespace Techniques
 
 			Interface::Patch p;
 			if (!patch._implementsName.empty()) {
+
 				p._implementsHash = Hash64(patch._implementsName);
 
-				if (patch._implementsName != patch._name) {
+				// When using the system codes, we can end up with many expansions with the same implementsHash
+				// We don't generate a scaffold function in these cases
+				if (patch._implementsName != patch._name && !XlBeginsWith<char>(patch._implementsName, "SV_"))
 					p._scaffoldInFunction = ShaderSourceParser::GenerateScaffoldFunction(
 						patch._implementsSignature, patch._signature,
 						patch._implementsName, patch._name, 
 						ShaderSourceParser::ScaffoldFunctionFlags::ScaffoldeeUsesReturnSlot);
-				}
+
 			}
 
 			p._originalEntryPointSignature = std::make_shared<GraphLanguage::NodeGraphSignature>(patch._signature);
 			p._originalEntryPointName = patch._name;
+			p._originalEntryPointHash = Hash64(p._originalEntryPointName);
 
-			p._scaffoldSignature = std::make_shared<GraphLanguage::NodeGraphSignature>(patch._implementsSignature);
-			p._scaffoldEntryPointName = patch._implementsName;
+			if (!XlBeginsWith<char>(patch._implementsName, "SV_")) {
+				p._scaffoldSignature = std::make_shared<GraphLanguage::NodeGraphSignature>(patch._implementsSignature);
+				p._scaffoldEntryPointName = patch._implementsName;
+			}
 
 			p._filteringRulesId = (unsigned)_interface._filteringRules.size();
 
@@ -211,8 +217,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<unsigned> srcPatchesToInclude;
 		srcPatchesToInclude.reserve(patchExpansions.size());
 		for (auto expansion:patchExpansions) {
-			auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion; });
-			// assert(i != _interface._patches.end());
+			auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion || c._originalEntryPointHash == expansion; });
 			if (i == _interface._patches.end()) continue;
 
 			auto srcPatchIdx = i->_filteringRulesId;		// this is actually the idx from the source patches array
@@ -240,8 +245,7 @@ namespace RenderCore { namespace Techniques
 		{
 			std::stringstream scaffoldFns;
 			for (auto expansion:patchExpansions) {
-				auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion; });
-				// assert(i!=_interface._patches.end());
+				auto i = std::find_if(_interface._patches.begin(), _interface._patches.end(), [expansion](const auto& c) { return c._implementsHash == expansion || c._originalEntryPointHash == expansion; });
 				if (i == _interface._patches.end()) continue;
 
 				// GenerateScaffoldFunction just creates a function with the name of the template

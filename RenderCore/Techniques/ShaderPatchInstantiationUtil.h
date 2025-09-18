@@ -45,7 +45,7 @@ namespace RenderCore { namespace Techniques
 		public:
 			struct Patch 
 			{
-				uint64_t		_implementsHash = 0;
+				uint64_t		_implementsHash = 0, _originalEntryPointHash = 0;
 				std::string 	_originalEntryPointName, _scaffoldEntryPointName;
 
 				std::shared_ptr<GraphLanguage::NodeGraphSignature> _originalEntryPointSignature;

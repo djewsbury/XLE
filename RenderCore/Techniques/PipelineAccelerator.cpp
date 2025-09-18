@@ -206,14 +206,15 @@ namespace RenderCore { namespace Techniques
 		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
 		::Assets::WhenAll(std::move(metalPipelineFuture)).ThenConstructToPromise(
 			std::move(resultPromise),
-			[cfg=std::move(cfg), weakThis](GraphicsPipelineAndLayout metalPipeline) {
+			[cfg=std::move(cfg), weakThis, dv=compiledPatchCollection->GetDependencyValidation(), dv2=layoutDelegate.GetDependencyValidation()](GraphicsPipelineAndLayout metalPipeline) {
 				auto containingPipelineAccelerator = weakThis.lock();
 				if (!containingPipelineAccelerator)
 					Throw(std::runtime_error("Containing GraphicsPipeline builder has been destroyed"));
 
 				IPipelineAcceleratorPool::Pipeline result;
 				result._metalPipeline = std::move(metalPipeline._pipeline);
-				result._depVal = metalPipeline._depVal;
+				::Assets::DependencyValidationMarker depVals[] { metalPipeline._depVal, dv, dv2 };
+				result._depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 				result._pipelineLayout = std::move(metalPipeline._layout);
 				#if defined(_DEBUG)
 					result._vsDescription = metalPipeline._debugInfo._vsDescription;

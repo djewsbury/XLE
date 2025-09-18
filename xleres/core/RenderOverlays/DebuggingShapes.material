@@ -1,151 +1,180 @@
+Shared=~
+	Patches=~
+		ShapeSystem0=~
+			ShapesFrameworkEntry.hlsl::ResolveShapeFramework_ShapeFillAndOutline
+			Implements=SV_AutoPS
+		ShapeSystem1=~
+			ShapesFrameworkEntry.hlsl::ResolveShapeFramework_ShapeAndFill
+			Implements=SV_AutoPS
+		ShapeSystem2=~
+			ShapesFrameworkEntry.hlsl::ResolveShapeFramework_Fill
+			Implements=SV_AutoPS
+		ShapeSystem3=~
+			ShapesFrameworkEntry.hlsl::ResolveShapeFramework_ShapeAndOutline
+			Implements=SV_AutoPS
+		ShapeSystem4=~
+			ShapesFrameworkEntry.hlsl::BuildShapeFrameworkInputs
+			Implements=SV_AutoPS
+
 HorizTweakerBar=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			DebuggingShapes.pixel.hlsl::HorizTweakerBarShader
-			Implements=Interfaces.hlsl::TwoLayersShader
+			Implements=SV_AutoPS
 TagShader=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			DebuggingShapes.pixel.hlsl::TagShader
-			Implements=Interfaces.hlsl::TwoLayersShader
+			Implements=SV_AutoPS
 GridBackgroundShader=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			DebuggingShapes.pixel.hlsl::GridBackgroundShader
-			Implements=Interfaces.hlsl::TwoLayersShader
+			Implements=SV_AutoPS
 
 SolidNoBorder=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::SolidFill_Calculate
-			Implements=Interfaces.hlsl::IFill_Calculate
+			Implements=SV_AutoPS
 		=~
-			CommonBrushes.hlsl::NoFill_Calculate
-			Implements=Interfaces.hlsl::IOutline_Calculate
+			CommonBrushes.hlsl::NoOutline_Calculate
+			Implements=SV_AutoPS
 
 SolidWithBorder=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::SolidFill_Calculate
-			Implements=Interfaces.hlsl::IFill_Calculate
+			Implements=SV_AutoPS
 		=~
-			CommonBrushes.hlsl::SolidFill_Calculate
-			Implements=Interfaces.hlsl::IOutline_Calculate
+			CommonBrushes.hlsl::SolidOutline_Calculate
+			Implements=SV_AutoPS
 
 RaisedNoBorder=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::RaisedFill_Calculate
-			Implements=Interfaces.hlsl::IFill_Calculate
+			Implements=SV_AutoPS
 		=~
-			CommonBrushes.hlsl::NoFill_Calculate
-			Implements=Interfaces.hlsl::IOutline_Calculate
+			CommonBrushes.hlsl::NoOutline_Calculate
+			Implements=SV_AutoPS
 
 ReverseRaisedNoBorder=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::ReverseRaisedFill_Calculate
-			Implements=Interfaces.hlsl::IFill_Calculate
+			Implements=SV_AutoPS
 		=~
-			CommonBrushes.hlsl::NoFill_Calculate
-			Implements=Interfaces.hlsl::IOutline_Calculate
+			CommonBrushes.hlsl::NoOutline_Calculate
+			Implements=SV_AutoPS
 
 EmptySolidBorder=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::NoFill_Calculate
-			Implements=Interfaces.hlsl::IFill_Calculate
+			Implements=SV_AutoPS
 		=~
-			CommonBrushes.hlsl::SolidFill_Calculate
-			Implements=Interfaces.hlsl::IOutline_Calculate
+			CommonBrushes.hlsl::SolidOutline_Calculate
+			Implements=SV_AutoPS
 
 FillRoundedRect=~
 	Inherit=~; <.>:SolidNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 FillAndOutlineRoundedRect=~
 	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 OutlineRoundedRect=~
 	Inherit=~; <.>:EmptySolidBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 FillRaisedRect=~
 	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 FillRaisedRoundedRect=~
 	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 FillReverseRaisedRoundedRect=~
 	Inherit=~; <.>:ReverseRaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 FillAndOutlineRect=~
 	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 FillEllipse=~
 	Inherit=~; <.>:SolidNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 OutlineEllipse=~
 	Inherit=~; <.>:EmptySolidBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 SoftShadowRect=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			DebuggingShapes.pixel.hlsl::SoftShadowRect
-			Implements=Interfaces.hlsl::TwoLayersShader
+			Implements=SV_AutoPS
 
 DashLine=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::DashLine_Calculate
-			Implements=Interfaces.hlsl::IFill_Calculate
+			Implements=SV_AutoPS
 
 FillColorAdjust=~
+	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::ColorAdjust_Calculate
-			Implements=Interfaces.hlsl::IFill_Calculate
+			Implements=SV_AutoPS
 
 ColorAdjustAndOutlineRoundedRect=~
 	Inherit=~; <.>:FillColorAdjust
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 		=~
-			CommonBrushes.hlsl::SolidFill_Calculate
-			Implements=Interfaces.hlsl::IOutline_Calculate
+			CommonBrushes.hlsl::SolidOutline_Calculate
+			Implements=SV_AutoPS

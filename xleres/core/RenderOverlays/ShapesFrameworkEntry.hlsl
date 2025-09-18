@@ -8,75 +8,56 @@
 #include "BrushUtils.hlsl"
 #include "../TechniqueLibrary/Framework/SystemUniforms.hlsl"
 
-cbuffer ShapesFramework : register(b0, space0)
+cbuffer ShapesFramework  // : register(b0, space0)
 {
-    float BorderSizePix;
+	float BorderSizePix;
 }
 
-float4 frameworkEntry(
-    float4 position	            : SV_Position,
-    float4 color0		        : COLOR0,
-    float4 color1		        : COLOR1,
-    float2 texCoord0	        : TEXCOORD0,
-    float2 shapeRelativeCoords	: TEXCOORD1) : SV_Target0
+float4 ResolveShapeFramework_ShapeFillAndOutline(
+	ShapeDesc shape : ShapeDesc,
+	float4 fill : Fill,
+	float4 outline : Outline) : SV_Target0
 {
-    float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
-
-    DebuggingShapesCoords coords =
-        DebuggingShapesCoords_Make(position, shapeRelativeCoords, outputDimensions);
-
-    ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, BorderSizePix);
-
-    float2 dhdp = ScreenSpaceDerivatives(coords, shapeDesc);
-
-    ShapeResult shape = IShape2D_Calculate(coords, shapeDesc);
-    float4 fill = IFill_Calculate(coords, texCoord0, color0, dhdp);
-    float4 outline = IOutline_Calculate(coords, texCoord0, color1, dhdp);
-
-    shape._border *= outline.a; // when outline alpha is zero, we want that space to be considered "fill"
-    float4 A = lerp(fill, outline, shape._border);
-    return float4(A.rgb, A.a * max(shape._fill, shape._border));
+	// Both outline and fill
+	shape._border *= outline.a; // when outline alpha is zero, we want that space to be considered "fill"
+	float4 A = lerp(fill, outline, shape._border);
+	return float4(A.rgb, A.a * max(shape._fill, shape._border));
 }
 
-float4 frameworkEntryForTwoLayersShader(
-    float4 position	    : SV_Position,
-    float4 color0		: COLOR0,
-    float4 color1		: COLOR1,
-    float2 texCoord0	: TEXCOORD0,
-    float2 texCoord1	: TEXCOORD1) : SV_Target0
+float4 ResolveShapeFramework_ShapeAndFill(
+	ShapeDesc shape : ShapeDesc,
+	float4 fill : Fill) : SV_Target0
 {
-    return TwoLayersShader(position, color0, color1, texCoord0, texCoord1);
+	// Just fill
+	return float4(fill.rgb, fill.a * max(shape._fill, shape._border));
 }
 
-float4 frameworkEntryJustFill(
-    float4 position	    : SV_Position,
-    float4 color0		: COLOR0,
-    float2 texCoord0	: TEXCOORD0) : SV_Target0
+float4 ResolveShapeFramework_Fill(
+	float4 fill : Fill) : SV_Target0
 {
-    float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
-
-    DebuggingShapesCoords coords =
-        DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
-
-    return IFill_Calculate(coords, texCoord0, color0, 1.0.xx);
+	// Just fill, no shape
+	return fill;
 }
 
-float4 frameworkEntryPC3D(
-    float4 position	    : SV_Position,
-    float4 color0		: COLOR0,
-    float3 worldPosition : WORLDPOSITION) : SV_Target0
+float4 ResolveShapeFramework_ShapeAndOutline(
+	ShapeDesc shape : ShapeDesc,
+	float4 outline : Outline) : SV_Target0
 {
-    return PC3D(position, color0, worldPosition);
+	// Just outline
+	return float4(outline.rgb, outline.a * shape._border);
 }
 
-
-float4 frameworkEntryPCT3D(
-    float4 position	    : SV_Position,
-    float4 color0		: COLOR0,
-    float2 texCoord0	: TEXCOORD0,
-    float3 worldPosition : WORLDPOSITION) : SV_Target0
+void BuildShapeFrameworkInputs(
+	float2 shapeRelativeCoords : TEXCOORD1,		// todo -- use a more specific semantic for this?
+	out float2 outputDimensions : OutputDimensions,
+	out float aspectRatio : AspectRatio,
+	out float2 DHDP : DHDP,
+	out DebuggingShapesCoords shapeCoords : DebuggingShapesCoords)
 {
-    return PCT3D(position, color0, texCoord0, worldPosition);
+	outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
+	shapeCoords = DebuggingShapesCoords_Make(shapeRelativeCoords);
+	aspectRatio = CalculateAspectRatio(shapeCoords);
+
+	ShapeDesc shapeDesc = MakeShapeDesc(0.0.xx, 1.0.xx, BorderSizePix);
+	dhdp = ScreenSpaceDerivatives(coords, shapeDesc, aspectRatio);		// note -- calculated before the true ShapeDesc is made
 }
-
-

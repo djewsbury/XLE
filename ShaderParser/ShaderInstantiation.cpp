@@ -132,17 +132,26 @@ namespace ShaderSourceParser
 						} else {
 							GraphLanguage::INodeGraphProvider::Signature sig, implementsSig;
 							if (dep._instantiation._customProvider) {
-								sig = dep._instantiation._customProvider->FindSignature(dep._instantiation._archiveName).value();
+								auto s = dep._instantiation._customProvider->FindSignature(dep._instantiation._archiveName);
+								if (!s) Throw(std::runtime_error("Failed searching for signature: " + dep._instantiation._archiveName));
+								sig = std::move(*s);
 								_rawShaderFileIncludes.insert(sig._sourceFile);
 							} else {
-								sig = provider.FindSignature(dep._instantiation._archiveName).value();
+								auto s = provider.FindSignature(dep._instantiation._archiveName);
+								if (!s) Throw(std::runtime_error("Failed searching for signature: " + dep._instantiation._archiveName));
+								sig = std::move(*s);
 								_rawShaderFileIncludes.insert(sig._sourceFile);
 							}
 							if (!dep._instantiation._implementsArchiveName.empty() && !XlBeginsWith<char>(dep._instantiation._implementsArchiveName, "SV_")) {
 								if (dep._instantiation._customProvider) {
-									implementsSig = dep._instantiation._customProvider->FindSignature(dep._instantiation._implementsArchiveName).value();
-								} else
-									implementsSig = provider.FindSignature(dep._instantiation._implementsArchiveName).value();
+									auto s = dep._instantiation._customProvider->FindSignature(dep._instantiation._implementsArchiveName);
+									if (!s) Throw(std::runtime_error("Failed searching for 'implements' field signature: " + dep._instantiation._implementsArchiveName));
+									implementsSig = std::move(s.value());
+								} else {
+									auto s = provider.FindSignature(dep._instantiation._implementsArchiveName);
+									if (!s) Throw(std::runtime_error("Failed searching for 'implements' field signature: " + dep._instantiation._implementsArchiveName));
+									implementsSig = std::move(s.value());
+								}
 							}
 
 							if (isRootInstantiation) {
@@ -190,7 +199,7 @@ namespace ShaderSourceParser
 			auto scaffoldName = MakeGraphName(inst._graph._name, inst._instantiationParams.CalculateInstanceHash());
 			auto implementationName = inst._useScaffoldFunction ? (scaffoldName + "_impl") : scaffoldName;
 			auto instFn = GenerateFunction(
-				inst._graph._graph, implementationName, 
+				inst._graph._graph, implementationName,
 				inst._instantiationParams, generateOptions, *inst._graph._subProvider);
 
 			if (inst._useScaffoldFunction) {

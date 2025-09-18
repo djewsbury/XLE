@@ -7,103 +7,92 @@
 #if !defined(DD_INTERFACES_H)
 #define DD_INTERFACES_H
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-    //   D E B U G G I N G   S H A P E S   C O O R D S
-struct DebuggingShapesCoords
-{
-    float4 position;
-    float2 outputDimensions;
-    float2 shapeRelativeCoords;
-
-    float aspectRatio;
-    float2 udds;
-    float2 vdds;
-};
-
-float4 GetPosition(DebuggingShapesCoords coords) { return coords.position; }
-float2 GetOutputDimensions(DebuggingShapesCoords coords) { return coords.outputDimensions; }
-float2 DebuggingShapesCoords_GetShapeRelativeCoords(DebuggingShapesCoords coords) { return coords.shapeRelativeCoords; }
-
-#if 0
-    float2 GetUDDS(DebuggingShapesCoords coords) { return float2(ddx(VSOUT_GetTexCoord0(coords).x), ddy(VSOUT_GetTexCoord0(coords).x)); }
-    float2 GetVDDS(DebuggingShapesCoords coords) { return float2(ddx(VSOUT_GetTexCoord0(coords).y), ddy(VSOUT_GetTexCoord0(coords).y)); }
-    float GetAspectRatio(DebuggingShapesCoords coords)
-    {
-        float a = length(GetUDDS(coords));
-        if (a == 0.f) return 1.f;       //right on the edge we're not getting an accurate result for this...?
-        float texCoordAspect = length(GetVDDS(coords))/a;
-        return 1.0f / texCoordAspect;
-    }
-#else
-    float2 GetUDDS(DebuggingShapesCoords coords)        { return coords.udds; }
-    float2 GetVDDS(DebuggingShapesCoords coords)        { return coords.vdds; }
-    float GetAspectRatio(DebuggingShapesCoords coords)  { return coords.aspectRatio; }
-#endif
-
-float2 GetRefractionCoords(DebuggingShapesCoords coords) { return coords.position.xy/coords.outputDimensions.xy; }
-
-DebuggingShapesCoords DebuggingShapesCoords_Make(float4 position, float2 shapeRelativeCoords, float2 outputDimensions)
-{
-    DebuggingShapesCoords result;
-    result.outputDimensions = outputDimensions;
-    result.shapeRelativeCoords = shapeRelativeCoords;
-
-    result.udds = float2(ddx(shapeRelativeCoords.x), ddy(shapeRelativeCoords.x));
-    result.vdds = float2(ddx(shapeRelativeCoords.y), ddy(shapeRelativeCoords.y));
-
-    result.position = position;
-
-        //  We can calculate the aspect ratio of tex coordinate mapping
-        //  by looking at the screen space derivatives
-    float a = length(GetUDDS(result));
-    if (a == 0.f) {
-        result.aspectRatio = 1.f;
-    } else {
-        float texCoordAspect = length(GetVDDS(result))/a;
-        result.aspectRatio = 1.f/texCoordAspect;
-    }
-
-    return result;
-}
+//
+// SEMANTICS
+// in to patches:
+//		SV_Position		(pixel shader position)
+//		OutputDimensions
+//		AspectRatio
+//
+//		DHDP
+//
+//		ShapeDesc (ShapeDesc struct)
+//		DebuggingShapesCoords (DebuggingShapesCoords struct)
+//
+//		COLOR 			(Linear color)
+//		COLOR_SRGB 		(SRGB color)
+//		TEXCOORD
+//
+// out from patches:
+//		Fill		(float4: color)
+//		Outline		(float4: color)
+//		ShapeResult (ShapeResult struct)
+// 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-    //   S H A P E   D E S C
+	//   S H A P E   D E S C
 
 struct ShapeDesc
 {
-    float2 _minCoords, _maxCoords;
-    float _borderSizePix;
+	float2 _minCoords, _maxCoords;
+	float _borderSizePix;
 };
 
 ShapeDesc MakeShapeDesc(float2 minCoords, float2 maxCoords, float borderSizePix)
 {
-    ShapeDesc result;
-    result._minCoords = minCoords;
-    result._maxCoords = maxCoords;
-    result._borderSizePix = borderSizePix;
-    return result;
+	ShapeDesc result;
+	result._minCoords = minCoords;
+	result._maxCoords = maxCoords;
+	result._borderSizePix = borderSizePix;
+	return result;
+}
+
+ShapeDesc DefaultValue_ShapeDesc()
+{
+	ShapeDesc result;
+	result._minCoords = 0.0.xx;
+	result._maxCoords = 1.0.xx;
+	result._borderSizePix = 1.0;
+	return result;
 }
 
 struct ShapeResult
 {
-        // strength (0-1) of the "border" and "fill" parts of this shape
-    float _fill;
-    float _border;
+		// strength (0-1) of the "border" and "fill" parts of this shape
+	float _fill;
+	float _border;
 };
 
 ShapeResult ShapeResult_Empty() { ShapeResult temp; temp._border = temp._fill = 0.f; return temp; }
 ShapeResult MakeShapeResult(float fill, float border)  { ShapeResult temp; temp._fill = fill; temp._border = border; return temp; }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-    //   I N T E R F A C E S
+	//   D E B U G G I N G   S H A P E S   C O O R D S
+struct DebuggingShapesCoords
+{
+	float2 shapeRelativeCoords;
+	float2 udds, vdds;
+};
 
-ShapeResult IShape2D_Calculate(DebuggingShapesCoords coords, ShapeDesc shapeDesc);
-float4 IOutline_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp);
-float4 IFill_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp);
+float2 GetShapeRelativeCoords(DebuggingShapesCoords coords) { return coords.shapeRelativeCoords; }
+float2 GetUDDS(DebuggingShapesCoords coords)        { return coords.udds; }
+float2 GetVDDS(DebuggingShapesCoords coords)        { return coords.vdds; }
 
-float4 TwoLayersShader(float4 position, float4 color, float4 color1, float2 texCoord0, float2 texCoord1);
+DebuggingShapesCoords DebuggingShapesCoords_Make(float2 shapeRelativeCoords)
+{
+	DebuggingShapesCoords result;
+	result.shapeRelativeCoords = shapeRelativeCoords;
+	result.udds = float2(ddx(shapeRelativeCoords.x), ddy(shapeRelativeCoords.x));
+	result.vdds = float2(ddx(shapeRelativeCoords.y), ddy(shapeRelativeCoords.y));
+	return result;
+}
 
-float4 PC3D(float4 position, float4 color, float3 worldPosition);
-float4 PCT3D(float4 position, float4 color, float2 texCoord, float3 worldPosition);
+float CalculateAspectRatio(DebuggingShapesCoords coords)
+{
+		//  We can calculate the aspect ratio of tex coordinate mapping
+		//  by looking at the screen space derivatives
+	float a = length(GetVDDS(coords));
+	return (a == 0.f) ? 1.f : (length(GetUDDS(coords)) / a);
+}
 
 #endif

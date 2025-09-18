@@ -991,7 +991,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					for (auto exp:patchExpansions) {
 						auto i = std::find_if(
 							res._patchCollection->GetInterface().GetPatches().begin(), res._patchCollection->GetInterface().GetPatches().end(),
-							[exp](const auto& c) { return c._implementsHash == exp; });
+							[exp](const auto& c) { return c._implementsHash == exp || c._originalEntryPointHash == exp; });
 						if (i == res._patchCollection->GetInterface().GetPatches().end()) continue;
 						if (std::find(filteringRulesPulledIn, &filteringRulesPulledIn[autoFilteringCount], i->_filteringRulesId) != &filteringRulesPulledIn[autoFilteringCount]) continue;
 						filteringRulesPulledIn[autoFilteringCount] = i->_filteringRulesId;

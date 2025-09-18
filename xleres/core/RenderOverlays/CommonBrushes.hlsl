@@ -11,19 +11,20 @@
 #include "../TechniqueLibrary/Framework/CommonResources.hlsl"
 #include "../TechniqueLibrary/Utility/Colour.hlsl"
 
-float4 SolidFill_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp) { return baseColor; }
-float4 NoFill_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp) { return 0.0.xxxx; }
+float4 SolidFill_Calculate(float4 baseColor : COLOR0) : Fill { return baseColor; }
+float4 NoFill_Calculate() : Fill { return 0.0.xxxx; }
+
+float4 SolidOutline_Calculate(float4 baseColor : COLOR0) : Outline { return baseColor; }
+float4 NoOutline_Calculate() : Outline { return 0.0.xxxx; }
 
 float4 CrossHatchFill_Calculate(
-    DebuggingShapesCoords coords,
-    float2 baseTex,
-    float4 baseColor,
-    float2 dhdp)
+    float4 position : SV_Position,
+    float4 baseColor : COLOR) : Fill
 {
     float4 color = baseColor;
 
         // cross hatch pattern -- (bright:dark == 1:1)
-    uint p = uint(coords.position.x) + uint(coords.position.y);
+    uint p = uint(position.x) + uint(position.y);
     if (((p/4) % 2) != 0) {
         color.rgb *= 0.66f;
     }
@@ -47,11 +48,13 @@ float3 NormalToSurface(float2 dhdp)
     return normalize(float3(-dhdp.x, -dhdp.y, 1.f));
 }
 
+float2 GetRefractionCoords(float4 position, float2 outputDimensions) { return position.xy/outputDimensions.xy; }
+
 float4 RaisedRefractiveFill_Calculate(
-    DebuggingShapesCoords coords,
-    float2 baseTex,
-    float4 baseColor,
-    float2 dhdp)
+    float4 position : SV_Position,
+    float2 outputDimensions : OutputDimensions,
+    float4 baseColor : COLOR0,
+    float2 dhdp : DHDP) : Fill
 {
     float3 normal = NormalToSurface(dhdp);
 
@@ -60,15 +63,13 @@ float4 RaisedRefractiveFill_Calculate(
 
     float3 result = A * baseColor.rgb + 0.1.xxx;
 
-    result.rgb += RefractionsBuffer.SampleLevel(ClampingSampler, GetRefractionCoords(coords), 0).rgb;
+    result.rgb += RefractionsBuffer.SampleLevel(ClampingSampler, GetRefractionCoords(position, outputDimensions), 0).rgb;
     return float4(result.rgb, 1.f);
 }
 
 float4 RaisedFill_Calculate(
-    DebuggingShapesCoords coords,
-    float2 baseTex,
-    float4 baseColor,
-    float2 dhdp)
+    float4 baseColor : COLOR0,
+    float2 dhdp : DHDP) : Fill
 {
     float accentuate = 8.f;
     float3 normal = NormalToSurface(accentuate*dhdp);
@@ -77,10 +78,8 @@ float4 RaisedFill_Calculate(
 }
 
 float4 ReverseRaisedFill_Calculate(
-    DebuggingShapesCoords coords,
-    float2 baseTex,
-    float4 baseColor,
-    float2 dhdp)
+    float4 baseColor : COLOR0,
+    float2 dhdp : DHDP) : Fill
 {
     float accentuate = 8.f;
     float3 normal = NormalToSurface(accentuate*dhdp);
@@ -88,7 +87,7 @@ float4 ReverseRaisedFill_Calculate(
     return float4(d * baseColor.rgb, 1.f);
 }
 
-float4 DashLine_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp)
+float4 DashLine_Calculate(float2 baseTex : TEXCOORD0, float4 baseColor : COLOR0) : Fill
 {
     const float sectionLength = 12;
     float sectionCoord = frac(baseTex.x / sectionLength);
@@ -118,7 +117,7 @@ float3 DoColorAdjust3(float3 input)
         luminanceOffset + ((1-luminanceOffset) * lerp(luminance, input.z, saturationMultiplier)));
 }
 
-float4 ColorAdjust_Calculate(DebuggingShapesCoords coords, float2 baseTex, float4 baseColor, float2 dhdp)
+float4 ColorAdjust_Calculate(float2 baseTex : TEXCOORD0, float4 baseColor : COLOR0) : Fill
 {
     float4 texColor = DiffuseTexture.SampleLevel(ClampingSampler, baseTex, 0);
     return float4(DoColorAdjust3(texColor.rgb), texColor.a) * baseColor;

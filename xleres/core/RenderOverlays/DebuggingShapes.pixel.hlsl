@@ -9,17 +9,16 @@
 #include "../TechniqueLibrary/Math/MathConstants.hlsl"
 
 float4 HorizTweakerBarShader(
-	float4 position,
-	float4 color,
-	float4 color1,
-	float2 texCoord0,
-	float2 texCoord1)
+	float4 position : SV_Position,
+	float2 texCoord0 : TEXCOORD0,
+	float2 texCoord1 : TEXCOORD1) : SV_Target0
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
 	float4 result = 0.0.xxxx;
+	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
 	RenderHorizTweakerBarShader(
 		0.0.xx, 1.0.xx, texCoord1.x,
-		DebuggingShapesCoords_Make(position, texCoord0, outputDimensions),
+		coords, CalculateAspectRatio(coords),
 		result);
 	return result;
 }
@@ -32,17 +31,14 @@ float4 TagShader(
 	float2 texCoord1	: TEXCOORD1) : SV_Target0
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
-	return RenderTag(
-		0.0.xx, 1.0.xx,
-		DebuggingShapesCoords_Make(position, texCoord0, outputDimensions));
+	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
+	return RenderTag(0.0.xx, 1.0.xx, coords, CalculateAspectRatio(coords));
 }
 
 float4 SmallGridBackground(
-	float4 position,
-	float4 color,
-	float4 color1,
-	float2 texCoord0,
-	float2 texCoord1)
+	float4 position : SV_Position,
+	float2 texCoord0 : TEXCOORD0,
+	float2 texCoord1 : TEXCOORD1) : SV_Target0
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
 	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
@@ -52,8 +48,8 @@ float4 SmallGridBackground(
 		return float4(.5f*float3(0.35f, 0.5f, 0.35f), 1.f);
 	}
 
-	float xPixels = DebuggingShapesCoords_GetShapeRelativeCoords(coords).x / GetUDDS(coords).x;
-	float yPixels = DebuggingShapesCoords_GetShapeRelativeCoords(coords).y / GetVDDS(coords).y;
+	float xPixels = GetShapeRelativeCoords(coords).x / GetUDDS(coords).x;
+	float yPixels = GetShapeRelativeCoords(coords).y / GetVDDS(coords).y;
 
 	uint pixelsFromThumb = uint(abs(texCoord0.x - texCoord1.x) / GetUDDS(coords).x + 0.5f);
 	if (pixelsFromThumb < 3) {
@@ -83,11 +79,8 @@ float4 SmallGridBackground(
 }
 
 float4 GridBackgroundShader(
-	float4 position,
-	float4 color,
-	float4 color1,
-	float2 texCoord0,
-	float2 texCoord1)
+	float4 position : SV_Position,
+	float2 texCoord0 : TEXCOORD0) : SV_Target0
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
 	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
@@ -98,14 +91,14 @@ float4 GridBackgroundShader(
 
 	float brightness = 0.f;
 
-	float xPixels = DebuggingShapesCoords_GetShapeRelativeCoords(coords).x / GetUDDS(coords).x;
+	float xPixels = GetShapeRelativeCoords(coords).x / GetUDDS(coords).x;
 	if (uint(xPixels)%64==63) {
 		brightness = 1.f;
 	} else if (uint(xPixels)%8==7) {
 		brightness = 0.5f;
 	}
 
-	float yPixels = DebuggingShapesCoords_GetShapeRelativeCoords(coords).y / GetVDDS(coords).y;
+	float yPixels = GetShapeRelativeCoords(coords).y / GetVDDS(coords).y;
 	if (uint(yPixels)%64==63) {
 		brightness = max(brightness, 1.f);
 	} else if (uint(yPixels)%8==7) {
@@ -237,9 +230,9 @@ float CalculateCircleRectangleIntersectionArea(
 }
 
 float4 SoftShadowRect(
-	float4 position,
-	float4 color, float4 color1,
-	float2 texCoord0, float2 texCoord1)
+	float4 position : SV_Position,
+	float4 color : COLOR0,
+	float2 texCoord0 : TEXCOORD0, float2 texCoord1 : TEXCOORD1) : SV_Target0
 {
 	// Draw a soft shadow for a rectangle
 	// The coordinates in rectangle space are in "texCoord0"
