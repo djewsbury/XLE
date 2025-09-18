@@ -3,14 +3,12 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ShaderPatchCollection.h"
-#include "../../Assets/DepVal.h"
-#include "../../Assets/BlockSerializer.h"
-#include "../../Utility/MemoryUtils.h"
+#include "../../Assets/AssetUtils.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
-#include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/FormatterUtils.h"
-#include "../../Utility/Conversion.h"
+#include "../../Utility/MemoryUtils.h"
+#include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/StringFormat.h"
 
 namespace RenderCore { namespace Assets

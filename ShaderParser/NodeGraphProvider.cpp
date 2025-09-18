@@ -8,6 +8,7 @@
 #include "../Assets/IFileSystem.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/Assets.h"
+#include "../Assets/AssetUtils.h"
 #include "../Utility/Streams/PathUtils.h"
 
 namespace GraphLanguage

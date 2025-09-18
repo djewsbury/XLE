@@ -103,13 +103,6 @@ namespace RenderCore { namespace Techniques
     std::shared_ptr<IResource> DestageResource(
         IThreadContext& threadContext,
         const std::shared_ptr<IResource>& input);
-    
-	/// <summary>Set the RES_HAS technique materials parameter</summary>
-    /// There are a few standard RES_HAS shader parameters that are defined by
-    /// the resources that are bound to a technique material. This function builds
-    /// a parameter box with these parameters set.
-    ParameterBox TechParams_SetResHas(
-        const ParameterBox& inputMatParameters, const ParameterBox& resBindings,
-        const ::Assets::DirectorySearchRules& searchRules);
+
 }}
 

@@ -8,7 +8,6 @@
 #include "NodeGraph.h"
 #include "NodeGraphProvider.h"
 #include "../Utility/StringUtils.h"
-#include <vector>
 #include <string>
 #include <unordered_map>
 

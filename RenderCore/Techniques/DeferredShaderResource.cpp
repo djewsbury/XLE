@@ -12,16 +12,12 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
-#include "../../Assets/AssetServices.h"
 #include "../../Assets/ConfigFileContainer.h"
-#include "../../Assets/ContinuationUtil.h"
 
 #include "../../Utility/Streams/PathUtils.h"
-#include "../../OSServices/RawFS.h"
 #include "../../Formatters/TextFormatter.h"
-#include "../../Formatters/StreamDOM.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/ParameterBox.h"
-#include "../../ConsoleRig/ResourceBox.h"
 #include <chrono>
 
 #include "../Metal/Resource.h"
@@ -49,18 +45,19 @@ namespace RenderCore { namespace Techniques
 	};
 
 	TextureMetaData::TextureMetaData(
-		Formatters::TextInputFormatter<utf8>& input, 
-		const ::Assets::DirectorySearchRules&, 
+		Formatters::TextInputFormatter<utf8>& fmttr,
+		const ::Assets::DirectorySearchRules&,
 		const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
-		Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> dom(input);
-        if (!dom.RootElement().children().empty()) {
-            auto colorSpace = dom.RootElement().children().begin()->Attribute("colorSpace");
-            if (colorSpace) {
-                if (!XlCompareStringI(colorSpace.Value(), "srgb")) { _colorSpace = SourceColorSpace::SRGB; }
-                else if (!XlCompareStringI(colorSpace.Value(), "linear")) { _colorSpace = SourceColorSpace::Linear; }
-            }
+        StringSection<> kn;
+        while (fmttr.TryKeyedItem(kn)) {
+            if (XlEqString(kn, "colorSpace")) {
+                auto colorSpace = Formatters::RequireStringValue(fmttr);
+                if (!XlCompareStringI(colorSpace, "srgb")) { _colorSpace = SourceColorSpace::SRGB; }
+                else if (!XlCompareStringI(colorSpace, "linear")) { _colorSpace = SourceColorSpace::Linear; }
+            } else
+                Formatters::SkipValueOrElement(fmttr);
         }
 	}
 
@@ -128,13 +125,9 @@ namespace RenderCore { namespace Techniques
 		assert(!splitter.File().IsEmpty());
 
 		std::shared_future<TextureMetaData> metaDataFuture;
-		{
+        constexpr bool enableMetadataFiles = false;     // disabled to avoid overhead in TryGetDesc()
+		if constexpr (enableMetadataFiles) {
             ::Assets::ResChar filename[MaxPath];
-                // Some resources might have a little xml ".metadata" file attached. This 
-                // can contain a setting that can tell us the intended source color format.
-                //
-                // Some textures use "_ddn" to mark them as normal maps... So we'll take this
-                // as a hint that they are in linear space. 
             XlCopyString(filename, splitter.AllExceptParameters());
             XlCatString(filename, ".metadata");
 			if (::Assets::MainFileSystem::TryGetDesc(filename)._snapshot._state == ::Assets::FileSnapshot::State::Normal)
@@ -436,6 +429,7 @@ namespace RenderCore { namespace Techniques
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if 0
     class CachedTextureFormats
     {
     public:
@@ -476,7 +470,6 @@ namespace RenderCore { namespace Techniques
 
     CachedTextureFormats::~CachedTextureFormats() {}
 
-#if 0
     static bool IsDXTNormalMapFormat(Format format)
     {
         return unsigned(format) >= unsigned(RenderCore::Format::BC1_TYPELESS)
@@ -616,35 +609,5 @@ namespace RenderCore { namespace Techniques
 
         threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
         return destagingResource;
-    }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-	ParameterBox TechParams_SetResHas(
-        const ParameterBox& inputMatParameters, const ParameterBox& resBindings,
-        const ::Assets::DirectorySearchRules& searchRules)
-    {
-            // The "material parameters" ParameterBox should contain some "RES_HAS_..."
-            // settings. These tell the shader what resource bindings are available
-            // (and what are missing). We need to set these parameters according to our
-            // binding list
-        ParameterBox result = inputMatParameters;
-        for (const auto& param:resBindings) {
-            result.SetParameter(StringMeld<64, utf8>() << "RES_HAS_" << param.Name(), 1);
-#if 0
-            static const auto DefaultNormalsTextureBindingHash = ParameterBox::MakeParameterNameHash("NormalsTexture");
-            if (param.HashName() == DefaultNormalsTextureBindingHash) {
-                auto resourceName = resBindings.GetParameterAsString(DefaultNormalsTextureBindingHash);
-                if (resourceName.has_value()) {
-                    ::Assets::ResChar resolvedName[MaxPath];
-                    searchRules.ResolveFile(resolvedName, dimof(resolvedName), resourceName.value().c_str());
-                    result.SetParameter(
-                        (const utf8*)"RES_HAS_NormalsTexture_DXT", 
-                        DeferredShaderResource::IsDXTNormalMap(resolvedName));
-                }
-            }
-#endif
-        }
-        return result;
     }
 }}

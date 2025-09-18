@@ -126,8 +126,6 @@ namespace ShaderSourceParser
 		IteratorRange<const InstantiationRequest*> request,
 		const GenerateFunctionOptions& generateOptions);
 
-	InstantiatedShader BuildSpritePipeline(const InstantiatedShader& patches);
-
         ///////////////////////////////////////////////////////////////
 
 	class DependencyTable

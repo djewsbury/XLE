@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "../Assets/AssetUtils.h"
 #include "../Utility/IteratorUtils.h"
 #include <string>
 #include <vector>

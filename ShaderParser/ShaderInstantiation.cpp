@@ -6,7 +6,7 @@
 #include "GraphSyntax.h"
 #include "DescriptorSetInstantiation.h"
 #include "NodeGraphSignature.h"
-#include "../Utility/Streams/PathUtils.h"
+#include "Assets/AssetUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../xleres/FileList.h"
