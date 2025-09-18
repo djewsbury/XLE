@@ -89,17 +89,20 @@ namespace RenderCore
 			StringSection<> definesTable) const override
 		{
 			assert(!resId._filename.empty());
-			::Assets::FileSnapshot snapshot;
+			::Assets::DependentFileState depFileState;
+			depFileState._filename = resId._filename;
 			size_t fileSize = 0;
-			auto fileData = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(resId._filename, &fileSize, &snapshot);
+			auto fileData = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(resId._filename, &fileSize, &depFileState._snapshot);
 			if (fileData.get() && fileSize) {
 				auto result = Compile({(const char*)fileData.get(), (const char*)fileData.get() + fileSize}, resId, definesTable);
-				result._deps.push_back(::Assets::DependentFileState{resId._filename, snapshot});
+				auto outerDepVal = ::Assets::GetDepValSys().Make(MakeIteratorRange(&depFileState, &depFileState+1));
+				::Assets::DependencyValidationMarker depVals[] { result._depVal, outerDepVal };
+				result._depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 				return result;
 			} else {
 				ShaderByteCodeBlob result;
 				result._errors = ::Assets::AsBlob(std::string{"Empty or missing shader file: "} + resId._filename);
-				result._deps.push_back(::Assets::DependentFileState{resId._filename, snapshot});
+				result._depVal = ::Assets::GetDepValSys().Make(MakeIteratorRange(&depFileState, &depFileState+1));
 				return result;
 			}
 		}
@@ -158,6 +161,8 @@ namespace RenderCore
 			bool success = false;
 			TRY
 			{
+				std::vector<::Assets::DependencyValidation> depValTemp;
+				std::vector<::Assets::DependentFileState> deps;
 				auto processedDefinesTable = AppendSystemDefines(definesTable, resId);
 				if (_preprocessor) {
 					auto preprocessedOutput = _preprocessor->RunPreprocessor(
@@ -166,20 +171,28 @@ namespace RenderCore
 					if (preprocessedOutput._processedSource.empty())
 						Throw(std::runtime_error("Preprocessed output is empty"));
 
-					result._deps = std::move(preprocessedOutput._dependencies);
-
 					success = _compiler->DoLowLevelCompile(
-						result._payload, result._errors, result._deps,
+						result._payload, result._errors, deps,
 						preprocessedOutput._processedSource.data(), preprocessedOutput._processedSource.size(), resId,
 						processedDefinesTable,
 						MakeIteratorRange(preprocessedOutput._lineMarkers));
 
+					depValTemp.emplace_back(preprocessedOutput._depVal);
+
 				} else {
 					success = _compiler->DoLowLevelCompile(
-						result._payload, result._errors, result._deps,
+						result._payload, result._errors, deps,
 						shaderInMemory.begin(), shaderInMemory.size(), resId, 
 						processedDefinesTable);
 				}
+
+				depValTemp.reserve(deps.size() + depValTemp.size());
+				for (const auto& d:deps) depValTemp.emplace_back(::Assets::GetDepValSys().Make(d));
+
+				std::vector<::Assets::DependencyValidationMarker> dvm; dvm.reserve(depValTemp.size());
+				for (const auto& dv:depValTemp) dvm.emplace_back(dv);
+
+				result._depVal = ::Assets::GetDepValSys().MakeOrReuse(dvm);
 			}
 				// imbue any exceptions with the dependency validation
 			CATCH(const ::Assets::Exceptions::ConstructionError& e)
@@ -249,7 +262,7 @@ namespace RenderCore
 				auto metrics = shaderSource.GenerateMetrics(MakeIteratorRange(*_byteCode._payload));
 				_metrics = ::Assets::AsBlob(metrics);
 			}
-			_depVal = ::Assets::GetDepValSys().Make(_byteCode._deps);
+			_depVal = _byteCode._depVal;
 		}
 		
 		~ShaderCompileOperation()

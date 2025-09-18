@@ -43,7 +43,6 @@ namespace ShaderSourceParser
 	struct DependencyTrackers
 	{
 		std::set<::Assets::DependencyValidation> _depVals;
-		std::set<::Assets::DependentFileState> _depFileStates;
 	};
 
     static std::string AsString(uint32_t i)
@@ -120,8 +119,6 @@ namespace ShaderSourceParser
         const auto& sig = sigResult.value()._signature;
 		assert(sigResult.value()._depVal);
 		depVals._depVals.insert(sigResult.value()._depVal);
-		assert(!sigResult.value()._fileState._filename.empty());
-		depVals._depFileStates.insert(sigResult.value()._fileState);
 
             // find a parameter with the right direction & name
         for (const auto& p:sig.GetParameters())
@@ -402,8 +399,6 @@ namespace ShaderSourceParser
 
 			assert(sigProviderResult.value()._depVal);
 			depVals._depVals.insert(sigProviderResult.value()._depVal);
-			assert(!sigProviderResult.value()._fileState._filename.empty());
-			depVals._depFileStates.insert(sigProviderResult.value()._fileState);
 
             return result;
         }
@@ -418,8 +413,6 @@ namespace ShaderSourceParser
 		result._isGraphSyntaxFile = sigProviderResult.value()._isGraphSyntax;
 		assert(sigProviderResult.value()._depVal);
 		depVals._depVals.insert(sigProviderResult.value()._depVal);
-		assert(!sigProviderResult.value()._fileState._filename.empty());
-		depVals._depFileStates.insert(sigProviderResult.value()._fileState);
         return result;
     }
 
@@ -488,8 +481,6 @@ namespace ShaderSourceParser
 				if (restrictionSignature) {
 					assert(restrictionSignature.value()._depVal);
 					depVals._depVals.insert(restrictionSignature.value()._depVal);
-					assert(!restrictionSignature.value()._fileState._filename.empty());
-					depVals._depFileStates.insert(restrictionSignature.value()._fileState);
 				}
 				for (const auto&c:nodeGraph.GetConnections()) {
 					if (c.OutputNodeId() == instantiationNode->NodeId()) {
@@ -776,8 +767,7 @@ namespace ShaderSourceParser
 			ShaderEntryPoint { name.AsString(), std::move(interf) },
 			std::move(depTable),
 			std::vector<GraphLanguage::NodeGraphSignature::Parameter> { interf.GetCapturedParameters().begin(), interf.GetCapturedParameters().end() },
-			std::move(depTrackers._depVals),
-			std::move(depTrackers._depFileStates) };
+			std::move(depTrackers._depVals) };
     }
 
 	static void MaybeComma(std::stringstream& stream) { if (stream.tellp() != std::stringstream::pos_type(0)) stream << ", "; }

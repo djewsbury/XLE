@@ -3,94 +3,36 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "NodeGraphProvider.h"
+#include "SignatureAsset.h"
 #include "GraphSyntax.h"
-#include "ParseHLSL.h"
 #include "../Assets/IFileSystem.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/Assets.h"
 #include "../Assets/AssetUtils.h"
-#include "../Utility/Streams/PathUtils.h"
+#include "../Assets/ChunkFileContainer.h"
+#include "../Assets/IArtifact.h"
 
 namespace GraphLanguage
 {
-    static std::pair<std::string, ::Assets::DependentFileState> LoadSourceFile(StringSection<char> sourceFileName)
-    {
-		::Assets::FileSnapshot snapshot;
-		size_t size = 0;
-		auto data = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(sourceFileName, &size, &snapshot);
-		return std::make_pair(std::string((const char*)data.get(), (const char*)PtrAdd(data.get(), size)), ::Assets::DependentFileState{sourceFileName.AsString(), snapshot});
-    }
-
-	class ShaderFragment
-	{
-	public:
-		auto GetFunction(StringSection<char> fnName) const -> const NodeGraphSignature*;
-		auto GetUniformBuffer(StringSection<char> structName) const -> const UniformBufferSignature*;
-
-		const ShaderFragmentSignature& GetSignature() const { return _sig; }
-		const std::string& GetSourceFileName() const { return _srcFileName; }
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		const ::Assets::DependentFileState& GetFileState() const { return _fileState; }
-		ShaderFragment(StringSection<::Assets::ResChar> fn);
-		~ShaderFragment();
-
-		bool _isGraphSyntaxFile = false;
-	private:
-		ShaderFragmentSignature _sig;
-		::Assets::DependencyValidation _depVal;
-		::Assets::DependentFileState _fileState;
-		std::string _srcFileName;
-	};
-
-	auto ShaderFragment::GetFunction(StringSection<char> fnName) const -> const NodeGraphSignature*
+	static auto GetFunction(const ShaderFragmentSignature& sig, StringSection<char> fnName) -> const NodeGraphSignature*
 	{
 		auto i = std::find_if(
-			_sig._functions.cbegin(), _sig._functions.cend(),
+			sig._functions.cbegin(), sig._functions.cend(),
             [fnName](const auto& signature) { return XlEqString(signature.first.AsStringSection(), fnName); });
-        if (i!=_sig._functions.cend())
+        if (i!=sig._functions.cend())
 			return &i->second;
 		return nullptr;
 	}
 
-	auto ShaderFragment::GetUniformBuffer(StringSection<char> structName) const -> const UniformBufferSignature*
+	static auto GetUniformBuffer(const ShaderFragmentSignature& sig, StringSection<char> structName) -> const UniformBufferSignature*
 	{
 		auto i = std::find_if(
-			_sig._uniformBuffers.cbegin(), _sig._uniformBuffers.cend(),
+			sig._uniformBuffers.cbegin(), sig._uniformBuffers.cend(),
             [structName](const auto& signature) { return XlEqString(signature.first.AsStringSection(), structName); });
-        if (i!=_sig._uniformBuffers.cend())
+        if (i!=sig._uniformBuffers.cend())
 			return &i->second;
 		return nullptr;
 	}
-
-	ShaderFragment::ShaderFragment(StringSection<::Assets::ResChar> fn)
-	: _srcFileName(fn.AsString())
-	{
-		auto shaderFile = LoadSourceFile(fn);
-		_depVal = ::Assets::GetDepValSys().Make(shaderFile.second);
-
-		if (shaderFile.first.empty())
-			Throw(::Assets::Exceptions::ConstructionError(
-				::Assets::Exceptions::ConstructionError::Reason::MissingFile,
-				_depVal,
-				StringMeld<256>() << "Missing or empty file while loading: " << fn));
-
-		TRY {
-			if (XlEqStringI(MakeFileNameSplitter(fn).Extension(), "graph")) {
-				auto graphSyntax = ParseGraphSyntax(shaderFile.first);
-				for (auto& subGraph:graphSyntax._subGraphs)
-					_sig._functions.emplace_back(std::make_pair(subGraph.first, std::move(subGraph.second._signature)));
-				_isGraphSyntaxFile = true;
-			} else {
-				_sig = ShaderSourceParser::ParseHLSL(MakeStringSection(shaderFile.first));
-			}
-			_fileState = shaderFile.second;
-		} CATCH(const std::exception& e) {
-			Throw(::Assets::Exceptions::ConstructionError(e, _depVal));
-		} CATCH_END
-	}
-
-	ShaderFragment::~ShaderFragment() {}
 
     static std::pair<StringSection<>, StringSection<>> SplitArchiveName(StringSection<> input)
     {
@@ -108,7 +50,13 @@ namespace GraphLanguage
 	{
 	public:
         ::Assets::DirectorySearchRules _searchRules;
-        std::unordered_map<uint64_t, std::shared_ptr<ShaderFragment>> _cache;
+
+		struct CachedItem
+		{
+			std::shared_ptr<ShaderSourceParser::SignatureAsset> _signature;
+			std::string _fn;
+		};
+        std::vector<std::pair<uint64_t, CachedItem>> _cache;
 	};
 
     auto BasicNodeGraphProvider::FindSignatures(StringSection<> name) -> std::vector<Signature>
@@ -117,26 +65,29 @@ namespace GraphLanguage
 			return {};
 
         auto hash = Hash64(name.begin(), name.end());
-        auto existing = _pimpl->_cache.find(hash);
-        if (existing == _pimpl->_cache.end() || existing->second->GetDependencyValidation().GetValidationIndex() > 0) {
+        auto existing = LowerBound(_pimpl->_cache, hash);
+        if (existing == _pimpl->_cache.end() || existing->first != hash || existing->second._signature->GetDependencyValidation().GetValidationIndex() > 0) {
 			char resolvedFile[MaxPath];
 			_pimpl->_searchRules.ResolveFile(resolvedFile, name);
 			if (!resolvedFile[0])
 				return {};
 
-			std::shared_ptr<ShaderFragment> fragment = ::Assets::AutoConstructAsset<std::shared_ptr<ShaderFragment>>(resolvedFile);
-			existing = _pimpl->_cache.insert(std::make_pair(hash, fragment)).first;
+			// note -- synchronized construction!
+			auto fragment = ::Assets::ActualizeAssetPtr<ShaderSourceParser::SignatureAsset>(resolvedFile);
+			if (existing == _pimpl->_cache.end() || existing->first != hash)
+				existing = _pimpl->_cache.emplace(existing, hash, Pimpl::CachedItem{fragment, resolvedFile});
+			else
+				existing->second = Pimpl::CachedItem{fragment, resolvedFile};
 		}
 
 		std::vector<Signature> result;
-		for (const auto&fn:existing->second->GetSignature()._functions) {
+		for (const auto&fn:existing->second._signature->GetSignature()._functions) {
 			INodeGraphProvider::Signature rSig;
 			rSig._name = fn.first;
 			rSig._signature = fn.second;
-			rSig._sourceFile = existing->second->GetSourceFileName();
-			rSig._isGraphSyntax = existing->second->_isGraphSyntaxFile;
-			rSig._depVal = existing->second->GetDependencyValidation();
-			rSig._fileState = existing->second->GetFileState();
+			rSig._sourceFile = existing->second._fn;
+			rSig._isGraphSyntax = existing->second._signature->IsGraphSyntaxFile();
+			rSig._depVal = existing->second._signature->GetDependencyValidation();
 			result.push_back(rSig);
 		}
 		return result;
@@ -144,6 +95,7 @@ namespace GraphLanguage
 
 	auto BasicNodeGraphProvider::FindGraph(StringSection<> name) -> std::optional<NodeGraph>
 	{
+		assert(0);		// note -- requires GraphSyntax parsing code, which we're trying to avoid
 		auto splitName = SplitArchiveName(name);
 		char resolvedName[MaxPath];
 		_pimpl->_searchRules.ResolveFile(resolvedName, splitName.first);

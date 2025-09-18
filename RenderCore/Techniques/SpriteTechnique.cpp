@@ -2,14 +2,19 @@
 #include "ShaderPatchInstantiationUtil.h"
 #include "../../ShaderParser/ShaderInstantiation.h"
 #include "../../ShaderParser/NodeGraphSignature.h"
-#include "../../ShaderParser/ShaderSignatureParser.h"
+#include "../../ShaderParser/ParseHLSL.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/FastParseValue.h"
 #include "../../Utility/StringFormat.h"
 #include <sstream>
 
-
 using namespace Utility::Literals;
+
+namespace Utility
+{
+	static bool operator==(StringSection<> lhs, StringSection<> rhs) { return XlEqString(lhs, rhs); }
+	static bool operator!=(StringSection<> lhs, StringSection<> rhs) { return !XlEqString(lhs, rhs); }
+}
 
 namespace RenderCore { namespace Techniques
 {
@@ -17,9 +22,9 @@ namespace RenderCore { namespace Techniques
 	{
 		struct WorkingAttribute
 		{
-			std::string _semantic;
+			StringSection<> _semantic;
 			unsigned _semanticIdx = 0;
-			std::string _type;
+			StringSection<> _type;
 		};
 
 		static std::pair<StringSection<>, unsigned> SplitSemanticAndIdx(StringSection<> input)
@@ -56,7 +61,7 @@ namespace RenderCore { namespace Techniques
 		{
 			auto s = SplitSemanticAndIdx(p._semantic);
 			if (s.first.size() == p._semantic.size()) return { p._semantic, 0, p._type };
-			return { s.first.AsString(), s.second, p._type };
+			return { s.first, s.second, p._type };
 		}
 
 		static bool UpdateActiveAttributesBackwards(
@@ -73,7 +78,7 @@ namespace RenderCore { namespace Techniques
 				if (p._direction != ParameterDirection::Out) continue;
 				
 				// always accept system values written out
-				if (XlBeginsWith(MakeStringSection(p._semantic), "SV_")) {
+				if (XlBeginsWith(p._semantic.AsStringSection(), "SV_")) {
 					active = true;
 					break;
 				}
@@ -112,27 +117,23 @@ namespace RenderCore { namespace Techniques
 			return true;
 		}
 
-		static std::string SemanticAndIdx(std::string semantic, unsigned semanticIdx)
+		static std::string SemanticAndIdx(StringSection<> semantic, unsigned semanticIdx)
 		{
-			std::string semanticAndIdx = semantic;
-			if (semanticIdx != 0) semanticAndIdx += std::to_string(semanticIdx);
-			return semanticAndIdx;
+			std::stringstream str;
+			str << semantic;
+			if (semanticIdx != 0) str << semanticIdx;
+			return str.str();
 		}
 		
-		static std::string SemanticAndIdx(const WorkingAttribute& a)
-		{
-			std::string semanticAndIdx = a._semantic;
-			if (a._semanticIdx != 0) semanticAndIdx += std::to_string(a._semanticIdx);
-			return semanticAndIdx;
-		}
+		static std::string SemanticAndIdx(const WorkingAttribute& a) { return SemanticAndIdx(a._semantic, a._semanticIdx); }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		class FragmentWriter
 		{
 		public:
-			void WriteInputParameter(std::string semantic, unsigned semanticIdx, std::string type, bool gsInputParameter = false);
-			void WriteOutputParameter(std::string semantic, unsigned semanticIdx, std::string type);
+			void WriteInputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type, bool gsInputParameter = false);
+			void WriteOutputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type);
 
 			void WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
 			void WriteGSPredicateCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
@@ -154,13 +155,13 @@ namespace RenderCore { namespace Techniques
 			void WriteCallParameterInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature::Parameter& p);
 		};
 
-		void FragmentWriter::WriteInputParameter(std::string semantic, unsigned semanticIdx, std::string type, bool gsInputParameter)
+		void FragmentWriter::WriteInputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type, bool gsInputParameter)
 		{
 			assert(SplitSemanticAndIdx(semantic).first.size() == semantic.size());
 			auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
 				[semantic, semanticIdx](const auto& q) { return q._semantic == semantic && q._semanticIdx == semanticIdx; });
 			if (i != _workingAttributes.end())
-				Throw(std::runtime_error("Input attribute " + semantic + " specified multiple times"));
+				Throw(std::runtime_error("Input attribute " + semantic.AsString() + " specified multiple times"));
 
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate(semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
@@ -168,7 +169,7 @@ namespace RenderCore { namespace Techniques
 			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName, gsInputParameter});
 		}
 
-		void FragmentWriter::WriteOutputParameter(std::string semantic, unsigned semanticIdx, std::string type)
+		void FragmentWriter::WriteOutputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type)
 		{
 			assert(SplitSemanticAndIdx(semantic).first.size() == semantic.size());
 
@@ -180,7 +181,7 @@ namespace RenderCore { namespace Techniques
 		static void WriteCastOrAssignExpression(
 			std::ostream& str,
 			FragmentWriter::WorkingAttributeWithName& attribute,
-			const std::string& requiredType)
+			StringSection<> requiredType)
 		{
 			if (attribute._type == requiredType) {
 				if (attribute._gsInputParameter) str << "input[0].";
@@ -195,7 +196,7 @@ namespace RenderCore { namespace Techniques
 
 		static void WriteDefaultValueExpression(
 			std::ostream& str,
-			const std::string& requiredType)
+			StringSection<> requiredType)
 		{
 			str << "DefaultValue_" << requiredType << "()";
 		}
@@ -215,11 +216,11 @@ namespace RenderCore { namespace Techniques
 				if (i == _workingAttributes.end()) {
 					auto newName = Concatenate(s.first, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
 					_body << "\t" << p._type << " " << newName << ";" << std::endl;
-					i = _workingAttributes.insert(_workingAttributes.end(), WorkingAttributeWithName{s.first.AsString(), s.second, p._type, newName});
+					i = _workingAttributes.insert(_workingAttributes.end(), WorkingAttributeWithName{s.first, s.second, p._type, newName});
 				} else if (i->_type != p._type) {
 					auto newName = Concatenate(s.first, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
 					_body << "\t" << p._type << " " << newName << ";" << std::endl;
-					*i = WorkingAttributeWithName{s.first.AsString(), s.second, p._type, newName};
+					*i = WorkingAttributeWithName{s.first, s.second, p._type, newName};
 				}
 				if (i->_gsInputParameter) temp << "input[0].";
 				temp << i->_name;
@@ -231,7 +232,7 @@ namespace RenderCore { namespace Techniques
 			bool pendingComma = false;
 			for (const auto&p:sig.GetParameters()) {
 				if (pendingComma) temp << ", ";
-				if (p._direction == GraphLanguage::ParameterDirection::Out && XlEqString(p._name, "result")) continue;
+				if (p._direction == GraphLanguage::ParameterDirection::Out && XlEqString(p._name.AsStringSection(), "result")) continue;
 				WriteCallParameterInternal(temp, p);
 				pendingComma = true;
 			}
@@ -242,7 +243,7 @@ namespace RenderCore { namespace Techniques
 			std::stringstream temp;
 			temp << "\t";
 
-			auto i = std::find_if(sig.GetParameters().begin(), sig.GetParameters().end(), [](const auto& p) { return p._direction == GraphLanguage::ParameterDirection::Out && XlEqString(p._name, "result"); });
+			auto i = std::find_if(sig.GetParameters().begin(), sig.GetParameters().end(), [](const auto& p) { return p._direction == GraphLanguage::ParameterDirection::Out && XlEqString<char>(p._name, "result"); });
 			if (i != sig.GetParameters().end()) {
 				WriteCallParameterInternal(temp, *i);
 				temp << " = ";
@@ -582,7 +583,7 @@ namespace RenderCore { namespace Techniques
 				{
 					unsigned _matchedInputs = 0, _unmatchedInputs = 0;
 					unsigned _insertionPt = ~0u;
-					std::string _name;
+					StringSection<> _name;
 					const GraphLanguage::NodeGraphSignature* _signature = nullptr;
 				};
 				std::vector<ProspectivePatch> prospectivePatches;
@@ -615,7 +616,7 @@ namespace RenderCore { namespace Techniques
 						unmatchedInputs += !matched;
 					}
 
-					prospectivePatches.emplace_back(ProspectivePatch{matchedInputs, unmatchedInputs, insertPt, e.first, &e.second});
+					prospectivePatches.emplace_back(ProspectivePatch{matchedInputs, unmatchedInputs, insertPt, e.first.AsStringSection(), &e.second});
 				}
 
 				if (prospectivePatches.empty()) {
@@ -633,7 +634,7 @@ namespace RenderCore { namespace Techniques
 
 				// add the best patch into the list of steps
 				auto& winner = *prospectivePatches.begin();
-				arranger._steps.insert(arranger._steps.begin()+winner._insertionPt, Internal::FragmentArranger::Step{winner._name, winner._signature});
+				arranger._steps.insert(arranger._steps.begin()+winner._insertionPt, Internal::FragmentArranger::Step{winner._name.AsString(), winner._signature});
 			}
 		}
 
@@ -839,7 +840,7 @@ void ExpandClipSpacePosition(
 					writerHelper.WriteCall(step._name, *step._signature);
 
 			for (const auto& a:gsEntryAttributes) {
-				if (XlBeginsWith(MakeStringSection(a._semantic), "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
+				if (XlBeginsWith(a._semantic, "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
 
 				// If the writer helper never actually got anything for this semantic, it will not become an output
 				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
@@ -869,7 +870,7 @@ void ExpandClipSpacePosition(
 					writerHelper.WriteCall(step._name, *step._signature);
 
 			for (const auto& a:psEntryAttributes) {
-				if (XlBeginsWith(MakeStringSection(a._semantic), "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
+				if (XlBeginsWith(a._semantic, "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
 
 				// If the writer helper never actually got anything for this semantic, it will not become an output
 				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
@@ -902,7 +903,7 @@ void ExpandClipSpacePosition(
 					// outputs of the final fragment shader
 					for (const auto& p:step._signature->GetParameters()) {
 						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
-						if (!XlBeginsWith(MakeStringSection(p._semantic), "SV_")) continue;
+						if (!XlBeginsWith(p._semantic.AsStringSection(), "SV_")) continue;
 						auto existing = Internal::Find(psOutputAttributes, Internal::SplitSemanticAndIdx(p._semantic));
 						if (existing != psOutputAttributes.end()) {
 							existing->_type = p._type;
@@ -1021,7 +1022,7 @@ void ExpandClipSpacePosition(
 					writerHelper.WriteCall(step._name, *step._signature);
 
 			for (const auto& a:psEntryAttributes) {
-				if (XlBeginsWith(MakeStringSection(a._semantic), "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
+				if (XlBeginsWith(a._semantic, "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
 
 				// If the writer helper never actually got anything for this semantic, it will not become an output
 				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
@@ -1052,7 +1053,7 @@ void ExpandClipSpacePosition(
 					// outputs of the final fragment shader
 					for (const auto& p:step._signature->GetParameters()) {
 						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
-						if (!XlBeginsWith(MakeStringSection(p._semantic), "SV_")) continue;
+						if (!XlBeginsWith(p._semantic.AsStringSection(), "SV_")) continue;
 						auto existing = Internal::Find(psOutputAttributes, Internal::SplitSemanticAndIdx(p._semantic));
 						if (existing != psOutputAttributes.end()) {
 							existing->_type = p._type;

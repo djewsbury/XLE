@@ -183,7 +183,6 @@ namespace ShaderSourceParser
             pendingInst._instantiations.pop();
 
 			result._depVals.insert(inst._graph._depVal);
-			result._depFileStates.insert(inst._graph._fileState);
 
 			// Slightly different rules for function name generation with inst._scope is not null. inst._scope is
 			// only null for the original instantiation request -- in that case, we want the outer most function
@@ -218,7 +217,6 @@ namespace ShaderSourceParser
 							entryPoint._implementsSignature = implementsSig.value()._signature;
 							assert(implementsSig.value()._depVal);
 							result._depVals.insert(implementsSig.value()._depVal);
-							result._depFileStates.insert(implementsSig.value()._fileState);
 						}
 					}
 					result._entryPoints.emplace_back(std::move(entryPoint));
@@ -242,7 +240,6 @@ namespace ShaderSourceParser
 			//  - selector relevance table
 
 			result._depVals.insert(instFn._depVals.begin(), instFn._depVals.end());
-			result._depFileStates.insert(instFn._depFileStates.begin(), instFn._depFileStates.end());
 
 			{
 				for (const auto&c:inst._graph._signature.GetCapturedParameters()) {
@@ -313,7 +310,6 @@ namespace ShaderSourceParser
 
 		result._rawShaderFileIncludes = std::move(pendingInst._rawShaderFileIncludes);
 		result._depVals.insert(pendingInst._depVals.begin(), pendingInst._depVals.end());
-		result._depFileStates.insert(pendingInst._fileStates.begin(), pendingInst._fileStates.end());
 
 		return result;
 	}

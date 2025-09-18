@@ -162,11 +162,6 @@ namespace RenderCore { namespace Techniques
 			assert(d);
 			_depVal.RegisterDependency(d);
 		}
-		for (const auto&d:inst._depFileStates) {
-			assert(!d._filename.empty());
-			if (std::find(_dependencies.begin(), _dependencies.end(), d) == _dependencies.end())
-				_dependencies.push_back(d);
-		}
 
 		ShaderSourceParser::SelectorFilteringRules filteringRules = inst._selectorRelevance;
 		std::vector<::Assets::PtrToMarkerPtr<ShaderSourceParser::SelectorFilteringRules>> rawIncludeFiltering;
@@ -329,10 +324,7 @@ namespace RenderCore { namespace Techniques
 
 		SourceCodeWithRemapping result;
 		result._processedSource = output.str();
-		for (const auto& dep:patchCollection._dependencies) { assert(!dep._filename.empty()); }
-		result._dependencies.insert(
-			result._dependencies.end(),
-			patchCollection._dependencies.begin(), patchCollection._dependencies.end());
+		result._depVal = patchCollection.GetDependencyValidation();
 
 		// We could fill in the _lineMarkers member with some line marker information
 		// from the original shader graph compile; but that might be overkill
@@ -364,12 +356,13 @@ namespace RenderCore { namespace Techniques
 
 		// Fall back to loading the file directly (without any real preprocessing)
 		SourceCodeWithRemapping result;
-		result._dependencies.push_back(::Assets::GetDepValSys().GetDependentFileState(filename));
 
 		size_t sizeResult = 0;
-		auto blob = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(filename, &sizeResult);
+		::Assets::DependentFileState fileState; fileState._filename = filename.AsString();
+		auto blob = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(filename, &sizeResult, &fileState._snapshot);
 		result._processedSource = std::string((char*)blob.get(), (char*)PtrAdd(blob.get(), sizeResult));
 		result._lineMarkers.push_back(ILowLevelCompiler::SourceLineMarker{filename.AsString(), 0, 0});
+		result._depVal = ::Assets::GetDepValSys().Make({&fileState, &fileState+1});
 		return result;
 	}
 
@@ -394,7 +387,8 @@ namespace RenderCore { namespace Techniques
 			res._entrypoint._entryPoint, res._entrypoint._shaderModel,
 			definesTable);
 
-		result._deps.insert(result._deps.end(), assembledShader._dependencies.begin(), assembledShader._dependencies.end());
+		::Assets::DependencyValidationMarker depVals[] { assembledShader._depVal, result._depVal };
+		result._depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		return result;
 	}
 
@@ -448,11 +442,9 @@ namespace RenderCore { namespace Techniques
 			IShaderSource& shaderSource,
 			const ShaderCompilePatchResource& res,
 			StringSection<> definesTable)
-		: _byteCode { 
-			InstantiateShaderGraph_CompileFromFile(shaderSource, res, definesTable) 
-		}
+		: _byteCode { InstantiateShaderGraph_CompileFromFile(shaderSource, res, definesTable) }
 		{
-			_depVal = ::Assets::GetDepValSys().Make(_byteCode._deps);
+			_depVal = _byteCode._depVal;
 		}
 		
 		~ShaderGraphCompileOperation()

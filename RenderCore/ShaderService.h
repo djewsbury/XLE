@@ -98,7 +98,7 @@ namespace RenderCore
         struct ShaderByteCodeBlob
         {
             ::Assets::Blob _payload, _errors;
-            std::vector<::Assets::DependentFileState> _deps;
+            ::Assets::DependencyValidation _depVal;
         };
 
         virtual ShaderByteCodeBlob CompileFromFile(

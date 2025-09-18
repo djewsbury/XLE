@@ -18,7 +18,7 @@ namespace GraphLanguage
 		struct Parameter
 		{
 			SerializableString _type, _name;
-			ParameterDirection _direction = ParameterDirection::In;
+			union { ParameterDirection _direction = ParameterDirection::In; uint64_t _paddingHack; };		// Hack to ensure we get 64 bit padding on this enum (since the serialization assumes it)
 			SerializableString _semantic, _default;
 		};
 

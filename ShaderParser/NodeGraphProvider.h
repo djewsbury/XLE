@@ -7,11 +7,7 @@
 #include "NodeGraph.h"
 #include "NodeGraphSignature.h"
 #include "../Assets/AssetsCore.h"
-#include "../Assets/IFileSystem.h"
 #include "../Utility/StringUtils.h"
-#include "../Utility/Optional.h"
-#include <unordered_map>
-#include <set>
 
 namespace GraphLanguage
 {
@@ -27,7 +23,6 @@ namespace GraphLanguage
 			std::string _sourceFile;
 			bool _isGraphSyntax = false;
 			::Assets::DependencyValidation _depVal;
-			::Assets::DependentFileState _fileState;
         };
 		virtual std::vector<Signature> FindSignatures(StringSection<> name) = 0;
 
@@ -38,7 +33,6 @@ namespace GraphLanguage
 			NodeGraphSignature _signature;
 			std::shared_ptr<INodeGraphProvider> _subProvider;
 			::Assets::DependencyValidation _depVal;
-			::Assets::DependentFileState _fileState;
         };
         virtual std::optional<NodeGraph> FindGraph(StringSection<> name) = 0;
 

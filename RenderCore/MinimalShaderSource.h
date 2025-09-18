@@ -18,7 +18,9 @@ namespace RenderCore
         std::string _processedSource;
 		unsigned _processedSourceLineCount = 0;
         std::vector<ILowLevelCompiler::SourceLineMarker> _lineMarkers;
-        std::vector<::Assets::DependentFileState> _dependencies;
+        ::Assets::DependencyValidation _depVal;
+
+        const ::Assets::DependencyValidation& GetDependencyValidation() { return _depVal; }
     };
 
 	class ISourceCodePreprocessor

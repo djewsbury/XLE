@@ -45,7 +45,7 @@ namespace GraphLanguage
 	static void SerializationOperator(::Assets::BlockSerializer& serializer, const NodeGraphSignature::Parameter& sig)
 	{
 		serializer << sig._type << sig._name;
-		serializer << (uint32_t)sig._direction;
+		serializer << (uint64_t)sig._direction;
 		serializer << sig._semantic << sig._default;
 	}
 

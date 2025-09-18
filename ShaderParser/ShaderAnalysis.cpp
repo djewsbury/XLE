@@ -248,10 +248,10 @@ namespace ShaderSourceParser
 						}
 
 						// todo -- search for duplicates in the dependencies
-						result._dependencies.insert(
-							result._dependencies.end(),
-							expanded._dependencies.begin(), expanded._dependencies.end());
-						result._dependencies.push_back({resolvedFN, subFile->GetSnapshot()});
+						::Assets::DependentFileState subFileState {resolvedFN, subFile->GetSnapshot()};
+						auto subFileDepVal = ::Assets::GetDepValSys().Make({&subFileState, &subFileState+1});
+						::Assets::DependencyValidationMarker depVals[] { subFileDepVal, expanded._depVal };
+						result._depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 					}
 				}
 			}

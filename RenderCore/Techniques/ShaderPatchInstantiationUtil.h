@@ -84,7 +84,6 @@ namespace RenderCore { namespace Techniques
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		::Assets::DependencyValidation _depVal;
-		std::vector<::Assets::DependentFileState> _dependencies;
 
 		std::pair<std::string, std::string> InstantiateShader(const ParameterBox& selectors, IteratorRange<const uint64_t*> patchExpansions) const;
 

@@ -453,11 +453,7 @@ namespace UnitTests
 			std::cout << "Shader compile failed with errors: " << ::Assets::AsString(codeBlob._errors) << std::endl;
 			assert(0);
 		}
-		return RenderCore::CompiledShaderByteCode {
-			codeBlob._payload,
-			::Assets::GetDepValSys().Make(MakeIteratorRange(codeBlob._deps)),
-			{}
-		};
+		return RenderCore::CompiledShaderByteCode { codeBlob._payload, codeBlob._depVal, {} };
 	}
 
 	RenderCore::Metal::ShaderProgram MakeShaderProgram(

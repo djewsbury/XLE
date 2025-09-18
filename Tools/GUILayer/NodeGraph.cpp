@@ -416,7 +416,6 @@ namespace GUILayer
     protected:
 		msclr::gcroot<NodeGraphFile^> _parsedGraphFile;
 		::Assets::DependencyValidation _parsedGraphFileDepVal;
-		::Assets::DependentFileState _parsedGraphFileState;
 		std::unordered_map<std::string, std::string> _imports;
     };
 
@@ -424,10 +423,9 @@ namespace GUILayer
 		NodeGraphFile^ parsedGraphFile,
 		const std::unordered_map<std::string, std::string>& imports,
 		const ::Assets::DirectorySearchRules& searchRules,
-		const ::Assets::DependencyValidation& dependencyValidation,
-		const ::Assets::DependentFileState& parsedGraphFileState)
+		const ::Assets::DependencyValidation& dependencyValidation)
 	{
-		return std::make_shared<GraphNodeGraphProvider>(parsedGraphFile, imports, searchRules, dependencyValidation, parsedGraphFileState);
+		return std::make_shared<GraphNodeGraphProvider>(parsedGraphFile, imports, searchRules, dependencyValidation);
 	}
 
 	auto GraphNodeGraphProvider::FindSignatures(StringSection<> name) -> std::vector<Signature>
@@ -450,7 +448,7 @@ namespace GUILayer
 				Signature{ 
 					clix::marshalString<clix::E_UTF8>(subGraph.Key), 
 					subGraph.Value->Signature->ConvertToNative(convContext), 
-					std::string{}, true, _parsedGraphFileDepVal, _parsedGraphFileState });
+					std::string{}, true, _parsedGraphFileDepVal });
 		}
 		return result;
 	}
@@ -478,12 +476,12 @@ namespace GUILayer
 		System::String^ str = clix::marshalString<clix::E_UTF8>(name);
 		if (_parsedGraphFile->SubGraphs->TryGetValue(str, subGraph)) {
 			ConversionContext convContext;
-			NodeGraph result { name.AsString(), subGraph->Graph->ConvertToNative(convContext), subGraph->Signature->ConvertToNative(convContext), nullptr, _parsedGraphFileDepVal, _parsedGraphFileState };
+			NodeGraph result { name.AsString(), subGraph->Graph->ConvertToNative(convContext), subGraph->Signature->ConvertToNative(convContext), nullptr, _parsedGraphFileDepVal };
 			convContext._importTable.insert(_imports.begin(), _imports.end());
 			result._subProvider = MakeGraphSyntaxProvider(
 				_parsedGraphFile, convContext._importTable, 
 				_parsedGraphFile->GetSearchRules()->GetNative(),
-				_parsedGraphFileDepVal, _parsedGraphFileState);
+				_parsedGraphFileDepVal);
 			return result;
 		}
 
@@ -512,13 +510,11 @@ namespace GUILayer
 		NodeGraphFile^ parsedGraphFile,
 		const std::unordered_map<std::string, std::string>& imports,
 		const ::Assets::DirectorySearchRules& searchRules,
-		const ::Assets::DependencyValidation& dependencyValidation,
-		const ::Assets::DependentFileState& parsedGraphFileState)
+		const ::Assets::DependencyValidation& dependencyValidation)
 	: BasicNodeGraphProvider(searchRules)
 	, _parsedGraphFile(parsedGraphFile)
 	, _imports(imports)
 	, _parsedGraphFileDepVal(dependencyValidation)
-	, _parsedGraphFileState(parsedGraphFileState)
 	{}
 
 	GraphNodeGraphProvider::~GraphNodeGraphProvider()
@@ -526,7 +522,7 @@ namespace GUILayer
 
 	std::shared_ptr<GraphLanguage::INodeGraphProvider> NodeGraphFile::MakeNodeGraphProvider()
 	{
-		return MakeGraphSyntaxProvider(this, GetImportTable(this), GetSearchRules()->GetNative(), {}, {});
+		return MakeGraphSyntaxProvider(this, GetImportTable(this), GetSearchRules()->GetNative(), {});
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

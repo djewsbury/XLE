@@ -16,6 +16,8 @@ namespace ShaderSourceParser
 	{
 	public:
 		const GraphLanguage::ShaderFragmentSignature& GetSignature() const;
+		bool IsGraphSyntaxFile() const;
+		
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		SignatureAsset(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);

@@ -4,6 +4,7 @@
 
 #include "SignatureAsset.h"
 #include "ParseHLSL.h"
+#include "GraphSyntax.h"
 #include "Assets/BlockSerializer.h"
 #include "Assets/ICompileOperation.h"
 #include "Assets/NascentChunk.h"
@@ -18,7 +19,21 @@ namespace ShaderSourceParser
 		::Assets::ArtifactRequest { "Scaffold", "shader-signature"_h, 1u, ::Assets::ArtifactRequest::DataType::BlockSerializer },
 	};
 
-	auto SignatureAsset::GetSignature() const -> const GraphLanguage::ShaderFragmentSignature& { return *(const GraphLanguage::ShaderFragmentSignature*)::Assets::Block_GetFirstObject(_rawMemoryBlock.get()); }
+	struct SignatureAssetData
+	{
+		GraphLanguage::ShaderFragmentSignature _signature;
+		uint32_t _isGraphSyntaxFile;
+	};
+
+	auto SignatureAsset::GetSignature() const -> const GraphLanguage::ShaderFragmentSignature&
+	{
+		return ((const SignatureAssetData*)::Assets::Block_GetFirstObject(_rawMemoryBlock.get()))->_signature;
+	}
+
+	bool SignatureAsset::IsGraphSyntaxFile() const
+	{
+		return !!((const SignatureAssetData*)::Assets::Block_GetFirstObject(_rawMemoryBlock.get()))->_isGraphSyntaxFile;
+	}
 
 	SignatureAsset::SignatureAsset(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
@@ -42,11 +57,28 @@ namespace ShaderSourceParser
 		if (!f || !fileSize)
 			Throw(::Assets::Exceptions::ConstructionError(depVal, "Missing or empty source file while generating signature: " + fn));
 
-		auto signature = ParseHLSL(MakeStringSection((const char*)f.get(), (const char*)PtrAdd(f.get(), fileSize)));
+		auto srcFile = MakeStringSection((const char*)f.get(), (const char*)PtrAdd(f.get(), fileSize));
 
+		bool isGraphSyntaxFile = false;
+		GraphLanguage::ShaderFragmentSignature signature;
+		TRY {
+			if (XlEqStringI(MakeFileNameSplitter(fn).Extension(), "graph")) {
+				auto graphSyntax = GraphLanguage::ParseGraphSyntax(srcFile);
+				for (auto& subGraph:graphSyntax._subGraphs)
+					signature._functions.emplace_back(std::make_pair(subGraph.first, std::move(subGraph.second._signature)));
+				isGraphSyntaxFile = true;
+			} else
+				signature = ParseHLSL(srcFile);
+		} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, depVal));
+		} CATCH(const std::exception& e) {
+			Throw(::Assets::Exceptions::ConstructionError(e, depVal));
+		} CATCH_END
+	
 		// write the processed version to a blockSerializer
 		::Assets::BlockSerializer blockSerializer;
 		blockSerializer << signature;
+		blockSerializer << (uint32_t)isGraphSyntaxFile;
 
 		return {
 			{
