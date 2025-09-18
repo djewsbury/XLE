@@ -366,7 +366,8 @@ namespace Formatters
 			for (unsigned c=0; c<(unsigned)type._params.size(); ++c) {
 				if (c != 0) str << ", ";
 				if (type._paramTypeField & (1<<c)) {
-					SerializeEvaluatedType(str, type._params[c]);
+					assert(type._params[c] <= 0xffffffffu);
+					SerializeEvaluatedType(str, (unsigned)type._params[c]);
 				} else {
 					str << type._params[c];
 				}

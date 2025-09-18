@@ -1985,7 +1985,7 @@ namespace RenderCore { namespace Techniques
         std::vector<AttachmentDesc> attachments; attachments.reserve(input._attachments.size());
         for (const auto& a:input._attachments) {
             Format fmt{0};
-            if (resources.size() > (&a-AsPointer(input._attachments.begin()))) {
+            if (resources.size() > size_t(&a-AsPointer(input._attachments.begin()))) {
                 auto desc = resources[&a-AsPointer(input._attachments.begin())]->GetDesc();
                 assert(desc._type == ResourceDesc::Type::Texture);
                 fmt = desc._textureDesc._format;

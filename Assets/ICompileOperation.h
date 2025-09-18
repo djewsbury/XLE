@@ -6,7 +6,6 @@
 
 #include "IntermediateCompilers.h"
 #include "AssetsCore.h"
-#include "../Utility/IteratorUtils.h"
 #include <vector>
 #include <memory>
 
