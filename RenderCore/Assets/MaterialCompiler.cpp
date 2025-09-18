@@ -253,7 +253,6 @@ namespace RenderCore { namespace Assets
 
 		char buffer[3*MaxPath];
 		for (const auto& cfg:modelMat._materials) {
-			ShaderPatchCollection patchCollection;
 			std::basic_stringstream<::Assets::ResChar> resName;
 			auto guid = MakeMaterialGuid(MakeStringSection(cfg.first));
 

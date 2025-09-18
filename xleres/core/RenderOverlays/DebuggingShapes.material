@@ -96,63 +96,63 @@ FillRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 FillAndOutlineRoundedRect=~
 	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 OutlineRoundedRect=~
 	Inherit=~; <.>:EmptySolidBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 FillRaisedRect=~
 	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 FillRaisedRoundedRect=~
 	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 FillReverseRaisedRoundedRect=~
 	Inherit=~; <.>:ReverseRaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 FillAndOutlineRect=~
 	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 FillEllipse=~
 	Inherit=~; <.>:SolidNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 OutlineEllipse=~
 	Inherit=~; <.>:EmptySolidBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 SoftShadowRect=~
 	Inherit=~; Shared
@@ -180,7 +180,7 @@ ColorAdjustAndOutlineRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=IShape2D_Calculate
+			Implements=Interfaces.hlsl::IShape2D_Calculate
 		=~
 			CommonBrushes.hlsl::SolidOutline_Calculate
 			Implements=SV_AutoPS

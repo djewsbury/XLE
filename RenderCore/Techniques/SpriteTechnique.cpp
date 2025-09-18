@@ -1,13 +1,11 @@
 #include "SpriteTechnique.h"
 #include "ShaderPatchInstantiationUtil.h"
-#include "../../ShaderParser/ShaderInstantiation.h"
 #include "../../ShaderParser/NodeGraphSignature.h"
 #include "../../ShaderParser/ParseHLSL.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/FastParseValue.h"
 #include "../../Utility/StringFormat.h"
 #include <sstream>
-#include <iostream>
 
 using namespace Utility::Literals;
 
@@ -166,7 +164,7 @@ namespace RenderCore { namespace Techniques
 
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate(semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-			_signature.AddParameter({type, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
+			_signature.AddParameter({SerializableString{type.begin(), type.end()}, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
 			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName, gsInputParameter});
 		}
 
@@ -176,7 +174,7 @@ namespace RenderCore { namespace Techniques
 
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate("out_", semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-			_signature.AddParameter({type, newName, GraphLanguage::ParameterDirection::Out, semanticAndIdx});
+			_signature.AddParameter({SerializableString{type.begin(), type.end()}, newName, GraphLanguage::ParameterDirection::Out, semanticAndIdx});
 		}
 
 		static void WriteCastOrAssignExpression(
@@ -648,6 +646,17 @@ namespace RenderCore { namespace Techniques
 #include "xleres/TechniqueLibrary/Framework/SystemUniforms.hlsl"
 #include "xleres/TechniqueLibrary/Utility/Colour.hlsl"
 
+#define NDC_POSITIVE 1
+#define NDC_POSITIVE_RIGHT_HANDED 2
+#define NDC_POSITIVE_REVERSEZ 3
+#define NDC_POSITIVE_RIGHT_HANDED_REVERSEZ 4
+
+#if VULKAN
+	#define NDC NDC_POSITIVE_RIGHT_HANDED_REVERSEZ
+#else
+	#define NDC NDC_POSITIVE_REVERSEZ
+#endif
+
 void LocalToWorld3D(
 	out float3 worldPosition : WORLDPOSITION,
 	float3 position : POSITION)
@@ -1088,11 +1097,6 @@ void ExpandClipSpacePosition(
 		psOutput._resource._entrypoint._shaderModel = s_SMPS;
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
 		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
-
-		#if defined(_DEBUG)
-			std::cout << "-------------------- PS Gen: --------------------" << std::endl;
-			std::cout << psOutput._resource._postPatchesFragments.back() << std::endl;
-		#endif
 
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));
