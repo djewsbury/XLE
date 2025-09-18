@@ -31,6 +31,7 @@
 #include "../ShaderService.h"
 #include "../Vulkan/IDeviceVulkan.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
+#include "../../ShaderParser/SignatureAsset.h"
 #include "../../RenderOverlays/FontRendering.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
@@ -54,6 +55,7 @@ namespace RenderCore { namespace Techniques
 		
 		auto& compilers = ::Assets::Services::GetIntermediateCompilers();
 		_shaderFilteringRegistration = ShaderSourceParser::RegisterShaderSelectorFilteringCompiler(compilers);
+		_shaderSignatureRegistration = ShaderSourceParser::RegisterSignatureAssetCompiler(compilers);
 
 		RenderCore::ShaderCompileResourceName::CompilationFlags::BitField shaderCompilerFlags = 0;
 		// In debug builds, if we're attached to a frame capture tool, then we'll enable debug symbols & disabled optimizations

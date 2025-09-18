@@ -8,6 +8,7 @@
 #include "../RenderCore/ShaderLangUtil.h"
 #include "../RenderCore/UniformsStream.h"
 #include "../Utility/StringUtils.h"
+#include "../Utility/StringFormat.h"
 #include "../Utility/IteratorUtils.h"
 #include <set>
 #include <unordered_map>
@@ -16,9 +17,9 @@
 
 namespace ShaderSourceParser
 {
-	static std::string MakeGlobalName(const std::string& str)
+	static SerializableString MakeGlobalName(const SerializableString& str)
 	{
-		auto i = str.find('.');
+		auto i = std::string_view{str}.find('.');
 		if (i != std::string::npos)
 			return str.substr(i+1);
 		return str;
@@ -50,19 +51,19 @@ namespace ShaderSourceParser
 				continue;
 
 			DescriptorSlot newSlot;			
-			newSlot._type = RenderCore::ShaderLangTypeNameAsDescriptorType(c._type);
+			newSlot._type = RenderCore::ShaderLangTypeNameAsDescriptorType(c._type.AsStringSection());
 
 			// If we didn't get a descriptor slot type from the type name, we'll treat this as a
 			// constant within a constant buffer
 			if (newSlot._type == RenderCore::DescriptorType::Empty) {
-				auto fmt = RenderCore::ShaderLangTypeNameAsTypeDesc(c._type);
+				auto fmt = RenderCore::ShaderLangTypeNameAsTypeDesc(c._type.AsStringSection());
 				if (fmt._type == ImpliedTyping::TypeCat::Void) {
 					warningStream << "\t// Could not convert type (" << c._type << ") to shader language type for capture (" << c._name << "). Skipping cbuffer entry." << std::endl;
 					continue;
 				}
 
 				std::string cbName, memberName;
-				auto i = c._name.find('.');
+				auto i = std::string_view{c._name}.find('.');
 				if (i != std::string::npos) {
 					cbName = c._name.substr(0, i);
 					memberName = c._name.substr(i+1);
@@ -77,9 +78,7 @@ namespace ShaderSourceParser
 
 				cbi->second._cbElements.push_back(NameAndType{ memberName, fmt });
 				if (!c._default.empty())
-					cbi->second._defaults.SetParameter(
-						MakeStringSection(memberName).Cast<utf8>(),
-						MakeStringSection(c._default));
+					cbi->second._defaults.SetParameter(memberName, c._default.AsStringSection());
 
 				newSlot._cbIdx = (unsigned)std::distance(workingCBs.begin(), cbi);
 				newSlot._name = cbName;
@@ -149,7 +148,7 @@ namespace ShaderSourceParser
 		for (const auto& slot:input._slots) maxSlotIdxInput = std::max(maxSlotIdxInput, int(slot._slotIdx));
 		for (const auto& slot:pipelineLayoutVersion._slots) maxSlotIdxPipelineLayout = std::max(maxSlotIdxPipelineLayout, int(slot._slotIdx));
 		if (flags & LinkToFixedLayoutFlags::AllowSlotTypeModification)
-			maxSlotIdxPipelineLayout = std::max(maxSlotIdxPipelineLayout, maxSlotIdxInput) + input._slots.size();		// reserve the absolute maximum we could need
+			maxSlotIdxPipelineLayout = std::max(maxSlotIdxPipelineLayout, maxSlotIdxInput) + int(input._slots.size());		// reserve the absolute maximum we could need
 
 		VLA(bool, assignedSlots_final, maxSlotIdxPipelineLayout+1);
 		VLA(bool, processedSlots_input, input._slots.size());
@@ -186,7 +185,7 @@ namespace ShaderSourceParser
 				}
 			}
 
-			assert(input._slots[c]._slotIdx < (maxSlotIdxPipelineLayout+1));
+			assert(input._slots[c]._slotIdx < unsigned(maxSlotIdxPipelineLayout+1));
 			assignedSlots_final[input._slots[c]._slotIdx] = true;
 			processedSlots_input[c] = true;
 			auto finalSlot = input._slots[c];
@@ -217,7 +216,7 @@ namespace ShaderSourceParser
 				
 					if (assignedSlots_final[i->_slotIdx])
 						Throw(std::runtime_error("Multiple descriptor set slots with the same name discovered"));
-					assert(i->_slotIdx < (maxSlotIdxPipelineLayout+1));
+					assert(i->_slotIdx < unsigned(maxSlotIdxPipelineLayout+1));
 					assignedSlots_final[i->_slotIdx] = true;
 					processedSlots_input[c] = true;
 					auto finalSlot = input._slots[c];
@@ -250,7 +249,7 @@ namespace ShaderSourceParser
 			if (q == pipelineLayoutVersion._slots.size())
 				continue;		// we'll get to this one after all of the easier slots are handled
 
-			assert(pipelineLayoutVersion._slots[q]._slotIdx < (maxSlotIdxPipelineLayout+1));
+			assert(pipelineLayoutVersion._slots[q]._slotIdx < unsigned(maxSlotIdxPipelineLayout+1));
 			assignedSlots_final[pipelineLayoutVersion._slots[q]._slotIdx] = true;
 			auto finalSlot = input._slots[c];
 			finalSlot._slotIdx = pipelineLayoutVersion._slots[q]._slotIdx;
@@ -273,7 +272,7 @@ namespace ShaderSourceParser
 					if (!assignedSlots_final[firstUnusedOutputSlot])
 						break;
 
-				assert(firstUnusedOutputSlot < (maxSlotIdxPipelineLayout+1));
+				assert(firstUnusedOutputSlot < unsigned(maxSlotIdxPipelineLayout+1));
 				assignedSlots_final[firstUnusedOutputSlot] = true;
 				auto finalSlot = input._slots[c];
 				finalSlot._slotIdx = firstUnusedOutputSlot;

@@ -182,7 +182,7 @@ namespace GraphLanguage
 
 		std::stringstream mainFunctionDeclParameters;
 		for (const auto& i:sig.GetParameters()) {
-            if (useReturnType && i._name == s_resultName && i._direction == ParameterDirection::Out) {
+            if (useReturnType && XlEqString(i._name.AsStringSection(), s_resultName) && i._direction == ParameterDirection::Out) {
                 assert(returnType.empty() && returnSemantic.empty());
                 returnType = i._type;
                 returnSemantic = i._semantic;

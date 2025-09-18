@@ -59,6 +59,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IShaderSource> _shaderSource;
 
 		::Assets::CompilerRegistration _shaderFilteringRegistration;
+		::Assets::CompilerRegistration _shaderSignatureRegistration;
 		::Assets::CompilerRegistration _shaderCompilerRegistration;
 		::Assets::CompilerRegistration _graphShaderCompiler2Registration;
 

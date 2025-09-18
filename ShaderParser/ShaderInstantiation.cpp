@@ -58,11 +58,11 @@ namespace ShaderSourceParser
 			}
 		}
 
-		static std::string TrimImplements(const GraphLanguage::NodeGraphSignature& signature)
+		static SerializableString TrimImplements(const GraphLanguage::NodeGraphSignature& signature)
 		{
 			auto res = signature.GetImplements();
 			// remove the anything before the scoping operator, if it exists
-			auto i = res.find_last_of(':');
+			auto i = res.AsStringView().find_last_of(':');
 			if (i != std::string::npos)
 				res.erase(res.begin(), res.begin()+i+1);
 			return res;
@@ -138,7 +138,7 @@ namespace ShaderSourceParser
 								sig = provider.FindSignature(dep._instantiation._archiveName).value();
 								_rawShaderFileIncludes.insert(sig._sourceFile);
 							}
-							if (!dep._instantiation._implementsArchiveName.empty() && !XlBeginsWith(MakeStringSection(dep._instantiation._implementsArchiveName), "SV_")) {
+							if (!dep._instantiation._implementsArchiveName.empty() && !XlBeginsWith<char>(dep._instantiation._implementsArchiveName, "SV_")) {
 								if (dep._instantiation._customProvider) {
 									implementsSig = dep._instantiation._customProvider->FindSignature(dep._instantiation._implementsArchiveName).value();
 								} else
@@ -151,7 +151,7 @@ namespace ShaderSourceParser
 								entryPoint._name = sig._name;
 								entryPoint._signature = sig._signature;
 
-								if (XlBeginsWith(MakeStringSection(dep._instantiation._implementsArchiveName), "SV_")) {
+								if (XlBeginsWith<char>(dep._instantiation._implementsArchiveName, "SV_")) {
 									entryPoint._implementsName = dep._instantiation._implementsArchiveName;
 									entryPoint._implementsSignature = entryPoint._signature;
 								} else if (!dep._instantiation._implementsArchiveName.empty()) {
@@ -162,7 +162,7 @@ namespace ShaderSourceParser
 									entryPoint._implementsSignature = entryPoint._signature;
 								}
 								_entryPointsFromRawShaders.emplace_back(std::move(entryPoint));
-								_instantiationPrefixFromRawShaders.insert("#define HAS_INSTANTIATION_" + (sig._signature.GetImplements().empty() ? sig._name : TrimImplements(sig._signature)) + " 1");
+								_instantiationPrefixFromRawShaders.insert(Concatenate("#define HAS_INSTANTIATION_", (sig._signature.GetImplements().empty() ? sig._name : TrimImplements(sig._signature)), " 1"));
 							}
 						}
 					}
@@ -201,7 +201,7 @@ namespace ShaderSourceParser
 						auto name = "curried_" + tp.first + "_" + c;
 						auto instP = std::find_if(
 							instFn._entryPoint._signature.GetParameters().begin(), instFn._entryPoint._signature.GetParameters().end(),
-							[name](const GraphLanguage::NodeGraphSignature::Parameter& p) { return XlEqString(MakeStringSection(name), p._name); });
+							[name](const GraphLanguage::NodeGraphSignature::Parameter& p) { return XlEqString<char>(name, p._name.AsStringSection()); });
 						if (instP != instFn._entryPoint._signature.GetParameters().end())
 							scaffoldSignature.AddParameter(*instP);
 					}
@@ -223,7 +223,7 @@ namespace ShaderSourceParser
 					}
 					result._entryPoints.emplace_back(std::move(entryPoint));
 					if (!scaffoldSignature.GetImplements().empty())
-						result._instantiationPrefix.insert("#define HAS_INSTANTIATION_" + Internal::TrimImplements(scaffoldSignature) + " 1");
+						result._instantiationPrefix.insert(Concatenate("#define HAS_INSTANTIATION_", Internal::TrimImplements(scaffoldSignature), " 1"));
 				}
 			}
 			else
@@ -248,10 +248,10 @@ namespace ShaderSourceParser
 				for (const auto&c:inst._graph._signature.GetCapturedParameters()) {
 					auto existing = std::find_if(
 						mergedCaptures.begin(), mergedCaptures.end(),
-						[c](const GraphLanguage::NodeGraphSignature::Parameter& p) { return XlEqString(MakeStringSection(p._name), c._name); });
+						[c](const GraphLanguage::NodeGraphSignature::Parameter& p) { return XlEqString(p._name.AsStringSection(), c._name.AsStringSection()); });
 					if (existing != mergedCaptures.end()) {
-						if (existing->_type != c._type || existing->_direction != c._direction)
-							Throw(::Exceptions::BasicLabel("Type mismatch detected for capture (%s). Multiple fragments have this capture, but they are not compatible types.", existing->_name.c_str()));
+						if (!XlEqString(existing->_type.AsStringSection(), c._type.AsStringSection()) || existing->_direction != c._direction)
+							Throw(::Exceptions::BasicLabel("Type mismatch detected for capture (%s). Multiple fragments have this capture, but they are not compatible types.", existing->_name.AsString().c_str()));
 						continue;
 					}
 					mergedCaptures.push_back(c);

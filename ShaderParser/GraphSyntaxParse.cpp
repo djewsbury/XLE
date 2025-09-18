@@ -307,9 +307,9 @@ extern "C" NodeId Node_Register(const void* ctx, GraphId gid, IdentifierAndScope
 		auto i = std::find_if(
 			ng._signature.GetTemplateParameters().begin(),
 			ng._signature.GetTemplateParameters().end(),
-			[archiveName](const GraphLanguage::NodeGraphSignature::TemplateParameter& param) { return param._name == archiveName; });
+			[archiveName](const GraphLanguage::NodeGraphSignature::TemplateParameter& param) { return XlEqString(param._name.AsStringSection(), archiveName); });
 		if (i != ng._signature.GetTemplateParameters().end()) {
-			archiveName += "<" + i->_restriction + ">";
+			archiveName += Concatenate("<", i->_restriction, ">");
 		}
 	}
 

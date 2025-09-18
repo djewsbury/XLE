@@ -4,7 +4,7 @@
 
 #include "NodeGraphProvider.h"
 #include "GraphSyntax.h"
-#include "ShaderSignatureParser.h"
+#include "ParseHLSL.h"
 #include "../Assets/IFileSystem.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/Assets.h"
@@ -47,7 +47,7 @@ namespace GraphLanguage
 	{
 		auto i = std::find_if(
 			_sig._functions.cbegin(), _sig._functions.cend(),
-            [fnName](const std::pair<std::string, NodeGraphSignature>& signature) { return XlEqString(MakeStringSection(signature.first), fnName); });
+            [fnName](const auto& signature) { return XlEqString(signature.first.AsStringSection(), fnName); });
         if (i!=_sig._functions.cend())
 			return &i->second;
 		return nullptr;
@@ -57,7 +57,7 @@ namespace GraphLanguage
 	{
 		auto i = std::find_if(
 			_sig._uniformBuffers.cbegin(), _sig._uniformBuffers.cend(),
-            [structName](const std::pair<std::string, UniformBufferSignature>& signature) { return XlEqString(MakeStringSection(signature.first), structName); });
+            [structName](const auto& signature) { return XlEqString(signature.first.AsStringSection(), structName); });
         if (i!=_sig._uniformBuffers.cend())
 			return &i->second;
 		return nullptr;

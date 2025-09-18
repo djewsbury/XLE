@@ -5,7 +5,7 @@
 #include "ShaderPatcher.h"
 #include "NodeGraph.h"
 #include "NodeGraphSignature.h"
-#include "ShaderSignatureParser.h"
+#include "ParseHLSL.h"
 #include "../RenderCore/ShaderLangUtil.h"
 #include "../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../RenderCore/Format.h"
@@ -24,6 +24,12 @@
 #if XLE_STRUCTURE_FOR_PREVIEW_ENABLE
     #include "plustache/template.hpp"
 #endif
+
+namespace Utility
+{
+	static bool operator==(StringSection<> lhs, StringSection<> rhs) { return XlEqString(lhs, rhs); }
+	static bool operator!=(StringSection<> lhs, StringSection<> rhs) { return !XlEqString(lhs, rhs); }
+}
 
 namespace ShaderSourceParser
 {
@@ -44,7 +50,7 @@ namespace ShaderSourceParser
 				captures.begin(), captures.end(),
 				[i](const GraphLanguage::NodeGraphSignature::Parameter&p) 
 				{ 
-					auto dot = p._name.find_first_of('.');
+					auto dot = p._name.AsStringView().find_first_of('.');
 					if (dot != std::string::npos) {	// we must ignore the captures name before the dot, if it exists
 						return XlEqString(MakeStringSection(p._name.begin()+dot+1, p._name.end()), i->_name);
 					} else {
@@ -65,7 +71,7 @@ namespace ShaderSourceParser
 				captures.begin(), captures.end(),
 				[i](const GraphLanguage::NodeGraphSignature::Parameter&p)
 				{ 
-					auto dot = p._name.find_first_of('.');	// we must ignore the captures name before the dot, if it exists
+					auto dot = p._name.AsStringView().find_first_of('.');	// we must ignore the captures name before the dot, if it exists
 					if (dot != std::string::npos) {
 						return XlEqString(MakeStringSection(p._name.begin()+dot+1, p._name.end()), i->_name);
 					} else {

@@ -4,74 +4,83 @@
 
 #pragma once
 
-#include "../Utility/StringUtils.h"
 #include "../Utility/IteratorUtils.h"
-#include <vector>
+#include "../Utility/Streams/SerializationUtils.h"
+
+namespace Assets { class BlockSerializer; }
 
 namespace GraphLanguage
 {
-    enum class ParameterDirection { In, Out };
-    class NodeGraphSignature
-    {
-    public:
-		class Parameter
+	enum class ParameterDirection : uint32_t { In, Out };
+	class NodeGraphSignature
+	{
+	public:
+		struct Parameter
 		{
-		public:
-			std::string _type, _name;
+			SerializableString _type, _name;
 			ParameterDirection _direction = ParameterDirection::In;
-            std::string _semantic, _default;
+			SerializableString _semantic, _default;
 		};
 
-        // Returns the list of parameters taken as input through the function call mechanism
-        auto GetParameters() const -> IteratorRange<const Parameter*>	{ return MakeIteratorRange(_functionParameters); }
-		auto GetParameters() -> IteratorRange<Parameter*>	{ return MakeIteratorRange(_functionParameters); }
-        void AddParameter(const Parameter& param);
+		// Returns the list of parameters taken as input through the function call mechanism
+		auto GetParameters() const -> IteratorRange<const Parameter*>	{ return _functionParameters; }
+		auto GetParameters() -> IteratorRange<Parameter*>				{ return MakeIteratorRange(_functionParameters); }
+		void AddParameter(const Parameter& param);
 
-        // Returns the list of parameters that are accesses as global scope variables (or captured from a containing scope)
-        // In other words, these aren't explicitly passed to the function, but the function needs to interact with them, anyway
-        auto GetCapturedParameters() const -> IteratorRange<const Parameter*>		{ return MakeIteratorRange(_capturedParameters); }
-        void AddCapturedParameter(const Parameter& param);
+		// Returns the list of parameters that are accesses as global scope variables (or captured from a containing scope)
+		// In other words, these aren't explicitly passed to the function, but the function needs to interact with them, anyway
+		auto GetCapturedParameters() const -> IteratorRange<const Parameter*>		{ return _capturedParameters; }
+		void AddCapturedParameter(const Parameter& param);
 
-        class TemplateParameter
-        {
-        public:
-            std::string _name;
-            std::string _restriction;
-        };
-        auto GetTemplateParameters() const -> IteratorRange<const TemplateParameter*>   { return MakeIteratorRange(_templateParameters); }
-        void AddTemplateParameter(const TemplateParameter& param);
+		struct TemplateParameter
+		{
+			SerializableString _name;
+			SerializableString _restriction;
+		};
+		auto GetTemplateParameters() const -> IteratorRange<const TemplateParameter*>   { return _templateParameters; }
+		void AddTemplateParameter(const TemplateParameter& param);
 
-		const std::string& GetImplements() const { return _implements; }
-		void SetImplements(const std::string& value) { _implements = value; }
+		const SerializableString& GetImplements() const { return _implements; }
+		void SetImplements(const SerializableString& value) { _implements = value; }
 		
-        NodeGraphSignature();
-        ~NodeGraphSignature();
-    private:
-        std::vector<Parameter> _functionParameters;
-        std::vector<Parameter> _capturedParameters;
-        std::vector<TemplateParameter> _templateParameters;
-		std::string _implements;
-    };
+		NodeGraphSignature();
+		~NodeGraphSignature();
 
-    class UniformBufferSignature
-    {
-    public:
-        class Parameter
-        {
-        public:
-            std::string _name;
-			std::string _type;
-            std::string _semantic;
-        };
+		friend void SerializationOperator(::Assets::BlockSerializer&, const NodeGraphSignature&);
+	private:
+		SerializableVector<Parameter> _functionParameters;
+		SerializableVector<Parameter> _capturedParameters;
+		SerializableVector<TemplateParameter> _templateParameters;
+		SerializableString _implements;
+	};
 
-        std::vector<Parameter> _parameters;
-    };
+	class UniformBufferSignature
+	{
+	public:
+		struct Parameter
+		{
+			SerializableString _name;
+			SerializableString _type;
+			SerializableString _semantic;
+		};
 
-    class ShaderFragmentSignature
-    {
-    public:
-        std::vector<std::pair<std::string, NodeGraphSignature>>			_functions;
-        std::vector<std::pair<std::string, UniformBufferSignature>>		_uniformBuffers;
-    };
+		SerializableVector<Parameter> _parameters;
+
+		friend void SerializationOperator(::Assets::BlockSerializer&, const UniformBufferSignature&);
+	};
+
+	#pragma pack(push)
+	#pragma pack(1)				// we need to prevent packing within the pair
+
+	class ShaderFragmentSignature
+	{
+	public:
+		SerializableVector<std::pair<SerializableString, NodeGraphSignature>>			_functions;
+		SerializableVector<std::pair<SerializableString, UniformBufferSignature>>		_uniformBuffers;
+
+		friend void SerializationOperator(::Assets::BlockSerializer&, const ShaderFragmentSignature&);
+	};
+
+	#pragma pack(pop)
 }
 

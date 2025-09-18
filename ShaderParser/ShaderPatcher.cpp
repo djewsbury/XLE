@@ -28,6 +28,12 @@
 #include <tuple>
 #include <map>
 
+namespace Utility
+{
+	static bool operator==(StringSection<> lhs, StringSection<> rhs) { return XlEqString<char>(lhs, rhs); }
+	static bool operator!=(StringSection<> lhs, StringSection<> rhs) { return !XlEqString<char>(lhs, rhs); }
+}
+
 namespace ShaderSourceParser
 {
 	using namespace GraphLanguage;
@@ -47,7 +53,7 @@ namespace ShaderSourceParser
         return buffer;
     }
 
-	static std::string SantizeIdentifier(const std::string& input)
+	static std::string SantizeIdentifier(StringSection<> input)
 	{
 		std::string result;
 		result.reserve(input.size());
@@ -59,7 +65,7 @@ namespace ShaderSourceParser
 		return result;
 	}
 
-    static std::string OutputTemporaryForNode(NodeId nodeId, const std::string& outputName)
+    static std::string OutputTemporaryForNode(NodeId nodeId, StringSection<> outputName)
     {
         return std::string("Output_") + AsString(nodeId) + "_" + SantizeIdentifier(outputName);
     }
@@ -67,11 +73,11 @@ namespace ShaderSourceParser
     template<typename Connection>
         const Connection* FindConnectionThatOutputsTo(
             IteratorRange<const Connection*> connections,
-            NodeId nodeId, const std::string& parameterName)
+            NodeId nodeId, StringSection<> parameterName)
     {
         return std::find_if(
             connections.cbegin(), connections.cend(),
-            [nodeId, &parameterName](const Connection& connection)
+            [nodeId, parameterName](const Connection& connection)
             { return    connection.OutputNodeId() == nodeId &&
                         connection.OutputParameterName() == parameterName; } );
     }
@@ -119,8 +125,8 @@ namespace ShaderSourceParser
 
             // find a parameter with the right direction & name
         for (const auto& p:sig.GetParameters())
-            if (p._direction == direction && XlEqString(paramName, p._name))
-                return p._type;
+            if (p._direction == direction && XlEqString<char>(p._name.AsStringSection(), paramName))
+                return p._type.AsString();
 
         return std::string();
     }
@@ -199,23 +205,23 @@ namespace ShaderSourceParser
 			// take the type and semantic from there.
 			auto predefined = std::find_if(
 				interfContext._predefinedParameters.begin(), interfContext._predefinedParameters.end(),
-				[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::In && XlEqString(MakeStringSection(connection.InputParameterName()), param._name); });
+				[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::In && XlEqString<char>(connection.InputParameterName(), param._name); });
 			if (predefined != interfContext._predefinedParameters.end()) {
 				param = *predefined;
-				if (param._type.empty() || XlEqString(param._type, "auto"))	// fallback to the expectedType if the predefined param has no type sets
+				if (param._type.empty() || XlEqString<char>(param._type.AsStringSection(), "auto"))	// fallback to the expectedType if the predefined param has no type sets
 					param._type = expectedType;
 			}
 
 			auto existing = std::find_if(
 				interfContext._additionalParameters.begin(), interfContext._additionalParameters.end(),
-				[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::In && XlEqString(MakeStringSection(connection.InputParameterName()), param._name); });
+				[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::In && XlEqString<char>(connection.InputParameterName(), param._name); });
 			if (existing == interfContext._additionalParameters.end()) {
 				existing = interfContext._additionalParameters.insert(interfContext._additionalParameters.end(), param);
 			} else {
-				assert(XlEqString(MakeStringSection(param._type), existing->_type));
+				assert(XlEqString<char>(param._type, existing->_type));
 			}
 
-			finalType = WriteCastExpression(str, {param._name, param._type}, expectedType);
+			finalType = WriteCastExpression(str, {param._name.AsString(), param._type.AsString()}, expectedType);
 
 		} else {
 
@@ -232,23 +238,23 @@ namespace ShaderSourceParser
 
 					auto predefined = std::find_if(
 						interfContext._predefinedParameters.begin(), interfContext._predefinedParameters.end(),
-						[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::In && XlEqString(MakeStringSection(connection.InputParameterName()), param._name); });
+						[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::In && XlEqString<char>(connection.InputParameterName(), param._name); });
 					if (predefined != interfContext._predefinedParameters.end()) {
 						param = *predefined;
-						if (param._type.empty() || XlEqString(param._type, "auto"))
+						if (param._type.empty() || XlEqString<char>(param._type, "auto"))
 							param._type = expectedType;
 					}
 
 					auto existing = std::find_if(
 						interfContext._capturedParameters.begin(), interfContext._capturedParameters.end(),
-						[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::In && XlEqString(MakeStringSection(connection.InputParameterName()), param._name); });
+						[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::In && XlEqString<char>(connection.InputParameterName(), param._name); });
 					if (existing == interfContext._capturedParameters.end()) {
 						existing = interfContext._capturedParameters.insert(interfContext._capturedParameters.end(), param);
 					} else {
-						assert(XlEqString(MakeStringSection(param._type), existing->_type));
+						assert(XlEqString<char>(param._type, existing->_type));
 					}
 
-					expr = ExpressionString { param._name, param._type };
+					expr = ExpressionString { param._name.AsString(), param._type.AsString() };
 				}
 				finalType = WriteCastExpression(str, expr, expectedType);
 			} else {
@@ -269,7 +275,7 @@ namespace ShaderSourceParser
 		INodeGraphProvider& sigProvider,
 		DependencyTrackers& depVals)
     {
-		auto expectedType = signatureParam._type;
+		auto expectedType = signatureParam._type.AsString();
         auto i = FindConnectionThatOutputsTo(nodeGraph.GetConnections(), nodeId, signatureParam._name);
         if (i!=nodeGraph.GetConnections().cend()) {
             return QueryExpression(nodeGraph, *i, expectedType, interfContext, sigProvider, depVals);
@@ -278,7 +284,7 @@ namespace ShaderSourceParser
 		// We must add this request as some kind of input to the function (ie, a parameter input or a global input)
 		// auto uniqueName = UniquifyName(signatureParam._name, interfContext);
 		if (generateDanglingInputs) {
-			auto uniqueName = "in_" + std::to_string(nodeId) + "_" + signatureParam._name;
+			auto uniqueName = "in_" + std::to_string(nodeId) + "_" + signatureParam._name.AsString();
 			interfContext._dangingParameters.push_back({expectedType, uniqueName, ParameterDirection::In, signatureParam._semantic});
 			return {uniqueName, expectedType};
 		} else {
@@ -311,14 +317,14 @@ namespace ShaderSourceParser
 
 				auto p = std::find_if(
 					interfContext._additionalParameters.begin(), interfContext._additionalParameters.end(),
-					[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::Out && XlEqString(MakeStringSection(connection.OutputParameterName()), param._name); });
+					[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::Out && XlEqString<char>(connection.OutputParameterName(), param._name); });
 				if (p == interfContext._additionalParameters.end()) {
 					auto predefined = std::find_if(
 						interfContext._predefinedParameters.begin(), interfContext._predefinedParameters.end(),
-						[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::Out && XlEqString(MakeStringSection(connection.OutputParameterName()), param._name); });
+						[&connection](const NodeGraphSignature::Parameter& param) { return param._direction == ParameterDirection::Out && XlEqString<char>(connection.OutputParameterName(), param._name); });
 					if (predefined != interfContext._predefinedParameters.end()) {
 						NodeGraphSignature::Parameter newParam = *p;
-						if (newParam._type.empty() || XlEqString(newParam._type, "auto"))
+						if (newParam._type.empty() || XlEqString<char>(newParam._type, "auto"))
 							newParam._type = inputType;
 						p = interfContext._additionalParameters.insert(interfContext._additionalParameters.end(), newParam);
 					} else {
@@ -326,7 +332,7 @@ namespace ShaderSourceParser
 					}
 				}
 
-				result << "\t" << p->_name << " = " << QueryExpression(graph, connection, p->_type, interfContext, sigProvider, depVals)._expression << ";" << std::endl;
+				result << "\t" << p->_name << " = " << QueryExpression(graph, connection, p->_type.AsString(), interfContext, sigProvider, depVals)._expression << ";" << std::endl;
 			}
         }
     }
@@ -468,7 +474,7 @@ namespace ShaderSourceParser
                     return p.OutputNodeId() == node.NodeId()
                         && p.OutputParameterName() == tp._name;
                 });
-            if (connection!=nodeGraph.GetConnections().end() && XlEqString(MakeStringSection(connection->InputParameterName()), ParameterName_NodeInstantiation)) {
+            if (connection!=nodeGraph.GetConnections().end() && XlEqString<char>(connection->InputParameterName(), ParameterName_NodeInstantiation)) {
 				// this connection must be used as a template parameter
 				// The connected node is called an "instantiation" node -- it represents an instantiation of some function
 				// There can be values attached as inputs to the instantiation node; they act like curried parameters.
@@ -494,7 +500,7 @@ namespace ShaderSourceParser
 								restrictionSignature.value()._signature.GetParameters().begin(),
 								restrictionSignature.value()._signature.GetParameters().end(),
 								[paramName](const NodeGraphSignature::Parameter&param) {
-									return XlEqString(MakeStringSection(param._semantic), paramName);
+									return XlEqString<char>(param._semantic, paramName);
 								});
 							isPartOfRestriction = i != restrictionSignature.value()._signature.GetParameters().end();
 						}
@@ -504,7 +510,7 @@ namespace ShaderSourceParser
 					}
 				}
 
-				callInstantiation._parameterBindings.insert({tp._name, std::move(param)});
+				callInstantiation._parameterBindings.insert({tp._name.AsString(), std::move(param)});
             }
         }
 
@@ -564,7 +570,7 @@ namespace ShaderSourceParser
 					auto i = std::find_if(
 						parameterBindingsForThisNode->second->_parametersToCurry.begin(),
 						parameterBindingsForThisNode->second->_parametersToCurry.end(),
-						[p](const std::string& str) { return XlEqString(MakeStringSection(str), p->_name);});
+						[p](const std::string& str) { return XlEqString<char>(str, p->_name);});
 					if (i != parameterBindingsForThisNode->second->_parametersToCurry.end()) {
 						interfContext._curriedParameters.push_back({n, *p});
 						result << "curried_" << n << "_" << p->_name;
@@ -589,7 +595,7 @@ namespace ShaderSourceParser
 					return p.OutputNodeId() == node.NodeId()
 						&& p.OutputParameterName() == tp.first;
 				});
-			if (connection!=nodeGraph.GetConnections().end() && XlEqString(MakeStringSection(connection->InputParameterName()), ParameterName_NodeInstantiation)) {
+			if (connection!=nodeGraph.GetConnections().end() && XlEqString<char>(connection->InputParameterName(), ParameterName_NodeInstantiation)) {
 				auto* instantiationNode = nodeGraph.GetNode(connection->InputNodeId());
 				assert(instantiationNode);
 
@@ -631,7 +637,7 @@ namespace ShaderSourceParser
 	static bool HasConnectionStartingAt(const NodeGraph& nodeGraph, NodeId inputNodeId, StringSection<> parameterName)
 	{
 		for (const auto&c:nodeGraph.GetConnections())
-			if (c.InputNodeId() == inputNodeId && XlEqString(parameterName, c.InputParameterName()))
+			if (c.InputNodeId() == inputNodeId && XlEqString<char>(parameterName, c.InputParameterName()))
 				return true;
 		return false;
 	}
@@ -679,7 +685,7 @@ namespace ShaderSourceParser
 						for (const auto& p:fnSig.GetParameters()) {
 							if (p._direction == ParameterDirection::Out) {
 								if (!HasConnectionStartingAt(graph, i2->NodeId(), p._name)) {
-									auto uniqueName = UniquifyName(p._name, interfContext);
+									auto uniqueName = UniquifyName(p._name.AsString(), interfContext);
 									interfContext._dangingParameters.push_back({p._type, uniqueName, ParameterDirection::Out});
 									dangingOutBlock << "\t" << uniqueName << " = " << OutputTemporaryForNode(i2->NodeId(), p._name) << ";" << std::endl;
 								}
@@ -827,9 +833,9 @@ namespace ShaderSourceParser
 					return test._name == p._name;
 				});
 			if (i != slotSignature.GetParameters().end()) {
-				if (XlEqString(i->_type, "auto"))
+				if (XlEqString<char>(i->_type, "auto"))
 					i->_type = p._type;
-				WriteCastExpression(paramStream, {i->_name, i->_type}, p._type);
+				WriteCastExpression(paramStream, {i->_name.AsString(), i->_type.AsString()}, p._type.AsString());
 				continue;
 			}
 
@@ -862,14 +868,14 @@ namespace ShaderSourceParser
 					return test._name == p._name;
 				});
 			if (i != generatedFunctionSignature.GetParameters().end()) {
-				if (XlEqString(p._type, "auto"))
+				if (XlEqString<char>(p._type, "auto"))
 					p._type = i->_type;
 
 				if (p._name == s_resultName) {
-					WriteCastExpression(returnExpression, {std::string("temp_") + i->_name, i->_type}, p._type);
+					WriteCastExpression(returnExpression, {std::string("temp_") + i->_name.AsString(), i->_type.AsString()}, p._type.AsString());
 				} else {
 					result << "\t" << p._name << " = ";
-					WriteCastExpression(result, {std::string("temp_") + i->_name, i->_type}, p._type);
+					WriteCastExpression(result, {std::string("temp_") + i->_name.AsString(), i->_type.AsString()}, p._type.AsString());
 					result << ";" << std::endl;
 				}
 				continue;

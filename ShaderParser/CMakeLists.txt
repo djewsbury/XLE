@@ -9,26 +9,12 @@ set(Src
 	NodeGraph.cpp
 	NodeGraphProvider.cpp
 	NodeGraphSignature.cpp
+	ParseHLSL.cpp
 	ShaderAnalysis.cpp
 	ShaderInstantiation.cpp
 	ShaderPatcher.cpp
-	ShaderSignatureParser.cpp
+	SignatureAsset.cpp
 	StructureForPreview.cpp)
-	
-set(Headers
-	AntlrHelper.h
-	AutomaticSelectorFiltering.h
-	DescriptorSetInstantiation.h
-	Exceptions.h
-	GraphSyntax.h
-	NodeGraph.h
-	NodeGraphProvider.h
-	NodeGraphSignature.h
-	ShaderAnalysis.h
-	ShaderInstantiation.h
-	ShaderPatcher_Internal.h
-	ShaderPatcher.h
-	ShaderSignatureParser.h)
 
 if (XLE_ANTLR_ENABLE)
 	set(GeneratedGrammarFiles
@@ -48,7 +34,7 @@ if (XLE_ANTLR_ENABLE)
 		BYPRODUCTS Grammar/GraphSyntax.tokens Grammar/GraphSyntaxEval.tokens Grammar/ShaderTreeWalk.tokens)
 endif()
 
-add_library(ShaderParser STATIC ${Src} ${Headers} ${GeneratedGrammarFiles})
+add_library(ShaderParser STATIC ${Src} ${GeneratedGrammarFiles})
 xle_configure_library(ShaderParser)
 
 target_include_directories(ShaderParser PRIVATE ${CMAKE_CURRENT_BINARY_DIR})

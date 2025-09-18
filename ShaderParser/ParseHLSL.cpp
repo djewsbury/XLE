@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ShaderSignatureParser.h"
+#include "ParseHLSL.h"
 #include "NodeGraphSignature.h"
 #include "NodeGraph.h"		// (just required for s_resultName)
 #include "AntlrHelper.h"
