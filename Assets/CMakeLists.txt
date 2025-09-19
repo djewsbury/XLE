@@ -1,5 +1,7 @@
 set(Src
     ArchiveCache.cpp
+    ArtifactCollectionFuture.cpp
+    AssetHeapNew.cpp
     Assets.cpp
     AssetServices.cpp
     AssetSetManager.cpp
@@ -9,20 +11,20 @@ set(Src
     BlockSerializer.cpp
     ChunkFileContainer.cpp
     ChunkFileWriter.cpp
-    ArtifactCollectionFuture.cpp
+    CompoundAsset.cpp
     ConfigFileContainer.cpp
     DepVal.cpp
-    IntermediatesStore.cpp
     IntermediateCompilers.cpp
+    IntermediatesStore.cpp
+    LooseFilesCache.cpp
     MainFileSystem.cpp
     MemoryFile.cpp
     MountingTree.cpp
     NascentChunk.cpp
-    OSFileSystem.cpp
-    RawFileAsset.cpp
-    LooseFilesCache.cpp
-    PreprocessorIncludeHandler.cpp
     OperationContext.cpp
+    OSFileSystem.cpp
+    PreprocessorIncludeHandler.cpp
+    RawFileAsset.cpp
     XPak.cpp
     Legacy/AssetsLegacy.cpp
     ../Foreign/FastLZ/fastlz.c)
