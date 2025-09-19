@@ -29,6 +29,8 @@ namespace Formatters
 		void WriteSequencedValue(
 			StringSection<> value);
 		void WriteValue(StringSection<> value);
+
+		void WriteDanglingKey(StringSection<> name);
 		
 		void NewLine();
 		void SuppressHeader();

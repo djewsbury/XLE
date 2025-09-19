@@ -27,6 +27,7 @@ add_library(
     ../GeoProc/MeshDatabase.cpp
     ../GeoProc/NascentAnimController.cpp
     ../GeoProc/NascentCommandStream.cpp
+    ../GeoProc/NascentMaterialTable.cpp
     ../GeoProc/NascentModel.cpp
     ../GeoProc/NascentObjectsSerialize.cpp
     ../GeoProc/NascentRawGeometry.cpp

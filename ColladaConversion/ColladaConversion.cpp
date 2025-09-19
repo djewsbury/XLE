@@ -16,6 +16,7 @@
 #include "../RenderCore/GeoProc/NascentAnimController.h"
 #include "../RenderCore/GeoProc/NascentObjectsSerialize.h"
 #include "../RenderCore/GeoProc/NascentModel.h"
+#include "../RenderCore/GeoProc/NascentMaterialTable.h"
 #include "../RenderCore/GeoProc/MeshDatabase.h"
 
 #include "../RenderCore/Assets/AssetUtils.h"
@@ -485,10 +486,8 @@ namespace ColladaConversion
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static void SerializeMatTable(OutputStream& stream, const ColladaCompileOp& model)
+    static void SerializeMatTable(NascentMaterialTable& result, const ColladaCompileOp& model)
     {
-        Formatters::TextOutputFormatter formatter(stream);
-
         std::vector<std::pair<NascentObjectGuid, RenderCore::Assets::RawMaterial>> compiledEffects;
 
         auto effects = model._doc->GetEffects();
@@ -509,28 +508,16 @@ namespace ColladaConversion
 			auto i = LowerBound(compiledEffects, NascentObjectGuid { effect._id, effect._fileHash });
 			if (i == compiledEffects.end() || !(i->first == NascentObjectGuid { effect._id, effect._fileHash }))
                 continue;
-
-            auto ele = formatter.BeginKeyedElement(m->_name.AsString());
-            SerializationOperator(formatter, i->second);
-            formatter.EndElement(ele);
+			result._rawMaterials.emplace(m->_name.AsString(), i->second);
         }
     }
 
     ::Assets::SerializedTarget SerializeMaterials(const ColladaCompileOp& model, StringSection<utf8> rootNodeName)
     { 
-        MemoryOutputStream<char> strm;
-        SerializeMatTable(strm, model);
+        NascentMaterialTable materials;
+        SerializeMatTable(materials, model);
         return ::Assets::SerializedTarget {
-			{
-				::Assets::SerializedArtifact{
-					Type_RawMat, 0, model._name,
-					::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))
-				},
-				::Assets::SerializedArtifact{
-					"DirectorySearchRules"_h, 0, model._name,
-					::Assets::DefaultDirectorySearchRules(model._name).Serialize()
-				}
-			},
+			SerializeMaterialToChunks(model._name, materials, ::Assets::DefaultDirectorySearchRules(model._name)),
 			model.GetDependencyValidation()
 		};
     }

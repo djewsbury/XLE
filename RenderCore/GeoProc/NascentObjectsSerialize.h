@@ -12,6 +12,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	class NascentModel;
 	class NascentSkeleton;
 	class NascentAnimationSet;
+	class NascentMaterialTable;
 	struct NativeVBSettings;
 
 	std::vector<::Assets::SerializedArtifact> SerializeSkinToChunks(
@@ -27,4 +28,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 	std::vector<::Assets::SerializedArtifact> SerializeAnimationsToChunks(
 		const std::string& name,
 		const NascentAnimationSet& animationSet);
+
+	std::vector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
+		const std::string& name,
+		const NascentMaterialTable&,
+		const ::Assets::DirectorySearchRules&);
 }}}

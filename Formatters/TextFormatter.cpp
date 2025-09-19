@@ -255,6 +255,38 @@ namespace Formatters
         _hotLine = true;
     }
 
+    void TextOutputFormatter::WriteDanglingKey(StringSection<> name)
+    {
+        const unsigned idealLineLength = 100;
+        bool forceNewLine = 
+            (_currentLineLength + name.size() + 3) > idealLineLength
+            || _pendingHeader
+			|| _currentIndentLevel < _indentLevelAtStartOfLine;
+
+        if (forceNewLine) {
+            DoNewLine();
+        } else if (_hotLine) {
+            _stream->WriteChar(';');
+            _stream->WriteChar(' ');
+            _currentLineLength += 2;
+        }
+
+        if (!name.IsEmpty()) {
+            if (IsSimpleString(name)) {
+                _stream->Write(name);
+            } else {
+                WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
+                _stream->Write(name);
+                WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
+            }
+        }
+
+        _stream->WriteChar('=');
+
+        _currentLineLength += unsigned(name.size() + 1);
+        _hotLine = false;   // not considered a "hot line" because we need to use this to get "A = B =~" type constructions
+    }
+
     void TextOutputFormatter::EndElement(ElementId id)
     {
         if (_currentIndentLevel == 0)

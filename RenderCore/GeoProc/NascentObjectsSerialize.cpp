@@ -7,8 +7,11 @@
 #include "NascentObjectsSerialize.h"
 #include "NascentModel.h"
 #include "NascentCommandStream.h"
+#include "NascentMaterialTable.h"
 #include "../Assets/AssetUtils.h"
 #include "../Assets/NascentChunk.h"
+#include "../../Formatters/TextOutputFormatter.h"
+#include "../../Utility/Streams/SerializationUtils.h"
 #include <sstream>
 
 #if defined(_DEBUG)
@@ -74,6 +77,29 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 					std::move(metricsBlock)}
 			#endif
 		};
+	}
+
+	std::vector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
+		const std::string& name,
+		const NascentMaterialTable& materialTable,
+		const ::Assets::DirectorySearchRules& searchRules)
+	{
+		MemoryOutputStream<> strm;
+		{
+			Formatters::TextOutputFormatter fmttr(strm);
+			fmttr << materialTable;
+		}
+
+		return {
+			::Assets::SerializedArtifact{
+				RenderCore::Assets::ChunkType_RawMat, 0, name,
+				::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))
+			},
+			::Assets::SerializedArtifact{
+				ConstHash64("DirectorySearchRules"), 0, name,
+				searchRules.Serialize()
+			}
+		},
 	}
 
 }}}
