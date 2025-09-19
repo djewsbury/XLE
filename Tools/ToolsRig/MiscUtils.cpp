@@ -19,7 +19,7 @@ namespace ToolsRig
 	constexpr auto s_ModelScaffold_CompileProcessType = GetCompileProcessType((RenderCore::Assets::ModelScaffold*)nullptr);
 	constexpr auto s_AnimationSetScaffold_CompileProcessType = GetCompileProcessType((RenderCore::Assets::AnimationSetScaffold*)nullptr);
 	constexpr auto s_SkeletonScaffold_CompileProcessType = GetCompileProcessType((RenderCore::Assets::SkeletonScaffold*)nullptr);
-	constexpr auto s_RawMaterialSet_CompileProcessType = GetCompileProcessType((RenderCore::Assets::RawMaterialSet*)nullptr);
+	constexpr auto s_RawMaterialSet_CompileProcessType = RenderCore::Assets::s_RawMaterial_CompileProcessType;
 
 	std::vector<std::pair<std::string, std::string>> GetModelExtensions()
 	{

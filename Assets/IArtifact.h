@@ -257,6 +257,8 @@ namespace Assets
 	//			(::Assets::Blob&&, DependencyValidation&&, StringSection<>)
 	//					or forward to AutoConstructAsset with
 	//			(::Assets::Blob&&, DirectorySearchRules&&, DependencyValidation&&, StringSection<>)
+	//					or
+	//			(Blob&&) (with imbued context)
 	//
 	template<typename AssetType, typename... Params, ENABLE_IF(!Internal::AssetTraits2<AssetType>::Constructor_ArtifactRequestResult)>
 		AssetType AutoConstructAsset(const IArtifactCollection& artifactCollection, uint64_t defaultChunkRequestCode = 0)
@@ -271,6 +273,16 @@ namespace Assets
 				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
 				auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
 				return Internal::InvokeAssetConstructor<AssetType>(std::move(chunks[0]._sharedBlob), artifactCollection.GetDependencyValidation(), StringSection<>{});
+
+			} else if constexpr (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::AssetTraits<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>::Constructor_SimpleBlobFile) {
+
+				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
+				auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
+				return {
+					Internal::InvokeAssetConstructor<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>(std::move(chunks[0]._sharedBlob)),
+					artifactCollection.GetDirectorySearchRules(),
+					artifactCollection.GetDependencyValidation(),
+					InheritList{}};
 
 			} else {
 
@@ -304,6 +316,7 @@ namespace Assets
 
 		TRY {
 			std::vector<ArtifactRequestResult> chunks;
+			using AssetType = Internal::PromisedTypeRemPtr<Promise>;
 			if constexpr (Internal::AssetTraits2<AssetType>::HasChunkRequests) {
 				chunks = artifactCollection.ResolveRequests(MakeIteratorRange(Internal::RemoveSmartPtrType<AssetType>::ChunkRequests));
 			} else {
@@ -313,7 +326,7 @@ namespace Assets
 
 			AutoConstructToPromiseSynchronously(
 				promise,
-				std::move(reqRes[0]._sharedBlob),
+				std::move(chunks[0]._sharedBlob),
 				artifactCollection.GetDependencyValidation(),
 				artifactCollection.GetRequestParameters());
 		} CATCH(...) {

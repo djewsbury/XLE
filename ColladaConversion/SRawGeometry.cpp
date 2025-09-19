@@ -18,6 +18,7 @@
 #include "../RenderCore/Assets/AssetUtils.h"
 #include "../RenderCore/StateDesc.h"      // for Topology...!
 #include "../RenderCore/Format.h"
+#include "../Math/Transformations.h"
 #include "../OSServices/Log.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/IteratorUtils.h"

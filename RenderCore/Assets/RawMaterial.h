@@ -189,6 +189,7 @@ namespace RenderCore { namespace Assets
     class ModelCompilationConfiguration;
 
     static constexpr uint64_t s_RawMaterial_ComponentName = ConstHash64("RawMaterial");
+    static constexpr uint64_t s_RawMaterial_CompileProcessType = ConstHash64Legacy<'RawM', 'at'>::Value;
 
 #if !defined(__CLR_VER)
 

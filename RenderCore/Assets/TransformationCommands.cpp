@@ -6,6 +6,8 @@
 
 #include "TransformationCommands.h"
 #include "../../OSServices/Log.h"
+#include "../../Math/Matrix.h"
+#include "../../Math/Transformations.h"
 #include "../../Math/MathSerialization.h"
 #include <sstream>
 

@@ -25,9 +25,10 @@
 #include "../../Formatters/TextFormatter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
-#include "../../Assets/IFileSystem.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
+#include "../../Math/Matrix.h"
+#include "../../Math/Transformations.h"
 #include "../../Utility/ArithmeticUtils.h"
 #include <utility>
 #include <map>

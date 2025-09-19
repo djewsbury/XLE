@@ -4,7 +4,7 @@
 
 #include "AnimationBindings.h"
 #include "TransformationCommands.h"
-#include "../../OSServices/Log.h"
+#include "../../Math/Transformations.h"
 
 namespace RenderCore { namespace Assets
 {

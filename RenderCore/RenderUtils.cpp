@@ -24,6 +24,7 @@
 #include "../Utility/ArithmeticUtils.h"
 #include "../Utility/BitUtils.h"
 #include <cctype>
+#include <sstream>
 
 using namespace Utility::Literals;
 

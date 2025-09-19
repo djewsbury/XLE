@@ -7,15 +7,10 @@
 #pragma once
 
 #include "ScaffoldCmdStream.h"
-#include "../../Assets/BlockSerializer.h"
-#include "../../Math/Transformations.h"
-#include "../../Math/Quaternion.h"
-#include "../../Utility/Streams/SerializationUtils.h"
+#include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
 #include <vector>
 #include <functional>
-
-namespace Utility { class OutputStream; }
 
 namespace RenderCore { namespace Assets
 {
