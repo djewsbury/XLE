@@ -7,12 +7,11 @@
 #include "Console.h"
 #include "Plugins.h"
 #include "../Utility/PtrUtils.h"
-#include "../Utility/StringFormat.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/IteratorUtils.h"
-#include "../Core/Exceptions.h"
 #include "../Math/Vector.h"
+#include "../Core/Exceptions.h"
 #include <iterator>
 #include <algorithm>
 
@@ -252,22 +251,10 @@ namespace ConsoleRig
         return std::basic_string<ucs2>(buffer);
     }
 
-    void            Console::Print(const std::string& message)
+    void            Console::Print(StringSection<> message)
     {
         if (!this) return;  // hack!
-        Print(AsUTF16(message));
-    }
-
-    void Console::Print(const char message[])
-    {
-        if (!this) return;  // hack!
-        Print(AsUTF16(message, XlStringSize(message)));
-    }
-
-    void Console::Print(const char* messageStart, const char* messageEnd)
-    {
-        if (!this) return;  // hack!
-        Print(AsUTF16(messageStart, messageEnd - messageStart));
+        Print(AsUTF16(message.begin(), message.size()));
     }
 
     void            Console::Print(const std::basic_string<ucs2>& message)

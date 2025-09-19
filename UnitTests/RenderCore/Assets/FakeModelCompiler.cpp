@@ -12,10 +12,10 @@
 #include "../../../RenderCore/GeoProc/NascentModel.h"
 #include "../../../RenderCore/GeoProc/MeshDatabase.h"
 #include "../../../RenderCore/StateDesc.h"
+#include "../../../Assets/NascentChunk.h"
 #include "../../../ConsoleRig/GlobalServices.h"			// for ConsoleRig::GetLibVersionDesc()
 #include "../../../OSServices/AttachableLibrary.h"
 #include "../../../Assets/ICompileOperation.h"
-#include "../../../Utility/Streams/StreamTypes.h"
 #include "../../../Formatters/TextFormatter.h"
 #include "../../../Formatters/TextOutputFormatter.h"
 
@@ -115,7 +115,7 @@ namespace UnitTests
 			{
 				::Assets::SerializedArtifact{
 					Type_RawMat, 0, _modelName,
-					::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))}
+					::Assets::AsBlob(strm)}
 			}
 		};
 	}

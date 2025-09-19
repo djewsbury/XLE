@@ -74,12 +74,12 @@ namespace UnitTests
     }
 
     template<typename CharType>
-        static void FillStream(StreamBuf<CharType>& stream)
+        static void FillStream(std::basic_stringstream<CharType>& stream)
         {
-            stream.WriteChar('B');
-            stream.Write(u8"<<StringB>>");
-            stream.WriteChar('D');
-            stream.Write(u8"<<StringD>>");
+            stream.put('B');
+            stream << u8"<<StringB>>";
+            stream.put('D');
+            stream << u8"<<StringD>>";
         }
 
     TEST_CASE( "Utilities-MemoryStreamTest", "[utility]" )
@@ -91,9 +91,9 @@ namespace UnitTests
         // FillStream(*memStreamB);
         FillStream(*memStreamC);
 
-        auto stringA = memStreamA->AsString();
+        auto stringA = memStreamA->str();
         // auto stringB = memStreamB->AsString();
-        auto stringC = memStreamC->AsString();
+        auto stringC = memStreamC->str();
 
         REQUIRE(stringA == "B<<StringB>>D<<StringD>>");
         // REQUIRE(stringB == (const utf16*)u"B<<StringB>>D<<StringD>>");

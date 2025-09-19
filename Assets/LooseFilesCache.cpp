@@ -320,10 +320,12 @@ namespace Assets
 			for (auto&c:simplifedCompileProducts._compileProducts)
 				c._intermediateArtifact = MakeRelativePath(compileProductsDirectorySplit, MakeSplitPath(c._intermediateArtifact));
 			std::shared_ptr<IFileInterface> productsFile = OpenFileInterface(*_filesystem, productsName + ".s", "wb", 0); // note -- no sharing allowed on this file. We take an exclusive lock on it
-			FileOutputStream stream(productsFile);
+			std::stringstream stream;
 			Formatters::TextOutputFormatter fmtter(stream);
 			fmtter << simplifedCompileProducts;
 			renameOps.push_back({productsName + ".s", productsName});
+			auto str = stream.str();
+			productsFile->Write(str.data(), str.size());
 		}
 
 #if defined(_DEBUG)

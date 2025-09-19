@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <vector>
 
-namespace Utility { class OutputStream; }
 namespace Assets { class IFileInterface; }
 namespace OSServices { class LibVersionDesc; }
 

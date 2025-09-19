@@ -15,7 +15,6 @@
 #include "ICompileOperation.h"
 #include "../OSServices/Log.h"
 #include "../OSServices/RawFS.h"
-#include "../OSServices/LegacyFileStreams.h"
 #include "../OSServices/AttachableLibrary.h"
 #include "../Formatters/TextFormatter.h"
 #include "../Formatters/TextOutputFormatter.h"
@@ -29,6 +28,7 @@
 #include "../Utility/FastParseValue.h"
 #include "../Utility/StringFormat.h"
 #include <algorithm>
+#include <sstream>
 
 using namespace Utility::Literals;
 
@@ -568,10 +568,12 @@ namespace Assets
 				TRY {
 					std::unique_ptr<IFileInterface> outputFile;
 					if (TryOpen(outputFile, *_filesystem, MakeStringSectionNullTerm(debugFilename), "wb") == MainFileSystem::IOReason::Success) {
-						FileOutputStream stream(std::move(outputFile));
+						std::stringstream stream;
 						Formatters::TextOutputFormatter formatter(stream);
 						for (const auto&i:attachedStrings)
 							formatter.WriteKeyedValue(i.first, i.second);
+						auto str = stream.str();
+						outputFile->Write(str.data(), str.size());
 					}
 				} CATCH (...) {
 				} CATCH_END
@@ -612,7 +614,7 @@ namespace Assets
 			TRY {
 				std::unique_ptr<IFileInterface> outputFile;
 				if (TryOpen(outputFile, *_filesystem, MakeStringSectionNullTerm(depsFilename), "wb") == MainFileSystem::IOReason::Success) {
-					FileOutputStream stream(std::move(outputFile));
+					std::stringstream stream;
 					Formatters::TextOutputFormatter formatter(stream);
 					for (auto i=depsData.begin(); i!=depsData.end();) {
 						auto objEnd = i+1;
@@ -634,6 +636,8 @@ namespace Assets
 						formatter.EndElement(ele);
 						i=objEnd;
 					}
+					auto str = stream.str();
+					outputFile->Write(str.data(), str.size());
 				}
 			} CATCH (...) {
 			} CATCH_END

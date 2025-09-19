@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "../Utility/StringUtils.h"
 #include "../Utility/UTFUtils.h"
 #if !defined(__CLR_VER)
     #include "../Utility/Threading/Mutex.h"
@@ -36,9 +37,7 @@ namespace ConsoleRig
         void        Execute(const std::string& str);
         auto        AutoComplete(const std::string& input) -> std::vector<std::string>;
 
-        void        Print(const char messageStart[]);
-        void        Print(const char* messageStart, const char* messageEnd);
-        void        Print(const std::string& message);
+        void        Print(StringSection<> message);
         void        Print(const std::basic_string<ucs2>& message);
 
         auto        GetLines(unsigned lineCount, unsigned scrollback=0) -> std::vector<std::basic_string<ucs2>>;
@@ -87,6 +86,17 @@ namespace ConsoleRig
 
         void Deregister();
     };
+
+    std::ostream& GetWarningStream();
+
+    void        xleWarning(const char format[], ...);
+    void        xleWarning(const char format[], va_list args);
+
+    #if defined(_DEBUG)
+        void            xleWarningDebugOnly(const char format[], ...);
+    #else
+        inline void     xleWarningDebugOnly(const char format[], ...) { (void)format; }
+    #endif
 
     namespace Detail
     {

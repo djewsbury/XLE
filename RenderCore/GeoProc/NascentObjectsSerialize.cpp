@@ -9,7 +9,7 @@
 #include "NascentCommandStream.h"
 #include "NascentMaterialTable.h"
 #include "../Assets/AssetUtils.h"
-#include "../Assets/NascentChunk.h"
+#include "../../Assets/NascentChunk.h"
 #include "../../Formatters/TextOutputFormatter.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 #include <sstream>
@@ -93,13 +93,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return {
 			::Assets::SerializedArtifact{
 				RenderCore::Assets::ChunkType_RawMat, 0, name,
-				::Assets::AsBlob(MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End()))
+				::Assets::AsBlob(strm)
 			},
 			::Assets::SerializedArtifact{
 				ConstHash64("DirectorySearchRules"), 0, name,
 				searchRules.Serialize()
 			}
-		},
+		};
 	}
 
 }}}

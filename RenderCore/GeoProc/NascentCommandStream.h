@@ -16,7 +16,6 @@
 namespace Assets { class BlockSerializer; }
 namespace RenderCore { namespace Assets { class RawAnimationCurve; }}
 namespace RenderCore { enum class Format : int; }
-namespace Utility { class OutputStream; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {

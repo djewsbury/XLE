@@ -72,11 +72,11 @@ namespace RenderCore { namespace Assets
 		template<typename Type>
 			static std::pair<std::unique_ptr<uint8_t[], PODAlignedDeletor>, size_t> SerializeViaStreamFormatterToBuffer(const Type& type)
 		{
-			MemoryOutputStream<utf8> strm;
+			std::stringstream strm;
 			{ Formatters::TextOutputFormatter fmtter{strm}; fmtter << type; }
-			auto strmBuffer = MakeIteratorRange(strm.GetBuffer().Begin(), strm.GetBuffer().End());
+			auto strmBuffer = strm.str();
 			std::unique_ptr<uint8_t[], PODAlignedDeletor> result { (uint8_t*)XlMemAlign(strmBuffer.size(), sizeof(uint64_t)) };
-			std::memcpy(result.get(), strmBuffer.begin(), strmBuffer.size());
+			std::memcpy(result.get(), strmBuffer.data(), strmBuffer.size());
 			return { std::move(result), strmBuffer.size() };
 		}
 

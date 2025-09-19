@@ -6,24 +6,14 @@
 
 #pragma once
 
-#include "../StringUtils.h"
-#include "../UTFUtils.h"
+#include <ostream>
+#include <sstream>
 
 namespace Utility
 {
-    class OutputStream
-    {
-    public:
-        using size_type = size_t;
-        virtual size_type   Tell() = 0;
-        virtual void        Write(const void*, size_type) = 0;
-        virtual void        Write(StringSection<utf8>) = 0;
-        virtual void        WriteChar(char ch) = 0;             // note -- this is always a single byte character (ie, use the string version if you want to write multibyte characters)
-        virtual void        Flush() = 0;
-
-        virtual ~OutputStream() {}
-    };
+    using OutputStream = std::ostream;
+    template<typename CharType = char>
+        using MemoryOutputStream = std::basic_stringstream<CharType>;
 }
 
 using namespace Utility;
-

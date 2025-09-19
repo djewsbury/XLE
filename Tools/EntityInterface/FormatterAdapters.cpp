@@ -188,15 +188,28 @@ namespace EntityInterface
 		virtual Formatters::StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
-		MemoryStreamTextFormatterAdapter(MemoryOutputStream<>&& stream, ::Assets::DependencyValidation&& depVal)
-		: _stream(std::move(stream))
-		, _depVal(std::move(depVal))
-		{
-			_fmttr = Formatters::TextStreamMarker<char>{MakeIteratorRange(_stream.GetBuffer().Begin(), _stream.GetBuffer().End()), _depVal};
-		}
+		#if __cplusplus >= 202002L
+			MemoryStreamTextFormatterAdapter(MemoryOutputStream<>&& stream, ::Assets::DependencyValidation&& depVal)
+			: _stream(std::move(stream))
+			, _depVal(std::move(depVal))
+			{
+				_fmttr = Formatters::TextStreamMarker<char>{MakeIteratorRange(_stream.view().begin(), _stream.view().end()), _depVal};
+			}
+		#else
+			MemoryStreamTextFormatterAdapter(std::string&& stream, ::Assets::DependencyValidation&& depVal)
+			: _stream(std::move(stream))
+			, _depVal(std::move(depVal))
+			{
+				_fmttr = Formatters::TextStreamMarker<char>{MakeIteratorRange(_stream.begin(), _stream.end()), _depVal};
+			}
+		#endif
 
 	private:
-		MemoryOutputStream<> _stream;
+		#if __cplusplus >= 202002L
+			MemoryOutputStream<> _stream;
+		#else
+			std::string _stream;
+		#endif
 		Formatters::TextInputFormatter<> _fmttr;
 		::Assets::DependencyValidation _depVal;
 	};
@@ -205,6 +218,10 @@ namespace EntityInterface
         MemoryOutputStream<>&& formatter,
 		::Assets::DependencyValidation&& depVal)
 	{
-		return std::make_shared<MemoryStreamTextFormatterAdapter>(std::move(formatter), std::move(depVal));
+		#if __cplusplus >= 202002L
+			return std::make_shared<MemoryStreamTextFormatterAdapter>(std::move(formatter), std::move(depVal));
+		#else
+			return std::make_shared<MemoryStreamTextFormatterAdapter>(formatter.str(), std::move(depVal));
+		#endif
 	}
 }

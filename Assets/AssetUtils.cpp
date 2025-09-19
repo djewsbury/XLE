@@ -670,15 +670,6 @@ namespace Assets
 		}
 	}
 
-
-    auto FileOutputStream::Tell() -> size_type { return _file->TellP(); }
-    void FileOutputStream::Write(const void* p, size_type len) { _file->Write(p, 1, len); }
-    void FileOutputStream::WriteChar(char ch) { _file->Write(&ch, 1); }
-    void FileOutputStream::Write(StringSection<utf8> s) { _file->Write(s.begin(), sizeof(utf8), s.size()); }
-    void FileOutputStream::Flush() {}
-    FileOutputStream::FileOutputStream(const std::shared_ptr<IFileInterface>& file) : _file(file) {}
-    FileOutputStream::FileOutputStream(std::unique_ptr<IFileInterface>&& file) : _file(std::move(file)) {}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     namespace Internal

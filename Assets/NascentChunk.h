@@ -6,7 +6,6 @@
 
 #include "AssetsCore.h"
 #include "../Utility/IteratorUtils.h"
-#include <memory>
 
 namespace Assets
 {
@@ -17,8 +16,12 @@ namespace Assets
 	template<typename Char>
 		static Blob AsBlob(std::basic_stringstream<Char>& stream)
 	{
-		auto str = stream.str();
-		return AsBlob(MakeIteratorRange(AsPointer(str.begin()), AsPointer(str.end())));
+		#if __cplusplus >= 202002L
+			return ::Assets::AsBlob(MakeIteratorRange(strm.view().begin(), strm.view.end()));
+		#else
+			auto str = stream.str();
+			return AsBlob(MakeIteratorRange(AsPointer(str.begin()), AsPointer(str.end())));
+		#endif
 	}
 
 	template<typename Type>

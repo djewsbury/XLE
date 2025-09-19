@@ -7,9 +7,9 @@ set(Src
     Console.cpp
     DebugUtil.cpp
     GlobalServices.cpp
-    OutputStream.cpp
     Plugins.cpp
     AttachablePtr.cpp
+    WarningStream.cpp
     ${CMAKE_BINARY_DIR}/ConsoleRig/Version.cpp)
 
 add_library(ConsoleRig STATIC ${Src})

@@ -33,8 +33,8 @@
 // 
 
 #include "../Core/Prefix.h"
-#include "Streams/Stream.h"
 #include "Streams/StreamTypes.h"
+#include "StringUtils.h"
 
 #include <sys/types.h>
 #include <string.h>

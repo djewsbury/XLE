@@ -6,16 +6,14 @@
 
 #pragma once
 
-#include "Streams/StreamTypes.h"
 #include "PtrUtils.h"
 #include "Detail/API.h"
 #include "MemoryUtils.h"
 #include "StringUtils.h"
 #include "IteratorUtils.h"
 #include <string>
-#include <streambuf>
-#include <ostream>
 #include <stdarg.h>
+#include <iosfwd>
 
 template<typename Type> std::ostream& Internal_MeldHelper_BreakoutOperator(std::ostream& strm, const Type& type) { return strm << type; }
 
@@ -35,7 +33,7 @@ namespace Utility
         return n;
     }
 
-    class OutputStream;
+    using OutputStream = std::ostream;
     XL_UTILITY_API int      PrintFormatV(OutputStream* stream, const char* fmt, va_list args);
     XL_UTILITY_API int      PrintFormat(OutputStream* stream, const char* fmt, ...);
 

@@ -156,7 +156,12 @@ static int FlagChar(int ch)
     }
 }
 
-// [TODO] remove xl_snprintf dependency!
+static void WriteNullTerm(std::ostream& str, const char string[])
+{
+    assert(string);
+    str.write(string, std::strlen(string));
+}
+
 template<typename T>
     int _PrintFormatV(OutputStream* stream, const T* fmt, va_list args)
 {
@@ -171,7 +176,7 @@ template<typename T>
             continue;
         }
         int len2 = (int)(fmt - start);
-        stream->Write(start, len2 * sizeof(T));
+        stream->write(start, len2 * sizeof(T));
         nchars += len2;
         ++fmt;
         if (*fmt == '%') {
@@ -335,20 +340,20 @@ template<typename T>
                         fixed_length = width - fixed_length;
 
                         if (fixed_length <= 0) {
-                            stream->Write(tmp);
+                            WriteNullTerm(*stream, tmp);
                         } else if (left) {
-                            stream->Write(tmp);
+                            WriteNullTerm(*stream, tmp);
                             while (fixed_length-- > 0) {
-                                stream->WriteChar(' ');
+                                stream->put(' ');
                             }
                         } else { // right
                             while (fixed_length-- > 0) {
-                                stream->WriteChar(' ');
+                                stream->put(' ');
                             }
-                            stream->Write(tmp);
+                            WriteNullTerm(*stream, tmp);
                         }
                     } else {
-                        stream->Write((const utf8*)"<null>");
+                        WriteNullTerm(*stream, "<null>");
                         nchars += XlGlyphCount((const utf8*)"<null>");
                     }
                 }
@@ -398,20 +403,20 @@ template<typename T>
                         fixed_length = width - fixed_length;
 
                         if (fixed_length <= 0) {
-                            stream->Write(tmp);
+                            WriteNullTerm(*stream, tmp);
                         } else if (left) {
-                            stream->Write(tmp);
+                            WriteNullTerm(*stream, tmp);
                             while (fixed_length-- > 0) {
-                                stream->WriteChar(' ');
+                                stream->put(' ');
                             }
                         } else { // right
                             while (fixed_length-- > 0) {
-                                stream->WriteChar(' ');
+                                stream->put(' ');
                             }
-                            stream->Write(tmp);
+                            WriteNullTerm(*stream, tmp);
                         }
                     } else {
-                        stream->Write((const utf8*)"<null>");
+                        WriteNullTerm(*stream, "<null>");
                         nchars += XlGlyphCount((const utf8*)"<null>");
                     }
                 }
@@ -561,14 +566,14 @@ template<typename T>
                 }
             }
 
-            stream->Write(buf);
+            WriteNullTerm(*stream, buf);
             nchars += XlGlyphCount(buf);
         }
         start = fmt;
     }
 
     int len = (int)(fmt - start);
-    stream->Write(start, len * sizeof(T));
+    stream->write(start, len * sizeof(T));
     nchars += len;
     return (int)nchars;
 }
@@ -589,9 +594,10 @@ int PrintFormat(OutputStream* stream, const char* fmt, ...)
 
 int XlFormatStringV(char* buf, int count, const char* fmt, va_list args) never_throws
 {
-    FixedMemoryOutputStream<utf8> stream((utf8*)buf, (size_t)count);
+    Internal::FixedMemoryBuffer2<char> streamBuf(buf, (size_t)count);
+    std::ostream stream{&streamBuf};
     int n = PrintFormatV(&stream, fmt, args);
-    stream.WriteChar(0);
+    stream.put(0);
     if (n >= count) {
         n = std::max<int>(count - 1, 0);
     }

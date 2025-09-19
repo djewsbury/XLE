@@ -6,8 +6,7 @@
 
 #include "../Utility/StringUtils.h"
 #include <vector>
-
-namespace Utility { class OutputStream; }
+#include <iosfwd>
 
 namespace Formatters
 {
@@ -31,15 +30,18 @@ namespace Formatters
 		void WriteValue(StringSection<> value);
 
 		void WriteDanglingKey(StringSection<> name);
+
+		template<typename Type>
+			void WriteKeyedValue(StringSection<> name, const Type& t);
 		
 		void NewLine();
 		void SuppressHeader();
 
-		TextOutputFormatter(Utility::OutputStream& stream);
+		TextOutputFormatter(std::ostream& stream);
 		~TextOutputFormatter();
 
 	protected:
-		Utility::OutputStream*   _stream;
+		std::ostream*   _stream;
 		unsigned        _currentIndentLevel;
 		unsigned		_indentLevelAtStartOfLine;
 		bool            _hotLine;
@@ -69,5 +71,13 @@ namespace Formatters
 		inline void SerializationOperator(TextOutputFormatter& formatter, const Type& input)
 	{
 		input.SerializeMethod(formatter);
+	}
+
+	template<typename Type>
+		void TextOutputFormatter::WriteKeyedValue(StringSection<> name, const Type& t)
+	{
+		// Note that we can't check for formatting characters using this path!
+		WriteDanglingKey(name);
+		*_stream << t;
 	}
 }

@@ -2,13 +2,10 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "../OSServices/Log.h"
-#include "OutputStream.h"
 #include "GlobalServices.h"
 #include "AttachablePtr.h"
 #include "../Utility/MemoryUtils.h"
 #include "../OSServices/RawFS.h"
-#include "../Utility/Streams/Stream.h"
 #include "../Core/Exceptions.h"
 
 #include <iostream>
@@ -17,13 +14,6 @@
     #include "../OSServices/WinAPI/IncludeWindows.h"
     #include "../Foreign/StackWalker/StackWalker.h"
 #endif
-
-    // We can't use the default initialisation method for easylogging++
-    // because is causes a "LoaderLock" exception when used with C++/CLI dlls.
-    // It also doesn't work well when sharing a single log file across dlls.
-    // Anyway, the default behaviour isn't great for our needs.
-    // So, we need to use "INITIALIZE_NULL" here, and manually construct
-    // a "GlobalStorage" object below...
 
 #if defined(_DEBUG)
     #define REDIRECT_COUT
@@ -41,57 +31,8 @@
 namespace ConsoleRig
 {
     #if defined(REDIRECT_COUT)
-        template <typename CharType>
-            class StdCToXLEStreamAdapter : public std::basic_streambuf<CharType>
-        {
-        public:
-            void Reset(std::shared_ptr<Utility::OutputStream> chain) { _chain = chain; }
-            StdCToXLEStreamAdapter(std::shared_ptr<Utility::OutputStream> chain);
-            ~StdCToXLEStreamAdapter();
-        protected:
-            std::shared_ptr<Utility::OutputStream> _chain;
-
-            virtual std::streamsize xsputn(const CharType* s, std::streamsize count);
-            virtual int sync();
-			using StreamIntType = typename std::basic_streambuf<CharType>::int_type;
-			virtual StreamIntType overflow(StreamIntType ch);
-        };
-
-        template <typename CharType>
-            StdCToXLEStreamAdapter<CharType>::StdCToXLEStreamAdapter(std::shared_ptr<Utility::OutputStream> chain) : _chain(chain) {}
-        template <typename CharType>
-            StdCToXLEStreamAdapter<CharType>::~StdCToXLEStreamAdapter() {}
-
-        template <typename CharType>
-            std::streamsize StdCToXLEStreamAdapter<CharType>::xsputn(const CharType* s, std::streamsize count)
-        {
-            assert(_chain);
-            _chain->Write(s, int(sizeof(CharType) * count));
-            return count;
-        }
-
-		template <typename CharType>
-			auto StdCToXLEStreamAdapter<CharType>::overflow(StreamIntType ch) -> StreamIntType
-		{
-			// For some reason, std::endl always invokes "overflow" instead of "xsputn"
-			using Traits = std::char_traits<CharType>;
-			if (!Traits::eq_int_type(ch, Traits::eof()))
-				_chain->Write(&ch, sizeof(CharType));
-			// any value other than Traits::eof() is considered a non-error return; but what
-			// value can be guarantee is not Traits::eof()?
-			return std::basic_streambuf<CharType>::overflow(ch);
-		}
-
-        template <typename CharType>
-            int StdCToXLEStreamAdapter<CharType>::sync()
-        {
-            _chain->Flush();
-            return 0;
-        }
-
-        std::shared_ptr<Utility::OutputStream>      GetSharedDebuggerWarningStream();
-
-        static StdCToXLEStreamAdapter<char> s_coutAdapter(nullptr);
+        std::ostream* GetSharedDebuggerWarningStream();
+        static std::ostream* s_coutAdapter;
         static std::basic_streambuf<char>* s_oldCoutStreamBuf = nullptr;
     #endif
 
@@ -110,12 +51,10 @@ namespace ConsoleRig
             
             bool doRedirect = serv.Call<bool>(Fn_RedirectCout);
             if (doRedirect && !serv.Has<OSServices::ModuleId()>(Fn_CoutRedirectModule)) {
-                auto redirect = GetSharedDebuggerWarningStream();
-                if (redirect) {
-                    s_coutAdapter.Reset(GetSharedDebuggerWarningStream());
+                s_coutAdapter = GetSharedDebuggerWarningStream();
+                if (s_coutAdapter) {
                     s_oldCoutStreamBuf = std::cout.rdbuf();
-                    std::cout.rdbuf(&s_coutAdapter);
-
+                    std::cout.rdbuf(s_coutAdapter->rdbuf());
                     serv.Add(Fn_CoutRedirectModule, [=](){ return currentModule; });
                 }
             }

@@ -10,13 +10,12 @@
 #include "../Assets/IntermediateCompilers.h"
 #include "../Assets/DepVal.h"
 #include "../Assets/PreprocessorIncludeHandler.h"
+#include "../Assets/NascentChunk.h"
 #include "../ConsoleRig/GlobalServices.h"		// for GetLibVersionDesc
 #include "../OSServices/AttachableLibrary.h"
 #include "../Utility/Streams/ConditionalPreprocessingTokenizer.h"
 #include "../Formatters/TextOutputFormatter.h"
-#include "../Utility/Streams/StreamTypes.h"
 #include "../Utility/Streams/SerializationUtils.h"
-#include "../Utility/Streams/PathUtils.h"
 #include "../Formatters/FormatterUtils.h"
 #include "../Utility/Conversion.h"
 #include "../Utility/StringUtils.h"
@@ -317,7 +316,7 @@ namespace ShaderSourceParser
 				artifact._chunkTypeCode = GetCompileProcessType((SelectorFilteringRules*)nullptr);
 				artifact._name = "filtering-rules";
 				artifact._version = 1;
-				artifact._data = ::Assets::AsBlob(memStream.AsString());
+				artifact._data = ::Assets::AsBlob(memStream);
 				artifacts.push_back(std::move(artifact));
 			}
 

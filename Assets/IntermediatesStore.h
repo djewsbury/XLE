@@ -11,7 +11,6 @@
 #include <set>
 #include <vector>
 
-namespace Utility { class OutputStream; }
 namespace OSServices { class BasicFile; }
 namespace OSServices { class LibVersionDesc; }
 

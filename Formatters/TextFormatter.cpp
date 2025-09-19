@@ -6,10 +6,8 @@
 
 #include "TextFormatter.h"
 #include "TextOutputFormatter.h"
-#include "../Assets/IFileSystem.h"       // for DependentFileState
 #include "../Utility/Streams/Stream.h"
 #include "../Utility/BitUtils.h"
-#include "../Utility/PtrUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/Conversion.h"
 #include "../Core/Exceptions.h"
@@ -47,7 +45,7 @@ namespace Formatters
     template<typename CharType, int Count> 
         static void WriteConst(OutputStream& stream, const CharType (&cnst)[Count], unsigned& lineLength)
     {
-        stream.Write(StringSection<CharType>(cnst, &cnst[Count]));
+        stream.write(cnst, Count);
         lineLength += Count;
     }
 
@@ -88,15 +86,15 @@ namespace Formatters
             // in simple cases, we just write the name without extra formatting 
             //  (otherwise we have to write a string prefix and string postfix
         if (IsSimpleString(name)) {
-            _stream->Write(name);
+            _stream->write(name.begin(), name.size());
         } else {
             WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
-            _stream->Write(name);
+            _stream->write(name.begin(), name.size());
             WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
         }
 
-        _stream->WriteChar('=');
-        _stream->WriteChar(FormatterConstants<utf8>::ElementPrefix);
+        _stream->put('=');
+        _stream->put(FormatterConstants<utf8>::ElementPrefix);
 
         _hotLine = true;
         _currentLineLength += unsigned(name.size() + 2);
@@ -116,8 +114,8 @@ namespace Formatters
     {
         DoNewLine();
 
-        _stream->WriteChar('=');
-        _stream->WriteChar(FormatterConstants<utf8>::ElementPrefix);
+        _stream->put('=');
+        _stream->put(FormatterConstants<utf8>::ElementPrefix);
 
         _hotLine = true;
         _currentLineLength += 2;
@@ -137,7 +135,7 @@ namespace Formatters
     {
         DoNewLine();
 
-        _stream->WriteChar(FormatterConstants<utf8>::ElementPrefix);
+        _stream->put(FormatterConstants<utf8>::ElementPrefix);
 
         _hotLine = true;
         _currentLineLength += 2;
@@ -159,7 +157,7 @@ namespace Formatters
             WriteConst(*_stream, FormatterConstants<utf8>::HeaderPrefix, _currentLineLength);
             StringMeld<128, utf8> buffer;
             buffer << "Format=2; Tab=" << TabWidth;
-            _stream->Write(buffer.get());
+            _stream->write(buffer.AsStringSection().begin(), buffer.AsStringSection().size());
 
             _hotLine = true;
             _pendingHeader = false;
@@ -172,7 +170,7 @@ namespace Formatters
             if (_currentIndentLevel > dimof(tabBuffer))
                 Throw(::Exceptions::BasicLabel("Excessive indent level found in OutputStreamFormatter (%i)", _currentIndentLevel));
             std::fill(tabBuffer, &tabBuffer[_currentIndentLevel], FormatterConstants<utf8>::Tab);
-            _stream->Write(StringSection<>(tabBuffer, &tabBuffer[_currentIndentLevel]));
+            _stream->write(tabBuffer, _currentIndentLevel);
             _hotLine = false;
             _currentLineLength = _currentIndentLevel * TabWidth;
         }
@@ -191,28 +189,28 @@ namespace Formatters
         if (forceNewLine) {
             DoNewLine();
         } else if (_hotLine) {
-            _stream->WriteChar(';');
-            _stream->WriteChar(' ');
+            _stream->put(';');
+            _stream->put(' ');
             _currentLineLength += 2;
         }
 
         if (!name.IsEmpty()) {
             if (IsSimpleString(name)) {
-                _stream->Write(name);
+                _stream->write(name.begin(), name.size());
             } else {
                 WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
-                _stream->Write(name);
+                _stream->write(name.begin(), name.size());
                 WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
             }
         }
 
-        _stream->WriteChar('=');
+        _stream->put('=');
 
         if (IsSimpleString(value)) {
-            _stream->Write(value);
+            _stream->write(value.begin(), name.size());
         } else {
             WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
-            _stream->Write(value);
+            _stream->write(value.begin(), name.size());
             WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
         }
 
@@ -238,16 +236,16 @@ namespace Formatters
         if (forceNewLine) {
             DoNewLine();
         } else if (_hotLine) {
-            _stream->WriteChar(';');
-            _stream->WriteChar(' ');
+            _stream->put(';');
+            _stream->put(' ');
             _currentLineLength += 2;
         }
 
         if (IsSimpleString(value)) {
-            _stream->Write(value);
+            _stream->write(value.begin(), value.size());
         } else {
             WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
-            _stream->Write(value);
+            _stream->write(value.begin(), value.size());
             WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
         }
 
@@ -266,22 +264,22 @@ namespace Formatters
         if (forceNewLine) {
             DoNewLine();
         } else if (_hotLine) {
-            _stream->WriteChar(';');
-            _stream->WriteChar(' ');
+            _stream->put(';');
+            _stream->put(' ');
             _currentLineLength += 2;
         }
 
         if (!name.IsEmpty()) {
             if (IsSimpleString(name)) {
-                _stream->Write(name);
+                _stream->write(name.begin(), name.size());
             } else {
                 WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
-                _stream->Write(name);
+                _stream->write(name.begin(), name.size());
                 WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
             }
         }
 
-        _stream->WriteChar('=');
+        _stream->put('=');
 
         _currentLineLength += unsigned(name.size() + 1);
         _hotLine = false;   // not considered a "hot line" because we need to use this to get "A = B =~" type constructions
@@ -379,9 +377,12 @@ namespace Formatters
                 if (marker[c] != pattern[c])
                     goto advptr;
 
-            auto result = marker.Pointer();
-            marker.SetPointer(marker.Pointer() + patternLength);
-            return result;
+            {
+                auto result = marker.Pointer();
+                marker.SetPointer(marker.Pointer() + patternLength);
+                return result;
+            }
+
         advptr:
             marker.AdvanceCheckNewLine();   // we must check for newlines as we do this, otherwise line tracking will just be thrown off
         }

@@ -294,8 +294,8 @@ void ps(
 			SerializationOperator(outFmttr, patchCollection);
 
 			// Now let's verify that we can deserialize in what we just wrote out
-			auto& serializedStream = strm.GetBuffer();
-			Formatters::TextInputFormatter<utf8> formattr2 { MakeStringSection(serializedStream.Begin(), serializedStream.End()) };
+			auto serializedStream = strm.str();
+			Formatters::TextInputFormatter<utf8> formattr2 { MakeStringSection(serializedStream) };
 			RenderCore::Assets::ShaderPatchCollection patchCollection2(formattr2);
 
 			// we should have the same contents in both patch collections

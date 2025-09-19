@@ -265,7 +265,7 @@ namespace UnitTests
         accessors.Add("VectorMember", &TestClass::_vectorMember);
 
         SECTION("Serialize") {
-            MemoryOutputStream<char> stream;
+            std::stringstream stream;
             {
                 Formatters::TextOutputFormatter formatter(stream);
 
@@ -275,7 +275,7 @@ namespace UnitTests
                 AccessorSerialize(formatter, &ex, accessors);
             }
 
-            auto serializedString = stream.AsString();
+            auto serializedString = stream.str();
             REQUIRE(serializedString == "~~!Format=2; Tab=4\r\nIntMember=30; VectorMember={5, 7, 6, 5}v");
         }
 

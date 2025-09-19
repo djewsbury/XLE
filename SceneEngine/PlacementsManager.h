@@ -8,14 +8,12 @@
 
 #include "IScene.h"
 #include "../Assets/AssetsCore.h"
-#include "../Utility/UTFUtils.h"
 #include "../Math/Vector.h"
 #include "../Math/Matrix.h"
 #include <string>
 #include <functional>
 
 namespace RenderCore { namespace Techniques { class ParsingContext; class DrawablesPacket; class ICustomDrawDelegate; } }
-namespace Utility { class OutputStream; }
 namespace Formatters { template<typename CharType> class TextInputFormatter; }
 namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}

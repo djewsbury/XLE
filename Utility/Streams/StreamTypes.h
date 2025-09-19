@@ -7,7 +7,7 @@
 #pragma once
 
 #include "../IteratorUtils.h"
-#include "Stream.h"
+#include "../UTFUtils.h"
 #include <streambuf>
 #include <sstream>
 
@@ -19,15 +19,16 @@ namespace Utility
     // --------------------------------------------------------------------------
 
     template<typename BufferType>
-        class XL_UTILITY_API StreamBuf : public OutputStream 
+        class StreamBuf
     {
     public:
-        virtual size_type Tell();
-        virtual void Write(const void* p, size_type len);
-        virtual void WriteChar(char ch);
-        virtual void Write(StringSection<utf8>);
+        using size_type = size_t;
+        size_type Tell();
+        void Write(const void* p, size_type len);
+        void WriteChar(char ch);
+        void Write(StringSection<utf8>);
 
-        virtual void Flush();
+        void Flush();
 
     private:
         template <typename C> static unsigned IsFullTest(decltype(&C::IsFull)*);
@@ -121,9 +122,6 @@ namespace Utility
 			ResizeableMemoryBuffer& operator=(ResizeableMemoryBuffer&& moveFrom) { std::basic_stringbuf<CharType>::operator=(std::move(moveFrom)); return *this; }
         };
     }
-
-    template<typename CharType = char>
-        using MemoryOutputStream = StreamBuf<Internal::ResizeableMemoryBuffer<CharType>>;
 
     template<typename CharType = char>
         using FixedMemoryOutputStream = StreamBuf<Internal::FixedMemoryBuffer2<CharType>>;
