@@ -6,8 +6,8 @@
 
 #include "IFileSystem.h"
 #include "InitializerPack.h"
+#include "AssetUtils.h"		// for DirectorySearchRules
 #include "../OSServices/Log.h"
-#include "../Utility/UTFUtils.h"
 #include "../Utility/StringUtils.h"
 #include <assert.h>
 #include <memory>

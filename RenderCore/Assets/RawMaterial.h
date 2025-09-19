@@ -14,8 +14,10 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <future>
 
 namespace Assets { class DependencyValidation; class DirectorySearchRules; }
+namespace AssetsNew { class CompoundAssetScaffold; }
 namespace Formatters { class TextOutputFormatter; }
 
 namespace RenderCore { namespace Assets
@@ -186,7 +188,11 @@ namespace RenderCore { namespace Assets
 
     class ModelCompilationConfiguration;
 
+    static constexpr uint64_t s_RawMaterial_ComponentName = ConstHash64("RawMaterial");
+
 #if !defined(__CLR_VER)
+
+#if 0
     using ContextImbuedRawMaterialPtr = ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>;
     using ContextImbuedRawMaterial = ::Assets::ContextImbuedAsset<RawMaterial>;
 
@@ -204,6 +210,15 @@ namespace RenderCore { namespace Assets
 
     void AutoConstructToPromiseOverride(
         std::promise<ContextImbuedRawMaterial>&& promise,
+        StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
+#endif
+
+    void MaterialCompoundScaffold_ConstructToPromise(
+        std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+        StringSection<> initializer);
+
+    void MaterialCompoundScaffold_ConstructToPromise2(
+        std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
         StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
 
     std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(StringSection<>);

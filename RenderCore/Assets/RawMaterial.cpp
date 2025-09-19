@@ -13,6 +13,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/AssetMixins.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
 #include "../../Formatters/StreamDOM.h"
@@ -554,6 +555,7 @@ namespace RenderCore { namespace Assets
         return *this;
     }
 
+#if 0
 	RawMaterialSet::RawMaterialSet(Formatters::TextInputFormatter<char>& fmttr)
     {
         StringSection<> keyName;
@@ -590,9 +592,56 @@ namespace RenderCore { namespace Assets
 			fmttr.EndElement(ele);
 		}
     }
+#endif
 
     static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "material"); }
 
+    void MaterialCompoundScaffold_ConstructToPromise(
+        std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+        StringSection<> initializer)
+    {
+        if (IsMaterialFile(MakeFileNameSplitter(initializer).Extension())) {
+            ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+			    [init=initializer.AsString(), promise=std::move(promise)]() mutable {
+                    TRY {
+                        promise.set_value(::Assets::AutoConstructAsset<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>(init));
+                    } CATCH (...) {
+                        promise.set_exception(std::current_exception());
+                    } CATCH_END
+                });
+		} else {
+            ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+                [promise=std::move(promise), init=initializer.AsString()]() mutable {
+                    TRY {
+                        ::Assets::DefaultCompilerConstructionSynchronously(
+                            std::move(promise),
+                            s_MaterialCompileProcessType,
+                            ::Assets::InitializerPack{init});
+                    } CATCH (...) {
+                        promise.set_exception(std::current_exception());
+                    } CATCH_END
+                });
+        }
+    }
+
+    void MaterialCompoundScaffold_ConstructToPromise2(
+        std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+        StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg)
+    {
+        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), init=initializer.AsString(), cfg=std::move(cfg)]() mutable {
+                TRY {
+                    ::Assets::DefaultCompilerConstructionSynchronously(
+                        std::move(promise),
+                        s_MaterialCompileProcessType,
+                        ::Assets::InitializerPack{init, std::move(cfg)});
+                } CATCH (...) {
+                    promise.set_exception(std::current_exception());
+                } CATCH_END
+            });
+    }
+
+#if 0
     void AutoConstructToPromiseOverride(
         std::promise<ContextImbuedRawMaterialPtr>&& promise,
         StringSection<> initializer)
@@ -746,10 +795,25 @@ namespace RenderCore { namespace Assets
                 } CATCH_END
             });
     }
+#endif
+
+    static void RawMaterial_ConstructToPromise(
+        std::promise<::Assets::AssetWrapper<RawMaterial>>&& promise,
+        StringSection<> initializer)
+    {
+        auto splitName = MakeFileNameSplitter(initializer);
+        auto containerInitializer = splitName.AllExceptParameters();
+        ::Assets::WhenAll(::Assets::GetAssetFutureFn< MaterialCompoundScaffold_ConstructToPromise > (containerInitializer)).ThenConstructToPromise(
+            std::move(promise),
+            [mat=splitName.Parameters().AsString()](auto&& promise, const auto& scaffold) {
+                auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+                util->ConstructToCachedPromise(std::move(promise), s_RawMaterial_ComponentName, ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(mat) DEBUG_ONLY(, mat)});
+            });
+    }
 
     std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(StringSection<> initializer)
     {
-        return ::Assets::GetAssetFutureFn< ::Assets::ResolveAssetToPromise<RawMaterial> > (initializer);
+        return ::Assets::GetAssetFutureFn< RawMaterial_ConstructToPromise > (initializer);
     }
 
 }}

@@ -170,8 +170,8 @@ namespace RenderCore { namespace Assets
 
 		static sp<::Assets::Marker<ContextImbuedMaterialSet>> MakeModelMatFuture(std::string sourceModel, sp<ModelCompilationConfiguration> sourceModelConfiguration)
 		{
-			if (sourceModelConfiguration) return ::Assets::GetAssetMarker<ContextImbuedMaterialSet>(sourceModel, sourceModelConfiguration);
-			else return ::Assets::GetAssetMarker<ContextImbuedMaterialSet>(sourceModel);
+			if (sourceModelConfiguration) return ::Assets::GetAssetMarkerFn<MaterialCompoundScaffold_ConstructToPromise2>(sourceModel, sourceModelConfiguration);
+			else return ::Assets::GetAssetMarkerFn<MaterialCompoundScaffold_ConstructToPromise>(sourceModel);
 		}
 
 
@@ -315,12 +315,12 @@ namespace RenderCore { namespace Assets
 				// resolve in model:configuration
 				// This is a little different, because we have to pass the "sourceModelConfiguration" down the chain
 			partialMaterials.emplace_back(
-				util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
+				util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
 
 			if (!sourceMaterial.get()) {
 					// resolve in the main material:cfg
 				partialMaterials.emplace_back(
-					util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, ::AssetsNew::ScaffoldAndEntityName{sourceMaterial, Hash64(cfg) DEBUG_ONLY(, cfg)}));
+					util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, ::AssetsNew::ScaffoldAndEntityName{sourceMaterial, Hash64(cfg) DEBUG_ONLY(, cfg)}));
 			}
 
 			pendingAssets._materials.emplace_back(guid, MergePartialMaterials(partialMaterials));
@@ -391,7 +391,7 @@ namespace RenderCore { namespace Assets
 
 			std::vector<std::shared_future<ResolvedMaterial>> partialMaterials;
 			if (useRawMaterialSet)
-				partialMaterials.emplace_back(util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
+				partialMaterials.emplace_back(util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
 
 			auto o0 = construction->_inlineMaterialOverrides.begin();
 			auto o1 = construction->_materialFileOverrides.begin();
@@ -412,7 +412,7 @@ namespace RenderCore { namespace Assets
 
 					if (o1->first._application == 0 || o1->first._application == guid) {
 						auto indexer = ::AssetsNew::ContextAndIdentifier{ (StringMeldInPlace(buffer) << o1->second << ":" << cfg).AsString() };
-						partialMaterials.emplace_back(util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, indexer));
+						partialMaterials.emplace_back(util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, indexer));
 					}
 					++o1;
 
@@ -430,7 +430,7 @@ namespace RenderCore { namespace Assets
 							std::move(promisedMaterial),
 							[cfg, util](const ::Assets::ContextImbuedAsset<sp<::AssetsNew::CompoundAssetScaffold>>& scaffold) {
 								auto indexer = ::AssetsNew::ScaffoldAndEntityName{ scaffold, Hash64(cfg) DEBUG_ONLY(, cfg) };
-								return util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, indexer).get();	// note -- stall
+								return util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, indexer).get();	// note -- stall
 							});
 						partialMaterials.emplace_back(std::move(futureMaterial));
 					}

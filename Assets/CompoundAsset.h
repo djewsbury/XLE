@@ -68,10 +68,13 @@ namespace AssetsNew
 		T1(Type) static constexpr bool s_useAssetWrapper = !::Assets::Internal::HasGetDependencyValidation<Type> && !::Assets::Internal::HasDerefGetDependencyValidation<Type> && !::Assets::Internal::HasStdGetDependencyValidation<Type>;
 		T1(Type) using ConditionalWrapper = std::conditional_t<s_useAssetWrapper<Type>, AssetWrapper<Type>, Type>;
 
-		T1(Type) [[nodiscard]] std::shared_future<ConditionalWrapper<Type>>	GetAssetFuture(uint64_t componentTypeName, const ScaffoldIndexer& rootEntity);
-		T1(Type) [[nodiscard]] std::shared_future<ConditionalWrapper<Type>>	GetCachedAssetFuture(uint64_t componentTypeName, const ScaffoldIndexer& rootEntity);
+		T1(Type) [[nodiscard]] std::shared_future<ConditionalWrapper<Type>>	GetFuture(uint64_t componentTypeName, const ScaffoldIndexer& rootEntity);
+		T1(Type) [[nodiscard]] std::shared_future<ConditionalWrapper<Type>>	GetCachedFuture(uint64_t componentTypeName, const ScaffoldIndexer& rootEntity);
 
-		T1(Type) [[nodiscard]] auto GetAssetFuture(uint64_t componentTypeName, const ContextImbuedScaffold& scaffold, uint64_t rootEntity) { return GetAssetFuture<Type>(componentTypeName, ScaffoldAndEntityName{scaffold, rootEntity}); }
+		T1(Type) void	ConstructToPromise(std::promise<Type>&& promise, uint64_t componentTypeName, const ScaffoldIndexer& rootEntity);
+		T1(Type) void	ConstructToCachedPromise(std::promise<Type>&& promise, uint64_t componentTypeName, const ScaffoldIndexer& rootEntity);
+
+		T1(Type) [[nodiscard]] auto GetFuture(uint64_t componentTypeName, const ContextImbuedScaffold& scaffold, uint64_t rootEntity) { return GetFuture<Type>(componentTypeName, ScaffoldAndEntityName{scaffold, rootEntity}); }
 
 			//
 			// We cache in the AssetHeap
@@ -649,7 +652,7 @@ namespace AssetsNew
 	}
 
 	template<typename Type>
-		auto CompoundAssetUtil::GetAssetFuture(uint64_t componentTypeName, const ScaffoldIndexer& rootEntity) -> std::shared_future<ConditionalWrapper<Type>>
+		auto CompoundAssetUtil::GetFuture(uint64_t componentTypeName, const ScaffoldIndexer& rootEntity) -> std::shared_future<ConditionalWrapper<Type>>
 	{
 		std::promise<ConditionalWrapper<Type>> p;
 		auto resolvedFuture = p.get_future();
@@ -658,7 +661,7 @@ namespace AssetsNew
 	}
 
 	template<typename Type>
-		auto CompoundAssetUtil::GetCachedAssetFuture(uint64_t componentTypeName, const ScaffoldIndexer& rootEntity) -> std::shared_future<ConditionalWrapper<Type>>
+		auto CompoundAssetUtil::GetCachedFuture(uint64_t componentTypeName, const ScaffoldIndexer& rootEntity) -> std::shared_future<ConditionalWrapper<Type>>
 	{
 		assert(_assetHeap);
 
@@ -677,6 +680,18 @@ namespace AssetsNew
 		BuildFuture<ConditionalWrapper<Type>>(std::move(p), componentTypeName, rootEntity);
 		_assetHeap->Insert(cacheKey, {}, std::shared_future<ConditionalWrapper<Type>>{resolvedFuture});
 		return resolvedFuture;
+	}
+
+	template<typename Type>
+		void CompoundAssetUtil::ConstructToPromise(std::promise<Type>&& promise, uint64_t componentTypeName, const ScaffoldIndexer& rootEntity)
+	{
+		BuildFuture<Type>(std::move(promise), componentTypeName, rootEntity);
+	}
+
+	template<typename Type>
+		void CompoundAssetUtil::ConstructToCachedPromise(std::promise<Type>&& promise, uint64_t componentTypeName, const ScaffoldIndexer& rootEntity)
+	{
+		::Assets::WhenAll(GetCachedFuture<Type>(componentTypeName, rootEntity)).CheckImmediately().ThenConstructToPromise(std::move(promise));
 	}
 
 	inline CompoundAssetUtil::CompoundAssetUtil(std::shared_ptr<AssetHeap> assetHeap) : _assetHeap(std::move(assetHeap))
