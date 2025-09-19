@@ -10,6 +10,7 @@
 #include "../../../RenderCore/GeoProc/NascentAnimController.h"
 #include "../../../RenderCore/GeoProc/NascentObjectsSerialize.h"
 #include "../../../RenderCore/GeoProc/NascentModel.h"
+#include "../../../RenderCore/GeoProc/NascentMaterialTable.h"
 #include "../../../RenderCore/GeoProc/MeshDatabase.h"
 #include "../../../RenderCore/StateDesc.h"
 #include "../../../Assets/NascentChunk.h"
@@ -86,11 +87,9 @@ namespace UnitTests
 
 	auto FakeModelCompileOperation::SerializeRawMat() -> ::Assets::SerializedTarget
 	{
-		MemoryOutputStream<char> strm;
+		RenderCore::Assets::GeoProc::NascentMaterialTable matTable;
 
 		{
-			Formatters::TextOutputFormatter formatter(strm);
-
 			RenderCore::Assets::RawMaterial material0;
 			material0._uniforms = {
 				std::make_pair("Emissive", "{.5, .5, .5}c"),
@@ -102,21 +101,12 @@ namespace UnitTests
 				std::make_pair("Brightness", "33")
 			};
 
-			auto matContainer = formatter.BeginKeyedElement("Material0");
-			formatter << material0;
-			formatter.EndElement(matContainer);
-
-			matContainer = formatter.BeginKeyedElement("Material1");
-			formatter << material1;
-			formatter.EndElement(matContainer);
+			matTable._rawMaterials.emplace("Material0", std::move(material0));
+			matTable._rawMaterials.emplace("Material1", std::move(material1));
 		}
 
 		return ::Assets::SerializedTarget {
-			{
-				::Assets::SerializedArtifact{
-					Type_RawMat, 0, _modelName,
-					::Assets::AsBlob(strm)}
-			}
+			RenderCore::Assets::GeoProc::SerializeMaterialToChunks(_modelName, matTable, {})
 		};
 	}
 

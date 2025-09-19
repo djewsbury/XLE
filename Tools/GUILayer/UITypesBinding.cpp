@@ -667,7 +667,7 @@ namespace GUILayer
     { 
         static unsigned counter = 0;
         RawMaterial^ result = gcnew RawMaterial(nullptr);
-        result->_initializer = "untitled" + (counter++) + ".material";
+        result->_initializer = "untitled" + (counter++) + ".compound";
         s_table->Add(result->_initializer, gcnew WeakReference(result));
         return result;
     }

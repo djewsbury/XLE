@@ -220,9 +220,9 @@ namespace Assets
 				_chunks.begin(), _chunks.end(), 
 				[](const auto& c) { return c._chunkTypeCode == "DirectorySearchRules"_h; });
 			if (i != _chunks.end()) {
-				*_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(*i->_data);
+				_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(*i->_data);
 			} else {
-				*_cachedDirectorySearchRules = {};
+				_cachedDirectorySearchRules = {};
 			}
 		}
 		return *_cachedDirectorySearchRules;

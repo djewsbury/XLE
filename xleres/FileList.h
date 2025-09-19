@@ -42,7 +42,7 @@ using namespace Assets::Literals;
 #define METRICS_RENDER_PIXEL_HLSL "xleres/TechniqueLibrary/Profiling/metricsrender.pixel.hlsl"
 
 #define RENDEROVERLAYS_SHAPES_HLSL "xleres/RenderOverlays/ShapesFrameworkEntry.hlsl"
-#define RENDEROVERLAYS_SHAPES_MATERIAL "xleres/RenderOverlays/DebuggingShapes.material"
+#define RENDEROVERLAYS_SHAPES_MATERIAL "xleres/RenderOverlays/DebuggingShapes.compound"
 #define RENDEROVERLAYS_SEL_PRECONFIG "xleres/RenderOverlays/Preconfiguration.hlsl"
 #define RENDEROVERLAYS_SEPARABLE_FILTER "xleres/RenderOverlays/separable-filter.compute.hlsl"
 #define RENDEROVERLAYS_SHAPES_PIPELINE "xleres/RenderOverlays/ShapesFramework.pipeline"
@@ -51,7 +51,7 @@ using namespace Assets::Literals;
 
 #define SCENE_ENGINE_RES "xleres/TechniqueLibrary/SceneEngine"
 
-#define AREA_LIGHT_TECH "xleres/ToolsRig/arealight.material"_initializer
+#define AREA_LIGHT_TECH "xleres/ToolsRig/arealight.compound"_initializer
 #define MESH_MARKER_TECH "xleres/Config/Legacy/MeshMarker.tech"_initializer
 
 #define NORMALS_FITTING_TEXTURE "xleres/DefaultResources/normalsfitting.dds:LT"_initializer

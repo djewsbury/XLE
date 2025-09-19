@@ -48,7 +48,7 @@ namespace GUILayer
             Utility::Legacy::XlDirname(dirName, dimof(dirName), clix::marshalString<clix::E_UTF8>(ofd->FileName).c_str());
 
             ofd->InitialDirectory = clix::marshalString<clix::E_UTF8>(dirName);
-            ofd->Filter = "Model files|*.dae|Material files|*.material|All Files|*.*";
+            ofd->Filter = "Model files|*.dae|Material files|*.compound|All Files|*.*";
             if (ofd->ShowDialog() == System::Windows::Forms::DialogResult::OK) {
                 return ofd->FileName;
             }

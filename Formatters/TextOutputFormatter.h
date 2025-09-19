@@ -30,9 +30,10 @@ namespace Formatters
 		void WriteValue(StringSection<> value);
 
 		void WriteDanglingKey(StringSection<> name);
+		ElementId BeginKeyedElement(StringSection<> name0, StringSection<> name1);
 
 		template<typename Type>
-			void WriteKeyedValue(StringSection<> name, const Type& t);
+			void FormatKeyedValue(StringSection<> name, const Type& t);
 		
 		void NewLine();
 		void SuppressHeader();
@@ -74,7 +75,7 @@ namespace Formatters
 	}
 
 	template<typename Type>
-		void TextOutputFormatter::WriteKeyedValue(StringSection<> name, const Type& t)
+		void TextOutputFormatter::FormatKeyedValue(StringSection<> name, const Type& t)
 	{
 		// Note that we can't check for formatting characters using this path!
 		WriteDanglingKey(name);

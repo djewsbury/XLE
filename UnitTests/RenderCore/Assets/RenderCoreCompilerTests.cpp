@@ -37,13 +37,19 @@ namespace UnitTests
 {
 	static std::unordered_map<std::string, ::Assets::Blob> s_utData {
 		std::make_pair(
-			"test.material",
+			"test.compound",
 			::Assets::AsBlob(R"--(
-				*=~
+				Entity = Universal
+				Entity = Material0
+				Entity = Material1
+
+				RawMaterial = Universal =~
 					Uniforms=~
 						OnEverything=75
-				Material0=~
-					Inherit=~; ./base.material:BaseSetting
+
+				Inherit = Material0 =~ ./base.compound:BaseSetting; Universal
+
+				RawMaterial = Material0 =~
 					Selectors=~
 						MAT_DOUBLE_SIDED_LIGHTING=1u
 					Uniforms=~
@@ -54,11 +60,14 @@ namespace UnitTests
 						PerPixel=~
 							some.pixel.hlsl::PerPixelCustomLighting
 						DescriptorSet=some.pipeline
+
+				Inherit = Material1 =~ Universal
 			)--")),
 		std::make_pair(
-			"base.material",
+			"base.compound",
 			::Assets::AsBlob(R"--(
-				BaseSetting=~
+				Entity = BaseSetting
+				RawMaterial = BaseSetting =~
 					Uniforms=~
 						SharedConstant={1.0f, 1.0f, 1.0f}c
 			)--"))
@@ -81,7 +90,7 @@ namespace UnitTests
 			auto targetCode = GetCompileProcessType((RenderCore::Assets::CompiledMaterialSet*)nullptr);
 			auto marker = compilers.Prepare(
 				targetCode, 
-				::Assets::InitializerPack { "ut-data/test.material", "fake-model" });
+				::Assets::InitializerPack { "ut-data/test.compound", "fake-model" });
 			REQUIRE(marker != nullptr);
 			auto artifactQuery = marker->GetArtifact(targetCode);
 			REQUIRE(artifactQuery.first == nullptr);

@@ -15,8 +15,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		for (auto n:names) {
 			if (auto rm = table._rawMaterials.find(n); rm!=table._rawMaterials.end()) {
-				fmttr.WriteDanglingKey("RawMaterial");
-				auto e = fmttr.BeginKeyedElement(n);
+				auto e = fmttr.BeginKeyedElement("RawMaterial", n);
 				fmttr << rm->second;
 				fmttr.EndElement(e);
 			}

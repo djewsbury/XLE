@@ -213,7 +213,8 @@ namespace RenderCore { namespace Assets
 						StringMeld<3*MaxPath>() << "Failed while loading material information from source model (" << _sourceModel << ") with msg (" << ::Assets::AsString(modelMatFuture->GetActualizationLog()) << ")"));
 				_modelMat = modelMatFuture->Actualize();
 
-				// todo -- add all entities with a RawMaterial (etc) component to _sourceModelConfiguration
+				for (const auto& e:_modelMat.get()->_entityLookup)
+					_modelMatConfigs.emplace_back(e.second._name);
 			}
 
 			SourceModelHelper(::Assets::ContextImbuedAsset<sp<CompoundAssetScaffold>> modelMat) : _modelMat(std::move(modelMat)) {}
@@ -272,7 +273,7 @@ namespace RenderCore { namespace Assets
 		if (sourceMaterialName == sourceModelName)
 			sourceMaterialName = {};
 
-		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>());
 
 		Internal::SourceModelHelper sourceModelHelper { sourceModelName, std::move(sourceModelConfiguration) };
 		auto modelMat = sourceModelHelper.GetModelMatConfigs();
@@ -317,7 +318,7 @@ namespace RenderCore { namespace Assets
 			partialMaterials.emplace_back(
 				util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
 
-			if (!sourceMaterial.get()) {
+			if (sourceMaterial.get()) {
 					// resolve in the main material:cfg
 				partialMaterials.emplace_back(
 					util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, ::AssetsNew::ScaffoldAndEntityName{sourceMaterial, Hash64(cfg) DEBUG_ONLY(, cfg)}));

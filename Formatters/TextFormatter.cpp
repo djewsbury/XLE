@@ -207,10 +207,10 @@ namespace Formatters
         _stream->put('=');
 
         if (IsSimpleString(value)) {
-            _stream->write(value.begin(), name.size());
+            _stream->write(value.begin(), value.size());
         } else {
             WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
-            _stream->write(value.begin(), name.size());
+            _stream->write(value.begin(), value.size());
             WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
         }
 
@@ -253,6 +253,51 @@ namespace Formatters
         _hotLine = true;
     }
 
+    auto TextOutputFormatter::BeginKeyedElement(StringSection<> name0, StringSection<> name1) -> ElementId
+    {
+        DoNewLine();
+
+        if (!name0.IsEmpty()) {
+            if (IsSimpleString(name0)) {
+                _stream->write(name0.begin(), name0.size());
+            } else {
+                WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
+                _stream->write(name0.begin(), name0.size());
+                WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
+            }
+        }
+
+        _stream->put('=');
+
+        if (!name1.IsEmpty()) {
+            if (IsSimpleString(name1)) {
+                _stream->write(name1.begin(), name1.size());
+            } else {
+                WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePrefix, _currentLineLength);
+                _stream->write(name1.begin(), name1.size());
+                WriteConst(*_stream, FormatterConstants<utf8>::ProtectedNamePostfix, _currentLineLength);
+            }
+        }
+
+        _stream->put('=');
+        _stream->put(FormatterConstants<utf8>::ElementPrefix);
+
+        _hotLine = true;
+        _currentLineLength += unsigned(name0.size() + 1 + name1.size() + 2);
+
+        ++_currentIndentLevel;
+		_indentLevelAtStartOfLine = _currentIndentLevel;
+
+        #if defined(STREAM_FORMATTER_CHECK_ELEMENTS)
+            auto id = _nextElementId;
+            _elementStack.push_back(id);
+            return id;
+        #else
+            return 0;
+        #endif
+    }
+
+    
     void TextOutputFormatter::WriteDanglingKey(StringSection<> name)
     {
         const unsigned idealLineLength = 100;

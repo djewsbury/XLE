@@ -290,7 +290,7 @@ namespace UnitTests
 				techniqueTestApparatus._drawablesPool,
 				pipelineAcceleratorPool,
 				"xleres/DefaultResources/materialsphere.dae",
-				"xleres/DefaultResources/materialsphere.material");
+				"xleres/DefaultResources/materialsphere.compound");
 			INFO(::Assets::AsString(renderer->GetActualizationLog()));
 			renderer->StallWhilePending();
 			REQUIRE(renderer->GetAssetState() == ::Assets::AssetState::Ready);

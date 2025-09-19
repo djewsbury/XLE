@@ -1,18 +1,21 @@
-sphere=~
+Entity=sphere
+RawMaterial=sphere=~
 	Patches=~
 		main=~
 			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
 	Selectors=~
 		SHAPE=1
 
-tube=~
+Entity=tube
+RawMaterial=tube=~
 	Patches=~
 		main=~
 			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
 	Selectors=~
 		SHAPE=2
 
-rectangle=~
+Entity=rectangle
+RawMaterial=rectangle=~
 	Patches=~
 		main=~
 			xleres/TechniqueLibrary/ToolsRig/arealight.hlsl::VertexPatch
