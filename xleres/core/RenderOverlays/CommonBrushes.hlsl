@@ -11,10 +11,10 @@
 #include "../TechniqueLibrary/Framework/CommonResources.hlsl"
 #include "../TechniqueLibrary/Utility/Colour.hlsl"
 
-float4 SolidFill_Calculate(float4 baseColor : COLOR0) : Fill { return baseColor; }
+float4 SolidFill_Calculate(float4 fillColor : COLOR0) : Fill { return fillColor; }
 float4 NoFill_Calculate() : Fill { return 0.0.xxxx; }
 
-float4 SolidOutline_Calculate(float4 baseColor : COLOR0) : Outline { return baseColor; }
+float4 SolidOutline_Calculate(float4 outlineColor : COLOR1) : Outline { return outlineColor; }
 float4 NoOutline_Calculate() : Outline { return 0.0.xxxx; }
 
 float4 CrossHatchFill_Calculate(

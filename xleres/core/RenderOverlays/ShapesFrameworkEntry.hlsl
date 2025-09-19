@@ -6,9 +6,10 @@
 
 #include "Interfaces.hlsl"
 #include "BrushUtils.hlsl"
+#include "CommonShapes.hlsl"		// for RectShape_Calculate
 #include "../TechniqueLibrary/Framework/SystemUniforms.hlsl"
 
-cbuffer ShapesFramework  // : register(b0, space0)
+cbuffer ShapesFramework
 {
 	float BorderSizePix;
 }
@@ -78,7 +79,6 @@ void BuildShapeFromInterface(
 	#if HAS_INSTANTIATION_IShape2D_Calculate
 		shape = IShape2D_Calculate(coords, shapeDesc, aspectRatio);
 	#else
-		shape._border = 0.f;
-		shape._fill = 1.f;
+		shape = RectShape_Calculate(coords, shapeDesc);
 	#endif
 }

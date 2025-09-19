@@ -168,7 +168,7 @@ namespace UnitTests
 		const RenderCore::Assets::ModelScaffold& scaffold,
 		const RenderCore::Assets::VertexData& vb)
 	{
-		auto buffer = std::make_unique<uint8[]>(vb._size);
+		auto buffer = std::make_unique<uint8_t[]>(vb._size);
 		{
 			auto inputFile = scaffold.OpenLargeBlocks();
 			inputFile->Seek(vb._offset, OSServices::FileSeekAnchor::Current);
@@ -427,7 +427,7 @@ namespace UnitTests
 		
 		auto modelScaffold = MakeTestAnimatedModel();
 		auto rendererConstruction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
-		rendererConstruction->AddElement().SetModelScaffold(modelScaffold);
+		rendererConstruction->AddElement().SetModel(modelScaffold);
 		StallWhilePending(*rendererConstruction);
 		
 		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device, techniqueTestHelper._drawablesPool, techniqueTestHelper._pipelineLayoutDelegate);

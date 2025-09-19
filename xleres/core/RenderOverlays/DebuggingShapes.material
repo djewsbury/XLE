@@ -2,25 +2,25 @@ Shared=~
 	Patches=~
 		ShapeSystem0=~
 			ShapesFrameworkEntry.hlsl::ResolveShapeFramework_ShapeFillAndOutline
-			Implements=SV_AutoPS
+			Implements=SV_SystemPS
 		ShapeSystem1=~
 			ShapesFrameworkEntry.hlsl::ResolveShapeFramework_ShapeAndFill
-			Implements=SV_AutoPS
+			Implements=SV_SystemPS
 		ShapeSystem2=~
 			ShapesFrameworkEntry.hlsl::ResolveShapeFramework_Fill
-			Implements=SV_AutoPS
+			Implements=SV_SystemPS
 		ShapeSystem3=~
 			ShapesFrameworkEntry.hlsl::ResolveShapeFramework_ShapeAndOutline
-			Implements=SV_AutoPS
+			Implements=SV_SystemPS
 		ShapeSystem4=~
 			ShapesFrameworkEntry.hlsl::BuildShapeFrameworkInputs
-			Implements=SV_AutoPS
+			Implements=SV_SystemPS
 		ShapeSystem5=~
 			ShapesFrameworkEntry.hlsl::BuildShapeDHDP
-			Implements=SV_AutoPS
+			Implements=SV_SystemPS
 		ShapeSystem6=~
 			ShapesFrameworkEntry.hlsl::BuildShapeFromInterface
-			Implements=SV_AutoPS
+			Implements=SV_SystemPS
 
 HorizTweakerBar=~
 	Inherit=~; Shared

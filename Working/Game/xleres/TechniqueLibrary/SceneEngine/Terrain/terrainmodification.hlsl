@@ -412,7 +412,7 @@ float3x3 RotationMatrix(float3 axis, float angle)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "../RenderOverlays/DebuggingShapes.hlsl"
-#include "../RenderOverlays/DebuggingPanels.hlsl"
+#include "../RenderOverlays/Legacy/DebuggingPanels.hlsl"
 
 Texture2D<float>		GPUCacheDebugging		: register(t5);
 

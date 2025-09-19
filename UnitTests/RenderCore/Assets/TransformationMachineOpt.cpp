@@ -54,7 +54,7 @@ namespace UnitTests
                 scale, MakeRotationMatrix(rotationAxis, rotationAngle), translation));
     }
 
-    static void InsertRandomTransforms(std::vector<uint32>& machine, std::mt19937& rng, unsigned transformCount, bool writeComments)
+    static void InsertRandomTransforms(std::vector<uint32_t>& machine, std::mt19937& rng, unsigned transformCount, bool writeComments)
     {
         using namespace RenderCore::Assets;
         // {
@@ -64,14 +64,14 @@ namespace UnitTests
         //         auto transform = AsFloat4x4(temp);
         // 
         //         if (writeComments) {
-        //             machine.push_back((uint32)TransformCommand::Comment);
+        //             machine.push_back((uint32_t)TransformCommand::Comment);
         //             std::string comment = "Transform";
         //             comment.resize(64, 0);
-        //             machine.insert(machine.end(), (uint32*)AsPointer(comment.begin()), (uint32*)AsPointer(comment.begin()+64));
+        //             machine.insert(machine.end(), (uint32_t*)AsPointer(comment.begin()), (uint32_t*)AsPointer(comment.begin()+64));
         //         }
         // 
-        //         machine.push_back((uint32)TransformCommand::TransformFloat4x4_Static);
-        //         machine.insert(machine.end(), (uint32*)(&transform), (uint32*)(&transform + 1));
+        //         machine.push_back((uint32_t)TransformCommand::TransformFloat4x4_Static);
+        //         machine.insert(machine.end(), (uint32_t*)(&transform), (uint32_t*)(&transform + 1));
         //     }
         //     return;
         // }
@@ -109,17 +109,17 @@ namespace UnitTests
             }
 
             if (writeComments) {
-                machine.push_back((uint32)TransformCommand::Comment);
+                machine.push_back((uint32_t)TransformCommand::Comment);
                 comment.resize(64, 0);
-                machine.insert(machine.end(), (uint32*)AsPointer(comment.begin()), (uint32*)AsPointer(comment.begin()+64));
+                machine.insert(machine.end(), (uint32_t*)AsPointer(comment.begin()), (uint32_t*)AsPointer(comment.begin()+64));
             }
 
-            machine.push_back((uint32)TransformCommand::TransformFloat4x4_Static);
-            machine.insert(machine.end(), (uint32*)(&transform), (uint32*)(&transform + 1));
+            machine.push_back((uint32_t)TransformCommand::TransformFloat4x4_Static);
+            machine.insert(machine.end(), (uint32_t*)(&transform), (uint32_t*)(&transform + 1));
         }
     }
 
-    static void LogTransMachines(std::ostream& stream, IteratorRange<const uint32*> orig, IteratorRange<const uint32*> opt, unsigned index)
+    static void LogTransMachines(std::ostream& stream, IteratorRange<const uint32_t*> orig, IteratorRange<const uint32_t*> opt, unsigned index)
     {
         using namespace RenderCore::Assets;
         stream << "============== Machine (" << index << ") ==============" << std::endl;
@@ -180,11 +180,11 @@ namespace UnitTests
             for (auto c=0u; c<testCount; ++c) {
                     // We will build a transformation machine, and then optimize it
                     // Then we will verify that the output is the same each time.
-                std::vector<uint32> machine;
+                std::vector<uint32_t> machine;
                 InsertRandomTransforms(machine, rng, 40, i==0);
 
                     // write out a single output matrix:
-                machine.push_back((uint32)TransformCommand::WriteOutputMatrix);
+                machine.push_back((uint32_t)TransformCommand::WriteOutputMatrix);
                 machine.push_back(0);
 
                 Optimizer opt;

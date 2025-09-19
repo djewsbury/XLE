@@ -436,7 +436,19 @@ namespace RenderCore { namespace Techniques
 		static bool VSCanProvideAttribute(IteratorRange<const PatchDelegateInput*> patches, StringSection<> semantic, unsigned semanticIdx)
 		{
 			for (unsigned ep=0; ep<patches.size(); ++ep)
-				if (patches[ep]._implementsHash == "SV_SpriteVS"_h)
+				if (patches[ep]._implementsHash == "SV_SpriteVS"_h || patches[ep]._implementsHash == "SV_AutoVS"_h)
+					for (const auto&p:patches[ep]._signature->GetParameters()) {
+						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+						if (CompareSemantic({semantic, semanticIdx}, SplitSemanticAndIdx(p._semantic)))
+							return true;
+					}
+			return false;
+		}
+
+		static bool GSCanProvideAttribute(IteratorRange<const PatchDelegateInput*> patches, StringSection<> semantic, unsigned semanticIdx)
+		{
+			for (unsigned ep=0; ep<patches.size(); ++ep)
+				if (patches[ep]._implementsHash == "SV_SpriteGS"_h || patches[ep]._implementsHash == "SV_AutoGS"_h)
 					for (const auto&p:patches[ep]._signature->GetParameters()) {
 						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
 						if (CompareSemantic({semantic, semanticIdx}, SplitSemanticAndIdx(p._semantic)))
@@ -453,6 +465,16 @@ namespace RenderCore { namespace Techniques
 					writer.WriteInputParameter(semantic.AsString(), semanticIdx, q.second);
 					return true;
 				}
+			return false;
+		}
+
+		static bool IsPSInputSystemAttributes(StringSection<> semantic, unsigned semanticIdx)
+		{
+			// SV_Position is always generated in the VS (and so can be removed from this point)
+			if (!XlBeginsWith(semantic, "SV_")) return false;
+			for (const auto& s:s_validPSInputSystemValues)
+				if (XlEqString(semantic, s.first))
+					return true;
 			return false;
 		}
 
@@ -539,7 +561,7 @@ namespace RenderCore { namespace Techniques
 			for (const auto& step:MakeIteratorRange(AsPointer(_steps.begin()), AsPointer(_steps.begin())+stepIdx)) {
 				for (const auto& p:step._signature->GetParameters()) {
 					if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
-					if (Find(result, SplitSemanticAndIdx(p._semantic))  == result.end())
+					if (Find(result, SplitSemanticAndIdx(p._semantic)) == result.end())
 						result.emplace_back(MakeWorkingAttribute(p));
 				}
 			}
@@ -557,7 +579,7 @@ namespace RenderCore { namespace Techniques
 
 		static void ConnectSystemPatches(
 			FragmentArranger& arranger,
-			const GraphLanguage::ShaderFragmentSignature& systemPatches,
+			IteratorRange<const PatchDelegateInput*> systemPatches,
 			std::function<bool(StringSection<>, unsigned)>&& isProvidedFn)
 		{
 			unsigned attemptCount = 0;
@@ -586,30 +608,31 @@ namespace RenderCore { namespace Techniques
 					unsigned _insertionPt = ~0u;
 					StringSection<> _name;
 					const GraphLanguage::NodeGraphSignature* _signature = nullptr;
+					uint64_t _implementsHash = ~0ull;
 				};
 				std::vector<ProspectivePatch> prospectivePatches;
-				for (const auto& e:systemPatches._functions) {
+				for (const auto& e:systemPatches) {
 					bool isUseful = false;
-					for (const auto&p:e.second.GetParameters()) {
+					for (const auto&p:e._signature->GetParameters()) {
 						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
 						auto s = Internal::SplitSemanticAndIdx(p._semantic);
 						if (Internal::Find(unprovidedAttributes, s) != unprovidedAttributes.end()) {
 							// if the function both outputs and inputs the parameter, it's not considered a generator, and so is not useful
 							// this is particularly input for some gs system patches which expand an attribute into four
 							// without this check we can get infinite loops
-							auto i = std::find_if(e.second.GetParameters().begin(), e.second.GetParameters().end(),
+							auto i = std::find_if(e._signature->GetParameters().begin(), e._signature->GetParameters().end(),
 								[s](const auto& q) { return q._direction == GraphLanguage::ParameterDirection::In && CompareSemantic(Internal::SplitSemanticAndIdx(q._semantic), s); });
-							isUseful = i == e.second.GetParameters().end();
+							isUseful = i == e._signature->GetParameters().end();
 						}
 					}
 					if (!isUseful) continue;
 
 					// we have to figure out where this step would be added in the order, and find the input attributes available there
 					// unfortunately, it's a lot of extra work to make these calculations
-					auto insertPt = arranger.CalculateInsertPosition(e.second);
+					auto insertPt = arranger.CalculateInsertPosition(*e._signature);
 					auto availableInputs = arranger.CalculateAvailableInputsAtStep(insertPt);
 					unsigned matchedInputs = 0, unmatchedInputs = 0;
-					for (const auto& p:e.second.GetParameters()) {
+					for (const auto& p:e._signature->GetParameters()) {
 						if (p._direction != GraphLanguage::ParameterDirection::In) continue;
 						auto s = Internal::SplitSemanticAndIdx(p._semantic);
 						auto matched = (Internal::Find(availableInputs, s) != availableInputs.end()) || isProvidedFn(s.first, s.second);
@@ -617,7 +640,7 @@ namespace RenderCore { namespace Techniques
 						unmatchedInputs += !matched;
 					}
 
-					prospectivePatches.emplace_back(ProspectivePatch{matchedInputs, unmatchedInputs, insertPt, e.first.AsStringSection(), &e.second});
+					prospectivePatches.emplace_back(ProspectivePatch{matchedInputs, unmatchedInputs, insertPt, e._name, e._signature, e._implementsHash});
 				}
 
 				if (prospectivePatches.empty()) {
@@ -635,7 +658,7 @@ namespace RenderCore { namespace Techniques
 
 				// add the best patch into the list of steps
 				auto& winner = *prospectivePatches.begin();
-				arranger._steps.insert(arranger._steps.begin()+winner._insertionPt, Internal::FragmentArranger::Step{winner._name.AsString(), winner._signature});
+				arranger._steps.insert(arranger._steps.begin()+winner._insertionPt, Internal::FragmentArranger::Step{winner._name.AsString(), winner._signature, true, winner._implementsHash, (winner._implementsHash==~0ull)?~0ull:Hash64(winner._name)});
 			}
 		}
 
@@ -758,8 +781,11 @@ void ExpandClipSpacePosition(
 	std::vector<PatchDelegateOutput> BuildSpritePipeline(IteratorRange<const PatchDelegateInput*> patches, IteratorRange<const uint64_t*> iaAttributes)
 	{
 		std::vector<Internal::WorkingAttribute> psEntryAttributes, gsEntryAttributes, vsEntryAttributes;
-		auto vsSystemPatches = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
-		auto gsSystemPatches = ShaderSourceParser::ParseHLSL(s_gsSpriteSystemPatches);
+		auto vsSystemPatchesParse = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
+		auto gsSystemPatchesParse = ShaderSourceParser::ParseHLSL(s_gsSpriteSystemPatches);
+		std::vector<PatchDelegateInput> vsSystemPatches, gsSystemPatches, psSystemPatches;
+		for (const auto& patch:vsSystemPatchesParse._functions) vsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
+		for (const auto& patch:gsSystemPatchesParse._functions) gsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
 
 		std::vector<Internal::FragmentArranger::Step> psSteps, gsSteps, vsSteps;
 		{
@@ -771,10 +797,23 @@ void ExpandClipSpacePosition(
 					if (patches[ep]._implementsHash == "SV_SpritePS"_h) {
 						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
 						atLeastOnePSStep = true;
+					} else if (patches[ep]._implementsHash == "SV_SystemPS"_h) {
+						psSystemPatches.emplace_back(patches[ep]);
 					}
 				}
 				if (!atLeastOnePSStep)
 					Throw(std::runtime_error("Cannot generate sprite pipeline because we must have at least one SV_SpritePS entrypoint"));
+
+				if (!psSystemPatches.empty())
+					Internal::ConnectSystemPatches(
+						arranger, psSystemPatches,
+						[&iaAttributes, patches](StringSection<> semantic, unsigned semanticIdx) {
+							auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(semantic)+semanticIdx);
+							if (ia != iaAttributes.end()) return true;
+							return Internal::IsPSInputSystemAttributes(semantic, semanticIdx)
+								|| Internal::VSCanProvideAttribute(patches, semantic, semanticIdx)
+								|| Internal::GSCanProvideAttribute(patches, semantic, semanticIdx);
+						});
 
 				psEntryAttributes = arranger.RebuildInputAttributes();
 				Internal::AddPSInputSystemAttributes(psEntryAttributes);
@@ -939,21 +978,21 @@ void ExpandClipSpacePosition(
 		vsOutput._resource._entrypoint._entryPoint = "VSEntry";
 		vsOutput._resource._entrypoint._shaderModel = s_SMVS;
 		vsOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(vsSignature);
-		for (auto& s:vsSteps) if (s._enabled && s._patchCodeForExpansions) vsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+		for (auto& s:vsSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) vsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		gsOutput._stage = ShaderStage::Geometry;
 		gsOutput._resource._postPatchesFragments.emplace_back(s_gsSpriteSystemPatches);
 		gsOutput._resource._postPatchesFragments.emplace_back(gs.str());
 		gsOutput._resource._entrypoint._entryPoint = "GSEntry";
 		gsOutput._resource._entrypoint._shaderModel = s_SMGS;
-		for (auto& s:gsSteps) if (s._enabled && s._patchCodeForExpansions) gsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+		for (auto& s:gsSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) gsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		psOutput._stage = ShaderStage::Pixel;
 		psOutput._resource._postPatchesFragments.emplace_back(ps.str());
 		psOutput._resource._entrypoint._entryPoint = "PSEntry";
 		psOutput._resource._entrypoint._shaderModel = s_SMPS;
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
-		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));
@@ -968,7 +1007,9 @@ void ExpandClipSpacePosition(
 	std::vector<PatchDelegateOutput> BuildAutoPipeline(IteratorRange<const PatchDelegateInput*> patches, IteratorRange<const uint64_t*> iaAttributes)
 	{
 		std::vector<Internal::WorkingAttribute> psEntryAttributes, vsEntryAttributes;
-		auto vsSystemPatches = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
+		auto vsSystemPatchesParse = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
+		std::vector<PatchDelegateInput> vsSystemPatches, psSystemPatches;
+		for (const auto& patch:vsSystemPatchesParse._functions) vsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
 
 		std::vector<Internal::FragmentArranger::Step> psSteps, gsSteps, vsSteps;
 		{
@@ -980,10 +1021,23 @@ void ExpandClipSpacePosition(
 					if (patches[ep]._implementsHash == "SV_AutoPS"_h) {
 						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
 						atLeastOnePSStep = true;
+					} else if (patches[ep]._implementsHash == "SV_SystemPS"_h) {
+						psSystemPatches.emplace_back(patches[ep]);
 					}
 				}
 				if (!atLeastOnePSStep)
 					Throw(std::runtime_error("Cannot generate auto pipeline because we must have at least one SV_AutoPS entrypoint"));
+
+				if (!psSystemPatches.empty())
+					Internal::ConnectSystemPatches(
+						arranger, psSystemPatches,
+						[&iaAttributes, patches](StringSection<> semantic, unsigned semanticIdx) {
+							auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(semantic)+semanticIdx);
+							if (ia != iaAttributes.end()) return true;
+							return Internal::IsPSInputSystemAttributes(semantic, semanticIdx)
+								|| Internal::VSCanProvideAttribute(patches, semantic, semanticIdx)
+								|| Internal::GSCanProvideAttribute(patches, semantic, semanticIdx);
+						});
 
 				psEntryAttributes = arranger.RebuildInputAttributes();
 				Internal::AddPSInputSystemAttributes(psEntryAttributes);
@@ -1089,14 +1143,14 @@ void ExpandClipSpacePosition(
 		vsOutput._resource._entrypoint._entryPoint = "VSEntry";
 		vsOutput._resource._entrypoint._shaderModel = s_SMVS;
 		vsOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(vsSignature);
-		for (auto& s:vsSteps) if (s._enabled && s._patchCodeForExpansions) vsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+		for (auto& s:vsSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) vsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		psOutput._stage = ShaderStage::Pixel;
 		psOutput._resource._postPatchesFragments.emplace_back(ps.str());
 		psOutput._resource._entrypoint._entryPoint = "PSEntry";
 		psOutput._resource._entrypoint._shaderModel = s_SMPS;
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
-		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));

@@ -8,7 +8,7 @@
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
 #include "../../../Assets/IFileSystem.h"
-#include "../../../ShaderParser/ShaderSignatureParser.h"
+#include "../../../ShaderParser/ParseHLSL.h"
 #include "../../../ShaderParser/NodeGraphSignature.h"
 #include "../../../ShaderParser/ShaderAnalysis.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"

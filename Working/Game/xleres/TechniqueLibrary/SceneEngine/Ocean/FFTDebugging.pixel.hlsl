@@ -5,7 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../TechniqueLibrary/Framework/CommonResources.hlsl"
-#include "../RenderOverlays/DebuggingPanels.hlsl"
+#include "../RenderOverlays/Legacy/DebuggingPanels.hlsl"
 
 Texture2D<uint> InputTexture0 : register(t0);
 Texture2D<uint> InputTexture1 : register(t1);
