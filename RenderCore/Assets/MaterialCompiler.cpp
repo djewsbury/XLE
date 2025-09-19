@@ -14,12 +14,10 @@
 #include "../../Assets/ChunkFileWriter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/NascentChunk.h"
-#include "../../Assets/MemoryFile.h"
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/ICompileOperation.h"
-#include "../../Assets/AssetMixins.h"
-#include "../../OSServices/AttachableLibrary.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
@@ -27,7 +25,8 @@
 #include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
-#include "../../Utility/Conversion.h"
+
+using namespace Utility::Literals;
 
 namespace RenderCore
 {
@@ -58,13 +57,15 @@ namespace RenderCore { namespace Assets
 	}
 
 	using ResolvedMaterial = ::Assets::AssetWrapper<RawMaterial>;
+	using CompoundAssetScaffold = ::AssetsNew::CompoundAssetScaffold;
+	using ContextImbuedMaterialSet = ::Assets::ContextImbuedAsset<sp<CompoundAssetScaffold>>;
 
 	namespace Internal
 	{
 		struct PendingAssets
 		{
-			SerializableVector<std::pair<MaterialGuid, SerializableVector<char>>> _resolvedNames;
-			using MaterialMarker = std::shared_ptr<::Assets::Marker<ResolvedMaterial>>;
+			SerializableVector<std::pair<MaterialGuid, SerializableString>> _resolvedNames;
+			using MaterialMarker = sp<::Assets::Marker<ResolvedMaterial>>;
 			std::vector<std::pair<MaterialGuid, MaterialMarker>> _materials;
 		};
 
@@ -167,35 +168,31 @@ namespace RenderCore { namespace Assets
 			blockSerializer.PushSizeValueAtRecall(outerRecall);
 		}
 
-		using ContextImbuedMaterial = ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>;
+		static sp<::Assets::Marker<ContextImbuedMaterialSet>> MakeModelMatFuture(std::string sourceModel, sp<ModelCompilationConfiguration> sourceModelConfiguration)
+		{
+			if (sourceModelConfiguration) return ::Assets::GetAssetMarker<ContextImbuedMaterialSet>(sourceModel, sourceModelConfiguration);
+			else return ::Assets::GetAssetMarker<ContextImbuedMaterialSet>(sourceModel);
+		}
+
 
 		struct SourceModelHelper
 		{
 			std::string _sourceModel;
-			std::shared_ptr<ModelCompilationConfiguration> _sourceModelConfiguration;
-			::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>> _modelMat;
+			sp<ModelCompilationConfiguration> _sourceModelConfiguration;
+			::Assets::ContextImbuedAsset<sp<CompoundAssetScaffold>> _modelMat;
+			std::vector<std::string> _modelMatConfigs;
 
-			const RawMaterialSet& GetModelMatConfigs() const { return *std::get<0>(_modelMat); }
-			::Assets::DependencyValidation GetModelMatDepVal() const { return std::get<::Assets::DependencyValidation>(_modelMat); }
+			IteratorRange<const std::string*> GetModelMatConfigs() const { return _modelMatConfigs; }
+			::Assets::DependencyValidation GetModelMatDepVal() const { return _modelMat.GetDependencyValidation(); }
 
-			std::shared_ptr<::Assets::Marker<ContextImbuedMaterial>> GetMaterialMarkerPtr(const std::string& cfg) const
+			::AssetsNew::ScaffoldAndEntityName GetMaterialMarkerPtr(const std::string& cfg) const
 			{
-				auto& mats = GetModelMatConfigs();
-				for (auto&i:mats._materials)
-					if (i.first == cfg) {
-						// We can just grab the material directly from the RawMaterialSet -- but we have to convert it into a format
-						// ready for return from here
-						auto result = std::make_shared<::Assets::Marker<ContextImbuedMaterial>>();
-						result->SetAssetForeground({std::make_shared<RawMaterial>(std::get<0>(i.second)), std::get<::Assets::DirectorySearchRules>(_modelMat), std::get<::Assets::DependencyValidation>(_modelMat), std::get<::Assets::InheritList>(i.second)});
-						return result;
-					}
-				assert(0);	// didn't find the requested cfg
-				return nullptr;
+				return ::AssetsNew::ScaffoldAndEntityName{ _modelMat, Hash64(cfg) DEBUG_ONLY(, cfg) };
 			}
 
 			SourceModelHelper(
 				std::string sourceModel,
-				std::shared_ptr<ModelCompilationConfiguration> sourceModelConfiguration)
+				sp<ModelCompilationConfiguration> sourceModelConfiguration)
 			: _sourceModel(std::move(sourceModel)), _sourceModelConfiguration(std::move(sourceModelConfiguration))
 			{
 					// Ensure we strip off parameters from the source model filename before we get here.
@@ -207,10 +204,7 @@ namespace RenderCore { namespace Assets
 						_sourceModel = splitter.AllExceptParameters().AsString();
 				}
 
-				using ContextImbuedMaterialSet = ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>;
-				std::shared_ptr<::Assets::Marker<ContextImbuedMaterialSet>> modelMatFuture;
-				if (_sourceModelConfiguration) modelMatFuture = ::Assets::GetAssetMarker<ContextImbuedMaterialSet>(_sourceModel, _sourceModelConfiguration);
-				else modelMatFuture = ::Assets::GetAssetMarker<ContextImbuedMaterialSet>(_sourceModel);
+				auto modelMatFuture = MakeModelMatFuture(_sourceModel, _sourceModelConfiguration);
 				auto modelMatState = modelMatFuture->StallWhilePending();
 				if (modelMatState == ::Assets::AssetState::Invalid)
 					Throw(::Assets::Exceptions::ConstructionError(
@@ -218,48 +212,88 @@ namespace RenderCore { namespace Assets
 						modelMatFuture->GetDependencyValidation(),
 						StringMeld<3*MaxPath>() << "Failed while loading material information from source model (" << _sourceModel << ") with msg (" << ::Assets::AsString(modelMatFuture->GetActualizationLog()) << ")"));
 				_modelMat = modelMatFuture->Actualize();
+
+				// todo -- add all entities with a RawMaterial (etc) component to _sourceModelConfiguration
 			}
 
-			SourceModelHelper(::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>> modelMat) : _modelMat(std::move(modelMat)) {}
+			SourceModelHelper(::Assets::ContextImbuedAsset<sp<CompoundAssetScaffold>> modelMat) : _modelMat(std::move(modelMat)) {}
 			SourceModelHelper() = default;
 		};
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+	using MaterialFuture = std::shared_future<ResolvedMaterial>;
+	static sp<::Assets::Marker<ResolvedMaterial>> MergePartialMaterials(const std::vector<MaterialFuture>& partialMaterials)
+	{
+		auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
+		::Assets::PollToPromise(
+			marker->AdoptPromise(),
+			[partialMaterials](auto timeout) {
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				for (auto& f:partialMaterials)
+					if (f.wait_until(timeoutTime) == std::future_status::timeout)
+						return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[partialMaterials]() {
+				if (partialMaterials.size() == 1)
+					return partialMaterials.front().get();
+
+				std::vector<::Assets::DependencyValidationMarker> dvs; dvs.reserve(partialMaterials.size());
+				auto& actualized = partialMaterials.front().get();
+				RawMaterial mergedResult { actualized.get() };
+				dvs.emplace_back(actualized.GetDependencyValidation());
+
+				for (auto i=partialMaterials.begin()+1; i!=partialMaterials.end(); ++i) {
+					auto& actualized = (*i).get();
+					mergedResult.MergeInWithFilenameResolve(actualized.get(), {});
+					dvs.emplace_back(actualized.GetDependencyValidation());
+				}
+
+				return ResolvedMaterial { std::move(mergedResult), ::Assets::GetDepValSys().MakeOrReuse(dvs) };
+			});
+		return marker;
+	}
 	
 	static ::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
 	{
-		std::string sourceMaterial, sourceModel;
-		std::shared_ptr<ModelCompilationConfiguration> sourceModelConfiguration;
-		sourceMaterial = initializers.GetInitializer<std::string>(0);
+		std::string sourceMaterialName, sourceModelName;
+		sp<ModelCompilationConfiguration> sourceModelConfiguration;
+		sourceMaterialName = initializers.GetInitializer<std::string>(0);
 		if (initializers.GetCount() >= 2)
-			sourceModel = initializers.GetInitializer<std::string>(1);
+			sourceModelName = initializers.GetInitializer<std::string>(1);
 		if (initializers.GetCount() >= 3 && initializers.GetInitializerType(2).hash_code() == typeid(decltype(sourceModelConfiguration)).hash_code())
 			sourceModelConfiguration = initializers.GetInitializer<decltype(sourceModelConfiguration)>(2);
 
-		if (sourceModel.empty())
+		if (sourceModelName.empty())
 			Throw(::Exceptions::BasicLabel{"Empty source model in MaterialCompileOperation"});
 
-		if (sourceMaterial == sourceModel)
-			sourceMaterial = {};
+		if (sourceMaterialName == sourceModelName)
+			sourceMaterialName = {};
 
-		Internal::SourceModelHelper sourceModelHelper { sourceModel, std::move(sourceModelConfiguration) };
-		const auto& modelMat = sourceModelHelper.GetModelMatConfigs();
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+
+		Internal::SourceModelHelper sourceModelHelper { sourceModelName, std::move(sourceModelConfiguration) };
+		auto modelMat = sourceModelHelper.GetModelMatConfigs();
+
+		ContextImbuedMaterialSet sourceMaterial;
+		if (!sourceMaterialName.empty())
+			sourceMaterial = ::Assets::ActualizeAsset<ContextImbuedMaterialSet>(sourceMaterialName);
 
 			//  for each configuration, we want to build a resolved material
 		Internal::PendingAssets pendingAssets;
-		pendingAssets._resolvedNames.reserve(modelMat._materials.size());
-		pendingAssets._materials.reserve(modelMat._materials.size());
+		pendingAssets._resolvedNames.reserve(modelMat.size());
+		pendingAssets._materials.reserve(modelMat.size());
 
 		char buffer[3*MaxPath];
-		for (const auto& cfg:modelMat._materials) {
+		for (const auto& cfg:modelMat) {
 			std::basic_stringstream<::Assets::ResChar> resName;
-			auto guid = MakeMaterialGuid(MakeStringSection(cfg.first));
+			auto guid = MakeMaterialGuid(MakeStringSection(cfg));
 
 				// Our resolved material comes from 3 separate inputs:
 				//  1) model:configuration
-				//  2) material:*
-				//  3) material:configuration
+				//  2) material:configuration
 				//
 				// Some material information is actually stored in the model
 				// source data. This is just for art-pipeline convenience --
@@ -276,32 +310,21 @@ namespace RenderCore { namespace Assets
 				// different material settings (eg, when we want one thing to have
 				// a red version and a blue version)
 
-			std::vector<PtrToMarkerToMaterial> partialMaterials;
+			std::vector<std::shared_future<ResolvedMaterial>> partialMaterials;
 		
 				// resolve in model:configuration
 				// This is a little different, because we have to pass the "sourceModelConfiguration" down the chain
-			partialMaterials.emplace_back(sourceModelHelper.GetMaterialMarkerPtr(cfg.first));
+			partialMaterials.emplace_back(
+				util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
 
-			if (!sourceMaterial.empty()) {
-					// resolve in material:*
-				partialMaterials.emplace_back(
-					::Assets::GetAssetMarker<Internal::ContextImbuedMaterial>(
-						(StringMeldInPlace(buffer) << sourceMaterial << ":*").AsStringSection()));
-
+			if (!sourceMaterial.get()) {
 					// resolve in the main material:cfg
 				partialMaterials.emplace_back(
-					::Assets::GetAssetMarker<Internal::ContextImbuedMaterial>(
-						(StringMeldInPlace(buffer) << sourceMaterial << ":" << cfg.first).AsStringSection()));
+					util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, ::AssetsNew::ScaffoldAndEntityName{sourceMaterial, Hash64(cfg) DEBUG_ONLY(, cfg)}));
 			}
 
-			auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
-			IteratorRange<const PtrToMarkerToMaterial*> initialBaseAssets = partialMaterials;
-			::Assets::ResolveAssetToPromise2<RawMaterial>(marker->AdoptPromise(), initialBaseAssets);
-
-			pendingAssets._materials.push_back(std::make_pair(guid, std::move(marker)));
-
-			SerializableVector<char> resNameVec(cfg.first.begin(), cfg.first.end());
-			pendingAssets._resolvedNames.push_back(std::make_pair(guid, std::move(resNameVec)));
+			pendingAssets._materials.emplace_back(guid, MergePartialMaterials(partialMaterials));
+			pendingAssets._resolvedNames.emplace_back(guid, cfg);
 		}
 
 		std::vector<::Assets::DependencyValidationMarker> depVals;
@@ -313,7 +336,7 @@ namespace RenderCore { namespace Assets
 			std::vector<::Assets::SerializedArtifact>{
 				{
 					ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
-					(StringMeld<256>() << sourceModel << "&" << sourceMaterial).AsString(),
+					(StringMeld<256>() << sourceModelName << "&" << sourceMaterialName).AsString(),
 					::Assets::AsBlob(blockSerializer)
 				}
 			},
@@ -335,9 +358,9 @@ namespace RenderCore { namespace Assets
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static std::shared_ptr<CompiledMaterialSet> ConstructMaterialSetSync(
-		std::shared_ptr<MaterialSetConstruction> construction,
-		const ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>& baseMaterials,
+	static sp<CompiledMaterialSet> ConstructMaterialSetSync(
+		sp<MaterialSetConstruction> construction,
+		const ::Assets::ContextImbuedAsset<sp<CompoundAssetScaffold>>& baseMaterials,
 		std::vector<std::string> materialsToInstantiate)
 	{
 		assert(materialsToInstantiate.empty() ^ (std::get<0>(baseMaterials) == nullptr));		// one or the other, not both
@@ -348,10 +371,12 @@ namespace RenderCore { namespace Assets
 		if (useRawMaterialSet) {
 			sourceModelHelper = baseMaterials;
 			const auto& modelMat = sourceModelHelper.GetModelMatConfigs();
-			materialsToInstantiate.reserve(modelMat._materials.size());
-			for (auto& m:modelMat._materials) materialsToInstantiate.push_back(m.first);
+			materialsToInstantiate.reserve(modelMat.size());
+			for (auto& m:modelMat) materialsToInstantiate.push_back(m);
 			depVals.emplace_back(sourceModelHelper.GetModelMatDepVal());		// record a dependency here incase it's empty
 		}
+
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
 
 			//  for each configuration, we want to build a resolved material
 		Internal::PendingAssets pendingAssets;
@@ -364,9 +389,9 @@ namespace RenderCore { namespace Assets
 			std::basic_stringstream<::Assets::ResChar> resName;
 			auto guid = MakeMaterialGuid(MakeStringSection(cfg));
 
-			std::vector<PtrToMarkerToMaterial> partialMaterials;
+			std::vector<std::shared_future<ResolvedMaterial>> partialMaterials;
 			if (useRawMaterialSet)
-				partialMaterials.emplace_back(sourceModelHelper.GetMaterialMarkerPtr(cfg));
+				partialMaterials.emplace_back(util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
 
 			auto o0 = construction->_inlineMaterialOverrides.begin();
 			auto o1 = construction->_materialFileOverrides.begin();
@@ -377,61 +402,45 @@ namespace RenderCore { namespace Assets
 				if (o0 != construction->_inlineMaterialOverrides.end() && o0->first._overrideIdx == overrideIdx) {
 
 					if (o0->first._application == 0 || o0->first._application == guid) {
-						auto marker = std::make_shared<::Assets::Marker<Internal::ContextImbuedMaterial>>();
-						marker->SetAssetForeground({std::make_shared<RawMaterial>(o0->second), ::Assets::DirectorySearchRules{}, ::Assets::DependencyValidation{}, ::Assets::InheritList{}});
-						partialMaterials.emplace_back(std::move(marker));
+						auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
+						marker->SetAssetForeground({o0->second, ::Assets::DependencyValidation{}});
+						partialMaterials.emplace_back(std::move(marker->ShareFuture()));
 					}
 					++o0;
 
 				} else if (o1 != construction->_materialFileOverrides.end() && o1->first._overrideIdx == overrideIdx) {
 
 					if (o1->first._application == 0 || o1->first._application == guid) {
-						if (o1->first._application == 0) {
-							partialMaterials.emplace_back(
-								::Assets::GetAssetMarker<Internal::ContextImbuedMaterial>(
-									(StringMeldInPlace(buffer) << o1->second << ":*").AsStringSection()));
-						} else {
-							partialMaterials.emplace_back(
-								::Assets::GetAssetMarker<Internal::ContextImbuedMaterial>(
-									(StringMeldInPlace(buffer) << o1->second << ":" << cfg).AsStringSection()));
-						}
+						auto indexer = ::AssetsNew::ContextAndIdentifier{ (StringMeldInPlace(buffer) << o1->second << ":" << cfg).AsString() };
+						partialMaterials.emplace_back(util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, indexer));
 					}
 					++o1;
 
 				} else if (o2 != construction->_futureMaterialOverrides.end() && o2->first._overrideIdx == overrideIdx) {
 					if (o2->first._application == 0 || o2->first._application == guid)
-						partialMaterials.push_back(o2->second);
+						partialMaterials.push_back(o2->second->ShareFuture());
 					++o2;
 				} else if (o3 != construction->_futureMaterialSetOverrides.end() && o3->first._overrideIdx == overrideIdx) {
 					if (o3->first._application == 0 || o3->first._application == guid) {
 						// We have to go via a ::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>
 						// in order to put this in "partialMaterials"
-						auto marker = std::make_shared<::Assets::Marker<Internal::ContextImbuedMaterial>>();
+						std::promise<ResolvedMaterial> promisedMaterial;
+						auto futureMaterial = promisedMaterial.get_future();
 						::Assets::WhenAll(o3->second).ThenConstructToPromise(
-							marker->AdoptPromise(),
-							[cfg](const ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>& rmSet) -> Internal::ContextImbuedMaterial {
-								auto i = std::find_if(
-									std::get<0>(rmSet)->_materials.begin(), std::get<0>(rmSet)->_materials.end(),
-									[cfg](const auto& q) { return q.first == cfg; });
-								if (i == std::get<0>(rmSet)->_materials.end()) return {};
-								return {
-									std::make_shared<RawMaterial>(std::get<0>(i->second)), std::get<::Assets::DirectorySearchRules>(rmSet), std::get<::Assets::DependencyValidation>(rmSet), std::get<::Assets::InheritList>(i->second)
-								};
+							std::move(promisedMaterial),
+							[cfg, util](const ::Assets::ContextImbuedAsset<sp<::AssetsNew::CompoundAssetScaffold>>& scaffold) {
+								auto indexer = ::AssetsNew::ScaffoldAndEntityName{ scaffold, Hash64(cfg) DEBUG_ONLY(, cfg) };
+								return util->GetCachedAssetFuture<RawMaterial>("RawMaterial"_h, indexer).get();	// note -- stall
 							});
+						partialMaterials.emplace_back(std::move(futureMaterial));
 					}
 					++o3;
 				}
 
 			}
 
-			auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
-			IteratorRange<const PtrToMarkerToMaterial*> initialBaseAssets = partialMaterials;
-			::Assets::ResolveAssetToPromise2(marker->AdoptPromise(), initialBaseAssets);
-
-			pendingAssets._materials.push_back(std::make_pair(guid, std::move(marker)));
-
-			SerializableVector<char> resNameVec(cfg.begin(), cfg.end());
-			pendingAssets._resolvedNames.push_back(std::make_pair(guid, std::move(resNameVec)));
+			pendingAssets._materials.emplace_back(guid, MergePartialMaterials(partialMaterials));
+			pendingAssets._resolvedNames.emplace_back(guid, cfg);
 		}
 
 		::Assets::BlockSerializer blockSerializer;
@@ -445,8 +454,8 @@ namespace RenderCore { namespace Assets
 	}
 
 	void ConstructMaterialSet(
-		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
-		std::shared_ptr<MaterialSetConstruction> construction)
+		std::promise<sp<CompiledMaterialSet>>&& promise,
+		sp<MaterialSetConstruction> construction)
 	{
 		if (auto* marker = std::get_if<PtrToMarkerToMaterialSet>(&construction->_baseMaterials)) {
 			::Assets::WhenAll(*marker).ThenConstructToPromise(
@@ -469,8 +478,7 @@ namespace RenderCore { namespace Assets
 					} CATCH_END
 				});
 		} else if (auto* modelFileIdentifier = std::get_if<std::string>(&construction->_baseMaterials)) {
-			auto marker = ::Assets::GetAssetFuture<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>>(*modelFileIdentifier);
-			::Assets::WhenAll(std::move(marker)).ThenConstructToPromise(
+			::Assets::WhenAll(Internal::MakeModelMatFuture(*modelFileIdentifier, nullptr)).ThenConstructToPromise(
 				std::move(promise),
 				[construction=std::move(construction)](const auto& sourceModelConfiguration) {
 					return ConstructMaterialSetSync(construction, sourceModelConfiguration, {});

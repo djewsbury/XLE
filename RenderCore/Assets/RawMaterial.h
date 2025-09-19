@@ -208,6 +208,7 @@ namespace RenderCore { namespace Assets
 
     std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(StringSection<>);
 
+#if 0
 	class RawMaterialSet
     {
     public:
@@ -228,6 +229,8 @@ namespace RenderCore { namespace Assets
 
     void SerializationOperator(Formatters::TextOutputFormatter&, const RawMaterialSet&);
     void SerializationOperator(Formatters::TextOutputFormatter&, const std::tuple<RawMaterial, ::Assets::InheritList>&);
+#endif
+
 #endif
 
     template<typename Value> void RawMaterial::BindResource(StringSection<> name, const Value& value) { _resources.SetParameter(name, value); }

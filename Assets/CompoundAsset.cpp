@@ -24,7 +24,7 @@ namespace AssetsNew
 				auto hashName = Hash64(entityName);
 				auto i2 = LowerBound(_entityLookup, hashName);
 				if (i2 != _entityLookup.end() && i2->first == hashName) Throw(::Formatters::FormatException("Duplicate entity name", fmttr.GetLocation()));
-				_entityLookup.emplace(i2, hashName, EntityBookkeeping{ nextComponentTableIdx++, entityName });
+				_entityLookup.emplace(i2, hashName, Internal::EntityBookkeeping{ nextComponentTableIdx++, entityName });
 
 			} else if (XlEqString(keyname, "Inherit")) {
 

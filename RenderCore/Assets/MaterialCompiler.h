@@ -12,12 +12,13 @@
 #include <future>
 #include <variant>
 
+namespace AssetsNew { class CompoundAssetScaffold; }
+
 namespace RenderCore { namespace Assets
 {
 	class RawMaterial;
-	class RawMaterialSet;
-	using PtrToMarkerToMaterial = std::shared_ptr<::Assets::Marker<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>>>;
-	using PtrToMarkerToMaterialSet = std::shared_ptr<::Assets::Marker<::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>>>;
+	using PtrToMarkerToMaterial = std::shared_ptr<::Assets::Marker<::Assets::AssetWrapper<RawMaterial>>>;
+	using PtrToMarkerToMaterialSet = std::shared_ptr<::Assets::Marker<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>>;
 
 	::Assets::CompilerRegistration RegisterMaterialCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers);

@@ -20,38 +20,7 @@
 namespace AssetsNew
 {
 
-	class CompoundAssetScaffold
-	{
-	public:
-		struct Component
-		{
-			std::vector<StringSection<>> _inlineChunks;
-			std::vector<StringSection<>> _externalReferences;
-		};
-		using ComponentTypeName = uint64_t;
-		std::vector<std::pair<ComponentTypeName, Component>> _components;
-
-		using EntityHashName = uint64_t;
-
-		struct EntityBookkeeping
-		{
-			unsigned _componentTableIdx = ~0u;
-			StringSection<> _name;
-			unsigned _inheritBegin = ~0u, _inheritEnd = ~0u;
-		};
-		std::vector<std::pair<EntityHashName, EntityBookkeeping>> _entityLookup;
-		std::vector<StringSection<>> _inheritLists;
-
-		::Assets::Blob _blob;
-		uint64_t _uniqueId;
-
-		CompoundAssetScaffold(::Assets::Blob&& blob);
-		~CompoundAssetScaffold();
-	protected:
-		void Deserialize(Formatters::TextInputFormatter<char>&);
-	};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	class CompoundAssetScaffold;
 
 	struct ScaffoldAndEntityName
 	{
@@ -85,6 +54,8 @@ namespace AssetsNew
 
 		T1(Type) using RemoveWrapperType = std::remove_cvref_t<decltype(MaybeSkipWrapper(std::declval<Type&>()))>;
 		T1(Type) static constexpr bool IsWrapperType = !std::is_same_v<std::remove_cvref_t<Type>, RemoveWrapperType<Type>>;
+
+		struct EntityBookkeeping;
 	}
 
 	class CompoundAssetUtil : public std::enable_shared_from_this<CompoundAssetUtil>
@@ -130,7 +101,7 @@ namespace AssetsNew
 
 		T1(MaybeWrapperType) static MaybeWrapperType AsResolvedAsset(UnresolvedAsset<Internal::RemoveWrapperType<MaybeWrapperType>>&&);
 
-		T1(Type) static void FillInInheritList(InheritList& inherited, const CompoundAssetScaffold::EntityBookkeeping& bookkeeping, std::shared_ptr<CompoundAssetScaffold> scaffold, const ::Assets::DirectorySearchRules& scaffoldSearchRules, const ::Assets::DependencyValidation& scaffoldDepVal);
+		T1(Type) static void FillInInheritList(InheritList& inherited, const Internal::EntityBookkeeping& bookkeeping, std::shared_ptr<CompoundAssetScaffold> scaffold, const ::Assets::DirectorySearchRules& scaffoldSearchRules, const ::Assets::DependencyValidation& scaffoldDepVal);
 
 		template<typename Type>
 			std::shared_future<Type> RemoveContextFromFuture(std::shared_future<AssetWrapper<Type>>&& input);
@@ -141,6 +112,44 @@ namespace AssetsNew
 
 		std::shared_ptr<AssetHeap> _assetHeap;
 	};
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	namespace Internal
+	{
+		struct EntityBookkeeping
+		{
+			unsigned _componentTableIdx = ~0u;
+			StringSection<> _name;
+			unsigned _inheritBegin = ~0u, _inheritEnd = ~0u;
+		};
+	}
+
+	class CompoundAssetScaffold
+	{
+	public:
+		struct Component
+		{
+			std::vector<StringSection<>> _inlineChunks;
+			std::vector<StringSection<>> _externalReferences;
+		};
+		using ComponentTypeName = uint64_t;
+		std::vector<std::pair<ComponentTypeName, Component>> _components;
+
+		using EntityHashName = uint64_t;
+		std::vector<std::pair<EntityHashName, Internal::EntityBookkeeping>> _entityLookup;
+		std::vector<StringSection<>> _inheritLists;
+
+		::Assets::Blob _blob;
+		uint64_t _uniqueId;
+
+		CompoundAssetScaffold(::Assets::Blob&& blob);
+		~CompoundAssetScaffold();
+	protected:
+		void Deserialize(Formatters::TextInputFormatter<char>&);
+	};
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<typename Type>
 		auto CompoundAssetUtil::BuildUnresolvedAssetSync(uint64_t componentTypeName, const ScaffoldAndEntityName& indexer) -> UnresolvedAsset<Type>
@@ -307,7 +316,7 @@ namespace AssetsNew
 	}
 
 	template<typename Type>
-		void CompoundAssetUtil::FillInInheritList(InheritList& inherited, const CompoundAssetScaffold::EntityBookkeeping& bookkeeping, std::shared_ptr<CompoundAssetScaffold> scaffold, const ::Assets::DirectorySearchRules& scaffoldSearchRules, const ::Assets::DependencyValidation& scaffoldDepVal)
+		void CompoundAssetUtil::FillInInheritList(InheritList& inherited, const Internal::EntityBookkeeping& bookkeeping, std::shared_ptr<CompoundAssetScaffold> scaffold, const ::Assets::DirectorySearchRules& scaffoldSearchRules, const ::Assets::DependencyValidation& scaffoldDepVal)
 	{
 		if (bookkeeping._inheritBegin != bookkeeping._inheritEnd) {
 			inherited.reserve(bookkeeping._inheritEnd - bookkeeping._inheritBegin);
