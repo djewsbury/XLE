@@ -554,6 +554,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				[outputDescriptorSet](const auto& c) { return c._descriptorSetIdx == outputDescriptorSet; });
 			if (adaptiveSet == groupRules._adaptiveSetRules.end()) {
 				auto layout = _pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet);
+				assert(layout);
 				auto reusableGroup = _globalPools->_mainDescriptorPool.GetReusableGroup(layout);
 				auto dynamicOffsetCount = CalculateDynamicOffsetCount(layout->GetDescriptorSlots());
 				groupRules._adaptiveSetRules.push_back(
@@ -571,6 +572,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			ProgressiveDescriptorSetBuilder::ResourceDims resourceDims,
 			StringSection<> variableName)
 		{
+			assert(_pipelineLayout->GetDescriptorSetLayout(outputDescriptorSet));
+
 			if (_descSetInfos.size() <= outputDescriptorSet)
 				_descSetInfos.resize(outputDescriptorSet+1);
 
@@ -724,6 +727,7 @@ namespace RenderCore { namespace Metal_Vulkan
 							Throw(std::runtime_error("Shader input is assigned to a descriptor set that doesn't exist in the pipeline layout (variable: " + reflectionVariable._name.AsString() + ", ds index: " + std::to_string(reflectionVariable._binding._descriptorSet) + ")"));
 
 						auto* descSetLayout = _pipelineLayout->GetDescriptorSetLayout(reflectionVariable._binding._descriptorSet).get();
+						assert(descSetLayout);
 						auto descSetSigBindings = descSetLayout->GetDescriptorSlots();
 
 						if (reflectionVariable._binding._bindingPoint >= descSetSigBindings.size() || !ShaderVariableCompatibleWithDescriptorSet(reflectionVariable, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
@@ -892,6 +896,8 @@ namespace RenderCore { namespace Metal_Vulkan
 			assert(_looseUniforms.size() <= 4);
 
 			for(unsigned descSetIdx=0; descSetIdx<pipelineLayout.GetDescriptorSets().size(); ++descSetIdx) {
+
+				if (!_pipelineLayout->GetDescriptorSetLayout(descSetIdx)) continue;
 
 				auto fixedDescSet = _fixedDescriptorSets.find(descSetIdx);
 				if (fixedDescSet == _fixedDescriptorSets.end()) {
@@ -1133,9 +1139,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
 				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
 				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
-				auto& i = _sharedDescSetBuilders.emplace_back(_pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
-				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
-					i._groupMask |= 1 << g;
+				if (auto descSet = _pipelineLayout->GetDescriptorSetLayout(descSetIdx).get()) {
+					auto& i = _sharedDescSetBuilders.emplace_back(descSet->GetDescriptorSlots());
+					for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
+						i._groupMask |= 1 << g;
+				}
 			}
 		}
 
@@ -1182,9 +1190,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
 				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
 				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
-				auto& i = _sharedDescSetBuilders.emplace_back(_pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
-				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
-					i._groupMask |= 1 << g;
+				if (auto descSet = _pipelineLayout->GetDescriptorSetLayout(descSetIdx).get()) {
+					auto& i = _sharedDescSetBuilders.emplace_back(descSet->GetDescriptorSlots());
+					for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
+						i._groupMask |= 1 << g;
+				}
 			}
 		}
 
@@ -1235,9 +1245,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned descSetIdx=0; descSetIdx<helper._descSetInfos.size(); ++descSetIdx) {
 				if (helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == ~0u) continue;
 				assert(helper._descSetInfos[descSetIdx]._assignedSharedDescSetWriter == _sharedDescSetBuilders.size());
-				auto& i = _sharedDescSetBuilders.emplace_back(_pipelineLayout->GetDescriptorSetLayout(descSetIdx)->GetDescriptorSlots());
-				for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
-					i._groupMask |= 1 << g;
+				if (auto descSet = _pipelineLayout->GetDescriptorSetLayout(descSetIdx).get()) {
+					auto& i = _sharedDescSetBuilders.emplace_back(descSet->GetDescriptorSlots());
+					for (auto g:helper._descSetInfos[descSetIdx]._groupsThatWriteHere)
+						i._groupMask |= 1 << g;
+				}
 			}
 		}
 
@@ -1797,9 +1809,11 @@ namespace RenderCore { namespace Metal_Vulkan
 				if (reflectionVariable._binding._descriptorSet >= pipelineLayout->GetDescriptorSetCount())
 					ThrowFromMeld(StringMeldInPlace(buffer) << "Shader input is assigned to a descriptor set that doesn't exist in the pipeline layout (variable:" << reflectionVariable._name);
 
-				auto descSetSigBindings = pipelineLayout->GetDescriptorSetLayout(reflectionVariable._binding._descriptorSet)->GetDescriptorSlots();
-				if (reflectionVariable._binding._bindingPoint >= descSetSigBindings.size() || !ShaderVariableCompatibleWithDescriptorSet(reflectionVariable, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
-					ThrowFromMeld(StringMeldInPlace(buffer) << "Shader input assignment is off the pipeline layout, or the shader type does not agree with descriptor set (variable: " << reflectionVariable._name << ")");
+				if (auto descSet = pipelineLayout->GetDescriptorSetLayout(reflectionVariable._binding._descriptorSet).get()) {
+					auto descSetSigBindings = descSet->GetDescriptorSlots();
+					if (reflectionVariable._binding._bindingPoint >= descSetSigBindings.size() || !ShaderVariableCompatibleWithDescriptorSet(reflectionVariable, descSetSigBindings[reflectionVariable._binding._bindingPoint]._type))
+						ThrowFromMeld(StringMeldInPlace(buffer) << "Shader input assignment is off the pipeline layout, or the shader type does not agree with descriptor set (variable: " << reflectionVariable._name << ")");
+				}
 			} else if (reflectionVariable._storageClass == SPIRVReflection::StorageClass::PushConstant) {
 				PipelineLayoutInitializer::PushConstantsBinding pushConstants;
 				pushConstants._shaderStage = byteCode.GetStage();

@@ -8,13 +8,10 @@
 #include "Pools.h"
 #include "ExtensionFunctions.h"
 #include "IncludeVulkan.h"
-#include "../../../OSServices/Log.h"
-#include "../../../Utility/Threading/Mutex.h"
 #include "../../../Formatters/TextFormatter.h"
+#include "../../../Utility/Threading/Mutex.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "../../../Utility/BitUtils.h"
-#include "../../../xleres/FileList.h"
-#include <iostream>
 
 namespace RenderCore { namespace Metal_Vulkan
 {
@@ -52,9 +49,14 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned maxDynamicOffsetsCount = 0;
 		for (unsigned c=0; c<_descriptorSetCount; ++c) {
 			_descriptorSetLayouts[c] = descriptorSets[c]._layout;
-			rawDescriptorSetLayouts[c] = _descriptorSetLayouts[c]->GetUnderlying();
+			if (_descriptorSetLayouts[c]) {
+				rawDescriptorSetLayouts[c] = _descriptorSetLayouts[c]->GetUnderlying();
+				_dynamicOffsetsCount[c] = CalculateDynamicOffsetCount(_descriptorSetLayouts[c]->GetDescriptorSlots());
+			} else {
+				rawDescriptorSetLayouts[c] = nullptr;
+				_dynamicOffsetsCount[c] = 0;
+			}
 			_blankDescriptorSets[c] = descriptorSets[c]._blankDescriptorSet;
-			_dynamicOffsetsCount[c] = CalculateDynamicOffsetCount(_descriptorSetLayouts[c]->GetDescriptorSlots());
 			_descriptorSetBindingNames[c] = Hash64(descriptorSets[c]._name);
 
 			#if defined(VULKAN_VERBOSE_DEBUG)

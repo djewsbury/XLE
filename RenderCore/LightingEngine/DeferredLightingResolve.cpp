@@ -16,6 +16,7 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/PipelineCollection.h"
 #include "../Techniques/DeferredShaderResource.h"
+#include "../Techniques/TechniqueDelegates.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/InputLayout.h"

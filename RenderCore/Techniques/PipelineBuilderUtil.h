@@ -481,7 +481,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			return device.CreatePipelineLayout(initializer, name);
 	}
 
-	// Make a final pipeline laaout (for a graphics pipeline) including filling in "auto" descriptor sets as necessary
+	// Make a final pipeline layout (for a graphics pipeline) including filling in "auto" descriptor sets as necessary
 	static std::shared_ptr<ICompiledPipelineLayout> MakeCompatibleCompiledPipelineLayout(
 		IDevice& device,
 		PipelineLayoutPool* pipelineLayoutPool, SamplerPool* samplerPool,

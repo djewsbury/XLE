@@ -4,20 +4,22 @@
 
 #pragma once
 
-#include "TechniqueDelegates.h"
 #include "../FrameBufferDesc.h"
 #include "../StateDesc.h"
 #include "../Types.h"
 #include "../Metal/Forward.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/DepVal.h"
-#include "../../Utility/Threading/Mutex.h"
-#include <vector>
 #include <future>
+
+namespace RenderCore::Assets { class PredefinedPipelineLayout; }
+namespace Utility { class ParameterBox; }
 
 namespace RenderCore { namespace Techniques
 {
 	class RenderPassInstance;
+	struct GraphicsPipelineDesc;
+	namespace Internal { class ShaderVariant; }
 
 	struct FrameBufferTarget
 	{
@@ -139,15 +141,6 @@ namespace RenderCore { namespace Techniques
 			const VertexInputStates& inputStates,
 			const FrameBufferTarget& fbTarget);
 	};
-
-	inline void PipelineCollection::CreateComputePipeline(
-		std::promise<ComputePipelineAndLayout>&& promise,
-		PipelineLayoutOptions&& pipelineLayout,
-		StringSection<> computeShader,
-		IteratorRange<const ParameterBox*const*> selectors)
-	{
-		CreateComputePipeline(std::move(promise), std::move(pipelineLayout), MakeShaderCompileResourceName(computeShader), selectors);
-	}
 
 }}
 

@@ -8,11 +8,9 @@
 #include "Resource.h"
 #include "ExtensionFunctions.h"
 #include "IncludeVulkan.h"
-#include "../../../OSServices/Log.h"
-#include "../../../Core/Prefix.h"
 #include "../../../Utility/Threading/Mutex.h"
 #include "../../../Utility/HeapUtils.h"
-#include <queue>
+#include "../../../Core/Prefix.h"
 #include <deque>
 
 namespace RenderCore { namespace Metal_Vulkan

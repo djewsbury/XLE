@@ -10,7 +10,6 @@
 #include "Pools.h"
 #include "ShaderReflection.h"
 #include "PipelineLayout.h"
-#include "../../Format.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "../../../Utility/ArithmeticUtils.h"
 

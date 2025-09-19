@@ -5,6 +5,8 @@
 #include "DeformGeoInternal.h"
 #include "PipelineLayoutDelegate.h"
 #include "SubFrameEvents.h"
+#include "ShaderPatchInstantiationUtil.h"
+#include "TechniqueDelegates.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"

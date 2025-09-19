@@ -5,11 +5,12 @@
 #include "PipelineCollection.h"
 #include "PipelineBuilderUtil.h"
 #include "RenderPass.h"
+#include "TechniqueDelegates.h"		// for ShaderVariant
+#include "../ShaderService.h" 		// for MakeShaderCompileResourceName
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/ArithmeticUtils.h"
-#include "../../Utility/StringFormat.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -69,6 +70,15 @@ namespace RenderCore { namespace Techniques
 					} CATCH_END
 				});
 		}
+	}
+
+	void PipelineCollection::CreateComputePipeline(
+		std::promise<ComputePipelineAndLayout>&& promise,
+		PipelineLayoutOptions&& pipelineLayout,
+		StringSection<> computeShader,
+		IteratorRange<const ParameterBox*const*> selectors)
+	{
+		CreateComputePipeline(std::move(promise), std::move(pipelineLayout), MakeShaderCompileResourceName(computeShader), selectors);
 	}
 
 	static ::Assets::DependencyValidation MakeConfigurationDepVal(const Internal::GraphicsPipelineDescWithFilteringRules& pipelineDescWithFiltering)
