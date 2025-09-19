@@ -19,7 +19,7 @@ namespace RenderCore { namespace Techniques
 {
 	class RenderPassInstance;
 	struct GraphicsPipelineDesc;
-	namespace Internal { class ShaderVariant; }
+	namespace Internal { struct ShaderVariant; }
 
 	struct FrameBufferTarget
 	{

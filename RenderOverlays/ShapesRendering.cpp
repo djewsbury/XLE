@@ -29,6 +29,7 @@
 #include "../Assets/Marker.h"
 #include "../Assets/Assets.h"
 #include "../Assets/AssetMixins.h"
+#include "../Assets/CompoundAsset.h"
 #include "../Assets/ConfigFileContainer.h"
 #include "../xleres/FileList.h"
 
@@ -136,22 +137,30 @@ namespace RenderOverlays
 
         static void ConstructToPromise(std::promise<std::shared_ptr<StandardResources>>&& promise)
         {
-            auto fillRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
-            auto fillAndOutlineRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRoundedRect");
-            auto outlineRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");
-            auto fillRaisedRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRect");
-            auto fillRaisedRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRoundedRect");
-            auto fillReverseRaisedRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":FillReverseRaisedRoundedRect");
-            auto fillAndOutlineRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRect");
-            auto fillEllipse = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
-            auto outlineEllipse = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
-            auto softShadowRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
-            auto dashLine = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":DashLine");
-            auto solidNoBorder = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":SolidNoBorder");
-            auto fillColorAdjust = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":FillColorAdjust");
-            auto colorAdjustAndOutlineRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":ColorAdjustAndOutlineRoundedRect");
+            auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>( std::make_shared<::AssetsNew::AssetHeap>() );
+            auto fillRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
+            auto fillAndOutlineRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRoundedRect");
+            auto outlineRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");
+            auto fillRaisedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRect");
+            auto fillRaisedRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillRaisedRoundedRect");
+            auto fillReverseRaisedRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillReverseRaisedRoundedRect");
+            auto fillAndOutlineRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRect");
+            auto fillEllipse = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillEllipse");
+            auto outlineEllipse = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineEllipse");
+            auto softShadowRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":SoftShadowRect");
+            auto dashLine = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":DashLine");
+            auto solidNoBorder = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":SolidNoBorder");
+            auto fillColorAdjust = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillColorAdjust");
+            auto colorAdjustAndOutlineRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":ColorAdjustAndOutlineRoundedRect");
 
-            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillAndOutlineRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, solidNoBorder, fillColorAdjust, colorAdjustAndOutlineRoundedRect).ThenConstructToPromise(std::move(promise));
+            std::promise<std::shared_ptr<StandardResources>> tempPromise;
+            auto tempFuture = tempPromise.get_future();
+            ::Assets::WhenAll(fillRoundedRect, fillAndOutlineRoundedRect, outlineRoundedRect, fillRaisedRect, fillRaisedRoundedRect, fillReverseRaisedRoundedRect, fillAndOutlineRect, fillEllipse, outlineEllipse, softShadowRect, dashLine, solidNoBorder, fillColorAdjust, colorAdjustAndOutlineRoundedRect).ThenConstructToPromise(std::move(tempPromise));
+
+            // strange hack to ensure 'util' stays alive until the StandardResources is completely constructed
+            ::Assets::WhenAll(std::move(tempFuture)).ThenConstructToPromise(
+                std::move(promise),
+                [util=std::move(util)](auto sr) { return sr; });
         }
 
         std::vector<std::unique_ptr<ParameterBox>> _retainedParameterBoxes;
@@ -815,7 +824,7 @@ namespace RenderOverlays
         mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
         mat._hash = ~mat._hash;
 
-        auto data = context.DrawGeometry(WriteInLineVertexCount(linePts.size()), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(WriteInLineVertexCount((unsigned)linePts.size()), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVertices(data, linePts, colour, width);
@@ -832,7 +841,7 @@ namespace RenderOverlays
         mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
         mat._hash = ~mat._hash;
 
-        auto data = context.DrawGeometry(WriteInLineVertexCount(linePts.size()), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(WriteInLineVertexCount((unsigned)linePts.size()), Internal::Vertex_PCT::inputElements2D, mat, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVertices(data, linePts, colour, width);

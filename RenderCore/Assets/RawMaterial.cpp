@@ -594,7 +594,7 @@ namespace RenderCore { namespace Assets
     }
 #endif
 
-    static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "material"); }
+    static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "compound"); }
 
     void MaterialCompoundScaffold_ConstructToPromise(
         std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
@@ -799,21 +799,22 @@ namespace RenderCore { namespace Assets
 
     static void RawMaterial_ConstructToPromise(
         std::promise<::Assets::AssetWrapper<RawMaterial>>&& promise,
+        std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
         StringSection<> initializer)
     {
         auto splitName = MakeFileNameSplitter(initializer);
         auto containerInitializer = splitName.AllExceptParameters();
         ::Assets::WhenAll(::Assets::GetAssetFutureFn< MaterialCompoundScaffold_ConstructToPromise > (containerInitializer)).ThenConstructToPromise(
             std::move(promise),
-            [mat=splitName.Parameters().AsString()](auto&& promise, const auto& scaffold) {
-                auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
-                util->ConstructToCachedPromise(std::move(promise), s_RawMaterial_ComponentName, ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(mat) DEBUG_ONLY(, mat)});
+            [util=std::move(util), mat=splitName.Parameters().AsString()](auto&& promise, const auto& scaffold) {
+                util->ConstructToCachedPromise(
+                    std::move(promise), s_RawMaterial_ComponentName, ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(mat) DEBUG_ONLY(, mat)});
             });
     }
 
-    std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(StringSection<> initializer)
+    std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<> initializer)
     {
-        return ::Assets::GetAssetFutureFn< RawMaterial_ConstructToPromise > (initializer);
+        return ::Assets::GetAssetFutureFn< RawMaterial_ConstructToPromise > (util, initializer);
     }
 
 }}

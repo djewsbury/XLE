@@ -17,7 +17,7 @@
 #include <future>
 
 namespace Assets { class DependencyValidation; class DirectorySearchRules; }
-namespace AssetsNew { class CompoundAssetScaffold; }
+namespace AssetsNew { class CompoundAssetScaffold; class CompoundAssetUtil; }
 namespace Formatters { class TextOutputFormatter; }
 
 namespace RenderCore { namespace Assets
@@ -222,7 +222,7 @@ namespace RenderCore { namespace Assets
         std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
         StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
 
-    std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(StringSection<>);
+    std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<>);
 
 #if 0
 	class RawMaterialSet

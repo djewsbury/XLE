@@ -88,6 +88,8 @@ namespace AssetsNew
 			//
 		explicit CompoundAssetUtil(std::shared_ptr<AssetHeap> =nullptr);
 
+		uint64_t GetGUID() const { return 0; }		// we just return 0, because the instance of the CompoundAssetUtil() shouldn't effect the content of any assets created
+
 	protected:
 		T1(Type) using UnresolvedAsset = std::tuple<Type, ::Assets::DirectorySearchRules, ::Assets::DependencyValidation, InheritList>;
 		T1(Type) using ChooseUnresolvedAssetType = UnresolvedAsset<Internal::RemoveWrapperType<Type>>;

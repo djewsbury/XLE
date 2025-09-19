@@ -753,7 +753,7 @@ namespace ShaderSourceParser
             //      change from time to time, and that would invalidate any other shaders calling
             //      this function. But ideally we need some way to guarantee uniqueness.
             //
-        std::stringstream result;     
+        std::stringstream result;
         result << GenerateSignature(interf, name, false) << std::endl;
         result << "{" << std::endl;
 		result << mainBody;

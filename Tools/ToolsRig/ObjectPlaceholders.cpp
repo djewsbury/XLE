@@ -30,6 +30,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/AssetMixins.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../ConsoleRig/Console.h"
 #include "../../ConsoleRig/ResourceBox.h"
 #include "../../Math/Transformations.h"
@@ -296,13 +297,14 @@ namespace ToolsRig
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAcceleratorPool,
 		const std::shared_ptr<RenderCore::BufferUploads::IManager>& bufferUploads)
     {
-		auto sphereMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(AREA_LIGHT_TECH":sphere");
-		auto tubeMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(AREA_LIGHT_TECH":tube");
-		auto rectangleMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(AREA_LIGHT_TECH":rectangle");
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>( std::make_shared<::AssetsNew::AssetHeap>() );
+		auto sphereMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(util, AREA_LIGHT_TECH":sphere");
+		auto tubeMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(util, AREA_LIGHT_TECH":tube");
+		auto rectangleMatFuture = RenderCore::Assets::GetResolvedMaterialFuture(util, AREA_LIGHT_TECH":rectangle");
 
 		::Assets::WhenAll(sphereMatFuture, tubeMatFuture, rectangleMatFuture).ThenConstructToPromise(
 			std::move(promise),
-			[drawablesPool, pipelineAcceleratorPool, bufferUploads](
+			[drawablesPool, pipelineAcceleratorPool, bufferUploads, util=std::move(util)](
 				const auto& sphereMat,
 				const auto& tubeMat,
 				const auto& rectangleMat) {

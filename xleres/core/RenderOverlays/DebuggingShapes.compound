@@ -24,32 +24,32 @@ RawMaterial=Shared=~
 			Implements=SV_SystemPS
 
 Entity=HorizTweakerBar
+Inherit=HorizTweakerBar=~; Shared
 RawMaterial=HorizTweakerBar=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			DebuggingShapes.pixel.hlsl::HorizTweakerBarShader
 			Implements=SV_AutoPS
 
 Entity=TagShader
+Inherit=TagShader=~; Shared
 RawMaterial=TagShader=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			DebuggingShapes.pixel.hlsl::TagShader
 			Implements=SV_AutoPS
 
 Entity=GridBackgroundShader
+Inherit=GridBackgroundShader=~; Shared
 RawMaterial=GridBackgroundShader=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			DebuggingShapes.pixel.hlsl::GridBackgroundShader
 			Implements=SV_AutoPS
 
 Entity=SolidNoBorder
+Inherit=SolidNoBorder=~; Shared
 RawMaterial=SolidNoBorder=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::SolidFill_Calculate
@@ -59,8 +59,8 @@ RawMaterial=SolidNoBorder=~
 			Implements=SV_AutoPS
 
 Entity=SolidWithBorder
+Inherit=SolidWithBorder=~; Shared
 RawMaterial=SolidWithBorder=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::SolidFill_Calculate
@@ -70,8 +70,8 @@ RawMaterial=SolidWithBorder=~
 			Implements=SV_AutoPS
 
 Entity=RaisedNoBorder
+Inherit=RaisedNoBorder=~; Shared
 RawMaterial=RaisedNoBorder=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::RaisedFill_Calculate
@@ -81,8 +81,8 @@ RawMaterial=RaisedNoBorder=~
 			Implements=SV_AutoPS
 
 Entity=ReverseRaisedNoBorder
+Inherit=ReverseRaisedNoBorder=~; Shared
 RawMaterial=ReverseRaisedNoBorder=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::ReverseRaisedFill_Calculate
@@ -92,8 +92,8 @@ RawMaterial=ReverseRaisedNoBorder=~
 			Implements=SV_AutoPS
 
 Entity=EmptySolidBorder
+Inherit=EmptySolidBorder=~; Shared
 RawMaterial=EmptySolidBorder=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::NoFill_Calculate
@@ -103,104 +103,104 @@ RawMaterial=EmptySolidBorder=~
 			Implements=SV_AutoPS
 
 Entity=FillRoundedRect
+Inherit=FillRoundedRect=~; SolidNoBorder
 RawMaterial=FillRoundedRect=~
-	Inherit=~; <.>:SolidNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=FillAndOutlineRoundedRect
+Inherit=FillAndOutlineRoundedRect=~; SolidWithBorder
 RawMaterial=FillAndOutlineRoundedRect=~
-	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=OutlineRoundedRect
+Inherit=OutlineRoundedRect=~; EmptySolidBorder
 RawMaterial=OutlineRoundedRect=~
-	Inherit=~; <.>:EmptySolidBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=FillRaisedRect
+Inherit=FillRaisedRect=~; RaisedNoBorder
 RawMaterial=FillRaisedRect=~
-	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=FillRaisedRoundedRect
+Inherit=FillRaisedRoundedRect=~; RaisedNoBorder
 RawMaterial=FillRaisedRoundedRect=~
-	Inherit=~; <.>:RaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=FillReverseRaisedRoundedRect
+Inherit=FillReverseRaisedRoundedRect=~; ReverseRaisedNoBorder
 RawMaterial=FillReverseRaisedRoundedRect=~
-	Inherit=~; <.>:ReverseRaisedNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=FillAndOutlineRect
+Inherit=FillAndOutlineRect=~; SolidWithBorder
 RawMaterial=FillAndOutlineRect=~
-	Inherit=~; <.>:SolidWithBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=FillEllipse
+Inherit=FillEllipse=~; SolidNoBorder
 RawMaterial=FillEllipse=~
-	Inherit=~; <.>:SolidNoBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=OutlineEllipse
+Inherit=OutlineEllipse=~; EmptySolidBorder
 RawMaterial=OutlineEllipse=~
-	Inherit=~; <.>:EmptySolidBorder
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
 			Implements=Interfaces.hlsl::IShape2D_Calculate
 
 Entity=SoftShadowRect
+Inherit=SoftShadowRect=~; Shared
 RawMaterial=SoftShadowRect=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			DebuggingShapes.pixel.hlsl::SoftShadowRect
 			Implements=SV_AutoPS
 
 Entity=DashLine
+Inherit=DashLine=~; Shared
 RawMaterial=DashLine=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::DashLine_Calculate
 			Implements=SV_AutoPS
 
 Entity=FillColorAdjust
+Inherit=FillColorAdjust=~; Shared
 RawMaterial=FillColorAdjust=~
-	Inherit=~; Shared
 	Patches=~
 		=~
 			CommonBrushes.hlsl::ColorAdjust_Calculate
 			Implements=SV_AutoPS
 
 Entity=ColorAdjustAndOutlineRoundedRect
+Inherit=ColorAdjustAndOutlineRoundedRect=~; FillColorAdjust
 RawMaterial=ColorAdjustAndOutlineRoundedRect=~
-	Inherit=~; <.>:FillColorAdjust
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate

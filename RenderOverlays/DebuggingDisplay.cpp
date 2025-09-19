@@ -27,6 +27,7 @@
 #include "../Assets/Assets.h"
 #include "../Assets/AssetMixins.h"
 #include "../Assets/ConfigFileContainer.h"
+#include "../Assets/CompoundAsset.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
@@ -941,12 +942,13 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         static void ConstructToPromise(std::promise<std::shared_ptr<DebugDisplayResources>>&& promise)
         {
-            auto horizTweakerBarMaterial = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
-            auto tagShaderMaterial = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
-            auto gridBackgroundMaterial = RenderCore::Assets::GetResolvedMaterialFuture(RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
+            auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>( std::make_shared<::AssetsNew::AssetHeap>() );
+            auto horizTweakerBarMaterial = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
+            auto tagShaderMaterial = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
+            auto gridBackgroundMaterial = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");
             ::Assets::WhenAll(horizTweakerBarMaterial, tagShaderMaterial, gridBackgroundMaterial).ThenConstructToPromise(
                 std::move(promise),
-                [](const auto& horizTweakerBarMaterial, const auto& tagShaderMaterial, const auto& gridBackgroundMaterial) {
+                [util=std::move(util)](const auto& horizTweakerBarMaterial, const auto& tagShaderMaterial, const auto& gridBackgroundMaterial) {
                     ::Assets::DependencyValidationMarker depVals[] {
                         std::get<::Assets::DependencyValidation>(horizTweakerBarMaterial),
                         std::get<::Assets::DependencyValidation>(tagShaderMaterial),
