@@ -39,11 +39,15 @@ namespace AssetsNew
 		const ::Assets::DirectorySearchRules& GetDirectorySearchRules() const { return std::get<::Assets::DirectorySearchRules>(_scaffold); }
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return std::get<::Assets::DependencyValidation>(_scaffold); }
 		const ::Assets::InheritList& GetInheritList() const { return std::get<::Assets::InheritList>(_scaffold); }
+
+		uint64_t GetHash() const;
 	};
 	struct ContextAndIdentifier
 	{
 		std::string _identifier;
 		::Assets::DirectorySearchRules _searchRules;		// these search rules are for resolving 'identifier' -- not for the references inside of that file
+
+		uint64_t CalculateHash(uint64_t seed) const;
 	};
 	using ScaffoldIndexer = std::variant<std::monostate, ScaffoldAndEntityName, ContextAndIdentifier>;
 
@@ -145,6 +149,8 @@ namespace AssetsNew
 		std::vector<std::pair<EntityHashName, Internal::EntityBookkeeping>> _entityLookup;
 		std::vector<StringSection<>> _inheritLists;
 
+		bool HasComponent(uint64_t entityName, uint64_t componentTypeName);
+
 		::Assets::Blob _blob;
 		uint64_t _uniqueId;
 
@@ -191,6 +197,22 @@ namespace AssetsNew
 			return result;
 
 		}
+	}
+
+	inline bool CompoundAssetScaffold::HasComponent(uint64_t entityName, uint64_t componentTypeName)
+	{
+		auto i = LowerBound(_entityLookup, entityName);
+		auto i2 = LowerBound(_components, componentTypeName);
+		if (	i == _entityLookup.end() || i->first != entityName
+			|| 	i2 == _components.end() || i2->first != componentTypeName)
+			return false;
+		
+		auto entityIdx = i->second._componentTableIdx;
+		if (i2->second._inlineChunks.size() > entityIdx && !i2->second._inlineChunks[entityIdx].IsEmpty()) {
+			return true;
+		}
+
+		return false;
 	}
 
 	template<typename Type, typename... Params> ::AssetsNew::AssetHeap::Iterator<Type> StallWhilePending(AssetHeap& heap, Params&&... initialisers)
@@ -283,7 +305,7 @@ namespace AssetsNew
 					srcInherited = std::get<::Assets::InheritList>(asset);
 				}
 
-				if constexpr (::Assets::Internal::AssetMixinTraits<::Assets::Internal::RemoveSmartPtrType<Type>>::HasDeserializeKey) {
+				if constexpr (::Assets::Internal::AssetMixinTraits<Type>::HasDeserializeKey) {
 					auto& inherited = std::get<InheritList>(t);
 					inherited.reserve(srcInherited.size());
 					for (auto i:srcInherited)
@@ -423,7 +445,7 @@ namespace AssetsNew
 			uint64_t componentTypeName, std::shared_future<ChooseUnresolvedAssetType<MaybeWrapperType>> baseAsset)
 	{
 		using Type = Internal::RemoveWrapperType<MaybeWrapperType>;
-		static_assert(::Assets::Internal::AssetMixinTraits<::Assets::Internal::RemoveSmartPtrType<Type>>::HasMergeInWithFilenameResolve);
+		static_assert(::Assets::Internal::AssetMixinTraits<Type>::HasMergeInWithFilenameResolve);
 
 		// Starting with just the given root entity, expand out a tree of everything requires to be merged together to result in 
 		// a final resolved asset
@@ -542,7 +564,7 @@ namespace AssetsNew
 		auto CompoundAssetUtil::AsResolvedAsset(UnresolvedAsset<Internal::RemoveWrapperType<MaybeWrapperType>>&& in) -> MaybeWrapperType
 	{
 		using Type = Internal::RemoveWrapperType<MaybeWrapperType>;
-		if constexpr (::Assets::Internal::AssetMixinTraits<::Assets::Internal::RemoveSmartPtrType<Type>>::HasMergeInWithFilenameResolve) {
+		if constexpr (::Assets::Internal::AssetMixinTraits<Type>::HasMergeInWithFilenameResolve) {
 			if constexpr (Internal::IsWrapperType<MaybeWrapperType>) {
 				Type finalAsset = ::Assets::Internal::InvokeAssetConstructor<Type>();
 				::Assets::Internal::MaybeDeref(finalAsset).MergeInWithFilenameResolve(::Assets::Internal::MaybeDeref(std::get<0>(std::move(in))), std::get<::Assets::DirectorySearchRules>(in));
@@ -608,7 +630,7 @@ namespace AssetsNew
 		bool inheritanceMechanism = NeedToIncorporatedInheritedAssets(rootEntity);
 		if (inheritanceMechanism) {
 
-			if constexpr (::Assets::Internal::AssetMixinTraits<::Assets::Internal::RemoveSmartPtrType<Type>>::HasMergeInWithFilenameResolve) {
+			if constexpr (::Assets::Internal::AssetMixinTraits<Type>::HasMergeInWithFilenameResolve) {
 
 				std::promise<UnresolvedAsset<Type>> baseAssetPromise;
 				auto baseAssetFuture = baseAssetPromise.get_future();
@@ -707,6 +729,27 @@ namespace AssetsNew
 		::Assets::WhenAll(std::move(input)).ThenConstructToPromise(
 			std::move(finalResult), [](auto&& a) { return std::get<0>(std::move(a)); });
 		return f;
+	}
+
+	inline uint64_t ScaffoldAndEntityName::GetHash() const
+	{
+		assert(_scaffold.get());
+		return HashCombine(_entityNameHash, _scaffold.get()->_uniqueId);
+	}
+
+	inline uint64_t ContextAndIdentifier::CalculateHash(uint64_t seed) const
+	{
+		return Hash64(_identifier, seed);
+	}
+
+	inline uint64_t GetHash(const ScaffoldIndexer& indexer)
+	{
+		switch (indexer.index()) {
+		default:
+		case 0: return 0;
+		case 1: return std::get<ScaffoldAndEntityName>(indexer).GetHash();
+		case 2: return std::get<ContextAndIdentifier>(indexer).CalculateHash(DefaultSeed64);
+		}
 	}
 
 }

@@ -9,26 +9,37 @@ namespace RenderCore::BufferUploads { class IAsyncDataSource; }
 
 namespace RenderCore { namespace Assets
 {
+	class ITextureCompiler
+	{
+	public:
+		struct Context
+		{
+			::Assets::OperationContextHelper* _opContext = nullptr;
+			const VariantFunctions* _conduit = nullptr;
+			std::vector<::Assets::DependencyValidation> _dependencies;
+		};
+
+		virtual std::string IntermediateName() const = 0;
+		virtual std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& ctx) = 0;
+		virtual ~ITextureCompiler();
+	};
+
 	class TextureCompilerRegistrar
 	{
 	public:
-		struct SubCompilerContext
-		{
-			::Assets::OperationContextHelper _opContext;
-			const VariantFunctions _conduit;
-			std::vector<::Assets::DependencyValidation> _dependencies;
-		};
-		using SubCompilerFunctionSig = std::shared_ptr<BufferUploads::IAsyncDataSource>(
-			SubCompilerContext&,
+		using SubCompilerFunctionSig = std::shared_ptr<ITextureCompiler>(
 			std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
-			const ::AssetsNew::ScaffoldIndexer&);
+			const ::AssetsNew::ScaffoldAndEntityName&);
 
 		using RegistrationId = unsigned;
 		RegistrationId Register(std::function<SubCompilerFunctionSig>&&);
 		void Deregister(RegistrationId);
 
+		std::shared_ptr<ITextureCompiler> TryBeginCompile(
+			std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
+			const ::AssetsNew::ScaffoldAndEntityName&);
+
 	protected:
 		Threading::Mutex _mutex;
-		std::
 	};
 }}

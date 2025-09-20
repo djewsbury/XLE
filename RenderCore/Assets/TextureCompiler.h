@@ -16,9 +16,9 @@ namespace std { template <typename T> class function; }
 
 namespace RenderCore { namespace Assets
 {
-#if 0
 	constexpr auto TextureCompilerProcessType = ConstHash64Legacy<'Text', 'ure'>::Value;
-
+	
+#if 0
 	class TextureCompilationRequest
 	{
 	public:
@@ -162,5 +162,10 @@ namespace RenderCore { namespace Assets
 	::Assets::CompilerRegistration RegisterTextureCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers,
 		std::shared_ptr<TextureCompilerRegistrar> registrar);
+
+	class ITextureCompiler;
+	std::shared_ptr<ITextureCompiler> TextureCompiler_Base(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer);
 }}
 

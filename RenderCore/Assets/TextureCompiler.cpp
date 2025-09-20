@@ -257,13 +257,11 @@ namespace RenderCore { namespace Assets
 
 		return destinationBlob;
 	}
-#else
+#endif
 
-	::Assets::Blob ConvertAndPrepareDDSBlobSync(
-		BufferUploads::IAsyncDataSource& srcPkt,
-		Format dstFmt)
+	::Assets::Blob PrepareDDSBlobSyncWithoutConvert(
+		BufferUploads::IAsyncDataSource& srcPkt)
 	{
-		assert(0);
 		auto descFuture = srcPkt.GetDesc();
 		descFuture.wait();
 		auto desc = descFuture.get();
@@ -277,13 +275,13 @@ namespace RenderCore { namespace Assets
 		auto arrayLayerCount = ActualArrayLayerCount(desc._textureDesc);
 		VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, subres, mipCount*arrayLayerCount);
 		for (unsigned a=0; a<arrayLayerCount; ++a)
-				for (unsigned m=0; m<mipCount; ++m) {
-					auto& sr = subres[m+a*mipCount];
-					auto srcOffset = GetSubResourceOffset(desc._textureDesc, m, a);
-					sr._id = SubResourceId{m, a};
-					sr._destination = {PtrAdd(data.get(), srcOffset._offset), PtrAdd(data.get(), srcOffset._offset+srcOffset._size)};
-					sr._pitches = srcOffset._pitches;
-				}
+			for (unsigned m=0; m<mipCount; ++m) {
+				auto& sr = subres[m+a*mipCount];
+				auto srcOffset = GetSubResourceOffset(desc._textureDesc, m, a);
+				sr._id = SubResourceId{m, a};
+				sr._destination = {PtrAdd(data.get(), srcOffset._offset), PtrAdd(data.get(), srcOffset._offset+srcOffset._size)};
+				sr._pitches = srcOffset._pitches;
+			}
 
 		auto dataFuture = srcPkt.PrepareData(MakeIteratorRange(subres, &subres[mipCount*arrayLayerCount]));
 		dataFuture.wait();
@@ -298,8 +296,6 @@ namespace RenderCore { namespace Assets
 
 		return destinationBlob;
 	}
-
-#endif
 
 	TextureCompilationRequest MakeTextureCompilationRequest(Formatters::StreamDOMElement<Formatters::TextInputFormatter<>>& operationElement, std::string srcFN)
 	{
@@ -501,6 +497,78 @@ namespace RenderCore { namespace Assets
 		HaltonSamplerTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
 	};
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	std::shared_ptr<ITextureCompiler> TextureCompiler_Base(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer)
+	{
+		auto scaffold = indexer._scaffold.get();
+
+		class Compiler_BalancedNoise : public ITextureCompiler
+		{
+		public:
+			unsigned _width = 512, _height = 512;
+			std::string IntermediateName() const override { return (StringMeld<128>() << "balanced-noise-" << _width << "x" << _height).AsString(); }
+			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<BalancedNoiseTexture>(request._width, request._height); }
+
+			Compiler_BalancedNoise(Formatters::TextInputFormatter<>& fmttr)
+			{
+				StringSection<> kn;
+				while (fmttr.TryKeyedItem(kn)) {
+					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
+					else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
+					else Formatters::SkipValueOrElement(fmttr);
+				}
+			}
+		};
+
+		if (scaffold->HasComponent(indexer._entityNameHash, "BalancedNoise"_h))
+			return util->GetFuture<std::shared_ptr<Compiler_BalancedNoise>>("BalancedNoise"_h, indexer).get().get();
+
+		class Compiler_HaltonSampler : public ITextureCompiler
+		{
+		public:
+			unsigned _width = 512, _height = 512;
+			std::string IntermediateName() const override { return (StringMeld<128>() << "halton-sampler-" << _width << "x" << _height).AsString(); }
+			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonSamplerTexture>(request._width, request._height); }
+
+			Compiler_HaltonSampler(Formatters::TextInputFormatter<>& fmttr)
+			{
+				StringSection<> kn;
+				while (fmttr.TryKeyedItem(kn)) {
+					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
+					else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
+					else Formatters::SkipValueOrElement(fmttr);
+				}
+			}
+		};
+
+		if (scaffold->HasComponent(indexer._entityNameHash, "HaltonSampler"_h))
+			return util->GetFuture<std::shared_ptr<Compiler_HaltonSampler>>("HaltonSampler"_h, indexer).get().get();
+		
+		return nullptr;
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	struct PostConvert
+	{
+		Format _format = Format::Unknown;
+	};
+
+	static void DeserializationOperator(Formatters::TextInputFormatter<>& fmttr, PostConvert& dst)
+	{
+		StringSection<> kn;
+		while (fmttr.TryKeyedItem(kn)) {
+			if (XlEqString(kn, "Format")) {
+				auto mode = Formatters::RequireStringValue(fmttr);
+				if (auto fmtOpt = AsFormat(mode)) dst._format = *fmtOpt;
+				else Throw(Formatters::FormatException("Unknown 'Format' field in texture compiler file: " + mode.AsString(), fmttr.GetLocation()));
+			} else Formatters::SkipValueOrElement(fmttr);
+		}
+	}
+
 	class TextureCompileOperation : public ::Assets::ICompileOperation
 	{
 	public:
@@ -523,100 +591,51 @@ namespace RenderCore { namespace Assets
 			return ::Assets::GetDepValSys().MakeOrReuse(markers);
 		}
 
-		void Initialize(TextureCompilationRequest request, std::string srcFN, ::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
+		void Initialize(ITextureCompiler& compiler, ::Assets::OperationContextHelper& opHelper, const VariantFunctions& conduit)
 		{
-			std::shared_ptr<BufferUploads::IAsyncDataSource> srcPkt;
-			if (request._operation != TextureCompilationRequest::Operation::ComputeShader
-				&& request._operation != TextureCompilationRequest::Operation::BalancedNoise
-				&& request._operation != TextureCompilationRequest::Operation::HaltonSampler) {
-				if (request._srcFile.empty())
-					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'SourceFile' fields in texture compiler file: " + srcFN));
-				srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(request._srcFile, 0);
-				_dependencies.push_back(srcPkt->GetDependencyValidation());
-			}
+			ITextureCompiler::Context ctx { &opHelper, &conduit };
+			auto pkt = compiler.ExecuteCompile(ctx);
+			auto blob = PrepareDDSBlobSyncWithoutConvert(*pkt);
 
-			LightingEngine::ProgressiveTextureFn dummyIntermediateFn;
-			LightingEngine::ProgressiveTextureFn* intermediateFunction = &dummyIntermediateFn;
-			if (conduit.Has<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0))
-				intermediateFunction = &conduit.Get<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0);
-
-			 else if (request._operation == TextureCompilationRequest::Operation::ComputeShader) {
-				if (opHelper) {
-					opHelper.SetDescription(Concatenate("Generating texture from {color:66d0a4}compute shader{color:}: ", ColouriseFilename(request._shader)));
-					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
-				}
-
-				auto targetDesc = TextureDesc::Plain2D(
-					request._width,
-					request._height,
-					Format::R32G32B32A32_FLOAT, // use full float precision for the pre-compression format
-					1, request._arrayLayerCount);
-				auto shader = request._shader;
-				if (shader.empty())
-					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
-				srcPkt = LightingEngine::GenerateFromSamplingComputeShader(shader, targetDesc, request._sampleCount, request._commandListIntervalMS, request._maxSamplesPerCmdList);
-				_dependencies.push_back(srcPkt->GetDependencyValidation());
-			} else if (request._operation == TextureCompilationRequest::Operation::ConversionComputeShader) {
-				if (opHelper) {
-					opHelper.SetDescription(Concatenate("Generating texture from {color:66d0a4}conversion compute shader{color:}: ", ColouriseFilename(request._shader), ", ", ColouriseFilename(request._srcFile)));
-					opHelper.SetMessage((StringMeld<256>() << request._faceDim << "x" << request._faceDim << " " << AsString(request._format)).AsString());
-				}
-
-				auto targetDesc = TextureDesc::Plain2D(
-					request._width,
-					request._height,
-					request._format,		// since we're not sampling, we can go directly to the output format
-					1, request._arrayLayerCount);
-				auto shader = request._shader;
-				if (shader.empty())
-					Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Expecting 'Shader' field in texture compiler file: " + srcFN));
-				srcPkt = LightingEngine::ConversionComputeShader(shader, *srcPkt, targetDesc);
-				_dependencies.push_back(srcPkt->GetDependencyValidation());
-			} else if (request._operation == TextureCompilationRequest::Operation::BalancedNoise) {
-				srcPkt = std::make_shared<BalancedNoiseTexture>(request._width, request._height);
-			} else if (request._operation == TextureCompilationRequest::Operation::HaltonSampler) {
-				srcPkt = std::make_shared<HaltonSamplerTexture>(request._width, request._height);
-			}
-
-			if (opHelper)
-				opHelper.SetMessage(Concatenate("Compressing to pixel format ", AsString(request._format)));
-
-			auto destinationBlob = ConvertAndPrepareDDSBlobSync(*srcPkt, request._format);
-
-			_serializedArtifacts = std::vector<::Assets::SerializedArtifact>{
-				{
-					TextureCompilerProcessType, 0, MakeFileNameSplitter(srcFN).File().AsString() + ".dds", destinationBlob
-				}
-			};
+			_serializedArtifacts.emplace_back({ TextureCompilerProcessType, 0, "dds", blob });
+			_dependencies.insert(_dependencies.end(), ctx._dependencies.begin(), ctx._dependencies.end());
+			_dependencies.push_back(pkt->GetDependencyValidation());
 		}
 
-		TextureCompileOperation(std::string srcFN, ::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
+		void Initialize(ITextureCompiler& compiler, const PostConvert& postConvert, ::Assets::OperationContextHelper& opHelper, const VariantFunctions& conduit)
 		{
-			// load the given file and perform texture processing operations
-			size_t inputBlockSize = 0;
-			::Assets::FileSnapshot snapshot;
-			auto dataHolder = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(srcFN, &inputBlockSize, &snapshot);
-			_cfgFileDepVal = ::Assets::GetDepValSys().Make(::Assets::DependentFileState{srcFN, snapshot});
-			_dependencies.push_back(_cfgFileDepVal);
-			if (!inputBlockSize)
-				Throw(::Assets::Exceptions::ConstructionError(_cfgFileDepVal, "Empty or missing file while loading: " + srcFN));
-			auto inputData = MakeStringSection((const char*)dataHolder.get(), (const char*)PtrAdd(dataHolder.get(), inputBlockSize));
-			Formatters::TextInputFormatter<> inputFormatter{inputData};
-			Formatters::StreamDOM<Formatters::TextInputFormatter<>> dom(inputFormatter);
-			if (dom.RootElement().children().empty())
-				Throw(std::runtime_error("Missing compilation operation in file: " + srcFN));
+			assert(postConvert._format != Format::Unknown);
+			ITextureCompiler::Context ctx { &opHelper, &conduit };
+			auto pkt = compiler.ExecuteCompile(ctx);
+			#if XLE_COMPRESSONATOR_ENABLE
+				if (opHelper)
+					opHelper.SetMessage(Concatenate("Compressing to pixel format ", AsString(postConvert._format)));
+				auto blob = ConvertAndPrepareDDSBlobSync(*pkt, postConvert._format);
+			#else
+				auto blob = PrepareDDSBlobSyncWithoutConvert(*pkt);
+			#endif
 
-			auto operationElement = *dom.RootElement().children().begin();
-			auto request = MakeTextureCompilationRequest(operationElement, srcFN);
-
-			Initialize(request, srcFN, std::move(opHelper), conduit);
+			_serializedArtifacts.emplace_back({ TextureCompilerProcessType, 0, "dds", blob });
+			_dependencies.insert(_dependencies.end(), ctx._dependencies.begin(), ctx._dependencies.end());
+			_dependencies.push_back(pkt->GetDependencyValidation());
 		}
 
-		TextureCompileOperation(TextureCompilationRequest request, ::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
+		TextureCompileOperation(
+			std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+			const ::AssetsNew::ScaffoldAndEntityName& indexer,
+			TextureCompilerRegistrar& registrar,
+			::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
 		{
-			std::stringstream str;
-			str << request;
-			Initialize(request, str.str(), std::move(opHelper), conduit);
+			auto compile = registrar.TryBeginCompile(util, indexer);
+			if (!compile)
+				Throw(std::runtime_error("Could not match to known texture compile operations: " + srcFN));
+
+			if (indexer._scaffold.get()->HasComponent(indexer._entityNameHash, "PostConvert"_h)) {
+				auto postConvert = util->GetFuture<PostConvert>("PostConvert"_h, indexer).get();
+				Initialize(*compiler, postConvert, opHealer, conduit);
+			} else {
+				Initialize(*compiler, opHealer, conduit);
+			}
 		}
 
 	private:
@@ -673,7 +692,7 @@ namespace RenderCore { namespace Assets
 			return promise.get_future();
 		}
 
-		auto futureDesc = pkt->GetDesc();	
+		auto futureDesc = pkt->GetDesc();
 		return thousandeyes::futures::then(
 			ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
 			std::move(futureDesc),
