@@ -17,7 +17,7 @@ namespace std { template <typename T> class function; }
 namespace RenderCore { namespace Assets
 {
 	constexpr auto TextureCompilerProcessType = ConstHash64Legacy<'Text', 'ure'>::Value;
-	
+
 #if 0
 	class TextureCompilationRequest
 	{
@@ -81,11 +81,29 @@ namespace RenderCore { namespace Assets
 
 #else
 
-	struct TextureCompilationRequest
+	struct PostConvert
 	{
+		Format _format = Format::Unknown;
+	};
+
+	class ITextureCompiler;
+
+	class TextureCompilationRequest
+	{
+		std::string _intermediateName;
+		std::shared_ptr<ITextureCompiler> _subCompiler;
+		std::optional<PostConvert> _postConvert;
+
+		uint64_t CalculateHash(uint64_t seed = DefaultSeed64) { return Hash64(_intermediateName, seed); }
+		friend std::ostream& operator<<(std::ostream& str, const TextureCompilationRequest& req) { return str << req._intermediateName; }
+	};
+
+	
+
+	/*
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> _util;
 		::AssetsNew::ScaffoldIndexer indexer;
-	};
+	};*/
 
 	struct TextureCompilerSource
 	{
@@ -160,11 +178,15 @@ namespace RenderCore { namespace Assets
 
 	class TextureCompilerRegistrar;
 	::Assets::CompilerRegistration RegisterTextureCompiler(
-		::Assets::IIntermediateCompilers& intermediateCompilers,
-		std::shared_ptr<TextureCompilerRegistrar> registrar);
+		::Assets::IIntermediateCompilers& intermediateCompilers);
 
 	class ITextureCompiler;
 	std::shared_ptr<ITextureCompiler> TextureCompiler_Base(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer);
+
+	TextureCompilationRequest MakeTextureCompilationRequestSync(
+		TextureCompilerRegistrar& registrar,
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer);
 }}

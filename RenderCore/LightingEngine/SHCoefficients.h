@@ -31,11 +31,13 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
+		enum class CoordinateSystem { YUp, ZUp };
+
 		static void ConstructToPromise(
 			std::promise<SHCoefficientsAsset>&&,
 			std::shared_ptr<::Assets::OperationContext>,
 			StringSection<> initializer,
-			RenderCore::Assets::TextureCompilationRequest::CoordinateSystem coordinateSystem = RenderCore::Assets::TextureCompilationRequest::CoordinateSystem::ZUp);
+			CoordinateSystem coordinateSystem = CoordinateSystem::ZUp);
 		SHCoefficientsAsset() = default;
 	protected:
 		::Assets::DependencyValidation _depVal;

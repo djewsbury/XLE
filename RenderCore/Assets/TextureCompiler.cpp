@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "TextureCompiler.h"
+#include "TextureCompilerRegistrar.h"
 #include "../Techniques/Services.h"
 #include "../LightingEngine/TextureCompilerUtil.h"
 #include "../LightingEngine/BlueNoiseGenerator.h"
@@ -14,11 +15,10 @@
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/ICompileOperation.h"
 #include "../../Math/SamplingUtil.h"
-#include "../../OSServices/AttachableLibrary.h"
-#include "../../Formatters/StreamDOM.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Formatters/TextFormatter.h"
+#include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
-#include "../../Utility/BitUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Core/Exceptions.h"
 
@@ -28,7 +28,7 @@
 	#include "Compressonator.h"
 #endif
 
-#include <random>
+using namespace Utility::Literals;
 
 namespace RenderCore { namespace Assets
 {
@@ -297,6 +297,7 @@ namespace RenderCore { namespace Assets
 		return destinationBlob;
 	}
 
+#if 0
 	TextureCompilationRequest MakeTextureCompilationRequest(Formatters::StreamDOMElement<Formatters::TextInputFormatter<>>& operationElement, std::string srcFN)
 	{
 		TextureCompilationRequest result;
@@ -394,6 +395,7 @@ namespace RenderCore { namespace Assets
 			params._upDirection = 2;
 		return params;
 	}
+#endif
 
 	class BalancedNoiseTexture : public BufferUploads::IAsyncDataSource
 	{
@@ -510,7 +512,7 @@ namespace RenderCore { namespace Assets
 		public:
 			unsigned _width = 512, _height = 512;
 			std::string IntermediateName() const override { return (StringMeld<128>() << "balanced-noise-" << _width << "x" << _height).AsString(); }
-			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<BalancedNoiseTexture>(request._width, request._height); }
+			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<BalancedNoiseTexture>(_width, _height); }
 
 			Compiler_BalancedNoise(Formatters::TextInputFormatter<>& fmttr)
 			{
@@ -531,7 +533,7 @@ namespace RenderCore { namespace Assets
 		public:
 			unsigned _width = 512, _height = 512;
 			std::string IntermediateName() const override { return (StringMeld<128>() << "halton-sampler-" << _width << "x" << _height).AsString(); }
-			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonSamplerTexture>(request._width, request._height); }
+			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonSamplerTexture>(_width, _height); }
 
 			Compiler_HaltonSampler(Formatters::TextInputFormatter<>& fmttr)
 			{
@@ -551,11 +553,6 @@ namespace RenderCore { namespace Assets
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	struct PostConvert
-	{
-		Format _format = Format::Unknown;
-	};
 
 	static void DeserializationOperator(Formatters::TextInputFormatter<>& fmttr, PostConvert& dst)
 	{
@@ -597,7 +594,7 @@ namespace RenderCore { namespace Assets
 			auto pkt = compiler.ExecuteCompile(ctx);
 			auto blob = PrepareDDSBlobSyncWithoutConvert(*pkt);
 
-			_serializedArtifacts.emplace_back({ TextureCompilerProcessType, 0, "dds", blob });
+			_serializedArtifacts.emplace_back(TextureCompilerProcessType, 0, "dds", blob);
 			_dependencies.insert(_dependencies.end(), ctx._dependencies.begin(), ctx._dependencies.end());
 			_dependencies.push_back(pkt->GetDependencyValidation());
 		}
@@ -615,26 +612,20 @@ namespace RenderCore { namespace Assets
 				auto blob = PrepareDDSBlobSyncWithoutConvert(*pkt);
 			#endif
 
-			_serializedArtifacts.emplace_back({ TextureCompilerProcessType, 0, "dds", blob });
+			_serializedArtifacts.emplace_back(TextureCompilerProcessType, 0, "dds", blob);
 			_dependencies.insert(_dependencies.end(), ctx._dependencies.begin(), ctx._dependencies.end());
 			_dependencies.push_back(pkt->GetDependencyValidation());
 		}
 
 		TextureCompileOperation(
-			std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
-			const ::AssetsNew::ScaffoldAndEntityName& indexer,
-			TextureCompilerRegistrar& registrar,
+			const TextureCompilationRequest& req,
 			::Assets::OperationContextHelper&& opHelper, const VariantFunctions& conduit)
 		{
-			auto compile = registrar.TryBeginCompile(util, indexer);
-			if (!compile)
-				Throw(std::runtime_error("Could not match to known texture compile operations: " + srcFN));
-
-			if (indexer._scaffold.get()->HasComponent(indexer._entityNameHash, "PostConvert"_h)) {
-				auto postConvert = util->GetFuture<PostConvert>("PostConvert"_h, indexer).get();
-				Initialize(*compiler, postConvert, opHealer, conduit);
+			assert(req._subCompiler);
+			if (req._postConvert) {
+				Initialize(*req._subCompiler, *req._postConvert, opHelper, conduit);
 			} else {
-				Initialize(*compiler, opHealer, conduit);
+				Initialize(*req._subCompiler, opHelper, conduit);
 			}
 		}
 
@@ -654,12 +645,7 @@ namespace RenderCore { namespace Assets
 			ConsoleRig::GetLibVersionDesc(),
 			{},
 			[](const ::Assets::InitializerPack& initializers, auto&& operationContextHelper, const auto& conduit) {
-				auto paramType = initializers.GetInitializer<unsigned>(0);
-				if (paramType == 0) {
-					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<std::string>(1), std::move(operationContextHelper), conduit);
-				} else {
-					return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<TextureCompilationRequest>(1), std::move(operationContextHelper), conduit);
-				}
+				return std::make_shared<TextureCompileOperation>(initializers.GetInitializer<TextureCompilationRequest>(0), std::move(operationContextHelper), conduit);
 			}};
 
 		uint64_t outputAssetTypes[] = { TextureCompilerProcessType };
@@ -669,6 +655,26 @@ namespace RenderCore { namespace Assets
 		intermediateCompilers.AssociateExtensions(
 			result.RegistrationId(),
 			"texture");
+		return result;
+	}
+
+	TextureCompilationRequest MakeTextureCompilationRequestSync(
+		TextureCompilerRegistrar& registrar,
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer)
+	{
+		TextureCompilationRequest result;
+		result._subCompiler = registrar.TryBeginCompile(util, indexer);
+		if (!result._subCompiler)
+			return {};		// invalid compile
+
+		result._intermediateName = result._subCompiler->IntermediateName();
+
+		if (indexer._scaffold.get()->HasComponent(indexer._entityNameHash, "PostConvert"_h)) {
+			result._postConvert = util->GetFuture<PostConvert>("PostConvert"_h, indexer).get();
+			result._intermediateName = Concatenate(result._intermediateName, "-", AsString(result._postConvert->_format));
+		}
+
 		return result;
 	}
 
@@ -745,6 +751,7 @@ namespace RenderCore { namespace Assets
 		::Assets::ArtifactRequest{ "main", RenderCore::Assets::TextureCompilerProcessType, 0, ::Assets::ArtifactRequest::DataType::Filename }
 	};
 
+#if 0
 	void TextureArtifact::ConstructToPromise(
 		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
 		StringSection<> initializer)
@@ -838,5 +845,7 @@ namespace RenderCore { namespace Assets
 				} CATCH_END
 			});
 	}
+#endif
+
 }}
 

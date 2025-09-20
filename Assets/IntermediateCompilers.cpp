@@ -858,7 +858,8 @@ namespace Assets
 			{},
 			[fn=std::move(fn)](const auto& initializers) {
 				return std::make_shared<SimpleCompilerAdapter>(fn(initializers));
-			}};
+			},
+			std::move(archiveNameDelegate)};
 	}
 
 }

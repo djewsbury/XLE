@@ -13,6 +13,7 @@
 namespace RenderCore { namespace BufferUploads { class IAsyncDataSource; }}
 namespace Assets { struct DependentFileState; }
 namespace RenderCore { class TextureDesc; class IThreadContext; class IResource; }
+namespace RenderCore::Assets { class ITextureCompiler; struct TextureCompilerSource; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -61,4 +62,8 @@ namespace RenderCore { namespace LightingEngine
 		MipMapFilter _mipMapFilter = MipMapFilter::None;
 		unsigned _coefficientCount = 9;		// for ProjectToSphericalHarmonic
 	};
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_EquirectFilter(
+		const EquirectToCubemap& mainComponent,
+		const Assets::TextureCompilerSource& sourceComponent);
 }}
