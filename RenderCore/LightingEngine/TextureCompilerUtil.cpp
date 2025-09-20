@@ -7,6 +7,9 @@
 #include "../Techniques/Techniques.h"
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/PipelineOperators.h"
+#include "../Techniques/Services.h"
+#include "../Assets/TextureCompiler.h"
+#include "../Assets/TextureCompilerRegistrar.h"
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
@@ -14,6 +17,8 @@
 #include "../Vulkan/IDeviceVulkan.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Marker.h"
+#include "../../Assets/CompoundAsset.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
@@ -647,6 +652,205 @@ namespace RenderCore { namespace LightingEngine
 			threadContextVulkan->ReleaseCommandBufferPool();
 		}
 		return result;
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	std::optional<EquirectFilterMode> AsEquirectFilterMode(StringSection<> str)
+	{
+		if (XlEqString(str, "ToCubeMap")) return EquirectFilterMode::ToCubeMap;
+		if (XlEqString(str, "ToCubeMapBokeh")) return EquirectFilterMode::ToCubeMapBokeh;
+		if (XlEqString(str, "ToGlossySpecular")) return EquirectFilterMode::ToGlossySpecular;
+		if (XlEqString(str, "ProjectToSphericalHarmonic")) return EquirectFilterMode::ProjectToSphericalHarmonic;
+		if (XlEqString(str, "ToGlossySpecularReference")) return EquirectFilterMode::ToGlossySpecularReference;
+		if (XlEqString(str, "ToDiffuseReference")) return EquirectFilterMode::ToDiffuseReference;
+		return {};
+	}
+
+	std::optional<EquirectToCubemap::MipMapFilter> AsMipMapFilter(StringSection<> str)
+	{
+		if (XlEqString(str, "None")) return EquirectToCubemap::MipMapFilter::None;
+		if (XlEqString(str, "FromSource")) return EquirectToCubemap::MipMapFilter::FromSource;
+		return {};
+	}
+
+	static void DeserializationOperator(Formatters::TextInputFormatter<>& fmttr, EquirectToCubemap& dst)
+	{
+		StringSection<> kn;
+		while (fmttr.TryKeyedItem(kn)) {
+			if (XlEqString(kn, "FilterMode")) {
+				auto mode = Formatters::RequireStringValue(fmttr);
+				if (auto m = AsEquirectFilterMode(mode)) dst._filterMode = *m;
+				else Throw(Formatters::FormatException("Unknown 'FilterMode' field in texture compiler file: " + mode.AsString(), fmttr.GetLocation()));
+			} else if (XlEqString(kn, "Format")) {
+				auto mode = Formatters::RequireStringValue(fmttr);
+				if (auto fmtOpt = AsFormat(mode)) dst._format = *fmtOpt;
+				else Throw(Formatters::FormatException("Unknown 'Format' field in texture compiler file: " + mode.AsString(), fmttr.GetLocation()));
+			} else if (XlEqString(kn, "FaceDim")) {
+				dst._faceDim = Formatters::RequireCastValue<decltype(dst._faceDim)>(fmttr);
+			} else if (XlEqString(kn, "MipMapFilter")) {
+				auto mode = Formatters::RequireStringValue(fmttr);
+				if (auto fmtOpt = AsMipMapFilter(mode)) dst._mipMapFilter = *fmtOpt;
+				else Throw(Formatters::FormatException("Unknown 'MipMapFilter' field in texture compiler file: " + mode.AsString(), fmttr.GetLocation()));
+			} else if (XlEqString(kn, "CoefficientCount")) {
+				dst._coefficientCount = Formatters::RequireCastValue<decltype(dst._coefficientCount)>(fmttr);
+
+			} else if (XlEqString(kn, "SampleCount")) {
+				dst._params._sampleCount = Formatters::RequireCastValue<decltype(dst._params._sampleCount)>(fmttr);
+			} else if (XlEqString(kn, "MaxSamplesPerCmdList")) {
+				dst._params._maxSamplesPerCmdList = Formatters::RequireCastValue<decltype(dst._params._maxSamplesPerCmdList)>(fmttr);
+			} else if (XlEqString(kn, "CommandListInterval")) {
+				dst._params._idealCmdListCostMS = Formatters::RequireCastValue<decltype(dst._params._idealCmdListCostMS)>(fmttr);
+			} else if (XlEqString(kn, "CoordinateSystem")) {
+				auto mode = Formatters::RequireStringValue(fmttr);
+				if (XlEqString(mode, "ZUp")) dst._params._upDirection = 2;
+				else if (XlEqString(mode, "YUp")) dst._params._upDirection = 1;
+				else Throw(Formatters::FormatException("Unknown 'CoordinateSystem' field in texture compiler file: " + mode.AsString(), fmttr.GetLocation()));
+
+			} else 
+				Formatters::SkipValueOrElement(fmttr);
+		}
+	}
+
+
+	std::shared_ptr<BufferUploads::IAsyncDataSource> TextureCompilerEntry_EquirectFilter(
+		RenderCore::Assets::TextureCompilerRegistrar::SubCompilerContext& context,
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer)
+	{
+		// look for "EquirectToCubemap" component
+		auto scaffold = indexer._scaffold.get();
+		if (	!scaffold->HasComponent(indexer._entityNameHash, "EquirectToCubemap"_h)
+			|| 	!scaffold->HasComponent(indexer._entityNameHash, "Source"_h))
+			return nullptr;
+
+		auto mainComponent = util->GetFuture<EquirectToCubemap>("EquirectToCubemap"_h, indexer).get().get();
+		auto sourceComponent = util->GetFuture<Assets::TextureCompilerSource>("Source"_h, indexer).get().get();
+
+		auto srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(sourceComponent._srcFile, 0);
+		context._dependencies.push_back(srcPkt->GetDependencyValidation());
+
+		ProgressiveTextureFn dummyIntermediateFn;
+		ProgressiveTextureFn* intermediateFunction = &dummyIntermediateFn;
+		if (context._conduit.Has<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0))
+			intermediateFunction = &context._conduit.Get<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>(0);
+
+		if (mainComponent._filterMode == EquirectFilterMode::ToCubeMap) {
+
+			if (context._opContext) {
+				context._opContext.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-cubemap{color:} compilation: ", ColouriseFilename(sourceComponent._srcFile)));
+				context._opContext.SetMessage((StringMeld<256>() << mainComponent._faceDim << "x" << mainComponent._faceDim << " " << AsString(mainComponent._format)).AsString());
+			}
+
+			auto srcDst = srcPkt->GetDesc();
+			srcDst.wait();
+			auto targetDesc = srcDst.get()._textureDesc;
+			targetDesc._width = mainComponent._faceDim;
+			targetDesc._height = mainComponent._faceDim;
+			targetDesc._depth = 1;
+			targetDesc._arrayCount = 0u;
+			targetDesc._mipCount = (mainComponent._mipMapFilter == EquirectToCubemap::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
+			targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+			srcPkt = EquirectFilter(*srcPkt, targetDesc, EquirectFilterMode::ToCubeMap, mainComponent._params, context._opContext, *intermediateFunction);
+			context._dependencies.push_back(srcPkt->GetDependencyValidation());
+
+		} else if (mainComponent._filterMode == EquirectFilterMode::ToCubeMapBokeh) {
+
+			if (context._opContext) {
+				context._opContext.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-cubemap-bokeh{color:} compilation: ", ColouriseFilename(sourceComponent._srcFile)));
+				context._opContext.SetMessage((StringMeld<256>() << mainComponent._faceDim << "x" << mainComponent._faceDim << " " << AsString(mainComponent._format)).AsString());
+			}
+
+			auto srcDst = srcPkt->GetDesc();
+			srcDst.wait();
+			auto targetDesc = srcDst.get()._textureDesc;
+			targetDesc._width = mainComponent._faceDim;
+			targetDesc._height = mainComponent._faceDim;
+			targetDesc._depth = 1;
+			targetDesc._arrayCount = 0u;
+			targetDesc._mipCount = (mainComponent._mipMapFilter == EquirectToCubemap::MipMapFilter::FromSource) ? IntegerLog2(targetDesc._width)+1 : 1;
+			targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+			srcPkt = EquirectFilter(*srcPkt, targetDesc, EquirectFilterMode::ToCubeMapBokeh, mainComponent._params, context._opContext, *intermediateFunction);
+			context._dependencies.push_back(srcPkt->GetDependencyValidation());
+
+		} else if (mainComponent._filterMode == EquirectFilterMode::ToGlossySpecular) {
+
+			if (context._opContext) {
+				context._opContext.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-specular{color:} compilation: ", ColouriseFilename(sourceComponent._srcFile)));
+				context._opContext.SetMessage((StringMeld<256>() << mainComponent._faceDim << "x" << mainComponent._faceDim << " " << AsString(mainComponent._format)).AsString());
+			}
+
+			auto srcDst = srcPkt->GetDesc();
+			srcDst.wait();
+			auto targetDesc = srcDst.get()._textureDesc;
+			targetDesc._width = mainComponent._faceDim;
+			targetDesc._height = mainComponent._faceDim;
+			targetDesc._depth = 1;
+			targetDesc._arrayCount = 0u;
+			targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
+			targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
+			targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+			srcPkt = EquirectFilter(*srcPkt, targetDesc, EquirectFilterMode::ToGlossySpecular, mainComponent._params, context._opContext, *intermediateFunction);
+			context._dependencies.push_back(srcPkt->GetDependencyValidation());
+
+		} else if (mainComponent._filterMode == EquirectFilterMode::ToGlossySpecularReference) {
+
+			if (context._opContext) {
+				context._opContext.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-specular-reference{color:} compilation: ", ColouriseFilename(sourceComponent._srcFile)));
+				context._opContext.SetMessage((StringMeld<256>() << mainComponent._faceDim << "x" << mainComponent._faceDim << " " << AsString(mainComponent._format)).AsString());
+			}
+
+			auto srcDst = srcPkt->GetDesc();
+			srcDst.wait();
+			auto targetDesc = srcDst.get()._textureDesc;
+			targetDesc._width = mainComponent._faceDim;
+			targetDesc._height = mainComponent._faceDim;
+			targetDesc._depth = 1;
+			targetDesc._arrayCount = 0u;
+			targetDesc._mipCount = IntegerLog2(targetDesc._width)+1;
+			targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
+			targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+			srcPkt = EquirectFilter(*srcPkt, targetDesc, EquirectFilterMode::ToGlossySpecularReference, mainComponent._params, context._opContext, *intermediateFunction);
+			context._dependencies.push_back(srcPkt->GetDependencyValidation());
+
+		} else if (mainComponent._filterMode == EquirectFilterMode::ToDiffuseReference) {
+
+			if (context._opContext) {
+				context._opContext.SetDescription(Concatenate("{color:66d0a4}Equirectangular-to-diffuse-reference{color:} compilation: ", ColouriseFilename(sourceComponent._srcFile)));
+				context._opContext.SetMessage((StringMeld<256>() << mainComponent._faceDim << "x" << mainComponent._faceDim << " " << AsString(mainComponent._format)).AsString());
+			}
+
+			auto srcDst = srcPkt->GetDesc();
+			srcDst.wait();
+			auto targetDesc = srcDst.get()._textureDesc;
+			targetDesc._width = mainComponent._faceDim;
+			targetDesc._height = mainComponent._faceDim;
+			targetDesc._depth = 1;
+			targetDesc._arrayCount = 0u;
+			targetDesc._mipCount = 1;
+			targetDesc._format = Format::R32G32B32A32_FLOAT; // use full float precision for the pre-compression format
+			targetDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
+			srcPkt = EquirectFilter(*srcPkt, targetDesc, EquirectFilterMode::ToDiffuseReference, mainComponent._params, context._opContext, *intermediateFunction);
+			context._dependencies.push_back(srcPkt->GetDependencyValidation());
+
+		} else if (mainComponent._filterMode == EquirectFilterMode::ProjectToSphericalHarmonic) {
+
+			if (context._opContext) {
+				context._opContext.SetDescription(Concatenate("{color:66d0a4}Equirectangular-project-to-spherical-harmonic{color:} compilation: ", ColouriseFilename(sourceComponent._srcFile)));
+				context._opContext.SetMessage((StringMeld<256>() << mainComponent._coefficientCount << " coefficients").AsString());
+			}
+
+			auto targetDesc = TextureDesc::Plain2D(mainComponent._coefficientCount, 1, Format::R32G32B32A32_FLOAT);
+			srcPkt = EquirectFilter(*srcPkt, targetDesc, EquirectFilterMode::ProjectToSphericalHarmonic, mainComponent._params, context._opContext, *intermediateFunction);
+			context._dependencies.push_back(srcPkt->GetDependencyValidation());
+
+		} else {
+
+			Throw(std::runtime_error("Unknown filter mode: " + std::to_string((uint32_t)mainComponent._filterMode)));
+
+		}
+
+		return srcPkt;
 	}
 
 }}

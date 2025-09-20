@@ -4,11 +4,10 @@
 
 #pragma once
 
+#include "../Format.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/OperationContext.h"
-#include "../../Utility/StringFormat.h"
 #include <memory>
-#include <vector>
 #include <functional>
 
 namespace RenderCore { namespace BufferUploads { class IAsyncDataSource; }}
@@ -23,7 +22,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _sampleCount = 1;
 		unsigned _idealCmdListCostMS = 1500;
 		unsigned _maxSamplesPerCmdList = ~0u;
-		unsigned _upDirection = 2;			// 1 = Y, 2 = Z
+		unsigned _upDirection = 2;			// 1 = Y, 2 = Z			-- texture compiler requests may be using "coordinate system" as a key for this
 	};
 
 	using ProgressiveTextureFn = std::function<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>;
@@ -51,4 +50,15 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IThreadContext> threadContext, 
 		std::shared_ptr<IResource> resource,
 		::Assets::DependencyValidation depVal = {});
+
+	struct EquirectToCubemap
+	{
+		EquirectFilterMode _filterMode;
+		Format _format = Format::Unknown;
+		unsigned _faceDim = 512;
+		EquirectFilterParams _params;
+		enum class MipMapFilter { None, FromSource };
+		MipMapFilter _mipMapFilter = MipMapFilter::None;
+		unsigned _coefficientCount = 9;		// for ProjectToSphericalHarmonic
+	};
 }}

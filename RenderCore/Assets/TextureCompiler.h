@@ -7,6 +7,7 @@
 #include "TextureLoaders.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediateCompilers.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"
 
@@ -15,6 +16,7 @@ namespace std { template <typename T> class function; }
 
 namespace RenderCore { namespace Assets
 {
+#if 0
 	constexpr auto TextureCompilerProcessType = ConstHash64Legacy<'Text', 'ure'>::Value;
 
 	class TextureCompilationRequest
@@ -77,6 +79,21 @@ namespace RenderCore { namespace Assets
 	const char* AsString(TextureCompilationRequest::CoordinateSystem);
 	std::optional<TextureCompilationRequest::CoordinateSystem> AsCoordinateSystem(StringSection<> name);
 
+#else
+
+	struct TextureCompilationRequest
+	{
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> _util;
+		::AssetsNew::ScaffoldIndexer indexer;
+	};
+
+	struct TextureCompilerSource
+	{
+		std::string _srcFile;
+	};
+
+#endif
+
 	::Assets::Blob ConvertAndPrepareDDSBlobSync(
 		BufferUploads::IAsyncDataSource& src,
 		Format dstFmt);
@@ -93,6 +110,7 @@ namespace RenderCore { namespace Assets
 		};
 		std::future<RawData> BeginLoadRawData(TextureLoaderFlags::BitField loadedFlags = 0) const;
 
+#if 0
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
 			StringSection<> initializer);
@@ -118,6 +136,7 @@ namespace RenderCore { namespace Assets
 			std::shared_ptr<::Assets::OperationContext> opContext,
 			const TextureCompilationRequest& request,
 			ProgressiveResultFn&& intermediateResultFn);
+#endif
 
 		TextureArtifact();
 		~TextureArtifact();
@@ -133,7 +152,15 @@ namespace RenderCore { namespace Assets
 		::Assets::DependencyValidation _depVal;
 	};
 
+	static void ConstructViaTextureCompiler(
+		std::promise<std::shared_ptr<TextureArtifact>>&&,
+		std::shared_ptr<::Assets::OperationContext>,
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
+		const ::AssetsNew::ScaffoldIndexer&);
+
+	class TextureCompilerRegistrar;
 	::Assets::CompilerRegistration RegisterTextureCompiler(
-		::Assets::IIntermediateCompilers& intermediateCompilers);
+		::Assets::IIntermediateCompilers& intermediateCompilers,
+		std::shared_ptr<TextureCompilerRegistrar> registrar);
 }}
 
