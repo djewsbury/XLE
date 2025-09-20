@@ -4,6 +4,7 @@
 
 #include "SHCoefficients.h"
 #include "TextureCompilerUtil.h"
+#include "../Assets/TextureCompilerRegistrar.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Assets/AssetTraits.h"
 #include "../../Assets/IArtifact.h"
@@ -27,17 +28,17 @@ namespace RenderCore { namespace LightingEngine
 		StringSection<> srcTexture,
 		CoordinateSystem coordinateSystem)
 	{
-		EquirectToCubemap request;
-		request._filterMode = EquirectFilterMode::ProjectToSphericalHarmonic; 
-		request._format = Format::R32G32B32A32_FLOAT;
-		request._coefficientCount = 25;
-		request._params._upDirection = (coordinateSystem == CoordinateSystem::YUp) ? 1 : 2;
+		EquirectToCubemap toCubemap;
+		toCubemap._filterMode = EquirectFilterMode::ProjectToSphericalHarmonic; 
+		toCubemap._format = Format::R32G32B32A32_FLOAT;
+		toCubemap._coefficientCount = 25;
+		toCubemap._params._upDirection = (coordinateSystem == CoordinateSystem::YUp) ? 1 : 2;
 
 		Assets::TextureCompilerSource srcComponent;
 		srcComponent._srcFile = srcTexture.AsString();
 
 		Assets::TextureCompilationRequest request;
-		request._subCompiler = TextureCompiler_EquirectFilter(request, srcComponent);
+		request._subCompiler = TextureCompiler_EquirectFilter(toCubemap, srcComponent);
 		request._intermediateName = request._subCompiler->GetIntermediateName();
 		
 		auto srcFuture = ::Assets::ConstructToMarkerPtr<RenderCore::Assets::TextureArtifact>(std::move(loadingContext), request);

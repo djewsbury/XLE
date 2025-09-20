@@ -12,6 +12,7 @@
 #include "../../RenderCore/LightingEngine/ToneMapOperator.h"
 #include "../../RenderCore/LightingEngine/HierarchicalDepths.h"
 #include "../../RenderCore/LightingEngine/ScreenSpaceReflections.h"
+#include "../../RenderCore/LightingEngine/TextureCompilerUtil.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
@@ -241,12 +242,19 @@ namespace ToolsRig
 
 				// set a sky texture
 				if (!ambientCubemap.IsEmpty()) {
-					RenderCore::Assets::TextureCompilationRequest request2;
-					request2._operation = RenderCore::Assets::TextureCompilationRequest::Operation::EquirectToCubeMap; 
-					request2._srcFile = ambientCubemap.AsString();
-					request2._format = Format::BC6H_UF16;
-					request2._faceDim = 1024;
-					request2._mipMapFilter = RenderCore::Assets::TextureCompilationRequest::MipMapFilter::FromSource;
+					RenderCore::LightingEngine::EquirectToCubemap toCubemap;
+					toCubemap._filterMode = RenderCore::LightingEngine::EquirectFilterMode::ToCubeMap; 
+					toCubemap._format = Format::R32G32B32_FLOAT;
+					toCubemap._faceDim = 1024;
+					toCubemap._mipMapFilter = RenderCore::LightingEngine::EquirectToCubemap::MipMapFilter::FromSource;
+
+					RenderCore::Assets::TextureCompilerSource srcComponent;
+					srcComponent._srcFile = ambientCubemap.AsString();
+
+					auto request2 = RenderCore::Assets::MakeTextureCompilationRequest(
+						RenderCore::LightingEngine::TextureCompiler_EquirectFilter(toCubemap, srcComponent),
+						RenderCore::Format::BC6H_UF16);
+
 					auto ambientRawCubemap = ::Assets::ConstructToMarkerPtr<Techniques::DeferredShaderResource>(request2);
 
 					std::weak_ptr<RenderCore::LightingEngine::ScreenSpaceReflectionsOperator> weakOp = opStep;

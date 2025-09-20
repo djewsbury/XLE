@@ -5,7 +5,6 @@
 #pragma once
 
 #include "StandardLightScene.h"
-#include "../Assets/TextureCompiler.h"
 #include "../Format.h"
 #include "../../Assets/AssetsCore.h"
 #include <memory>
@@ -56,7 +55,8 @@ namespace RenderCore { namespace LightingEngine
 		bool _useProgressiveSpecularAsBackground = false;
 		bool _blurBackground = false;
 
-		RenderCore::Assets::TextureCompilationRequest::CoordinateSystem _coordinateSystem = RenderCore::Assets::TextureCompilationRequest::CoordinateSystem::ZUp;
+		enum class CoordinateSystem { YUp, ZUp };
+		CoordinateSystem _coordinateSystem = CoordinateSystem::ZUp;
 	};
 
 	/// <summary>Utility for transforming from asset name to sky texture resources, and assign to necessary operators</summary>

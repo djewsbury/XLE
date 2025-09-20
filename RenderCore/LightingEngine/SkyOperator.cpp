@@ -5,16 +5,17 @@
 #include "SkyOperator.h"
 #include "SequenceIterator.h"
 #include "SHCoefficients.h"
+#include "TextureCompilerUtil.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/Drawables.h"
 #include "../Techniques/DescriptorSetAccelerator.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/Services.h"
 #include "../Techniques/CommonResources.h"
-#include "../Techniques/CommonBindings.h"
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/TextureCompiler.h"
+#include "../Assets/TextureCompilerRegistrar.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
@@ -235,19 +236,21 @@ namespace RenderCore { namespace LightingEngine
 		auto weakThis = weak_from_this();
 
 		if (_skyOperator || _onChangeSkyTexture.AtLeastOneBind()) {
-			Assets::TextureCompilationRequest request2;
-			request2._operation = Assets::TextureCompilationRequest::Operation::EquirectToCubeMap; 
-			request2._srcFile = _sourceImage;
-			request2._format = _desc._cubemapFormat;
-			request2._faceDim = _desc._cubemapFaceDimension;
-			request2._mipMapFilter = Assets::TextureCompilationRequest::MipMapFilter::FromSource;
-			request2._coordinateSystem = _desc._coordinateSystem;
+			EquirectToCubemap toCubemap;
+			toCubemap._filterMode = EquirectFilterMode::ToCubeMap; 
+			toCubemap._format = _desc._cubemapFormat;
+			toCubemap._faceDim = _desc._cubemapFaceDimension;
+			toCubemap._mipMapFilter = EquirectToCubemap::MipMapFilter::FromSource;
+			toCubemap._params._upDirection = (_desc._coordinateSystem == SkyTextureProcessorDesc::CoordinateSystem::YUp) ? 1 : 2;
 
 			if (_desc._blurBackground) {
 				// Use the "Bokeh" mode to blur out the background image, almost as if it's a depth of field effect
-				request2._operation = Assets::TextureCompilationRequest::Operation::EquirectToCubeMapBokeh;
-				request2._sampleCount = 2048u;
+				toCubemap._filterMode = EquirectFilterMode::ToCubeMapBokeh;
+				toCubemap._params._sampleCount = 2048u;
 			}
+
+			Assets::TextureCompilerSource srcComponent;
+			srcComponent._srcFile = _sourceImage;
 
 			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
 			if (_desc._progressiveCompilation && !_desc._useProgressiveSpecularAsBackground) {
@@ -273,25 +276,31 @@ namespace RenderCore { namespace LightingEngine
 					};
 			}
 
-			_skyCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request2, std::move(progressiveResultsFn));
+			Assets::TextureCompilationRequest request;
+			request._subCompiler = TextureCompiler_EquirectFilter(toCubemap, srcComponent);
+			request._intermediateName = request._subCompiler->GetIntermediateName();
+
+			_skyCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request, std::move(progressiveResultsFn));
 		}
 
 		if (_onChangeIBL.AtLeastOneBind()) {
-			_diffuseIBL = ::Assets::GetAssetFuture<SHCoefficientsAsset>(loadingContext, input, _desc._coordinateSystem);
+			_diffuseIBL = ::Assets::GetAssetFuture<SHCoefficientsAsset>(loadingContext, input, (_desc._coordinateSystem==SkyTextureProcessorDesc::CoordinateSystem::YUp)?SHCoefficientsAsset::CoordinateSystem::YUp:SHCoefficientsAsset::CoordinateSystem::ZUp);
 
-			Assets::TextureCompilationRequest request;
-			request._operation = Assets::TextureCompilationRequest::Operation::EquirectFilterGlossySpecular;
-			// request._operation = Assets::TextureCompilationRequest::Operation::EquirectFilterGlossySpecularReference;
-			// request._operation = Assets::TextureCompilationRequest::Operation::EquirectFilterDiffuseReference;
-			request._srcFile = _sourceImage;
-			request._format = _desc._specularCubemapFormat;
-			request._faceDim = _desc._specularCubemapFaceDimension;
-			request._sampleCount = 32u*1024u;
-			request._coordinateSystem = _desc._coordinateSystem;
+			EquirectToCubemap toCubemap;
+			toCubemap._filterMode = EquirectFilterMode::ToGlossySpecular;
+			// toCubemap._filterMode = EquirectFilterMode::ToGlossySpecularReference;
+			// toCubemap._filterMode = EquirectFilterMode::ToDiffuseReference;
+			toCubemap._format = _desc._specularCubemapFormat;
+			toCubemap._faceDim = _desc._specularCubemapFaceDimension;
+			toCubemap._params._sampleCount = 32u*1024u;
+			toCubemap._params._upDirection = (_desc._coordinateSystem == SkyTextureProcessorDesc::CoordinateSystem::YUp) ? 1 : 2;
+
+			Assets::TextureCompilerSource srcComponent;
+			srcComponent._srcFile = _sourceImage;
 
 			Techniques::DeferredShaderResource::ProgressiveResultFn progressiveResultsFn;
 			if (_desc._progressiveCompilation) {
-				request._commandListIntervalMS = 1000;	// some overhead created by splitting cmd lists when we want progressive results
+				toCubemap._params._idealCmdListCostMS = 1000;	// some overhead created by splitting cmd lists when we want progressive results
 
 				progressiveResultsFn =
 					[weakbu=std::weak_ptr<BufferUploads::IManager>{_bufferUploads}, weakThis, setBkgrnd=_desc._useProgressiveSpecularAsBackground](auto dataSource) {
@@ -318,6 +327,10 @@ namespace RenderCore { namespace LightingEngine
 						} CATCH_END
 					};
 			}
+
+			Assets::TextureCompilationRequest request;
+			request._subCompiler = TextureCompiler_EquirectFilter(toCubemap, srcComponent);
+			request._intermediateName = request._subCompiler->GetIntermediateName();
 
 			_specularIBL = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request, std::move(progressiveResultsFn));
 		}

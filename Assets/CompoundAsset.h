@@ -286,7 +286,7 @@ namespace AssetsNew
 
 		} else {
 
-			if constexpr (::Assets::Internal::HasConstructor_SimpleFormatter<Type>) {
+			if constexpr (::Assets::Internal::ValidForConstructFromFormatterSyncHelper<Type>) {
 
 				UnresolvedAsset<Type> t;
 				::Assets::InheritList srcInherited;

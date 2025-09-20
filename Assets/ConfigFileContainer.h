@@ -121,6 +121,8 @@ namespace Assets
 				std::declval< const T& >(),
 				std::declval< const ::Assets::DirectorySearchRules& >()
 				));
+
+			TEST_SUBST_MEMBER(HasDeserializationOperatorFromFormatter, std::declval< Formatters::TextInputFormatter<char>& >() >> std::declval<T&>());
 		};
 
 		template<typename AssetType>
@@ -182,6 +184,12 @@ namespace Assets
 
 					return Internal::InvokeAssetConstructor<AssetType>(fmttr);
 
+				} else if constexpr (Internal::AssetMixinTraits<AssetType>::HasDeserializationOperatorFromFormatter) {
+
+					AssetType result;
+					fmttr >> result;
+					return result;
+
 				} else {
 
 					UNREACHABLE()
@@ -199,7 +207,8 @@ namespace Assets
 			static constexpr bool ValidForConstructFromFormatterSyncHelper
 				=  Internal::HasConstructor_Formatter<AssetType>
 				|| Internal::HasConstructor_SimpleFormatter<AssetType>
-				|| (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::HasConstructor_SimpleFormatter<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>);
+				|| (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::HasConstructor_SimpleFormatter<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>)
+				|| Internal::AssetMixinTraits<AssetType>::HasDeserializationOperatorFromFormatter;
 	}
 
 	#define ENABLE_IF(...) typename std::enable_if_t<__VA_ARGS__>* = nullptr

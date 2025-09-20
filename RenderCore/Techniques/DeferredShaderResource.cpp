@@ -255,6 +255,8 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		const FileNameSplitter<char>& splitter)
     {
+        assert(0);      // todo -- needs to be adapted for compound asset texture compile requests
+#if 0
         auto containerInitializer = splitter.AllExceptParameters();
         std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
         auto containerFuture = containerPromise.get_future();
@@ -264,6 +266,7 @@ namespace RenderCore { namespace Techniques
             [originalRequest=splitter.FullFilename().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
                 ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
             });
+#endif
     }
 
     static void ConstructToPromiseTextureCompile(
@@ -271,6 +274,8 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<::Assets::OperationContext> opContext,
 		const FileNameSplitter<char>& splitter)
     {
+        assert(0);      // todo -- needs to be adapted for compound asset texture compile requests
+#if 0
         auto containerInitializer = splitter.AllExceptParameters();
 		std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
         auto containerFuture = containerPromise.get_future();
@@ -280,6 +285,7 @@ namespace RenderCore { namespace Techniques
             [originalRequest=splitter.FullFilename().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
                 ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
             });
+#endif
     }
 
     void DeferredShaderResource::ConstructToPromise(
@@ -291,8 +297,8 @@ namespace RenderCore { namespace Techniques
         ::Assets::AutoConstructToPromise(std::move(containerPromise), compileRequest);
         ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
             std::move(promise),
-            [originalRequest=compileRequest._srcFile](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
-                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
+            [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
             });
     }
 
@@ -306,8 +312,8 @@ namespace RenderCore { namespace Techniques
         ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest);
         ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
             std::move(promise),
-            [originalRequest=compileRequest._srcFile](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
-                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
+            [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
             });
     }
 
@@ -322,8 +328,8 @@ namespace RenderCore { namespace Techniques
         ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest, std::move(intermediateResultsFn));
         ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
             std::move(promise),
-            [originalRequest=compileRequest._srcFile](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
-                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
+            [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
             });
     }
 

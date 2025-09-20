@@ -1271,6 +1271,13 @@ namespace SceneEngine
         return false;
     }
 
+    std::optional<RenderCore::LightingEngine::SkyTextureProcessorDesc::CoordinateSystem> AsCoordinateSystem(StringSection<> name)
+	{
+		if (XlEqString(name, "YUp")) return RenderCore::LightingEngine::SkyTextureProcessorDesc::CoordinateSystem::YUp;
+		if (XlEqString(name, "ZUp")) return RenderCore::LightingEngine::SkyTextureProcessorDesc::CoordinateSystem::ZUp;
+		return {};
+	}
+
     bool SetProperty(
         RenderCore::LightingEngine::SkyTextureProcessorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
@@ -1320,7 +1327,7 @@ namespace SceneEngine
             break;
 
         case "CoordinateSystem"_h:
-            SetViaEnumFn<RenderCore::Assets::TextureCompilationRequest::CoordinateSystem, RenderCore::Assets::AsCoordinateSystem>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_coordinateSystem, data, type);
+            SetViaEnumFn<RenderCore::LightingEngine::SkyTextureProcessorDesc::CoordinateSystem, AsCoordinateSystem>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_coordinateSystem, data, type);
             break;
         }
         return false;

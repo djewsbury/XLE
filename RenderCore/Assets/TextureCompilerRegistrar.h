@@ -19,7 +19,7 @@ namespace RenderCore { namespace Assets
 			std::vector<::Assets::DependencyValidation> _dependencies;
 		};
 
-		virtual std::string IntermediateName() const = 0;
+		virtual std::string GetIntermediateName() const = 0;
 		virtual std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& ctx) = 0;
 		virtual ~ITextureCompiler();
 	};
@@ -39,7 +39,12 @@ namespace RenderCore { namespace Assets
 			std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
 			const ::AssetsNew::ScaffoldAndEntityName&);
 
+		TextureCompilerRegistrar();
+		~TextureCompilerRegistrar();
+
 	protected:
 		Threading::Mutex _mutex;
+		std::vector<std::pair<RegistrationId, std::function<SubCompilerFunctionSig>>> _fns;
+		RegistrationId _nextRegistrationId;
 	};
 }}

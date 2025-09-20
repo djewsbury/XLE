@@ -97,7 +97,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 		auto i = std::find(_pipelineHashes.begin(), _pipelineHashes.end(), hash);
 		if (i!=_pipelineHashes.end())
-			return std::distance(_pipelineHashes.begin(), i);
+			return (PipelineMarkerIdx)std::distance(_pipelineHashes.begin(), i);
 
 		if (_pendingCreateSharedResources)
 			RebuildSharedResources();

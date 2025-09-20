@@ -287,7 +287,6 @@ namespace RenderCore { namespace Assets
 		pendingAssets._resolvedNames.reserve(modelMat.size());
 		pendingAssets._materials.reserve(modelMat.size());
 
-		char buffer[3*MaxPath];
 		for (const auto& cfg:modelMat) {
 			std::basic_stringstream<::Assets::ResChar> resName;
 			auto guid = MakeMaterialGuid(MakeStringSection(cfg));

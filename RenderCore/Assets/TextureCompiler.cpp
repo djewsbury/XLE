@@ -19,6 +19,7 @@
 #include "../../Formatters/TextFormatter.h"
 #include "../../OSServices/AttachableLibrary.h"
 #include "../../Utility/Streams/PathUtils.h"
+#include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Core/Exceptions.h"
 
@@ -501,29 +502,30 @@ namespace RenderCore { namespace Assets
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	class Compiler_BalancedNoise : public ITextureCompiler
+	{
+	public:
+		unsigned _width = 512, _height = 512;
+		std::string GetIntermediateName() const override { return (StringMeld<128>() << "balanced-noise-" << _width << "x" << _height).AsString(); }
+		std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<BalancedNoiseTexture>(_width, _height); }
+
+		Compiler_BalancedNoise(Formatters::TextInputFormatter<>& fmttr)
+		{
+			StringSection<> kn;
+			while (fmttr.TryKeyedItem(kn)) {
+				if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
+				else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
+				else Formatters::SkipValueOrElement(fmttr);
+			}
+		}
+		Compiler_BalancedNoise(unsigned width, unsigned height) : _width(width), _height(height) {}
+	};
+
 	std::shared_ptr<ITextureCompiler> TextureCompiler_Base(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer)
 	{
 		auto scaffold = indexer._scaffold.get();
-
-		class Compiler_BalancedNoise : public ITextureCompiler
-		{
-		public:
-			unsigned _width = 512, _height = 512;
-			std::string IntermediateName() const override { return (StringMeld<128>() << "balanced-noise-" << _width << "x" << _height).AsString(); }
-			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<BalancedNoiseTexture>(_width, _height); }
-
-			Compiler_BalancedNoise(Formatters::TextInputFormatter<>& fmttr)
-			{
-				StringSection<> kn;
-				while (fmttr.TryKeyedItem(kn)) {
-					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
-					else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
-					else Formatters::SkipValueOrElement(fmttr);
-				}
-			}
-		};
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "BalancedNoise"_h))
 			return util->GetFuture<std::shared_ptr<Compiler_BalancedNoise>>("BalancedNoise"_h, indexer).get().get();
@@ -532,7 +534,7 @@ namespace RenderCore { namespace Assets
 		{
 		public:
 			unsigned _width = 512, _height = 512;
-			std::string IntermediateName() const override { return (StringMeld<128>() << "halton-sampler-" << _width << "x" << _height).AsString(); }
+			std::string GetIntermediateName() const override { return (StringMeld<128>() << "halton-sampler-" << _width << "x" << _height).AsString(); }
 			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonSamplerTexture>(_width, _height); }
 
 			Compiler_HaltonSampler(Formatters::TextInputFormatter<>& fmttr)
@@ -552,9 +554,25 @@ namespace RenderCore { namespace Assets
 		return nullptr;
 	}
 
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_BalancedNoise(unsigned width, unsigned height)
+	{
+		return std::make_shared<Compiler_BalancedNoise>(width, height);
+	}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static void DeserializationOperator(Formatters::TextInputFormatter<>& fmttr, PostConvert& dst)
+	void DeserializationOperator(Formatters::TextInputFormatter<>& fmttr, TextureCompilerSource& dst)
+	{
+		StringSection<> kn;
+		while (fmttr.TryKeyedItem(kn)) {
+			if (XlEqString(kn, "SourceFile")) {
+				dst._srcFile = Formatters::RequireStringValue(fmttr);
+			} else
+				Formatters::SkipValueOrElement(fmttr);
+		}
+	}
+
+	void DeserializationOperator(Formatters::TextInputFormatter<>& fmttr, PostConvert& dst)
 	{
 		StringSection<> kn;
 		while (fmttr.TryKeyedItem(kn)) {
@@ -565,6 +583,8 @@ namespace RenderCore { namespace Assets
 			} else Formatters::SkipValueOrElement(fmttr);
 		}
 	}
+
+	static_assert(::Assets::Internal::AssetMixinTraits<PostConvert>::HasDeserializationOperatorFromFormatter);
 
 	class TextureCompileOperation : public ::Assets::ICompileOperation
 	{
@@ -668,13 +688,23 @@ namespace RenderCore { namespace Assets
 		if (!result._subCompiler)
 			return {};		// invalid compile
 
-		result._intermediateName = result._subCompiler->IntermediateName();
+		result._intermediateName = result._subCompiler->GetIntermediateName();
 
 		if (indexer._scaffold.get()->HasComponent(indexer._entityNameHash, "PostConvert"_h)) {
 			result._postConvert = util->GetFuture<PostConvert>("PostConvert"_h, indexer).get();
 			result._intermediateName = Concatenate(result._intermediateName, "-", AsString(result._postConvert->_format));
 		}
 
+		return result;
+	}
+
+	TextureCompilationRequest MakeTextureCompilationRequest(std::shared_ptr<Assets::ITextureCompiler> subCompiler, Format fmt)
+	{
+		assert(subCompiler);
+		TextureCompilationRequest result;
+		result._subCompiler = std::move(subCompiler);
+		result._intermediateName = Concatenate(result._subCompiler->GetIntermediateName(), "-", AsString(fmt));
+		result._postConvert = PostConvert{fmt};
 		return result;
 	}
 
@@ -773,20 +803,6 @@ namespace RenderCore { namespace Assets
 
 	void TextureArtifact::ConstructToPromise(
 		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
-		const TextureCompilationRequest& request)
-	{
-		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[request, promise=std::move(promise)]() mutable {
-				TRY {
-					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{1u, request});
-				} CATCH(...) {
-					promise.set_exception(std::current_exception());
-				} CATCH_END
-			});
-	}
-
-	void TextureArtifact::ConstructToPromise(
-		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
 		std::shared_ptr<::Assets::OperationContext> opContext,
 		StringSection<> initializer)
 	{
@@ -802,6 +818,21 @@ namespace RenderCore { namespace Assets
 						promise.set_exception(std::current_exception());
 					} CATCH_END
 				}
+			});
+	}
+#endif
+
+	void TextureArtifact::ConstructToPromise(
+		std::promise<std::shared_ptr<TextureArtifact>>&& promise,
+		const TextureCompilationRequest& request)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[request, promise=std::move(promise)]() mutable {
+				TRY {
+					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{1u, request});
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 	}
 
@@ -845,7 +876,38 @@ namespace RenderCore { namespace Assets
 				} CATCH_END
 			});
 	}
-#endif
+
+	auto TextureCompilerRegistrar::Register(std::function<SubCompilerFunctionSig>&& sig) -> RegistrationId
+	{
+		ScopedLock(_mutex);
+		auto result = ++_nextRegistrationId;
+		_fns.emplace_back(result, std::move(sig));
+		return result;
+	}
+
+	void TextureCompilerRegistrar::Deregister(RegistrationId id)
+	{
+		ScopedLock(_mutex);
+		_fns.erase(
+			std::remove_if(_fns.begin(), _fns.end(), [id](const auto& q) { return q.first == id; }),
+			_fns.end());
+	}
+
+	std::shared_ptr<ITextureCompiler> TextureCompilerRegistrar::TryBeginCompile(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer)
+	{
+		ScopedLock(_mutex);
+		for (const auto& f:_fns)
+			if (auto compiler = f.second(util, indexer))
+				return compiler;
+		return nullptr;
+	}
+
+	TextureCompilerRegistrar::TextureCompilerRegistrar() { _nextRegistrationId = 1; }
+	TextureCompilerRegistrar::~TextureCompilerRegistrar() {}
+
+	ITextureCompiler::~ITextureCompiler() = default;
 
 }}
 

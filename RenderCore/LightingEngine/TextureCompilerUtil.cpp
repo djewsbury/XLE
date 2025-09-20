@@ -20,6 +20,7 @@
 #include "../../Assets/CompoundAsset.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Formatters/FormatterUtils.h"
+#include "../../Utility/Streams/SerializationUtils.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
@@ -749,7 +750,7 @@ namespace RenderCore { namespace LightingEngine
 			EquirectToCubemap _mainComponent;
 			Assets::TextureCompilerSource _sourceComponent;
 
-			std::string IntermediateName() const override
+			std::string GetIntermediateName() const override
 			{
 				return (StringMeld<1024>() 
 					<< _sourceComponent._srcFile 
@@ -910,7 +911,12 @@ namespace RenderCore { namespace LightingEngine
 		return nullptr;
 	}
 
-	static uint64_t CalculateHash(const EquirectFilterParams&);
+	static uint64_t CalculateHash(const EquirectFilterParams& params)
+	{
+		uint64_t a = (uint64_t(params._sampleCount) << 32ull) | uint64_t(params._idealCmdListCostMS);
+		uint64_t b = (uint64_t(params._maxSamplesPerCmdList) << 32ull) | uint64_t(params._upDirection);
+		return HashCombine(a, b);
+	}
 
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ComputeShader(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
@@ -926,7 +932,7 @@ namespace RenderCore { namespace LightingEngine
 			std::string _shader;
 			EquirectFilterParams _params;
 
-			std::string IntermediateName() const override { return (StringMeld<128>() << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << CalculateHash(_params)).AsString(); }
+			std::string GetIntermediateName() const override { return (StringMeld<128>() << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << CalculateHash(_params)).AsString(); }
 			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
 			{
 				if (context._opContext) {
@@ -972,7 +978,7 @@ namespace RenderCore { namespace LightingEngine
 			std::string _shader;
 			Assets::TextureCompilerSource _sourceComponent;
 
-			std::string IntermediateName() const override { return (StringMeld<1024>() << _sourceComponent._srcFile << "-" << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << AsString(_format)).AsString(); }
+			std::string GetIntermediateName() const override { return (StringMeld<1024>() << _sourceComponent._srcFile << "-" << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << AsString(_format)).AsString(); }
 			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
 			{
 				if (context._opContext) {

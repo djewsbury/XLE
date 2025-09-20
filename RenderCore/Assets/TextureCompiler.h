@@ -84,17 +84,20 @@ namespace RenderCore { namespace Assets
 	struct PostConvert
 	{
 		Format _format = Format::Unknown;
+
+		friend void DeserializationOperator(Formatters::TextInputFormatter<>&, PostConvert&);
 	};
 
 	class ITextureCompiler;
 
 	class TextureCompilationRequest
 	{
+	public:
 		std::string _intermediateName;
 		std::shared_ptr<ITextureCompiler> _subCompiler;
 		std::optional<PostConvert> _postConvert;
 
-		uint64_t CalculateHash(uint64_t seed = DefaultSeed64) { return Hash64(_intermediateName, seed); }
+		uint64_t CalculateHash(uint64_t seed = DefaultSeed64) const { return Hash64(_intermediateName, seed); }
 		friend std::ostream& operator<<(std::ostream& str, const TextureCompilationRequest& req) { return str << req._intermediateName; }
 	};
 
@@ -108,6 +111,8 @@ namespace RenderCore { namespace Assets
 	struct TextureCompilerSource
 	{
 		std::string _srcFile;
+
+		friend void DeserializationOperator(Formatters::TextInputFormatter<>&, TextureCompilerSource&);
 	};
 
 #endif
@@ -135,12 +140,13 @@ namespace RenderCore { namespace Assets
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
-			const TextureCompilationRequest& request);
+			std::shared_ptr<::Assets::OperationContext> opContext,
+			StringSection<> initializer);
+#endif
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
-			std::shared_ptr<::Assets::OperationContext> opContext,
-			StringSection<> initializer);
+			const TextureCompilationRequest& request);
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
@@ -154,7 +160,6 @@ namespace RenderCore { namespace Assets
 			std::shared_ptr<::Assets::OperationContext> opContext,
 			const TextureCompilationRequest& request,
 			ProgressiveResultFn&& intermediateResultFn);
-#endif
 
 		TextureArtifact();
 		~TextureArtifact();
@@ -189,5 +194,8 @@ namespace RenderCore { namespace Assets
 		TextureCompilerRegistrar& registrar,
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer);
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_BalancedNoise(unsigned width, unsigned height);
+	TextureCompilationRequest MakeTextureCompilationRequest(std::shared_ptr<Assets::ITextureCompiler>, Format fmt);
 }}
 

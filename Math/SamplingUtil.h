@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <random>
+#include <vector>
+
 namespace XLEMath
 {
 	template <int Base>
