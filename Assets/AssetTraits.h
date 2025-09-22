@@ -175,7 +175,7 @@ namespace Assets
 		TRY {
 			FileSnapshot snapshot;
 			auto blob = MainFileSystem::TryLoadFileAsBlob_TolerateSharingErrors(initializer, &snapshot);
-			assert(blob);
+			if (!blob) Throw(std::runtime_error("Missing or empty file: " + initializer.AsString()));
 
 			if constexpr (Internal::AssetTraits<AssetType>::Constructor_BlobFile) {
 

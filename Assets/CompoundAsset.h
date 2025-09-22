@@ -215,52 +215,6 @@ namespace AssetsNew
 		return false;
 	}
 
-	template<typename Type, typename... Params> ::AssetsNew::AssetHeap::Iterator<Type> StallWhilePending(AssetHeap& heap, Params&&... initialisers)
-	{
-		auto cacheKey = ::Assets::Internal::BuildParamHash(initialisers...);
-
-		if (auto l = heap.Lookup<Type>(cacheKey)) {
-			l.StallWhilePending();		// lookup again because StallWhilePending invalidates the iterator
-			l = heap.Lookup<Type>(cacheKey);
-			if (!l) Throw(std::runtime_error("Unexpected asset erasure in StallAndActualize"));
-			if (l.GetDependencyValidation().GetValidationIndex() <= 0)
-				return l;
-		}
-
-		// No existing asset, or asset is invalidated. Fall through
-
-		auto lock = heap.WriteLock<Type>();
-
-		// We have to check again for a valid object, incase another thread modified the heap
-		// before we took our write lock
-		if (auto l = heap.LookupAlreadyLocked<Type>(cacheKey)) {
-			if (l.GetState() == ::Assets::AssetState::Pending) {
-				// There's been an issue. Another thread has changed this entry unexpectedly. We need to restart from the top
-				lock = {};
-				return StallWhilePending<Type>(heap, std::forward<Params>(initialisers)...);
-			}
-
-			if (l.GetDependencyValidation().GetValidationIndex() <= 0)
-				return l;		// another thread changed the entry, and it completed quickly
-		}
-
-		std::promise<Type> promise;
-		heap.InsertAlreadyLocked<Type>(cacheKey, ::Assets::Internal::AsString(initialisers...), promise.get_future());
-
-		lock = {};
-		::Assets::AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
-
-		auto l = heap.Lookup<Type>(cacheKey);
-		assert(l);
-		l.StallWhilePending();
-		l = heap.Lookup<Type>(cacheKey);		// lookup again because StallWhilePending invalidates the iterator
-		assert(l);
-
-		// note that we return this even if it became invalidated during the construction
-		// Also note that we can't return the result of l.Actualize(), because that gives a reference into the table, which is only valid while the iterator lock is held
-		return l;
-	}
-
 	template<typename Type>
 		auto CompoundAssetUtil::BuildUnresolvedAssetSync(uint64_t componentTypeName, const ContextAndIdentifier& indexer) -> UnresolvedAsset<Type>
 	{
