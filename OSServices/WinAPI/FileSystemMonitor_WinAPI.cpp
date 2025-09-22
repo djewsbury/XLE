@@ -55,7 +55,7 @@ namespace OSServices
 
 				auto hresult = ReadDirectoryChangesW(
 					_directoryHandle, _resultBuffer, sizeof(_resultBuffer),
-					FALSE, FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME,
+					FALSE, FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_CREATION | FILE_NOTIFY_CHANGE_DIR_NAME,
 					nullptr, overlapped, completionRoutine);
 				if (!hresult) {
 					auto errorAsString = SystemErrorCodeAsString(GetLastError());
@@ -108,6 +108,7 @@ namespace OSServices
 			}
 
 			assert(!results._changedFiles.empty());
+			results._changedFiles.push_back(std::u16string{});		// record a change notification for the directory itself
 			return results;
 		}
 
