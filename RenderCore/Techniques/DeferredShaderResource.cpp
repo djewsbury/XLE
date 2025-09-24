@@ -22,7 +22,6 @@
 #include "../../Utility/ParameterBox.h"
 #include <chrono>
 
-#include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 
 namespace RenderCore { namespace Techniques 

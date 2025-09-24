@@ -13,7 +13,6 @@
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
-#include "../IAnnotator.h"
 #include "../Vulkan/IDeviceVulkan.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/Marker.h"

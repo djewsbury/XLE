@@ -18,69 +18,6 @@ namespace RenderCore { namespace Assets
 {
 	constexpr auto TextureCompilerProcessType = ConstHash64Legacy<'Text', 'ure'>::Value;
 
-#if 0
-	class TextureCompilationRequest
-	{
-	public:
-		enum class Operation
-		{
-			Convert,
-			EquirectToCubeMap,
-			EquirectToCubeMapBokeh,
-			EquirectFilterGlossySpecular,
-			EquirectFilterGlossySpecularReference,
-			EquirectFilterDiffuseReference,
-			ComputeShader,
-			ConversionComputeShader,
-			ProjectToSphericalHarmonic,
-			BalancedNoise,
-			HaltonSampler
-		};
-		Operation _operation = Operation::Convert;
-		Format _format = Format::Unknown;
-		unsigned _faceDim = 512;
-		unsigned _width = 512, _height = 512;
-		unsigned _arrayLayerCount = 0;
-		unsigned _coefficientCount = 9;
-		unsigned _sampleCount = 1;
-
-		enum class MipMapFilter { None, FromSource };
-		MipMapFilter _mipMapFilter = MipMapFilter::None;
-
-		// Compilers that operate on the GPU will attempt to split command lists so that
-		// each individual one takes less than the give number of milliseconds to process
-		// on the GPU.
-		// This can be useful for avoiding driver timeouts; and also so that operations
-		// that given progressive results don't hog the GPU to heavily
-		unsigned _commandListIntervalMS = 1500;
-
-		// For compilations that use BalancedSamplingShaderHelper, this can limit the maximum
-		// number of samples that are calculated for a given cmd list. This can sometimes
-		// reduce the occurrence of infinities (depending on the algorithm)
-		unsigned _maxSamplesPerCmdList = ~0u;
-
-		enum class CoordinateSystem
-		{
-			// A Y-up coordinate system compatible with (for example) Substance Painter
-			YUp,
-
-			// A Z-up coordinate system compatible with (for example) Blender
-			ZUp
-		};
-		CoordinateSystem _coordinateSystem = CoordinateSystem::ZUp;
-
-		std::string _shader;
-		std::string _srcFile;
-
-		uint64_t GetHash(uint64_t seed=DefaultSeed64) const;
-	};
-
-	std::ostream& operator<<(std::ostream&, const TextureCompilationRequest&);		// (note, on clang Initializer pack won't find this if it's called SerializationOperator)
-	const char* AsString(TextureCompilationRequest::CoordinateSystem);
-	std::optional<TextureCompilationRequest::CoordinateSystem> AsCoordinateSystem(StringSection<> name);
-
-#else
-
 	struct PostConvert
 	{
 		Format _format = Format::Unknown;
@@ -102,20 +39,12 @@ namespace RenderCore { namespace Assets
 	};
 
 	
-
-	/*
-		std::shared_ptr<::AssetsNew::CompoundAssetUtil> _util;
-		::AssetsNew::ScaffoldIndexer indexer;
-	};*/
-
 	struct TextureCompilerSource
 	{
 		std::string _srcFile;
 
 		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, TextureCompilerSource&);
 	};
-
-#endif
 
 	::Assets::Blob ConvertAndPrepareDDSBlobSync(
 		BufferUploads::IAsyncDataSource& src,
@@ -132,17 +61,6 @@ namespace RenderCore { namespace Assets
 			TextureDesc _desc;
 		};
 		std::future<RawData> BeginLoadRawData(TextureLoaderFlags::BitField loadedFlags = 0) const;
-
-#if 0
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<TextureArtifact>>&&,
-			StringSection<> initializer);
-
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<TextureArtifact>>&&,
-			std::shared_ptr<::Assets::OperationContext> opContext,
-			StringSection<> initializer);
-#endif
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
@@ -174,12 +92,6 @@ namespace RenderCore { namespace Assets
 		std::string _artifactFile;
 		::Assets::DependencyValidation _depVal;
 	};
-
-	/*static void ConstructViaTextureCompiler(
-		std::promise<std::shared_ptr<TextureArtifact>>&&,
-		std::shared_ptr<::Assets::OperationContext>,
-		std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
-		const ::AssetsNew::ScaffoldIndexer&);*/
 
 	class TextureCompilerRegistrar;
 	::Assets::CompilerRegistration RegisterTextureCompiler(
