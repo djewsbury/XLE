@@ -840,5 +840,35 @@ namespace AssetsNew
 		// Also note that we can't return the result of l.Actualize(), because that gives a reference into the table, which is only valid while the iterator lock is held
 		return l;
 	}
+
+	template<typename Type, typename... Params> ::AssetsNew::AssetHeap::Iterator<Type> Get(AssetHeap& heap, Params&&... initialisers)
+	{
+		auto cacheKey = ::Assets::Internal::BuildParamHash(initialisers...);
+
+		if (auto l = heap.Lookup<Type>(cacheKey)) {
+			if (l.GetDependencyValidation().GetValidationIndex() <= 0)
+				return l;
+		}
+
+		// No existing asset, or asset is invalidated. Fall through
+
+		auto lock = heap.WriteLock<Type>();
+
+		// We have to check again for a valid object, incase another thread modified the heap
+		// before we took our write lock
+		if (auto l = heap.LookupAlreadyLocked<Type>(cacheKey)) {
+			if (l.GetDependencyValidation().GetValidationIndex() <= 0)
+				return l;		// another thread changed the entry, and it completed quickly
+		}
+
+		std::promise<Type> promise;
+		heap.InsertAlreadyLocked<Type>(cacheKey, ::Assets::Internal::AsString(initialisers...), promise.get_future());
+
+		lock = {}; // after unlocking here, other threads will return the future we've just placed in the heap
+
+		::Assets::AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
+		return heap.Lookup<Type>(cacheKey);
+	}
+
 }
 

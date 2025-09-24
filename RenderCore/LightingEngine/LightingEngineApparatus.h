@@ -40,6 +40,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<Techniques::PipelineCollection> _lightingOperatorCollection;
 		std::shared_ptr<Techniques::SystemUniformsDelegate> _systemUniformsDelegate;
+		unsigned _textureCompilerRegistrations[2] { ~0u, ~0u };
 
 		LightingEngineApparatus(std::shared_ptr<Techniques::DrawingApparatus>);
 		~LightingEngineApparatus();

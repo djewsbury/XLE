@@ -182,7 +182,7 @@ namespace Assets
 
 			if constexpr (Internal::AssetTraits<AssetType>::IsContextImbue) {
 				using InternalAssetType = typename Internal::AssetTraits<AssetType>::ContextImbueInternalType;
-				return { Internal::InvokeAssetConstructor<InternalAssetType>(fmttr), std::move(searchRules), depVal, InheritList{} };
+				return { Internal::InvokeAssetConstructor<InternalAssetType>(fmttr), searchRules, depVal, InheritList{} };
 			} else {
 				return Internal::InvokeAssetConstructor<AssetType>(fmttr);
 			}

@@ -740,7 +740,7 @@ namespace RenderCore { namespace LightingEngine
 		return future.get();
 	}
 
-	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_EquirectFilter(
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_EquirectFilter2(
 		const EquirectToCubemap& mainComponent,
 		const Assets::TextureCompilerSource& sourceComponent)
 	{
@@ -904,7 +904,7 @@ namespace RenderCore { namespace LightingEngine
 		// look for "EquirectToCubemap" component
 		auto scaffold = indexer._scaffold.get();
 		if (scaffold->HasComponent(indexer._entityNameHash, "EquirectToCubemap"_h) && scaffold->HasComponent(indexer._entityNameHash, "Source"_h))
-			return TextureCompiler_EquirectFilter(
+			return TextureCompiler_EquirectFilter2(
 				Actualize<EquirectToCubemap>(*util, "EquirectToCubemap"_h, indexer).get(),
 				Actualize<Assets::TextureCompilerSource>(*util, "Source"_h, indexer).get());
 

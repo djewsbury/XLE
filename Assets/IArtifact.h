@@ -276,11 +276,16 @@ namespace Assets
 
 			} else if constexpr (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::AssetTraits<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>::Constructor_SimpleBlobFile) {
 
-				ArtifactRequest request { "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob };
-				auto chunks = artifactCollection.ResolveRequests(MakeIteratorRange(&request, &request+1));
+				ArtifactRequest requests[] {
+					{ "default-blob", defaultChunkRequestCode, ~0u, ArtifactRequest::DataType::SharedBlob },
+					{ "dir-search-rules", Utility::ConstHash64("DirectorySearchRules"), ~0u, ArtifactRequest::DataType::OptionalSharedBlob }
+				};
+				auto chunks = artifactCollection.ResolveRequests(requests);
+				DirectorySearchRules dirSearchRules;
+				if (chunks[1]._sharedBlob) dirSearchRules = DirectorySearchRules::Deserialize(*chunks[1]._sharedBlob);
 				return {
 					Internal::InvokeAssetConstructor<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>(std::move(chunks[0]._sharedBlob)),
-					artifactCollection.GetDirectorySearchRules(),
+					std::move(dirSearchRules),
 					artifactCollection.GetDependencyValidation(),
 					InheritList{}};
 

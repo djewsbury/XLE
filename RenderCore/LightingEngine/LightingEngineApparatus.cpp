@@ -4,13 +4,16 @@
 
 #include "LightingEngineApparatus.h"
 #include "GBufferOperator.h"
+#include "TextureCompilerUtil.h"
 #include "../Techniques/TechniqueDelegates.h"
 #include "../Techniques/Apparatuses.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/PipelineCollection.h"
 #include "../Techniques/CommonResources.h"
+#include "../Techniques/Services.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
+#include "../Assets/TextureCompilerRegistrar.h"
 #include "../IDevice.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/Assets.h"
@@ -145,9 +148,17 @@ namespace RenderCore { namespace LightingEngine
 			drawingApparatus->_shaderCompiler->GetShaderLanguage(), &drawingApparatus->_commonResources->_samplerPool);
 		_lightingOperatorCollection = std::make_shared<Techniques::PipelineCollection>(_device);
 		_systemUniformsDelegate = drawingApparatus->_systemUniformsDelegate;
+		
+		auto& tcRegistrar = Techniques::Services::GetTextureCompilerRegistrar();
+		_textureCompilerRegistrations[0] = tcRegistrar.Register(TextureCompiler_EquirectFilter);
+		_textureCompilerRegistrations[1] = tcRegistrar.Register(TextureCompiler_ComputeShader);
 	}
 
-	LightingEngineApparatus::~LightingEngineApparatus() {}
+	LightingEngineApparatus::~LightingEngineApparatus()
+	{
+		auto& tcRegistrar = Techniques::Services::GetTextureCompilerRegistrar();
+		for (auto reg:_textureCompilerRegistrations) if (reg != ~0u) tcRegistrar.Deregister(reg);
+	}
 }}
 
 namespace RenderCore

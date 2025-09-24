@@ -7,11 +7,11 @@
 #include "TextureLoaders.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediateCompilers.h"
-#include "../../Assets/CompoundAsset.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../Utility/StringUtils.h"
 
 namespace Assets { class OperationContext; class DependencyValidation; class ArtifactRequestResult; class ArtifactRequest; }
+namespace AssetsNew { struct ScaffoldAndEntityName; class CompoundAssetUtil; }
+namespace Formatters { template<typename T> class TextInputFormatter; }
 namespace std { template <typename T> class function; }
 
 namespace RenderCore { namespace Assets
@@ -85,7 +85,7 @@ namespace RenderCore { namespace Assets
 	{
 		Format _format = Format::Unknown;
 
-		friend void DeserializationOperator(Formatters::TextInputFormatter<>&, PostConvert&);
+		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, PostConvert&);
 	};
 
 	class ITextureCompiler;
@@ -112,7 +112,7 @@ namespace RenderCore { namespace Assets
 	{
 		std::string _srcFile;
 
-		friend void DeserializationOperator(Formatters::TextInputFormatter<>&, TextureCompilerSource&);
+		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, TextureCompilerSource&);
 	};
 
 #endif
@@ -175,11 +175,11 @@ namespace RenderCore { namespace Assets
 		::Assets::DependencyValidation _depVal;
 	};
 
-	static void ConstructViaTextureCompiler(
+	/*static void ConstructViaTextureCompiler(
 		std::promise<std::shared_ptr<TextureArtifact>>&&,
 		std::shared_ptr<::Assets::OperationContext>,
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
-		const ::AssetsNew::ScaffoldIndexer&);
+		const ::AssetsNew::ScaffoldIndexer&);*/
 
 	class TextureCompilerRegistrar;
 	::Assets::CompilerRegistration RegisterTextureCompiler(

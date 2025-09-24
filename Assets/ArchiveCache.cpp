@@ -1003,9 +1003,9 @@ namespace Assets
 				if (i!=_archiveCache->_pendingCommits.end() && i->_objectId == _objectId) {
 					auto i2 = std::find_if(i->_data.begin(), i->_data.end(), [](const auto& q) { return q._chunkTypeCode == "DirectorySearchRules"_h; });
 					if (i2 != i->_data.end()) {
-						*_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(*i2->_data);
+						_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(*i2->_data);
 					} else {
-						*_cachedDirectorySearchRules = {};
+						_cachedDirectorySearchRules = {};
 					}
 				} else {
 
@@ -1027,10 +1027,10 @@ namespace Assets
 						VLA(char, buffer, i2->_size);
 						archiveFile->Seek(i2->_start);
 						archiveFile->Read(buffer, i2->_size);
-						*_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(buffer, &buffer[i2->_size]));
+						_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(buffer, &buffer[i2->_size]));
 
 					} else {
-						*_cachedDirectorySearchRules = {};
+						_cachedDirectorySearchRules = {};
 					}
 
 				}

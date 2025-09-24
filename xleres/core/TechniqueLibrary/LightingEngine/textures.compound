@@ -1,6 +1,8 @@
-ComputeShader=~
+Entity=glosslut
+SamplingComputeShader=glosslut=~
     Shader = xleres/ToolsHelper/IBLTables.hlsl:GenerateSplitSumGlossLUT
-    Format = BC6H_UF16
     Width = 512
     Height = 512
     SampleCount = 65536
+PostConvert=glosslut=~
+    Format = BC6H_UF16

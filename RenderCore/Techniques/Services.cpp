@@ -6,6 +6,8 @@
 #include "CommonResources.h"
 #include "SubFrameEvents.h"
 #include "../BufferUploads/IBufferUploads.h"
+#include "../Assets/TextureCompilerRegistrar.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "wildcards.hpp"
@@ -121,6 +123,8 @@ namespace RenderCore { namespace Techniques
 		_pimpl = std::make_unique<Pimpl>();
 		_device = device;
 		_subFrameEvents = std::make_shared<SubFrameEvents>();
+		_textureCompilerRegistrar = std::make_shared<Assets::TextureCompilerRegistrar>();
+		_compoundAssetUtil = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>());
 	}
 
 	Services::~Services()

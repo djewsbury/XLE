@@ -14,13 +14,14 @@
 #include "../../Assets/IArtifact.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/ICompileOperation.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../Math/SamplingUtil.h"
 #include "../../Formatters/FormatterUtils.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../OSServices/AttachableLibrary.h"
-#include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/StringFormat.h"
+#include "../../Utility/StringUtils.h"
 #include "../../Core/Exceptions.h"
 
 #include "thousandeyes/futures/then.h"
@@ -614,7 +615,7 @@ namespace RenderCore { namespace Assets
 			auto pkt = compiler.ExecuteCompile(ctx);
 			auto blob = PrepareDDSBlobSyncWithoutConvert(*pkt);
 
-			_serializedArtifacts.emplace_back(TextureCompilerProcessType, 0, "dds", blob);
+			_serializedArtifacts.emplace_back(TextureCompilerProcessType, 0, ".dds", blob);
 			_dependencies.insert(_dependencies.end(), ctx._dependencies.begin(), ctx._dependencies.end());
 			_dependencies.push_back(pkt->GetDependencyValidation());
 		}
@@ -632,7 +633,7 @@ namespace RenderCore { namespace Assets
 				auto blob = PrepareDDSBlobSyncWithoutConvert(*pkt);
 			#endif
 
-			_serializedArtifacts.emplace_back(TextureCompilerProcessType, 0, "dds", blob);
+			_serializedArtifacts.emplace_back(TextureCompilerProcessType, 0, ".dds", blob);
 			_dependencies.insert(_dependencies.end(), ctx._dependencies.begin(), ctx._dependencies.end());
 			_dependencies.push_back(pkt->GetDependencyValidation());
 		}
@@ -829,7 +830,7 @@ namespace RenderCore { namespace Assets
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[request, promise=std::move(promise)]() mutable {
 				TRY {
-					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{1u, request});
+					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{request});
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -844,7 +845,7 @@ namespace RenderCore { namespace Assets
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[request, promise=std::move(promise), opContext=std::move(opContext)]() mutable {
 				TRY {
-					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{1u, request}, opContext.get());
+					::Assets::DefaultCompilerConstructionSynchronously(std::move(promise), TextureCompilerProcessType, ::Assets::InitializerPack{request}, opContext.get());
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -868,7 +869,7 @@ namespace RenderCore { namespace Assets
 				TRY {
 					::Assets::DefaultCompilerConstructionSynchronously(
 						std::move(promise), TextureCompilerProcessType,
-						::Assets::InitializerPack{1u, request},
+						::Assets::InitializerPack{request},
 						std::move(conduit),
 						opContext.get());
 				} CATCH(...) {

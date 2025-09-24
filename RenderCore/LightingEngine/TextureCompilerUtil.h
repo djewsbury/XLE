@@ -14,6 +14,7 @@ namespace RenderCore { namespace BufferUploads { class IAsyncDataSource; }}
 namespace Assets { struct DependentFileState; }
 namespace RenderCore { class TextureDesc; class IThreadContext; class IResource; }
 namespace RenderCore::Assets { class ITextureCompiler; struct TextureCompilerSource; }
+namespace AssetsNew { struct ScaffoldAndEntityName; class CompoundAssetUtil; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -63,7 +64,15 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _coefficientCount = 9;		// for ProjectToSphericalHarmonic
 	};
 
-	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_EquirectFilter(
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_EquirectFilter2(
 		const EquirectToCubemap& mainComponent,
 		const Assets::TextureCompilerSource& sourceComponent);
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_EquirectFilter(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer);
+		
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ComputeShader(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer);
 }}

@@ -92,6 +92,6 @@ using namespace Assets::Literals;
 #define SKIN_PIPELINE "xleres/Deform/skin.pipeline"_initializer
 #define DEFORM_ENTRY_HLSL "xleres/Deform/deform-entry.compute.hlsl"
 
-#define GLOSS_LUT_TEXTURE "xleres/TechniqueLibrary/LightingEngine/glosslut.texture"_initializer
+#define GLOSS_LUT_TEXTURE "xleres/TechniqueLibrary/LightingEngine/textures.compound:glosslut"_initializer
 
 #define PREFIX_HLSL "xleres/TechniqueLibrary/Framework/Prefix.hlsl"

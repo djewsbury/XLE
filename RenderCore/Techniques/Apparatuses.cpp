@@ -20,6 +20,7 @@
 #include "PipelineOperators.h"
 #include "PipelineLayoutDelegate.h"
 #include "../Assets/TextureCompiler.h"
+#include "../Assets/TextureCompilerRegistrar.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
 #include "../Assets/MaterialCompiler.h"
@@ -170,6 +171,7 @@ namespace RenderCore { namespace Techniques
 		_modelCompilers = ::Assets::DiscoverCompileOperations(compilers, "*Conversion.dll");
 
 		_textureCompilerRegistration = RenderCore::Assets::RegisterTextureCompiler(compilers);
+		_textureCompilerBaseRegistration = _techniqueServices->GetTextureCompilerRegistrar().Register(RenderCore::Assets::TextureCompiler_Base);
 
 		_skinDeformerSystemRegistration = _techniqueServices->RegisterDeformConfigure("gpu_skin", CreateGPUSkinDeformerConfigure(std::make_shared<PipelineCollection>(device)));
 		
@@ -189,6 +191,10 @@ namespace RenderCore { namespace Techniques
 	{
 		if (_skinDeformerSystemRegistration != ~0u) {
 			_techniqueServices->DeregisterDeformConfigure(_skinDeformerSystemRegistration);
+		}
+
+		if (_textureCompilerBaseRegistration != ~0u) {
+			_techniqueServices->GetTextureCompilerRegistrar().Deregister(_textureCompilerBaseRegistration);
 		}
 
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();

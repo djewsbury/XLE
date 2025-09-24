@@ -13,6 +13,8 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/CompoundAsset.h"
+#include "../../Assets/OperationContext.h"
 
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/TextFormatter.h"
@@ -255,18 +257,23 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		const FileNameSplitter<char>& splitter)
     {
-        assert(0);      // todo -- needs to be adapted for compound asset texture compile requests
-#if 0
         auto containerInitializer = splitter.AllExceptParameters();
-        std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
-        auto containerFuture = containerPromise.get_future();
-        ::Assets::AutoConstructToPromise(std::move(containerPromise), containerInitializer);
-        ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
+        assert(!containerInitializer.IsEmpty());
+        assert(!splitter.Parameters().IsEmpty());
+        auto util = Services::GetCompoundAssetUtil();
+        ::Assets::WhenAll(util->GetCachedFutureScaffold(containerInitializer)).ThenConstructToPromise(
             std::move(promise),
-            [originalRequest=splitter.FullFilename().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
-                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
+            [util=std::weak_ptr<::AssetsNew::CompoundAssetUtil>{util}, originalRequest=splitter.FullFilename().AsString(), config=splitter.Parameters().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, const auto& scaffold) {
+                TRY {
+                    auto req = MakeTextureCompilationRequestSync(
+                        Services::GetTextureCompilerRegistrar(),
+                        util.lock(), ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(config) DEBUG_ONLY(, config)});
+                    auto artifactActual = ::Assets::ActualizeAssetPtr<Assets::TextureArtifact>(req);
+                    ConstructToPromiseArtifact(std::move(thatPromise), *artifactActual, originalRequest);
+                } CATCH(...) {
+                    thatPromise.set_exception(std::current_exception());
+                } CATCH_END
             });
-#endif
     }
 
     static void ConstructToPromiseTextureCompile(
@@ -274,18 +281,23 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<::Assets::OperationContext> opContext,
 		const FileNameSplitter<char>& splitter)
     {
-        assert(0);      // todo -- needs to be adapted for compound asset texture compile requests
-#if 0
         auto containerInitializer = splitter.AllExceptParameters();
-		std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
-        auto containerFuture = containerPromise.get_future();
-        ::Assets::AutoConstructToPromise(std::move(containerPromise), std::move(opContext), containerInitializer);
-        ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
+        assert(!containerInitializer.IsEmpty());
+        assert(!splitter.Parameters().IsEmpty());
+        auto util = Services::GetCompoundAssetUtil();
+        ::Assets::WhenAll(util->GetCachedFutureScaffold(containerInitializer)).ThenConstructToPromise(
             std::move(promise),
-            [originalRequest=splitter.FullFilename().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
-                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, originalRequest);
+            [util=std::weak_ptr<::AssetsNew::CompoundAssetUtil>{util}, originalRequest=splitter.FullFilename().AsString(), opContext=std::move(opContext), config=splitter.Parameters().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, const auto& scaffold) {
+                TRY {
+                    auto req = MakeTextureCompilationRequestSync(
+                        Services::GetTextureCompilerRegistrar(),
+                        util.lock(), ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(config) DEBUG_ONLY(, config)});
+                    auto artifactActual = ::Assets::ActualizeAssetPtr<Assets::TextureArtifact>(opContext, req);
+                    ConstructToPromiseArtifact(std::move(thatPromise), *artifactActual, originalRequest);
+                } CATCH(...) {
+                    thatPromise.set_exception(std::current_exception());
+                } CATCH_END
             });
-#endif
     }
 
     void DeferredShaderResource::ConstructToPromise(
@@ -338,7 +350,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> initializer)
     {
         auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "texture")) {
+        if (XlEqStringI(splitter.Extension(), "compound")) {
             ConstructToPromiseTextureCompile(std::move(promise), splitter);
         } else {
             ConstructToPromiseImageFile(std::move(promise), splitter);
@@ -351,7 +363,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> initializer)
     {
         auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "texture")) {
+        if (XlEqStringI(splitter.Extension(), "compound")) {
             ConstructToPromiseTextureCompile(std::move(promise), std::move(opContext), splitter);
         } else {
             ConstructToPromiseImageFile(std::move(promise), splitter);
@@ -363,7 +375,7 @@ namespace RenderCore { namespace Techniques
         StringSection<> initializer)
     {
         auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "texture")) {
+        if (XlEqStringI(splitter.Extension(), "compound")) {
             ConstructToPromiseTextureCompile(std::move(promise), splitter);
             return BufferUploads::TransactionID_Invalid;
         } else {
@@ -617,3 +629,4 @@ namespace RenderCore { namespace Techniques
         return destagingResource;
     }
 }}
+

@@ -252,7 +252,7 @@ namespace ToolsRig
 					srcComponent._srcFile = ambientCubemap.AsString();
 
 					auto request2 = RenderCore::Assets::MakeTextureCompilationRequest(
-						RenderCore::LightingEngine::TextureCompiler_EquirectFilter(toCubemap, srcComponent),
+						RenderCore::LightingEngine::TextureCompiler_EquirectFilter2(toCubemap, srcComponent),
 						RenderCore::Format::BC6H_UF16);
 
 					auto ambientRawCubemap = ::Assets::ConstructToMarkerPtr<Techniques::DeferredShaderResource>(request2);

@@ -5,12 +5,14 @@
 #pragma once
 
 #include "../Assets/TextureLoaders.h"
-#include "../../Utility/IteratorUtils.h"
+#include "../../Utility/StringUtils.h"
 #include <memory>
 #include <cassert>
 
 namespace RenderCore { class IDevice; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
+namespace RenderCore::Assets { class TextureCompilerRegistrar; }
+namespace AssetsNew { class CompoundAssetUtil; }
 
 namespace RenderCore { namespace Techniques
 {
@@ -28,6 +30,8 @@ namespace RenderCore { namespace Techniques
 		static std::shared_ptr<CommonResourceBox> GetCommonResources() { return GetInstance()._commonResources; }
 		static SubFrameEvents& GetSubFrameEvents() { return *GetInstance()._subFrameEvents; }
 		static std::shared_ptr<SubFrameEvents> GetSubFrameEventsPtr() { return GetInstance()._subFrameEvents; }
+		static Assets::TextureCompilerRegistrar& GetTextureCompilerRegistrar() { return *GetInstance()._textureCompilerRegistrar; }
+		static std::shared_ptr<AssetsNew::CompoundAssetUtil> GetCompoundAssetUtil() { return GetInstance()._compoundAssetUtil; }
 
 		/////////////////////////////
 		//   T E X T U R E   L O A D E R S
@@ -58,6 +62,8 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<BufferUploads::IManager> _bufferUploads;
 		std::shared_ptr<CommonResourceBox> _commonResources;
 		std::shared_ptr<SubFrameEvents> _subFrameEvents;
+		std::shared_ptr<Assets::TextureCompilerRegistrar> _textureCompilerRegistrar;
+		std::shared_ptr<AssetsNew::CompoundAssetUtil> _compoundAssetUtil;
 
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;

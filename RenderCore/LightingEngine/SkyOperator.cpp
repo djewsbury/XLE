@@ -277,8 +277,9 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			Assets::TextureCompilationRequest request;
-			request._subCompiler = TextureCompiler_EquirectFilter(toCubemap, srcComponent);
+			request._subCompiler = TextureCompiler_EquirectFilter2(toCubemap, srcComponent);
 			request._intermediateName = request._subCompiler->GetIntermediateName();
+			request._postConvert = Assets::PostConvert{ _desc._cubemapFormat };
 
 			_skyCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request, std::move(progressiveResultsFn));
 		}
@@ -329,8 +330,9 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			Assets::TextureCompilationRequest request;
-			request._subCompiler = TextureCompiler_EquirectFilter(toCubemap, srcComponent);
+			request._subCompiler = TextureCompiler_EquirectFilter2(toCubemap, srcComponent);
 			request._intermediateName = request._subCompiler->GetIntermediateName();
+			request._postConvert = Assets::PostConvert{ _desc._cubemapFormat };
 
 			_specularIBL = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request, std::move(progressiveResultsFn));
 		}

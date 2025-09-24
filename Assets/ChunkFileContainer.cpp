@@ -164,9 +164,9 @@ namespace Assets
                 auto buffer = std::unique_ptr<uint8_t[], PODAlignedDeletor>(mem);
                 file.Seek(initialOffset + i->_fileOffset);
                 file.Read(buffer.get(), i->_size);
-                *_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), i->_size)));
+                _cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(buffer.get(), PtrAdd(buffer.get(), i->_size)));
             } else {
-                *_cachedDirectorySearchRules = {};
+                _cachedDirectorySearchRules = DirectorySearchRules{};
             }
 
             file.Seek(initialOffset);

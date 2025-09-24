@@ -38,7 +38,7 @@ namespace RenderCore { namespace LightingEngine
 		srcComponent._srcFile = srcTexture.AsString();
 
 		Assets::TextureCompilationRequest request;
-		request._subCompiler = TextureCompiler_EquirectFilter(toCubemap, srcComponent);
+		request._subCompiler = TextureCompiler_EquirectFilter2(toCubemap, srcComponent);
 		request._intermediateName = request._subCompiler->GetIntermediateName();
 		
 		auto srcFuture = ::Assets::ConstructToMarkerPtr<RenderCore::Assets::TextureArtifact>(std::move(loadingContext), request);

@@ -500,16 +500,33 @@ namespace Assets
 		{
 			// the directory search rules are just a chunk in the file
 			if (!_cachedDirectorySearchRules) {
-				bool found = false;
+				bool found = false, foundMulti = false;
 				for (const auto&prod:_productsFile._compileProducts)
 					if (prod._type == "DirectorySearchRules"_h) {
 						size_t size = 0;
 						auto fileData = TryLoadFileAsAlignedBuffer(*_filesystem, prod._intermediateArtifact, size);
-						*_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(fileData.get(), PtrAdd(fileData.get(), size)));
+						_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(MakeIteratorRange(fileData.get(), PtrAdd(fileData.get(), size)));
 						found = true;
 						break;
-					}
-				if (!found) *_cachedDirectorySearchRules = {};
+					} else if (prod._type == ChunkType_Multi)
+						foundMulti = true;
+
+				if (!found && foundMulti) {
+					for (const auto&prod:_productsFile._compileProducts)
+						if (prod._type == ChunkType_Multi) {
+							auto mainChunkFile = OpenFileInterface(*_filesystem, prod._intermediateArtifact, "rb", OSServices::FileShareMode::Read);
+							ArtifactChunkContainer temp(_filesystem, prod._intermediateArtifact, _depVal);
+							ArtifactRequest requestsForMulti[] { "", "DirectorySearchRules"_h, ~0u, ArtifactRequest::DataType::OptionalSharedBlob };
+							auto fromMulti = temp.ResolveRequests(*mainChunkFile, MakeIteratorRange(requestsForMulti));
+							if (!fromMulti.empty() && fromMulti.front()._sharedBlob) {
+								_cachedDirectorySearchRules = DirectorySearchRules::Deserialize(*fromMulti.front()._sharedBlob);
+								found = true;
+							}
+							break;
+						}
+				}
+
+				if (!found) _cachedDirectorySearchRules = DirectorySearchRules{};
 			}
 
 			return *_cachedDirectorySearchRules;

@@ -80,6 +80,8 @@ namespace AssetsNew
 
 		T1(Type) [[nodiscard]] auto GetFuture(uint64_t componentTypeName, const ContextImbuedScaffold& scaffold, uint64_t rootEntity) { return GetFuture<Type>(componentTypeName, ScaffoldAndEntityName{scaffold, rootEntity}); }
 
+		std::shared_future<ContextImbuedScaffold> GetCachedFutureScaffold(StringSection<>);
+
 			//
 			// We cache in the AssetHeap
 			//		* the results of previous GetCachedAssetFuture calls (ie, with a ScaffoldIndexer)
@@ -215,6 +217,15 @@ namespace AssetsNew
 		return false;
 	}
 
+	inline auto CompoundAssetUtil::GetCachedFutureScaffold(StringSection<> initializer) -> std::shared_future<ContextImbuedScaffold>
+	{
+		if (_assetHeap) {
+			return Get<ContextImbuedScaffold>(*_assetHeap, initializer).GetFuture();
+		} else {
+			return ::Assets::GetAssetFuture<ContextImbuedScaffold>(initializer);
+		}
+	}
+
 	template<typename Type>
 		auto CompoundAssetUtil::BuildUnresolvedAssetSync(uint64_t componentTypeName, const ContextAndIdentifier& indexer) -> UnresolvedAsset<Type>
 	{
@@ -348,6 +359,15 @@ namespace AssetsNew
 			UnresolvedAsset<Type> result {
 				::Assets::Internal::InvokeAssetConstructor<Type>(chunk, scaffoldSearchRules, scaffoldDepVal),
 				scaffoldSearchRules, scaffoldDepVal, InheritList{} };
+			return result;
+
+		} else if constexpr (::Assets::Internal::AssetMixinTraits<T>::HasDeserializationOperatorFromFormatter) {
+
+			Formatters::TextInputFormatter<> fmttr { chunk };
+			UnresolvedAsset<Type> result {
+				::Assets::Internal::InvokeAssetConstructor<Type>(),
+				scaffoldSearchRules, scaffoldDepVal, InheritList{} };
+			fmttr >> ::Assets::Internal::MaybeDeref(std::get<0>(result));
 			return result;
 
 		} else {

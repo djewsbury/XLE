@@ -121,7 +121,7 @@ namespace Assets
 	const DirectorySearchRules& ChunkFileArtifactCollection::GetDirectorySearchRules() const
 	{
 		if (!_cachedDirectorySearchRules) {
-			*_cachedDirectorySearchRules = ArtifactChunkContainer{}.GetDirectorySearchRules(*_file);
+			_cachedDirectorySearchRules = ArtifactChunkContainer{}.GetDirectorySearchRules(*_file);
 		}
 		return *_cachedDirectorySearchRules;
 	}
