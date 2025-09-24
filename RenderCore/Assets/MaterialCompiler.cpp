@@ -348,7 +348,7 @@ namespace RenderCore { namespace Assets
 	::Assets::CompilerRegistration RegisterMaterialCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "material-scaffold-compiler", "material-scaffold-compiler", MaterialCompileOperation);
+		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "material-set-compiler", "material-set-compiler", MaterialCompileOperation);
 		uint64_t outputAssetTypes[] = { GetCompileProcessType((CompiledMaterialSet*)nullptr) };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),

@@ -46,23 +46,33 @@ namespace SceneEngine
 		RenderCore::Techniques::IPipelineAcceleratorPool& pipelineAccelerators,
 		IScene& scene)
 	{
-		using namespace RenderCore;
-		auto prepareLightingIterator = LightingEngine::BeginPrepareResourcesInstance(pipelineAccelerators, compiledTechnique);
-
-		for (;;) {
-			auto next = prepareLightingIterator.GetNextStep();
-			if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
-			if (next._type == LightingEngine::StepType::DrawSky) continue;
-			assert(next._type == LightingEngine::StepType::ParseScene);
-			assert(!next._pkts.empty());
-
-			ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
-			scene.ExecuteScene(threadContext, sceneExecuteContext);
-		}
-
 		std::promise<RenderCore::Techniques::PreparedResourcesVisibility> promise;
 		auto result = promise.get_future();
-		prepareLightingIterator.FulfillWhenNotPending(std::move(promise));
+
+		TRY {
+
+			using namespace RenderCore;
+			auto prepareLightingIterator = LightingEngine::BeginPrepareResourcesInstance(pipelineAccelerators, compiledTechnique);
+
+			for (;;) {
+				auto next = prepareLightingIterator.GetNextStep();
+				if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
+				if (next._type == LightingEngine::StepType::DrawSky) continue;
+				assert(next._type == LightingEngine::StepType::ParseScene);
+				assert(!next._pkts.empty());
+
+				ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
+				scene.ExecuteScene(threadContext, sceneExecuteContext);
+			}
+
+			prepareLightingIterator.FulfillWhenNotPending(std::move(promise));
+
+		} CATCH(...) {
+
+			promise.set_exception(std::current_exception());
+
+		} CATCH_END
+
 		return result;
 	}
 

@@ -11,7 +11,6 @@
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../PlatformRig/SingleWindowAppRig.h"
-#include "../../Utility/StringFormat.h"
 
 namespace Sample
 {

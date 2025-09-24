@@ -225,11 +225,12 @@ namespace UnitTests
 			REQUIRE(cfgs->_entityLookup[0].second._name.AsString() == "Material0");
 			REQUIRE(cfgs->_entityLookup[1].second._name.AsString() == "Material1");
 
-			RenderCore::Assets::RawMaterial material0 = RenderCore::Assets::GetResolvedMaterialFuture("fake-model:Material0").get();
+			auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>());
+			RenderCore::Assets::RawMaterial material0 = RenderCore::Assets::GetResolvedMaterialFuture(util, "fake-model:Material0").get();
 			REQUIRE(material0._uniforms.GetParameter<float>("Brightness") == 50_a);
 			REQUIRE(Equivalent(material0._uniforms.GetParameter<Float3>("Emissive").value(), Float3{0.5f, 0.5f, 0.5f}, 1e-3f));
 
-			RenderCore::Assets::RawMaterial material1 = RenderCore::Assets::GetResolvedMaterialFuture("fake-model:Material1").get();
+			RenderCore::Assets::RawMaterial material1 = RenderCore::Assets::GetResolvedMaterialFuture(util, "fake-model:Material1").get();
 			REQUIRE(material1._uniforms.GetParameter<float>("Brightness") == 33_a);
 			REQUIRE(Equivalent(material1._uniforms.GetParameter<Float3>("Emissive").value(), Float3{2.5f, 0.25f, 0.15f}, 1e-3f));
 		}

@@ -907,7 +907,11 @@ namespace RenderCore { namespace LightingEngine
 
 	void SequencePlayback::FulfillWhenNotPending(std::promise<Techniques::PreparedResourcesVisibility>&& promise)
 	{
-		if (!_prepareResourcesIterator || _prepareResourcesIterator->_requiredResources.empty()) return;
+		if (!_prepareResourcesIterator || _prepareResourcesIterator->_requiredResources.empty()) {
+			assert(0);
+			promise.set_value({});
+			return;
+		}
 		
 		TRY {
 			struct Futures
@@ -964,8 +968,8 @@ namespace RenderCore { namespace LightingEngine
 
 	void SequencePlayback::ResetIteration(Phase newPhase)
 	{
-		assert(_iterator);
-		*_stepper = LightingTechniqueStepper{MakeIteratorRange(_sequences), *_iterator};
+		if (_iterator) *_stepper = LightingTechniqueStepper{MakeIteratorRange(_sequences), *_iterator};
+		else if (_prepareResourcesIterator) *_stepper = LightingTechniqueStepper{MakeIteratorRange(_sequences), *_prepareResourcesIterator};
 		if (_prepareResourcesIterator) _prepareResourcesIterator->_drawablePktIdxOffset = 0;
 		_currentPhase = newPhase;
 	}
