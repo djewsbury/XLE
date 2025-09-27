@@ -31,6 +31,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	std::vector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
 		const std::string& name,
+		const NascentMaterialTable&);
+		
+	std::vector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
+		const std::string& name,
 		const NascentMaterialTable&,
 		const ::Assets::DirectorySearchRules&);
 }}}

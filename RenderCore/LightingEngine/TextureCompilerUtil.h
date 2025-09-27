@@ -75,4 +75,12 @@ namespace RenderCore { namespace LightingEngine
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ComputeShader(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer);
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_SamplingComputeShader(
+		unsigned width, unsigned height, unsigned arrayLayerCount,
+		std::string shader, const EquirectFilterParams& params);
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_LightingEngineCommon(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer);
 }}

@@ -3,10 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "TextureCompiler.h"
-#include "TextureCompilerRegistrar.h"
-#include "../Techniques/Services.h"
-#include "../LightingEngine/TextureCompilerUtil.h"
-#include "../LightingEngine/BlueNoiseGenerator.h"
 #include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/IFileSystem.h"
@@ -365,42 +361,6 @@ namespace RenderCore { namespace Assets
 		BalancedNoiseTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
 	};
 
-	class HaltonSamplerTexture : public BufferUploads::IAsyncDataSource
-	{
-	public:
-		virtual std::future<ResourceDesc> GetDesc() override
-		{
-			std::promise<ResourceDesc> promise;
-			promise.set_value(CreateDesc(0, TextureDesc::Plain2D(_width, _height, Format::R32_UINT)));
-			return promise.get_future();
-		}
-
-		virtual StringSection<> GetName() const override { return "halton-sampler"; }
-
-		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
-		{
-			assert(subResources.size() == 1);
-			assert(subResources[0]._destination.size() == sizeof(uint32_t)*_width*_height);
-			uint32_t* dst = (uint32_t*)subResources[0]._destination.begin();
-			std::memset(dst, 0, subResources[0]._destination.size());
-
-			uint32_t repeatingStride = LightingEngine::HaltonSamplerHelper::WriteHaltonSamplerIndices(MakeIteratorRange(subResources[0]._destination).Cast<uint32_t*>(), _width, _height);
-			(void)repeatingStride;
-
-			std::promise<void> promise;
-			promise.set_value();
-			return promise.get_future();
-		}
-
-		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
-		{
-			return {};
-		}
-
-		unsigned _width, _height;
-		HaltonSamplerTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
-	};
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class Compiler_BalancedNoise : public ITextureCompiler
@@ -430,27 +390,6 @@ namespace RenderCore { namespace Assets
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "BalancedNoise"_h))
 			return util->GetFuture<std::shared_ptr<Compiler_BalancedNoise>>("BalancedNoise"_h, indexer).get().get();
-
-		class Compiler_HaltonSampler : public ITextureCompiler
-		{
-		public:
-			unsigned _width = 512, _height = 512;
-			std::string GetIntermediateName() const override { return (StringMeld<128>() << "halton-sampler-" << _width << "x" << _height).AsString(); }
-			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonSamplerTexture>(_width, _height); }
-
-			Compiler_HaltonSampler(Formatters::TextInputFormatter<>& fmttr)
-			{
-				StringSection<> kn;
-				while (fmttr.TryKeyedItem(kn)) {
-					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
-					else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
-					else Formatters::SkipValueOrElement(fmttr);
-				}
-			}
-		};
-
-		if (scaffold->HasComponent(indexer._entityNameHash, "HaltonSampler"_h))
-			return util->GetFuture<std::shared_ptr<Compiler_HaltonSampler>>("HaltonSampler"_h, indexer).get().get();
 		
 		return nullptr;
 	}
@@ -556,7 +495,7 @@ namespace RenderCore { namespace Assets
 		std::vector<::Assets::SerializedArtifact> _serializedArtifacts;
 	};
 
-	::Assets::CompilerRegistration RegisterTextureCompiler(
+	::Assets::CompilerRegistration RegisterTextureCompilerInfrastructure(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
 		::Assets::CompilerRegistration result{
@@ -610,56 +549,6 @@ namespace RenderCore { namespace Assets
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	std::shared_ptr<BufferUploads::IAsyncDataSource> TextureArtifact::BeginDataSource(TextureLoaderFlags::BitField loadedFlags) const
-	{
-		return Techniques::Services::GetInstance().CreateTextureDataSource(_artifactFile, loadedFlags);
-	}
-
-	auto TextureArtifact::BeginLoadRawData(TextureLoaderFlags::BitField loadedFlags) const -> std::future<RawData>
-	{
-		auto pkt = Techniques::Services::GetInstance().CreateTextureDataSource(_artifactFile, 0);
-		if (!pkt) {
-			std::promise<RawData> promise;
-			promise.set_exception(std::make_exception_ptr(
-				::Assets::Exceptions::ConstructionError(
-					::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
-					GetDependencyValidation(),
-					StringMeld<256>() << "Could not find matching texture loader for file: " << _artifactFile)));
-			return promise.get_future();
-		}
-
-		auto futureDesc = pkt->GetDesc();
-		return thousandeyes::futures::then(
-			ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
-			std::move(futureDesc),
-			[pkt](auto descFuture) {
-				auto desc = descFuture.get();
-				assert(desc._type == ResourceDesc::Type::Texture);
-				auto mipCount = (unsigned)desc._textureDesc._mipCount, elementCount = ActualArrayLayerCount(desc._textureDesc);
-				std::vector<uint8_t> data;
-				data.resize(ByteCount(desc._textureDesc));
-				VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, srs, mipCount*elementCount);
-				for (unsigned e=0; e<elementCount; ++e)
-					for (unsigned m=0; m<mipCount; ++m) {
-						auto srOffset = GetSubResourceOffset(desc._textureDesc, m, e);
-						auto& sr = srs[e*mipCount+m];
-						sr._id = {m,e};
-						assert((srOffset._offset+srOffset._size) <= data.size());
-						sr._destination = MakeIteratorRange(PtrAdd(data.data(), srOffset._offset), PtrAdd(data.data(), srOffset._offset+srOffset._size));
-						sr._pitches = srOffset._pitches;
-					}
-				return thousandeyes::futures::then(
-					ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
-					pkt->PrepareData(MakeIteratorRange(srs, &srs[mipCount*elementCount])),
-					[tDesc=desc._textureDesc, data=std::move(data), pkt](auto) {		// need to retain "pkt" as load as PrepareData() is working
-						RawData result;
-						result._data = std::move(data);
-						result._desc = tDesc;
-						return result;
-					});
-			});
-	}
 
 	TextureArtifact::TextureArtifact(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)

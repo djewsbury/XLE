@@ -306,7 +306,7 @@ namespace ShaderSourceParser
 					trans));
 			}
 
-			MemoryOutputStream<> memStream;
+			std::stringstream memStream;
 			Formatters::TextOutputFormatter fmttr(memStream);
 			fmttr << filteringRules;
 

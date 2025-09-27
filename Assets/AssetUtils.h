@@ -8,7 +8,6 @@
 
 #include "AssetsCore.h"
 #include "../Utility/StringUtils.h"
-#include "../Utility/Streams/Stream.h"
 
 namespace Assets
 {

@@ -5,7 +5,7 @@
 #pragma once
 
 #include "../../Assets/ConfigFileContainer.h"
-#include "../../Utility/Streams/StreamTypes.h"
+#include <iosfwd>
 
 namespace Formatters { class IDynamicInputFormatter; }
 namespace EntityInterface
@@ -17,7 +17,7 @@ namespace EntityInterface
         StringSection<> internalSection);
 
     std::shared_ptr<Formatters::IDynamicInputFormatter> CreateDynamicFormatter(
-        MemoryOutputStream<>&& formatter,
+        std::stringstream&&,
         ::Assets::DependencyValidation&& depVal);
 
     std::shared_ptr<IEntityDocument> CreateTextEntityDocument(StringSection<> filename);

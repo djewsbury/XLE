@@ -5,6 +5,7 @@
 #pragma once
 
 #include "AssetsCore.h"
+#include "BlockSerializer.h"
 #include "../Utility/IteratorUtils.h"
 
 namespace Assets

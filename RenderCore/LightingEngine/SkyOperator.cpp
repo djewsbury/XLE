@@ -13,9 +13,9 @@
 #include "../Techniques/Services.h"
 #include "../Techniques/CommonResources.h"
 #include "../Techniques/DeferredShaderResource.h"
+#include "../BufferUploads/IBufferUploads.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/TextureCompiler.h"
-#include "../Assets/TextureCompilerRegistrar.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
@@ -276,10 +276,9 @@ namespace RenderCore { namespace LightingEngine
 					};
 			}
 
-			Assets::TextureCompilationRequest request;
-			request._subCompiler = TextureCompiler_EquirectFilter2(toCubemap, srcComponent);
-			request._intermediateName = request._subCompiler->GetIntermediateName();
-			request._postConvert = Assets::PostConvert{ _desc._cubemapFormat };
+			auto request = RenderCore::Assets::MakeTextureCompilationRequest(
+				TextureCompiler_EquirectFilter2(toCubemap, srcComponent),
+				_desc._cubemapFormat);
 
 			_skyCubemap = ::Assets::ConstructToFuturePtr<Techniques::DeferredShaderResource>(loadingContext, request, std::move(progressiveResultsFn));
 		}

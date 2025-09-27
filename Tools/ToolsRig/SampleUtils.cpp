@@ -217,7 +217,7 @@ namespace ToolsRig
 		std::string plugin,
 		const std::vector<std::pair<std::string, std::string>>& settings)
 	{
-		MemoryOutputStream<> strm;
+		std::stringstream strm;
 		{
 			Formatters::TextOutputFormatter fmttr(strm);
 			auto ele = fmttr.BeginKeyedElement(plugin);

@@ -29,8 +29,6 @@ static_assert( std::is_same_v< ::Assets::Internal::AssetTraits< ::Assets::Contex
 namespace RenderCore { namespace Assets
 {
 
-	static const auto s_MaterialCompileProcessType = ConstHash64Legacy<'RawM', 'at'>::Value;
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     static const std::pair<Blend, const utf8*> s_blendNames[] =
@@ -555,45 +553,6 @@ namespace RenderCore { namespace Assets
         return *this;
     }
 
-#if 0
-	RawMaterialSet::RawMaterialSet(Formatters::TextInputFormatter<char>& fmttr)
-    {
-        StringSection<> keyName;
-        while (fmttr.TryKeyedItem(keyName)) {
-            Formatters::RequireBeginElement(fmttr);
-            Entry e;
-            StringSection<> keyname;
-            while (fmttr.TryKeyedItem(keyname))
-                if (XlEqString(keyname, "Inherit")) {
-                    std::get<1>(e) = ::Assets::Internal::DeserializeInheritList(fmttr);
-                } else if (!std::get<0>(e).TryDeserializeKey(fmttr, keyname))
-                    Formatters::SkipValueOrElement(fmttr);
-            _materials.emplace_back(keyName.AsString(), std::move(e));
-            Formatters::RequireEndElement(fmttr);
-        }
-    }
-
-    void SerializationOperator(Formatters::TextOutputFormatter& fmttr, const std::tuple<RawMaterial, ::Assets::InheritList>& e)
-    {
-        auto& inheritList = std::get<::Assets::InheritList>(e);
-        if (!inheritList.empty()) {
-            auto e = fmttr.BeginKeyedElement("Inherit");
-            for (auto i:inheritList) fmttr.WriteSequencedValue(i);
-            fmttr.EndElement(e);
-        }
-        fmttr << std::get<RawMaterial>(e);
-    }
-
-    void SerializationOperator(Formatters::TextOutputFormatter& fmttr, const RawMaterialSet& matSet)
-    {
-		for (const auto& m:matSet._materials) {
-			auto ele = fmttr.BeginKeyedElement(m.first);
-            fmttr << m.second;
-			fmttr.EndElement(ele);
-		}
-    }
-#endif
-
     static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "compound"); }
 
     void MaterialCompoundScaffold_ConstructToPromise(
@@ -615,7 +574,7 @@ namespace RenderCore { namespace Assets
                     TRY {
                         ::Assets::DefaultCompilerConstructionSynchronously(
                             std::move(promise),
-                            s_MaterialCompileProcessType,
+                            s_RawMaterial_CompileProcessType,
                             ::Assets::InitializerPack{init});
                     } CATCH (...) {
                         promise.set_exception(std::current_exception());
@@ -633,169 +592,13 @@ namespace RenderCore { namespace Assets
                 TRY {
                     ::Assets::DefaultCompilerConstructionSynchronously(
                         std::move(promise),
-                        s_MaterialCompileProcessType,
+                        s_RawMaterial_CompileProcessType,
                         ::Assets::InitializerPack{init, std::move(cfg)});
                 } CATCH (...) {
                     promise.set_exception(std::current_exception());
                 } CATCH_END
             });
     }
-
-#if 0
-    void AutoConstructToPromiseOverride(
-        std::promise<ContextImbuedRawMaterialPtr>&& promise,
-        StringSection<> initializer)
-    {
-        // If we're loading from a .material file, then just go head and use the
-		// default asset construction
-		// Otherwise, we need to invoke a compile and load of a ConfigFileContainer
-		if (IsMaterialFile(MakeFileNameSplitter(initializer).Extension())) {
-            ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
-			    [init=initializer.AsString(), promise=std::move(promise)]() mutable {
-                    TRY {
-                        promise.set_value(::Assets::AutoConstructAsset<ContextImbuedRawMaterialPtr>(init));
-                    } CATCH (...) {
-                        promise.set_exception(std::current_exception());
-                    } CATCH_END
-                });
-			return;
-		}
-
-        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[promise=std::move(promise), init=initializer.AsString()]() mutable {
-                TRY {
-                    auto splitName = MakeFileNameSplitter(init);
-                    auto containerInitializer = splitName.AllExceptParameters();
-                    std::string containerInitializerString = containerInitializer.AsString();
-                    auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
-                    ::Assets::DefaultCompilerConstructionSynchronously(
-                        containerFuture->AdoptPromise(),
-                        s_MaterialCompileProcessType,
-                        containerInitializer);
-
-                    std::string section = splitName.Parameters().AsString();
-                    ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
-                        std::move(promise),
-                        [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
-                            return ::Assets::Internal::ConstructFromFormatterSyncHelper<ContextImbuedRawMaterialPtr>(
-                                *containerActual, section,
-                                ::Assets::DefaultDirectorySearchRules(containerInitializerString),
-                                containerActual->GetDependencyValidation());
-                        });
-                } CATCH (...) {
-                    promise.set_exception(std::current_exception());
-                } CATCH_END
-            });
-    }
-
-    void AutoConstructToPromiseOverride(
-        std::promise<ContextImbuedRawMaterial>&& promise,
-        StringSection<> initializer)
-    {
-        // If we're loading from a .material file, then just go head and use the
-		// default asset construction
-		// Otherwise, we need to invoke a compile and load of a ConfigFileContainer
-		if (IsMaterialFile(MakeFileNameSplitter(initializer).Extension())) {
-            ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
-			    [init=initializer.AsString(), promise=std::move(promise)]() mutable {
-                    TRY {
-                        promise.set_value(::Assets::AutoConstructAsset<ContextImbuedRawMaterial>(init));
-                    } CATCH (...) {
-                        promise.set_exception(std::current_exception());
-                    } CATCH_END
-                });
-			return;
-		}
-
-        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[promise=std::move(promise), init=initializer.AsString()]() mutable {
-                TRY {
-                    auto splitName = MakeFileNameSplitter(init);
-                    auto containerInitializer = splitName.AllExceptParameters();
-                    std::string containerInitializerString = containerInitializer.AsString();
-                    auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
-                    ::Assets::DefaultCompilerConstructionSynchronously(
-                        containerFuture->AdoptPromise(),
-                        s_MaterialCompileProcessType,
-                        containerInitializer);
-
-                    std::string section = splitName.Parameters().AsString();
-                    ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
-                        std::move(promise),
-                        [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
-                            return ::Assets::Internal::ConstructFromFormatterSyncHelper<ContextImbuedRawMaterial>(
-                                *containerActual, section,
-                                ::Assets::DefaultDirectorySearchRules(containerInitializerString),
-                                containerActual->GetDependencyValidation());
-                        });
-                } CATCH (...) {
-                    promise.set_exception(std::current_exception());
-                } CATCH_END
-            });
-    }
-
-    void AutoConstructToPromiseOverride(
-        std::promise<ContextImbuedRawMaterialPtr>&& promise,
-        StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg)
-    {
-        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[promise=std::move(promise), init=initializer.AsString(), cfg=std::move(cfg)]() mutable {
-                TRY {
-                    auto splitName = MakeFileNameSplitter(init);
-                    auto containerInitializer = splitName.AllExceptParameters();
-                    std::string containerInitializerString = containerInitializer.AsString();
-                    auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
-                    ::Assets::DefaultCompilerConstructionSynchronously(
-                        containerFuture->AdoptPromise(),
-                        s_MaterialCompileProcessType,
-                        ::Assets::InitializerPack{containerInitializer, std::move(cfg)});
-
-                    std::string section = splitName.Parameters().AsString();
-                    ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
-                        std::move(promise),
-                        [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
-                            return ::Assets::Internal::ConstructFromFormatterSyncHelper<ContextImbuedRawMaterialPtr>(
-                                *containerActual, section,
-                                ::Assets::DefaultDirectorySearchRules(containerInitializerString),
-                                containerActual->GetDependencyValidation());
-                        });
-                } CATCH (...) {
-                    promise.set_exception(std::current_exception());
-                } CATCH_END
-            });
-    }
-
-    void AutoConstructToPromiseOverride(
-        std::promise<ContextImbuedRawMaterial>&& promise,
-        StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg)
-    {
-        ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-			[promise=std::move(promise), init=initializer.AsString(), cfg=std::move(cfg)]() mutable {
-                TRY {
-                    auto splitName = MakeFileNameSplitter(init);
-                    auto containerInitializer = splitName.AllExceptParameters();
-                    std::string containerInitializerString = containerInitializer.AsString();
-                    auto containerFuture = std::make_shared<::Assets::MarkerPtr<::Assets::ConfigFileContainer<>>>(containerInitializerString);
-                    ::Assets::DefaultCompilerConstructionSynchronously(
-                        containerFuture->AdoptPromise(),
-                        s_MaterialCompileProcessType,
-                        ::Assets::InitializerPack{containerInitializer, std::move(cfg)});
-
-                    std::string section = splitName.Parameters().AsString();
-                    ::Assets::WhenAll(containerFuture).ThenConstructToPromise(
-                        std::move(promise),
-                        [section, containerInitializerString](std::shared_ptr<::Assets::ConfigFileContainer<>> containerActual) {
-                            return ::Assets::Internal::ConstructFromFormatterSyncHelper<ContextImbuedRawMaterial>(
-                                *containerActual, section,
-                                ::Assets::DefaultDirectorySearchRules(containerInitializerString),
-                                containerActual->GetDependencyValidation());
-                        });
-                } CATCH (...) {
-                    promise.set_exception(std::current_exception());
-                } CATCH_END
-            });
-    }
-#endif
 
     static void RawMaterial_ConstructToPromise(
         std::promise<::Assets::AssetWrapper<RawMaterial>>&& promise,

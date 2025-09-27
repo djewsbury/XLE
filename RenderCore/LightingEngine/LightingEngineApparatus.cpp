@@ -13,7 +13,7 @@
 #include "../Techniques/Services.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
-#include "../Assets/TextureCompilerRegistrar.h"
+#include "../Assets/TextureCompiler.h"
 #include "../IDevice.h"
 #include "../../Assets/AssetTraits.h"
 #include "../../Assets/Assets.h"
@@ -152,6 +152,7 @@ namespace RenderCore { namespace LightingEngine
 		auto& tcRegistrar = Techniques::Services::GetTextureCompilerRegistrar();
 		_textureCompilerRegistrations[0] = tcRegistrar.Register(TextureCompiler_EquirectFilter);
 		_textureCompilerRegistrations[1] = tcRegistrar.Register(TextureCompiler_ComputeShader);
+		_textureCompilerRegistrations[2] = tcRegistrar.Register(TextureCompiler_LightingEngineCommon);
 	}
 
 	LightingEngineApparatus::~LightingEngineApparatus()

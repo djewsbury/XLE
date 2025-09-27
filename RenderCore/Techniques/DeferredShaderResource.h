@@ -8,13 +8,15 @@
 
 #include "../IDevice_Forward.h"
 #include "../ResourceDesc.h"
+#include "../Assets/TextureLoaders.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Utility/StringUtils.h"
+#include <future>
 
 namespace Utility { class ParameterBox; }
 namespace Assets { class DirectorySearchRules; class OperationContext; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; class IAsyncDataSource; using TransactionID = uint64_t; }}
-namespace RenderCore { namespace Assets { class TextureCompilationRequest; }}
+namespace RenderCore { namespace Assets { class TextureCompilationRequest; class TextureArtifact; }}
 
 namespace RenderCore { namespace Techniques 
 {
@@ -103,6 +105,15 @@ namespace RenderCore { namespace Techniques
     std::shared_ptr<IResource> DestageResource(
         IThreadContext& threadContext,
         const std::shared_ptr<IResource>& input);
+
+    std::shared_ptr<BufferUploads::IAsyncDataSource> BeginDataSource(const Assets::TextureArtifact& artifact, Assets::TextureLoaderFlags::BitField loadedFlags = 0);
+
+    struct TextureRawData
+    {
+        std::vector<uint8_t> _data;
+        TextureDesc _desc;
+    };
+    std::future<TextureRawData> BeginLoadRawData(const Assets::TextureArtifact& artifact, Assets::TextureLoaderFlags::BitField loadedFlags = 0);
 
 }}
 

@@ -193,27 +193,6 @@ namespace RenderCore { namespace Assets
 
 #if !defined(__CLR_VER)
 
-#if 0
-    using ContextImbuedRawMaterialPtr = ::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterial>>;
-    using ContextImbuedRawMaterial = ::Assets::ContextImbuedAsset<RawMaterial>;
-
-    void AutoConstructToPromiseOverride(
-        std::promise<ContextImbuedRawMaterialPtr>&& promise,
-        StringSection<> initializer);
-
-    void AutoConstructToPromiseOverride(
-        std::promise<ContextImbuedRawMaterial>&& promise,
-        StringSection<> initializer);
-
-    void AutoConstructToPromiseOverride(
-        std::promise<ContextImbuedRawMaterialPtr>&& promise,
-        StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
-
-    void AutoConstructToPromiseOverride(
-        std::promise<ContextImbuedRawMaterial>&& promise,
-        StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
-#endif
-
     void MaterialCompoundScaffold_ConstructToPromise(
         std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
         StringSection<> initializer);
@@ -223,29 +202,6 @@ namespace RenderCore { namespace Assets
         StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
 
     std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<>);
-
-#if 0
-	class RawMaterialSet
-    {
-    public:
-        using Entry = std::tuple<RawMaterial, ::Assets::InheritList>;
-        std::vector<std::pair<std::string, Entry>> _materials;
-
-        void AddMaterial(std::string s, RawMaterial&& mat) { _materials.emplace_back(std::move(s), std::make_tuple(std::move(mat), ::Assets::InheritList{})); }
-        void AddMaterial(std::string s, RawMaterial&& mat, ::Assets::InheritList&& inherit) { _materials.emplace_back(std::move(s), std::make_tuple(std::move(mat), std::move(inherit))); }
-
-		RawMaterialSet(Formatters::TextInputFormatter<char>& fmttr);
-        RawMaterialSet() = default;
-    };
-
-    constexpr auto GetCompileProcessType(RawMaterialSet*) { return ConstHash64Legacy<'RawM', 'at'>::Value; }
-
-        // todo -- avoid the need for this!
-    constexpr auto GetCompileProcessType(::Assets::ContextImbuedAsset<std::shared_ptr<RawMaterialSet>>*) { return ConstHash64Legacy<'RawM', 'at'>::Value; }
-
-    void SerializationOperator(Formatters::TextOutputFormatter&, const RawMaterialSet&);
-    void SerializationOperator(Formatters::TextOutputFormatter&, const std::tuple<RawMaterial, ::Assets::InheritList>&);
-#endif
 
 #endif
 

@@ -12,6 +12,7 @@
 #include "../Utility/ArithmeticUtils.h"
 #include "../Utility/StreamUtils.h"
 #include <stack>
+#include <sstream>
 
 using namespace Utility::Literals;
 

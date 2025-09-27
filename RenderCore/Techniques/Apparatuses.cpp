@@ -20,7 +20,6 @@
 #include "PipelineOperators.h"
 #include "PipelineLayoutDelegate.h"
 #include "../Assets/TextureCompiler.h"
-#include "../Assets/TextureCompilerRegistrar.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
 #include "../Assets/MaterialCompiler.h"
@@ -170,7 +169,7 @@ namespace RenderCore { namespace Techniques
 		_mergedAnimSetCompilerRegistration = RenderCore::Assets::RegisterMergedAnimationSetCompiler(compilers);
 		_modelCompilers = ::Assets::DiscoverCompileOperations(compilers, "*Conversion.dll");
 
-		_textureCompilerRegistration = RenderCore::Assets::RegisterTextureCompiler(compilers);
+		_textureCompilerRegistration = RenderCore::Assets::RegisterTextureCompilerInfrastructure(compilers);
 		_textureCompilerBaseRegistration = _techniqueServices->GetTextureCompilerRegistrar().Register(RenderCore::Assets::TextureCompiler_Base);
 
 		_skinDeformerSystemRegistration = _techniqueServices->RegisterDeformConfigure("gpu_skin", CreateGPUSkinDeformerConfigure(std::make_shared<PipelineCollection>(device)));

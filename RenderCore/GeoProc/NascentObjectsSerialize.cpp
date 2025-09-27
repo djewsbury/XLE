@@ -81,13 +81,43 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	std::vector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
 		const std::string& name,
-		const NascentMaterialTable& materialTable,
-		const ::Assets::DirectorySearchRules& searchRules)
+		const NascentMaterialTable& materialTable)
 	{
-		MemoryOutputStream<> strm;
+		std::stringstream strm;
 		{
 			Formatters::TextOutputFormatter fmttr(strm);
 			fmttr << materialTable;
+
+			if (materialTable._rawMaterials.empty()) {
+				// add something, to prevent a zero length artefact
+				auto ele = fmttr.BeginKeyedElement("dummy");
+				fmttr.EndElement(ele);
+			}
+		}
+
+		return {
+			::Assets::SerializedArtifact{
+				RenderCore::Assets::ChunkType_RawMat, 0, name,
+				::Assets::AsBlob(strm)
+			}
+		};
+	}
+
+	std::vector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
+		const std::string& name,
+		const NascentMaterialTable& materialTable,
+		const ::Assets::DirectorySearchRules& searchRules)
+	{
+		std::stringstream strm;
+		{
+			Formatters::TextOutputFormatter fmttr(strm);
+			fmttr << materialTable;
+
+			if (materialTable._rawMaterials.empty()) {
+				// add something, to prevent a zero length artefact
+				auto ele = fmttr.BeginKeyedElement("dummy");
+				fmttr.EndElement(ele);
+			}
 		}
 
 		return {

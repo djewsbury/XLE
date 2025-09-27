@@ -189,7 +189,7 @@ namespace EntityInterface
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
 		#if __cplusplus >= 202002L
-			MemoryStreamTextFormatterAdapter(MemoryOutputStream<>&& stream, ::Assets::DependencyValidation&& depVal)
+			MemoryStreamTextFormatterAdapter(std::stringstream&& stream, ::Assets::DependencyValidation&& depVal)
 			: _stream(std::move(stream))
 			, _depVal(std::move(depVal))
 			{
@@ -206,7 +206,7 @@ namespace EntityInterface
 
 	private:
 		#if __cplusplus >= 202002L
-			MemoryOutputStream<> _stream;
+			std::stringstream _stream;
 		#else
 			std::string _stream;
 		#endif
@@ -215,7 +215,7 @@ namespace EntityInterface
 	};
 
 	std::shared_ptr<Formatters::IDynamicInputFormatter> CreateDynamicFormatter(
-        MemoryOutputStream<>&& formatter,
+        std::stringstream&& formatter,
 		::Assets::DependencyValidation&& depVal)
 	{
 		#if __cplusplus >= 202002L

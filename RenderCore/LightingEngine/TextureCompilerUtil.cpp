@@ -9,7 +9,6 @@
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/Services.h"
 #include "../Assets/TextureCompiler.h"
-#include "../Assets/TextureCompilerRegistrar.h"
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
@@ -917,111 +916,190 @@ namespace RenderCore { namespace LightingEngine
 		return HashCombine(a, b);
 	}
 
+	class Compiler_SamplingComputeShader : public Assets::ITextureCompiler
+	{
+	public:
+		unsigned _width = 512, _height = 512;
+		unsigned _arrayLayerCount = 0;
+		std::string _shader;
+		EquirectFilterParams _params;
+
+		std::string GetIntermediateName() const override { return (StringMeld<128>() << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << CalculateHash(_params)).AsString(); }
+		std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
+		{
+			if (context._opContext) {
+				context._opContext->SetDescription(Concatenate("Generating texture from {color:66d0a4}compute shader{color:}: ", ColouriseFilename(_shader)));
+				context._opContext->SetMessage((StringMeld<256>() << _width << "x" << _height).AsString());
+			}
+
+			auto targetDesc = TextureDesc::Plain2D(
+				_width,
+				_height,
+				Format::R32G32B32A32_FLOAT, // use full float precision for the pre-compression format
+				1, _arrayLayerCount);
+			assert(!_shader.empty());
+			return LightingEngine::GenerateFromSamplingComputeShader(_shader, targetDesc, _params._sampleCount, _params._idealCmdListCostMS, _params._maxSamplesPerCmdList);
+		}
+
+		Compiler_SamplingComputeShader(Formatters::TextInputFormatter<>& fmttr)
+		{
+			StringSection<> kn;
+			while (fmttr.TryKeyedItem(kn)) {
+				if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
+				else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
+				else if (XlEqString(kn, "ArrayLayerCount")) _height = Formatters::RequireCastValue<decltype(_arrayLayerCount)>(fmttr);
+				else if (XlEqString(kn, "Shader")) _shader = Formatters::RequireStringValue(fmttr).AsString();
+				else if (TryDeserializeKey(fmttr, kn, _params)) {}
+				else Formatters::SkipValueOrElement(fmttr);
+			}
+
+			if (_shader.empty())
+				Throw(Formatters::FormatException("Expecting 'Shader' field in texture compiler file", fmttr.GetLocation()));
+		}
+
+		Compiler_SamplingComputeShader(unsigned width, unsigned height, unsigned arrayLayerCount, std::string shader, const EquirectFilterParams& params)
+		: _width(width), _height(height), _arrayLayerCount(arrayLayerCount)
+		, _shader(std::move(shader)), _params(params)
+		{}
+	};
+
+	class Compiler_ConversionComputeShader : public Assets::ITextureCompiler
+	{
+	public:
+		unsigned _width = 512, _height = 512;
+		unsigned _arrayLayerCount = 0;
+		Format _format = Format::Unknown;
+		std::string _shader;
+		Assets::TextureCompilerSource _sourceComponent;
+
+		std::string GetIntermediateName() const override { return (StringMeld<1024>() << _sourceComponent._srcFile << "-" << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << AsString(_format)).AsString(); }
+		std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
+		{
+			if (context._opContext) {
+				context._opContext->SetDescription(Concatenate("Generating texture from {color:66d0a4}conversion compute shader{color:}: ", ColouriseFilename(_shader), ", ", ColouriseFilename(_sourceComponent._srcFile)));
+				context._opContext->SetMessage((StringMeld<256>() << _width << "x" << _height << " " << AsString(_format)).AsString());
+			}
+
+			auto srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(_sourceComponent._srcFile, 0);
+			context._dependencies.push_back(srcPkt->GetDependencyValidation());
+
+			auto targetDesc = TextureDesc::Plain2D(
+				_width,
+				_height,
+				_format,		// since we're not sampling, we can go directly to the output format
+				1, _arrayLayerCount);
+			assert(!_shader.empty());
+			return LightingEngine::ConversionComputeShader(_shader, *srcPkt, targetDesc);
+		}
+
+		Compiler_ConversionComputeShader(Formatters::TextInputFormatter<>& fmttr)
+		{
+			StringSection<> kn;
+			while (fmttr.TryKeyedItem(kn)) {
+				if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
+				else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
+				else if (XlEqString(kn, "ArrayLayerCount")) _height = Formatters::RequireCastValue<decltype(_arrayLayerCount)>(fmttr);
+				else if (XlEqString(kn, "Shader")) _shader = Formatters::RequireStringValue(fmttr).AsString();
+				else if (XlEqString(kn, "Format")) {
+					auto mode = Formatters::RequireStringValue(fmttr);
+					if (auto fmtOpt = AsFormat(mode)) _format = *fmtOpt;
+					else Throw(Formatters::FormatException("Unknown 'Format' field in texture compiler file: " + mode.AsString(), fmttr.GetLocation()));
+				} else Formatters::SkipValueOrElement(fmttr);
+			}
+
+			if (_shader.empty())
+				Throw(Formatters::FormatException("Expecting 'Shader' field in texture compiler file", fmttr.GetLocation()));
+		}
+	};
+
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ComputeShader(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer)
 	{
 		auto scaffold = indexer._scaffold.get();
 
-		class Compiler_SamplingComputeShader : public Assets::ITextureCompiler
-		{
-		public:
-			unsigned _width = 512, _height = 512;
-			unsigned _arrayLayerCount = 0;
-			std::string _shader;
-			EquirectFilterParams _params;
-
-			std::string GetIntermediateName() const override { return (StringMeld<128>() << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << CalculateHash(_params)).AsString(); }
-			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
-			{
-				if (context._opContext) {
-					context._opContext->SetDescription(Concatenate("Generating texture from {color:66d0a4}compute shader{color:}: ", ColouriseFilename(_shader)));
-					context._opContext->SetMessage((StringMeld<256>() << _width << "x" << _height).AsString());
-				}
-
-				auto targetDesc = TextureDesc::Plain2D(
-					_width,
-					_height,
-					Format::R32G32B32A32_FLOAT, // use full float precision for the pre-compression format
-					1, _arrayLayerCount);
-				assert(!_shader.empty());
-				return LightingEngine::GenerateFromSamplingComputeShader(_shader, targetDesc, _params._sampleCount, _params._idealCmdListCostMS, _params._maxSamplesPerCmdList);
-			}
-
-			Compiler_SamplingComputeShader(Formatters::TextInputFormatter<>& fmttr)
-			{
-				StringSection<> kn;
-				while (fmttr.TryKeyedItem(kn)) {
-					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
-					else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
-					else if (XlEqString(kn, "ArrayLayerCount")) _height = Formatters::RequireCastValue<decltype(_arrayLayerCount)>(fmttr);
-					else if (XlEqString(kn, "Shader")) _shader = Formatters::RequireStringValue(fmttr).AsString();
-					else if (TryDeserializeKey(fmttr, kn, _params)) {}
-					else Formatters::SkipValueOrElement(fmttr);
-				}
-
-				if (_shader.empty())
-					Throw(Formatters::FormatException("Expecting 'Shader' field in texture compiler file", fmttr.GetLocation()));
-			}
-		};
-
 		if (scaffold->HasComponent(indexer._entityNameHash, "SamplingComputeShader"_h))
 			return Actualize<std::shared_ptr<Compiler_SamplingComputeShader>>(*util, "SamplingComputeShader"_h, indexer).get();
-
-		class Compiler_ConversionComputeShader : public Assets::ITextureCompiler
-		{
-		public:
-			unsigned _width = 512, _height = 512;
-			unsigned _arrayLayerCount = 0;
-			Format _format = Format::Unknown;
-			std::string _shader;
-			Assets::TextureCompilerSource _sourceComponent;
-
-			std::string GetIntermediateName() const override { return (StringMeld<1024>() << _sourceComponent._srcFile << "-" << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << AsString(_format)).AsString(); }
-			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
-			{
-				if (context._opContext) {
-					context._opContext->SetDescription(Concatenate("Generating texture from {color:66d0a4}conversion compute shader{color:}: ", ColouriseFilename(_shader), ", ", ColouriseFilename(_sourceComponent._srcFile)));
-					context._opContext->SetMessage((StringMeld<256>() << _width << "x" << _height << " " << AsString(_format)).AsString());
-				}
-
-				auto srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(_sourceComponent._srcFile, 0);
-				context._dependencies.push_back(srcPkt->GetDependencyValidation());
-
-				auto targetDesc = TextureDesc::Plain2D(
-					_width,
-					_height,
-					_format,		// since we're not sampling, we can go directly to the output format
-					1, _arrayLayerCount);
-				assert(!_shader.empty());
-				return LightingEngine::ConversionComputeShader(_shader, *srcPkt, targetDesc);
-			}
-
-			Compiler_ConversionComputeShader(Formatters::TextInputFormatter<>& fmttr)
-			{
-				StringSection<> kn;
-				while (fmttr.TryKeyedItem(kn)) {
-					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
-					else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
-					else if (XlEqString(kn, "ArrayLayerCount")) _height = Formatters::RequireCastValue<decltype(_arrayLayerCount)>(fmttr);
-					else if (XlEqString(kn, "Shader")) _shader = Formatters::RequireStringValue(fmttr).AsString();
-					else if (XlEqString(kn, "Format")) {
-						auto mode = Formatters::RequireStringValue(fmttr);
-						if (auto fmtOpt = AsFormat(mode)) _format = *fmtOpt;
-						else Throw(Formatters::FormatException("Unknown 'Format' field in texture compiler file: " + mode.AsString(), fmttr.GetLocation()));
-					} else Formatters::SkipValueOrElement(fmttr);
-				}
-
-				if (_shader.empty())
-					Throw(Formatters::FormatException("Expecting 'Shader' field in texture compiler file", fmttr.GetLocation()));
-			}
-		};
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "ConversionComputeShader"_h) && scaffold->HasComponent(indexer._entityNameHash, "Source"_h)) {
 			auto result = Actualize<std::shared_ptr<Compiler_ConversionComputeShader>>(*util, "ConversionComputeShader"_h, indexer).get();
 			result->_sourceComponent = Actualize<Assets::TextureCompilerSource>(*util, "Source"_h, indexer).get();
 			return result;
 		}
+
+		return nullptr;
+	}
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_SamplingComputeShader(
+		unsigned width, unsigned height, unsigned arrayLayerCount,
+		std::string shader, const EquirectFilterParams& params)
+	{
+		return std::make_shared<Compiler_SamplingComputeShader>(width, height, arrayLayerCount, shader, params);
+	}
+
+	class HaltonSamplerTexture : public BufferUploads::IAsyncDataSource
+	{
+	public:
+		virtual std::future<ResourceDesc> GetDesc() override
+		{
+			std::promise<ResourceDesc> promise;
+			promise.set_value(CreateDesc(0, TextureDesc::Plain2D(_width, _height, Format::R32_UINT)));
+			return promise.get_future();
+		}
+
+		virtual StringSection<> GetName() const override { return "halton-sampler"; }
+
+		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
+		{
+			assert(subResources.size() == 1);
+			assert(subResources[0]._destination.size() == sizeof(uint32_t)*_width*_height);
+			uint32_t* dst = (uint32_t*)subResources[0]._destination.begin();
+			std::memset(dst, 0, subResources[0]._destination.size());
+
+			uint32_t repeatingStride = HaltonSamplerHelper::WriteHaltonSamplerIndices(MakeIteratorRange(subResources[0]._destination).Cast<uint32_t*>(), _width, _height);
+			(void)repeatingStride;
+
+			std::promise<void> promise;
+			promise.set_value();
+			return promise.get_future();
+		}
+
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
+		{
+			return {};
+		}
+
+		unsigned _width, _height;
+		HaltonSamplerTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
+	};
+
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_LightingEngineCommon(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer)
+	{
+		auto scaffold = indexer._scaffold.get();
+
+		class Compiler_HaltonSampler : public Assets::ITextureCompiler
+		{
+		public:
+			unsigned _width = 512, _height = 512;
+			std::string GetIntermediateName() const override { return (StringMeld<128>() << "halton-sampler-" << _width << "x" << _height).AsString(); }
+			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonSamplerTexture>(_width, _height); }
+
+			Compiler_HaltonSampler(Formatters::TextInputFormatter<>& fmttr)
+			{
+				StringSection<> kn;
+				while (fmttr.TryKeyedItem(kn)) {
+					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
+					else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
+					else Formatters::SkipValueOrElement(fmttr);
+				}
+			}
+		};
+
+		if (scaffold->HasComponent(indexer._entityNameHash, "HaltonSampler"_h))
+			return util->GetFuture<std::shared_ptr<Compiler_HaltonSampler>>("HaltonSampler"_h, indexer).get().get();
 
 		return nullptr;
 	}

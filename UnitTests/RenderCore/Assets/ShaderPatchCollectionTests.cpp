@@ -289,7 +289,7 @@ void ps(
 			REQUIRE(i->second._parameterBindings.begin()->second->_archiveName == std::string("ut-data/perpixel.graph::Default_PerPixel"));
 
 			// Write out the patch collection again
-			MemoryOutputStream<char> strm;
+			std::stringstream strm;
 			Formatters::TextOutputFormatter outFmttr(strm);
 			SerializationOperator(outFmttr, patchCollection);
 

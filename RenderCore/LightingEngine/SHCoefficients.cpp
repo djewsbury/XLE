@@ -4,7 +4,7 @@
 
 #include "SHCoefficients.h"
 #include "TextureCompilerUtil.h"
-#include "../Assets/TextureCompilerRegistrar.h"
+#include "../Techniques/DeferredShaderResource.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Assets/AssetTraits.h"
 #include "../../Assets/IArtifact.h"
@@ -45,7 +45,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::WhenAll(std::move(srcFuture)).ThenConstructToPromise(
 			std::move(promise),
 			[](std::promise<SHCoefficientsAsset>&& thatPromise, std::shared_ptr<RenderCore::Assets::TextureArtifact> textureArtifact) {
-				::Assets::WhenAll(textureArtifact->BeginLoadRawData()).ThenConstructToPromise(
+				::Assets::WhenAll(Techniques::BeginLoadRawData(*textureArtifact)).ThenConstructToPromise(
 					std::move(thatPromise),
 					[depVal = textureArtifact->GetDependencyValidation()](auto rawData) {
 						if (rawData._data.size() < 8*sizeof(Float4)

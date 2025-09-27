@@ -5,62 +5,30 @@
 #pragma once
 
 #include "TextureLoaders.h"
-#include "../BufferUploads/IBufferUploads.h"
 #include "../../Assets/IntermediateCompilers.h"
+#include "../../Assets/DepVal.h"
 #include "../../Utility/MemoryUtils.h"
+#include "../../Utility/Threading/Mutex.h"
+#include <future>
+#include <functional>
 
-namespace Assets { class OperationContext; class DependencyValidation; class ArtifactRequestResult; class ArtifactRequest; }
+namespace RenderCore::BufferUploads { class IAsyncDataSource; }
+namespace Assets { class OperationContext; class DependencyValidation; class ArtifactRequestResult; class ArtifactRequest; struct OperationContextHelper; }
 namespace AssetsNew { struct ScaffoldAndEntityName; class CompoundAssetUtil; }
 namespace Formatters { template<typename T> class TextInputFormatter; }
+namespace Utility { class VariantFunctions; }
 namespace std { template <typename T> class function; }
 
 namespace RenderCore { namespace Assets
 {
 	constexpr auto TextureCompilerProcessType = ConstHash64Legacy<'Text', 'ure'>::Value;
-
-	struct PostConvert
-	{
-		Format _format = Format::Unknown;
-
-		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, PostConvert&);
-	};
-
-	class ITextureCompiler;
-
-	class TextureCompilationRequest
-	{
-	public:
-		std::string _intermediateName;
-		std::shared_ptr<ITextureCompiler> _subCompiler;
-		std::optional<PostConvert> _postConvert;
-
-		uint64_t CalculateHash(uint64_t seed = DefaultSeed64) const { return Hash64(_intermediateName, seed); }
-		friend std::ostream& operator<<(std::ostream& str, const TextureCompilationRequest& req) { return str << req._intermediateName; }
-	};
-
-	
-	struct TextureCompilerSource
-	{
-		std::string _srcFile;
-
-		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, TextureCompilerSource&);
-	};
-
-	::Assets::Blob ConvertAndPrepareDDSBlobSync(
-		BufferUploads::IAsyncDataSource& src,
-		Format dstFmt);
+	class TextureCompilationRequest;
 
 	class TextureArtifact
 	{
 	public:
 		const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
-		std::shared_ptr<BufferUploads::IAsyncDataSource> BeginDataSource(TextureLoaderFlags::BitField loadedFlags = 0) const;
-		struct RawData
-		{
-			std::vector<uint8_t> _data;
-			TextureDesc _desc;
-		};
-		std::future<RawData> BeginLoadRawData(TextureLoaderFlags::BitField loadedFlags = 0) const;
+		const std::string& GetArtifactFile() const { return _artifactFile; }
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
@@ -93,21 +61,97 @@ namespace RenderCore { namespace Assets
 		::Assets::DependencyValidation _depVal;
 	};
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class ITextureCompiler;
+	struct PostConvert
+	{
+		Format _format = Format::Unknown;
+		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, PostConvert&);
+	};
+
+	struct TextureCompilerSource
+	{
+		std::string _srcFile;
+		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, TextureCompilerSource&);
+	};
+
+	class TextureCompilationRequest
+	{
+	public:
+		std::string _intermediateName;
+		std::shared_ptr<ITextureCompiler> _subCompiler;
+		std::optional<PostConvert> _postConvert;
+
+		uint64_t CalculateHash(uint64_t seed = DefaultSeed64) const { return Hash64(_intermediateName, seed); }
+		friend std::ostream& operator<<(std::ostream& str, const TextureCompilationRequest& req) { return str << req._intermediateName; }
+	};
+
+	TextureCompilationRequest MakeTextureCompilationRequest(std::shared_ptr<Assets::ITextureCompiler>, Format fmt);
+
 	class TextureCompilerRegistrar;
-	::Assets::CompilerRegistration RegisterTextureCompiler(
-		::Assets::IIntermediateCompilers& intermediateCompilers);
+	TextureCompilationRequest MakeTextureCompilationRequestSync(
+		TextureCompilerRegistrar& registrar,
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	::Assets::Blob ConvertAndPrepareDDSBlobSync(
+		BufferUploads::IAsyncDataSource& src,
+		Format dstFmt);
 
 	class ITextureCompiler;
 	std::shared_ptr<ITextureCompiler> TextureCompiler_Base(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer);
 
-	TextureCompilationRequest MakeTextureCompilationRequestSync(
-		TextureCompilerRegistrar& registrar,
-		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
-		const ::AssetsNew::ScaffoldAndEntityName& indexer);
-
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_BalancedNoise(unsigned width, unsigned height);
-	TextureCompilationRequest MakeTextureCompilationRequest(std::shared_ptr<Assets::ITextureCompiler>, Format fmt);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class ITextureCompiler
+	{
+	public:
+		struct Context
+		{
+			::Assets::OperationContextHelper* _opContext = nullptr;
+			const VariantFunctions* _conduit = nullptr;
+			std::vector<::Assets::DependencyValidation> _dependencies;
+		};
+
+		virtual std::string GetIntermediateName() const = 0;
+		virtual std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& ctx) = 0;
+		virtual ~ITextureCompiler();
+	};
+
+	class TextureCompilerRegistrar
+	{
+	public:
+		using SubCompilerFunctionSig = std::shared_ptr<ITextureCompiler>(
+			std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
+			const ::AssetsNew::ScaffoldAndEntityName&);
+
+		using RegistrationId = unsigned;
+		RegistrationId Register(std::function<SubCompilerFunctionSig>&&);
+		void Deregister(RegistrationId);
+
+		std::shared_ptr<ITextureCompiler> TryBeginCompile(
+			std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
+			const ::AssetsNew::ScaffoldAndEntityName&);
+
+		TextureCompilerRegistrar();
+		~TextureCompilerRegistrar();
+
+	protected:
+		Threading::Mutex _mutex;
+		std::vector<std::pair<RegistrationId, std::function<SubCompilerFunctionSig>>> _fns;
+		RegistrationId _nextRegistrationId;
+	};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	::Assets::CompilerRegistration RegisterTextureCompilerInfrastructure(
+		::Assets::IIntermediateCompilers& intermediateCompilers);
 }}
 

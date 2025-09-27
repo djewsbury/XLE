@@ -101,8 +101,8 @@ namespace UnitTests
 				std::make_pair("Brightness", "33")
 			};
 
-			matTable._rawMaterials.emplace("Material0", std::move(material0));
-			matTable._rawMaterials.emplace("Material1", std::move(material1));
+			matTable.AddMaterial("Material0", std::move(material0));
+			matTable.AddMaterial("Material1", std::move(material1));
 		}
 
 		return ::Assets::SerializedTarget {

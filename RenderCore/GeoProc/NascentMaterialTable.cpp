@@ -14,9 +14,16 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		for (auto n:names) fmttr.WriteKeyedValue("Entity", n);
 
 		for (auto n:names) {
-			if (auto rm = table._rawMaterials.find(n); rm!=table._rawMaterials.end()) {
+			if (auto rm = std::find_if(b2e(table._rawMaterials), [n](const auto& q) { return q.first == n; }); rm!=table._rawMaterials.end()) {
+				auto& inheritList = std::get<1>(rm->second);
+				if (!inheritList.empty()) {
+					auto e = fmttr.BeginKeyedElement("Inherit", n);
+					for (const auto& i:inheritList) fmttr.WriteSequencedValue(i);
+					fmttr.EndElement(e);
+				}
+
 				auto e = fmttr.BeginKeyedElement("RawMaterial", n);
-				fmttr << rm->second;
+				fmttr << std::get<0>(rm->second);
 				fmttr.EndElement(e);
 			}
 		}

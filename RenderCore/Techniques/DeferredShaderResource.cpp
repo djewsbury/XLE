@@ -214,7 +214,7 @@ namespace RenderCore { namespace Techniques
 		const RenderCore::Assets::TextureArtifact& artifact,
         std::string originalRequest)
     {
-		auto pkt = artifact.BeginDataSource();
+		auto pkt = BeginDataSource(artifact);
         if (!pkt) {
             promise.set_exception(std::make_exception_ptr(::Assets::Exceptions::InvalidAsset{{}, artifact.GetDependencyValidation(), ::Assets::AsBlob("Could not find matching texture loader")}));
 			return;
@@ -627,5 +627,56 @@ namespace RenderCore { namespace Techniques
         threadContext.CommitCommands(CommitCommandsFlags::WaitForCompletion);
         return destagingResource;
     }
+
+    std::shared_ptr<BufferUploads::IAsyncDataSource> BeginDataSource(const Assets::TextureArtifact& artifact, Assets::TextureLoaderFlags::BitField loadedFlags)
+	{
+		return Techniques::Services::GetInstance().CreateTextureDataSource(artifact.GetArtifactFile(), loadedFlags);
+	}
+
+	auto BeginLoadRawData(const Assets::TextureArtifact& artifact, Assets::TextureLoaderFlags::BitField loadedFlags) -> std::future<TextureRawData>
+	{
+		auto pkt = Techniques::Services::GetInstance().CreateTextureDataSource(artifact.GetArtifactFile(), 0);
+		if (!pkt) {
+			std::promise<TextureRawData> promise;
+			promise.set_exception(std::make_exception_ptr(
+				::Assets::Exceptions::ConstructionError(
+					::Assets::Exceptions::ConstructionError::Reason::FormatNotUnderstood,
+					artifact.GetDependencyValidation(),
+					StringMeld<256>() << "Could not find matching texture loader for file: " << artifact.GetArtifactFile())));
+			return promise.get_future();
+		}
+
+		auto futureDesc = pkt->GetDesc();
+		return thousandeyes::futures::then(
+			ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
+			std::move(futureDesc),
+			[pkt](auto descFuture) {
+				auto desc = descFuture.get();
+				assert(desc._type == ResourceDesc::Type::Texture);
+				auto mipCount = (unsigned)desc._textureDesc._mipCount, elementCount = ActualArrayLayerCount(desc._textureDesc);
+				std::vector<uint8_t> data;
+				data.resize(ByteCount(desc._textureDesc));
+				VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, srs, mipCount*elementCount);
+				for (unsigned e=0; e<elementCount; ++e)
+					for (unsigned m=0; m<mipCount; ++m) {
+						auto srOffset = GetSubResourceOffset(desc._textureDesc, m, e);
+						auto& sr = srs[e*mipCount+m];
+						sr._id = {m,e};
+						assert((srOffset._offset+srOffset._size) <= data.size());
+						sr._destination = MakeIteratorRange(PtrAdd(data.data(), srOffset._offset), PtrAdd(data.data(), srOffset._offset+srOffset._size));
+						sr._pitches = srOffset._pitches;
+					}
+				return thousandeyes::futures::then(
+					ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor(),
+					pkt->PrepareData(MakeIteratorRange(srs, &srs[mipCount*elementCount])),
+					[tDesc=desc._textureDesc, data=std::move(data), pkt](auto) {		// need to retain "pkt" as load as PrepareData() is working
+						TextureRawData result;
+						result._data = std::move(data);
+						result._desc = tDesc;
+						return result;
+					});
+			});
+	}
+
 }}
 
