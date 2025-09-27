@@ -399,7 +399,7 @@ namespace AssetsNew
 			} else {
 				// this future is not engaged; why do we think it is recently completed?
 				// did we get the message twice?
-				assert(0);		
+				assert(_states[idx] == ::Assets::AssetState::Ready);
 			}
 		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 			_completed[idx] = {};

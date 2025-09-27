@@ -87,6 +87,7 @@ namespace RenderCore { namespace Assets
 		{
 			unsigned 	_startBlock, _endBlock;
 			float		_framesPerSecond;
+			unsigned	_dummy = 0;
 
 			static const bool SerializeRaw = true;
 		};
