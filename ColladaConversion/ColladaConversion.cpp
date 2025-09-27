@@ -508,7 +508,7 @@ namespace ColladaConversion
 			auto i = LowerBound(compiledEffects, NascentObjectGuid { effect._id, effect._fileHash });
 			if (i == compiledEffects.end() || !(i->first == NascentObjectGuid { effect._id, effect._fileHash }))
                 continue;
-			result._rawMaterials.emplace(m->_name.AsString(), i->second);
+			result.AddMaterial(m->GetId().GetOriginal().AsString(), i->second);
         }
     }
 

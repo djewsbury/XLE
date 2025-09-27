@@ -315,7 +315,7 @@ namespace ColladaConversion
                 if (file) {
                     const auto* mat = file->FindMaterial(ref._id);
                     if (mat) {
-                        newMaterialGuid = mat->_name.AsString();
+                        newMaterialGuid = mat->GetId().GetOriginal();
                     }
                 }
 
