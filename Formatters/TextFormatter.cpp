@@ -327,7 +327,7 @@ namespace Formatters
         _stream->put('=');
 
         _currentLineLength += unsigned(name.size() + 1);
-        _hotLine = false;   // not considered a "hot line" because we need to use this to get "A = B =~" type constructions
+        _hotLine = true;
     }
 
     void TextOutputFormatter::EndElement(ElementId id)

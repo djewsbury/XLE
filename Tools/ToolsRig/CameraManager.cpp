@@ -341,6 +341,8 @@ namespace ToolsRig { namespace Camera
 				modifierMode = input.IsHeld(alt) ? Orbit : Translate;
 			} else if (_mode == Mode::Blender_RightButton) {
 				modifierMode = input.IsHeld(shift) ? Translate : Orbit;
+			} else if (_mode == Mode::OnlyTranslation) {
+				modifierMode = Translate;
 			}
 				
 			if (input._mouseDelta[0] || input._mouseDelta[1]) {
@@ -393,13 +395,21 @@ namespace ToolsRig { namespace Camera
 		}
 
 		if (input._wheelDelta) {
-			float distanceToFocus = Magnitude(camera._focus -camera._position);
+			if (camera._projection == VisCameraSettings::Projection::Perspective) {
+				float distanceToFocus = Magnitude(camera._focus -camera._position);
 
-			float speedScale = distanceToFocus * XlTan(0.5f * camera._verticalFieldOfView);
-			auto movement = std::min(input._wheelDelta * speedScale * _wheelTranslateSpeed, distanceToFocus - 0.1f);
+				float speedScale = distanceToFocus * XlTan(0.5f * camera._verticalFieldOfView);
+				auto movement = std::min(input._wheelDelta * speedScale * _wheelTranslateSpeed, distanceToFocus - 0.1f);
 
-			Float3 translation = movement * Normalize(camera._focus - camera._position);
-			camera._position += translation;
+				Float3 translation = movement * Normalize(camera._focus - camera._position);
+				camera._position += translation;
+			} else {
+				assert(camera._projection == VisCameraSettings::Projection::Orthogonal);
+
+				float scale = input._wheelDelta * _wheelOrthoWindowSpeed;
+				camera._right *= scale; camera._right *= scale;
+				camera._top *= scale; camera._bottom *= scale;
+			}
 		}
 	}
 
@@ -419,6 +429,8 @@ namespace ToolsRig { namespace Camera
 				modifierMode = input.IsHeld(alt) ? Orbit : Translate;
 			} else if (_mode == Mode::Blender_RightButton) {
 				modifierMode = input.IsHeld(shift) ? Translate : Orbit;
+			} else if (_mode == Mode::OnlyTranslation) {
+				modifierMode = Translate;
 			}
 				
 			if (input._mouseDelta[0] || input._mouseDelta[1]) {

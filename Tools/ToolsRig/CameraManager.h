@@ -55,12 +55,13 @@ namespace ToolsRig { namespace Camera
 		void Update(VisCameraSettings& camera, float dt, const OSServices::InputSnapshot& input) const;
 		void Update(Float4x4& cameraToWorld, float& fov, float distanceToFocus, float dt, const OSServices::InputSnapshot& input) const;
 
-		enum class Mode { Max_MiddleButton, Blender_RightButton };
+		enum class Mode { Max_MiddleButton, Blender_RightButton, OnlyTranslation };
 		Mode _mode = Mode::Blender_RightButton;
 
 		float _translateSpeed = 1.f / 512.f;
 		float _orbitRotationSpeed = (1.f / 768.f) * gPI;
 		float _wheelTranslateSpeed = 1.f / 512.f;
+		float _wheelOrthoWindowSpeed = 1.f / 512.f;
 	};
 
 	struct CharacterCam
