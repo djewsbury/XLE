@@ -227,26 +227,49 @@ namespace ToolsRig { namespace Camera
 	void OrthogonalFlatCam::Update(VisCameraSettings& camera, const OSServices::InputSnapshot& input, const Float2& projSpaceMouseOver) const
 	{
 		assert(camera._projection == VisCameraSettings::Projection::Orthogonal);
-		float size = std::abs(camera._top - camera._bottom);
 
-		Float3 cameraForward = camera._focus - camera._position;
-		if (!Normalize_Checked(&cameraForward, cameraForward))
-			cameraForward = Float3{0,-1,0};
+		unsigned mainMouseButton = (_mode == Manipulator::Mode::Max_MiddleButton) ? 2 : 1;
+		if (input.IsHeld_MouseButton(mainMouseButton)) {
 
-		Float3 cameraRight = Cross(cameraForward, Float3{0,0,1});
-		if (!Normalize_Checked(&cameraRight, cameraRight))
-			cameraRight = Float3{1,0,0};
+			constexpr auto alt = "alt"_key;
+			constexpr auto shift = "shift"_key;
+			enum ModifierMode
+			{
+				Translate, Orbit
+			};
+			ModifierMode modifierMode = Orbit;
 
-		Float3 cameraUp = Cross(cameraRight, cameraForward);
-		if (!Normalize_Checked(&cameraUp, cameraUp))
-			cameraUp = Float3{0,0,1};
+			if (_mode == Manipulator::Mode::Max_MiddleButton) {
+				modifierMode = input.IsHeld(alt) ? Orbit : Translate;
+			} else if (_mode == Manipulator::Mode::Blender_RightButton) {
+				modifierMode = input.IsHeld(shift) ? Translate : Orbit;
+			} else if (_mode == Manipulator::Mode::OnlyTranslation) {
+				modifierMode = Translate;
+			}
 
-		if (input.IsHeld_RButton()) {
-			auto translation
-				=  cameraRight * -input._mouseDelta[0] * size * 0.1f * _translationSpeed
-				+  cameraUp * -input._mouseDelta[1] * size * 0.1f * _translationSpeed;
-			camera._position += translation;
-			camera._focus += translation;
+			if (input._mouseDelta[0] || input._mouseDelta[1]) {
+				if (modifierMode == Translate) {
+					Float3 cameraForward = camera._focus - camera._position;
+					if (!Normalize_Checked(&cameraForward, cameraForward))
+						cameraForward = Float3{0,-1,0};
+
+					Float3 cameraRight = Cross(cameraForward, Float3{0,0,1});
+					if (!Normalize_Checked(&cameraRight, cameraRight))
+						cameraRight = Float3{1,0,0};
+
+					Float3 cameraUp = Cross(cameraRight, cameraForward);
+					if (!Normalize_Checked(&cameraUp, cameraUp))
+						cameraUp = Float3{0,0,1};
+
+					float size = std::abs(camera._top - camera._bottom);
+					auto translation
+						=  cameraRight * input._mouseDelta[0] * size * 0.1f * _translationSpeed
+						+  cameraUp * input._mouseDelta[1] * size * 0.1f * _translationSpeed;
+					camera._position += translation;
+					camera._focus += translation;
+				}
+			}
+
 		}
 
 		if (input._wheelDelta) {
@@ -395,21 +418,13 @@ namespace ToolsRig { namespace Camera
 		}
 
 		if (input._wheelDelta) {
-			if (camera._projection == VisCameraSettings::Projection::Perspective) {
-				float distanceToFocus = Magnitude(camera._focus -camera._position);
+			float distanceToFocus = Magnitude(camera._focus -camera._position);
 
-				float speedScale = distanceToFocus * XlTan(0.5f * camera._verticalFieldOfView);
-				auto movement = std::min(input._wheelDelta * speedScale * _wheelTranslateSpeed, distanceToFocus - 0.1f);
+			float speedScale = distanceToFocus * XlTan(0.5f * camera._verticalFieldOfView);
+			auto movement = std::min(input._wheelDelta * speedScale * _wheelTranslateSpeed, distanceToFocus - 0.1f);
 
-				Float3 translation = movement * Normalize(camera._focus - camera._position);
-				camera._position += translation;
-			} else {
-				assert(camera._projection == VisCameraSettings::Projection::Orthogonal);
-
-				float scale = input._wheelDelta * _wheelOrthoWindowSpeed;
-				camera._right *= scale; camera._right *= scale;
-				camera._top *= scale; camera._bottom *= scale;
-			}
+			Float3 translation = movement * Normalize(camera._focus - camera._position);
+			camera._position += translation;
 		}
 	}
 

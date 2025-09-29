@@ -84,7 +84,7 @@ namespace XLEMath
     public:
             //
             //      This is a full 3D transformation.
-            //      It can represent any affline transformation,
+            //      It can represent any affine transformation,
             //      and includes a non-uniform scale parameter.
             //
             //      In effect, we apply in this order:

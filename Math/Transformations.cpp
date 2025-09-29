@@ -1125,9 +1125,9 @@ namespace XLEMath
         //
         // Since RU decomposition is quite expensive, we will check for 
         // a simple case when there is no skew. When there is no skew,
-        // the calculations collapse to something much simplier.
+        // the calculations collapse to something much simpler.
         //
-        // However note that this method calculates the eigen vectors for
+        // However note that this method calculates the Eigen vectors for
         // one matrix, and then inverts another matrix. It seems like the 
         // quantity of calculations could introduce some floating point creep.
         // It might be better if we could find a way to calculate R without the 

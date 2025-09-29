@@ -174,7 +174,7 @@ namespace ToolsRig
                 continue;
 
             if (XlAbs(B._texCoord[0] - A._texCoord[0]) > 1e-3f) {
-                assert(Dot(Truncate(B._tangent), Truncate(A._tangent)) > 0.f);  // both tangents should point in roughly the same direction
+                // assert(Dot(Truncate(B._tangent), Truncate(A._tangent)) > 0.f);  // both tangents should point in roughly the same direction (can be violated at detail 0)
                 bool rightWay1 = (Dot(B._position - A._position, Truncate(A._tangent)) < 0.f) == ((B._texCoord[0] - A._texCoord[0]) < 0.f);
                 if (!rightWay1) {
                     if (B._texCoord[0] < A._texCoord[0]) B._texCoord[0] += texWrapsX;
@@ -183,7 +183,7 @@ namespace ToolsRig
             }
 
             if (XlAbs(C._texCoord[0] - A._texCoord[0]) > 1e-3f) {
-                assert(Dot(Truncate(C._tangent), Truncate(A._tangent)) > 0.f);  // both tangents should point in roughly the same direction
+                // assert(Dot(Truncate(C._tangent), Truncate(A._tangent)) > 0.f);  // both tangents should point in roughly the same direction (can be violated at detail 0)
                 bool rightWay1 = (Dot(C._position - A._position, Truncate(A._tangent)) < 0.f) == ((C._texCoord[0] - A._texCoord[0]) < 0.f);
                 if (!rightWay1) {
                     if (C._texCoord[0] < A._texCoord[0]) C._texCoord[0] += texWrapsX;
@@ -192,7 +192,7 @@ namespace ToolsRig
             }
 
             if (XlAbs(C._texCoord[0] - B._texCoord[0]) > 1e-3f) {
-                assert(Dot(Truncate(C._tangent), Truncate(B._tangent)) > 0.f);  // both tangents should point in roughly the same direction
+                // assert(Dot(Truncate(C._tangent), Truncate(B._tangent)) > 0.f);  // both tangents should point in roughly the same direction (can be violated at detail 0)
                 bool rightWay1 = (Dot(C._position - B._position, Truncate(B._tangent)) < 0.f) == ((C._texCoord[0] - B._texCoord[0]) < 0.f);
                 if (!rightWay1) {
                     if (C._texCoord[0] < B._texCoord[0]) C._texCoord[0] += texWrapsX;

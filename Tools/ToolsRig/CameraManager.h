@@ -77,6 +77,7 @@ namespace ToolsRig { namespace Camera
 	{
 		void Update(VisCameraSettings& camera, const OSServices::InputSnapshot& input, const Float2& projSpaceMouseOver) const;
 
+		Manipulator::Mode _mode = Manipulator::Mode::Blender_RightButton;
 		float _translationSpeed = 0.01f;
 	};
 
