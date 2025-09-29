@@ -249,21 +249,14 @@ namespace ToolsRig { namespace Camera
 
 			if (input._mouseDelta[0] || input._mouseDelta[1]) {
 				if (modifierMode == Translate) {
-					Float3 cameraForward = camera._focus - camera._position;
-					if (!Normalize_Checked(&cameraForward, cameraForward))
-						cameraForward = Float3{0,-1,0};
-
-					Float3 cameraRight = Cross(cameraForward, Float3{0,0,1});
-					if (!Normalize_Checked(&cameraRight, cameraRight))
-						cameraRight = Float3{1,0,0};
-
-					Float3 cameraUp = Cross(cameraRight, cameraForward);
-					if (!Normalize_Checked(&cameraUp, cameraUp))
-						cameraUp = Float3{0,0,1};
+					// Use MakeCameraToWorld3x4() to maximize compatibility with the calculation path used for rendering
+					auto cameraToWorld = MakeCameraToWorld3x4(camera._focus - camera._position, Float3{0,0,1}, camera._position);
+					auto cameraRight = ExtractRight_Cam(cameraToWorld);
+					auto cameraUp = ExtractUp_Cam(cameraToWorld);
 
 					float size = std::abs(camera._top - camera._bottom);
 					auto translation
-						=  cameraRight * input._mouseDelta[0] * size * 0.1f * _translationSpeed
+						=  cameraRight * -input._mouseDelta[0] * size * 0.1f * _translationSpeed
 						+  cameraUp * input._mouseDelta[1] * size * 0.1f * _translationSpeed;
 					camera._position += translation;
 					camera._focus += translation;
@@ -377,13 +370,10 @@ namespace ToolsRig { namespace Camera
 						//  Translate the camera, but don't change forward direction
 						//  Speed should be related to the distance to the focus point -- so that
 						//  it works ok for both small models and large models.
-					Float3 cameraRight = Cross(camera._focus - camera._position, Float3{0,0,1});
-					if (!Normalize_Checked(&cameraRight, cameraRight))
-						cameraRight = Float3{0,1,0};        // happens when facing directly up
-
-					Float3 cameraUp = Cross(cameraRight, camera._focus - camera._position);
-					if (!Normalize_Checked(&cameraUp, cameraUp))
-						cameraUp = Float3{0,0,1};
+					// Use MakeCameraToWorld3x4() to maximize compatibility with the calculation path used for rendering
+					auto cameraToWorld = MakeCameraToWorld3x4(camera._focus - camera._position, Float3{0,0,1}, camera._position);
+					auto cameraRight = ExtractRight_Cam(cameraToWorld);
+					auto cameraUp = ExtractUp_Cam(cameraToWorld);
 
 					Float3 translation
 						=   (speedScale * _translateSpeed *  input._mouseDelta[1]) * cameraUp

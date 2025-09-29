@@ -1427,6 +1427,7 @@ namespace XLEMath
         float n = nearClipPlane;
         float f = farClipPlane;
 
+        assert(coordinateSpace == GeometricCoordinateSpace::RightHanded);       // this parameter not implemented
         if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
             std::swap(t, b);
 

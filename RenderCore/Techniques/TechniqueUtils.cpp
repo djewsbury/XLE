@@ -22,16 +22,16 @@ namespace RenderCore { namespace Techniques
     {
         if (sceneCamera._projection == CameraDesc::Projection::Orthogonal) {
             return OrthogonalProjection(
-                sceneCamera._left, sceneCamera._top, 
-                sceneCamera._right, sceneCamera._bottom, 
+                sceneCamera._left, sceneCamera._top,
+                sceneCamera._right, sceneCamera._bottom,
                 sceneCamera._nearClip, sceneCamera._farClip,
-                GeometricCoordinateSpace::RightHanded, 
+                GeometricCoordinateSpace::RightHanded,
                 GetDefaultClipSpaceType());
         } else {
             return PerspectiveProjection(
                 sceneCamera._verticalFieldOfView, viewportAspect,
-                sceneCamera._nearClip, sceneCamera._farClip, 
-                GeometricCoordinateSpace::RightHanded, 
+                sceneCamera._nearClip, sceneCamera._farClip,
+                GeometricCoordinateSpace::RightHanded,
                 GetDefaultClipSpaceType());
         }
     }
