@@ -233,11 +233,11 @@ namespace RenderCore { namespace Techniques
 	{
 		PipelineCollection::Metrics result;
 		ScopedLock(_sharedPools->_lock);
-		result._graphicsPipelineCount = _sharedPools->_pendingGraphicsPipelines.size();
+		result._graphicsPipelineCount = (unsigned)_sharedPools->_pendingGraphicsPipelines.size();
 		for (auto& p:_sharedPools->_completedGraphicsPipelines)
 			if (!p.second._pipeline.expired())
 				++result._graphicsPipelineCount;
-		result._computePipelineCount = _sharedPools->_pendingComputePipelines.size();
+		result._computePipelineCount = (unsigned)_sharedPools->_pendingComputePipelines.size();
 		for (auto& p:_sharedPools->_completedComputePipelines)
 			if (!p.second._pipeline.expired())
 				++result._computePipelineCount;

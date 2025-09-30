@@ -6,6 +6,7 @@
 #include "CommonResources.h"
 #include "ShaderPatchInstantiationUtil.h"
 #include "Techniques.h"
+#include "SpriteTechnique.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
@@ -619,7 +620,7 @@ namespace RenderCore { namespace Techniques
 		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
 		{
 			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
-            _rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};
+			_rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};
 
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
@@ -661,8 +662,8 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<ITechniqueDelegate>>&& promise,
 		TechniqueSetFileFuture techniqueSet,
 		const RSDepthBias& singleSidedBias,
-        const RSDepthBias& doubleSidedBias,
-        CullMode cullMode, FaceWinding faceWinding)
+		const RSDepthBias& doubleSidedBias,
+		CullMode cullMode, FaceWinding faceWinding)
 	{
 		TechniqueDelegate_DepthOnly::ConstructToPromise(std::move(promise), std::move(techniqueSet), singleSidedBias, doubleSidedBias, cullMode, faceWinding, std::optional<ShadowGenType>{});
 	}
@@ -672,8 +673,8 @@ namespace RenderCore { namespace Techniques
 		TechniqueSetFileFuture techniqueSet,
 		ShadowGenType shadowGenType,
 		const RSDepthBias& singleSidedBias,
-        const RSDepthBias& doubleSidedBias,
-        CullMode cullMode, FaceWinding faceWinding)
+		const RSDepthBias& doubleSidedBias,
+		CullMode cullMode, FaceWinding faceWinding)
 	{
 		TechniqueDelegate_DepthOnly::ConstructToPromise(std::move(promise), std::move(techniqueSet), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGenType);
 	}
@@ -897,41 +898,69 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
 
-			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
-			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
-			if (shaderPatches) {
+			if (!shaderPatches || !shaderPatches->GetInterface().HasPatchType("SV_AutoPS"_h)) {
+
+				const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
+				const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+				std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+				if (shaderPatches) {
+					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+
+					auto illumType = CalculateIllumType(shaderPatches->GetInterface());
+					bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+					switch (illumType) {
+					case IllumType::PerPixel:
+						psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
+						psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+						break;
+					case IllumType::PerPixelAndEarlyRejection:
+						psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
+						psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+						break;
+					default:
+						break;
+					}
+
+					if (hasDeformVertex) {
+						vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+						vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+					}
+				}
+
+				nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
+
+				TechniqueEntry mergedTechEntry = *vsTechEntry;
+				mergedTechEntry.MergeIn(*psTechEntry);
+				mergedTechEntry._selectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
+
+				PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
+
+			} else {
+
 				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 
-				auto illumType = CalculateIllumType(shaderPatches->GetInterface());
-				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+				// "SpriteTechnique" style path
+				// todo -- technique delegate-specific system patches (to process the output for the specific delegate type, etc)
+				assert(!shaderPatches->GetInterface().HasPatchType(s_vertexPatch));
 
-				switch (illumType) {
-				case IllumType::PerPixel:
-					psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
-					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-					break;
-				case IllumType::PerPixelAndEarlyRejection:
-					psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
-					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-					break;
-				default:
-					break;
+				std::vector<RenderCore::Techniques::PatchDelegateInput> patchesInterface;
+				for (const auto& p:shaderPatches->GetInterface().GetPatches())
+					patchesInterface.emplace_back(RenderCore::Techniques::PatchDelegateInput{p._originalEntryPointName, p._originalEntryPointSignature.get(), p._implementsHash});
+				for (auto& out:RenderCore::Techniques::BuildAutoPipeline(patchesInterface, iaAttributes)) {
+					if (unsigned(out._stage) >= dimof(nascentDesc->_shaders)) continue;
+					if (!out._resource._patchCollectionExpansions.empty())
+						out._resource._patchCollection = shaderPatches;
+					nascentDesc->_shaders[unsigned(out._stage)] = std::move(out._resource);
 				}
 
-				if (hasDeformVertex) {
-					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-				}
+				TechniqueEntry mergedTechEntry = _techniqueFileHelper._vsNoPatchesSrc;
+				mergedTechEntry.MergeIn(_techniqueFileHelper._psNoPatchesSrc);
+				mergedTechEntry._selectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
+				nascentDesc->_manualSelectorFiltering = mergedTechEntry._selectorFiltering;
+				nascentDesc->_techniquePreconfigurationFile = mergedTechEntry._preconfigurationFileName;
+
 			}
-
-			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
-
-			TechniqueEntry mergedTechEntry = *vsTechEntry;
-			mergedTechEntry.MergeIn(*psTechEntry);
-			mergedTechEntry._selectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
-
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 
 			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry).IsEmpty())
 				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry));
@@ -1000,15 +1029,15 @@ namespace RenderCore { namespace Techniques
 	std::optional<UtilityDelegateType> AsUtilityDelegateType(StringSection<> input)
 	{
 		if (XlEqString(input, "FlatColor")) return UtilityDelegateType::FlatColor;
-        if (XlEqString(input, "CopyDiffuseAlbedo")) return UtilityDelegateType::CopyDiffuseAlbedo;
-        if (XlEqString(input, "CopyWorldSpacePosition")) return UtilityDelegateType::CopyWorldSpacePosition;
+		if (XlEqString(input, "CopyDiffuseAlbedo")) return UtilityDelegateType::CopyDiffuseAlbedo;
+		if (XlEqString(input, "CopyWorldSpacePosition")) return UtilityDelegateType::CopyWorldSpacePosition;
 		if (XlEqString(input, "CopyWorldSpaceNormal")) return UtilityDelegateType::CopyWorldSpaceNormal;
 		if (XlEqString(input, "CopyRoughness")) return UtilityDelegateType::CopyRoughness;
 		if (XlEqString(input, "CopyMetal")) return UtilityDelegateType::CopyMetal;
 		if (XlEqString(input, "CopySpecular")) return UtilityDelegateType::CopySpecular;
 		if (XlEqString(input, "CopyCookedAO")) return UtilityDelegateType::CopyCookedAO;
 		if (XlEqString(input, "SolidWireframe")) return UtilityDelegateType::SolidWireframe;
-        return {};
+		return {};
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
