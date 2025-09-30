@@ -138,7 +138,8 @@ namespace RenderCore { namespace Techniques
 			void WriteGSPredicateCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
 
 			GraphLanguage::NodeGraphSignature WriteFragment(std::stringstream& str, StringSection<> name);
-			GraphLanguage::NodeGraphSignature WriteGSFragment(std::stringstream& str, StringSection<> name);
+			GraphLanguage::NodeGraphSignature WriteGSFragment_Sprite(std::stringstream& str, StringSection<> name);
+			GraphLanguage::NodeGraphSignature WriteGSFragment_Triangle(std::stringstream& str, StringSection<> name);
 
 			bool HasAttributeFor(StringSection<> semantic, unsigned semanticIdx);
 
@@ -180,14 +181,15 @@ namespace RenderCore { namespace Techniques
 		static void WriteCastOrAssignExpression(
 			std::ostream& str,
 			FragmentWriter::WorkingAttributeWithName& attribute,
-			StringSection<> requiredType)
+			StringSection<> requiredType,
+			unsigned inputIdx = 0)
 		{
 			if (attribute._type == requiredType) {
-				if (attribute._gsInputParameter) str << "input[0].";
+				if (attribute._gsInputParameter) str << "input[" << inputIdx << "].";
 				str << attribute._name;
 			} else {
 				str << "Cast_" << attribute._type << "_to_" << requiredType << "(";
-				if (attribute._gsInputParameter) str << "input[0].";
+				if (attribute._gsInputParameter) str << "input[" << inputIdx << "].";
 				str << attribute._name;
 				str << ")";
 			}
@@ -296,7 +298,7 @@ namespace RenderCore { namespace Techniques
 		static const char* s_VSToGS = "VS_TO_GS";
 		static const char* s_GSToPS = "GS_TO_PS";
 
-		GraphLanguage::NodeGraphSignature FragmentWriter::WriteGSFragment(std::stringstream& str, StringSection<> name)
+		GraphLanguage::NodeGraphSignature FragmentWriter::WriteGSFragment_Sprite(std::stringstream& str, StringSection<> name)
 		{
 			// (note -- some SV_ values might still need to be direct function parameters?)
 			str << "struct " << name << "_" << s_VSToGS << std::endl << "{" << std::endl;
@@ -346,6 +348,56 @@ namespace RenderCore { namespace Techniques
 			return _signature;
 		}
 
+		GraphLanguage::NodeGraphSignature FragmentWriter::WriteGSFragment_Triangle(std::stringstream& str, StringSection<> name)
+		{
+			// (note -- some SV_ values might still need to be direct function parameters?)
+			str << "struct " << name << "_" << s_VSToGS << std::endl << "{" << std::endl;
+			for (const auto& p:_signature.GetParameters()) {
+				if (p._direction != GraphLanguage::ParameterDirection::In) continue;
+				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
+			}
+			str << "};" << std::endl << std::endl;
+
+			str << "struct " << name << "_" << s_GSToPS << std::endl << "{" << std::endl;
+			for (const auto& p:_signature.GetParameters()) {
+				if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
+			}
+			str << "};" << std::endl << std::endl;
+
+			str << "[maxvertexcount(3)]" << std::endl;
+			str << "\tvoid " << name << "(triangle " << name << "_" << s_VSToGS << " input[3], inout TriangleStream<" << name << "_" << s_GSToPS << "> outputStream)" << std::endl;
+			str << "{" << std::endl;
+			str << _body.str();
+
+			// write the code that should move values from the working attributes into the output vertices
+			for (unsigned vIdx=0; vIdx<3; ++vIdx) {
+				str << "\t" << name << "_" << s_GSToPS << " output" << vIdx << ";" << std::endl;
+				for (const auto& p:_signature.GetParameters()) {
+					if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+					str << "\t" << "output" << vIdx << "." << p._name << " = ";
+					// look for the working parameter that matches the semantic (consider cases where we have separate values for each vertex
+					auto s = SplitSemanticAndIdx(p._semantic);
+					assert(s.second == 0);		// funny things happen if this is not zero
+					auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
+						[s, vIdx](const auto& q) { return q._semanticIdx == vIdx && XlEqString(s.first, q._semantic); });
+					if (i == _workingAttributes.end() && vIdx != 0)
+						i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
+							[s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
+					if (i != _workingAttributes.end()) {
+						WriteCastOrAssignExpression(str, *i, p._type, vIdx);
+					} else {
+						WriteDefaultValueExpression(str, p._type);
+					}
+					str << ";" << std::endl;
+				}
+				str << "\toutputStream.Append(output" << vIdx << ");" << std::endl;
+			}
+
+			str << "}" << std::endl;
+			return _signature;
+		}
+
 		bool FragmentWriter::HasAttributeFor(StringSection<> semantic, unsigned semanticIdx)
 		{
 			auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
@@ -381,7 +433,8 @@ namespace RenderCore { namespace Techniques
 			{"SV_RenderTargetArrayIndex", "uint"},
 			{"SV_SampleIndex", "uint"},
 			{"SV_ViewportArrayIndex", "uint"},
-			{"SV_ShadingRate", "uint"}
+			{"SV_ShadingRate", "uint"},
+			{"SV_Barycentrics", "float3"}
 		};
 
 		static void AddPSInputSystemAttributes(std::vector<WorkingAttribute>& result)
@@ -687,6 +740,13 @@ void LocalToWorld3D(
 	worldPosition = position;
 }
 
+void LocalToWorld3D_ViaTransform(
+	out float3 worldPosition : WORLDPOSITION,
+	float3 position : LOCALPOSITION)
+{
+	worldPosition = mul(SysUniform_GetLocalToWorld(), float4(position,1));
+}
+
 void WorldToClip3D(
 	out float4 clipPosition : SV_Position,
 	float3 worldPosition : WORLDPOSITION)
@@ -777,6 +837,19 @@ void ExpandClipSpacePosition(
 
 	)--";
 
+constexpr const char* s_gsTriangleSystemPatches = R"--(
+
+void WriteBarycentricCoords(
+	out float3 bary0 : BARYCENTRIC0,
+	out float3 bary1 : BARYCENTRIC1,
+	out float3 bary2 : BARYCENTRIC2)
+{
+	bary0 = float3(1,0,0);
+	bary1 = float3(0,1,0);
+	bary2 = float3(0,0,1);
+}
+
+	)--";
 
 	std::vector<PatchDelegateOutput> BuildSpritePipeline(IteratorRange<const PatchDelegateInput*> patches, IteratorRange<const uint64_t*> iaAttributes)
 	{
@@ -930,7 +1003,7 @@ void ExpandClipSpacePosition(
 
 			// GS signature isn't strictly the signature of a particular function, but contains the members of the
 			// vertex input and output structures
-			gsSignature = writerHelper.WriteGSFragment(gs, "GSEntry");
+			gsSignature = writerHelper.WriteGSFragment_Sprite(gs, "GSEntry");
 		}
 
 		{
@@ -1006,10 +1079,12 @@ void ExpandClipSpacePosition(
 
 	std::vector<PatchDelegateOutput> BuildAutoPipeline(IteratorRange<const PatchDelegateInput*> patches, IteratorRange<const uint64_t*> iaAttributes)
 	{
-		std::vector<Internal::WorkingAttribute> psEntryAttributes, vsEntryAttributes;
+		std::vector<Internal::WorkingAttribute> psEntryAttributes, gsEntryAttributes, vsEntryAttributes;
 		auto vsSystemPatchesParse = ShaderSourceParser::ParseHLSL(s_vsSystemPatches);
-		std::vector<PatchDelegateInput> vsSystemPatches, psSystemPatches;
+		auto gsSystemPatchesParse = ShaderSourceParser::ParseHLSL(s_gsTriangleSystemPatches);
+		std::vector<PatchDelegateInput> vsSystemPatches, gsSystemPatches, psSystemPatches;
 		for (const auto& patch:vsSystemPatchesParse._functions) vsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
+		for (const auto& patch:gsSystemPatchesParse._functions) gsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
 
 		std::vector<Internal::FragmentArranger::Step> psSteps, gsSteps, vsSteps;
 		{
@@ -1048,6 +1123,29 @@ void ExpandClipSpacePosition(
 				Internal::FragmentArranger arranger;
 				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
 
+				for (unsigned ep=0; ep<patches.size(); ++ep) {
+					if (patches[ep]._implementsHash == "SV_AutoGS"_h) {
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
+					} else if (patches[ep]._implementsHash == "SV_SystemGS"_h) {
+						gsSystemPatches.emplace_back(patches[ep]);
+					}
+				}
+
+				Internal::ConnectSystemPatches(
+					arranger, gsSystemPatches,
+					[patches](StringSection<> semantic, unsigned semanticIdx) {
+						return Internal::IsGSInputSystemAttributes(semantic, semanticIdx)
+							|| Internal::VSCanProvideAttribute(patches, semantic, semanticIdx);
+					});
+
+				gsEntryAttributes = arranger.RebuildInputAttributes();
+				gsSteps = std::move(arranger._steps);
+			}
+
+			{
+				Internal::FragmentArranger arranger;
+				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
+
 				for (unsigned ep=0; ep<patches.size(); ++ep)
 					if (patches[ep]._implementsHash == "SV_AutoVS"_h)
 						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
@@ -1069,8 +1167,9 @@ void ExpandClipSpacePosition(
 		// should perform all of the steps
 		//
 		// During this phase, we may also need to generate some custom patches for system values and required transformations
-		std::stringstream vs, ps;
-		GraphLanguage::NodeGraphSignature vsSignature, psSignature;
+		std::stringstream vs, gs, ps;
+		GraphLanguage::NodeGraphSignature vsSignature, gsSignature, psSignature;
+		bool gsEnabled = false;
 
 		{
 			Internal::FragmentWriter writerHelper;
@@ -1100,14 +1199,57 @@ void ExpandClipSpacePosition(
 
 		{
 			Internal::FragmentWriter writerHelper;
-			for (const auto& a:psEntryAttributes) {
+			for (const auto& a:gsEntryAttributes) {
 				auto gsin = std::find_if(vsSignature.GetParameters().begin(), vsSignature.GetParameters().end(),
 					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
 				if (gsin != vsSignature.GetParameters().end()) {
-					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
+					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type, true);
 				} else {
-					Internal::TryWritePSSystemInput(writerHelper, a._semantic, a._semanticIdx);
+					Internal::TryWriteGSSystemInput(writerHelper, a._semantic, a._semanticIdx);
 				}
+			}
+
+			for (auto& step:gsSteps)
+				if (step._enabled) {
+					writerHelper.WriteCall(step._name, *step._signature);
+					gsEnabled = true;
+				}
+
+			if (gsEnabled) {
+				for (const auto& a:psEntryAttributes) {
+					if (XlBeginsWith(a._semantic, "SV_") && !XlEqString(a._semantic, "SV_Position")) continue;
+
+					// If the writer helper never actually got anything for this semantic, it will not become an output
+					if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
+						writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);	// early cast to type expected by gs
+				}
+
+				// GS signature isn't strictly the signature of a particular function, but contains the members of the
+				// vertex input and output structures
+				gsSignature = writerHelper.WriteGSFragment_Triangle(gs, "GSEntry");		// assuming triangles
+			}
+		}
+
+		{
+			Internal::FragmentWriter writerHelper;
+			for (const auto& a:psEntryAttributes) {
+				if (!gsEnabled) {
+					auto vsin = std::find_if(vsSignature.GetParameters().begin(), vsSignature.GetParameters().end(),
+						[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+					if (vsin != vsSignature.GetParameters().end()) {
+						writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
+						continue;
+					}
+				} else {
+					auto gsin = std::find_if(gsSignature.GetParameters().begin(), gsSignature.GetParameters().end(),
+						[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+					if (gsin != gsSignature.GetParameters().end()) {
+						writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
+						continue;
+					}
+				}
+
+				Internal::TryWritePSSystemInput(writerHelper, a._semantic, a._semanticIdx);
 			}
 
 			std::vector<Internal::WorkingAttribute> psOutputAttributes;
@@ -1136,7 +1278,7 @@ void ExpandClipSpacePosition(
 			psSignature = writerHelper.WriteFragment(ps, "PSEntry");
 		}
 
-		PatchDelegateOutput vsOutput, psOutput;
+		PatchDelegateOutput vsOutput, gsOutput, psOutput;
 		vsOutput._stage = ShaderStage::Vertex;
 		vsOutput._resource._postPatchesFragments.emplace_back(s_vsSystemPatches);
 		vsOutput._resource._postPatchesFragments.emplace_back(vs.str());
@@ -1144,6 +1286,15 @@ void ExpandClipSpacePosition(
 		vsOutput._resource._entrypoint._shaderModel = s_SMVS;
 		vsOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(vsSignature);
 		for (auto& s:vsSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) vsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+
+		if (gsEnabled) {
+			gsOutput._stage = ShaderStage::Geometry;
+			gsOutput._resource._postPatchesFragments.emplace_back(s_gsTriangleSystemPatches);
+			gsOutput._resource._postPatchesFragments.emplace_back(gs.str());
+			gsOutput._resource._entrypoint._entryPoint = "GSEntry";
+			gsOutput._resource._entrypoint._shaderModel = s_SMGS;
+			for (auto& s:gsSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) gsOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+		}
 
 		psOutput._stage = ShaderStage::Pixel;
 		psOutput._resource._postPatchesFragments.emplace_back(ps.str());
@@ -1155,6 +1306,7 @@ void ExpandClipSpacePosition(
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));
 		result.emplace_back(std::move(psOutput));
+		if (gsEnabled) result.emplace_back(std::move(gsOutput));
 		return result;
 	}
 
