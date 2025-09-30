@@ -410,6 +410,23 @@ namespace Assets
 		AutoConstructToPromise(std::move(promise), std::forward<Params>(initialisers)...);
 		return future;
 	}
+
+	namespace Internal
+	{
+		template<auto ConstructToPromiseFn>
+			using AssetTypeFromConstructToPromise = PromisedType<
+				std::tuple_element_t<0, typename FunctionTraits<decltype(ConstructToPromiseFn)>::ArgumentTuple>
+			>;
+	}
+
+	template<auto ConstructToPromiseFn, typename... Params>
+		std::future<Internal::AssetTypeFromConstructToPromise<ConstructToPromiseFn>> ConstructToFutureFn(Params&&... initialisers)
+	{
+		std::promise<Internal::AssetTypeFromConstructToPromise<ConstructToPromiseFn>> promise;
+		auto future = promise.get_future();
+		ConstructToPromiseFn(std::move(promise), std::forward<Params>(initialisers)...);
+		return future;
+	}
 #endif
 
 	#undef ENABLE_IF

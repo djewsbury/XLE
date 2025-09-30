@@ -56,14 +56,6 @@ namespace Assets
 		// C O N S T R U C T I O N   F U N C T I O N   V A R I A T I O N S
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	namespace Internal
-	{
-		template<auto ConstructToPromiseFn>
-			using AssetTypeFromConstructToPromise = PromisedType<
-				std::tuple_element_t<0, typename FunctionTraits<decltype(ConstructToPromiseFn)>::ArgumentTuple>
-			>;
-	}
-
 	template<auto ConstructToPromiseFn, typename... Params>
 		std::shared_future<Internal::AssetTypeFromConstructToPromise<ConstructToPromiseFn>> GetAssetFutureFn(Params&&... initialisers)
 	{
