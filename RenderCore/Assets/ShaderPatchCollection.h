@@ -30,7 +30,7 @@ namespace RenderCore { namespace Assets
 		void SetPreconfigurationFileName(const std::string&);
 		void OverrideShader(ShaderStage, const std::string&);
 
-		void MergeInWithFilenameResolve(const ShaderPatchCollection& dest, const ::Assets::DirectorySearchRules&);
+		void MergeInWithFilenameResolve(const ShaderPatchCollection&, const ::Assets::DirectorySearchRules&);
 
 		uint64_t GetHash() const;
 
@@ -61,6 +61,8 @@ namespace RenderCore { namespace Assets
 	public:
 		StringSection<> GetPipelineLayout() const { return _pipelineLayout; }
 		uint64_t GetHash() const { return _hash; }
+
+		void MergeInWithFilenameResolve(const TechniqueDelegateConfig&, const ::Assets::DirectorySearchRules&);
 
 		friend void SerializationOperator(Formatters::TextOutputFormatter&, const TechniqueDelegateConfig&);
 		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, TechniqueDelegateConfig&);

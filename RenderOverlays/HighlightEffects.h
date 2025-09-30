@@ -8,8 +8,8 @@
 
 #include "../../Math/Vector.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class IAttachmentPool; class IFrameBufferPool; class FrameBufferDescFragment; } }
-namespace RenderCore { class FrameBufferDesc; class FrameBufferProperties; class IThreadContext; class ICompiledPipelineLayout; }
+namespace RenderCore { namespace Techniques { class ParsingContext; class IAttachmentPool; class IFrameBufferPool; class FrameBufferDescFragment; class RenderPassInstance; } }
+namespace RenderCore { class FrameBufferDesc; class FrameBufferProperties; class IThreadContext; class ICompiledPipelineLayout; class IResourceView; }
 
 namespace RenderOverlays
 {
@@ -36,7 +36,7 @@ namespace RenderOverlays
     ///   <item>BinaryHighlight::BinaryHighlight() (constructor)
     ///   <item>Draw something... 
     ///         (BinaryHighlight constructor binds an offscreen buffer, so this render 
-    ///         is just to provide the siholette of the thing we want to highlight
+    ///         is just to provide the silhouette of the thing we want to highlight
     ///   <item>BinaryHighlight::FinishWithOutline()
     ///         This rebinds the old render target, and blends in the highlight
     /// </list>
@@ -49,6 +49,10 @@ namespace RenderOverlays
 
 		const RenderCore::FrameBufferDesc& GetFrameBufferDesc() const;
         static RenderCore::Techniques::FrameBufferDescFragment GetFrameBufferDescFragment();
+        static void WriteOutlineAndOverlay(
+            RenderCore::Techniques::ParsingContext& parsingContext,
+            RenderCore::IResourceView& stencilSRV,
+            Float3 outlineColor, unsigned overlayColor);
         
         BinaryHighlight(
             RenderCore::Techniques::ParsingContext& parsingContext);

@@ -295,6 +295,13 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
+	void TechniqueDelegateConfig::MergeInWithFilenameResolve(const TechniqueDelegateConfig& src, const ::Assets::DirectorySearchRules&)
+	{
+		if (!src._pipelineLayout.empty())
+			_pipelineLayout = src._pipelineLayout;
+		_hash = Hash64(_pipelineLayout);
+	}
+
 	void SerializationOperator(Formatters::TextOutputFormatter& fmttr, const TechniqueDelegateConfig& cfg)
 	{
 		fmttr.WriteKeyedValue("PipelineLayout", cfg._pipelineLayout);
@@ -309,6 +316,7 @@ namespace RenderCore { namespace Assets
 			} else
 				Formatters::SkipValueOrElement(fmttr);
 		}
+		cfg._hash = Hash64(cfg._pipelineLayout);
 	}
 
 	TechniqueDelegateConfig::TechniqueDelegateConfig() {}

@@ -52,7 +52,7 @@ uint Marker(uint2 pos)
 			uint result = StencilInput.Load(uint3(pos, 0)).g;
 		#endif
 	#elif INPUT_MODE == 1
-		uint result = uint(255.f * StencilInput.Load(uint3(pos, 0)).a);
+		uint result = uint(255.f * StencilInput.Load(uint3(pos, 0)).r);
 	#elif INPUT_MODE == 2
 		uint result = StencilInput.SubpassLoad();
 	#endif
