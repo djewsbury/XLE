@@ -21,8 +21,6 @@
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
-#include "../../Formatters/StreamDOM.h"
-#include "../../Utility/Streams/StreamTypes.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
 
@@ -257,119 +255,16 @@ namespace RenderCore { namespace Assets
 		return marker;
 	}
 	
-	static ::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
-	{
-		std::string sourceMaterialName, sourceModelName;
-		sp<ModelCompilationConfiguration> sourceModelConfiguration;
-		sourceMaterialName = initializers.GetInitializer<std::string>(0);
-		if (initializers.GetCount() >= 2)
-			sourceModelName = initializers.GetInitializer<std::string>(1);
-		if (initializers.GetCount() >= 3 && initializers.GetInitializerType(2).hash_code() == typeid(decltype(sourceModelConfiguration)).hash_code())
-			sourceModelConfiguration = initializers.GetInitializer<decltype(sourceModelConfiguration)>(2);
-
-		if (sourceModelName.empty())
-			Throw(::Exceptions::BasicLabel{"Empty source model in MaterialCompileOperation"});
-
-		if (sourceMaterialName == sourceModelName)
-			sourceMaterialName = {};
-
-		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>());
-
-		Internal::SourceModelHelper sourceModelHelper { sourceModelName, std::move(sourceModelConfiguration) };
-		auto modelMat = sourceModelHelper.GetModelMatConfigs();
-
-		ContextImbuedMaterialSet sourceMaterial;
-		if (!sourceMaterialName.empty())
-			sourceMaterial = ::Assets::ActualizeAsset<ContextImbuedMaterialSet>(sourceMaterialName);
-
-			//  for each configuration, we want to build a resolved material
-		Internal::PendingAssets pendingAssets;
-		pendingAssets._resolvedNames.reserve(modelMat.size());
-		pendingAssets._materials.reserve(modelMat.size());
-
-		for (const auto& cfg:modelMat) {
-			std::basic_stringstream<::Assets::ResChar> resName;
-			auto guid = MakeMaterialGuid(MakeStringSection(cfg));
-
-				// Our resolved material comes from 3 separate inputs:
-				//  1) model:configuration
-				//  2) material:configuration
-				//
-				// Some material information is actually stored in the model
-				// source data. This is just for art-pipeline convenience --
-				// generally texture assignments (and other settings) are 
-				// set in the model authoring tool (eg, 3DS Max). The .material
-				// files actually only provide overrides for settings that can't
-				// be set within 3rd party tools.
-				// 
-				// We don't combine the model and material information until
-				// this step -- this gives us some flexibility to use the same
-				// model with different material files. The material files can
-				// also override settings from 3DS Max (eg, change texture assignments
-				// etc). This provides a path for reusing the same model with
-				// different material settings (eg, when we want one thing to have
-				// a red version and a blue version)
-
-			std::vector<std::shared_future<ResolvedMaterial>> partialMaterials;
-		
-				// resolve in model:configuration
-				// This is a little different, because we have to pass the "sourceModelConfiguration" down the chain
-			partialMaterials.emplace_back(
-				util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
-
-			if (sourceMaterial.get()) {
-					// resolve in the main material:cfg
-				partialMaterials.emplace_back(
-					util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, ::AssetsNew::ScaffoldAndEntityName{sourceMaterial, Hash64(cfg) DEBUG_ONLY(, cfg)}));
-			}
-
-			pendingAssets._materials.emplace_back(guid, MergePartialMaterials(partialMaterials));
-			pendingAssets._resolvedNames.emplace_back(guid, cfg);
-		}
-
-		std::vector<::Assets::DependencyValidationMarker> depVals;
-		depVals.emplace_back(sourceModelHelper.GetModelMatDepVal());
-		::Assets::BlockSerializer blockSerializer;
-		Internal::Serialize(blockSerializer, pendingAssets, depVals);
-
-		return {
-			std::vector<::Assets::SerializedArtifact>{
-				{
-					ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
-					(StringMeld<256>() << sourceModelName << "&" << sourceMaterialName).AsString(),
-					::Assets::AsBlob(blockSerializer)
-				}
-			},
-			::Assets::GetDepValSys().MakeOrReuse(depVals),
-			GetCompileProcessType((CompiledMaterialSet*)nullptr)
-		};
-	}
-
-	::Assets::CompilerRegistration RegisterMaterialCompiler(
-		::Assets::IIntermediateCompilers& intermediateCompilers)
-	{
-		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "material-set-compiler", "material-set-compiler", MaterialCompileOperation);
-		uint64_t outputAssetTypes[] = { GetCompileProcessType((CompiledMaterialSet*)nullptr) };
-		intermediateCompilers.AssociateRequest(
-			result.RegistrationId(),
-			MakeIteratorRange(outputAssetTypes));
-		return result;
-	}
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static sp<CompiledMaterialSet> ConstructMaterialSetSync(
+	static ::Assets::BlockSerializer ConstructMaterialSetSync_ToBlockSerializer(
+		std::vector<::Assets::DependencyValidationMarker>& depVals,
 		sp<MaterialSetConstruction> construction,
-		const ::Assets::ContextImbuedAsset<sp<CompoundAssetScaffold>>& baseMaterials,
+		const Internal::SourceModelHelper& sourceModelHelper,
 		std::vector<std::string> materialsToInstantiate)
 	{
-		assert(materialsToInstantiate.empty() ^ (std::get<0>(baseMaterials) == nullptr));		// one or the other, not both
-
-		Internal::SourceModelHelper sourceModelHelper;
-		std::vector<::Assets::DependencyValidationMarker> depVals;
 		bool useRawMaterialSet = materialsToInstantiate.empty();
 		if (useRawMaterialSet) {
-			sourceModelHelper = baseMaterials;
 			const auto& modelMat = sourceModelHelper.GetModelMatConfigs();
 			materialsToInstantiate.reserve(modelMat.size());
 			for (auto& m:modelMat) materialsToInstantiate.push_back(m);
@@ -445,6 +340,22 @@ namespace RenderCore { namespace Assets
 
 		::Assets::BlockSerializer blockSerializer;
 		Internal::Serialize(blockSerializer, pendingAssets, depVals);
+		return blockSerializer;
+	}
+
+	static sp<CompiledMaterialSet> ConstructMaterialSetSync(
+		sp<MaterialSetConstruction> construction,
+		const ::Assets::ContextImbuedAsset<sp<CompoundAssetScaffold>>& baseMaterials,
+		std::vector<std::string> materialsToInstantiate)
+	{
+		assert(materialsToInstantiate.empty() ^ (std::get<0>(baseMaterials) == nullptr));		// one or the other, not both
+
+		Internal::SourceModelHelper sourceModelHelper;
+		if (materialsToInstantiate.empty())
+			sourceModelHelper = baseMaterials;
+
+		std::vector<::Assets::DependencyValidationMarker> depVals;
+		auto blockSerializer = ConstructMaterialSetSync_ToBlockSerializer(depVals, std::move(construction), sourceModelHelper, std::move(materialsToInstantiate));
 		auto memBlock = blockSerializer.AsMemoryBlock();
 		::Assets::Block_Initialize(memBlock.get());
 
@@ -486,6 +397,57 @@ namespace RenderCore { namespace Assets
 		} else {
 			promise.set_exception(std::make_exception_ptr(std::runtime_error("Bad ConstructMaterialSet call because base materials have not been set")));
 		}
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static ::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
+	{
+		std::string sourceMaterialName, sourceModelName;
+		sp<ModelCompilationConfiguration> sourceModelConfiguration;
+		sourceMaterialName = initializers.GetInitializer<std::string>(0);
+		if (initializers.GetCount() >= 2)
+			sourceModelName = initializers.GetInitializer<std::string>(1);
+		if (initializers.GetCount() >= 3 && initializers.GetInitializerType(2).hash_code() == typeid(decltype(sourceModelConfiguration)).hash_code())
+			sourceModelConfiguration = initializers.GetInitializer<decltype(sourceModelConfiguration)>(2);
+
+		if (sourceModelName.empty())
+			Throw(::Exceptions::BasicLabel{"Empty source model in MaterialCompileOperation"});
+
+		if (sourceMaterialName == sourceModelName)
+			sourceMaterialName = {};
+
+		Internal::SourceModelHelper sourceModelHelper { sourceModelName, std::move(sourceModelConfiguration) };
+		auto modelMat = sourceModelHelper.GetModelMatConfigs();
+		std::vector<::Assets::DependencyValidationMarker> depVals;
+		auto construction = std::make_shared<MaterialSetConstruction>();
+		if (!sourceMaterialName.empty())
+			construction->AddOverride(sourceMaterialName);
+		auto blockSerializer = ConstructMaterialSetSync_ToBlockSerializer(depVals, construction, sourceModelHelper, {});
+		depVals.emplace_back(sourceModelHelper.GetModelMatDepVal());
+
+		return {
+			std::vector<::Assets::SerializedArtifact>{
+				{
+					ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
+					(StringMeld<256>() << sourceModelName << "&" << sourceMaterialName).AsString(),
+					::Assets::AsBlob(blockSerializer)
+				}
+			},
+			::Assets::GetDepValSys().MakeOrReuse(depVals),
+			GetCompileProcessType((CompiledMaterialSet*)nullptr)
+		};
+	}
+
+	::Assets::CompilerRegistration RegisterMaterialCompiler(
+		::Assets::IIntermediateCompilers& intermediateCompilers)
+	{
+		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "material-set-compiler", "material-set-compiler", MaterialCompileOperation);
+		uint64_t outputAssetTypes[] = { GetCompileProcessType((CompiledMaterialSet*)nullptr) };
+		intermediateCompilers.AssociateRequest(
+			result.RegistrationId(),
+			MakeIteratorRange(outputAssetTypes));
+		return result;
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
