@@ -42,7 +42,7 @@ namespace RenderCore { namespace Assets
 		friend void SerializationOperator(Formatters::TextOutputFormatter& formatter, const ShaderPatchCollection& patchCollection);
 
 		ShaderPatchCollection();
-		ShaderPatchCollection(Formatters::TextInputFormatter<utf8>& formatter);
+		ShaderPatchCollection(Formatters::TextInputFormatter<char>& formatter);
 		ShaderPatchCollection(IteratorRange<const std::pair<std::string, ShaderSourceParser::InstantiationRequest>*> patches);
 		ShaderPatchCollection(std::vector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>>&& patches);
 		~ShaderPatchCollection();
@@ -55,8 +55,24 @@ namespace RenderCore { namespace Assets
 
 		void SortAndCalculateHash();
 	};
-	
-	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(Formatters::TextInputFormatter<utf8>& formatter);
+
+	class TechniqueDelegateConfig
+	{
+	public:
+		StringSection<> GetPipelineLayout() const { return _pipelineLayout; }
+		uint64_t GetHash() const { return _hash; }
+
+		friend void SerializationOperator(Formatters::TextOutputFormatter&, const TechniqueDelegateConfig&);
+		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, TechniqueDelegateConfig&);
+		TechniqueDelegateConfig();
+		~TechniqueDelegateConfig();
+
+	private:
+		std::string _pipelineLayout;
+		uint64_t _hash = ~0ull;
+	};
+
+	std::vector<ShaderPatchCollection> DeserializeShaderPatchCollectionSet(Formatters::TextInputFormatter<char>& formatter);
 	void SerializeShaderPatchCollectionSet(Formatters::TextOutputFormatter& formatter, IteratorRange<const ShaderPatchCollection*> patchCollections);
 }}
 

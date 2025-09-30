@@ -295,5 +295,24 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
+	void SerializationOperator(Formatters::TextOutputFormatter& fmttr, const TechniqueDelegateConfig& cfg)
+	{
+		fmttr.WriteKeyedValue("PipelineLayout", cfg._pipelineLayout);
+	}
+
+	void DeserializationOperator(Formatters::TextInputFormatter<char>& fmttr, TechniqueDelegateConfig& cfg)
+	{
+		StringSection<> kn;
+		while (fmttr.TryKeyedItem(kn)) {
+			if (XlEqString(kn, "PipelineLayout")) {
+				cfg._pipelineLayout = Formatters::RequireStringValue(fmttr).AsString();
+			} else
+				Formatters::SkipValueOrElement(fmttr);
+		}
+	}
+
+	TechniqueDelegateConfig::TechniqueDelegateConfig() {}
+	TechniqueDelegateConfig::~TechniqueDelegateConfig() {}
+
 }}
 

@@ -7,13 +7,8 @@
 #include "LightingEngine.h"
 #include "../Techniques/TechniqueDelegates.h"
 #include "../Techniques/CommonBindings.h"
-#include "../ResourceDesc.h"		// for TextureSamples
-#include "../../Assets/AssetsCore.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; } }
-namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
-namespace RenderCore { class IDevice; class FrameBufferProperties; }
-namespace std { template<typename T> class future; }
+namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {
