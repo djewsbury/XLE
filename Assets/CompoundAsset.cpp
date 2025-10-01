@@ -159,14 +159,8 @@ namespace AssetsNew
 			auto entityNameHash = std::get<CompoundAssetScaffold::EntityHashName>(check);
 			
 			auto ei = LowerBound(scaffold->_entityLookup, entityNameHash);
-			if (ei == scaffold->_entityLookup.end() || ei->first != entityNameHash) {
-				#if defined(_DEBUG)
-					Throw(std::runtime_error(Concatenate("Missing entity (while looking up ", indexer._entityName, " in ", indexer.GetDirectorySearchRules().GetBaseFile(), ")")));
-				#else
-					Throw(std::runtime_error("Missing entity"));
-				#endif
-			}
-
+			if (ei == scaffold->_entityLookup.end() || ei->first != entityNameHash)
+				return std::monostate{};
 			// Does the requested
 			if (compTable->second._inlineChunks.size() > ei->second._componentTableIdx && !compTable->second._inlineChunks[ei->second._componentTableIdx].IsEmpty())
 				return ScaffoldAndEntityName { indexer._scaffold, entityNameHash DEBUG_ONLY(, indexer._entityName) };

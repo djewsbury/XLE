@@ -524,6 +524,7 @@ namespace RenderCore { namespace Techniques
 
 			CompiledPipeline MakePipeline(
 				const WorkingMaterial& material,
+				std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> matDescSet,
 				IteratorRange<const InputElementDesc*> inputElements,
 				Topology topology)
 			{
@@ -531,7 +532,7 @@ namespace RenderCore { namespace Techniques
 				resultGeoCall._pipelineAcceleratorIdx =
 					AddPipelineAccelerator(
 						_pipelineAcceleratorPool->CreatePipelineAccelerator(
-							material._patchCollection, nullptr,
+							material._patchCollection, std::move(matDescSet),
 							material._selectors,
 							inputElements,
 							topology,
@@ -697,13 +698,14 @@ namespace RenderCore { namespace Techniques
 									// efficient to avoid some of the redundancy
 									assert(materialIterator < currentMaterialAssignments.size());
 									auto matAssignment = currentMaterialAssignments[materialIterator++];
+									auto materialMachine = materialScaffold->GetMaterialMachine(matAssignment);
 									auto* workingMaterial = _pendingPipelines.AddMaterial(
-										materialScaffold->GetMaterialMachine(matAssignment),
+										materialMachine,
 										materialScaffold,
 										elementIdx, matAssignment, materialScaffold->DehashMaterialName(matAssignment).AsString(),
 										deformAcceleratorPool.get(), deformParametersAttachment);
 									auto compiledPipeline = _pendingPipelines.MakePipeline(
-										*workingMaterial, 
+										*workingMaterial, workingMaterial->_materialDescriptorSetLayout,
 										_pendingGeos._geosLayout[pendingGeoIdx],
 										_pendingGeos._geosTopologies[pendingGeoIdx]);
 

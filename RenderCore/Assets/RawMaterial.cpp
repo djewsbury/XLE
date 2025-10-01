@@ -553,7 +553,7 @@ namespace RenderCore { namespace Assets
         return *this;
     }
 
-    static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "compound"); }
+    static bool IsMaterialFile(StringSection<> extension) { return XlEqStringI(extension, "compound") || XlEqStringI(extension, "hlsl"); }
 
     void MaterialCompoundScaffold_ConstructToPromise(
         std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,

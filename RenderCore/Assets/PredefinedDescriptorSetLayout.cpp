@@ -405,12 +405,13 @@ namespace RenderCore { namespace Assets
 		struct ConditionalDescriptorSlot
 		{
 			StringSection<> _name;
-			uint64_t _nameHash = 0ull;
+			uint64_t _nameHash;
 			uint32_t _type;
-			unsigned _arrayElementCount = 0u;
-			unsigned _slotIdx = ~0u;
-			unsigned _cbIdx = ~0u;
-			unsigned _fixedSamplerIdx = ~0u;
+			unsigned _arrayElementCount;
+			unsigned _slotIdx;
+			unsigned _cbIdx;
+			unsigned _fixedSamplerIdx;
+			uint32_t _pad;
 			StringSection<> _conditions; 
 		};
 
@@ -436,6 +437,7 @@ namespace RenderCore { namespace Assets
 		serializer << slot._slotIdx;
 		serializer << slot._cbIdx;
 		serializer << slot._fixedSamplerIdx;
+		serializer << uint32_t(0);
 		serializer << slot._conditions;
 	}
 
@@ -452,19 +454,21 @@ namespace RenderCore { namespace Assets
 		serializer.SerializeRawSubBlock(MakeIteratorRange(layout._fixedSamplers), ::Assets::BlockSerializer::SpecialBuffer::IteratorRange);
 	}
 
-	PredefinedDescriptorSetLayout::PredefinedDescriptorSetLayout(IteratorRange<const void*> block, const ::Assets::DependencyValidation& depVal)
-	: _depVal(depVal)
+	PredefinedDescriptorSetLayout PredefinedDescriptorSetLayout::Deserialize(IteratorRange<const void*> block, const ::Assets::DependencyValidation& depVal)
 	{
+		PredefinedDescriptorSetLayout result;
+		result._depVal = depVal;
 		auto& mirror = *(const SerializableMirrors::PredefinedDescriptorSetLayout*)block.first;
-		_slots.reserve(mirror._slots.size());
+		result._slots.reserve(mirror._slots.size());
 		for (const auto& s:mirror._slots)
-			_slots.emplace_back(ConditionalDescriptorSlot {
+			result._slots.emplace_back(ConditionalDescriptorSlot {
 				s._name.AsString(), s._nameHash, DescriptorType(s._type), s._arrayElementCount, s._slotIdx, s._cbIdx, s._fixedSamplerIdx, s._conditions.AsString()
 			});
-		_constantBuffers.reserve(mirror._constantBuffers.size());
+		result._constantBuffers.reserve(mirror._constantBuffers.size());
 		for (const auto& cb:mirror._constantBuffers)
-			_constantBuffers.emplace_back(std::make_shared<PredefinedCBLayout>(cb._data, depVal));
-		_fixedSamplers.insert(_fixedSamplers.end(), mirror._fixedSamplers.begin(), mirror._fixedSamplers.end());
+			result._constantBuffers.emplace_back(std::make_shared<PredefinedCBLayout>(cb._data, depVal));
+		result._fixedSamplers.insert(result._fixedSamplers.end(), mirror._fixedSamplers.begin(), mirror._fixedSamplers.end());
+		return result;
 	}
 
 }}

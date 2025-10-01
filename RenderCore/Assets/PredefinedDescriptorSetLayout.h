@@ -50,12 +50,12 @@ namespace RenderCore { namespace Assets
 		PredefinedDescriptorSetLayout(
 			Utility::ConditionalProcessingTokenizer&,
 			const ::Assets::DependencyValidation&);
-		PredefinedDescriptorSetLayout(IteratorRange<const void*> block, const ::Assets::DependencyValidation&);
 		PredefinedDescriptorSetLayout();
 		~PredefinedDescriptorSetLayout();
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 		friend void SerializationOperator(::Assets::BlockSerializer&, const PredefinedDescriptorSetLayout&);
+		static PredefinedDescriptorSetLayout Deserialize(IteratorRange<const void*> block, const ::Assets::DependencyValidation&);
 
 	protected:
 		void ParseSlot(Utility::ConditionalProcessingTokenizer& iterator, DescriptorType type);
@@ -64,6 +64,8 @@ namespace RenderCore { namespace Assets
 		::Assets::DependencyValidation _depVal;
 		friend class PredefinedPipelineLayoutFile;
 	};
+
+	static constexpr uint64_t s_DescriptorSet_ComponentName = ConstHash64("DescriptorSet");
 
 }}
 

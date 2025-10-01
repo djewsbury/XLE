@@ -349,7 +349,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> initializer)
     {
         auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "compound")) {
+        if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
             ConstructToPromiseTextureCompile(std::move(promise), splitter);
         } else {
             ConstructToPromiseImageFile(std::move(promise), splitter);
@@ -362,7 +362,7 @@ namespace RenderCore { namespace Techniques
 		StringSection<> initializer)
     {
         auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "compound")) {
+        if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
             ConstructToPromiseTextureCompile(std::move(promise), std::move(opContext), splitter);
         } else {
             ConstructToPromiseImageFile(std::move(promise), splitter);
@@ -374,7 +374,7 @@ namespace RenderCore { namespace Techniques
         StringSection<> initializer)
     {
         auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "compound")) {
+        if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
             ConstructToPromiseTextureCompile(std::move(promise), splitter);
             return BufferUploads::TransactionID_Invalid;
         } else {

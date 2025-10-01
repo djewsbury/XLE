@@ -121,6 +121,8 @@ namespace Assets
 					Log(Error) << "Missing _readReferenceCount marker during cleanup op in RetrieveCompileProducts" << std::endl;
 				}
 			}
+			ReadRefCountLock(const ReadRefCountLock&) = delete;
+			ReadRefCountLock& operator=(const ReadRefCountLock&) = delete;
 		private:
 			IntermediatesStoreBase* _pimpl;
 			uint64_t _hashCode;
@@ -151,6 +153,9 @@ namespace Assets
 					Log(Error) << "Missing _storeOperationsInFlight marker during cleanup op in StoreCompileProducts" << std::endl;
 				}
 			}
+
+			WriteRefCountLock(const WriteRefCountLock&) = delete;
+			WriteRefCountLock& operator=(const WriteRefCountLock&) = delete;
 		private:
 			IntermediatesStoreBase* _pimpl;
 			uint64_t _hashCode;

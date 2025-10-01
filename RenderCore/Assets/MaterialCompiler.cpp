@@ -56,6 +56,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	using ResolvedMaterial = ::Assets::AssetWrapper<RawMaterial>;
+	using ResolvedDescriptorSet = std::shared_ptr<PredefinedDescriptorSetLayout>;
 	using CompoundAssetScaffold = ::AssetsNew::CompoundAssetScaffold;
 	using ContextImbuedMaterialSet = ::Assets::ContextImbuedAsset<sp<CompoundAssetScaffold>>;
 
@@ -93,7 +94,7 @@ namespace RenderCore { namespace Assets
 		void Serialize(
 			::Assets::BlockSerializer& blockSerializer,
 			PendingAssets& pendingAssets,
-			std::vector<::Assets::DependencyValidationMarker>& depVals)
+			std::vector<::Assets::DependencyValidation>& depVals)
 		{
 			struct SerializedBlock1
 			{
@@ -176,20 +177,21 @@ namespace RenderCore { namespace Assets
 				}
 
 				if (m.second._descSet.valid()) {
-					auto actualized = m.second._descSet.get();
-					depVals.emplace_back(actualized->GetDependencyValidation());
-					if (!actualized->IsEmpty()) {
-						auto hash = actualized->CalculateHash();
-						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachMaterialDescriptorSetLayoutId, hash);
+					if (auto actualized = m.second._descSet.get()) {
+						depVals.emplace_back(actualized->GetDependencyValidation());
+						if (!actualized->IsEmpty()) {
+							auto hash = actualized->CalculateHash();
+							tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachMaterialDescriptorSetLayoutId, hash);
 
-						bool gotExisting = false;
-						for (const auto&p:descSetLayouts)
-							gotExisting |= p._hash == hash;
+							bool gotExisting = false;
+							for (const auto&p:descSetLayouts)
+								gotExisting |= p._hash == hash;
 
-						if (!gotExisting) {
-							// ShaderPatchCollection is mostly strings; so we just serialize it as a text block
-							auto buffer = SerializeViaBlockFormatterToBuffer(*actualized);
-							descSetLayouts.emplace_back(SerializedBlock1{hash, buffer.second, std::move(buffer.first)});
+							if (!gotExisting) {
+								// ShaderPatchCollection is mostly strings; so we just serialize it as a text block
+								auto buffer = SerializeViaBlockFormatterToBuffer(*actualized);
+								descSetLayouts.emplace_back(SerializedBlock1{hash, buffer.second, std::move(buffer.first)});
+							}
 						}
 					}
 				}
@@ -319,11 +321,34 @@ namespace RenderCore { namespace Assets
 			});
 		return result;
 	}
+
+	static std::future<ResolvedDescriptorSet> MergePartialDescriptorSets(const std::vector<std::shared_future<ResolvedDescriptorSet>>& partialMaterials)
+	{
+		std::promise<ResolvedDescriptorSet> promise;
+		auto result = promise.get_future();
+		::Assets::PollToPromise(
+			std::move(promise),
+			[partialMaterials](auto timeout) {
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				for (auto& f:partialMaterials)
+					if (f.wait_until(timeoutTime) == std::future_status::timeout)
+						return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[partialMaterials]() {
+				for (auto i=partialMaterials.rbegin(); i!=partialMaterials.rend(); ++i) {
+					auto actualized = (*i).get();
+					if (actualized && !actualized->IsEmpty()) return actualized;
+				}
+				return ResolvedDescriptorSet{nullptr};
+			});
+		return result;
+	}
 	
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static ::Assets::BlockSerializer ConstructMaterialSetSync_ToBlockSerializer(
-		std::vector<::Assets::DependencyValidationMarker>& depVals,
+		std::vector<::Assets::DependencyValidation>& depVals,
 		sp<MaterialSetConstruction> construction,
 		const Internal::SourceModelHelper& sourceModelHelper,
 		std::vector<std::string> materialsToInstantiate)
@@ -349,8 +374,12 @@ namespace RenderCore { namespace Assets
 			auto guid = MakeMaterialGuid(MakeStringSection(cfg));
 
 			std::vector<std::shared_future<ResolvedMaterial>> partialMaterials;
-			if (useRawMaterialSet)
-				partialMaterials.emplace_back(util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, sourceModelHelper.GetMaterialMarkerPtr(cfg)));
+			std::vector<std::shared_future<ResolvedDescriptorSet>> partialMaterialDescriptorSets;
+			if (useRawMaterialSet) {
+				auto indexer = sourceModelHelper.GetMaterialMarkerPtr(cfg);
+				partialMaterials.emplace_back(util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, indexer));
+				partialMaterialDescriptorSets.emplace_back(util->GetCachedFuture<ResolvedDescriptorSet>(s_DescriptorSet_ComponentName, indexer));
+			}
 
 			auto o0 = construction->_inlineMaterialOverrides.begin();
 			auto o1 = construction->_materialFileOverrides.begin();
@@ -372,6 +401,7 @@ namespace RenderCore { namespace Assets
 					if (o1->first._application == 0 || o1->first._application == guid) {
 						auto indexer = ::AssetsNew::ContextAndIdentifier{ (StringMeldInPlace(buffer) << o1->second << ":" << cfg).AsString() };
 						partialMaterials.emplace_back(util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, indexer));
+						partialMaterialDescriptorSets.emplace_back(util->GetCachedFuture<ResolvedDescriptorSet>(s_DescriptorSet_ComponentName, indexer));
 					}
 					++o1;
 
@@ -400,6 +430,7 @@ namespace RenderCore { namespace Assets
 
 			Internal::PendingAssets::Entry pendingAsset;
 			pendingAsset._material = MergePartialMaterials(partialMaterials);
+			pendingAsset._descSet = MergePartialDescriptorSets(partialMaterialDescriptorSets);
 			pendingAsset._name = cfg;
 			pendingAssets._entries.emplace_back(guid, std::move(pendingAsset));
 		}
@@ -407,6 +438,14 @@ namespace RenderCore { namespace Assets
 		::Assets::BlockSerializer blockSerializer;
 		Internal::Serialize(blockSerializer, pendingAssets, depVals);
 		return blockSerializer;
+	}
+
+	static ::Assets::DependencyValidation AsDepVal(IteratorRange<const ::Assets::DependencyValidation*> depVals)
+	{
+		if (depVals.empty()) return {};
+		VLA(::Assets::DependencyValidationMarker, markers, depVals.size());
+		for (unsigned c=0; c<depVals.size(); ++c) markers[c] = depVals[c];
+		return ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(markers, markers+depVals.size()));
 	}
 
 	static sp<CompiledMaterialSet> ConstructMaterialSetSync(
@@ -420,14 +459,12 @@ namespace RenderCore { namespace Assets
 		if (materialsToInstantiate.empty())
 			sourceModelHelper = baseMaterials;
 
-		std::vector<::Assets::DependencyValidationMarker> depVals;
+		std::vector<::Assets::DependencyValidation> depVals;
 		auto blockSerializer = ConstructMaterialSetSync_ToBlockSerializer(depVals, std::move(construction), sourceModelHelper, std::move(materialsToInstantiate));
 		auto memBlock = blockSerializer.AsMemoryBlock();
 		::Assets::Block_Initialize(memBlock.get());
 
-		return std::make_shared<CompiledMaterialSet>(
-			std::move(memBlock), blockSerializer.Size(),
-			::Assets::GetDepValSys().MakeOrReuse(depVals));
+		return std::make_shared<CompiledMaterialSet>(std::move(memBlock), blockSerializer.Size(), AsDepVal(depVals));
 	}
 
 	void ConstructMaterialSet(
@@ -485,7 +522,7 @@ namespace RenderCore { namespace Assets
 
 		Internal::SourceModelHelper sourceModelHelper { sourceModelName, std::move(sourceModelConfiguration) };
 		auto modelMat = sourceModelHelper.GetModelMatConfigs();
-		std::vector<::Assets::DependencyValidationMarker> depVals;
+		std::vector<::Assets::DependencyValidation> depVals;
 		auto construction = std::make_shared<MaterialSetConstruction>();
 		if (!sourceMaterialName.empty())
 			construction->AddOverride(sourceMaterialName);
@@ -500,7 +537,7 @@ namespace RenderCore { namespace Assets
 					::Assets::AsBlob(blockSerializer)
 				}
 			},
-			::Assets::GetDepValSys().MakeOrReuse(depVals),
+			AsDepVal(depVals),
 			GetCompileProcessType((CompiledMaterialSet*)nullptr)
 		};
 	}

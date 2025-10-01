@@ -52,7 +52,7 @@ namespace ShaderSourceParser
 		auto fn = initializers.GetInitializer<std::string>(0);
 		size_t fileSize;
 		::Assets::FileSnapshot fileState;
-		auto f = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(fn, &fileSize, &fileState);
+		auto f = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock_TolerateSharingErrors(fn, &fileSize, &fileState);
 		auto depVal = ::Assets::GetDepValSys().Make(::Assets::DependentFileState{fn, fileState});
 		if (!f || !fileSize)
 			Throw(::Assets::Exceptions::ConstructionError(depVal, "Missing or empty source file while generating signature: " + fn));

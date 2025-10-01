@@ -577,7 +577,32 @@ namespace AssetsNew
 
 					if (auto* scaffoldAndEntity = std::get_if<ScaffoldAndEntityName>(&indexer)) {
 						indexer = l->FindFirstDeserializableSync(componentTypeName, *scaffoldAndEntity);
-						assert(indexer.index() != 0);
+
+						if (std::get_if<std::monostate>(&indexer)) {
+							if constexpr (std::is_constructible_v<Type>) {
+
+								// NOTE -- smart pointers are initialized to nullptr on missing asset!
+								//		ie, unlike InvokeAssetConstructor<>(), we don't get a pointer to a default initialized object
+								//		This is partially because std::is_constructible_v<Type> will be true for a smart pointer to an object that cannot be default initialized
+								if constexpr (::Assets::Internal::IsSharedPtr<std::decay_t<Type>>::value || ::Assets::Internal::IsUniquePtr<std::decay_t<Type>>::value) {
+									if constexpr (Internal::IsWrapperType<MaybeWrapperType>) {
+										promise.set_value({ Type{}, scaffoldAndEntity->GetDependencyValidation() });
+									} else {
+										promise.set_value(Type{});
+									}
+								} else {
+									if constexpr (Internal::IsWrapperType<MaybeWrapperType>) {
+										promise.set_value({ ::Assets::Internal::InvokeAssetConstructor<Type>(), scaffoldAndEntity->GetDependencyValidation() });
+									} else {
+										promise.set_value(::Assets::Internal::InvokeAssetConstructor<Type>());
+									}
+								}
+
+							} else {
+								Throw(std::runtime_error("Non-default-constructable asset is missing in scaffold file" DEBUG_ONLY( + std::string("(") + scaffoldAndEntity->_entityName + ")")));
+							}
+							return;
+						}
 					}
 
 					if (auto* scaffoldAndEntity = std::get_if<ScaffoldAndEntityName>(&indexer)) {

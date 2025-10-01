@@ -397,9 +397,7 @@ namespace AssetsNew
 				_completedDepVals[idx] = ::Assets::Internal::GetDependencyValidation(_completed[idx]);
 				_states[idx] = ::Assets::AssetState::Ready;
 			} else {
-				// this future is not engaged; why do we think it is recently completed?
-				// did we get the message twice?
-				assert(_states[idx] == ::Assets::AssetState::Ready);
+				// we can end up checking the same future multiple times after calling CompleteIndividualAlreadyLocked from StallWhilePending (etc)
 			}
 		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 			_completed[idx] = {};

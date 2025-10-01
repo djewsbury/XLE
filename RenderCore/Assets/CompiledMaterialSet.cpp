@@ -131,7 +131,8 @@ namespace RenderCore { namespace Assets
 					if (i == _descriptorSetLayouts.end() || i->first != ref._hashId) {
 						auto block = IteratorRange<void*>{ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize)};
 						::Assets::Block_Initialize(block.data());
-						auto descSet = std::make_shared<PredefinedDescriptorSetLayout>(block, depVal);
+						block.first = (void*)::Assets::Block_GetFirstObject(block.first);
+						auto descSet = std::make_shared<PredefinedDescriptorSetLayout>(PredefinedDescriptorSetLayout::Deserialize(block, depVal));
 						_descriptorSetLayouts.emplace_back(ref._hashId, std::move(descSet));
 					}
 				}

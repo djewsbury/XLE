@@ -640,13 +640,14 @@ namespace RenderCore { namespace Assets
 	{
 		struct CBElement
 		{
-            ParameterBox::ParameterNameHash _hash = ~0ull;
-            ImpliedTyping::TypeDesc _type;
-            unsigned _arrayElementCount = 0;            // set to zero if this parameter is not actually an array
-            unsigned _arrayElementStride = 0;
+            ParameterBox::ParameterNameHash _hash;
+            uint64_t _type;
+            unsigned _arrayElementCount;
+            unsigned _arrayElementStride;
             StringSection<> _name;
             StringSection<> _conditions;
             unsigned _offsetsByLanguage[PredefinedCBLayout::AlignmentRules_Max];
+            uint32_t _pad;
         };
 
         struct PredefinedCBLayout
@@ -661,12 +662,13 @@ namespace RenderCore { namespace Assets
     void SerializationOperator(::Assets::BlockSerializer& serializer, const PredefinedCBLayout::Element& ele)
     {
         serializer << ele._hash;
-        serializer << ele._type;
+        serializer << *(const uint64_t*)&ele._type;
         serializer << ele._arrayElementCount;
         serializer << ele._arrayElementStride;
         serializer << ele._name;
         serializer << ele._conditions;
         for (const auto& o:ele._offsetsByLanguage) serializer << o;
+        serializer << uint32_t(0);
     }
     
     void SerializationOperator(::Assets::BlockSerializer& serializer, const PredefinedCBLayout& cbLayout)
@@ -683,7 +685,7 @@ namespace RenderCore { namespace Assets
         auto& mirror = *(const SerializableMirrors::PredefinedCBLayout*)block.first;
         _elements.reserve(mirror._elements.size());
         for (const auto& e:mirror._elements) {
-            Element q { e._hash, e._type, e._arrayElementCount, e._arrayElementStride, e._name.AsString(), e._conditions.AsString(), {} };
+            Element q { e._hash, *(const ImpliedTyping::TypeDesc*)&e._type, e._arrayElementCount, e._arrayElementStride, e._name.AsString(), e._conditions.AsString(), {} };
             for (unsigned c=0; c<dimof(q._offsetsByLanguage); ++c) q._offsetsByLanguage[c] = e._offsetsByLanguage[c];
             _elements.emplace_back(std::move(q));
         }
