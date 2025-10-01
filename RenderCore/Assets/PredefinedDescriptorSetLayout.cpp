@@ -299,6 +299,11 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
+	bool PredefinedDescriptorSetLayout::IsEmpty() const
+	{
+		return _slots.empty();
+	}
+
 	PredefinedDescriptorSetLayout::PredefinedDescriptorSetLayout() {}
 	PredefinedDescriptorSetLayout::~PredefinedDescriptorSetLayout() {}
 

@@ -4,14 +4,10 @@
 
 #pragma once
 
-#include "../Core/Exceptions.h"
-#include "../Utility/PtrUtils.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/Streams/SerializationUtils.h"
 #include <vector>
-#include <iterator>
-#include <type_traits>
 
 namespace Assets
 {

@@ -84,17 +84,5 @@ namespace RenderCore { namespace Techniques {
 		const StreamOutputInitializers& soInit,
 		const std::string& programName = {});
 
-	class PipelineAccelerator;
-	class DescriptorSetAccelerator;
-	class IPipelineAcceleratorPool;
-	std::pair<std::shared_ptr<PipelineAccelerator>, ::Assets::PtrToMarkerPtr<DescriptorSetAccelerator>> 
-		CreatePipelineAccelerator(
-			IPipelineAcceleratorPool& pool,
-			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& patchCollection,
-			const ParameterBox& materialSelectors,
-			const Assets::RenderStateSet& renderStateSet,
-			IteratorRange<const InputElementDesc*> inputLayout,
-			Topology topology = Topology::TriangleList);
-
 }}
 

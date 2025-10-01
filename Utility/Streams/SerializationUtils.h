@@ -416,11 +416,11 @@ namespace Utility
 
 		SerializableBasicString substr(size_t pos = 0, size_t count=npos) const
 		{
-			assert(pos < size());
-			if ((size() - pos) <= count) {
-				return SerializableBasicString{begin()+pos, end()};
+			assert(pos < SerializableVector<CharType>::size());
+			if ((SerializableVector<CharType>::size() - pos) <= count) {
+				return SerializableBasicString{SerializableVector<CharType>::begin()+pos, SerializableVector<CharType>::end()};
 			} else
-				return SerializableBasicString{begin()+pos, begin()+pos+count};
+				return SerializableBasicString{SerializableVector<CharType>::begin()+pos, SerializableVector<CharType>::begin()+pos+count};
 		}
 
 		friend SerializableBasicString operator+(const SerializableBasicString& lhs, StringSection<CharType> rhs)

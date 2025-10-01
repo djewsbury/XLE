@@ -23,6 +23,7 @@ namespace RenderCore { namespace Assets
 		Material,				// pointer to stream of MaterialCommand
 		Skeleton,				// pointer to stream of TransformationCommand
 		ShaderPatchCollection, 	// serialized ShaderPatchCollection
+		DescriptorSetLayout,	// serialized PredefinedDescriptorSetLayout
 		ModelCommandStream,		// pointer to stream of ModelCommand
 
 		MaterialNameDehash,

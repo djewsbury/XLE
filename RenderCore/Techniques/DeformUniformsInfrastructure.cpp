@@ -182,6 +182,7 @@ namespace RenderCore { namespace Techniques
 				auto materialMachine = materialScaffold->GetMaterialMachine(materialGuid);
 				const ParameterBox* constants = nullptr;
 				std::shared_ptr<Assets::ShaderPatchCollection> shaderPatchCollection;
+				std::shared_ptr<Assets::PredefinedDescriptorSetLayout> materialDescriptorSetLayout;
 				for (auto cmd:materialMachine) {
 					switch (cmd.Cmd()) {
 					case (uint32_t)Assets::MaterialCommand::AttachConstants:
@@ -189,6 +190,9 @@ namespace RenderCore { namespace Techniques
 						break;
 					case (uint32_t)Assets::MaterialCommand::AttachPatchCollectionId:
 						shaderPatchCollection = materialScaffold->GetShaderPatchCollection(cmd.As<uint64_t>());
+						break;
+					case (uint32_t)Assets::MaterialCommand::AttachMaterialDescriptorSetLayoutId:
+						materialDescriptorSetLayout = materialScaffold->GetMaterialDescriptorSetLayout(cmd.As<uint64_t>());
 						break;
 					}
 				}
@@ -198,7 +202,7 @@ namespace RenderCore { namespace Techniques
 				// PipelineAcceleratorPool will use when instantiating the main descriptor set. This
 				// includes any modifications made by the ShaderPatchInstantiationUtil...
 				std::vector<std::pair<unsigned, AnimatedUniformBufferHelper>> animBuffers;
-				auto patchCollectionFuture = compiledLayoutPool.CompileShaderPatchCollection(shaderPatchCollection, nullptr);
+				auto patchCollectionFuture = compiledLayoutPool.CompileShaderPatchCollection(shaderPatchCollection, materialDescriptorSetLayout);
 				patchCollectionFuture->StallWhilePending();		// unfortunately we have to stall; but it should be ready immediately in many cases
 				auto compiledPatchCollection = patchCollectionFuture->Actualize();
 				animBuffers = FindAnimatedUniformsBuffers(

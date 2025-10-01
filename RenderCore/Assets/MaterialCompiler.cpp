@@ -10,6 +10,7 @@
 #include "MaterialMachine.h"
 #include "AssetUtils.h"
 #include "ModelCompilationConfiguration.h"
+#include "PredefinedDescriptorSetLayout.h"
 #include "../../Assets/BlockSerializer.h"
 #include "../../Assets/ChunkFileWriter.h"
 #include "../../Assets/Assets.h"
@@ -62,20 +63,31 @@ namespace RenderCore { namespace Assets
 	{
 		struct PendingAssets
 		{
-			SerializableVector<std::pair<MaterialGuid, SerializableString>> _resolvedNames;
-			using MaterialMarker = sp<::Assets::Marker<ResolvedMaterial>>;
-			std::vector<std::pair<MaterialGuid, MaterialMarker>> _materials;
+			struct Entry
+			{
+				SerializableString _name;
+				std::future<ResolvedMaterial> _material;
+				std::shared_future<std::shared_ptr<PredefinedDescriptorSetLayout>> _descSet;
+			};
+			vp<MaterialGuid, Entry> _entries;
 		};
 
 		template<typename Type>
 			static std::pair<std::unique_ptr<uint8_t[], PODAlignedDeletor>, size_t> SerializeViaStreamFormatterToBuffer(const Type& type)
 		{
 			std::stringstream strm;
-			{ Formatters::TextOutputFormatter fmtter{strm}; fmtter << type; }
+			{ Formatters::TextOutputFormatter fmttr{strm}; fmttr << type; }
 			auto strmBuffer = strm.str();
 			std::unique_ptr<uint8_t[], PODAlignedDeletor> result { (uint8_t*)XlMemAlign(strmBuffer.size(), sizeof(uint64_t)) };
 			std::memcpy(result.get(), strmBuffer.data(), strmBuffer.size());
 			return { std::move(result), strmBuffer.size() };
+		}
+
+		template<typename Type>
+			static std::pair<std::unique_ptr<uint8_t[], PODAlignedDeletor>, size_t> SerializeViaBlockFormatterToBuffer(const Type& type)
+		{
+			::Assets::BlockSerializer blockSerializer; blockSerializer << type;
+			return { blockSerializer.AsMemoryBlock(), blockSerializer.Size() };
 		}
 
 		void Serialize(
@@ -96,55 +108,100 @@ namespace RenderCore { namespace Assets
 			};
 			std::vector<SerializedBlock2> resolved;
 			std::vector<SerializedBlock1> patchCollections;
-			resolved.reserve(pendingAssets._materials.size());
-			patchCollections.reserve(pendingAssets._materials.size());
+			std::vector<SerializedBlock1> descSetLayouts;
+			vp<uint64_t, SerializableString> resolvedNames;
+			resolved.reserve(pendingAssets._entries.size());
+			patchCollections.reserve(pendingAssets._entries.size());
+			descSetLayouts.reserve(pendingAssets._entries.size());
+			resolvedNames.reserve(pendingAssets._entries.size());
 
-			for (const auto&m:pendingAssets._materials) {
-				auto state = m.second->StallWhilePending();
-				assert(state.value() == ::Assets::AssetState::Ready);
-				auto& actualized = m.second->Actualize();
-				auto& resolvedMat = std::get<0>(actualized);
+			{
+				std::promise<void> uberPromise;
+				auto uberFuture = uberPromise.get_future();
+				::Assets::PollToPromise(
+					std::move(uberPromise),
+					[&pendingAssets, idx=0](auto timeout) mutable {
+						auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+						for (; idx<pendingAssets._entries.size(); ++idx) {
+							if (pendingAssets._entries[idx].second._material.valid() && pendingAssets._entries[idx].second._material.wait_until(timeoutTime) != std::future_status::ready)
+								return ::Assets::PollStatus::Continue;
+							if (pendingAssets._entries[idx].second._descSet.valid() && pendingAssets._entries[idx].second._descSet.wait_until(timeoutTime) != std::future_status::ready)
+								return ::Assets::PollStatus::Continue;
+						}
+						return ::Assets::PollStatus::Finish;
+					},
+					[]() {});
+				YieldToPool(uberFuture);		// wait for everything in a single YieldToPool, rather than many tiny ones
+			}
+
+			for (auto&m:pendingAssets._entries) {
 
 				::Assets::BlockSerializer tempBlock;
+				if (m.second._material.valid()) {
+					auto actualized = m.second._material.get();
+					auto& resolvedMat = std::get<0>(actualized);
 
-				if (resolvedMat._resources.GetCount())
-					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachShaderResourceBindings, resolvedMat._resources);
-				if (resolvedMat._selectors.GetCount())
-					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachSelectors, resolvedMat._selectors);
-				if (resolvedMat._uniforms.GetCount())
-					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachConstants, resolvedMat._uniforms);
-				if (!resolvedMat._samplers.empty()) {
-					tempBlock << (uint32_t)MaterialCommand::AttachSamplerBindings;
-					auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
-					for (auto& s:resolvedMat._samplers) {
-						tempBlock << Hash64(s.first);
-						tempBlock << s.second;
+					if (resolvedMat._resources.GetCount())
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachShaderResourceBindings, resolvedMat._resources);
+					if (resolvedMat._selectors.GetCount())
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachSelectors, resolvedMat._selectors);
+					if (resolvedMat._uniforms.GetCount())
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachConstants, resolvedMat._uniforms);
+					if (!resolvedMat._samplers.empty()) {
+						tempBlock << (uint32_t)MaterialCommand::AttachSamplerBindings;
+						auto recall = tempBlock.CreateRecall(sizeof(uint32_t));
+						for (auto& s:resolvedMat._samplers) {
+							tempBlock << Hash64(s.first);
+							tempBlock << s.second;
+						}
+						tempBlock.PushSizeValueAtRecall(recall);
 					}
-					tempBlock.PushSizeValueAtRecall(recall);
+					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachStateSet, resolvedMat._stateSet.GetHash());
+
+					if (resolvedMat._patchCollection.GetHash() != 0) {
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachPatchCollectionId, resolvedMat._patchCollection.GetHash());
+
+						bool gotExisting = false;
+						for (const auto&p:patchCollections)
+							gotExisting |= p._hash == resolvedMat._patchCollection.GetHash();
+
+						if (!gotExisting) {
+							// ShaderPatchCollection is mostly strings; so we just serialize it as a text block
+							auto buffer = SerializeViaStreamFormatterToBuffer(resolvedMat._patchCollection);
+							patchCollections.emplace_back(SerializedBlock1{resolvedMat._patchCollection.GetHash(), buffer.second, std::move(buffer.first)});
+						}
+					}
+
+					depVals.emplace_back(std::get<::Assets::DependencyValidation>(actualized));
 				}
-				tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachStateSet, resolvedMat._stateSet.GetHash());
 
-				if (resolvedMat._patchCollection.GetHash() != 0) {
-					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachPatchCollectionId, resolvedMat._patchCollection.GetHash());
+				if (m.second._descSet.valid()) {
+					auto actualized = m.second._descSet.get();
+					depVals.emplace_back(actualized->GetDependencyValidation());
+					if (!actualized->IsEmpty()) {
+						auto hash = actualized->CalculateHash();
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachMaterialDescriptorSetLayoutId, hash);
 
-					bool gotExisting = false;
-					for (const auto&p:patchCollections)
-						gotExisting |= p._hash == resolvedMat._patchCollection.GetHash();
+						bool gotExisting = false;
+						for (const auto&p:descSetLayouts)
+							gotExisting |= p._hash == hash;
 
-					if (!gotExisting) {
-						// ShaderPatchCollection is mostly strings; so we just serialize it as a text block
-						auto buffer = SerializeViaStreamFormatterToBuffer(resolvedMat._patchCollection);
-						patchCollections.emplace_back(SerializedBlock1{resolvedMat._patchCollection.GetHash(), buffer.second, std::move(buffer.first)});
+						if (!gotExisting) {
+							// ShaderPatchCollection is mostly strings; so we just serialize it as a text block
+							auto buffer = SerializeViaBlockFormatterToBuffer(*actualized);
+							descSetLayouts.emplace_back(SerializedBlock1{hash, buffer.second, std::move(buffer.first)});
+						}
 					}
 				}
 
 				resolved.emplace_back(SerializedBlock2{m.first, std::move(tempBlock)});
-				depVals.emplace_back(std::get<::Assets::DependencyValidation>(actualized));
+				if (!m.second._name.empty()) resolvedNames.emplace_back(m.first, m.second._name);
 			}
 
 			std::sort(resolved.begin(), resolved.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
 			std::sort(patchCollections.begin(), patchCollections.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
-			std::sort(pendingAssets._resolvedNames.begin(), pendingAssets._resolvedNames.end(), CompareFirst2{});
+			std::sort(descSetLayouts.begin(), descSetLayouts.end(), [](const auto& lhs, const auto& rhs) { return lhs._hash < rhs._hash; });
+			std::sort(resolvedNames.begin(), resolvedNames.end(), CompareFirst2{});
 
 				// "resolved" is now actually the data we want to write out
 			auto outerRecall = blockSerializer.CreateRecall(sizeof(uint32_t));
@@ -162,7 +219,14 @@ namespace RenderCore { namespace Assets
 				blockSerializer << pc._dataSize;
 				blockSerializer.SerializeSubBlock(MakeIteratorRange(pc._data.get(), PtrAdd(pc._data.get(), pc._dataSize)));
 			}
-			blockSerializer << MakeCmdAndSerializable(ScaffoldCommand::MaterialNameDehash, pendingAssets._resolvedNames);
+			for (const auto& pc:descSetLayouts) {
+				blockSerializer << (uint32_t)ScaffoldCommand::DescriptorSetLayout;
+				blockSerializer << (uint32_t)(sizeof(size_t) + sizeof(size_t) + sizeof(uint64_t));
+				blockSerializer << pc._hash;
+				blockSerializer << pc._dataSize;
+				blockSerializer.SerializeSubBlock(MakeIteratorRange(pc._data.get(), PtrAdd(pc._data.get(), pc._dataSize)));
+			}
+			blockSerializer << MakeCmdAndSerializable(ScaffoldCommand::MaterialNameDehash, resolvedNames);
 			blockSerializer.PushSizeValueAtRecall(outerRecall);
 		}
 
@@ -223,11 +287,12 @@ namespace RenderCore { namespace Assets
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	using MaterialFuture = std::shared_future<ResolvedMaterial>;
-	static sp<::Assets::Marker<ResolvedMaterial>> MergePartialMaterials(const std::vector<MaterialFuture>& partialMaterials)
+	static std::future<ResolvedMaterial> MergePartialMaterials(const std::vector<MaterialFuture>& partialMaterials)
 	{
-		auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
+		std::promise<ResolvedMaterial> promise;
+		auto result = promise.get_future();
 		::Assets::PollToPromise(
-			marker->AdoptPromise(),
+			std::move(promise),
 			[partialMaterials](auto timeout) {
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 				for (auto& f:partialMaterials)
@@ -252,7 +317,7 @@ namespace RenderCore { namespace Assets
 
 				return ResolvedMaterial { std::move(mergedResult), ::Assets::GetDepValSys().MakeOrReuse(dvs) };
 			});
-		return marker;
+		return result;
 	}
 	
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -271,12 +336,11 @@ namespace RenderCore { namespace Assets
 			depVals.emplace_back(sourceModelHelper.GetModelMatDepVal());		// record a dependency here incase it's empty
 		}
 
-		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>());
 
 			//  for each configuration, we want to build a resolved material
 		Internal::PendingAssets pendingAssets;
-		pendingAssets._resolvedNames.reserve(materialsToInstantiate.size());
-		pendingAssets._materials.reserve(materialsToInstantiate.size());
+		pendingAssets._entries.reserve(materialsToInstantiate.size());
 
 		char buffer[3*MaxPath];
 		for (const auto& cfg:materialsToInstantiate) {
@@ -334,8 +398,10 @@ namespace RenderCore { namespace Assets
 
 			}
 
-			pendingAssets._materials.emplace_back(guid, MergePartialMaterials(partialMaterials));
-			pendingAssets._resolvedNames.emplace_back(guid, cfg);
+			Internal::PendingAssets::Entry pendingAsset;
+			pendingAsset._material = MergePartialMaterials(partialMaterials);
+			pendingAsset._name = cfg;
+			pendingAssets._entries.emplace_back(guid, std::move(pendingAsset));
 		}
 
 		::Assets::BlockSerializer blockSerializer;

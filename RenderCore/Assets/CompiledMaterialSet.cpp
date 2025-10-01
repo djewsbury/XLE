@@ -6,7 +6,8 @@
 
 #include "CompiledMaterialSet.h"
 #include "ShaderPatchCollection.h"
-#include "MaterialMachine.h"
+#include "ScaffoldCmdStream.h"
+#include "PredefinedDescriptorSetLayout.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/BlockSerializer.h"
@@ -58,6 +59,14 @@ namespace RenderCore { namespace Assets
 		return nullptr;
 	}
 
+	std::shared_ptr<PredefinedDescriptorSetLayout> CompiledMaterialSet::GetMaterialDescriptorSetLayout(uint64_t hash) const
+	{
+		auto i = LowerBound(_descriptorSetLayouts, hash);
+		if (i != _descriptorSetLayouts.end() && i->first == hash)
+			return i->second;
+		return nullptr;
+	}
+
 	IteratorRange<ScaffoldCmdIterator> CompiledMaterialSet::GetOuterCommandStream() const
 	{
 		if (_rawMemoryBlockSize <= sizeof(uint32_t)) return {};
@@ -81,7 +90,7 @@ namespace RenderCore { namespace Assets
 	}
 
 	CompiledMaterialSet::CompiledMaterialSet(
-		std::unique_ptr<uint8_t[], PODAlignedDeletor>	rawMemoryBlock,
+		std::unique_ptr<uint8_t[], PODAlignedDeletor> rawMemoryBlock,
 		size_t rawMemoryBlockSize, const ::Assets::DependencyValidation& depVal)
 	: _rawMemoryBlock(std::move(rawMemoryBlock)), _rawMemoryBlockSize(rawMemoryBlockSize)
 	, _depVal(depVal)
@@ -111,6 +120,19 @@ namespace RenderCore { namespace Assets
 						Formatters::TextInputFormatter<> inputFormatter{MakeIteratorRange(ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize))};
 						auto patchCollection = std::make_shared<Assets::ShaderPatchCollection>(inputFormatter);
 						_patchCollections.insert(i, std::move(patchCollection));
+					}
+				}
+				break;
+			case (uint32_t)Assets::ScaffoldCommand::DescriptorSetLayout:
+				{
+					struct DSLRef { uint64_t _hashId; size_t _blockSize; void* _serializedBlock; };
+					auto ref = cmd.As<DSLRef>();
+					auto i = LowerBound(_descriptorSetLayouts, ref._hashId);
+					if (i == _descriptorSetLayouts.end() || i->first != ref._hashId) {
+						auto block = IteratorRange<void*>{ref._serializedBlock, PtrAdd(ref._serializedBlock, ref._blockSize)};
+						::Assets::Block_Initialize(block.data());
+						auto descSet = std::make_shared<PredefinedDescriptorSetLayout>(block, depVal);
+						_descriptorSetLayouts.emplace_back(ref._hashId, std::move(descSet));
 					}
 				}
 				break;

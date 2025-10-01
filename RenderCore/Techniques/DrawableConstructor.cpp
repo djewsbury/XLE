@@ -10,12 +10,9 @@
 #include "PipelineAccelerator.h"
 #include "CommonUtils.h"
 #include "ResourceConstructionContext.h"
-#include "Services.h"
 #include "ManualDrawables.h"		// for DecomposeMaterialMachine
-#include "../BufferUploads/BatchedResources.h"
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelMachine.h"
-#include "../Assets/MaterialMachine.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/CompiledMaterialSet.h"
 #include "../Assets/RawMaterial.h"
@@ -425,6 +422,7 @@ namespace RenderCore { namespace Techniques
 				unsigned _descriptorSetAcceleratorIdx;
 
 				std::shared_ptr<Assets::ShaderPatchCollection> _patchCollection;
+				std::shared_ptr<Assets::PredefinedDescriptorSetLayout> _materialDescriptorSetLayout;
 				ParameterBox _selectors;
 				ParameterBox _resourceBindings;
 				Assets::RenderStateSet _stateSet;
@@ -468,13 +466,15 @@ namespace RenderCore { namespace Techniques
 					auto decomposed = DecomposeMaterialMachine(materialMachine);
 					i->_stateSet = std::move(decomposed._stateSet);
 					i->_selectors = std::move(decomposed._matSelectors);
-					if (decomposed._shaderPatchCollection != ~0u)
+					if (decomposed._shaderPatchCollection != ~0ull)
 						i->_patchCollection = materialScaffold->GetShaderPatchCollection(decomposed._shaderPatchCollection);
+					if (decomposed._materialDescriptorSetLayout != ~0ull)
+						i->_materialDescriptorSetLayout = materialScaffold->GetMaterialDescriptorSetLayout(decomposed._materialDescriptorSetLayout);
 
 					// Descriptor set accelerator
 					auto descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
 						_constructionContext,
-						i->_patchCollection, nullptr,
+						i->_patchCollection, i->_materialDescriptorSetLayout,
 						materialMachine,
 						materialScaffold,
 						std::move(materialName),

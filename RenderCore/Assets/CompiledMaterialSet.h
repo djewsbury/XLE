@@ -16,6 +16,7 @@ namespace Assets {  class DependencyValidation; class ArtifactRequestResult; cla
 namespace RenderCore { namespace Assets
 {
 	class ShaderPatchCollection;
+	class PredefinedDescriptorSetLayout;
 	class ScaffoldCmdIterator;
 
 	using MaterialGuid = uint64_t;
@@ -34,6 +35,7 @@ namespace RenderCore { namespace Assets
 		std::vector<uint64_t> GetMaterials() const;
 
 		std::shared_ptr<ShaderPatchCollection> GetShaderPatchCollection(uint64_t hash) const;
+		std::shared_ptr<PredefinedDescriptorSetLayout> GetMaterialDescriptorSetLayout(uint64_t hash) const;
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		CompiledMaterialSet();
@@ -47,6 +49,7 @@ namespace RenderCore { namespace Assets
 	protected:
 		std::vector<std::pair<uint64_t, Machine>> _materialMachines;
 		std::vector<std::shared_ptr<ShaderPatchCollection>> _patchCollections;
+		std::vector<std::pair<uint64_t, std::shared_ptr<PredefinedDescriptorSetLayout>>> _descriptorSetLayouts;
 		IteratorRange<const void*> _resolvedNamesBlock;
 		std::unique_ptr<uint8_t[], PODAlignedDeletor>		_rawMemoryBlock;
 		size_t											_rawMemoryBlockSize = 0;

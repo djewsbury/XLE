@@ -334,46 +334,5 @@ namespace RenderCore { namespace Techniques
 		return future;
 	}
 
-	std::pair<std::shared_ptr<PipelineAccelerator>, ::Assets::PtrToMarkerPtr<DescriptorSetAccelerator>>
-		CreatePipelineAccelerator(
-			IPipelineAcceleratorPool& pool,
-			const std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>& patchCollection,
-			const ParameterBox& materialSelectors,
-			const Assets::RenderStateSet& renderStateSet,
-			IteratorRange<const RenderCore::InputElementDesc*> inputLayout,
-			Topology topology)
-	{
-		::Assets::PtrToMarkerPtr<DescriptorSetAccelerator> descriptorSetAccelerator;
-
-		/*if (patchCollection) {
-			const auto* descriptorSetLayout = patchCollection->GetInterface().GetMaterialDescriptorSet().get();
-			if (!descriptorSetLayout) {
-				descriptorSetLayout = &RenderCore::Techniques::GetFallbackMaterialDescriptorSetLayout();
-			}
-			descriptorSetAccelerator = RenderCore::Techniques::MakeDescriptorSetAccelerator(
-				*pool.GetDevice(),
-				material._constants, material._bindings,
-				*descriptorSetLayout,
-				"MaterialVisualizationScene");
-			
-			// Also append the "RES_HAS_" constants for each resource that is both in the descriptor set and that we have a binding for
-			for (const auto&r:descriptorSetLayout->_slots) {
-				if (r._type == DescriptorType::Sampler || r._type == DescriptorType::UniformBuffer)
-					continue;
-				if (material._bindings.HasParameter(MakeStringSection(r._name)))
-					matSelectors.SetParameter(MakeStringSection(std::string{"RES_HAS_"} + r._name).Cast<utf8>(), 1);
-			}
-		}*/
-
-		auto pipelineAccelerator = pool.CreatePipelineAccelerator(
-			patchCollection, nullptr,
-			materialSelectors,
-			inputLayout,
-			topology,
-			renderStateSet);
-
-		return std::make_pair(pipelineAccelerator, descriptorSetAccelerator);
-	}
-
 }}
 

@@ -877,8 +877,11 @@ namespace RenderCore { namespace Techniques
 		ParameterBox resHasParameters;
 		for (auto cmd:matMachine) {
 			if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachPatchCollectionId) {
-				assert(result._shaderPatchCollection == ~0u);
+				assert(result._shaderPatchCollection == ~0ull);
 				result._shaderPatchCollection = *(const uint64_t*)cmd.RawData().begin();
+			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachMaterialDescriptorSetLayoutId) {
+				assert(result._materialDescriptorSetLayout == ~0ull);
+				result._materialDescriptorSetLayout = *(const uint64_t*)cmd.RawData().begin();
 			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachShaderResourceBindings) {
 				assert(resHasParameters.GetCount() == 0);
 				assert(!cmd.RawData().empty());
