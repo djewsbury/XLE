@@ -76,33 +76,16 @@ namespace RenderCore { namespace Techniques
 		// Call AutoConstructToPromise outside of the lock. Note that this opens the door to other threads
 		// using the marker before we even initialize the promise like this
 		assert(_matDescSetLayout);
-		if (!matDescSet && !shaderPatchCollection->GetDescriptorSetFileName().IsEmpty()) {
-			auto layoutFileFuture = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayoutFile>(shaderPatchCollection->GetDescriptorSetFileName());
-			::Assets::WhenAll(layoutFileFuture).ThenConstructToPromise(
-				result->AdoptPromise(),
-				[shaderPatchCollection, weakThis=weak_from_this(), fn=shaderPatchCollection->GetDescriptorSetFileName().AsString()](auto layoutFile) {
+		::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise = result->AdoptPromise(), shaderPatchCollection, matDescSet, weakThis=weak_from_this()]() mutable {
+				TRY {
 					auto l = weakThis.lock();
 					if (!l) Throw(std::runtime_error("expired"));
-					
-					// additionalDepVal = actualLayoutFile->GetDependencyValidation();
-					auto i = layoutFile->_descriptorSets.find("Material");
-					if (i == layoutFile->_descriptorSets.end())
-						Throw(std::runtime_error("Expecting to find a descriptor set layout called 'Material' in pipeline layout file (" + fn + "), but it was not found"));
-
-					return std::make_shared<ShaderPatchInstantiationUtil>(*shaderPatchCollection, i->second.get(), *l->_matDescSetLayout);
-				});
-		} else {
-			::ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-				[promise = result->AdoptPromise(), shaderPatchCollection, matDescSet, weakThis=weak_from_this()]() mutable {
-					TRY {
-						auto l = weakThis.lock();
-						if (!l) Throw(std::runtime_error("expired"));
-						promise.set_value(std::make_shared<ShaderPatchInstantiationUtil>(*shaderPatchCollection, matDescSet.get(), *l->_matDescSetLayout));
-					} CATCH (...) {
-						promise.set_exception(std::current_exception());
-					} CATCH_END
-				});
-		}
+					promise.set_value(std::make_shared<ShaderPatchInstantiationUtil>(*shaderPatchCollection, matDescSet.get(), *l->_matDescSetLayout));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
 		return result;
 	}
 

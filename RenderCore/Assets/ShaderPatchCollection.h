@@ -20,13 +20,11 @@ namespace RenderCore { namespace Assets
 	public:
 		// getters
 		IteratorRange<const std::pair<std::string, ShaderSourceParser::InstantiationRequest>*> GetPatches() const { return MakeIteratorRange(_patches); }
-		StringSection<> GetDescriptorSetFileName() const { return MakeStringSection(_descriptorSet.begin(), _descriptorSet.end()); }
 		StringSection<> GetPreconfigurationFileName() const { return MakeStringSection(_preconfiguration.begin(), _preconfiguration.end()); }
 		StringSection<> GetOverrideShader(ShaderStage stage) const { return (unsigned(stage)<dimof(_overrideShaders)) ? MakeStringSection(_overrideShaders[unsigned(stage)]) : StringSection<>{}; }
 
 		// setters
 		void AddPatch(const std::string& name, const ShaderSourceParser::InstantiationRequest&);
-		void SetDescriptorSetFileName(const std::string&);
 		void SetPreconfigurationFileName(const std::string&);
 		void OverrideShader(ShaderStage, const std::string&);
 
@@ -49,7 +47,7 @@ namespace RenderCore { namespace Assets
 
 	private:
 		std::vector<std::pair<std::string, ShaderSourceParser::InstantiationRequest>> _patches;
-		std::string _descriptorSet, _preconfiguration;
+		std::string _preconfiguration;
 		std::string _overrideShaders[3];
 		uint64_t _hash = ~0ull;
 

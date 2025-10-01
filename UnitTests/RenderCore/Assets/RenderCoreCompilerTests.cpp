@@ -59,7 +59,6 @@ namespace UnitTests
 					Patches=~
 						PerPixel=~
 							some.pixel.hlsl::PerPixelCustomLighting
-						DescriptorSet=some.pipeline
 
 				Inherit = Material1 =~ Universal
 			)--")),
@@ -136,7 +135,6 @@ namespace UnitTests
 						auto guid = cmd.As<uint64_t>();
 						auto patchCollection = newScaffold->GetShaderPatchCollection(guid);
 						REQUIRE(patchCollection);
-						REQUIRE(patchCollection->GetDescriptorSetFileName().AsString() == "some.pipeline");
 						REQUIRE(patchCollection->GetPatches().size() == 1);
 						REQUIRE(patchCollection->GetPatches()[0].first == "PerPixel");
 					}

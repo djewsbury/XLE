@@ -60,8 +60,6 @@ namespace RenderCore { namespace Assets
 				}
 			}
 		}
-		if (!src._descriptorSet.empty())
-			_descriptorSet = src._descriptorSet;
 		if (!src._preconfiguration.empty())
 			_preconfiguration = src._preconfiguration;
 		for (unsigned c=0; c<dimof(src._overrideShaders); ++c)
@@ -77,12 +75,6 @@ namespace RenderCore { namespace Assets
 		if (i != _patches.end())
 			Throw(std::runtime_error("Cannot add shader patch named (" + name + ") because one with this name already exists"));
 		_patches.emplace_back(name, instRequest);
-		_hash = s_rebuildHash;
-	}
-
-	void ShaderPatchCollection::SetDescriptorSetFileName(const std::string& name)
-	{
-		_descriptorSet = name;
 		_hash = s_rebuildHash;
 	}
 
@@ -149,8 +141,6 @@ namespace RenderCore { namespace Assets
 			if (!p.second._implementsArchiveName.empty())
 				_hash = Hash64(p.second._implementsArchiveName, _hash);
 		}
-		if (!_descriptorSet.empty())
-			_hash = Hash64(_descriptorSet, _hash);
 		if (!_preconfiguration.empty())
 			_hash = Hash64(_preconfiguration, _hash);
 		for (const auto& s:_overrideShaders)
@@ -182,8 +172,6 @@ namespace RenderCore { namespace Assets
 			SerializeInstantiationRequest(formatter, p.second);
 			formatter.EndElement(pele);
 		}
-		if (!patchCollection.GetDescriptorSetFileName().IsEmpty())
-			formatter.WriteKeyedValue("DescriptorSet", patchCollection.GetDescriptorSetFileName());
 		if (!patchCollection.GetPreconfigurationFileName().IsEmpty())
 			formatter.WriteKeyedValue("Preconfiguration", patchCollection.GetPreconfigurationFileName());
 		if (!patchCollection.GetOverrideShader(ShaderStage::Vertex).IsEmpty())
@@ -236,10 +224,7 @@ namespace RenderCore { namespace Assets
 			if (next == Formatters::FormatterBlob::KeyedItem) {
 				auto name = RequireKeyedItem(formatter);
 				
-				if (XlEqString(name, "DescriptorSet")) {
-					_descriptorSet = RequireStringValue(formatter).AsString();
-					continue;
-				} else if (XlEqString(name, "Preconfiguration")) {
+				if (XlEqString(name, "Preconfiguration")) {
 					_preconfiguration = RequireStringValue(formatter).AsString();
 					continue;
 				} else if (XlEqString(name, "OverrideVS")) {
@@ -252,6 +237,10 @@ namespace RenderCore { namespace Assets
 					_overrideShaders[2] = RequireStringValue(formatter).AsString();
 					continue;
 				}
+
+				#if defined(_DEBUG)
+					if (XlEqString(name, "DescriptorSet")) Throw(Formatters::FormatException("Deprecated DescriptorSet key", formatter.GetLocation()));
+				#endif
 				
 				if (formatter.PeekNext() != Formatters::FormatterBlob::BeginElement)
 					Throw(Formatters::FormatException(StringMeld<256>() << "Unexpected attribute (" << name << ") in ShaderPatchCollection", formatter.GetLocation()));
