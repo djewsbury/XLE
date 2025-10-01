@@ -39,13 +39,7 @@ namespace RenderCore { namespace Assets
             std::string _conditions;
 
             // Offsets according to the alignment rules for different shader languages
-            unsigned _offsetsByLanguage[AlignmentRules_Max];
-
-			Element()
-			{
-				for (unsigned c=0; c<AlignmentRules_Max; ++c)
-					_offsetsByLanguage[c] = 0;
-			}
+            unsigned _offsetsByLanguage[AlignmentRules_Max] {0,};
         };
         std::vector<Element> _elements;
         ParameterBox _defaults;
@@ -81,6 +75,7 @@ namespace RenderCore { namespace Assets
 			ConditionalProcessingTokenizer&,
 			const ::Assets::DependencyValidation&);
 		PredefinedCBLayout(IteratorRange<const NameAndType*> elements, const ParameterBox& defaults = {});
+        PredefinedCBLayout(IteratorRange<const void*> block, const ::Assets::DependencyValidation&);
         ~PredefinedCBLayout();
         
         PredefinedCBLayout(const PredefinedCBLayout&) = default;
@@ -90,6 +85,7 @@ namespace RenderCore { namespace Assets
 
         const ::Assets::DependencyValidation& GetDependencyValidation() const     
             { return _validationCallback; }
+        friend void SerializationOperator(::Assets::BlockSerializer&, const PredefinedCBLayout&);
 
     private:
         ::Assets::DependencyValidation   _validationCallback;

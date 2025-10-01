@@ -10,6 +10,7 @@
 #include "../../Assets/DepVal.h"
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/PreprocessorIncludeHandler.h"
+#include "../../Assets/BlockSerializer.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
@@ -392,6 +393,73 @@ namespace RenderCore { namespace Assets
 		}
 
 		return result;
+	}
+
+	namespace SerializableMirrors
+	{
+		struct ConditionalDescriptorSlot
+		{
+			StringSection<> _name;
+			uint64_t _nameHash = 0ull;
+			uint32_t _type;
+			unsigned _arrayElementCount = 0u;
+			unsigned _slotIdx = ~0u;
+			unsigned _cbIdx = ~0u;
+			unsigned _fixedSamplerIdx = ~0u;
+			StringSection<> _conditions; 
+		};
+
+		struct CB
+		{
+			IteratorRange<const void*> _data;
+		};
+
+		struct PredefinedDescriptorSetLayout
+		{
+			IteratorRange<const ConditionalDescriptorSlot*> _slots;
+			IteratorRange<const CB*> _constantBuffers;
+			IteratorRange<const SamplerDesc*> _fixedSamplers;
+		};
+	}
+
+	static void SerializationOperator(::Assets::BlockSerializer& serializer, const PredefinedDescriptorSetLayout::ConditionalDescriptorSlot& slot)
+	{
+		serializer << slot._name;
+		serializer << slot._nameHash;
+		serializer << uint32_t(slot._type);
+		serializer << slot._arrayElementCount;
+		serializer << slot._slotIdx;
+		serializer << slot._cbIdx;
+		serializer << slot._fixedSamplerIdx;
+		serializer << slot._conditions;
+	}
+
+	static void SerializationOperator(::Assets::BlockSerializer& serializer, const std::shared_ptr<RenderCore::Assets::PredefinedCBLayout>& cb)
+	{
+		assert(cb);
+		serializer.SerializeSubBlock(MakeIteratorRange(cb.get(), cb.get()+1), ::Assets::BlockSerializer::SpecialBuffer::IteratorRange);
+	}
+
+	void SerializationOperator(::Assets::BlockSerializer& serializer, const PredefinedDescriptorSetLayout& layout)
+	{
+		serializer.SerializeSubBlock(MakeIteratorRange(layout._slots), ::Assets::BlockSerializer::SpecialBuffer::IteratorRange);
+		serializer.SerializeSubBlock(MakeIteratorRange(layout._constantBuffers), ::Assets::BlockSerializer::SpecialBuffer::IteratorRange);
+		serializer.SerializeRawSubBlock(MakeIteratorRange(layout._fixedSamplers), ::Assets::BlockSerializer::SpecialBuffer::IteratorRange);
+	}
+
+	PredefinedDescriptorSetLayout::PredefinedDescriptorSetLayout(IteratorRange<const void*> block, const ::Assets::DependencyValidation& depVal)
+	: _depVal(depVal)
+	{
+		auto& mirror = *(const SerializableMirrors::PredefinedDescriptorSetLayout*)block.first;
+		_slots.reserve(mirror._slots.size());
+		for (const auto& s:mirror._slots)
+			_slots.emplace_back(ConditionalDescriptorSlot {
+				s._name.AsString(), s._nameHash, DescriptorType(s._type), s._arrayElementCount, s._slotIdx, s._cbIdx, s._fixedSamplerIdx, s._conditions.AsString()
+			});
+		_constantBuffers.reserve(mirror._constantBuffers.size());
+		for (const auto& cb:mirror._constantBuffers)
+			_constantBuffers.emplace_back(std::make_shared<PredefinedCBLayout>(cb._data, depVal));
+		_fixedSamplers.insert(_fixedSamplers.end(), mirror._fixedSamplers.begin(), mirror._fixedSamplers.end());
 	}
 
 }}

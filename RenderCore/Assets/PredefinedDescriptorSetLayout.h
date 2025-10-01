@@ -12,7 +12,7 @@
 #include <vector>
 #include <memory>
 
-namespace Assets { class DirectorySearchRules; class DependencyValidation; }
+namespace Assets { class DirectorySearchRules; class DependencyValidation; class BlockSerializer; }
 namespace Utility { class ConditionalProcessingTokenizer; }
 namespace RenderCore { enum class DescriptorType; class DescriptorSetSignature; class SamplerPool; }
 
@@ -41,6 +41,7 @@ namespace RenderCore { namespace Assets
 		DescriptorSetSignature MakeDescriptorSetSignature(SamplerPool*) const;
 
 		uint64_t CalculateHash(uint64_t seed=DefaultSeed64) const;
+		bool IsEmpty() const;
 
 		PredefinedDescriptorSetLayout(
 			StringSection<> inputData,
@@ -49,10 +50,12 @@ namespace RenderCore { namespace Assets
 		PredefinedDescriptorSetLayout(
 			Utility::ConditionalProcessingTokenizer&,
 			const ::Assets::DependencyValidation&);
+		PredefinedDescriptorSetLayout(IteratorRange<const void*> block, const ::Assets::DependencyValidation&);
 		PredefinedDescriptorSetLayout();
 		~PredefinedDescriptorSetLayout();
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
+		friend void SerializationOperator(::Assets::BlockSerializer&, const PredefinedDescriptorSetLayout&);
 
 	protected:
 		void ParseSlot(Utility::ConditionalProcessingTokenizer& iterator, DescriptorType type);

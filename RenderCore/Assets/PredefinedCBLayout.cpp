@@ -10,9 +10,8 @@
 #include "../../Assets/IFileSystem.h"
 #include "../../Assets/DepVal.h"
 #include "../../Assets/PreprocessorIncludeHandler.h"
-#include "../../OSServices/Log.h"
+#include "../../Assets/BlockSerializer.h"
 #include "../../Utility/BitUtils.h"
-#include "../../OSServices/RawFS.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/MemoryUtils.h"
@@ -635,6 +634,62 @@ namespace RenderCore { namespace Assets
 
     PredefinedCBLayoutFile::~PredefinedCBLayoutFile()
     {
+    }
+
+    namespace SerializableMirrors
+	{
+		struct CBElement
+		{
+            ParameterBox::ParameterNameHash _hash = ~0ull;
+            ImpliedTyping::TypeDesc _type;
+            unsigned _arrayElementCount = 0;            // set to zero if this parameter is not actually an array
+            unsigned _arrayElementStride = 0;
+            StringSection<> _name;
+            StringSection<> _conditions;
+            unsigned _offsetsByLanguage[PredefinedCBLayout::AlignmentRules_Max];
+        };
+
+        struct PredefinedCBLayout
+        {
+            IteratorRange<const CBElement*> _elements;
+            ParameterBox _defaults;
+            unsigned _cbSizeByLanguage[Assets::PredefinedCBLayout::AlignmentRules_Max];
+            unsigned _cbSizeByLanguageNoPostfix[Assets::PredefinedCBLayout::AlignmentRules_Max];
+        };
+    }
+
+    void SerializationOperator(::Assets::BlockSerializer& serializer, const PredefinedCBLayout::Element& ele)
+    {
+        serializer << ele._hash;
+        serializer << ele._type;
+        serializer << ele._arrayElementCount;
+        serializer << ele._arrayElementStride;
+        serializer << ele._name;
+        serializer << ele._conditions;
+        for (const auto& o:ele._offsetsByLanguage) serializer << o;
+    }
+    
+    void SerializationOperator(::Assets::BlockSerializer& serializer, const PredefinedCBLayout& cbLayout)
+    {
+        serializer.SerializeSubBlock(MakeIteratorRange(cbLayout._elements), ::Assets::BlockSerializer::SpecialBuffer::IteratorRange);
+        serializer << cbLayout._defaults;
+        for (const auto& o:cbLayout._cbSizeByLanguage) serializer << o;
+        for (const auto& o:cbLayout._cbSizeByLanguageNoPostfix) serializer << o;
+    }
+
+    PredefinedCBLayout::PredefinedCBLayout(IteratorRange<const void*> block, const ::Assets::DependencyValidation& depVal)
+    : _validationCallback(depVal)
+    {
+        auto& mirror = *(const SerializableMirrors::PredefinedCBLayout*)block.first;
+        _elements.reserve(mirror._elements.size());
+        for (const auto& e:mirror._elements) {
+            Element q { e._hash, e._type, e._arrayElementCount, e._arrayElementStride, e._name.AsString(), e._conditions.AsString(), {} };
+            for (unsigned c=0; c<dimof(q._offsetsByLanguage); ++c) q._offsetsByLanguage[c] = e._offsetsByLanguage[c];
+            _elements.emplace_back(std::move(q));
+        }
+        _defaults = mirror._defaults;
+        for (unsigned c=0; c<dimof(_cbSizeByLanguage); ++c) _cbSizeByLanguage[c] = mirror._cbSizeByLanguage[c];
+        for (unsigned c=0; c<dimof(_cbSizeByLanguageNoPostfix); ++c) _cbSizeByLanguageNoPostfix[c] = mirror._cbSizeByLanguageNoPostfix[c];
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
