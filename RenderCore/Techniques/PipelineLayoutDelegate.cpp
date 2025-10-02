@@ -98,14 +98,20 @@ namespace RenderCore { namespace Techniques
 		auto result = std::make_shared<RenderCore::Assets::PredefinedPipelineLayout>(skeletonPipelineLayout);
 
 		// Take each descriptor set either from skeletonPipelineLayout, or the patch in list
-		for (auto& ds:result->_descriptorSets) {
+		for (auto ds=result->_descriptorSets.begin(); ds!=result->_descriptorSets.end();) {
 			auto patchIn = std::find_if(
 				patchInDescSets.begin(), patchInDescSets.end(),
-				[n=&ds._name](const auto& q) { return XlEqString(q._bindingName, *n); });
+				[n=&ds->_name](const auto& q) { return XlEqString(q._bindingName, *n); });
 			if (patchIn != patchInDescSets.end()) {
-				ds._isAuto = false;
-				ds._descSet = patchIn->_descSet;
+				if (!patchIn->_descSet || patchIn->_descSet->IsEmpty()) {
+					ds = result->_descriptorSets.erase(ds);
+					continue;	// skip increment ds
+				} else {
+					ds->_isAuto = false;
+					ds->_descSet = patchIn->_descSet;
+				}
 			}
+			++ds;
 		}
 		
 		return result;

@@ -1059,12 +1059,15 @@ namespace RenderCore { namespace Techniques
 		// future continuation functions
 		std::shared_ptr<ShaderPatchInstantiationUtil> patchCollection; ::Assets::DependencyValidation patchCollectionDepVal; ::Assets::Blob patchCollectionLog;
 		if (patchCollectionFuture->CheckStatusBkgrnd(patchCollection, patchCollectionDepVal, patchCollectionLog) == ::Assets::AssetState::Ready) {
-			ConstructDescriptorSetHelper helper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo};
-			helper.Construct(
-				constructionContext.get(),
-				patchCollection->GetInterface().GetMaterialDescriptorSet(),
-				materialMachine, deformBinding.get(), std::move(name));
-			helper.CompleteToPromise(std::move(promise));
+			if (!patchCollection->GetInterface().GetMaterialDescriptorSet().IsEmpty()) {
+				ConstructDescriptorSetHelper helper{_device, _samplerPool.get(), PipelineType::Graphics, generateBindingInfo};
+				helper.Construct(
+					constructionContext.get(),
+					patchCollection->GetInterface().GetMaterialDescriptorSet(),
+					materialMachine, deformBinding.get(), std::move(name));
+				helper.CompleteToPromise(std::move(promise));
+			} else
+				promise.set_value({});	// we're assuming that the material desc set will be patched out of the pipeline layout; meaning it will never be queried
 		} else {
 			std::weak_ptr<IDevice> weakDevice = _device;
 			::Assets::WhenAll(patchCollectionFuture).ThenConstructToPromise(
@@ -1077,12 +1080,15 @@ namespace RenderCore { namespace Techniques
 					if (!d)
 						Throw(std::runtime_error("Device has been destroyed"));
 					
-					ConstructDescriptorSetHelper helper{d, samplerPool.lock().get(), PipelineType::Graphics, generateBindingInfo};
-					helper.Construct(
-						constructionContext.get(),
-						patchCollection->GetInterface().GetMaterialDescriptorSet(),
-						materialMachine, deformBinding.get(), std::move(name));
-					helper.CompleteToPromise(std::move(promise));
+					if (!patchCollection->GetInterface().GetMaterialDescriptorSet().IsEmpty()) {
+						ConstructDescriptorSetHelper helper{d, samplerPool.lock().get(), PipelineType::Graphics, generateBindingInfo};
+						helper.Construct(
+							constructionContext.get(),
+							patchCollection->GetInterface().GetMaterialDescriptorSet(),
+							materialMachine, deformBinding.get(), std::move(name));
+						helper.CompleteToPromise(std::move(promise));
+					} else
+						promise.set_value({});	// we're assuming that the material desc set will be patched out of the pipeline layout; meaning it will never be queried
 				});
 		}
 
@@ -1505,8 +1511,10 @@ namespace RenderCore { namespace Techniques
 			{
 				auto completed = descSet->_pending.get();
 				descSet->_invalidUnreliable = false;
-				descSet->_depVal = completed.begin()->GetDependencyValidation();
-				descSet->_completed = std::move(*completed.begin());
+				if (!completed.empty()) {
+					descSet->_depVal = completed.begin()->GetDependencyValidation();
+					descSet->_completed = std::move(*completed.begin());
+				} else descSet->_completed = {};		// null desc set (ie, expecting to be used with a pipeline layout with no material desc set entry) -- but no depVal tracking
 				descSet->_visibilityMarker = newVisibilityMarker;
 				descSet->_pending = {};
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
