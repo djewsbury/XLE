@@ -26,6 +26,7 @@ namespace SceneEngine
                 Terrain = 1<<0, 
                 Placement = 1<<1,
                 Brush = 1<<2,
+                BrushVertices = 1<<3,
 
                 Extra = 1<<6
             };

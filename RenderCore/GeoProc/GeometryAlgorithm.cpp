@@ -69,6 +69,48 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return tc;
     }
 
+    std::pair<Float3, Float3> CalculateST(
+		const Float3& p0, const Float3& p1, const Float3& p2,
+		const Float2& UV0, const Float2& UV1, const Float2& UV2)
+	{
+		/*	There is one natural tangent and one natural bitangent for each triangle, on the v=0 and u=0 axes 
+            in 3 space. We'll calculate them for this triangle here and then use a composite of triangle tangents
+            for the vertex tangents below.
+
+            Here's a good reference:
+            http://www.terathon.com/code/tangent.html
+            from "Mathematics for 3D Game Programming and Computer Graphics, 2nd ed."
+
+            These equations just solve for v=0 and u=0 on the triangle surface.
+        */
+
+        auto Q1 = p1 - p0;
+        auto Q2 = p2 - p0;
+        auto st1 = UV1 - UV0;
+        auto st2 = UV2 - UV0;
+        float rr = (st1[0] * st2[1] + st2[0] * st1[1]);
+        if (!Equivalent(rr, 0.f, 1e-10f)) { 
+            float r = 1.f / rr;
+            Float3 sAxis = (st2[1] * Q1 - st1[1] * Q2) * r;
+            Float3 tAxis = (st1[0] * Q2 - st2[0] * Q1) * r;
+
+                // We may need to flip the direction of the s or t axis
+                // check the texture coordinates to find the correct direction
+                // for these axes...
+            sAxis = CorrectAxisDirection(sAxis, p0, p1, p2, UV0[0], UV1[0], UV2[0]);
+            tAxis = CorrectAxisDirection(tAxis, p0, p1, p2, UV0[1], UV1[1], UV2[1]);
+
+            auto sMagSq = MagnitudeSquared(sAxis);
+            auto tMagSq = MagnitudeSquared(tAxis);
+        
+            float recipSMag, recipTMag;
+            if (XlRSqrt_Checked(&recipSMag, sMagSq) && XlRSqrt_Checked(&recipTMag, tMagSq))
+                return { sAxis * recipSMag, tAxis * recipTMag };
+        }
+
+        return { Zero<Float3>(), Zero<Float3>() };
+	}
+
     void GenerateTangentFrame(
         MeshDatabase& mesh,
         unsigned semanticIndex,
@@ -117,52 +159,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
                     Float3 tangent, bitangent;
 
 					if (tcElement != ~0u) {
-							/*	There is one natural tangent and one natural bitangent for each triangle, on the v=0 and u=0 axes 
-								in 3 space. We'll calculate them for this triangle here and then use a composite of triangle tangents
-								for the vertex tangents below.
-
-								Here's a good reference:
-								http://www.terathon.com/code/tangent.html
-								from "Mathematics for 3D Game Programming and Computer Graphics, 2nd ed."
-
-								These equations just solve for v=0 and u=0 on the triangle surface.
-							*/
+							
 						const auto UV0 = mesh.GetUnifiedElement<Float2>(v0, tcElement);
 						const auto UV1 = mesh.GetUnifiedElement<Float2>(v1, tcElement);
 						const auto UV2 = mesh.GetUnifiedElement<Float2>(v2, tcElement);
-						auto Q1 = p1 - p0;
-						auto Q2 = p2 - p0;
-						auto st1 = UV1 - UV0;
-						auto st2 = UV2 - UV0;
-						float rr = (st1[0] * st2[1] + st2[0] * st1[1]);
-						if (Equivalent(rr, 0.f, 1e-10f)) { 
-                            tangent = bitangent = Zero<Float3>();
-                        } else {
-							float r = 1.f / rr;
-							Float3 sAxis = (st2[1] * Q1 - st1[1] * Q2) * r;
-							Float3 tAxis = (st1[0] * Q2 - st2[0] * Q1) * r;
-
-								// We may need to flip the direction of the s or t axis
-								// check the texture coordinates to find the correct direction
-								// for these axes...
-							sAxis = CorrectAxisDirection(sAxis, p0, p1, p2, UV0[0], UV1[0], UV2[0]);
-							tAxis = CorrectAxisDirection(tAxis, p0, p1, p2, UV0[1], UV1[1], UV2[1]);
-
-							auto sMagSq = MagnitudeSquared(sAxis);
-							auto tMagSq = MagnitudeSquared(tAxis);
 						
-							float recipSMag, recipTMag;
-							if (XlRSqrt_Checked(&recipSMag, sMagSq) && XlRSqrt_Checked(&recipTMag, tMagSq)) {
-								tangent = sAxis * recipSMag;
-								bitangent = tAxis * recipTMag;
-							} else {
-								tangent = bitangent = Zero<Float3>();
-							}
-
-							tangent = sAxis;
-							bitangent = tAxis;
-						}
-
+						std::tie(tangent, bitangent) = CalculateST(p0, p1, p2, UV0, UV1, UV2);
 						assert( tangent[0] == tangent[0] );
 					} else {
 						tangent = Zero<Float3>();
@@ -645,7 +647,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		// 3. write out an index buffer with the adjacent vertex indices in interleaved order
 		// when there is no adjacency for an edge, we duplicate one of the vertex indices from the edge
 
-		const unsigned inputTriCount = inputTriListIndexBuffer.size() / 3;
+		const unsigned inputTriCount = unsigned(inputTriListIndexBuffer.size() / 3);
 		const unsigned estimateEdgeCount = inputTriCount * 3 / 2;		// assuming each edge is used twice
 		
 		std::vector<WorkingEdge> edges;

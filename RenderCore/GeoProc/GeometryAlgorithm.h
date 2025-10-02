@@ -81,4 +81,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         IteratorRange<const void*> outputIndices, IteratorRange<const void*> inputIndices,
         IteratorRange<const uint32_t*> reordering, Format indexFormat);
 
+    std::pair<Float3, Float3> CalculateST(
+		const Float3& p0, const Float3& p1, const Float3& p2,
+		const Float2& UV0, const Float2& UV1, const Float2& UV2);
+
 }}}
