@@ -11,6 +11,7 @@
 #include "../../Assets/AssetUtils.h"
 #include "../../Assets/PreprocessorIncludeHandler.h"
 #include "../../Assets/BlockSerializer.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/FastParseValue.h"
@@ -469,6 +470,11 @@ namespace RenderCore { namespace Assets
 			result._constantBuffers.emplace_back(std::make_shared<PredefinedCBLayout>(cb._data, depVal));
 		result._fixedSamplers.insert(result._fixedSamplers.end(), mirror._fixedSamplers.begin(), mirror._fixedSamplers.end());
 		return result;
+	}
+
+	std::shared_future<std::shared_ptr<PredefinedDescriptorSetLayout>> GetResolvedPredefinedDescriptorSetLayoutFuture(std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<> identifier)
+	{
+		return util->GetCachedFuture<std::shared_ptr<PredefinedDescriptorSetLayout>>(s_DescriptorSet_ComponentName, ::AssetsNew::ContextAndIdentifier{identifier.AsString(), {}});
 	}
 
 }}

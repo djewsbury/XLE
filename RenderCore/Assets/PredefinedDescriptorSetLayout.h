@@ -13,8 +13,10 @@
 #include <memory>
 
 namespace Assets { class DirectorySearchRules; class DependencyValidation; class BlockSerializer; }
+namespace AssetsNew { class CompoundAssetUtil; }
 namespace Utility { class ConditionalProcessingTokenizer; }
 namespace RenderCore { enum class DescriptorType; class DescriptorSetSignature; class SamplerPool; }
+namespace std { template<typename T> class shared_future; }
 
 namespace RenderCore { namespace Assets 
 {
@@ -66,6 +68,8 @@ namespace RenderCore { namespace Assets
 	};
 
 	static constexpr uint64_t s_DescriptorSet_ComponentName = ConstHash64("DescriptorSet");
+
+	std::shared_future<std::shared_ptr<PredefinedDescriptorSetLayout>> GetResolvedPredefinedDescriptorSetLayoutFuture(std::shared_ptr<::AssetsNew::CompoundAssetUtil>, StringSection<>);
 
 }}
 

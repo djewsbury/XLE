@@ -133,7 +133,7 @@ namespace Assets
 		template<typename Type> static constexpr bool HasStdGetDependencyValidation = TupleHasType<DependencyValidation, Type>;
 
 		template<typename Type> decltype(std::declval<const Type&>().GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset.GetDependencyValidation(); }
-		template<typename Type> decltype(std::declval<const Type&>()->GetDependencyValidation()) GetDependencyValidation(const Type& asset) { return asset->GetDependencyValidation(); }
+		template<typename Type> std::remove_reference_t<decltype(std::declval<const Type&>()->GetDependencyValidation())> GetDependencyValidation(const Type& asset) { return asset ? asset->GetDependencyValidation() : std::remove_reference_t<decltype(std::declval<const Type&>()->GetDependencyValidation())>{}; }
 		template<typename Type> std::enable_if_t<HasStdGetDependencyValidation<Type> && !HasGetDependencyValidation<Type> && !HasDerefGetDependencyValidation<Type>, const DependencyValidation&> GetDependencyValidation(const Type& asset) { return std::get<DependencyValidation>(asset); }
 
 		template<typename Type, typename =std::enable_if_t<!HasGetDependencyValidation<Type> && !HasDerefGetDependencyValidation<Type> && !HasStdGetDependencyValidation<Type>>>
@@ -152,7 +152,7 @@ namespace Assets
 		template<typename Type> static constexpr bool HasStdGetActualizationLog = TupleHasType<Blob, Type>;
 
 		template<typename Type> decltype(std::declval<const Type&>().GetActualizationLog()) GetActualizationLog(const Type& asset) { return asset.GetActualizationLog(); }
-		template<typename Type> decltype(std::declval<const Type&>()->GetActualizationLog()) GetActualizationLog(const Type& asset) { return asset->GetActualizationLog(); }
+		template<typename Type> std::remove_reference_t<decltype(std::declval<const Type&>()->GetActualizationLog())> GetActualizationLog(const Type& asset) { return asset ? asset->GetActualizationLog() : std::remove_reference_t<decltype(std::declval<const Type&>()->GetActualizationLog())>{}; }
 		template<typename Type> std::enable_if_t<HasStdGetActualizationLog<Type>, const Blob&> GetActualizationLog(const Type& asset) { return std::get<Blob>(asset); }
 
 		template<typename Type, typename =std::enable_if_t<!HasGetActualizationLog<Type> && !HasDerefGetActualizationLog<Type> && !HasStdGetActualizationLog<Type>>>
