@@ -776,8 +776,12 @@ namespace Utility
 				*erasePtr = std::move(*(erasePtr+1));
 				++erasePtr;
 			}
-			*erasePtr = std::move(((Type*)_objects)[0]);
-			erasePtr = (Type*)_objects;
+			// We don't do this move if endIdx == 0, since endIdx is just past the end.
+			// in this case, erasePtr->~Type(); will ultimately delete the last item in _objects
+			if (endIdx != 0) {
+				*erasePtr = std::move(((Type*)_objects)[0]);
+				erasePtr = (Type*)_objects;
+			}
 			// continue --
 		}
 
