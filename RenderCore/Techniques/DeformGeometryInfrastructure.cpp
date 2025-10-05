@@ -90,7 +90,7 @@ namespace RenderCore { namespace Techniques
 					metrics._constantDataSize += deformerMetrics._constantDataSize;
 					metrics._inputStaticDataSize += deformerMetrics._inputStaticDataSize;
 				}
-				metrics._deformersReadied += _deformOps.size();
+				metrics._deformersReadied += (unsigned)_deformOps.size();
 			}
 		}
 

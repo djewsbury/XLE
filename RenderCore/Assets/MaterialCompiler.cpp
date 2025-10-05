@@ -502,6 +502,20 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
+	std::vector<::Assets::SerializedArtifact> SerializeCompiledMaterialSetToChunks(
+		std::shared_ptr<MaterialSetConstruction> construction,
+		std::vector<std::string> materialsToInstantiate)
+	{
+		std::vector<::Assets::DependencyValidation> depVals;
+		auto blockSerializer = ConstructMaterialSetSync_ToBlockSerializer(depVals, construction, {}, materialsToInstantiate);
+
+		return {
+			{
+				ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion, "material-set", ::Assets::AsBlob(blockSerializer)
+			}
+		};
+	}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static ::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)

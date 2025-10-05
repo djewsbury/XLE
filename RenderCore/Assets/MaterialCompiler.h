@@ -13,6 +13,7 @@
 #include <variant>
 
 namespace AssetsNew { class CompoundAssetScaffold; }
+namespace Assets { struct SerializedArtifact; }
 
 namespace RenderCore { namespace Assets
 {
@@ -66,6 +67,10 @@ namespace RenderCore { namespace Assets
 	void ConstructMaterialSet(
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialSetConstruction> construction);
+
+	std::vector<::Assets::SerializedArtifact> SerializeCompiledMaterialSetToChunks(
+		std::shared_ptr<MaterialSetConstruction> construction,
+		std::vector<std::string> materialsToInstantiate);
 
 }}
 

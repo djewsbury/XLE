@@ -699,7 +699,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             CopyVertexData(
                 rawData.data(), srcFormat, packedStride, rawData.size(),
                 data.begin(), srcFormat, stride, data.size(),
-                count);
+                (unsigned)count);
             return std::make_shared<RawVertexSourceDataAdapter>(std::move(rawData), count, packedStride, srcFormat, 0, 0);
         }
     }
@@ -743,7 +743,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         CopyVertexData(
             extractedPositions.data(), Format::R32G32B32A32_FLOAT, sizeof(Float4), extractedPositions.size()*sizeof(Float4),
             sourceStream.GetData().begin(), sourceStream.GetFormat(), sourceStream.GetStride(), sourceStream.GetData().size(),
-            sourceStream.GetCount());
+            (unsigned)sourceStream.GetCount());
 
         Double4 doubleOffset = offset, doubleQuant = quantization;
 
@@ -763,10 +763,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             // assert((B>>32ll) >= std::numeric_limits<int16_t>::min() && (B>>32ll) <= std::numeric_limits<int16_t>::max());
             // assert((C>>32ll) >= std::numeric_limits<int16_t>::min() && (C>>32ll) <= std::numeric_limits<int16_t>::max());
             // assert((D>>32ll) >= std::numeric_limits<int16_t>::min() && (D>>32ll) <= std::numeric_limits<int16_t>::max());
-            int16_t uberA = A>>32ll;
-            int16_t uberB = B>>32ll;
-            int16_t uberC = C>>32ll;
-            int16_t uberD = D>>32ll;
+            int16_t uberA = int16_t(A>>32ll);
+            int16_t uberB = int16_t(B>>32ll);
+            int16_t uberC = int16_t(C>>32ll);
+            int16_t uberD = int16_t(D>>32ll);
             uint64_t uberIdx = (uint64_t(uberD) << 48ull) | (uint64_t(uberC) << 32ull) | (uint64_t(uberB) << 16ull) | uint64_t(uberA);
             Int4 q{int(A), int(B), int(C), int(D)};
             result[c] = std::make_pair(QuantizedBlockId{q, uberIdx}, c);
