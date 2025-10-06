@@ -89,6 +89,7 @@ namespace XLEMath
 			unsigned outsideIndicesDst[],
 			std::vector<GeneratedPoint<Primitive>>& generatedPts,
 			IteratorRange<const Vector3T<Primitive>*> staticPtPositions,
+			IteratorRange<const unsigned*> indexToStaticPtPosition,			// mapping (optional) from indices in sourceIndices to staticPtPositions (if they don't refer to a generatedPt
 			unsigned sourceIndices[], Primitive clippingParam[],
 			const Primitive coplanarThreshold);
 

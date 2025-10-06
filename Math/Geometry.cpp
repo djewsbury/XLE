@@ -421,12 +421,13 @@ namespace XLEMath
         }
     }
 
-	template<typename Primitive>
-		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
+	template<typename Primitive, bool useIndexToStaticPtPosition>
+		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle_Internal(
 			unsigned insideIndicesDst[],
 			unsigned outsideIndicesDst[],
 			std::vector<GeneratedPoint<Primitive>>& generatedPts,
 			IteratorRange<const Vector3T<Primitive>*> staticPtPositions,
+            IteratorRange<const unsigned*> indexToStaticPtPosition,
 			unsigned sourceIndices[], Primitive clippingParam[],
 			const Primitive coplanarThreshold)
 	{
@@ -451,7 +452,10 @@ namespace XLEMath
 		auto GetVertexPosition = [&](unsigned idx) -> Vector3T<Primitive> {
 			const auto highBit = 1u<<31u;
 			if (idx & highBit) return generatedPts[idx & ~highBit]._position;
-			return staticPtPositions[idx];
+            if constexpr (useIndexToStaticPtPosition) {
+                return staticPtPositions[indexToStaticPtPosition[idx]];
+            } else
+			    return staticPtPositions[idx];
 		};
 
 		Vector3T<Primitive> sourcePositions[3] {
@@ -565,6 +569,23 @@ namespace XLEMath
 			return {0, 0};
 		}
 	}
+
+    template<typename Primitive>
+		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
+			unsigned insideIndicesDst[],
+			unsigned outsideIndicesDst[],
+			std::vector<GeneratedPoint<Primitive>>& generatedPts,
+			IteratorRange<const Vector3T<Primitive>*> staticPtPositions,
+            IteratorRange<const unsigned*> indexToStaticPtPosition,
+			unsigned sourceIndices[], Primitive clippingParam[],
+			const Primitive coplanarThreshold)
+	{
+        if (!indexToStaticPtPosition.empty()) {
+            return ClipIndexedBasedTriangle_Internal<Primitive, true>(insideIndicesDst, outsideIndicesDst, generatedPts, staticPtPositions, indexToStaticPtPosition, sourceIndices, clippingParam, coplanarThreshold);
+        } else {
+            return ClipIndexedBasedTriangle_Internal<Primitive, false>(insideIndicesDst, outsideIndicesDst, generatedPts, staticPtPositions, indexToStaticPtPosition, sourceIndices, clippingParam, coplanarThreshold);
+        } 
+    }
 
     template<typename Primitive>
         unsigned PlaneAABBIntersection(Vector3T<Primitive> dst[], Vector4T<Primitive> planeEquation, Vector3T<Primitive> aabbMins, Vector3T<Primitive> aabbMaxs)
@@ -692,14 +713,14 @@ namespace XLEMath
         std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
 			unsigned[], unsigned[],
 			std::vector<GeneratedPoint<float>>&,
-			IteratorRange<const Vector3T<float>*>,
+			IteratorRange<const Vector3T<float>*>, IteratorRange<const unsigned*>,
 			unsigned[], float[], float);
 
     template
         std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
 			unsigned[], unsigned[],
 			std::vector<GeneratedPoint<double>>&,
-			IteratorRange<const Vector3T<double>*>,
+			IteratorRange<const Vector3T<double>*>, IteratorRange<const unsigned*>,
 			unsigned[], double[], double);
 
     template unsigned PlaneAABBIntersection(Vector3T<float>[], Vector4T<float>, Vector3T<float>, Vector3T<float>);
