@@ -979,29 +979,47 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             // we should combine these pairs into chains of vertices. These chains get combined
             // into a single vertex, which is the one that is closest to the averaged vertex.
             //
-            // Note that this will actually miss some close vertices. There is a case where 2 vertices
-            // are separated one one cardinal plane in the first test, and then separated by another
-            // cardinal plane in the second. The vertices have to be perfectly positions, but it can
-            // happen
-            //
-            // We can create a better algorithm by using a single hashing list, but adding each vertex
-            // into it 4 times (or alternatively just having 4 lists)
+            // Note that we need quite a lot of separate quantized coord sets to check for (quite
+            // literal) edge conditions. With a more primitive solution, we end up with problems for
+            // vertices that are close to the edge of a cell in multiple dimensions -- shifting the 
+            // grid in one dimension may cause us to start missing options because of the other
+            // dimension)
         auto quant = Float4(2.f*threshold, 2.f*threshold, 2.f*threshold, 2.f*threshold);
-        auto quantizedSet0 = BuildQuantizedCoords(sourceStream, quant, Zero<Float4>());
-        auto quantizedSet1 = BuildQuantizedCoords(sourceStream, quant, Float4(threshold, threshold, threshold, threshold));
-
-            // sort our quantized vertices to make it easier to find duplicates
-            // note that duplicates will be sorted with the lowest vertex index first,
-            // which is important when building the pairs.
-        std::sort(quantizedSet0.begin(), quantizedSet0.end(), SortQuantizedSet);
-        std::sort(quantizedSet1.begin(), quantizedSet1.end(), SortQuantizedSet);
-        
-            // Find the pairs of close vertices
-            // Note that in these pairs, the first index will always be smaller 
-            // than the second index.
         std::vector<std::pair<unsigned, unsigned>> closeVertices;
-        FindVertexPairs(closeVertices, quantizedSet0, sourceStream, threshold);
-        FindVertexPairs(closeVertices, quantizedSet1, sourceStream, threshold);
+
+        Float4 offsets[] {
+            Float4(-threshold, -threshold, -threshold, -threshold),
+            Float4( threshold, -threshold, -threshold, -threshold),
+            Float4(-threshold,  threshold, -threshold, -threshold),
+            Float4( threshold,  threshold, -threshold, -threshold),
+
+            Float4(-threshold, -threshold,  threshold, -threshold),
+            Float4( threshold, -threshold,  threshold, -threshold),
+            Float4(-threshold,  threshold,  threshold, -threshold),
+            Float4( threshold,  threshold,  threshold, -threshold),
+
+            Float4(-threshold, -threshold, -threshold,  threshold),
+            Float4( threshold, -threshold, -threshold,  threshold),
+            Float4(-threshold,  threshold, -threshold,  threshold),
+            Float4( threshold,  threshold, -threshold,  threshold),
+
+            Float4(-threshold, -threshold,  threshold,  threshold),
+            Float4( threshold, -threshold,  threshold,  threshold),
+            Float4(-threshold,  threshold,  threshold,  threshold),
+            Float4( threshold,  threshold,  threshold,  threshold)
+        };
+
+        unsigned componentCount = GetComponentCount(GetComponents(sourceStream.GetFormat()));
+        unsigned offsetsForComponentCount[] { 0, 2, 4, 8, 16 };
+        for (auto o:MakeIteratorRange(offsets, offsets+offsetsForComponentCount[std::min(componentCount, (unsigned)dimof(offsetsForComponentCount)-1)])) {
+            auto quantizedSet = BuildQuantizedCoords(sourceStream, quant, o);
+            std::sort(quantizedSet.begin(), quantizedSet.end(), SortQuantizedSet);
+
+                // Find the pairs of close vertices
+                // Note that in these pairs, the first index will always be smaller 
+                // than the second index.
+            FindVertexPairs(closeVertices, quantizedSet, sourceStream, threshold);
+        }
 
         std::vector<std::pair<unsigned, unsigned>> reversedCloseVertices;
         reversedCloseVertices.reserve(closeVertices.size());
