@@ -423,8 +423,8 @@ namespace XLEMath
 
 	template<typename Primitive, bool useIndexToStaticPtPosition>
 		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle_Internal(
-			unsigned insideIndicesDst[],
-			unsigned outsideIndicesDst[],
+			unsigned positiveSideIndicesDst[],
+			unsigned negativeSideIndicesDst[],
 			std::vector<GeneratedPoint<Primitive>>& generatedPts,
 			IteratorRange<const Vector3T<Primitive>*> staticPtPositions,
             IteratorRange<const unsigned*> indexToStaticPtPosition,
@@ -440,12 +440,12 @@ namespace XLEMath
 		coplanar &= ~clearlyOutside;
 
 		if (clearlyOutside == 0) {
-			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
+			positiveSideIndicesDst[0] = sourceIndices[0]; positiveSideIndicesDst[1] = sourceIndices[1]; positiveSideIndicesDst[2] = sourceIndices[2];
 			return {1, 0};
 		}
 
 		if ((clearlyOutside|coplanar) == 7) {
-			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = sourceIndices[1]; outsideIndicesDst[2] = sourceIndices[2];
+			negativeSideIndicesDst[0] = sourceIndices[0]; negativeSideIndicesDst[1] = sourceIndices[1]; negativeSideIndicesDst[2] = sourceIndices[2];
 			return {0, 1};
 		}
 
@@ -481,87 +481,87 @@ namespace XLEMath
 		case 1: // just [0] clipped
 			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
 			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
-			insideIndicesDst[0] = A; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
-			insideIndicesDst[3] = A; insideIndicesDst[4] = sourceIndices[2]; insideIndicesDst[5] = B;
-			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = A; outsideIndicesDst[2] = B;
+			positiveSideIndicesDst[0] = A; positiveSideIndicesDst[1] = sourceIndices[1]; positiveSideIndicesDst[2] = sourceIndices[2];
+			positiveSideIndicesDst[3] = A; positiveSideIndicesDst[4] = sourceIndices[2]; positiveSideIndicesDst[5] = B;
+			negativeSideIndicesDst[0] = sourceIndices[0]; negativeSideIndicesDst[1] = A; negativeSideIndicesDst[2] = B;
 			return {2, 1};
 
 		case 2: // just [1] clipped
 			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
 			B = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
-			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = A; insideIndicesDst[2] = sourceIndices[2];
-			insideIndicesDst[3] = sourceIndices[2]; insideIndicesDst[4] = A; insideIndicesDst[5] = B;
-			outsideIndicesDst[0] = sourceIndices[1]; outsideIndicesDst[1] = B; outsideIndicesDst[2] = A;
+			positiveSideIndicesDst[0] = sourceIndices[0]; positiveSideIndicesDst[1] = A; positiveSideIndicesDst[2] = sourceIndices[2];
+			positiveSideIndicesDst[3] = sourceIndices[2]; positiveSideIndicesDst[4] = A; positiveSideIndicesDst[5] = B;
+			negativeSideIndicesDst[0] = sourceIndices[1]; negativeSideIndicesDst[1] = B; negativeSideIndicesDst[2] = A;
 			return {2, 1};
 
 		case 4: // just [2] clipped
 			A = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
 			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
-			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = B;
-			insideIndicesDst[3] = B; insideIndicesDst[4] = sourceIndices[1]; insideIndicesDst[5] = A;
-			outsideIndicesDst[0] = sourceIndices[2]; outsideIndicesDst[1] = B; outsideIndicesDst[2] = A;
+			positiveSideIndicesDst[0] = sourceIndices[0]; positiveSideIndicesDst[1] = sourceIndices[1]; positiveSideIndicesDst[2] = B;
+			positiveSideIndicesDst[3] = B; positiveSideIndicesDst[4] = sourceIndices[1]; positiveSideIndicesDst[5] = A;
+			negativeSideIndicesDst[0] = sourceIndices[2]; negativeSideIndicesDst[1] = B; negativeSideIndicesDst[2] = A;
 			return {2, 1};
 
 		case 3: // [0] & [1] clipped
 			A = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
 			B = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
-			insideIndicesDst[0] = A; insideIndicesDst[1] = B; insideIndicesDst[2] = sourceIndices[2];
-			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = sourceIndices[1]; outsideIndicesDst[2] = A;
-			outsideIndicesDst[3] = A; outsideIndicesDst[4] = sourceIndices[1]; outsideIndicesDst[5] = B;
+			positiveSideIndicesDst[0] = A; positiveSideIndicesDst[1] = B; positiveSideIndicesDst[2] = sourceIndices[2];
+			negativeSideIndicesDst[0] = sourceIndices[0]; negativeSideIndicesDst[1] = sourceIndices[1]; negativeSideIndicesDst[2] = A;
+			negativeSideIndicesDst[3] = A; negativeSideIndicesDst[4] = sourceIndices[1]; negativeSideIndicesDst[5] = B;
 			return {1, 2};
 
 		case 5: // [0] & [2] clipped
 			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
 			B = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
-			insideIndicesDst[0] = A; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = B;
-			outsideIndicesDst[0] = sourceIndices[2]; outsideIndicesDst[1] = sourceIndices[0]; outsideIndicesDst[2] = B;
-			outsideIndicesDst[3] = B; outsideIndicesDst[4] = sourceIndices[0]; outsideIndicesDst[5] = A;
+			positiveSideIndicesDst[0] = A; positiveSideIndicesDst[1] = sourceIndices[1]; positiveSideIndicesDst[2] = B;
+			negativeSideIndicesDst[0] = sourceIndices[2]; negativeSideIndicesDst[1] = sourceIndices[0]; negativeSideIndicesDst[2] = B;
+			negativeSideIndicesDst[3] = B; negativeSideIndicesDst[4] = sourceIndices[0]; negativeSideIndicesDst[5] = A;
 			return {1, 2};
 
 		case 6: // [1] & [2] clipped
 			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
 			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
-			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = A; insideIndicesDst[2] = B;
-			outsideIndicesDst[0] = sourceIndices[1]; outsideIndicesDst[1] = sourceIndices[2]; outsideIndicesDst[2] = A;
-			outsideIndicesDst[3] = A; outsideIndicesDst[4] = sourceIndices[2]; outsideIndicesDst[5] = B;
+			positiveSideIndicesDst[0] = sourceIndices[0]; positiveSideIndicesDst[1] = A; positiveSideIndicesDst[2] = B;
+			negativeSideIndicesDst[0] = sourceIndices[1]; negativeSideIndicesDst[1] = sourceIndices[2]; negativeSideIndicesDst[2] = A;
+			negativeSideIndicesDst[3] = A; negativeSideIndicesDst[4] = sourceIndices[2]; negativeSideIndicesDst[5] = B;
 			return {1, 2};
 
 		// cases with some coplanar vertices...
 
 		case 1u | (2u<<3u): // just [0] clipped, [1] coplanar
 			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
-			insideIndicesDst[0] = B; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
-			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = sourceIndices[1]; outsideIndicesDst[2] = B;
+			positiveSideIndicesDst[0] = B; positiveSideIndicesDst[1] = sourceIndices[1]; positiveSideIndicesDst[2] = sourceIndices[2];
+			negativeSideIndicesDst[0] = sourceIndices[0]; negativeSideIndicesDst[1] = sourceIndices[1]; negativeSideIndicesDst[2] = B;
 			return {1, 1};
 
 		case 1u | (4u<<3u): // just [0] clipped, [2] coplanar
 			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
-			insideIndicesDst[0] = A; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = sourceIndices[2];
-			outsideIndicesDst[0] = sourceIndices[0]; outsideIndicesDst[1] = A; outsideIndicesDst[2] = sourceIndices[2];
+			positiveSideIndicesDst[0] = A; positiveSideIndicesDst[1] = sourceIndices[1]; positiveSideIndicesDst[2] = sourceIndices[2];
+			negativeSideIndicesDst[0] = sourceIndices[0]; negativeSideIndicesDst[1] = A; negativeSideIndicesDst[2] = sourceIndices[2];
 			return {1, 1};
 
 		case 2u | (1u<<3u): // just [1] clipped, [0] coplanar
 			B = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
-			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = B; insideIndicesDst[2] = sourceIndices[2];
-			outsideIndicesDst[0] = sourceIndices[1]; outsideIndicesDst[1] = B; outsideIndicesDst[2] = sourceIndices[0];
+			positiveSideIndicesDst[0] = sourceIndices[0]; positiveSideIndicesDst[1] = B; positiveSideIndicesDst[2] = sourceIndices[2];
+			negativeSideIndicesDst[0] = sourceIndices[1]; negativeSideIndicesDst[1] = B; negativeSideIndicesDst[2] = sourceIndices[0];
 			return {1, 1};
 
 		case 2u | (4u<<3u): // just [1] clipped, [2] coplanar
 			A = GeneratePoint(0, 1, clippingParam[0] / (clippingParam[0] - clippingParam[1]));
-			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = A; insideIndicesDst[2] = sourceIndices[2];
-			outsideIndicesDst[0] = sourceIndices[1]; outsideIndicesDst[1] = sourceIndices[2]; outsideIndicesDst[2] = A;
+			positiveSideIndicesDst[0] = sourceIndices[0]; positiveSideIndicesDst[1] = A; positiveSideIndicesDst[2] = sourceIndices[2];
+			negativeSideIndicesDst[0] = sourceIndices[1]; negativeSideIndicesDst[1] = sourceIndices[2]; negativeSideIndicesDst[2] = A;
 			return {1, 1};
 
 		case 4u | (1u<<3u): // just [2] clipped, [0] coplanar
 			A = GeneratePoint(1, 2, clippingParam[1] / (clippingParam[1] - clippingParam[2]));
-			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = A;
-			outsideIndicesDst[0] = sourceIndices[2]; outsideIndicesDst[1] = sourceIndices[0]; outsideIndicesDst[2] = A;
+			positiveSideIndicesDst[0] = sourceIndices[0]; positiveSideIndicesDst[1] = sourceIndices[1]; positiveSideIndicesDst[2] = A;
+			negativeSideIndicesDst[0] = sourceIndices[2]; negativeSideIndicesDst[1] = sourceIndices[0]; negativeSideIndicesDst[2] = A;
 			return {1, 1};
 
 		case 4u | (2u<<3u): // just [2] clipped, [1] coplanar
 			B = GeneratePoint(0, 2, clippingParam[0] / (clippingParam[0] - clippingParam[2]));
-			insideIndicesDst[0] = sourceIndices[0]; insideIndicesDst[1] = sourceIndices[1]; insideIndicesDst[2] = B;
-			outsideIndicesDst[0] = sourceIndices[2]; outsideIndicesDst[1] = B; outsideIndicesDst[2] = sourceIndices[1];
+			positiveSideIndicesDst[0] = sourceIndices[0]; positiveSideIndicesDst[1] = sourceIndices[1]; positiveSideIndicesDst[2] = B;
+			negativeSideIndicesDst[0] = sourceIndices[2]; negativeSideIndicesDst[1] = B; negativeSideIndicesDst[2] = sourceIndices[1];
 			return {1, 1};
 
 		default:
@@ -572,8 +572,8 @@ namespace XLEMath
 
     template<typename Primitive>
 		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
-			unsigned insideIndicesDst[],
-			unsigned outsideIndicesDst[],
+			unsigned positiveSideIndicesDst[],
+			unsigned negativeSideIndicesDst[],
 			std::vector<GeneratedPoint<Primitive>>& generatedPts,
 			IteratorRange<const Vector3T<Primitive>*> staticPtPositions,
             IteratorRange<const unsigned*> indexToStaticPtPosition,
@@ -581,9 +581,9 @@ namespace XLEMath
 			const Primitive coplanarThreshold)
 	{
         if (!indexToStaticPtPosition.empty()) {
-            return ClipIndexedBasedTriangle_Internal<Primitive, true>(insideIndicesDst, outsideIndicesDst, generatedPts, staticPtPositions, indexToStaticPtPosition, sourceIndices, clippingParam, coplanarThreshold);
+            return ClipIndexedBasedTriangle_Internal<Primitive, true>(positiveSideIndicesDst, negativeSideIndicesDst, generatedPts, staticPtPositions, indexToStaticPtPosition, sourceIndices, clippingParam, coplanarThreshold);
         } else {
-            return ClipIndexedBasedTriangle_Internal<Primitive, false>(insideIndicesDst, outsideIndicesDst, generatedPts, staticPtPositions, indexToStaticPtPosition, sourceIndices, clippingParam, coplanarThreshold);
+            return ClipIndexedBasedTriangle_Internal<Primitive, false>(positiveSideIndicesDst, negativeSideIndicesDst, generatedPts, staticPtPositions, indexToStaticPtPosition, sourceIndices, clippingParam, coplanarThreshold);
         } 
     }
 

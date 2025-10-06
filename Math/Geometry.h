@@ -85,8 +85,8 @@ namespace XLEMath
 
     template<typename Primitive>
 		std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
-			unsigned insideIndicesDst[],
-			unsigned outsideIndicesDst[],
+			unsigned positiveSideIndicesDst[],
+			unsigned negativeSideIndicesDst[],
 			std::vector<GeneratedPoint<Primitive>>& generatedPts,
 			IteratorRange<const Vector3T<Primitive>*> staticPtPositions,
 			IteratorRange<const unsigned*> indexToStaticPtPosition,			// mapping (optional) from indices in sourceIndices to staticPtPositions (if they don't refer to a generatedPt
