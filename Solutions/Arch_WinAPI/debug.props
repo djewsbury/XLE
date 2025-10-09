@@ -6,7 +6,6 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <PreprocessorDefinitions>XL_DEBUG;_DEBUG;_CRTDBG_MAP_ALLOC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <Optimization>Disabled</Optimization>
       <BufferSecurityCheck>true</BufferSecurityCheck>

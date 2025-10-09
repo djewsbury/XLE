@@ -20,6 +20,7 @@ set(XLE_ADDRESS_SANITIZER OFF CACHE BOOL "Enable the address sanitizer when comp
 set(XLE_MEMORY_SANITIZER OFF CACHE BOOL "Enable the memory sanitizer when compiling with clang")
 set(XLE_THREAD_SANITIZER OFF CACHE BOOL "Enable the thread sanitizer when compiling with clang")
 
+# note -- set cmake_policy(SET CMP0091 NEW) in the root CMakeLists.txt before any project() when using XLE_MSVC_RUNTIME_STATIC
 set(XLE_MSVC_RUNTIME_STATIC OFF CACHE BOOL "When on, use the static version of the MSVC runtime library. Do not use compiler/plugin dlls when on. (default off)")
 
 # clang is quite lenient with shared libraries, and will allow symbols to be implicitly imported from shared libraries
