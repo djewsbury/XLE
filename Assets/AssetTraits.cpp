@@ -11,12 +11,12 @@ namespace Assets { namespace Internal
 {
 	const ConfigFileContainer<>& GetConfigFileContainer(StringSection<ResChar> identifier)
 	{
-		return ::Assets::Legacy::GetAsset<ConfigFileContainer<>>(identifier);
+		return *::Assets::ActualizeAssetPtr<ConfigFileContainer<>>(identifier);
 	}
 
 	const ArtifactChunkContainer& GetChunkFileContainer(StringSection<ResChar> identifier)
 	{
-		return ::Assets::Legacy::GetAsset<ArtifactChunkContainer>(nullptr, identifier);
+		return *::Assets::ActualizeAssetPtr<ArtifactChunkContainer>(nullptr, identifier);
 	}
 
 	std::shared_future<std::shared_ptr<ConfigFileContainer<>>> GetConfigFileContainerFuture(StringSection<ResChar> identifier)

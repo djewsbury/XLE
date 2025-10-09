@@ -8,6 +8,8 @@
 #include "AssetUtils.h"
 #include "ModelMachine.h"
 #include "../../Assets/ChunkFileContainer.h"
+#include "../../Assets/Continuation.h"
+#include "../../Assets/Assets.h"
 #include "../../Math/MathSerialization.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"
@@ -214,6 +216,81 @@ namespace RenderCore { namespace Assets
 	void SerializationOperator(::Assets::BlockSerializer& serializer, const ModelRootData& rootData)
 	{
 		serializer << rootData._maxLOD;
+	}
+
+	void ConstructModelScaffoldToPromiseFromChunks(
+		std::promise<std::shared_ptr<ModelScaffold>>&& promise,
+		StringSection<> identifier)
+	{
+		// let avoid the WhenAll() variation, because ArtifactChunkContainer's constructor is trivial
+
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
+				TRY {
+					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
+					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::ModelScaffold::ChunkRequests);
+					promise.set_value(std::make_shared<RenderCore::Assets::ModelScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+
+		/*
+		::Assets::WhenAll(::Assets::Internal::GetChunkFileContainerFuture(identifier)).ThenConstructToPromise(
+			std::move(promise),
+			[fn=identifier.AsString()](auto chunkContainer) {
+				auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::ModelScaffold::ChunkRequests);
+				return std::make_shared<RenderCore::Assets::ModelScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation());
+			});
+			*/
+	}
+
+	void ConstructModelSupplementsScaffoldToPromiseFromChunks(
+		std::promise<std::shared_ptr<ModelSupplementScaffold>>&& promise,
+		StringSection<> identifier)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
+				TRY {
+					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
+					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::ModelSupplementScaffold::ChunkRequests);
+					promise.set_value(std::make_shared<RenderCore::Assets::ModelSupplementScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+	}
+
+	void ConstructSkeletonScaffoldToPromiseFromChunks(
+		std::promise<std::shared_ptr<SkeletonScaffold>>&& promise,
+		StringSection<> identifier)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
+				TRY {
+					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
+					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::SkeletonScaffold::ChunkRequests);
+					promise.set_value(std::make_shared<RenderCore::Assets::SkeletonScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+	}
+
+	void ConstructAnimationSetScaffoldToPromiseFromChunks(
+		std::promise<std::shared_ptr<AnimationSetScaffold>>&& promise,
+		StringSection<> identifier)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
+				TRY {
+					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
+					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::AnimationSetScaffold::ChunkRequests);
+					promise.set_value(std::make_shared<RenderCore::Assets::AnimationSetScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
 	}
 
 }}

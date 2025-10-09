@@ -64,5 +64,9 @@ namespace RenderCore { namespace Assets
 
 	constexpr auto GetCompileProcessType(CompiledMaterialSet*) { return ConstHash64Legacy<'ResM', 'at'>::Value; }
 
+	void ConstructCompiledMaterialSetToPromiseFromChunks(
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&&,
+		StringSection<> identifier);
+
 }}
 

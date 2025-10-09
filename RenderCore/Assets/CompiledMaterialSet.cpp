@@ -147,5 +147,21 @@ namespace RenderCore { namespace Assets
 	CompiledMaterialSet::~CompiledMaterialSet()
 	{}
 
+	void ConstructCompiledMaterialSetToPromiseFromChunks(
+		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
+		StringSection<> identifier)
+	{
+		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
+				TRY {
+					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
+					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::CompiledMaterialSet::ChunkRequests);
+					promise.set_value(std::make_shared<RenderCore::Assets::CompiledMaterialSet>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
+	}
+
 }}
 

@@ -99,6 +99,10 @@ namespace RenderCore { namespace Assets
 		 assert(idx < _geoMachines.size());
 		 return _geoMachines[idx];
 	}
+
+	void ConstructModelScaffoldToPromiseFromChunks(
+		std::promise<std::shared_ptr<ModelScaffold>>&&,
+		StringSection<> identifier);
 	
 ////////////////////////////////////////////////////////////////////////////////////////////
 	
@@ -144,6 +148,10 @@ namespace RenderCore { namespace Assets
 	};
 
 	constexpr auto GetCompileProcessType(ModelSupplementScaffold*) { return ConstHash64Legacy<'Mode', 'l'>::Value; }
+
+	void ConstructModelSupplementsScaffoldToPromiseFromChunks(
+		std::promise<std::shared_ptr<ModelSupplementScaffold>>&&,
+		StringSection<> identifier);
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -195,6 +203,10 @@ namespace RenderCore { namespace Assets
 
 	constexpr auto GetCompileProcessType(SkeletonScaffold*) { return ConstHash64Legacy<'Skel', 'eton'>::Value; }
 
+	void ConstructSkeletonScaffoldToPromiseFromChunks(
+		std::promise<std::shared_ptr<SkeletonScaffold>>&&,
+		StringSection<> identifier);
+
 	/// <summary>Structural data for animation</summary>
 	/// Represents a set of animation that can potentially be applied to a skeleton.
 	///
@@ -223,6 +235,10 @@ namespace RenderCore { namespace Assets
 	};
 
 	constexpr auto GetCompileProcessType(AnimationSetScaffold*) { return ConstHash64Legacy<'Anim', 'Set'>::Value; }
+
+	void ConstructAnimationSetScaffoldToPromiseFromChunks(
+		std::promise<std::shared_ptr<AnimationSetScaffold>>&&,
+		StringSection<> identifier);
 
 
 }}
