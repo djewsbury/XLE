@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "StandardLightScene.h"
+#include "StandardLightOperators.h"
 #include "ILightScene.h"
 #include "../../Core/Exceptions.h"
 

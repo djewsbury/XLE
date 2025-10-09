@@ -18,7 +18,8 @@
 				"XLE_ANTLR_ENABLE" : true,
 				"XLE_FREETYPE_ENABLE" : true,
 				"XLE_GET_MODULE_FILE_TIME_ENABLE" : true,
-				"XLE_GET_MODULE_PATH_ENABLE" : true
+				"XLE_GET_MODULE_PATH_ENABLE" : true,
+				"XLE_CONSOLE_LUA_ENABLE" : true
 			}
 		},
 

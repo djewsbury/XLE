@@ -7,7 +7,6 @@
 #include "../../Math/Vector.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../Utility/StringUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include <cstdint>
 

@@ -137,7 +137,7 @@ namespace ToolsRig
 			drawables[0]._pipeline = _pipelineAccelerator.get();
 			drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
 			drawables[0]._geo = &geo;
-			drawables[0]._vertexCount = vertexCount;
+			drawables[0]._vertexCount = (unsigned)vertexCount;
 			drawables[0]._looseUniformsInterface = &s_localTransformUSI;
 			drawables[0]._localToWorld = localToWorld;
 			drawables[0]._viewMask = viewMask;
@@ -180,7 +180,7 @@ namespace ToolsRig
 			drawables[0]._pipeline = _pipelineAccelerator.get();
 			drawables[0]._descriptorSet = _descriptorSetAccelerator.get();
 			drawables[0]._geo = &geo;
-			drawables[0]._vertexCount = vertexCount;
+			drawables[0]._vertexCount = (unsigned)vertexCount;
 			drawables[0]._looseUniformsInterface = &s_localTransformUSI;
 			drawables[0]._localToWorld = localToWorld;
 			drawables[0]._customDrawDelegate = customDrawDelegate;
@@ -596,7 +596,7 @@ namespace ToolsRig
 		drawables[0]._pipeline = &pipelineAccelerator;
 		drawables[0]._descriptorSet = descriptorSetAccelerator;
 		drawables[0]._geo = &geo;
-		drawables[0]._vertexCount = vertexCount;
+		drawables[0]._vertexCount = (unsigned)vertexCount;
 		drawables[0]._looseUniformsInterface = &s_localTransformUSI;
 		drawables[0]._localToWorld = localToWorld;
 		drawables[0]._drawFn = [](RenderCore::Techniques::ParsingContext& parsingContext, const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext, const RenderCore::Techniques::Drawable& drawable)

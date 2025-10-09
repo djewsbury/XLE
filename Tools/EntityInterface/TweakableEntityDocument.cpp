@@ -83,7 +83,7 @@ namespace EntityInterface
 			b._bindingEngineId = id;
 			b._useBindingEngineId = true;
 			auto hash = Hash64(name);
-			_data.insert(_data.end(), &hash, &hash+1);
+			_data.insert(_data.end(), (const uint8_t*)&hash, (const uint8_t*)(&hash+1));
 			_data.insert(_data.end(), name.begin(), name.end());
 			_blobs.emplace_back(std::move(b));
 		}

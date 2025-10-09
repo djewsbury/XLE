@@ -5,9 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
-#include "StandardLightOperators.h"
 #include "../../Math/Transformations.h"
-#include "../../Math/ProjectionMath.h"
 #include "../../Utility/BitUtils.h"
 
 namespace RenderCore { namespace Techniques { class ParsingContext; }}
