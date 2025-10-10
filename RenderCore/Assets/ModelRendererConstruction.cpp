@@ -105,6 +105,11 @@ namespace RenderCore { namespace Assets
 		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::ModelScaffold>>(std::move(opContext), modelName, std::move(compilationConfig));
 	}
 
+	static std::shared_future<std::shared_ptr<Assets::ModelScaffold>> CreateModelScaffoldFromChunkFuture(StringSection<> modelName)
+	{
+		return ::Assets::GetAssetFutureFn<Assets::ConstructModelScaffoldToPromiseFromChunks>(modelName);
+	}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	static std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>> CreateMaterialSetFuture(
@@ -153,6 +158,11 @@ namespace RenderCore { namespace Assets
 		return ::Assets::GetAssetFuture<std::shared_ptr<Assets::CompiledMaterialSet>>(std::move(opContext), materialName, modelName, std::move(compilationConfig));
 	}
 
+	static std::shared_future<std::shared_ptr<Assets::CompiledMaterialSet>> CreateMaterialSetFromChunkFuture(StringSection<> materialName)
+	{
+		return ::Assets::GetAssetFutureFn<ConstructCompiledMaterialSetToPromiseFromChunks>(materialName);
+	}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	auto ModelRendererConstruction::ElementConstructor::SetModelAndMaterials(StringSection<> model, StringSection<> material) -> ElementConstructor&
@@ -161,37 +171,48 @@ namespace RenderCore { namespace Assets
 		assert(!model.IsEmpty());
 		auto originalDisableHash = _internal->_disableHash;
 
+		auto modelChunk = XlEqString(MakeFileNameSplitter(model).Extension(), "chunk"); bool materialChunk;
 		auto materialForAsset = material;
-		if (materialForAsset.IsEmpty()) materialForAsset = model;
+		if (materialForAsset.IsEmpty()) { materialForAsset = model; materialChunk = modelChunk; }
+		else materialChunk = XlEqString(MakeFileNameSplitter(materialForAsset).Extension(), "chunk");
 
-		auto i = LowerBound(_internal->_compilationConfigurationMarkers, _elementId);
-		if (i != _internal->_compilationConfigurationMarkers.end() && i->first == _elementId) {
-			if (_internal->_opContext) {
-				SetModel(CreateModelScaffoldFuture(_internal->_opContext, model, i->second), model.AsString());
-				SetMaterials(CreateMaterialSetFuture(_internal->_opContext, materialForAsset, model, i->second), material.AsString());
+		if (modelChunk != materialChunk)
+			Throw(std::runtime_error("Both model and material must be chunk files, or neither. Attempting to mix " + model.AsString() + " with " + material.AsString()));
+	
+		if (!modelChunk) {
+			auto i = LowerBound(_internal->_compilationConfigurationMarkers, _elementId);
+			if (i != _internal->_compilationConfigurationMarkers.end() && i->first == _elementId) {
+				if (_internal->_opContext) {
+					SetModel(CreateModelScaffoldFuture(_internal->_opContext, model, i->second), model.AsString());
+					SetMaterials(CreateMaterialSetFuture(_internal->_opContext, materialForAsset, model, i->second), material.AsString());
+				} else {
+					SetModel(CreateModelScaffoldFuture(model, i->second), model.AsString());
+					SetMaterials(CreateMaterialSetFuture(materialForAsset, model, i->second), material.AsString());
+				}
 			} else {
-				SetModel(CreateModelScaffoldFuture(model, i->second), model.AsString());
-				SetMaterials(CreateMaterialSetFuture(materialForAsset, model, i->second), material.AsString());
+				auto i2 = LowerBound(_internal->_compilationConfigurationPtrs, _elementId);
+				if (i2 != _internal->_compilationConfigurationPtrs.end() && i2->first == _elementId) {
+					if (_internal->_opContext) {
+						SetModel(CreateModelScaffoldFuture(_internal->_opContext, model, i2->second), model.AsString());
+						SetMaterials(CreateMaterialSetFuture(_internal->_opContext, materialForAsset, model, i2->second), material.AsString());
+					} else {
+						SetModel(CreateModelScaffoldFuture(model, i2->second), model.AsString());
+						SetMaterials(CreateMaterialSetFuture(materialForAsset, model, i2->second), material.AsString());
+					}
+				} else {
+					if (_internal->_opContext) {
+						SetModel(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(_internal->_opContext, model), model.AsString());
+						SetMaterials(::Assets::GetAssetFuture<Internal::MaterialSetPtr>(_internal->_opContext, materialForAsset, model), material.AsString());
+					} else {
+						SetModel(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(model), model.AsString());
+						SetMaterials(::Assets::GetAssetFuture<Internal::MaterialSetPtr>(materialForAsset, model), material.AsString());
+					}
+				}
 			}
 		} else {
-			auto i2 = LowerBound(_internal->_compilationConfigurationPtrs, _elementId);
-			if (i2 != _internal->_compilationConfigurationPtrs.end() && i2->first == _elementId) {
-				if (_internal->_opContext) {
-					SetModel(CreateModelScaffoldFuture(_internal->_opContext, model, i2->second), model.AsString());
-					SetMaterials(CreateMaterialSetFuture(_internal->_opContext, materialForAsset, model, i2->second), material.AsString());
-				} else {
-					SetModel(CreateModelScaffoldFuture(model, i2->second), model.AsString());
-					SetMaterials(CreateMaterialSetFuture(materialForAsset, model, i2->second), material.AsString());
-				}
-			} else {
-				if (_internal->_opContext) {
-					SetModel(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(_internal->_opContext, model), model.AsString());
-					SetMaterials(::Assets::GetAssetFuture<Internal::MaterialSetPtr>(_internal->_opContext, materialForAsset, model), material.AsString());
-				} else {
-					SetModel(::Assets::GetAssetFuture<Internal::ModelScaffoldPtr>(model), model.AsString());
-					SetMaterials(::Assets::GetAssetFuture<Internal::MaterialSetPtr>(materialForAsset, model), material.AsString());
-				}
-			}
+			// chunk file source
+			SetModel(CreateModelScaffoldFromChunkFuture(model), model.AsString());
+			SetMaterials(CreateMaterialSetFromChunkFuture(materialForAsset), material.AsString());
 		}
 		
 		_internal->_disableHash = originalDisableHash;
