@@ -90,7 +90,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 			if (materialTable._rawMaterials.empty()) {
 				// add something, to prevent a zero length artefact
-				auto ele = fmttr.BeginKeyedElement("dummy");
+				fmttr.WriteKeyedValue("Entity", "dummy");
+				auto ele = fmttr.BeginKeyedElement("RawMaterial", "dummy");
 				fmttr.EndElement(ele);
 			}
 		}
@@ -115,7 +116,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 			if (materialTable._rawMaterials.empty()) {
 				// add something, to prevent a zero length artefact
-				auto ele = fmttr.BeginKeyedElement("dummy");
+				fmttr.WriteKeyedValue("Entity", "dummy");
+				auto ele = fmttr.BeginKeyedElement("RawMaterial", "dummy");
 				fmttr.EndElement(ele);
 			}
 		}
