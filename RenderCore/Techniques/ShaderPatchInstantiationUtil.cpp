@@ -416,7 +416,7 @@ namespace RenderCore { namespace Techniques
 	class ShaderGraphCompileOperation : public ::Assets::ICompileOperation
 	{
 	public:
-		virtual std::vector<TargetDesc> GetTargets() const override
+		virtual ::Assets::PortableVector<TargetDesc> GetTargets() const override
 		{
 			return {
 				TargetDesc { GetCompileProcessType((CompiledShaderByteCode_InstantiateShaderGraph*)nullptr), "main" }
@@ -425,7 +425,7 @@ namespace RenderCore { namespace Techniques
 		
 		virtual ::Assets::SerializedTarget SerializeTarget(unsigned idx) override
 		{
-			std::vector<::Assets::SerializedArtifact> result;
+			::Assets::PortableVector<::Assets::SerializedArtifact> result;
 			if (_byteCode._payload)
 				result.push_back({
 					GetCompileProcessType((CompiledShaderByteCode_InstantiateShaderGraph*)nullptr), 0, "main",

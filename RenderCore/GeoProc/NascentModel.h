@@ -19,6 +19,7 @@
 
 namespace RenderCore { namespace Assets { struct ModelDefaultPoseData; class ModelCompilationConfiguration; }}
 namespace Assets { struct SerializedArtifact; }
+namespace Assets { template<typename T> using PortableVector = std::vector<T>; }
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
@@ -99,7 +100,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		void AttachNameToSkinControllerBlock(NascentObjectGuid id, std::string name);
 		void AttachNameToCommand(NascentObjectGuid id, std::string name);
 
-		std::vector<::Assets::SerializedArtifact> SerializeToChunks(
+		::Assets::PortableVector<::Assets::SerializedArtifact> SerializeToChunks(
 			const std::string& name,
 			const NascentSkeleton& embeddedSkeleton,
 			const ModelCompilationConfiguration& modelCompilationConfiguration) const;

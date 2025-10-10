@@ -14,6 +14,7 @@ namespace Assets
 	struct DependentFileState;
 	class InitializerPack;
 	using ArtifactTargetCode = uint64_t;
+	template<typename T> using PortableVector = std::vector<T>;
 
 	struct SerializedArtifact
 	{
@@ -31,7 +32,7 @@ namespace Assets
 
 	struct SerializedTarget
 	{
-		std::vector<SerializedArtifact> _artifacts;
+		PortableVector<SerializedArtifact> _artifacts;
 		::Assets::DependencyValidation _depVal;
 	};
 
@@ -43,7 +44,7 @@ namespace Assets
 			ArtifactTargetCode	_targetCode;
 			const char*			_name;
 		};
-		virtual std::vector<TargetDesc> GetTargets() const = 0;
+		virtual PortableVector<TargetDesc> GetTargets() const = 0;
 		virtual SerializedTarget SerializeTarget(unsigned idx) = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;	// note that serialize targets can return additional dep vals
 

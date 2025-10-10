@@ -41,7 +41,7 @@ namespace UnitTests
 	{
 	public:
 		std::string _initializer;
-		virtual std::vector<TargetDesc>			GetTargets() const override
+		virtual ::Assets::PortableVector<TargetDesc> GetTargets() const override
 		{
 			return {
 				TargetDesc { Type_UnitTestArtifact, "unitary-artifact" }
@@ -64,7 +64,7 @@ namespace UnitTests
 				Throw(std::runtime_error("Throw from serialize target requested"));
 
 			// Blobs written here will become chunks in the output file
-			std::vector<::Assets::SerializedArtifact> result;
+			::Assets::PortableVector<::Assets::SerializedArtifact> result;
 			{
 				::Assets::SerializedArtifact opRes;
 				opRes._chunkTypeCode = Type_UnitTestArtifact;

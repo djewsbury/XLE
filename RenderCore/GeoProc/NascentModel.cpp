@@ -527,7 +527,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
-	std::vector<::Assets::SerializedArtifact> NascentModel::SerializeToChunks(
+	::Assets::PortableVector<::Assets::SerializedArtifact> NascentModel::SerializeToChunks(
 		const std::string& name,
 		const NascentSkeleton& embeddedSkeleton,
 		const ModelCompilationConfiguration& modelCompilationConfiguration) const

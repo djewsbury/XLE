@@ -310,7 +310,7 @@ namespace ShaderSourceParser
 			Formatters::TextOutputFormatter fmttr(memStream);
 			fmttr << filteringRules;
 
-			std::vector<::Assets::SerializedArtifact> artifacts;
+			::Assets::PortableVector<::Assets::SerializedArtifact> artifacts;
 			{
 				::Assets::SerializedArtifact artifact;
 				artifact._chunkTypeCode = GetCompileProcessType((SelectorFilteringRules*)nullptr);

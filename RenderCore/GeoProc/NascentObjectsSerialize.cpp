@@ -20,7 +20,7 @@
 
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
-	std::vector<::Assets::SerializedArtifact> SerializeSkinToChunks(
+	::Assets::PortableVector<::Assets::SerializedArtifact> SerializeSkinToChunks(
 		const std::string& name,
 		const NascentModel& model,
 		const NascentSkeleton& embeddedSkeleton,
@@ -29,7 +29,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return model.SerializeToChunks(name, embeddedSkeleton, cfg);
 	}
 
-	std::vector<::Assets::SerializedArtifact> SerializeSkeletonToChunks(
+	::Assets::PortableVector<::Assets::SerializedArtifact> SerializeSkeletonToChunks(
 		const std::string& name,
 		const NascentSkeleton& skeleton)
 	{
@@ -53,7 +53,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		};
 	}
 
-	std::vector<::Assets::SerializedArtifact> SerializeAnimationsToChunks(
+	::Assets::PortableVector<::Assets::SerializedArtifact> SerializeAnimationsToChunks(
 		const std::string& name,
 		const NascentAnimationSet& animationSet)
 	{
@@ -79,7 +79,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		};
 	}
 
-	std::vector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
+	::Assets::PortableVector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
 		const std::string& name,
 		const NascentMaterialTable& materialTable)
 	{
@@ -103,7 +103,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		};
 	}
 
-	std::vector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
+	::Assets::PortableVector<::Assets::SerializedArtifact> SerializeMaterialToChunks(
 		const std::string& name,
 		const NascentMaterialTable& materialTable,
 		const ::Assets::DirectorySearchRules& searchRules)

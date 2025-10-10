@@ -82,7 +82,7 @@ namespace ShaderSourceParser
 
 		return {
 			{
-				std::vector<::Assets::SerializedArtifact>{
+				::Assets::PortableVector<::Assets::SerializedArtifact>{
 					{ "shader-signature"_h, 1, fn, ::Assets::AsBlob(blockSerializer) }
 				},
 				depVal

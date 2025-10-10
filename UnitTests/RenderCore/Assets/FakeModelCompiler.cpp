@@ -31,7 +31,7 @@ namespace UnitTests
 	{
 	public:
 		::Assets::DependencyValidation GetDependencyValidation() const override { return ::Assets::GetDepValSys().Make(_dependencies); }
-		std::vector<TargetDesc> GetTargets() const override { return _targets; }
+		::Assets::PortableVector<TargetDesc> GetTargets() const override { return _targets; }
 		::Assets::SerializedTarget SerializeTarget(unsigned idx) override
 		{
 			if (idx >= _targets.size())
@@ -73,7 +73,7 @@ namespace UnitTests
 		{}
 	private:
 		std::vector<::Assets::DependentFileState> _dependencies;
-		std::vector<TargetDesc> _targets;
+		::Assets::PortableVector<TargetDesc> _targets;
 		std::string _modelName;
 
 		::Assets::SerializedTarget SerializeModel();

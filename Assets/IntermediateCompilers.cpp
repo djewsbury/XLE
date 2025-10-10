@@ -818,7 +818,7 @@ namespace Assets
 	class SimpleCompilerAdapter : public ICompileOperation
 	{
 	public:
-		std::vector<TargetDesc> GetTargets() const override
+		PortableVector<TargetDesc> GetTargets() const override
 		{
 			if (_serializedArtifacts.empty()) return {};
 			return {
@@ -839,7 +839,7 @@ namespace Assets
 		{}
 
 	private:
-		std::vector<SerializedArtifact> _serializedArtifacts;
+		PortableVector<SerializedArtifact> _serializedArtifacts;
 		DependencyValidation _depVal;
 		ArtifactTargetCode _targetCode;
 	};

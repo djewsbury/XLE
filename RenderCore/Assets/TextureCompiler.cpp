@@ -429,7 +429,7 @@ namespace RenderCore { namespace Assets
 	class TextureCompileOperation : public ::Assets::ICompileOperation
 	{
 	public:
-		std::vector<TargetDesc> GetTargets() const
+		::Assets::PortableVector<TargetDesc> GetTargets() const
 		{
 			if (_serializedArtifacts.empty()) return {};
 			return {
@@ -492,7 +492,7 @@ namespace RenderCore { namespace Assets
 	private:
 		std::vector<::Assets::DependencyValidation> _dependencies;
 		::Assets::DependencyValidation _cfgFileDepVal;
-		std::vector<::Assets::SerializedArtifact> _serializedArtifacts;
+		::Assets::PortableVector<::Assets::SerializedArtifact> _serializedArtifacts;
 	};
 
 	::Assets::CompilerRegistration RegisterTextureCompilerInfrastructure(

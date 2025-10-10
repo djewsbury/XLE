@@ -64,13 +64,13 @@ namespace ColladaConversion
         OSServices::MemoryMappedFile _fileData;
         std::shared_ptr<DocumentScaffold> _doc;
         ::ColladaConversion::URIResolveContext _resolveContext;
-		std::vector<TargetDesc> _targets;
+		::Assets::PortableVector<TargetDesc> _targets;
 		::Assets::DependencyValidation _depVal;
 
 		::Assets::rstring _rootNode;
 		std::shared_ptr<ModelCompilationConfiguration> _modelCompilationConfiguration;
 
-		std::vector<TargetDesc> GetTargets() const override;
+		::Assets::PortableVector<TargetDesc> GetTargets() const override;
 		::Assets::SerializedTarget SerializeTarget(unsigned idx) override;
 		::Assets::DependencyValidation GetDependencyValidation() const override;
 
@@ -564,7 +564,7 @@ namespace ColladaConversion
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	auto ColladaCompileOp::GetTargets() const -> std::vector<TargetDesc> 
+	auto ColladaCompileOp::GetTargets() const -> ::Assets::PortableVector<TargetDesc> 
 	{
 		return _targets;
 	}

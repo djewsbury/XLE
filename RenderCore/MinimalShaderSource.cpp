@@ -221,7 +221,7 @@ namespace RenderCore
 	class ShaderCompileOperation : public ::Assets::ICompileOperation
 	{
 	public:
-		virtual std::vector<TargetDesc> GetTargets() const override
+		virtual ::Assets::PortableVector<TargetDesc> GetTargets() const override
 		{
 			return {
 				TargetDesc { ChunkType_CompiledShaderByteCode, "main" }
@@ -230,7 +230,7 @@ namespace RenderCore
 		
 		virtual ::Assets::SerializedTarget SerializeTarget(unsigned idx) override
 		{
-			std::vector<::Assets::SerializedArtifact> result;
+			::Assets::PortableVector<::Assets::SerializedArtifact> result;
 			if (_byteCode._payload)
 				result.push_back({
 					ChunkType_CompiledShaderByteCode, 0, "main",

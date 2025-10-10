@@ -502,7 +502,7 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-	std::vector<::Assets::SerializedArtifact> SerializeCompiledMaterialSetToChunks(
+	::Assets::PortableVector<::Assets::SerializedArtifact> SerializeCompiledMaterialSetToChunks(
 		std::shared_ptr<MaterialSetConstruction> construction,
 		std::vector<std::string> materialsToInstantiate)
 	{
@@ -544,7 +544,7 @@ namespace RenderCore { namespace Assets
 		depVals.emplace_back(sourceModelHelper.GetModelMatDepVal());
 
 		return {
-			std::vector<::Assets::SerializedArtifact>{
+			::Assets::PortableVector<::Assets::SerializedArtifact>{
 				{
 					ChunkType_ResolvedMat, ResolvedMat_ExpectedVersion,
 					(StringMeld<256>() << sourceModelName << "&" << sourceMaterialName).AsString(),

@@ -6,6 +6,7 @@
 
 #include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/AssetMixins.h"
+#include "../../Assets/ICompileOperation.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -68,7 +69,7 @@ namespace RenderCore { namespace Assets
 		std::promise<std::shared_ptr<CompiledMaterialSet>>&& promise,
 		std::shared_ptr<MaterialSetConstruction> construction);
 
-	std::vector<::Assets::SerializedArtifact> SerializeCompiledMaterialSetToChunks(
+	::Assets::PortableVector<::Assets::SerializedArtifact> SerializeCompiledMaterialSetToChunks(
 		std::shared_ptr<MaterialSetConstruction> construction,
 		std::vector<std::string> materialsToInstantiate);
 
