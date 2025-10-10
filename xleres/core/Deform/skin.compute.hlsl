@@ -77,7 +77,7 @@ DeformVertex PerformDeform(DeformVertex input, uint vertexIdx, uint instanceIdx)
 		uint c=0;
 		for (;;) {
 			uint packedWeights = LoadWeightPack(vertexIdx, c, skinIAParams);
-			uint packedIndices = LoadIndexPackUINT8(vertexIdx, c, skinIAParams);
+			uint packedIndices = LoadIndexPack(vertexIdx, c, skinIAParams);
 
 			{
 				uint boneIndex = packedIndices&0xff;

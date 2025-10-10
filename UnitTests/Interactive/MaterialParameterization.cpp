@@ -13,6 +13,7 @@
 #include "../../RenderCore/LightingEngine/ToneMapOperator.h"
 #include "../../RenderCore/LightingEngine/SkyOperator.h"
 #include "../../RenderCore/LightingEngine/ILightScene.h"
+#include "../../RenderCore/LightingEngine/StandardLightOperators.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"

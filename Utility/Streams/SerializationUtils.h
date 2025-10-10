@@ -325,6 +325,8 @@ namespace Utility
 			insert(this->end(), begin, end);
 		}
 
+		SerializableVector(std::initializer_list<Element> initializers) : SerializableVector(initializers.begin(), initializers.end()) {}
+
 		~SerializableVector()
 		{
 			for (auto i=_begin; i!=_end; ++i) i->~Element();

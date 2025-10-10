@@ -325,7 +325,8 @@ namespace XLEMath
 		Primitive p, s, q;
 		std::tie(p, s) = Dot_Accurate(pt, Truncate(plane));
 		std::tie(p, q) = TwoSum(p, plane[3]);
-		return p + (s + q);
+		s += q;
+		return p + s;
 	}
 
 	static Float3 Normalize_Accurate(Float3 input)
