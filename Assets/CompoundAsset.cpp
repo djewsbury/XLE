@@ -141,8 +141,6 @@ namespace AssetsNew
 	{
 		auto* scaffold = indexer.GetCompoundAssetScaffold().get();
 		auto compTable = LowerBound(scaffold->_components, componentTypeName);
-		if (compTable == scaffold->_components.end() || compTable->first != componentTypeName)
-			return std::monostate{};
 
 		std::stack<std::variant<CompoundAssetScaffold::EntityHashName, StringSection<>>> checkStack;
 		checkStack.emplace(indexer._entityNameHash);
@@ -161,8 +159,8 @@ namespace AssetsNew
 			auto ei = LowerBound(scaffold->_entityLookup, entityNameHash);
 			if (ei == scaffold->_entityLookup.end() || ei->first != entityNameHash)
 				return std::monostate{};
-			// Does the requested
-			if (compTable->second._inlineChunks.size() > ei->second._componentTableIdx && !compTable->second._inlineChunks[ei->second._componentTableIdx].IsEmpty())
+			// Does the requested component actually exist?
+			if ((compTable != scaffold->_components.end() && compTable->first == componentTypeName) && compTable->second._inlineChunks.size() > ei->second._componentTableIdx && !compTable->second._inlineChunks[ei->second._componentTableIdx].IsEmpty())
 				return ScaffoldAndEntityName { indexer._scaffold, entityNameHash DEBUG_ONLY(, indexer._entityName) };
 
 			// Note that we'll check the inherits in reverse order (because of the stack)
