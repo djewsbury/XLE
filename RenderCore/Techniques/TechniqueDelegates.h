@@ -32,6 +32,8 @@ namespace RenderCore { namespace Techniques
 		Internal::ShaderVariant			_shaders[3] { std::monostate{}, std::monostate{}, std::monostate{} };		// indexed by RenderCore::ShaderStage
 
 		ShaderSourceParser::ManualSelectorFiltering _manualSelectorFiltering;
+		std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> _additionalSelectorFiltering[3];		// used by technique delegates to add filtering for additional patches & shaders not included in _shaders
+
 		std::string				_techniquePreconfigurationFile;
 		std::string				_materialPreconfigurationFile;
 

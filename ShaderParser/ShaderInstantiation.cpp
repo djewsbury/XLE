@@ -9,7 +9,6 @@
 #include "Assets/AssetUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
-#include "../xleres/FileList.h"
 #include <stack>
 #include <sstream>
 #include <regex>
@@ -301,7 +300,6 @@ namespace ShaderSourceParser
 		// Build a fragment containing all of the #include statements needed
 		{
 			std::stringstream str;
-			str << "#include \"" PREFIX_HLSL "\"" << std::endl;
 			for (const auto&i:pendingInst._rawShaderFileIncludes) {
 				assert(!i.empty());
 				str << "#include \"" << i << "\"" << std::endl;

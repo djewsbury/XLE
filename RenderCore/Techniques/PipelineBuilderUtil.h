@@ -61,6 +61,20 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			return {};
 		}
 
+		static void SetFilteringForStage(GraphicsPipelineDescWithFilteringRules& rules, unsigned shaderStage, std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> filtering)
+		{
+			if (rules._pipelineDesc->_additionalSelectorFiltering[shaderStage]) {
+				if (filtering) {
+					rules._automaticFiltering[shaderStage] = std::make_shared<ShaderSourceParser::SelectorFilteringRules>(*filtering);
+					rules._automaticFiltering[shaderStage]->MergeIn(*rules._pipelineDesc->_additionalSelectorFiltering[shaderStage]);
+				} else {
+					rules._automaticFiltering[shaderStage] = rules._pipelineDesc->_additionalSelectorFiltering[shaderStage];
+				}
+			} else {
+				rules._automaticFiltering[shaderStage] = std::move(filtering);
+			}
+		}
+
 		static void InitializePromise(
 			std::promise<std::shared_ptr<GraphicsPipelineDescWithFilteringRules>>&& promise,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc)
@@ -75,6 +89,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					assert(!filteringFuture[(unsigned)ShaderStage::Geometry].valid());
 					auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
 					finalObject->_pipelineDesc = pipelineDesc;
+					for (unsigned c=0; c<3; ++c)
+						if (pipelineDesc->_shaders[c].index())
+							finalObject->_automaticFiltering[c] = pipelineDesc->_additionalSelectorFiltering[c];
 					promise.set_value(std::move(finalObject));
 					return;
 				}
@@ -88,9 +105,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> psFiltering) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = std::move(psFiltering);
 								finalObject->_pipelineDesc = pipelineDesc;
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Pixel, std::move(psFiltering));
 								return finalObject;
 							});
 					} else {
@@ -102,10 +119,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = std::move(psFiltering);
-								finalObject->_preconfiguration = preconfiguration;
 								finalObject->_pipelineDesc = pipelineDesc;
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Pixel, std::move(psFiltering));
+								finalObject->_preconfiguration = preconfiguration;
 								return finalObject;
 							});
 					}
@@ -120,10 +137,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> gsFiltering) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = std::move(psFiltering);
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = std::move(gsFiltering);
 								finalObject->_pipelineDesc = pipelineDesc;
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Pixel, std::move(psFiltering));
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Geometry, std::move(gsFiltering));
 								return finalObject;
 							});
 					} else {
@@ -136,11 +153,11 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Pixel] = std::move(psFiltering);
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = std::move(gsFiltering);
-								finalObject->_preconfiguration = preconfiguration;
 								finalObject->_pipelineDesc = pipelineDesc;
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Pixel, std::move(psFiltering));
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Geometry, std::move(gsFiltering));
+								finalObject->_preconfiguration = preconfiguration;
 								return finalObject;
 							});
 					}
@@ -154,9 +171,9 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> gsFiltering) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = std::move(gsFiltering);
 								finalObject->_pipelineDesc = pipelineDesc;
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Geometry, std::move(gsFiltering));
 								return finalObject;
 							});
 					} else {
@@ -168,10 +185,10 @@ namespace RenderCore { namespace Techniques { namespace Internal
 								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
 								
 								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Vertex] = std::move(vsFiltering);
-								finalObject->_automaticFiltering[(unsigned)ShaderStage::Geometry] = std::move(gsFiltering);
-								finalObject->_preconfiguration = preconfiguration;
 								finalObject->_pipelineDesc = pipelineDesc;
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
+								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Geometry, std::move(gsFiltering));
+								finalObject->_preconfiguration = preconfiguration;
 								return finalObject;
 							});
 					}

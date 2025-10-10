@@ -58,6 +58,7 @@ namespace RenderCore { namespace Assets
 	{
 	public:
 		StringSection<> GetPipelineLayout() const { return _pipelineLayout; }
+		StringSection<> GetPreconfiguration() const { return _preconfiguration; }
 		uint64_t GetHash() const { return _hash; }
 
 		void MergeInWithFilenameResolve(const TechniqueDelegateConfig&, const ::Assets::DirectorySearchRules&);
@@ -68,7 +69,7 @@ namespace RenderCore { namespace Assets
 		~TechniqueDelegateConfig();
 
 	private:
-		std::string _pipelineLayout;
+		std::string _pipelineLayout, _preconfiguration;
 		uint64_t _hash = ~0ull;
 	};
 

@@ -28,6 +28,7 @@ namespace RenderCore { namespace Techniques
 			RenderCore::Assets::TechniqueDelegateConfig _delegateConfig;
 			std::vector<std::tuple<std::string, GraphLanguage::NodeGraphSignature, uint64_t>> _patchDelegateInput;
 			std::string _additionalPrePatchesFragment;
+			std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> _additionalSelectorFiltering;
 			::Assets::DependencyValidation _depVal;
 
 			void Configure(

@@ -24,6 +24,7 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Threading/CompletionThreadPool.h"
+#include "../../xleres/FileList.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -317,6 +318,7 @@ namespace RenderCore { namespace Techniques
 		// it can be confusing if there is other code injected before the start of the file. Since
 		// the entry points should have signatures for the patch functions anyway, it should work
 		// fine
+		output << "#include \"" PREFIX_HLSL "\"" << std::endl;		// (integrating here to match other AssembleShader variation)
 		output << instantiated.first;
 		for (const auto& s:prePatchFragments)
 			output << s << std::endl;
@@ -341,6 +343,7 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const std::string*> postPatchFragments) -> SourceCodeWithRemapping
 	{
 		std::stringstream output;
+		output << "#include \"" PREFIX_HLSL "\"" << std::endl;		// (integrating here to match other AssembleShader variation)
 		for (const auto& s:prePatchFragments)
 			output << s << std::endl;
 		if (!mainSourceFile.IsEmpty())

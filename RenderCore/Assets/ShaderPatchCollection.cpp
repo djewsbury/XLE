@@ -288,12 +288,17 @@ namespace RenderCore { namespace Assets
 	{
 		if (!src._pipelineLayout.empty())
 			_pipelineLayout = src._pipelineLayout;
-		_hash = Hash64(_pipelineLayout);
+		if (!src._preconfiguration.empty())
+			_preconfiguration = src._preconfiguration;
+		_hash = Hash64(_pipelineLayout, Hash64(_preconfiguration));
 	}
 
 	void SerializationOperator(Formatters::TextOutputFormatter& fmttr, const TechniqueDelegateConfig& cfg)
 	{
-		fmttr.WriteKeyedValue("PipelineLayout", cfg._pipelineLayout);
+		if (!cfg._pipelineLayout.empty())
+			fmttr.WriteKeyedValue("PipelineLayout", cfg._pipelineLayout);
+		if (!cfg._preconfiguration.empty())
+			fmttr.WriteKeyedValue("Preconfiguration", cfg._preconfiguration);
 	}
 
 	void DeserializationOperator(Formatters::TextInputFormatter<char>& fmttr, TechniqueDelegateConfig& cfg)
@@ -302,10 +307,12 @@ namespace RenderCore { namespace Assets
 		while (fmttr.TryKeyedItem(kn)) {
 			if (XlEqString(kn, "PipelineLayout")) {
 				cfg._pipelineLayout = Formatters::RequireStringValue(fmttr).AsString();
+			} else if (XlEqString(kn, "Preconfiguration")) {
+				cfg._preconfiguration = Formatters::RequireStringValue(fmttr).AsString();
 			} else
 				Formatters::SkipValueOrElement(fmttr);
 		}
-		cfg._hash = Hash64(cfg._pipelineLayout);
+		cfg._hash = Hash64(cfg._pipelineLayout, Hash64(cfg._preconfiguration));
 	}
 
 	TechniqueDelegateConfig::TechniqueDelegateConfig() {}

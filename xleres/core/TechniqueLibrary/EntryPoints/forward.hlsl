@@ -44,6 +44,7 @@ GBufferValues SampleFallback() : GBUFFERVALUES { return GBufferValues_Default();
 Entity=main
 TechniqueDelegateConfig=main=~
 	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
+	Preconfiguration=xleres/Config/Preconfiguration.hlsl
 RawMaterial=main=~
 ShaderPatchCollection=main=~
 ManualSelectorFiltering=main=~

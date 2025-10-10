@@ -15,6 +15,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/IArtifact.h"
 #include "../../Assets/CompoundAsset.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StreamUtils.h"
@@ -423,18 +424,17 @@ namespace RenderCore { namespace Techniques
 			}
 			nascentDesc->_depthStencil = _depthStencil;
 
-			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
-			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
-			if (shaderPatches) {
-				auto illumType = CalculateIllumType(shaderPatches->GetInterface());
-				if (illumType != IllumType::SpriteTechnique) {
+			auto illumType = shaderPatches ? CalculateIllumType(shaderPatches->GetInterface()) : IllumType::NoPerPixel;
+			if (!shaderPatches || illumType != IllumType::SpriteTechnique) {
 
-					// old style more limited technique
+				const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
+				const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+				std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+
+				// old style more limited technique
+				if (shaderPatches) {
 					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
-
 					bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
-
 					switch (illumType) {
 					case IllumType::PerPixel:
 						psTechEntry = &_techniqueFileHelper._perPixel;
@@ -455,23 +455,22 @@ namespace RenderCore { namespace Techniques
 						vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
 						vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
 					}
-
-				} else {
-
-					// new style, more flexible approach
-					if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h) {
-						i->second.Configure(*nascentDesc, std::move(shaderPatches), iaAttributes);
-					}
-
 				}
+
+				TechniqueEntry mergedTechEntry = *vsTechEntry;
+				mergedTechEntry.MergeIn(*psTechEntry);
+				PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
+
+			} else {
+
+				// new style, more flexible approach
+				if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h) {
+					i->second.Configure(*nascentDesc, std::move(shaderPatches), iaAttributes);
+				}
+
 			}
 
 			nascentDesc->_depVal = _depVal;
-
-			TechniqueEntry mergedTechEntry = *vsTechEntry;
-			mergedTechEntry.MergeIn(*psTechEntry);
-
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 			return nascentDesc;
 		}
 
@@ -501,7 +500,7 @@ namespace RenderCore { namespace Techniques
 			TechniqueDelegateForwardFlags::BitField flags)
 		{
 			auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
-			::Assets::WhenAll(std::move(techniqueSet),::Assets::GetAssetFuture<Techniques::FlexibleTechniqueHelper>(util, TECH_ENTRY_FORWARD)).CheckImmediately().ThenConstructToPromise(
+			::Assets::WhenAll(std::move(techniqueSet), ::Assets::GetAssetFuture<Techniques::FlexibleTechniqueHelper>(util, TECH_ENTRY_FORWARD)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[flags, util](auto techniqueSetFile, const auto& flexibleHelper) {
 					TechniqueFileHelper helper{techniqueSetFile};
@@ -903,7 +902,8 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
 
-			if (!shaderPatches || !shaderPatches->GetInterface().HasPatchType("SV_AutoPS"_h)) {
+			auto illumType = shaderPatches ? CalculateIllumType(shaderPatches->GetInterface()) : IllumType::NoPerPixel;
+			if (!shaderPatches || illumType != IllumType::SpriteTechnique) {
 
 				const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
 				const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
@@ -911,7 +911,6 @@ namespace RenderCore { namespace Techniques
 				if (shaderPatches) {
 					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 
-					auto illumType = CalculateIllumType(shaderPatches->GetInterface());
 					bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
 
 					switch (illumType) {
@@ -943,27 +942,12 @@ namespace RenderCore { namespace Techniques
 
 			} else {
 
-				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
-
-				// "SpriteTechnique" style path
-				// todo -- technique delegate-specific system patches (to process the output for the specific delegate type, etc)
-				assert(!shaderPatches->GetInterface().HasPatchType(s_vertexPatch));
-
-				std::vector<RenderCore::Techniques::PatchDelegateInput> patchesInterface;
-				for (const auto& p:shaderPatches->GetInterface().GetPatches())
-					patchesInterface.emplace_back(RenderCore::Techniques::PatchDelegateInput{p._originalEntryPointName, p._originalEntryPointSignature.get(), p._implementsHash});
-				for (auto& out:RenderCore::Techniques::BuildAutoPipeline(patchesInterface, iaAttributes)) {
-					if (unsigned(out._stage) >= dimof(nascentDesc->_shaders)) continue;
-					if (!out._resource._patchCollectionExpansions.empty())
-						out._resource._patchCollection = shaderPatches;
-					nascentDesc->_shaders[unsigned(out._stage)] = std::move(out._resource);
+				// new style, more flexible approach
+				if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h) {
+					i->second.Configure(*nascentDesc, std::move(shaderPatches), iaAttributes);
 				}
 
-				TechniqueEntry mergedTechEntry = _techniqueFileHelper._vsNoPatchesSrc;
-				mergedTechEntry.MergeIn(_techniqueFileHelper._psNoPatchesSrc);
-				mergedTechEntry._selectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
-				nascentDesc->_manualSelectorFiltering = mergedTechEntry._selectorFiltering;
-				nascentDesc->_techniquePreconfigurationFile = mergedTechEntry._preconfigurationFileName;
+				nascentDesc->_manualSelectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
 
 			}
 
@@ -978,9 +962,10 @@ namespace RenderCore { namespace Techniques
 
 		TechniqueDelegate_Utility(
 			TechniqueFileHelper&& helper,
+			const FlexibleTechniqueHelper& flexibleHelper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			UtilityDelegateType utilityType, bool allowBlending)
-		: _techniqueFileHelper{std::move(helper)}, _pipelineLayout(std::move(pipelineLayout))
+		: _techniqueFileHelper{std::move(helper)}, _flexibleHelper(flexibleHelper), _pipelineLayout(std::move(pipelineLayout))
 		, _utilityType(utilityType), _allowBlending(allowBlending)
 		{
 			_dss[0] = CommonResourceBox::s_dsDisable;
@@ -997,25 +982,19 @@ namespace RenderCore { namespace Techniques
 			TechniqueSetFileFuture techniqueSet,
 			UtilityDelegateType utilityType, bool allowBlending)
 		{
-			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
+			auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+			::Assets::WhenAll(std::move(techniqueSet), ::Assets::GetAssetFuture<Techniques::FlexibleTechniqueHelper>(util, TECH_ENTRY_UTILITY)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
-				[utilityType, allowBlending](auto&& promise, auto techniqueSetFile) {
-					TRY {
-						TechniqueFileHelper helper{techniqueSetFile, utilityType};
-						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
-						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
-							std::move(promise),
-							[helper=std::move(helper), utilityType, allowBlending](auto pipelineLayout) mutable {
-								return std::make_shared<TechniqueDelegate_Utility>(std::move(helper), std::move(pipelineLayout), utilityType, allowBlending);
-							});
-					} CATCH (...) {
-						promise.set_exception(std::current_exception());
-					} CATCH_END
+				[utilityType, allowBlending, util](auto techniqueSetFile, const auto& flexibleHelper) {
+					TechniqueFileHelper helper{techniqueSetFile, utilityType};
+					auto pipelineLayout = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
+					return std::make_shared<TechniqueDelegate_Utility>(std::move(helper), flexibleHelper, std::move(pipelineLayout), utilityType, allowBlending);
 				});
 		}
 
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
+		FlexibleTechniqueHelper _flexibleHelper;
 		UtilityDelegateType _utilityType;
 		DepthStencilDesc _dss[4];
 		bool _allowBlending;
@@ -1378,8 +1357,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<Techniques::ShaderPatchInstantiationUtil> shaderPatches,
 		IteratorRange<const uint64_t*> iaAttributes)
 	{
-		nascentDesc._materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
-
 		bool hasSpritePatch = false;
 		std::vector<Techniques::PatchDelegateInput> patchesInterface;
 		for (const auto& p:shaderPatches->GetInterface().GetPatches()) {
@@ -1400,14 +1377,21 @@ namespace RenderCore { namespace Techniques
 
 				// HACK -- the file for our system patches will not be included by default, because it's not part of out._resource._patchCollection
 				// We'll get around this by just forcing an include of our lighting technique file
-				if (!_additionalPrePatchesFragment.empty())
+				if (!_additionalPrePatchesFragment.empty()) {
 					out._resource._prePatchesFragments.emplace_back(_additionalPrePatchesFragment);
+				}
 			}
 			nascentDesc._shaders[unsigned(out._stage)] = std::move(out._resource);
+			nascentDesc._additionalSelectorFiltering[unsigned(out._stage)] = _additionalSelectorFiltering;
 		}
 
 		nascentDesc._manualSelectorFiltering = _selectorFiltering;
 		nascentDesc._techniquePreconfigurationFile = _patches.GetPreconfigurationFileName().AsString();
+
+		if (!shaderPatches->GetInterface().GetPreconfigurationFileName().empty())
+			nascentDesc._materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+		if (nascentDesc._techniquePreconfigurationFile.empty())
+			nascentDesc._techniquePreconfigurationFile = _delegateConfig.GetPreconfiguration().AsString();
 	}
 
 	static void FlexibleTechniqueHelper_ConstructEntryToPromise(
@@ -1427,6 +1411,8 @@ namespace RenderCore { namespace Techniques
 				::Assets::DependencyValidationMarker depVals[] { selectorFiltering.GetDependencyValidation(), patches.GetDependencyValidation(), delegateConfig.GetDependencyValidation() };
 				result._depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 
+				std::set<std::string> rawShadersForSystemPatches;
+
 				// interpret the patches interface
 				for (const auto& p:result._patches.GetPatches()) {
 					ShaderSourceParser::GenerateFunctionOptions generateOptions;
@@ -1436,7 +1422,27 @@ namespace RenderCore { namespace Techniques
 					auto instShader = ShaderSourceParser::InstantiateShader(MakeIteratorRange(&p.second, &p.second+1), generateOptions);
 					for (const auto& e:instShader._entryPoints)
 						result._patchDelegateInput.emplace_back(e._name, e._signature, Hash64(e._implementsName));
+					rawShadersForSystemPatches.insert(instShader._rawShaderFileIncludes.begin(), instShader._rawShaderFileIncludes.end());
 				}
+
+				if (!rawShadersForSystemPatches.empty()) {
+					std::vector<std::shared_future<std::shared_ptr<ShaderSourceParser::SelectorFilteringRules>>> additionalSelectorFiltering;
+					for (auto s:rawShadersForSystemPatches) {
+						additionalSelectorFiltering.emplace_back(::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorFilteringRules>(s));
+						result._additionalPrePatchesFragment = Concatenate(result._additionalPrePatchesFragment, "#include \"", s, "\"\n");
+					}
+					if (additionalSelectorFiltering.size() == 1) {
+						YieldToPool(additionalSelectorFiltering.back());
+						result._additionalSelectorFiltering = additionalSelectorFiltering.back().get();
+					} else {
+						result._additionalSelectorFiltering = std::make_shared<ShaderSourceParser::SelectorFilteringRules>();
+						for (auto& r:additionalSelectorFiltering) {
+							YieldToPool(r);
+							result._additionalSelectorFiltering->MergeIn(*r.get());
+						}
+					}
+				}
+
 				return result;
 			});
 	}
@@ -1485,8 +1491,6 @@ namespace RenderCore { namespace Techniques
 							for (auto& f:helper->_futures) {
 								result._entries.emplace_back(f.first, f.second.get());
 								depVals.emplace_back(result._entries.back().second._depVal);
-
-								result._entries.back().second._additionalPrePatchesFragment = additionalPrepatchesFragment;
 
 								// Note -- each configuration in this file is loaded, but we're not sure yet which are going to be relevant to the
 								//		actual TechniqueDelegate. However, each technique delegate can only have a single pipeline layout
