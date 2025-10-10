@@ -5,6 +5,7 @@
 #include "../../UnitTestHelper.h"
 #include "../ReusableDataFiles.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
+#include "../../../RenderCore/Techniques/TechniqueDelegateUtil.h"
 #include "../../../RenderCore/Techniques/ShaderVariationSet.h"
 #include "../../../RenderCore/Assets/ModelCompilationConfiguration.h"
 #include "../../../ShaderParser/AutomaticSelectorFiltering.h"

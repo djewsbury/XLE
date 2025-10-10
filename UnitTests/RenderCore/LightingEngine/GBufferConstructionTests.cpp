@@ -10,6 +10,7 @@
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
+#include "../../../RenderCore/Techniques/TechniqueDelegateUtil.h"
 #include "../../../RenderCore/Techniques/CommonBindings.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"

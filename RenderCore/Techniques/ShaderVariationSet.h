@@ -5,9 +5,10 @@
 #pragma once
 
 #include "Techniques.h"
+#include "../../Assets/DepVal.h"
 #include "../Metal/Forward.h"
-#include <unordered_map>
 #include <string>
+#include <future>
 
 namespace ShaderSourceParser
 {

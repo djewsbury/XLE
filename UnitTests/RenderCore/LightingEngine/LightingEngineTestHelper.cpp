@@ -10,6 +10,7 @@
 #include "../../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
+#include "../../../RenderCore/Techniques/CommonBindings.h"
 #include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Techniques/Techniques.h"

@@ -7,10 +7,8 @@
 #include "SimpleVisualization.h"
 #include "OverlayContext.h"
 #include "Font.h"
-#include "DebuggingDisplay.h"
 #include "OverlayApparatus.h"
 #include "DrawText.h"
-#include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/ImmediateDrawables.h"
@@ -355,7 +353,6 @@ namespace RenderOverlays
 		}
 
 		using namespace RenderOverlays;
-		using namespace RenderOverlays::DebuggingDisplay;
 		context.DrawTriangle(
 			ProjectionMode::P2D, 
 			AsPixelCoords(Coord2(rect._bottomRight[0],								0.5f * (rect._topLeft[1] + rect._bottomRight[1]))), colour,
@@ -374,8 +371,6 @@ namespace RenderOverlays
 		const RenderOverlays::Rect& viewport,
 		unsigned animationCounter)
 	{
-		using namespace RenderOverlays::DebuggingDisplay;
-
 		const unsigned indicatorWidth = 80;
 		const unsigned indicatorHeight = 120;
 		RenderOverlays::Rect outerRect;
@@ -406,7 +401,6 @@ namespace RenderOverlays
 			r._bottomRight[0] = unsigned(center[0] + a * 0.5f * (outerRect._bottomRight[0] - outerRect._topLeft[0]));
 			r._bottomRight[1] = unsigned(center[1] + a * 0.5f * (outerRect._bottomRight[1] - outerRect._topLeft[1]));
 
-			using namespace RenderOverlays::DebuggingDisplay;
 			float fadeOff = std::min((1.0f - a) * 10.f, 1.0f);
 			DrawDiamond(context, r, RenderOverlays::ColorB { uint8_t(0xff * fadeOff * a2), uint8_t(0xff * fadeOff * a2), uint8_t(0xff * fadeOff * a2), 0xff });
 		}

@@ -16,6 +16,7 @@
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../../RenderCore/Techniques/TechniqueDelegateUtil.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"

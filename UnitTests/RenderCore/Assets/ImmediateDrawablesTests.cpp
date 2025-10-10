@@ -15,6 +15,7 @@
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/DeferredShaderResource.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
+#include "../../../RenderCore/Techniques/CommonBindings.h"
 #include "../../../RenderCore/Techniques/SystemUniformsDelegate.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"

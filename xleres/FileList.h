@@ -8,6 +8,8 @@ using namespace Assets::Literals;
 #define ILLUM_TECH "xleres/Config/Illum.tech"_initializer
 #define ILLUM_LEGACY_TECH "xleres/Config/IllumLegacy.tech"_initializer
 
+#define TECH_ENTRY_FORWARD "xleres/TechniqueLibrary/EntryPoints/forward.hlsl"_initializer
+
 #define MAIN_PIPELINE "xleres/Config/main.pipeline"_initializer
 #define LIGHTING_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/light-resolve-operator.pipeline"_initializer
 #define GENERAL_OPERATOR_PIPELINE "xleres/TechniqueLibrary/LightingEngine/general-operator.pipeline"_initializer

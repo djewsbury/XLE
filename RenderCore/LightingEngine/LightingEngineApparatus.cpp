@@ -6,6 +6,7 @@
 #include "GBufferOperator.h"
 #include "TextureCompilerUtil.h"
 #include "../Techniques/TechniqueDelegates.h"
+#include "../Techniques/TechniqueDelegateUtil.h"
 #include "../Techniques/Apparatuses.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/PipelineCollection.h"

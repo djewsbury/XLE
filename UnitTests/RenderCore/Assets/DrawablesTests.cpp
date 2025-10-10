@@ -12,6 +12,7 @@
 #include "../../../RenderCore/Techniques/PipelineAcceleratorInternal.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
+#include "../../../RenderCore/Techniques/TechniqueDelegateUtil.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../../RenderCore/Techniques/Techniques.h"

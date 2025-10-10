@@ -11,7 +11,7 @@
 #include "LightingDelegateUtil.h"
 
 #include "../Techniques/CommonResources.h"
-#include "../Techniques/Techniques.h"
+#include "../Techniques/CommonBindings.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/PipelineCollection.h"

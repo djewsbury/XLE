@@ -11,7 +11,6 @@
 #include "DescriptorSetAccelerator.h"
 #include "DeformAccelerator.h"
 #include "CommonUtils.h"
-#include "CommonResources.h"
 #include "ShaderPatchInstantiationUtil.h"		// for DescriptorSetLayoutAndBinding
 #include "Services.h"
 #include "SubFrameEvents.h"
@@ -26,7 +25,6 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"		// for PrepareResources
 #include "../../Utility/ArithmeticUtils.h"
-#include "../../Utility/BitUtils.h"
 
 using namespace Utility::Literals;
 

@@ -11,6 +11,7 @@
 #include "../../../RenderCore/Techniques/PipelineAcceleratorInternal.h"
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
+#include "../../../RenderCore/Techniques/TechniqueDelegateUtil.h"
 #include "../../../RenderCore/Techniques/ShaderPatchInstantiationUtil.h"
 #include "../../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../../RenderCore/Techniques/Services.h"

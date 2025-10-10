@@ -5,11 +5,11 @@
 #include "ParsingContext.h"
 #include "Techniques.h"
 #include "SystemUniformsDelegate.h"
+#include "CommonBindings.h"
 #include "RenderPass.h"
+#include "DrawableDelegates.h"
 #include "../IDevice.h"
-#include "../../Assets/AssetUtils.h"
 #include "../../Utility/StringFormat.h"
-#include "../../Utility/ArithmeticUtils.h"
 #include <memory>
 
 using namespace Utility::Literals;

@@ -14,7 +14,7 @@
 #include "../RenderCore/BufferView.h"
 #include "../RenderCore/Techniques/CommonResources.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
-#include "../RenderCore/Techniques/Techniques.h"
+#include "../RenderCore/Techniques/TechniqueDelegateUtil.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/DrawableDelegates.h"
 #include "../RenderCore/Techniques/RenderPass.h"

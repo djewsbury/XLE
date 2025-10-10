@@ -14,6 +14,7 @@
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/TechniqueDelegates.h"
+#include "../../RenderCore/Techniques/TechniqueDelegateUtil.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/PipelineLayoutDelegate.h"     // (for CompiledPipelineLayoutAsset)

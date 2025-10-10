@@ -142,7 +142,7 @@ namespace RenderCore { namespace Techniques
 
 	RasterizationDesc BuildDefaultRasterizationDesc(const Assets::RenderStateSet& states);
 
-	enum class IllumType { NoPerPixel, PerPixel, PerPixelAndEarlyRejection, PerPixelCustomLighting };
+	enum class IllumType { NoPerPixel, PerPixel, PerPixelAndEarlyRejection, PerPixelCustomLighting, SpriteTechnique };
 	IllumType CalculateIllumType(const ShaderPatchInstantiationUtil& patchCollection);
 
 	TechniqueSetFileFuture GetDefaultTechniqueSetFileFuture();

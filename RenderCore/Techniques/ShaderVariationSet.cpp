@@ -4,6 +4,7 @@
 
 #include "ShaderVariationSet.h"
 #include "ParsingContext.h"
+#include "TechniqueDelegateUtil.h"
 #include "../Types.h"
 #include "../FrameBufferDesc.h"
 #include "../UniformsStream.h"

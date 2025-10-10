@@ -7,7 +7,7 @@
 #include "LightingEngineApparatus.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/TechniqueDelegates.h"
-#include "../Techniques/Techniques.h"
+#include "../Techniques/TechniqueDelegateUtil.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/ParsingContext.h"
 #include "../../Assets/Continuation.h"

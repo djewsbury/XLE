@@ -13,6 +13,7 @@
 #include "PipelineLayoutDelegate.h"
 #include "Drawables.h"				// for IDrawablesPool & protected destroy
 #include "ResourceConstructionContext.h"
+#include "CommonBindings.h"
 #include "../FrameBufferDesc.h"
 #include "../Format.h"
 #include "../Assets/RawMaterial.h"
