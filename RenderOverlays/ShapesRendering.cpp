@@ -606,10 +606,10 @@ namespace RenderOverlays
                 Float2 d2 = Normalize(Truncate(Float3(pt2 - pt1)));
                 float cosTheta = dot(-d1, d2);
                 // tan(A/2) = +/-sqrt((1-cosA)/(1+cosA))
-                if (cosTheta < (-1+1e-3f))      // protect against div by zero / sqrt inf
+                if (cosTheta < (-1+1e-3f) || cosTheta > (1-1e-3f))      // protect against div by zero / sqrt inf
                     a1 = 0.f;
                 else
-                    a1 = halfWidth / sqrt((1.f-cosTheta)/(1.f+cosTheta));
+                    a1 = halfWidth * XlRSqrt((1.f-cosTheta)/(1.f+cosTheta));
                 a1 = -a1;
                 assert(std::isfinite(a1) && a1 == a1);
 
@@ -737,10 +737,10 @@ namespace RenderOverlays
                 Float2 d2 = Normalize(Truncate(Float3(pt2 - pt1)));
                 float cosTheta = dot(-d1, d2);
                 // tan(A/2) = +/-sqrt((1-cosA)/(1+cosA))
-                if (cosTheta < (-1+1e-3f))      // protect against div by zero / sqrt inf
+                if (cosTheta < (-1+1e-3f) || cosTheta > (1-1e-3f))      // protect against div by zero / sqrt inf
                     a1 = 0.f;
                 else
-                    a1 = width / sqrt((1.f-cosTheta)/(1.f+cosTheta));
+                    a1 = width * XlRSqrt((1.f-cosTheta)/(1.f+cosTheta));
                 a1 = -a1;
 
                 nextTriangleSign = TriangleSignNoEpsilon(Truncate(pt0), Truncate(pt1), Truncate(pt2));
