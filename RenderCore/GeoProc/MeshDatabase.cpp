@@ -114,8 +114,25 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 	}
 
+    template<VertexUtilComponentType type, unsigned componentCount>
+        inline void GetVertData_CompileTime(float* dst, const void* src, BrokenDownFormat fmt, ProcessingFlags::BitField processingFlags)
+    {
+        assert(fmt._type == type && fmt._componentCount == componentCount); assert(processingFlags == 0);
+        if constexpr (type == VertexUtilComponentType::Float32) {
+            RenderCore::Internal::GetVertDataF32(dst, (const float*)src, componentCount);
+        } else if constexpr (type == VertexUtilComponentType::Float16) {
+            RenderCore::Internal::GetVertDataF16(dst, (const uint16_t*)src, componentCount);
+        } else if constexpr (type == VertexUtilComponentType::UNorm16) {
+            RenderCore::Internal::GetVertDataUNorm16(dst, (const uint16_t*)src, componentCount);
+        } else if constexpr (type == VertexUtilComponentType::SNorm16) {
+            RenderCore::Internal::GetVertDataSNorm16(dst, (const int16_t*)src, componentCount);
+        } else {
+            static_assert("Unsupported VertexUtilComponentType");
+        }
+    }
+
 	inline void GetVertData(
-        float* dst, 
+        float* dst,
         const void* src, BrokenDownFormat fmt,
         ProcessingFlags::BitField processingFlags)
     {
@@ -815,13 +832,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return false;
     }
 
-    static void FindVertexPairs(
-        std::vector<std::pair<unsigned, unsigned>>& closeVertices,
-        std::vector<std::pair<QuantizedBlockId, unsigned>> & quantizedSet,
-        const IVertexSourceData& sourceStream, float threshold)
+    template<void GetVertDataImpl(float*, const void*, BrokenDownFormat, ProcessingFlags::BitField)>
+        static void FindVertexPairs_Internal(
+            std::vector<std::pair<unsigned, unsigned>>& closeVertices,
+            std::vector<std::pair<QuantizedBlockId, unsigned>> & quantizedSet,
+            const IVertexSourceData& sourceStream, float threshold)
     {
-        auto stride = sourceStream.GetStride();
         auto fmtBrkdn = BreakdownFormat(sourceStream.GetFormat());
+        auto stride = sourceStream.GetStride();
+        auto processingFlags = sourceStream.GetProcessingFlags();
 
         std::vector<bool> alreadyProcessedIdentical;
         const float tsq = threshold*threshold;
@@ -837,13 +856,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             for (auto ct0=c; ct0<c2; ++ct0) {
 				if (alreadyProcessedIdentical[ct0-c]) continue;
 
-                GetVertData(
+                GetVertDataImpl(
                     vert0, (const float*)PtrAdd(sourceStream.GetData().begin(), ct0->second * stride), 
-                    fmtBrkdn, sourceStream.GetProcessingFlags());
+                    fmtBrkdn, processingFlags);
                 for (auto ct1=ct0+1; ct1<c2; ++ct1) {
-                    GetVertData(
+                    GetVertDataImpl(
                         vert1, (const float*)PtrAdd(sourceStream.GetData().begin(), ct1->second * stride), 
-                        fmtBrkdn, sourceStream.GetProcessingFlags());
+                        fmtBrkdn, processingFlags);
 
                     auto off = Float4(vert1[0]-vert0[0], vert1[1]-vert0[1], vert1[2]-vert0[2], vert1[3]-vert0[3]);
                     float dstSq = MagnitudeSquared(off);
@@ -870,9 +889,44 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         }
     }
 
-    static unsigned FindClosestToAverage(
-        const IVertexSourceData& sourceStream,
-        const unsigned* chainStart, const unsigned* chainEnd)
+    static void FindVertexPairs(
+        std::vector<std::pair<unsigned, unsigned>>& closeVertices,
+        std::vector<std::pair<QuantizedBlockId, unsigned>> & quantizedSet,
+        const IVertexSourceData& sourceStream, float threshold)
+    {
+        // redirect to a "compile time" version of GetVertData where possible
+        auto processingFlags = sourceStream.GetProcessingFlags();
+        if (processingFlags == 0) {
+            auto fmtBrkdn = BreakdownFormat(sourceStream.GetFormat());
+            switch (fmtBrkdn._type) {
+            case VertexUtilComponentType::Float32:
+                if (fmtBrkdn._componentCount == 2) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float32, 2>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+                if (fmtBrkdn._componentCount == 3) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float32, 3>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+                if (fmtBrkdn._componentCount == 4) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float32, 4>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+            case VertexUtilComponentType::Float16:
+                if (fmtBrkdn._componentCount == 2) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float16, 2>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+                if (fmtBrkdn._componentCount == 3) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float16, 3>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+                if (fmtBrkdn._componentCount == 4) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float16, 4>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+            case VertexUtilComponentType::UNorm16:
+                if (fmtBrkdn._componentCount == 2) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::UNorm16, 2>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+                if (fmtBrkdn._componentCount == 3) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::UNorm16, 3>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+                if (fmtBrkdn._componentCount == 4) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::UNorm16, 4>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+            case VertexUtilComponentType::SNorm16:
+                if (fmtBrkdn._componentCount == 2) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::SNorm16, 2>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+                if (fmtBrkdn._componentCount == 3) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::SNorm16, 3>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+                if (fmtBrkdn._componentCount == 4) { FindVertexPairs_Internal<GetVertData_CompileTime<VertexUtilComponentType::SNorm16, 4>>(closeVertices, quantizedSet, sourceStream, threshold); return; }
+            default:
+                break;
+            }
+        }
+
+        FindVertexPairs_Internal<GetVertData>(closeVertices, quantizedSet, sourceStream, threshold);
+    }
+
+    template<void GetVertDataImpl(float*, const void*, BrokenDownFormat, ProcessingFlags::BitField)>
+        static unsigned FindClosestToAverage_Internal(
+            const IVertexSourceData& sourceStream,
+            const unsigned* chainStart, const unsigned* chainEnd)
     {
         if (chainEnd <= chainStart) { assert(0); return ~0u; }
 
@@ -882,7 +936,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         float ave[4] = {0.f, 0.f, 0.f, 0.f};
         for (auto c=chainStart; c!=chainEnd; ++c) {
             float b[4];
-            GetVertData(
+            GetVertDataImpl(
                 b, (const float*)PtrAdd(sourceStream.GetData().begin(), (*c) * stride), 
                 fmtBrkdn, sourceStream.GetProcessingFlags());
             for (unsigned q=0; q<dimof(ave); ++q)
@@ -897,7 +951,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         auto bestIndex = ~0u;
         for (auto c=chainStart; c!=chainEnd; ++c) {
             float b[4];
-            GetVertData(
+            GetVertDataImpl(
                 b, (const float*)PtrAdd(sourceStream.GetData().begin(), (*c) * stride), 
                 fmtBrkdn, sourceStream.GetProcessingFlags());
             float dstSq = 0.f;
@@ -911,6 +965,39 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             }
         }
         return bestIndex;
+    }
+
+    static unsigned FindClosestToAverage(
+        const IVertexSourceData& sourceStream,
+        const unsigned* chainStart, const unsigned* chainEnd)
+    {
+        // redirect to a "compile time" version of GetVertData where possible
+        auto processingFlags = sourceStream.GetProcessingFlags();
+        if (processingFlags == 0) {
+            auto fmtBrkdn = BreakdownFormat(sourceStream.GetFormat());
+            switch (fmtBrkdn._type) {
+            case VertexUtilComponentType::Float32:
+                if (fmtBrkdn._componentCount == 2) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float32, 2>>(sourceStream, chainStart, chainEnd);
+                if (fmtBrkdn._componentCount == 3) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float32, 3>>(sourceStream, chainStart, chainEnd);
+                if (fmtBrkdn._componentCount == 4) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float32, 4>>(sourceStream, chainStart, chainEnd);
+            case VertexUtilComponentType::Float16:
+                if (fmtBrkdn._componentCount == 2) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float16, 2>>(sourceStream, chainStart, chainEnd);
+                if (fmtBrkdn._componentCount == 3) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float16, 3>>(sourceStream, chainStart, chainEnd);
+                if (fmtBrkdn._componentCount == 4) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::Float16, 4>>(sourceStream, chainStart, chainEnd);
+            case VertexUtilComponentType::UNorm16:
+                if (fmtBrkdn._componentCount == 2) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::UNorm16, 2>>(sourceStream, chainStart, chainEnd);
+                if (fmtBrkdn._componentCount == 3) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::UNorm16, 3>>(sourceStream, chainStart, chainEnd);
+                if (fmtBrkdn._componentCount == 4) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::UNorm16, 4>>(sourceStream, chainStart, chainEnd);
+            case VertexUtilComponentType::SNorm16:
+                if (fmtBrkdn._componentCount == 2) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::SNorm16, 2>>(sourceStream, chainStart, chainEnd);
+                if (fmtBrkdn._componentCount == 3) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::SNorm16, 3>>(sourceStream, chainStart, chainEnd);
+                if (fmtBrkdn._componentCount == 4) return FindClosestToAverage_Internal<GetVertData_CompileTime<VertexUtilComponentType::SNorm16, 4>>(sourceStream, chainStart, chainEnd);
+            default:
+                break;
+            }
+        }
+
+        return FindClosestToAverage_Internal<GetVertData>(sourceStream, chainStart, chainEnd);
     }
 
     std::shared_ptr<IVertexSourceData>
