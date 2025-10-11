@@ -1075,24 +1075,24 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<std::pair<unsigned, unsigned>> closeVertices;
 
         Float4 offsets[] {
-            Float4(-threshold, -threshold, -threshold, -threshold),
-            Float4( threshold, -threshold, -threshold, -threshold),
-            Float4(-threshold,  threshold, -threshold, -threshold),
-            Float4( threshold,  threshold, -threshold, -threshold),
+            Float4(       0.f,        0.f,        0.f,        0.f),
+            Float4( threshold,        0.f,        0.f,        0.f),
+            Float4(       0.f,  threshold,        0.f,        0.f),
+            Float4( threshold,  threshold,        0.f,        0.f),
 
-            Float4(-threshold, -threshold,  threshold, -threshold),
-            Float4( threshold, -threshold,  threshold, -threshold),
-            Float4(-threshold,  threshold,  threshold, -threshold),
-            Float4( threshold,  threshold,  threshold, -threshold),
+            Float4(       0.f,        0.f,  threshold,        0.f),
+            Float4( threshold,        0.f,  threshold,        0.f),
+            Float4(       0.f,  threshold,  threshold,        0.f),
+            Float4( threshold,  threshold,  threshold,        0.f),
 
-            Float4(-threshold, -threshold, -threshold,  threshold),
-            Float4( threshold, -threshold, -threshold,  threshold),
-            Float4(-threshold,  threshold, -threshold,  threshold),
-            Float4( threshold,  threshold, -threshold,  threshold),
+            Float4(       0.f,        0.f,        0.f,  threshold),
+            Float4( threshold,        0.f,        0.f,  threshold),
+            Float4(       0.f,  threshold,        0.f,  threshold),
+            Float4( threshold,  threshold,        0.f,  threshold),
 
-            Float4(-threshold, -threshold,  threshold,  threshold),
-            Float4( threshold, -threshold,  threshold,  threshold),
-            Float4(-threshold,  threshold,  threshold,  threshold),
+            Float4(       0.f,        0.f,  threshold,  threshold),
+            Float4( threshold,        0.f,  threshold,  threshold),
+            Float4(       0.f,  threshold,  threshold,  threshold),
             Float4( threshold,  threshold,  threshold,  threshold)
         };
 
@@ -1111,7 +1111,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<std::pair<unsigned, unsigned>> reversedCloseVertices;
         reversedCloseVertices.reserve(closeVertices.size());
         for (auto c:closeVertices) reversedCloseVertices.emplace_back(c.second, c.first);
-        std::sort(reversedCloseVertices.begin(), reversedCloseVertices.end(), CompareFirst2{});
+        std::sort(b2e(reversedCloseVertices));
 
         oldOrderingToNewOrdering.clear();
         oldOrderingToNewOrdering.resize(sourceStream.GetCount(), ~0u);
