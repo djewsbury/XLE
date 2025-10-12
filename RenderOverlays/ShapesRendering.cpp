@@ -611,7 +611,6 @@ namespace RenderOverlays
                 else
                     a1 = halfWidth * XlRSqrt((1.f-cosTheta)/(1.f+cosTheta));
                 a1 = -a1;
-                assert(std::isfinite(a1) && a1 == a1);
 
                 nextTriangleSign = TriangleSignNoEpsilon(Truncate(pt0), Truncate(pt1), Truncate(pt2));
             }

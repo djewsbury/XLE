@@ -16,26 +16,30 @@ float4 frameworkEntry(
 	float3 worldPosition : WORLDPOSITION,
 	float3 worldVertexNormal : NORMAL,
 	float3 worldViewVector : WORLDVIEWVECTOR,
-	SystemInputs sys) : SV_Target0
+	SystemInputs sys : SYSTEMINPUTS) : SV_Target0
 {
-	GBufferValues sample = PerPixel(geo);
+	// note -- early rejection isn't supported
 
-	#if VSOUT_HAS_NORMAL
-		const bool hasNormal = true;
-	#else
-		const bool hasNormal = false;
-	#endif
+	const bool hasNormal = true;		// todo -- can't detect when there is no normal
 	float3 result =
 		CalculateIllumination(
 			sample, normalize(worldViewVector), worldPosition, worldVertexNormal,
 			NDCDepthToLinear0To1(position.z),
 			LightScreenDest_Create(int2(position.xy), GetSampleIndex(sys)), 
 			hasNormal);
-
 	return float4(result, sample.blendingAlpha);
 }
 
 GBufferValues SampleFallback() : GBUFFERVALUES { return GBufferValues_Default(); }
+
+SystemInputs InitializeSystemInputs(uint sampleIndex : SV_SampleIndex) : SYSTEMINPUTS
+{
+	SystemInputs result;
+	#if MSAA_SAMPLES > 1
+        result.sampleIndex = sampleIndex;
+    #endif
+	return result;
+}
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -54,6 +58,9 @@ ShaderPatchCollection=main=~
 		Implements=SV_SystemPS
 	=~
 		<.>::SampleFallback
+		Implements=SV_SystemPS
+	=~
+		<.>::InitializeSystemInputs
 		Implements=SV_SystemPS
 
 )-- */

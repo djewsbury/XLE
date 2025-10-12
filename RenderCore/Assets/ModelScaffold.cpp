@@ -8,9 +8,9 @@
 #include "AssetUtils.h"
 #include "ModelMachine.h"
 #include "../../Assets/ChunkFileContainer.h"
-#include "../../Assets/Continuation.h"
 #include "../../Assets/Assets.h"
 #include "../../Math/MathSerialization.h"
+#include "../../ConsoleRig/GlobalServices.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringUtils.h"
 #include "../../Utility/PtrUtils.h"
@@ -228,8 +228,8 @@ namespace RenderCore { namespace Assets
 			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
 				TRY {
 					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
-					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::ModelScaffold::ChunkRequests);
-					promise.set_value(std::make_shared<RenderCore::Assets::ModelScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+					auto chunks = chunkContainer->ResolveRequests(ModelScaffold::ChunkRequests);
+					promise.set_value(std::make_shared<ModelScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
 				} CATCH (...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -239,8 +239,8 @@ namespace RenderCore { namespace Assets
 		::Assets::WhenAll(::Assets::Internal::GetChunkFileContainerFuture(identifier)).ThenConstructToPromise(
 			std::move(promise),
 			[fn=identifier.AsString()](auto chunkContainer) {
-				auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::ModelScaffold::ChunkRequests);
-				return std::make_shared<RenderCore::Assets::ModelScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation());
+				auto chunks = chunkContainer->ResolveRequests(ModelScaffold::ChunkRequests);
+				return std::make_shared<ModelScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation());
 			});
 			*/
 	}
@@ -253,8 +253,8 @@ namespace RenderCore { namespace Assets
 			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
 				TRY {
 					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
-					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::ModelSupplementScaffold::ChunkRequests);
-					promise.set_value(std::make_shared<RenderCore::Assets::ModelSupplementScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+					auto chunks = chunkContainer->ResolveRequests(ModelSupplementScaffold::ChunkRequests);
+					promise.set_value(std::make_shared<ModelSupplementScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
 				} CATCH (...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -269,8 +269,8 @@ namespace RenderCore { namespace Assets
 			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
 				TRY {
 					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
-					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::SkeletonScaffold::ChunkRequests);
-					promise.set_value(std::make_shared<RenderCore::Assets::SkeletonScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+					auto chunks = chunkContainer->ResolveRequests(SkeletonScaffold::ChunkRequests);
+					promise.set_value(std::make_shared<SkeletonScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
 				} CATCH (...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
@@ -285,8 +285,8 @@ namespace RenderCore { namespace Assets
 			[promise=std::move(promise), fn=identifier.AsString()]() mutable {
 				TRY {
 					auto chunkContainer = ::Assets::ActualizeAssetPtr<::Assets::ArtifactChunkContainer>(nullptr, fn);
-					auto chunks = chunkContainer->ResolveRequests(RenderCore::Assets::AnimationSetScaffold::ChunkRequests);
-					promise.set_value(std::make_shared<RenderCore::Assets::AnimationSetScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
+					auto chunks = chunkContainer->ResolveRequests(AnimationSetScaffold::ChunkRequests);
+					promise.set_value(std::make_shared<AnimationSetScaffold>(MakeIteratorRange(chunks), chunkContainer->GetDependencyValidation()));
 				} CATCH (...) {
 					promise.set_exception(std::current_exception());
 				} CATCH_END
