@@ -11,6 +11,7 @@
 #include "../Utility/IteratorUtils.h"       // for IteratorRange
 #include "../Core/Prefix.h"
 #include <utility>
+#include <optional>
 
 #if (defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)) && defined(__SSE4_1__)
     #include <immintrin.h>			// MSVC & clang intrinsic
@@ -37,6 +38,8 @@ namespace XLEMath
 			Returns the parameters of the standard plane equation, eg:
 				0 = A * x + B * y + C * z + D
 			( so the result is a Vector4( A, B, C, D ) )
+
+			Variable point version does not consider winding order
 		*/
 	T1(Primitive) auto PlaneFit(const Vector3T<Primitive> pts[], size_t ptCount ) -> Vector4T<Primitive>;
 	T1(Primitive) auto PlaneFit(const Vector3T<Primitive> & pt0,
@@ -99,7 +102,11 @@ namespace XLEMath
     template<typename Primitive>
         unsigned PlaneAABBIntersection(Vector3T<Primitive> dst[], Vector4T<Primitive> planeEquation, Vector3T<Primitive> aabbMins, Vector3T<Primitive> aabbMaxs);
 
-    int TriangleSign(Float2 p1, Float2 p2, Float2 p3);
+	template<typename ResultPrecision, typename InputPrimitive>
+        std::optional<Vector3T<ResultPrecision>> TriplePlaneIntersection(const Vector4T<InputPrimitive>& p0, const Vector4T<InputPrimitive>& p1, const Vector4T<InputPrimitive>& p2);
+
+    // Sometimes called "orient2d", determines what side of the line p1->p2 that p3 is on (or if colinear)
+	int TriangleSign(Float2 p1, Float2 p2, Float2 p3);
 	float TriangleSignNoEpsilon(Float2 p1, Float2 p2, Float2 p3);
     bool PointInTriangle(Float2 pt, Float2 v0, Float2 v1, Float2 v2);
 
@@ -160,6 +167,25 @@ namespace XLEMath
 	}
 
 	inline float TriangleSignNoEpsilon(Float2 p1, Float2 p2, Float2 p3) { return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1]); }
+
+	// compares p4 to the plane defined by p1, pt2 and p3, and determines what side it is on
+	// NOTE -- a positive result corresponds to a **negative** SignedDistance() from a plane created with PlaneFit
+	//		this is due to our definition of winding order
+	T1(Primitive) inline float Orient3d(const Vector3T<Primitive>& p1, const Vector3T<Primitive>& p2, const Vector3T<Primitive>& p3, const Vector3T<Primitive>& p4)
+	{
+		// See William C. Lenthe's predicates.h for details on precision lost due to the calculations here
+		Vector3T<Primitive> ad = p1 - p4;
+		Vector3T<Primitive> bd = p2 - p4;
+		Vector3T<Primitive> cd = p3 - p4;
+		const Primitive bdxcdy = bd[0] * cd[1];
+		const Primitive cdxbdy = cd[0] * bd[1];
+		const Primitive cdxady = cd[0] * ad[1];
+		const Primitive adxcdy = ad[0] * cd[1];
+		const Primitive adxbdy = ad[0] * bd[1];
+		const Primitive bdxady = bd[0] * ad[1];
+		Primitive det = ad[2] * (bdxcdy - cdxbdy) + bd[2] * (cdxady - adxcdy) + cd[2] * (adxbdy - bdxady);
+		return det;
+	}
 
         ////////////////////////////////////////////////////////////////////////////////////////////////
             //      I N C R E A S E D   P R E C I S I O N   C A L C U L A T I O N S			//

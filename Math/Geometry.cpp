@@ -247,6 +247,28 @@ namespace XLEMath
         return std::make_pair(mins, maxs);
     }
 
+    template<typename ResultPrecision, typename InputPrimitive>
+        std::optional<Vector3T<ResultPrecision>> TriplePlaneIntersection(const Vector4T<InputPrimitive>& p0, const Vector4T<InputPrimitive>& p1, const Vector4T<InputPrimitive>& p2)
+    {
+        // See also TriplePlaneIntersection in Brush.cpp
+        Matrix3x3T<InputPrimitive> matrix {
+            p0[0], p1[0], p2[0],
+            p0[1], p1[1], p2[1],
+            p0[2], p1[2], p2[2]};
+        auto det = Determinant(matrix);
+        if (std::abs(det) > InputPrimitive(1e-7)) {
+            // We could use the determinant and the adjoint to find the inverse here, instead going back to cml's inverse algorithm
+            // still, let's promote to double to try to improve accuracy
+            auto inverse = cml::inverse(Matrix3x3T<ResultPrecision>(matrix));
+            return Vector3T<ResultPrecision>{-p0[3], -p1[3], -p2[3]} * inverse;
+        } else
+            return {};
+    }
+
+    template std::optional<Vector3T<float>> TriplePlaneIntersection(const Vector4T<float>& p0, const Vector4T<float>& p1, const Vector4T<float>& p2);
+    template std::optional<Vector3T<double>> TriplePlaneIntersection(const Vector4T<float>& p0, const Vector4T<float>& p1, const Vector4T<float>& p2);
+    template std::optional<Vector3T<double>> TriplePlaneIntersection(const Vector4T<double>& p0, const Vector4T<double>& p1, const Vector4T<double>& p2);
+
 #if defined(HAS_EIGEN_LIBRARY)
     T1(PrimitiveType)
 		Vector4T<PrimitiveType> PlaneFit(const Vector3T<PrimitiveType> pts[], size_t ptCount)

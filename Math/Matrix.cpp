@@ -202,15 +202,6 @@ namespace XLEMath
             return result;
         }
 
-        Float4x4        Transpose(const Float4x4& input)        { return cml::transpose(input); }
-        Float3x3        Transpose(const Float3x3& input)        { return cml::transpose(input); }
-
-        Float3x3        Inverse(const Float3x3& input)          { return cml::inverse(input); }
-        Float4x4        Inverse(const Float4x4& input)          { return cml::inverse(input); }
-
-        float           Determinant(const Float3x3& input)      { return cml::determinant(input); }
-        float           Determinant(const Float4x4& input)      { return cml::determinant(input); }
-
         static Quaternion MakeIdentityQuaternion() { Quaternion temp; temp.identity(); return temp; }
         template<> const Quaternion& Identity<Quaternion>()
         {

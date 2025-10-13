@@ -87,36 +87,6 @@ namespace Assets
         }
     }
 
-    void    BlockSerializer::SerializeValue(uint8_t     value)
-    {
-        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
-    }
-
-    void    BlockSerializer::SerializeValue(uint16_t    value)
-    {
-        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
-    }
-
-    void    BlockSerializer::SerializeValue(uint32_t    value)
-    {
-        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
-    }
-
-    void    BlockSerializer::SerializeValue(uint64_t    value)
-    {
-        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
-    }
-
-    void    BlockSerializer::SerializeValue(float     value)
-    {
-        _memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
-    }
-
-    void    BlockSerializer::AddPadding(unsigned sizeInBytes)
-    {
-        _memory.insert(_memory.end(), sizeInBytes, 0);
-    }
-
     unsigned BlockSerializer::CreateRecall(unsigned size)
     {
         _pendingRecalls.push_back(Recall{_nextRecallId, size, (uint64_t)_memory.size()});

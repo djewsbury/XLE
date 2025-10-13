@@ -42,6 +42,7 @@ namespace Assets
 		void    SerializeValue  ( uint32_t value );
 		void    SerializeValue  ( uint64_t value );
 		void    SerializeValue  ( float value );
+		void    SerializeValue  ( double value );
 		void    SerializeValue  ( const std::string& value );				// NOTE -- becomes a StringSection<>! Not a SerializableString
 		void    AddPadding      ( unsigned sizeInBytes );
 			
@@ -172,5 +173,40 @@ namespace Assets
 	}
 
 	inline void    BlockSerializer::SerializeRawRange( IteratorRange<const void*> data ) { PushBackRaw(data.begin(), data.size()); }
+
+	inline void    BlockSerializer::SerializeValue(uint8_t     value)
+	{
+		_memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
+	}
+
+	inline void    BlockSerializer::SerializeValue(uint16_t    value)
+	{
+		_memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
+	}
+
+	inline void    BlockSerializer::SerializeValue(uint32_t    value)
+	{
+		_memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
+	}
+
+	inline void    BlockSerializer::SerializeValue(uint64_t    value)
+	{
+		_memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
+	}
+
+	inline void    BlockSerializer::SerializeValue(float     value)
+	{
+		_memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
+	}
+
+	inline void    BlockSerializer::SerializeValue(double     value)
+	{
+		_memory.insert(_memory.end(), (const uint8_t*)&value, (const uint8_t*)PtrAdd(&value, sizeof(value)));
+	}
+
+	inline void    BlockSerializer::AddPadding(unsigned sizeInBytes)
+	{
+		_memory.insert(_memory.end(), sizeInBytes, 0);
+	}
 }
 

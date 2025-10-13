@@ -67,12 +67,14 @@ namespace XLEMath
         return true;
     }
 
-    Float3x3        Inverse(const Float3x3& input);
-    Float4x4        Inverse(const Float4x4& input);
-    float           Determinant(const Float3x3& input);
-    float           Determinant(const Float4x4& input);
-    Float3x3        Transpose(const Float3x3& input);
-    Float4x4        Transpose(const Float4x4& input);
+    T1(Primitive) Matrix4x4T<Primitive>     Transpose(const Matrix4x4T<Primitive>& input)        { return cml::transpose(input); }
+    T1(Primitive) Matrix3x3T<Primitive>     Transpose(const Matrix3x3T<Primitive>& input)        { return cml::transpose(input); }
+
+    T1(Primitive) Matrix4x4T<Primitive>        Inverse(const Matrix4x4T<Primitive>& input)          { return cml::inverse(input); }
+    T1(Primitive) Matrix3x3T<Primitive>        Inverse(const Matrix3x3T<Primitive>& input)          { return cml::inverse(input); }
+
+    T1(Primitive) Primitive           Determinant(const Matrix3x3T<Primitive>& input)      { return cml::determinant(input); }
+    T1(Primitive) Primitive           Determinant(const Matrix4x4T<Primitive>& input)      { return cml::determinant(input); }
 
     Float3x3        LeftMultiplyByTranspose(const Float3x3& input);
  
@@ -125,6 +127,7 @@ namespace XLEMath
         float m00, float m01, float m02,
         float m10, float m11, float m12,
         float m20, float m21, float m22);
+
 
 }
 
