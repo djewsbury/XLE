@@ -61,7 +61,7 @@ namespace ConsoleRig
 
 				auto copy = std::min(remaining, count-finalCount);
 				std::memcpy(pptr(), s+finalCount, copy);
-				pbump(copy);
+				pbump((int)copy);
 				finalCount += copy;
 			}
 			return count;

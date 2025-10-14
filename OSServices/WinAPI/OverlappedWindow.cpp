@@ -232,7 +232,7 @@ namespace OSServices
                 case WM_KEYDOWN:
                 case WM_KEYUP:
                     if (inputTrans) { generatedSnapshot = inputTrans->OnKeyChange((unsigned)wparam, (msg==WM_KEYDOWN) || (msg==WM_SYSKEYDOWN)); }
-                    suppressDefaultHandler =  (msg==WM_SYSKEYUP || msg==WM_SYSKEYDOWN);        // (suppress default windows behaviour for these system keys)
+                    suppressDefaultHandler = (msg==WM_SYSKEYUP || msg==WM_SYSKEYDOWN);        // (suppress default windows behaviour for these system keys)
                     break;
 
                 case WM_CHAR:

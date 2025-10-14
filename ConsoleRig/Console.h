@@ -19,15 +19,14 @@ typedef struct lua_State lua_State;
 
 namespace ConsoleRig
 {
-    class LuaState;
     class ConsoleVariableStorage;
+    class IConsoleScriptingInterface;
 
     #if !defined(__CLR_VER)
-        struct LockedLuaState
+        struct LockedScriptingState
         {
             std::unique_lock<Threading::Mutex> _lock;
-            lua_State* _luaState;
-            lua_State* GetLuaState() const { return _luaState; }
+            IConsoleScriptingInterface* _interface = nullptr;
         };
     #endif
     
@@ -48,11 +47,13 @@ namespace ConsoleRig
         static void         SetInstance(Console* newInstance);
 
         #if !defined(__CLR_VER)
-            LockedLuaState      LockLuaState(bool allowCustom=false);
+            LockedScriptingState LockScriptingState();
         #endif
-        void SetLua(lua_State&);
-        void ResetLua();
-        ConsoleVariableStorage& GetCVars();
+
+        void PushScriptingInterface(std::shared_ptr<IConsoleScriptingInterface> interf);
+        void PopScriptingInterface(IConsoleScriptingInterface&);
+
+        ConsoleVariableStorage& GetCVars();         // should be exposed to scripting interfaces in the "cv" namespace -- like lua, etc
 
         Console();
         ~Console();
@@ -66,6 +67,22 @@ namespace ConsoleRig
         std::unique_ptr<Pimpl> _pimpl;
         static Console* s_instance;
     };
+
+    class IConsoleScriptingInterface
+    {
+    public:
+        virtual void Execute(StringSection<> str) = 0;
+        virtual auto AutoComplete(StringSection<> str) -> std::vector<std::string> = 0;
+        virtual ~IConsoleScriptingInterface();
+    };
+
+    class ILuaScriptInterface
+    {
+    public:
+        virtual lua_State* GetLuaState() = 0;
+    };
+
+    std::shared_ptr<IConsoleScriptingInterface> CreateLuaScripting();
 
     template <typename Type> class ConsoleVariable
     {
@@ -98,7 +115,7 @@ namespace ConsoleRig
         inline void     xleWarningDebugOnly(const char format[], ...) { (void)format; }
     #endif
 
-    namespace Detail
+    namespace Internal
     {
         template <typename Type>
             Type&       FindTweakable(const char name[], Type defaultValue);
@@ -107,20 +124,6 @@ namespace ConsoleRig
     }
 }
 
-
-
-    //
-    //      Get a generic "tweakable" console variable. 
-    //
-    //          Tweakable --    this can be called for the same variable from
-    //                          multiple places. The same name always evaluates
-    //                          to the same value
-    //
-    //          TweakableUnique --   this can only be used when the variable
-    //                               is only referenced from a single place
-    //                               in the code.
-    //
-
 #if !defined(_DEBUG)
 
     #define Tweakable(name, defaultValue)   defaultValue
@@ -128,37 +131,12 @@ namespace ConsoleRig
 #elif 1
 
     #define Tweakable(name, defaultValue)                                                       \
-        ([&]() -> decltype(defaultValue)&                                                        \
+        ([&]() -> decltype(defaultValue)&                                                       \
             {                                                                                   \
-                static auto& value = ::ConsoleRig::Detail::FindTweakable(name, defaultValue);   \
+                static auto& value = ::ConsoleRig::Internal::FindTweakable(name, defaultValue); \
                 return value;                                                                   \
             })()                                                                                \
         /**/
 
-    // not currently working! The static within the lamdba gets destroyed
-    // #define TweakableUnique(name, defaultValue)                                     \
-    //     ([&]() -> decltype(defaultValue)&                                            \
-    //         {                                                                       \
-    //             static auto value = defaultValue;                                   \
-    //             static ::ConsoleRig::ConsoleVariable<decltype(value)>(name, value); \
-    //             return value;                                                       \
-    //         })()                                                                    \
-    //     /**/
-
-#else
-
-    template <int Line, typename Type>
-        Type    GetTweakableValue(const char name[], Type defaultValue)
-        {
-            static auto& value = ::ConsoleRig::Detail::FindTweakable(name, defaultValue);
-            return value;
-        }
-
-    #define Tweakable(name, defaultValue)                   \
-        GetTweakableValue<__LINE__>(name, defaultValue);    \
-        /**/
-
-
 #endif
-
 

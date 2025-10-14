@@ -56,8 +56,9 @@ namespace PlatformRig
         auto binder = std::make_unique<Pimpl::TechniqueContextBinder>(techContext);
 
         using namespace luabridge;
-        auto luaState = ConsoleRig::Console::GetInstance().LockLuaState();
-        setGlobal(luaState.GetLuaState(), binder.get(), name.c_str());
+        auto scriptingState = ConsoleRig::Console::GetInstance().LockScriptingState();
+        if (auto luaState = dynamic_cast<ConsoleRig::ILuaScriptInterface*>(scriptingState._interface))
+            setGlobal(luaState->GetLuaState(), binder.get(), name.c_str());
         _pimpl->_techniqueBinders.insert(std::make_pair(name, std::move(binder)));
     }
 
@@ -66,8 +67,9 @@ namespace PlatformRig
         auto binder = std::make_unique<Pimpl::FrameRigBinder>(frameRig);
 
         using namespace luabridge;
-        auto luaState = ConsoleRig::Console::GetInstance().LockLuaState();
-        setGlobal(luaState.GetLuaState(), binder.get(), name.c_str());
+        auto scriptingState = ConsoleRig::Console::GetInstance().LockScriptingState();
+        if (auto luaState = dynamic_cast<ConsoleRig::ILuaScriptInterface*>(scriptingState._interface))
+            setGlobal(luaState->GetLuaState(), binder.get(), name.c_str());
         _pimpl->_frameRigs.insert(std::make_pair(name, std::move(binder)));
     }
 
@@ -76,28 +78,32 @@ namespace PlatformRig
         _pimpl = std::make_unique<Pimpl>();
 
         using namespace luabridge;
-        auto luaState = ConsoleRig::Console::GetInstance().LockLuaState();
-        getGlobalNamespace(luaState.GetLuaState())
-            .beginClass<Pimpl::FrameRigBinder>("FrameRig")
-            .endClass();
+        auto scriptingState = ConsoleRig::Console::GetInstance().LockScriptingState();
+        if (auto luaState = dynamic_cast<ConsoleRig::ILuaScriptInterface*>(scriptingState._interface)) {
+            getGlobalNamespace(luaState->GetLuaState())
+                .beginClass<Pimpl::FrameRigBinder>("FrameRig")
+                .endClass();
 
-        getGlobalNamespace(luaState.GetLuaState())
-            .beginClass<Pimpl::TechniqueContextBinder>("TechniqueContext")
-                .addFunction("SetI", &Pimpl::TechniqueContextBinder::SetInteger)
-            .endClass();
+            getGlobalNamespace(luaState->GetLuaState())
+                .beginClass<Pimpl::TechniqueContextBinder>("TechniqueContext")
+                    .addFunction("SetI", &Pimpl::TechniqueContextBinder::SetInteger)
+                .endClass();
+        }
     }
 
     ScriptInterface::~ScriptInterface() 
     {
-        auto luaState = ConsoleRig::Console::GetInstance().LockLuaState();
-        for (const auto& a:_pimpl->_techniqueBinders) {
-            lua_pushnil(luaState.GetLuaState());
-            lua_setglobal(luaState.GetLuaState(), a.first.c_str());
-        }
+        auto scriptingState = ConsoleRig::Console::GetInstance().LockScriptingState();
+        if (auto luaState = dynamic_cast<ConsoleRig::ILuaScriptInterface*>(scriptingState._interface)) {
+            for (const auto& a:_pimpl->_techniqueBinders) {
+                lua_pushnil(luaState->GetLuaState());
+                lua_setglobal(luaState->GetLuaState(), a.first.c_str());
+            }
 
-        for (const auto& a:_pimpl->_frameRigs) {
-            lua_pushnil(luaState.GetLuaState());
-            lua_setglobal(luaState.GetLuaState(), a.first.c_str());
+            for (const auto& a:_pimpl->_frameRigs) {
+                lua_pushnil(luaState->GetLuaState());
+                lua_setglobal(luaState->GetLuaState(), a.first.c_str());
+            }
         }
     }
 
