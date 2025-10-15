@@ -33,8 +33,7 @@ namespace PlatformRig { namespace Overlays
 
         static void ConstructToPromise(std::promise<std::shared_ptr<ConsoleDisplayResources>>&& promise)
         {
-            ::Assets::WhenAll(
-                RenderOverlays::MakeFont("OrbitronBlack", 20)).ThenConstructToPromise(std::move(promise));
+            ::Assets::WhenAll(RenderOverlays::MakeFont("Anka", 20)).ThenConstructToPromise(std::move(promise));
         }
     };
 

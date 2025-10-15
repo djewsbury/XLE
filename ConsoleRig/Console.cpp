@@ -90,11 +90,13 @@ namespace ConsoleRig
 
 	void            Console::Execute(const std::string& str)
 	{
+		if (!_pimpl->_lastLineComplete) Print("\n");
 		Print(Concatenate("{Color:af3f7f}> {Color:7F7F7F}", str, "\n"));
 		if (auto L = LockScriptingState(); L._interface) {
 			TRY {
 				L._interface->Execute(str);
 			} CATCH(std::exception& e) {
+				if (!_pimpl->_lastLineComplete) Print("\n");
 				Print(Concatenate(e.what(), "\n"));
 			} CATCH_END
 		} else
@@ -350,7 +352,6 @@ namespace ConsoleRig
 	{
 	public:
 		lua_State* L;
-		Threading::Mutex _mutex;
 		lua_State* GetUnderlying() { return L; }
 
 		int PCall(int argumentCount, int returnValueCount);
@@ -400,7 +401,6 @@ namespace ConsoleRig
 		{
 			lua_pushglobaltable(L);
 			lua_getfield(L, -1, "cv");
-			assert(lua_istable(L, -1));
 			lua_pop(L, 1);
 			lua_pushnil(L);
 			lua_setfield(L, -2, "cv");
@@ -465,7 +465,56 @@ namespace ConsoleRig
 			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
 			assert(params && params->_bridge);
 			auto& bridge = *params->_bridge;
-			lua_pop(L, 1);
+
+			assert(lua_isstring(L, 2));
+			auto name = lua_tostring(L, 2);
+
+			for (const auto& ints:bridge._cvars->GetTable<int>())
+				if (XlEqString(ints->second.Name(), name)) {
+					int isnum;
+					auto result = lua_tointegerx(L, 3, &isnum);
+					if (!isnum) Throw(std::runtime_error(Concatenate("Attempting to assign non-integer value (", lua_tostring(L, 3), ") to integer cvar (", name, ")")));
+
+					ints->first = (int)result;
+					return 0;
+				}
+
+			for (const auto& floats:bridge._cvars->GetTable<float>())
+				if (XlEqString(floats->second.Name(), name)) {
+					int isnum;
+					auto result = lua_tonumberx(L, 3, &isnum);
+					if (!isnum) Throw(std::runtime_error(Concatenate("Attempting to assign non-number value (", lua_tostring(L, 3), ") to float cvar (", name, ")")));
+
+					floats->first = (float)result;
+					return 0;
+				}
+
+			for (const auto& strings:bridge._cvars->GetTable<std::string>())
+				if (XlEqString(strings->second.Name(), name)) {
+					strings->first = lua_tostring(L, 3);
+					return 0;
+				}
+
+			for (const auto& bools:bridge._cvars->GetTable<bool>())
+				if (XlEqString(bools->second.Name(), name)) {
+					bools->first = lua_toboolean(L, 3);
+					return 0;
+				}
+
+			for (const auto& v3ds:bridge._cvars->GetTable<Float3>())
+				if (XlEqString(v3ds->second.Name(), name)) {
+					// todo -- complex type required
+					assert(0);
+					return 0;
+				}
+
+			for (const auto& v4ds:bridge._cvars->GetTable<Float4>())
+				if (XlEqString(v4ds->second.Name(), name)) {
+					// todo -- complex type required
+					assert(0);
+					return 0;
+				}
+
 			return 0;
 		}
 
