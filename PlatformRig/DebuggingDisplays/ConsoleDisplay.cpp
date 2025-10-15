@@ -22,171 +22,211 @@ using namespace OSServices::Literals;
 
 namespace PlatformRig { namespace Overlays
 {
-    class ConsoleDisplayResources
-    {
-    public:
-        std::shared_ptr<RenderOverlays::Font> _font;
+	class ConsoleDisplayResources
+	{
+	public:
+		std::shared_ptr<RenderOverlays::Font> _font;
 
-        ConsoleDisplayResources(std::shared_ptr<RenderOverlays::Font> font)
-        : _font(std::move(font))
-        {}
+		ConsoleDisplayResources(std::shared_ptr<RenderOverlays::Font> font)
+		: _font(std::move(font))
+		{}
 
-        static void ConstructToPromise(std::promise<std::shared_ptr<ConsoleDisplayResources>>&& promise)
-        {
-            ::Assets::WhenAll(RenderOverlays::MakeFont("Anka", 20)).ThenConstructToPromise(std::move(promise));
-        }
-    };
+		static void ConstructToPromise(std::promise<std::shared_ptr<ConsoleDisplayResources>>&& promise)
+		{
+			::Assets::WhenAll(RenderOverlays::MakeFont("Anka", 24)).ThenConstructToPromise(std::move(promise));
+		}
+	};
 
-            //////   C O N S O L E   D I S P L A Y   //////
+			//////   C O N S O L E   D I S P L A Y   //////
 
-    void    ConsoleDisplay::Render( IOverlayContext& context,       Layout& layout, 
-                                    Interactables&interactables,    InterfaceState& interfaceState)
-    {
-        Rect consoleMaxSize                 = layout.GetMaximumSize();
-        const unsigned height               = std::min(consoleMaxSize.Height() / 2, 512);
-        consoleMaxSize._bottomRight[1]       = consoleMaxSize._topLeft[1] + height;
+	void    ConsoleDisplay::Render( IOverlayContext& context,       Layout& layout, 
+									Interactables&interactables,    InterfaceState& interfaceState)
+	{
+		Rect consoleMaxSize                 = layout.GetMaximumSize();
+		const unsigned height               = std::min(consoleMaxSize.Height() * 4 / 5, 800);
+		consoleMaxSize._bottomRight[1]       = consoleMaxSize._topLeft[1] + height;
 
 		auto* res = ConsoleRig::TryActualizeCachedBox<ConsoleDisplayResources>();
-        if (!res) return;
+		if (!res) return;
 
-        const float         textHeight      = res->_font->GetFontProperties()._lineHeight;
-        const Coord         entryBoxHeight  = Coord(textHeight) + 2 * layout._paddingBetweenAllocations;
+		const float         textHeight      = 4+res->_font->GetFontProperties()._lineHeight;
+		const Coord         entryBoxHeight  = Coord(textHeight) + 2 * layout._paddingBetweenAllocations;
 
-        layout.SetDirection(Layout::Direction::Column);
-        const Rect          historyArea     = layout.Allocate(consoleMaxSize.Height() - 2 * layout._paddingInternalBorder - layout._paddingBetweenAllocations - entryBoxHeight);
-        const Rect          entryBoxArea    = layout.Allocate(entryBoxHeight);
+		layout.SetDirection(Layout::Direction::Column);
+		const Rect          historyArea     = layout.Allocate(consoleMaxSize.Height() - 2 * layout._paddingInternalBorder - layout._paddingBetweenAllocations - entryBoxHeight);
+		const Rect          entryBoxArea    = layout.Allocate(entryBoxHeight);
 
-        Layout              historyAreaLayout(historyArea, Layout::Direction::Column);
-        historyAreaLayout._paddingInternalBorder = 0;
-        unsigned            linesToRender   = (unsigned)XlFloor((historyArea.Height() - 2*historyAreaLayout._paddingInternalBorder) / (textHeight + historyAreaLayout._paddingBetweenAllocations));
+		Layout              historyAreaLayout(historyArea, Layout::Direction::Column);
+		historyAreaLayout._paddingInternalBorder = 0;
+		unsigned            linesToRender   = (unsigned)XlFloor((historyArea.Height() - 2*historyAreaLayout._paddingInternalBorder) / (textHeight + historyAreaLayout._paddingBetweenAllocations));
 
-        static ColorB       backColor       = ColorB(0x20, 0x20, 0x20, 0x90);
-        static ColorB       borderColor     = ColorB(0xff, 0xff, 0xff, 0x7f);
-        static ColorB       entryBoxColor   = ColorB(0x00, 0x00, 0x00, 0x4f);
-        static ColorB       textColor       = ColorB(0xff, 0xff, 0xff);
-        if (auto* blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()) {
-            auto res = blurryBackground->GetResourceView();
-            context.DrawTexturedQuad(
-                RenderOverlays::ProjectionMode::P2D,
-                {consoleMaxSize._topLeft[0], consoleMaxSize._topLeft[1], 0.f},
-                {consoleMaxSize._bottomRight[0], consoleMaxSize._bottomRight[1], 0.f},
-                std::move(res),
-                ColorB::White,
-                blurryBackground->AsTextureCoords(consoleMaxSize._topLeft), blurryBackground->AsTextureCoords(consoleMaxSize._bottomRight));
-        } else {
-            FillRectangle(context, consoleMaxSize, backColor);
-        }
-        FillRectangle(context, 
-            Rect(   Coord2(consoleMaxSize._topLeft[0],      consoleMaxSize._bottomRight[1]-3),
-                    Coord2(consoleMaxSize._bottomRight[0],  consoleMaxSize._bottomRight[1]  )),
-            borderColor);
-        FillRectangle(context, 
-            Rect(   Coord2(consoleMaxSize._topLeft[0],      entryBoxArea._topLeft[1]-3),
-                    Coord2(consoleMaxSize._bottomRight[0],  consoleMaxSize._bottomRight[1]-3)),
-            entryBoxColor);
+		static ColorB       backColor       = ColorB(0x20, 0x20, 0x20, 0x90);
+		static ColorB       borderColor     = ColorB(0xff, 0xff, 0xff, 0x7f);
+		static ColorB       entryBoxColor   = ColorB(0x00, 0x00, 0x00, 0x4f);
+		static ColorB       textColor       = ColorB(0xff, 0xff, 0xff);
+		if (auto* blurryBackground = context.GetService<RenderOverlays::BlurryBackgroundEffect>()) {
+			auto res = blurryBackground->GetResourceView();
+			context.DrawTexturedQuad(
+				RenderOverlays::ProjectionMode::P2D,
+				{consoleMaxSize._topLeft[0], consoleMaxSize._topLeft[1], 0.f},
+				{consoleMaxSize._bottomRight[0], consoleMaxSize._bottomRight[1], 0.f},
+				std::move(res),
+				ColorB::White,
+				blurryBackground->AsTextureCoords(consoleMaxSize._topLeft), blurryBackground->AsTextureCoords(consoleMaxSize._bottomRight));
+		} else {
+			FillRectangle(context, consoleMaxSize, backColor);
+		}
+		FillRectangle(context, 
+			Rect(   Coord2(consoleMaxSize._topLeft[0],      consoleMaxSize._bottomRight[1]-3),
+					Coord2(consoleMaxSize._bottomRight[0],  consoleMaxSize._bottomRight[1]  )),
+			borderColor);
+		FillRectangle(context, 
+			Rect(   Coord2(consoleMaxSize._topLeft[0],      entryBoxArea._topLeft[1]-3),
+					Coord2(consoleMaxSize._bottomRight[0],  consoleMaxSize._bottomRight[1]-3)),
+			entryBoxColor);
 
-        auto lines = _console->GetLines(linesToRender, _scrollBack);
-        signed emptyLines = signed(linesToRender) - signed(lines.size());
-        for (signed c=0; c<emptyLines; ++c) { historyAreaLayout.Allocate(Coord(textHeight)); }
-        for (auto i=lines.cbegin(); i!=lines.cend(); ++i) {
+		auto lines = _console->GetLines(linesToRender, _scrollBack);
+		signed emptyLines = signed(linesToRender) - signed(lines.size());
+		for (signed c=0; c<emptyLines; ++c) { historyAreaLayout.Allocate(Coord(textHeight)); }
+		for (auto i=lines.cbegin(); i!=lines.cend(); ++i) {
 			DrawText()
-                .Alignment(TextAlignment::Left)
-                .Color(textColor)
-                .Font(*res->_font)
-                .Draw(context, historyAreaLayout.Allocate(Coord(textHeight)), *i);
-        }
+				.Alignment(TextAlignment::Left)
+				.Color(textColor)
+				.Font(*res->_font)
+				.Draw(context, historyAreaLayout.Allocate(Coord(textHeight)), *i);
+		}
 
-        RenderOverlays::CommonWidgets::Render(context, entryBoxArea, res->_font, _textEntry);
-    }
+		RenderOverlays::CommonWidgets::Render(context, entryBoxArea, res->_font, _textEntry);
+	}
 
-    constexpr auto enter      = "enter"_key;
-    constexpr auto escape     = "escape"_key;
-    constexpr auto ctrl       = "control"_key;
-    constexpr auto pgdn       = "page down"_key;
-    constexpr auto pgup       = "page up"_key;
+	constexpr auto enter      = "enter"_key;
+	constexpr auto escape     = "escape"_key;
+	constexpr auto ctrl       = "control"_key;
+	constexpr auto pgdn       = "page down"_key;
+	constexpr auto pgup       = "page up"_key;
 
-    auto    ConsoleDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
-    {
-        auto beginI = input._activeButtons.cbegin();
-        auto endI = input._activeButtons.cend();
+	auto    ConsoleDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
+	{
+		auto beginI = input._activeButtons.cbegin();
+		auto endI = input._activeButtons.cend();
 
-        bool consume = _textEntry.ProcessInput(
-            input,
-            [](auto currentline) { return ConsoleRig::Console::GetInstance().AutoComplete(currentline); }) == ProcessInputResult::Consumed;
+		bool consume = _textEntry.ProcessInput(
+			input,
+			[](auto currentline) { return ConsoleRig::Console::GetInstance().AutoComplete(currentline); }) == ProcessInputResult::Consumed;
 
-        if (input.IsPress(enter)) {
-            if (!_textEntry._currentLine.empty())
-                _console->Execute(_textEntry._currentLine);
-            _textEntry._caret = 0;
-            _textEntry._selectionStart = _textEntry._selectionEnd = _textEntry._caret;
-            _textEntry._history.push_back(_textEntry._currentLine);
-            _textEntry._historyCursor = 0;
-            _scrollBack = 0;        // reset scroll?
-            _scrollBackFractional = 0;
-            _textEntry._currentLine = {};
-            _textEntry._autoComplete.clear();
-            consume = true;
-        }
+		if (input.IsPress(enter)) {
+			if (!_textEntry._currentLine.empty())
+				_console->Execute(_textEntry._currentLine);
+			_textEntry._caret = 0;
+			_textEntry._selectionStart = _textEntry._selectionEnd = _textEntry._caret;
+			_textEntry._history.push_back(_textEntry._currentLine);
+			_textEntry._historyCursor = 0;
+			_scrollBack = 0;        // reset scroll?
+			_scrollBackFractional = 0;
+			_textEntry._currentLine = {};
+			_textEntry._autoComplete.clear();
+			consume = true;
+		}
 
-        if (input.IsPress(escape)) {
-            _textEntry._caret = 0;
-            _textEntry._selectionStart = _textEntry._selectionEnd = _textEntry._caret;
-            _textEntry._currentLine = {};
-            _textEntry._autoComplete.clear();
-            consume = true;
-        }
+		if (input.IsPress(escape)) {
+			_textEntry._caret = 0;
+			_textEntry._selectionStart = _textEntry._selectionEnd = _textEntry._caret;
+			_textEntry._currentLine = {};
+			_textEntry._autoComplete.clear();
+			consume = true;
+		}
 
-        auto lineCount = _console->GetLineCount();
-        
-        if (input.IsHeld(pgdn)) {
-            if (lineCount > 0) {
-                if (input.IsHeld(ctrl)) {
-                    _scrollBack = 0;
-                    _scrollBackFractional = 0;
-                } else {
-                    if ((_scrollBackFractional % 3) == 0) {
-                        _scrollBack = unsigned(std::max(0, signed(_scrollBack)-1));
-                    }
-                    ++_scrollBackFractional;
-                }
-            } else { _scrollBack = _scrollBackFractional = 0; }
-            consume = true;
-        } else if (input.IsHeld(pgup)) {
-            if (lineCount > 0) {
-                if (input.IsHeld(ctrl)) {
-                    _scrollBack = _console->GetLineCount()-1;
-                    _scrollBackFractional = 0;
-                } else {
-                    if ((_scrollBackFractional % 3) == 0) {
-                        _scrollBack = std::min(_console->GetLineCount()-1, _scrollBack+1u);
-                    }
-                    ++_scrollBackFractional;
-                }
-            } else { _scrollBack = _scrollBackFractional = 0; }
-            consume = true;
-        } else {
-            _scrollBackFractional = 0;
-        }
+		auto lineCount = _console->GetLineCount();
+		
+		if (input.IsHeld(pgdn)) {
+			if (lineCount > 0) {
+				if (input.IsHeld(ctrl)) {
+					_scrollBack = 0;
+					_scrollBackFractional = 0;
+				} else {
+					if ((_scrollBackFractional % 3) == 0) {
+						_scrollBack = unsigned(std::max(0, signed(_scrollBack)-1));
+					}
+					++_scrollBackFractional;
+				}
+			} else { _scrollBack = _scrollBackFractional = 0; }
+			consume = true;
+		} else if (input.IsHeld(pgup)) {
+			if (lineCount > 0) {
+				if (input.IsHeld(ctrl)) {
+					_scrollBack = _console->GetLineCount()-1;
+					_scrollBackFractional = 0;
+				} else {
+					if ((_scrollBackFractional % 3) == 0) {
+						_scrollBack = std::min(_console->GetLineCount()-1, _scrollBack+1u);
+					}
+					++_scrollBackFractional;
+				}
+			} else { _scrollBack = _scrollBackFractional = 0; }
+			consume = true;
+		} else {
+			_scrollBackFractional = 0;
+		}
 
-        // Consume all button presses (otherwise key up and down events -- even ones where we consume the "pressedChar" event)
-        for (auto& ab:input._activeButtons)
-            if (ab._transition)
-                consume = true;
-        consume |= input._pressedChar != 0;
+		// Consume all button presses (otherwise key up and down events -- even ones where we consume the "pressedChar" event)
+		for (auto& ab:input._activeButtons)
+			if (ab._transition)
+				consume = true;
+		consume |= input._pressedChar != 0;
 
-        return consume ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
-    }
+		return consume ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
+	}
 
-    ConsoleDisplay::ConsoleDisplay(ConsoleRig::Console& console)
-    : _console(&console)
-    {
-        _renderCounter = 0;
-        _scrollBack = 0;
-        _scrollBackFractional = 0;
-    }
+	ConsoleDisplay::ConsoleDisplay(ConsoleRig::Console& console)
+	: _console(&console)
+	{
+		_renderCounter = 0;
+		_scrollBack = 0;
+		_scrollBackFractional = 0;
+	}
 
-    ConsoleDisplay::~ConsoleDisplay()
-    {
-    }
+	ConsoleDisplay::~ConsoleDisplay()
+	{
+	}
+
+
+	void ConsoleRecentMsgsDisplay::Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState)
+	{
+		// render a limited number of recent msgs
+		auto* res = ConsoleRig::TryActualizeCachedBox<ConsoleDisplayResources>();
+		if (!res) return;
+
+		layout.SetDirection(Layout::Direction::Column);
+
+		auto now = std::chrono::steady_clock::now();
+		const auto displayTime = std::chrono::milliseconds(5000);
+		const unsigned maxLines = 6;
+		auto lines = _console->GetRecentLines(maxLines, now - displayTime);
+		const float textHeight = 4+res->_font->GetFontProperties()._lineHeight;
+
+		for (const auto&l:lines) {
+			auto age = now - l.first;
+			float x = std::chrono::duration_cast<std::chrono::milliseconds>(age).count() / float(displayTime.count());
+			x *= x; x *= x; x *= x;
+			auto color = ColorB::FromNormalized(LinearInterpolate(
+				ColorB{200,200,200}.AsNormalized(),			// rgb(200,200,200)
+				ColorB{65,65,65}.AsNormalized(), 			// rgb(65,65,65)
+				x));
+
+			DrawText()
+				.Alignment(TextAlignment::Left)
+				.Color(color)
+				.Font(*res->_font)
+				.Draw(context, layout.Allocate(Coord(textHeight)), l.second);
+		}
+	}
+
+	ProcessInputResult ConsoleRecentMsgsDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input)
+	{
+		return ProcessInputResult::Passthrough;
+	}
+
+	ConsoleRecentMsgsDisplay::ConsoleRecentMsgsDisplay(ConsoleRig::Console& console) : _console(&console) {}
+	ConsoleRecentMsgsDisplay::~ConsoleRecentMsgsDisplay() {}
 
 }}

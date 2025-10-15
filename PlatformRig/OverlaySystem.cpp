@@ -11,6 +11,7 @@
 #include "../RenderOverlays/OverlayEffects.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include "../RenderOverlays/ShapesRendering.h"
+#include "../RenderOverlays/LayoutEngine.h"
 #include "../RenderCore/IDevice.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
@@ -35,18 +36,12 @@ namespace PlatformRig
                 if (evnt.IsPress(i->first)) {
                     auto newIndex = std::distance(_childSystems.cbegin(), i);
 
-                    if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size())) {
+                    if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
                         _childSystems[_activeChildIndex].second->SetActivationState(false);
-                    }
-                        
-                    if (signed(newIndex) != _activeChildIndex) {
-                        _activeChildIndex = signed(newIndex);
-                        if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size())) {
+
+                    _activeChildIndex = (signed(newIndex) != _activeChildIndex) ? signed(newIndex) : _defaultChildIndex;
+                    if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
                             _childSystems[_activeChildIndex].second->SetActivationState(true);
-                        }
-                    } else {
-                        _activeChildIndex = -1;
-                    }
 
                     return ProcessInputResult::Consumed;
                 }
@@ -74,10 +69,14 @@ namespace PlatformRig
     void OverlaySystemSwitch::SetActivationState(bool newState) 
     {
         if (!newState) {
-            if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size())) {
-                _childSystems[_activeChildIndex].second->SetActivationState(false);
+            if (_activeChildIndex != _defaultChildIndex) {
+                if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
+                    _childSystems[_activeChildIndex].second->SetActivationState(false);
+                _activeChildIndex = _defaultChildIndex;
             }
-            _activeChildIndex = -1;
+        } else {
+            if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
+                _childSystems[_activeChildIndex].second->SetActivationState(true);
         }
     }
 
@@ -92,6 +91,16 @@ namespace PlatformRig
     {
         auto* sys = system.get();
         _childSystems.push_back(std::make_pair(activator, std::move(system)));
+
+        if (!_preregisteredAttachments.empty())
+            sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps, _systemAttachmentFormats);
+    }
+
+    void OverlaySystemSwitch::SetDefaultSystem(std::shared_ptr<IOverlaySystem> system)
+    {
+        auto* sys = system.get();
+        _childSystems.push_back(std::make_pair(0, std::move(system)));
+        _defaultChildIndex = int(_childSystems.size()-1);
 
         if (!_preregisteredAttachments.empty())
             sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps, _systemAttachmentFormats);
@@ -113,7 +122,7 @@ namespace PlatformRig
     }
 
     OverlaySystemSwitch::OverlaySystemSwitch() 
-    : _activeChildIndex(-1)
+    : _activeChildIndex(-1), _defaultChildIndex(-1)
     {}
 
     OverlaySystemSwitch::~OverlaySystemSwitch() {}
@@ -232,23 +241,40 @@ namespace PlatformRig
         ~ConsoleOverlaySystem();
 
     private:
-        typedef RenderOverlays::DebuggingDisplay::DebugScreensSystem DebugScreensSystem;
-        std::shared_ptr<DebugScreensSystem> _screens;
+        std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> _openWidget;
+        std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> _closedWidget;
+
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _sequencerConfigSet;
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderer;
+
+        RenderOverlays::DebuggingDisplay::InterfaceStateHelper _interfaceStateHelper;
+        bool _open = false;
     };
 
     ProcessInputResult ConsoleOverlaySystem::ProcessInput(
         const InputContext& context,
         const OSServices::InputSnapshot& evnt)
     {
-        return _screens->OnInputEvent(context, evnt);
+        _interfaceStateHelper.OnInputEvent(context, evnt);
+
+        if (evnt.IsPress("~"_key)) {
+            _open = !_open;
+            return ProcessInputResult::Consumed;
+        }
+
+        if (_open) {
+            return _openWidget->ProcessInput(_interfaceStateHelper._currentInterfaceState, evnt);
+        } else {
+            return _closedWidget->ProcessInput(_interfaceStateHelper._currentInterfaceState, evnt);
+        }
     }
 
     void ConsoleOverlaySystem::Render(
         RenderCore::Techniques::ParsingContext& parserContext)
     {
+        _interfaceStateHelper.PreRender();
+
 		auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *_immediateDrawables, _fontRenderer.get());
 
         // RenderOverlays::BlurryBackgroundEffect blurryBackground { parserContext };
@@ -256,10 +282,19 @@ namespace PlatformRig
 
         Int2 viewportDims{ parserContext.GetViewport()._width, parserContext.GetViewport()._height };
         assert(viewportDims[0] * viewportDims[1]);
-        _screens->Render(*overlayContext, RenderOverlays::Rect{ {0,0}, viewportDims });
+        RenderOverlays::ImmediateLayout layout(RenderOverlays::Rect{ {0,0}, viewportDims });
+        if (_open) {
+            _openWidget->Render(*overlayContext, layout, _interfaceStateHelper._currentInteractables, _interfaceStateHelper._currentInterfaceState);
+        } else {
+            _closedWidget->Render(*overlayContext, layout, _interfaceStateHelper._currentInteractables, _interfaceStateHelper._currentInterfaceState);
+        }
 
-		auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext);
-        _immediateDrawables->ExecuteDraws(parserContext, _sequencerConfigSet->GetTechniqueDelegate(), rpi);
+        if (!_immediateDrawables->IsEmpty()) {
+            auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext);
+            _immediateDrawables->ExecuteDraws(parserContext, _sequencerConfigSet->GetTechniqueDelegate(), rpi);
+        }
+
+        _interfaceStateHelper.PostRender();
     }
 
     void ConsoleOverlaySystem::SetActivationState(bool) {}
@@ -272,11 +307,9 @@ namespace PlatformRig
     , _sequencerConfigSet(std::move(sequencerConfigSet))
     , _fontRenderer(std::move(fontRenderer))
     {
-        _screens = std::make_shared<DebugScreensSystem>();
-
-        auto consoleDisplay = std::make_shared<PlatformRig::Overlays::ConsoleDisplay>(
-            std::ref(ConsoleRig::Console::GetInstance()));
-        _screens->Register(consoleDisplay, "[Console] Console", DebugScreensSystem::SystemDisplay);
+        _openWidget = std::make_shared<PlatformRig::Overlays::ConsoleDisplay>(std::ref(ConsoleRig::Console::GetInstance()));
+        _closedWidget = std::make_shared<PlatformRig::Overlays::ConsoleRecentMsgsDisplay>(std::ref(ConsoleRig::Console::GetInstance()));
+        _open = false;
     }
 
     ConsoleOverlaySystem::~ConsoleOverlaySystem()

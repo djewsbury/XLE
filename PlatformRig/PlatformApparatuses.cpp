@@ -43,13 +43,10 @@ namespace PlatformRig
 		_debugScreensOverlaySystem = std::make_shared<PlatformRig::OverlaySystemSet>();
 		_debugScreensOverlaySystem->AddSystem(CreateDebugScreensOverlay(
 			_debugSystem,
-			immediateDrawingApparatus->_immediateDrawables,
-			immediateDrawingApparatus->_shapeRenderingDelegate,
-			immediateDrawingApparatus->_fontRenderingManager));
+			immediateDrawingApparatus->_immediateDrawables, immediateDrawingApparatus->_shapeRenderingDelegate, immediateDrawingApparatus->_fontRenderingManager));
 
-		auto overlaySwitch = std::make_shared<PlatformRig::OverlaySystemSwitch>();
-		overlaySwitch->AddSystem("~"_key, PlatformRig::CreateConsoleOverlaySystem(*immediateDrawingApparatus));
-		_debugScreensOverlaySystem->AddSystem(overlaySwitch);
+		_debugScreensOverlaySystem->AddSystem(CreateConsoleOverlaySystem(
+			immediateDrawingApparatus->_immediateDrawables, immediateDrawingApparatus->_shapeRenderingDelegate, immediateDrawingApparatus->_fontRenderingManager));
 
 		_debugScreenRegistry = CreateDebugScreenRegistry();
 		_debugScreenRegistry->OnRegister.Bind(

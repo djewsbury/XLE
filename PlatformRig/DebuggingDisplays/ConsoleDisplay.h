@@ -33,5 +33,17 @@ namespace PlatformRig { namespace Overlays
         unsigned                        _scrollBack;
         unsigned                        _scrollBackFractional;
     };
+
+    class ConsoleRecentMsgsDisplay : public IWidget ///////////////////////////////////////////////////////////
+    {
+    public:
+        void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState);
+        ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input);
+
+        ConsoleRecentMsgsDisplay(ConsoleRig::Console& console);
+        ~ConsoleRecentMsgsDisplay();
+    private:
+        ConsoleRig::Console* _console;
+    };
 }}
 

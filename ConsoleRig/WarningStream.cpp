@@ -110,7 +110,7 @@ namespace ConsoleRig
 			return result;
 		}
 
-		void xleWarning(const char format[], va_list args)
+		void Warning(const char format[], va_list args)
 		{
 			auto& strm = GetWarningStream();
 			strm << "{Color:ff7f7f}";
@@ -118,28 +118,53 @@ namespace ConsoleRig
 			strm.flush();
 		}
 
-		void xleWarning(const char format[], ...)
+		void Warning(const char format[], ...)
 		{
 			va_list args;
 			va_start(args, format);
-			xleWarning(format, args);
+			Warning(format, args);
+			va_end(args);
+		}
+
+		void Message(const char format[], va_list args)
+		{
+			auto& strm = GetWarningStream();
+			PrintFormatV(&strm, format, args);
+			strm.flush();
+		}
+
+		void Message(const char format[], ...)
+		{
+			va_list args;
+			va_start(args, format);
+			Message(format, args);
 			va_end(args);
 		}
 
 		#if defined(_DEBUG)
-			void xleWarningDebugOnly(const char format[], ...)
+			void WarningDebugOnly(const char format[], ...)
 			{
 				va_list args;
 				va_start(args, format);
-				xleWarning(format, args);
+				Warning(format, args);
+				va_end(args);
+			}
+
+			void MessageDebugOnly(const char format[], ...)
+			{
+				va_list args;
+				va_start(args, format);
+				Message(format, args);
 				va_end(args);
 			}
 		#endif
 
 	#else
 		std::ostream* GetWarningStream() { return nullptr; }
-		void xleWarning(const char format[], va_list args) {}
-		void xleWarning(const char format[], ...) {}
+		void Warning(const char format[], va_list args) {}
+		void Warning(const char format[], ...) {}
+		void Message(const char format[], va_list args) {}
+		void Message(const char format[], ...) {}
 		void DebuggerOnlyWarning(const char format[], ...) {}
 	#endif
 

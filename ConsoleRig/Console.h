@@ -46,6 +46,7 @@ namespace ConsoleRig
         void        Print(StringSection<> message);
 
         auto        GetLines(unsigned lineCount, unsigned scrollback=0) -> std::vector<std::string>;
+        auto        GetRecentLines(unsigned maxLineCount, std::chrono::steady_clock::time_point oldest) -> std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>>;
         unsigned    GetLineCount() const;
 
         static Console&     GetInstance() { return *s_instance; }
@@ -112,13 +113,17 @@ namespace ConsoleRig
 
     std::ostream& GetWarningStream();
 
-    void        xleWarning(const char format[], ...);
-    void        xleWarning(const char format[], va_list args);
+    void        Warning(const char format[], ...);
+    void        Warning(const char format[], va_list args);
+    void        Message(const char format[], ...);
+    void        Message(const char format[], va_list args);
 
     #if defined(_DEBUG)
-        void            xleWarningDebugOnly(const char format[], ...);
+        void            WarningDebugOnly(const char format[], ...);
+        void            MessageDebugOnly(const char format[], ...);
     #else
-        inline void     xleWarningDebugOnly(const char format[], ...) { (void)format; }
+        inline void     WarningDebugOnly(const char format[], ...) { (void)format; }
+        inline void     MessageDebugOnly(const char format[], ...) { (void)format; }
     #endif
 
     namespace Internal

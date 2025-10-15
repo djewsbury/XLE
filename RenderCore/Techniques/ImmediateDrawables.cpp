@@ -415,6 +415,11 @@ namespace RenderCore { namespace Techniques
 			return &_workingPkt;
 		}
 
+		virtual bool IsEmpty() override
+		{
+			return _workingPkt._drawables.empty();
+		}
+
 		virtual std::shared_ptr<IPipelineAcceleratorPool> GetPipelineAcceleratorPool() override
 		{
 			return _pipelineAcceleratorPool;

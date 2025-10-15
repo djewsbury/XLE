@@ -131,6 +131,7 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) = 0;
 		virtual void AbandonDraws() = 0;
+		virtual bool IsEmpty() = 0;
 		void ExecuteDraws(ParsingContext&, const std::shared_ptr<ITechniqueDelegate>&, const RenderPassInstance&);
 		virtual void PrepareResources(
 			std::promise<PreparedResourcesVisibility>&& promise,

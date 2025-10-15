@@ -9,10 +9,8 @@
 #include "../Utility/PtrUtils.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/MemoryUtils.h"
-#include "../Utility/IteratorUtils.h"
 #include "../Math/Vector.h"
 #include "../Core/Exceptions.h"
-#include <iterator>
 #include <algorithm>
 
 #pragma GCC diagnostic ignored "-Wundefined-bool-conversion"
@@ -25,7 +23,7 @@ namespace ConsoleRig
 	class Console::Pimpl
 	{
 	public:
-		std::vector<std::string> _lines;
+		std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>> _lines;
 		bool _lastLineComplete;
 		std::shared_ptr<ConsoleVariableStorage> _cvars;
 
@@ -64,6 +62,7 @@ namespace ConsoleRig
 		size_t stringLength = message.size();
 		bool lastLineComplete = _pimpl->_lastLineComplete;
 		const char newlineChars[] = "\r\n";
+		auto now = std::chrono::steady_clock::now();
 
 		while (currentOffset < stringLength) {
 			auto start = currentOffset;
@@ -80,17 +79,17 @@ namespace ConsoleRig
 
 			if (end > start) {
 				if (!lastLineComplete && !_pimpl->_lines.empty()) {
-					_pimpl->_lines.back() = Concatenate(_pimpl->_lines.back(), MakeStringSection(message.begin()+start, message.begin()+end));
+					_pimpl->_lines.back().second = Concatenate(_pimpl->_lines.back().second, MakeStringSection(message.begin()+start, message.begin()+end));
+					_pimpl->_lines.back().first = now;
 				} else {
-					_pimpl->_lines.push_back(MakeStringSection(message.begin()+start, message.begin()+end).AsString());
+					_pimpl->_lines.emplace_back(now, MakeStringSection(message.begin()+start, message.begin()+end).AsString());
 				}
 			}
 			lastLineComplete = completeLine;
 
 			currentOffset = end;
-			while (currentOffset < stringLength && (message[currentOffset]=='\r'||message[currentOffset]=='\n')) {
+			while (currentOffset < stringLength && (message[currentOffset]=='\r'||message[currentOffset]=='\n'))
 				++currentOffset;
-			}
 		}
 
 		_pimpl->_lastLineComplete = lastLineComplete;
@@ -101,15 +100,22 @@ namespace ConsoleRig
 		std::vector<std::string> result;
 		signed linesToGet = std::max(0, std::min(signed(lineCount), signed(_pimpl->_lines.size())-signed(scrollback)));
 		result.reserve(linesToGet);
+		for (auto i=_pimpl->_lines.end() - scrollback - linesToGet; i!=_pimpl->_lines.end() - scrollback; ++i)
+			result.push_back(i->second);
+		return result;
+	}
 
-		if (linesToGet <= 0) {
-			return result;
-		}
-
-		std::copy(
-			_pimpl->_lines.end() - scrollback - linesToGet, _pimpl->_lines.end() - scrollback,
-			std::back_inserter(result));
-
+	auto Console::GetRecentLines(unsigned maxLineCount, std::chrono::steady_clock::time_point oldest) -> std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>>
+	{
+		std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>> result;
+		size_t linesToGet = 0;
+		for (; linesToGet<std::min(size_t(maxLineCount), _pimpl->_lines.size()); ++linesToGet)
+			if (_pimpl->_lines[_pimpl->_lines.size()-1-linesToGet].first < oldest)
+				break;
+		
+		result.reserve(linesToGet);
+		for (auto i=_pimpl->_lines.end() - linesToGet; i!=_pimpl->_lines.end(); ++i)
+			result.push_back(*i);
 		return result;
 	}
 

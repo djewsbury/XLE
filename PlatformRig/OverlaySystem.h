@@ -77,12 +77,13 @@ namespace PlatformRig
             IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
         void AddSystem(uint32_t activator, std::shared_ptr<IOverlaySystem> system);
+        void SetDefaultSystem(std::shared_ptr<IOverlaySystem> system);
 
         OverlaySystemSwitch();
         ~OverlaySystemSwitch();
 
     private:
-        signed _activeChildIndex;
+        signed _activeChildIndex, _defaultChildIndex;
         std::vector<std::pair<uint32_t,std::shared_ptr<IOverlaySystem>>> _childSystems;
 
         std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
@@ -124,10 +125,8 @@ namespace PlatformRig
     };
 
     std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
-        RenderOverlays::OverlayApparatus&);
-
-    std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
         std::shared_ptr<RenderCore::Techniques::IImmediateDrawables>,
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate>,
         std::shared_ptr<RenderOverlays::FontRenderingManager>);
+
 }
