@@ -100,8 +100,6 @@ namespace ConsoleRig
         Type*           _attachedValue;
     private:
         std::string     _name;
-
-        void Deregister();
     };
 
     std::ostream& GetWarningStream();
