@@ -257,7 +257,7 @@ namespace PlatformRig
 		}
 
 		_layout.SetDirection(ImmediateLayout::Direction::Row);
-		Rect frame = _layout.Allocate(_topBarStaticData._headingPadding*2 + requestedWidth);
+		Rect frame = _layout.Allocate(Coord(_topBarStaticData._headingPadding*2 + requestedWidth));
 		RenderObjectBkgrnd(overlayContext, frame, _themeStaticData._headingBkgrnd, _topBarStaticData._headingHeight);
 		_layout.Allocate(_topBarStaticData._headingHeight);		// extra space for the border
 
@@ -278,7 +278,7 @@ namespace PlatformRig
 		}
 
 		_layout.SetDirection(ImmediateLayout::Direction::Row);
-		Rect frame = _layout.Allocate(_topBarStaticData._headingPadding*2 + requestedWidth);
+		Rect frame = _layout.Allocate(Coord(_topBarStaticData._headingPadding*2 + requestedWidth));
 		RenderObjectBkgrnd(overlayContext, frame, _themeStaticData._menuBkgrnd[std::min(_menusAllocated, (unsigned)dimof(_themeStaticData._menuBkgrnd))], _topBarStaticData._headingHeight);
 		_layout.Allocate(_topBarStaticData._headingHeight);		// extra space for the border
 		++_menusAllocated;

@@ -1,4 +1,6 @@
 
+option(XLE_CONSOLE_LUA_ENABLE "Enables the lua VM for the console" OFF)
+
 foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
     set(Src
@@ -12,7 +14,8 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DebugScreensOverlay.cpp
         DebugScreenRegistry.cpp
         TopBar.cpp
-        SingleWindowAppRig.cpp)
+        SingleWindowAppRig.cpp
+        LuaInterface.cpp)
 
     set(DebuggingDisplaysSrc 
         DefaultDebuggingDisplays.cpp
@@ -60,5 +63,9 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
     xle_configure_library(PlatformRig-${metal_name})
     target_link_libraries(PlatformRig-${metal_name} PRIVATE ToolsRig-${metal_name} RenderCoreLightingEngine-${metal_name} RenderCoreTechniques-${metal_name})
     target_link_libraries(PlatformRig-${metal_name} PRIVATE yogacore)
+
+    if (XLE_CONSOLE_LUA_ENABLE)
+        target_compile_definitions(PlatformRig-${metal_name} PRIVATE -DXLE_CONSOLE_LUA_ENABLE=1)
+    endif()
 
 endforeach()

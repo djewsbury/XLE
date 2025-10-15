@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../Utility/StringUtils.h"
+#include "../Utility/IteratorUtils.h"
 #include "../Utility/UTFUtils.h"
 #if !defined(__CLR_VER)
     #include "../Utility/Threading/Mutex.h"
@@ -15,21 +16,28 @@
 #include <vector>
 #include <memory>
 
-typedef struct lua_State lua_State;
+#if !defined(_DEBUG)
+
+    #define Tweakable(name, defaultValue)   defaultValue
+
+#else
+
+    #define Tweakable(name, defaultValue)                                                       \
+        ([&]() -> decltype(defaultValue)&                                                       \
+            {                                                                                   \
+                static auto& value = ::ConsoleRig::Internal::FindTweakable(name, defaultValue); \
+                return value;                                                                   \
+            })()                                                                                \
+        /**/
+
+#endif
 
 namespace ConsoleRig
 {
     class ConsoleVariableStorage;
     class IConsoleScriptingInterface;
+    struct LockedScriptingState;
 
-    #if !defined(__CLR_VER)
-        struct LockedScriptingState
-        {
-            std::unique_lock<Threading::Mutex> _lock;
-            IConsoleScriptingInterface* _interface = nullptr;
-        };
-    #endif
-    
     class Console
     {
     public:
@@ -77,13 +85,15 @@ namespace ConsoleRig
         virtual ~IConsoleScriptingInterface();
     };
 
-    class ILuaScriptInterface
-    {
-    public:
-        virtual lua_State* GetLuaState() = 0;
-    };
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    std::shared_ptr<IConsoleScriptingInterface> CreateLuaScripting(std::shared_ptr<ConsoleVariableStorage> cvars);
+    #if !defined(__CLR_VER)
+        struct LockedScriptingState
+        {
+            std::unique_lock<Threading::Mutex> _lock;
+            IConsoleScriptingInterface* _interface = nullptr;
+        };
+    #endif
 
     template <typename Type> class ConsoleVariable
     {
@@ -120,21 +130,43 @@ namespace ConsoleRig
         template <typename Type>
             Type*       FindTweakable(const char name[]);
     }
+
+    class ConsoleVariableStorage
+    {
+    public:
+        class ICVarTable
+        {
+        public:
+            virtual ~ICVarTable() {}
+        };
+
+        template<typename Type>
+            class CVarTable : public ICVarTable
+        {
+        public:
+            using Table = std::vector<std::unique_ptr<std::pair<Type, ConsoleVariable<Type>>>>;
+            Table _table;
+        };
+
+        template<typename Type>
+            using Table = typename CVarTable<Type>::Table;
+
+        template<typename Type>
+            Table<Type>& GetTable()
+        {
+            constexpr auto hash = TypeHashCode<Type>;
+            auto i = LowerBound(_tables, (uint64_t)hash);
+            if (i == _tables.end() || i->first != hash) {
+                auto newTable = std::make_unique<CVarTable<Type>>();
+                i = _tables.insert(i, std::make_pair(hash, std::move(newTable)));
+            }
+            
+            auto* rawTable = i->second.get();
+            return ((CVarTable<Type>*)rawTable)->_table;    // (critical upcast here)
+        }
+
+    private:
+        std::vector<std::pair<uint64_t, std::unique_ptr<ICVarTable>>> _tables;
+    };
 }
-
-#if !defined(_DEBUG)
-
-    #define Tweakable(name, defaultValue)   defaultValue
-
-#elif 1
-
-    #define Tweakable(name, defaultValue)                                                       \
-        ([&]() -> decltype(defaultValue)&                                                       \
-            {                                                                                   \
-                static auto& value = ::ConsoleRig::Internal::FindTweakable(name, defaultValue); \
-                return value;                                                                   \
-            })()                                                                                \
-        /**/
-
-#endif
 

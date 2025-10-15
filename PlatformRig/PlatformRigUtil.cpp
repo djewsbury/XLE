@@ -5,6 +5,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PlatformRigUtil.h"
+#include "LuaInterface.h"
 #include "FrameRig.h"
 #include "InputContext.h"
 #include "../RenderCore/IDevice.h"
@@ -57,7 +58,7 @@ namespace PlatformRig
 
         using namespace luabridge;
         auto scriptingState = ConsoleRig::Console::GetInstance().LockScriptingState();
-        if (auto luaState = dynamic_cast<ConsoleRig::ILuaScriptInterface*>(scriptingState._interface))
+        if (auto luaState = dynamic_cast<ILuaScriptInterface*>(scriptingState._interface))
             setGlobal(luaState->GetLuaState(), binder.get(), name.c_str());
         _pimpl->_techniqueBinders.insert(std::make_pair(name, std::move(binder)));
     }
@@ -68,7 +69,7 @@ namespace PlatformRig
 
         using namespace luabridge;
         auto scriptingState = ConsoleRig::Console::GetInstance().LockScriptingState();
-        if (auto luaState = dynamic_cast<ConsoleRig::ILuaScriptInterface*>(scriptingState._interface))
+        if (auto luaState = dynamic_cast<ILuaScriptInterface*>(scriptingState._interface))
             setGlobal(luaState->GetLuaState(), binder.get(), name.c_str());
         _pimpl->_frameRigs.insert(std::make_pair(name, std::move(binder)));
     }
@@ -79,7 +80,7 @@ namespace PlatformRig
 
         using namespace luabridge;
         auto scriptingState = ConsoleRig::Console::GetInstance().LockScriptingState();
-        if (auto luaState = dynamic_cast<ConsoleRig::ILuaScriptInterface*>(scriptingState._interface)) {
+        if (auto luaState = dynamic_cast<ILuaScriptInterface*>(scriptingState._interface)) {
             getGlobalNamespace(luaState->GetLuaState())
                 .beginClass<Pimpl::FrameRigBinder>("FrameRig")
                 .endClass();
@@ -94,7 +95,7 @@ namespace PlatformRig
     ScriptInterface::~ScriptInterface() 
     {
         auto scriptingState = ConsoleRig::Console::GetInstance().LockScriptingState();
-        if (auto luaState = dynamic_cast<ConsoleRig::ILuaScriptInterface*>(scriptingState._interface)) {
+        if (auto luaState = dynamic_cast<ILuaScriptInterface*>(scriptingState._interface)) {
             for (const auto& a:_pimpl->_techniqueBinders) {
                 lua_pushnil(luaState->GetLuaState());
                 lua_setglobal(luaState->GetLuaState(), a.first.c_str());

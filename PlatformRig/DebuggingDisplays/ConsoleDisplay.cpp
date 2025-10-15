@@ -170,6 +170,12 @@ namespace PlatformRig { namespace Overlays
             _scrollBackFractional = 0;
         }
 
+        // Consume all button presses (otherwise key up and down events -- even ones where we consume the "pressedChar" event)
+        for (auto& ab:input._activeButtons)
+            if (ab._transition)
+                consume = true;
+        consume |= input._pressedChar != 0;
+
         return consume ? ProcessInputResult::Consumed : ProcessInputResult::Passthrough;
     }
 
