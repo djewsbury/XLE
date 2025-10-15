@@ -89,13 +89,11 @@ namespace PlatformRig { namespace Overlays
         signed emptyLines = signed(linesToRender) - signed(lines.size());
         for (signed c=0; c<emptyLines; ++c) { historyAreaLayout.Allocate(Coord(textHeight)); }
         for (auto i=lines.cbegin(); i!=lines.cend(); ++i) {
-            char buffer[1024];
-            ucs2_2_utf8(AsPointer(i->begin()), i->size(), (utf8*)buffer, dimof(buffer));
 			DrawText()
                 .Alignment(TextAlignment::Left)
                 .Color(textColor)
                 .Font(*res->_font)
-                .Draw(context, historyAreaLayout.Allocate(Coord(textHeight)), buffer);
+                .Draw(context, historyAreaLayout.Allocate(Coord(textHeight)), *i);
         }
 
         RenderOverlays::CommonWidgets::Render(context, entryBoxArea, res->_font, _textEntry);

@@ -8,7 +8,6 @@
 
 #include "../Utility/StringUtils.h"
 #include "../Utility/IteratorUtils.h"
-#include "../Utility/UTFUtils.h"
 #if !defined(__CLR_VER)
     #include "../Utility/Threading/Mutex.h"
 #endif
@@ -45,9 +44,8 @@ namespace ConsoleRig
         auto        AutoComplete(const std::string& input) -> std::vector<std::string>;
 
         void        Print(StringSection<> message);
-        void        Print(const std::basic_string<ucs2>& message);
 
-        auto        GetLines(unsigned lineCount, unsigned scrollback=0) -> std::vector<std::basic_string<ucs2>>;
+        auto        GetLines(unsigned lineCount, unsigned scrollback=0) -> std::vector<std::string>;
         unsigned    GetLineCount() const;
 
         static Console&     GetInstance() { return *s_instance; }

@@ -25,7 +25,7 @@ namespace ConsoleRig
 	class Console::Pimpl
 	{
 	public:
-		std::vector<std::basic_string<ucs2>> _lines;
+		std::vector<std::string> _lines;
 		bool _lastLineComplete;
 		std::shared_ptr<ConsoleVariableStorage> _cvars;
 
@@ -57,37 +57,18 @@ namespace ConsoleRig
 		return {};
 	}
 
-	static std::basic_string<ucs2>      AsUTF16(const std::string& input)
-	{
-		ucs2 buffer[1024];
-		utf8_2_ucs2((utf8*)AsPointer(input.begin()), input.size(), buffer, dimof(buffer));
-		return std::basic_string<ucs2>(buffer);
-	}
-
-	static std::basic_string<ucs2>      AsUTF16(const char input[], size_t len)
-	{
-		ucs2 buffer[1024];
-		utf8_2_ucs2((utf8*)input, len, buffer, dimof(buffer));
-		return std::basic_string<ucs2>(buffer);
-	}
-
 	void            Console::Print(StringSection<> message)
 	{
 		if (!this) return;  // hack!
-		Print(AsUTF16(message.begin(), message.size()));
-	}
-
-	void            Console::Print(const std::basic_string<ucs2>& message)
-	{
-		if (!this) return;  // hack!
-		std::basic_string<ucs2>::size_type currentOffset = 0;
-		std::basic_string<ucs2>::size_type stringLength = message.size();
+		size_t currentOffset = 0;
+		size_t stringLength = message.size();
 		bool lastLineComplete = _pimpl->_lastLineComplete;
+		const char newlineChars[] = "\r\n";
 
 		while (currentOffset < stringLength) {
-			const std::basic_string<ucs2>::size_type start = currentOffset;
-			const std::basic_string<ucs2>::size_type s = message.find_first_of((ucs2*)u"\r\n", currentOffset);
-			std::basic_string<ucs2>::size_type end;
+			auto start = currentOffset;
+			auto s = std::find_first_of(message.begin()+currentOffset, message.end(), newlineChars, ArrayEnd(newlineChars)) - message.begin();
+			size_t end;
 			bool completeLine = false;
 
 			if (s != std::string::npos) {
@@ -99,9 +80,9 @@ namespace ConsoleRig
 
 			if (end > start) {
 				if (!lastLineComplete && !_pimpl->_lines.empty()) {
-					_pimpl->_lines[_pimpl->_lines.size()-1] += message.substr(start, end-start);
+					_pimpl->_lines.back() = Concatenate(_pimpl->_lines.back(), MakeStringSection(message.begin()+start, message.begin()+end));
 				} else {
-					_pimpl->_lines.push_back(message.substr(start, end-start));
+					_pimpl->_lines.push_back(MakeStringSection(message.begin()+start, message.begin()+end).AsString());
 				}
 			}
 			lastLineComplete = completeLine;
@@ -115,9 +96,9 @@ namespace ConsoleRig
 		_pimpl->_lastLineComplete = lastLineComplete;
 	}
 
-	std::vector<std::basic_string<ucs2>>    Console::GetLines(unsigned lineCount, unsigned scrollback)
+	std::vector<std::string>    Console::GetLines(unsigned lineCount, unsigned scrollback)
 	{
-		std::vector<std::basic_string<ucs2>> result;
+		std::vector<std::string> result;
 		signed linesToGet = std::max(0, std::min(signed(lineCount), signed(_pimpl->_lines.size())-signed(scrollback)));
 		result.reserve(linesToGet);
 
@@ -174,7 +155,7 @@ namespace ConsoleRig
 	{
 		_pimpl = std::make_unique<Pimpl>();
 		_pimpl->_lastLineComplete = false;
-		_pimpl->_lines.push_back(std::basic_string<ucs2>());
+		_pimpl->_lines.push_back({});
 		_pimpl->_cvars = std::make_shared<ConsoleVariableStorage>();
 
 		assert(!s_instance);
