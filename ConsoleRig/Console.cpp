@@ -15,7 +15,7 @@
 #include <iterator>
 #include <algorithm>
 
-// #define XLE_CONSOLE_LUA_ENABLE 1         // hack -- don't check in
+#define XLE_CONSOLE_LUA_ENABLE 1         // hack -- don't check in
 
 #if XLE_CONSOLE_LUA_ENABLE
 #define _SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS		// LuaBridge uses hash_map, which creates a compile error in Visual Studio 2015. We should use the standard unordered_map, instead
@@ -80,9 +80,7 @@ namespace ConsoleRig
 	public:
 		std::vector<std::basic_string<ucs2>> _lines;
 		bool _lastLineComplete;
-		// std::unique_ptr<LuaState> _lua;
-		// std::unique_ptr<LuaState> _customLua;
-		std::unique_ptr<ConsoleVariableStorage> _cvars;
+		std::shared_ptr<ConsoleVariableStorage> _cvars;
 
 		std::mutex _scriptingInterfaceMutex;
 		std::vector<std::shared_ptr<IConsoleScriptingInterface>> _scriptingInterfaces;
@@ -201,10 +199,8 @@ namespace ConsoleRig
 		return result;
 	}
 
-	ConsoleVariableStorage&  Console::GetCVars()
-	{
-		return *_pimpl->_cvars;
-	}
+	ConsoleVariableStorage& Console::GetCVars() { return *_pimpl->_cvars; }
+	std::shared_ptr<ConsoleVariableStorage> Console::GetCVarsPtr() { return _pimpl->_cvars; }
 
 	void Console::SetInstance(Console* newInstance)
 	{
@@ -230,7 +226,7 @@ namespace ConsoleRig
 		_pimpl = std::make_unique<Pimpl>();
 		_pimpl->_lastLineComplete = false;
 		_pimpl->_lines.push_back(std::basic_string<ucs2>());
-		_pimpl->_cvars = std::make_unique<ConsoleVariableStorage>();
+		_pimpl->_cvars = std::make_shared<ConsoleVariableStorage>();
 
 		assert(!s_instance);
 		s_instance = this;
@@ -244,6 +240,174 @@ namespace ConsoleRig
 		s_instance = nullptr;
 	}
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	namespace Internal
+	{
+		template <typename Type>
+			ConsoleVariableStorage::Table<Type>& GetConsoleVariableTable()
+		{
+			return Console::GetInstance().GetCVars().GetTable<Type>();
+		}
+
+		template <typename Type>
+			class CompareConsoleVariable 
+		{
+		public:
+			typedef std::pair<Type, ConsoleVariable<Type>> Pair;
+			bool operator()(const char lhs[], const std::unique_ptr<Pair>& rhs) const      { return XlCompareString(lhs, rhs->second.Name().c_str()) < 0; }
+			bool operator()(const std::unique_ptr<Pair>& lhs, const char rhs[]) const      { return XlCompareString(lhs->second.Name().c_str(), rhs) < 0; }
+		};
+
+		#undef new
+
+			template <typename Type>
+				Type&       FindTweakable(const char name[], Type defaultValue)
+			{
+				auto& table  = GetConsoleVariableTable<Type>();
+				auto i       = std::lower_bound(table.cbegin(), table.cend(), name, CompareConsoleVariable<Type>());
+				if (i!=table.cend() && XlEqString((*i)->second.Name(), name))
+					return (*i)->first;
+
+				using Pair = std::pair<Type, ConsoleVariable<Type>>;
+				// This bit of funkiness is because we want the ConsoleVariable object to contain
+				// a pointer to the value object (which is contained in the same heap block)
+				// It's awkward here, but it's convenient otherwise
+				auto p = std::make_unique<Pair>(defaultValue, ConsoleVariable<Type>());
+				ConsoleVariable<Type>& var = std::get<1>(*p);
+				var.~ConsoleVariable<Type>();
+				new(&var) ConsoleVariable<Type>(name, std::get<0>(*p));
+
+				i = table.insert(i, std::move(p));
+				return (*i)->first;
+			}
+
+		#if defined(DEBUG_NEW)
+			#define new DEBUG_NEW
+		#endif
+
+		template <typename Type>
+			Type*       FindTweakable(const char name[])
+		{
+					// this version only find an existing tweakable, and returns null if it can't be found
+			auto& table  = GetConsoleVariableTable<Type>();
+			auto i       = std::lower_bound(table.cbegin(), table.cend(), name, CompareConsoleVariable<Type>());
+			if (i!=table.cend() && !XlCompareString((*i)->second.Name().c_str(), name)) {
+				return &(*i)->first;
+			}
+			return nullptr;
+		}
+
+		template int&           FindTweakable<int>(const char name[], int defaultValue);
+		template float&         FindTweakable<float>(const char name[], float defaultValue);
+		template std::string&   FindTweakable<std::string>(const char name[], std::string defaultValue);
+		template bool&          FindTweakable<bool>(const char name[], bool defaultValue);
+		template Float3&        FindTweakable<Float3>(const char name[], Float3 defaultValue);
+		template Float4&        FindTweakable<Float4>(const char name[], Float4 defaultValue);
+
+		template int*           FindTweakable<int>(const char name[]);
+		template float*         FindTweakable<float>(const char name[]);
+		template std::string*   FindTweakable<std::string>(const char name[]);
+		template bool*          FindTweakable<bool>(const char name[]);
+		template Float3*        FindTweakable<Float3>(const char name[]);
+		template Float4*        FindTweakable<Float4>(const char name[]);
+	}
+
+			//////   C O N S O L E   V A R I A B L E   H E L P E R   //////
+
+	template <typename Type>
+		ConsoleVariable<Type>::ConsoleVariable(const std::string& name, Type& attachedValue)
+	:   _name(name)
+	,   _attachedValue(&attachedValue)
+	{
+#if 0		// todo -- new cvar to lua setup
+			//
+			//          Register the variable as a global value in LUA
+			//
+		auto lockedLua = Console::GetInstance().LockLuaState();        // (use the global lua state for console variables)
+		auto* L = lockedLua.GetLuaState();
+
+		using namespace luabridge;
+
+		auto get = &Internal::ConsoleVariable_Getter<Type>;
+		auto set = &Internal::ConsoleVariable_Setter<Type>;
+
+		lua_getglobal(L, "_G");
+		rawgetfield(L, -1, cvarNamespace?cvarNamespace:"cv");
+		assert(lua_istable (L, -1));
+
+			// Get
+		rawgetfield (L, -1, "__propget");
+		assert (lua_istable (L, -1));
+		lua_pushlightuserdata(L, this);
+		lua_pushlightuserdata(L, (void*)get);
+		lua_pushcclosure(L, &Internal::ConsoleVariable_CallFunction<Type, decltype(get)>::Call, 2);
+		rawsetfield(L, -2, name.c_str());
+		lua_pop(L, 1);
+
+			// Set
+		rawgetfield(L, -1, "__propset");
+		assert(lua_istable(L, -1));
+		lua_pushlightuserdata(L, this);
+		lua_pushlightuserdata(L, (void*)set);
+		lua_pushcclosure(L, &Internal::ConsoleVariable_CallFunction<Type, decltype(set)>::Call, 2);
+		rawsetfield(L, -2, name.c_str());
+		lua_pop(L, 1);
+
+		lua_pop(L, 2);      // pop _G & cv namespace
+#endif
+	}
+
+	template <typename Type>
+		ConsoleVariable<Type>::ConsoleVariable() {}
+
+	template <typename Type>
+		ConsoleVariable<Type>::~ConsoleVariable()
+	{
+		Deregister();
+	}
+
+	template <typename Type>
+		ConsoleVariable<Type>::ConsoleVariable(ConsoleVariable&& moveFrom)
+	:       _name(std::move(moveFrom._name))
+	,       _attachedValue(std::move(moveFrom._attachedValue))
+	{}
+
+	template <typename Type>
+		ConsoleVariable<Type>& ConsoleVariable<Type>::operator=(ConsoleVariable<Type>&& moveFrom)
+	{
+		Deregister();
+		_name           = std::move(moveFrom._name);
+		_attachedValue  = std::move(moveFrom._attachedValue);
+		return *this;
+	}
+
+	template <typename Type>
+		void ConsoleVariable<Type>::Deregister()
+	{
+#if 0		// todo -- new cvar to lua setup
+		if (!_name.empty() && Console::HasInstance()) {
+			auto lockedLua = Console::GetInstance().LockLuaState();
+			auto* L = lockedLua.GetLuaState();
+
+			lua_getglobal(L, "_G");
+			luabridge::rawgetfield(L, -1, _cvarNamespace.empty()?"cv":_cvarNamespace.c_str());
+			assert(lua_istable (L, -1));
+
+			luabridge::rawgetfield(L, -1, "__propget");
+			lua_pushnil(L);
+			luabridge::rawsetfield(L, -2, _name.c_str());
+			lua_pop(L, 1);
+
+			luabridge::rawgetfield(L, -1, "__propset");
+			lua_pushnil(L);
+			luabridge::rawsetfield(L, -2, _name.c_str());
+			lua_pop(L, 1);
+
+			lua_pop(L, 2);      // pop _G & cv namespace
+		}
+#endif
+	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -254,7 +418,6 @@ namespace ConsoleRig
 	public:
 		lua_State* L;
 		Threading::Mutex _mutex;
-		// operator lua_State*() { return L; }
 		lua_State* GetUnderlying() { return L; }
 
 		int PCall(int argumentCount, int returnValueCount);
@@ -272,6 +435,324 @@ namespace ConsoleRig
 		bool _closeOnExit = true;
 	};
 
+	class LuaConsoleVariableBridge
+	{
+	public:
+		struct ClosureParams { LuaConsoleVariableBridge* _bridge; ClosureParams(LuaConsoleVariableBridge* bridge) : _bridge(bridge) {} };
+
+		static constexpr char* s_metatableTable = "Meta-LuaConsoleVariableBridge";
+
+		LuaConsoleVariableBridge(std::shared_ptr<ConsoleVariableStorage> cvars, lua_State* iL)
+		: _cvars(std::move(cvars)), L(iL)
+		{
+			DEBUG_ONLY(int stackSizeStart2 = lua_gettop(L));
+
+			#if 0
+			using namespace luabridge;
+			lua_getglobal(L, "_G");
+			assert (lua_istable (L, -1));
+
+			lua_newtable(L);
+
+			lua_pushvalue (L, -1);	// setting it as it's own metatable
+			lua_setmetatable (L, -2);
+			
+			new (lua_newuserdata (L, sizeof (ClosureParams))) ClosureParams (this);
+			lua_pushcclosure (L, &indexMetaMethod, 1);
+			rawsetfield (L, -2, "__index");
+
+			new (lua_newuserdata (L, sizeof (ClosureParams))) ClosureParams (this);
+			lua_pushcclosure (L, &pairsMethod, 1);
+			rawsetfield (L, -2, "__pairs");
+
+			// lua_newtable (L);
+			// rawsetfield (L, -2, "__propget");
+			// lua_newtable (L);
+			// rawsetfield (L, -2, "__propset");
+			// 
+			// lua_pushlightuserdata(L, this);
+			// lua_setuservalue(L, -2);
+
+			// lua_pushvalue (L, -1);
+			rawsetfield (L, -2, "cv");
+
+			lua_pop(L, 1);
+			#endif
+
+			lua_pushglobaltable(L);
+			assert (lua_istable (L, -1));
+
+			new (lua_newuserdata (L, sizeof (ClosureParams))) ClosureParams (this);
+
+			luaL_newmetatable(L, s_metatableTable);
+			luaL_setfuncs(L, s_container_meta, 0);		// register our funcs in the metatable
+			lua_setmetatable (L, -2);
+
+			lua_setfield(L, -2, "cv");
+			lua_pop(L, 1);
+
+			DEBUG_ONLY(int stackSizeEnd2 = lua_gettop(L));
+			assert(stackSizeEnd2 == stackSizeStart2);
+		}
+
+		~LuaConsoleVariableBridge()
+		{
+			lua_pushglobaltable(L);
+			lua_getfield(L, -1, "cv");
+			assert(lua_istable(L, -1));
+			lua_pop(L, 1);
+			lua_pushnil(L);
+			lua_setfield(L, -2, "cv");
+			lua_pop(L, 1);
+		}
+
+	private:
+		std::shared_ptr<ConsoleVariableStorage> _cvars;
+		lua_State* L;
+
+		static int indexMethod(lua_State* L)
+		{
+			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
+			assert(params && params->_bridge);
+			auto& bridge = *params->_bridge;
+
+			assert(lua_isstring(L, 2));
+			auto name = lua_tostring(L, 2);
+
+			for (const auto& ints:bridge._cvars->GetTable<int>())
+				if (XlEqString(ints->second.Name(), name)) {
+					lua_pushinteger(L, ints->first);
+					return 1;
+				}
+
+			for (const auto& floats:bridge._cvars->GetTable<float>())
+				if (XlEqString(floats->second.Name(), name)) {
+					lua_pushnumber(L, floats->first);
+					return 1;
+				}
+
+			for (const auto& strings:bridge._cvars->GetTable<std::string>())
+				if (XlEqString(strings->second.Name(), name)) {
+					lua_pushstring(L, strings->first.c_str());
+					return 1;		// number of values returned
+				}
+
+			for (const auto& bools:bridge._cvars->GetTable<bool>())
+				if (XlEqString(bools->second.Name(), name)) {
+					lua_pushboolean(L, bools->first);
+					return 1;
+				}
+
+			for (const auto& v3ds:bridge._cvars->GetTable<Float3>())
+				if (XlEqString(v3ds->second.Name(), name)) {
+					lua_pushnil(L);	// todo -- complex type required
+					return 1;
+				}
+
+			for (const auto& v4ds:bridge._cvars->GetTable<Float4>())
+				if (XlEqString(v4ds->second.Name(), name)) {
+					lua_pushnil(L);	// todo -- complex type required
+					return 1;
+				}
+
+			lua_pushnil(L);
+			return 1;
+		}
+
+		static int newIndexMethod(lua_State* L)
+		{
+			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
+			assert(params && params->_bridge);
+			auto& bridge = *params->_bridge;
+			return 0;
+		}
+
+		static int ContainerIterator(lua_State* L)
+		{
+			// 1. Get our userdata object (the 'state').
+			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
+			assert(params && params->_bridge);
+			auto& bridge = *params->_bridge;
+
+			// 2. Determine the current index for iteration.
+			// The control variable is the index from the *previous* iteration.
+			// If it's nil, this is the first call, so we start at index 0.
+			// Otherwise, we start at the next index.
+			lua_Integer iteratorIndex = 0;
+			if (!lua_isnil(L, 2)) {
+				assert(lua_isinteger(L, 2));
+				iteratorIndex = lua_tointeger(L, 2) + 1;
+			}
+
+			lua_Integer i = 0;
+			for (const auto& ints:bridge._cvars->GetTable<int>()) {
+				if (i == iteratorIndex) {
+					lua_pushinteger(L, iteratorIndex);
+					lua_pushstring(L, ints->second.Name().c_str());
+					lua_pushinteger(L, ints->first);
+					return 3;		// number of values returned
+				}
+				++i;
+			}
+
+			for (const auto& floats:bridge._cvars->GetTable<float>()) {
+				if (i == iteratorIndex) {
+					lua_pushinteger(L, iteratorIndex);
+					lua_pushstring(L, floats->second.Name().c_str());
+					lua_pushnumber(L, floats->first);
+					return 3;		// number of values returned
+				}
+				++i;
+			}
+
+			for (const auto& strings:bridge._cvars->GetTable<std::string>()) {
+				if (i == iteratorIndex) {
+					lua_pushinteger(L, iteratorIndex);
+					lua_pushstring(L, strings->second.Name().c_str());
+					lua_pushstring(L, strings->first.c_str());
+					return 3;		// number of values returned
+				}
+				++i;
+			}
+
+			for (const auto& bools:bridge._cvars->GetTable<bool>()) {
+				if (i == iteratorIndex) {
+					lua_pushinteger(L, iteratorIndex);
+					lua_pushstring(L, bools->second.Name().c_str());
+					lua_pushboolean(L, bools->first);
+					return 3;		// number of values returned
+				}
+				++i;
+			}
+
+			for (const auto& v3ds:bridge._cvars->GetTable<Float3>()) {
+				if (i == iteratorIndex) {
+					lua_pushinteger(L, iteratorIndex);
+					lua_pushstring(L, v3ds->second.Name().c_str());
+					lua_pushnil(L);	// todo -- complex type required
+					return 3;		// number of values returned
+				}
+				++i;
+			}
+
+			for (const auto& v4ds:bridge._cvars->GetTable<Float4>()) {
+				if (i == iteratorIndex) {
+					lua_pushinteger(L, iteratorIndex);
+					lua_pushstring(L, v4ds->second.Name().c_str());
+					lua_pushnil(L);	// todo -- complex type required
+					return 3;		// number of values returned
+				}
+				++i;
+			}
+
+			lua_pushnil(L);
+			return 1;
+		}
+
+		static int pairsMethod (lua_State* L)
+		{
+			// search through the list of console variables, and return pairs
+			// using namespace luabridge;
+			// assert (isfulluserdata (L, lua_upvalueindex (1)));
+			// auto* params = (ClosureParams*) (lua_touserdata (L, lua_upvalueindex (1)));
+			// if (!params->_bridge) return 0;
+// 
+			// return 0;
+
+			luaL_checkudata(L, 1, s_metatableTable);
+			lua_pushcfunction(L, ContainerIterator);
+			lua_pushvalue(L, 1);
+			lua_pushnil(L);
+			return 3;		// We are returning 3 values.
+		}
+
+		static int gcMethod(lua_State* L)
+		{
+			auto* container = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
+			container->~ClosureParams();
+			return 0;
+		}
+
+		static const struct luaL_Reg s_container_meta[];
+	};
+
+	const struct luaL_Reg LuaConsoleVariableBridge::s_container_meta[] = {
+		{"__pairs", LuaConsoleVariableBridge::pairsMethod},
+		{"__index", LuaConsoleVariableBridge::indexMethod},
+		{"__newindex", LuaConsoleVariableBridge::newIndexMethod},
+		{"__gc", LuaConsoleVariableBridge::gcMethod},
+		{nullptr, nullptr}
+	};
+
+	namespace Internal
+	{
+		template <typename MemFn, typename D=MemFn> struct ImmMemberFunction {};
+
+		template <typename R, typename E, typename D>
+			struct ImmMemberFunction <R (*) (E), D>
+		{
+			typedef luabridge::None Params;
+			static R call (D fp, E e, luabridge::TypeListValues<Params>)            { return fp(e); }
+		};
+
+		template <typename R, typename P1, typename E, typename D>
+			struct ImmMemberFunction <R (*) (E, P1), D>
+		{
+			typedef luabridge::TypeList <P1> Params;
+			static R call (D fp, E e, luabridge::TypeListValues<Params> tvl)       { return fp(e, tvl.hd); }
+		};
+
+		template <typename R, typename P1, typename P2, typename E, typename D>
+			struct ImmMemberFunction <R (*) (E, P1, P2), D>
+		{
+			typedef luabridge::TypeList <P1, P2> Params;
+			static R call (D fp, E e, luabridge::TypeListValues<Params> tvl)       { return fp(e, tvl.hd, tvl.tl.hd); }
+		};
+
+		template <typename R, typename P1, typename P2, typename P3, typename E, typename D>
+			struct ImmMemberFunction <R (*) (E, P1, P2, P3), D>
+		{
+			typedef luabridge::TypeList <P1, luabridge::TypeList <P2, luabridge::TypeList <P3> > > Params;
+			static R call (D fp, E e, luabridge::TypeListValues<Params> tvl)            { return fp(e, tvl.hd, tvl.tl.hd, tvl.tl.tl.hd); }
+		};
+
+		template <typename Type>
+			static Type ConsoleVariable_Getter(ConsoleVariable<Type>* attachedValue)
+		{
+			return (*attachedValue->_attachedValue);
+		}
+
+		template <typename Type>
+			static Type ConsoleVariable_Setter(ConsoleVariable<Type>* attachedValue, Type newValue)
+		{
+			(*attachedValue->_attachedValue) = newValue;
+			return *attachedValue->_attachedValue;
+		}
+
+		template<   class Type,
+					class MemFn,
+					class ReturnType = typename luabridge::FuncTraits<MemFn>::ReturnType>
+		struct ConsoleVariable_CallFunction
+		{
+			using T = ConsoleVariable<Type>;
+			using Params = typename ImmMemberFunction<MemFn>::Params;
+			static int Call(lua_State* L)
+			{
+				using namespace luabridge;
+				assert (lua_isuserdata (L, lua_upvalueindex(1)));
+				T*t = (T*)lua_touserdata(L, lua_upvalueindex(1));
+
+				assert (lua_isuserdata (L, lua_upvalueindex (2)));
+				MemFn fp = reinterpret_cast<MemFn>(lua_touserdata(L, lua_upvalueindex (2)));
+
+				assert (fp != 0);
+				ArgList<Params> args (L);
+				Stack<ReturnType>::push(L, ImmMemberFunction<MemFn>::call(fp, t, args));
+				return 1;
+			}
+		};
+	}
+
 	static std::vector<std::string> CollectAutoCompleteList(lua_State*L, StringSection<> input, size_t iterateStart)
 	{
 		std::vector<std::string> result;
@@ -279,8 +760,9 @@ namespace ConsoleRig
 		if (compareLength) {
 			DEBUG_ONLY(int stackSizeStart2 = lua_gettop(L));
 			assert(lua_istable(L, -1));
+			auto table_idx = lua_absindex(L, -1);
 			lua_pushnil(L);
-			while (lua_next(L, -2) != 0) {
+			while (lua_next(L, table_idx) != 0) {
 
 				size_t length = 0;
 				const char* name = lua_tolstring(L, -2, &length);
@@ -305,7 +787,6 @@ namespace ConsoleRig
 
 				lua_pop(L, 1);
 			}
-			// lua_pop(L, 1);  DavidJ -- seems to be an automatic pop in lua_next() when it returns 0
 
 			DEBUG_ONLY(int stackSizeEnd2 = lua_gettop(L));
 			assert(stackSizeEnd2 == stackSizeStart2);
@@ -340,11 +821,12 @@ namespace ConsoleRig
 				//
 			auto L = _state.L;
 			DEBUG_ONLY(int stackSizeStart2 = lua_gettop(L));
-			lua_getglobal(L, "_G");
+			lua_pushglobaltable(L);
 			int tablesPushed = 1;
 			auto iterateStart = input.begin();
 			for (;;) {
-				auto nextPart = std::find_first_of(input.begin(), input.end(), ".:", input.begin());
+				char search[] = ".:";
+				auto nextPart = std::find_first_of(iterateStart, input.end(), search, ArrayEnd(search));
 				if (nextPart == input.end()) {
 					break;
 				}
@@ -388,29 +870,32 @@ namespace ConsoleRig
 			return _state.L;
 		}
 
-		LuaScriptingInterface()
+		LuaScriptingInterface(std::shared_ptr<ConsoleVariableStorage> cvars)
 		{
+			_consoleVariableBridge = std::make_shared<LuaConsoleVariableBridge>(cvars, _state.L);
+
 			// HACK --  getting some memory allocation problems across DLL boundaries sometimes
 			//          It seems to be resolved if we allocate the first console variable in the
 			//          main module.
-			_dummyValue = 1;
-			_dummyVar = ConsoleVariable<int>("dummy", _dummyValue);
+			// _dummyValue = 1;
+			// _dummyVar = ConsoleVariable<int>("dummy", _dummyValue);
 		}
 
 		~LuaScriptingInterface()
 		{
-			_dummyVar = ConsoleVariable<int>(std::string(), _dummyValue);		// force deregister
+			// _dummyVar = ConsoleVariable<int>(std::string(), _dummyValue);		// force deregister
 		}
 
 		LuaState _state;
+		std::shared_ptr<LuaConsoleVariableBridge> _consoleVariableBridge;
 
-		int _dummyValue;
-		ConsoleVariable<int> _dummyVar;
+		// int _dummyValue;
+		// ConsoleVariable<int> _dummyVar;
 	};
 
-	std::shared_ptr<IConsoleScriptingInterface> CreateLuaScripting()
+	std::shared_ptr<IConsoleScriptingInterface> CreateLuaScripting(std::shared_ptr<ConsoleVariableStorage> cvars)
 	{
-		return std::make_shared<LuaScriptingInterface>();
+		return std::make_shared<LuaScriptingInterface>(std::move(cvars));
 	}
 
 			//////   B A S I C   L U A   B E H A V I O U R   //////
@@ -534,13 +1019,6 @@ namespace ConsoleRig
 		lua_pushlightuserdata(L, GetTracebackKey());
 		lua_pushcclosure(L, &ErrorHandler, 0);
 		lua_rawset(L, LUA_REGISTRYINDEX);
-
-
-			//
-			//      We need to create the "cv" namespace, to have something 
-			//      to put cvar property methods into
-			//
-		luabridge::getGlobalNamespace(L).beginNamespace("cv").endNamespace();
 	}
 
 	LuaState::LuaState(lua_State& existing)
@@ -555,286 +1033,11 @@ namespace ConsoleRig
 			lua_close(L);
 	}
 
-	namespace Internal
-	{
-		template <typename MemFn, typename D=MemFn> struct ImmMemberFunction {};
-
-		template <typename R, typename E, typename D>
-			struct ImmMemberFunction <R (*) (E), D>
-		{
-			typedef luabridge::None Params;
-			static R call (D fp, E e, luabridge::TypeListValues<Params>)            { return fp(e); }
-		};
-
-		template <typename R, typename P1, typename E, typename D>
-			struct ImmMemberFunction <R (*) (E, P1), D>
-		{
-			typedef luabridge::TypeList <P1> Params;
-			static R call (D fp, E e, luabridge::TypeListValues<Params> tvl)       { return fp(e, tvl.hd); }
-		};
-
-		template <typename R, typename P1, typename P2, typename E, typename D>
-			struct ImmMemberFunction <R (*) (E, P1, P2), D>
-		{
-			typedef luabridge::TypeList <P1, P2> Params;
-			static R call (D fp, E e, luabridge::TypeListValues<Params> tvl)       { return fp(e, tvl.hd, tvl.tl.hd); }
-		};
-
-		template <typename R, typename P1, typename P2, typename P3, typename E, typename D>
-			struct ImmMemberFunction <R (*) (E, P1, P2, P3), D>
-		{
-			typedef luabridge::TypeList <P1, luabridge::TypeList <P2, luabridge::TypeList <P3> > > Params;
-			static R call (D fp, E e, luabridge::TypeListValues<Params> tvl)            { return fp(e, tvl.hd, tvl.tl.hd, tvl.tl.tl.hd); }
-		};
-
-		template <typename Type>
-			static Type ConsoleVariable_Getter(ConsoleVariable<Type>* attachedValue)
-		{
-			return (*attachedValue->_attachedValue);
-		}
-
-		template <typename Type>
-			static Type ConsoleVariable_Setter(ConsoleVariable<Type>* attachedValue, Type newValue)
-		{
-			(*attachedValue->_attachedValue) = newValue;
-			return *attachedValue->_attachedValue;
-		}
-		
-		template <typename Type>
-			ConsoleVariableStorage::Table<Type>& GetConsoleVariableTable()
-		{
-			return Console::GetInstance().GetCVars().GetTable<Type>();
-		}
-
-		template <typename Type>
-			class CompareConsoleVariable 
-		{
-		public:
-			typedef std::pair<Type, ConsoleVariable<Type>> Pair;
-			bool operator()(const char lhs[], const std::unique_ptr<Pair>& rhs) const      { return XlCompareString(lhs, rhs->second.Name().c_str()) < 0; }
-			bool operator()(const std::unique_ptr<Pair>& lhs, const char rhs[]) const      { return XlCompareString(lhs->second.Name().c_str(), rhs) < 0; }
-		};
-
-		#undef new
-
-			template <typename Type>
-				Type&       FindTweakable(const char name[], Type defaultValue)
-			{
-				auto& table  = GetConsoleVariableTable<Type>();
-				auto i       = std::lower_bound(table.cbegin(), table.cend(), name, CompareConsoleVariable<Type>());
-				if (i!=table.cend() && XlEqString((*i)->second.Name(), name))
-					return (*i)->first;
-
-				using Pair = std::pair<Type, ConsoleVariable<Type>>;
-				// This bit of funkiness is because we want the ConsoleVariable object to contain
-				// a pointer to the value object (which is contained in the same heap block)
-				// It's awkward here, but it's convenient otherwise
-				auto p = std::make_unique<Pair>(defaultValue, ConsoleVariable<Type>());
-				ConsoleVariable<Type>& var = std::get<1>(*p);
-				var.~ConsoleVariable<Type>();
-				new(&var) ConsoleVariable<Type>(name, std::get<0>(*p));
-
-				i = table.insert(i, std::move(p));
-				return (*i)->first;
-			}
-
-		#if defined(DEBUG_NEW)
-			#define new DEBUG_NEW
-		#endif
-
-		template <typename Type>
-			Type*       FindTweakable(const char name[])
-		{
-					// this version only find an existing tweakable, and returns null if it can't be found
-			auto& table  = GetConsoleVariableTable<Type>();
-			auto i       = std::lower_bound(table.cbegin(), table.cend(), name, CompareConsoleVariable<Type>());
-			if (i!=table.cend() && !XlCompareString((*i)->second.Name().c_str(), name)) {
-				return &(*i)->first;
-			}
-			return nullptr;
-		}
-
-		template int&           FindTweakable<int>(const char name[], int defaultValue);
-		template float&         FindTweakable<float>(const char name[], float defaultValue);
-		template std::string&   FindTweakable<std::string>(const char name[], std::string defaultValue);
-		template bool&          FindTweakable<bool>(const char name[], bool defaultValue);
-		template Float3&        FindTweakable<Float3>(const char name[], Float3 defaultValue);
-		template Float4&        FindTweakable<Float4>(const char name[], Float4 defaultValue);
-
-		template int*           FindTweakable<int>(const char name[]);
-		template float*         FindTweakable<float>(const char name[]);
-		template std::string*   FindTweakable<std::string>(const char name[]);
-		template bool*          FindTweakable<bool>(const char name[]);
-		template Float3*        FindTweakable<Float3>(const char name[]);
-		template Float4*        FindTweakable<Float4>(const char name[]);
-
-		template<   class Type,
-					class MemFn,
-					class ReturnType = typename luabridge::FuncTraits<MemFn>::ReturnType>
-		struct ConsoleVariable_CallFunction
-		{
-			using T = ConsoleVariable<Type>;
-			using Params = typename ImmMemberFunction<MemFn>::Params;
-			static int Call(lua_State* L)
-			{
-				using namespace luabridge;
-				assert (lua_isuserdata (L, lua_upvalueindex(1)));
-				T*t = (T*)lua_touserdata(L, lua_upvalueindex(1));
-
-				assert (lua_isuserdata (L, lua_upvalueindex (2)));
-				MemFn fp = reinterpret_cast<MemFn>(lua_touserdata(L, lua_upvalueindex (2)));
-
-				assert (fp != 0);
-				ArgList<Params> args (L);
-				Stack<ReturnType>::push(L, ImmMemberFunction<MemFn>::call(fp, t, args));
-				return 1;
-			}
-		};
-	}
-
-
-
-
-			//////   C O N S O L E   V A R I A B L E   H E L P E R   //////
-
-	template <typename Type>
-		ConsoleVariable<Type>::ConsoleVariable(const std::string& name, Type& attachedValue, const char cvarNamespace[])
-	:   _name(name)
-	,   _attachedValue(&attachedValue)
-	{
-#if 0		// todo -- new cvar to lua setup
-			//
-			//          Register the variable as a global value in LUA
-			//
-		auto lockedLua = Console::GetInstance().LockLuaState();        // (use the global lua state for console variables)
-		auto* L = lockedLua.GetLuaState();
-
-		using namespace luabridge;
-
-		auto get = &Internal::ConsoleVariable_Getter<Type>;
-		auto set = &Internal::ConsoleVariable_Setter<Type>;
-
-		lua_getglobal(L, "_G");
-		rawgetfield(L, -1, cvarNamespace?cvarNamespace:"cv");
-		assert(lua_istable (L, -1));
-
-			// Get
-		rawgetfield (L, -1, "__propget");
-		assert (lua_istable (L, -1));
-		lua_pushlightuserdata(L, this);
-		lua_pushlightuserdata(L, (void*)get);
-		lua_pushcclosure(L, &Internal::ConsoleVariable_CallFunction<Type, decltype(get)>::Call, 2);
-		rawsetfield(L, -2, name.c_str());
-		lua_pop(L, 1);
-
-			// Set
-		rawgetfield(L, -1, "__propset");
-		assert(lua_istable(L, -1));
-		lua_pushlightuserdata(L, this);
-		lua_pushlightuserdata(L, (void*)set);
-		lua_pushcclosure(L, &Internal::ConsoleVariable_CallFunction<Type, decltype(set)>::Call, 2);
-		rawsetfield(L, -2, name.c_str());
-		lua_pop(L, 1);
-
-		lua_pop(L, 2);      // pop _G & cv namespace
-#endif
-	}
-
-	template <typename Type>
-		ConsoleVariable<Type>::ConsoleVariable() {}
-
-	template <typename Type>
-		ConsoleVariable<Type>::~ConsoleVariable()
-	{
-		Deregister();
-	}
-
-	template <typename Type>
-		ConsoleVariable<Type>::ConsoleVariable(ConsoleVariable&& moveFrom)
-	:       _name(std::move(moveFrom._name))
-	,       _cvarNamespace(std::move(moveFrom._cvarNamespace))
-	,       _attachedValue(std::move(moveFrom._attachedValue))
-	{}
-
-	template <typename Type>
-		ConsoleVariable<Type>& ConsoleVariable<Type>::operator=(ConsoleVariable<Type>&& moveFrom)
-	{
-		Deregister();
-		_name           = std::move(moveFrom._name);
-		_cvarNamespace  = std::move(moveFrom._cvarNamespace);
-		_attachedValue  = std::move(moveFrom._attachedValue);
-		return *this;
-	}
-
-	template <typename Type>
-		void ConsoleVariable<Type>::Deregister()
-	{
-#if 0		// todo -- new cvar to lua setup
-		if (!_name.empty() && Console::HasInstance()) {
-			auto lockedLua = Console::GetInstance().LockLuaState();
-			auto* L = lockedLua.GetLuaState();
-
-			lua_getglobal(L, "_G");
-			luabridge::rawgetfield(L, -1, _cvarNamespace.empty()?"cv":_cvarNamespace.c_str());
-			assert(lua_istable (L, -1));
-
-			luabridge::rawgetfield(L, -1, "__propget");
-			lua_pushnil(L);
-			luabridge::rawsetfield(L, -2, _name.c_str());
-			lua_pop(L, 1);
-
-			luabridge::rawgetfield(L, -1, "__propset");
-			lua_pushnil(L);
-			luabridge::rawsetfield(L, -2, _name.c_str());
-			lua_pop(L, 1);
-
-			lua_pop(L, 2);      // pop _G & cv namespace
-		}
-#endif
-	}
-
 #else
 
-	int LuaState::PCall(int argumentCount, int returnValueCount) { return 0; }
+	std::shared_ptr<IConsoleScriptingInterface> CreateLuaScripting() { return nullptr; }
 
-	LuaState::LuaState() {}
-	LuaState::LuaState(lua_State& existing) {}
-	LuaState::~LuaState() {}
-
-	template<typename T> ConsoleVariable<T>::ConsoleVariable(const std::string& name, T& attachedValue, const char cvarNamespace[]) {}
-	template<typename T> ConsoleVariable<T>::ConsoleVariable() {}
-	template<typename T> ConsoleVariable<T>::~ConsoleVariable() {}
-
-	template<typename T> ConsoleVariable<T>::ConsoleVariable(ConsoleVariable&& moveFrom) {}
-	template<typename T> ConsoleVariable<T>& ConsoleVariable<T>::operator=(ConsoleVariable&& moveFrom) { return *this; }
-
-	namespace Internal
-	{
-		template <typename Type>
-			Type&       FindTweakable(const char name[], Type defaultValue)
-		{
-			// note -- very non-ideal implementation. Debug only!
-			static thread_local std::unordered_map<std::string, Type> s_map;
-			std::string n = name;
-			if (auto i = s_map.find(n); i != s_map.end()) return i->second;
-			s_map.emplace(n, defaultValue);
-			return s_map[n];
-		}
-
-		template <typename Type>
-			Type*       FindTweakable(const char name[]) { return nullptr; }
-
-		template int&           FindTweakable<int>(const char name[], int defaultValue);
-		template float&         FindTweakable<float>(const char name[], float defaultValue);
-		template std::string&   FindTweakable<std::string>(const char name[], std::string defaultValue);
-		template bool&          FindTweakable<bool>(const char name[], bool defaultValue);
-		template Float3&        FindTweakable<Float3>(const char name[], Float3 defaultValue);
-		template Float4&        FindTweakable<Float4>(const char name[], Float4 defaultValue);
-	}
-	
 #endif
-
-
 
 	template class ConsoleVariable<int>;
 	template class ConsoleVariable<float>;

@@ -53,7 +53,8 @@ namespace ConsoleRig
         void PushScriptingInterface(std::shared_ptr<IConsoleScriptingInterface> interf);
         void PopScriptingInterface(IConsoleScriptingInterface&);
 
-        ConsoleVariableStorage& GetCVars();         // should be exposed to scripting interfaces in the "cv" namespace -- like lua, etc
+        ConsoleVariableStorage& GetCVars();
+        std::shared_ptr<ConsoleVariableStorage> GetCVarsPtr();
 
         Console();
         ~Console();
@@ -82,12 +83,12 @@ namespace ConsoleRig
         virtual lua_State* GetLuaState() = 0;
     };
 
-    std::shared_ptr<IConsoleScriptingInterface> CreateLuaScripting();
+    std::shared_ptr<IConsoleScriptingInterface> CreateLuaScripting(std::shared_ptr<ConsoleVariableStorage> cvars);
 
     template <typename Type> class ConsoleVariable
     {
     public:
-        ConsoleVariable(const std::string& name, Type& attachedValue, const char cvarNamespace[] = nullptr);
+        ConsoleVariable(const std::string& name, Type& attachedValue);
         ConsoleVariable();
         ~ConsoleVariable();
 
@@ -99,7 +100,6 @@ namespace ConsoleRig
         Type*           _attachedValue;
     private:
         std::string     _name;
-        std::string     _cvarNamespace;
 
         void Deregister();
     };
