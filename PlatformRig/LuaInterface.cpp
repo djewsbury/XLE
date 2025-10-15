@@ -41,12 +41,12 @@ namespace PlatformRig
 		bool _closeOnExit = true;
 	};
 
+	static const char* s_consoleVariableBridgeMetatable = "Meta-LuaConsoleVariableBridge";
+
 	class LuaConsoleVariableBridge
 	{
 	public:
 		struct ClosureParams { LuaConsoleVariableBridge* _bridge; ClosureParams(LuaConsoleVariableBridge* bridge) : _bridge(bridge) {} };
-
-		static constexpr char* s_metatableTable = "Meta-LuaConsoleVariableBridge";
 
 		LuaConsoleVariableBridge(std::shared_ptr<ConsoleRig::ConsoleVariableStorage> cvars, lua_State* iL)
 		: _cvars(std::move(cvars)), L(iL)
@@ -58,7 +58,7 @@ namespace PlatformRig
 
 			new (lua_newuserdata (L, sizeof (ClosureParams))) ClosureParams (this);
 
-			luaL_newmetatable(L, s_metatableTable);
+			luaL_newmetatable(L, s_consoleVariableBridgeMetatable);
 			luaL_setfuncs(L, s_container_meta, 0);		// register our funcs in the metatable
 			lua_setmetatable (L, -2);
 
@@ -85,7 +85,7 @@ namespace PlatformRig
 
 		static int indexMethod(lua_State* L)
 		{
-			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
+			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_consoleVariableBridgeMetatable);
 			assert(params && params->_bridge);
 			auto& bridge = *params->_bridge;
 
@@ -134,7 +134,7 @@ namespace PlatformRig
 
 		static int newIndexMethod(lua_State* L)
 		{
-			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
+			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_consoleVariableBridgeMetatable);
 			assert(params && params->_bridge);
 			auto& bridge = *params->_bridge;
 
@@ -192,7 +192,7 @@ namespace PlatformRig
 
 		static int ContainerIterator(lua_State* L)
 		{
-			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
+			auto* params = (ClosureParams*)luaL_checkudata(L, 1, s_consoleVariableBridgeMetatable);
 			assert(params && params->_bridge);
 			auto& bridge = *params->_bridge;
 
@@ -261,7 +261,7 @@ namespace PlatformRig
 
 		static int pairsMethod (lua_State* L)
 		{
-			luaL_checkudata(L, 1, s_metatableTable);
+			luaL_checkudata(L, 1, s_consoleVariableBridgeMetatable);
 			lua_pushcfunction(L, ContainerIterator);
 			lua_pushvalue(L, 1);
 			lua_pushnil(L);
@@ -270,7 +270,7 @@ namespace PlatformRig
 
 		static int gcMethod(lua_State* L)
 		{
-			auto* container = (ClosureParams*)luaL_checkudata(L, 1, s_metatableTable);
+			auto* container = (ClosureParams*)luaL_checkudata(L, 1, s_consoleVariableBridgeMetatable);
 			container->~ClosureParams();
 			return 0;
 		}

@@ -9,6 +9,7 @@
 #include "OverlaySystem.h"
 #include "DebugHotKeys.h"
 #include "MainInputHandler.h"
+#include "LuaInterface.h"
 
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/Techniques/Techniques.h"
@@ -440,6 +441,10 @@ namespace PlatformRig
 			if (::Assets::MainFileSystem::DoesFileExist("rawos/hotkey.dat"))
 				globals._windowApparatus->_mainInputHandler->AddListener(MakeHotKeysHandler("rawos/hotkey.dat"));
 		globals._windowApparatus->_mainInputHandler->AddListener(CreateInputListener(globals._debugOverlaysApparatus->_debugScreensOverlaySystem));
+
+		if (_installLuaConsoleInterface)
+			if (auto interf = PlatformRig::CreateLuaScripting(ConsoleRig::Console::GetInstance().GetCVarsPtr()))
+				ConsoleRig::Console::GetInstance().PushScriptingInterface(std::move(interf));
 
 		return result;
 	}

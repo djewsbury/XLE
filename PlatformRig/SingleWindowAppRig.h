@@ -216,6 +216,7 @@ namespace PlatformRig
 		bool _installDefaultDebuggingDisplays = false;
 		bool _useFrameRigSystemDisplay = false;
 		bool _installHotKeysHandler = false;
+		bool _installLuaConsoleInterface = false;
 
 		std::vector<std::pair<std::string, std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget>>> _additionalDebuggingDisplays;
 
