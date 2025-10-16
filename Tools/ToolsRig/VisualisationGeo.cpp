@@ -206,7 +206,7 @@ namespace ToolsRig
 
     std::vector<Internal::Vertex3D> BuildCube()
     {
-            // build a basic cube at the origing with radius 1. All edges are "sharp" edges //
+            // build a basic cube at the origin with radius 1. All edges are "sharp" edges //
         Float3 normals[] = { 
             Float3(0.f, 0.f, -1.f), Float3(0.f, 0.f, 1.f),
             Float3(1.f, 0.f, 0.f), Float3(-1.f, 0.f, 0.f),
@@ -240,6 +240,42 @@ namespace ToolsRig
             }
             result.push_back(a[0]); result.push_back(a[1]); result.push_back(a[2]);
             result.push_back(a[2]); result.push_back(a[1]); result.push_back(a[3]);
+        }
+
+        return result;
+    }
+
+    std::vector<Internal::Vertex3D> BuildCylinder(unsigned segments)
+    {
+        // create a cylinder with the top and bottom facing in the +Z and -Z directions
+        // texture coordinates wrap around the cylinder in the U direction
+        // fits within the [-1,-1,-1]->[1,1,1] cube
+        std::vector<Internal::Vertex3D> result;
+        assert(segments >= 3);
+        for (unsigned seg=0; seg<segments; ++seg) {
+            float t0 = seg * gPI * 2.f / float(segments);
+            float t1 = (seg+1) * gPI * 2.f / float(segments);
+            float s0, c0; std::tie(s0, c0) = XlSinCos(t0);
+            float s1, c1; std::tie(s1, c1) = XlSinCos(t1);
+            float tc0 = seg / float(segments), tc1 = (seg+1)/float(segments);
+
+            // wall
+            result.push_back(Internal::Vertex3D{ Float3{c0, s0,  1.f}, Float3{c0, s0, 0.f}, Float2{tc0, 0.f}, Float4{-s0, c0, 0.f, 1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{c0, s0, -1.f}, Float3{c0, s0, 0.f}, Float2{tc0, 1.f}, Float4{-s0, c0, 0.f, 1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{c1, s1,  1.f}, Float3{c1, s1, 0.f}, Float2{tc1, 0.f}, Float4{-s1, c1, 0.f, 1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{c1, s1,  1.f}, Float3{c1, s1, 0.f}, Float2{tc1, 0.f}, Float4{-s1, c1, 0.f, 1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{c0, s0, -1.f}, Float3{c0, s0, 0.f}, Float2{tc0, 1.f}, Float4{-s0, c0, 0.f, 1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{c1, s1, -1.f}, Float3{c1, s1, 0.f}, Float2{tc1, 1.f}, Float4{-s1, c1, 0.f, 1.f} });
+
+            // cap on the top
+            result.push_back(Internal::Vertex3D{ Float3{ c0,  s0,  1.f}, Float3{0.f, 0.f, 1.f}, Float2{0.5f+0.5f*c0, 0.5f+0.5f*s0},  Float4{1.f, 0.f, 0.f, 1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{ c1,  s1,  1.f}, Float3{0.f, 0.f, 1.f}, Float2{0.5f+0.5f*c1, 0.5f+0.5f*s1},  Float4{1.f, 0.f, 0.f, 1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{0.f, 0.f,  1.f}, Float3{0.f, 0.f, 1.f}, Float2{0.5f, 0.5f},                  Float4{1.f, 0.f, 0.f, 1.f} });
+
+            // cap on the bottom
+            result.push_back(Internal::Vertex3D{ Float3{ c0,  s0, -1.f}, Float3{0.f, 0.f, -1.f}, Float2{0.5f+0.5f*c0, 0.5f+0.5f*s0},  Float4{1.f, 0.f, 0.f, -1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{0.f, 0.f, -1.f}, Float3{0.f, 0.f, -1.f}, Float2{0.5f, 0.5f},                  Float4{1.f, 0.f, 0.f, -1.f} });
+            result.push_back(Internal::Vertex3D{ Float3{ c1,  s1, -1.f}, Float3{0.f, 0.f, -1.f}, Float2{0.5f+0.5f*c1, 0.5f+0.5f*s1},  Float4{1.f, 0.f, 0.f, -1.f} });
         }
 
         return result;

@@ -551,6 +551,7 @@ namespace RenderCore { namespace Techniques
 		RetainedUniformsStream&& uniforms,
 		Topology topology)
 	{
+		assert(customGeo._ibFormat == Format(0));		// assuming no index buffer, just a vertex count
 		auto* drawable = pkt._drawables.Allocate<DrawableWithVertexCount>();
 		drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
 		drawable->_geo = &customGeo;
