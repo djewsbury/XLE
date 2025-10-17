@@ -572,6 +572,8 @@ namespace RenderCore { namespace Techniques
 
 	static const std::string s_manualDrawables{"manual-drawables"};
 
+	static void AddResHasSelectors(ParameterBox& dst, const ParameterBox& materialResourceBindings);
+
 	std::pair<std::shared_ptr<Techniques::PipelineAccelerator>, std::shared_ptr<Techniques::DescriptorSetAccelerator>> CreateAccelerators(
 		Techniques::IPipelineAcceleratorPool& pool,
 		const RenderCore::Assets::RawMaterial& material,
@@ -587,8 +589,11 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c=0; c<material._samplers.size(); ++c)
 			samplers[c] = {Hash64(material._samplers[c].first), material._samplers[c].second};
 
+		auto matSelectors = material._selectors;
+		AddResHasSelectors(matSelectors, material._resources);
+
 		auto materialMachine = std::make_shared<Techniques::ManualMaterialMachine>(material._uniforms, material._resources, MakeIteratorRange(samplers, &samplers[material._samplers.size()]));
-		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, nullptr, material._selectors, inputAssembly, topology, material._stateSet);
+		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, nullptr, matSelectors, inputAssembly, topology, material._stateSet);
 		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(nullptr, patchCollectionPtr, nullptr, materialMachine->GetMaterialMachine(), materialMachine, std::string{s_manualDrawables});
 		return {std::move(pipelineAccelerator), std::move(descriptorSetAccelerator)};
 	}
@@ -609,8 +614,11 @@ namespace RenderCore { namespace Techniques
 		for (unsigned c=0; c<material._samplers.size(); ++c)
 			samplers[c] = {Hash64(material._samplers[c].first), material._samplers[c].second};
 
+		auto matSelectors = material._selectors;
+		AddResHasSelectors(matSelectors, material._resources);
+
 		auto materialMachine = std::make_shared<Techniques::ManualMaterialMachine>(material._uniforms, material._resources, MakeIteratorRange(samplers, &samplers[material._samplers.size()]));
-		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, matDescSet, material._selectors, inputAssembly, topology, material._stateSet);
+		auto pipelineAccelerator = pool.CreatePipelineAccelerator(patchCollectionPtr, matDescSet, matSelectors, inputAssembly, topology, material._stateSet);
 		auto descriptorSetAccelerator = pool.CreateDescriptorSetAccelerator(nullptr, patchCollectionPtr, matDescSet, materialMachine->GetMaterialMachine(), materialMachine, std::string{s_manualDrawables});
 		return {std::move(pipelineAccelerator), std::move(descriptorSetAccelerator)};
 	}
@@ -871,6 +879,13 @@ namespace RenderCore { namespace Techniques
 	ManualDrawableWriter::~ManualDrawableWriter()
 	{}
 
+	static void AddResHasSelectors(ParameterBox& dst, const ParameterBox& materialResourceBindings)
+	{
+		// Append the "RES_HAS_" constants for each resource that is both in the descriptor set and that we have a binding for
+		for (const auto&r:materialResourceBindings)
+			dst.SetParameter(std::string{"RES_HAS_"} + r.Name().AsString(), 1);
+	}
+
 	MatMachineDecompositionHelper DecomposeMaterialMachine(IteratorRange<RenderCore::Assets::ScaffoldCmdIterator> matMachine)
 	{
 		MatMachineDecompositionHelper result;
@@ -885,10 +900,7 @@ namespace RenderCore { namespace Techniques
 			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachShaderResourceBindings) {
 				assert(resHasParameters.GetCount() == 0);
 				assert(!cmd.RawData().empty());
-				auto& shaderResourceParameterBox = *(const ParameterBox*)cmd.RawData().begin();
-				// Append the "RES_HAS_" constants for each resource that is both in the descriptor set and that we have a binding for
-				for (const auto&r:shaderResourceParameterBox)
-					resHasParameters.SetParameter(std::string{"RES_HAS_"} + r.Name().AsString(), 1);
+				AddResHasSelectors(resHasParameters, *(const ParameterBox*)cmd.RawData().begin());
 			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachStateSet) {
 				assert(cmd.RawData().size() == sizeof(RenderCore::Assets::RenderStateSet));
 				result._stateSet = *(const RenderCore::Assets::RenderStateSet*)cmd.RawData().begin();
