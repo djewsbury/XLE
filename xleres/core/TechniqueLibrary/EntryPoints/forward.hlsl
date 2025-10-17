@@ -15,7 +15,7 @@ float4 frameworkEntry(
 	float4 position : SV_Position,
 	float3 worldPosition : WORLDPOSITION,
 	float3 worldVertexNormal : NORMAL,
-	float3 worldViewVector : WORLDVIEWVECTOR,
+	// float3 worldViewVector : WORLDVIEWVECTOR,
 	SystemInputs sys : SYSTEMINPUTS) : SV_Target0
 {
 	// note -- early rejection isn't supported
@@ -23,7 +23,7 @@ float4 frameworkEntry(
 	const bool hasNormal = true;		// todo -- can't detect when there is no normal
 	float3 result =
 		CalculateIllumination(
-			sample, normalize(worldViewVector), worldPosition, worldVertexNormal,
+			sample, normalize(SysUniform_GetWorldSpaceView()-worldPosition), worldPosition, worldVertexNormal,
 			NDCDepthToLinear0To1(position.z),
 			LightScreenDest_Create(int2(position.xy), GetSampleIndex(sys)), 
 			hasNormal);

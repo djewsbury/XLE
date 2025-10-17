@@ -36,7 +36,7 @@ namespace ConsoleRig
 	void            Console::Execute(const std::string& str)
 	{
 		if (!_pimpl->_lastLineComplete) Print("\n");
-		Print(Concatenate("{Color:af3f7f}> {Color:7F7F7F}", str, "\n"));
+		Print(Concatenate("{Color:3f3f3f}> {Color:7F7F7F}", str, "\n"));
 		if (auto L = LockScriptingState(); L._interface) {
 			TRY {
 				L._interface->Execute(str);

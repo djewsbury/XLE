@@ -587,7 +587,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void ToneMapAcesOperator::SetPreciseRadius(float radius)
 	{
-		if (_desc._broadBloomMaxRadius <= 0.f)
+		if (!_desc._enablePreciseBloom)
 			Throw(std::runtime_error("Cannot set small bloom radius because this feature was disabled in the operator desc"));
 		_brightPassSmallRadius = radius;
 		auto& brightPassParams = *(CB_BrightPassParams*)PtrAdd(_paramsData.data(), _alignedParamsSize);
