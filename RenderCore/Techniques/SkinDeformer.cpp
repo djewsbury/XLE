@@ -434,7 +434,6 @@ namespace RenderCore { namespace Techniques
 					jointMatrixSrc,
 					sizeof(Float3x4)*_jointMatricesInstanceStride);
 			}
-			auto beginAndEndInResource = temporaryMapping.GetBeginAndEndInResource();
 			jointMatricesBuffer = temporaryMapping.AsResourceView();
 		}
 

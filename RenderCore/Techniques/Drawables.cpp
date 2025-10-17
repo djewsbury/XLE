@@ -96,6 +96,7 @@ namespace RenderCore { namespace Techniques
 		Metal::BoundUniforms* currentBoundUniforms = nullptr;
 		unsigned idx = 0;
 		const ICompiledPipelineLayout* currentPipelineLayout = &initialPipelineLayout;
+		unsigned currentDeformIndex = 0; bool watchDeformIndex = false;
 
 		Metal::CapturedStates capturedStates;
 		encoder.BeginStateCapture(capturedStates);
@@ -164,7 +165,8 @@ namespace RenderCore { namespace Techniques
 				////////////////////////////////////////////////////////////////////////////// 
 			
 				VertexBufferView vbv[4];
-				if (drawable._geo != currentGeo && drawable._geo) {
+				if (((drawable._geo != currentGeo) | (watchDeformIndex & (drawable._deformInstanceIdx != currentDeformIndex))) & (drawable._geo != nullptr)) {
+					watchDeformIndex = false;
 					for (unsigned c=0; c<drawable._geo->_vertexStreamCount; ++c) {
 						auto& stream = drawable._geo->_vertexStreams[c];
 						if (stream._type == DrawableGeo::StreamType::Resource) {
@@ -176,6 +178,7 @@ namespace RenderCore { namespace Techniques
 							auto deformVbv = Techniques::Internal::GetOutputVBV(*drawable._geo->_deformAccelerator, drawable._deformInstanceIdx);
 							vbv[c]._resource = deformVbv._resource;
 							vbv[c]._offset = stream._vbOffset + deformVbv._offset;
+							watchDeformIndex = true;
 						} else {
 							assert(stream._type == DrawableGeo::StreamType::PacketStorage);
 							vbv[c]._resource = temporaryVB._res;
@@ -196,6 +199,7 @@ namespace RenderCore { namespace Techniques
 					}
 					assert(parserContext._requiredBufferUploadsCommandList >= drawable._geo->_completionCmdList);	// parser context must be configured for this completion cmd list before getting here
 					currentGeo = drawable._geo;
+					currentDeformIndex = drawable._deformInstanceIdx;
 				}
 
 				//////////////////////////////////////////////////////////////////////////////
