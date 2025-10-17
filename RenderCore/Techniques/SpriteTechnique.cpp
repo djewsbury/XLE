@@ -733,19 +733,23 @@ namespace RenderCore { namespace Techniques
 	#define NDC NDC_POSITIVE_REVERSEZ
 #endif
 
-void LocalToWorld3D(
+void LocalToWorldP3D(
 	out float3 worldPosition : WORLDPOSITION,
 	float3 position : POSITION)
 {
 	worldPosition = position;
 }
 
-void LocalToWorld3D_ViaTransform(
+void LocalToWorldP3D_ViaTransform(
 	out float3 worldPosition : WORLDPOSITION,
 	float3 position : LOCALPOSITION)
 {
 	worldPosition = mul(SysUniform_GetLocalToWorld(), float4(position,1));
 }
+
+void LocalToWorldN3D_ViaTransform(out float3 worldNormal : WORLDNORMAL, float3 normal : NORMAL) { worldNormal = mul(SysUniform_GetLocalToWorld(), float4(normal,0)); }
+void LocalToWorldT3D_ViaTransform(out float4 worldTangent : WORLDTANGENT, float4 tangent : TEXTANGENT) { worldTangent = float4(mul(SysUniform_GetLocalToWorld(), float4(tangent.xyz,0)), tangent.w); }
+void LocalToWorldBT3D_ViaTransform(out float3 worldBitangent : WORLDBITANGENT, float3 bitangent : TEXBITANGENT) { worldBitangent = mul(SysUniform_GetLocalToWorld(), float4(bitangent,0)); }
 
 void WorldToClip3D(
 	out float4 clipPosition : SV_Position,
