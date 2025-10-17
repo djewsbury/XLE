@@ -505,7 +505,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<unsigned>&& vertexMap,
         const char semantic[], unsigned semanticIndex)
     {
-        return InsertStream(~0u, dataSource, std::move(vertexMap), semantic, semanticIndex);
+        return InsertStream(~0u, std::move(dataSource), std::move(vertexMap), semantic, semanticIndex);
     }
 
     unsigned    MeshDatabase::InsertStream(

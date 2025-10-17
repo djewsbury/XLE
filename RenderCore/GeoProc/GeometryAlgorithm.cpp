@@ -334,9 +334,9 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             }
 
             if (atLeastOneGoodTangent && (creationFlags & GenerateTangentFrameFlags::Bitangents)) {
-                auto bitangentsData = CreateRawDataSource(bitangents, Format::R32G32B32A32_FLOAT);
+                auto bitangentsData = CreateRawDataSource(bitangents, Format::R32G32B32_FLOAT);
                 if (equivalenceThreshold != 0.0f) {
-                    Float4* begin = (Float4*)bitangentsData->GetData().begin(), *end = (Float4*)bitangentsData->GetData().end();
+                    Float3* begin = (Float3*)bitangentsData->GetData().begin(), *end = (Float3*)bitangentsData->GetData().end();
                     float quantValue = 1.f/equivalenceThreshold;
                     for (auto& f:MakeIteratorRange(begin, end))
                         f = QuantizeUnitVector(f, quantValue);
