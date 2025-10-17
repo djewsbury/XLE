@@ -826,20 +826,5 @@ namespace RenderCore { namespace LightingEngine
 			[](auto&& input) { return std::move(input); });
 	}
 
-	bool ForwardLightingTechniqueIsCompatible(
-		CompiledLightingTechnique& technique,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const ChainedOperatorDesc* globalOperators)
-	{
-		assert(0);	// todo -- update for chained technique operators
-#if 0
-		auto* lightScene = checked_cast<ForwardPlusLightScene*>(&technique.GetLightScene());
-		return lightScene->IsCompatible(resolveOperators, shadowGenerators, ambientLightOperator);
-#else
-		return false;
-#endif
-	}
-
 }}
 

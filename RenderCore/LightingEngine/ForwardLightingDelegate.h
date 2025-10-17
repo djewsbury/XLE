@@ -38,11 +38,6 @@ namespace RenderCore { namespace LightingEngine
 		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit);
 
-	bool ForwardLightingTechniqueIsCompatible(
-		CompiledLightingTechnique& technique,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const ChainedOperatorDesc* globalOperators);
 
 
 

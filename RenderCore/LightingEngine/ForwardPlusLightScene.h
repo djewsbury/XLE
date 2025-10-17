@@ -45,10 +45,6 @@ namespace RenderCore { namespace LightingEngine
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override;
 		virtual void* QueryInterface(uint64_t typeCode) override;
 
-		bool IsCompatible(
-			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-			IteratorRange<const ShadowOperatorDesc*> shadowGenerators);
-
 		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 
 		struct ShadowPreparerIdMapping

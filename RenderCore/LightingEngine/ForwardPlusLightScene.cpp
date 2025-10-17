@@ -299,37 +299,6 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
-#if 0
-	bool ForwardPlusLightScene::IsCompatible(
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
-		const AmbientLightOperatorDesc& ambientLightOperator)
-	{
-		// returns true iff the given operators are exactly compatible with ours, and in the same order
-		// this is typically used to determine when we need to rebuild the lighting techniques in response
-		// to a configuration change
-		if (_shadowPreparerIdMapping._operatorToShadowPreparerId.size() != shadowGenerators.size()) return false;
-		if (_positionalLightOperators.size() != resolveOperators.size()) return false;
-
-		for (unsigned c=0; c<_shadowPreparerIdMapping._operatorToShadowPreparerId.size(); ++c) {
-			auto preparerId = _shadowPreparerIdMapping._operatorToShadowPreparerId[c];
-			if (preparerId == ~0u) continue;
-			if (c >= shadowGenerators.size()) return false;
-			if (_shadowPreparers->_preparers[preparerId]._desc.GetHash() != shadowGenerators[c].GetHash()) return false;
-		}
-		if (_shadowPreparerIdMapping._operatorForStaticProbes != ~0u) {
-			if (_shadowPreparerIdMapping._operatorForStaticProbes >= shadowGenerators.size()) return false;
-			auto cfg = MakeShadowProbeConfiguration(shadowGenerators[_shadowPreparerIdMapping._operatorForStaticProbes]);
-			if (!(cfg == _shadowPreparerIdMapping._shadowProbesCfg)) return false;
-		}
-		for (unsigned c=0; c<_positionalLightOperators.size(); ++c) {
-			if (resolveOperators[c].GetHash() != _positionalLightOperators[c].GetHash())
-				return false;
-		}
-		return true;
-	}
-#endif
-
 	ForwardPlusLightScene::ForwardPlusLightScene()
 	{
 		_ambientLight = std::make_shared<AmbientLightConfig>();
