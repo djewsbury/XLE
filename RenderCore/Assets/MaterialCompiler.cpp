@@ -385,6 +385,7 @@ namespace RenderCore { namespace Assets
 			auto o1 = construction->_materialFileOverrides.begin();
 			auto o2 = construction->_futureMaterialOverrides.begin();
 			auto o3 = construction->_futureMaterialSetOverrides.begin();
+			auto o4 = construction->_futurePredefinedDescriptorSetOverrides.begin();
 			for (unsigned overrideIdx=0; overrideIdx<construction->_nextOverrideIdx; ++overrideIdx) {
 
 				if (o0 != construction->_inlineMaterialOverrides.end() && o0->first._overrideIdx == overrideIdx) {
@@ -407,7 +408,7 @@ namespace RenderCore { namespace Assets
 
 				} else if (o2 != construction->_futureMaterialOverrides.end() && o2->first._overrideIdx == overrideIdx) {
 					if (o2->first._application == 0 || o2->first._application == guid)
-						partialMaterials.push_back(o2->second->ShareFuture());
+						partialMaterials.push_back(o2->second);
 					++o2;
 				} else if (o3 != construction->_futureMaterialSetOverrides.end() && o3->first._overrideIdx == overrideIdx) {
 					if (o3->first._application == 0 || o3->first._application == guid) {
@@ -424,6 +425,10 @@ namespace RenderCore { namespace Assets
 						partialMaterials.emplace_back(std::move(futureMaterial));
 					}
 					++o3;
+				} else if (o4 != construction->_futurePredefinedDescriptorSetOverrides.end() && o4->first._overrideIdx == overrideIdx) {
+					if (o4->first._application == 0 || o4->first._application == guid)
+						partialMaterialDescriptorSets.push_back(o4->second);
+					++o4;
 				}
 
 			}
@@ -471,7 +476,7 @@ namespace RenderCore { namespace Assets
 		std::promise<sp<CompiledMaterialSet>>&& promise,
 		sp<MaterialSetConstruction> construction)
 	{
-		if (auto* marker = std::get_if<PtrToMarkerToMaterialSet>(&construction->_baseMaterials)) {
+		if (auto* marker = std::get_if<FutureMaterialSet>(&construction->_baseMaterials)) {
 			::Assets::WhenAll(*marker).ThenConstructToPromise(
 				std::move(promise),
 				[construction=std::move(construction)](const auto& sourceModelConfiguration) {
@@ -569,7 +574,7 @@ namespace RenderCore { namespace Assets
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void MaterialSetConstruction::SetBaseMaterials(PtrToMarkerToMaterialSet&& futureBaseMaterials)
+	void MaterialSetConstruction::SetBaseMaterials(FutureMaterialSet&& futureBaseMaterials)
 	{
 		_baseMaterials = std::move(futureBaseMaterials);
 		_disableHash = true;
@@ -592,9 +597,16 @@ namespace RenderCore { namespace Assets
 		_hash = 0;
 	}
 
-	void MaterialSetConstruction::AddOverride(StringSection<> application, PtrToMarkerToMaterial&& mat)
+	void MaterialSetConstruction::AddOverride(StringSection<> application, FutureMaterial&& mat)
 	{
 		_futureMaterialOverrides.emplace_back(Override{MakeMaterialGuid(application), _nextOverrideIdx++}, std::move(mat));
+		_disableHash = true;
+		_hash = 0;
+	}
+
+	void MaterialSetConstruction::AddOverride(StringSection<> application, FuturePredefinedDescriptorSet&& descSet)
+	{
+		_futurePredefinedDescriptorSetOverrides.emplace_back(Override{MakeMaterialGuid(application), _nextOverrideIdx++}, std::move(descSet));
 		_disableHash = true;
 		_hash = 0;
 	}
@@ -611,14 +623,21 @@ namespace RenderCore { namespace Assets
 		_hash = 0;
 	}
 
-	void MaterialSetConstruction::AddOverride(PtrToMarkerToMaterial&& mat)
+	void MaterialSetConstruction::AddOverride(FutureMaterial&& mat)
 	{
 		_futureMaterialOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
 		_disableHash = true;
 		_hash = 0;
 	}
 
-	void MaterialSetConstruction::AddOverride(PtrToMarkerToMaterialSet&& mat)
+	void MaterialSetConstruction::AddOverride(FuturePredefinedDescriptorSet&& descSet)
+	{
+		_futurePredefinedDescriptorSetOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(descSet));
+		_disableHash = true;
+		_hash = 0;
+	}
+
+	void MaterialSetConstruction::AddOverride(FutureMaterialSet&& mat)
 	{
 		_futureMaterialSetOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
 		_disableHash = true;
