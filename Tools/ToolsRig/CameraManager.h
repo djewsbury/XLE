@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../../Math/Matrix.h"
+#include <optional>
 
 namespace RenderCore { namespace Techniques { class CameraDesc; } }
 namespace PlatformRig { enum class ProcessInputResult; }
@@ -62,6 +63,7 @@ namespace ToolsRig { namespace Camera
 		float _orbitRotationSpeed = (1.f / 768.f) * gPI;
 		float _wheelTranslateSpeed = 1.f / 512.f;
 		float _wheelOrthoWindowSpeed = 1.f / 512.f;
+		std::optional<Slew> _slew;
 	};
 
 	struct CharacterCam
@@ -75,10 +77,11 @@ namespace ToolsRig { namespace Camera
 
 	struct OrthogonalFlatCam
 	{
-		void Update(VisCameraSettings& camera, const OSServices::InputSnapshot& input, const Float2& projSpaceMouseOver) const;
+		void Update(VisCameraSettings& camera, float dt, const OSServices::InputSnapshot& input, const Float2& projSpaceMouseOver) const;
 
 		Manipulator::Mode _mode = Manipulator::Mode::Blender_RightButton;
 		float _translationSpeed = 0.01f;
+		std::optional<Slew> _slew;
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////

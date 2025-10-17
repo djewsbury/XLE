@@ -24,7 +24,7 @@ namespace ToolsRig { namespace Camera
 		//      *	-Z into the screen
 		//
 
-	static std::tuple<float, float, Float3> SlewUpdateInternal(const Slew& slew, float dt, const OSServices::InputSnapshot& input)
+	static std::tuple<float, float, Float3> SlewUpdateInternal(const Slew& slew, float dt, const OSServices::InputSnapshot& input, bool allowMouse = true)
 	{
 		constexpr auto shift        = "shift"_key;
 		constexpr auto ctrl         = "control"_key;
@@ -65,9 +65,9 @@ namespace ToolsRig { namespace Camera
 		deltaPos[1] *= dt * moveSpeedY;
 		deltaPos[2] *= dt * moveSpeedZ;
 
-		auto mouseX = input._mouseDelta[0], mouseY = input._mouseDelta[1];
 		const bool rightButton      = input.IsHeld_RButton();
-		if (rightButton) {
+		if (allowMouse && rightButton) {
+			auto mouseX = input._mouseDelta[0], mouseY = input._mouseDelta[1];
 			float mouseSensitivity = -0.01f * std::max(0.01f, slew._mouseSensitivity);
 			mouseSensitivity    *= gPI / 180.0f;
 			deltaCameraYaw      +=  mouseX * mouseSensitivity; 
@@ -104,11 +104,11 @@ namespace ToolsRig { namespace Camera
 		cameraToWorld = Expand(rotationPart, camPos);
 	}
 
-	void Slew::Update(VisCameraSettings& camera, float dt, const OSServices::InputSnapshot& input) const
+	static void SlewUpdateInternal2(const Slew& slew, VisCameraSettings& camera, float dt, const OSServices::InputSnapshot& input, bool allowMouse = true)
 	{
 		Float3 deltaPos;
 		float deltaCameraYaw, deltaCameraPitch;
-		std::tie(deltaCameraYaw, deltaCameraPitch, deltaPos) = SlewUpdateInternal(*this, dt, input);
+		std::tie(deltaCameraYaw, deltaCameraPitch, deltaPos) = SlewUpdateInternal(slew, dt, input, allowMouse);
 
 		// deltaCameraYaw & pitch modify the position of the focus, relative to the position
 		auto spherical = CartesianToSpherical(camera._focus - camera._position);
@@ -125,6 +125,11 @@ namespace ToolsRig { namespace Camera
 		auto trans = TransformDirectionVector(cameraToWorld, Float3(deltaPos));
 		camera._position += trans;
 		camera._focus += trans;
+	}
+
+	void Slew::Update(VisCameraSettings& camera, float dt, const OSServices::InputSnapshot& input) const
+	{
+		SlewUpdateInternal2(*this, camera, dt, input);
 	}
 
 	static std::tuple<float, float, Float3> OrbitUpdateInternal(const Orbit& orbit, float dt, const OSServices::InputSnapshot& input, float distanceToFocus)
@@ -224,7 +229,7 @@ namespace ToolsRig { namespace Camera
 		camera._focus += cameraFocusDrift;
 	}
 
-	void OrthogonalFlatCam::Update(VisCameraSettings& camera, const OSServices::InputSnapshot& input, const Float2& projSpaceMouseOver) const
+	void OrthogonalFlatCam::Update(VisCameraSettings& camera, float dt, const OSServices::InputSnapshot& input, const Float2& projSpaceMouseOver) const
 	{
 		assert(camera._projection == VisCameraSettings::Projection::Orthogonal);
 
@@ -273,6 +278,8 @@ namespace ToolsRig { namespace Camera
 			camera._top = LinearInterpolate(projSpaceMouseOver[1], camera._top, scale);
 			camera._bottom = LinearInterpolate(projSpaceMouseOver[1], camera._bottom, scale);
 		}
+
+		if (_slew) SlewUpdateInternal2(*_slew, camera, dt, input, false);		// keyboard (but not mouse) slew
 	}
 
 	void UnitCam::Update(VisCameraSettings& camera, const Float3x4& playerCharacterLocalToWorld, float dt, const OSServices::InputSnapshot& input) const
@@ -416,6 +423,8 @@ namespace ToolsRig { namespace Camera
 			Float3 translation = movement * Normalize(camera._focus - camera._position);
 			camera._position += translation;
 		}
+
+		if (_slew) SlewUpdateInternal2(*_slew, camera, dt, input, false);		// keyboard (but not mouse) slew
 	}
 
 	void Manipulator::Update(Float4x4& cameraToWorld, float& fov, float distanceToFocus, float dt, const OSServices::InputSnapshot& input) const
