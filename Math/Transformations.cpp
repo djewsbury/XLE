@@ -859,7 +859,7 @@ namespace XLEMath
         // lhs(3,0) = lhs(3,0) * rhs00;
         // lhs(3,1) =                      lhs(3,1) * rhs11;
         // lhs(3,2) =                                          lhs(3,2) * rhs22;
-        lhs(3,3) = lhs(3,0) * rhs03 +   lhs(3,1) * rhs13 +  lhs(3,2) * rhs23 +      lhs(3,3) * rhs33;
+        // lhs(3,3) = lhs(3,0) * rhs03 +   lhs(3,1) * rhs13 +  lhs(3,2) * rhs23 +      lhs(3,3) * rhs33;
     }
 
     void Combine_IntoLHS(Float3x4& transform, const Float3& translate)

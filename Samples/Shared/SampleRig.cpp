@@ -113,6 +113,7 @@ namespace Sample
 		devFeatures._installDefaultDebuggingDisplays = true;
 		devFeatures._useFrameRigSystemDisplay = true;
 		devFeatures._installHotKeysHandler = true;
+		devFeatures._installLuaConsoleInterface = true;
 		devFeatures.Apply(globals);
 		InstallSampleDebuggingDisplays(globals);
 
