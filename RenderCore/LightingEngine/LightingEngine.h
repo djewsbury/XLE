@@ -130,6 +130,7 @@ namespace RenderCore { namespace LightingEngine
 
 	class ILightScene;
 	ILightScene& GetLightScene(CompiledLightingTechnique&);
+	ILightScene* TryGetLightScene(CompiledLightingTechnique&);
 	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique&);
 	IteratorRange<const Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments(CompiledLightingTechnique&);
 	namespace Internal { void* QueryInterface(CompiledLightingTechnique&, uint64_t typeCode); }

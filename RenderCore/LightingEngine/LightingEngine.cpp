@@ -495,6 +495,11 @@ namespace RenderCore { namespace LightingEngine
 		return *interf;
 	}
 
+	ILightScene* TryGetLightScene(CompiledLightingTechnique& technique)
+	{
+		return (ILightScene*)technique._queryInterfaceHelper(TypeHashCode<ILightScene>);
+	}
+
 	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique& technique)
 	{
 		return technique.GetDependencyValidation();
