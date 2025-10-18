@@ -458,13 +458,18 @@ namespace PlatformRig
 	public:
 		void Execute(StringSection<> str) override
 		{
-			luaL_loadbuffer(_state.L, str.begin(), str.size(), {});
+			luaL_loadbuffer(L, str.begin(), str.size(), {});
 
-			int errorCode = _state.PCall(0, 0);
+			int errorCode;
+			if (_customState) {
+				errorCode = _customState->PCall(0, 0);
+			} else
+				errorCode = lua_pcall(L,0,0,0);
+
 			if (errorCode != LUA_OK) {
-				if (const char* msg = lua_tostring(_state.L, -1)) {
+				if (const char* msg = lua_tostring(L, -1)) {
 					std::string msgCopy = msg;
-					lua_pop(_state.L, 1);
+					lua_pop(L, 1);
 					Throw(std::runtime_error(std::move(msg)));
 				} else {
 					Throw(std::runtime_error("lua error code: " + std::to_string(errorCode)));
@@ -478,7 +483,6 @@ namespace PlatformRig
 				//      Separate the input string into parts with "." or ":"
 				//      these are tables, etc, we should look up
 				//
-			auto L = _state.L;
 			DEBUG_ONLY(int stackSizeStart2 = lua_gettop(L));
 			lua_pushglobaltable(L);
 			int tablesPushed = 1;
@@ -514,12 +518,14 @@ namespace PlatformRig
 
 		lua_State* GetLuaState() override
 		{
-			return _state.L;
+			return L;
 		}
 
 		LuaScriptingInterface(std::shared_ptr<ConsoleRig::ConsoleVariableStorage> cvars)
 		{
-			_consoleVariableBridge = std::make_shared<LuaConsoleVariableBridge>(cvars, _state.L);
+			_customState = std::make_shared<LuaState>();
+			L = _customState->L;
+			_consoleVariableBridge = std::make_shared<LuaConsoleVariableBridge>(cvars, L);
 
 			// HACK --  getting some memory allocation problems across DLL boundaries sometimes
 			//          It seems to be resolved if we allocate the first console variable in the
@@ -528,12 +534,19 @@ namespace PlatformRig
 			// _dummyVar = ConsoleVariable<int>("dummy", _dummyValue);
 		}
 
+		LuaScriptingInterface(lua_State* l, std::shared_ptr<ConsoleRig::ConsoleVariableStorage> cvars)
+		: L(l)
+		{
+			_consoleVariableBridge = std::make_shared<LuaConsoleVariableBridge>(cvars, L);
+		}
+
 		~LuaScriptingInterface()
 		{
 			// _dummyVar = ConsoleVariable<int>(std::string(), _dummyValue);		// force deregister
 		}
 
-		LuaState _state;
+		lua_State* L;
+		std::shared_ptr<LuaState> _customState;
 		std::shared_ptr<LuaConsoleVariableBridge> _consoleVariableBridge;
 
 		// int _dummyValue;
@@ -543,6 +556,11 @@ namespace PlatformRig
 	std::shared_ptr<ConsoleRig::IConsoleScriptingInterface> CreateLuaScripting(std::shared_ptr<ConsoleRig::ConsoleVariableStorage> cvars)
 	{
 		return std::make_shared<LuaScriptingInterface>(std::move(cvars));
+	}
+
+	std::shared_ptr<ConsoleRig::IConsoleScriptingInterface> CreateLuaScripting(lua_State* L, std::shared_ptr<ConsoleRig::ConsoleVariableStorage> cvars)
+	{
+		return std::make_shared<LuaScriptingInterface>(L, std::move(cvars));
 	}
 
 			//////   B A S I C   L U A   B E H A V I O U R   //////

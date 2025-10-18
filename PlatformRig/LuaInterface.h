@@ -11,6 +11,7 @@ typedef struct lua_State lua_State;
 namespace PlatformRig
 {
 	std::shared_ptr<ConsoleRig::IConsoleScriptingInterface> CreateLuaScripting(std::shared_ptr<ConsoleRig::ConsoleVariableStorage>);
+	std::shared_ptr<ConsoleRig::IConsoleScriptingInterface> CreateLuaScripting(lua_State*, std::shared_ptr<ConsoleRig::ConsoleVariableStorage>);
 
 	class ILuaScriptInterface
 	{
