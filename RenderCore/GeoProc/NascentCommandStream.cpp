@@ -25,17 +25,16 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 	unsigned    NascentAnimationSet::AddParameter(StringOrHash parameterName, AnimSamplerComponent parameterComponent, AnimSamplerType samplerType)
 	{
-		size_t parameterIndex = _parameterInterfaceDefinition.size();
 		auto i = std::find_if( 
 			_parameterInterfaceDefinition.cbegin(), _parameterInterfaceDefinition.cend(), 
 			[parameterName, parameterComponent](const auto& q) { return q._name == parameterName && q._component == parameterComponent; });
 		if (i!=_parameterInterfaceDefinition.end()) {
 			assert(i->_samplerType == samplerType);
-			parameterIndex = (unsigned)std::distance(_parameterInterfaceDefinition.cbegin(), i);
+			return (unsigned)std::distance(_parameterInterfaceDefinition.cbegin(), i);
 		} else {
 			_parameterInterfaceDefinition.push_back({parameterName, parameterComponent, samplerType});
+			return unsigned(_parameterInterfaceDefinition.size()-1);
 		}
-		return parameterIndex;
 	}
 
 	void    NascentAnimationSet::NascentBlock::AddConstantDriver( 

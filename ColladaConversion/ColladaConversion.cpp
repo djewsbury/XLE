@@ -148,7 +148,8 @@ namespace ColladaConversion
 		const ::ColladaConversion::URIResolveContext& resolveContext)
 	{
 		auto mati = geoBlockMatBindings.find(geoId);
-		assert(mati != geoBlockMatBindings.end());
+		if (mati == geoBlockMatBindings.end())
+			Throw(std::runtime_error("Missing material bindings while looking up geoId"));
 
 		auto materials = BuildMaterialTableStrings(
 			materialBindings,
@@ -372,7 +373,7 @@ namespace ColladaConversion
 		auto skinningSkeletons = CollateSkeletonRoots(input, *scene, roots, configuration);
 		auto embeddedSkeleton = ConvertSkeleton(input, *scene, skinningSkeletons, MakeIteratorRange(roots));
 		if (skinningSkeletons.size() != 1)
-			Throw(std::runtime_error("Optimization for multiple skeletons not supported"));
+			Log(Warning) << "Multiple skeletons detected: in this case, all skeletons are optimized using the skeleton rules applying to the first one" << std::endl;
 		OptimizeSkeleton(embeddedSkeleton, model, skinningSkeletons.front()._skeletonRules);
 
 		return { model.SerializeToChunks("skin", embeddedSkeleton, configuration), input.GetDependencyValidation() };
@@ -468,7 +469,7 @@ namespace ColladaConversion
 		auto skinningSkeletons = CollateSkeletonRoots(input, scene, roots, cfg);
 		auto result = ConvertSkeleton(input, scene, skinningSkeletons, MakeIteratorRange(roots));
 		if (skinningSkeletons.size() != 1)
-			Throw(std::runtime_error("Optimization for multiple skeletons not supported"));
+			Log(Warning) << "Multiple skeletons detected: in this case, all skeletons are optimized using the skeleton rules applying to the first one" << std::endl;
 		OptimizeSkeleton(result, skinningSkeletons.front()._skeletonRules);
 
 		return result;
@@ -617,6 +618,7 @@ namespace ColladaConversion
 		}
 
 		// Always load a .model file next to the input file -- this might contain addition configuration options
+		// note -- this isn't working when using absolute paths with a windows drive name. The ':' in the path confuses the ConfigFileContainer loader
 		::Assets::DependencyValidation modelCfgFileDepVal;
 		{
 			auto cfgFileName = split.StemPathAndFilename().AsString() + ".model";

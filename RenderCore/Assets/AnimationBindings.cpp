@@ -69,7 +69,7 @@ namespace RenderCore { namespace Assets
 			if (result[c] == ~0u)
 				for (size_t c2=0; c2<secondaryOutput._outputMatrixNameCount; ++c2)
 					if (secondaryOutput._outputMatrixNames[c2] == name) {
-						result[c] = unsigned(c2) + primaryOutput._outputMatrixNameCount;
+						result[c] = unsigned(c2 + primaryOutput._outputMatrixNameCount);
 						break;
 					}
 		}
@@ -217,6 +217,10 @@ namespace RenderCore { namespace Assets
 			const Type& defaultValue,
 			unsigned animParameterIndex, AnimSamplerType samplerType)
 	{
+		// We can hit this assert when a single animation parameter is used multiple times in the same skeleton
+		// This might happen if there are multiple source skeletons (in the original authored file) that overlap
+		// partially or completely. We don't support this case, because combining the multiple skeletons into a single
+		// one would probably produce a more efficient result.
 		assert(bindingRules[animParameterIndex]._outputOffset == ~0u);
 		auto result = bindingRules[animParameterIndex]._outputOffset = (unsigned)outputBlockItemsDefaults.size();
 		bindingRules[animParameterIndex]._samplerType = samplerType;

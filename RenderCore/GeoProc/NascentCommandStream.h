@@ -40,6 +40,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             StringOrHash() = default;
             StringOrHash(const std::string&);
             StringOrHash(uint64_t);
+            StringOrHash(const StringOrHash&) = default;
+            StringOrHash& operator=(const StringOrHash&) = default;
             friend bool operator==(const StringOrHash& lhs, const StringOrHash& rhs);
         };
 
