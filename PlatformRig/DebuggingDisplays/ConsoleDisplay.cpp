@@ -154,11 +154,11 @@ namespace PlatformRig { namespace Overlays
 		} else if (input.IsHeld(pgup)) {
 			if (lineCount > 0) {
 				if (input.IsHeld(ctrl)) {
-					_scrollBack = _console->GetLineCount()-1;
+					_scrollBack = lineCount-1;
 					_scrollBackFractional = 0;
 				} else {
 					if ((_scrollBackFractional % 3) == 0) {
-						_scrollBack = std::min(_console->GetLineCount()-1, _scrollBack+1u);
+						_scrollBack = std::min(lineCount-1, _scrollBack+1u);
 					}
 					++_scrollBackFractional;
 				}

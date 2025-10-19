@@ -25,42 +25,20 @@ namespace ConsoleRig
 	public:
 		std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>> _lines;
 		bool _lastLineComplete;
+		Threading::Mutex _linesMutex;
 		std::shared_ptr<ConsoleVariableStorage> _cvars;
 
 		std::mutex _scriptingInterfaceMutex;
 		std::vector<std::shared_ptr<IConsoleScriptingInterface>> _scriptingInterfaces;
+
+		void Print_AlreadyLocked(StringSection<> message);
 	};
 
-	Console*        Console::s_instance = nullptr;
-
-	void            Console::Execute(const std::string& str)
+	void Console::Pimpl::Print_AlreadyLocked(StringSection<> message)
 	{
-		if (!_pimpl->_lastLineComplete) Print("\n");
-		Print(Concatenate("{Color:3f3f3f}> {Color:7F7F7F}", str, "\n"));
-		if (auto L = LockScriptingState(); L._interface) {
-			TRY {
-				L._interface->Execute(str);
-			} CATCH(std::exception& e) {
-				if (!_pimpl->_lastLineComplete) Print("\n");
-				Print(Concatenate(e.what(), "\n"));
-			} CATCH_END
-		} else
-			Print("No scripting interface available\n");
-	}
-
-	std::vector<std::string>    Console::AutoComplete(const std::string& input)
-	{
-		if (auto L = LockScriptingState(); L._interface)
-			return L._interface->AutoComplete(input);
-		return {};
-	}
-
-	void            Console::Print(StringSection<> message)
-	{
-		if (!this) return;  // hack!
 		size_t currentOffset = 0;
 		size_t stringLength = message.size();
-		bool lastLineComplete = _pimpl->_lastLineComplete;
+		bool lastLineComplete = _lastLineComplete;
 		const char newlineChars[] = "\r\n";
 		auto now = std::chrono::steady_clock::now();
 
@@ -78,11 +56,11 @@ namespace ConsoleRig
 			}
 
 			if (end > start) {
-				if (!lastLineComplete && !_pimpl->_lines.empty()) {
-					_pimpl->_lines.back().second = Concatenate(_pimpl->_lines.back().second, MakeStringSection(message.begin()+start, message.begin()+end));
-					_pimpl->_lines.back().first = now;
+				if (!lastLineComplete && !_lines.empty()) {
+					_lines.back().second = Concatenate(_lines.back().second, MakeStringSection(message.begin()+start, message.begin()+end));
+					_lines.back().first = now;
 				} else {
-					_pimpl->_lines.emplace_back(now, MakeStringSection(message.begin()+start, message.begin()+end).AsString());
+					_lines.emplace_back(now, MakeStringSection(message.begin()+start, message.begin()+end).AsString());
 				}
 			}
 			lastLineComplete = completeLine;
@@ -92,11 +70,48 @@ namespace ConsoleRig
 				++currentOffset;
 		}
 
-		_pimpl->_lastLineComplete = lastLineComplete;
+		_lastLineComplete = lastLineComplete;
+	}
+
+	Console*        Console::s_instance = nullptr;
+
+	void            Console::Execute(const std::string& str)
+	{
+		{
+			ScopedLock(_pimpl->_linesMutex);
+			if (!_pimpl->_lastLineComplete) Print("\n");
+			_pimpl->Print_AlreadyLocked(Concatenate("{Color:3f3f3f}> {Color:7F7F7F}", str, "\n"));
+		}
+
+		if (auto L = LockScriptingState(); L._interface) {
+			TRY {
+				L._interface->Execute(str);
+			} CATCH(std::exception& e) {
+				ScopedLock(_pimpl->_linesMutex);
+				if (!_pimpl->_lastLineComplete) _pimpl->Print_AlreadyLocked("\n");
+				_pimpl->Print_AlreadyLocked(Concatenate(e.what(), "\n"));
+			} CATCH_END
+		} else
+			Print("No scripting interface available\n");
+	}
+
+	std::vector<std::string>    Console::AutoComplete(const std::string& input)
+	{
+		if (auto L = LockScriptingState(); L._interface)
+			return L._interface->AutoComplete(input);
+		return {};
+	}
+
+	void            Console::Print(StringSection<> message)
+	{
+		if (!this) return;  // hack!
+		ScopedLock(_pimpl->_linesMutex);
+		_pimpl->Print_AlreadyLocked(message);
 	}
 
 	std::vector<std::string>    Console::GetLines(unsigned lineCount, unsigned scrollback)
 	{
+		ScopedLock(_pimpl->_linesMutex);
 		std::vector<std::string> result;
 		signed linesToGet = std::max(0, std::min(signed(lineCount), signed(_pimpl->_lines.size())-signed(scrollback)));
 		result.reserve(linesToGet);
@@ -107,6 +122,7 @@ namespace ConsoleRig
 
 	auto Console::GetRecentLines(unsigned maxLineCount, std::chrono::steady_clock::time_point oldest) -> std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>>
 	{
+		ScopedLock(_pimpl->_linesMutex);
 		std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>> result;
 		size_t linesToGet = 0;
 		for (; linesToGet<std::min(size_t(maxLineCount), _pimpl->_lines.size()); ++linesToGet)
@@ -121,6 +137,7 @@ namespace ConsoleRig
 
 	unsigned Console::GetLineCount() const
 	{
+		ScopedLock(_pimpl->_linesMutex);
 		return unsigned(_pimpl->_lines.size());
 	}
 
