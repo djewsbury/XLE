@@ -31,7 +31,7 @@ if(NOT CLIENT_HAS_LUA)
         Lua/src/lbaselib.c
         Lua/src/lbitlib.c
         Lua/src/lcode.c
-        # Lua/src/lcorolib.c
+        Lua/src/lcorolib.c
         Lua/src/lctype.c
         # Lua/src/ldblib.c
         Lua/src/ldebug.c
