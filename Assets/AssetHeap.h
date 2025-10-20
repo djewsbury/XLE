@@ -91,7 +91,7 @@ namespace Assets
 	};
 
 	template<typename AssetType>
-		static bool IsInvalidated(Marker<AssetType>& future)
+		bool IsInvalidated(Marker<AssetType>& future)
 	{
 		// We must check the "background state" here. If it's invalidated in the
 		// background, we can restart the compile; even if that invalidated state hasn't

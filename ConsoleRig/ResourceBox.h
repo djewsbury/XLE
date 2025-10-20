@@ -9,6 +9,9 @@
 #include "../Assets/Marker.h"
 #include "../Assets/AssetTraits.h"
 #include "../Assets/InitializerPack.h"
+#if defined(_DEBUG)
+	#include "../Assets/AssetHeap.h"		// for IsInvalidated
+#endif
 #include "../OSServices/Log.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/PtrUtils.h"

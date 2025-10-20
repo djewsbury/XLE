@@ -1,4 +1,5 @@
 
+#include "../../Math/Noise.h"
 #include "../../Utility/HeapUtils.h"
 #include <random>
 #include <iostream>
@@ -520,38 +521,6 @@ namespace UnitTests
             REQUIRE(nth_bit_set_parallelpopcount(v, 62) == comparison);
         }
     }
-
-	namespace xoshiro
-	{
-		static inline uint32_t rotl32(uint32_t x, uint32_t k) { return (x << k) | (x >> (32u - k)); }
-
-		struct RNGState { uint32_t s[4]; };
-
-		uint32_t RNGNext(RNGState& state)
-		{
-			const uint32_t result = state.s[0] + state.s[3];
-			const uint32_t t = state.s[1] << 9u;
-
-			state.s[2] ^= state.s[0];
-			state.s[3] ^= state.s[1];
-			state.s[1] ^= state.s[2];
-			state.s[0] ^= state.s[3];
-
-			state.s[2] ^= t;
-
-			state.s[3] = rotl32(state.s[3], 11u);
-
-			return result;
-		}
-
-		void RNGInitialize(RNGState& state, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
-		{
-			state.s[0] = a;
-			state.s[1] = b;
-			state.s[2] = c;
-			state.s[3] = d;
-		}
-	}
 
 	TEST_CASE( "Utilities-NthBitSet-Performance", "[utility]" )
     {
