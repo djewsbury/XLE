@@ -407,6 +407,48 @@ std::optional<std::string> ModalSelectFolderDialog(StringSection<> initialFolder
     return Conversion::Convert<std::string>(wresult);
 }
 
+std::optional<std::string> ModalSaveFileDialog(StringSection<> initialFile)
+{
+    IFileDialog *pfd = nullptr;
+    auto hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
+    if (!SUCCEEDED(hr)) return {};
+    auto cleanup0 = AutoCleanup([pfd]() { pfd->Release(); });
+
+    DWORD dwFlags = 0;
+    hr = pfd->GetOptions(&dwFlags);
+    if (!SUCCEEDED(hr)) return {};
+    hr = pfd->SetOptions(dwFlags | FOS_OVERWRITEPROMPT);
+    if (!SUCCEEDED(hr)) return {};
+
+    if (!initialFile.IsEmpty()) {
+        std::wstring winitial = Conversion::Convert<std::wstring>(initialFile);
+        IShellItem *psi = nullptr;
+        hr = SHCreateItemFromParsingName(winitial.c_str(), nullptr, IID_PPV_ARGS(&psi));
+        if (SUCCEEDED(hr)) {
+            hr = pfd->SetFolder(psi);
+            assert(SUCCEEDED(hr));
+        }
+        if (psi) psi->Release();
+    }
+
+    hr = pfd->Show(NULL);
+    if (!SUCCEEDED(hr)) return {};
+
+    IShellItem *psiResult;
+    hr = pfd->GetResult(&psiResult);
+    if (!SUCCEEDED(hr)) return {};
+
+    PWSTR pszFilePath = nullptr;
+    hr = psiResult->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
+    if (!SUCCEEDED(hr)) { CoTaskMemFree(pszFilePath); return {}; }
+
+    std::wstring wresult = pszFilePath;
+    CoTaskMemFree(pszFilePath);
+    psiResult->Release();
+
+    return Conversion::Convert<std::string>(wresult);
+}
+
 void MessageUser(StringSection<> text, StringSection<> title)
 {
     ::MessageBoxA(nullptr, text.AsString().c_str(), title.AsString().c_str(), MB_OK);
