@@ -489,6 +489,7 @@ namespace PlatformRig
 
 			auto features = apiInstance.QueryFeatureCapability(c);
 			out << "    GeometryShaders: " << features._geometryShaders << std::endl;
+			out << "    MeshShaders: " << features._meshShaders << std::endl;
 			out << "    ViewInstancingRenderPasses: " << features._viewInstancingRenderPasses << std::endl;
 			out << "    StreamOutput: " << features._streamOutput << std::endl;
 			out << "    DepthBounds: " << features._depthBounds << std::endl;

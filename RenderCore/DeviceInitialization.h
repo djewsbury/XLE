@@ -60,6 +60,7 @@ namespace RenderCore
     public:
         // ShaderStages supported
         bool _geometryShaders = false;
+        bool _meshShaders = false;
 
         // General rendering features
         bool _viewInstancingRenderPasses = false;

@@ -601,6 +601,14 @@ namespace RenderCore { namespace ImplVulkan
 		return str;
 	}
 
+	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceMeshShaderFeaturesEXT & features)
+	{
+		str << "Mesh Shader Features" << std::endl;
+		str << "Task Shaders :" << (features.taskShader?"enabled":"disabled") << ", Mesh shaders: " << (features.meshShader?"enabled":"disabled") << ", Multi-view mesh shader: " << (features.multiviewMeshShader?"enabled":"disabled") << std::endl;
+		str << "Primitive fragment shading :" << features.primitiveFragmentShadingRateMeshShader << ", Mesh shader queries: " << features.meshShaderQueries << std::endl;
+		return str;
+	}
+
 	static std::ostream& operator<<(std::ostream& str, const VkPhysicalDeviceVulkan12Features& features)
 	{
 		std::vector<const char*> enabledFeatures;
@@ -1191,6 +1199,10 @@ namespace RenderCore { namespace ImplVulkan
 					break;
 #endif
 
+				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT:
+					str << *(VkPhysicalDeviceMeshShaderFeaturesEXT*)pNextChain << std::endl;
+					break;
+
 				case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2:
 					assert(0);
 				default:
@@ -1334,6 +1346,14 @@ namespace RenderCore { namespace ImplVulkan
 
 		// ShaderStages supported
 		enabledFeatures2.features.geometryShader = xleFeatures._geometryShaders;
+
+		VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures = {};
+		if (xleFeatures._meshShaders) {
+			meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+			meshShaderFeatures.taskShader = meshShaderFeatures.meshShader = true;
+			appender->pNext = (VkBaseInStructure*)&meshShaderFeatures;
+			appender = (VkBaseInStructure*)&meshShaderFeatures;
+		}
 
 		// General rendering features
 		VkPhysicalDeviceMultiviewFeatures multiViewFeatures = {};
@@ -1680,6 +1700,7 @@ namespace RenderCore { namespace ImplVulkan
 		APPEND_STRUCT(VkPhysicalDeviceShaderFloat16Int8Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES);		// (part of vk1.2 core)
 		APPEND_STRUCT(VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES);		// (part of vk1.2 core)
 		APPEND_STRUCT(VkPhysicalDeviceLineRasterizationFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT);		// (part of vk1.1 core)
+		APPEND_STRUCT(VkPhysicalDeviceMeshShaderFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
 
 		#undef APPEND_STRUCT
 
@@ -1695,11 +1716,14 @@ namespace RenderCore { namespace ImplVulkan
 		bool hasLineRasterizationExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_LINE_RASTERIZATION_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasRenderPass2Ext = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasMutableSwapchainFormat = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasMeshShaderExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME); }) != ext._extensions.end();
 
 		DeviceFeatures result;
 
 		// ShaderStages supported
 		result._geometryShaders = features.features.geometryShader;
+		if (hasMeshShaderExt)
+			result._meshShaders = VkPhysicalDeviceMeshShaderFeaturesEXT_inst.meshShader && VkPhysicalDeviceMeshShaderFeaturesEXT_inst.taskShader;
 
 		// General rendering features
 		result._viewInstancingRenderPasses = hasShaderViewportIndex && VkPhysicalDeviceVulkan11Features_inst.multiview;
@@ -1851,6 +1875,7 @@ namespace RenderCore { namespace ImplVulkan
 				APPEND_STRUCT(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
 			#endif
 			APPEND_STRUCT(VkPhysicalDeviceLineRasterizationFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT);
+			APPEND_STRUCT(VkPhysicalDeviceMeshShaderFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
 			vkGetPhysicalDeviceFeatures2(_physicalDevices[configurationIdx]._dev, &features);
 			str << std::endl << "TOGGLEABLE PHYSICAL DEVICE FEATURES" << std::endl;
 			LogPhysicalDeviceFeatures(str, features);
