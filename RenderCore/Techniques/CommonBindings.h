@@ -82,6 +82,7 @@ namespace RenderCore { namespace Techniques
 		constexpr auto BONEWEIGHTS = ConstHash64("BONEWEIGHTS");
 		constexpr auto PER_VERTEX_AO = ConstHash64("PER_VERTEX_AO");
         constexpr auto RADIUS = ConstHash64("RADIUS");
+        constexpr auto LIFETIME = ConstHash64("LIFETIME");
         constexpr auto FONTTABLE = ConstHash64("FONTTABLE");
 
         std::pair<const char*, unsigned> TryDehash(uint64_t);

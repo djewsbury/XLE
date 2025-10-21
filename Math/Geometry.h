@@ -171,7 +171,7 @@ namespace XLEMath
 	// compares p4 to the plane defined by p1, pt2 and p3, and determines what side it is on
 	// NOTE -- a positive result corresponds to a **negative** SignedDistance() from a plane created with PlaneFit
 	//		this is due to our definition of winding order
-	T1(Primitive) inline float Orient3d(const Vector3T<Primitive>& p1, const Vector3T<Primitive>& p2, const Vector3T<Primitive>& p3, const Vector3T<Primitive>& p4)
+	T1(Primitive) inline Primitive Orient3d(const Vector3T<Primitive>& p1, const Vector3T<Primitive>& p2, const Vector3T<Primitive>& p3, const Vector3T<Primitive>& p4)
 	{
 		// See William C. Lenthe's predicates.h for details on precision lost due to the calculations here
 		Vector3T<Primitive> ad = p1 - p4;

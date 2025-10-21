@@ -839,6 +839,31 @@ void ExpandClipSpacePosition(
 	pos3 = float4(inputPos.xy + float2( h, +v), inputPos.zw);
 }
 
+void ExpandClipSpacePosition(
+	out float4 pos0 : SV_Position0,
+	out float4 pos1 : SV_Position1,
+	out float4 pos2 : SV_Position2,
+	out float4 pos3 : SV_Position3,
+	float4 wsCenter : WORLDPOSITION,
+	float3 normal : SPRITENORMAL,
+	float radius : RADIUS,
+	float rotation : ROTATION)
+{
+	float3 up = (abs(normal).y < 0.5f) ? float3(0,1,0) : float3(1,0,0);
+    float3 tangentX = normalize(cross(up, normal));
+    float3 tangentY = cross(normal, tangentX);
+
+	float2 sc; sincos(rotation, sc.x, sc.y);
+	sc *= radius;
+	const float3 h = tangentX * sc.y + tangentY * sc.x;
+	const float3 v = tangentX * sc.x + tangentY * -sc.y;
+
+	pos0 = mul(SysUniform_GetWorldToClip(), float4(wsCenter -h -v, 1));
+	pos1 = mul(SysUniform_GetWorldToClip(), float4(wsCenter -h +v, 1));
+	pos2 = mul(SysUniform_GetWorldToClip(), float4(wsCenter +h -v, 1));
+	pos3 = mul(SysUniform_GetWorldToClip(), float4(wsCenter +h +v, 1));
+}
+
 	)--";
 
 constexpr const char* s_gsTriangleSystemPatches = R"--(
