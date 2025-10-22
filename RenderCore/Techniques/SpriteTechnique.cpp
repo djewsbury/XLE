@@ -758,6 +758,55 @@ void WorldToClip3D(
 	clipPosition = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
 }
 
+#if VERTEX_ID_VIEW_INSTANCING
+	cbuffer MultiViewProperties BIND_SEQ_B4
+	{
+		row_major float4x4 MultiViewWorldToClip[32];
+	}
+	uint GetMultiViewIndex(uint instanceId)
+	{
+		// Find the position of the instanceId'th bit set in the view mask
+		// this has a little processing to the vertex shader, but we gain something
+		// by avoiding having to store an array of view indices in LocalTransform 
+		uint mask = SystemUniforms_GetViewMask();
+		while (instanceId) {
+			mask ^= 1u << firstbithigh(mask);
+			--instanceId;
+		}
+		return firstbithigh(mask);
+	}
+#endif
+
+// WorldToClip3D_ShadowInstancing won't be used yet by the pipeline, because it doesn't
+// understand that it's required when VERTEX_ID_VIEW_INSTANCING is set to true
+// possibly we could force it to be integrated by including SV_InstanceID as an input
+// when VERTEX_ID_VIEW_INSTANCING is enabled?
+void WorldToClip3D_ShadowInstancing(
+	out float4 clipPosition : SV_Postion,
+	out nointerpolation uint renderTargetIndex : SV_RenderTargetArrayIndex,
+	float3 worldPosition : WORLDPOSITION,
+	uint instanceId : SV_InstanceID)
+{
+	#if VERTEX_ID_VIEW_INSTANCING
+		uint viewIdx = GetMultiViewIndex(instanceId);
+		clipPosition = mul(MultiViewWorldToClip[viewIdx], float4(worldPosition,1));
+
+		#if SHADOW_ORTHOGONAL_CLIP_TO_NEAR
+			// this happens to work in orthogonal projections; but we can capture all shadows behind the shadow
+			// camera by preventing the Z value from going behind the near plane.
+			// see more notes in shadow.geo.hlsl
+			// specialized for ReverseZ
+			clipPosition.z = min(1, clipPosition.z);
+		#endif
+
+		// shadow gen requires writing to the SV_RenderTargetArrayIndex variable
+		renderTargetIndex = viewIdx;
+	#else
+		clipPosition = mul(SysUniform_GetWorldToClip(), float4(worldPosition,1));
+		renderTargetIndex = 0;
+	#endif
+}
+
 float4 PixelCoordToSVPosition(float2 pixelCoord)
 {
 	// This is a kind of viewport transform -- unfortunately it needs to

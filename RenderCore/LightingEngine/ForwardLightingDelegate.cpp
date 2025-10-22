@@ -334,7 +334,7 @@ namespace RenderCore { namespace LightingEngine
 			hasSSR, hasSSAO, balanceNoiseTexture);
 
 		result.AddSubpass(
-			std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending, std::move(box),
+			std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Decal|Techniques::BatchFlags::Blending, std::move(box),
 			std::move(resourceDelegate));
 		return result;
 	}

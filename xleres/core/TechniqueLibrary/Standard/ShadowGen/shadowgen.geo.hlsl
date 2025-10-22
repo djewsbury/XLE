@@ -22,8 +22,8 @@
 		// todo -- perhaps do backface removal here to
 		//		quickly reject half of the triangles
 		//		-- but we have to enable/disable it for double sided geometry
-	//if (BackfaceSign(float4(input[0].position.xyz,1), float4(input[1].position.xyz,1), float4(input[2].position.xyz,1)) < 0)
-		//return;
+	if (BackfaceSign(float4(input[0].position.xyz,1), float4(input[1].position.xyz,1), float4(input[2].position.xyz,1)) < 0)
+		return;
 
 	#if VSOUT_HAS_SHADOW_PROJECTION_COUNT == 1
 		#undef FRUSTUM_FILTER

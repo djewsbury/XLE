@@ -582,7 +582,7 @@ namespace RenderCore { namespace LightingEngine
 
 					// prepare-only steps
 					for (const auto&shadowPreparer:captures->_lightScene->_shadowPreparers->_preparers) {
-						mainSequence.CreatePrepareOnlyParseScene(Techniques::BatchFlags::Opaque);
+						mainSequence.CreatePrepareOnlyParseScene(Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Decal|Techniques::BatchFlags::Blending);
 						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
 					}
 
