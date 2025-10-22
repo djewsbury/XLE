@@ -227,6 +227,7 @@ X(Deform/skin.compute.hlsl, __LINE__)
 X(Deform/skin.pipeline, __LINE__)
 X(Deform/deform-entry.compute.hlsl, __LINE__)
 X(Deform/deform-helper.compute.hlsl, __LINE__)
+X(Deform/byte-buffer-helper.hlsl, __LINE__)
 
 X(Objects/default.material.hlsl, __LINE__)
 X(Objects/default.vertex.hlsl, __LINE__)
