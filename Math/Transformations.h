@@ -24,7 +24,7 @@ namespace XLEMath
         //
 
     class UniformScale      { public: float _scale;     explicit UniformScale(float scale) : _scale(scale) {} };
-    class ArbitraryScale    { public: Float3 _scale;    explicit ArbitraryScale(const Float3& scale) : _scale(scale) {} };
+    class ArbitraryScale    { public: Float3 _scale;    explicit ArbitraryScale(const Float3& scale) : _scale(scale) {}; ArbitraryScale(float x, float y, float z) : _scale(x, y, z) {} };
     class RotationX         { public: float _angle;     explicit RotationX(float angle) : _angle(angle) {} };
     class RotationY         { public: float _angle;     explicit RotationY(float angle) : _angle(angle) {} };
     class RotationZ         { public: float _angle;     explicit RotationZ(float angle) : _angle(angle) {} };
@@ -304,6 +304,8 @@ namespace XLEMath
     Float3x4    AsFloat3x4(const Float4x4& orthonormalTransform);
     Float3x4    AsFloat3x4(const UniformScaleYRotTranslation& input);
     Float3x4    AsFloat3x4(const UniformScaleZRotTranslation& input);
+    Float3x4    AsFloat3x4(const ScaleRotationTranslationQ& input);
+    Float3x4    AsFloat3x4(const ScaleRotationTranslationM& input);
 
     Float4x4    AsFloat4x4(const Float2x3& input);
 

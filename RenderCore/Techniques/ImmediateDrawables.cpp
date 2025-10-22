@@ -29,6 +29,21 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static void ApplyUniforms(const ExecuteDrawableContext& drawContext, const RetainedUniformsStream& uniforms)
+	{
+		VLA(const IResourceView*, res, uniforms._resourceViews.size());
+		for (size_t c=0; c<uniforms._resourceViews.size(); ++c) res[c] = uniforms._resourceViews[c].get();
+		VLA_UNSAFE_FORCE(UniformsStream::ImmediateData, immData, uniforms._immediateData.size());
+		for (size_t c=0; c<uniforms._immediateData.size(); ++c) immData[c] = uniforms._immediateData[c];
+		VLA(const ISampler*, samplers, uniforms._samplers.size());
+		for (size_t c=0; c<uniforms._samplers.size(); ++c) samplers[c] = uniforms._samplers[c].get();
+		drawContext.ApplyLooseUniforms(
+			UniformsStream { 
+				MakeIteratorRange(res, &res[uniforms._resourceViews.size()]),
+				MakeIteratorRange(immData, &immData[uniforms._immediateData.size()]),
+				MakeIteratorRange(samplers, &samplers[uniforms._samplers.size()]) });
+	}
+
 	struct DrawableWithVertexCount : public Drawable 
 	{ 
 		unsigned _vertexCount = 0, _vertexStride = 0, _vertexStartLocation = 0, _bytesAllocated = 0;
@@ -40,7 +55,7 @@ namespace RenderCore { namespace Techniques
 		{
 			auto* customDrawable = (DrawableWithVertexCount*)&drawable;
 			if (drawContext.AtLeastOneBoundLooseUniform())
-				customDrawable->ApplyUniforms(drawContext);
+				ApplyUniforms(drawContext, customDrawable->_uniforms);
 			drawContext.Draw(customDrawable->_vertexCount, customDrawable->_vertexStartLocation);
 		};
 
@@ -48,25 +63,37 @@ namespace RenderCore { namespace Techniques
 		{
 			auto* customDrawable = (DrawableWithVertexCount*)&drawable;
 			if (drawContext.AtLeastOneBoundLooseUniform())
-				customDrawable->ApplyUniforms(drawContext);
+				ApplyUniforms(drawContext, customDrawable->_uniforms);
 			drawContext.DrawIndexed(customDrawable->_vertexCount, customDrawable->_vertexStartLocation);
 		};
+	};
 
-	private:
-		void ApplyUniforms(const ExecuteDrawableContext& drawContext)
+	struct DrawableManyWithVertexCount : public Drawable 
+	{ 
+		unsigned _vertexCount = 0, _vertexStride = 0, _vertexStartLocation = 0, _bytesAllocated = 0;
+		DEBUG_ONLY(bool _userGeo = false;)
+		std::vector<RetainedUniformsStream> _uniforms;
+		uint64_t _matHash = ~0ull;
+
+		static void ExecuteFn(ParsingContext&, const ExecuteDrawableContext& drawContext, const Drawable& drawable)
 		{
-			VLA(const IResourceView*, res, _uniforms._resourceViews.size());
-			for (size_t c=0; c<_uniforms._resourceViews.size(); ++c) res[c] = _uniforms._resourceViews[c].get();
-			VLA_UNSAFE_FORCE(UniformsStream::ImmediateData, immData, _uniforms._immediateData.size());
-			for (size_t c=0; c<_uniforms._immediateData.size(); ++c) immData[c] = _uniforms._immediateData[c];
-			VLA(const ISampler*, samplers, _uniforms._samplers.size());
-			for (size_t c=0; c<_uniforms._samplers.size(); ++c) samplers[c] = _uniforms._samplers[c].get();
-			drawContext.ApplyLooseUniforms(
-				UniformsStream { 
-					MakeIteratorRange(res, &res[_uniforms._resourceViews.size()]),
-					MakeIteratorRange(immData, &immData[_uniforms._immediateData.size()]),
-					MakeIteratorRange(samplers, &samplers[_uniforms._samplers.size()]) });
-		}
+			auto* customDrawable = (DrawableManyWithVertexCount*)&drawable;
+			assert(drawContext.AtLeastOneBoundLooseUniform());
+			for (const auto& instance:customDrawable->_uniforms) {
+				ApplyUniforms(drawContext, instance);
+				drawContext.Draw(customDrawable->_vertexCount, customDrawable->_vertexStartLocation);
+			}
+		};
+
+		static void IndexedExecuteFn(ParsingContext&, const ExecuteDrawableContext& drawContext, const Drawable& drawable)
+		{
+			auto* customDrawable = (DrawableManyWithVertexCount*)&drawable;
+			assert(drawContext.AtLeastOneBoundLooseUniform());
+			for (const auto& instance:customDrawable->_uniforms) {
+				ApplyUniforms(drawContext, instance);
+				drawContext.DrawIndexed(customDrawable->_vertexCount, customDrawable->_vertexStartLocation);
+			}
+		};
 	};
 
 	template<typename Chain>
@@ -541,6 +568,42 @@ namespace RenderCore { namespace Techniques
 		return vertexStorage._data;
 	}
 
+	IteratorRange<void*> QueueDrawMany(
+		DrawablesPacket& pkt,
+		size_t vertexCount, size_t vStride,
+		PipelineAccelerator& pipeline,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface,
+		std::vector<RetainedUniformsStream>&& uniforms,
+		Topology topology)
+	{
+		auto vertexDataSize = vertexCount * vStride;
+
+		auto* drawable = pkt._drawables.Allocate<DrawableManyWithVertexCount>();
+		drawable->_drawFn = &DrawableManyWithVertexCount::ExecuteFn;
+		auto* geo = pkt.CreateTemporaryGeo();
+		DrawablesPacket::AllocateStorageResult vertexStorage;
+		if (vertexDataSize) {
+			vertexStorage = pkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
+			geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+			geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
+			geo->_vertexStreamCount = 1;
+		}
+		geo->_ibFormat = Format(0);
+		drawable->_geo = geo;
+		drawable->_pipeline = &pipeline;
+		drawable->_descriptorSet = &prebuiltDescriptorSet;
+		drawable->_vertexCount = (unsigned)vertexCount;
+		drawable->_vertexStride = (unsigned)vStride;
+		drawable->_bytesAllocated = (unsigned)vertexDataSize;
+		drawable->_matHash = "do-not-combine"_h;
+		if (uniformStreamInterface) {
+			drawable->_looseUniformsInterface = uniformStreamInterface;		// note lifetime must be preserved by the caller
+			drawable->_uniforms = std::move(uniforms);
+		}
+		return vertexStorage._data;
+	}
+
 	void QueueDraw(
 		DrawablesPacket& pkt,
 		size_t vertexCount,
@@ -554,6 +617,32 @@ namespace RenderCore { namespace Techniques
 		assert(customGeo._ibFormat == Format(0));		// assuming no index buffer, just a vertex count
 		auto* drawable = pkt._drawables.Allocate<DrawableWithVertexCount>();
 		drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
+		drawable->_geo = &customGeo;
+		drawable->_pipeline = &pipeline;
+		drawable->_descriptorSet = &prebuiltDescriptorSet;
+		drawable->_vertexCount = (unsigned)vertexCount;
+		drawable->_vertexStride = drawable->_bytesAllocated = 0;
+		DEBUG_ONLY(drawable->_userGeo = true;)
+		drawable->_matHash = "do-not-combine"_h;
+		if (uniformStreamInterface) {
+			drawable->_looseUniformsInterface = uniformStreamInterface;		// note lifetime must be preserved by the caller
+			drawable->_uniforms = std::move(uniforms);
+		}
+	}
+
+	void QueueDrawMany(
+		DrawablesPacket& pkt,
+		size_t vertexCount,
+		DrawableGeo& customGeo,
+		PipelineAccelerator& pipeline,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface,
+		std::vector<RetainedUniformsStream>&& uniforms,
+		Topology topology)
+	{
+		assert(customGeo._ibFormat == Format(0));		// assuming no index buffer, just a vertex count
+		auto* drawable = pkt._drawables.Allocate<DrawableManyWithVertexCount>();
+		drawable->_drawFn = &DrawableManyWithVertexCount::ExecuteFn;
 		drawable->_geo = &customGeo;
 		drawable->_pipeline = &pipeline;
 		drawable->_descriptorSet = &prebuiltDescriptorSet;

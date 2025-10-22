@@ -161,6 +161,15 @@ namespace RenderCore { namespace Techniques
 		RetainedUniformsStream&& uniforms = {},
 		Topology topology = Topology::TriangleList);
 
+	IteratorRange<void*> QueueDrawMany(
+		DrawablesPacket& pkt,
+		size_t vertexCount, size_t vertexStride,
+		PipelineAccelerator& pipelineAccelerator,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface,
+		std::vector<RetainedUniformsStream>&& uniforms,			// candidate for subframe heap
+		Topology topology = Topology::TriangleList);
+
 	void QueueDraw(
 		DrawablesPacket& pkt,
 		size_t vertexCount, DrawableGeo& customGeo,
@@ -168,6 +177,15 @@ namespace RenderCore { namespace Techniques
 		DescriptorSetAccelerator& prebuiltDescriptorSet,
 		const UniformsStreamInterface* uniformStreamInterface = nullptr,
 		RetainedUniformsStream&& uniforms = {},
+		Topology topology = Topology::TriangleList);
+
+	void QueueDrawMany(
+		DrawablesPacket& pkt,
+		size_t vertexCount, DrawableGeo& customGeo,
+		PipelineAccelerator& pipelineAccelerator,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface,
+		std::vector<RetainedUniformsStream>&& uniforms,			// candidate for subframe heap
 		Topology topology = Topology::TriangleList);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////

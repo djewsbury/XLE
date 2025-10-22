@@ -118,7 +118,7 @@ namespace RenderCore { namespace Techniques
 
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const CameraDesc& camera);
     SharedPkt MakeLocalTransformPacket(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition);
-    LocalTransformConstants MakeLocalTransform(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition, uint32_t viewMask = 1);
+    LocalTransformConstants MakeLocalTransform(const Float4x4& localToWorld, const Float3& worldSpaceCameraPosition = Float3{0,0,0}, uint32_t viewMask = 1);
 
     ViewportConstants BuildViewportConstants(const ViewportDesc&);
 
