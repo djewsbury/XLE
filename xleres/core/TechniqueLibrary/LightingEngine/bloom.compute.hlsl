@@ -13,7 +13,7 @@
 	Texture2D<float3>		HDRInput : register(t0, space0);
 #endif
 RWTexture2D<float4>		HighResBlurTemp : register(u1, space0);
-RWTexture2D<float4>		MipChainUAV[8] : register(u2, space0);
+RWTexture2D<float4>		MipChainUAV[13] : register(u2, space0);
 Texture2D<float3>		MipChainSRV : register(t3, space0);
 SamplerState 			BilinearClamp : register(s6, space0);
 

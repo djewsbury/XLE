@@ -3,7 +3,7 @@ DescriptorSet Bloom
 {
 	SampledTexture				HDRInput;				// 0
 	UnorderedAccessTexture		HighResBlurTemp;		// 1
-	UnorderedAccessTexture		MipChainUAV[8];			// 2
+	UnorderedAccessTexture		MipChainUAV[13];		// 2
 	SampledTexture				MipChainSRV;			// 3
 	StorageTexelBuffer 			AtomicBuffer;			// 4
 	ConstantBuffer				BloomParameters;		// 5

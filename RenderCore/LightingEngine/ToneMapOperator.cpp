@@ -45,7 +45,7 @@ namespace RenderCore { namespace LightingEngine
 		void CalculateSmallBlurWeights(float radius);
 	};
 
-	static const unsigned s_shaderMipChainUniformCount = 8;		// there's a limit to how many mip levels are actually useful
+	static const unsigned s_shaderMipChainUniformCount = 13;		// there's a limit to how many mip levels are actually useful
 
 	static Float4x4 BuildPreToneScaleTransform();
 	static Float4x4 BuildPostToneScaleTransform_SRGB();
