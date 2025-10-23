@@ -13,7 +13,10 @@
 #include "../../../Utility/IteratorUtils.h"
 #include <memory>
 #include "IncludeVulkan.h"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnullability-completeness"
 #include "Foreign/VulkanMemoryAllocator/include/vk_mem_alloc.h"
+#pragma clang diagnostic pop
 
 #if defined(VULKAN_VALIDATE_RESOURCE_VISIBILITY)
     #include "../../../Utility/Threading/Mutex.h"
