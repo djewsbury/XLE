@@ -1985,11 +1985,23 @@ namespace XLEMath
 			auto v0 = AddSteinerVertex(result, A);
 			auto v1 = AddSteinerVertex(result, B);
 			if (v0 != v1) {
-				AddEdge(
-					result,
-					v0, v1,
-					~0u, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
-					StraightSkeleton<Primitive>::EdgeType::Wavefront);
+				if (loop._edges.size() > 2) {
+					AddEdge(
+						result,
+						v0, v1,
+						~0u, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
+						StraightSkeleton<Primitive>::EdgeType::Wavefront);
+				} else {
+					// This should be two overlapping edging. They were frozen like this after a motorcycle or a collapse
+					// with no further events. It must be a vertex path (going both ways), since there's no area within
+					// the wavefront
+					assert(loop._edges[0]._head == loop._edges[1]._tail && loop._edges[0]._tail == loop._edges[1]._head);
+					AddEdge(
+						result,
+						v0, v1,
+						GetVertex<Primitive>(_vertices, i->_head)._outsideFace, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
+						StraightSkeleton<Primitive>::EdgeType::VertexPath);
+				}
 			}
 			// note that AddEdge() will reject the VertexPath for the stationary vertex (if this is actually a vertex path)
 			AddEdge(
