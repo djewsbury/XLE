@@ -4,6 +4,7 @@
 
 #include "StraightSkeleton.h"
 #include "StraightSkeleton_Internal.h"
+#include "../Core/Exceptions.h"
 #include <cmath>
 #include <optional>
 
@@ -2035,6 +2036,8 @@ namespace XLEMath
 		unsigned vertexOffset = (unsigned)_graph->_vertices.size();
 		for (size_t v=0; v<vertices.size(); ++v) {
 			loop._edges.emplace_back(WavefrontEdge<Primitive>{vertexOffset + unsigned((v+1)%vertices.size()), vertexOffset + unsigned(v)});
+			if (Equivalent(vertices[v], vertices[(v+1)%vertices.size()], GetEpsilon<Primitive>()))
+				Throw(std::runtime_error("Duplicate sequential vertices in straight skeleton input"));	// duplicate vertices will throw off the vertex paths, and cause a lot of unnecessary complications
 			_graph->_originalBoundaryEdges.push_back({vertexOffset + unsigned((v+1)%vertices.size()), vertexOffset + unsigned(v)});
 			_graph->_vertices.emplace_back(PointAndTime<Primitive>{vertices[v], Primitive(0)}, PointAndTime<Primitive>{vertices[v], Primitive(0)}, FaceId(vertexOffset+((v+vertices.size()-1)%vertices.size())), FaceId(vertexOffset+v));
 		}
@@ -2054,6 +2057,9 @@ namespace XLEMath
 		unsigned vertexOffset = (unsigned)_graph->_vertices.size();
 		for (size_t v=0; v<count; ++v) {
 			loop._edges.emplace_back(WavefrontEdge<Primitive>{vertexOffset + unsigned((v+1)%count), vertexOffset + unsigned(v)});
+			if (	Equivalent(*PtrAdd(xComponents, v*stride), *PtrAdd(xComponents, ((v+1)%count)*stride), GetEpsilon<Primitive>())
+				&& 	Equivalent(*PtrAdd(yComponents, v*stride), *PtrAdd(yComponents, ((v+1)%count)*stride), GetEpsilon<Primitive>()))
+				Throw(std::runtime_error("Duplicate sequential vertices in straight skeleton input"));	// duplicate vertices will throw off the vertex paths, and cause a lot of unnecessary complications
 			_graph->_originalBoundaryEdges.push_back({vertexOffset + unsigned((v+1)%count), vertexOffset + unsigned(v)});
 			_graph->_vertices.emplace_back(
 				PointAndTime<Primitive>{*PtrAdd(xComponents, v*stride), *PtrAdd(yComponents, v*stride), Primitive(0)},
@@ -2081,43 +2087,45 @@ namespace XLEMath
 	T1(Primitive) StraightSkeletonCalculator<Primitive>::~StraightSkeletonCalculator()
 	{}
 
-	static std::vector<std::vector<unsigned>> AsVertexLoopsOrdered(IteratorRange<const std::pair<unsigned, unsigned>*> segments)
+	static std::vector<unsigned> AsVertexLoopsOrdered(IteratorRange<const std::pair<unsigned, unsigned>*> segments)
 	{
 		// From a line segment soup, generate vertex loops. This requires searching
 		// for segments that join end-to-end, and following them around until we
 		// make a loop.
 		// Note that in vertex loop order we want to go from tail to head (which is actually segment.second, segment.first
+		// return vertex count, index0, index1, index2, ..., vertex count, index0, index, ....
 		std::vector<std::pair<unsigned, unsigned>> pool(segments.begin(), segments.end());
-		std::vector<std::vector<unsigned>> result;
+		std::vector<unsigned> result;
 		while (!pool.empty()) {
-			std::vector<unsigned> workingLoop;
+			size_t workingLoopBegin = result.size();
+			result.push_back(0);	// sentinel for size (we'll come back later)
 			{
 				auto i = pool.end()-1;
-				workingLoop.push_back(i->second);
-				workingLoop.push_back(i->first);
+				result.push_back(i->second);
+				result.push_back(i->first);
 				pool.erase(i);
 			}
 			for (;;) {
 				assert(!pool.empty());	// if we hit this, we have open segments
-				auto searching = *(workingLoop.end()-1);
+				auto searching = result.back();
 				auto hit = pool.end(); 
 				for (auto i=pool.begin(); i!=pool.end(); ++i) if (i->second == searching) hit = i;
 
 				assert(hit != pool.end());
 				auto newVert = hit->first;
 				pool.erase(hit);
-				auto meet = std::find(workingLoop.begin(), workingLoop.end(), newVert);
-				if (meet != workingLoop.end()) {
+				auto meet = std::find(result.begin()+workingLoopBegin+1, result.end(), newVert);
+				if (meet != result.end()) {
 					// closed the loop.. But all of the vertices before "meet" have been cut off from the
 					// loop and have to be added back into the pool
-					for (auto i=workingLoop.begin(); i!=meet; ++i)
-						pool.emplace_back(*i, *(i+1));
-					workingLoop.erase(workingLoop.begin(), meet);
+					for (auto i=result.begin()+workingLoopBegin+1; i!=meet; ++i)
+						pool.emplace_back(*(i+1), *i);
+					result.erase(result.begin()+workingLoopBegin+1, meet);
 					break;	
 				}
-				workingLoop.push_back(newVert);
+				result.push_back(newVert);
 			}
-			result.push_back(std::move(workingLoop));
+			result[workingLoopBegin] = unsigned(result.size()-(workingLoopBegin+1));
 		}
 
 		return result;
@@ -2171,7 +2179,7 @@ namespace XLEMath
 	}
 #endif
 
-	T1(Primitive) std::vector<std::vector<unsigned>> StraightSkeleton<Primitive>::WavefrontAsVertexLoops() const
+	T1(Primitive) std::vector<unsigned> StraightSkeleton<Primitive>::WavefrontLoops() const
 	{
 		std::vector<std::pair<unsigned, unsigned>> segmentSoup;
 		for (auto&e:_edges)
@@ -2182,7 +2190,7 @@ namespace XLEMath
 		return AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
 	}
 
-	T1(Primitive) std::vector<unsigned> StraightSkeleton<Primitive>::VertexLoopForFace(unsigned faceIdx) const
+	T1(Primitive) std::vector<unsigned> StraightSkeleton<Primitive>::VertexLoopsForFace(unsigned faceIdx) const
 	{
 		if (_edgesByFace[faceIdx].empty()) return {};
 
@@ -2194,9 +2202,7 @@ namespace XLEMath
 			auto& e = _edgesByFace[faceIdx][(c+offset)%_edgesByFace[faceIdx].size()];
 			segmentSoup.emplace_back(e._head, e._tail);
 		}
-		auto loops = AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
-		assert(loops.size() == 1);
-		return std::move(loops[0]);
+		return AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
 	}
 
 	T1(Primitive) Primitive StraightSkeleton<Primitive>::LastEventTime() const

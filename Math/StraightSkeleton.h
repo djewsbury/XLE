@@ -49,8 +49,8 @@ namespace XLEMath
 		EdgeSet _edges;
 		std::vector<EdgeSet> _edgesByFace;
 
-		std::vector<std::vector<unsigned>> WavefrontAsVertexLoops() const;
-		std::vector<unsigned> VertexLoopForFace(unsigned) const;
+		std::vector<unsigned> WavefrontLoops() const;					// vertex count, index0, index1, index2, ..., vertex count, index0, index, ....
+		std::vector<unsigned> VertexLoopsForFace(unsigned) const;		// vertex count, index0, index1, index2, ..., vertex count, index0, index, ....
 		Primitive LastEventTime() const;
 	};
 

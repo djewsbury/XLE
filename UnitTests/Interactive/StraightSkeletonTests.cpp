@@ -159,6 +159,17 @@ namespace UnitTests
 	}
 
 	template<typename Primitive>
+		static Primitive SignedPolyArea(float* xs, float* ys, size_t stride, size_t count)
+	{
+		Primitive result = 0;
+		for (unsigned c=0; c<count; ++c) {
+			auto next = (c+1)%count;
+			result += (*PtrAdd(xs, next*stride) - *PtrAdd(xs, c*stride)) * (*PtrAdd(ys, next*stride) + *PtrAdd(ys, next*stride));
+		}
+		return result / 2.f;
+	}
+
+	template<typename Primitive>
 		static bool PtInPolygon(IteratorRange<const Vector2T<Primitive>*> loop, Vector2T<Primitive> testPt)
 	{
 		// Note that the basic algorithm here doesn't support colinear lines in "loop" too well
@@ -675,26 +686,36 @@ namespace UnitTests
 			assert(projectionMode == RenderOverlays::ProjectionMode::P2D);		// only implemented for p2d so far
 			auto worldToLocal = Inverse(localToWorld);
 			for (const auto& f:_faces) {
+				if (f._boundary.empty()) continue;
+
 				Float3 localTestLocation = XLEMath::TransformPoint(worldToLocal, Float3(testLocation, 0));
 				if (!PtInPolygon<float>(f._boundary, Truncate(localTestLocation))) continue;
 
-				Float3 avePt = Zero<Float3>();
+				Float3 avePt = Zero<Float3>(); unsigned aveCount = 0;
 				std::vector<Float3> boundaryLines;
-				auto lastPt = f._boundaryIndices.back();
-				for (auto pt:f._boundaryIndices) {
-					boundaryLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(lastPt)));
-					boundaryLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(pt)));
-					lastPt = pt;
+				for (auto i=f._boundaryIndices.begin(); i!=f._boundaryIndices.end();) {
+					auto start = i+1;
+					auto end = start+*i;
+					i += *i+1;
 
-					avePt += GetPt(lastPt);
+					auto lastPt = *(end-1);
+					for (auto pt:MakeIteratorRange(start, end)) {
+						boundaryLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(lastPt)));
+						boundaryLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(pt)));
+						lastPt = pt;
+
+						avePt += GetPt(lastPt); ++aveCount;
+					}
 				}
 
 				const RenderOverlays::ColorB faceBoundaryColor { 214, 179, 39 };		// rgba(214, 179, 39, 1))
 				overlayContext.DrawLines(projectionMode, boundaryLines.data(), (uint32_t)boundaryLines.size(), faceBoundaryColor, 3.f);
 
-				avePt /= f._boundaryIndices.size();
-				avePt = XLEMath::TransformPoint(localToWorld, avePt);
-				RenderOverlays::DrawText{}.Color(faceBoundaryColor).FormatAndDraw(overlayContext, {Int2(Truncate(avePt)), Int2(Truncate(avePt))}, "%i", unsigned(&f-_faces.data()));
+				if (aveCount) {
+					avePt /= aveCount;
+					avePt = XLEMath::TransformPoint(localToWorld, avePt);
+					RenderOverlays::DrawText{}.Color(faceBoundaryColor).FormatAndDraw(overlayContext, {Int2(Truncate(avePt)), Int2(Truncate(avePt))}, "%i", unsigned(&f-_faces.data()));
+				}
 			}
 		}
 
@@ -738,9 +759,14 @@ namespace UnitTests
 			_faces.reserve(_straightSkeleton._edgesByFace.size());
 			for (unsigned c=0; c<_straightSkeleton._edgesByFace.size(); ++c) {
 				Face face; 
-				face._boundaryIndices = _straightSkeleton.VertexLoopForFace(c);
+				face._boundaryIndices = _straightSkeleton.VertexLoopsForFace(c);
 				face._boundary.reserve(face._boundaryIndices.size());
-				for (auto i:face._boundaryIndices) face._boundary.push_back(Truncate(GetPt(i)));
+
+				// only grabbing the first loop
+				if (!face._boundaryIndices.empty())
+					for (auto i=face._boundaryIndices.begin()+1; i!=face._boundaryIndices.begin()+1+face._boundaryIndices.front(); ++i)
+					face._boundary.push_back(Truncate(GetPt(*i)));
+
 				_faces.push_back(std::move(face));
 			}
 		}
@@ -985,12 +1011,22 @@ namespace UnitTests
 			for (auto& sp:subpaths) {
 				assert(!sp._segments.empty());
 				auto ptsSize = pts.size();
-				if (!sp._closed) Throw(std::runtime_error("unclosed segment in roofmodel construction")); // pts.emplace_back(sp._segments.front()._A);
+				if (!sp._closed) Throw(std::runtime_error("unclosed segment in roofmodel construction"));
 				for (auto i2=sp._segments.begin(); i2!=sp._segments.end(); ++i2)
 					pts.emplace_back(i2->_B, unsigned(i2-sp._segments.begin()));
-				// Straight skeleton wants counter clockwise order vertices, however, +Y is up the page, rather than down the 
-				// page. This reverses winding order
-				std::reverse(pts.begin()+ptsSize, pts.end());
+
+				assert(pts.size() != ptsSize);
+
+				const bool reliableWindingOrder = false;
+				if (reliableWindingOrder) {
+					// Straight skeleton wants counter clockwise order vertices, however, +Y is up the page, rather than down the 
+					// page. This reverses winding order
+					std::reverse(pts.begin()+ptsSize, pts.end());
+				} else {
+					if (SignedPolyArea<Primitive>(&pts[ptsSize]._pt[0], &pts[ptsSize]._pt[1], sizeof(GeometryUtil::Vertex2D<Primitive>), pts.size()-ptsSize) > 0.f)
+						std::reverse(pts.begin()+ptsSize, pts.end());
+				}
+
 				calculator.AddLoop(pts.size() - ptsSize, &pts[ptsSize]._pt[0], &pts[ptsSize]._pt[1], sizeof(GeometryUtil::Vertex2D<Primitive>));
 
 				std::vector<Vector2T<Primitive>> temp; temp.reserve(pts.size() - ptsSize);
