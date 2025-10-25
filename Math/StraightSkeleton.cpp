@@ -858,6 +858,7 @@ namespace XLEMath
 		std::vector<Event<Primitive>> additionalEventsToAdd;
 		for (auto e=evnts.begin(); e!=evnts.end();) {
 			if (e->_edgeHead == removedVertex || e->_edgeTail == removedVertex) {
+				assert(e->_motor != removedVertex);
 				bool useHeadSidePart = true;
 				if (e->_edgeHead != removedVertex || e->_edgeTail != removedVertex) {		// If this is not a single vertex collision (with that vertex being the removed one)
 					if (&tailSide != &headSide) {
@@ -970,10 +971,28 @@ namespace XLEMath
 				}
 
 				ValidateUpdatedEvent(vSet, *e);
+
 			} else if (e->_motor == removedVertex) {
-				e = evnts.erase(e);
-				continue;
+
+				// We decide what replacement to use based on where the crash segment is
+				// The crash segment should not be split across the two new loops, because
+				// only the edge involved in the instigating motorcycle crash is split like that
+				// (and we should not have that same edge involved with another motor that needs
+				// replacing)
+				bool useHeadSidePart = ContainsVertex<Primitive>(headSide._edges, e->_edgeHead);
+				assert(ContainsVertex<Primitive>(tailSide._edges, e->_edgeHead) != useHeadSidePart);
+				assert(useHeadSidePart == ContainsVertex<Primitive>(headSide._edges, e->_edgeTail));
+
+				if (useHeadSidePart) {
+					e->_motor = headSideReplacement;
+					e->_motorLoop = headSide._loopId;
+				} else {
+					e->_motor = tailSideReplacement;
+					e->_motorLoop = tailSide._loopId;
+				}
+
 			}
+
 			++e;
 		}
 		evnts.insert(evnts.end(), additionalEventsToAdd.begin(), additionalEventsToAdd.end());
@@ -1021,10 +1040,14 @@ namespace XLEMath
 		unsigned crashSegmentTail = crashInfo._crashSegmentTail, crashSegmentHead = crashInfo._crashSegmentHead;
 		auto crashPtAndTime = crashInfo._crashPtAndTime;
 
-		// In the single vertex collision case, crashSegmentHead has been removed from the simulation; remove it's motor... 
+		// In the single vertex collision case, we need to look for a complementary motor, which is just the same thing, but reversed
+		// It's safe to remove this, since the only processing required is what we've already done
 		if (crashSegmentHead == crashSegmentTail)
 			for (auto pendingEvent=evnts.begin(); pendingEvent!=evnts.end();++pendingEvent)
-				if (pendingEvent->_motor == crashSegmentHead) { evnts.erase(pendingEvent); break; }
+				if (pendingEvent->_motor == crashSegmentHead && pendingEvent->_edgeHead == crashInfo._motor && pendingEvent->_edgeTail == crashInfo._motor) { 
+					evnts.erase(pendingEvent);
+					break;
+				}
 
 		// Process the crashSegmentHead <-- crashSegmentTail edge first
 		if (crashSegmentHead != crashSegmentTail) {
@@ -2130,54 +2153,6 @@ namespace XLEMath
 
 		return result;
 	}
-
-#if 0
-	static std::vector<std::vector<unsigned>> AsVertexLoopsAllowReverse(IteratorRange<const std::pair<unsigned, unsigned>*> segments)
-	{
-		// From a line segment soup, generate vertex loops. This requires searching
-		// for segments that join end-to-end, and following them around until we
-		// make a loop.
-		std::vector<std::pair<unsigned, unsigned>> pool(segments.begin(), segments.end());
-		std::vector<std::vector<unsigned>> result;
-		while (!pool.empty()) {
-			std::vector<unsigned> workingLoop;
-			{
-				auto i = pool.end()-1;
-				workingLoop.push_back(i->first);
-				workingLoop.push_back(i->second);
-				pool.erase(i);
-			}
-			for (;;) {
-				assert(!pool.empty());	// if we hit this, we have open segments
-				if (pool.empty()) break;
-				auto searching = *(workingLoop.end()-1);
-				auto hit = pool.end(); 
-				for (auto i=pool.begin(); i!=pool.end(); ++i) {
-					if (i->first == searching || i->second == searching) {
-						assert(hit == pool.end());
-						hit = i;
-					}
-				}
-				assert(hit != pool.end());
-				auto newVert = (hit->first == searching) ? hit->second : hit->first;
-				pool.erase(hit);
-				auto meet = std::find(workingLoop.begin(), workingLoop.end(), newVert);
-				if (meet != workingLoop.end()) {
-					// closed the loop.. But all of the vertices before "meet" have been cut off from the
-					// loop and have to be added back into the pool
-					for (auto i=workingLoop.begin(); i!=meet; ++i)
-						pool.emplace_back(*i, *(i+1));
-					workingLoop.erase(workingLoop.begin(), meet);
-					break;	
-				}
-				workingLoop.push_back(newVert);
-			}
-			result.push_back(std::move(workingLoop));
-		}
-
-		return result;
-	}
-#endif
 
 	T1(Primitive) std::vector<unsigned> StraightSkeleton<Primitive>::WavefrontLoops() const
 	{
