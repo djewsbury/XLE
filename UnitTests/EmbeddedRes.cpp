@@ -3,6 +3,13 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "../Assets/MemoryFile.h"
+
+#if !defined(XLE_EMBEDDED_RES_STAND_IN)
+
+#if COMPILER_ACTIVE == COMPILER_TYPE_MSVC
+	#error Embedded res does not work with the MSVC compiler. You must set XLE_EMBEDDED_RES_STAND_IN to select a folder as a stand-in for embedded res.
+#endif
+
 #define INCBIN_PREFIX
 #include "../Foreign/incbin/incbin.h"
 
@@ -40,3 +47,17 @@ namespace UnitTests
 			::Assets::FileSystemMemoryFlags::EnableChangeMonitoring | ::Assets::FileSystemMemoryFlags::UseModuleModificationTime);
 	}
 }
+
+#else
+
+#include "../Assets/OSFileSystem.h"
+
+namespace UnitTests
+{
+	std::shared_ptr<::Assets::IFileSystem> CreateEmbeddedResFileSystem()
+	{
+		return ::Assets::CreateFileSystem_OS(XLE_EMBEDDED_RES_STAND_IN);		// work around for INCBIN not working for msvc
+	}
+}
+
+#endif

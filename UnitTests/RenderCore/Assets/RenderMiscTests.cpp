@@ -216,10 +216,12 @@ namespace UnitTests
 			ellipsisWidth = RenderOverlays::StringEllipsis(singleSizeBuffer, dimof(singleSizeBuffer), *font, MakeStringSectionLiteral("filename.txt"), 1024.f);
 			REQUIRE(singleSizeBuffer[0] == '\0');
 			REQUIRE(ellipsisWidth == 0.f);
-			char zeroSizeBuffer[0];
-			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(zeroSizeBuffer, dimof(zeroSizeBuffer), *font, MakeStringSectionLiteral("filename.txt"), MakeStringSectionLiteral("/\\"), 1024.f);
-			REQUIRE(ellipsisWidth == 0.f);
-			ellipsisWidth = RenderOverlays::StringEllipsis(zeroSizeBuffer, dimof(zeroSizeBuffer), *font, MakeStringSectionLiteral("filename.txt"), 1024.f);
+			#if COMPILER_ACTIVE != COMPILER_TYPE_MSVC
+				char zeroSizeBuffer[0];
+				ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(zeroSizeBuffer, dimof(zeroSizeBuffer), *font, MakeStringSectionLiteral("filename.txt"), MakeStringSectionLiteral("/\\"), 1024.f);
+				REQUIRE(ellipsisWidth == 0.f);
+				ellipsisWidth = RenderOverlays::StringEllipsis(zeroSizeBuffer, dimof(zeroSizeBuffer), *font, MakeStringSectionLiteral("filename.txt"), 1024.f);
+			#endif
 			REQUIRE(ellipsisWidth == 0.f);
 			char largeBuffer[1024];
 			ellipsisWidth = RenderOverlays::StringEllipsisDoubleEnded(largeBuffer, dimof(largeBuffer), *font, MakeStringSectionLiteral(""), MakeStringSectionLiteral("/\\"), 1024.f);

@@ -19,7 +19,8 @@
 				"XLE_FREETYPE_ENABLE" : true,
 				"XLE_GET_MODULE_FILE_TIME_ENABLE" : true,
 				"XLE_GET_MODULE_PATH_ENABLE" : true,
-				"XLE_CONSOLE_LUA_ENABLE" : true
+				"XLE_CONSOLE_LUA_ENABLE" : true,
+				"XLE_EMBEDDED_RES_STAND_IN": "e:/code/XLE/xleres/core"
 			}
 		},
 
