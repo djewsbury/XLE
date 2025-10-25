@@ -22,6 +22,8 @@
 #include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
+#include "../../Formatters/XmlFormatter.h"
+#include "../../Formatters/FormatterUtils.h"
 #include "../../Assets/IAsyncMarker.h"
 #include "../../Math/ProjectionMath.h"
 #include "../../Math/Transformations.h"
@@ -35,6 +37,8 @@
 #include <fstream>
 #include <filesystem>
 #include <future>
+
+#include "e:/code/narwrld3/Compiler/SVGUtil.h"
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
@@ -263,7 +267,7 @@ namespace UnitTests
 					break;
 
 			if (i2!=pendingLoops.end()) {
-				i->_containingLoop = std::distance(pendingLoops.begin(), i2);
+				i->_containingLoop = (unsigned)std::distance(pendingLoops.begin(), i2);
 				#if defined(_DEBUG)
 					// we don't support polys begin inside of multiple other polygons, because
 					// this would mean islands within lakes within outer polygons
@@ -274,7 +278,7 @@ namespace UnitTests
 			} else {
 				// if you hit this, it means there are multiple external polygons -- ie, multiple completely separate "islands" in the original cell list
 				assert(externalPolygonIdx == ~0u);
-				externalPolygonIdx = std::distance(pendingLoops.begin(), i);
+				externalPolygonIdx = (unsigned)std::distance(pendingLoops.begin(), i);
 			}
 		}
 
@@ -455,7 +459,7 @@ namespace UnitTests
 			boundaryLines.push_back(Float3(TransformPoint(localToWorld, pt), 0.f));
 			lastPt = pt;
 		}
-		overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, boundaryLines.data(), boundaryLines.size(), color);
+		overlayContext.DrawLines(RenderOverlays::ProjectionMode::P2D, boundaryLines.data(), (unsigned)boundaryLines.size(), color);
 	}
 
 	void FillHexGrid(RenderOverlays::IOverlayContext& overlayContext, IteratorRange<const Int2*> enabledCells, const Float3x3& localToWorld, RenderOverlays::ColorB color)
@@ -477,7 +481,7 @@ namespace UnitTests
 				triangles.push_back(Expand(TransformPoint(localToWorld, cellCenter + corners[t]), 0.f));
 		}
 
-		overlayContext.DrawTriangles(RenderOverlays::ProjectionMode::P2D, triangles.data(), triangles.size(), color);
+		overlayContext.DrawTriangles(RenderOverlays::ProjectionMode::P2D, triangles.data(), (unsigned)triangles.size(), color);
 	}
 
 	template<typename T> StraightSkeleton<T> CalculateStraightSkeleton(IteratorRange<const Vector2T<T>*> vertices, T maxInset = std::numeric_limits<T>::max())
@@ -582,7 +586,7 @@ namespace UnitTests
 		{
 			auto i = _orderedBoundaryPts.begin();
 			while (i!=_orderedBoundaryPts.end() && ptIdx >= i->size()) {
-				ptIdx -= i->size();
+				ptIdx -= (uint32_t)i->size();
 				++i;
 			}
 			if (i!=_orderedBoundaryPts.end()) {
@@ -595,9 +599,9 @@ namespace UnitTests
 
 		void Draw(RenderOverlays::IOverlayContext& overlayContext, const Float4x4& localToWorld, RenderOverlays::ProjectionMode projectionMode) const
 		{
-			const RenderOverlays::ColorB waveFrontColor { 96, 200, 159 };
-			const RenderOverlays::ColorB pathColor { 65, 151, 204 };
-			const RenderOverlays::ColorB originalShapeColor { 158, 158, 158 };
+			const RenderOverlays::ColorB waveFrontColor { 96, 200, 159 };		// rgb(96, 200, 159)
+			const RenderOverlays::ColorB pathColor { 65, 151, 204 };			// rgb(65, 151, 204)
+			const RenderOverlays::ColorB originalShapeColor { 90, 90, 90 };		// rgba(90, 90, 90, 1)
 
 			std::vector<Float3> wavefrontLines, pathLines;
 			wavefrontLines.reserve(_straightSkeleton._edges.size() * 2);
@@ -614,8 +618,8 @@ namespace UnitTests
 				}
 			}
 
-			overlayContext.DrawLines(projectionMode, wavefrontLines.data(), wavefrontLines.size(), waveFrontColor);
-			overlayContext.DrawLines(projectionMode, pathLines.data(), pathLines.size(), pathColor);
+			overlayContext.DrawLines(projectionMode, wavefrontLines.data(), (uint32_t)wavefrontLines.size(), waveFrontColor);
+			overlayContext.DrawLines(projectionMode, pathLines.data(), (uint32_t)pathLines.size(), pathColor);
 
 			for (auto& b:_orderedBoundaryPts) {
 				std::vector<Float3> originalShapeLines;
@@ -625,7 +629,7 @@ namespace UnitTests
 					originalShapeLines.push_back(XLEMath::TransformPoint(localToWorld, Float3(b[c], 0)));
 					originalShapeLines.push_back(XLEMath::TransformPoint(localToWorld, Float3(b[(c+1)%b.size()], 0)));
 				}
-				overlayContext.DrawLines(projectionMode, originalShapeLines.data(), originalShapeLines.size(), originalShapeColor);
+				overlayContext.DrawLines(projectionMode, originalShapeLines.data(), (uint32_t)originalShapeLines.size(), originalShapeColor);
 			}
 
 			/*const float vertexSize = 0.1f;
@@ -663,6 +667,12 @@ namespace UnitTests
 		}
 
 		void AddBoundaryLoop(BoundaryLoop&& boundary) { _orderedBoundaryPts.push_back(std::move(boundary)); }
+		float CalculateMaxInset() const
+		{
+			float result = 0.f;
+			for (const auto& v:_straightSkeleton._steinerVertices) result = std::max(result, v[2]);
+			return result;
+		}
 
 		StraightSkeletonPreview(StraightSkeleton<Primitive>&& input)
 		: _straightSkeleton(std::move(input))
@@ -785,6 +795,251 @@ namespace UnitTests
 		{
 			std::mt19937_64 rng(619047819);
 			auto tester = std::make_shared<HexGridStraightSkeleton>(std::move(rng));
+			testHelper->Run(StartingCamera(0.5f), tester);
+		}
+	}
+
+	namespace SVGUtil = NarrativeWorld::SVGUtil;
+
+	namespace GeometryUtil
+	{
+		template<typename Primitive>
+			struct Vertex2D
+		{
+			Vector2T<Primitive> _pt; unsigned _id = ~0u;
+
+			Vertex2D() = default;
+			Vertex2D(Vector2T<Primitive> pt, unsigned id = ~0u) : _pt(pt), _id(id) {}
+			Vertex2D(const Vertex2D&) = default;
+			Vertex2D& operator=(const Vertex2D&) = default;
+		};
+
+		template<typename Primitive>
+			struct Vertex3D
+		{
+			Vector3T<Primitive> _pt; unsigned _id = ~0u;
+
+			Vertex3D() = default;
+			Vertex3D(Vector3T<Primitive> pt, unsigned id = ~0u) : _pt(pt), _id(id) {}
+			Vertex3D(const Vertex3D&) = default;
+			Vertex3D& operator=(const Vertex3D&) = default;
+		};
+	}
+
+	template<typename Primitive>
+		class SVGRoofModelCompilerUtil
+	{
+	public:
+		struct PolygonSection
+		{
+			std::vector<SVGUtil::PolygonSegment> _segments;
+			Float2 _mins, _maxs;
+			StraightSkeletonPreview<Primitive> _ssPreview;
+		};
+
+		std::vector<std::pair<uint64_t, PolygonSection>> _polygonSections;
+
+		SVGRoofModelCompilerUtil() = default;
+		SVGRoofModelCompilerUtil(Formatters::XmlInputFormatter<char>& fmttr, float dilation)
+		{
+			StringSection<> kn;
+			while (fmttr.TryKeyedItem(kn))
+				if (XlEqString(kn, "svg")) break;
+				else Formatters::SkipValueOrElement(fmttr);
+
+			if (!XlEqString(kn, "svg")) Formatters::FormatException("Expecting SVG file", fmttr.GetLocation());
+			Formatters::RequireBeginElement(fmttr);
+			DeserializeGroup(fmttr, Identity<Float3x3>(), dilation);
+			Formatters::RequireEndElement(fmttr);
+		}
+
+		void DeserializeGroup(Formatters::XmlInputFormatter<char>& fmttr, const Float3x3& parentToWorld, float dilation)
+		{
+			bool usedLocalToWorld = false;
+			Float3x3 localToWorld = parentToWorld;
+			StringSection<> kn;
+			while (fmttr.TryKeyedItem(kn))
+				if (XlEqString(kn, "path")) {
+					Formatters::RequireBeginElement(fmttr);
+					auto poly = DeserializePolygonSection(fmttr, localToWorld, dilation);
+					_polygonSections.emplace_back(Hash64(poly.first), std::move(poly.second));
+					Formatters::RequireEndElement(fmttr);
+				} else if (XlEqString(kn, "g")) {
+					Formatters::RequireBeginElement(fmttr);
+					DeserializeGroup(fmttr, localToWorld, dilation);
+					Formatters::RequireEndElement(fmttr);
+					usedLocalToWorld = true;
+				} else if (XlEqString(kn, "transform")) {
+					assert(!usedLocalToWorld);
+					localToWorld = Combine(SVGUtil::DeserializeTransform(Formatters::RequireStringValue(fmttr)), localToWorld);
+				} else Formatters::SkipValueOrElement(fmttr);
+		}
+
+		std::pair<StringSection<>, PolygonSection> DeserializePolygonSection(Formatters::XmlInputFormatter<char>& fmttr, const Float3x3& localToWorld, Primitive dilation)
+		{
+			Float3x3 localToParent = Identity<Float3x3>();
+			PolygonSection polySection; StringSection<> id;
+			StringSection<> kn;
+			std::vector<SVGUtil::SubPath> subpaths;
+			while (fmttr.TryKeyedItem(kn))
+				if (XlEqString(kn, "d")) {
+					// this is the main key, containing instructions on making a path
+					subpaths = SVGUtil::DeserializeSegments(Formatters::RequireStringValue(fmttr));
+				} else if (XlEqString(kn, "id")) {
+					id = Formatters::RequireStringValue(fmttr);
+				} else if (XlEqString(kn, "transform")) {
+					localToParent = SVGUtil::DeserializeTransform(Formatters::RequireStringValue(fmttr));
+				} else Formatters::SkipValueOrElement(fmttr);
+
+			polySection._mins = Float2(FLT_MAX, FLT_MAX);
+			polySection._maxs = Float2(-FLT_MAX, -FLT_MAX);
+			for (auto& sp:subpaths)
+				for (auto&s:sp._segments) {
+					s._A = TransformPoint(localToWorld, s._A);
+					s._B = TransformPoint(localToWorld, s._B);
+					s._length = Magnitude(s._B-s._A);
+
+					polySection._mins[0] = std::min(polySection._mins[0], s._A[0]);
+					polySection._mins[1] = std::min(polySection._mins[1], s._A[1]);
+					polySection._mins[0] = std::min(polySection._mins[0], s._B[0]);
+					polySection._mins[1] = std::min(polySection._mins[1], s._B[1]);
+					polySection._maxs[0] = std::max(polySection._maxs[0], s._A[0]);
+					polySection._maxs[1] = std::max(polySection._maxs[1], s._A[1]);
+					polySection._maxs[0] = std::max(polySection._maxs[0], s._B[0]);
+					polySection._maxs[1] = std::max(polySection._maxs[1], s._B[1]);
+				}
+
+			// We want to support paths with holes, etc, which requires complicated triangulations
+			std::vector<GeometryUtil::Vertex2D<Primitive>> pts, ptsInterior;
+			StraightSkeletonCalculator<Primitive> calculator; //, calculatorInterior;
+			for (auto& sp:subpaths) {
+				assert(!sp._segments.empty());
+				auto ptsSize = pts.size();
+				if (!sp._closed) Throw(std::runtime_error("unclosed segment in roofmodel construction")); // pts.emplace_back(sp._segments.front()._A);
+				for (auto i2=sp._segments.begin(); i2!=sp._segments.end(); ++i2)
+					pts.emplace_back(i2->_B, unsigned(i2-sp._segments.begin()));
+				std::reverse(pts.begin()+ptsSize, pts.end());		// reverse so that the straight skeleton grows inwards
+				calculator.AddLoop(pts.size() - ptsSize, &pts[ptsSize]._pt[0], &pts[ptsSize]._pt[1], sizeof(GeometryUtil::Vertex2D<Primitive>));
+
+				std::vector<Vector2T<Primitive>> temp; temp.reserve(pts.size() - ptsSize);
+				for (auto p=pts.begin()+ptsSize; p!=pts.end(); ++p) temp.push_back(p->_pt);
+				polySection._ssPreview.AddBoundaryLoop(std::move(temp));
+			}
+
+			polySection._ssPreview._straightSkeleton = calculator.Calculate(dilation);
+			return {id, std::move(polySection)};
+		}
+	};
+
+	TEST_CASE( "StraightSkeletonSVG", "[math]" )
+	{
+		using namespace RenderCore;
+		class SVGStraightSkeleton : public IInteractiveTestOverlay
+		{
+		public:
+			float ZoomFactorToScale() const
+			{
+				float scale = 1.f * (_zoomFactor + 1.f);
+				return scale;
+			}
+
+			virtual void Render(
+				RenderCore::Techniques::ParsingContext& parserContext,
+				IInteractiveTestHelper& testHelper) override
+			{
+				Float2 viewport { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
+				auto scale = ZoomFactorToScale();
+				const Float3x3 localToWorld3x3 {
+					scale, 0.f, 0.5f * viewport[0] + scale * _viewOffset[0],
+					0.f, scale, 0.5f * viewport[1] + scale * _viewOffset[1],
+					0.f, 0.f, 1.f,
+				};
+				const Float4x4 localToWorld4x4 {
+					scale, 0.f, 0.f, 0.5f * viewport[0] + scale * _viewOffset[0],
+					0.f, scale, 0.f, 0.5f * viewport[1] + scale * _viewOffset[1],
+					0.f, 0.f, 1.f, 0.f,
+					0.f, 0.f, 0.f, 1.f
+				};
+
+				{
+					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
+						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables);
+					// DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, localToWorld3x3, RenderOverlays::ColorB{32, 190, 32});
+					// for (const auto&g:_cellField._interiorGroups)
+					// 	DrawBoundary(*overlayContext, _cellField, g, localToWorld3x3, RenderOverlays::ColorB{64, 140, 210});
+					for (auto& section:_preview._polygonSections) {
+						section.second._ssPreview.Draw(*overlayContext, localToWorld4x4, RenderOverlays::ProjectionMode::P2D);
+					}
+				}
+
+				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
+				RenderOverlays::ExecuteDraws(
+					parserContext, rpi,
+					*testHelper.GetOverlayApparatus());
+			}
+
+			virtual bool OnInputEvent(
+				const PlatformRig::InputContext& context,
+				const OSServices::InputSnapshot& evnt,
+				IInteractiveTestHelper& testHelper) override
+			{
+				if (evnt.IsHeld_RButton()) {
+					const float mouseSensitivity = 2.0f / ZoomFactorToScale();
+					_viewOffset += Float2{evnt._mouseDelta[0] * mouseSensitivity, evnt._mouseDelta[1] * mouseSensitivity};
+				}
+				if (evnt._wheelDelta) {
+					_zoomFactor += evnt._wheelDelta / 180.f;
+					_zoomFactor = std::max(1e-4f, _zoomFactor);
+				}
+
+				float zoomScale = ZoomFactorToScale();
+
+				if (evnt._pressedChar == 'r') {
+					ReloadPreview();
+				} else if (evnt._pressedChar == 'q' || evnt._pressedChar == 'Q') {
+					_maxInset += zoomScale * ((evnt._pressedChar == 'Q') ? (20.f * 0.05f) : 0.05f);
+					ReloadPreview();
+				} else if (evnt._pressedChar == 'a' || evnt._pressedChar == 'A') {
+					_maxInset -= zoomScale * ((evnt._pressedChar == 'A') ? (20.f * 0.05f) : 0.05f);
+					ReloadPreview();
+				} else if (evnt._pressedChar == 'm') {
+					_maxInset = std::numeric_limits<float>::max();
+					ReloadPreview();
+					_maxInset = 0.f;
+					for (const auto& polySection:_preview._polygonSections)
+						_maxInset = std::max(_maxInset, polySection.second._ssPreview.CalculateMaxInset());
+				} else if (evnt._pressedChar == ' ') {
+					ReloadPreview();
+				}
+				return false;
+			}
+
+			void ReloadPreview()
+			{
+				auto fn = "rawos/ss-input.svg";
+				size_t fileSize;
+				::Assets::FileSnapshot fileState;
+				auto f = ::Assets::MainFileSystem::TryLoadFileAsMemoryBlock(fn, &fileSize, &fileState);
+				Formatters::XmlInputFormatter<char> fmttr { MakeStringSection(f.get(), PtrAdd(f.get(), fileSize)) };
+				auto depVal = ::Assets::GetDepValSys().Make(::Assets::DependentFileState{fn, fileState});
+				_preview = SVGRoofModelCompilerUtil<float>(fmttr, _maxInset);
+			}
+
+			SVGRoofModelCompilerUtil<float> _preview;
+			float _maxInset = 30.f;
+			Float2 _viewOffset { 0.f, 0.f };
+			float _zoomFactor { 1.0f };
+			
+			SVGStraightSkeleton()
+			{
+				ReloadPreview();
+			}
+		};
+
+		auto testHelper = CreateInteractiveTestHelper(IInteractiveTestHelper::EnabledComponents::RenderCoreTechniques);
+
+		{
+			auto tester = std::make_shared<SVGStraightSkeleton>();
 			testHelper->Run(StartingCamera(0.5f), tester);
 		}
 	}
