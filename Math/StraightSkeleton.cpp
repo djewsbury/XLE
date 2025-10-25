@@ -4,10 +4,8 @@
 
 #include "StraightSkeleton.h"
 #include "StraightSkeleton_Internal.h"
-#include "../Math/Geometry.h"
 #include <cmath>
 #include <optional>
-#include <deque>
 
 namespace XLEMath
 {

@@ -12,6 +12,31 @@
 
 namespace XLEMath
 {
+	//
+	//	In our coordinate system, Y is up the page		 (see SPACE_HANDINESS_CLOCKWISE in StraightSkeleton_Internal.h"
+	//
+	//		^ +Y
+	//		|
+	//		|
+	//		---------> +X
+	//
+	// counter clockwise order input loop
+	// positive inset values represents moving inwards into the polygon
+	//
+	//						^
+	//						| positive direction of travel (inward) as per counter clockwise ordering
+	//						|
+	//		tail >-----------------------> head
+	//
+	// on initializing a loop:
+	//
+	//						   ^
+	//		(inside face)	   |	  (outside face)
+	//				N-1		   |		0
+	//						   ^
+	//		N-1 >------------> 0 >------------> 1
+	//
+
 	T1(Primitive) class StraightSkeleton
 	{
 	public:
