@@ -16,21 +16,13 @@
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Drawables.h"		// unfortunately required for PreparedResourcesVisibility
 #include "../../RenderCore/BufferUploads/IBufferUploads.h"
-#include "../../RenderCore/IDevice.h"
-#include "../../RenderOverlays/OverlayContext.h"
-#include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderOverlays/ShapesRendering.h"
-#include "../../Tools/ToolsRig/VisualisationGeo.h"
+#include "../../RenderOverlays/DrawText.h"
 #include "../../Formatters/XmlFormatter.h"
 #include "../../Formatters/FormatterUtils.h"
-#include "../../Assets/IAsyncMarker.h"
-#include "../../Math/ProjectionMath.h"
-#include "../../Math/Transformations.h"
-#include "../../Math/Geometry.h"
 #include "../../Math/StraightSkeleton.h"
-#include "../../OSServices/Log.h"
-#include "../../Utility/ArithmeticUtils.h"
+#include "../../Math/Transformations.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 #include <random>
@@ -39,11 +31,23 @@
 #include <future>
 
 #include "e:/code/narwrld3/Compiler/SVGUtil.h"
+#include "../OSServices/WinAPI/IncludeWindows.h"
 
 using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
+
+#if PLATFORMOS_ACTIVE == PLATFORMOS_WINDOWS
+	Int2 GetCursorPos()
+	{
+		POINT cursorPos;
+		::GetCursorPos(&cursorPos);
+		ScreenToClient((HWND)::GetActiveWindow(), &cursorPos);
+		return Int2(cursorPos.x, cursorPos.y);
+	}
+#endif
+
 	static void GetAdjacentCells(Int2 dst[6], Int2 centerCell)
 	{
 		// in our coordinate cell, we imagine the hex cell having alternating
@@ -580,6 +584,13 @@ namespace UnitTests
 		using BoundaryLoop = std::vector<Vector2T<Primitive>>;
 		std::vector<BoundaryLoop> _orderedBoundaryPts;
 
+		struct Face
+		{
+			std::vector<Float2> _boundary;
+			std::vector<unsigned> _boundaryIndices;
+		};
+		std::vector<Face> _faces;
+
 		static constexpr unsigned BoundaryVertexFlag = 1u<<31u;
 
 		Float3 GetPt(unsigned ptIdx) const
@@ -640,6 +651,53 @@ namespace UnitTests
 				overlayContext.DrawQuad(projectionMode, Float3{Truncate(_straightSkeleton._steinerVertices[c]) - Float2{vertexSize, vertexSize}, 0.f}, Float3{Truncate(_straightSkeleton._steinerVertices[c]) + Float2{vertexSize, vertexSize}, 0.f}, RenderOverlays::ColorB(0x7f, (c+_orderedBoundaryPts.size())>>8, (c+_orderedBoundaryPts.size())&0xff));*/
 		}
 
+		void DrawVertexIndices(RenderOverlays::IOverlayContext& context, const Float4x4& localToWorld, RenderOverlays::ProjectionMode projectionMode) const
+		{
+			assert(projectionMode == RenderOverlays::ProjectionMode::P2D);		// only implemented for p2d so far
+			unsigned vertexIdx = 0;
+			for (auto& loop:_orderedBoundaryPts)
+				for (auto pt:loop) {
+					auto p = Truncate(XLEMath::TransformPoint(localToWorld, Float3(pt, 0))) + Float2{8,0};
+					// rgba(167, 174, 228, 1)
+					RenderOverlays::DrawText{}.Color(RenderOverlays::ColorB{167, 174, 228}).FormatAndDraw(context, {Int2(p), Int2(p)}, "%i", vertexIdx);
+					++vertexIdx;
+				}
+			for (auto& pt:_straightSkeleton._steinerVertices) {
+				auto p = Truncate(XLEMath::TransformPoint(localToWorld, pt)) + Float2{8,0};
+				// rgba(208, 154, 184, 1)
+				RenderOverlays::DrawText{}.Color(RenderOverlays::ColorB{208, 154, 184}).FormatAndDraw(context, {Int2(p), Int2(p)}, "%i", vertexIdx);
+				++vertexIdx;
+			}
+		}
+
+		void DrawFaceBoundary(RenderOverlays::IOverlayContext& overlayContext, const Float4x4& localToWorld, RenderOverlays::ProjectionMode projectionMode, Float2 testLocation) const
+		{
+			assert(projectionMode == RenderOverlays::ProjectionMode::P2D);		// only implemented for p2d so far
+			auto worldToLocal = Inverse(localToWorld);
+			for (const auto& f:_faces) {
+				Float3 localTestLocation = XLEMath::TransformPoint(worldToLocal, Float3(testLocation, 0));
+				if (!PtInPolygon<float>(f._boundary, Truncate(localTestLocation))) continue;
+
+				Float3 avePt = Zero<Float3>();
+				std::vector<Float3> boundaryLines;
+				auto lastPt = f._boundaryIndices.back();
+				for (auto pt:f._boundaryIndices) {
+					boundaryLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(lastPt)));
+					boundaryLines.push_back(XLEMath::TransformPoint(localToWorld, GetPt(pt)));
+					lastPt = pt;
+
+					avePt += GetPt(lastPt);
+				}
+
+				const RenderOverlays::ColorB faceBoundaryColor { 214, 179, 39 };		// rgba(214, 179, 39, 1))
+				overlayContext.DrawLines(projectionMode, boundaryLines.data(), (uint32_t)boundaryLines.size(), faceBoundaryColor, 3.f);
+
+				avePt /= f._boundaryIndices.size();
+				avePt = XLEMath::TransformPoint(localToWorld, avePt);
+				RenderOverlays::DrawText{}.Color(faceBoundaryColor).FormatAndDraw(overlayContext, {Int2(Truncate(avePt)), Int2(Truncate(avePt))}, "%i", unsigned(&f-_faces.data()));
+			}
+		}
+
 		StraightSkeletonPreview(const HexCellField& cellField, Primitive maxInset = std::numeric_limits<Primitive>::max())
 		{
 			StraightSkeletonCalculator<Primitive> calculator;
@@ -672,6 +730,19 @@ namespace UnitTests
 			float result = 0.f;
 			for (const auto& v:_straightSkeleton._steinerVertices) result = std::max(result, v[2]);
 			return result;
+		}
+
+		void CalculateFaces()
+		{
+			_faces.clear();
+			_faces.reserve(_straightSkeleton._edgesByFace.size());
+			for (unsigned c=0; c<_straightSkeleton._edgesByFace.size(); ++c) {
+				Face face; 
+				face._boundaryIndices = _straightSkeleton.VertexLoopForFace(c);
+				face._boundary.reserve(face._boundaryIndices.size());
+				for (auto i:face._boundaryIndices) face._boundary.push_back(Truncate(GetPt(i)));
+				_faces.push_back(std::move(face));
+			}
 		}
 
 		StraightSkeletonPreview(StraightSkeleton<Primitive>&& input)
@@ -743,8 +814,7 @@ namespace UnitTests
 				};
 
 				{
-					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables);
+					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus());
 					DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, localToWorld3x3, RenderOverlays::ColorB{32, 190, 32});
 					for (const auto&g:_cellField._interiorGroups)
 						DrawBoundary(*overlayContext, _cellField, g, localToWorld3x3, RenderOverlays::ColorB{64, 140, 210});
@@ -918,7 +988,9 @@ namespace UnitTests
 				if (!sp._closed) Throw(std::runtime_error("unclosed segment in roofmodel construction")); // pts.emplace_back(sp._segments.front()._A);
 				for (auto i2=sp._segments.begin(); i2!=sp._segments.end(); ++i2)
 					pts.emplace_back(i2->_B, unsigned(i2-sp._segments.begin()));
-				std::reverse(pts.begin()+ptsSize, pts.end());		// reverse so that the straight skeleton grows inwards
+				// Straight skeleton wants counter clockwise order vertices, however, +Y is up the page, rather than down the 
+				// page. This reverses winding order
+				std::reverse(pts.begin()+ptsSize, pts.end());
 				calculator.AddLoop(pts.size() - ptsSize, &pts[ptsSize]._pt[0], &pts[ptsSize]._pt[1], sizeof(GeometryUtil::Vertex2D<Primitive>));
 
 				std::vector<Vector2T<Primitive>> temp; temp.reserve(pts.size() - ptsSize);
@@ -949,27 +1021,30 @@ namespace UnitTests
 			{
 				Float2 viewport { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
 				auto scale = ZoomFactorToScale();
+				// note that we have to flip Y due to the coordinate system the straight skeleton assumes
 				const Float3x3 localToWorld3x3 {
 					scale, 0.f, 0.5f * viewport[0] + scale * _viewOffset[0],
-					0.f, scale, 0.5f * viewport[1] + scale * _viewOffset[1],
+					0.f, -scale, 0.5f * viewport[1] + scale * _viewOffset[1],
 					0.f, 0.f, 1.f,
 				};
 				const Float4x4 localToWorld4x4 {
 					scale, 0.f, 0.f, 0.5f * viewport[0] + scale * _viewOffset[0],
-					0.f, scale, 0.f, 0.5f * viewport[1] + scale * _viewOffset[1],
+					0.f, -scale, 0.f, 0.5f * viewport[1] + scale * _viewOffset[1],
 					0.f, 0.f, 1.f, 0.f,
 					0.f, 0.f, 0.f, 1.f
 				};
 
 				{
-					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables);
-					// DrawBoundary(*overlayContext, _cellField, _cellField._exteriorGroup, localToWorld3x3, RenderOverlays::ColorB{32, 190, 32});
-					// for (const auto&g:_cellField._interiorGroups)
-					// 	DrawBoundary(*overlayContext, _cellField, g, localToWorld3x3, RenderOverlays::ColorB{64, 140, 210});
-					for (auto& section:_preview._polygonSections) {
+					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus());
+					for (auto& section:_preview._polygonSections)
 						section.second._ssPreview.Draw(*overlayContext, localToWorld4x4, RenderOverlays::ProjectionMode::P2D);
-					}
+
+					if (_writeVertexIndices)
+						for (auto& section:_preview._polygonSections)
+							section.second._ssPreview.DrawVertexIndices(*overlayContext, localToWorld4x4, RenderOverlays::ProjectionMode::P2D);
+
+					for (auto& section:_preview._polygonSections)
+						section.second._ssPreview.DrawFaceBoundary(*overlayContext, localToWorld4x4, RenderOverlays::ProjectionMode::P2D, Float2(GetCursorPos()));
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
@@ -997,10 +1072,10 @@ namespace UnitTests
 				if (evnt._pressedChar == 'r') {
 					ReloadPreview();
 				} else if (evnt._pressedChar == 'q' || evnt._pressedChar == 'Q') {
-					_maxInset += zoomScale * ((evnt._pressedChar == 'Q') ? (20.f * 0.05f) : 0.05f);
+					_maxInset += ((evnt._pressedChar == 'Q') ? (20.f * 0.05f) : 0.05f) / zoomScale;
 					ReloadPreview();
 				} else if (evnt._pressedChar == 'a' || evnt._pressedChar == 'A') {
-					_maxInset -= zoomScale * ((evnt._pressedChar == 'A') ? (20.f * 0.05f) : 0.05f);
+					_maxInset -= ((evnt._pressedChar == 'A') ? (20.f * 0.05f) : 0.05f) / zoomScale;
 					ReloadPreview();
 				} else if (evnt._pressedChar == 'm') {
 					_maxInset = std::numeric_limits<float>::max();
@@ -1010,6 +1085,8 @@ namespace UnitTests
 						_maxInset = std::max(_maxInset, polySection.second._ssPreview.CalculateMaxInset());
 				} else if (evnt._pressedChar == ' ') {
 					ReloadPreview();
+				} else if (evnt._pressedChar == 'v') {
+					_writeVertexIndices = !_writeVertexIndices;
 				}
 				return false;
 			}
@@ -1023,12 +1100,14 @@ namespace UnitTests
 				Formatters::XmlInputFormatter<char> fmttr { MakeStringSection(f.get(), PtrAdd(f.get(), fileSize)) };
 				auto depVal = ::Assets::GetDepValSys().Make(::Assets::DependentFileState{fn, fileState});
 				_preview = SVGRoofModelCompilerUtil<float>(fmttr, _maxInset);
+				for (auto& section:_preview._polygonSections) section.second._ssPreview.CalculateFaces();
 			}
 
 			SVGRoofModelCompilerUtil<float> _preview;
 			float _maxInset = 30.f;
 			Float2 _viewOffset { 0.f, 0.f };
 			float _zoomFactor { 1.0f };
+			bool _writeVertexIndices = false;
 			
 			SVGStraightSkeleton()
 			{
@@ -1052,8 +1131,7 @@ namespace UnitTests
 			IInteractiveTestHelper& testHelper) override
 		{
 			{
-				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables);
+				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus());
 				for (const auto& preview:_previews)
 					preview.Draw(*overlayContext, Identity<Float4x4>(), RenderOverlays::ProjectionMode::P3D);		// use 3d so the camera is taken into account
 			}
@@ -1360,8 +1438,7 @@ namespace UnitTests
 				IInteractiveTestHelper& testHelper) override
 			{
 				{
-					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables);
+					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus());
 					_preview.Draw(*overlayContext, Identity<Float4x4>(), RenderOverlays::ProjectionMode::P3D);
 				}
 
@@ -1430,8 +1507,7 @@ namespace UnitTests
 		auto threadContext = testHelper.GetDevice()->GetImmediateContext();
 		{
 			{
-				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(
-					*threadContext, *testHelper.GetOverlayApparatus()->_immediateDrawables);
+				auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(*threadContext, *testHelper.GetOverlayApparatus());
 				preview.Draw(*overlayContext, Identity<Float4x4>(), RenderOverlays::ProjectionMode::P3D);
 			}
 

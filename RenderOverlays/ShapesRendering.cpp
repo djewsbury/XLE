@@ -881,7 +881,7 @@ namespace RenderOverlays
 		ColorB col,
 		TextAlignment alignment, StringSection<char> text)
 	{
-		if (!context.GetFontRenderingManager()) return Float2{0, 0};
+		if (!context.GetFontRenderingManager()) { Log(Warning) << "IOverlayContext does not have attached font rendering manager" << std::endl; return Float2{0, 0}; }
 
 		Quad q;
 		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
@@ -908,7 +908,7 @@ namespace RenderOverlays
 		ColorB col, RenderCore::Assets::RenderStateSet stateSet,
 		bool center, StringSection<char> text)
 	{
-		if (!context.GetFontRenderingManager()) return;
+		if (!context.GetFontRenderingManager()) { Log(Warning) << "IOverlayContext does not have attached font rendering manager" << std::endl; return; }
 
 		if (center) {
 			// integrate a little offset into the local-to-world
@@ -941,7 +941,7 @@ namespace RenderOverlays
 		IteratorRange<const uint8_t*> fontSelectors,
 		ColorB shadowColor)
 	{
-		if (!context.GetFontRenderingManager()) return;
+		if (!context.GetFontRenderingManager()) { Log(Warning) << "IOverlayContext does not have attached font rendering manager" << std::endl; return; }
 
 		Quad q;
 		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);

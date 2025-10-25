@@ -1843,20 +1843,29 @@ namespace XLEMath
 		}
 	}
 
-	T1(Primitive) static void AddEdge(StraightSkeleton<Primitive>& dest, VertexId headVertex, VertexId tailVertex, FaceId insideFace, FaceId outsideFace, typename StraightSkeleton<Primitive>::EdgeType type)
+	T1(Primitive) static void AddEdge(
+		StraightSkeleton<Primitive>& dest,
+		VertexId laterVertex, VertexId earlierVertex,		// or head, tail
+		FaceId insideFace, FaceId outsideFace,
+		typename StraightSkeleton<Primitive>::EdgeType type)
 	{
-		if (headVertex == tailVertex) return;
-		AddUnique(dest._edges, {headVertex, tailVertex, type});
+		if (earlierVertex == laterVertex) return;
 
+		// when adding a wavefront edge, 
+		//		laterVertex = head, earlierVertex = tail
+		AddUnique(dest._edges, {laterVertex, earlierVertex, type});
+
+		// We need to try to maintain the counter clockwise ordering when we construct _edgesByFace.
+		// See the coordinate system diagram, but note that edge is constructed head, then tail
 		if (insideFace != ~FaceId(0)) {
 			if (dest._edgesByFace.size() <= insideFace)
 				dest._edgesByFace.resize(insideFace+1);
-			AddUnique(dest._edgesByFace[insideFace], {headVertex, tailVertex, type});
+			AddUnique(dest._edgesByFace[insideFace], {laterVertex, earlierVertex, type});
 		}
 		if (outsideFace != ~FaceId(0)) {
 			if (dest._edgesByFace.size() <= outsideFace)
 				dest._edgesByFace.resize(outsideFace+1);
-			AddUnique(dest._edgesByFace[outsideFace], {headVertex, tailVertex, type});
+			AddUnique(dest._edgesByFace[outsideFace], {earlierVertex, laterVertex, type});
 		}
 	}
 
@@ -1947,12 +1956,12 @@ namespace XLEMath
 		result._boundaryPointCount = _boundaryPointCount;
 		result._edgesByFace.resize(_boundaryPointCount);
 		for (const auto& e:_originalBoundaryEdges)
-			result._edgesByFace[e.second].push_back({e.first, e.second, StraightSkeleton<Primitive>::EdgeType::OriginalBoundary});
+			result._edgesByFace[e.second].push_back({e.first, e.second, StraightSkeleton<Primitive>::EdgeType::OriginalBoundary});		// _originalBoundaryEdges is head then tail
 		for (const auto& e:_vertexPathEdges)
 			AddEdge(
 				result,
-				(e._vertex <  _boundaryPointCount) ? e._vertex : AddSteinerVertex(result, e._beginPt),
 				AddSteinerVertex(result, e._endPt),
+				(e._vertex <  _boundaryPointCount) ? e._vertex : AddSteinerVertex(result, e._beginPt),
 				GetVertex<Primitive>(_vertices, e._vertex)._insideFace, GetVertex<Primitive>(_vertices, e._vertex)._outsideFace,
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		for (const auto&l:_loops)
@@ -1980,13 +1989,13 @@ namespace XLEMath
 			// damage event handling for other vertices.
 			auto A = PointAndTime<Primitive>{_vertices[i->_head].PositionAtTimeUsingLastValid(time), time};
 			auto B = PointAndTime<Primitive>{_vertices[i->_tail].PositionAtTimeUsingLastValid(time), time};
-			auto v0 = AddSteinerVertex(result, A);
-			auto v1 = AddSteinerVertex(result, B);
-			if (v0 != v1) {
+			auto vHead = AddSteinerVertex(result, A);
+			auto vTail = AddSteinerVertex(result, B);
+			if (vHead != vTail) {
 				if (loop._edges.size() > 2) {
 					AddEdge(
 						result,
-						v0, v1,
+						vHead, vTail,
 						~0u, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
 						StraightSkeleton<Primitive>::EdgeType::Wavefront);
 				} else {
@@ -1994,9 +2003,11 @@ namespace XLEMath
 					// with no further events. It must be a vertex path (going both ways), since there's no area within
 					// the wavefront
 					assert(loop._edges[0]._head == loop._edges[1]._tail && loop._edges[0]._tail == loop._edges[1]._head);
+					assert(GetVertex<Primitive>(_vertices, i->_head)._outsideFace != ~0u);
+					assert(GetVertex<Primitive>(_vertices, i->_tail)._outsideFace != ~0u);
 					AddEdge(
 						result,
-						v0, v1,
+						vHead, vTail,
 						GetVertex<Primitive>(_vertices, i->_head)._outsideFace, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
 						StraightSkeleton<Primitive>::EdgeType::VertexPath);
 				}
@@ -2004,8 +2015,8 @@ namespace XLEMath
 			// note that AddEdge() will reject the VertexPath for the stationary vertex (if this is actually a vertex path)
 			AddEdge(
 				result,
+				vTail,
 				(i->_tail < _boundaryPointCount) ? i->_tail : AddSteinerVertex(result, _vertices[i->_tail]._anchor0),
-				v1,
 				GetVertex<Primitive>(_vertices, i->_tail)._insideFace, GetVertex<Primitive>(_vertices, i->_tail)._outsideFace,
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		}
@@ -2075,27 +2086,25 @@ namespace XLEMath
 		// From a line segment soup, generate vertex loops. This requires searching
 		// for segments that join end-to-end, and following them around until we
 		// make a loop.
+		// Note that in vertex loop order we want to go from tail to head (which is actually segment.second, segment.first
 		std::vector<std::pair<unsigned, unsigned>> pool(segments.begin(), segments.end());
 		std::vector<std::vector<unsigned>> result;
 		while (!pool.empty()) {
 			std::vector<unsigned> workingLoop;
 			{
 				auto i = pool.end()-1;
-				workingLoop.push_back(i->first);
 				workingLoop.push_back(i->second);
+				workingLoop.push_back(i->first);
 				pool.erase(i);
 			}
 			for (;;) {
 				assert(!pool.empty());	// if we hit this, we have open segments
 				auto searching = *(workingLoop.end()-1);
 				auto hit = pool.end(); 
-				for (auto i=pool.begin(); i!=pool.end(); ++i) {
-					if (i->first == searching /*|| i->second == searching*/) {
-						hit = i;
-					}
-				}
+				for (auto i=pool.begin(); i!=pool.end(); ++i) if (i->second == searching) hit = i;
+
 				assert(hit != pool.end());
-				auto newVert = hit->second; // (hit->first == searching) ? hit->second : hit->first;
+				auto newVert = hit->first;
 				pool.erase(hit);
 				auto meet = std::find(workingLoop.begin(), workingLoop.end(), newVert);
 				if (meet != workingLoop.end()) {
@@ -2114,6 +2123,7 @@ namespace XLEMath
 		return result;
 	}
 
+#if 0
 	static std::vector<std::vector<unsigned>> AsVertexLoopsAllowReverse(IteratorRange<const std::pair<unsigned, unsigned>*> segments)
 	{
 		// From a line segment soup, generate vertex loops. This requires searching
@@ -2159,13 +2169,14 @@ namespace XLEMath
 
 		return result;
 	}
+#endif
 
 	T1(Primitive) std::vector<std::vector<unsigned>> StraightSkeleton<Primitive>::WavefrontAsVertexLoops() const
 	{
 		std::vector<std::pair<unsigned, unsigned>> segmentSoup;
 		for (auto&e:_edges)
 			if (e._type == EdgeType::Wavefront)
-				segmentSoup.push_back({e._head, e._tail});
+				segmentSoup.emplace_back(e._head, e._tail);
 		// We shouldn't need the edges in _unplacedEdges, so long as each edge has been correctly
 		// assigned to it's source face
 		return AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
@@ -2175,7 +2186,6 @@ namespace XLEMath
 	{
 		if (_edgesByFace[faceIdx].empty()) return {};
 
-		// note that we pick up the ordering from first segment -- ideally it should be a Wavefront or OriginalBoundary edge
 		std::vector<std::pair<unsigned, unsigned>> segmentSoup;
 		segmentSoup.reserve(_edgesByFace[faceIdx].size());
 		size_t offset = 0;
@@ -2184,7 +2194,7 @@ namespace XLEMath
 			auto& e = _edgesByFace[faceIdx][(c+offset)%_edgesByFace[faceIdx].size()];
 			segmentSoup.emplace_back(e._head, e._tail);
 		}
-		auto loops = AsVertexLoopsAllowReverse(MakeIteratorRange(segmentSoup));
+		auto loops = AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
 		assert(loops.size() == 1);
 		return std::move(loops[0]);
 	}
