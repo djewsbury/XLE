@@ -1223,9 +1223,6 @@ namespace XLEMath
 		// The motor can collapse to become a vertex of the collision edge during earlier steps.
 		if (crashEvent._motor == crashEvent._edgeHead || crashEvent._motor == crashEvent._edgeTail) return;
 
-		assert(initialEdgeLoop._edges.size() > 2);
-		if (initialEdgeLoop._edges.size() <= 2) return;
-
 		if (crashEvent._edgeHead == crashEvent._edgeTail) {
 			// Sometimes crash events are converted into what should really be a collapse event. In these cases,
 			// there should also be a collapse event queued
@@ -1238,6 +1235,9 @@ namespace XLEMath
 				return;
 			}
 		}
+
+		assert(initialEdgeLoop._edges.size() > 2);
+		if (initialEdgeLoop._edges.size() <= 2) return;
 
 		// We need to build 2 new WavefrontLoops -- one for the "tout" side and one for the "tin" side
 		// In some cases, one side or the other than can be completely collapsed. But we're still going to
@@ -1755,6 +1755,8 @@ namespace XLEMath
 		auto motorLoop = GetLoop(crashEvent._motorLoop);
 		auto edgeLoop = GetLoop(crashEvent._edgeLoop);
 
+		// DEBUG_ONLY( auto originalEdgeLoop = *edgeLoop; auto originalMotorLoop = *motorLoop; );
+
 		// There should only be 2 possibilities -- one loop expanding (1) while the other is contracting (-1), or 2 loops expanding (1)
 		assert((motorLoop->_signOfInitialLoop != 0) && (edgeLoop->_signOfInitialLoop != 0));
 		assert((motorLoop->_signOfInitialLoop > 0) || (edgeLoop->_signOfInitialLoop > 0));
@@ -1836,15 +1838,18 @@ namespace XLEMath
 				motorLoop->_signOfInitialLoop = -1;
 
 			auto newSignedArea = CalculateSignedAreaAtTime<Primitive>(motorLoop->_edges, _vertices, crashEvent._eventTime);
+
+#if 0		// note that this completely breaks PostProcessEvents, because nothing expects the edges to be reversed. Also, are we ending up with crossed edges here?
 			if ((newSignedArea > 0) != (motorLoop->_signOfInitialLoop > 0)) {
 				// reverse all edges, to ensure they're left in the correct order for the new movement
 				for (auto& e:motorLoop->_edges) std::swap(e._head, e._tail);
 				std::reverse(motorLoop->_edges.begin(), motorLoop->_edges.end());
 				newSignedArea = -newSignedArea;
 			}
+#endif
 
 			motorLoop->_signedAreaAtLatestEvent = newSignedArea;
-			assert(std::abs(motorLoop->_signedAreaAtLatestEvent) < GetEpsilon<Primitive>() || (motorLoop->_signedAreaAtLatestEvent > 0) == (motorLoop->_signOfInitialLoop > 0));
+			// assert(std::abs(motorLoop->_signedAreaAtLatestEvent) < GetEpsilon<Primitive>() || (motorLoop->_signedAreaAtLatestEvent > 0) == (motorLoop->_signOfInitialLoop > 0));
 		}
 
 		// Update loop ids in all evnts and motorcycles
