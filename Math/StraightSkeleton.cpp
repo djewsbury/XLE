@@ -152,11 +152,22 @@ namespace XLEMath
 		return vSet[v];
 	}
 
-	T1(Primitive) static bool ContainsVertex(IteratorRange<const WavefrontEdge<Primitive>*> edges, unsigned v)
+	T1(Primitive) static bool HasVertex(IteratorRange<const WavefrontEdge<Primitive>*> edges, VertexId v)
 	{
 		auto headSideI = std::find_if(edges.begin(), edges.end(),
 			[v](const auto& e) { return e._head == v || e._tail == v; });
 		return headSideI != edges.end();
+	}
+
+	T1(Primitive) static bool HasEdge(IteratorRange<const WavefrontEdge<Primitive>*> edges, VertexId head, VertexId tail)
+	{
+		if (head != tail) {
+			auto q = std::find_if(b2e(edges), [head, tail](const auto& e){ return e._head == head && e._tail == tail; });
+			return q != edges.end();
+		} else {
+			auto q = std::find_if(b2e(edges), [head](const auto& e){ return e._head == head || e._tail == head; });
+			return q != edges.end();
+		}
 	}
 
 	T1(Primitive)
@@ -543,8 +554,8 @@ namespace XLEMath
 				earliestTime = std::min(crashTime, earliestTime);
 				#if defined(_DEBUG)
 					auto& edgeLoop = *GetLoop(m._edgeLoop);
-					assert(ContainsVertex<Primitive>(edgeLoop._edges, m._edgeHead) && ContainsVertex<Primitive>(edgeLoop._edges, m._edgeTail));
-					assert(ContainsVertex<Primitive>(loop._edges, m._motor));
+					assert(HasVertex<Primitive>(edgeLoop._edges, m._edgeHead) && HasVertex<Primitive>(edgeLoop._edges, m._edgeTail));
+					assert(HasVertex<Primitive>(loop._edges, m._motor));
 				#endif
 			}
 		}
@@ -744,17 +755,8 @@ namespace XLEMath
 
 	T1(Primitive) static void SetEdgeLoop(const WavefrontLoop<Primitive>& loop, Event<Primitive>& evnt)
 	{
-		if (evnt._type != EventType::MotorcycleCrash)
-			assert(evnt._edgeHead != evnt._edgeTail);
-		if (evnt._edgeHead != evnt._edgeTail) {
-			auto q = std::find_if(loop._edges.begin(), loop._edges.end(),
-				[evnt](const auto& e){ return e._head == evnt._edgeHead && e._tail == evnt._edgeTail; });
-			assert(q != loop._edges.end());
-		} else {
-			auto q = std::find_if(loop._edges.begin(), loop._edges.end(),
-				[evnt](const auto& e){ return e._head == evnt._edgeHead || e._tail == evnt._edgeHead; });
-			assert(q != loop._edges.end());
-		}
+		assert(evnt._type == EventType::MotorcycleCrash || (evnt._edgeHead != evnt._edgeTail));
+		assert(HasEdge<Primitive>(loop._edges, evnt._edgeHead, evnt._edgeTail));
 		assert(loop._loopId != ~0u);
 		evnt._edgeLoop = loop._loopId;
 	}
@@ -815,8 +817,8 @@ namespace XLEMath
 					if (e._motorLoop == originalLoopId) {
 						// Use the side that contains the motor
 						if (&headSide != &tailSide) {
-							useHeadSidePart = ContainsVertex<Primitive>(headSide._edges, e._motor);
-							useTailSidePart = ContainsVertex<Primitive>(tailSide._edges, e._motor);
+							useHeadSidePart = HasVertex<Primitive>(headSide._edges, e._motor);
+							useTailSidePart = HasVertex<Primitive>(tailSide._edges, e._motor);
 						} else useHeadSidePart = true;
 						assert((useHeadSidePart^useTailSidePart)==1);
 					} else {
@@ -865,7 +867,7 @@ namespace XLEMath
 		VertexId removedVertex,
 		VertexId tailSideReplacement, VertexId headSideReplacement,
 		const WavefrontLoop<Primitive>& tailSide, const WavefrontLoop<Primitive>& headSide,
-		LoopId originalLoopId)
+		LoopId originalSegmentLoopId)
 	{
 		std::vector<Event<Primitive>> additionalEventsToAdd;
 		for (auto e=evnts.begin(); e!=evnts.end();) {
@@ -878,101 +880,108 @@ namespace XLEMath
 				
 				bool useHeadSidePart = true;
 				if (e->_edgeHead != removedVertex || e->_edgeTail != removedVertex) {		// If this is not a single vertex collision (with that vertex being the removed one)
-					if (&tailSide != &headSide) {
-						if (e->_edgeHead != removedVertex) useHeadSidePart = ContainsVertex<Primitive>(headSide._edges, e->_edgeHead);
-						else useHeadSidePart = ContainsVertex<Primitive>(headSide._edges, e->_edgeTail);
+					if (tailSide._loopId != headSide._loopId) {
+						if (e->_edgeHead != removedVertex) useHeadSidePart = HasVertex<Primitive>(headSide._edges, e->_edgeHead);
+						else useHeadSidePart = HasVertex<Primitive>(headSide._edges, e->_edgeTail);
 					} else {
-						auto q = std::find_if(headSide._edges.begin(), headSide._edges.end(),
-							[headSideReplacement, e](const auto& c) { return (c._head == headSideReplacement && c._tail == e->_edgeTail) || (c._head == e->_edgeHead && c._tail == headSideReplacement); });
-						useHeadSidePart = q != headSide._edges.end();
-
-						#if defined(_DEBUG)
-							auto q2 = std::find_if(headSide._edges.begin(), headSide._edges.end(),
-								[tailSideReplacement, e](const auto& c) { return (c._head == tailSideReplacement && c._tail == e->_edgeTail) || (c._head == e->_edgeHead && c._tail == tailSideReplacement); });
-							assert(q == headSide._edges.end() || q2 == headSide._edges.end());	// two men say they're Jesus; one of them must be wrong
-						#endif
+						bool headSideExists = HasEdge<Primitive>(headSide._edges, (e->_edgeHead == removedVertex) ? headSideReplacement : e->_edgeHead, (e->_edgeTail == removedVertex) ? headSideReplacement : e->_edgeTail);
+						bool tailSideExists = HasEdge<Primitive>(tailSide._edges, (e->_edgeHead == removedVertex) ? tailSideReplacement : e->_edgeHead, (e->_edgeTail == removedVertex) ? tailSideReplacement : e->_edgeTail);
+						assert((tailSideExists ^ headSideExists) == 1);		// two men say they're Jesus; one of them must be wrong
+						useHeadSidePart = headSideExists;
 					}
 				} else {
 					// This is a single vertex collision, and the vertex is the removed one
 					assert(IsCrash(*e));
-					if (e->_motorLoop == originalLoopId && &headSide != &tailSide) {
+					if (e->_motorLoop == originalSegmentLoopId && headSide._loopId != tailSide._loopId) {
 						// don't use this when headSide and tailSide are the same, because in that case it will just always pick the headside loop
-						useHeadSidePart = ContainsVertex<Primitive>(headSide._edges, e->_motor);
-						assert(ContainsVertex<Primitive>(headSide._edges, e->_motor) ^ ContainsVertex<Primitive>(tailSide._edges, e->_motor));
+						useHeadSidePart = HasVertex<Primitive>(headSide._edges, e->_motor);
+						assert(HasVertex<Primitive>(headSide._edges, e->_motor) ^ HasVertex<Primitive>(tailSide._edges, e->_motor));
 					} else {
+
 						// Unfortunately we have to solve this, because it can happen... I've seen a good example with a 3 loop collision, two expanding
 						// and one contracting
+						//
+						// We can get this in complex cases, such as a loop merge. It can also happen after a vertex to vertex crash loop merge. However,
+						// in that vertex to vertex case, only one side of the edge will remain
+						//
 						// We don't get any hints from the loop itself, but we can try to look at the directions tailSideReplacement and headSideReplacement
 						// are moving. They should be moving in opposite directions, so we'll pick the one moving opposite to the direction of the motor
 
-						Vector2T<Primitive> headSideDirection = Zero<Vector2T<Primitive>>();
-						Vector2T<Primitive> tailSideDirection = Zero<Vector2T<Primitive>>();
+						bool headSideExists = HasEdge<Primitive>(headSide._edges, (e->_edgeHead == removedVertex) ? headSideReplacement : e->_edgeHead, (e->_edgeTail == removedVertex) ? headSideReplacement : e->_edgeTail);
+						bool tailSideExists = HasEdge<Primitive>(tailSide._edges, (e->_edgeHead == removedVertex) ? tailSideReplacement : e->_edgeHead, (e->_edgeTail == removedVertex) ? tailSideReplacement : e->_edgeTail);
+						assert(tailSideExists || headSideExists);
+						if (!tailSideExists) useHeadSidePart = true;
+						else if (!headSideExists) useHeadSidePart = false;
+						else {
+							Vector2T<Primitive> headSideDirection = Zero<Vector2T<Primitive>>();
+							Vector2T<Primitive> tailSideDirection = Zero<Vector2T<Primitive>>();
 
-						// "useAnchorBasedMovementDetermination" is similar to anchor calculation similar UpdateLoopStage1
-						// but it's more complicated than the alternative, and should produce the same direction (precision errors aside)
-						// note that this doesn't find good movement for vertices on colinear or near-colinear lines
-						const bool useAnchorBasedMovementDetermination = false;
-						if (!ConsiderStationary(headSide)) {
-							auto prevPrevEdge = headSide._edges.end()-2;
-							auto prevEdge = headSide._edges.end()-1;
-							for (auto edge=headSide._edges.begin(); edge!=headSide._edges.end(); ++edge) {
-								assert(edge->_head != edge->_tail);
-								assert(prevEdge->_head == edge->_tail);
-								if (edge->_tail == headSideReplacement) {
-									if (useAnchorBasedMovementDetermination) {
-										auto& v0 = vSet[edge->_tail];
-										auto next = edge+1;
-										if (next == headSide._edges.end()) next = headSide._edges.begin();
-										auto calcTime = v0.InitialTime();
-										auto anchor1 = CalculateAnchor1<Primitive>(
-											prevPrevEdge->_tail, prevEdge->_tail, edge->_tail, edge->_head, next->_head,
-											vSet, calcTime);
-										headSideDirection = Truncate(anchor1) - Truncate(v0._anchor0);
-									} else {
-										headSideDirection = EdgeTangentToMovementDir<Primitive>(vSet[edge->_head].PositionAtTime(e->_eventTime) - vSet[edge->_tail].PositionAtTime(e->_eventTime))
-											+ EdgeTangentToMovementDir<Primitive>(vSet[prevEdge->_head].PositionAtTime(e->_eventTime) - vSet[prevEdge->_tail].PositionAtTime(e->_eventTime));
+							// "useAnchorBasedMovementDetermination" is similar to anchor calculation similar UpdateLoopStage1
+							// but it's more complicated than the alternative, and should produce the same direction (precision errors aside)
+							// note that this doesn't find good movement for vertices on colinear or near-colinear lines
+							const bool useAnchorBasedMovementDetermination = false;
+							if (!ConsiderStationary(headSide)) {
+								auto prevPrevEdge = headSide._edges.end()-2;
+								auto prevEdge = headSide._edges.end()-1;
+								for (auto edge=headSide._edges.begin(); edge!=headSide._edges.end(); ++edge) {
+									assert(edge->_head != edge->_tail);
+									assert(prevEdge->_head == edge->_tail);
+									if (edge->_tail == headSideReplacement) {
+										if (useAnchorBasedMovementDetermination) {
+											auto& v0 = vSet[edge->_tail];
+											auto next = edge+1;
+											if (next == headSide._edges.end()) next = headSide._edges.begin();
+											auto calcTime = v0.InitialTime();
+											auto anchor1 = CalculateAnchor1<Primitive>(
+												prevPrevEdge->_tail, prevEdge->_tail, edge->_tail, edge->_head, next->_head,
+												vSet, calcTime);
+											headSideDirection = Truncate(anchor1) - Truncate(v0._anchor0);
+										} else {
+											headSideDirection = EdgeTangentToMovementDir<Primitive>(vSet[edge->_head].PositionAtTime(e->_eventTime) - vSet[edge->_tail].PositionAtTime(e->_eventTime))
+												+ EdgeTangentToMovementDir<Primitive>(vSet[prevEdge->_head].PositionAtTime(e->_eventTime) - vSet[prevEdge->_tail].PositionAtTime(e->_eventTime));
+										}
 									}
+
+									prevPrevEdge = prevEdge;
+									prevEdge = edge;
 								}
-
-								prevPrevEdge = prevEdge;
-								prevEdge = edge;
 							}
-						}
 
-						if (!ConsiderStationary(tailSide)) {
-							auto prevPrevEdge = tailSide._edges.end()-2;
-							auto prevEdge = tailSide._edges.end()-1;
-							for (auto edge=tailSide._edges.begin(); edge!=tailSide._edges.end(); ++edge) {
-								assert(edge->_head != edge->_tail);
-								assert(prevEdge->_head == edge->_tail);
-								if (edge->_tail == tailSideReplacement) {
-									if (useAnchorBasedMovementDetermination) {
-										auto& v0 = vSet[edge->_tail];
-										auto next = edge+1;
-										if (next == tailSide._edges.end()) next = tailSide._edges.begin();
-										auto calcTime = v0.InitialTime();
-										auto anchor1 = CalculateAnchor1<Primitive>(
-											prevPrevEdge->_tail, prevEdge->_tail, edge->_tail, edge->_head, next->_head,
-											vSet, calcTime);
-										tailSideDirection = Truncate(anchor1) - Truncate(v0._anchor0);
-									} else {
-										tailSideDirection = EdgeTangentToMovementDir<Primitive>(vSet[edge->_head].PositionAtTime(e->_eventTime) - vSet[edge->_tail].PositionAtTime(e->_eventTime))
-											+ EdgeTangentToMovementDir<Primitive>(vSet[prevEdge->_head].PositionAtTime(e->_eventTime) - vSet[prevEdge->_tail].PositionAtTime(e->_eventTime));
+							if (!ConsiderStationary(tailSide)) {
+								auto prevPrevEdge = tailSide._edges.end()-2;
+								auto prevEdge = tailSide._edges.end()-1;
+								for (auto edge=tailSide._edges.begin(); edge!=tailSide._edges.end(); ++edge) {
+									assert(edge->_head != edge->_tail);
+									assert(prevEdge->_head == edge->_tail);
+									if (edge->_tail == tailSideReplacement) {
+										if (useAnchorBasedMovementDetermination) {
+											auto& v0 = vSet[edge->_tail];
+											auto next = edge+1;
+											if (next == tailSide._edges.end()) next = tailSide._edges.begin();
+											auto calcTime = v0.InitialTime();
+											auto anchor1 = CalculateAnchor1<Primitive>(
+												prevPrevEdge->_tail, prevEdge->_tail, edge->_tail, edge->_head, next->_head,
+												vSet, calcTime);
+											tailSideDirection = Truncate(anchor1) - Truncate(v0._anchor0);
+										} else {
+											tailSideDirection = EdgeTangentToMovementDir<Primitive>(vSet[edge->_head].PositionAtTime(e->_eventTime) - vSet[edge->_tail].PositionAtTime(e->_eventTime))
+												+ EdgeTangentToMovementDir<Primitive>(vSet[prevEdge->_head].PositionAtTime(e->_eventTime) - vSet[prevEdge->_tail].PositionAtTime(e->_eventTime));
+										}
 									}
+
+									prevPrevEdge = prevEdge;
+									prevEdge = edge;
 								}
-
-								prevPrevEdge = prevEdge;
-								prevEdge = edge;
 							}
-						}
 
-						// if we couldn't calculate the head side direction, try to get it from the tail side
-						auto motorDirection = e->_eventPt - Truncate(vSet[e->_motor]._anchor0);
-						// look for the one moving in the opposite direction -- use the magnitude of the "direction" value as an estimate for accuracy
-						if (MagnitudeSquared(headSideDirection) > MagnitudeSquared(tailSideDirection)) {
-							useHeadSidePart = Dot(motorDirection, headSideDirection) < 0.f;
-						} else {
-							useHeadSidePart = Dot(motorDirection, tailSideDirection) > 0.f;
+							// if we couldn't calculate the head side direction, try to get it from the tail side
+							auto motorDirection = e->_eventPt - Truncate(vSet[e->_motor]._anchor0);
+							// look for the one moving in the opposite direction -- use the magnitude of the "direction" value as an estimate for accuracy
+							if (MagnitudeSquared(headSideDirection) > MagnitudeSquared(tailSideDirection)) {
+								useHeadSidePart = Dot(motorDirection, headSideDirection) < 0.f;
+							} else {
+								useHeadSidePart = Dot(motorDirection, tailSideDirection) > 0.f;
+							}
 						}
 					}
 				}
@@ -991,21 +1000,37 @@ namespace XLEMath
 
 			} else if (e->_motor == removedVertex) {
 
+				// todo -- if the event is beyond our event horizon, we must remove the event and recalculate
+				// the crashes for this vertex... The replacement vertex may not be moving in the same direction 
+				// as the old vertex
+
 				// We decide what replacement to use based on where the crash segment is
 				// The crash segment should not be split across the two new loops, because
 				// only the edge involved in the instigating motorcycle crash is split like that
 				// (and we should not have that same edge involved with another motor that needs
 				// replacing)
-				bool useHeadSidePart = ContainsVertex<Primitive>(headSide._edges, e->_edgeHead);
-				assert(ContainsVertex<Primitive>(tailSide._edges, e->_edgeHead) != useHeadSidePart);
-				assert(useHeadSidePart == ContainsVertex<Primitive>(headSide._edges, e->_edgeTail));
+				assert(e->_motorLoop == originalSegmentLoopId);
+				if (e->_edgeLoop == originalSegmentLoopId) {
+					bool useHeadSidePart = HasVertex<Primitive>(headSide._edges, e->_edgeHead);
+					assert((HasVertex<Primitive>(tailSide._edges, e->_edgeHead) != useHeadSidePart) || headSide._loopId == tailSide._loopId);		// headSide & tailSide is the same in loop merge events
+					assert(useHeadSidePart == HasVertex<Primitive>(headSide._edges, e->_edgeTail));
 
-				if (useHeadSidePart) {
-					e->_motor = headSideReplacement;
-					e->_motorLoop = headSide._loopId;
+					if (useHeadSidePart) {
+						e->_motor = headSideReplacement;
+						SetMotorLoop(headSide, *e);
+					} else {
+						e->_motor = tailSideReplacement;
+						SetMotorLoop(tailSide, *e);
+					}
 				} else {
-					e->_motor = tailSideReplacement;
-					e->_motorLoop = tailSide._loopId;
+					// The motor was replaced; but it was schedule for loop merge event by smashing into another loop
+					// We need to split it into two events
+					auto additionalEvent = *e;
+					e->_motor = headSideReplacement;
+					SetMotorLoop(headSide, *e);
+					additionalEvent._motor = tailSideReplacement;
+					SetMotorLoop(tailSide, additionalEvent);
+					additionalEventsToAdd.emplace_back(additionalEvent);
 				}
 
 			}
@@ -1041,9 +1066,9 @@ namespace XLEMath
 			} else if (crashSegmentHead == crashSegmentTail && (m._edgeHead == crashSegmentTail || m._edgeTail == crashSegmentHead)) {
 				m._pendingCalculate = true;
 			} else if (m._edgeLoop == originalLoopId) {
-				if (ContainsVertex<Primitive>(headSide._edges, m._edgeHead)) {
+				if (HasVertex<Primitive>(headSide._edges, m._edgeHead)) {
 					m._edgeLoop = headSide._loopId;
-				} else if (&tailSide != &headSide && ContainsVertex<Primitive>(tailSide._edges, m._edgeHead)) {
+				} else if (&tailSide != &headSide && HasVertex<Primitive>(tailSide._edges, m._edgeHead)) {
 					m._edgeLoop = tailSide._loopId;
 				} else {
 					assert(0);
@@ -1115,14 +1140,14 @@ namespace XLEMath
 
 		for (auto e=evnts.begin(); e!=evnts.end();) {
 			if (e->_edgeLoop == crashInfo._originalSegmentLoop) {
-				if (ContainsVertex<Primitive>(crashInfo._headSide._edges, e->_edgeHead)) {
+				if (HasVertex<Primitive>(crashInfo._headSide._edges, e->_edgeHead)) {
 					SetEdgeLoop(crashInfo._headSide, *e);
 				} else {
 					SetEdgeLoop(crashInfo._tailSide, *e);
 				}
 			}
 			if (IsCrash(*e) && e->_motorLoop == crashInfo._originalSegmentLoop) {
-				if (ContainsVertex<Primitive>(crashInfo._headSide._edges, e->_motor)) {
+				if (HasVertex<Primitive>(crashInfo._headSide._edges, e->_motor)) {
 					SetMotorLoop(crashInfo._headSide, *e);
 				} else {
 					SetMotorLoop(crashInfo._tailSide, *e);
@@ -1150,10 +1175,10 @@ namespace XLEMath
 			if (crashSegmentHead == crashSegmentTail && m._motor == crashSegmentHead) continue;
 
 			if (m._motorLoop == crashInfo._originalSegmentLoop || m._motorLoop == crashInfo._originalMotorLoop) {
-				if (ContainsVertex<Primitive>(crashInfo._headSide._edges, m._motor)) {
+				if (HasVertex<Primitive>(crashInfo._headSide._edges, m._motor)) {
 					m._motorLoop = crashInfo._headSide._loopId;
 				} else {
-					assert(ContainsVertex<Primitive>(crashInfo._tailSide._edges, m._motor));
+					assert(HasVertex<Primitive>(crashInfo._tailSide._edges, m._motor));
 					m._motorLoop = crashInfo._tailSide._loopId;
 				}
 			}
@@ -1434,7 +1459,7 @@ namespace XLEMath
 				[searchingTail](const auto& t) { return t._type == EventType::Collapse && t._edgeHead == searchingTail; });
 			if (i == evnts.begin()+eventsCutoffEnd) break;
 
-			assert(ContainsVertex<Primitive>(loop._edges, i->_edgeHead) && ContainsVertex<Primitive>(loop._edges, i->_edgeTail));
+			assert(HasVertex<Primitive>(loop._edges, i->_edgeHead) && HasVertex<Primitive>(loop._edges, i->_edgeTail));
 			searchingTail = i->_edgeTail;
 			collapses.push_back(*i);
 			evnts.erase(i); --eventsCutoffEnd;
@@ -1447,7 +1472,7 @@ namespace XLEMath
 				[searchingHead](const auto& t) { return t._type == EventType::Collapse && t._edgeTail == searchingHead; });
 			if (i == evnts.begin()+eventsCutoffEnd) break;
 
-			assert(ContainsVertex<Primitive>(loop._edges, i->_edgeHead) && ContainsVertex<Primitive>(loop._edges, i->_edgeTail));
+			assert(HasVertex<Primitive>(loop._edges, i->_edgeHead) && HasVertex<Primitive>(loop._edges, i->_edgeTail));
 			searchingHead = i->_edgeHead;
 			collapses.push_back(*i);
 			evnts.erase(i); --eventsCutoffEnd;
@@ -1651,7 +1676,7 @@ namespace XLEMath
 			for (auto pendingEvent=evnts.begin(); pendingEvent!=evnts.end();) {
 				assert (pendingEvent->_edgeTail != ~0u && pendingEvent->_edgeHead != ~0u);
 				assert(!(pendingEvent->_type == EventType::Collapse && pendingEvent->_edgeTail == pendingEvent->_edgeHead));
-				assert(pendingEvent->_edgeLoop != loop._loopId || ContainsVertex<Primitive>(loop._edges, pendingEvent->_edgeHead) && ContainsVertex<Primitive>(loop._edges, pendingEvent->_edgeTail));
+				assert(pendingEvent->_edgeLoop != loop._loopId || HasVertex<Primitive>(loop._edges, pendingEvent->_edgeHead) && HasVertex<Primitive>(loop._edges, pendingEvent->_edgeTail));
 				if ((pendingEvent->_type == EventType::MotorcycleCrash) && pendingEvent->_motor == ~0u) {
 					pendingEvent = evnts.erase(pendingEvent);
 					continue;
@@ -1860,11 +1885,11 @@ namespace XLEMath
 		#if defined(_DEBUG)
 			for (auto& evnt:evnts) {
 				if (evnt._edgeLoop == motorLoop->_loopId) {
-					assert(ContainsVertex<Primitive>(motorLoop->_edges, evnt._edgeHead));
-					assert(ContainsVertex<Primitive>(motorLoop->_edges, evnt._edgeTail));
+					assert(HasVertex<Primitive>(motorLoop->_edges, evnt._edgeHead));
+					assert(HasVertex<Primitive>(motorLoop->_edges, evnt._edgeTail));
 				}
 				if (evnt._type != EventType::Collapse && evnt._motorLoop == motorLoop->_loopId)
-					assert(ContainsVertex<Primitive>(motorLoop->_edges, evnt._motor));
+					assert(HasVertex<Primitive>(motorLoop->_edges, evnt._motor));
 				assert(evnt._edgeLoop != edgeLoop->_loopId && evnt._motorLoop != edgeLoop->_loopId);
 			}
 
