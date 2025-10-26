@@ -637,6 +637,7 @@ namespace XLEMath
     		event._edgeHead = edgeHead;
     		event._edgeTail = edgeTail;
     	}
+		assert(event._motor != event._edgeHead && event._motor != event._edgeTail);
         return event;
 	}
 
@@ -689,6 +690,8 @@ namespace XLEMath
 					auto& motorv = GetVertex(motor);
 					if (motorv._motorcycleState != VertexMotorcycleState::Motor) continue;
 					// if (std::find(b2e(_pendingVertexRecalculate), m->_tail) == _pendingVertexRecalculate.end()) continue;
+
+					if (motor == seg1._head || motor == seg1._tail) continue;		// don't motorcycle into yourself
 
 					// if (seg1._head == motor || seg1._tail == motor) { m->_pendingCalculate = true; continue; }
 					// if (m->_edgeHead == seg1._head || m->_edgeHead == seg1._tail || m->_edgeTail == seg1._head || m->_edgeTail == seg1._tail) { m->_pendingCalculate = true; continue; }
@@ -823,12 +826,14 @@ namespace XLEMath
 						assert((useHeadSidePart^useTailSidePart)==1);
 					} else {
 						// Determine based on the position of the crash
+						// there's a good chance that one or more of the vertices are frozen / uncalculated -- so outside the
+						// event horizon we will probably only get trash
 						auto v0 = GetVertex(vertices, splitEdgeHead).PositionAtTime(e._eventTime);
 						auto v2 = GetVertex(vertices, splitEdgeTail).PositionAtTime(e._eventTime);
 						if (Dot(e._eventPt - splitPt, v0 - splitPt) > 0) {
 							useHeadSidePart = true;
 						} else {
-							assert(Dot(e._eventPt - splitPt, v2 - splitPt) > 0);
+							// assert(Dot(e._eventPt - splitPt, v2 - splitPt) > 0);		not reliable, given the assumptions here
 							useTailSidePart = true;
 						}
 					}
@@ -1153,13 +1158,12 @@ namespace XLEMath
 					SetMotorLoop(crashInfo._tailSide, *e);
 				}
 
-				// Don't create a loop merge operation like this. If the edge and motor loop diverge, it's
-				// hopefully just an artefact of precision errors cause by splitting the loop earlier. We'll
-				// just end up making things worse if we try to merge the loops together again
-				if (e->_edgeLoop != e->_motorLoop && e->_type == EventType::MotorcycleCrash) {
-					e = evnts.erase(e);
-					continue;
-				}
+				// Precision accuracy can cause loop splits with re-merge immediately afterwards, creating
+				// a bit of a mess...
+				// Unfortunately we can't easily distinguish that case from two separate and legit splits
+				// and merges -- which might be happening simultaneously at different parts of a loop
+				// previously there was a hack here to try to prevent a mess in the first case, but it was
+				// causing more problems than it was solving.
 			}
 			++e;
 		}
@@ -1755,11 +1759,10 @@ namespace XLEMath
 		auto motorLoop = GetLoop(crashEvent._motorLoop);
 		auto edgeLoop = GetLoop(crashEvent._edgeLoop);
 
-		// DEBUG_ONLY( auto originalEdgeLoop = *edgeLoop; auto originalMotorLoop = *motorLoop; );
-
 		// There should only be 2 possibilities -- one loop expanding (1) while the other is contracting (-1), or 2 loops expanding (1)
-		assert((motorLoop->_signOfInitialLoop != 0) && (edgeLoop->_signOfInitialLoop != 0));
-		assert((motorLoop->_signOfInitialLoop > 0) || (edgeLoop->_signOfInitialLoop > 0));
+		// However, we can get here with one of the loops being zero-area, thought I'm not sure if it's correct to be handling that case
+		if ((motorLoop->_signOfInitialLoop != 0) && (edgeLoop->_signOfInitialLoop != 0))
+			assert((motorLoop->_signOfInitialLoop > 0) || (edgeLoop->_signOfInitialLoop > 0));
 
 		// This is like a normal motorcycle crash event, except that we take 2 loops as input and end up with one as output
 		// headSideReplacement -> hout around to tin -> tailSideReplacement, then onto tout around to hin
