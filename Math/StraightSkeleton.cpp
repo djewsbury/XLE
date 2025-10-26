@@ -827,12 +827,10 @@ namespace XLEMath
 			if (e._edgeHead == splitEdgeHead && e._edgeTail == splitEdgeTail) {
 				bool useTailSidePart = false, useHeadSidePart = false;
 				if (IsCrash(e)) {
-					if (e._motorLoop == originalLoopId) {
+					if (e._motorLoop == originalLoopId && headSide._loopId != tailSide._loopId) {
 						// Use the side that contains the motor
-						if (&headSide != &tailSide) {
-							useHeadSidePart = HasVertex<Primitive>(headSide._edges, e._motor);
-							useTailSidePart = HasVertex<Primitive>(tailSide._edges, e._motor);
-						} else useHeadSidePart = true;
+						useHeadSidePart = HasVertex<Primitive>(headSide._edges, e._motor);
+						useTailSidePart = HasVertex<Primitive>(tailSide._edges, e._motor);
 						assert((useHeadSidePart^useTailSidePart)==1);
 					} else {
 						// Determine based on the position of the crash
@@ -1917,7 +1915,7 @@ namespace XLEMath
 				evnts, _vertices,
 				crashEvent._edgeTail, crashEvent._edgeHead,
 				crashInfo._tailSideReplacement, crashInfo._headSideReplacement,
-				*motorLoop, *motorLoop, motorLoop->_loopId,
+				*motorLoop, *motorLoop, crashInfo._originalSegmentLoop,
 				Truncate(crashInfo._crashPtAndTime), _vertices);
 		} else {
 			HandleRemovedVertex<Primitive>(evnts, _vertices, crashEvent._edgeTail, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, *motorLoop, *motorLoop, motorLoop->_loopId, eventBatchCutoffTime);
