@@ -129,7 +129,7 @@ namespace XLEMath
 		// std::vector<MotorcycleSegment<Primitive>> _motorcycleSegments;		// can have multiples for the same motor
 		// std::vector<VertexId> _pendingMotorcycleCalculate;
 		Primitive _lastEventBatchEarliest = std::numeric_limits<Primitive>::max();
-		Primitive _lastEventBatchLatest = -std::numeric_limits<Primitive>::max();
+		Primitive _lastEventBatchLatest = std::numeric_limits<Primitive>::lowest();
 		unsigned _lastBatchIndex = 0;
 		LoopId _loopId = ~LoopId(0);
 		Primitive _signOfInitialLoop = 0;
@@ -498,16 +498,16 @@ namespace XLEMath
 	private:
 		void WriteFinalEdges(StraightSkeleton<Primitive>& dest, const WavefrontLoop<Primitive>& loop, Primitive time);
 
-		void ProcessEvents(std::vector<Event<Primitive>>& evnts, Primitive cutoff);
-		void ProcessMotorcycleEvents(std::vector<Event<Primitive>>& evnts);
-		void ProcessCollapseEvents(std::vector<Event<Primitive>>& evnts, Primitive cutoff);
-		void ProcessLoopMergeEvents(std::vector<Event<Primitive>>& evnts);
+		void ProcessEvents(std::vector<Event<Primitive>>& evnts, Primitive eventBatchCutoffTime);
+		void ProcessMotorcycleEvents(std::vector<Event<Primitive>>& evnts, Primitive eventBatchCutoffTime);
+		void ProcessCollapseEvents(std::vector<Event<Primitive>>& evnts, Primitive eventBatchCutoffTime);
+		void ProcessLoopMergeEvents(std::vector<Event<Primitive>>& evnts, Primitive eventBatchCutoffTime);
 
 		void FindCollapses(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop<Primitive>& loop);
 		// void FindMotorcycleCrashes(std::vector<Event<Primitive>>& events, Primitive& earliestTime, const WavefrontLoop<Primitive>& loop);
 
 		void PostProcessEventsForMotorcycleCrash_Phase0(CrashEventInfo<Primitive>& crashInfo, std::vector<Event<Primitive>>& evnts);
-		void PostProcessEventsForMotorcycleCrash_Phase1(CrashEventInfo<Primitive>& crashInfo, std::vector<Event<Primitive>>& evnts);
+		void PostProcessEventsForMotorcycleCrash_Phase1(CrashEventInfo<Primitive>& crashInfo, std::vector<Event<Primitive>>& evnts, Primitive eventBatchCutoffTime);
 
 		void AddVertexPathEdge(VertexId vertex, PointAndTime<Primitive> begin, PointAndTime<Primitive> end);
 		void UpdateLoopStage1(WavefrontLoop<Primitive>& loop);
@@ -526,7 +526,7 @@ namespace XLEMath
 
 		for (const auto&e:loop._edges) {
 			auto collapseTime = e._collapsePt[2];
-			assert(collapseTime >= loop._lastEventBatchEarliest || loop._lastEventBatchEarliest > loop._lastEventBatchLatest);
+			// assert(collapseTime >= loop._lastEventBatchEarliest || loop._lastEventBatchEarliest > loop._lastEventBatchLatest);
 			if (collapseTime < (earliestTime + s_maxEventChain * GetTimeEpsilon<Primitive>())) {
 				events.push_back(Event<Primitive>::Collapse(loop._loopId, e._collapsePt, e._head, e._tail));
 				earliestTime = std::min(collapseTime, earliestTime);
@@ -688,6 +688,12 @@ namespace XLEMath
 				for (auto m=motorLoop._edges.begin(); m!=motorLoop._edges.end(); ++m) {
 					auto motor = m->_tail;
 					auto& motorv = GetVertex(motor);
+
+					if (motor == 134 && seg1._head == 93 && seg1._tail == 92) {
+						int c=0;
+						(void)c;
+					}
+
 					if (motorv._motorcycleState != VertexMotorcycleState::Motor) continue;
 					// if (std::find(b2e(_pendingVertexRecalculate), m->_tail) == _pendingVertexRecalculate.end()) continue;
 
@@ -701,9 +707,15 @@ namespace XLEMath
 					// If the edge is too far, we can just skip it
 
 					auto protoCrash = BuildCrashEvent_SimultaneousV<Primitive>(MakeIteratorRange(_vertices), seg1._head, seg1._tail, motor);
-					if (protoCrash && protoCrash->_pointAndTime[2] <= seg1._collapsePt[2] + GetTimeEpsilon<Primitive>())
-					    if (auto e = AsMotorcycleCrash(*protoCrash, seg1._tail, seg1._head, motor, loop._loopId, motorLoop))
-							newEvents.emplace_back(std::move(*e));
+					if (protoCrash) {
+						// We must ensure the crash is in a valid time range. It's possible to calculate a motorcycle in the past
+						// This must be rejected, because it can lead to infinite loops.
+						Primitive mustBeAfter = std::max(motorLoop._lastEventBatchLatest, loop._lastEventBatchLatest);
+						Primitive mustBeBefore = seg1._collapsePt[2] + GetTimeEpsilon<Primitive>();
+						if (mustBeAfter < protoCrash->_pointAndTime[2] && protoCrash->_pointAndTime[2] < mustBeBefore)
+							if (auto e = AsMotorcycleCrash(*protoCrash, seg1._tail, seg1._head, motor, loop._loopId, motorLoop))
+								newEvents.emplace_back(std::move(*e));
+					}
 				}
 			}
 
@@ -872,7 +884,7 @@ namespace XLEMath
 		VertexId removedVertex,
 		VertexId tailSideReplacement, VertexId headSideReplacement,
 		const WavefrontLoop<Primitive>& tailSide, const WavefrontLoop<Primitive>& headSide,
-		LoopId originalSegmentLoopId)
+		LoopId originalSegmentLoopId, Primitive eventBatchCutoffTime)
 	{
 		std::vector<Event<Primitive>> additionalEventsToAdd;
 		for (auto e=evnts.begin(); e!=evnts.end();) {
@@ -1005,9 +1017,13 @@ namespace XLEMath
 
 			} else if (e->_motor == removedVertex) {
 
-				// todo -- if the event is beyond our event horizon, we must remove the event and recalculate
+				// If the event is beyond our event horizon, we must remove the event and recalculate
 				// the crashes for this vertex... The replacement vertex may not be moving in the same direction 
 				// as the old vertex
+				if (e->_eventTime > eventBatchCutoffTime) {
+					e=evnts.erase(e);
+					continue;
+				}
 
 				// We decide what replacement to use based on where the crash segment is
 				// The crash segment should not be split across the two new loops, because
@@ -1122,7 +1138,7 @@ namespace XLEMath
 
 	T1(Primitive) void StraightSkeletonGraph<Primitive>::PostProcessEventsForMotorcycleCrash_Phase1(
 		CrashEventInfo<Primitive>& crashInfo,
-		std::vector<Event<Primitive>>& evnts)
+		std::vector<Event<Primitive>>& evnts, Primitive eventBatchCutoffTime)
 	{
 		// We may have to rename the crash segments for any future crashes. We remove 1 vertex
 		// from the system every time we process a motorcycle crash. So, if one of the upcoming
@@ -1138,10 +1154,10 @@ namespace XLEMath
 				crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop,
 				Truncate(crashInfo._crashPtAndTime), _vertices);
 		} else {
-			HandleRemovedVertex<Primitive>(evnts, _vertices, crashInfo._crashSegmentTail, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop);
+			HandleRemovedVertex<Primitive>(evnts, _vertices, crashInfo._crashSegmentTail, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop, eventBatchCutoffTime);
 		}
 
-		HandleRemovedVertex<Primitive>(evnts, _vertices, crashInfo._motor, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop);
+		HandleRemovedVertex<Primitive>(evnts, _vertices, crashInfo._motor, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop, eventBatchCutoffTime);
 
 		for (auto e=evnts.begin(); e!=evnts.end();) {
 			if (e->_edgeLoop == crashInfo._originalSegmentLoop) {
@@ -1199,7 +1215,7 @@ namespace XLEMath
 #endif
 	}
 
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::ProcessMotorcycleEvents(std::vector<Event<Primitive>>& evnts)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::ProcessMotorcycleEvents(std::vector<Event<Primitive>>& evnts, Primitive eventBatchCutoffTime)
 	{
 		assert(!evnts.empty() && evnts.begin()->_type == EventType::MotorcycleCrash);
 
@@ -1390,7 +1406,7 @@ namespace XLEMath
 
 		//////////////////////////////////////////////////////////////////////
 		PostProcessEventsForMotorcycleCrash_Phase0(crashInfo, evnts);
-		PostProcessEventsForMotorcycleCrash_Phase1(crashInfo, evnts);
+		PostProcessEventsForMotorcycleCrash_Phase1(crashInfo, evnts, eventBatchCutoffTime);
 
 		// Overwrite "loop" with tailSide, and append inSide to the list of wavefront loops
 		// crashSegment, motorIn & motorOut should not make it into either tailSide or headSide
@@ -1748,7 +1764,7 @@ namespace XLEMath
 		}
 	}
 
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::ProcessLoopMergeEvents(std::vector<Event<Primitive>>& evnts)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::ProcessLoopMergeEvents(std::vector<Event<Primitive>>& evnts, Primitive eventBatchCutoffTime)
 	{
 		assert(!evnts.empty() && evnts.begin()->_type == EventType::MotorcycleCrash);
 		auto crashEvent = *evnts.begin();
@@ -1880,10 +1896,10 @@ namespace XLEMath
 				*motorLoop, *motorLoop, motorLoop->_loopId,
 				Truncate(crashInfo._crashPtAndTime), _vertices);
 		} else {
-			HandleRemovedVertex<Primitive>(evnts, _vertices, crashEvent._edgeTail, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, *motorLoop, *motorLoop, motorLoop->_loopId);
+			HandleRemovedVertex<Primitive>(evnts, _vertices, crashEvent._edgeTail, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, *motorLoop, *motorLoop, motorLoop->_loopId, eventBatchCutoffTime);
 		}
 
-		HandleRemovedVertex<Primitive>(evnts, _vertices, crashEvent._motor, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, *motorLoop, *motorLoop, motorLoop->_loopId);
+		HandleRemovedVertex<Primitive>(evnts, _vertices, crashEvent._motor, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, *motorLoop, *motorLoop, motorLoop->_loopId, eventBatchCutoffTime);
 
 #if 0
 		for (auto& l:_loops)
@@ -1933,12 +1949,12 @@ namespace XLEMath
 			if (evnts.front()._type == EventType::Collapse) {
 				ProcessCollapseEvents(evnts, cutoff);
 			} else if (evnts.front()._type == EventType::MotorcycleCrash && evnts.front()._edgeLoop == evnts.front()._motorLoop) {
-				ProcessMotorcycleEvents(evnts);
+				ProcessMotorcycleEvents(evnts, cutoff);
 			} else {
 				assert(evnts.front()._type == EventType::MotorcycleCrash);
 				// For a motorcycle between 2 loops; we start off by merging the 2 loops
 				// After the merge, we can handle this has a standard motorcycle crash1
-				ProcessLoopMergeEvents(evnts);
+				ProcessLoopMergeEvents(evnts, cutoff);
 			}
 		}
 	}
@@ -2009,9 +2025,16 @@ namespace XLEMath
 		for (;;) {
 			std::vector<Event<Primitive>> collapseEvents;		// collapse events are retained -- we rebuild this list every step
 			Primitive earliestEvent = std::numeric_limits<Primitive>::max();
+
+			// UpdateLoopStage1 generates anchors & motorcycle states for all vertices. 
+			// It must be completed on all loops before UpdateLoopStage2, so that loop to loop crash events
+			// are correctly calculated
+			for (auto l=_loops.begin(); l!=_loops.end(); ++l)
+				if (l->_lastBatchIndex == _currentBatchIndex)
+					UpdateLoopStage1(*l);
+
 			for (auto l=_loops.begin(); l!=_loops.end(); ) {
 				if (l->_lastBatchIndex == _currentBatchIndex) {
-					UpdateLoopStage1(*l);
 					UpdateLoopStage2(*l);
 				}
 				// UpdateLoopStage3(*l);

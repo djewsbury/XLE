@@ -76,12 +76,18 @@ namespace XLEMath
 	T1(Primitive) std::pair<WindingType, Primitive> CalculateWindingType(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two, Primitive threshold)
 	{
 		auto sign = WindingDeterminant(zero, one, two);
+
+		// EXPERIMENTAL: Incorporate scale of the numbers in the determination (otherwise we may get inconsistent results when working with very short edges)
+		Vector2T<Primitive> mins { std::min(std::min(zero[0], one[0]), two[0]), std::min(std::min(zero[1], one[1]), two[1]) };
+		Vector2T<Primitive> maxs { std::max(std::max(zero[0], one[0]), two[0]), std::max(std::max(zero[1], one[1]), two[1]) };
+		Primitive s = std::max(maxs[0]-mins[0], maxs[1]-mins[1]);
+
 		#if SPACE_HANDINESS == SPACE_HANDINESS_CLOCKWISE
-			if (sign > threshold) return Right;
-			if (sign < -threshold) return Left;
+			if (sign > s*threshold) return Right;
+			if (sign < s*-threshold) return Left;
 		#else
-			if (sign > threshold) return {Left, sign};
-			if (sign < -threshold) return {Right, sign};
+			if (sign > s*threshold) return {Left, sign};
+			if (sign < s*-threshold) return {Right, sign};
 		#endif
 
 		Primitive d = (zero[0] - one[0]) * (two[0] - one[0]) + (zero[1] - one[1]) * (two[1] - one[1]);
@@ -273,9 +279,6 @@ namespace XLEMath
 		Primitive magFactor0 = 1, magFactor1 = 1;
 		auto winding0 = CalculateWindingType(pm1, p0, p1, epsilon*magFactor0);
 		auto winding1 = CalculateWindingType(p0, p1, p2, epsilon*magFactor1);
-
-		auto attempt0 = CalculateEdgeCollapse_Offset(pm1, p0, p1, p2);
-		(void)attempt0;	// DONT CHECK IN
 
 		if (winding0.first == WindingType::FlatV && winding1.first == WindingType::FlatV) {
 

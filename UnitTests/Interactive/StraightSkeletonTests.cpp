@@ -689,7 +689,7 @@ namespace UnitTests
 				if (f._boundary.empty()) continue;
 
 				Float3 localTestLocation = XLEMath::TransformPoint(worldToLocal, Float3(testLocation, 0));
-				if (!PtInPolygon<float>(f._boundary, Truncate(localTestLocation))) continue;
+				if (!PtInPolygon<float>(f._boundary, Truncate(localTestLocation) + Float2(0.f, 1e-4f))) continue;
 
 				Float3 avePt = Zero<Float3>(); unsigned aveCount = 0;
 				std::vector<Float3> boundaryLines;
@@ -811,30 +811,34 @@ namespace UnitTests
 	{
 		// static constexpr unsigned randomCellCount = 9u;
 		// static constexpr unsigned randomCellCount = 32u;
-		// static constexpr unsigned randomCellCount = 64u;
+		static constexpr unsigned randomCellCount = 64u;
 		// static constexpr unsigned randomCellCount = 256u;
-		static constexpr unsigned randomCellCount = 2048u;
+		// static constexpr unsigned randomCellCount = 2048u;
 
 		using namespace RenderCore;
 		class HexGridStraightSkeleton : public IInteractiveTestOverlay
 		{
 		public:
+			float ZoomFactorToScale() const
+			{
+				float scale = 1.f * (_zoomFactor + 1.f);
+				return scale;
+			}
+
 			virtual void Render(
 				RenderCore::Techniques::ParsingContext& parserContext,
 				IInteractiveTestHelper& testHelper) override
 			{
-				float zoomFactor = 1.f;
-				Float2 viewOffset{ 0.f, 0.f };
 				Float2 viewport { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
-				float scale = 8.f; // std::log(zoomFactor * gE - zoomFactor + 1.0f);
+				float scale = ZoomFactorToScale();
 				const Float3x3 localToWorld3x3 {
-					scale, 0.f, 0.5f * viewport[0] + scale * viewOffset[0],
-					0.f, scale, 0.5f * viewport[1] + scale * viewOffset[1],
-					0.f, 0.f, 1.f
+					scale, 0.f, 0.5f * viewport[0] + scale * _viewOffset[0],
+					0.f, -scale, 0.5f * viewport[1] + scale * _viewOffset[1],
+					0.f, 0.f, 1.f,
 				};
 				const Float4x4 localToWorld4x4 {
-					scale, 0.f, 0.f, 0.5f * viewport[0] + scale * viewOffset[0],
-					0.f, scale, 0.f, 0.5f * viewport[1] + scale * viewOffset[1],
+					scale, 0.f, 0.f, 0.5f * viewport[0] + scale * _viewOffset[0],
+					0.f, -scale, 0.f, 0.5f * viewport[1] + scale * _viewOffset[1],
 					0.f, 0.f, 1.f, 0.f,
 					0.f, 0.f, 0.f, 1.f
 				};
@@ -845,6 +849,12 @@ namespace UnitTests
 					for (const auto&g:_cellField._interiorGroups)
 						DrawBoundary(*overlayContext, _cellField, g, localToWorld3x3, RenderOverlays::ColorB{64, 140, 210});
 					_preview.Draw(*overlayContext, localToWorld4x4, RenderOverlays::ProjectionMode::P2D);
+
+					if (_writeVertexIndices)
+						_preview.DrawVertexIndices(*overlayContext, localToWorld4x4, RenderOverlays::ProjectionMode::P2D);
+					_preview.DrawFaceBoundary(*overlayContext, localToWorld4x4, RenderOverlays::ProjectionMode::P2D, Float2(GetCursorPos()));
+
+					RenderOverlays::DrawText{}.Alignment(RenderOverlays::TextAlignment::TopLeft).FormatAndDraw(*overlayContext, {0,0,1920,1080}, "Cell Field: %i", _cellFieldIdx);
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
@@ -858,31 +868,62 @@ namespace UnitTests
 				const OSServices::InputSnapshot& evnt,
 				IInteractiveTestHelper& testHelper) override
 			{
+				if (evnt.IsHeld_RButton()) {
+					const float mouseSensitivity = 2.0f / ZoomFactorToScale();
+					_viewOffset += Float2{evnt._mouseDelta[0] * mouseSensitivity, evnt._mouseDelta[1] * mouseSensitivity};
+				}
+				if (evnt._wheelDelta) {
+					_zoomFactor += evnt._wheelDelta / 180.f;
+					_zoomFactor = std::max(1e-4f, _zoomFactor);
+				}
+
 				if (evnt._pressedChar == 'r') {
+					++_cellFieldIdx;
 					_cellField = CreateRandomHexCellField(randomCellCount, _rng);
-					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
+					RebuildPreview();
 				} else if (evnt._pressedChar == 'q' || evnt._pressedChar == 'Q') {
-					maxInset += (evnt._pressedChar == 'Q') ? (20.f * 0.01f) : 0.01f;
-					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
+					_maxInset += (evnt._pressedChar == 'Q') ? (20.f * 0.05f) : 0.05f;
+					RebuildPreview();
 				} else if (evnt._pressedChar == 'a' || evnt._pressedChar == 'A') {
-					maxInset -= (evnt._pressedChar == 'A') ? (20.f * 0.01f) : 0.01f;
-					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
+					_maxInset -= (evnt._pressedChar == 'A') ? (20.f * 0.05f) : 0.05f;
+					RebuildPreview();
+				} else if (evnt._pressedChar == 'm') {
+					_maxInset = std::numeric_limits<float>::max();
+					RebuildPreview();
+					_maxInset = _preview.CalculateMaxInset();
 				} else if (evnt._pressedChar == ' ') {
-					_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
+					
+				} else if (evnt._pressedChar == 'v') {
+					_writeVertexIndices = !_writeVertexIndices;
 				}
 				return false;
+			}
+
+			void RebuildPreview()
+			{
+				_preview = StraightSkeletonPreview<float>(_cellField, _maxInset);
+				_preview.CalculateFaces();
 			}
 
 			HexCellField _cellField;
 			StraightSkeletonPreview<float> _preview;
 			std::mt19937_64 _rng;
-			float maxInset = 30.f;
+			float _maxInset = .59f; // 30.f;
+			Float2 _viewOffset { 0.f, 0.f };
+			float _zoomFactor { 1.0f };
+			bool _writeVertexIndices = false;
+			unsigned _cellFieldIdx = 0;
 			
 			HexGridStraightSkeleton(std::mt19937_64&& rng)
 			: _rng(std::move(rng))
 			{
 				_cellField = CreateRandomHexCellField(randomCellCount, _rng);
-				_preview = StraightSkeletonPreview<float>(_cellField, maxInset);
+				RebuildPreview();
+				while (_cellFieldIdx<47) {
+					++_cellFieldIdx;
+					_cellField = CreateRandomHexCellField(randomCellCount, _rng);
+					RebuildPreview();
+				}
 			}
 		};
 
@@ -1007,7 +1048,7 @@ namespace UnitTests
 
 			// We want to support paths with holes, etc, which requires complicated triangulations
 			std::vector<GeometryUtil::Vertex2D<Primitive>> pts, ptsInterior;
-			StraightSkeletonCalculator<Primitive> calculator; //, calculatorInterior;
+			StraightSkeletonCalculator<Primitive> calculator;
 			for (auto& sp:subpaths) {
 				assert(!sp._segments.empty());
 				auto ptsSize = pts.size();
