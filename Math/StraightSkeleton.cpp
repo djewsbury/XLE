@@ -245,16 +245,11 @@ namespace XLEMath
 		auto d1Sq = std::copysign(d1*d1, d1);
 		Primitive eSq = epsilon * epsilon * edgeMagSq;
 		if (d0Sq < -eSq || d1Sq < -eSq)
-		// if (d0Sq < 0 || d1Sq < 0)
 			return {};
 
-		if (d0Sq < eSq) {
-			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Head, pointAndTime };
-		} else if (d1Sq < eSq) {
-			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Tail, pointAndTime };
-		} else {
-			return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Middle, pointAndTime };
-		}
+		if (d0Sq < eSq) 		return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Head, pointAndTime };
+		else if (d1Sq < eSq) 	return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Tail, pointAndTime };
+		else 					return ProtoCrashEvent<Primitive> { ProtoCrashEvent<Primitive>::Type::Middle, pointAndTime };
 	}
 
 	T1(Primitive) static std::optional<ProtoCrashEvent<Primitive>> BuildCrashEvent_Simultaneous(
@@ -526,8 +521,11 @@ namespace XLEMath
 
 		for (const auto&e:loop._edges) {
 			auto collapseTime = e._collapsePt[2];
-			// assert(collapseTime >= loop._lastEventBatchEarliest || loop._lastEventBatchEarliest > loop._lastEventBatchLatest);
-			if (collapseTime < (earliestTime + s_maxEventChain * GetTimeEpsilon<Primitive>())) {
+			// Protect against processing collapses from the past. These might be a result of precision errors. We could also consider just collapsing
+			// the vertex now to the average of the two positions
+			Primitive mustBeAfter = std::max(loop._lastEventBatchLatest, loop._lastEventBatchLatest);
+			Primitive mustBeBefore = earliestTime + s_maxEventChain * GetTimeEpsilon<Primitive>();
+			if (mustBeAfter < collapseTime && collapseTime < mustBeBefore) {
 				events.push_back(Event<Primitive>::Collapse(loop._loopId, e._collapsePt, e._head, e._tail));
 				earliestTime = std::min(collapseTime, earliestTime);
 			}
@@ -1006,10 +1004,14 @@ namespace XLEMath
 				if (useHeadSidePart) {
 					e->_edgeHead = (e->_edgeHead == removedVertex) ? headSideReplacement : e->_edgeHead;
 					e->_edgeTail = (e->_edgeTail == removedVertex) ? headSideReplacement : e->_edgeTail;
+					assert(e->_edgeHead != e->_motor && e->_edgeTail != e->_motor);
+					assert(e->_edgeHead != tailSideReplacement && e->_edgeTail != tailSideReplacement);	// very awkward situation that can cause the loop to get re-merged
 					SetEdgeLoop(headSide, *e);
 				} else {
 					e->_edgeHead = (e->_edgeHead == removedVertex) ? tailSideReplacement : e->_edgeHead;
 					e->_edgeTail = (e->_edgeTail == removedVertex) ? tailSideReplacement : e->_edgeTail;
+					assert(e->_edgeHead != e->_motor && e->_edgeTail != e->_motor);
+					assert(e->_edgeHead != headSideReplacement && e->_edgeTail != headSideReplacement);	// very awkward situation that can cause the loop to get re-merged
 					SetEdgeLoop(tailSide, *e);
 				}
 
@@ -1038,9 +1040,13 @@ namespace XLEMath
 
 					if (useHeadSidePart) {
 						e->_motor = headSideReplacement;
+						assert(e->_edgeHead != e->_motor && e->_edgeTail != e->_motor);
+						assert(e->_edgeHead != tailSideReplacement && e->_edgeTail != tailSideReplacement);	// very awkward situation that can cause the loop to get re-merged
 						SetMotorLoop(headSide, *e);
 					} else {
 						e->_motor = tailSideReplacement;
+						assert(e->_edgeHead != e->_motor && e->_edgeTail != e->_motor);
+						assert(e->_edgeHead != headSideReplacement && e->_edgeTail != headSideReplacement);	// very awkward situation that can cause the loop to get re-merged
 						SetMotorLoop(tailSide, *e);
 					}
 				} else {
@@ -1048,8 +1054,12 @@ namespace XLEMath
 					// We need to split it into two events
 					auto additionalEvent = *e;
 					e->_motor = headSideReplacement;
+					assert(e->_edgeHead != e->_motor && e->_edgeTail != e->_motor);
+					assert(e->_edgeHead != tailSideReplacement && e->_edgeTail != tailSideReplacement);	// very awkward situation that can cause the loop to get re-merged
 					SetMotorLoop(headSide, *e);
 					additionalEvent._motor = tailSideReplacement;
+					assert(additionalEvent._edgeHead != additionalEvent._motor && additionalEvent._edgeTail != additionalEvent._motor);
+					assert(additionalEvent._edgeHead != headSideReplacement && additionalEvent._edgeTail != headSideReplacement);	// very awkward situation that can cause the loop to get re-merged
 					SetMotorLoop(tailSide, additionalEvent);
 					additionalEventsToAdd.emplace_back(additionalEvent);
 				}
@@ -1127,12 +1137,26 @@ namespace XLEMath
 		}
 
 		{
-			// after motor->vertex events, we can end up duplicating the same motorcycle event multiple times
-			auto i = std::remove_if(b2e(evnts),
-				[&](const auto& q) {
-					return q._motor == crashInfo._motor && q._edgeTail == crashInfo._crashSegmentTail && q._edgeHead == crashInfo._crashSegmentHead;
-				});
-			evnts.erase(i, evnts.end());
+			// We can end up duplicating the same motorcycle event multiple times, due to a lack of filtering when we create the events
+			// For crash vs vertex, we want to remove both duplicate crash vs vertex, and crashes vs edges containing that vertex
+			// and flipped for crash vs edge
+			if (crashInfo._crashSegmentTail == crashInfo._crashSegmentHead) {
+				auto i = std::remove_if(b2e(evnts),
+					[&](const auto& q) {
+						return q._motor == crashInfo._motor && (q._edgeTail == crashInfo._crashSegmentTail || q._edgeHead == crashInfo._crashSegmentTail);
+					});
+				evnts.erase(i, evnts.end());
+			} else {
+				auto i = std::remove_if(b2e(evnts),
+					[&](const auto& q) {
+						return q._motor == crashInfo._motor && (
+							(q._edgeTail == crashInfo._crashSegmentTail && q._edgeHead == crashInfo._crashSegmentHead)
+							|| (q._edgeTail == crashInfo._crashSegmentTail && q._edgeHead == crashInfo._crashSegmentTail)	// crash vs vertex case 0
+							|| (q._edgeTail == crashInfo._crashSegmentHead && q._edgeHead == crashInfo._crashSegmentHead)	// crash vs vertex case 1
+							);
+					});
+				evnts.erase(i, evnts.end());
+			}
 		}
 	}
 
@@ -2173,7 +2197,7 @@ namespace XLEMath
 						~0u, GetVertex(i->_tail)._outsideFace,
 						StraightSkeleton<Primitive>::EdgeType::Wavefront);
 				} else {
-					// This should be two overlapping edging. They were frozen like this after a motorcycle or a collapse
+					// This should be two overlapping edges. They were frozen like this after a motorcycle or a collapse
 					// with no further events. It must be a vertex path (going both ways), since there's no area within
 					// the wavefront
 					assert(loop._edges[0]._head == loop._edges[1]._tail && loop._edges[0]._tail == loop._edges[1]._head);

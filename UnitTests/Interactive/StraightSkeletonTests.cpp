@@ -821,7 +821,7 @@ namespace UnitTests
 		public:
 			float ZoomFactorToScale() const
 			{
-				float scale = 1.f * (_zoomFactor + 1.f);
+				float scale = 10.f * (_zoomFactor + 1.f);
 				return scale;
 			}
 
@@ -892,7 +892,7 @@ namespace UnitTests
 					RebuildPreview();
 					_maxInset = _preview.CalculateMaxInset();
 				} else if (evnt._pressedChar == ' ') {
-					
+					RebuildPreview();
 				} else if (evnt._pressedChar == 'v') {
 					_writeVertexIndices = !_writeVertexIndices;
 				}
@@ -908,7 +908,7 @@ namespace UnitTests
 			HexCellField _cellField;
 			StraightSkeletonPreview<float> _preview;
 			std::mt19937_64 _rng;
-			float _maxInset = .59f; // 30.f;
+			float _maxInset = 3.46398640f; // 30.f;
 			Float2 _viewOffset { 0.f, 0.f };
 			float _zoomFactor { 1.0f };
 			bool _writeVertexIndices = false;
@@ -918,12 +918,11 @@ namespace UnitTests
 			: _rng(std::move(rng))
 			{
 				_cellField = CreateRandomHexCellField(randomCellCount, _rng);
-				RebuildPreview();
-				while (_cellFieldIdx<47) {
+				while (_cellFieldIdx<166) {
 					++_cellFieldIdx;
 					_cellField = CreateRandomHexCellField(randomCellCount, _rng);
-					RebuildPreview();
 				}
+				RebuildPreview();
 			}
 		};
 
