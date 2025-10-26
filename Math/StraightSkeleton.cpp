@@ -585,8 +585,11 @@ namespace XLEMath
 				// stays at the original position
 				if (v0._anchor0 != v0._anchor1) {
 					v0._lastValidAnchor1 = v0._anchor1;
-   					bool hasMotorCycle = std::find_if(b2e(_futureEvents), [v=edge->_tail](const auto&c) { return c._motor == v; }) != _futureEvents.end();
-   					assert(!hasMotorCycle);
+
+					// We might already have motorcycles associated with this vertex, because of the renaming scheme
+   					// bool hasMotorCycle = std::find_if(b2e(_futureEvents), [v=edge->_tail](const auto&c) { return c._motor == v; }) != _futureEvents.end();
+   					// assert(!hasMotorCycle);
+
 					auto vp0 = GetVertex(prevEdge->_tail).PositionAtTime(calcTime);
 					auto vp1 = GetVertex(edge->_tail).PositionAtTime(calcTime);
 					auto vp2 = GetVertex(edge->_head).PositionAtTime(calcTime);
@@ -693,7 +696,10 @@ namespace XLEMath
 			prevE->_pendingCalculate = false;
 		}
 
-		// not -- not filtering out crash events beyond the event horizon for an individual motor
+		for (const auto& q:_futureEvents) assert(q._type == EventType::MotorcycleCrash);
+		assert(std::is_sorted(b2e(_futureEvents), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; }));
+
+		// note -- not filtering our crash events beyond the event horizon for an individual motor
 		std::stable_sort(b2e(newEvents), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
 		auto midway = _futureEvents.size();
 		_futureEvents.insert(_futureEvents.end(), newEvents.begin(), newEvents.end());
@@ -848,7 +854,10 @@ namespace XLEMath
 				ValidateUpdatedEvent(vSet, e);
 			}
 		}
+		std::sort(additionalEventsToAdd.begin(), additionalEventsToAdd.end(), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
+		auto midway = evnts.size();
 		evnts.insert(evnts.end(), additionalEventsToAdd.begin(), additionalEventsToAdd.end());
+		std::inplace_merge(evnts.begin(), evnts.begin()+midway, evnts.end(), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
 	}
 
 	T1(Primitive) static void HandleRemovedVertex(
@@ -861,7 +870,12 @@ namespace XLEMath
 		std::vector<Event<Primitive>> additionalEventsToAdd;
 		for (auto e=evnts.begin(); e!=evnts.end();) {
 			if (e->_edgeHead == removedVertex || e->_edgeTail == removedVertex) {
-				assert(e->_motor != removedVertex);
+
+				if (e->_motor == removedVertex) {
+					e=evnts.erase(e);		// collapsed into a degenerate event, protect against the calculations below going haywire
+					continue;
+				}
+				
 				bool useHeadSidePart = true;
 				if (e->_edgeHead != removedVertex || e->_edgeTail != removedVertex) {		// If this is not a single vertex collision (with that vertex being the removed one)
 					if (&tailSide != &headSide) {
@@ -998,7 +1012,10 @@ namespace XLEMath
 
 			++e;
 		}
+		std::sort(additionalEventsToAdd.begin(), additionalEventsToAdd.end(), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
+		auto midway = evnts.size();
 		evnts.insert(evnts.end(), additionalEventsToAdd.begin(), additionalEventsToAdd.end());
+		std::inplace_merge(evnts.begin(), evnts.begin()+midway, evnts.end(), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
 	}
 
 #if 0
@@ -1042,16 +1059,26 @@ namespace XLEMath
 		std::vector<Event<Primitive>>& evnts)
 	{
 		unsigned crashSegmentTail = crashInfo._crashSegmentTail, crashSegmentHead = crashInfo._crashSegmentHead;
-		auto crashPtAndTime = crashInfo._crashPtAndTime;
 
 		// In the single vertex collision case, we need to look for a complementary motor, which is just the same thing, but reversed
 		// It's safe to remove this, since the only processing required is what we've already done
-		if (crashSegmentHead == crashSegmentTail)
-			for (auto pendingEvent=evnts.begin(); pendingEvent!=evnts.end();++pendingEvent)
-				if (pendingEvent->_motor == crashSegmentHead && pendingEvent->_edgeHead == crashInfo._motor && pendingEvent->_edgeTail == crashInfo._motor) {
-					evnts.erase(pendingEvent);
-					break;
-				}
+		// Sometimes the complementary case will look like a motor vs edge case
+		if (crashSegmentHead == crashSegmentTail) {
+			auto i = std::remove_if(b2e(evnts),
+				[&](const auto& q) {
+					return 
+						(q._motor == crashSegmentHead && q._edgeTail == crashInfo._motor && q._edgeHead == crashInfo._motor)		// simple complement
+						|| (q._motor == crashSegmentHead && (q._edgeTail == crashInfo._motor || q._edgeHead == crashInfo._motor));	// complex complement
+				});
+			evnts.erase(i, evnts.end());
+		} else {
+			// as above, look for the complex complement (edge head or tail crashing to the motor as a vertex to vertex motor)
+			auto i = std::remove_if(b2e(evnts),
+				[&](const auto& q) {
+					return (q._motor == crashSegmentHead || q._motor == crashSegmentTail) && q._edgeTail == crashInfo._motor && q._edgeHead == crashInfo._motor;
+				});
+			evnts.erase(i, evnts.end());
+		}
 
 		{
 			// after motor->vertex events, we can end up duplicating the same motorcycle event multiple times
@@ -1071,21 +1098,17 @@ namespace XLEMath
 		// from the system every time we process a motorcycle crash. So, if one of the upcoming
 		// crash events involves this vertex, we have rename it to either the new vertex on the
 		// inSide, or on the tailSide
-		unsigned crashSegmentTail = crashInfo._crashSegmentTail, crashSegmentHead = crashInfo._crashSegmentHead;
-		auto crashPtAndTime = crashInfo._crashPtAndTime;
-
-		
 
 		// Process the crashSegmentHead <-- crashSegmentTail edge first
-		if (crashSegmentHead != crashSegmentTail) {
+		if (crashInfo._crashSegmentHead != crashInfo._crashSegmentTail) {
 			HandleEdgeSplit<Primitive>(
 				evnts, _vertices,
-				crashSegmentTail, crashSegmentHead,
+				crashInfo._crashSegmentTail, crashInfo._crashSegmentHead,
 				crashInfo._tailSideReplacement, crashInfo._headSideReplacement,
 				crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop,
-				Truncate(crashPtAndTime), _vertices);
+				Truncate(crashInfo._crashPtAndTime), _vertices);
 		} else {
-			HandleRemovedVertex<Primitive>(evnts, _vertices, crashSegmentTail, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop);
+			HandleRemovedVertex<Primitive>(evnts, _vertices, crashInfo._crashSegmentTail, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop);
 		}
 
 		HandleRemovedVertex<Primitive>(evnts, _vertices, crashInfo._motor, crashInfo._tailSideReplacement, crashInfo._headSideReplacement, crashInfo._tailSide, crashInfo._headSide, crashInfo._originalSegmentLoop);
@@ -1480,8 +1503,8 @@ namespace XLEMath
 
 			// Also remove any motorcycles associated with these vertices (since they will be removed
 			// from active loops, the motorcycle is no longer valid)
+			assert(*v != VertexId(~0u));
 			auto i = std::remove_if(b2e(evnts), [q=*v](const auto& e) { return e._motor == q; });
-			assert(i == evnts.end());		// not sure if this is still relevant, or if it will always been cleaned up in earlier steps
 			evnts.erase(i, evnts.end());
 		}
 
@@ -1982,22 +2005,22 @@ namespace XLEMath
 				auto i = _futureEvents.begin(), i2 = collapseEvents.begin();
 				while (i!=_futureEvents.end() && i2!=collapseEvents.end()) {
 					if (i->_eventTime < i2->_eventTime) {
-						if (i->_eventTime >= cutoff) break;
-						if (!mergedEvents.empty() && (i->_eventTime-mergedEvents.back()._eventTime) >= GetTimeEpsilon<Primitive>()) break;
+						if (i->_eventTime > cutoff) break;
+						if (!mergedEvents.empty() && (i->_eventTime-mergedEvents.back()._eventTime) > GetTimeEpsilon<Primitive>()) break;
 						cutoff = std::min(cutoff, i->_eventTime+s_maxEventChain*GetTimeEpsilon<Primitive>());
 						mergedEvents.push_back(*i);
 						++i;
 					} else {
-						if (i2->_eventTime >= cutoff) break;
-						if (!mergedEvents.empty() && (i2->_eventTime-mergedEvents.back()._eventTime) >= GetTimeEpsilon<Primitive>()) break;
+						if (i2->_eventTime > cutoff) break;
+						if (!mergedEvents.empty() && (i2->_eventTime-mergedEvents.back()._eventTime) > GetTimeEpsilon<Primitive>()) break;
 						cutoff = std::min(cutoff, i2->_eventTime+s_maxEventChain*GetTimeEpsilon<Primitive>());
 						mergedEvents.push_back(*i2);
 						++i2;
 					}
 				}
 				while (i2!=collapseEvents.end()) {
-					if (i2->_eventTime >= cutoff) break;
-					if (!mergedEvents.empty() && (i2->_eventTime-mergedEvents.back()._eventTime) >= GetTimeEpsilon<Primitive>()) break;
+					if (i2->_eventTime > cutoff) break;
+					if (!mergedEvents.empty() && (i2->_eventTime-mergedEvents.back()._eventTime) > GetTimeEpsilon<Primitive>()) break;
 					cutoff = std::min(cutoff, i2->_eventTime+s_maxEventChain*GetTimeEpsilon<Primitive>());
 					mergedEvents.push_back(*i2);
 					++i2;
