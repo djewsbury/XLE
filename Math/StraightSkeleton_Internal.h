@@ -6,16 +6,16 @@
 #include "Matrix.h"
 #include <optional>
 
-#include "..\..\XLEExt\Foreign\delabella\predicates.h"		// todo -- test -- don't check in
+#include "..\..\XLEExt\Foreign\delabella\predicates.h"		// todo -- fix up paths, etc
 
 // We can define the handiness of 2D space as such:
-// If we wanted to rotate the X axis so that it lies on the Y axis, 
+// If we wanted to rotate the X axis so that it lies on the Y axis,
 // which is the shortest direction to rotate in? Is it clockwise, or counterclockwise?
 // "SPACE_HANDINESS_COUNTERCLOCKWISE" corresponds to a space in which +Y points up the page, and +X to the right
 // "SPACE_HANDINESS_CLOCKWISE" corresponds to a space in which +Y points down the page, and +X to the right
 #define SPACE_HANDINESS_CLOCKWISE 1
 #define SPACE_HANDINESS_COUNTERCLOCKWISE 2
-#define SPACE_HANDINESS SPACE_HANDINESS_COUNTERCLOCKWISE 
+#define SPACE_HANDINESS SPACE_HANDINESS_COUNTERCLOCKWISE
 
 namespace XLEMath
 {
@@ -70,7 +70,7 @@ namespace XLEMath
 	{
 		// This is the 2d dot product of (one - zero) and a vector orthogonal to two - zero
 		// return (one[0] - zero[0]) * (two[1] - zero[1]) - (one[1] - zero[1]) * (two[0] - zero[0]);
-		return predicates::adaptive::orient2d(&zero[0], &one[0], &two[0]);		// DONT CHECK IN -- TEST
+		return predicates::adaptive::orient2d(&zero[0], &one[0], &two[0]);
 	}
 
 	T1(Primitive) std::pair<WindingType, Primitive> CalculateWindingType(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two, Primitive threshold)
@@ -106,7 +106,7 @@ namespace XLEMath
 			result[c] = input[c] * mag / scale;
 		return result;
 	}
-	
+
 	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
 		-> typename std::enable_if<std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
 	{
@@ -143,7 +143,7 @@ namespace XLEMath
 		// Solving for simultaneous equations.... If tu != sv, then:
 		// x = (it - jv) / (sv - tu)
 		// y = (ju - is) / (sv - tu)
-		
+
 		// For some primitive types we should promote to higher precision
 		//			types here (eg, we will get int32_t overflows if we don't promote here)
 
@@ -152,7 +152,7 @@ namespace XLEMath
 		auto Bx = (WorkingPrim)zero.second[0], By = (WorkingPrim)zero.second[1];
 		auto Cx = (WorkingPrim)one.first[0], Cy = (WorkingPrim)one.first[1];
 		auto Dx = (WorkingPrim)one.second[0], Dy = (WorkingPrim)one.second[1];
-		
+
 		auto u = By-Ay, v = Ax-Bx, i = Ay*Bx-Ax*By;
 		auto s = Dy-Cy, t = Cx-Dx, j = Cy*Dx-Cx*Dy;
 
@@ -174,7 +174,7 @@ namespace XLEMath
 
 		auto N0 = SetMagnitude(EdgeTangentToMovementDir(t0), movementTime);
 		auto N1 = SetMagnitude(EdgeTangentToMovementDir(t1), movementTime);
-    
+
 		auto A = vex0 - vex1 + N0;
 		auto B = N0;
 		auto C = N1;
@@ -259,10 +259,10 @@ namespace XLEMath
 		// if the middle segment is of a reasonable length, use it -- otherwise use the other points
 		if (std::max(std::abs(diff[0]), std::abs(diff[1])) > GetEpsilon<Primitive>()) {
 			auto movement = EdgeTangentToMovementDir<Primitive>(p1 - p0);
-			return { movement / std::hypot(movement[0], movement[1]), Primitive(1) }; 
+			return { movement / std::hypot(movement[0], movement[1]), Primitive(1) };
 		} else {
 			auto movement = EdgeTangentToMovementDir<Primitive>(p2 - pm1);
-			return { movement / std::hypot(movement[0], movement[1]), Primitive(1) }; 
+			return { movement / std::hypot(movement[0], movement[1]), Primitive(1) };
 		}
 	}
 
@@ -395,7 +395,7 @@ namespace XLEMath
 			// = (A^2+C^2)t^2 + (2AB+2CD)t + B^2+D^2
 			// a = A+C, b = 2AB+2CD, c = B^2+D^2
 			//
-			// either find the intersections with zero at 
+			// either find the intersections with zero at
 			// t = (-b +/- sqrt(b^2 - 4ac)) / 2a
 			// or minimum with -b/2a
 
@@ -499,7 +499,7 @@ namespace XLEMath
 	}
 
 	T1(Primitive) static std::optional<PointAndTime<Primitive>> FindCrashEvent(
-		Vector2T<Primitive> edgeHead, Vector2T<Primitive> edgeTail, 
+		Vector2T<Primitive> edgeHead, Vector2T<Primitive> edgeTail,
 		Vector2T<Primitive> motorPrev, Vector2T<Primitive> motorNext)
 	{
 		Matrix3x3T<Primitive> M;
