@@ -1053,6 +1053,9 @@ namespace UnitTests
 					polySection._maxs[1] = std::max(polySection._maxs[1], s._B[1]);
 				}
 
+			for (auto& sp:subpaths)
+				sp._segments.erase(std::remove_if(b2e(sp._segments), [](const auto& q) { return q._length < 1e-3f; }), sp._segments.end());
+
 			// We want to support paths with holes, etc, which requires complicated triangulations
 			std::vector<GeometryUtil::Vertex2D<Primitive>> pts, ptsInterior;
 			StraightSkeletonCalculator<Primitive> calculator;
@@ -1517,13 +1520,28 @@ namespace UnitTests
 		class SwitchStraightSkeletonOverlay : public IInteractiveTestOverlay
 		{
 		public:
+			float ZoomFactorToScale() const
+			{
+				float scale = 5.f * (_zoomFactor + 1.f);
+				return scale;
+			}
+
 			virtual void Render(
 				RenderCore::Techniques::ParsingContext& parserContext,
 				IInteractiveTestHelper& testHelper) override
 			{
+				Float2 viewport { parserContext.GetViewport()._width, parserContext.GetViewport()._height };
+				float scale = ZoomFactorToScale();
+				Float4x4 localToWorld4x4 {
+					scale, 0.f, 0.f, 0.5f * viewport[0] + scale * _viewOffset[0],
+					0.f, -scale, 0.f, 0.5f * viewport[1] + scale * _viewOffset[1],
+					0.f, 0.f, 1.f, 0.f,
+					0.f, 0.f, 0.f, 1.f
+				};
+
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus());
-					_preview.Draw(*overlayContext, Identity<Float4x4>(), RenderOverlays::ProjectionMode::P3D);
+					_preview.Draw(*overlayContext, localToWorld4x4, RenderOverlays::ProjectionMode::P2D);
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);
@@ -1537,12 +1555,25 @@ namespace UnitTests
 				const OSServices::InputSnapshot& evnt,
 				IInteractiveTestHelper& testHelper) override
 			{
+				if (evnt.IsHeld_RButton()) {
+					const float mouseSensitivity = 2.0f / ZoomFactorToScale();
+					_viewOffset += Float2{evnt._mouseDelta[0] * mouseSensitivity, evnt._mouseDelta[1] * mouseSensitivity};
+				}
+				if (evnt._wheelDelta) {
+					_zoomFactor += evnt._wheelDelta / 180.f;
+					_zoomFactor = std::max(1e-4f, _zoomFactor);
+				}
+
 				if (evnt._pressedChar == 'q' || evnt._pressedChar == 'Q') {
-					_maxInset += (evnt._pressedChar == 'Q') ? (20.f * 0.01f) : 0.01f;
+					_maxInset += (evnt._pressedChar == 'Q') ? (20.f * 0.05f) : 0.05f;
 					_preview = StraightSkeletonPreview<float>(_inputs[_currentInputIdx], _maxInset);
 				} else if (evnt._pressedChar == 'a' || evnt._pressedChar == 'A') {
-					_maxInset -= (evnt._pressedChar == 'A') ? (20.f * 0.01f) : 0.01f;
+					_maxInset -= (evnt._pressedChar == 'A') ? (20.f * 0.05f) : 0.05f;
 					_preview = StraightSkeletonPreview<float>(_inputs[_currentInputIdx], _maxInset);
+				} else if (evnt._pressedChar == 'm') {
+					_maxInset = std::numeric_limits<float>::max();
+					_preview = StraightSkeletonPreview<float>(_inputs[_currentInputIdx], _maxInset);
+					_maxInset = _preview.CalculateMaxInset();
 				} else if (evnt._pressedChar == ' ') {
 					_currentInputIdx = (_currentInputIdx+1)%_inputs.size();
 					_preview = StraightSkeletonPreview<float>(_inputs[_currentInputIdx], _maxInset);
@@ -1560,6 +1591,8 @@ namespace UnitTests
 			std::vector<std::vector<Float2>> _inputs;
 			size_t _currentInputIdx = 0; 
 			float _maxInset = 50.f;
+			Float2 _viewOffset { 10.f, -5.f };
+			float _zoomFactor { 1.0f };
 			
 			SwitchStraightSkeletonOverlay() {}
 		};
