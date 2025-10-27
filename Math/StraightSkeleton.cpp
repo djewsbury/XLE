@@ -69,7 +69,7 @@ namespace XLEMath
 	};
 
 #if 0
-    T1(Primitive) struct MotorcycleSegment
+	T1(Primitive) struct MotorcycleSegment
 	{
 		VertexId _motor;
 		PointAndTime<Primitive> _crashPt = PointAndTime<Primitive>{0,0,std::numeric_limits<Primitive>::max()};
@@ -138,14 +138,14 @@ namespace XLEMath
 
 	template<typename Iterator>
 		static auto FindInAndOut(IteratorRange<Iterator> edges, unsigned pivotVertex) -> std::pair<Iterator, Iterator>
-    {
-        Iterator first = edges.end(), second = edges.end();
-        for  (auto s=edges.begin(); s!=edges.end(); ++s) {
-            if (s->_head == pivotVertex) { assert(first == edges.end()); first = s; }
-            else if (s->_tail == pivotVertex) { assert(second == edges.end()); second = s; }
-        }
-        return {first, second};
-    }
+	{
+		Iterator first = edges.end(), second = edges.end();
+		for  (auto s=edges.begin(); s!=edges.end(); ++s) {
+			if (s->_head == pivotVertex) { assert(first == edges.end()); first = s; }
+			else if (s->_tail == pivotVertex) { assert(second == edges.end()); second = s; }
+		}
+		return {first, second};
+	}
 
 	T1(Primitive) const Vertex<Primitive>& GetVertex(VertexSet<Primitive> vSet, VertexId v)
 	{
@@ -580,7 +580,7 @@ namespace XLEMath
 			assert(prevEdge->_head == edge->_tail);
 			auto& v0 = _vertices[edge->_tail];
 			if (v0._anchor0 == v0._anchor1) {
-			    assert(v0._motorcycleState == VertexMotorcycleState::Uncalculated);
+				assert(v0._motorcycleState == VertexMotorcycleState::Uncalculated);
 				auto next = edge+1;
 				if (next == loop._edges.end()) next = loop._edges.begin();
 				// we must calculate the velocity at the max initial time -- (this should always be the crash time)
@@ -629,27 +629,27 @@ namespace XLEMath
 
 	T1(Primitive) static std::optional<Event<Primitive>> AsMotorcycleCrash(const ProtoCrashEvent<Primitive>& protoCrash, VertexId edgeTail, VertexId edgeHead, LoopId edgeLoop, VertexId motor, const WavefrontLoop<Primitive>& motorLoop)
 	{
-        Event<Primitive> event;
-    	event._eventPt = Truncate(protoCrash._pointAndTime);
-    	event._eventTime = protoCrash._pointAndTime[2];
-    	event._edgeLoop = edgeLoop;
-    	event._motor = motor;
-    	event._motorLoop = motorLoop._loopId;
-    	event._type = EventType::MotorcycleCrash;
-    	if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Head) {
-    		auto inAndOut = FindInAndOut(MakeIteratorRange(motorLoop._edges), motor); assert(inAndOut.first != motorLoop._edges.end()); assert(inAndOut.second != motorLoop._edges.end());
-    		if (edgeHead == inAndOut.first->_tail) return {};		// reject crashes when there is a direct edge between the motor and the point
-    		event._edgeHead = event._edgeTail = edgeHead;
-    	} else if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Tail) {
-    		auto inAndOut = FindInAndOut(MakeIteratorRange(motorLoop._edges), motor); assert(inAndOut.first != motorLoop._edges.end()); assert(inAndOut.second != motorLoop._edges.end());
-    		if (edgeTail == inAndOut.second->_head) return {};		// reject crashes when there is a direct edge between the motor and the point
-    		event._edgeHead = event._edgeTail = edgeTail;
-    	} else {
-    		event._edgeHead = edgeHead;
-    		event._edgeTail = edgeTail;
-    	}
+		Event<Primitive> event;
+		event._eventPt = Truncate(protoCrash._pointAndTime);
+		event._eventTime = protoCrash._pointAndTime[2];
+		event._edgeLoop = edgeLoop;
+		event._motor = motor;
+		event._motorLoop = motorLoop._loopId;
+		event._type = EventType::MotorcycleCrash;
+		if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Head) {
+			auto inAndOut = FindInAndOut(MakeIteratorRange(motorLoop._edges), motor); assert(inAndOut.first != motorLoop._edges.end()); assert(inAndOut.second != motorLoop._edges.end());
+			if (edgeHead == inAndOut.first->_tail) return {};		// reject crashes when there is a direct edge between the motor and the point
+			event._edgeHead = event._edgeTail = edgeHead;
+		} else if (protoCrash._type == ProtoCrashEvent<Primitive>::Type::Tail) {
+			auto inAndOut = FindInAndOut(MakeIteratorRange(motorLoop._edges), motor); assert(inAndOut.first != motorLoop._edges.end()); assert(inAndOut.second != motorLoop._edges.end());
+			if (edgeTail == inAndOut.second->_head) return {};		// reject crashes when there is a direct edge between the motor and the point
+			event._edgeHead = event._edgeTail = edgeTail;
+		} else {
+			event._edgeHead = edgeHead;
+			event._edgeTail = edgeTail;
+		}
 		assert(event._motor != event._edgeHead && event._motor != event._edgeTail);
-        return event;
+		return event;
 	}
 
 	T1(Primitive) void StraightSkeletonGraph<Primitive>::UpdateLoopStage2(WavefrontLoop<Primitive>& loop, bool updatedLoop, IteratorRange<const NewMotorcycle*> newMotorcycles)
@@ -661,7 +661,7 @@ namespace XLEMath
 				e._collapsePt = PointAndTime<Primitive>{0,0,std::numeric_limits<Primitive>::max()};
 				_vertices[e._tail]._anchor1 = _vertices[e._tail]._anchor0;
 #if 0
-                for (auto& motorLoop:_loops) {
+				for (auto& motorLoop:_loops) {
 					for (auto m=motorLoop._motorcycleSegments.begin(); m!=motorLoop._motorcycleSegments.end(); ++m) {
 						if (m->_pendingCalculate) continue;
 						if (m->_edgeHead == e._head || m->_edgeHead == e._tail || m->_edgeTail == e._head || m->_edgeTail == e._tail) { m->_pendingCalculate = true; continue; }
@@ -798,7 +798,7 @@ namespace XLEMath
 	}
 
 #if 0
-    T1(Primitive) void StraightSkeletonGraph<Primitive>::UpdateLoopStage3(WavefrontLoop<Primitive>& loop)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::UpdateLoopStage3(WavefrontLoop<Primitive>& loop)
 	{
 		if (ConsiderStationary(loop)) return;
 
@@ -2043,11 +2043,6 @@ namespace XLEMath
 			}
 		#endif
 
-		if (evnts.front()._eventTime >= 55.57) {
-			int c=0;
-			(void)c;
-		}
-
 		// Keep processing events until there are no more to do
 		while (!evnts.empty() && evnts.front()._eventTime <= cutoff) {
 			if (evnts.front()._type == EventType::Collapse) {
@@ -2187,9 +2182,9 @@ namespace XLEMath
 			_futureEvents = std::move(mergedEvents);
 
 			// If we do not find any more events, the remaining wavefronts will expand infinitely.
-            // This case isn't perfectly handled currently, we'll just complete the loop here if
-            // it has started.  If it has not started, skip it.
-            if (_futureEvents.empty() || _futureEvents.front()._eventTime >= maxTime)
+			// This case isn't perfectly handled currently, we'll just complete the loop here if
+			// it has started.  If it has not started, skip it.
+			if (_futureEvents.empty() || _futureEvents.front()._eventTime >= maxTime)
 				break;
 
 			ProcessEvents(_futureEvents, cutoff);

@@ -29,25 +29,25 @@ namespace XLEMath
 	template<> inline const Vector2T<int64_t>& Zero<Vector2T<int64_t>>() { static Vector2T<int64_t> result(0ll, 0ll); return result; }
 	template<> inline const Vector3T<int64_t>& Zero<Vector3T<int64_t>>() { static Vector3T<int64_t> result(0ll, 0ll, 0ll); return result; }
 
-    T1(T) auto IsFiniteNumber(T value) -> typename std::enable_if<std::is_floating_point<T>::value, bool>::type
-    {
-        auto type = std::fpclassify(value);
-        return ((type == FP_NORMAL) || (type == FP_SUBNORMAL) || (type == FP_ZERO)) && (value == value);
-    }
+	T1(T) auto IsFiniteNumber(T value) -> typename std::enable_if<std::is_floating_point<T>::value, bool>::type
+	{
+		auto type = std::fpclassify(value);
+		return ((type == FP_NORMAL) || (type == FP_SUBNORMAL) || (type == FP_ZERO)) && (value == value);
+	}
 
-    T1(T) auto IsFiniteNumber(T) -> typename std::enable_if<!std::is_floating_point<T>::value, bool>::type { return true; }
+	T1(T) auto IsFiniteNumber(T) -> typename std::enable_if<!std::is_floating_point<T>::value, bool>::type { return true; }
 
-    template<typename Primitive>
-        std::ostream& operator<<(std::ostream& str, const Vector2T<Primitive>& vert)
-        {
-            return str << vert[0] << ", " << vert[1];
-        }
+	template<typename Primitive>
+		std::ostream& operator<<(std::ostream& str, const Vector2T<Primitive>& vert)
+		{
+			return str << vert[0] << ", " << vert[1];
+		}
 
-    template<typename Primitive>
-        std::ostream& operator<<(std::ostream& str, const Vector3T<Primitive>& vert)
-        {
-            return str << vert[0] << ", " << vert[1] << ", " << vert[2];
-        }
+	template<typename Primitive>
+		std::ostream& operator<<(std::ostream& str, const Vector3T<Primitive>& vert)
+		{
+			return str << vert[0] << ", " << vert[1] << ", " << vert[2];
+		}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -197,30 +197,30 @@ namespace XLEMath
 		// This version will return false if the determinant of the matrix is zero (which means
 		// there is no inverse)
 
-        /* Compute cofactors for each entry: */
-        auto m_00 = M(1,1)*M(2,2) - M(1,2)*M(2,1);
-        auto m_01 = M(1,2)*M(2,0) - M(1,0)*M(2,2);
-        auto m_02 = M(1,0)*M(2,1) - M(1,1)*M(2,0);
+		/* Compute cofactors for each entry: */
+		auto m_00 = M(1,1)*M(2,2) - M(1,2)*M(2,1);
+		auto m_01 = M(1,2)*M(2,0) - M(1,0)*M(2,2);
+		auto m_02 = M(1,0)*M(2,1) - M(1,1)*M(2,0);
 
-        auto m_10 = M(0,2)*M(2,1) - M(0,1)*M(2,2);
-        auto m_11 = M(0,0)*M(2,2) - M(0,2)*M(2,0);
-        auto m_12 = M(0,1)*M(2,0) - M(0,0)*M(2,1);
+		auto m_10 = M(0,2)*M(2,1) - M(0,1)*M(2,2);
+		auto m_11 = M(0,0)*M(2,2) - M(0,2)*M(2,0);
+		auto m_12 = M(0,1)*M(2,0) - M(0,0)*M(2,1);
 
-        auto m_20 = M(0,1)*M(1,2) - M(0,2)*M(1,1);
-        auto m_21 = M(0,2)*M(1,0) - M(0,0)*M(1,2);
-        auto m_22 = M(0,0)*M(1,1) - M(0,1)*M(1,0);
+		auto m_20 = M(0,1)*M(1,2) - M(0,2)*M(1,1);
+		auto m_21 = M(0,2)*M(1,0) - M(0,0)*M(1,2);
+		auto m_22 = M(0,0)*M(1,1) - M(0,1)*M(1,0);
 
-        /* Compute determinant from the minors: */
-        auto Ddenom = (M(0,0)*m_00 + M(0,1)*m_01 + M(0,2)*m_02);
+		/* Compute determinant from the minors: */
+		auto Ddenom = (M(0,0)*m_00 + M(0,1)*m_01 + M(0,2)*m_02);
 
 		auto type = std::fpclassify(Ddenom);
-        if ((type != FP_NORMAL) && (type != FP_SUBNORMAL))		// zeroes, infinites and nans rejected
+		if ((type != FP_NORMAL) && (type != FP_SUBNORMAL))		// zeroes, infinites and nans rejected
 			return false;
 
-        /* Assign the inverse as (1/D) * (cofactor matrix)^T: */
-        M(0,0) = m_00/Ddenom;  M(0,1) = m_10/Ddenom;  M(0,2) = m_20/Ddenom;
-        M(1,0) = m_01/Ddenom;  M(1,1) = m_11/Ddenom;  M(1,2) = m_21/Ddenom;
-        M(2,0) = m_02/Ddenom;  M(2,1) = m_12/Ddenom;  M(2,2) = m_22/Ddenom;
+		/* Assign the inverse as (1/D) * (cofactor matrix)^T: */
+		M(0,0) = m_00/Ddenom;  M(0,1) = m_10/Ddenom;  M(0,2) = m_20/Ddenom;
+		M(1,0) = m_01/Ddenom;  M(1,1) = m_11/Ddenom;  M(1,2) = m_21/Ddenom;
+		M(2,0) = m_02/Ddenom;  M(2,1) = m_12/Ddenom;  M(2,2) = m_22/Ddenom;
 		return true;
 	}
 
