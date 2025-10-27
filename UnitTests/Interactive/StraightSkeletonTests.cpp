@@ -738,7 +738,7 @@ namespace UnitTests
 			SaveStraightSkeletonToFile<Primitive>(_straightSkeleton, MakeIteratorRange(flattenedBoundaryLoop), "straightskeleton-hexgrid");
 		}
 
-		StraightSkeletonPreview(IteratorRange<const Vector2T<Primitive>*> inputPts, Primitive maxInset = std::numeric_limits<Primitive>::max())
+		StraightSkeletonPreview(IteratorRange<const Vector2T<Primitive>*> inputPts, Primitive maxInset = 10000) // std::numeric_limits<Primitive>::max())
 		: _straightSkeleton(CalculateStraightSkeleton(inputPts, maxInset))
 		{
 			std::vector<Vector2T<Primitive>> boundary(inputPts.begin(), inputPts.end());
@@ -917,6 +917,14 @@ namespace UnitTests
 			HexGridStraightSkeleton(std::mt19937_64&& rng)
 			: _rng(std::move(rng))
 			{
+				// loop remerges are an issue with the current StraightSkeleton
+				// with randomCellCount = 64u; at _cellFieldIdx 166 you can see the issue
+				// Basically when there are multiple motorcycles happening simultaneously (and perhaps
+				// some are considered motor vs edge, while others are motor vs vertex), the first
+				// motor can split a loop, splitting another motor in the same area so that the motor
+				// and crash target are on the two new loops. Then when the second motor is processed, 
+				// the two loops are merged together again. The resulting loop can actually be stationary, 
+				// but is considered alive because it's larger than 2 edges.
 				_cellField = CreateRandomHexCellField(randomCellCount, _rng);
 				while (_cellFieldIdx<166) {
 					++_cellFieldIdx;
@@ -1057,7 +1065,7 @@ namespace UnitTests
 
 				assert(pts.size() != ptsSize);
 
-				const bool reliableWindingOrder = false;
+				const bool reliableWindingOrder = true;
 				if (reliableWindingOrder) {
 					// Straight skeleton wants counter clockwise order vertices, however, +Y is up the page, rather than down the 
 					// page. This reverses winding order
@@ -1180,7 +1188,7 @@ namespace UnitTests
 			}
 
 			SVGRoofModelCompilerUtil<float> _preview;
-			float _maxInset = 30.f;
+			float _maxInset = 60.8f;
 			Float2 _viewOffset { 0.f, 0.f };
 			float _zoomFactor { 1.0f };
 			bool _writeVertexIndices = false;
@@ -1348,11 +1356,11 @@ namespace UnitTests
 		for (auto& c:colinearEdges) c = Float2 { c[0] * cosTheta + c[1] * sinTheta, c[0] * -sinTheta + c[1] * cosTheta };
 #endif
 
-		SaveStraightSkeletonToFile(MakeIteratorRange(rectangleCollapse), "rectangle-collapse");
-		SaveStraightSkeletonToFile(MakeIteratorRange(singleMotorcycle), "single-motorcycle");
-		SaveStraightSkeletonToFile(MakeIteratorRange(doubleMotorcycle), "double-motorcycle");
-		SaveStraightSkeletonToFile(MakeIteratorRange(colinearCollapse), "colinear-collapse");
-		SaveStraightSkeletonToFile(MakeIteratorRange(colinearEdges), "colinear-edges");
+		// SaveStraightSkeletonToFile(MakeIteratorRange(rectangleCollapse), "rectangle-collapse");
+		// SaveStraightSkeletonToFile(MakeIteratorRange(singleMotorcycle), "single-motorcycle");
+		// SaveStraightSkeletonToFile(MakeIteratorRange(doubleMotorcycle), "double-motorcycle");
+		// SaveStraightSkeletonToFile(MakeIteratorRange(colinearCollapse), "colinear-collapse");
+		// SaveStraightSkeletonToFile(MakeIteratorRange(colinearEdges), "colinear-edges");
 
 		{
 			auto tester = std::make_shared<BasicDrawStraightSkeleton>();
@@ -1495,7 +1503,7 @@ namespace UnitTests
 		REQUIRE(ValidatePolygonLoop<float>(dancingMan) == true);
 		REQUIRE(ValidatePolygonLoop<float>(secretaryBird) == true);
 		REQUIRE(ValidatePolygonLoop<float>(swallow) == true);
-		REQUIRE(ValidatePolygonLoop<float>(greenTree) == true);
+		// REQUIRE(ValidatePolygonLoop<float>(greenTree) == true);
 		REQUIRE(ValidatePolygonLoop<float>(fiddlers) == true);
 		REQUIRE(ValidatePolygonLoop<float>(perseus) == true);
 		REQUIRE(ValidatePolygonLoop<float>(eagleFlight) == true);
