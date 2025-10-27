@@ -704,29 +704,6 @@ namespace XLEMath
 			}
 		}
 
-		// HACK
-		/*{
-			if (loop._signOfInitialLoop < 0) {
-				bool atLeastOneValidCollapse = false;
-				for (auto& e:loop._edges)
-					atLeastOneValidCollapse |= e._collapsePt[2] != std::numeric_limits<Primitive>::max();
-				if (!atLeastOneValidCollapse)
-					possibleFlattenedLoop = true;
-			}
-
-			if (loop._lastEventBatchLatest > 0) {
-				auto signedArea = CalculateSignedAreaAtTime<Primitive>(loop._edges, _vertices, loop._lastEventBatchLatest);
-				if (signedArea < 0.f != loop._signedAreaAtLatestEvent < 0.f || signedArea < 0.f != loop._signOfInitialLoop < 0.f)
-					possibleFlattenedLoop = true;
-			}
-
-			for (auto& e:loop._edges)
-				if (_vertices[e._tail]._anchor0 == _vertices[e._tail]._anchor1) {
-					assert(_vertices[e._tail]._anchor0[2] > 0);		// this can be triggered if there are stationary vertices in the input
-					possibleFlattenedLoop = true;
-				}
-		}*/
-
 		auto TestMotorcycle = [this, &newEvents](const WavefrontEdge<Primitive>& seg1, VertexId motor, const WavefrontLoop<Primitive>& motorLoop, const WavefrontLoop<Primitive>& segmentLoop) {
 
 			auto& motorv = GetVertex(motor);
@@ -929,15 +906,19 @@ namespace XLEMath
 				if (useHeadSidePart && useTailSidePart) {
 					auto headSideEvent = e;
 					headSideEvent._edgeTail = headSideReplacement;
+					assert(headSideEvent._motor != headSideEvent._edgeTail && headSideEvent._motor != headSideEvent._edgeHead);
 					SetEdgeLoop(headSide, headSideEvent);
 					additionalEventsToAdd.push_back(headSideEvent);
 					e._edgeHead = tailSideReplacement;
+					assert(e._motor != e._edgeTail && e._motor != e._edgeHead);
 					SetEdgeLoop(tailSide, e);
 				} else if (useHeadSidePart) {
 					e._edgeTail = headSideReplacement;
+					assert(e._motor != e._edgeTail && e._motor != e._edgeHead);
 					SetEdgeLoop(headSide, e);
 				} else if (useTailSidePart) {
 					e._edgeHead = tailSideReplacement;
+					assert(e._motor != e._edgeTail && e._motor != e._edgeHead);
 					SetEdgeLoop(tailSide, e);
 				}
 			}
@@ -1739,8 +1720,10 @@ namespace XLEMath
 								continue;
 							} else
 								pendingEvent->_motor = collapseGroupInfo._headSideReplacement;
-						} else
+						} else {
+							assert(0);		// cancelling the motor
 							pendingEvent->_motor = ~0u;
+						}
 					}
 
 					if (collapseGroupInfo._tailSideReplacement != collapseGroupInfo._headSideReplacement) {
@@ -1774,6 +1757,12 @@ namespace XLEMath
 
 				assert(pendingEvent->_edgeTail != ~0u);
 				assert(pendingEvent->_edgeHead != ~0u);
+				if (pendingEvent->_edgeHead == pendingEvent->_motor || pendingEvent->_edgeTail == pendingEvent->_motor) {
+					// this collapse resolved the motor; now it's a motor against it's own segment
+					assert(IsCrash(*pendingEvent));
+					pendingEvent = evnts.erase(pendingEvent);
+					continue;
+				}
 				++pendingEvent;
 			}
 
@@ -1979,15 +1968,18 @@ namespace XLEMath
 
 		// Update loop ids in all evnts and motorcycles
 		for (auto e=evnts.begin(); e!=evnts.end();) {
-			bool originallyInternalLoop = e->_edgeLoop == e->_motorLoop;
+			// bool originallyInternalLoop = e->_edgeLoop == e->_motorLoop;
 			if (e->_edgeLoop == edgeLoop->_loopId) e->_edgeLoop = motorLoop->_loopId;
 			if (e->_motorLoop == edgeLoop->_loopId) e->_motorLoop = motorLoop->_loopId;
 
+#if 0
+			// HACK
 			// See above -- don't convert MotorcycleCrash -> MultiLoopMotorcycleCrash like this
 			if (e->_edgeLoop != e->_motorLoop && e->_type == EventType::MotorcycleCrash && originallyInternalLoop) {
 				e = evnts.erase(e);
 				continue;
 			}
+#endif
 			++e;
 		}
 
@@ -2051,7 +2043,7 @@ namespace XLEMath
 			}
 		#endif
 
-		if (evnts.front()._eventTime >= 48.3627) {
+		if (evnts.front()._eventTime >= 55.57) {
 			int c=0;
 			(void)c;
 		}

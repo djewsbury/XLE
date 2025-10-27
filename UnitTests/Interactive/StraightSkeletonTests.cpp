@@ -811,9 +811,9 @@ namespace UnitTests
 	{
 		// static constexpr unsigned randomCellCount = 9u;
 		// static constexpr unsigned randomCellCount = 32u;
-		static constexpr unsigned randomCellCount = 64u;
+		// static constexpr unsigned randomCellCount = 64u;
 		// static constexpr unsigned randomCellCount = 256u;
-		// static constexpr unsigned randomCellCount = 2048u;
+		static constexpr unsigned randomCellCount = 2048u;
 
 		using namespace RenderCore;
 		class HexGridStraightSkeleton : public IInteractiveTestOverlay
@@ -926,7 +926,7 @@ namespace UnitTests
 				// the two loops are merged together again. The resulting loop can actually be stationary, 
 				// but is considered alive because it's larger than 2 edges.
 				_cellField = CreateRandomHexCellField(randomCellCount, _rng);
-				while (_cellFieldIdx<166) {
+				while (_cellFieldIdx<0/*166*/) {
 					++_cellFieldIdx;
 					_cellField = CreateRandomHexCellField(randomCellCount, _rng);
 				}
@@ -1191,7 +1191,7 @@ namespace UnitTests
 			}
 
 			SVGRoofModelCompilerUtil<float> _preview;
-			float _maxInset = 60.8f;
+			float _maxInset = 63.8f;
 			Float2 _viewOffset { 0.f, 0.f };
 			float _zoomFactor { 1.0f };
 			bool _writeVertexIndices = false;
