@@ -637,6 +637,7 @@ namespace XLEMath
 	{
 		if (ConsiderStationary(loop)) {
 			// loop._motorcycleSegments.clear();
+#if 0
 			for (auto& e:loop._edges) {
 				e._collapsePt = PointAndTime<Primitive>{0,0,std::numeric_limits<Primitive>::max()};
 				_vertices[e._tail]._anchor1 = _vertices[e._tail]._anchor0;
@@ -649,6 +650,7 @@ namespace XLEMath
 				}
 #endif
 			}
+#endif
 			// remove all motorcycle crash events against this loop
 			auto i = std::remove_if(b2e(_futureEvents), [loopId=loop._loopId](const Event<Primitive>& q) { return q._motorLoop == loopId || q._edgeLoop == loopId; });
 			_futureEvents.erase(i, _futureEvents.end());
@@ -1961,6 +1963,7 @@ namespace XLEMath
 		assert(IsFiniteNumber(vertex[0]) && IsFiniteNumber(vertex[1]) && IsFiniteNumber(vertex[2]));
 		assert(vertex[0] != std::numeric_limits<Primitive>::max() && vertex[1] != std::numeric_limits<Primitive>::max() && vertex[2] != std::numeric_limits<Primitive>::max());
 		assert(vertex[2] < 1e6f);
+		assert(vertex[2] > 0);
 
 		auto existing = std::find_if(
 			skeleton._steinerVertices.begin(), skeleton._steinerVertices.end(),
@@ -2159,6 +2162,7 @@ namespace XLEMath
 		// If any vertices in the loop are stationary, they must limit the entire loop
 		for (auto& e:loop._edges)
 			if (_vertices[e._tail]._anchor0 == _vertices[e._tail]._anchor1) {
+				assert(_vertices[e._tail]._anchor0[2] > 0);		// this can be triggered if there are stationary vertices in the input
 				time = std::min(time, _vertices[e._tail]._anchor0[2]);
 				stationary = true;
 			}
