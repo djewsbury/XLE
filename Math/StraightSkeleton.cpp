@@ -315,12 +315,6 @@ namespace XLEMath
 		return loop._edges.size() <= 2 || tripwire;
 	}
 
-	T1(Primitive) static bool ConsiderStationary_Tripwire(const WavefrontLoop<Primitive>& loop)
-	{
-		// note -- the following tripwire should be used with caution, because it can prevent looking for simplification (that might be possible)
-		return std::abs(loop._signedAreaAtLatestEvent) < GetEpsilon<Primitive>();
-	}
-
 	T1(Primitive) static bool CheckForMotorcycles(const WavefrontLoop<Primitive>& loop0, const WavefrontLoop<Primitive>& loop1)
 	{
 		if (loop0._loopId == loop1._loopId) {
@@ -799,20 +793,6 @@ namespace XLEMath
 
 	T1(Primitive) static bool IsCrash(Event<Primitive>& e) { return e._type == EventType::MotorcycleCrash; }
 
-	T1(Primitive) static void ValidateUpdatedEvent(VertexSet<Primitive> vSet, const Event<Primitive>& evnt)
-	{
-		// disabling this because it's not reliable atm; see note in ProcessCollapseEvents
-		#if 0 // defined(_DEBUG)
-			if (evnt._type == EventType::Collapse) {
-				// ensure we haven't knocked collapses off where they should be
-				auto one = GetVertex(vSet, evnt._edgeHead).PositionAtTime(evnt._eventTime);
-				auto two = GetVertex(vSet, evnt._edgeTail).PositionAtTime(evnt._eventTime);
-				assert(Equivalent(one, evnt._eventPt, GetEpsilon<Primitive>()));
-				assert(Equivalent(two, evnt._eventPt, GetEpsilon<Primitive>()));
-			}
-		#endif
-	}
-
 	T1(Primitive) static void HandleEdgeSplit(
 		std::vector<Event<Primitive>>& evnts, VertexSet<Primitive> vSet,
 		VertexId splitEdgeTail, VertexId splitEdgeHead,
@@ -854,7 +834,6 @@ namespace XLEMath
 					auto headSideEvent = e;
 					headSideEvent._edgeTail = headSideReplacement;
 					SetEdgeLoop(headSide, headSideEvent);
-					ValidateUpdatedEvent(vSet, headSideEvent);
 					additionalEventsToAdd.push_back(headSideEvent);
 					e._edgeHead = tailSideReplacement;
 					SetEdgeLoop(tailSide, e);
@@ -865,8 +844,6 @@ namespace XLEMath
 					e._edgeHead = tailSideReplacement;
 					SetEdgeLoop(tailSide, e);
 				}
-
-				ValidateUpdatedEvent(vSet, e);
 			}
 		}
 		std::sort(additionalEventsToAdd.begin(), additionalEventsToAdd.end(), [](const auto& lhs, const auto& rhs) { return lhs._eventTime < rhs._eventTime; });
@@ -1012,8 +989,6 @@ namespace XLEMath
 					assert(e->_edgeHead != headSideReplacement && e->_edgeTail != headSideReplacement);	// very awkward situation that can cause the loop to get re-merged
 					SetEdgeLoop(tailSide, *e);
 				}
-
-				ValidateUpdatedEvent(vSet, *e);
 
 			} else if (e->_motor == removedVertex) {
 
@@ -2161,7 +2136,7 @@ namespace XLEMath
 				GetVertex(e._vertex)._insideFace, GetVertex(e._vertex)._outsideFace,
 				StraightSkeleton<Primitive>::EdgeType::VertexPath);
 		for (const auto&l:_loops)
-			WriteFinalEdges(result, l, ((ConsiderStationary(l) || ConsiderStationary_Tripwire(l)) && l._lastEventBatchLatest != -std::numeric_limits<Primitive>::max()) ? l._lastEventBatchLatest : maxTime);
+			WriteFinalEdges(result, l, maxTime);
 		std::sort(_mergedFaces.begin(), _mergedFaces.end(), [](const auto&lhs, const auto&rhs) { return lhs.second > rhs.second; });
 		for (auto mergedFace:_mergedFaces) {
 			assert(mergedFace.first < mergedFace.second);
@@ -2174,8 +2149,44 @@ namespace XLEMath
 		return result;
 	}
 
-	T1(Primitive) void StraightSkeletonGraph<Primitive>::WriteFinalEdges(StraightSkeleton<Primitive>& result, const WavefrontLoop<Primitive>& loop, Primitive time)
+	T1(Primitive) void StraightSkeletonGraph<Primitive>::WriteFinalEdges(StraightSkeleton<Primitive>& result, const WavefrontLoop<Primitive>& loop, Primitive maxTime)
 	{
+		Primitive time = maxTime;
+
+		bool stationary = ConsiderStationary(loop);
+		stationary |= std::abs(loop._signedAreaAtLatestEvent) < GetEpsilon<Primitive>();
+
+		// If any vertices in the loop are stationary, they must limit the entire loop
+		for (auto& e:loop._edges)
+			if (_vertices[e._tail]._anchor0 == _vertices[e._tail]._anchor1) {
+				time = std::min(time, _vertices[e._tail]._anchor0[2]);
+				stationary = true;
+			}
+
+		if (!stationary) {
+			// If the loop is contracting, and there are no valid collapses, we are subject to precision errors. If we don't clamp time, these loops
+			// will invert and expand infinitely
+			if (loop._signOfInitialLoop < 0) {
+				bool atLeastOneValidCollapse = false;
+				for (auto& e:loop._edges)
+					atLeastOneValidCollapse |= e._collapsePt[2] != std::numeric_limits<Primitive>::max();
+				if (!atLeastOneValidCollapse)
+					stationary = true;
+			}
+		}
+
+		if (!stationary) {
+			// Check signed area agrees with expectation. If the loop has inverted, we assume this loop is subject to precision errors
+			// and rewind time to the last event the loop was involved in
+			auto signedArea = CalculateSignedAreaAtTime<Primitive>(loop._edges, _vertices, time);
+			if (signedArea < 0.f != loop._signedAreaAtLatestEvent < 0.f || signedArea < 0.f != loop._signOfInitialLoop < 0.f)
+				stationary = true;
+		}
+
+		// clamp time at last event for stationary loops
+		if (stationary && loop._lastEventBatchLatest != -std::numeric_limits<Primitive>::max())
+			time = std::min(time, loop._lastEventBatchLatest);
+
 		for (auto i=loop._edges.begin(); i!=loop._edges.end(); ++i) {
 			// Use the "LastValid" movement for each vertex here. This is required to distinguish between a true part of
 			// the wavefront, and a vertex path that collapsed into a 2-vertex loop. Once the loop is reduced to 2-vertices,
@@ -2189,11 +2200,14 @@ namespace XLEMath
 			auto vTail = AddSteinerVertex(result, B);
 			if (vHead != vTail) {
 				if (loop._edges.size() > 2) {
+					// We allow some "stationary" edges through this path after precision errors. They are really vertex paths,
+					// however there may be some errors (such as not having inside/outside faces on every edge). Most likely we will
+					// have some vertices getting combined by the higher equivalence thresholds when writing out vertices
 					AddEdge(
 						result,
 						vHead, vTail,
 						~0u, GetVertex(i->_tail)._outsideFace,
-						StraightSkeleton<Primitive>::EdgeType::Wavefront);
+						stationary ? StraightSkeleton<Primitive>::EdgeType::VertexPath : StraightSkeleton<Primitive>::EdgeType::Wavefront);
 				} else {
 					// This should be two overlapping edges. They were frozen like this after a motorcycle or a collapse
 					// with no further events. It must be a vertex path (going both ways), since there's no area within
