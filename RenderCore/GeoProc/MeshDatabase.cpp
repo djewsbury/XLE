@@ -503,16 +503,16 @@ namespace RenderCore { namespace Assets { namespace GeoProc
     unsigned    MeshDatabase::AddStream(
         std::shared_ptr<IVertexSourceData> dataSource,
         std::vector<unsigned>&& vertexMap,
-        const char semantic[], unsigned semanticIndex)
+        std::string semantic, unsigned semanticIndex, unsigned inputSlot)
     {
-        return InsertStream(~0u, std::move(dataSource), std::move(vertexMap), semantic, semanticIndex);
+        return InsertStream(~0u, std::move(dataSource), std::move(vertexMap), std::move(semantic), semanticIndex, inputSlot);
     }
 
     unsigned    MeshDatabase::InsertStream(
         unsigned insertionPosition,
         std::shared_ptr<IVertexSourceData> dataSource,
         std::vector<unsigned>&& vertexMap,
-        const char semantic[], unsigned semanticIndex)
+        std::string semantic, unsigned semanticIndex, unsigned inputSlot)
     {
         auto count = vertexMap.size() ? vertexMap.size() : dataSource->GetCount();
         assert(count > 0);
@@ -521,12 +521,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         if (insertionPosition == ~0u) {
             _streams.push_back(
-                Stream { std::move(dataSource), std::move(vertexMap), semantic, semanticIndex });
+                Stream { std::move(dataSource), std::move(vertexMap), std::move(semantic), semanticIndex, inputSlot });
             return unsigned(_streams.size()-1);
         } else {
             _streams.insert(
                 _streams.begin()+insertionPosition,
-                Stream { std::move(dataSource), std::move(vertexMap), semantic, semanticIndex });
+                Stream { std::move(dataSource), std::move(vertexMap), std::move(semantic), semanticIndex, inputSlot });
             return insertionPosition;
         }
     }
@@ -544,12 +544,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    MeshDatabase::Stream::Stream() { _semanticIndex = 0; }
+    MeshDatabase::Stream::Stream() { _semanticIndex = _inputSlot=0; }
     MeshDatabase::Stream::Stream(
         std::shared_ptr<IVertexSourceData> sourceData, std::vector<unsigned> vertexMap, 
-        const std::string& semanticName, unsigned semanticIndex)
+        const std::string& semanticName, unsigned semanticIndex, unsigned inputSlot)
     : _sourceData(std::move(sourceData)), _vertexMap(std::move(vertexMap))
-    , _semanticName(semanticName), _semanticIndex(semanticIndex)
+    , _semanticName(semanticName), _semanticIndex(semanticIndex), _inputSlot(inputSlot)
     {}
 
     MeshDatabase::Stream::Stream(Stream&&) never_throws = default;
@@ -1400,7 +1400,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				inputStreams[s].GetSourceData(),
 				std::move(workingMapping[s]._unifiedToStreamElement),
 				inputStreams[s].GetSemanticName().c_str(),
-				inputStreams[s].GetSemanticIndex());
+				inputStreams[s].GetSemanticIndex(),
+				inputStreams[s].GetInputSlot());
 		}
 
 		assert(result.GetUnifiedVertexCount() == finalUnifiedVertexCount);

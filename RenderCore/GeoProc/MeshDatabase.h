@@ -55,12 +55,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         unsigned    AddStream(
             std::shared_ptr<IVertexSourceData> dataSource,
             std::vector<unsigned>&& vertexMap,
-            const char semantic[], unsigned semanticIndex);
+            std::string semantic, unsigned semanticIndex=0, unsigned inputSlot=0);
         unsigned    InsertStream(
             unsigned insertionPosition,
             std::shared_ptr<IVertexSourceData> dataSource,
             std::vector<unsigned>&& vertexMap,
-            const char semantic[], unsigned semanticIndex);
+            std::string semantic, unsigned semanticIndex=0, unsigned inputSlot=0);
 
         class Stream;
         IteratorRange<const Stream*> GetStreams() const     { return MakeIteratorRange(_streams); }
@@ -78,10 +78,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         public:
             IteratorRange<const unsigned*> GetVertexMap() const { return _vertexMap; }
             const std::string& GetSemanticName() const          { return _semanticName; }
-            const unsigned GetSemanticIndex() const             { return _semanticIndex; }
+            unsigned GetSemanticIndex() const                   { return _semanticIndex; }
+            unsigned GetInputSlot() const                       { return _inputSlot; }
 			const std::shared_ptr<IVertexSourceData>& GetSourceData() const { return _sourceData; }
 
 			void SetSemantic(const std::string& newName, unsigned semanticIndex) { _semanticName = newName; _semanticIndex = semanticIndex; }
+            void SetInputSlot(unsigned inputSlot) { _inputSlot = inputSlot; }
 
             unsigned UnifiedToStream(unsigned input) const
             {
@@ -92,7 +94,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             Stream();
             Stream(
                 std::shared_ptr<IVertexSourceData> sourceData, std::vector<unsigned> vertexMap, 
-                const std::string& semanticName, unsigned semanticIndex);
+                const std::string& semanticName, unsigned semanticIndex, unsigned inputSlot);
             Stream(Stream&&) never_throws;
             Stream& operator=(Stream&&) never_throws;
             Stream(const Stream&);
@@ -103,6 +105,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             std::vector<unsigned>   _vertexMap;
             std::string             _semanticName;
             unsigned                _semanticIndex;
+            unsigned                _inputSlot;
         };
 
     private:

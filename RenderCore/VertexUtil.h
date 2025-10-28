@@ -21,6 +21,9 @@ namespace RenderCore
 		{
 		public:
 			template<typename Type> const Type& ReinterpretCast() const;
+			float AsFloat() const;
+			Float2 AsFloat2() const;
+			Float3 AsFloat3() const;
 			Float4 AsFloat4() const;
 			IteratorRange<void*> _data;
 			RenderCore::Format _format = RenderCore::Format(0);
@@ -34,8 +37,8 @@ namespace RenderCore
 			Value(IteratorRange<void*> data, RenderCore::Format format) : ConstValue{data, format} {}
 		};
 
-		bool operator==(const VertexElementIterator&);
-		bool operator!=(const VertexElementIterator&);
+		bool operator==(const VertexElementIterator&) const;
+		bool operator!=(const VertexElementIterator&) const;
 		void operator++();
 		friend size_t operator-(const VertexElementIterator& lhs, const VertexElementIterator& rhs);
 		friend bool operator<(const VertexElementIterator& lhs, const VertexElementIterator& rhs);
@@ -65,12 +68,12 @@ namespace RenderCore
 		using iterator_category = std::random_access_iterator_tag;
 	};
 
-	inline bool VertexElementIterator::operator==(const VertexElementIterator& other)
+	inline bool VertexElementIterator::operator==(const VertexElementIterator& other) const
 	{
 		return _data.begin() == other._data.begin();
 	}
 
-	inline bool VertexElementIterator::operator!=(const VertexElementIterator& other)
+	inline bool VertexElementIterator::operator!=(const VertexElementIterator& other) const
 	{
 		return _data.begin() != other._data.begin();
 	}
@@ -222,30 +225,30 @@ namespace RenderCore
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 	enum class VertexUtilComponentType { Float32, Float16, UNorm8, UNorm10, UNorm16, SNorm8, SNorm10, SNorm16, UInt8, UInt10, UInt16, UInt32, SInt8, SInt16, SInt32 };
-    struct BrokenDownFormat { VertexUtilComponentType _type; unsigned _componentCount; };
+	struct BrokenDownFormat { VertexUtilComponentType _type; unsigned _componentCount; };
 	BrokenDownFormat BreakdownFormat(Format fmt);
-    
+	
 	inline unsigned short AsFloat16(float input)
-    {
-        //
-        //      Using "half" library
-        //          http://sourceforge.net/projects/half/
-        //
-        //      It doesn't have vectorized conversions,
-        //      and it looks like it doesn't support denormalized
-        //      or overflowed numbers. But it has lots of rounding
-        //      modes!
-        //
+	{
+		//
+		//      Using "half" library
+		//          http://sourceforge.net/projects/half/
+		//
+		//      It doesn't have vectorized conversions,
+		//      and it looks like it doesn't support denormalized
+		//      or overflowed numbers. But it has lots of rounding
+		//      modes!
+		//
 
-        auto result = half_float::detail::float2half<std::round_to_nearest>(input);
-        // assert(!std::isinf(half_float::detail::half2float(result)));
-        return result;
-    }
+		auto result = half_float::detail::float2half<std::round_to_nearest>(input);
+		// assert(!std::isinf(half_float::detail::half2float(result)));
+		return result;
+	}
 
-    inline float Float16AsFloat32(unsigned short input)
-    {
-        return half_float::detail::half2float(input);
-    }
+	inline float Float16AsFloat32(unsigned short input)
+	{
+		return half_float::detail::half2float(input);
+	}
 
 	// Note the slight oddity with snorm numbers whereby there are 2 representations for -1 (the smallest integer input and the second
 	// smallest). This is so 0 falls on directly on an integer. 
@@ -256,25 +259,25 @@ namespace RenderCore
 	inline float SNorm8AsFloat32(int8_t value)		{ return std::max(value, int8_t(-0x7f)) / float(0x7f); }
 
 	inline BrokenDownFormat BreakdownFormat(Format fmt)
-    {
-        if (fmt == Format::Unknown) return {VertexUtilComponentType::Float32, 0};
+	{
+		if (fmt == Format::Unknown) return {VertexUtilComponentType::Float32, 0};
 
-        auto componentType = VertexUtilComponentType::Float32;
-        unsigned componentCount = GetComponentCount(GetComponents(fmt));
+		auto componentType = VertexUtilComponentType::Float32;
+		unsigned componentCount = GetComponentCount(GetComponents(fmt));
 
-        auto type = GetComponentType(fmt);
-        unsigned prec = GetComponentPrecision(fmt);
+		auto type = GetComponentType(fmt);
+		unsigned prec = GetComponentPrecision(fmt);
 
-        switch (type) {
-        case FormatComponentType::Float:
-            assert(prec == 16 || prec == 32);
-            componentType = (prec > 16) ? VertexUtilComponentType::Float32 : VertexUtilComponentType::Float16; 
-            break;
+		switch (type) {
+		case FormatComponentType::Float:
+			assert(prec == 16 || prec == 32);
+			componentType = (prec > 16) ? VertexUtilComponentType::Float32 : VertexUtilComponentType::Float16; 
+			break;
 
-        case FormatComponentType::UnsignedFloat16:
-        case FormatComponentType::SignedFloat16:
-            componentType = VertexUtilComponentType::Float16;
-            break;
+		case FormatComponentType::UnsignedFloat16:
+		case FormatComponentType::SignedFloat16:
+			componentType = VertexUtilComponentType::Float16;
+			break;
 
 		case FormatComponentType::SNorm:
 			switch (prec) {
@@ -286,14 +289,14 @@ namespace RenderCore
 			break;
 
 		case FormatComponentType::UNorm: 
-        case FormatComponentType::UNorm_SRGB:
-            switch (prec) {
+		case FormatComponentType::UNorm_SRGB:
+			switch (prec) {
 			case 8: componentType = VertexUtilComponentType::UNorm8; break;
 			case 10: componentType = VertexUtilComponentType::UNorm10; break;
 			case 16: componentType = VertexUtilComponentType::UNorm16; break;
 			default: assert(0); break;
 			}
-            break;
+			break;
 
 		case FormatComponentType::UInt:
 			switch (prec) {
@@ -312,12 +315,12 @@ namespace RenderCore
 			else componentType = VertexUtilComponentType::SInt32;
 			break;
 
-        default:
-            UNREACHABLE();
-        }
+		default:
+			UNREACHABLE();
+		}
 
-        return {componentType, componentCount};
-    }
+		return {componentType, componentCount};
+	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -421,106 +424,92 @@ namespace RenderCore
 	}
 
 	// static unsigned short AsFloat16_Fast(float input)
-    // {
-    //         //
-    //         //      See stack overflow article:
-    //         //          http://stackoverflow.com/questions/3026441/float32-to-float16
-    //         //
-    //         //      He suggests either using a table lookup or vectorising
-    //         //      this code for further optimisation.
-    //         //
-    //     unsigned int fltInt32 = FloatBits(input);
-    // 
-    //     unsigned short fltInt16 = (fltInt32 >> 31) << 5;
-    // 
-    //     unsigned short tmp = (fltInt32 >> 23) & 0xff;
-    //     tmp = (tmp - 0x70) & ((unsigned int)((int)(0x70 - tmp) >> 4) >> 27);
-    // 
-    //     fltInt16 = (fltInt16 | tmp) << 10;
-    //     fltInt16 |= (fltInt32 >> 13) & 0x3ff;
-    // 
-    //     return fltInt16;
-    // }
+	// {
+	//         //
+	//         //      See stack overflow article:
+	//         //          http://stackoverflow.com/questions/3026441/float32-to-float16
+	//         //
+	//         //      He suggests either using a table lookup or vectorising
+	//         //      this code for further optimisation.
+	//         //
+	//     unsigned int fltInt32 = FloatBits(input);
+	// 
+	//     unsigned short fltInt16 = (fltInt32 >> 31) << 5;
+	// 
+	//     unsigned short tmp = (fltInt32 >> 23) & 0xff;
+	//     tmp = (tmp - 0x70) & ((unsigned int)((int)(0x70 - tmp) >> 4) >> 27);
+	// 
+	//     fltInt16 = (fltInt16 | tmp) << 10;
+	//     fltInt16 |= (fltInt32 >> 13) & 0x3ff;
+	// 
+	//     return fltInt16;
+	// }
 
+	namespace Internal
+	{
+		inline void AsFloat4s(float* dst, size_t stride, IteratorRange<VertexElementIterator> input)
+		{
+			auto fmtBreakdown = BreakdownFormat(input.begin()._format);
+			switch (fmtBreakdown._type) {
+			case VertexUtilComponentType::Float32:
+				for (auto p=input.begin(); p<input.end(); ++p, dst=PtrAdd(dst, stride))
+					Internal::GetVertDataF32(dst, &(*p).ReinterpretCast<float>(), fmtBreakdown._componentCount);
+				break;
+			case VertexUtilComponentType::Float16:
+				for (auto p=input.begin(); p<input.end(); ++p, dst=PtrAdd(dst, stride))
+					Internal::GetVertDataF16(dst, &(*p).ReinterpretCast<uint16_t>(), fmtBreakdown._componentCount);
+				break;
+			case VertexUtilComponentType::UNorm16:
+				for (auto p=input.begin(); p<input.end(); ++p, dst=PtrAdd(dst, stride))
+					Internal::GetVertDataUNorm16(dst, &(*p).ReinterpretCast<uint16_t>(), fmtBreakdown._componentCount);
+				break;
+			case VertexUtilComponentType::SNorm16:
+				for (auto p=input.begin(); p<input.end(); ++p, dst=PtrAdd(dst, stride))
+					Internal::GetVertDataSNorm16(dst, &(*p).ReinterpretCast<int16_t>(), fmtBreakdown._componentCount);
+				break;
+			case VertexUtilComponentType::UNorm8:
+				for (auto p=input.begin(); p<input.end(); ++p, dst=PtrAdd(dst, stride))
+					Internal::GetVertDataUNorm8(dst, &(*p).ReinterpretCast<uint8_t>(), fmtBreakdown._componentCount);
+				break;
+			case VertexUtilComponentType::SNorm8:
+				for (auto p=input.begin(); p<input.end(); ++p, dst=PtrAdd(dst, stride))
+					Internal::GetVertDataSNorm8(dst, &(*p).ReinterpretCast<int8_t>(), fmtBreakdown._componentCount);
+				break;
+			default:
+				UNREACHABLE();
+				break;
+			}
+		}
+	}
+
+	inline std::vector<float> AsFloats(IteratorRange<VertexElementIterator> input)
+	{
+		std::vector<float> result(input.size()+4);		// allocate additional for Internal::AsFloat4s overflow
+		Internal::AsFloat4s(&result.front(), sizeof(float), input);
+		result.erase(result.end()-4, result.end());
+		return result;
+	}
+	
+	inline std::vector<Float2> AsFloat2s(IteratorRange<VertexElementIterator> input)
+	{
+		std::vector<Float2> result(input.size()+1);		// allocate additional for Internal::AsFloat4s overflow
+		Internal::AsFloat4s(&result.front()[0], sizeof(Float2), input);
+		result.pop_back();
+		return result;
+	}
+	
 	inline std::vector<Float3> AsFloat3s(IteratorRange<VertexElementIterator> input)
 	{
-		std::vector<Float3> result(input.size());
-		auto output = result.begin();
-
-		auto fmtBreakdown = BreakdownFormat(input.begin()._format);
-		switch (fmtBreakdown._type) {
-		case VertexUtilComponentType::Float32:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output) {
-				Float4 value{0.f, 0.f, 0.f, 1.0};
-				Internal::GetVertDataF32(value.data(), &(*p).ReinterpretCast<float>(), std::min(fmtBreakdown._componentCount, 3u));
-				*output = Truncate(value);
-			}
-			break;
-		case VertexUtilComponentType::Float16:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output) {
-				Float4 value{0.f, 0.f, 0.f, 1.0};
-				Internal::GetVertDataF16(value.data(), &(*p).ReinterpretCast<uint16_t>(), std::min(fmtBreakdown._componentCount, 3u));
-				*output = Truncate(value);
-			}
-			break;
-		case VertexUtilComponentType::UNorm16:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output) {
-				Float4 value{0.f, 0.f, 0.f, 1.0};
-				Internal::GetVertDataUNorm16(value.data(), &(*p).ReinterpretCast<uint16_t>(), std::min(fmtBreakdown._componentCount, 3u));
-				*output = Truncate(value);
-			}
-			break;
-		case VertexUtilComponentType::SNorm16:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output) {
-				Float4 value{0.f, 0.f, 0.f, 1.0};
-				Internal::GetVertDataSNorm16(value.data(), &(*p).ReinterpretCast<int16_t>(), std::min(fmtBreakdown._componentCount, 3u));
-				*output = Truncate(value);
-			}
-			break;
-		default:
-			UNREACHABLE();
-			break;
-		}
-
+		std::vector<Float3> result(input.size()+1);		// allocate additional for Internal::AsFloat4s overflow
+		Internal::AsFloat4s(&result.front()[0], sizeof(Float3), input);
+		result.pop_back();
 		return result;
 	}
 
 	inline std::vector<Float4> AsFloat4s(IteratorRange<VertexElementIterator> input)
 	{
 		std::vector<Float4> result(input.size());
-		auto output = result.begin();
-
-		auto fmtBreakdown = BreakdownFormat(input.begin()._format);
-		switch (fmtBreakdown._type) {
-		case VertexUtilComponentType::Float32:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				Internal::GetVertDataF32(output->data(), &(*p).ReinterpretCast<float>(), fmtBreakdown._componentCount);
-			break;
-		case VertexUtilComponentType::Float16:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				Internal::GetVertDataF16(output->data(), &(*p).ReinterpretCast<uint16_t>(), fmtBreakdown._componentCount);
-			break;
-		case VertexUtilComponentType::UNorm16:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				Internal::GetVertDataUNorm16(output->data(), &(*p).ReinterpretCast<uint16_t>(), fmtBreakdown._componentCount);
-			break;
-		case VertexUtilComponentType::SNorm16:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				Internal::GetVertDataSNorm16(output->data(), &(*p).ReinterpretCast<int16_t>(), fmtBreakdown._componentCount);
-			break;
-		case VertexUtilComponentType::UNorm8:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				Internal::GetVertDataUNorm8(output->data(), &(*p).ReinterpretCast<uint8_t>(), fmtBreakdown._componentCount);
-			break;
-		case VertexUtilComponentType::SNorm8:
-			for (auto p=input.begin(); p<input.end(); ++p, ++output)
-				Internal::GetVertDataSNorm8(output->data(), &(*p).ReinterpretCast<int8_t>(), fmtBreakdown._componentCount);
-			break;
-		default:
-			UNREACHABLE();
-			break;
-		}
-
+		Internal::AsFloat4s(&result.front()[0], sizeof(Float4), input);
 		return result;
 	}
 
@@ -551,42 +540,156 @@ namespace RenderCore
 		return result;
 	}
 
+	inline float VertexElementIterator::ConstValue::AsFloat() const
+	{
+		assert(_data.size() >= BitsPerPixel(_format) / 8);
+		switch (_format) {
+		case RenderCore::Format::R32G32B32A32_FLOAT:    return *(const float*)_data.begin();
+		case RenderCore::Format::R32G32B32_FLOAT:       return *(const float*)_data.begin();
+		case RenderCore::Format::R32G32_FLOAT:          return *(const float*)_data.begin();
+		case RenderCore::Format::R32_FLOAT:             return *(const float*)_data.begin();
+
+		case RenderCore::Format::R10G10B10A2_UNORM:
+		case RenderCore::Format::R10G10B10A2_SNORM:
+		case RenderCore::Format::R10G10B10A2_UINT:
+		case RenderCore::Format::R11G11B10_FLOAT:
+		case RenderCore::Format::B5G6R5_UNORM:
+		case RenderCore::Format::B5G5R5A1_UNORM:        UNREACHABLE(); return 0.f;  // requires some custom adjustments (these are uncommon uses, anyway)
+
+		case RenderCore::Format::R16G16B16A16_FLOAT:    return Float16AsFloat32(((const unsigned short*)_data.begin())[0]);
+		case RenderCore::Format::R16G16_FLOAT:          return Float16AsFloat32(((const unsigned short*)_data.begin())[0]);
+		case RenderCore::Format::R16_FLOAT:             return Float16AsFloat32(((const unsigned short*)_data.begin())[0]);
+
+		case RenderCore::Format::B8G8R8A8_UNORM:
+		case RenderCore::Format::R8G8B8A8_UNORM:        return UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]);
+		case RenderCore::Format::R8G8_UNORM:            return UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]);
+		case RenderCore::Format::R8_UNORM:              return UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]);
+		
+		case RenderCore::Format::B8G8R8X8_UNORM:        return UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]);
+
+		case RenderCore::Format::R16G16B16A16_UNORM:	return UNorm16AsFloat32(((const uint16_t*)_data.begin())[0]);
+		case RenderCore::Format::R16G16B16A16_SNORM:	return SNorm16AsFloat32(((const int16_t*)_data.begin())[0]);
+			
+		default:
+			UNREACHABLE();
+		}
+
+		UNREACHABLE();
+		return 0;
+	}
+	
+	inline Float2 VertexElementIterator::ConstValue::AsFloat2() const
+	{
+		assert(_data.size() >= BitsPerPixel(_format) / 8);
+		switch (_format) {
+		case RenderCore::Format::R32G32B32A32_FLOAT:    return *(const Float2*)_data.begin();
+		case RenderCore::Format::R32G32B32_FLOAT:       return *(const Float2*)_data.begin();
+		case RenderCore::Format::R32G32_FLOAT:          return *(const Float2*)_data.begin();
+		case RenderCore::Format::R32_FLOAT:             return Float2(((const float*)_data.begin())[0], 0.f);
+
+		case RenderCore::Format::R10G10B10A2_UNORM:
+		case RenderCore::Format::R10G10B10A2_SNORM:
+		case RenderCore::Format::R10G10B10A2_UINT:
+		case RenderCore::Format::R11G11B10_FLOAT:
+		case RenderCore::Format::B5G6R5_UNORM:
+		case RenderCore::Format::B5G5R5A1_UNORM:        UNREACHABLE(); return Float2(0,0);  // requires some custom adjustments (these are uncommon uses, anyway)
+
+		case RenderCore::Format::R16G16B16A16_FLOAT:    return Float2(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), Float16AsFloat32(((const unsigned short*)_data.begin())[1]));
+		case RenderCore::Format::R16G16_FLOAT:          return Float2(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), Float16AsFloat32(((const unsigned short*)_data.begin())[1]));
+		case RenderCore::Format::R16_FLOAT:             return Float2(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), 0.f);
+
+		case RenderCore::Format::B8G8R8A8_UNORM:
+		case RenderCore::Format::R8G8B8A8_UNORM:        return Float2(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]));
+		case RenderCore::Format::R8G8_UNORM:            return Float2(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]));
+		case RenderCore::Format::R8_UNORM:              return Float2(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), 0.f);
+		
+		case RenderCore::Format::B8G8R8X8_UNORM:        return Float2(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]));
+
+		case RenderCore::Format::R16G16B16A16_UNORM:	return Float2(UNorm16AsFloat32(((const uint16_t*)_data.begin())[0]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[1]));
+		case RenderCore::Format::R16G16B16A16_SNORM:	return Float2(SNorm16AsFloat32(((const int16_t*)_data.begin())[0]), SNorm16AsFloat32(((const int16_t*)_data.begin())[1]));
+			
+		default:
+			UNREACHABLE();
+		}
+
+		UNREACHABLE();
+		return Float2(0,0);
+	}
+	
+	inline Float3 VertexElementIterator::ConstValue::AsFloat3() const
+	{
+		assert(_data.size() >= BitsPerPixel(_format) / 8);
+		switch (_format) {
+		case RenderCore::Format::R32G32B32A32_FLOAT:    return *(const Float3*)_data.begin();
+		case RenderCore::Format::R32G32B32_FLOAT:       return *(const Float3*)_data.begin();
+		case RenderCore::Format::R32G32_FLOAT:          return Float3(((const float*)_data.begin())[0], ((const float*)_data.begin())[1], 0.f);
+		case RenderCore::Format::R32_FLOAT:             return Float3(((const float*)_data.begin())[0], 0.f, 0.f);
+
+		case RenderCore::Format::R10G10B10A2_UNORM:
+		case RenderCore::Format::R10G10B10A2_SNORM:
+		case RenderCore::Format::R10G10B10A2_UINT:
+		case RenderCore::Format::R11G11B10_FLOAT:
+		case RenderCore::Format::B5G6R5_UNORM:
+		case RenderCore::Format::B5G5R5A1_UNORM:        UNREACHABLE(); return Float3(0,0,0);  // requires some custom adjustments (these are uncommon uses, anyway)
+
+		case RenderCore::Format::R16G16B16A16_FLOAT:    return Float3(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), Float16AsFloat32(((const unsigned short*)_data.begin())[1]), Float16AsFloat32(((const unsigned short*)_data.begin())[2]));
+		case RenderCore::Format::R16G16_FLOAT:          return Float3(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), Float16AsFloat32(((const unsigned short*)_data.begin())[1]), 0.f);
+		case RenderCore::Format::R16_FLOAT:             return Float3(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), 0.f, 0.f);
+
+		case RenderCore::Format::B8G8R8A8_UNORM:
+		case RenderCore::Format::R8G8B8A8_UNORM:        return Float3(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[2]));
+		case RenderCore::Format::R8G8_UNORM:            return Float3(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), 0.f);
+		case RenderCore::Format::R8_UNORM:              return Float3(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), 0.f, 0.f);
+		
+		case RenderCore::Format::B8G8R8X8_UNORM:        return Float3(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[2]));
+
+		case RenderCore::Format::R16G16B16A16_UNORM:	return Float3(UNorm16AsFloat32(((const uint16_t*)_data.begin())[0]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[1]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[2]));
+		case RenderCore::Format::R16G16B16A16_SNORM:	return Float3(SNorm16AsFloat32(((const int16_t*)_data.begin())[0]), SNorm16AsFloat32(((const int16_t*)_data.begin())[1]), SNorm16AsFloat32(((const int16_t*)_data.begin())[2]));
+			
+		default:
+			UNREACHABLE();
+		}
+
+		UNREACHABLE();
+		return Float3(0,0,0);
+	}
+	
 	inline Float4 VertexElementIterator::ConstValue::AsFloat4() const
 	{
 		assert(_data.size() >= BitsPerPixel(_format) / 8);
 		switch (_format) {
-        case RenderCore::Format::R32G32B32A32_FLOAT:    return *(const Float4*)_data.begin();
-        case RenderCore::Format::R32G32B32_FLOAT:       return Float4(((const float*)_data.begin())[0], ((const float*)_data.begin())[1], ((const float*)_data.begin())[2], 0.f);
-        case RenderCore::Format::R32G32_FLOAT:          return Float4(((const float*)_data.begin())[0], ((const float*)_data.begin())[1], 0.f, 1.f);
-        case RenderCore::Format::R32_FLOAT:             return Float4(((const float*)_data.begin())[0], 0.f, 0.f, 1.f);
+		case RenderCore::Format::R32G32B32A32_FLOAT:    return *(const Float4*)_data.begin();
+		case RenderCore::Format::R32G32B32_FLOAT:       return Float4(((const float*)_data.begin())[0], ((const float*)_data.begin())[1], ((const float*)_data.begin())[2], 0.f);
+		case RenderCore::Format::R32G32_FLOAT:          return Float4(((const float*)_data.begin())[0], ((const float*)_data.begin())[1], 0.f, 1.f);
+		case RenderCore::Format::R32_FLOAT:             return Float4(((const float*)_data.begin())[0], 0.f, 0.f, 1.f);
 
-        case RenderCore::Format::R10G10B10A2_UNORM:
+		case RenderCore::Format::R10G10B10A2_UNORM:
 		case RenderCore::Format::R10G10B10A2_SNORM:
-        case RenderCore::Format::R10G10B10A2_UINT:
-        case RenderCore::Format::R11G11B10_FLOAT:
-        case RenderCore::Format::B5G6R5_UNORM:
-        case RenderCore::Format::B5G5R5A1_UNORM:        UNREACHABLE(); return Float4(0,0,0,1);  // requires some custom adjustments (these are uncommon uses, anyway)
+		case RenderCore::Format::R10G10B10A2_UINT:
+		case RenderCore::Format::R11G11B10_FLOAT:
+		case RenderCore::Format::B5G6R5_UNORM:
+		case RenderCore::Format::B5G5R5A1_UNORM:        UNREACHABLE(); return Float4(0,0,0,1);  // requires some custom adjustments (these are uncommon uses, anyway)
 
-        case RenderCore::Format::R16G16B16A16_FLOAT:    return Float4(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), Float16AsFloat32(((const unsigned short*)_data.begin())[1]), Float16AsFloat32(((const unsigned short*)_data.begin())[2]), Float16AsFloat32(((const unsigned short*)_data.begin())[3]));
-        case RenderCore::Format::R16G16_FLOAT:          return Float4(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), Float16AsFloat32(((const unsigned short*)_data.begin())[1]), 0.f, 1.f);
-        case RenderCore::Format::R16_FLOAT:             return Float4(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), 0.f, 0.f, 1.f);
+		case RenderCore::Format::R16G16B16A16_FLOAT:    return Float4(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), Float16AsFloat32(((const unsigned short*)_data.begin())[1]), Float16AsFloat32(((const unsigned short*)_data.begin())[2]), Float16AsFloat32(((const unsigned short*)_data.begin())[3]));
+		case RenderCore::Format::R16G16_FLOAT:          return Float4(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), Float16AsFloat32(((const unsigned short*)_data.begin())[1]), 0.f, 1.f);
+		case RenderCore::Format::R16_FLOAT:             return Float4(Float16AsFloat32(((const unsigned short*)_data.begin())[0]), 0.f, 0.f, 1.f);
 
-        case RenderCore::Format::B8G8R8A8_UNORM:
-        case RenderCore::Format::R8G8B8A8_UNORM:        return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[2]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[3]));
-        case RenderCore::Format::R8G8_UNORM:            return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), 0.f, 1.f);
-        case RenderCore::Format::R8_UNORM:              return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), 0.f, 0.f, 1.f);
-        
-        case RenderCore::Format::B8G8R8X8_UNORM:        return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[2]), 1.f);
+		case RenderCore::Format::B8G8R8A8_UNORM:
+		case RenderCore::Format::R8G8B8A8_UNORM:        return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[2]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[3]));
+		case RenderCore::Format::R8G8_UNORM:            return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), 0.f, 1.f);
+		case RenderCore::Format::R8_UNORM:              return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), 0.f, 0.f, 1.f);
+		
+		case RenderCore::Format::B8G8R8X8_UNORM:        return Float4(UNorm8AsFloat32(((const unsigned char*)_data.begin())[0]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[1]), UNorm8AsFloat32(((const unsigned char*)_data.begin())[2]), 1.f);
 
 		case RenderCore::Format::R16G16B16A16_UNORM:	return Float4(UNorm16AsFloat32(((const uint16_t*)_data.begin())[0]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[1]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[2]), UNorm16AsFloat32(((const uint16_t*)_data.begin())[3]));
 		case RenderCore::Format::R16G16B16A16_SNORM:	return Float4(SNorm16AsFloat32(((const int16_t*)_data.begin())[0]), SNorm16AsFloat32(((const int16_t*)_data.begin())[1]), SNorm16AsFloat32(((const int16_t*)_data.begin())[2]), SNorm16AsFloat32(((const int16_t*)_data.begin())[3]));
-            
-        default:
-            UNREACHABLE();
-        }
+			
+		default:
+			UNREACHABLE();
+		}
 
-        UNREACHABLE();
-        return Float4(0,0,0,1);
+		UNREACHABLE();
+		return Float4(0,0,0,1);
 	}
 }
 
