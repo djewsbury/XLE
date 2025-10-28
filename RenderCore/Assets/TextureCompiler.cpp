@@ -525,8 +525,10 @@ namespace RenderCore { namespace Assets
 	{
 		TextureCompilationRequest result;
 		result._subCompiler = registrar.TryBeginCompile(util, indexer);
-		if (!result._subCompiler)
+		if (!result._subCompiler) {
+			assert(0);
 			return {};		// invalid compile
+		}
 
 		result._intermediateName = result._subCompiler->GetIntermediateName();
 

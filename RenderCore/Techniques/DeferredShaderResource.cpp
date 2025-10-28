@@ -303,6 +303,7 @@ namespace RenderCore { namespace Techniques
         std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
         const Assets::TextureCompilationRequest& compileRequest)
     {
+        assert(compileRequest._subCompiler);
         std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
         auto containerFuture = containerPromise.get_future();
         ::Assets::AutoConstructToPromise(std::move(containerPromise), compileRequest);
@@ -318,6 +319,7 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<::Assets::OperationContext> opContext,
         const Assets::TextureCompilationRequest& compileRequest)
     {
+        assert(compileRequest._subCompiler);
         std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
         auto containerFuture = containerPromise.get_future();
         ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest);
@@ -334,6 +336,7 @@ namespace RenderCore { namespace Techniques
         const Assets::TextureCompilationRequest& compileRequest,
         ProgressiveResultFn&& intermediateResultsFn)
     {
+        assert(compileRequest._subCompiler);
         std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
         auto containerFuture = containerPromise.get_future();
         ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest, std::move(intermediateResultsFn));
