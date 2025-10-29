@@ -79,7 +79,7 @@ namespace ConsoleRig
 	{
 		{
 			ScopedLock(_pimpl->_linesMutex);
-			if (!_pimpl->_lastLineComplete) Print("\n");
+			if (!_pimpl->_lastLineComplete) _pimpl->Print_AlreadyLocked("\n");
 			_pimpl->Print_AlreadyLocked(Concatenate("{Color:3f3f3f}> {Color:7F7F7F}", str, "\n"));
 		}
 
