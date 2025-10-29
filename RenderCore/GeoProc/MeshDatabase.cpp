@@ -488,11 +488,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         std::vector<uint8_t> finalVertexBuffer(size);
         XlSetMemory(finalVertexBuffer.data(), 0, size);
 
-        for (unsigned elementIndex = 0; elementIndex <_streams.size(); ++elementIndex) {
-            const auto& nativeElement     = outputLayout._elements[elementIndex];
-            const auto& stream            = _streams[elementIndex];
+        for (auto& nativeElement:outputLayout._elements) {
+
+            auto stream = _streams.begin();
+            for (; stream!=_streams.end(); ++stream)
+                if (stream->GetSemanticName() == nativeElement._semanticName && stream->GetSemanticIndex() == nativeElement._semanticIndex && stream->GetInputSlot() == nativeElement._inputSlot)
+                    break;
+
+            if (stream == _streams.end())
+                Throw(std::runtime_error("In BuildNativeVertexBuffer, could not find matching vertex data stream for " + nativeElement._semanticName));
+
             WriteStream(
-                stream, PtrAdd(finalVertexBuffer.data(), nativeElement._alignedByteOffset),
+                *stream, PtrAdd(finalVertexBuffer.data(), nativeElement._alignedByteOffset),
                 nativeElement._nativeFormat, outputLayout._vertexStride,
                 size - nativeElement._alignedByteOffset);
         }
