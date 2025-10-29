@@ -228,7 +228,6 @@ namespace RenderCore { namespace Techniques
 
 		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 		::Assets::DependencyValidation _depVal;
-		DEBUG_ONLY(unsigned _usiCount = 1);
 
 		void BeginDispatchesInternal(
 			ParsingContext& parsingContext,
@@ -236,7 +235,6 @@ namespace RenderCore { namespace Techniques
 			uint64_t pushConstantsBinding = 0)
 		{
 			assert(!_betweenBeginEnd);
-			DEBUG_ONLY(assert(_usiCount == 1));
 			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterfaceCompute();
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
@@ -262,7 +260,6 @@ namespace RenderCore { namespace Techniques
 			uint64_t pushConstantsBinding = 0)
 		{
 			assert(!_betweenBeginEnd);
-			DEBUG_ONLY(assert(_usiCount == 1));
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, usi?*usi:s_usiNull, pushConstantsUSI);
@@ -287,7 +284,6 @@ namespace RenderCore { namespace Techniques
 		{
 			assert(usi0); assert(usi1);		// if you're using this variant, you should pass both
 			assert(!_betweenBeginEnd);
-			DEBUG_ONLY(assert(_usiCount == 2));
 			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterfaceCompute();
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
@@ -317,7 +313,6 @@ namespace RenderCore { namespace Techniques
 		{
 			assert(usi0); assert(usi1);		// if you're using this variant, you should pass both
 			assert(!_betweenBeginEnd);
-			DEBUG_ONLY(assert(_usiCount == 2));
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
 			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, *usi0, *usi1, pushConstantsUSI);
@@ -467,7 +462,6 @@ namespace RenderCore { namespace Techniques
 					op->_depVal = pipelineAndLayout.GetDependencyValidation();
 					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
 					op->_pipeline = std::move(pipelineAndLayout._pipeline);
-					DEBUG_ONLY(op->_usiCount = 1);
 					assert(op->_pipeline);
 					return op;
 				});
