@@ -170,16 +170,14 @@ namespace RenderCore { namespace LightingEngine
 				pipelineCollection,
 				EQUIRECTANGULAR_TO_CUBE_HLSL ":EquirectToCube",
 				std::move(sharedParameterBox),
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
-				usi);
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 		} else if (filter == EquirectFilterMode::ToCubeMapBokeh) {
 			usi.BindResourceView(1, "OutputArray"_h);
  			computeOpFuture = Techniques::CreateComputeOperator(
 				pipelineCollection,
 				EQUIRECTANGULAR_TO_CUBE_BOKEH_HLSL ":EquirectToCubeBokeh",
 				std::move(sharedParameterBox),
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
-				usi);
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 		} else if (filter == EquirectFilterMode::ToGlossySpecular) {
 			usi.BindResourceView(1, "OutputArray"_h);
 			usi.BindResourceView(2, "MarginalHorizontalCDF"_h);
@@ -191,8 +189,7 @@ namespace RenderCore { namespace LightingEngine
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":EquirectFilterGlossySpecular",
 				std::move(sharedParameterBox),
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
-				usi);
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 		} else if (filter == EquirectFilterMode::ToGlossySpecularReference) {
 			usi.BindResourceView(1, "OutputArray"_h);
 			usi.BindImmediateData(0, "ControlUniforms"_h);
@@ -200,8 +197,7 @@ namespace RenderCore { namespace LightingEngine
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":EquirectFilterGlossySpecular_Reference",
 				std::move(sharedParameterBox),
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
-				usi);
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 		} else if (filter == EquirectFilterMode::ToDiffuseReference) {
 			usi.BindResourceView(1, "OutputArray"_h);
 			usi.BindImmediateData(0, "ControlUniforms"_h);
@@ -209,8 +205,7 @@ namespace RenderCore { namespace LightingEngine
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":EquirectFilterDiffuse_Reference",
 				std::move(sharedParameterBox),
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
-				usi);
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 		} else {
 			assert(filter == EquirectFilterMode::ProjectToSphericalHarmonic);
 			usi.BindResourceView(1, "Output"_h);
@@ -218,8 +213,7 @@ namespace RenderCore { namespace LightingEngine
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":ProjectToSphericalHarmonic",
 				std::move(sharedParameterBox),
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
-				usi);
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 		}
 
 		auto inputRes = Techniques::CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
@@ -256,7 +250,7 @@ namespace RenderCore { namespace LightingEngine
 
 				UniformsStream us;
 				us._resourceViews = MakeIteratorRange(resViews);
-				auto dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);
+				auto dispatchGroup = computeOp->BeginDispatches(*threadContext, &usi, us, {}, pushConstantsBinding);
 
 				if (filter == EquirectFilterMode::ToCubeMap) {
 					auto passCount = (mipDesc._width+7)/8 * (mipDesc._height+7)/8 * 6;
@@ -283,7 +277,7 @@ namespace RenderCore { namespace LightingEngine
 						dispatchGroup = {};
 						Metal::BarrierHelper{*threadContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 						samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, "ToCubeMapBokeh");
-						dispatchGroup = computeOp->BeginDispatches(*threadContext, us, {}, pushConstantsBinding);		// hack -- because we're ending the display list we have to begin and end the dispatch group
+						dispatchGroup = computeOp->BeginDispatches(*threadContext, &usi, us, {}, pushConstantsBinding);		// hack -- because we're ending the display list we have to begin and end the dispatch group
 					}
 
 					++completedDispatchCount; if (opHelper) opHelper.SetProgress(completedDispatchCount, totalDispatchCount);
@@ -302,14 +296,12 @@ namespace RenderCore { namespace LightingEngine
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":CalculateHorizontalMarginalDensities",
 				{},
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
-				usi);
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 			auto normalizeDensitiesFuture = CreateComputeOperator(
 				pipelineCollection,
 				IBL_PREFILTER_HLSL ":NormalizeMarginalDensities",
 				{},
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain",
-				usi);
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 			horizontalDensitiesFuture->StallWhilePending();
 			normalizeDensitiesFuture->StallWhilePending();
 			auto horizontalDensities = horizontalDensitiesFuture->Actualize();
@@ -334,9 +326,9 @@ namespace RenderCore { namespace LightingEngine
 			UniformsStream us;
 			us._resourceViews = MakeIteratorRange(resViews);
 
-			horizontalDensities->Dispatch(*threadContext, (densitiesDims[0]+8-1)/8, (densitiesDims[1]+8-1)/8, 1, us);
+			horizontalDensities->Dispatch(*threadContext, (densitiesDims[0]+8-1)/8, (densitiesDims[1]+8-1)/8, 1, &usi, us);
 			Metal::BarrierHelper(metalContext).Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
-			normalizeDensities->Dispatch(*threadContext, 1, 1, 1, us);
+			normalizeDensities->Dispatch(*threadContext, 1, 1, 1, &usi, us);
 			Metal::BarrierHelper(metalContext)
 				.Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess)
 				.Add(*marginalVerticalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
@@ -407,7 +399,7 @@ namespace RenderCore { namespace LightingEngine
 					UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
 					us._immediateData = immDatas;
 
-					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, us);
+					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, &usi, us);
 
 					// update the progress tracker (reduce sample counts a little bit, to avoid exceeding 32 bit integers)
 					samplesCompleted += samplingShaderHelper.SamplesProcessedCount() - initialCompletedSamples;
@@ -468,7 +460,7 @@ namespace RenderCore { namespace LightingEngine
 					UniformsStream::ImmediateData immDatas[] = { MakeOpaqueIteratorRange(controlUniforms) };
 					us._immediateData = immDatas;
 
-					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, us);
+					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 6, &usi, us);
 
 					if ((mip+1) == targetDesc._mipCount && samplingShaderHelper.Finished()) break;		// exit now to avoid a tiny cmd list after the last dispatch
 
@@ -515,7 +507,7 @@ namespace RenderCore { namespace LightingEngine
 
  		auto computeOpFuture = Techniques::CreateComputeOperator(
 			std::make_shared<Techniques::PipelineCollection>(threadContext->GetDevice()),
-			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain", usi);
+			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
@@ -568,7 +560,7 @@ namespace RenderCore { namespace LightingEngine
 					us._resourceViews = MakeIteratorRange(resViews);
 					us._immediateData = MakeIteratorRange(immData);
 					
-					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
+					computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, &usi, us);
 
 					if (samplingShaderHelper.Finished() && (a+1) == ActualArrayLayerCount(targetDesc) && (mip+1) == targetDesc._mipCount) break;		// exit now to avoid a tiny cmd list after the last dispatch
 					samplingShaderHelper.CommitAndTimeCommandList(*threadContext, controlUniforms._samplingShaderUniforms, shader);
@@ -603,7 +595,7 @@ namespace RenderCore { namespace LightingEngine
 
  		auto computeOpFuture = Techniques::CreateComputeOperator(
 			std::make_shared<Techniques::PipelineCollection>(threadContext->GetDevice()),
-			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain", usi);
+			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 
 		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		auto inputRes = Techniques::CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
@@ -637,7 +629,7 @@ namespace RenderCore { namespace LightingEngine
 				us._resourceViews = MakeIteratorRange(resViews);
 				us._immediateData = MakeIteratorRange(immData);
 				
-				computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, us);
+				computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, &usi, us);
 			}
 		}
 

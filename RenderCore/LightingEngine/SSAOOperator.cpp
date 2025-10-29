@@ -37,6 +37,21 @@ namespace RenderCore { namespace LightingEngine
 
     static const uint32_t s_ditherTable[96] = {24, 72, 0, 48, 60, 12, 84, 36, 90, 42, 66, 18, 6, 54, 30, 78, 7, 91, 61, 25, 55, 43, 13, 73, 31, 67, 85, 1, 79, 19, 37, 49, 80, 20, 38, 50, 32, 68, 86, 2, 56, 44, 14, 74, 8, 92, 62, 26, 9, 57, 33, 81, 93, 45, 69, 21, 63, 15, 87, 39, 27, 75, 3, 51, 52, 4, 76, 28, 40, 88, 16, 64, 22, 70, 46, 94, 82, 34, 58, 10, 29, 65, 95, 11, 77, 17, 47, 59, 5, 89, 71, 35, 53, 41, 23, 83};
 
+    static const UniformsStreamInterface s_ssaoUSI = UniformsStreamInterface{}
+        .BindResourceView(0, "FullResolutionDepths"_h)
+        .BindResourceView(1, "OutputTexture"_h)
+        .BindResourceView(2, "Working"_h)
+        .BindResourceView(3, "AccumulationAO"_h)
+        .BindResourceView(4, "AccumulationAOLast"_h)
+        .BindResourceView(5, "InputNormals"_h)
+        .BindResourceView(6, "GBufferMotion"_h)
+        .BindResourceView(7, "HistoryConfidence"_h)
+        .BindResourceView(8, "HierarchicalDepths"_h)
+        .BindResourceView(9, "DepthPrev"_h)
+        .BindResourceView(10, "GBufferNormalPrev"_h)
+        .BindResourceView(11, "DitherTable"_h)
+        .BindImmediateData(0, "AOProps"_h);
+
     void SSAOOperator::Execute(
         SequenceIterator& iterator,
         IResourceView& inputDepthsSRV,
@@ -90,12 +105,12 @@ namespace RenderCore { namespace LightingEngine
             _orthogonalComputeOp->Dispatch(
                 *iterator._parsingContext,
                 (outputDims[0] + (2*8) - 1) / (2*8), (outputDims[1] + (2*8) - 1) / (2*8), 1,
-                us);
+                &s_ssaoUSI, us);
         } else {
             _perspectiveComputeOp->Dispatch(
                 *iterator._parsingContext,
                 (outputDims[0] + (2*8) - 1) / (2*8), (outputDims[1] + (2*8) - 1) / (2*8), 1,
-                us);
+                &s_ssaoUSI, us);
         }
 
         // barrier on "workingUAV" (written in first step, read in second)
@@ -105,7 +120,7 @@ namespace RenderCore { namespace LightingEngine
         _upsampleOp->Dispatch(
             *iterator._parsingContext,
             (outputDims[0] + (2*8) - 1) / (2*8), (outputDims[1] + (2*8) - 1) / (2*8), 1,
-            us);
+            &s_ssaoUSI, us);
 
         // leave the output texture in ShaderResource layout
         Metal::BarrierHelper{metalContext}
@@ -258,20 +273,7 @@ namespace RenderCore { namespace LightingEngine
         assert(_secondStageConstructionState == 0);
         _secondStageConstructionState = 1;
 
-        UniformsStreamInterface usi;
-        usi.BindResourceView(0, "FullResolutionDepths"_h);
-        usi.BindResourceView(1, "OutputTexture"_h);
-        usi.BindResourceView(2, "Working"_h);
-        usi.BindResourceView(3, "AccumulationAO"_h);
-        usi.BindResourceView(4, "AccumulationAOLast"_h);
-        usi.BindResourceView(5, "InputNormals"_h);
-        usi.BindResourceView(6, "GBufferMotion"_h);
-        usi.BindResourceView(7, "HistoryConfidence"_h);
-        usi.BindResourceView(8, "HierarchicalDepths"_h);
-        usi.BindResourceView(9, "DepthPrev"_h);
-        usi.BindResourceView(10, "GBufferNormalPrev"_h);
-        usi.BindResourceView(11, "DitherTable"_h);
-        usi.BindImmediateData(0, "AOProps"_h);
+        
 
         ParameterBox selectors;
         if (_opDesc._sampleBothDirections) selectors.SetParameter("BOTH_WAYS", 1);
@@ -285,22 +287,19 @@ namespace RenderCore { namespace LightingEngine
             _pipelinePool,
             AO_COMPUTE_HLSL ":main",
             selectors, 
-            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-            usi);
+            GENERAL_OPERATOR_PIPELINE ":ComputeMain");
         selectors.SetParameter("ORTHO_CAMERA", 1);
         auto orthogonalComputeOp = Techniques::CreateComputeOperator(
             _pipelinePool,
             AO_COMPUTE_HLSL ":main",
             selectors, 
-            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-            usi);
+            GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 
         auto upsampleOp = Techniques::CreateComputeOperator(
             _pipelinePool,
             AO_COMPUTE_HLSL ":UpsampleOp",
             selectors, 
-            GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-            usi);
+            GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 
         ::Assets::WhenAll(perspectiveComputeOp, orthogonalComputeOp, upsampleOp).ThenConstructToPromise(
             std::move(promise),

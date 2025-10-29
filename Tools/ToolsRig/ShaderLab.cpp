@@ -459,9 +459,7 @@ namespace ToolsRig
 						{0, BindFlag::ShaderResource}		// attachmentSRV to shader resource
 					});
 
-					UniformsStreamInterface usi;
-					usi.BindResourceView(0, "VisualizeInput"_h);
-					usi.BindImmediateData(0, "DebuggingGlobals"_h);
+					static const UniformsStreamInterface usi = UniformsStreamInterface{}.BindResourceView(0, "VisualizeInput"_h).BindImmediateData(0, "DebuggingGlobals"_h);
 					UniformsStream us;
 					IResourceView* srvs[] = { attachmentSRV.get() };
 					us._resourceViews = MakeIteratorRange(srvs);
@@ -485,9 +483,8 @@ namespace ToolsRig
 						drawingApparatus._graphicsPipelinePool,
 						Techniques::FullViewportOperatorSubType::DisableDepth,
 						VISUALIZE_ATTACHMENT_PIXEL_HLSL ":main", _shaderSelectors, 
-						GENERAL_OPERATOR_PIPELINE ":GraphicsMain", outputStates,
-						usi);
-					op->Actualize()->Draw(parsingContext, us);
+						GENERAL_OPERATOR_PIPELINE ":GraphicsMain", outputStates);
+					op->Actualize()->Draw(parsingContext, &usi, us);
 				} CATCH (::Assets::Exceptions::InvalidAsset& e) {
 					std::stringstream str;
 					str << "Error in visualize shader:" << std::endl;

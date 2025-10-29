@@ -20,6 +20,18 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine 
 {
+	static const UniformsStreamInterface s_usiTAAResolve = UniformsStreamInterface{}
+		.BindResourceView(0, "ColorHDR"_h)
+		.BindResourceView(1, "Output"_h)
+		.BindResourceView(2, "OutputPrev"_h)
+		.BindResourceView(3, "GBufferMotion"_h)
+		.BindResourceView(4, "Depth"_h)
+		.BindImmediateData(0, "ControlUniforms"_h);
+
+	static const UniformsStreamInterface s_usiTAASharpen = UniformsStreamInterface{}
+		.BindResourceView(0, "Output"_h)
+		.BindResourceView(1, "ColorHDR"_h)
+		.BindImmediateData(0, "ControlUniforms"_h);
 
 	void TAAOperator::Execute(
 		Techniques::ParsingContext& parsingContext,
@@ -58,7 +70,7 @@ namespace RenderCore { namespace LightingEngine
 		_aaResolve->Dispatch(
 			parsingContext,
 			(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
-			uniforms);
+			&s_usiTAAResolve, uniforms);
 
 		{
 			Metal::BarrierHelper barrierHelper{parsingContext.GetThreadContext()};
@@ -86,7 +98,7 @@ namespace RenderCore { namespace LightingEngine
 			_sharpenFutureYesterday->Dispatch(
 				parsingContext,
 				(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
-				uniforms);
+				&s_usiTAASharpen, uniforms);
 		}
 
 		_firstFrame = false;
@@ -209,14 +221,6 @@ namespace RenderCore { namespace LightingEngine
 		assert(_secondStageConstructionState == 0);
 		_secondStageConstructionState = 1;
 
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, "ColorHDR"_h);
-		usi.BindResourceView(1, "Output"_h);
-		usi.BindResourceView(2, "OutputPrev"_h);
-		usi.BindResourceView(3, "GBufferMotion"_h);
-		usi.BindResourceView(4, "Depth"_h);
-		usi.BindImmediateData(0, "ControlUniforms"_h);
-
 		ParameterBox selectors;
 		selectors.SetParameter("PLAYDEAD_NEIGHBOURHOOD_SEARCH", _desc._findOptimalMotionVector);
 		selectors.SetParameter("CATMULL_ROM_SAMPLING", _desc._catmullRomSampling);
@@ -225,21 +229,15 @@ namespace RenderCore { namespace LightingEngine
 			_pool,
 			TAA_COMPUTE_HLSL ":ResolveTemporal",
 			std::move(selectors),
-			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-			usi);
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 
 		if (_desc._sharpenHistory) {
-			UniformsStreamInterface usi2;
-			usi2.BindResourceView(0, "Output"_h);
-			usi2.BindResourceView(1, "ColorHDR"_h);
-			usi2.BindImmediateData(0, "ControlUniforms"_h);
 
 			auto sharpenFutureYesterday = Techniques::CreateComputeOperator(
 				_pool,
 				TAA_COMPUTE_HLSL ":UpdateHistory",
 				{},
-				GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-				usi2);
+				GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 
 			::Assets::WhenAll(futureAAResolve, sharpenFutureYesterday).ThenConstructToPromise(
 				std::move(promise),

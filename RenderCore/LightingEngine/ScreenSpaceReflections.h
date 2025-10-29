@@ -130,6 +130,7 @@ namespace RenderCore { namespace LightingEngine
 		
 		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<Techniques::PipelineCollection> _pipelinePool;
+		UniformsStreamInterface _usi;
 		::Assets::DependencyValidation _depVal;
 		unsigned _pingPongCounter = ~0u;
 		bool _pendingCompleteInit = true;

@@ -22,6 +22,17 @@ namespace RenderCore { namespace LightingEngine
 {
 	static const Format s_hierarchicalDepthFormat = Format::R16_FLOAT;
 
+	static const UniformsStreamInterface s_usiHierarchicalDepths = []() {
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, "AtomicBuffer"_h);
+		usi.BindResourceView(1, "InputDepths"_h);
+		usi.BindImmediateData(0, "ControlUniforms"_h);
+		auto downSampleDepthsBinding = "DownsampleDepths"_h;
+		for (unsigned c=0; c<13; ++c)
+			usi.BindResourceView(2+c, downSampleDepthsBinding+c);
+		return usi;
+	}();
+
 	void HierarchicalDepthsOperator::Execute(RenderCore::LightingEngine::SequenceIterator& iterator)
 	{
 		assert(_secondStageConstructionState == 2);
@@ -70,7 +81,7 @@ namespace RenderCore { namespace LightingEngine
 		_resolveOp->Dispatch(
 			*iterator._parsingContext,
 			groupsX, groupsY, 1,
-			us);
+			&s_usiHierarchicalDepths, us);
 
 		// because we're using a compute shader fragment, we must manually add a barrier to update the resource layout
 		Metal::BarrierHelper{*iterator._threadContext}.Add(*iterator._rpi.GetNonFrameBufferAttachmentView(1)->GetResource(), BindFlag::UnorderedAccess, BindFlag::ShaderResource);
@@ -141,21 +152,12 @@ namespace RenderCore { namespace LightingEngine
 		assert(_secondStageConstructionState == 0);
 		_secondStageConstructionState = 1;
 
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, "AtomicBuffer"_h);
-		usi.BindResourceView(1, "InputDepths"_h);
-		usi.BindImmediateData(0, "ControlUniforms"_h);
-		auto downSampleDepthsBinding = "DownsampleDepths"_h;
-		for (unsigned c=0; c<13; ++c)
-			usi.BindResourceView(2+c, downSampleDepthsBinding+c);
-
 		ParameterBox selectors;
 		auto resolveOp = Techniques::CreateComputeOperator(
 			_pipelinePool,
 			HIERARCHICAL_DEPTHS_HLSL ":GenerateDownsampleDepths",
 			selectors, 
-			SSR_PIPELINE ":DownsampleDepths",
-			usi);
+			SSR_PIPELINE ":DownsampleDepths");
 
 		::Assets::WhenAll(resolveOp).ThenConstructToPromise(
 			std::move(promise), 

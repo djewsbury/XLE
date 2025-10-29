@@ -28,6 +28,11 @@ namespace RenderOverlays
 {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static const RenderCore::UniformsStreamInterface s_usiGaussianBlur = RenderCore::UniformsStreamInterface{}
+		.BindResourceView(0, "InputTexture"_h)
+		.BindResourceView(1, "OutputTexture"_h)
+		.BindImmediateData(0, "ControlUniforms"_h);
+
 	class GaussianBlurOperator
 	{
 	public:
@@ -177,7 +182,7 @@ namespace RenderOverlays
 				(parsingContext.GetFrameBufferProperties()._width + blockSize - 1) / blockSize,
 				(parsingContext.GetFrameBufferProperties()._height + blockSize - 1) / blockSize,
 				1,
-				uniforms);
+				&s_usiGaussianBlur, uniforms);
 		}
 
 		rpi.AutoNonFrameBufferBarrier({
@@ -197,18 +202,14 @@ namespace RenderOverlays
 		unsigned tapCount)
 	{
 		assert((tapCount&1) == 1);		// tap count must be odd (and should generally be 11 or higher)
-		RenderCore::UniformsStreamInterface usi;
-		usi.BindResourceView(0, "InputTexture"_h);
-		usi.BindResourceView(1, "OutputTexture"_h);
-		usi.BindImmediateData(0, "ControlUniforms"_h);
+		
 		ParameterBox selectors;
 		selectors.SetParameter("TAP_COUNT", tapCount);
 		auto futurePipelineOperator = RenderCore::Techniques::CreateComputeOperator(
 			pool,
 			RENDEROVERLAYS_SEPARABLE_FILTER ":GaussianRGB",
 			std::move(selectors),
-			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-			usi);
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 		::Assets::WhenAll(std::move(futurePipelineOperator)).ThenConstructToPromise(
 			std::move(promise),
 			[tapCount](auto pipelineOperator) {
@@ -217,6 +218,16 @@ namespace RenderOverlays
 	}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static const RenderCore::UniformsStreamInterface s_usiFastMipChain = []() {
+		RenderCore::UniformsStreamInterface usi;
+		usi.BindResourceView(0, "InputTexture"_h);
+		usi.BindResourceView(1, "AtomicBuffer"_h);
+		for (unsigned c=0; c<13; ++c)
+			usi.BindResourceView(2+c, "MipChainUAV"_h+c);
+		usi.BindImmediateData(0, "ControlUniforms"_h);
+		return usi;
+	}();
 
 	class FastMipChainOperator
 	{
@@ -272,7 +283,7 @@ namespace RenderOverlays
 		auto* dummySRV = Techniques::Services::GetCommonResources()->_undefined2DUAV.get();
 		for (; c<13; ++c) srvs[2+c] = dummySRV;
 		UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
-		_op->Dispatch(threadContext, threadGroupX, threadGroupY, 1, UniformsStream { srvs, immDatas });
+		_op->Dispatch(threadContext, threadGroupX, threadGroupY, 1, &s_usiFastMipChain, UniformsStream { srvs, immDatas });
 	}
 
 	FastMipChainOperator::FastMipChainOperator(RenderCore::IDevice& device, std::shared_ptr<RenderCore::Techniques::IComputeShaderOperator> op)
@@ -291,18 +302,11 @@ namespace RenderOverlays
 		std::promise<std::shared_ptr<FastMipChainOperator>>&& promise,
 		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool)
 	{
-		RenderCore::UniformsStreamInterface usi;
-		usi.BindResourceView(0, "InputTexture"_h);
-		usi.BindResourceView(1, "AtomicBuffer"_h);
-		for (unsigned c=0; c<13; ++c)
-			usi.BindResourceView(2+c, "MipChainUAV"_h+c);
-		usi.BindImmediateData(0, "ControlUniforms"_h);
 		auto futureOp = RenderCore::Techniques::CreateComputeOperator(
 			pool,
 			FAST_MIP_CHAIN_COMPUTE_HLSL ":main",
 			ParameterBox{},
-			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-			usi);
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 
 		::Assets::WhenAll(std::move(futureOp)).ThenConstructToPromise(
 			std::move(promise),
@@ -310,6 +314,11 @@ namespace RenderOverlays
 				return std::make_shared<FastMipChainOperator>(*dev, std::move(op));
 			});
 	}
+
+	static const RenderCore::UniformsStreamInterface s_usiBroadBlurUpsample = RenderCore::UniformsStreamInterface{}
+		.BindResourceView(0, "MipChainUAV"_h)
+		.BindResourceView(1, "MipChainSRV"_h)
+		.BindImmediateData(0, "ControlUniforms"_h);
 
 	class BroadBlurOperator
 	{
@@ -440,7 +449,7 @@ namespace RenderOverlays
 				// still generates warnings
 				IResourceView* srvs[] { tempUAVs[dstMip].get(), workingSRV.get() };
 				UniformsStream::ImmediateData immDatas[] { MakeOpaqueIteratorRange(controlUniforms) };
-				_upsampleOperator->Dispatch(parsingContext, threadGroupX, threadGroupY, 1, UniformsStream { srvs, immDatas });
+				_upsampleOperator->Dispatch(parsingContext, threadGroupX, threadGroupY, 1, &s_usiBroadBlurUpsample, UniformsStream { srvs, immDatas });
 			}
 
 			Metal::BarrierHelper barrierHelper{metalContext};
@@ -470,16 +479,11 @@ namespace RenderOverlays
 		std::promise<std::shared_ptr<BroadBlurOperator>>&& promise,
 		const std::shared_ptr<RenderCore::Techniques::PipelineCollection>& pool)
 	{
-		RenderCore::UniformsStreamInterface usi1;
-		usi1.BindResourceView(0, "MipChainUAV"_h);
-		usi1.BindResourceView(1, "MipChainSRV"_h);
-		usi1.BindImmediateData(0, "ControlUniforms"_h);
 		auto futureUpsampleOperator = RenderCore::Techniques::CreateComputeOperator(
 			pool,
 			RENDEROVERLAYS_HIERARCHICAL_BLUR_HLSL ":main",
 			ParameterBox{},
-			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-			usi1);
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 
 		auto futureDownsampleOperator = ::Assets::GetAssetMarkerPtr<FastMipChainOperator>(pool);
 

@@ -30,6 +30,8 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine
 {
+	static const UniformsStreamInterface s_skyUSI = UniformsStreamInterface{}.BindFixedDescriptorSet(0, "SkyDS"_h);
+
 	void SkyOperator::Execute(Techniques::ParsingContext& parsingContext)
 	{
 		assert(_secondStageConstructionState == 2);
@@ -38,7 +40,7 @@ namespace RenderCore { namespace LightingEngine
 		const IDescriptorSet* descSets[] = { _descSet.get() };
 		_shader->Draw(
 			parsingContext,
-			{},
+			&s_skyUSI, {},
 			MakeIteratorRange(descSets));
 
 		parsingContext.RequireCommandList(_completionCommandList);
@@ -99,9 +101,6 @@ namespace RenderCore { namespace LightingEngine
 		assert(_secondStageConstructionState == 0);
 		_secondStageConstructionState = 1;
 
-		UniformsStreamInterface usi;
-		usi.BindFixedDescriptorSet(0, "SkyDS"_h);
-
 		ParameterBox params;
 		params.SetParameter("SKY_PROJECTION", 5);
 		Techniques::PixelOutputStates po;
@@ -119,7 +118,7 @@ namespace RenderCore { namespace LightingEngine
 			SKY_PIXEL_HLSL ":main",
 			params,
 			GENERAL_OPERATOR_PIPELINE ":Sky",
-			po, usi);
+			po);
 		::Assets::WhenAll(futureShader).ThenConstructToPromise(
 			std::move(promise),
 			[strongThis=shared_from_this()](auto shader) {
@@ -449,7 +448,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(_secondStageConstructionState == 2);
 		assert(_shader);
-		_shader->Draw(parsingContext, {});
+		_shader->Draw(parsingContext);
 	}
 
 	::Assets::DependencyValidation FillBackgroundOperator::GetDependencyValidation() const
@@ -470,13 +469,11 @@ namespace RenderCore { namespace LightingEngine
 		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
 		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
 		outputStates.Bind(MakeIteratorRange(blendStates));
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, "SubpassInputAttachment"_h);
 		auto shaderFuture = Techniques::CreateFullViewportOperator(
 			_pool, Techniques::FullViewportOperatorSubType::DisableDepth,
 			BASIC_PIXEL_HLSL ":fill_background",
 			{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-			outputStates, usi);
+			outputStates);
 		::Assets::WhenAll(std::move(shaderFuture)).ThenConstructToPromise(
 			std::move(promise),
 			[strongThis=shared_from_this()](auto shader) {

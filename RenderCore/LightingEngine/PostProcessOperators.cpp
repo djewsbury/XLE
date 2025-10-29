@@ -29,6 +29,10 @@ namespace RenderCore { namespace LightingEngine
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static const UniformsStreamInterface s_nonAttachmentUsi = UniformsStreamInterface{}
+		.BindImmediateData(0, "ControlUniforms"_h)
+		.BindResourceView(0, "NoiseTexture"_h);
+
 	template <int Base>
 		inline float CalculateHaltonNumber(unsigned index)
 	{
@@ -100,8 +104,8 @@ namespace RenderCore { namespace LightingEngine
 				op->_shader->Dispatch(
 					parsingContext,
 					(outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1,
-					pass.GetNextUniformsStream(),
-					UniformsStream { srvs, immDatas });
+					&op->_attachmentUsi, pass.GetNextUniformsStream(),
+					&s_nonAttachmentUsi, UniformsStream { srvs, immDatas });
 			});
 
 		return result;
@@ -118,17 +122,11 @@ namespace RenderCore { namespace LightingEngine
 		ParameterBox selectors;
 		selectors.SetParameter("SHARPEN", _desc._sharpen.has_value());
 		selectors.SetParameter("FILM_GRAIN", _desc._filmGrain.has_value());
-		UniformsStreamInterface nonAttachmentUsi;
-		nonAttachmentUsi.BindImmediateData(0, "ControlUniforms"_h);
-		nonAttachmentUsi.BindResourceView(0, "NoiseTexture"_h);
-
 		auto shader = Techniques::CreateComputeOperator(
 			_pool,
 			POSTPROCESS_COMPUTE_HLSL ":main",
 			std::move(selectors),
-			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-			_attachmentUsi,
-			nonAttachmentUsi);
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 
 		if (!_desc._filmGrain) {
 

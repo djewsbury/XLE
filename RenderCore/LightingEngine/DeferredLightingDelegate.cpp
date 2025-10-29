@@ -681,10 +681,10 @@ namespace RenderCore { namespace LightingEngine
 
 		Techniques::RenderPassInstance rpi { parsingContext, fbDesc };
 
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, "GBuffer_Normals"_h);
-		usi.BindResourceView(1, "DepthTexture"_h);
-		usi.BindFixedDescriptorSet(0, "ShadowTemplate"_h);
+		static const UniformsStreamInterface usi = UniformsStreamInterface{}
+			.BindResourceView(0, "GBuffer_Normals"_h)
+			.BindResourceView(1, "DepthTexture"_h)
+			.BindFixedDescriptorSet(0, "ShadowTemplate"_h);
 		IResourceView* srvs[] = { rpi.GetNonFrameBufferAttachmentView(0).get(), rpi.GetNonFrameBufferAttachmentView(1).get() };
 		ImmediateDataStream immData { parsingContext.GetProjectionDesc()};
 		UniformsStream us;
@@ -701,10 +701,10 @@ namespace RenderCore { namespace LightingEngine
 		outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
 		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque, Techniques::CommonResourceBox::s_abOpaque };
 		outputStates.Bind(MakeIteratorRange(blendStates));
-		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, LIGHTING_OPERATOR_PIPELINE ":LightingOperatorWithAuto", outputStates, usi);
+		auto op = Techniques::CreateFullViewportOperator(pool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":detailed_visualisation", selectors, LIGHTING_OPERATOR_PIPELINE ":LightingOperatorWithAuto", outputStates);
 		op->StallWhilePending();
 		assert(op->GetAssetState() == ::Assets::AssetState::Ready);
-		op->Actualize()->Draw(parsingContext, us, MakeIteratorRange(shadowDescSets));
+		op->Actualize()->Draw(parsingContext, &usi, us, MakeIteratorRange(shadowDescSets));
 	}
 
 	void DeferredLightingCaptures::GenerateDebuggingOutputs(SequenceIterator& iterator)

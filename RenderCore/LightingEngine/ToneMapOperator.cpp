@@ -51,6 +51,13 @@ namespace RenderCore { namespace LightingEngine
 	static Float4x4 BuildPostToneScaleTransform_SRGB();
 	static void InitializeAcesLookupTable(Metal::DeviceContext&, IResource&);
 
+	static const UniformsStreamInterface s_usiToneMap = UniformsStreamInterface{}
+		.BindResourceView(0, "HDRInput"_h)
+		.BindResourceView(1, "LDROutput"_h)
+		.BindResourceView(2, "Params"_h)
+		.BindResourceView(3, "BrightPass"_h)
+		.BindResourceView(4, "LookupTable"_h);
+
 	void ToneMapAcesOperator::Execute(
 		Techniques::ParsingContext& parsingContext,
 		IResourceView& ldrOutput, IResourceView& hdrInput,
@@ -251,7 +258,7 @@ namespace RenderCore { namespace LightingEngine
 				(fbProps._width + dispatchGroupWidth - 1) / dispatchGroupWidth,
 				(fbProps._height + dispatchGroupHeight - 1) / dispatchGroupHeight,
 				1,
-				uniforms);
+				&s_usiToneMap, uniforms);
 		}
 		
 	}
@@ -462,13 +469,6 @@ namespace RenderCore { namespace LightingEngine
 			[strongThis=shared_from_this()](auto&& promise, auto predefinedPipelineLayout)
 			{
 				TRY {
-					UniformsStreamInterface toneMapUsi;
-					toneMapUsi.BindResourceView(0, "HDRInput"_h);
-					toneMapUsi.BindResourceView(1, "LDROutput"_h);
-					toneMapUsi.BindResourceView(2, "Params"_h);
-					toneMapUsi.BindResourceView(3, "BrightPass"_h);
-					toneMapUsi.BindResourceView(4, "LookupTable"_h);
-
 					bool hasBrightPass = strongThis->_desc._enablePreciseBloom || (strongThis->_desc._broadBloomMaxRadius > 0.f);
 					ParameterBox toneMapParameters;
 					toneMapParameters.SetParameter("HAS_BRIGHT_PASS", hasBrightPass ? 1 : 0);
@@ -478,8 +478,7 @@ namespace RenderCore { namespace LightingEngine
 						strongThis->_pool,
 						TONEMAP_ACES_COMPUTE_HLSL ":main",
 						std::move(toneMapParameters),
-						GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-						toneMapUsi);
+						GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 
 					auto& commonResources = *Techniques::Services::GetCommonResources();
 					auto compiledPipelineLayout = strongThis->_pool->GetDevice()->CreatePipelineLayout(
@@ -886,6 +885,13 @@ namespace RenderCore { namespace LightingEngine
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static const UniformsStreamInterface s_usiSubpassInput = UniformsStreamInterface{}
+		.BindResourceView(0, "SubpassInputAttachment"_h);
+
+	static const UniformsStreamInterface s_usiCopy = UniformsStreamInterface{}
+		.BindResourceView(0, "OutputTexture"_h)
+		.BindResourceView(1, "InputTexture"_h);
+
 	RenderStepFragmentInterface CopyToneMapOperator::CreateFragment(const FrameBufferProperties& fbProps)
 	{
 		RenderStepFragmentInterface fragment { UsePixelShaderPath() ? RenderCore::PipelineType::Graphics : RenderCore::PipelineType::Compute };
@@ -904,7 +910,7 @@ namespace RenderCore { namespace LightingEngine
 					assert(op->_secondStageConstructionState == 2);
 					assert(op->_shader);
 					ResourceViewStream us { *iterator._rpi.GetInputAttachmentView(0) };
-					op->_shader->Draw(*iterator._parsingContext, us);
+					op->_shader->Draw(*iterator._parsingContext, &s_usiSubpassInput, us);
 				});
 		} else {
 			subpass.AppendNonFrameBufferAttachmentView(ldrOutput, BindFlag::UnorderedAccess, {TextureViewDesc::Aspect::ColorLinear});
@@ -928,7 +934,7 @@ namespace RenderCore { namespace LightingEngine
 					ResourceViewStream us { *iterator._rpi.GetNonFrameBufferAttachmentView(0), *iterator._rpi.GetNonFrameBufferAttachmentView(1) };
 					UInt2 outputDims { iterator._parsingContext->GetFrameBufferProperties()._width, iterator._parsingContext->GetFrameBufferProperties()._height };
 					const unsigned groupSize = 8;
-					op->_computeShader->Dispatch(*iterator._parsingContext, (outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1, us);
+					op->_computeShader->Dispatch(*iterator._parsingContext, (outputDims[0] + groupSize - 1) / groupSize, (outputDims[1] + groupSize - 1) / groupSize, 1, &s_usiCopy, us);
 
 					if (outputState != BindFlag::UnorderedAccess)
 						Metal::BarrierHelper{iterator._parsingContext->GetThreadContext()}.Add(*iterator._rpi.GetNonFrameBufferAttachmentView(0)->GetResource(), {BindFlag::UnorderedAccess, ShaderStage::Compute}, outputState);
@@ -974,13 +980,12 @@ namespace RenderCore { namespace LightingEngine
 			outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
 			AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abOpaque };
 			outputStates.Bind(MakeIteratorRange(blendStates));
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, "SubpassInputAttachment"_h);
+			
 			auto shaderFuture = Techniques::CreateFullViewportOperator(
 				_pool, Techniques::FullViewportOperatorSubType::DisableDepth,
 				BASIC_PIXEL_HLSL ":copy_inputattachment",
 				{}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-				outputStates, usi);
+				outputStates);
 			::Assets::WhenAll(std::move(shaderFuture)).ThenConstructToPromise(
 				std::move(promise),
 				[strongThis=shared_from_this()](auto shader) {
@@ -992,10 +997,7 @@ namespace RenderCore { namespace LightingEngine
 
 		} else {
 
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, "OutputTexture"_h);
-			usi.BindResourceView(1, "InputTexture"_h);
-			auto shaderFuture = Techniques::CreateComputeOperator(_pool, BASIC_COMPUTE_HLSL ":copy_nonlinearOut", {}, usi);
+			auto shaderFuture = Techniques::CreateComputeOperator(_pool, BASIC_COMPUTE_HLSL ":copy_nonlinearOut");
 			::Assets::WhenAll(std::move(shaderFuture)).ThenConstructToPromise(
 				std::move(promise),
 				[strongThis=shared_from_this()](auto shader) {

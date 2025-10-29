@@ -138,12 +138,12 @@ namespace SceneEngine
     {
         auto rpi = Techniques::RenderPassToPresentationTarget(parsingContext);
 
-        UniformsStreamInterface usi;
-        usi.BindResourceView(0, Hash64("LightOutput"));
-        usi.BindResourceView(1, Hash64("DebuggingTextureMin"));
-        usi.BindResourceView(2, Hash64("DebuggingTextureMax"));
-        usi.BindResourceView(3, Hash64("DebuggingLightCountTexture"));
-        usi.BindResourceView(4, Hash64("DigitsTexture"));
+        static const UniformsStreamInterface usi = UniformsStreamInterface{}
+            .BindResourceView(0, Hash64("LightOutput"))
+            .BindResourceView(1, Hash64("DebuggingTextureMin"))
+            .BindResourceView(2, Hash64("DebuggingTextureMax"))
+            .BindResourceView(3, Hash64("DebuggingLightCountTexture"))
+            .BindResourceView(4, Hash64("DigitsTexture"));
 
         UniformsStream us;
         const IResourceView* srvs[] { 
@@ -166,9 +166,8 @@ namespace SceneEngine
             Techniques::FullViewportOperatorSubType::DisableDepth,
             "xleres/Deferred/debugging.pixel.hlsl:DepthsDebuggingTexture", {},
             "xleres/Deferred/tiled.pipeline:ComputeMain",
-            outputStates,
-            usi)->Actualize();
-        debuggingShader.Draw(parsingContext, us);
+            outputStates)->Actualize();
+        debuggingShader.Draw(parsingContext, &usi, us);
     }
 
     static float PowerForHalfRadius(float halfRadius, float powerFraction)
@@ -274,19 +273,19 @@ namespace SceneEngine
                     fov, { 0, 0 }
                 };
 
-                UniformsStreamInterface usi;
-                usi.BindResourceView(0, Hash64("InputLightList"));
-                usi.BindResourceView(1, Hash64("DepthTexture"));
-                usi.BindResourceView(2, Hash64("GBuffer_Normals"));
+                static const UniformsStreamInterface usi = UniformsStreamInterface{}
+                    .BindResourceView(0, Hash64("InputLightList"))
+                    .BindResourceView(1, Hash64("DepthTexture"))
+                    .BindResourceView(2, Hash64("GBuffer_Normals"))
 
-                usi.BindResourceView(3, Hash64("LightOutput"));
-                usi.BindResourceView(4, Hash64("ProjectedLightList"));
-                usi.BindResourceView(5, Hash64("MetricsObject"));
-                usi.BindResourceView(6, Hash64("DebuggingTextureMin"));
-                usi.BindResourceView(7, Hash64("DebuggingTextureMax"));
-                usi.BindResourceView(8, Hash64("DebuggingLightCountTexture"));
+                    .BindResourceView(3, Hash64("LightOutput"))
+                    .BindResourceView(4, Hash64("ProjectedLightList"))
+                    .BindResourceView(5, Hash64("MetricsObject"))
+                    .BindResourceView(6, Hash64("DebuggingTextureMin"))
+                    .BindResourceView(7, Hash64("DebuggingTextureMax"))
+                    .BindResourceView(8, Hash64("DebuggingLightCountTexture"))
 
-                usi.BindImmediateData(0, Hash64("LightCulling"));
+                    .BindImmediateData(0, Hash64("LightCulling"));
 
                 UniformsStream us;
                 UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(lightCulling) };
@@ -301,12 +300,11 @@ namespace SceneEngine
                 auto& prepareLights = *Techniques::CreateComputeOperator(
                     pipelinePool, 
                     "xleres/Deferred/tiled.compute.hlsl:PrepareLights", {},
-                    "xleres/Deferred/tiled.pipeline:ComputeMain",
-                    usi)->Actualize();
+                    "xleres/Deferred/tiled.pipeline:ComputeMain")->Actualize();
                 prepareLights.Dispatch(
                     parsingContext,
                     (tileLightCount + 256 - 1) / 256, 1, 1,
-                    us);
+                    &usi, us);
 
                 {
                     VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
@@ -330,22 +328,20 @@ namespace SceneEngine
                     auto& clusteredMain = *Techniques::CreateComputeOperator(
                         pipelinePool, 
                         "xleres/Deferred/clustered.compute.hlsl:main", definesTable,
-                        "xleres/Deferred/tiled.pipeline:ComputeMain",
-                        usi)->Actualize();
+                        "xleres/Deferred/tiled.pipeline:ComputeMain")->Actualize();
                     clusteredMain.Dispatch(
                         parsingContext,
                         lightCulling._groupCounts[0], lightCulling._groupCounts[1], 1,
-                        us);
+                        &usi, us);
                 } else {
                     auto& clusteredMain = *Techniques::CreateComputeOperator(
                         pipelinePool, 
                         "xleres/Deferred/tiled.compute.hlsl:main", definesTable,
-                        "xleres/Deferred/tiled.pipeline:ComputeMain",
-                        usi)->Actualize();
+                        "xleres/Deferred/tiled.pipeline:ComputeMain")->Actualize();
                     clusteredMain.Dispatch(
                         parsingContext,
                         lightCulling._groupCounts[0], lightCulling._groupCounts[1], 1,
-                        us);
+                        &usi, us);
                 }
 
                     //

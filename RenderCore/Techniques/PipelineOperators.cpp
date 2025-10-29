@@ -3,7 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PipelineOperators.h"
-#include "CommonResources.h"
 #include "RenderPass.h"
 #include "ParsingContext.h"
 #include "PipelineLayoutDelegate.h"
@@ -23,13 +22,14 @@
 
 namespace RenderCore { namespace Techniques
 {
+	static const UniformsStreamInterface s_usiNull;
+
 	class FullViewportOperator : public IShaderOperator
 	{
 	public:
 		std::shared_ptr<Metal::GraphicsPipeline> _pipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		BoundUniformsPool _boundUniforms;
-		UniformsStreamInterface _usi;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
 
 		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
@@ -37,10 +37,10 @@ namespace RenderCore { namespace Techniques
 
 		virtual void Draw(
 			ParsingContext& parsingContext,
-			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
+			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterfaceGraphics();
-			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi);
+			auto& boundUniforms = usi ? _boundUniforms.Get(*_pipeline, sysUsi, *usi) : _boundUniforms.Get(*_pipeline, sysUsi);
 
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			auto encoder = metalContext.BeginGraphicsEncoder(*_pipelineLayout);
@@ -62,16 +62,20 @@ namespace RenderCore { namespace Techniques
 
 		virtual void Draw(
 			IThreadContext& threadContext,
-			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
+			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
-			auto& boundUniforms = _boundUniforms.Get(*_pipeline, _usi);	// maybe silly to do a lookup here because it's the same every time
-
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			auto encoder = metalContext.BeginGraphicsEncoder(*_pipelineLayout);
 
-			if (!descSets.empty())
-				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 0);
-			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
+			if (usi) {
+				auto& boundUniforms = _boundUniforms.Get(*_pipeline, *usi);
+				if (!descSets.empty())
+					boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 0);
+				boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
+			} else {
+				auto& boundUniforms = _boundUniforms.Get(*_pipeline, s_usiNull);
+				boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
+			}
 			
 			encoder.Draw(*_pipeline, 4);
 		}
@@ -90,8 +94,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-			const FrameBufferTarget& fbTarget,
-			const UniformsStreamInterface& usi)
+			const FrameBufferTarget& fbTarget)
 		{
 			assert(pool);
 			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
@@ -100,9 +103,8 @@ namespace RenderCore { namespace Techniques
 			pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
-				[pipelineLayout=pipelineLayout, usi=usi](auto pipelineAndLayout) {
+				[pipelineLayout=pipelineLayout](auto pipelineAndLayout) {
 					auto op = std::make_shared<FullViewportOperator>();
-					op->_usi = std::move(usi);
 					op->_depVal = pipelineAndLayout.GetDependencyValidation();
 					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
 					op->_pipeline = std::move(pipelineAndLayout._pipeline);
@@ -116,8 +118,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<PipelineCollection>& pool,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
-			const FrameBufferTarget& fbTarget,
-			const UniformsStreamInterface& usi)
+			const FrameBufferTarget& fbTarget)
 		{
 			assert(pool);
 			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
@@ -126,9 +127,8 @@ namespace RenderCore { namespace Techniques
 			pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
-				[usi=usi](auto pipelineAndLayout) {
+				[](auto pipelineAndLayout) {
 					auto op = std::make_shared<FullViewportOperator>();
-					op->_usi = std::move(usi);
 					op->_depVal = pipelineAndLayout.GetDependencyValidation();
 					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
 					op->_pipeline = std::move(pipelineAndLayout._pipeline);
@@ -143,14 +143,13 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
 			StringSection<> pipelineLayoutAssetName,
-			const FrameBufferTarget& fbTarget,
-			const UniformsStreamInterface& usi)
+			const FrameBufferTarget& fbTarget)
 		{
 			assert(pool);
 			auto futurePipelineLayout = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
-				[pool, selectors, usi, plname=pipelineLayoutAssetName.AsString(), pipelineDesc, fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](auto&& promise, const auto& predefinedPipelineLayout) {
+				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), pipelineDesc, fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](auto&& promise, const auto& predefinedPipelineLayout) {
 					
 					auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
 					const ParameterBox* selectorList[] { &selectors };
@@ -159,9 +158,8 @@ namespace RenderCore { namespace Techniques
 
 					::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 						std::move(promise),
-						[predefinedPipelineLayout, usi=usi](auto pipelineAndLayout) {
+						[predefinedPipelineLayout](auto pipelineAndLayout) {
 							auto op = std::make_shared<FullViewportOperator>();
-							op->_usi = std::move(usi);
 							::Assets::DependencyValidationMarker depVals[] { pipelineAndLayout.GetDependencyValidation(), predefinedPipelineLayout->GetDependencyValidation() };
 							op->_depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
 							op->_pipelineLayout = std::move(pipelineAndLayout._layout);
@@ -198,12 +196,11 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const PixelOutputStates& po,
-		const UniformsStreamInterface& usi)
+		const PixelOutputStates& po)
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
-		auto op = ::Assets::GetAssetMarkerPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
+		auto op = ::Assets::GetAssetMarkerPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx});
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -213,12 +210,11 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAssetName,
-		const PixelOutputStates& po,
-		const UniformsStreamInterface& usi)
+		const PixelOutputStates& po)
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
-		auto op = ::Assets::GetAssetMarkerPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx}, usi);
+		auto op = ::Assets::GetAssetMarkerPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx});
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -228,7 +224,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<Metal::ComputePipeline> _pipeline;
 		std::shared_ptr<ICompiledPipelineLayout> _pipelineLayout;
 		BoundUniformsPool _boundUniforms;
-		UniformsStreamInterface _usi0, _usi1;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _predefinedPipelineLayout;
 
 		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
@@ -237,7 +232,7 @@ namespace RenderCore { namespace Techniques
 
 		void BeginDispatchesInternal(
 			ParsingContext& parsingContext,
-			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets,
+			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets,
 			uint64_t pushConstantsBinding = 0)
 		{
 			assert(!_betweenBeginEnd);
@@ -245,7 +240,7 @@ namespace RenderCore { namespace Techniques
 			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterfaceCompute();
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
-			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi0, pushConstantsUSI);
+			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, usi?*usi:s_usiNull, pushConstantsUSI);
 
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			_activeEncoder = {};
@@ -263,14 +258,14 @@ namespace RenderCore { namespace Techniques
 
 		void BeginDispatchesInternal(
 			IThreadContext& threadContext, 
-			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets, 
+			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets, 
 			uint64_t pushConstantsBinding = 0)
 		{
 			assert(!_betweenBeginEnd);
 			DEBUG_ONLY(assert(_usiCount == 1));
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
-			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, _usi0, pushConstantsUSI);
+			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, usi?*usi:s_usiNull, pushConstantsUSI);
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			_activeEncoder = {};
 			auto newEncoder = metalContext.BeginComputeEncoder(*_pipelineLayout);
@@ -285,15 +280,18 @@ namespace RenderCore { namespace Techniques
 
 		void BeginDispatchesInternal(
 			ParsingContext& parsingContext,
-			const UniformsStream& us0, const UniformsStream& us1, IteratorRange<const IDescriptorSet* const*> descSets,
+			const UniformsStreamInterface* usi0, const UniformsStream& us0,
+			const UniformsStreamInterface* usi1, const UniformsStream& us1,
+			IteratorRange<const IDescriptorSet* const*> descSets,
 			uint64_t pushConstantsBinding = 0)
 		{
+			assert(usi0); assert(usi1);		// if you're using this variant, you should pass both
 			assert(!_betweenBeginEnd);
 			DEBUG_ONLY(assert(_usiCount == 2));
 			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterfaceCompute();
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
-			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, _usi0, _usi1, pushConstantsUSI);
+			auto& boundUniforms = _boundUniforms.Get(*_pipeline, sysUsi, *usi0, *usi1, pushConstantsUSI);
 
 			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
 			_activeEncoder = {};
@@ -312,14 +310,17 @@ namespace RenderCore { namespace Techniques
 
 		void BeginDispatchesInternal(
 			IThreadContext& threadContext, 
-			const UniformsStream& us0, const UniformsStream& us1, IteratorRange<const IDescriptorSet* const*> descSets, 
+			const UniformsStreamInterface* usi0, const UniformsStream& us0,
+			const UniformsStreamInterface* usi1, const UniformsStream& us1,
+			IteratorRange<const IDescriptorSet* const*> descSets, 
 			uint64_t pushConstantsBinding = 0)
 		{
+			assert(usi0); assert(usi1);		// if you're using this variant, you should pass both
 			assert(!_betweenBeginEnd);
 			DEBUG_ONLY(assert(_usiCount == 2));
 			UniformsStreamInterface pushConstantsUSI;
 			if (pushConstantsBinding) pushConstantsUSI.BindImmediateData(0, pushConstantsBinding);
-			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, _usi0, _usi1, pushConstantsUSI);
+			auto& boundUniforms = _boundUniforms.Get(*_pipeline, {}, *usi0, *usi1, pushConstantsUSI);
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
 			_activeEncoder = {};
 			auto newEncoder = metalContext.BeginComputeEncoder(*_pipelineLayout);
@@ -335,16 +336,16 @@ namespace RenderCore { namespace Techniques
 
 		virtual DispatchGroupHelper BeginDispatches(
 			ParsingContext& parsingContext,
-			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets,
+			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets,
 			uint64_t pushConstantsBinding = 0) override
 		{
-			BeginDispatchesInternal(parsingContext, us, descSets, pushConstantsBinding);
+			BeginDispatchesInternal(parsingContext, usi, us, descSets, pushConstantsBinding);
 			return DispatchGroupHelper{this};
 		}
 
-		virtual DispatchGroupHelper BeginDispatches(IThreadContext& threadContext, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets, uint64_t pushConstantsBinding = 0) override
+		virtual DispatchGroupHelper BeginDispatches(IThreadContext& threadContext, const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets, uint64_t pushConstantsBinding = 0) override
 		{
-			BeginDispatchesInternal(threadContext, us, descSets, pushConstantsBinding);
+			BeginDispatchesInternal(threadContext, usi, us, descSets, pushConstantsBinding);
 			return DispatchGroupHelper{this};
 		}
 
@@ -358,10 +359,10 @@ namespace RenderCore { namespace Techniques
 		virtual void Dispatch(
 			ParsingContext& parsingContext,
 			unsigned countX, unsigned countY, unsigned countZ, 
-			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
+			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			TRY {
-				BeginDispatchesInternal(parsingContext, us, descSets);
+				BeginDispatchesInternal(parsingContext, usi, us, descSets);
 				_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
 			} CATCH(...) {
 				_activeEncoder = {};
@@ -375,10 +376,10 @@ namespace RenderCore { namespace Techniques
 		virtual void Dispatch(
 			IThreadContext& threadContext,
 			unsigned countX, unsigned countY, unsigned countZ,
-			const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
+			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			TRY {
-				BeginDispatchesInternal(threadContext, us, descSets);
+				BeginDispatchesInternal(threadContext, usi, us, descSets);
 				_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
 			} CATCH(...) {
 				_activeEncoder = {};
@@ -392,10 +393,12 @@ namespace RenderCore { namespace Techniques
 		virtual void Dispatch(
 			ParsingContext& parsingContext,
 			unsigned countX, unsigned countY, unsigned countZ, 
-			const UniformsStream& us0, const UniformsStream& us1, IteratorRange<const IDescriptorSet* const*> descSets) override
+			const UniformsStreamInterface* usi0, const UniformsStream& us0,
+			const UniformsStreamInterface* usi1, const UniformsStream& us1,
+			IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			TRY {
-				BeginDispatchesInternal(parsingContext, us0, us1, descSets);
+				BeginDispatchesInternal(parsingContext, usi0, us0, usi1, us1, descSets);
 				_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
 			} CATCH(...) {
 				_activeEncoder = {};
@@ -409,10 +412,12 @@ namespace RenderCore { namespace Techniques
 		virtual void Dispatch(
 			IThreadContext& threadContext,
 			unsigned countX, unsigned countY, unsigned countZ,
-			const UniformsStream& us0, const UniformsStream& us1, IteratorRange<const IDescriptorSet* const*> descSets) override
+			const UniformsStreamInterface* usi0, const UniformsStream& us0,
+			const UniformsStreamInterface* usi1, const UniformsStream& us1,
+			IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			TRY {
-				BeginDispatchesInternal(threadContext, us0, us1, descSets);
+				BeginDispatchesInternal(threadContext, usi0, us0, usi1, us1, descSets);
 				_activeEncoder.Dispatch(*_pipeline, countX, countY, countZ);
 			} CATCH(...) {
 				_activeEncoder = {};
@@ -449,8 +454,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<PipelineCollection>& pool,
 			PipelineLayoutOptions&& pipelineLayout,
 			const Internal::ShaderVariant& computeShader,
-			const ParameterBox& selectors,
-			const UniformsStreamInterface& usi)
+			const ParameterBox& selectors)
 		{
 			assert(pool);
 			const ParameterBox* selectorList[] { &selectors };
@@ -458,9 +462,8 @@ namespace RenderCore { namespace Techniques
 			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), computeShader, MakeIteratorRange(selectorList));
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
-				[usi=usi, pipelineLayout](auto pipelineAndLayout) {
+				[pipelineLayout](auto pipelineAndLayout) {
 					auto op = std::make_shared<ComputeOperator>();
-					op->_usi0 = std::move(usi);
 					op->_depVal = pipelineAndLayout.GetDependencyValidation();
 					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
 					op->_pipeline = std::move(pipelineAndLayout._pipeline);
@@ -475,71 +478,18 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<PipelineCollection>& pool,
 			StringSection<> pipelineLayoutAssetName,
 			const Internal::ShaderVariant& computeShader,
-			const ParameterBox& selectors,
-			const UniformsStreamInterface& usi)
+			const ParameterBox& selectors)
 		{
 			assert(pool);
 			auto futurePipelineLayout = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
-				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), computeShader, usi](auto&& promise, auto pipelineLayout) mutable {
+				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), computeShader](auto&& promise, auto pipelineLayout) mutable {
 					ConstructToPromise(
 						std::move(promise),
 						pool,
 						PipelineLayoutOptions{pipelineLayout, Hash64(plname), plname},
-						computeShader, selectors,
-						usi);
-				});
-		}
-
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
-			const std::shared_ptr<PipelineCollection>& pool,
-			PipelineLayoutOptions&& pipelineLayout,
-			const Internal::ShaderVariant& computeShader,
-			const ParameterBox& selectors,
-			const UniformsStreamInterface& usi0,
-			const UniformsStreamInterface& usi1)
-		{
-			assert(pool);
-			const ParameterBox* selectorList[] { &selectors };
-			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::ComputePipelineAndLayout>>();
-			pool->CreateComputePipeline(pipelineFuture->AdoptPromise(), std::move(pipelineLayout), computeShader, MakeIteratorRange(selectorList));
-			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
-				std::move(promise),
-				[usi0=usi0, usi1=usi1, pipelineLayout](auto pipelineAndLayout) {
-					auto op = std::make_shared<ComputeOperator>();
-					op->_usi0 = std::move(usi0);
-					op->_usi1 = std::move(usi1);
-					op->_depVal = pipelineAndLayout.GetDependencyValidation();
-					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
-					op->_pipeline = std::move(pipelineAndLayout._pipeline);
-					DEBUG_ONLY(op->_usiCount = 2);
-					assert(op->_pipeline);
-					return op;
-				});
-		}
-
-		static void ConstructToPromise(
-			std::promise<std::shared_ptr<ComputeOperator>>&& promise,
-			const std::shared_ptr<PipelineCollection>& pool,
-			StringSection<> pipelineLayoutAssetName,
-			const Internal::ShaderVariant& computeShader,
-			const ParameterBox& selectors,
-			const UniformsStreamInterface& usi0,
-			const UniformsStreamInterface& usi1)
-		{
-			assert(pool);
-			auto futurePipelineLayout = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
-			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
-				std::move(promise),
-				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), computeShader, usi0, usi1](auto&& promise, auto pipelineLayout) mutable {
-					ConstructToPromise(
-						std::move(promise),
-						pool,
-						PipelineLayoutOptions{pipelineLayout, Hash64(plname), plname},
-						computeShader, selectors,
-						usi0, usi1);
+						computeShader, selectors);
 				});
 		}
 
@@ -552,12 +502,11 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<PipelineCollection>& pool,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
 		StringSection<> computeShader,
-		const ParameterBox& selectors,
-		const UniformsStreamInterface& usi)
+		const ParameterBox& selectors)
 	{
 		assert(pipelineLayout);
 		assert(!computeShader.IsEmpty());
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayout, MakeShaderCompileResourceName(computeShader), selectors, usi);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayout, MakeShaderCompileResourceName(computeShader), selectors);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
@@ -565,71 +514,29 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
 		const ParameterBox& selectors,
-		StringSection<> pipelineLayoutAssetName,
-		const UniformsStreamInterface& usi)
+		StringSection<> pipelineLayoutAssetName)
 	{
 		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(
 			pool, pipelineLayoutAssetName,
-			MakeShaderCompileResourceName(computeShader), selectors, usi);
+			MakeShaderCompileResourceName(computeShader), selectors);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
 	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
-		const ParameterBox& selectors,
-		const UniformsStreamInterface& usi)
+		const ParameterBox& selectors)
 	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, MakeShaderCompileResourceName(computeShader), selectors, usi);
-		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
-	}
-
-	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
-		const std::shared_ptr<PipelineCollection>& pool,
-		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		StringSection<> computeShader,
-		const ParameterBox& selectors,
-		const UniformsStreamInterface& usi0,
-		const UniformsStreamInterface& usi1)
-	{
-		assert(pipelineLayout);
-		assert(!computeShader.IsEmpty());
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayout, MakeShaderCompileResourceName(computeShader), selectors, usi0, usi1);
-		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
-	}
-
-	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
-		const std::shared_ptr<PipelineCollection>& pool,
-		StringSection<> computeShader,
-		const ParameterBox& selectors,
-		StringSection<> pipelineLayoutAssetName,
-		const UniformsStreamInterface& usi0,
-		const UniformsStreamInterface& usi1)
-	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(
-			pool, pipelineLayoutAssetName,
-			MakeShaderCompileResourceName(computeShader), selectors, usi0, usi1);
-		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
-	}
-
-	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
-		const std::shared_ptr<PipelineCollection>& pool,
-		StringSection<> computeShader,
-		const ParameterBox& selectors,
-		const UniformsStreamInterface& usi0,
-		const UniformsStreamInterface& usi1)
-	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, MakeShaderCompileResourceName(computeShader), selectors, usi0, usi1);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, MakeShaderCompileResourceName(computeShader), selectors);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
 	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		const Internal::ShaderVariant& computeShader,
-		const ParameterBox& selectors,
-		const UniformsStreamInterface& usi)
+		const ParameterBox& selectors)
 	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, computeShader, selectors, usi);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, computeShader, selectors);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 

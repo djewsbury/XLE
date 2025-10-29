@@ -254,7 +254,7 @@ namespace RenderCore { namespace LightingEngine
 		_classifyTiles->Dispatch(
 			*iterator._parsingContext,
 			(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
-			us);
+			&_usi, us);
 
 		{
 			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
@@ -274,7 +274,7 @@ namespace RenderCore { namespace LightingEngine
 		_prepareIndirectArgs->Dispatch(
 			*iterator._parsingContext,
 			1, 1, 1,
-			us);
+			&_usi, us);
 
 		{
 			VkMemoryBarrier barrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER };
@@ -291,7 +291,7 @@ namespace RenderCore { namespace LightingEngine
 				0, nullptr);
 		}
 
-		_intersect->BeginDispatches(*iterator._parsingContext, us).DispatchIndirect(*_indirectArgsBuffer);
+		_intersect->BeginDispatches(*iterator._parsingContext, &_usi, us).DispatchIndirect(*_indirectArgsBuffer);
 
 		{
 			auto* res = iterator._rpi.GetNonFrameBufferAttachmentView(s_nfb_intSRV)->GetResource().get();
@@ -299,7 +299,7 @@ namespace RenderCore { namespace LightingEngine
 			_resolveSpatial->Dispatch(
 				*iterator._parsingContext,
 				(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
-				us);
+				&_usi, us);
 		}
 
 		{
@@ -310,14 +310,14 @@ namespace RenderCore { namespace LightingEngine
 			_resolveTemporal->Dispatch(
 				*iterator._parsingContext,
 				(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
-				us);
+				&_usi, us);
 		}
 
 		if (_desc._enableFinalBlur)
 			_reflectionsBlur->Dispatch(
 				*iterator._parsingContext,
 				(outputDims[0]+7) / 8, (outputDims[1]+7) / 8, 1,
-				us);
+				&_usi, us);
 
 		++_pingPongCounter;
 	}
@@ -542,58 +542,58 @@ namespace RenderCore { namespace LightingEngine
 		assert(_secondStageConstructionState == 0);
 		_secondStageConstructionState = 1;
 
-		UniformsStreamInterface usi;
-		usi.BindResourceView(0, "g_denoised_reflections"_h);
+		_usi = {};
+		_usi.BindResourceView(0, "g_denoised_reflections"_h);
 
-		usi.BindResourceView(1, "g_intersection_result"_h);
-		usi.BindResourceView(2, "g_intersection_result_read"_h);
+		_usi.BindResourceView(1, "g_intersection_result"_h);
+		_usi.BindResourceView(2, "g_intersection_result_read"_h);
 
-		usi.BindResourceView(3, "g_ray_list"_h);
-		usi.BindResourceView(4, "g_ray_list_read"_h);
-		usi.BindResourceView(5, "g_ray_counter"_h);
-		usi.BindResourceView(6, "g_ray_lengths"_h);
-		usi.BindResourceView(7, "g_ray_lengths_read"_h);
+		_usi.BindResourceView(3, "g_ray_list"_h);
+		_usi.BindResourceView(4, "g_ray_list_read"_h);
+		_usi.BindResourceView(5, "g_ray_counter"_h);
+		_usi.BindResourceView(6, "g_ray_lengths"_h);
+		_usi.BindResourceView(7, "g_ray_lengths_read"_h);
 
-		usi.BindResourceView(8, "g_tile_meta_data_mask"_h);
-		usi.BindResourceView(9, "g_tile_meta_data_mask_read"_h);
+		_usi.BindResourceView(8, "g_tile_meta_data_mask"_h);
+		_usi.BindResourceView(9, "g_tile_meta_data_mask_read"_h);
 
-		usi.BindResourceView(10, "g_temporal_variance_mask"_h);
-		usi.BindResourceView(11, "g_temporal_variance_mask_read"_h);
-		usi.BindResourceView(12, "g_temporally_denoised_reflections"_h);
-		usi.BindResourceView(13, "g_temporally_denoised_reflections_read"_h);
-		usi.BindResourceView(14, "g_temporally_denoised_reflections_history"_h);
-		usi.BindResourceView(15, "g_spatially_denoised_reflections"_h);
-		usi.BindResourceView(16, "g_spatially_denoised_reflections_read"_h);
+		_usi.BindResourceView(10, "g_temporal_variance_mask"_h);
+		_usi.BindResourceView(11, "g_temporal_variance_mask_read"_h);
+		_usi.BindResourceView(12, "g_temporally_denoised_reflections"_h);
+		_usi.BindResourceView(13, "g_temporally_denoised_reflections_read"_h);
+		_usi.BindResourceView(14, "g_temporally_denoised_reflections_history"_h);
+		_usi.BindResourceView(15, "g_spatially_denoised_reflections"_h);
+		_usi.BindResourceView(16, "g_spatially_denoised_reflections_read"_h);
 
-		usi.BindResourceView(17, "g_intersect_args"_h);
+		_usi.BindResourceView(17, "g_intersect_args"_h);
 
-		usi.BindResourceView(18, "DownsampleDepths"_h);
-		usi.BindResourceView(19, "FullResolutionDepths"_h);
-		usi.BindResourceView(20, "GBufferMotion"_h);
-		usi.BindResourceView(21, "GBufferNormal"_h);
-		usi.BindResourceView(22, "GBufferNormalPrev"_h);
-		usi.BindResourceView(23, "LastFrameLit"_h);
+		_usi.BindResourceView(18, "DownsampleDepths"_h);
+		_usi.BindResourceView(19, "FullResolutionDepths"_h);
+		_usi.BindResourceView(20, "GBufferMotion"_h);
+		_usi.BindResourceView(21, "GBufferNormal"_h);
+		_usi.BindResourceView(22, "GBufferNormalPrev"_h);
+		_usi.BindResourceView(23, "LastFrameLit"_h);
 
-		usi.BindResourceView(24, "BN_Sobol"_h);
-		usi.BindResourceView(25, "BN_Ranking"_h);
-		usi.BindResourceView(26, "BN_Scrambling"_h);
+		_usi.BindResourceView(24, "BN_Sobol"_h);
+		_usi.BindResourceView(25, "BN_Ranking"_h);
+		_usi.BindResourceView(26, "BN_Scrambling"_h);
 
-		usi.BindResourceView(27, "SkyCube"_h);
+		_usi.BindResourceView(27, "SkyCube"_h);
 
-		usi.BindResourceView(28, "SSRDebug"_h);
-		usi.BindResourceView(29, "SSRConfiguration"_h);
+		_usi.BindResourceView(28, "SSRDebug"_h);
+		_usi.BindResourceView(29, "SSRConfiguration"_h);
 
 		if (_desc._splitConfidence) {
-			usi.BindResourceView(30, "g_confidence_result"_h);
-			usi.BindResourceView(31, "g_confidence_result_read"_h);
-			usi.BindResourceView(32, "g_spatially_denoised_confidence"_h);
-			usi.BindResourceView(33, "g_temporally_denoised_confidence_history"_h);
-			usi.BindResourceView(34, "g_temporally_denoised_confidence"_h);
-			usi.BindResourceView(35, "g_spatially_denoised_confidence_read"_h);
+			_usi.BindResourceView(30, "g_confidence_result"_h);
+			_usi.BindResourceView(31, "g_confidence_result_read"_h);
+			_usi.BindResourceView(32, "g_spatially_denoised_confidence"_h);
+			_usi.BindResourceView(33, "g_temporally_denoised_confidence_history"_h);
+			_usi.BindResourceView(34, "g_temporally_denoised_confidence"_h);
+			_usi.BindResourceView(35, "g_spatially_denoised_confidence_read"_h);
 		}
 
-		usi.BindImmediateData(0, "ExtendedTransforms"_h);
-		usi.BindImmediateData(1, "FrameIdBuffer"_h);
+		_usi.BindImmediateData(0, "ExtendedTransforms"_h);
+		_usi.BindImmediateData(1, "FrameIdBuffer"_h);
 
 		ParameterBox selectors;
 		selectors.SetParameter("DEBUGGING_PRODUCTS", 1);
@@ -605,43 +605,37 @@ namespace RenderCore { namespace LightingEngine
 			_pipelinePool,
 			SSR_CLASSIFY_TILES_HLSL ":ClassifyTiles",
 			selectors,
-			SSR_PIPELINE ":Main",
-			usi);
+			SSR_PIPELINE ":Main");
 
 		auto prepareIndirectArgs = Techniques::CreateComputeOperator(
 			_pipelinePool,
 			SSR_CLASSIFY_TILES_HLSL ":PrepareIndirectArgs",
 			selectors,
-			SSR_PIPELINE ":Main",
-			usi);
+			SSR_PIPELINE ":Main");
 
 		auto intersect = Techniques::CreateComputeOperator(
 			_pipelinePool,
 			SSR_INTERSECT_HLSL ":SSRIntersect",
 			selectors,
-			SSR_PIPELINE ":Main",
-			usi);
+			SSR_PIPELINE ":Main");
 
 		auto resolveSpatial = Techniques::CreateComputeOperator(
 			_pipelinePool,
 			SSR_RESOLVE_SPATIAL_HLSL ":ResolveSpatial",
 			selectors,
-			SSR_PIPELINE ":Main",
-			usi);
+			SSR_PIPELINE ":Main");
 
 		auto resolveTemporal = Techniques::CreateComputeOperator(
 			_pipelinePool,
 			SSR_RESOLVE_TEMPORAL_HLSL ":ResolveTemporal",
 			selectors,
-			SSR_PIPELINE ":Main",
-			usi);
+			SSR_PIPELINE ":Main");
 
 		auto reflectionsBlur = Techniques::CreateComputeOperator(
 			_pipelinePool,
 			SSR_REFLECTIONS_BLUR_HLSL ":ReflectionsBlur",
 			selectors,
-			SSR_PIPELINE ":Main",
-			usi);
+			SSR_PIPELINE ":Main");
 
 		auto pipelineLayoutFuture = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(SSR_PIPELINE ":Main");
 
