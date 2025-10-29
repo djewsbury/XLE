@@ -286,7 +286,7 @@ namespace RenderCore { namespace Techniques
 				assert(cpuVBV._resource);
 			}
 			if (reservationBytes[AllocationType::AllocationType_GPUVB]) {
-				gpuBufferAndRange = attachedStorage.AllocateDeviceOnlyRange(reservationBytes[AllocationType::AllocationType_GPUVB], BindFlag::VertexBuffer|BindFlag::UnorderedAccess, allocationAlignments[AllocationType_GPUVB]);
+				gpuBufferAndRange = attachedStorage.AllocateDeviceOnlyRange(reservationBytes[AllocationType::AllocationType_GPUVB], BindFlag::VertexBuffer|BindFlag::UnorderedAccess|BindFlag::ShaderResource, allocationAlignments[AllocationType_GPUVB]);
 				gpuVBV = gpuBufferAndRange.AsVertexBufferView();
 				assert(gpuVBV._resource);
 			}
@@ -430,6 +430,22 @@ namespace RenderCore { namespace Techniques
 			VertexBufferView result = accelerator._outputVBV;
 			result._offset += accelerator._instanceToReadiedOffset[AllocationType_GPUVB][instanceIdx];
 			return result;
+		}
+
+		std::shared_ptr<IResourceView> GetOutputSRV(DeformAccelerator& accelerator, unsigned instanceIdx)
+		{
+			#if defined(_DEBUG)
+				auto f = instanceIdx / 64;
+				// If you hit either of the following, it means the instance wasn't enabled. Each instance that will be used should
+				// be enabled via EnableInstance() before usage (probably at the time it's initialized with current state data)
+				assert(f < accelerator._readiedInstances.size());
+				assert(accelerator._readiedInstances[f] & (1ull << uint64_t(instanceIdx & (64-1))));	
+				assert(instanceIdx < accelerator._instanceToReadiedOffset[AllocationType_GPUVB].size());
+			#endif
+			return ((IResource*)accelerator._outputVBV._resource)->CreateBufferView(
+				BindFlag::ShaderResource, 
+				accelerator._instanceToReadiedOffset[AllocationType_GPUVB][instanceIdx],
+				accelerator._reservationPerInstance[AllocationType_GPUVB]);
 		}
 
 		unsigned GetUniformPageBufferOffset(DeformAccelerator& accelerator, unsigned instanceIdx)

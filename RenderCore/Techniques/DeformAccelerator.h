@@ -150,6 +150,7 @@ namespace RenderCore { namespace Techniques
 	namespace Internal
 	{
 		VertexBufferView GetOutputVBV(DeformAccelerator& accelerator, unsigned instanceIdx);
+		std::shared_ptr<IResourceView> GetOutputSRV(DeformAccelerator& accelerator, unsigned instanceIdx);
 		unsigned GetUniformPageBufferOffset(DeformAccelerator& accelerator, unsigned instanceIdx);
 	}
 
