@@ -5,13 +5,13 @@
 #pragma once
 
 #include "DeformGeometryInfrastructure.h"
-#include "CommonBindings.h"
 #include "PipelineCollection.h"
 #include "CommonUtils.h"
 #include "../Assets/ModelMachine.h"
 #include "../Metal/InputLayout.h"
 #include "../Format.h"
 #include "../Types.h"
+#include "../VertexUtil.h"
 #include "../UniformsStream.h"
 #include "../../ShaderParser/ShaderInstantiation.h"
 #include "../../Assets/Marker.h"
@@ -19,8 +19,6 @@
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
 #include <vector>
-#include <future>
-#include <optional>
 
 namespace RenderCore { class IDevice; class ICompiledPipelineLayout; class UniformsStreamInterface; }
 namespace RenderCore { namespace Techniques 

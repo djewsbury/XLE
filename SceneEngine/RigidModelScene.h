@@ -29,6 +29,7 @@ namespace RenderCore { namespace Techniques
 	class DeformerConstruction;
 	class ProjectionDesc;
 	class DrawablesPacket;
+	class DeformersPacket;
 }}
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace std { template<class T> class future; }
@@ -47,6 +48,7 @@ namespace SceneEngine
 		struct BuildDrawablesHelper;
 		BuildDrawablesHelper BeginBuildDrawables(
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> = {},
+			RenderCore::Techniques::DeformersPacket* deformersPacket = nullptr,
 			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> = {},
 			const XLEMath::ArbitraryConvexVolumeTester* = nullptr);
 
@@ -113,6 +115,7 @@ namespace SceneEngine
 		BuildDrawablesHelper(
 			IRigidModelScene& scene,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+			RenderCore::Techniques::DeformersPacket* deformersPacket = nullptr,
 			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views = {},
 			const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume = nullptr);
 
@@ -122,6 +125,7 @@ namespace SceneEngine
 	private:
 		RigidModelSceneInternal::Renderer* _activeRenderer;
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> _pkts;
+		RenderCore::Techniques::DeformersPacket* _deformersPacket;
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _views;
 		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
 		IRigidModelScene* _scene;
@@ -129,10 +133,11 @@ namespace SceneEngine
 
 	inline auto IRigidModelScene::BeginBuildDrawables(
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkt,
+		RenderCore::Techniques::DeformersPacket* deformersPacket,
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> viewDesc,
 		const XLEMath::ArbitraryConvexVolumeTester* complexCullingTester) -> BuildDrawablesHelper
 	{
-		return BuildDrawablesHelper { *this, pkt, viewDesc, complexCullingTester };
+		return BuildDrawablesHelper { *this, pkt, deformersPacket, viewDesc, complexCullingTester };
 	}
 
 	inline auto IRigidModelScene::BeginBuildDrawables(

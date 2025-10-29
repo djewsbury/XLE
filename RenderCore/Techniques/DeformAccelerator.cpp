@@ -6,7 +6,6 @@
 #include "Services.h"
 #include "SubFrameUtil.h"
 #include "CommonUtils.h"
-#include "CommonResources.h"
 #include "Drawables.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/InputLayout.h"
@@ -14,12 +13,10 @@
 #include "../Vulkan/Metal/CmdListAttachedStorage.h"		// todo -- this must become a GFX independant interface
 #include "../IDevice.h"
 #include "../BufferView.h"
-#include "../../Assets/IFileSystem.h"
-#include "../../Assets/ContinuationUtil.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../Utility/ArithmeticUtils.h"
 #include "../../Utility/BitUtils.h"
 #include <vector>
+#include <deque>
 
 namespace RenderCore { namespace Techniques
 {
@@ -38,7 +35,6 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDeformGeoAttachment> GetDeformGeoAttachment(DeformAccelerator& deformAccelerator) override;
 		std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) override;
 
-		void ReadyInstances(IThreadContext&) override;
 		void SetVertexInputBarrier(IThreadContext&) const override;
 		void OnFrameBarrier() override;
 		ReadyInstancesMetrics GetMetrics() const override;
@@ -46,6 +42,10 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IPipelineLayoutDelegate>& GetCompiledLayoutPool() const override;
 
 		std::shared_ptr<IResource> GetDynamicPageResource() const override;
+
+		std::shared_ptr<DeformersPacket> CreatePacket() override;
+
+		std::atomic<unsigned> _alivePacketCount = 0;
 
 		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<IPipelineLayoutDelegate>);
 		~DeformAcceleratorPool();
@@ -69,6 +69,11 @@ namespace RenderCore { namespace Techniques
 		ReadyInstancesMetrics _readyInstancesMetrics;
 		ReadyInstancesMetrics _lastFrameReadyInstancesMetrics;
 
+		friend class DeformersPacket;
+		std::deque<DeformersPacket*> _reusablePackets;
+
+		friend void Deform(IThreadContext&, IDeformAcceleratorPool&, DeformersPacket&);
+
 		friend RenderCore::Metal_Vulkan::TemporaryStorageResourceMap AllocateFromDynamicPageResource(IDeformAcceleratorPool& accelerators, unsigned bytes);
 	};
 
@@ -77,10 +82,7 @@ namespace RenderCore { namespace Techniques
 	class DeformAccelerator
 	{
 	public:
-		std::vector<uint64_t> _enabledInstances;
 		std::vector<uint64_t> _readiedInstances;
-		unsigned _minEnabledInstance = ~0u;
-		unsigned _maxEnabledInstance = 0;
 
 		unsigned _reservationPerInstance[AllocationType_Max] = {0,0,0};
 		std::vector<unsigned> _instanceToReadiedOffset[AllocationType_Max];
@@ -110,6 +112,15 @@ namespace RenderCore { namespace Techniques
 		{
 			_parametersAttachment->Execute(instanceIdx, dst);
 		}
+
+		~DeformAccelerator()
+		{
+			#if defined(_DEBUG)
+				// Don't destroy a deform accelerator while there is an active DeformersPacket; because this could 
+				// cause a dangling pointer within the packet's deformables list
+				assert(!_containingPool || !_containingPool->_alivePacketCount);
+			#endif
+		}
 	};
 
 	std::shared_ptr<DeformAccelerator> DeformAcceleratorPool::CreateDeformAccelerator()
@@ -119,7 +130,6 @@ namespace RenderCore { namespace Techniques
 			newAccelerator = _drawablesPool->MakeProtectedPtr<DeformAccelerator>();
 		} else
 			newAccelerator = std::make_shared<DeformAccelerator>();
-		newAccelerator->_enabledInstances.resize(8, 0);
 		newAccelerator->_readiedInstances.resize(8, 0);
 		#if defined(_DEBUG)
 			newAccelerator->_containingPool = this;
@@ -174,63 +184,84 @@ namespace RenderCore { namespace Techniques
 		return deformAccelerator._parametersAttachment;
 	}
 
-	void EnableInstanceDeform(DeformAccelerator& accelerator, unsigned instanceIdx)
+	void Deform(
+		IThreadContext& threadContext,
+		IDeformAcceleratorPool& ipool,
+		DeformersPacket& pkt)
 	{
-		assert(instanceIdx!=~0u);
-		auto field = instanceIdx / 64;
-		if (accelerator._enabledInstances.size() <= field)
-			accelerator._enabledInstances.resize(field+1, 0);
-		accelerator._enabledInstances[field] |= 1ull << (instanceIdx & (64-1));
-		accelerator._minEnabledInstance = std::min(accelerator._minEnabledInstance, instanceIdx);
-		accelerator._maxEnabledInstance = std::max(accelerator._maxEnabledInstance, instanceIdx);
-	}
+		auto& pool = *checked_cast<DeformAcceleratorPool*>(&ipool);
 
-	void DeformAcceleratorPool::ReadyInstances(IThreadContext& threadContext)
-	{
-		assert(_boundThread == std::this_thread::get_id());
-		auto attachedStorage = _temporaryStorageManager->BeginCmdListReservation();
+		assert(pool._boundThread == std::this_thread::get_id());
+		auto attachedStorage = pool._temporaryStorageManager->BeginCmdListReservation();
 
 		std::vector<std::shared_ptr<DeformAccelerator>> accelerators;
-		accelerators.resize(_accelerators.size());		// subframe heap candidate
+		accelerators.resize(pool._accelerators.size());		// subframe heap candidate
 		unsigned activeAcceleratorCount=0;
 		unsigned reservationBytes[AllocationType_Max] = {0,0,0};
 		unsigned allocationAlignments[AllocationType_Max] = {1,1,1};
-		unsigned maxInstanceCount = 0;
+		// unsigned maxInstanceCount = 0;
 
 		allocationAlignments[AllocationType_GPUVB] = threadContext.GetDevice()->GetDeviceLimits()._unorderedAccessBufferOffsetAlignment;
 
+		// We need to sort the requests the pkt and figure out the exact instances to run deforms for
+		// note that we could skip this step if we just stored queuing information within the DeformAccelerator itself
+
+		std::sort(b2e(pkt._deformables), [](const auto& lhs, const auto& rhs) { 
+			if (lhs._deformAccelerator < rhs._deformAccelerator) return true;
+			if (lhs._deformAccelerator > rhs._deformAccelerator) return false;
+			return lhs._instance < rhs._instance;
+		});
+
+		VLA(unsigned, flatInstancesBuffer, pkt._deformables.size());
+		unsigned* flatInstancesBufferI = flatInstancesBuffer;
+
+		struct DeformerAndInstances
 		{
-			ScopedLock(_acceleratorsLock);
-			for (auto a=_accelerators.begin(); a!=_accelerators.end();) {
-				auto accelerator = a->lock();
-				if (!accelerator) {
-					a = _accelerators.erase(a);
-					continue;
+			DeformAccelerator* _accelerator;
+
+			unsigned _minEnabledInstance = ~0u;
+			unsigned _maxEnabledInstance = 0;
+			IteratorRange<const unsigned*> _flatInstances;
+		};
+		std::vector<DeformerAndInstances> deformersAndInstances;				// candidate for subframe heap
+		{
+			deformersAndInstances.reserve(pkt._deformables.size());
+			pkt._deformables.push_back(DeformersPacket::Deformable{nullptr, ~0u});		// sentinel
+			auto i = pkt._deformables.begin();
+			while (i->_deformAccelerator) {
+				auto start = i; ++i; while (i->_deformAccelerator == start->_deformAccelerator) ++i;
+
+				DeformerAndInstances op;
+				op._accelerator = start->_deformAccelerator;
+				IteratorRange<const DeformersPacket::Deformable*> instances = {start, i};
+				for (const auto& q:instances) {
+					op._minEnabledInstance = std::min(op._minEnabledInstance, q._instance);
+					op._maxEnabledInstance = std::max(op._maxEnabledInstance, q._instance);
 				}
 
-				if (accelerator->_maxEnabledInstance < accelerator->_minEnabledInstance) { a++; continue; }
-				auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
-				auto instanceCount = 0u;
-				for (auto f=fMin; f<=fMax; ++f)
-					instanceCount += popcount(accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f]);
-				
-				if (instanceCount) {
-					for (unsigned c=0; c<AllocationType_Max; ++c)
-						reservationBytes[c] += CeilToMultiple(accelerator->_reservationPerInstance[c] * instanceCount, allocationAlignments[c]);
-					accelerators[activeAcceleratorCount++] = std::move(accelerator);
-					maxInstanceCount = std::max(maxInstanceCount, instanceCount);
-				} else {
-					for (auto f=fMin; f<=fMax; ++f)
-						accelerator->_enabledInstances[f] = 0;
-					accelerator->_minEnabledInstance = ~0u;
-					accelerator->_maxEnabledInstance = 0u;
+				auto accelerator = start->_deformAccelerator;
+				if (accelerator->_readiedInstances.size() < (op._maxEnabledInstance+1+64-1)/64)
+					accelerator->_readiedInstances.resize((op._maxEnabledInstance+1+64-1)/64, 0);
+
+				// filter out instances already readied (also removed dupes)
+				auto flatInstancesBegin = flatInstancesBufferI;
+				for (auto&i:instances) {
+					auto i64 = i._instance/64; auto bit = 1ull<<(i._instance&0x3f);
+					if (!(accelerator->_readiedInstances[i64] & bit)) {
+						*flatInstancesBufferI++ = i._instance;
+						accelerator->_readiedInstances[i64] |= bit;
+					}
 				}
-				++a;
+
+				op._flatInstances = { flatInstancesBegin, flatInstancesBufferI };
+				if (op._flatInstances.empty()) continue;
+
+				for (unsigned c=0; c<AllocationType_Max; ++c)
+					reservationBytes[c] += CeilToMultiple(accelerator->_reservationPerInstance[c] * op._flatInstances.size(), allocationAlignments[c]);
+
+				deformersAndInstances.push_back(op);
 			}
 		}
-
-		if (!activeAcceleratorCount)
-			return;
 
 		bool atLeastOneGPUOperator = false;
 
@@ -260,37 +291,16 @@ namespace RenderCore { namespace Techniques
 				assert(gpuVBV._resource);
 			}
 			if (reservationBytes[AllocationType::AllocationType_UniformBuffer]) {
-				uniformBufferMap = attachedStorage.MapStorageFromNamedPage(reservationBytes[AllocationType::AllocationType_UniformBuffer], _cbNamedPage, allocationAlignments[AllocationType_UniformBuffer]);
+				uniformBufferMap = attachedStorage.MapStorageFromNamedPage(reservationBytes[AllocationType::AllocationType_UniformBuffer], pool._cbNamedPage, allocationAlignments[AllocationType_UniformBuffer]);
 				uniformBufferDst = uniformBufferMap.GetData();
 				uniformBufferPageOffset = uniformBufferMap.AsConstantBufferView()._prebuiltRangeBegin;
 			}
 
 			unsigned movingOffsets[AllocationType_Max] = {0, 0, 0};
-			VLA(unsigned, instanceList, maxInstanceCount);
 
-			for (unsigned c=0; c<activeAcceleratorCount; ++c) {
-				auto accelerator = accelerators[c];
-				if (!accelerator) continue;
-
-				if (accelerator->_readiedInstances.size() < accelerator->_enabledInstances.size())
-					accelerator->_readiedInstances.resize(accelerator->_enabledInstances.size(), 0);
-
-				unsigned instanceCount=0, maxInstanceIdx=0;
-				auto fMin = accelerator->_minEnabledInstance / 64, fMax = accelerator->_maxEnabledInstance / 64;
-				for (auto f=fMin; f<=fMax; ++f) {
-					auto active = accelerator->_enabledInstances[f] & ~accelerator->_readiedInstances[f];
-					while (active) {
-						auto bit = xl_ctz8(active);
-						active ^= 1ull<<uint64_t(bit);
-						instanceList[instanceCount++] = f*64+bit;
-						maxInstanceIdx = std::max(maxInstanceIdx, f*64+bit);
-					}
-					accelerator->_readiedInstances[f] |= accelerator->_enabledInstances[f];
-					accelerator->_enabledInstances[f] = 0;
-				}
-
-				accelerator->_minEnabledInstance = ~0u;
-				accelerator->_maxEnabledInstance = 0u;
+			for (auto& deformerAndInstances:deformersAndInstances) {
+				auto* accelerator = deformerAndInstances._accelerator;
+				unsigned instanceCount = deformerAndInstances._flatInstances.size();
 
 				std::shared_ptr<IResourceView> gpuBufferView;
 				if (accelerator->_reservationPerInstance[AllocationType_GPUVB] != 0) {
@@ -306,9 +316,9 @@ namespace RenderCore { namespace Techniques
 
 					accelerator->Execute(
 						threadContext, 
-						MakeIteratorRange(instanceList, &instanceList[instanceCount]),
+						deformerAndInstances._flatInstances,
 						*gpuBufferView, cpuOutputRange,
-						_readyInstancesMetrics);
+						pool._readyInstancesMetrics);
 				}
 
 				if (accelerator->_parametersAttachment) {
@@ -317,7 +327,7 @@ namespace RenderCore { namespace Techniques
 						PtrAdd(uniformBufferDst.begin(), movingOffsets[AllocationType_UniformBuffer]+instanceCount*accelerator->_reservationPerInstance[AllocationType_UniformBuffer]));
 
 					accelerator->ExecuteParameters(
-						MakeIteratorRange(instanceList, &instanceList[instanceCount]),
+						deformerAndInstances._flatInstances,
 						cbOutputRange);
 					accelerator->_uniformBufferPageResourceBaseOffset = uniformBufferPageOffset;
 				}
@@ -326,10 +336,10 @@ namespace RenderCore { namespace Techniques
 				for (auto allType:{AllocationType_GPUVB, AllocationType_CPUVB, AllocationType_UniformBuffer}) {
 					if (!accelerator->_reservationPerInstance[allType]) continue;
 
-					if (accelerator->_instanceToReadiedOffset[allType].size() <= maxInstanceIdx+1)
-						accelerator->_instanceToReadiedOffset[allType].resize(maxInstanceIdx+1, ~0u);
+					if (accelerator->_instanceToReadiedOffset[allType].size() <= deformerAndInstances._maxEnabledInstance+1)
+						accelerator->_instanceToReadiedOffset[allType].resize(deformerAndInstances._maxEnabledInstance+1, ~0u);
 
-					for (auto i:MakeIteratorRange(instanceList, &instanceList[instanceCount])) {
+					for (auto i:deformerAndInstances._flatInstances) {
 						accelerator->_instanceToReadiedOffset[allType][i] = movingOffsets[allType];
 						movingOffsets[allType] += accelerator->_reservationPerInstance[allType];
 					}
@@ -337,8 +347,8 @@ namespace RenderCore { namespace Techniques
 					movingOffsets[allType] = CeilToMultiple(movingOffsets[allType], allocationAlignments[allType]);	// ensure we end up with correct offset alignment
 				}
 
-				++_readyInstancesMetrics._acceleratorsReadied;
-				_readyInstancesMetrics._instancesReadied += instanceCount;
+				++pool._readyInstancesMetrics._acceleratorsReadied;
+				pool._readyInstancesMetrics._instancesReadied += instanceCount;
 			}
 
 			for (auto allType:{AllocationType_GPUVB, AllocationType_CPUVB, AllocationType_UniformBuffer})
@@ -349,14 +359,14 @@ namespace RenderCore { namespace Techniques
 			#endif
 		}
 
-		_pendingVertexInputBarrier |= atLeastOneGPUOperator;
-		_readyInstancesMetrics._cpuDeformAllocation += reservationBytes[AllocationType_CPUVB];
-		_readyInstancesMetrics._gpuDeformAllocation += reservationBytes[AllocationType_GPUVB];
-		_readyInstancesMetrics._uniformDeformAllocation += reservationBytes[AllocationType_UniformBuffer];
+		pool._pendingVertexInputBarrier |= atLeastOneGPUOperator;
+		pool._readyInstancesMetrics._cpuDeformAllocation += reservationBytes[AllocationType_CPUVB];
+		pool._readyInstancesMetrics._gpuDeformAllocation += reservationBytes[AllocationType_GPUVB];
+		pool._readyInstancesMetrics._uniformDeformAllocation += reservationBytes[AllocationType_UniformBuffer];
 
 		// todo - we should add a pipeline barrier for any output buffers that were written by the GPU, before they ared used
 		// by the GPU (ie, written by a compute shader to be read by a vertex shader, etc)
-		_currentFrameAttachedStorage.emplace_back(std::move(attachedStorage));
+		pool._currentFrameAttachedStorage.emplace_back(std::move(attachedStorage));
 	}
 
 	void DeformAcceleratorPool::SetVertexInputBarrier(IThreadContext& threadContext) const
@@ -377,6 +387,30 @@ namespace RenderCore { namespace Techniques
 				0, nullptr,
 				0, nullptr);
 			_pendingVertexInputBarrier = false;
+		}
+	}
+
+	std::shared_ptr<DeformersPacket> DeformAcceleratorPool::CreatePacket()
+	{
+		auto Destroyer = [this](auto* pkt) {
+			assert(pkt->_pool == this);
+			pkt->_pool = nullptr;
+			pkt->_deformables.clear();
+			--this->_alivePacketCount;
+			this->_reusablePackets.emplace_back(pkt);
+		};
+
+		if (_reusablePackets.empty()) {
+			auto newPacket = std::shared_ptr<DeformersPacket>(new DeformersPacket(), Destroyer);
+			newPacket->_pool = this;
+			++_alivePacketCount;
+			return newPacket;
+		} else {
+			auto result = _reusablePackets.front(); _reusablePackets.pop_front();
+			assert(!result->_pool);
+			result->_pool = this;
+			++_alivePacketCount;
+			return std::shared_ptr<DeformersPacket>(result, Destroyer);
 		}
 	}
 
@@ -469,12 +503,22 @@ namespace RenderCore { namespace Techniques
 
 	DeformAcceleratorPool::~DeformAcceleratorPool() 
 	{
+		assert(!_alivePacketCount);
 		_currentFrameAttachedStorage.clear();
 	}
 
 	static uint64_t s_nextDeformAcceleratorPool = 1;
 	IDeformAcceleratorPool::IDeformAcceleratorPool() : _guid(s_nextDeformAcceleratorPool++) {}
 	IDeformAcceleratorPool::~IDeformAcceleratorPool() {}
+
+	auto DeformersPacket::Allocate() -> Deformable&
+	{
+		_deformables.emplace_back();	// may invalidate previously returned items
+		return _deformables.back();
+	}
+
+	DeformersPacket::DeformersPacket() { _pool = nullptr; }
+	DeformersPacket::~DeformersPacket() { assert(!_pool); }
 
 	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineLayoutDelegate> compiledLayoutPool)
 	{

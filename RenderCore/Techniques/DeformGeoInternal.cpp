@@ -7,6 +7,7 @@
 #include "SubFrameEvents.h"
 #include "ShaderPatchInstantiationUtil.h"
 #include "TechniqueDelegates.h"
+#include "CommonBindings.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"

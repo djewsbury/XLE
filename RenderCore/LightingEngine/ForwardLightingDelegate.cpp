@@ -514,16 +514,11 @@ namespace RenderCore { namespace LightingEngine
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(
-			[](SequenceIterator& iterator) {
-				if (iterator._parsingContext->GetTechniqueContext()._deformAccelerators)
-					iterator._parsingContext->GetTechniqueContext()._deformAccelerators->SetVertexInputBarrier(*iterator._threadContext);
-			});
-
-		mainSequence.CreateStep_CallFunction(
 			[captures=shared_from_this()](SequenceIterator& iterator) {
 				captures->SetupCameraJitter(*iterator._parsingContext, iterator.GetFrameToFrameProperties());
 			});
 
+		mainSequence.CreateStep_VertexIABarrier();
 		mainSequence.CreateStep_InvalidateUniforms();
 		mainSequence.CreateStep_BringUpToDateUniforms();
 

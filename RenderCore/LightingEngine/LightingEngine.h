@@ -11,7 +11,7 @@
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class IDeformAcceleratorPool; class DrawablesPacket; class ParsingContext; struct PreparedResourcesVisibility; }}
-namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; struct DoubleBufferAttachment; } }
+namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; struct DoubleBufferAttachment; class DeformersPacket; } }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 namespace Assets { class IAsyncMarker; class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
@@ -92,6 +92,7 @@ namespace RenderCore { namespace LightingEngine
 			StepType _type = StepType::Abort;
 			Techniques::ParsingContext* _parsingContext = nullptr;
 			std::vector<Techniques::DrawablesPacket*> _pkts;			// todo -- candidate for subframe heap
+			Techniques::DeformersPacket* _deformersPacket;
 			XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume = nullptr;
 			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- candidate for subframe heap
 			uint64_t _signal = ~0ull;

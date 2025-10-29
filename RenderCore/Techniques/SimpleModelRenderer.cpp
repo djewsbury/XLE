@@ -172,14 +172,14 @@ namespace RenderCore { namespace Techniques
 
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<DrawablesPacket** const> pkts,
+		DeformersPacket* deformersPkt,
 		const Float4x4& localToWorld,
 		unsigned deformInstanceIdx,
 		uint32_t viewMask,
 		uint64_t cmdStreamGuid) const
 	{
 		assert(viewMask != 0);
-		if (_deformAccelerator)
-			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
+		if (_deformAccelerator) { assert(deformersPkt), deformersPkt->Allocate() = DeformersPacket::Deformable{_deformAccelerator.get(), deformInstanceIdx}; }
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
@@ -245,11 +245,12 @@ namespace RenderCore { namespace Techniques
 
 		// if we need the topological batch, make sure to draw the appropriate cmd stream
 		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildDrawables(pkts, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
+			BuildDrawables(pkts, deformersPkt, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<DrawablesPacket** const> pkts,
+		DeformersPacket* deformersPkt,
 		const Float4x4& localToWorld,
 		IteratorRange<const Float4x4*> animatedSkeletonOutput,
 		unsigned deformInstanceIdx,
@@ -257,8 +258,7 @@ namespace RenderCore { namespace Techniques
 		uint64_t cmdStreamGuid) const
 	{
 		assert(viewMask != 0);
-		if (_deformAccelerator)
-			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
+		if (_deformAccelerator) { assert(deformersPkt), deformersPkt->Allocate() = DeformersPacket::Deformable{_deformAccelerator.get(), deformInstanceIdx}; }
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
@@ -330,13 +330,14 @@ namespace RenderCore { namespace Techniques
 
 		// if we need the topological batch, make sure to draw the appropriate cmd stream
 		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildDrawables(pkts, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
+			BuildDrawables(pkts, deformersPkt, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
 
 		TestDescSetInvalidation();
 	}
 
 	void SimpleModelRenderer::BuildDrawables(
 		IteratorRange<DrawablesPacket** const> pkts,
+		DeformersPacket* deformersPkt,
 		const Float4x4& localToWorld,
 		IteratorRange<const Float4x4*> animatedSkeletonOutput,
 		unsigned deformInstanceIdx,
@@ -345,13 +346,12 @@ namespace RenderCore { namespace Techniques
 		uint64_t cmdStreamGuid) const
 	{
 		if (!delegate) {
-			BuildDrawables(pkts, localToWorld, animatedSkeletonOutput, deformInstanceIdx, viewMask, cmdStreamGuid);
+			BuildDrawables(pkts, deformersPkt, localToWorld, animatedSkeletonOutput, deformInstanceIdx, viewMask, cmdStreamGuid);
 			return;
 		}
 
 		assert(viewMask != 0);
-		if (_deformAccelerator)
-			EnableInstanceDeform(*_deformAccelerator, deformInstanceIdx);
+		if (_deformAccelerator) { assert(deformersPkt), deformersPkt->Allocate() = DeformersPacket::Deformable{_deformAccelerator.get(), deformInstanceIdx}; }
 
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
@@ -430,7 +430,7 @@ namespace RenderCore { namespace Techniques
 
 		// if we need the topological batch, make sure to draw the appropriate cmd stream
 		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildDrawables(pkts, localToWorld, animatedSkeletonOutput, deformInstanceIdx, delegate, viewMask, s_topologicalCmdStream);
+			BuildDrawables(pkts, deformersPkt, localToWorld, animatedSkeletonOutput, deformInstanceIdx, delegate, viewMask, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::BuildGeometryProcables(

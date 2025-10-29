@@ -297,7 +297,7 @@ namespace ToolsRig
 					if (next._type == RenderCore::LightingEngine::StepType::ParseScene) {
 						assert(!next._pkts.empty());
 						if (actualizedScene->_scene) {
-							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), MakeIteratorRange(&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1), next._complexCullingVolume};
+							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), next._deformersPacket, MakeIteratorRange(&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1), next._complexCullingVolume};
 							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
 							parserContext.RequireCommandList(executeContext._completionCmdList);
 						}
@@ -305,12 +305,11 @@ namespace ToolsRig
 						assert(!next._pkts.empty());
 						assert(!next._multiViewDesc.empty());
 						if (actualizedScene->_scene) {
-							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
+							SceneEngine::ExecuteSceneContext executeContext{MakeIteratorRange(next._pkts), next._deformersPacket, next._multiViewDesc, next._complexCullingVolume};
 							actualizedScene->_scene->ExecuteScene(parserContext.GetThreadContext(), executeContext);
 							parserContext.RequireCommandList(executeContext._completionCmdList);
 						}
 					} else if (next._type == RenderCore::LightingEngine::StepType::ReadyInstances) {
-						_deformAccelerators->ReadyInstances(parserContext.GetThreadContext());
 					}
 				}
 			} CATCH(...) {
@@ -638,10 +637,11 @@ namespace ToolsRig
 		using namespace RenderCore;
 		std::vector<SceneEngine::ModelIntersectionStateContext::ResultEntry> results;
 
+		auto deformersPacket = drawingApparatus._deformAccelerators->CreatePacket();
 		RenderCore::Techniques::DrawablesPacket pkt;
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
 		pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
-		SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), {}};
+		SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), deformersPacket.get(), {}};
 		if (viewProjDesc)
 			sceneExecuteContext._views = { &(*viewProjDesc), &(*viewProjDesc)+1 };
 
@@ -655,8 +655,10 @@ namespace ToolsRig
 			scene.ExecuteScene(threadContext, sceneExecuteContext);
 			parserContext.RequireCommandList(sceneExecuteContext._completionCmdList);
 
-			if (drawingApparatus._deformAccelerators)
-				drawingApparatus._deformAccelerators->ReadyInstances(threadContext);
+			if (deformersPacket) {
+				Techniques::Deform(threadContext, *drawingApparatus._deformAccelerators, *deformersPacket);
+				drawingApparatus._deformAccelerators->SetVertexInputBarrier(threadContext);
+			}
 			
 			SceneEngine::ModelIntersectionStateContext stateContext {
 				SceneEngine::ModelIntersectionStateContext::RayTest,

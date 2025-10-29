@@ -120,6 +120,7 @@ namespace RenderCore { namespace Techniques
 
         _pipelineAccelerators = _techniqueContext->_pipelineAccelerators.get();
         _pipelineAcceleratorsVisibility = 0;
+        _deformAccelerators = _techniqueContext->_deformAccelerators.get();
 
         _internal->_stitchingContext = FragmentStitchingContext{
             IteratorRange<const PreregisteredAttachment*>{},
@@ -145,6 +146,7 @@ namespace RenderCore { namespace Techniques
 
         result._pipelineAccelerators = _pipelineAccelerators;
         result._pipelineAcceleratorsVisibility = _pipelineAcceleratorsVisibility;
+        result._deformAccelerators = _deformAccelerators;
         return result;
     }
 

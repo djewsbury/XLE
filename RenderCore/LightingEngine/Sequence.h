@@ -48,6 +48,7 @@ namespace RenderCore { namespace LightingEngine
 		void CreateStep_BindDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> uniformDelegate);
 		void CreateStep_InvalidateUniforms();
 		void CreateStep_BringUpToDateUniforms();
+		void CreateStep_VertexIABarrier();
 
 		// Ensure that we retain attachment data for the given semantic. This is typically used for debugging
 		//		-- ie, keeping an intermediate attachment that would otherwise be discarded after usage

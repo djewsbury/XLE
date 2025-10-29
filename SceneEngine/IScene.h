@@ -19,7 +19,7 @@
 #include <any>
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; } }
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; class DeformersPacket; } }
 namespace RenderCore { namespace LightingEngine { class ILightScene; struct LightSourceOperatorDesc; struct ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace RenderOverlays { class FontRenderingManager; }
 namespace Assets { class DependencyValidation; }
@@ -34,6 +34,7 @@ namespace SceneEngine
     {
     public:
         IteratorRange<RenderCore::Techniques::DrawablesPacket**> _destinationPkts;
+        RenderCore::Techniques::DeformersPacket* _deformersPacket = nullptr;
         IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _views;
 		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume = nullptr;
         char _quickMetrics[4096];
@@ -41,9 +42,10 @@ namespace SceneEngine
 
         ExecuteSceneContext(
             IteratorRange<RenderCore::Techniques::DrawablesPacket**> destinationPkts,
+            RenderCore::Techniques::DeformersPacket* deformersPacket,
             IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views,
 		    const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume = nullptr)
-        :  _destinationPkts(destinationPkts), _views(views), _complexCullingVolume(complexCullingVolume)
+        :  _destinationPkts(destinationPkts), _deformersPacket(deformersPacket), _views(views), _complexCullingVolume(complexCullingVolume)
         { _quickMetrics[0] = '\0'; }
         ExecuteSceneContext() { _quickMetrics[0] = '\0'; }
     };

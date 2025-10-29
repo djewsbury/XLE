@@ -38,6 +38,7 @@ namespace RenderCore { namespace Techniques
 	class ExecuteDrawableContext;
 	class ResourceConstructionContext;
 	class DeformerConstruction;
+	class DeformersPacket;
 
 	class ICustomDrawDelegate
 	{
@@ -77,6 +78,7 @@ namespace RenderCore { namespace Techniques
 	public:
 		void BuildDrawables(
 			IteratorRange<DrawablesPacket** const> pkts,
+			DeformersPacket* deformersPkt,
 			const Float4x4& localToWorld = Identity<Float4x4>(),
 			unsigned deformInstanceIdx = 0,
 			uint32_t viewMask = 1,
@@ -84,6 +86,7 @@ namespace RenderCore { namespace Techniques
 
 		void BuildDrawables(
 			IteratorRange<DrawablesPacket** const> pkts,
+			DeformersPacket* deformersPkt,
 			const Float4x4& localToWorld,
 			IteratorRange<const Float4x4*> animatedSkeletonOutput,
 			unsigned deformInstanceIdx = 0,
@@ -92,6 +95,7 @@ namespace RenderCore { namespace Techniques
 
 		void BuildDrawables(
 			IteratorRange<DrawablesPacket** const> pkts,
+			DeformersPacket* deformersPkt,
 			const Float4x4& localToWorld,
 			IteratorRange<const Float4x4*> animatedSkeletonOutput,
 			unsigned deformInstanceIdx,

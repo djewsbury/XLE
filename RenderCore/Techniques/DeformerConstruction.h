@@ -5,11 +5,9 @@
 #pragma once
 
 #include "DeformAccelerator.h"
+#include "../Format.h"
 #include "../../Assets/AssetsCore.h"
-#include "../../Utility/IteratorUtils.h"
-#include "../../Utility/StringUtils.h"
 #include <vector>
-#include <functional>
 #include <future>
 
 namespace RenderCore { namespace Assets { class ModelRendererConstruction; }}

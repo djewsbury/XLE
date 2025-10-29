@@ -10,7 +10,7 @@
 #include <memory>
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class IShaderResourceDelegate; class SequencerConfig; struct PreparedResourcesVisibility; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class IShaderResourceDelegate; class SequencerConfig; struct PreparedResourcesVisibility; class DeformersPacket; } }
 namespace RenderCore { namespace Techniques { namespace BatchFlags { using BitField = unsigned; }}}
 namespace std { template<typename T> class promise; }
 
@@ -49,6 +49,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _drawablePktIdxOffset = 0;
 		FrameToFrameProperties* _frameToFrameProps = nullptr;
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<void>>*> _interfaces;
+		std::shared_ptr<Techniques::DeformersPacket> _deformersPacket;
 
 		void GetOrAllocatePkts(IteratorRange<Techniques::DrawablesPacket**> result, SequenceParseId parse, Techniques::BatchFlags::BitField batches);
 

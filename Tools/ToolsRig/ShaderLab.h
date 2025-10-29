@@ -10,7 +10,7 @@
 #include <functional>
 
 namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; class Sequence; class SequenceIterator; class ILightScene; }}
-namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; struct DoubleBufferAttachment; class DrawablesPacket; }}
+namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; class DrawingApparatus; class FragmentStitchingContext; struct DoubleBufferAttachment; class DrawablesPacket; class DeformersPacket; }}
 namespace RenderCore { class FrameBufferProperties; }
 namespace RenderCore { namespace BufferUploads { class IManager; }}
 namespace RenderOverlays { class OverlayApparatus; }
@@ -58,6 +58,7 @@ namespace ToolsRig
 			virtual void BuildDrawables(
 				RenderCore::Techniques::ParsingContext& parsingContext,
 				IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+				RenderCore::Techniques::DeformersPacket* deformersPkt,
 				const Float4x4& localToWorld,
 				uint32_t viewMask=1,
 				uint64_t cmdStream=0) = 0;

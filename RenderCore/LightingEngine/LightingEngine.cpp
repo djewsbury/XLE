@@ -15,10 +15,13 @@
 #include "../Techniques/Techniques.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/DrawableDelegates.h"
+#include "../Techniques/DeformAccelerator.h"
 #include "../FrameBufferDesc.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../OSServices/Log.h"
+
+using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -181,6 +184,19 @@ namespace RenderCore { namespace LightingEngine
 		assert(!_frozen);
 		ExecuteStep newStep;
 		newStep._type = ExecuteStep::Type::BringUpToDateUniforms;
+		
+		if (_pendingCreateFragmentSteps.empty()) {
+			_steps.emplace_back(std::move(newStep));
+		} else {
+			_pendingCreateFragmentSteps.emplace_back(std::move(newStep));
+		}
+	}
+
+	void Sequence::CreateStep_VertexIABarrier()
+	{
+		assert(!_frozen);
+		ExecuteStep newStep;
+		newStep._type = ExecuteStep::Type::VertexIABarrier;
 		
 		if (_pendingCreateFragmentSteps.empty()) {
 			_steps.emplace_back(std::move(newStep));
@@ -687,6 +703,8 @@ namespace RenderCore { namespace LightingEngine
 
 			for (auto& sequence:_sequences)
 				sequence->TryDynamicInitialization(*_iterator);
+
+			_iterator->_deformersPacket = _iterator->_parsingContext->GetDeformAccelerators().CreatePacket();
 			ResetIteration(Phase::SceneParse);
 		}
 
@@ -698,11 +716,16 @@ namespace RenderCore { namespace LightingEngine
 					pkts.resize((unsigned)Techniques::Batch::Max);
 					_iterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
 					if (next->_multiViewProjections.empty()) {
-						return { StepType::ParseScene, _iterator->_parsingContext, std::move(pkts), next->_complexCullingVolume.get() };
+						return { StepType::ParseScene, _iterator->_parsingContext, std::move(pkts), _iterator->_deformersPacket.get(), next->_complexCullingVolume.get() };
 					} else {
-						return { StepType::MultiViewParseScene, _iterator->_parsingContext, std::move(pkts), next->_complexCullingVolume.get(), next->_multiViewProjections };
+						return { StepType::MultiViewParseScene, _iterator->_parsingContext, std::move(pkts), _iterator->_deformersPacket.get(), next->_complexCullingVolume.get(), next->_multiViewProjections };
 					}
 				}
+			}
+
+			if (_iterator->_deformersPacket) {
+				Techniques::Deform(*_iterator->_threadContext,_iterator->_parsingContext->GetDeformAccelerators(), *_iterator->_deformersPacket);
+				_iterator->_deformersPacket.reset();
 			}
 
 			ResetIteration(Phase::Execute);
@@ -766,6 +789,10 @@ namespace RenderCore { namespace LightingEngine
 			case Sequence::ExecuteStep::Type::BringUpToDateUniforms:
 				_iterator->_parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*_iterator->_parsingContext);
 				_iterator->_parsingContext->GetUniformDelegateManager()->BringUpToDateCompute(*_iterator->_parsingContext);
+				break;
+
+			case Sequence::ExecuteStep::Type::VertexIABarrier:
+				_iterator->_parsingContext->GetDeformAccelerators().SetVertexInputBarrier(*_iterator->_threadContext);
 				break;
 
 			case Sequence::ExecuteStep::Type::None:
@@ -864,9 +891,9 @@ namespace RenderCore { namespace LightingEngine
 				pkts.resize((unsigned)Techniques::Batch::Max);
 				_prepareResourcesIterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
 				if (next->_multiViewProjections.empty()) {
-					return { StepType::ParseScene, nullptr, std::move(pkts), next->_complexCullingVolume.get() };
+					return { StepType::ParseScene, nullptr, std::move(pkts), nullptr, next->_complexCullingVolume.get() };
 				} else {
-					return { StepType::MultiViewParseScene, nullptr, std::move(pkts), next->_complexCullingVolume.get(), next->_multiViewProjections };
+					return { StepType::MultiViewParseScene, nullptr, std::move(pkts), nullptr, next->_complexCullingVolume.get(), next->_multiViewProjections };
 				}
 			}
 
@@ -898,6 +925,7 @@ namespace RenderCore { namespace LightingEngine
 			case Sequence::ExecuteStep::Type::BindDelegate:
 			case Sequence::ExecuteStep::Type::InvalidateUniforms:
 			case Sequence::ExecuteStep::Type::BringUpToDateUniforms:
+			case Sequence::ExecuteStep::Type::VertexIABarrier:
 				break;
 
 			case Sequence::ExecuteStep::Type::None:

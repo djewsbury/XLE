@@ -5,6 +5,7 @@
 #pragma once
 
 #include "DeformAccelerator.h"
+#include "../Types.h"
 #include "../../Assets/AssetsCore.h"
 #include <future>
 

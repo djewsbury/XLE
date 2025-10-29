@@ -4,11 +4,7 @@
 
 #pragma once
 
-#include "../VertexUtil.h"
-#include "../Types.h"
-#include "../../Utility/StringUtils.h"
 #include "../../Utility/IteratorUtils.h"
-#include "../../Utility/ImpliedTyping.h"
 #include <memory>
 #include <future>
 
@@ -24,6 +20,7 @@ namespace RenderCore { namespace Techniques
 	class IDeformUniformsAttachment;
 	class IPipelineLayoutDelegate;
 	class IDrawablesPool;
+	class DeformersPacket;
 
 	class IDeformAcceleratorPool
 	{
@@ -40,7 +37,6 @@ namespace RenderCore { namespace Techniques
 		virtual std::shared_ptr<IDeformGeoAttachment> GetDeformGeoAttachment(DeformAccelerator& deformAccelerator) = 0;
 		virtual std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) = 0;
 
-		virtual void ReadyInstances(IThreadContext&) = 0;
 		virtual void SetVertexInputBarrier(IThreadContext&) const = 0;
 		virtual void OnFrameBarrier() = 0;
 
@@ -53,15 +49,43 @@ namespace RenderCore { namespace Techniques
 		struct ReadyInstancesMetrics;
 		virtual ReadyInstancesMetrics GetMetrics() const = 0;
 
+		virtual std::shared_ptr<DeformersPacket> CreatePacket() = 0;
+
 		IDeformAcceleratorPool();
 		virtual ~IDeformAcceleratorPool();
 	private:
 		uint64_t _guid;
 	};
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<IPipelineLayoutDelegate>);
+	void Deform(
+		IThreadContext&,
+		IDeformAcceleratorPool&,
+		DeformersPacket&);
 
-	void EnableInstanceDeform(DeformAccelerator& accelerator, unsigned instanceIdx);
+	class DeformersPacket
+	{
+	public:
+		struct Deformable
+		{
+			DeformAccelerator* _deformAccelerator;		// note that deformers should not be destroyed while any packet is alive, to prevent dangling pointers here
+			unsigned _instance;
+		};
+		Deformable& Allocate();
+
+		void Queue(DeformAccelerator* da, unsigned instance) { Allocate() = Deformable{da, instance}; }
+
+		DeformersPacket();
+		~DeformersPacket();
+		DeformersPacket(const DeformersPacket&) = delete;
+		DeformersPacket& operator=(const DeformersPacket&) = delete;
+
+		std::vector<Deformable> _deformables;
+	private:
+		IDeformAcceleratorPool* _pool;
+		friend class DeformAcceleratorPool;
+	};
+
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<IPipelineLayoutDelegate>);
 
 	class IGeoDeformer;
 	struct DeformerToRendererBinding;

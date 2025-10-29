@@ -28,6 +28,7 @@ namespace RenderCore { namespace Techniques
     class RenderPassInstance;
     class IUniformDelegateManager;
     class IPipelineAcceleratorPool;
+    class IDeformAcceleratorPool;
     using VisibilityMarkerId = uint32_t;
 
     /// <summary>Manages critical shader state</summary>
@@ -76,6 +77,7 @@ namespace RenderCore { namespace Techniques
 
         IThreadContext& GetThreadContext() { return *_threadContext; }
         IPipelineAcceleratorPool& GetPipelineAccelerators() { return *_pipelineAccelerators; }
+        IDeformAcceleratorPool& GetDeformAccelerators() { return *_deformAccelerators; }
 
         RenderPassInstance* _rpi = nullptr;
 
@@ -130,6 +132,7 @@ namespace RenderCore { namespace Techniques
         IThreadContext*         _threadContext;
         std::shared_ptr<IUniformDelegateManager> _uniformDelegateManager;
         IPipelineAcceleratorPool*   _pipelineAccelerators;
+        IDeformAcceleratorPool*     _deformAccelerators;
 
         class Internal;
         std::unique_ptr<Internal>           _internal;

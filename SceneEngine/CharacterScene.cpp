@@ -499,7 +499,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
-		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+		_deformersPacket->Queue(_activeRenderer->_deformAccelerator.get(), instanceIdx);
 	}
 
 	void ICharacterScene::BuildDrawablesHelper::CullAndBuildDrawables(
@@ -518,7 +518,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
-		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+		_deformersPacket->Queue(_activeRenderer->_deformAccelerator.get(), instanceIdx);
 	}
 
 	void ICharacterScene::BuildDrawablesHelper::CullAndBuildDrawables(
@@ -540,7 +540,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			composedTransform, instanceIdx, viewMask);
-		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+		_deformersPacket->Queue(_activeRenderer->_deformAccelerator.get(), instanceIdx);
 	}
 
 	bool ICharacterScene::BuildDrawablesHelper::SetRenderer(void* renderer)
@@ -553,9 +553,10 @@ namespace SceneEngine
 	ICharacterScene::BuildDrawablesHelper::BuildDrawablesHelper(
 		ICharacterScene& scene,
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+		RenderCore::Techniques::DeformersPacket* deformersPacket,
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views,
 		const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume)
-	: _pkts(pkts)
+	: _pkts(pkts), _deformersPacket(deformersPacket)
 	, _activeRenderer(nullptr)
 	, _views(views), _complexCullingVolume(complexCullingVolume)
 	{}
@@ -563,7 +564,7 @@ namespace SceneEngine
 	ICharacterScene::BuildDrawablesHelper::BuildDrawablesHelper(
 		ICharacterScene& scene,
 		SceneEngine::ExecuteSceneContext& executeContext)
-	: _pkts(executeContext._destinationPkts)
+	: _pkts(executeContext._destinationPkts), _deformersPacket(executeContext._deformersPacket)
 	, _activeRenderer(nullptr)
 	, _views(executeContext._views), _complexCullingVolume(executeContext._complexCullingVolume)
 	{

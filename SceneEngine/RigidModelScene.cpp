@@ -615,7 +615,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
-		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+		_deformersPacket->Queue(_activeRenderer->_deformAccelerator.get(), instanceIdx);
 	}
 
 	void IRigidModelScene::BuildDrawablesHelper::BuildDrawablesInstancedFixedSkeleton(
@@ -657,7 +657,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
-		EnableInstanceDeform(*_activeRenderer->_deformAccelerator, instanceIdx);
+		_deformersPacket->Queue(_activeRenderer->_deformAccelerator.get(), instanceIdx);
 	}
 
 	unsigned IRigidModelScene::BuildDrawablesHelper::GetDrawableCount(unsigned pktIndex) const
@@ -711,9 +711,10 @@ namespace SceneEngine
 	IRigidModelScene::BuildDrawablesHelper::BuildDrawablesHelper(
 		IRigidModelScene& scene,
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+		RenderCore::Techniques::DeformersPacket* deformersPacket,
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views,
 		const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume)
-	: _pkts(pkts)
+	: _pkts(pkts), _deformersPacket(deformersPacket)
 	, _activeRenderer(nullptr)
 	, _views(views), _complexCullingVolume(complexCullingVolume)
 	, _scene(&scene)
@@ -722,7 +723,7 @@ namespace SceneEngine
 	IRigidModelScene::BuildDrawablesHelper::BuildDrawablesHelper(
 		IRigidModelScene& scene,
 		SceneEngine::ExecuteSceneContext& executeContext)
-	: _pkts(executeContext._destinationPkts)
+	: _pkts(executeContext._destinationPkts), _deformersPacket(executeContext._deformersPacket)
 	, _activeRenderer(nullptr)
 	, _views(executeContext._views), _complexCullingVolume(executeContext._complexCullingVolume)
 	, _scene(&scene)

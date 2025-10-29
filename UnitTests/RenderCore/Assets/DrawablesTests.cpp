@@ -299,7 +299,7 @@ namespace UnitTests
 			Techniques::DrawablesPacket pkts[(unsigned)Techniques::Batch::Max];
 			Techniques::DrawablesPacket* drawablePktsPtrs[] = { &pkts[0], &pkts[1], &pkts[2], &pkts[3] };
 			static_assert(dimof(pkts) == dimof(drawablePktsPtrs));
-			renderer->Actualize()->BuildDrawables(MakeIteratorRange(drawablePktsPtrs));
+			renderer->Actualize()->BuildDrawables(MakeIteratorRange(drawablePktsPtrs), nullptr);
 				
 			auto globalDelegate = std::make_shared<UnitTestGlobalUniforms>(targetDesc);
 

@@ -10,7 +10,7 @@
 #include <memory>
 #include <future>
 
-namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; }}
+namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; class DeformersPacket; }}
 namespace RenderCore { namespace BufferUploads { class IManager; using CommandListID = uint32_t; }}
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Assets { class SkeletonMachine; class ModelRendererConstruction; class SkeletonBinding; }}
@@ -33,6 +33,7 @@ namespace SceneEngine
 		struct BuildDrawablesHelper;
 		BuildDrawablesHelper BeginBuildDrawables(
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const>,
+			RenderCore::Techniques::DeformersPacket* deformersPacket = nullptr,
 			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> = {},
 			const XLEMath::ArbitraryConvexVolumeTester* = nullptr);
 
@@ -76,6 +77,7 @@ namespace SceneEngine
 		BuildDrawablesHelper(
 			ICharacterScene& scene,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+			RenderCore::Techniques::DeformersPacket* deformersPacket = nullptr,
 			IteratorRange<const RenderCore::Techniques::ProjectionDesc*> views = {},
 			const XLEMath::ArbitraryConvexVolumeTester* complexCullingVolume = nullptr);
 
@@ -85,6 +87,7 @@ namespace SceneEngine
 	private:
 		CharacterSceneInternal::Renderer* _activeRenderer;
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> _pkts;
+		RenderCore::Techniques::DeformersPacket* _deformersPacket;
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> _views;
 		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume;
 	};
@@ -108,10 +111,11 @@ namespace SceneEngine
 
 	inline auto ICharacterScene::BeginBuildDrawables(
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkt,
+		RenderCore::Techniques::DeformersPacket* deformersPacket,
 		IteratorRange<const RenderCore::Techniques::ProjectionDesc*> viewDesc,
 		const XLEMath::ArbitraryConvexVolumeTester* complexCullingTester) -> BuildDrawablesHelper
 	{
-		return BuildDrawablesHelper { *this, pkt, viewDesc, complexCullingTester };
+		return BuildDrawablesHelper { *this, pkt, deformersPacket, viewDesc, complexCullingTester };
 	}
 
 	inline auto ICharacterScene::BeginBuildDrawables(

@@ -180,12 +180,7 @@ namespace RenderCore { namespace LightingEngine
 		PreregisterAttachments(stitchingContext, fbProps);
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
-		mainSequence.CreateStep_CallFunction(
-			[](SequenceIterator& iterator) {
-				if (iterator._parsingContext->GetTechniqueContext()._deformAccelerators)
-					iterator._parsingContext->GetTechniqueContext()._deformAccelerators->SetVertexInputBarrier(*iterator._threadContext);
-			});
-
+		mainSequence.CreateStep_VertexIABarrier();
 		mainSequence.CreateStep_InvalidateUniforms();
 		mainSequence.CreateStep_BringUpToDateUniforms();
 

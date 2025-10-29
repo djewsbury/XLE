@@ -24,7 +24,7 @@ namespace SceneEngine
 		RenderCore::Techniques::DrawablesPacket pkt;
 		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
 		pkts[(unsigned)batch] = &pkt;
-		ExecuteSceneContext executeContext{MakeIteratorRange(pkts), MakeIteratorRange(&view, &view+1)};
+		ExecuteSceneContext executeContext{MakeIteratorRange(pkts), nullptr, MakeIteratorRange(&view, &view+1)};
         scene.ExecuteScene(parserContext.GetThreadContext(), executeContext);
 		parserContext.RequireCommandList(executeContext._completionCmdList);
 		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt);
@@ -57,11 +57,11 @@ namespace SceneEngine
 			for (;;) {
 				auto next = prepareLightingIterator.GetNextStep();
 				if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
-				if (next._type == LightingEngine::StepType::DrawSky) continue;
+				if (next._type == LightingEngine::StepType::Signal) continue;
 				assert(next._type == LightingEngine::StepType::ParseScene);
 				assert(!next._pkts.empty());
 
-				ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(next._pkts), next._multiViewDesc, next._complexCullingVolume};
+				ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(next._pkts), next._deformersPacket, next._multiViewDesc, next._complexCullingVolume};
 				scene.ExecuteScene(threadContext, sceneExecuteContext);
 			}
 
