@@ -499,7 +499,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
-		_deformersPacket->Queue(_activeRenderer->_deformAccelerator.get(), instanceIdx);
+		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
 	void ICharacterScene::BuildDrawablesHelper::CullAndBuildDrawables(
@@ -518,7 +518,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
-		_deformersPacket->Queue(_activeRenderer->_deformAccelerator.get(), instanceIdx);
+		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
 	void ICharacterScene::BuildDrawablesHelper::CullAndBuildDrawables(
@@ -540,7 +540,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			composedTransform, instanceIdx, viewMask);
-		_deformersPacket->Queue(_activeRenderer->_deformAccelerator.get(), instanceIdx);
+		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
 	bool ICharacterScene::BuildDrawablesHelper::SetRenderer(void* renderer)

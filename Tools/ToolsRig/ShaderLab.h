@@ -65,6 +65,13 @@ namespace ToolsRig
 			virtual ~IBuildDrawablesResource() = default;
 		};
 
+		class IReadyInstancesResource
+		{
+		public:
+			virtual void ReadyInstances(RenderCore::Techniques::ParsingContext& parsingContext) = 0;
+			virtual ~IReadyInstancesResource() = default;
+		};
+
 		class ResourceSet
 		{
 		public:

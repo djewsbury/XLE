@@ -560,6 +560,7 @@ namespace RenderCore { namespace Techniques
 		drawable->_vertexCount = (unsigned)vertexCount;
 		drawable->_vertexStride = (unsigned)vStride;
 		drawable->_bytesAllocated = (unsigned)vertexDataSize;
+		drawable->_deformInstanceIdx = 0;
 		drawable->_matHash = "do-not-combine"_h;
 		if (uniformStreamInterface) {
 			drawable->_looseUniformsInterface = uniformStreamInterface;		// note lifetime must be preserved by the caller
@@ -596,6 +597,7 @@ namespace RenderCore { namespace Techniques
 		drawable->_vertexCount = (unsigned)vertexCount;
 		drawable->_vertexStride = (unsigned)vStride;
 		drawable->_bytesAllocated = (unsigned)vertexDataSize;
+		drawable->_deformInstanceIdx = 0;
 		drawable->_matHash = "do-not-combine"_h;
 		if (uniformStreamInterface) {
 			drawable->_looseUniformsInterface = uniformStreamInterface;		// note lifetime must be preserved by the caller
@@ -622,6 +624,7 @@ namespace RenderCore { namespace Techniques
 		drawable->_descriptorSet = &prebuiltDescriptorSet;
 		drawable->_vertexCount = (unsigned)vertexCount;
 		drawable->_vertexStride = drawable->_bytesAllocated = 0;
+		drawable->_deformInstanceIdx = 0;
 		DEBUG_ONLY(drawable->_userGeo = true;)
 		drawable->_matHash = "do-not-combine"_h;
 		if (uniformStreamInterface) {
@@ -648,6 +651,7 @@ namespace RenderCore { namespace Techniques
 		drawable->_descriptorSet = &prebuiltDescriptorSet;
 		drawable->_vertexCount = (unsigned)vertexCount;
 		drawable->_vertexStride = drawable->_bytesAllocated = 0;
+		drawable->_deformInstanceIdx = 0;
 		DEBUG_ONLY(drawable->_userGeo = true;)
 		drawable->_matHash = "do-not-combine"_h;
 		if (uniformStreamInterface) {

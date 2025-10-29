@@ -729,7 +729,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			ResetIteration(Phase::Execute);
-			return { StepType::ReadyInstances };
+			return { StepType::ReadyInstances, _iterator->_parsingContext };
 		}
 
 		const Sequence::ExecuteStep* next;

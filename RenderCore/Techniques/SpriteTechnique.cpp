@@ -893,7 +893,7 @@ void ExpandClipSpacePosition(
 	out float4 pos1 : SV_Position1,
 	out float4 pos2 : SV_Position2,
 	out float4 pos3 : SV_Position3,
-	float4 wsCenter : WORLDPOSITION,
+	float3 wsCenter : WORLDPOSITION,
 	float3 normal : SPRITENORMAL,
 	float radius : RADIUS,
 	float rotation : ROTATION)
