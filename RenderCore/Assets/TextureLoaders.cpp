@@ -732,6 +732,7 @@ namespace RenderCore { namespace Assets
 
 		headerSize = 0;
 		auto directXFlags = DirectX::DDS_FLAGS_NONE;
+		if (tDesc._dimensionality != TextureDesc::Dimensionality::T2D) directXFlags |= DirectX::DDS_FLAGS_FORCE_DX10_EXT;		// we need to use DX10_EXT to write 1D, 3D flag (etc)
 		auto hr = DirectX::_EncodeDDSHeader(metadata, directXFlags, nullptr, 0, headerSize);
 		assert(SUCCEEDED(hr));
 

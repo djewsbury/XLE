@@ -19,6 +19,7 @@
 #include "../../Assets/AssetsCore.h"
 #include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/Streams/SerializationUtils.h"
+#include "../../Math/SamplingUtil.h"
 #include "../../OSServices/Log.h"
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
@@ -1029,6 +1030,7 @@ namespace RenderCore { namespace LightingEngine
 		return std::make_shared<Compiler_SamplingComputeShader>(width, height, arrayLayerCount, shader, params);
 	}
 
+	// Gives: at a given x,y position, what is the associated sample index?
 	class HaltonSamplerTexture : public BufferUploads::IAsyncDataSource
 	{
 	public:
@@ -1065,6 +1067,47 @@ namespace RenderCore { namespace LightingEngine
 		HaltonSamplerTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
 	};
 
+	// Gives: a 1d array of sample positions, in Halton sampler order
+	// HaltonSamplerTexture and HaltonOrderedSamplesTexture are effectively inverse operations of each other
+	class HaltonOrderedSamplesTexture : public BufferUploads::IAsyncDataSource
+	{
+	public:
+		virtual std::future<ResourceDesc> GetDesc() override
+		{
+			std::promise<ResourceDesc> promise;
+			promise.set_value(CreateDesc(0, TextureDesc::Plain1D(_width, Format::R16G16_UNORM)));
+			return promise.get_future();
+		}
+
+		virtual StringSection<> GetName() const override { return "halton-ordered-samples"; }
+
+		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
+		{
+			assert(subResources.size() == 1);
+			assert(subResources[0]._destination.size() == sizeof(uint32_t)*_width);
+			uint32_t* dst = (uint32_t*)subResources[0]._destination.begin();
+			std::memset(dst, 0, subResources[0]._destination.size());
+
+			for (unsigned sampleIndex=0; sampleIndex!=_width; ++sampleIndex) {
+				Float2 uv {
+					CalculateScrambledHaltonNumber<1>(sampleIndex),
+					CalculateScrambledHaltonNumber<0>(sampleIndex) };
+				dst[sampleIndex] = uint32_t(uv[0]*0xffff) | (uint32_t(uv[1]*0xffff) << 16u);
+			}
+
+			std::promise<void> promise;
+			promise.set_value();
+			return promise.get_future();
+		}
+
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override
+		{
+			return {};
+		}
+
+		unsigned _width;
+		HaltonOrderedSamplesTexture(unsigned width) : _width(width) {}
+	};
 
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_LightingEngineCommon(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
@@ -1092,6 +1135,26 @@ namespace RenderCore { namespace LightingEngine
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "HaltonSampler"_h))
 			return util->GetFuture<std::shared_ptr<Compiler_HaltonSampler>>("HaltonSampler"_h, indexer).get().get();
+
+		class Compiler_HaltonOrderedSamples : public Assets::ITextureCompiler
+		{
+		public:
+			unsigned _width = 16384;
+			std::string GetIntermediateName() const override { return (StringMeld<128>() << "halton-ordered-samples-" << _width).AsString(); }
+			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonOrderedSamplesTexture>(_width); }
+
+			Compiler_HaltonOrderedSamples(Formatters::TextInputFormatter<>& fmttr)
+			{
+				StringSection<> kn;
+				while (fmttr.TryKeyedItem(kn)) {
+					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
+					else Formatters::SkipValueOrElement(fmttr);
+				}
+			}
+		};
+
+		if (scaffold->HasComponent(indexer._entityNameHash, "HaltonOrderedSamples"_h))
+			return util->GetFuture<std::shared_ptr<Compiler_HaltonOrderedSamples>>("HaltonOrderedSamples"_h, indexer).get().get();
 
 		return nullptr;
 	}
