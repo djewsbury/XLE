@@ -81,12 +81,23 @@ namespace RenderCore { namespace LightingEngine
 	private:
 		struct ExecuteStep
 		{
-			enum class Type { DrawSky, CallFunction, ExecuteDrawables, BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep, PrepareOnly_ExecuteDrawables, BindDelegate, InvalidateUniforms, BringUpToDateUniforms, None };
+			enum class Type
+			{ 
+				Signal,
+				CallFunction,
+				ExecuteDrawables,
+				BeginRenderPassInstance, EndRenderPassInstance, NextRenderPassStep,
+				PrepareOnly_ExecuteDrawables,
+				BindDelegate, InvalidateUniforms, BringUpToDateUniforms,
+				VertexIABarrier,
+				None
+			};
 			Type _type = Type::None;
 			std::shared_ptr<Techniques::SequencerConfig> _sequencerConfig;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
 			unsigned _fbDescIdx = ~0u;		// also used for drawable pkt index
 			std::function<StepFnSig> _function;
+			uint64_t _signal = ~0ull;		// used by Type::Signal, sent up to client to execute custom steps (DrawSky, etc)
 		};
 		std::vector<ExecuteStep> _steps;
 		struct ParseStep

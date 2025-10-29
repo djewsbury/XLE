@@ -268,8 +268,9 @@ namespace RenderCore { namespace LightingEngine
 								beginStep._fbDescIdx, stepCounter });
 						drawStep._shaderResourceDelegate = sb._shaderResourceDelegate;
 						_steps.emplace_back(std::move(drawStep));
-					} else if (sb._type == SubpassExtension::Type::ExecuteSky) {
-						_steps.push_back({ExecuteStep::Type::DrawSky});
+					} else if (sb._type == SubpassExtension::Type::Signal) {
+						ExecuteStep step {ExecuteStep::Type::Signal}; step._signal = sb._signal;
+						_steps.push_back(step);
 					} else if (sb._type == SubpassExtension::Type::CallLightingIteratorFunction) {
 						ExecuteStep newStep;
 						newStep._type = ExecuteStep::Type::CallFunction;
@@ -723,11 +724,12 @@ namespace RenderCore { namespace LightingEngine
 				_iterator->ExecuteDrawables(next->_fbDescIdx, *next->_sequencerConfig, next->_shaderResourceDelegate);
 				break;
 
-			case Sequence::ExecuteStep::Type::DrawSky:
+			case Sequence::ExecuteStep::Type::Signal:
 				{
 					Step result;
-					result._type = StepType::DrawSky;
+					result._type = StepType::Signal;
 					result._parsingContext = _iterator->_parsingContext;
+					result._signal = next->_signal;
 					return result;
 				}
 
@@ -874,8 +876,8 @@ namespace RenderCore { namespace LightingEngine
 		const Sequence::ExecuteStep* next;
 		while ((next=_stepper->AdvanceExecuteStep(*_prepareResourcesIterator))) {
 			switch (next->_type) {
-			case Sequence::ExecuteStep::Type::DrawSky:
-				return { StepType::DrawSky };
+			case Sequence::ExecuteStep::Type::Signal:
+				return { StepType::Signal, nullptr, {}, nullptr, nullptr, {}, next->_signal };
 
 			case Sequence::ExecuteStep::Type::PrepareOnly_ExecuteDrawables:
 			case Sequence::ExecuteStep::Type::ExecuteDrawables:

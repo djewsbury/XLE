@@ -128,7 +128,7 @@ namespace UnitTests
 			auto next = lightingIterator.GetNextStep();
 			if (next._type == LightingEngine::StepType::None || next._type == LightingEngine::StepType::Abort) break;
 			if (next._type == LightingEngine::StepType::ReadyInstances) continue;
-			if (next._type == LightingEngine::StepType::DrawSky) {
+			if (next._type == LightingEngine::StepType::Signal && next._signal == "sky"_h) {
 				// we need to draw something, otherwise we'll just end up garbage in the areas of the image outside of the gbuffer
 				if (next._parsingContext) BlackOutSky(*next._parsingContext);
 				continue;

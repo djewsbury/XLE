@@ -33,7 +33,7 @@ namespace RenderCore { namespace LightingEngine
 		void AddSubpass(
 			Techniques::FrameBufferDescFragment::SubpassDesc&& subpass,
 			std::function<void(SequenceIterator&)>&& fn);
-		void AddSkySubpass(Techniques::FrameBufferDescFragment::SubpassDesc&& subpass);
+		void AddSignalSubpass(Techniques::FrameBufferDescFragment::SubpassDesc&& subpass, uint64_t signal);
 		void AddSubpasses(
 			IteratorRange<const Techniques::FrameBufferDescFragment::SubpassDesc*> subpasses,
 			std::function<void(SequenceIterator&)>&& fn);
@@ -46,13 +46,14 @@ namespace RenderCore { namespace LightingEngine
 
 		struct SubpassExtension
 		{
-			enum Type { ExecuteDrawables, ExecuteSky, CallLightingIteratorFunction, HandledByPrevious };
+			enum Type { ExecuteDrawables, Signal, CallLightingIteratorFunction, HandledByPrevious };
 			Type _type;
 			std::shared_ptr<Techniques::ITechniqueDelegate> _techniqueDelegate;
 			ParameterBox _sequencerSelectors;
 			Techniques::BatchFlags::BitField _batchFilter;
 			std::shared_ptr<Techniques::IShaderResourceDelegate> _shaderResourceDelegate;
 			std::function<void(SequenceIterator&)> _lightingIteratorFunction;
+			uint64_t _signal = ~0ull;
 		};
 		IteratorRange<const SubpassExtension*> GetSubpassAddendums() const { return MakeIteratorRange(_subpassExtensions); }
 	private:

@@ -10,7 +10,6 @@
 
 namespace RenderCore { namespace LightingEngine 
 {
-
 	RenderCore::Techniques::FrameBufferDescFragment::DefineAttachmentHelper RenderStepFragmentInterface::DefineAttachment(uint64_t semantic)
 	{
 		return _frameBufferDescFragment.DefineAttachment(semantic);
@@ -60,11 +59,12 @@ namespace RenderCore { namespace LightingEngine
 			_subpassExtensions.emplace_back(SubpassExtension { SubpassExtension::Type::HandledByPrevious });
 	}
 
-	void RenderStepFragmentInterface::AddSkySubpass(Techniques::FrameBufferDescFragment::SubpassDesc&& subpass)
+	void RenderStepFragmentInterface::AddSignalSubpass(Techniques::FrameBufferDescFragment::SubpassDesc&& subpass, uint64_t signal)
 	{
 		_frameBufferDescFragment.AddSubpass(std::move(subpass));
 		SubpassExtension ext;
-		ext._type = SubpassExtension::Type::ExecuteSky;
+		ext._type = SubpassExtension::Type::Signal;
+		ext._signal = signal;
 		_subpassExtensions.emplace_back(std::move(ext));
 	}
 

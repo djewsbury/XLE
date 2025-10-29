@@ -78,7 +78,7 @@ namespace RenderCore { namespace LightingEngine
 
 	[[nodiscard]] SequencePlayback BeginPrepareResourcesInstance(Techniques::IPipelineAcceleratorPool&, CompiledLightingTechnique&);
 
-	enum class StepType { ParseScene, MultiViewParseScene, DrawSky, ReadyInstances, None, Abort };
+	enum class StepType { ParseScene, MultiViewParseScene, Signal, ReadyInstances, None, Abort };
 	struct FrameToFrameProperties;
 	class Sequence;
 	class SequenceIterator;
@@ -94,6 +94,7 @@ namespace RenderCore { namespace LightingEngine
 			std::vector<Techniques::DrawablesPacket*> _pkts;			// todo -- candidate for subframe heap
 			XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume = nullptr;
 			std::vector<Techniques::ProjectionDesc> _multiViewDesc;		// todo -- candidate for subframe heap
+			uint64_t _signal = ~0ull;
 
 			operator bool() const { return _type != StepType::None && _type != StepType::Abort; }
 		};

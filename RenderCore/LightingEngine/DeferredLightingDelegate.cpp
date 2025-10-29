@@ -279,7 +279,7 @@ namespace RenderCore { namespace LightingEngine
 					this->_skyOperator->Execute(iterator);
 				});
 		} else {
-			fragment.AddSkySubpass(std::move(subpasses[0]));
+			fragment.AddSignalSubpass(std::move(subpasses[0]), "sky"_h);
 		}
 		fragment.AddSubpass(
 			std::move(subpasses[1]), 

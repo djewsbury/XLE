@@ -295,7 +295,7 @@ namespace RenderCore { namespace LightingEngine
 				});
 		} else {
 			// This sends a message back to the client to draw the sky
-			result.AddSkySubpass(std::move(skySubpass));
+			result.AddSignalSubpass(std::move(skySubpass), "sky"_h);
 		}
 
 		Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;

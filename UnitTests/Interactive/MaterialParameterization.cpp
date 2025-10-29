@@ -149,7 +149,7 @@ namespace UnitTests
 						offset[1] += 2.5f;
 						parserContext.RequireCommandList(s.GetCompletionCommandList());
 					}
-				} else if (step._type == LightingEngine::StepType::DrawSky) {
+				} else if (step._type == LightingEngine::StepType::Signal && step._signal == "sky"_h) {
 					// Simple black background
 					Techniques::PixelOutputStates outputStates;
 					outputStates.Bind(*step._parsingContext->_rpi);
