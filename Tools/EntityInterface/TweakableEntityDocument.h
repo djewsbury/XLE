@@ -7,6 +7,8 @@
 #include "EntityInterface.h"
 #include <memory>
 
+namespace Formatters { class FormatterRecording; }
+
 namespace EntityInterface
 {
 	class IDynamicOutputFormatter
@@ -57,10 +59,5 @@ namespace EntityInterface
 	std::shared_ptr<IEntityDocumentWithDataBinding> CreateEntityDocumentWithDataBinding(
 		std::shared_ptr<MinimalBindingEngine> bindingEngine,
 		WriteToDataBindingFormatter&& modelFn);
-
-	class FormatterRecording;
-	std::shared_ptr<FormatterRecording> CopyToRecording(Formatters::TextInputFormatter<>& fmttr);
-
-	std::shared_ptr<Formatters::IDynamicInputFormatter> PlaybackRecording(std::shared_ptr<FormatterRecording> recording, ::Assets::DependencyValidation depVal);
 }
 

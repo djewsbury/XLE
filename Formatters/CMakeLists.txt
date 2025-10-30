@@ -3,6 +3,7 @@ add_library(
 	STATIC
 	BinaryFormatter.cpp
 	BinarySchemata.cpp
+	PlaybackFormatter.cpp
 	StreamDOM.cpp
 	TextFormatter.cpp
 	XmlFormatter.cpp
