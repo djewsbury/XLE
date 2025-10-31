@@ -529,31 +529,37 @@ namespace ColladaConversion
     {
 		NascentAnimationSet result;
 
+		const float framesPerSecond = 120.f;
+		UnboundAnimation mergedAnim;
+
 		auto animations = input._doc->GetAnimations();
         for (auto i=animations.cbegin(); i!=animations.cend(); ++i) {
             TRY {
-				const float framesPerSecond = 120.f;
+				// There's no concept of separate "animations" in Collada... We just have to merge
+				// of the curves into a single animation
                 auto anim = Convert(*i, input._resolveContext, framesPerSecond); 
-				if (!anim._curves.empty()) {
-					unsigned maxFrame = 0, minFrame = std::numeric_limits<unsigned>::max();
-					for (const auto& c:anim._curves) {
-						minFrame = std::min(minFrame, (unsigned)c._curve.TimeAtFirstKeyframe());
-						maxFrame = std::max(maxFrame, (unsigned)c._curve.TimeAtLastKeyframe());
-					}
-					NascentAnimationSet::BlockSpan blocks[1] {
-						{minFrame, maxFrame+1}
-					};
-					auto nascentBlocks = result.AddAnimation("main", MakeIteratorRange(blocks), framesPerSecond);
-					for (auto c=anim._curves.begin(); c!=anim._curves.end(); ++c) {
-						unsigned curveIndex = result.AddCurve(std::move(c->_curve));
-						nascentBlocks[0].AddAnimationDriver(
-							c->_parameterName, c->_parameterComponent, c->_samplerType, curveIndex,
-							c->_interpolationType);
-					}
-				}
+				mergedAnim._curves.insert(mergedAnim._curves.end(), anim._curves.begin(), anim._curves.end());
             } CATCH (...) {
             } CATCH_END
         }
+
+		if (!mergedAnim._curves.empty()) {
+			unsigned maxFrame = 0, minFrame = std::numeric_limits<unsigned>::max();
+			for (const auto& c:mergedAnim._curves) {
+				minFrame = std::min(minFrame, (unsigned)c._curve.TimeAtFirstKeyframe());
+				maxFrame = std::max(maxFrame, (unsigned)c._curve.TimeAtLastKeyframe());
+			}
+			NascentAnimationSet::BlockSpan blocks[1] {
+				{minFrame, maxFrame+1}
+			};
+			auto nascentBlocks = result.AddAnimation("main", MakeIteratorRange(blocks), framesPerSecond);
+			for (auto c=mergedAnim._curves.begin(); c!=mergedAnim._curves.end(); ++c) {
+				unsigned curveIndex = result.AddCurve(std::move(c->_curve));
+				nascentBlocks[0].AddAnimationDriver(
+					c->_parameterName, c->_parameterComponent, c->_samplerType, curveIndex,
+					c->_interpolationType);
+			}
+		}
 
 		return result;
     }

@@ -467,7 +467,7 @@ namespace ColladaConversion
             result._curves.emplace_back(
 				UnboundAnimation::Curve {
                     i->first, std::move(curve), samplerType,
-                    RenderCore::Assets::AnimSamplerComponent::None,      // we don't know the component type here -- it has be implied by where we're binding it to
+                    RenderCore::Assets::AnimSamplerComponent::None,      // we don't know the component type here -- it has be implied by where we're binding it to the skeleton
                     interpolationType
                 });
             
