@@ -613,8 +613,11 @@ namespace RenderCore { namespace Metal_Vulkan
 						0, nullptr);
 				}
 
-				Internal::CaptureForBind capture{ctx, *const_cast<Resource*>(this), BindFlag::TransferSrc};
-				Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateImageLayout, capture.GetLayout());
+				if (_underlyingImage) {
+					Internal::CaptureForBind capture{ctx, *const_cast<Resource*>(this), BindFlag::TransferSrc};
+					Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateImageLayout, capture.GetLayout());
+				} else
+					Copy(ctx, destaging, *const_cast<Resource*>(this), destaging._steadyStateImageLayout, VK_IMAGE_LAYOUT_GENERAL);
 
 				// "7.9. Host Write Ordering Guarantees" suggests we shouldn't need a transfer -> host barrier here
 			}
