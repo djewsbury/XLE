@@ -11,7 +11,7 @@
 #include <future>
 
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; class ScaffoldCmdIterator; }}
-namespace RenderCore { class IDevice; class IDescriptorSet; class SamplerPool; class IResource; }
+namespace RenderCore { class IDevice; class IDescriptorSet; class SamplerPool; class IResource; class IThreadContext; }
 namespace Utility { class ParameterBox; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; } }
 
@@ -73,6 +73,8 @@ namespace RenderCore { namespace Techniques
 
 	struct ConstructDescriptorSetHelper
 	{
+		/////////
+
 		void Construct(
 			ResourceConstructionContext* context,
 			const Assets::PredefinedDescriptorSetLayout& layout,
@@ -80,14 +82,23 @@ namespace RenderCore { namespace Techniques
 			const DeformerToDescriptorSetBinding* deformBinding,
 			std::string&& name);
 
-		std::shared_ptr<IDescriptorSet> ConstructImmediately(
+		void CompleteToPromise(
+			std::promise<std::vector<ActualizedDescriptorSet>>&& promise);
+
+		/////////
+
+		std::shared_ptr<IDescriptorSet> ConstructImmediately(		// note this variation can't initialize the uniform buffers with their defaults
 			const Assets::PredefinedDescriptorSetLayout& layout,
 			const UniformsStreamInterface& usi,
 			const UniformsStream& us,
 			StringSection<> name);
 
-		void CompleteToPromise(
-			std::promise<std::vector<ActualizedDescriptorSet>>&& promise);
+		std::shared_ptr<IDescriptorSet> ConstructImmediately(
+			IThreadContext& threadContext,
+			const Assets::PredefinedDescriptorSetLayout& layout,
+			const UniformsStreamInterface& usi,
+			const UniformsStream& us,
+			StringSection<> name);
 
 		std::shared_ptr<IDevice> _device;
 		SamplerPool* _samplerPool = nullptr;

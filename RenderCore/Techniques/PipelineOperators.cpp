@@ -510,27 +510,37 @@ namespace RenderCore { namespace Techniques
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAssetName)
 	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(
-			pool, pipelineLayoutAssetName,
-			MakeShaderCompileResourceName(computeShader), selectors);
-		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
-	}
-
-	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
-		const std::shared_ptr<PipelineCollection>& pool,
-		StringSection<> computeShader,
-		const ParameterBox& selectors)
-	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, MakeShaderCompileResourceName(computeShader), selectors);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayoutAssetName, MakeShaderCompileResourceName(computeShader), selectors);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 
 	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		const Internal::ShaderVariant& computeShader,
-		const ParameterBox& selectors)
+		const ParameterBox& selectors,
+		StringSection<> pipelineLayoutAssetName)
 	{
-		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, PipelineLayoutOptions{}, computeShader, selectors);
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pipelineLayoutAssetName, computeShader, selectors);
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
+	}
+
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		StringSection<> computeShader,
+		const ParameterBox& selectors,
+		const PipelineLayoutOptions& pl)
+	{
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pl, MakeShaderCompileResourceName(computeShader), selectors);
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
+	}
+
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		const Internal::ShaderVariant& computeShader,
+		const ParameterBox& selectors,
+		const PipelineLayoutOptions& pl)
+	{
+		auto op = ::Assets::GetAssetMarkerPtr<ComputeOperator>(pool, pl, computeShader, selectors);
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IComputeShaderOperator>*>(&op);
 	}
 

@@ -18,6 +18,8 @@
 #include "../StateDesc.h"
 #include "../DeviceInitialization.h"
 #include "../BufferUploads/IBufferUploads.h"
+#include "../Metal/DeviceContext.h"
+#include "../Metal/Resource.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
@@ -441,6 +443,10 @@ namespace RenderCore { namespace Techniques
 					slotIdx};
 				continue;
 			}
+
+			if (slot._cbIdx != ~0u && layout._constantBuffers[slot._cbIdx]->_defaults.GetCount() != 0) {
+				assert(0);		// Defaults cannot be initialized -- use one of the other variations
+			}
 		}
 
 		// awkwardly we need to construct a descriptor set signature here
@@ -454,6 +460,97 @@ namespace RenderCore { namespace Techniques
 		auto result = _device->CreateDescriptorSet(_pipelineType, sig, name);
 		result->Write(initializer);
 		return result;
+	}
+
+	std::shared_ptr<IDescriptorSet> ConstructDescriptorSetHelper::ConstructImmediately(
+		IThreadContext& threadContext,
+		const Assets::PredefinedDescriptorSetLayout& layout,
+		const UniformsStreamInterface& usi,
+		const UniformsStream& us,
+		StringSection<> name)
+	{
+		// Convert the immediate datas (and cb defaults) in the PredefinedDescriptorSetLayout to
+		// resource view bindings
+		unsigned bufferSpaceRequired = 0;
+		for (unsigned slotIdx=0; slotIdx<layout._slots.size(); ++slotIdx) {
+			const auto& slot = layout._slots[slotIdx];
+			auto i = std::find(usi.GetImmediateDataBindings().begin(), usi.GetImmediateDataBindings().end(), slot._nameHash);
+			if (i != usi.GetImmediateDataBindings().end()) {
+				bufferSpaceRequired += us._immediateData[i-usi.GetImmediateDataBindings().begin()].size();
+				continue;
+			}
+
+			i = std::find(usi.GetResourceViewBindings().begin(), usi.GetResourceViewBindings().end(), slot._nameHash);
+			if (i != usi.GetResourceViewBindings().end())
+				continue;
+
+			if (slot._cbIdx != ~0u) {
+				bufferSpaceRequired += layout._constantBuffers[slot._cbIdx]->GetSize(GetDefaultShaderLanguage());
+				continue;
+			}
+		}
+
+		if (!bufferSpaceRequired)
+			return ConstructImmediately(layout, usi, us, name);
+		
+		std::vector<uint8_t> bufferInitializer;
+		bufferInitializer.resize(bufferSpaceRequired);
+		// do we need unordered access bind flag?
+		auto buffer = threadContext.GetDevice()->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferSrc, LinearBufferDesc::Create(bufferSpaceRequired)), "descriptor-set-helper");
+		bufferSpaceRequired = 0;
+
+		UniformsStreamInterface updatedUSI;
+		for (unsigned c=0; c<usi.GetResourceViewBindings().size(); ++c) updatedUSI.BindResourceView(c, usi.GetResourceViewBindings()[c]);
+		for (unsigned c=0; c<usi.GetSamplerBindings().size(); ++c) updatedUSI.BindSampler(c, usi.GetSamplerBindings()[c]);
+		for (unsigned c=0; c<usi.GetFixedDescriptorSetBindings().size(); ++c) updatedUSI.BindFixedDescriptorSet(c, usi.GetFixedDescriptorSetBindings()[c]);
+
+		UniformsStream updatedUS;
+		updatedUS._samplers = us._samplers;
+		std::vector<const IResourceView*> srvs { us._resourceViews.begin(), us._resourceViews.end() };
+		std::vector<std::shared_ptr<IResourceView>> tempRefHolders;
+
+		for (unsigned slotIdx=0; slotIdx<layout._slots.size(); ++slotIdx) {
+			const auto& slot = layout._slots[slotIdx];
+			auto i = std::find(usi.GetImmediateDataBindings().begin(), usi.GetImmediateDataBindings().end(), slot._nameHash);
+			if (i != usi.GetImmediateDataBindings().end()) {
+				auto size = us._immediateData[i-usi.GetImmediateDataBindings().begin()].size();
+				std::memcpy(bufferInitializer.data()+bufferSpaceRequired, us._immediateData[i-usi.GetImmediateDataBindings().begin()].begin(), size);
+
+				updatedUSI.BindResourceView(unsigned(srvs.size()), slot._nameHash);
+				tempRefHolders.push_back(buffer->CreateBufferView(BindFlag::ConstantBuffer, bufferSpaceRequired, size));
+				srvs.emplace_back(tempRefHolders.back().get());
+				bufferSpaceRequired += size;
+				continue;
+			}
+
+			i = std::find(usi.GetResourceViewBindings().begin(), usi.GetResourceViewBindings().end(), slot._nameHash);
+			if (i != usi.GetResourceViewBindings().end())
+				continue;
+
+			if (slot._cbIdx != ~0u) {
+				auto size = layout._constantBuffers[slot._cbIdx]->GetSize(GetDefaultShaderLanguage());
+				layout._constantBuffers[slot._cbIdx]->BuildCB(
+					MakeIteratorRange(bufferInitializer.data()+bufferSpaceRequired, bufferInitializer.data()+bufferSpaceRequired+size),
+					{}, GetDefaultShaderLanguage());
+
+				updatedUSI.BindResourceView(unsigned(srvs.size()), slot._nameHash);
+				tempRefHolders.emplace_back(buffer->CreateBufferView(BindFlag::ConstantBuffer, bufferSpaceRequired, size));
+				srvs.emplace_back(tempRefHolders.back().get());
+				bufferSpaceRequired += size;
+				continue;
+			}
+		}
+
+		{
+			auto blitEncoder = RenderCore::Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder();
+			blitEncoder.Write(*buffer, MakeIteratorRange(bufferInitializer));
+		}
+
+		updatedUS._resourceViews = srvs;
+
+		// updateUSI and updatedUS now contain the same data, except the "immediate datas" have been merged into a constant buffer, and
+		// the bindings converted to ResourceView bindings
+		return ConstructImmediately(layout, updatedUSI, updatedUS, name);
 	}
 
 	const uint64_t DeformerToDescriptorSetBinding::GetHash() const

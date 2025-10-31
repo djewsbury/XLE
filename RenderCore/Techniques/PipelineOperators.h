@@ -122,13 +122,21 @@ namespace RenderCore { namespace Techniques
 
 	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
+		const Internal::ShaderVariant& computeShader,
+		const ParameterBox& selectors,
+		StringSection<> pipelineLayoutAsset);
+
+	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
 		StringSection<> computeShader,
-		const ParameterBox& selectors = {});
+		const ParameterBox& selectors = {},
+		const PipelineLayoutOptions& = {});
 
 	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		const Internal::ShaderVariant& computeShader,
-		const ParameterBox& selectors = {});
+		const ParameterBox& selectors = {},
+		const PipelineLayoutOptions& = {});
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
