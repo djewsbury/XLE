@@ -296,8 +296,10 @@ namespace RenderCore { namespace Techniques
 			newEncoder.BeginStateCapture(_capturedStates);
 
 			ApplyUniformsCompute(*parsingContext.GetUniformDelegateManager(), metalContext, newEncoder, parsingContext, boundUniforms, 0);
-			if (!descSets.empty())
+			if (!descSets.empty()) {
 				boundUniforms.ApplyDescriptorSets(metalContext, newEncoder, descSets, 1);
+				boundUniforms.ApplyDescriptorSets(metalContext, newEncoder, descSets, 2);
+			}
 			boundUniforms.ApplyLooseUniforms(metalContext, newEncoder, us0, 1);
 			boundUniforms.ApplyLooseUniforms(metalContext, newEncoder, us1, 2);
 			_activeEncoder = std::move(newEncoder);
@@ -321,8 +323,10 @@ namespace RenderCore { namespace Techniques
 			auto newEncoder = metalContext.BeginComputeEncoder(*_pipelineLayout);
 			_capturedStates = {};
 			newEncoder.BeginStateCapture(_capturedStates);
-			if (!descSets.empty())
+			if (!descSets.empty()) {
 				boundUniforms.ApplyDescriptorSets(metalContext, newEncoder, descSets, 1);
+				boundUniforms.ApplyDescriptorSets(metalContext, newEncoder, descSets, 2);
+			}
 			boundUniforms.ApplyLooseUniforms(metalContext, newEncoder, us0, 1);
 			boundUniforms.ApplyLooseUniforms(metalContext, newEncoder, us1, 2);
 			_activeEncoder = std::move(newEncoder);

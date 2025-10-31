@@ -53,3 +53,12 @@ PipelineLayout GraphicsProbePrepare
 		uint ViewMask;
 	};
 };
+
+PipelineLayout ComputeOperatorWithMaterial
+{
+	AutoDescriptorSet Numeric;				// 0
+	DescriptorSet Spacer;					// 1
+	DescriptorSet Spacer;					// 2
+	DescriptorSet Spacer;					// 3
+	AutoDescriptorSet Material;				// 4
+};

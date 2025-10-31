@@ -471,12 +471,13 @@ namespace RenderCore { namespace Techniques
 	{
 		// Convert the immediate datas (and cb defaults) in the PredefinedDescriptorSetLayout to
 		// resource view bindings
+		// todo -- we may need to support alignment between buffer allocations
 		unsigned bufferSpaceRequired = 0;
 		for (unsigned slotIdx=0; slotIdx<layout._slots.size(); ++slotIdx) {
 			const auto& slot = layout._slots[slotIdx];
 			auto i = std::find(usi.GetImmediateDataBindings().begin(), usi.GetImmediateDataBindings().end(), slot._nameHash);
 			if (i != usi.GetImmediateDataBindings().end()) {
-				bufferSpaceRequired += us._immediateData[i-usi.GetImmediateDataBindings().begin()].size();
+				bufferSpaceRequired += (unsigned)us._immediateData[i-usi.GetImmediateDataBindings().begin()].size();
 				continue;
 			}
 
@@ -496,7 +497,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<uint8_t> bufferInitializer;
 		bufferInitializer.resize(bufferSpaceRequired);
 		// do we need unordered access bind flag?
-		auto buffer = threadContext.GetDevice()->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferSrc, LinearBufferDesc::Create(bufferSpaceRequired)), "descriptor-set-helper");
+		auto buffer = threadContext.GetDevice()->CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(bufferSpaceRequired)), "descriptor-set-helper");
 		bufferSpaceRequired = 0;
 
 		UniformsStreamInterface updatedUSI;
@@ -513,7 +514,7 @@ namespace RenderCore { namespace Techniques
 			const auto& slot = layout._slots[slotIdx];
 			auto i = std::find(usi.GetImmediateDataBindings().begin(), usi.GetImmediateDataBindings().end(), slot._nameHash);
 			if (i != usi.GetImmediateDataBindings().end()) {
-				auto size = us._immediateData[i-usi.GetImmediateDataBindings().begin()].size();
+				auto size = (unsigned)us._immediateData[i-usi.GetImmediateDataBindings().begin()].size();
 				std::memcpy(bufferInitializer.data()+bufferSpaceRequired, us._immediateData[i-usi.GetImmediateDataBindings().begin()].begin(), size);
 
 				updatedUSI.BindResourceView(unsigned(srvs.size()), slot._nameHash);
