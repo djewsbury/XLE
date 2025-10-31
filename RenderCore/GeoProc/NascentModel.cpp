@@ -992,7 +992,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			filteringSkeleInterface.insert(filteringSkeleInterface.begin(), std::make_pair(std::string{}, Hash64("identity")));
 			for (auto s:skeletonRules._preserveOutputs)
 				filteringSkeleInterface.emplace_back(std::string{}, s);
-			embeddedSkeleton.GetSkeletonMachine().FilterOutputInterface(MakeIteratorRange(filteringSkeleInterface));
+			embeddedSkeleton.GetSkeletonMachine().FilterOutputInterface(MakeIteratorRange(filteringSkeleInterface), skeletonRules._preserveSkinningSkeletonOutputs.value_or(false));
 		}
 
 		if (!skeletonRules._preserveAllParameters.value_or(false)) {

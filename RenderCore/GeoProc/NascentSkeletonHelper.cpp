@@ -89,7 +89,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 		_outputMatrixCount = newOutputMatrixCount;
 	}
 
-	void NascentSkeletonHelper::FilterOutputInterface(IteratorRange<const std::pair<std::string, uint64_t>*> filterIn)
+	void NascentSkeletonHelper::FilterOutputInterface(IteratorRange<const std::pair<std::string, uint64_t>*> filterIn, bool preservedSecondarySkeletonOutputs)
 	{
 		auto oldOutputInterface = GetOutputInterface();
 		std::vector<JointTag> newOutputInterface;
@@ -101,7 +101,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 				oldIndexToNew[c] = (unsigned)std::distance(newOutputInterface.begin(), i);
 			} else {
 				auto f = std::find(filterIn.begin(), filterIn.end(), std::make_pair(oldOutputInterface[c].first, Hash64(oldOutputInterface[c].second)));
-				if (f!=filterIn.end()) {
+				if (f!=filterIn.end() || (preservedSecondarySkeletonOutputs && !oldOutputInterface[c].first.empty())) {
 					oldIndexToNew[c] = (unsigned)(newOutputInterface.size());
 					newOutputInterface.push_back(oldOutputInterface[c]);
 				}

@@ -34,7 +34,7 @@ namespace RenderCore { namespace Assets
 
 		struct SkeletonRules
 		{
-			std::optional<bool> _preserveAllParameters, _preserveAllOutputs, _bakeStaticTransforms, _optimize;
+			std::optional<bool> _preserveAllParameters, _preserveAllOutputs, _preserveSkinningSkeletonOutputs, _bakeStaticTransforms, _optimize;
 			std::vector<uint64_t> _preserveParameters;
 			std::vector<uint64_t> _preserveOutputs;
 

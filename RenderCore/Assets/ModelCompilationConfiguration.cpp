@@ -50,6 +50,7 @@ namespace RenderCore { namespace Assets
 	{
 		if (src._preserveAllParameters) _preserveAllParameters = src._preserveAllParameters;
 		if (src._preserveAllOutputs) _preserveAllOutputs = src._preserveAllOutputs;
+		if (src._preserveSkinningSkeletonOutputs) _preserveSkinningSkeletonOutputs = src._preserveSkinningSkeletonOutputs;
 		if (src._bakeStaticTransforms) _bakeStaticTransforms = src._bakeStaticTransforms;
 		if (src._optimize) _optimize = src._optimize;
 		UnionSortedSet(_preserveParameters, src._preserveParameters);
@@ -194,6 +195,9 @@ namespace RenderCore { namespace Assets
 				case "PreserveAllOutputs"_h:
 					rules._preserveAllOutputs = Formatters::RequireCastValue<bool>(fmttr);
 					break;
+				case "PreserveSkinningSkeletonOutputs"_h:
+					rules._preserveSkinningSkeletonOutputs = Formatters::RequireCastValue<bool>(fmttr);
+					break;
 				case "BakeStaticTransforms"_h:
 					rules._bakeStaticTransforms = Formatters::RequireCastValue<bool>(fmttr);
 					break;
@@ -250,8 +254,9 @@ namespace RenderCore { namespace Assets
 		uint64_t flags =
 				(_preserveAllParameters ? uint64_t(*_preserveAllParameters) : 2ull) << 0ull
 			| 	(_preserveAllOutputs ? uint64_t(*_preserveAllOutputs) : 2ull) << 2ull
-			| 	(_bakeStaticTransforms ? uint64_t(*_bakeStaticTransforms) : 2ull) << 4ull
-			| 	(_optimize ? uint64_t(*_optimize) : 2ull) << 6ull
+			| 	(_preserveSkinningSkeletonOutputs ? uint64_t(*_preserveSkinningSkeletonOutputs) : 2ull) << 4ull
+			| 	(_bakeStaticTransforms ? uint64_t(*_bakeStaticTransforms) : 2ull) << 6ull
+			| 	(_optimize ? uint64_t(*_optimize) : 2ull) << 8ull
 			;
 		hash = HashCombine(flags, hash);
 		hash = Hash64(AsPointer(_preserveParameters.begin()), AsPointer(_preserveParameters.end()), hash);

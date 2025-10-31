@@ -34,7 +34,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 		void							SetOutputInterface(IteratorRange<const JointTag*> jointNames);
 		std::vector<uint64_t>			BuildHashedOutputInterface() const;
 
-		void			FilterOutputInterface(IteratorRange<const std::pair<std::string, uint64_t>*> filterIn);
+		void			FilterOutputInterface(IteratorRange<const std::pair<std::string, uint64_t>*> filterIn, bool preservedSecondarySkeletonOutputs=false);
         void            FilterParameterInterface(IteratorRange<const uint64_t*> filterIn);
 
         const std::vector<uint32_t>&		GetCommandStream() const { return _commandStream; }
